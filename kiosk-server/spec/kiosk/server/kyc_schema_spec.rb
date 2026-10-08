@@ -41,15 +41,4 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(described_class.kyc_attributes_sql).to include('"myschema".kyc_requests', 'REFERENCES "people"(id)')
     end
   end
-
-  describe ".kyc_on_person_sql" do
-    let(:sql) { described_class.kyc_on_person_sql(schema: "kiosk", user_id_type: :uuid, user_table: "users") }
-
-    it "drops the assistant-keyed grants and the agents column, then lays down the person-keyed tables" do
-      expect(sql).to include(%(DROP TABLE IF EXISTS "kiosk".kyc_attributes;))
-      expect(sql).to include(%(ALTER TABLE "kiosk".agents DROP COLUMN IF EXISTS kyc_verified_at;))
-      expect(sql.index("DROP TABLE")).to be < sql.index(%(CREATE TABLE IF NOT EXISTS "kiosk".kyc_attributes))
-      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".kyc_requests))
-    end
-  end
 end

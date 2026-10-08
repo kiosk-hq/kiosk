@@ -24,16 +24,8 @@ module Kiosk
     #   - db/migrate/<ts+5>_create_kiosk_kyc_attributes.rb
     #   - db/migrate/<ts+6>_create_kiosk_events.rb
     #
-    # EVERY canonical migration is a `create` and NONE is an amendment: each
-    # table is created in its final shape by the file that creates it, so a
-    # fresh adopter installs a schema outright instead of replaying a
-    # migration HISTORY to arrive at one.
-    #
-    # THE LIST ABOVE IS THE COUNT, and no cardinal is written beside it. A
-    # number here is a second copy of that list, and a second copy is what
-    # rots: this comment and the `desc` below both said SIX for as long as it
-    # took a seventh template to land, while the list itself was already
-    # right.
+    # Every migration is a `create`: each table is created in its final shape,
+    # so a fresh adopter installs the schema outright.
     #
     # Each migration file is a thin wrapper that calls into
     # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL

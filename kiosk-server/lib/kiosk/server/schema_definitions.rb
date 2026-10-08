@@ -4,33 +4,16 @@ require "kiosk/server/version"
 
 module Kiosk
   module Server
-    # Pure SQL generators for the six canonical Kiosk migrations.
+    # Pure SQL generators for the canonical Kiosk migrations `kiosk:install`
+    # emits, each of which creates its tables in their final shape.
     #
     #   001 create_kiosk_schema                → schema + four current_*() helpers + the schema-major marker
     #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
     #   003 create_kiosk_reservations          → kiosk.reservations
     #   004 create_kiosk_device_authorizations → kiosk.device_authorizations (account binding)
     #   005 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
-    #   006 create_kiosk_kyc_attributes        → kiosk.kyc_attributes, one row per
-    #       named anonymized boolean an attestation granted an agent
-    #
-    # EVERY `CREATE` HERE IS GUARDED WITH `IF NOT EXISTS`, AND THAT IS NOT
-    # DECORATION. A migration file that has shipped is recorded in the
-    # `schema_migrations` of every database that ran it, and `db:migrate` never
-    # re-runs a recorded version — so a database provisioned from an earlier
-    # vintage of this set can reach these six files carrying objects they
-    # create, and an unguarded `CREATE` then aborts `db:migrate` ONE STEP IN
-    # (`PG::DuplicateTable: relation "agents" already exists`), leaving every
-    # later migration on that box unreachable, including any corrective one.
-    #
-    # A guarded `CREATE` buys that at a price: it ACCEPTS an
-    # existing table instead of failing loudly, so a table that has DRIFTED from
-    # what this file states passes silently. Two things pay for it, and neither
-    # is optional. First, guarded creates are paired with idempotent repairs for
-    # every column an older table may lack (see {.identity_tables_sql}) — the
-    # guard skips, but the repair still runs. Second, a change to a shipped table
-    # arrives as a new migration in every demo, never as an edit to this file
-    # alone.
+    #   006 create_kiosk_kyc_attributes        → kiosk.kyc_attributes and kiosk.kyc_requests, keyed on the person
+    #   007 create_kiosk_events                → kiosk.events, the per-identity event tail
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -107,10 +90,6 @@ module Kiosk
       #                        ({ColumnSpendingCap} reads this column).
       #   human_label        — a human-friendly name for the manage-assistants
       #                        page.
-      #
-      # The `ADD COLUMN IF NOT EXISTS` lines below bring an `agents` table built
-      # by an earlier vintage of this set up to that shape; a guarded `CREATE`
-      # alone would step over it.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -128,17 +107,13 @@ module Kiosk
             revoked_at          timestamptz,
             issuer              text NOT NULL
           );
-          -- Brings an older `agents` table up to the shape above: these two
-          -- columns are optional, so a database provisioned from an earlier
-          -- vintage of this migration set may lack them. No-ops from zero.
-          ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS human_label        text;
-          ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS spending_cap_cents bigint;
 
           CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
           -- Dedupe at the DB, not via SELECT-then-INSERT (TOCTOU): two LIVE
           -- rows for one public key on one origin cannot coexist. Partial
           -- (WHERE revoked_at IS NULL) so a revoked key can re-register.
-          #{agents_issuer_index(schema)}
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_issuer_public_key_live
+            ON "#{schema}".agents (issuer, public_key) WHERE revoked_at IS NULL;
 
           CREATE TABLE IF NOT EXISTS "#{schema}".agent_tokens (
             id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -157,32 +132,6 @@ module Kiosk
             agent_id     uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
             PRIMARY KEY (provider, external_id)
           );
-        SQL
-      end
-
-      # `agents.issuer` on a database whose `agents` predates it: the origin an
-      # assistant account belongs to. Existing rows were registered
-      # on the one origin served then, so they are backfilled with `issuer`,
-      # by default the `c.issuer` in force when the migration runs. No column default: a
-      # default would write one environment's origin into `db/structure.sql`.
-      def agents_issuer_sql(schema: nil, issuer: nil)
-        schema ||= Kiosk.configuration.schema
-        issuer ||= Kiosk.configuration.issuer
-        raise ArgumentError, "agents_issuer_sql needs the issuer existing agents belong to" if issuer.to_s.strip.empty?
-
-        <<~SQL.strip
-          ALTER TABLE "#{schema}".agents ADD COLUMN IF NOT EXISTS issuer text;
-          UPDATE "#{schema}".agents SET issuer = '#{issuer.to_s.gsub("'", "''")}' WHERE issuer IS NULL;
-          ALTER TABLE "#{schema}".agents ALTER COLUMN issuer SET NOT NULL;
-          DROP INDEX IF EXISTS "#{schema}".idx_agents_public_key_live;
-          #{agents_issuer_index(schema)}
-        SQL
-      end
-
-      def agents_issuer_index(schema)
-        <<~SQL.strip
-          CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_issuer_public_key_live
-            ON "#{schema}".agents (issuer, public_key) WHERE revoked_at IS NULL;
         SQL
       end
 
@@ -298,18 +247,6 @@ module Kiosk
       # one and invite the misreading that a settlement gives «non-repudiation
       # both ways»; it does not. An operator counter-signature would be a new
       # normative protocol element, not a column.
-      #
-      # THIS DDL ONLY EVER REACHES A DATABASE BUILT FROM ZERO, so removing a
-      # column from it is only half the change. A database provisioned before
-      # the removal still carries the column, and nothing in this file can take
-      # a column away from a table that already exists — so if it was `NOT
-      # NULL` with no DEFAULT, an INSERT that no longer names it is refused
-      # there forever. That is why the drop of `settlements.raw_jws` ships as
-      # its own migration,
-      # `db/migrate/20260827000002_drop_kiosk_settlement_raw_jws.rb`, in each of
-      # the seven demos that hold this table. THE RULE IS SYMMETRICAL: a column
-      # REMOVED from this file needs a shipped `DROP` for exactly the reason a
-      # column ADDED needs a shipped `ADD`.
       #
       # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
       # supplied by the caller, so one principal cannot pre-occupy or block
@@ -434,36 +371,6 @@ module Kiosk
         SQL
       end
 
-      # Brings KYC tables laid down without the user key up to
-      # {.kyc_attributes_sql}'s shape. Rows whose person is already gone are
-      # deleted first.
-      def kyc_user_fk_sql(schema: nil, user_table: nil)
-        schema     ||= Kiosk.configuration.schema
-        user_table ||= configured_user_table
-
-        %w[kyc_attributes kyc_requests].map { |table|
-          <<~SQL
-            DELETE FROM "#{schema}".#{table} k WHERE NOT EXISTS (SELECT 1 FROM "#{user_table}" u WHERE u.id = k.user_id);
-            ALTER TABLE "#{schema}".#{table} DROP CONSTRAINT IF EXISTS #{table}_user_id_fkey,
-              ADD CONSTRAINT #{table}_user_id_fkey FOREIGN KEY (user_id) REFERENCES "#{user_table}"(id) ON DELETE CASCADE;
-          SQL
-        }.join.strip
-      end
-
-      # Moves a database whose grants were keyed on the assistant account onto
-      # the person. The old grants are dropped, not converted: a grant made
-      # while an assistant acted for a placeholder principal must not become a
-      # statement about the human it was later linked to, so people verify again.
-      def kyc_on_person_sql(schema: nil, user_id_type: nil, user_table: nil)
-        schema ||= Kiosk.configuration.schema
-
-        <<~SQL.strip
-          DROP TABLE IF EXISTS "#{schema}".kyc_attributes;
-          ALTER TABLE "#{schema}".agents DROP COLUMN IF EXISTS kyc_verified_at;
-          #{kyc_attributes_sql(schema: schema, user_id_type: user_id_type, user_table: user_table)}
-        SQL
-      end
-
       # The event tail behind {EventStores::ActiveRecord}, laid down by every
       # install. `id` is the origin's one monotonic cursor. `identity_key` is a
       # user_id as text: the engine alone reads it and never joins it. The two
@@ -496,7 +403,7 @@ module Kiosk
       # store a MULTI-PROCESS operator must configure so that PoW single-use
       # holds across web workers.
       #
-      # This is deliberately NOT one of the six canonical migrations and the
+      # This is deliberately NOT one of the canonical migrations and the
       # `kiosk:install` generator does not lay it down: the shipped default
       # store is in-process ({PowSpentStore}) and a single-process operator
       # needs no table at all. An operator raising `WEB_CONCURRENCY` above 1

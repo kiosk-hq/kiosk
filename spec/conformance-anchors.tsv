@@ -408,7 +408,7 @@ kiosk-demo-getgrocery/config/routes/kiosk.rb	# 1. THE PROTOCOL PLANE IS MOUNTED,
 kiosk-demo-getgrocery/config/routes/kiosk.rb	get  "/kiosk/catalog",             to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
 kiosk-demo-getgrocery/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-getgrocery/config/routes/kiosk.rb	post "/kiosk/create_order",        to: "kiosk/server/verb#create", defaults: { kiosk_verb: "create_order" }
-kiosk-demo-getgrocery/db/migrate/20260618131462_create_getgrocery_tables.rb	      t.text        :address,   null: true
+kiosk-demo-getgrocery/db/migrate/20260101000011_create_products_and_orders.rb	      t.text        :address
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      boot_env["STRIPE_SECRET_KEY"] = "sk_test_mock"
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      exit exit_status
 kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "  OK  past-slot filter: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
@@ -489,7 +489,7 @@ kiosk-demo-hoteling/config/initializers/kiosk.rb	# Queries: properties, availabi
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(api_key: key, test_autocard: Rails.configuration.x.kiosk.test_autocard),
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
-kiosk-demo-hoteling/db/migrate/20261008000001_create_kiosk_pay_stripe_customers.rb	def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
+kiosk-demo-hoteling/db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb	def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
 kiosk-demo-hoteling/lib/tasks/demo.rake	        puts "  OK  SKIP_PAY: http_confirm_booking == 403"
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task book: "demo:setup" do
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task isolation: "demo:setup" do
@@ -1057,7 +1057,7 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_mandates.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_reservations.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_schema.rb.tt",
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	    # EVERY canonical migration is a `create` and NONE is an amendment: each
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	    # Every migration is a `create`: each table is created in its final shape,
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc "Generate the Kiosk initializer and its canonical base migrations."
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_events.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_schema.rb.tt",

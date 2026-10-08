@@ -156,25 +156,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(agents).to include("spending_cap_cents  bigint")
       expect(agents).to include("human_label         text")
     end
-
-    # ...and the other half of the same fold (K-1083). Folding three amendment
-    # migrations into the CREATE is lossless only from zero. A database that ran
-    # the pre-2026-08-20 set already HAS an `agents` table and reaches this
-    # migration with whichever subset of the three its vintage amended on —
-    # measured on the structure.sql the fleet's boxes were built from,
-    # human_label and spending_cap_cents were there and kyc_verified_at was not.
-    # The guarded CREATE would step over that table and record itself as
-    # applied, leaving the column the KYC gate SELECTs missing forever.
-    it "repairs a pre-fold agents table rather than stepping over it" do
-      expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS human_label))
-      expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS spending_cap_cents))
-    end
-
-    it "keeps every repair idempotent, so the from-zero path is untouched" do
-      alters = sql.lines.grep(/ALTER TABLE/)
-      expect(alters).not_to be_empty
-      expect(alters).to all(include("ADD COLUMN IF NOT EXISTS"))
-    end
   end
 
   # K-1083, and it is a deploy-level contract rather than a style rule. The
@@ -378,26 +359,5 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect { described_class.user_id_cast(:bigserial) }
         .to raise_error(ArgumentError, /user_id_type/)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions, ".agents_issuer_sql" do
-  subject(:sql) { described_class.agents_issuer_sql(schema: "kiosk", issuer: "https://o'brien.example") }
-
-  it "adds the column, backfills it with the issuer, then makes it NOT NULL" do
-    expect(sql).to include(%(ALTER TABLE "kiosk".agents ADD COLUMN IF NOT EXISTS issuer text;))
-    expect(sql).to include(%(UPDATE "kiosk".agents SET issuer = 'https://o''brien.example' WHERE issuer IS NULL;))
-    expect(sql).to include(%(ALTER TABLE "kiosk".agents ALTER COLUMN issuer SET NOT NULL;))
-  end
-
-  it "replaces the live public_key index with the per-origin one" do
-    expect(sql).to include(%(DROP INDEX IF EXISTS "kiosk".idx_agents_public_key_live;))
-    expect(sql).to match(
-      /CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_issuer_public_key_live\s+ON "kiosk"\.agents \(issuer, public_key\) WHERE revoked_at IS NULL/,
-    )
-  end
-
-  it "refuses to backfill with no issuer" do
-    expect { described_class.agents_issuer_sql(schema: "kiosk", issuer: " ") }.to raise_error(ArgumentError)
   end
 end

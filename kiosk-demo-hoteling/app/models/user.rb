@@ -1,14 +1,7 @@
 # frozen_string_literal: true
 
-# The account principal: ONE table for both human guest accounts and headless
-# assistant-created principals — no separate "user" surface.
-# `kiosk.current_user_id()` resolves to this table's `id`, so a booking made by
-# an assistant bound to a human is tied to that human's account.
-#
-# Human guests sign in with email + password (the Devise session that mints the
-# link code approving an assistant). Assistant accounts are rows in this same
-# table WITHOUT credentials — kiosk-pop key possession is their only channel, so
-# they can never drive the human surfaces.
+# Human guests sign in with a password; an assistant's account is a row with
+# no credentials, reachable only through its Kiosk key.
 class User < ApplicationRecord
   devise :database_authenticatable
 

@@ -43,10 +43,10 @@ Kiosk.configure do |c|
       test_autocard: ENV["KIOSK_TEST_AUTOCARD"] == "1",
     ),
     currency: "eur", table: "bookings", reference: "booking_id",
-    query: "my_bookings", payer_column: "paid_by_user_id",
+    query: "my_bookings", owner_column: "user_id",
   )
   c.cart_price_checker = PriceChecker
-  c.after_payment      = ->(booking_id) { Booking.paid!(booking_id) }
+  c.after_payment      = ->(booking_id) { Booking.captured!(booking_id) }
   c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
 
   c.pow_secret         = ENV.fetch("KIOSK_POW_SECRET")

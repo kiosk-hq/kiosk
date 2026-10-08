@@ -106,9 +106,8 @@ needs. It is not shorter under containers; it is unnecessary.
 From this directory:
 
 ```
-bin/rails check:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guard every verb opens with: the integer parse and its magnitude ceiling, stay_dates' strict ISO parse, past_stay and the published examples against a frozen property clock, priceable_total, and the 404-not-400 split for a property nobody has
 bin/rails check:property_decision # the property's OWN answer, minutes after the money: both branches forced and the two-to-five minute wait collapsed, because an 80/20 draw behind a real wait is something no flow can assert. Accepting mints the confirmation code — the only thing in this demo that does — and `confirm_booking` reads it back; declining cancels the booking, refunds the guest's money to the card that paid through the Stripe adapter, frees the room-nights by status alone, and the event names where the money went
-bin/rails check:conformance # the properties the protocol makes normative of this origin, in RSpec: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
+bin/rails check:conformance # `bundle exec rspec`: the WireArguments checks, owner-only payment, and the properties the protocol makes normative of this origin: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
 bin/rails demo:setup       # create + load schema + seed the properties and rooms
 bin/rails check:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
 bin/rails check:browse      # browse-heavy priced-pagination PoW demo — depth is priced, not banned
@@ -123,23 +122,15 @@ bin/rails check:spending_cap # the per-assistant spending cap: a stay under it s
 `demo:setup` itself declares `: :setup`, so
 running any of them DROPS and recreates `kiosk_hoteling_development` before it
 starts — nothing you left in the database survives a run, and that is what makes
-each of them repeatable. `check:wire_args_spec` is outside that sentence entirely:
-it boots nothing, opens no connection and declares no prerequisite — it is a bare
-`ruby spec/wire_arguments_spec.rb` over pure functions, which is the whole reason
-it exists. `check:conformance` is outside it for a different reason: it runs in
+each of them repeatable. `check:conformance` is outside it: it runs in
 `RAILS_ENV=test` against `kiosk_hoteling_test`, which it drops and rebuilds
 itself, so it neither reads nor disturbs the development data the tasks above
 share.
 
-**Two test directories, and they are different things.** `spec/conformance/` is
-an ordinary RSpec suite — the CONFORMANCE suite, written with the matchers
-`kiosk-test-support` ships, and the file to copy when you are adding a Kiosk wire
-to an app of your own. `kiosk-demo-getgrocery` is the same surface written in
-Minitest, and the two report the same failure sentence. `spec/wire_arguments_spec.rb`
-beside it is NOT an RSpec file: it is a standalone assertion script with its own
-`assert` and its own exit block. That is why `.rspec` sets `--default-path
-spec/conformance` — a bare `bundle exec rspec` over the whole of `spec/` would
-load the script, define no examples from it, and exit 0 having asserted nothing. `check:book` was the one exception, and it was not
+**`spec/` is an ordinary RSpec suite.** `spec/conformance/` is written with the
+matchers `kiosk-test-support` ships, and is the file to copy when you are adding a
+Kiosk wire to an app of your own; `kiosk-demo-getgrocery` is the same surface in
+Minitest. `check:book` was the one exception, and it was not
 repeatable: the driver always picks the same property for the same three nights
 and books it twice (happy path, then the payment-gate negative), so one pass took
 that property's whole inventory — the negative's unpaid hold is never released,
@@ -171,7 +162,6 @@ and pull request; the rest are local-only, for the reason given.
 |---|---|---|
 | `demo:setup` | yes — the job's own setup step |  |
 | `check:property_decision` | yes |  |
-| `check:wire_args_spec` | yes |  |
 | `check:conformance` | yes |  |
 | `check:book` | yes |  |
 | `check:spending_cap` | yes |  |

@@ -1,43 +1,10 @@
 # frozen_string_literal: true
 
-# hoteling's WRITE surface: the two verbs an assistant reaches with
-# `POST /kiosk/<action-name>`, arguments as the JSON BODY. Same shape as
-# Kiosk::HotelsController — `ActionController::API` plus `include
-# Kiosk::Handler` — with `kind :action` above each declaration, which is what
-# puts it on `POST`.
-#
-# `reserve_room` hands straight to an Operation: a transaction with a three-part
-# inventory guard, which does not want a `render` in the middle. `confirm_booking`
-# hands to one too, for the gates rather than for a write — it reads the
-# property's answer.
-#
-# Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
-# closed table, not a class hierarchy, so a refusal is an ordinary `render json:,
-# status:`. An Operation answers with an {OperationResult} and
-# `render_kiosk_result` is the one place that becomes a status.
-#
-# Nothing here means a 402. The wire's three payment/PoW codes share that status
-# and `Errors::STATUS_CODES` refuses to guess between them; the 402s on this
-# origin come from the PoW gates upstream of dispatch, never from a handler.
+# The write verbs. The work is in app/operations.
+
 class Kiosk::ReservationsController < ActionController::API
   include Kiosk::Handler
 
-  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
-  #
-  # A booking can be paid BY SOMEBODY ELSE. The cashier deliberately lets
-  # principal B settle A's booking — that is a documented property of this
-  # demo, not an accident — and until now the only way A learned of it was to
-  # re-read `my_bookings` on a guess. The subject is the booking and the
-  # audience is its OWNER, never the payer: B already knows it paid.
-  #
-  # `subject_reachable` is re-run while the subscription stands, with no
-  # request and therefore no GUC, so it calls {Booking.readable_by?} rather
-  # than the per-request isolation scope beside it.
-  # THE PROPERTY'S OWN ANSWER, and the clearest case on this wire for a stream.
-  # Every other transition here is something the caller asked for; this one is
-  # not. The guest has paid and is waiting on a hotel desk, so there is no call
-  # to re-try and no cadence to invent — the operator answers when it answers,
-  # and sometimes the answer is no and the money goes back.
   topic :booking_confirmation do
     description "The property answered your paid booking: confirmed, with the code to give at " \
                 "the desk — or cancelled, in which case the charge has been reversed to the card " \
@@ -73,10 +40,6 @@ class Kiosk::ReservationsController < ActionController::API
     subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
   end
 
-  # reserve_room — the hold. See {ReserveRoomOperation} for the inventory guard;
-  # the two identity values below are read from the identity the wire resolved
-  # rather than from arguments, which is what makes a forged `user_id` in the
-  # body inert.
   kind :action
   description "Hold a room for the authenticated principal. It is a HOLD and not a booking: " \
               "nothing is charged and no stay is confirmed until you pay and call " \
@@ -121,21 +84,16 @@ class Kiosk::ReservationsController < ActionController::API
                 },
                 required: %w[booking_id total_cents currency nights nightly_price_cents pay_hint]
   def reserve_room
-    render_kiosk_result ReserveRoomOperation.call(
+    render json: ReserveRoomOperation.call(
       principal_id: kiosk_identity.user_id,
       agent_id:     kiosk_identity.agent_id,
-      property_id:  params[:property_id],
-      room_type_id: params[:room_type_id],
+      property_id:  params[:property_id].to_i,
+      room_type_id: params[:room_type_id].to_i,
       check_in:     params[:check_in],
       check_out:    params[:check_out],
     )
   end
 
-  # confirm_booking — READS the property's answer. It writes nothing: a guest
-  # does not confirm their own booking, a hotel does, and {PropertyDecisionJob}
-  # is the only thing that mints a confirmation code. See
-  # {ConfirmBookingOperation}; the principal is NOT passed in, because the
-  # ownership test is a WHERE predicate over `kiosk.current_user_id()`.
   kind :action
   description "Collect the property's answer to a booking you have paid for. THE HOTEL " \
               "CONFIRMS, NOT YOU: paying starts it deciding, and it answers on its own clock — " \
@@ -165,6 +123,6 @@ class Kiosk::ReservationsController < ActionController::API
                 },
                 required: %w[booking_id status confirmation_code]
   def confirm_booking
-    render_kiosk_result ConfirmBookingOperation.call(booking_id: params[:booking_id])
+    render json: ConfirmBookingOperation.call(booking_id: params[:booking_id])
   end
 end

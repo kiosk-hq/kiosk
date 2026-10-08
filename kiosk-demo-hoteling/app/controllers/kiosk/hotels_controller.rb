@@ -1,26 +1,15 @@
 # frozen_string_literal: true
 
-# hoteling's READ surface: the five verbs an assistant reaches with
-# `GET /kiosk/<query-name>`, arguments in the QUERY STRING. `include
-# Kiosk::Handler` is the whole contract, and each class-level macro records a
-# declaration that the NEXT `def` claims — so a method with no macros above it
-# is a helper the wire cannot see.
-#
-# `kind :query` belongs to the DECLARATION and not to the class, so one
-# controller may declare both kinds; keeping the write half next door in
-# Kiosk::ReservationsController is this demo's shape, not a rule.
+# The read verbs.
+
 class Kiosk::HotelsController < ActionController::API
   include Kiosk::Handler
 
-  # ── properties — the whole (small) catalogue of hotels, name-ordered.
-  # The `description` carries semantics only; fields live in the schema.
   kind :query
   description "Browse the whole hotel catalogue this origin serves — an empty answer would mean this " \
               "origin lists no hotels at all. Once the human narrows to one, `availability` says " \
               "which of its room types are still free for the nights they want and `reserve_room` " \
               "takes the hold."
-  # A verb that takes nothing still declares the empty closed object, so "takes
-  # no arguments" is a published fact rather than an absence to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 description: "The whole (small) catalogue of properties, name-ordered.",
@@ -34,17 +23,11 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[property_id name city],
                 }
   def properties
-    # `pluck` rather than loading models: a projection, and naming the columns is
-    # what keeps the wire's field names and their order a decision this handler
-    # makes rather than a side effect of the schema.
     render json: Property.order(:name).pluck(:id, :name, :city).map { |id, name, city|
       { property_id: id, name: name, city: city }
     }
   end
 
-  # ── availability — the OFFER: room types of one property with no live booking
-  # overlapping the requested nights. `RoomType.free_for` is that predicate, and
-  # `reserve_room` sells against the same scope, so the two cannot disagree.
   kind :query
   description "Check which room types are still free at ONE hotel for ONE stay. An EMPTY array " \
               "means that hotel is SOLD OUT for those nights, not that it has no rooms. There is no " \
@@ -74,9 +57,6 @@ class Kiosk::HotelsController < ActionController::API
                                              "the next guest's check-in day." },
                },
                required: ["property_id", "check_in", "check_out"]
-  # The OFFER, not the catalogue. Empty means the property is sold out for those
-  # nights, and that is the ONLY thing empty means here — an unknown
-  # `property_id` is 404.
   output_schema type: "array",
                 description: "Room types free for the requested nights, cheapest first.",
                 items: {
@@ -90,40 +70,12 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[room_type_id name nightly_price_cents currency],
                 }
   def availability
-    return unless kiosk_present?(params[:property_id], "property_id")
-    return unless kiosk_present?(params[:check_in], "check_in")
-    return unless kiosk_present?(params[:check_out], "check_out")
+    property_id = params[:property_id].to_i
+    check_in    = Date.iso8601(params[:check_in])
+    check_out   = Date.iso8601(params[:check_out])
+    WireArguments.bookable!(check_in, zone: WireArguments.zone_for(property_id))
+    WireArguments.existing_property!(property_id)
 
-    property_id, refusal = WireArguments.integer(params[:property_id], field: "property_id",
-                                                                       hint: WireArguments::HINT_PROPERTY_ID)
-    return render_kiosk_result(refusal) if refusal
-
-    dates, refusal = WireArguments.stay_dates(params[:check_in], params[:check_out])
-    return render_kiosk_result(refusal) if refusal
-
-    # A past `check_in` is outside this verb's domain (§9.1's first branch), so
-    # it is a named 400 rather than the `[]` that already means SOLD OUT here —
-    # the two must not be confusable. `reserve_room` refuses the same class from
-    # the same guard.
-    #
-    # ON THIS PROPERTY'S CLOCK, not on the origin's. The lookup runs
-    # before the existence check below on purpose: an unknown id must stay a
-    # `404` rather than becoming a `400`, so {WireArguments.zone_for} answers
-    # the origin default for an id nobody has and the 404 arrives two lines
-    # later exactly as it did.
-    refusal = WireArguments.past_stay(dates.first, zone: WireArguments.zone_for(property_id))
-    return render_kiosk_result(refusal) if refusal
-
-    # Spec §9.1: `property_id` ADDRESSES a property before anything is
-    # filtered, so an id nobody has is `404 not_found` and NOT an empty list —
-    # empty is reserved for its one honest meaning here, that the property exists
-    # and is SOLD OUT for the requested nights.
-    refusal = WireArguments.existing_property(property_id)
-    return render_kiosk_result(refusal) if refusal
-
-    check_in, check_out = dates
-    # The currency is advertised on every row so an assistant knows to sign its
-    # cart in EUR (the cashier rejects any other currency at capture).
     render json: RoomType.where(property_id: property_id)
                          .free_for(property_id, check_in, check_out)
                          .order(:nightly_price_cents)
@@ -133,16 +85,6 @@ class Kiosk::HotelsController < ActionController::API
                          }
   end
 
-  # ── my_bookings — per-identity: the caller's OWN bookings only. The caller
-  # supplies no filter; the scope is provider-controlled and un-bypassable, and
-  # `own` is the ONE place the identity predicate is
-  # written (see Booking for why it stays SQL-side).
-  #
-  # THE RECONCILIATION SURFACE: the "per-user query" protocol.md §11.6 sends an
-  # assistant to after a `pay` whose response it never read, so what it
-  # publishes about money is normative. `payment_state` is a TRI-state because
-  # §11.6 requires an answer distinct from paid and not-paid: "no record" is not
-  # evidence that no money moved.
   kind :query
   description "List this principal's hotel bookings (scoped to authenticated user). " \
               "This is the query to re-read after a payment whose response never arrived: " \
@@ -172,53 +114,22 @@ class Kiosk::HotelsController < ActionController::API
                                total_cents status payment_state confirmation_code],
                 }
   def my_bookings
-    # The settled flag is a CORRELATED EXISTS over the CALLER's settlements — one
-    # statement for the whole list, not one query per row — and it is only the
-    # second of the two witnesses {Booking.payment_state} weighs.
-    settled_flag = Booking.settled_flag(Kiosk::Settlement.own)
-    render json: Booking.own
-                        .order(created_at: :desc)
-                        .pluck(:id, :property_id, :room_type_id, :check_in, :check_out,
-                               :total_cents, :status, :payment_status, settled_flag,
-                               :confirmation_code)
-                        .map { |id, property_id, room_type_id, check_in, check_out,
-                                total_cents, status, payment_status, settled, confirmation_code|
-                          { booking_id:        id,
-                            property_id:       property_id,
-                            room_type_id:      room_type_id,
-                            check_in:          check_in,
-                            check_out:         check_out,
-                            total_cents:       total_cents,
-                            status:            status,
-                            payment_state:     Booking.payment_state(payment_status, settled),
-                            confirmation_code: confirmation_code }
-                        }
+    render json: Booking.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc).map { |booking|
+      { booking_id:        booking.id,
+        property_id:       booking.property_id,
+        room_type_id:      booking.room_type_id,
+        check_in:          booking.check_in,
+        check_out:         booking.check_out,
+        total_cents:       booking.total_cents,
+        status:            booking.status,
+        payment_state:     booking.payment_state,
+        confirmation_code: booking.confirmation_code }
+    }
   end
 
-  # ── search_hotels — paginated, multi-parameter search ────────────────────────
-  #
-  # The fleet's ONLY paginating verb: the one handler that answers with
-  # `render_kiosk_page`. Per RFC 8288 the opaque cursor rides in a
-  # `Link: <…?cursor=…>; rel="next"` header and the matching-row count in
-  # `X-Total-Count`, so the BODY is the same bare array every other query
-  # answers (spec §8.2/§8.4).
-  HOTELING_SEARCH_PAGE = 20  # default page size (assistant may override via `limit`)
-  HOTELING_SEARCH_MAX  = 50  # cap so `limit` can't defeat pagination
+  SEARCH_PAGE = 20
+  SEARCH_MAX  = 50
 
-  # The «what should I have sent» tails for this verb's three INTEGER arguments:
-  # a refusal that only says «not an integer» leaves the caller guessing the
-  # domain, so each of these names it.
-  HINT_SEARCH_LIMIT     = "`limit` is a whole number of rows, e.g. 20. It is CLAMPED to " \
-                          "1..#{HOTELING_SEARCH_MAX} — an integer outside that range is adjusted, " \
-                          "never refused; this refusal is about the SHAPE."
-  HINT_SEARCH_MIN_STARS = "`min_stars` is a whole number 1..5 — the star rating to floor at."
-  HINT_SEARCH_MAX_PRICE = "`max_price_cents` is a whole number of EUR CENTS, e.g. 20000 for €200."
-
-  # The prose description does not restate the schemas. The one carve-out is the
-  # page size and its clamp: `limit` and `cursor` are RESERVED names a verb
-  # never declares (spec §8.1 item 6), so the engine's derived OpenAPI injects
-  # `limit` with no `default:` and no `maximum:` — twenty and fifty are stated
-  # nowhere else on this verb, which makes them prose's job.
   kind :query
   description "Search Istanbul hotels, returning a paginated page of SUMMARY rows — one per hotel, " \
               "priced from its cheapest room. Apply the human's stated constraints as filters so the " \
@@ -242,16 +153,7 @@ class Kiosk::HotelsController < ActionController::API
                  min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Star-rating floor." },
                  amenity:         { type: "string", enum: AMENITY_POOL, description: "Property must offer this amenity." },
                },
-               # `limit` and `cursor` ARE NOT DECLARED HERE, and their absence is
-               # the declaration: spec §8.1 item 6 and §8.4 make them RESERVED
-               # names the wire always accepts and a verb never declares. The
-               # decoder still coerces them, the validator exempts them from
-               # `additionalProperties: false`, and the OpenAPI renderer injects
-               # both into this operation.
                required: []
-  # ONE SHAPE: the cursor is a `Link` header, so a truncated page and a complete
-  # one are the SAME array and the declaration says so once. `$defs` is kept
-  # because the row shape is worth naming.
   output_schema "$defs": {
                   hotel: {
                     type: "object", additionalProperties: false,
@@ -279,77 +181,22 @@ class Kiosk::HotelsController < ActionController::API
     from_price_cents: 15000, currency: "eur", room_type_count: 2,
   })
   def search_hotels
-    # The three integers go through {WireArguments.integer}, not `.to_i`, which
-    # answers 0 for `"abc"` and 1 for `"1.5"` — a junk filter would silently
-    # become «no floor at all» and a junk `limit` the default page size. The
-    # guard is `Integer(raw, 10)` with base 10 explicit, so `"0x10"` is refused
-    # rather than read as 16.
-    #
-    # The engine's ArgumentDecoder has already coerced all three, so this is not
-    # wire-reachable — but a layer that only holds while the layer in front of
-    # it holds is not a second layer.
-    #
-    # `limit` takes no `max:` deliberately: it is the one integer here that
-    # reaches no COLUMN — it becomes `.limit()`, bounded by construction two
-    # lines below — and refusing a `limit` of 2**31 would contradict the
-    # sentence the descriptor publishes. The two FILTERS take one, because each
-    # is compared against a 4-byte `integer` column.
-    limit = HOTELING_SEARCH_PAGE
-    if params[:limit].present?
-      requested, refusal = WireArguments.integer(params[:limit], field: "limit",
-                                                                 hint: HINT_SEARCH_LIMIT)
-      return render_kiosk_result(refusal) if refusal
-
-      limit = requested
-    end
-    # The floor is 1, NOT the default page size: `limit=0` and every negative
-    # integer are CLAMPED into 1..50, because mapping them to
-    # HOTELING_SEARCH_PAGE would silently hand a caller asking for zero rows
-    # twenty of them. `script/search_flow.rb` sends `limit=0` and check:search
-    # asserts the one-row page, so the floor is asserted, not just written.
-    limit = 1 if limit < 1
-    limit = HOTELING_SEARCH_MAX if limit > HOTELING_SEARCH_MAX
-
-    # A cursor is OPAQUE BY CONTRACT: the assistant round-trips it and never
-    # parses or builds one. An ABSENT cursor is the first page; one this
-    # endpoint did not issue is a typed 400 rather than a silent page one.
-    # `decode_offset` cannot return a negative offset, so nothing clamps here.
+    limit  = (params[:limit] || SEARCH_PAGE).to_i.clamp(1, SEARCH_MAX)
     offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
 
-    # The filters, in the order they are applied — a refusal is raised where the
-    # filter is read, so `{min_stars: "abc", max_price_cents: "abc"}` answers
-    # about `min_stars` first.
     scope = Property.all
-    scope = scope.where(neighbourhood: params[:neighbourhood].to_s) if params[:neighbourhood].present?
-    if params[:min_stars].present?
-      min_stars, refusal = WireArguments.integer(params[:min_stars], field: "min_stars",
-                                                                     hint: HINT_SEARCH_MIN_STARS,
-                                                                     max:  WireArguments::MAX_INT4)
-      return render_kiosk_result(refusal) if refusal
-
-      scope = scope.where(Property.arel_table[:stars].gteq(min_stars))
-    end
-    scope = scope.offering(params[:amenity].to_s) if params[:amenity].present?
+    scope = scope.where(neighbourhood: params[:neighbourhood]) if params[:neighbourhood].present?
+    scope = scope.where(Property.arel_table[:stars].gteq(params[:min_stars].to_i)) if params[:min_stars].present?
+    scope = scope.offering(params[:amenity]) if params[:amenity].present?
     if params[:max_price_cents].present?
-      max_price_cents, refusal = WireArguments.integer(params[:max_price_cents],
-                                                       field: "max_price_cents",
-                                                       hint:  HINT_SEARCH_MAX_PRICE,
-                                                       max:   WireArguments::MAX_INT4)
-      return render_kiosk_result(refusal) if refusal
-
-      scope = scope.where(Property.from_price_cents.lteq(max_price_cents))
+      scope = scope.where(Property.from_price_cents.lteq(params[:max_price_cents].to_i))
     end
 
-    # Fetch limit+1 to detect a following page without counting the whole set.
-    rows = scope.order(Property.arel_table[:stars].desc,
-                       Property.from_price_cents.asc,
-                       Property.arel_table[:id].asc)
+    rows = scope.order(Property.arel_table[:stars].desc, Property.from_price_cents.asc, Property.arel_table[:id].asc)
                 .limit(limit + 1)
                 .offset(offset)
-                .pluck(:id, :name, :neighbourhood, :stars,
-                       Property.from_price_cents, Property.room_type_count)
+                .pluck(:id, :name, :neighbourhood, :stars, Property.from_price_cents, Property.room_type_count)
 
-    has_more = rows.length > limit
     page = rows.first(limit).map { |id, name, neighbourhood, stars, from_price_cents, room_type_count|
       { property_id:      id,
         name:             name,
@@ -360,17 +207,13 @@ class Kiosk::HotelsController < ActionController::API
         currency:         "eur" }
     }
 
-    # `total:` is one extra query, deliberately: the limit+1 probe decides
-    # TRUNCATION without a COUNT, but `X-Total-Count` is a statement about the
-    # whole matching set, which no page of 21 rows can produce.
     render_kiosk_page(
       page,
-      next_cursor: has_more ? Kiosk::Server::Cursor.encode_offset(offset + limit) : nil,
+      next_cursor: rows.length > limit ? Kiosk::Server::Cursor.encode_offset(offset + limit) : nil,
       total:       scope.count,
     )
   end
 
-  # ── hotel_detail — fetch ONE property by id (search→summaries, fetch on demand)
   kind :query
   description "Fetch the full record for ONE hotel — the «search returns summaries, fetch detail on " \
               "demand» half of this origin's read surface. Call it for the one or few hotels the " \
@@ -396,11 +239,6 @@ class Kiosk::HotelsController < ActionController::API
                                 description: "Checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
                },
                required: ["property_id"]
-  # A ONE-ROW ARRAY, not a bare object. Spec §8.2: a query answers a JSON ARRAY
-  # of rows, and a detail-by-id query is still a query. The MISS is a separate
-  # question from the SHAPE: an id nobody has is `404 not_found`
-  # (spec §9.1), because an empty one-row array would state that the property
-  # exists and merely has no detail.
   output_schema type: "array",
                 description: "ONE property in full, with its room types — a one-row array. " \
                              "A property_id nobody has is 404 not_found, not an empty array.",
@@ -438,11 +276,6 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[property_id name neighbourhood stars address amenities currency
                                room_types_scope check_in check_out timezone room_types],
                 }
-  # The stay is RESOLVED, not written down: a calendar literal here ages
-  # into a 400, because a `check_in` before today is refused. `example_params`
-  # and `example_row` are RESOLVABLE slots (see {Kiosk::Server::SchemaSlots}), so
-  # both name {WireArguments.example_check_in}/{WireArguments.example_check_out},
-  # and `room_types_scope` is built from the same two rather than repeating them.
   example_params({ property_id: 4,
                    check_in:  -> { WireArguments.example_check_in.iso8601 },
                    check_out: -> { WireArguments.example_check_out.iso8601 } })
@@ -463,109 +296,36 @@ class Kiosk::HotelsController < ActionController::API
     ],
   })
   def hotel_detail
-    return unless kiosk_present?(params[:property_id], "property_id")
-
-    # ── Optional date filter ─────────────────────────────────────────────────
-    # With both dates this applies `availability`'s exclusion — the SAME
-    # `RoomType.free_for` scope, not a second copy of the predicate. Without them
-    # the list is a CATALOGUE, and the response says so rather than implying an
-    # offer.
-    ci_raw = params[:check_in].to_s.strip
-    co_raw = params[:check_out].to_s.strip
-    dated  = !ci_raw.empty? && !co_raw.empty?
-    if !dated && (!ci_raw.empty? || !co_raw.empty?)
-      return render_kiosk_result(OperationResult.refused(
-        code:    "bad_request",
-        message: "check_in and check_out go together — pass both (YYYY-MM-DD) for a free-rooms " \
-                 "list, or neither for the property's full catalogue",
-      ))
-    end
+    property_id = params[:property_id].to_i
+    dated = params[:check_in].present? || params[:check_out].present?
     if dated
-      # One date guard for the whole origin: {WireArguments.stay_dates}, which
-      # accepts `\A\d{4}-\d{2}-\d{2}\z` and nothing else.
-      #
-      # The strict spelling, because `Date.parse` SCANS rather than validates:
-      # `"x2026-09-01x"`, `"2026-09-01'; --"` and `["2026-09-01"].to_s` all
-      # parse; `"09/01/2026"` is read as 9 January, not the 1 September an
-      # assistant sending it means; and `"Tue"`, `"sep"` and `"1st"` are
-      # completed from TODAY'S CLOCK, so the accepted set would depend on the
-      # day the call is made and there is no set to name.
-      dates, refusal = WireArguments.stay_dates(ci_raw, co_raw)
-      return render_kiosk_result(refusal) if refusal
-
-      ci, co = dates
-      unless co > ci
-        return render_kiosk_result(OperationResult.refused(
-          code: "bad_request", message: "check_out must be after check_in",
-        ))
+      if params[:check_in].blank? || params[:check_out].blank?
+        WireArguments.refuse "check_in and check_out go together — pass both (YYYY-MM-DD) for a free-rooms " \
+                             "list, or neither for the property's full catalogue"
       end
-      dated_check_in = ci
+      check_in, check_out = WireArguments.stay(params[:check_in], params[:check_out])
+      WireArguments.bookable!(check_in, zone: WireArguments.zone_for(property_id))
     end
 
-    property_id, refusal = WireArguments.integer(params[:property_id], field: "property_id",
-                                                                       hint: WireArguments::HINT_PROPERTY_ID)
-    return render_kiosk_result(refusal) if refusal
+    property = Property.find_by(id: property_id) or WireArguments.property_not_found!(property_id)
+    rooms = property.room_types
+    rooms = rooms.free_for(property_id, check_in, check_out) if dated
 
-    # THE FLOOR IS THIS PROPERTY'S, so it cannot be applied before the property
-    # is known — which is why the dates are parsed above and judged here.
-    # With dates this verb becomes an availability statement, so a past
-    # `check_in` would publish a free-rooms list for nights nobody can book.
-    # Same guard as `availability` and `reserve_room`, and one floor PER
-    # PROPERTY rather than per origin.
-    zone = WireArguments.zone_for(property_id)
-    if dated_check_in
-      refusal = WireArguments.past_stay(dated_check_in, zone: zone)
-      return render_kiosk_result(refusal) if refusal
-    end
-
-    # `pick`, not `find_by!`: the bang form's RecordNotFound would render a 404
-    # carrying Rails' own message, which says nothing an assistant can act on.
-    # The refusal below is the same status with this origin's sentence in it.
-    prop = Property.where(id: property_id)
-                   .pick(:id, :name, :neighbourhood, :stars, :address, :amenities, :timezone)
-    # NO SUCH HOTEL IS 404 (spec §9.1). Not confusable with the 404 the
-    # wire answers for an UNREGISTERED VERB: that one names the verb and carries
-    # the registry's hint, this one names the id.
-    return render_kiosk_result(WireArguments.property_not_found(property_id)) if prop.nil?
-
-    rooms = RoomType.where(property_id: property_id)
-    rooms = rooms.free_for(property_id, ci, co) if dated
-    # `amenities` is jsonb and ActiveRecord already hands back a Ruby Array. The
-    # brackets are the one-row array §8.2 requires: a query answers rows.
     render json: [{
-      property_id:      prop[0],
-      name:             prop[1],
-      neighbourhood:    prop[2],
-      stars:            prop[3],
-      address:          prop[4],
-      amenities:        prop[5],
+      property_id:      property.id,
+      name:             property.name,
+      neighbourhood:    property.neighbourhood,
+      stars:            property.stars,
+      address:          property.address,
+      amenities:        property.amenities,
       currency:         "eur",
-      # Says which of the two things the list is, so a reader of the response
-      # alone (not the descriptor) cannot mistake a catalogue for an offer.
-      room_types_scope: dated ? "free #{ci}..#{co}" : "catalogue (no dates given — not an availability statement)",
-      check_in:         dated ? ci.to_s : nil,
-      check_out:        dated ? co.to_s : nil,
-      # THE ROW SAYS WHOSE CLOCK IT IS ON (spec §3 point 8 rule 9). Read off
-      # the property, never off the origin: a second hotel in another city
-      # answers a different value here, and `check_in` is a calendar day of
-      # THIS one's calendar.
-      timezone:         prop[6],
+      room_types_scope: dated ? "free #{check_in}..#{check_out}" : "catalogue (no dates given — not an availability statement)",
+      check_in:         check_in&.iso8601,
+      check_out:        check_out&.iso8601,
+      timezone:         property.timezone,
       room_types:       rooms.order(:nightly_price_cents)
                              .pluck(:id, :name, :nightly_price_cents)
-                             .map { |id, name, cents|
-                               { room_type_id: id, name: name, nightly_price_cents: cents }
-                             },
+                             .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents } },
     }]
-  end
-
-  private
-
-  # Presence guard as a guard clause: `return unless kiosk_present?(…)`, so the
-  # refusal is already rendered when the action returns.
-  def kiosk_present?(value, field)
-    return true if value.present?
-
-    render_kiosk_result(WireArguments.missing(field))
-    false
   end
 end

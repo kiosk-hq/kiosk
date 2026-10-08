@@ -122,8 +122,7 @@ namespace :check do
       Booking.create!(user: user, property: property, room_type: room_type,
                       check_in: Date.current + (3650 + (offset * 10)),
                       check_out: Date.current + (3650 + (offset * 10) + 2),
-                      total_cents: 24_000, status: Booking::RESERVED,
-                      payment_status: Booking::PAID)
+                      total_cents: 24_000, status: :reserved, payment_status: :paid)
     }
 
     puts "\n── the property ACCEPTS (rate 0) ──"
@@ -131,7 +130,7 @@ namespace :check do
     Rails.configuration.x.hoteling.decline_rate = 0
     PropertyDecisionJob.new.perform(accepted.id)
     accepted.reload
-    check.call("status is confirmed", accepted.status == Booking::CONFIRMED)
+    check.call("status is confirmed", accepted.confirmed?)
     check.call("a confirmation code was persisted", accepted.confirmation_code.present?)
     event = store.since(accepted.user_id, 0).find { |e| e["subject"] == accepted.id }
     check.call("one booking_confirmation event, status=confirmed",
@@ -145,7 +144,7 @@ namespace :check do
     Rails.configuration.x.hoteling.decline_rate = 1
     PropertyDecisionJob.new.perform(declined.id)
     declined.reload
-    check.call("status is cancelled", declined.status == Booking::CANCELLED)
+    check.call("status is cancelled", declined.cancelled?)
     # THE NIGHTS COME BACK, and nothing wrote a second row to say so: the
     # overlap constraint and the `live` scope are both scoped to
     # reserved+confirmed, so the status alone frees the room.
@@ -213,11 +212,11 @@ namespace :check do
     Rails.configuration.x.hoteling.decline_rate = 1
     PropertyDecisionJob.new.perform(paid.id)
     paid.reload
-    check.call("status is cancelled", paid.status == Booking::CANCELLED)
-    check.call("payment_status is refunded", paid.payment_status == Booking::REFUNDED)
+    check.call("status is cancelled", paid.cancelled?)
+    check.call("payment_status is refunded", paid.refunded?)
     check.call("a Stripe refund reference was persisted", paid.refund_psp_reference.to_s.start_with?("re_"))
     check.call("my_bookings publishes payment_state=refunded, though the settlement row stays",
-               Booking.payment_state(paid.payment_status, true) == "refunded")
+               paid.payment_state == "refunded")
     pevent = store.since(paid.user_id, head_paid).find { |e| e["subject"] == paid.id }
     refund = pevent && pevent["data"]["refund"]
     check.call("the event carries the refund", !refund.nil?)
@@ -240,41 +239,39 @@ namespace :check do
     # is `check:book`'s SKIP_PAY beat and not this one.
     pending = seed.call
     settle.call(pending)
-    pending.update_columns(status: Booking::RESERVED)
+    pending.update_columns(status: "reserved")
     # Both gates read the principal from the DB session rather than from an
     # argument (that is what makes a forged `user_id` in the body inert), so
     # off the wire the session has to be opened by hand — which is exactly what
     # the engine's own refusal tells a rake task to do.
     identity = Kiosk::Identity.new(user_id: pending.user_id, role: "customer", actor: "agent",
                                    agent_id: SecureRandom.uuid)
-    answer = Kiosk::Server::SessionContext.open(
-      connection: ActiveRecord::Base.lease_connection, identity: identity,
-    ) { ConfirmBookingOperation.call(booking_id: pending.id) }
+    refusal = begin
+      Kiosk::Server::SessionContext.open(
+        connection: ActiveRecord::Base.lease_connection, identity: identity,
+      ) { ConfirmBookingOperation.call(booking_id: pending.id) }
+      nil
+    rescue Kiosk::Server::Errors::Forbidden => e
+      e
+    end
     check.call("confirm_booking writes nothing while the property is silent",
-               pending.reload.status == Booking::RESERVED && pending.confirmation_code.nil?)
+               pending.reload.reserved? && pending.confirmation_code.nil?)
     # AND IT SAYS WHY. «not found or not yours» over a booking that is both
     # would send an assistant to re-read `my_bookings` and find it there, so
     # the refusal names the thing that has not happened yet.
     check.call("…and the refusal names the property's silence",
-               !answer.ok? && answer.message.include?("the property has not answered"))
+               refusal&.message.to_s.include?("the property has not answered"))
 
     puts "\n── a decision that arrives twice changes nothing ──"
     PropertyDecisionJob.new.perform(accepted.id)
     check.call("a second run leaves the confirmed booking alone",
-               accepted.reload.status == Booking::CONFIRMED)
+               accepted.reload.confirmed?)
 
     if failures.empty?
       puts "\n  All property-decision assertions passed."
     else
       abort("\n  FAILED: #{failures.join('; ')}")
     end
-  end
-
-  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
-  task :wire_args_spec do
-    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
-    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
-    sh "ruby #{spec}"
   end
 
   # ── The conformance suite, and why it is `rspec` here ──────────────────────
@@ -290,11 +287,6 @@ namespace :check do
   # one, off the same gem and the same checks, and the two render the same
   # failure sentence. An adopting operator copies whichever matches the
   # framework they already run.
-  #
-  # `.rspec` sets `--default-path spec/conformance` and that is load-bearing:
-  # `spec/wire_arguments_spec.rb` beside it is a standalone assertion script,
-  # not an RSpec file, so a bare run over the whole of `spec/` would load it,
-  # define zero examples and exit 0 having asserted nothing.
   #
   # It runs in RAILS_ENV=test against its OWN database, so it neither reads nor
   # disturbs the seeded development data every other task in this file shares —
@@ -800,11 +792,8 @@ namespace :check do
     with two fresh principals (A and B), and asserts all cross-tenant denial
     properties:
 
-      Assertion 1 (ownership denial — Gate-1 isolated): B settles a payment
-        mandate referencing A's booking (Gate-2 ✓) then calls confirm_booking
-        on A's booking_id. Gate-1 (user_id = kiosk.current_user_id() AND
-        status='reserved') finds nothing → 403. The 403 isolates Gate-1
-        because Gate-2 is genuinely satisfied by B.
+      Assertion 1a: B's pay for A's booking → 403 forbidden, nothing charged.
+      Assertion 1b: B's confirm_booking on A's booking → 403.
       Assertion 2a (exclusion): B's my_bookings does NOT contain A's booking.
       Assertion 2b (positive control): B's my_bookings DOES contain B's own
         booking, proving the exclusion is not vacuous.
@@ -944,16 +933,20 @@ namespace :check do
     b_confirm_booking_rc = result["b_confirm_booking_rc"]
     b_booking_ids        = result["b_booking_ids"] || []
 
-    # ── Assertion 1: B's confirm_booking on A's booking → 403 ────────────
-    # B paid for rA (Gate-2 ✓); the 403 isolates Gate-1 ownership exclusively.
+    pay_rc, pay_code = result["b_pay_refusal"] || []
+    if pay_rc == 403 && pay_code == "forbidden"
+      puts "  OK  Assertion 1a: B's pay for A's #{booking_id_a} → 403 forbidden"
+    else
+      failures << "B paid for A's booking: #{[pay_rc, pay_code].inspect}, want [403, \"forbidden\"]"
+      puts "  FAIL  Assertion 1a: B's pay for A's booking → #{[pay_rc, pay_code].inspect}"
+    end
+
     if b_confirm_booking_rc == 403
-      puts "  OK  Assertion 1: B's confirm_booking on A's #{booking_id_a} → 403 " \
-           "(Gate-1 ownership denied; Gate-2 payment satisfied)"
+      puts "  OK  Assertion 1b: B's confirm_booking on A's #{booking_id_a} → 403"
     else
       failures << "ISOLATION HOLE: B's confirm_booking on A's booking returned " \
-                  "#{b_confirm_booking_rc.inspect} (expected 403) — Gate-1 ownership bypass"
-      puts "  FAIL  Assertion 1: B's confirm_booking on A's booking expected 403, " \
-           "got #{b_confirm_booking_rc.inspect} — isolation hole"
+                  "#{b_confirm_booking_rc.inspect} (expected 403)"
+      puts "  FAIL  Assertion 1b: B's confirm_booking on A's booking → #{b_confirm_booking_rc.inspect}"
     end
 
     # ── Assertion 2a: B's my_bookings excludes A's booking ───────────────
@@ -1024,7 +1017,7 @@ namespace :check do
     prints the count it actually ran; this list names them. No count is kept
     here on purpose — a count kept here is a count that rots:
 
-      BLOCKED  PayForOtherUseSelf    — C2: B pays for A's booking, tries confirm_booking
+      BLOCKED  PayForOtherUseSelf    — C2: B's pay for A's booking is refused
       BLOCKED  SpentResourceReuse    — C3: re-confirm an already-confirmed booking
       BLOCKED  UnpaidGatedAction     — confirm_booking without payment → Gate-2 fires
       BLOCKED  CrossTenantRead       — B's my_bookings excludes A's rows

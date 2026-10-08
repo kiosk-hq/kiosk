@@ -110,7 +110,7 @@ needs. It is not shorter under containers; it is unnecessary.
 From this directory:
 
 ```
-bin/rails check:wire_args_spec # DB-free unit spec (no boot, no Postgres, no toll) for the WireArguments shape guards every verb opens with: party_size's shape/floor/int4-ceiling sentences, the whole_number table, the seating-time, seating-date and neighbourhood domain refusals, and booking_id's blank-vs-malformed split
+bin/rails test             # the argument checks the verbs' input schemas cannot express, and the per-restaurant seating clock
 bin/rails demo:setup       # DROPS and recreates the DB, then seeds the Lisbon restaurant roster, their tables, and diners
 bin/rails check:book        # the headline: register → availability → book_table(party 2) → my_bookings
 bin/rails check:binding     # a diner signs in (Devise), links their assistant, and its booking ties to the diner
@@ -149,7 +149,6 @@ and pull request; the rest are local-only, for the reason given.
 | Task | Runs in CI | Why not |
 |---|---|---|
 | `demo:setup` | yes — the job's own setup step |  |
-| `check:wire_args_spec` | yes |  |
 | `check:walkthrough` | yes |  |
 | `check:book` | yes |  |
 | `check:pow` | yes |  |

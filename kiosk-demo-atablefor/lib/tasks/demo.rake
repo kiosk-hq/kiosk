@@ -81,13 +81,6 @@ end
 
 namespace :check do
 
-  desc "DB-free unit spec for the WireArguments shape guards — every verb's first gate."
-  task :wire_args_spec do
-    spec = File.expand_path("../../spec/wire_arguments_spec.rb", __dir__)
-    puts "\n── WireArguments shape-guard spec (no boot, no DB) ──"
-    sh "ruby #{spec}"
-  end
-
   desc "Boot the server and run the curl demo walkthrough."
   task walkthrough: "demo:setup" do
     exec File.expand_path("../../bin/demo", __dir__)

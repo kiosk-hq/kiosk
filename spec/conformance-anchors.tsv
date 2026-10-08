@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1910 anchors.
+# 1898 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -55,7 +55,7 @@ deploy/Caddyfile	skooti.demo.kiosk.tech {
 deploy/Caddyfile	stylish.demo.kiosk.tech {
 deploy/Caddyfile	tudu.demo.kiosk.tech {
 deploy/README.md	## Per-demo map
-deploy/README.md	**PoW difficulty is a feature**: ALL seven demos honor the
+deploy/README.md	**PoW difficulty is fixed per demo** in its
 deploy/README.md	**The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
 deploy/README.md	Runbook for hosting the 7 Kiosk demo Rails apps **plus the KYC broker**
 deploy/README.md	What the EDGE on that box is, measured over ssh 2026-09-15, read-only:
@@ -64,9 +64,8 @@ deploy/README.md	| prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not 
 deploy/demo-reset.sh	# ADDITIVELY re-seeded, because it holds the orders REAL third-party assistants
 deploy/demo-reset.sh	# Those rows are evidence of a run that happened, and seeding cannot reproduce
 deploy/demo-reset.sh	# placed against this origin — the Hermes-verified order f8bc3efb among them.
-deploy/env/atablefor.env.example	KIOSK_POW_DIFFICULTY=high
-deploy/env/getgrocery.env.example	KIOSK_POW_DIFFICULTY=low
 deploy/env/hoteling.env.example	STRIPE_SECRET_KEY=sk_test_REPLACE_WITH_STRIPE_TEST_KEY
+deploy/env/skooti.env.example	KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech
 e2e/README.md	    ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
 e2e/README.md	    ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
 e2e/README.md	    ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
@@ -320,14 +319,13 @@ kiosk-demo-atablefor/before-after.md	`rake check:book` runs the errand with no h
 kiosk-demo-atablefor/before-after.md	rails g kiosk:install
 kiosk-demo-atablefor/config/initializers/kiosk.rb	        account_age_seconds:     nil,
 kiosk-demo-atablefor/config/initializers/kiosk.rb	        dispute_count:           nil,
-kiosk-demo-atablefor/config/initializers/kiosk.rb	      count = Booking.confirmed.where(user_id: identity.user_id).count
 kiosk-demo-atablefor/config/initializers/kiosk.rb	    c.reputation_factors = ->(identity:, **) {
-kiosk-demo-atablefor/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-atablefor/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
-kiosk-demo-atablefor/config/initializers/kiosk.rb	# ── NO payment_provider ──────────────────────────────────────────────────
-kiosk-demo-atablefor/config/initializers/kiosk.rb	Anti-scalping: 0 bookings → 2 proofs · 1 booking → 1 proof · 2+ → free pass
-kiosk-demo-atablefor/config/initializers/kiosk.rb	Factors: REAL DB lookup
+kiosk-demo-atablefor/config/initializers/kiosk.rb	# 0 confirmed bookings: 2 proofs · 1: 1 proof · 2+: free.
+kiosk-demo-atablefor/config/initializers/kiosk.rb	EQUIHASH_PARAMS = { n: 168, k: 7 }.freeze
 kiosk-demo-atablefor/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-atablefor/config/initializers/kiosk.rb	pow_difficulty: "high",
+kiosk-demo-atablefor/config/initializers/kiosk.rb	settled_purchases_count: Booking.confirmed.where(user_id: identity.user_id).count,
 kiosk-demo-atablefor/db/seeds.rb	# atablefor — a restaurant AGGREGATOR across a few Lisbon neighbourhoods, taking
 kiosk-demo-atablefor/db/seeds.rb	# upcoming evening seatings relative to NOW on each restaurant's own clock (see
 kiosk-demo-atablefor/lib/tasks/demo.rake	      failures << "expected served_after_2_bookings=true + challenge_after_2=nil; got served=#{served_2.inspect}, challenge=#{n_after_2.inspect}"
@@ -352,7 +350,6 @@ kiosk-demo-atablefor/script/book_flow.rb	# Reference agent driver: no-human rest
 kiosk-demo-atablefor/script/book_flow.rb	# The headline: a 2-top at tonight's 20:00 seating ("a table for two tonight at 8").
 kiosk-demo-atablefor/script/book_flow.rb	slot = slots.find { |r| r["seating_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
 kiosk-demo-atablefor/script/pow_flow.rb	abort "expected HTTP 403 for wrong nonce, got #{rc_wrong}: #{JSON.generate(resp_wrong)}"
-kiosk-demo-atablefor/script/pow_flow.rb	abort "expected bad_proof_count >= 1 for the offending identity after wrong nonce, got #{bad_proof_count}"
 kiosk-demo-atablefor/script/pow_flow.rb	rc_challenge, resp_challenge = availability_once
 kiosk-demo-atablefor/script/pow_flow.rb	rc_served, resp_served = availability_once(proofs)
 kiosk-demo-atablefor/script/pow_flow.rb	rc_wrong, resp_wrong = availability_once([{ challenge: challenge_neg, nonce: bad_nonce }])
@@ -391,20 +388,20 @@ kiosk-demo-getgrocery/before-after.md	**The human is needed once.**
 kiosk-demo-getgrocery/before-after.md	Both flagship consumer-commerce connectors in Claude today, Uber Eats and
 kiosk-demo-getgrocery/before-after.md	ChatGPT-Agent food orders take 6–20 minutes, two to three times a human, and
 kiosk-demo-getgrocery/before-after.md	`rake check:shop` runs the errand end to end:
-kiosk-demo-getgrocery/config/environments/development.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
-kiosk-demo-getgrocery/config/environments/development.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
-kiosk-demo-getgrocery/config/environments/production.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
-kiosk-demo-getgrocery/config/environments/test.rb	  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
-kiosk-demo-getgrocery/config/environments/test.rb	  config.x.kiosk.test_autocard = ENV["KIOSK_TEST_AUTOCARD"] == "1"
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18]
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_public_key = Rails.configuration.x.kiosk.prove_public_key_pem
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_public_key = ENV.fetch("KIOSK_PROVE_PUBLIC_KEY_PEM")
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	  raise "getgrocery requires STRIPE_SECRET_KEY (sk_test_…) or STRIPE_MOCK_URL" if key.blank?
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	Stripe.api_base = ENV["STRIPE_MOCK_URL"] if ENV["STRIPE_MOCK_URL"]
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	api_key:       ENV.fetch("STRIPE_SECRET_KEY"),
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.payment_provider = Kiosk::Server::PaymentClaim.new(
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.signing_key       = Base64.decode64(ENV.fetch("KIOSK_SIGNING_KEY_B64"))
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	test_autocard: ENV["KIOSK_TEST_AUTOCARD"] == "1",
+kiosk-demo-getgrocery/config/local_env.rb	ENV["STRIPE_SECRET_KEY"]          ||= "sk_test_mock"
 kiosk-demo-getgrocery/config/routes/kiosk.rb	# 1. THE PROTOCOL PLANE IS MOUNTED, the ordinary Rails way. `schema`, `pay`, the
 kiosk-demo-getgrocery/config/routes/kiosk.rb	get  "/kiosk/catalog",             to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
 kiosk-demo-getgrocery/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
@@ -471,6 +468,8 @@ kiosk-demo-hoteling/README.md	always gated by Equihash proof-of-work** (`registr
 kiosk-demo-hoteling/README.md	bin/rails check:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the paym
 kiosk-demo-hoteling/README.md	bin/rails demo:setup       # create + load schema + seed the properties and rooms
 kiosk-demo-hoteling/README.md	this origin serves, never the registered verb names. That is a MODELLING rule,
+kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def hotel_detail
+kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def search_hotels
 kiosk-demo-hoteling/app/models/property.rb	zone is a recorded column rather than a constant on the origin, because an
 kiosk-demo-hoteling/app/models/room_hold.rb	  # this as an expiry: nothing enforces it.
 kiosk-demo-hoteling/app/models/room_hold.rb	  PAY_BY = 15.minutes
@@ -486,10 +485,9 @@ kiosk-demo-hoteling/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree
 kiosk-demo-hoteling/before-after.md	`rake check:book` runs the errand with no human present:
 kiosk-demo-hoteling/config/initializers/kiosk.rb	      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
-kiosk-demo-hoteling/config/initializers/kiosk.rb	# Queries: properties, availability, my_bookings, search_hotels, hotel_detail
-kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(api_key: key, test_autocard: Rails.configuration.x.kiosk.test_autocard),
+kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap = Kiosk::Server::ColumnSpendingCap.new
+kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
 kiosk-demo-hoteling/db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb	def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
 kiosk-demo-hoteling/lib/tasks/demo.rake	        puts "  OK  SKIP_PAY: http_confirm_booking == 403"
 kiosk-demo-hoteling/lib/tasks/demo.rake	  task book: "demo:setup" do
@@ -528,10 +526,8 @@ kiosk-demo-philslist/README.md	identity-binding surface with **no money on the w
 kiosk-demo-philslist/README.md	its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 kiosk-demo-philslist/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-philslist/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist
-kiosk-demo-philslist/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-philslist/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
-kiosk-demo-philslist/config/initializers/kiosk.rb	# `payment_provider` here, so `capabilities` computes to schema/queries/actions and
-kiosk-demo-philslist/config/initializers/kiosk.rb	# ── NO payment_provider ──────────────────────────────────────────────────
+kiosk-demo-philslist/config/initializers/kiosk.rb	# A classifieds board takes no money: no payment_provider, so `pay` is absent from discovery.
 kiosk-demo-philslist/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-philslist/lib/tasks/demo.rake	    if capabilities.include?("pay")
 kiosk-demo-philslist/lib/tasks/demo.rake	  task :walkthrough do
@@ -601,13 +597,14 @@ kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/m
 kiosk-demo-skooti/before-after.md	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	`rake check:rideflow` runs the errand with no human account and no sign-in:
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
+kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
-kiosk-demo-skooti/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(api_key: key, test_autocard: Rails.configuration.x.kiosk.test_autocard),
+kiosk-demo-skooti/config/initializers/kiosk.rb	EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
+kiosk-demo-skooti/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-skooti/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience   = prove_operator
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience   = "skooti"
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count  = 1
 kiosk-demo-skooti/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-skooti/lib/tasks/demo.rake	  task :rideflow do
@@ -660,10 +657,9 @@ kiosk-demo-stylish/app/operations/book_appointment_operation.rb	names no time zo
 kiosk-demo-stylish/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-stylish/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish
 kiosk-demo-stylish/bin/demo	run an Action
-kiosk-demo-stylish/config/initializers/kiosk.rb	  # before a cart exists. stylish configures no payment_provider (this salon
-kiosk-demo-stylish/config/initializers/kiosk.rb	  # role separation in this demo). This demo runs WITHOUT RLS — isolation
 kiosk-demo-stylish/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-stylish/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-stylish/config/initializers/kiosk.rb	c.system_role    = "app_role"
 kiosk-demo-stylish/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-stylish/lib/tasks/demo.rake	  task :walkthrough do
 kiosk-demo-stylish/lib/tasks/demo.rake	  task binding: "demo:setup" do
@@ -729,11 +725,10 @@ kiosk-demo-tudu/app/operations/invite_operation.rb	OperationResult.ok({ "code" =
 kiosk-demo-tudu/app/operations/list_access.rb	return nil if Membership.reachable?(list_id, require_owner: require_owner)
 kiosk-demo-tudu/app/views/lists/index.html.erb	      <h2>Point your AI assistant here — it creates &amp; shares a todo list</h2>
 kiosk-demo-tudu/app/views/lists/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu
-kiosk-demo-tudu/config/initializers/kiosk.rb	  # enforced at the app layer (the membership EXISTS-check that
-kiosk-demo-tudu/config/initializers/kiosk.rb	  # migrates that headless account's lists and memberships to the human.
-kiosk-demo-tudu/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────
-kiosk-demo-tudu/config/initializers/kiosk.rb	  c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) do
+kiosk-demo-tudu/config/initializers/kiosk.rb	  # it later moves that account's lists and memberships to the human.
+kiosk-demo-tudu/config/initializers/kiosk.rb	  c.assistant_claimed  = ->(agent:, previous_user_id:, user_id:) do
 kiosk-demo-tudu/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
+kiosk-demo-tudu/config/initializers/kiosk.rb	# No payment_provider: tudu takes no money, so discovery advertises no `pay`.
 kiosk-demo-tudu/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-tudu/lib/tasks/demo.rake	    PreLinkTokenAfterLink (401), NoLoginAddressOnTheRoster (a co-member's
 kiosk-demo-tudu/lib/tasks/demo.rake	    check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
@@ -768,7 +763,7 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            mode:        
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	            usage:                "off_session",
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        ::Stripe.api_key = @api_key
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        @api_key           = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        @api_key           = api_key
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        if pm.nil? && @test_autocard
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        return false if @test_autocard
@@ -776,15 +771,14 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        when "authenticat
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def attach_test_card(user_id:, payment_method: "pm_card_visa")
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def capture(cart_mandate, payment_method: nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(customer_resolver: nil, customer_saver: nil, api_key: nil, test_autocard: false)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, test_autocard: false)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def refund(psp_reference:, amount_cents:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_return_user_id(params)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_url(user_id:, return_url:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	ENV.fetch("STRIPE_SECRET_KEY", nil)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	customer_resolver ||= CustomerRecord.method(:resolve)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(customer_resolver: nil, customer_saver: nil, api_key: nil, test_autocard: false)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key:, customer_resolver: nil, customer_saver: nil, test_autocard: false)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:, return_url:)
@@ -866,10 +860,6 @@ kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_K = 7
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_N = 168
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      def self.params(n: 168, k: 7)
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	    # The solver finds 2^k nonces whose BLAKE2b-256(seed ‖ nonce) outputs
-kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	          "low"  => { n: 96, k: 5 }.freeze,
-kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	"high" => { n: DEFAULT_N, k: DEFAULT_K }.freeze,
-kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	"low"  => { n: 96, k: 5 }.freeze,
-kiosk-pow-equihash/lib/kiosk/pow/equihash/difficulty.rb	LEVELS = {
 kiosk-pow-equihash/solve.py	        "ERROR: this solver requires numpy.\n"
 kiosk-pow-equihash/solve.py	BUCKET_CAP = 32
 kiosk-pow-equihash/solve.py	Equihash PoW solver for Kiosk (default n=168, k=7).
@@ -1085,9 +1075,7 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= 
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :spending_cap_window_days
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	def default_signing_key
-kiosk-server/lib/kiosk/server/configuration_extension.rb	encoded = ENV["KIOSK_SIGNING_KEY_B64"]
-kiosk-server/lib/kiosk/server/configuration_extension.rb	pem = ENV["KIOSK_SIGNING_KEY_PEM"]
+kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. Generate one with
 kiosk-server/lib/kiosk/server/device_code_grant.rb	device_code parameter required
 kiosk-server/lib/kiosk/server/discovery_controller.rb	    #   GET /.well-known/api-catalog           → RFC 9727 linkset of the wire
 kiosk-server/lib/kiosk/server/discovery_controller.rb	    #   GET /agents.txt                        → text/plain agents.txt v1.0

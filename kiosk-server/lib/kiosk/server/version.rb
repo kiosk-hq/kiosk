@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    VERSION = "0.5.9"
+    VERSION = "0.5.10"
 
     # The MAJOR of the Kiosk schema this gem installs. A genesis records it in
     # the database as `<schema>.schema_major()`; crossing a major re-emits that

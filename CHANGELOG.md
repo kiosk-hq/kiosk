@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.10] — 2026-10-08
+
+- 2026-10-08: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.10, matching skill 0.5.10.**
+
 - 2026-10-08: skooti `start_rental` and `rent_motorcycle` say the reservation must be paid first, and an unpaid one is refused with what to do: pay it, then call again.
 - 2026-10-08: getgrocery `create_order` and `reschedule_delivery` require `delivery_date`, so the window booked is the one the `delivery_slots` row showed, never a defaulted tomorrow.
 - 2026-10-08: Demo columns every write path fills are NOT NULL: atablefor's booking table and seating, getgrocery's order window and address, skooti's scooter name, dock and position.

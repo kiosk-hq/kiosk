@@ -9,7 +9,7 @@
 # offline. When both repositories are checked out side by side the same script
 # re-derives them and fails on any disagreement, so the copy cannot drift.
 #
-# source sha256: 137399701f77ece81ee68d4d1e34295ec6bbb57f444c2a34c43163efbd559c4c
+# source sha256: b4771d9d1cadf40030a54a561a3e5344334660af512e48e0b4c0ac6d3f33e315
 # sections: 161
 1	18
 1.1	20

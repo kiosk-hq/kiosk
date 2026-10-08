@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.10] — 2026-10-08
+
+- 2026-10-08: Version 0.5.10, the tree cut that matches skill 0.5.10 and carries the entries below.
+
 - 2026-10-08: The `StripeMock` front relays a long stripe-mock answer intact, so a Checkout Session for card setup reaches the caller.
 - 2026-10-08: `StripeMock.start` fronts stripe-mock so a confirmed charge answers `succeeded` with its whole amount, as Stripe does for a test card.
 - 2026-10-08: `StripeMock.start` brings up a local stripe-mock for a demo suite that pays and refunds with no Stripe key.

@@ -15,6 +15,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 - 2026-10-08: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.12, matching skill 0.5.12.**
 
+- 2026-10-08: **Every demo and the engine default pin `skill-v0.5.12.md`.**
+
 - 2026-10-08: **skooti's rental verbs answer an `unlock_url`: a page it serves with the token and its QR, the link an assistant hands its human.**
 
 ## [0.5.11] — 2026-10-08

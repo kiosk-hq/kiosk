@@ -229,6 +229,9 @@ What each unit must carry. For EACH of the 7 apps:
       keeps serving its previous process, while `/srv/kiosk` already holds the new `main`; the push prints
       `DEPLOY FAILED for: <units>` and exits non-zero (the commits have landed regardless). Fix the cause, then
       re-push or run `db:migrate` and `systemctl restart kiosk-demo@<app>` for those units by hand.
+- [ ] ⚠ **A NEW ENV KEY GOES ON THE BOX BEFORE THE PUSH.** When a push makes an app require a name its
+      `/etc/kiosk-demo/<unit>.env` lacks, place it and run `deploy/rollout.sh` FIRST, then push `prod-demo` — the
+      app cannot boot without it, so neither can its `db:migrate`.
 - [ ] ⚠ **`db:seed` is not optional — omit it and the demos serve empty catalogs.** `db:prepare` seeds only a
       database it has just CREATED, so on every push after the first it is a no-op for content: a box whose hook
       runs `db:prepare` alone serves a partial catalog — hoteling with 5 properties instead of 100, skooti with

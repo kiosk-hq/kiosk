@@ -12,6 +12,8 @@
 # one in its own file by hand and re-run.
 #
 # It touches no service, no database and no Caddy: restart what it reports.
+# Run it BEFORE pushing prod-demo a tree that adds an env name: the push migrates
+# with these files, and an app missing a name it requires cannot boot to migrate.
 set -euo pipefail
 
 OWNER=${KIOSK_OWNER:-ubuntu:ubuntu}   # the push-to-deploy hook sources every one of these

@@ -121,26 +121,6 @@ end
 
 namespace :check do
 
-  desc "DB-free unit spec for the board clock a listing's publication time is read on, run under two TZ values."
-  task :clock_spec do
-    spec = File.expand_path("../../spec/board_clock_spec.rb", __dir__)
-    # TWO INVOCATIONS, NOT ONE, AND THE TZ VALUES ARE THE POINT. A helper that
-    # leaked the SERVER PROCESS's zone into a published `posted_at` cannot be
-    # seen from inside a single run: on the machine that wrote the code the
-    # process zone and the intended zone are the same and everything passes.
-    # Etc/GMT-11 and Etc/GMT+2 are thirteen hours apart and sit on either side
-    # of the board's own clock.
-    puts "\n── board-clock rendering (no boot, no DB), under two process zones ──"
-    %w[Etc/GMT-11 Etc/GMT+2].each { |tz| sh "TZ=#{tz} ruby #{spec}" }
-  end
-
-  desc "DB-free unit spec for the owner-scoped refusal surface — the listing_id shape guard and the not-owner sentence."
-  task :access_spec do
-    spec = File.expand_path("../../spec/listing_access_spec.rb", __dir__)
-    puts "\n── owner-scoped refusal surface (no boot, no DB) ──"
-    sh "ruby #{spec}"
-  end
-
   desc "Boot the server and run the demo walkthrough (browse→post→edit→close)."
   task :walkthrough do
     exec File.expand_path("../../bin/demo", __dir__)

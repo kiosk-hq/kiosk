@@ -1,20 +1,14 @@
 # frozen_string_literal: true
 
-# close_listing — OWNER-ONLY. Take one of the authenticated principal's own
-# listings off the public board.
+# Takes one of the principal's own listings off the board.
 class CloseListingOperation
-  # Same owner-scoped single statement and shape guard as {EditListingOperation}:
-  # a malformed id answers 400, a well-formed foreign one 403.
   def self.call(listing_id:)
-    id, refusal = ListingAccess.listing_id(listing_id)
-    return refusal if refusal
+    listing = Listing.own.find_by(id: listing_id)
+    # One answer for absent and foreign, so ids cannot be probed.
+    raise Kiosk::Server::Errors::Forbidden.new("listing not owned by the authenticated principal",
+                                               hint: "You may only close your own listings.") unless listing
 
-    updated = Listing.own
-                     .where(id: id)
-                     .update_all(status: "closed", updated_at: Time.current)
-
-    return ListingAccess.not_owner("close") if updated.zero?
-
-    OperationResult.ok({ listing_id: id, status: "closed" })
+    listing.closed!
+    { listing_id: listing_id, status: listing.status }
   end
 end

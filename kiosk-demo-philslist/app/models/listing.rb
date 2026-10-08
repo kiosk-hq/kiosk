@@ -1,24 +1,17 @@
 # frozen_string_literal: true
 
-# A classifieds ad. The load-bearing detail: `price_text` is a plain NULLABLE
-# STRING ("€300", "Free", or NULL), NOT a money type — the board never
-# transacts on it. A commerce reviewer looking for a hidden PSP finds only a
-# display string. `owner_id` is the account that posted the ad; `edit`/`close`
-# are scoped to `owner_id = kiosk.current_user_id()` (app-layer isolation).
+# A classifieds ad. `price_text` is display text ("€300", "Free" or nil), never
+# an amount: the board carries no money.
 class Listing < ApplicationRecord
-  STATUSES = %w[open closed].freeze
+  enum :status, { open: "open", closed: "closed" }
 
-  belongs_to :owner, class_name: "User", foreign_key: :owner_id, inverse_of: :listings
+  belongs_to :owner, class_name: "User", inverse_of: :listings
   belongs_to :category
 
-  validates :title, presence: true
-  validates :body, presence: true
-  validates :status, inclusion: { in: STATUSES }
+  validates :title, :body, presence: true
 
   scope :own, -> { where(owner_id: Kiosk.current_user_id) }
 
-  # The public classifieds board: the fifty newest open listings, every owner's.
-  scope :on_board, lambda {
-    where(status: "open").includes(:category, :owner).order(created_at: :desc, id: :asc).limit(50)
-  }
+  # The public board: the fifty newest open listings, every owner's.
+  scope :on_board, -> { open.includes(:category, :owner).order(created_at: :desc, id: :asc).limit(50) }
 end

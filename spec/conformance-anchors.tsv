@@ -625,9 +625,9 @@ kiosk-demo-skooti/script/pay_window.rb	every booking_payment `data` satisfies th
 kiosk-demo-skooti/script/pay_window.rb	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
 kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows
 kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=pending while the capture is outstanding
-kiosk-demo-skooti/script/pay_window.rb	start_rental does NOT answer «no settlement for this reservation» about an in-flight charge
+kiosk-demo-skooti/script/pay_window.rb	start_rental does NOT answer «this reservation is not paid» about an in-flight charge
 kiosk-demo-skooti/script/pay_window.rb	start_rental issues the rental token on the capture-anchored witness alone, no settlement row
-kiosk-demo-skooti/script/pay_window.rb	start_rental names the outstanding capture instead of answering «no settlement»
+kiosk-demo-skooti/script/pay_window.rb	start_rental names the outstanding capture as in progress
 kiosk-demo-skooti/script/rental_flow.rb	# Flow: register (PoW) → scooters_available → reserve → payment_setup → pay → start_rental →
 kiosk-demo-skooti/script/rental_flow.rb	# ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
 kiosk-demo-skooti/script/rental_flow.rb	# ── Step 3b: payment_setup — the card check that MUST precede pay

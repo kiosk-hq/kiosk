@@ -24,8 +24,8 @@
 #       all, which would break the ONE answer that makes a fresh chain correct.
 #   (b) IN FLIGHT        — while a capture is blocked mid-charge, my_reservations
 #       reads `pending` (never `unpaid`), no settlement row exists, and
-#       start_rental refuses with the pending sentence rather than "no
-#       settlement".
+#       start_rental refuses with the in-progress sentence rather than "not
+#       paid".
 #   (c) PHASE-3 WINDOW   — after the capture RETURNS and before any settlement
 #       row exists, my_reservations reads `paid` and start_rental issues the
 #       rental token on the capture-anchored witness alone.
@@ -240,10 +240,10 @@ check(state_inflight != "unpaid",
 refusal      = verb_error(Kiosk::Server::Actions, "start_rental", reservation_id: inflight_id)
 refusal_text = refusal&.message.to_s
 check(refusal_text.include?("in progress"),
-      "start_rental names the outstanding capture instead of answering «no settlement» " \
+      "start_rental names the outstanding capture as in progress " \
       "(#{refusal_text[0, 120].inspect})")
 check(!refusal_text.include?("this reservation is not paid"),
-      "start_rental does NOT answer «no settlement for this reservation» about an in-flight charge")
+      "start_rental does NOT answer «this reservation is not paid» about an in-flight charge")
 
 puts "\n== (c) PHASE-3 WINDOW: capture RETURNED, settlement row not yet written =="
 

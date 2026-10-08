@@ -301,7 +301,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = "0.5.10"
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = "0.5.11"
 kiosk-core/spec/spec_helper.rb	require "kiosk"
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	rollingly on the restaurant's own clock; "tonight at 8" lands on an open 2-top at 20:00.

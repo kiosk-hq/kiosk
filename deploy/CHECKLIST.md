@@ -147,21 +147,6 @@ What each unit must carry. For EACH of the 7 apps:
       dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate
       written twice, and this copy is the one a human types.
 - [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
-- [ ] ⚠ **hoteling only, and ONLY on a database that already holds bookings:**
-      `20260813000001_add_booking_overlap_guard` adds an EXCLUDE constraint, and Postgres validates it
-      against existing rows — so it **refuses to apply** while any two live bookings overlap, and the
-      deploy stops there with a constraint error. A fresh box and every `demo:setup` (which rebuilds
-      from `db/structure.sql`) are unaffected. Find the offenders BEFORE deploying, with the
-      constraint's own predicate:
-      ```sql
-      SELECT a.id, b.id, a.room_type_id, a.check_in, a.check_out, b.check_in, b.check_out
-      FROM bookings a JOIN bookings b
-        ON a.room_type_id = b.room_type_id AND a.id < b.id
-       AND daterange(a.check_in, a.check_out) && daterange(b.check_in, b.check_out)
-      WHERE a.status IN ('reserved','confirmed') AND b.status IN ('reserved','confirmed');
-      ```
-      Remedy: cancel or delete one of each overlapping pair (they are demo bookings), then re-run the
-      migration. Do NOT weaken the constraint — selling one room-night twice is the bug it exists to stop.
 - [ ] Enable the systemd unit: `systemctl enable --now kiosk-demo@<app>` (per `deploy/kiosk-demo@.service`, binds 127.0.0.1:<port>).
 
 ## 6. Front with Caddy (auto-TLS)
@@ -256,6 +241,48 @@ What each unit must carry. For EACH of the 7 apps:
       scheduled housekeeping at all, and nothing in it reclaims demo accounts — no demo ships a retention
       task. **Reclaiming disk is `deploy/demo-reset.sh`, run by hand**; for what covers the catalog
       re-seed instead, see `deploy/README.md` step 5.
+
+## 7b. Rebuild every database on a collapsed migration set (one-time, after a squash)
+When a tree collapses the demos' `db/migrate/` into a fresh install, no deployed database has any of
+the new versions recorded, so the hook's `db:migrate` would re-create tables that exist and stop. Each
+database is dropped and rebuilt from `db/structure.sql` instead. **All fleet data is lost**: orders,
+bookings, KYC grants and verifications, bound assistants and every account the seeds do not create —
+getgrocery's real third-party orders included.
+- [ ] Install the current hook (the push below runs it):
+      ```
+      scp reference/deploy/post-receive <deploy-user>@<box>:/srv/kiosk.git/hooks/post-receive
+      ssh <deploy-user>@<box> chmod +x /srv/kiosk.git/hooks/post-receive
+      ```
+- [ ] Stop every unit and recreate its database empty, same name and owner (names from each unit's own
+      env file, as `deploy/demo-reset.sh` reads them):
+      ```
+      ssh <deploy-user>@<box> 'bash -s' <<'SH'
+      for a in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
+        A=$(printf %s "$a" | tr '[:lower:]' '[:upper:]')
+        names=$(set -a; . /etc/kiosk-demo/$a.env; set +a; dv=KIOSK_${A}_DB; uv=KIOSK_${A}_DB_USER
+                printf '%s %s' "${!dv:-kiosk_${a}_production}" "${!uv:-kiosk_${a}}")
+        db=${names% *}; role=${names#* }
+        sudo systemctl stop "kiosk-demo@$a"
+        sudo -u postgres psql -v ON_ERROR_STOP=1 -q <<SQL
+      DROP DATABASE IF EXISTS "$db" WITH (FORCE);
+      CREATE DATABASE "$db" OWNER "$role";
+      REVOKE CONNECT ON DATABASE "$db" FROM PUBLIC;
+      GRANT CONNECT ON DATABASE "$db" TO "$role";
+      SQL
+      done
+      SH
+      ```
+- [ ] Push: `git -C reference push prod-demo main`. On an empty database the hook's `db:migrate` loads
+      `db/structure.sql` (which records every migration), then `db:seed` and `systemctl restart` run as on
+      any deploy. The push must end `deploy complete.`
+- [ ] By hand instead of the push, per app on the box, as the hook does:
+      ```
+      export PATH=$HOME/.local/share/mise/installs/ruby/4.0.1/bin:$PATH
+      cd /srv/kiosk/kiosk-demo-<app>
+      (set -a; . /etc/kiosk-demo/<app>.env; set +a; bundle exec rails db:migrate && bundle exec rails db:seed)
+      sudo systemctl start kiosk-demo@<app>
+      ```
+- [ ] Verify as §8; `\d` on any table in `psql` shows the shape `db/structure.sql` states.
 
 ## 8. Verify (per subdomain)
 - [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).

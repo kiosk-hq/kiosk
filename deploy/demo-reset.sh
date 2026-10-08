@@ -28,10 +28,7 @@
 # `db:migrate` outright on a database that already holds those tables
 # (PG::DuplicateTable, one step in). Loading `db/structure.sql`
 # sidesteps both by construction: it rebuilds the schema the tree states rather
-# than replaying the path that cannot reach it. So when `bin/check-migration-
-# replay` names an object the deploy cannot deliver, THIS is the tool — run it
-# after deploying head, and then move that gate's FLEET_SCHEMA_BASELINE forward
-# to the day you ran it.
+# than replaying the path that cannot reach it. Run it after deploying head.
 #
 # IT PRINTS WHAT WENT WRONG, AND THAT IS NOT TIDINESS. A command run
 # `>/dev/null 2>&1` with only its exit code read leaves its failure branch saying

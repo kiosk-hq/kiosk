@@ -40,7 +40,6 @@ class RescheduleDeliveryOperation
     # assistant saw is the day+time this books.
     date, refusal = WireArguments.delivery_date(
       delivery_date,
-      default:      DeliverySlots.now(zone).to_date + 1,
       past_message: ->(d) { "delivery_date is in the past: #{d}" },
       zone:         zone,
     )

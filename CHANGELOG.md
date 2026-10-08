@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: getgrocery `create_order` and `reschedule_delivery` require `delivery_date`, so the window booked is the one the `delivery_slots` row showed, never a defaulted tomorrow.
 - 2026-10-08: Demo columns every write path fills are NOT NULL: atablefor's booking table and seating, getgrocery's order window and address, skooti's scooter name, dock and position.
 - 2026-10-08: Each demo's `db/migrate` is one fresh install: users, the `kiosk:install` set, then its own tables in final form. Deployed databases are rebuilt (`deploy/CHECKLIST.md` §7b).
 - 2026-10-08: The deploy hook no longer restarts an app whose `db:migrate` failed, and the push exits non-zero naming it.

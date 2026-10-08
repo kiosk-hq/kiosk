@@ -97,6 +97,9 @@ end
 
 require_relative "equihash_register"
 
+# The day every order here is booked on: tomorrow, so every window is open.
+ORDER_DAY = (Date.today + 1).iso8601
+
 # Register a fresh agent through the proof-of-possession handshake, solving the
 # Equihash register PoW transparently. Returns [key, agent_id, user_id, token].
 def register_agent
@@ -121,7 +124,7 @@ end
 def create_order(token, items, address: "42 Camden Street, Dublin 2", slot_id: 1)
   post_json(
     "#{SERVER}/kiosk/create_order",
-    { items: items, delivery_slot_id: slot_id, delivery_address: address },
+    { items: items, delivery_slot_id: slot_id, delivery_date: ORDER_DAY, delivery_address: address },
     { "Authorization" => "Bearer #{token}" },
   )
 end

@@ -115,6 +115,9 @@ require "openssl"
 require "securerandom"
 require "uri"
 
+# The day every order here is booked on: tomorrow, so every window is open.
+ORDER_DAY = (Date.today + 1).iso8601
+
 BASE_URL = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 
@@ -165,7 +168,7 @@ profile = Kiosk::Redteam::Profile.new(
       principal,
       name:             "create_order",
       items:            [{ sku: product["sku"], qty: 1 }],
-      delivery_slot_id: 1,
+      delivery_slot_id: 1, delivery_date: ORDER_DAY,
       delivery_address: "1 Redteam St, Dublin 1",
     )
     raise "redteam: create_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
@@ -202,7 +205,7 @@ profile = Kiosk::Redteam::Profile.new(
     product = catalog.first
     {
       items:            [{ sku: product["sku"], qty: 1 }],
-      delivery_slot_id: 1,
+      delivery_slot_id: 1, delivery_date: ORDER_DAY,
       delivery_address: "1 Redteam St, Dublin 1",
     }
   },
@@ -214,7 +217,7 @@ profile = Kiosk::Redteam::Profile.new(
   gated_args:   ->(owned_ref) {
     {
       order_id:         owned_ref[:id],
-      delivery_slot_id: 2,
+      delivery_slot_id: 2, delivery_date: ORDER_DAY,
     }
   },
 
@@ -373,7 +376,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
     statuses = []
 
     BAD_ITEMS.each do |label, items|
-      args = { delivery_slot_id: 1, delivery_address: ADDRESS }
+      args = { delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS }
       args[:items] = items unless items.nil?
       resp = client.run(a, name: "create_order", **args)
       statuses << resp.status
@@ -397,7 +400,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
     catalog = catalog_body.is_a?(Array) ? catalog_body : []
     control = client.run(a, name: "create_order",
                             items: [{ sku: catalog.first["sku"], qty: 1 }],
-                            delivery_slot_id: 1, delivery_address: ADDRESS)
+                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS)
     statuses << control.status
     unless control.status == 200
       failures << "CONTROL well-formed items → HTTP #{control.status} #{control.body.inspect} (want 200)"
@@ -495,10 +498,10 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     SHAPES.each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: v, delivery_address: ADDRESS),
+                            delivery_slot_id: v, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
               supplied: v
       refused "reschedule_delivery order_id=#{v.inspect}",
-              client.run(a, name: "reschedule_delivery", order_id: v, delivery_slot_id: 1),
+              client.run(a, name: "reschedule_delivery", order_id: v, delivery_slot_id: 1, delivery_date: ORDER_DAY),
               supplied: v
     end
     # Out of the declared 1..6 range — the same refusal, from the schema's
@@ -506,7 +509,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     [0, -1, 7, 999].each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: v, delivery_address: ADDRESS),
+                            delivery_slot_id: v, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
               supplied: v
     end
 
@@ -532,7 +535,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     (SHAPES + [0, -1]).each do |v|
       refused "create_order items[0].qty=#{v.inspect}",
               client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
-                            delivery_slot_id: 1, delivery_address: ADDRESS),
+                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
               supplied: { sku: sku, qty: v }
     end
 
@@ -574,7 +577,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
       "unstorable qty"       => max_int4 + 1 }.each do |why, v|
       refused "create_order items[0].qty=#{v} (#{why})",
               client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
-                            delivery_slot_id: 1, delivery_address: ADDRESS),
+                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
               supplied: { sku: sku, qty: v }
     end
 
@@ -596,7 +599,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     ["", "   ", "1 Main St, Cork", "Dublin 99", "somewhere"].each do |v|
       refused "create_order delivery_address=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: 1, delivery_address: v),
+                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: v),
               supplied: v
     end
 
@@ -605,7 +608,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     # Without it every assertion above could pass vacuously on an origin that
     # refuses EVERYTHING. A well-formed order must still be placed.
     control = client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: 1, delivery_address: ADDRESS)
+                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS)
     unless control.status == 200
       @failures << "CONTROL well-formed create_order → HTTP #{control.status} " \
                    "#{control.body.inspect[0, 90]} (want 200; the probes above prove nothing " \

@@ -47,11 +47,8 @@ class CreateOrderOperation
     return refusal if refusal
 
     # ── Gate 3: the window, on the day the assistant saw it ────────────────
-    # An omitted delivery_date falls back to tomorrow, for callers that pre-date
-    # the field — but a caller that saw a slot for a day SHOULD pass that day.
     date, refusal = WireArguments.delivery_date(
       delivery_date,
-      default:      DeliverySlots.now(zone).to_date + 1,
       past_message: ->(d) { "delivery_date is in the past: #{d} — choose a current/future delivery slot" },
       zone:         zone,
     )

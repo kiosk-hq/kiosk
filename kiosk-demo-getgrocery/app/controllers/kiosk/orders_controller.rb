@@ -122,11 +122,11 @@ class Kiosk::OrdersController < ActionController::API
                  # DECLARED contract says so too and the wire refuses the rest
                  # before any Ruby runs.
                  delivery_date:    { type: "string", format: "date",
-                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way the day you were offered is the day you get. Omitting it books tomorrow at the address." },
+                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row, so the booking lands on the day you saw. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way the day you were offered is the day you get." },
                  delivery_address: { type: "string",
                                      description: "In-zone Dublin delivery address naming a served postal district (e.g. \"Dublin 2\" / \"D02\")." },
                },
-               required: ["items", "delivery_slot_id", "delivery_address"]
+               required: ["items", "delivery_slot_id", "delivery_date", "delivery_address"]
   output_schema type: "object",
                 description: "The created order, priced.",
                 additionalProperties: false,
@@ -194,11 +194,11 @@ class Kiosk::OrdersController < ActionController::API
                                      description: "The new `delivery_slot_id` from a delivery_slots row (1..6)." },
                  # Same declaration as create_order's, for the same reason.
                  delivery_date:    { type: "string", format: "date",
-                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar. Omitting it books tomorrow at the address." },
+                                     description: "The `date` (YYYY-MM-DD) of the chosen delivery_slots row. It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar." },
                  delivery_address: { type: "string",
                                      description: "New in-zone Dublin delivery address; unchanged if omitted." },
                },
-               required: ["order_id", "delivery_slot_id"]
+               required: ["order_id", "delivery_slot_id", "delivery_date"]
   # No price and no pay_hint, and that absence is the contract: a reschedule
   # REUSES the order's existing payment, so there is no new mandate to sign.
   output_schema type: "object",

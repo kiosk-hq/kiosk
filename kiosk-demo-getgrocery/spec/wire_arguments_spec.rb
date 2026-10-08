@@ -356,28 +356,29 @@ end
 assert(WireArguments::HINT_ORDER_ID_MOVE.include?("my_orders"),
        "the tail tells a caller where to GET an order_id, rather than only that theirs is wrong")
 
-# ── 6. delivery_date/3 — the day, the default, and ONE clock ──────────────────
+# ── 6. delivery_date/3 — the day, required, and ONE clock ──────────────────
 #
 # ONE SPELLING. A date on this wire is `YYYY-MM-DD` and nothing else (ADR-0029);
 # `Date.iso8601` runs behind an anchored pattern, so the ISO FAMILY — a basic
 # `20260901`, a datetime, a week date, an ordinal date — is refused along with
 # everything else. The clock is the ORIGIN's — around midnight a server-zone
 # `Date.today` would let `create_order` accept a day `delivery_slots` refuses.
-puts "\n── delivery_date: the default, the one spelling, the past, and the clock ──"
+puts "\n── delivery_date: required, the one spelling, the past, and the clock ──"
 at_dublin("2026-08-07T11:00:00") do
   today    = DeliverySlots.now.to_date
-  default  = today + 1
   past_msg = ->(d) { "delivery_date is in the past: #{d} — choose a current/future delivery slot" }
-  call     = ->(raw) { WireArguments.delivery_date(raw, default: default, past_message: past_msg) }
+  call     = ->(raw) { WireArguments.delivery_date(raw, past_message: past_msg) }
   fmt_msg  = lambda do |raw|
     "invalid delivery_date: #{raw} — use YYYY-MM-DD from the delivery_slots row you chose"
   end
 
   [nil, "", "   ", false].each do |blank|
     pair = guard("delivery_date(#{blank.inspect})") { call.(blank) }
-    assert(refusal_of(pair).nil? && value_of(pair) == default,
-           "a blank delivery_date (#{blank.inspect}) falls back to the caller's default (#{default}), " \
-           "got #{pair.inspect}")
+    refusal = refusal_of(pair)
+    assert_typed_400(refusal, "delivery_date(#{blank.inspect})")
+    assert(refusal.is_a?(OperationResult) && refusal.message.include?("missing field: delivery_date"),
+           "a blank delivery_date (#{blank.inspect}) is REFUSED, never defaulted — a slot id without " \
+           "its row's day could book a day nobody was shown; got #{pair.inspect}")
   end
 
   # TODAY is accepted — the boundary is the DAY, and it is read off DeliverySlots.now.
@@ -466,7 +467,7 @@ at_dublin("2026-08-07T11:00:00") do
 
   other = ->(d) { "a completely different sentence about #{d}" }
   refusal = refusal_of(guard("delivery_date(past, other wording)") do
-    WireArguments.delivery_date((today - 1).iso8601, default: default, past_message: other)
+    WireArguments.delivery_date((today - 1).iso8601, past_message: other)
   end)
   assert(refusal.is_a?(OperationResult) && refusal.message == other.call(today - 1),
          "a second caller's past_message is used verbatim too: #{refusal&.message.inspect}")
@@ -476,11 +477,11 @@ end
 # flips from accepted to refused. Nothing here reads Date.today.
 DAY = Date.new(2026, 8, 7)
 at_dublin("2026-08-07T23:59:00") do
-  pair = WireArguments.delivery_date(DAY.iso8601, default: DAY, past_message: ->(d) { "past #{d}" })
+  pair = WireArguments.delivery_date(DAY.iso8601, past_message: ->(d) { "past #{d}" })
   assert(refusal_of(pair).nil?, "at 23:59 Dublin, #{DAY} is still TODAY and is accepted")
 end
 at_dublin("2026-08-08T00:01:00") do
-  refusal = refusal_of(WireArguments.delivery_date(DAY.iso8601, default: DAY, past_message: ->(d) { "past #{d}" }))
+  refusal = refusal_of(WireArguments.delivery_date(DAY.iso8601, past_message: ->(d) { "past #{d}" }))
   assert(refusal.is_a?(OperationResult) && refusal.message == "past #{DAY}",
          "two minutes later — Dublin's next day — the same date is REFUSED, so the clock read " \
          "is DeliverySlots.now and not the runner's")
@@ -501,7 +502,7 @@ INSTANTS = %w[2026-09-30T23:59:00 2026-10-01T00:01:00 2026-09-05T12:00:00 2026-0
 %w[1st Tue sep 250 W36-2].each do |partial|
   seen = INSTANTS.map do |instant|
     at_dublin(instant) do
-      refusal_of(WireArguments.delivery_date(partial, default: Date.new(2026, 9, 30), past_message: LATE))
+      refusal_of(WireArguments.delivery_date(partial, past_message: LATE))
     end
   end
   assert(seen.all? { |r| r.is_a?(OperationResult) && r.code == "bad_request" },
@@ -515,7 +516,7 @@ end
 # day whatever the origin's clock says, which is the other half of "no clock".
 %w[2026-09-30T23:59:00 2026-10-01T00:01:00 2026-01-01T00:00:00].each do |instant|
   at_dublin(instant) do
-    pair = WireArguments.delivery_date("2026-12-24", default: Date.new(2026, 12, 1), past_message: LATE)
+    pair = WireArguments.delivery_date("2026-12-24", past_message: LATE)
     assert(refusal_of(pair).nil? && value_of(pair) == Date.new(2026, 12, 24),
            "at #{instant} Dublin, \"2026-12-24\" is 2026-12-24")
   end

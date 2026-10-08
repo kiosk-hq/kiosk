@@ -27,6 +27,7 @@
 #   KIOSK_ISSUER=http://127.0.0.1:3001 \
 #   bundle exec ruby script/isolation_flow.rb
 
+require "date"
 require "jwt"
 require "json"
 require "uri"
@@ -115,6 +116,9 @@ end
 # key is returned so it can sign its own pay mandates.
 require_relative "equihash_register"
 
+# The day every order here is booked on: tomorrow, so every window is open.
+ORDER_DAY = (Date.today + 1).iso8601
+
 # `equihash_register` drives FULL URLs through the two callables it is handed —
 # it is the one helper a driver shares with e2e, where the origin is not known
 # until the harness boots it — while WIRE is bound to this origin, so the
@@ -160,7 +164,7 @@ mirror_items = [{ sku: product_sku, qty: 1, price_cents: product.fetch("price_ce
 rc, order_a_resp = WIRE.post_json(
   "/kiosk/create_order",
   { items: [{ sku: product_sku, qty: 1 }],
-    delivery_slot_id: 1, delivery_address: "1 Good St, Dublin 4" },
+    delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: "1 Good St, Dublin 4" },
   WIRE.bearer(token_a),
 )
 abort "A create_order failed (#{rc}): #{JSON.generate(order_a_resp)}" unless rc == 200
@@ -186,7 +190,7 @@ b_reschedule_on_a_status, _b_reschedule_on_a_resp = WIRE.post_json(
   "/kiosk/reschedule_delivery",
   {
     order_id:         order_id_a,
-    delivery_slot_id: 1,
+    delivery_slot_id: 1, delivery_date: ORDER_DAY,
     delivery_address: "2 Evil St, Dublin 4",
   },
   WIRE.bearer(token_b),
@@ -197,7 +201,7 @@ rc, resched_a = WIRE.post_json(
   "/kiosk/reschedule_delivery",
   {
     order_id:         order_id_a,
-    delivery_slot_id: 2,
+    delivery_slot_id: 2, delivery_date: ORDER_DAY,
   },
   WIRE.bearer(token_a),
 )
@@ -214,7 +218,7 @@ forged_rc, forged_resp = WIRE.post_json(
   "/kiosk/create_order",
   {
     items:            [{ sku: product_sku, qty: 1 }],
-    delivery_slot_id: 1,
+    delivery_slot_id: 1, delivery_date: ORDER_DAY,
     delivery_address: "3 Bob St, Dublin 6",
     user_id:          user_id_a,  # adversarial: B supplies A's user_id
   },
@@ -230,7 +234,7 @@ STDERR.puts "  B create_order with a forged user_id → #{forged_rc} #{forged_re
 rc, owner_probe_resp = WIRE.post_json(
   "/kiosk/create_order",
   { items: [{ sku: product_sku, qty: 1 }],
-    delivery_slot_id: 1, delivery_address: "3 Bob St, Dublin 6" },
+    delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: "3 Bob St, Dublin 6" },
   WIRE.bearer(token_b),
 )
 abort "B create_order (owner probe) failed (#{rc}): #{JSON.generate(owner_probe_resp)}" unless rc == 200
@@ -241,7 +245,7 @@ STDERR.puts "  B created the owner-probe order #{owner_probe_order_id} (owner co
 rc, order_b_resp = WIRE.post_json(
   "/kiosk/create_order",
   { items: [{ sku: product_sku, qty: 1 }],
-    delivery_slot_id: 1, delivery_address: "3 Bob St, Dublin 6" },
+    delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: "3 Bob St, Dublin 6" },
   WIRE.bearer(token_b),
 )
 abort "B create_order (genuine) failed (#{rc}): #{JSON.generate(order_b_resp)}" unless rc == 200
@@ -281,7 +285,7 @@ rc, resched_b = WIRE.post_json(
   "/kiosk/reschedule_delivery",
   {
     order_id:         order_id_b,
-    delivery_slot_id: 3,
+    delivery_slot_id: 3, delivery_date: ORDER_DAY,
   },
   WIRE.bearer(token_b),
 )

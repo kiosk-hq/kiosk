@@ -96,7 +96,7 @@ def create_order(token, items)
   # Delivery is part of the order: slot + address are required fields.
   rc, resp = post_json("#{SERVER}/kiosk/create_order",
                        { items: items,
-                         delivery_slot_id: 1, delivery_address: "7 Claim Ct, Dublin 8" },
+                         delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: "7 Claim Ct, Dublin 8" },
                        { "Authorization" => "Bearer #{token}" })
   abort "create_order failed (#{rc}): #{JSON.generate(resp)}" unless rc == 200
   # Carry the server's EUR display string so operator stdout shows €, not cents.
@@ -110,6 +110,9 @@ results = {}
 # is returned so the claim ceremony (Beat 2) and the payment mandates below can
 # re-prove possession / sign with it.
 require_relative "equihash_register"
+
+# The day every order here is booked on: tomorrow, so every window is open.
+ORDER_DAY = (Date.today + 1).iso8601
 key, reg, rc_register = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),

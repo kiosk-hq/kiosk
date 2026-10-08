@@ -126,9 +126,10 @@ module WireArguments
     )]
   end
 
-  # The DAY of the slot the assistant chose, or the default when omitted.
+  # The DAY of the slot the assistant chose. REQUIRED: a slot id names a window
+  # only together with the day of the row it came from, so a default here could
+  # book a day the caller was never shown.
   #
-  # @param default [Date] what a blank value means (tomorrow, for both verbs)
   # @param past_message [Proc] the refusal sentence for a past date; the two
   #   verbs word it differently and neither's wording is the other's to pick.
   # @return [Array(Date, nil), Array(nil, OperationResult)]
@@ -141,8 +142,8 @@ module WireArguments
   # read in the caller's calendar by {#caller_day}.
   #
   # @param zone [ActiveSupport::TimeZone] the DELIVERY ADDRESS's clock
-  def delivery_date(raw, default:, past_message:, zone: DeliverySlots.default_zone)
-    return [default, nil] if raw.blank?
+  def delivery_date(raw, past_message:, zone: DeliverySlots.default_zone)
+    return [nil, missing("delivery_date — the `date` of the delivery_slots row you chose")] if raw.blank?
 
     date = iso_date(raw)
     if date.nil?

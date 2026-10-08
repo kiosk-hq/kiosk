@@ -63,9 +63,7 @@ module DeliverySlots
   # before today is REFUSED, so a published literal ages into a 400. Tomorrow is
   # the right answer rather than today because EVERY window
   # of a future day is still bookable — today's example would go empty at 18:00
-  # Dublin — and because tomorrow is already what a blank `delivery_date` means
-  # to both write verbs, so an assistant that copies the catalogue gets exactly
-  # what omitting the argument would have given it.
+  # Dublin.
   #
   # Read through a proc from the declaration, never called at class-body load —
   # see {Kiosk::Server::SchemaSlots}.

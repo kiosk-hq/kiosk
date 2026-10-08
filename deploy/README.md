@@ -577,15 +577,15 @@ curl -s "$BASE/kiosk/catalog" -H "authorization: Bearer $TOKEN" \
 #    f) …and an action is a POST at its own path, with the arguments as the body,
 #       tolled the same way (wrap it in the (e) retry if it answers 402).
 #       Send everything the verb's input_schema requires — create_order needs
-#       delivery_slot_id and delivery_address as well as items (delivery is part
-#       of the order), and a call missing one is a typed 400 naming it. The
-#       slot id is a `delivery_slot_id` from the delivery_slots query;
-#       delivery_date is optional and omitting it books tomorrow.
+#       delivery_slot_id, delivery_date and delivery_address as well as items
+#       (delivery is part of the order), and a call missing one is a typed 400
+#       naming it. The slot id and the date are the `delivery_slot_id` and
+#       `date` of ONE delivery_slots row — set DAY to that row's `date`.
 curl -s -X POST "$BASE/kiosk/create_order" \
   -H "authorization: Bearer $TOKEN" \
   -H 'content-type: application/json' \
   -d '{"items":[{"sku":"milk-0.5l","qty":2}],
-       "delivery_slot_id":3,
+       "delivery_slot_id":3, "delivery_date":"'"$DAY"'",
        "delivery_address":"42 Camden Street, Dublin 2"}' | jq .
 ```
 

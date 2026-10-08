@@ -57,6 +57,13 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
     assert_equal 1347, second["total_cents"]
   end
 
+  test "the delivery day is REQUIRED: a slot id names a window only together with the row's date" do
+    refusal = assert_kiosk_refused { place(delivery_date: nil) }
+    assert_equal "bad_request", refusal.code
+    assert_includes refusal.message, "delivery_date"
+    assert_equal 0, Order.where(user_id: @shopper.id).count
+  end
+
   test "an abandoned order stays unpaid on the principal's own reconciliation surface" do
     place
     rows = kiosk_origin.call("my_orders", kind: :query, params: {}, as: @shopper)
@@ -68,11 +75,11 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
 
   private
 
-  def place(order_id: nil, qty: 1)
+  def place(order_id: nil, qty: 1, delivery_date: DeliverySlots.example_date.iso8601)
     params = { items: [{ sku: "sourdough-bread", qty: qty }],
                delivery_slot_id: 3,
-               delivery_date:    DeliverySlots.example_date.iso8601,
-               delivery_address: ADDRESS }
+               delivery_date:    delivery_date,
+               delivery_address: ADDRESS }.compact
     params[:order_id] = order_id if order_id
     kiosk_origin.call("create_order", kind: :action, params: params, as: @shopper)
   end

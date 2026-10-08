@@ -158,7 +158,7 @@ BATTERY.record("ForgedUserId",
 
 # ── MalformedUuidArg — junk ids must be a typed 400, never a 500 ────────────
 # tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
-# KioskMembershipGate choke point every membership-gated verb opens with),
+# ListAccess check every membership-gated verb opens with),
 # complete_todo's `todo_id`, and remove_member's `account_id`. Without the
 # Kiosk::UuidCheck guards a malformed value makes Postgres raise
 # InvalidTextRepresentation, which is not a Kiosk error and escapes as a raw 500

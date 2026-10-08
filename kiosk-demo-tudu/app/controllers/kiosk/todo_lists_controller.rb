@@ -1,42 +1,8 @@
 # frozen_string_literal: true
 
-# tudu's WRITE surface: the six verbs an assistant reaches with
-# `POST /kiosk/<action-name>` — one endpoint per verb, the most of
-# any demo. The arguments ARE the JSON body and the verb is the path itself.
-# `kind :action` above each declaration puts it on `POST`.
-#
-# Every action below is four lines: arguments off the request, into an Operation,
-# render what it answers. The logic lives in app/operations/ because tudu's HUMAN
-# web UI drives the same writes and calls the same Operations directly.
-#
-# A refusal is an ordinary `render json:, status:` naming a code from the wire's
-# closed error-code table, carried verbatim into the RFC 9457 document's
-# top-level `code`; `render_kiosk_result` is where that happens. tudu
-# advertises no `pay` verb and configures no payment provider: the only 402 on
-# this origin comes from the registration PoW gate, never from a handler.
+# The actions. The work is in app/operations, which the human pages call too.
 class Kiosk::TodoListsController < ApplicationController
   include Kiosk::Handler
-
-  # create_list(title) — INSERT a list owned by the AUTHENTICATED principal and,
-  # in the SAME transaction, an `owner` membership for the caller. Ownership is
-  # read from the resolved identity, never from params: `input_schema` declares
-  # `title` as the only property, so a forged owner_id is refused 400, not ignored.
-  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
-  #
-  # A shared list is the case the event stream exists for that is NOT a
-  # completion of anything the subscriber started: another member's assistant
-  # adds a todo, a HUMAN ticks one off in the browser, somebody redeems an
-  # invite. None of those is an answer to a call, so there is nothing to poll
-  # for and no cadence to invent — before events the only way to learn any of
-  # them was to re-read `list_todos` on a guess.
-  #
-  # Both topics take the LIST as their subject and `reach :consented`, exactly
-  # as the verbs beside them do: membership is the consent artefact, and a
-  # non-member is refused the subscription rather than handed a filtered one.
-  #
-  # `subject_reachable` is re-run on every subscribe AND while the subscription
-  # stands, so it must not read `CurrentRequest` — see
-  # {Membership.readable_by?}, which is the request-free twin written for it.
 
   topic :todo do
     reach :consented
@@ -85,15 +51,11 @@ class Kiosk::TodoListsController < ApplicationController
   example_params({ title: "Hike" })
   example_row({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70" })
   def create_list
-    render_kiosk_result CreateListOperation.call(
+    render json: CreateListOperation.call(
       principal_id: kiosk_identity.user_id, title: params[:title],
     )
   end
 
-  # add_todo(list_id, title) — membership-gated; records the acting agent as
-  # created_by_agent_id ("who added the tent? — Bob's assistant"), nil for the
-  # human web surface. `reach :consented`: §7.2 is about what a verb may AFFECT as
-  # much as what it may read, and this one writes onto a list another account owns.
   kind :action
   reach :consented
   description "Add a todo to a list the caller is a member of. The acting assistant is recorded on " \
@@ -122,25 +84,16 @@ class Kiosk::TodoListsController < ApplicationController
                   todo_id: { type: "string", description: "uuid. Pass to complete_todo as `todo_id`." },
                 },
                 required: ["todo_id"]
-  # The deadline is RESOLVED, not written down: a calendar literal here would go
-  # on saying «e.g. 2026-09-08» long after that day is gone, and an assistant
-  # copying it would set a deadline in the past. `example_params` takes a
-  # resolvable slot ({Kiosk::Server::SchemaSlots}), so the served bytes
-  # re-resolve; the instant itself lives in the Operation, which quotes it back
-  # from both of its `due_at` refusals.
   example_params({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Book campsite",
-                   due_at: -> { AddTodoOperation.example_due_at } })
+                   due_at: -> { ReaderClock.example_due_at } })
   example_row({ todo_id: "7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d" })
   def add_todo
-    render_kiosk_result AddTodoOperation.call(
+    render json: AddTodoOperation.call(
       agent_id: kiosk_identity.agent_id, list_id: params[:list_id], title: params[:title],
       due_at: params[:due_at],
     )
   end
 
-  # complete_todo(todo_id) — membership-gated via the todo's list. One UPDATE
-  # scoped to the caller's memberships; zero rows → 403, so probing can't
-  # enumerate ids. `reach :consented`: it updates a row on somebody else's list.
   kind :action
   reach :consented
   description "Mark a todo done. Allowed only if the caller is a member of the list the todo is on; " \
@@ -162,12 +115,9 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: %w[todo_id done]
   def complete_todo
-    render_kiosk_result CompleteTodoOperation.call(todo_id: params[:todo_id])
+    render json: CompleteTodoOperation.call(todo_id: params[:todo_id])
   end
 
-  # invite(list_id) — OWNER-ONLY. Mint a single-use, TTL'd (10 min) code; store
-  # ONLY its SHA-256 digest; return the plaintext ONCE. The code travels
-  # human-to-human; the recipient's agent redeems it via accept_invite.
   kind :action
   description "Owner-only: mint a single-use, ten-minute collaboration secret for a list you own. " \
               "The plaintext is handed back ONCE and never again — this origin stores only its hash — " \
@@ -191,16 +141,11 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: %w[code expires_in]
   def invite
-    render_kiosk_result InviteOperation.call(
+    render json: InviteOperation.call(
       principal_id: kiosk_identity.user_id, list_id: params[:list_id],
     )
   end
 
-  # accept_invite(code) — look up by digest; reject foreign/expired/redeemed
-  # (403); INSERT a `member` membership; mark redeemed, so a used code fails on
-  # the second try. `reach :consented` — this is the verb that MINTS the artefact
-  # every other `consented` verb here relies on: the moment consent becomes a row
-  # this operator can point at, which is what makes the claim `consented`.
   kind :action
   reach :consented
   description "Redeem a collaboration secret somebody shared with you and join their list as a " \
@@ -223,16 +168,11 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: %w[list_id joined]
   def accept_invite
-    render_kiosk_result AcceptInviteOperation.call(
+    render json: AcceptInviteOperation.call(
       principal_id: kiosk_identity.user_id, code: params[:code],
     )
   end
 
-  # remove_member(list_id, account_id) — OWNER-ONLY. DELETE the target's
-  # membership; access is cut instantly, and the LAST owner cannot be removed.
-  # `reach :consented` — it deletes a `memberships` row whose `account_id` is
-  # ANOTHER principal's. `invite` needs no such declaration: it mints a row on a
-  # list the caller already owns, so it never leaves the principal.
   kind :action
   reach :consented
   description "Owner-only: remove a member from a list you own — their access is " \
@@ -257,7 +197,7 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: ["removed"]
   def remove_member
-    render_kiosk_result RemoveMemberOperation.call(
+    render json: RemoveMemberOperation.call(
       list_id: params[:list_id], account_id: params[:account_id],
     )
   end

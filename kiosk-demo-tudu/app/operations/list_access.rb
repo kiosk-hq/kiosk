@@ -1,48 +1,21 @@
 # frozen_string_literal: true
 
-# THE LIST-ACCESS PRECONDITION every list-scoped caller shares — shape first,
-# then membership — expressed once, as a REFUSAL rather than as a rendered
-# response. Three kinds of caller need it and no two render the same way:
-# Operations that know no HTTP, the Kiosk query handlers that `render json:,
-# status:`, and the human web controllers that redirect with a flash — and a
-# message that drifted in one copy would be a wire difference nobody could see.
-#
-# NOT an Operation: it writes nothing. Not on the model either —
-# {Membership.reachable?} is the DECISION (a fact about the domain) and this is
-# the refusal that decision earns (a fact about a caller).
+# The refusal a caller gets for a list it may not reach. Forbidden either way,
+# so a stranger cannot tell which list ids exist.
 module ListAccess
-  # @param list_id [Object] the raw wire/URL value — shape is checked here
-  # @param require_owner [Boolean] tighten to role='owner' (invite/remove authority)
-  # @return [OperationResult, nil] a refusal, or nil when access is granted
-  #
-  # WHICH DOOR THE SHAPE CHECK IS FOR. Not the wire: every verb that takes a
-  # `list_id` declares it `format: "uuid"` and a verb's arguments are validated
-  # before any handler runs, so an assistant that sends a typo already has a 400
-  # naming the argument. tudu's SECOND door has no schema in front of it —
-  # {ListsController#show} hands this the raw `params[:id]` off a URL — and
-  # there this check is the only thing between a typo and the wrong answer:
-  # `where(list_id: junk)` does not raise, ActiveRecord's uuid type quietly casts
-  # an unparseable value to NULL, which matches no row, so the typo would be
-  # reported as an ACCESS refusal (403) instead of the shape one (400) it is. A
-  # well-formed but foreign id still gets the 403, on either door.
-  def self.check(list_id, require_owner: false)
-    unless Kiosk::UuidCheck.valid?(list_id)
-      return OperationResult.refused(
-        code:    "bad_request",
-        message: "list_id #{list_id.to_s.inspect} is not a uuid",
-        hint:    "Pass a `list_id` from my_lists (or the one create_list returned), verbatim.",
-      )
-    end
+  module_function
 
-    return nil if Membership.reachable?(list_id, require_owner: require_owner)
+  def member!(list_id)
+    return if Membership.own.exists?(list_id: list_id)
 
-    # Forbidden (not NotFound) so probing can't enumerate which ids exist.
-    OperationResult.refused(
-      code:    "forbidden",
-      message: require_owner ? "list not owned by the authenticated principal" \
-                             : "list not accessible by the authenticated principal",
-      hint:    require_owner ? "Only the list owner may do this." \
-                             : "You may only reach lists you are a member of.",
-    )
+    raise Kiosk::Server::Errors::Forbidden.new("list not accessible by the authenticated principal",
+                                               hint: "You may only reach lists you are a member of.")
+  end
+
+  def owner!(list_id)
+    return if Membership.own.owner.exists?(list_id: list_id)
+
+    raise Kiosk::Server::Errors::Forbidden.new("list not owned by the authenticated principal",
+                                               hint: "Only the list owner may do this.")
   end
 end

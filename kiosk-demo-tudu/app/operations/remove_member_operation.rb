@@ -1,60 +1,27 @@
 # frozen_string_literal: true
 
-# remove_member — OWNER-ONLY. Cut a member's access to a list instantly, but
-# never orphan the list by removing its last owner. Wire-only today, an Operation
-# for the same reason as AcceptInviteOperation.
+# Removes a member from one of the principal's own lists. A list keeps at least one owner.
 class RemoveMemberOperation
   def self.call(list_id:, account_id:)
-    refusal = ListAccess.check(list_id, require_owner: true)
-    return refusal if refusal
+    ListAccess.owner!(list_id)
 
-    # `account_id` is a SECOND wire-supplied id and {ListAccess} only covers
-    # `list_id`, so it gets its own shape check.
-    target = account_id.to_s
-    unless Kiosk::UuidCheck.valid?(target)
-      return OperationResult.refused(
-        code:    "bad_request",
-        message: "account_id #{target.inspect} is not a uuid",
-        hint:    "Pass an `account_id` from list_members, verbatim.",
-      )
+    owners = Membership.where(list_id: list_id).owner.pluck(:account_id)
+    if owners.one? && owners.first.casecmp?(account_id)
+      raise Kiosk::Server::Errors::Forbidden.new("cannot remove the list's last owner",
+                                                 hint: "A list must keep at least one owner.")
     end
 
-    # Never remove the list's LAST owner, decided from ONE statement rather than
-    # an `exists?` plus a `count`: at READ COMMITTED each statement takes its own
-    # snapshot, so two could straddle a concurrent membership change.
-    #
-    # `casecmp?` and not `==`: Kiosk::UuidCheck accepts either case (`\h`) and Postgres'
-    # `uuid` compares canonically, so a byte-comparison would let an owner remove
-    # herself by shouting her own id.
-    owner_ids = Membership.where(list_id: list_id, role: Membership::OWNER).pluck(:account_id)
-    if owner_ids.size <= 1 && owner_ids.any? { |id| id.casecmp?(target) }
-      return OperationResult.refused(
-        code:    "forbidden",
-        message: "cannot remove the list's last owner",
-        hint:    "A list must keep at least one owner.",
-      )
+    if Membership.where(list_id: list_id, account_id: account_id).delete_all.zero?
+      raise Kiosk::Server::Errors::Forbidden.new("no such membership on this list",
+                                                 hint: "The account is not a member of this list.")
     end
 
-    # `delete_all`, not `destroy_all`: no callbacks, and the count IS the answer.
-    removed = Membership.where(list_id: list_id, account_id: target).delete_all
-    if removed.zero?
-      return OperationResult.refused(
-        code:    "forbidden",
-        message: "no such membership on this list",
-        hint:    "The account is not a member of this list.",
-      )
-    end
-
-    # Emitted AFTER the delete, so the removed account is no longer in the
-    # scope and does not receive an event about losing access it can no longer
-    # subscribe to — its standing subscription is torn down by the socket's own
-    # re-authorisation, which is where that belongs.
     Kiosk::Server::Events.emit(
       topic: :list_membership, subject: list_id,
       identity_scope: Membership.account_ids_on(list_id),
-      data: { "account_id" => target, "action" => "removed" },
+      data: { "account_id" => account_id, "action" => "removed" },
     )
 
-    OperationResult.ok({ "removed" => true })
+    { removed: true }
   end
 end

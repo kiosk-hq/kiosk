@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.12] — 2026-10-08
+
+- 2026-10-08: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.12, matching skill 0.5.12.**
+
 - 2026-10-08: **skooti's rental verbs answer an `unlock_url`: a page it serves with the token and its QR, the link an assistant hands its human.**
 
 ## [0.5.11] — 2026-10-08

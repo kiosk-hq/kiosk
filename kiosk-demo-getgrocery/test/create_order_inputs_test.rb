@@ -64,6 +64,14 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
     assert_equal 0, Order.where(user_id: @shopper.id).count
   end
 
+  test "both write verbs PUBLISH delivery_date as required" do
+    %w[create_order reschedule_delivery].each do |name|
+      verb = kiosk_origin.verbs.find { |v| v.name == name }
+      required = verb.input_schema.with_indifferent_access[:required]
+      assert_includes required, "delivery_date", "#{name}'s input_schema must list delivery_date as required"
+    end
+  end
+
   test "an abandoned order stays unpaid on the principal's own reconciliation surface" do
     place
     rows = kiosk_origin.call("my_orders", kind: :query, params: {}, as: @shopper)

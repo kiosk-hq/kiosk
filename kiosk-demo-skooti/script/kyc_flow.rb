@@ -48,6 +48,7 @@ require_relative "lock_sim"
 require_relative "dev_unlock_key"
 require_relative "equihash_register"
 require_relative "prove_test_issuer"
+require_relative "unlock_page"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
@@ -246,6 +247,7 @@ if rc_mc_kyc == 200
   mc_unlocked = lock.unlock(token: mc_kyc_body["rental_token"], now: Time.now.to_i)
   STDERR.puts "  motorcycle unlocked=#{mc_unlocked}"
 end
+mc_unlock_page = unlock_page_check(mc_kyc_body["unlock_url"], mc_kyc_body["rental_token"])
 
 # ── PART B: scooter positive control — NO KYC at all ─────────────────────────
 
@@ -306,6 +308,9 @@ puts JSON.generate(
   kyc_identity_key:            mc_user,
   http_mc_rent_with_kyc:       rc_mc_kyc,
   mc_unlocked:                 mc_unlocked,
+  http_mc_unlock_page:         mc_unlock_page[:status],
+  mc_unlock_page_qr:           mc_unlock_page[:qr],
+  mc_unlock_page_token:        mc_unlock_page[:token],
   http_scooter_rent_no_kyc:    rc_sc,
   scooter_rented_no_kyc:       (rc_sc == 200),
   http_spelling_kyc_submit:    rc_spelling,

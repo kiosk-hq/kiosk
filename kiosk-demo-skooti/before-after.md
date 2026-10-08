@@ -38,8 +38,9 @@ key, scooter code, expiry, one-shot `jti`. No round-trip, no account session.
 
 **The step the assistant does not take, and cannot** — a lock opens on a
 Bluetooth write from something standing beside the scooter. An assistant
-reaching this origin over HTTP has no radio, so it relays the token to its
-human exactly as it relays a card-setup link. The human's tap on the NFC tag
+reaching this origin over HTTP has no radio, so it relays the `unlock_url`
+the verb answers — a page showing the token and its QR — to its human exactly
+as it relays a card-setup link. The human's tap on the NFC tag
 launches the App Clip, and the clip writes the token to the lock.
 
 A licence-free scooter needs no identity check at all. The signed KYC

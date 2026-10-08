@@ -40,6 +40,31 @@ class Kiosk::RentalsController < ActionController::API
     }
   end
 
+  # What both rental verbs answer: they end in one activation ({RentalActivation}),
+  # so they publish one contract, and only their GATES differ.
+  RENTAL = {
+    type: "object",
+    description: "The activated rental and the unlock link to hand to your human.",
+    additionalProperties: false,
+    properties: {
+      scooter_code: { type: "string", description: "The vehicle this rental is for." },
+      rental_token: { type: "string",
+                      description: "An Ed25519-signed OFFLINE unlock token for the vehicle named beside it, " \
+                                   "short-lived and good once. It is presented AT the vehicle — the App Clip " \
+                                   "writes it to the lock — and the lock checks it without reaching this " \
+                                   "origin. Nothing on this wire opens a lock: that step is physical, and it " \
+                                   "is the human's." },
+      unlock_url:   { type: "string", format: "uri",
+                      description: "The page to hand your human, complete and verbatim, as you hand a " \
+                                   "card-setup link. It shows rental_token and its QR: scanning that QR, or " \
+                                   "tapping the vehicle's NFC tag, opens the App Clip that writes the token " \
+                                   "to the lock. It CARRIES the token, so it is a credential and not a " \
+                                   "pointer: hand it over once." },
+      exp:          { type: "integer", description: "Unix seconds at which the token stops being accepted." },
+    },
+    required: %w[scooter_code rental_token unlock_url exp],
+  }.freeze
+
   # reserve — the hold, and the quote a cart must be signed against. See
   # {ReserveOperation}; the principal below is all this controller contributes,
   # and it comes from the identity the wire resolved rather than from arguments,
@@ -104,24 +129,7 @@ class Kiosk::RentalsController < ActionController::API
                                                 "reserve or my_reservations, verbatim." },
                },
                required: ["reservation_id"]
-  # The SAME three fields rent_motorcycle answers with: both verbs end in one
-  # activation ({RentalActivation}), so they must not publish two contracts.
-  output_schema type: "object",
-                description: "The activated rental and the offline unlock token to relay to your human.",
-                additionalProperties: false,
-                properties: {
-                  scooter_code: { type: "string", description: "The vehicle this rental is for." },
-                  rental_token: { type: "string",
-                                  description: "An Ed25519-signed OFFLINE unlock token for the vehicle named " \
-                                               "beside it, short-lived and good once. Relay it to your human, the " \
-                                               "way you relay a card-setup link: it is presented AT the vehicle — " \
-                                               "tapping the vehicle's NFC tag or scanning its QR opens the App " \
-                                               "Clip that writes it to the lock — and the lock checks it without " \
-                                               "reaching this origin. Nothing on this wire opens a lock: that step " \
-                                               "is physical, and it is the human's." },
-                  exp:          { type: "integer", description: "Unix seconds at which the token stops being accepted." },
-                },
-                required: %w[scooter_code rental_token exp]
+  output_schema(**RENTAL)
   def start_rental
     render_kiosk_result StartRentalOperation.call(reservation_id: params[:reservation_id])
   end
@@ -139,23 +147,7 @@ class Kiosk::RentalsController < ActionController::API
                                                 "`reservation_id` from reserve or my_reservations, verbatim." },
                },
                required: ["reservation_id"]
-  # Identical to start_rental's: what differs between the two verbs is the GATE.
-  output_schema type: "object",
-                description: "The activated rental and the offline unlock token to relay to your human.",
-                additionalProperties: false,
-                properties: {
-                  scooter_code: { type: "string", description: "The vehicle this rental is for." },
-                  rental_token: { type: "string",
-                                  description: "An Ed25519-signed OFFLINE unlock token for the vehicle named " \
-                                               "beside it, short-lived and good once. Relay it to your human, the " \
-                                               "way you relay a card-setup link: it is presented AT the vehicle — " \
-                                               "tapping the vehicle's NFC tag or scanning its QR opens the App " \
-                                               "Clip that writes it to the lock — and the lock checks it without " \
-                                               "reaching this origin. Nothing on this wire opens a lock: that step " \
-                                               "is physical, and it is the human's." },
-                  exp:          { type: "integer", description: "Unix seconds at which the token stops being accepted." },
-                },
-                required: %w[scooter_code rental_token exp]
+  output_schema(**RENTAL)
   def rent_motorcycle
     render_kiosk_result RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
   end

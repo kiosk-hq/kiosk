@@ -22,7 +22,7 @@ module RentalActivation
   #   accepts either hex case, so an uppercase id is signed as the caller wrote
   #   it and re-canonicalising here would change the bytes a provisioned lock
   #   verifies. The UPDATE below uses the ROW's id — the same row.
-  # @return [OperationResult] the token, the vehicle it opens, and its expiry
+  # @return [OperationResult] the token, the vehicle it opens, the page showing it, and its expiry
   def call(reservation:, scooter:, reservation_id:)
     now = Time.now.to_i
 
@@ -45,6 +45,7 @@ module RentalActivation
     OperationResult.ok({
       scooter_code: scooter.code,
       rental_token: token,
+      unlock_url:   UnlockLink.url(origin: Kiosk.current_issuer, scooter_code: scooter.code, rental_token: token),
       exp:          exp,
     })
   end

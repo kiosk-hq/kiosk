@@ -47,6 +47,7 @@ require "jwt"
 
 require_relative "lock_sim"
 require_relative "dev_unlock_key"
+require_relative "unlock_page"
 
 SERVER   = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
@@ -228,11 +229,13 @@ rc_rental, rental_resp = post_json(
 
 rental_token = nil
 exp          = nil
+unlock_url   = nil
 unlocked     = false
 
 if rc_rental == 200
   rental_token = rental_resp["rental_token"]
   exp          = rental_resp["exp"]
+  unlock_url   = rental_resp["unlock_url"]
   sc           = rental_resp["scooter_code"]
 
   # Provision the lock sim with skooti's public key from DevUnlockKey.
@@ -253,6 +256,8 @@ else
   abort "start_rental failed unexpectedly (#{rc_rental}): #{JSON.generate(rental_resp)}"
 end
 
+unlock_page = unlock_page_check(unlock_url, rental_token)
+
 # ── Step 7: print ONE JSON line ──────────────────────────────────────────────
 
 puts JSON.generate(
@@ -268,5 +273,9 @@ puts JSON.generate(
   browse_rows_count:      browse_rows.size,
   rental_token:           rental_token,
   exp:                    exp,
+  unlock_url:             unlock_url,
+  http_unlock_page:       unlock_page[:status],
+  unlock_page_qr:         unlock_page[:qr],
+  unlock_page_token:      unlock_page[:token],
   unlocked:               unlocked,
 )

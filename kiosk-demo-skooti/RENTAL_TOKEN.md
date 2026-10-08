@@ -220,17 +220,12 @@ Assistant (agent token → Kiosk API)
          RentalTokenIssuer.issue(scooter_code, reservation_id, now, ttl: 900)
          reservation status → 'active'
        │
-       Returns: { scooter_code:, rental_token:, exp: } — and nothing else.
-                No launch link is on the wire, so an assistant driving this
-                origin relays the token to its human and stops there.
-       │
-       ▼
-  Operator side, in this checkout: bin/make-qr turns a token into the
-  App Clip launch link and renders its QR —
+       Returns: { scooter_code:, rental_token:, unlock_url:, exp: }
+                The assistant hands unlock_url to its human — a page this
+                origin serves, showing the token and the QR of that same URL:
     https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded token>
-  In the shipped product that tag is on the vehicle. The link is the App
-  Clip's association URL, resolved by iOS; it is not a web page and this
-  origin serves none at that path.
+                It is also the App Clip's launch URL, so a phone opening it
+                where the clip is associated launches the clip instead.
        │
        ▼
   The human taps the tag, scans the QR, or opens a pushed link

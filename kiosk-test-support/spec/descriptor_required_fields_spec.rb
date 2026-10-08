@@ -35,7 +35,7 @@ RSpec.describe "descriptor required fields" do
       offset       = m.end(0)
       previous_end = offset
 
-      declared = REQUIRED_MACROS.select { |macro| header.match?(/^[ \t]*#{macro}[ \t]/) }
+      declared = REQUIRED_MACROS.select { |macro| header.match?(/^[ \t]*#{macro}[ \t(]/) }
       next if declared.empty? && !header.match?(/^[ \t]*wire_name[ \t]/)
 
       name = header[/^[ \t]*wire_name[ \t]+"([^"]*)"/, 1] || method_name

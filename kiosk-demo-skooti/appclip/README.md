@@ -185,20 +185,16 @@ The rental token is dynamic (issued by the server at `start_rental` time, 15-min
 It CANNOT be a static sticker on the scooter.  The flow is:
 
 ```
-Server start_rental → issues rental token
-  → assistant encodes: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded token>
-  → generates a QR code from that URL
+Server start_rental → issues rental token and unlock_url:
+     https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded token>
+  → assistant hands unlock_url to its human; the page shows the QR of that URL
   → user scans the QR → iOS shows App Clip banner → clip launches
 ```
 
 The `|` characters in the token must be percent-encoded (`%7C`) in the URL.
 `URLComponents.queryItems` in the clip handles decoding automatically.
 
-On the server side (Ruby):
-```ruby
-rt_encoded = CGI.escape(rental_token)
-url = "https://skooti.demo.kiosk.tech/unlock?scooter=#{scooter_code}&rt=#{rt_encoded}"
-```
+On the server side the URL is built in one place, `app/services/unlock_link.rb`.
 
 ### NFC tag
 

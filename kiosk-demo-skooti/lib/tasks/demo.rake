@@ -94,9 +94,12 @@ namespace :check do
     sh "ruby #{Rails.root.join('script/rental_token_issuer_kat.rb')}"
   end
 
-  desc "Boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), then the " \
+  desc "Run spec/unlock_page_spec.rb, boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), then the " \
        "in-process capture-window regression (script/pay_window.rb), assert."
   task :rideflow do
+    puts "\n── unlock page spec (no server, no port) ──"
+    sh "bundle exec rails runner #{File.expand_path("../../spec/unlock_page_spec.rb", __dir__)}"
+
     require "resolv"
     require "net/http"
     require "uri"
@@ -306,6 +309,17 @@ namespace :check do
       else
         failures << "happy: rental_token missing or empty"
         puts "  FAIL  rental_token missing or empty"
+      end
+
+      # The unlock_url beside the token is a page this origin serves: the QR
+      # of that same URL and the token, readable.
+      if happy_result["http_unlock_page"] == 200 && happy_result["unlock_page_qr"] && happy_result["unlock_page_token"]
+        puts "  OK  unlock_url → 200, the page carries its own QR and the token"
+      else
+        failures << "happy: unlock_url page expected 200/qr/token, got #{happy_result["http_unlock_page"].inspect}/" \
+                    "#{happy_result["unlock_page_qr"].inspect}/#{happy_result["unlock_page_token"].inspect}"
+        puts "  FAIL  unlock_url page → #{happy_result["http_unlock_page"].inspect}/" \
+             "#{happy_result["unlock_page_qr"].inspect}/#{happy_result["unlock_page_token"].inspect}"
       end
 
       # The published `exp` is the token's own field 4 — the number the lock
@@ -1523,6 +1537,16 @@ namespace :check do
     else
       failures << "A4: rent_motorcycle with KYC expected 200/unlocked, got #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
       puts "  FAIL  A4 rent_motorcycle with KYC → #{result["http_mc_rent_with_kyc"].inspect}/#{result["mc_unlocked"].inspect}"
+    end
+
+    # A5: the unlock_url beside the token opens a page with that URL's QR and the token.
+    if result["http_mc_unlock_page"] == 200 && result["mc_unlock_page_qr"] && result["mc_unlock_page_token"]
+      puts "  OK  A5 unlock_url → 200, the page carries its own QR and the token"
+    else
+      failures << "A5: unlock_url page expected 200/qr/token, got #{result["http_mc_unlock_page"].inspect}/" \
+                  "#{result["mc_unlock_page_qr"].inspect}/#{result["mc_unlock_page_token"].inspect}"
+      puts "  FAIL  A5 unlock_url page → #{result["http_mc_unlock_page"].inspect}/" \
+           "#{result["mc_unlock_page_qr"].inspect}/#{result["mc_unlock_page_token"].inspect}"
     end
 
     # B: scooter positive control — start_rental succeeds with NO KYC submitted

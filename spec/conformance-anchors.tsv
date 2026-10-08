@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1912 anchors.
+# 1910 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -733,7 +733,6 @@ kiosk-demo-tudu/config/initializers/kiosk.rb	  # enforced at the app layer (the 
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # migrates that headless account's lists and memberships to the human.
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # ── NO payment_provider ──────────────────────────────────────────────────
 kiosk-demo-tudu/config/initializers/kiosk.rb	  c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) do
-kiosk-demo-tudu/config/initializers/kiosk.rb	  c.handlers = %w[Kiosk::HouseholdController Kiosk::TodoListsController]
 kiosk-demo-tudu/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-tudu/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-tudu/lib/tasks/demo.rake	    PreLinkTokenAfterLink (401), NoLoginAddressOnTheRoster (a co-member's
@@ -1115,7 +1114,7 @@ kiosk-server/lib/kiosk/server/engine.rb	        post "auth/revoke",    to: "auth
 kiosk-server/lib/kiosk/server/engine.rb	        post "pay",    to: "wire#pay"
 kiosk-server/lib/kiosk/server/engine.rb	      initializer "kiosk-server.root_discovery_routes" do |app|
 kiosk-server/lib/kiosk/server/engine.rb	      routes do
-kiosk-server/lib/kiosk/server/engine.rb	#   mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+kiosk-server/lib/kiosk/server/engine.rb	# The Rails engine. `mount Kiosk::Server::Engine => Kiosk.configuration.mount_path`
 kiosk-server/lib/kiosk/server/engine.rb	get  "oauth/device/verify",        to: "device_verify#show"
 kiosk-server/lib/kiosk/server/engine.rb	get  "schema", to: "wire#schema"
 kiosk-server/lib/kiosk/server/engine.rb	get "/.well-known/api-catalog",
@@ -1218,14 +1217,12 @@ kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/verb_controller.rb	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-kiosk-server/lib/kiosk/server/verb_controller.rb	    # SUCCESS is the handler's rendered payload, VERBATIM; ERRORS are RFC 9457
-kiosk-server/lib/kiosk/server/verb_controller.rb	    # THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
+kiosk-server/lib/kiosk/server/verb_controller.rb	    # The per-verb wire, one endpoint per registered verb under the mount:
 kiosk-server/lib/kiosk/server/verb_controller.rb	GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-kiosk-server/lib/kiosk/server/verb_controller.rb	THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
+kiosk-server/lib/kiosk/server/verb_controller.rb	The per-verb wire, one endpoint per registered verb under the mount:
 kiosk-server/lib/kiosk/server/verb_controller.rb	class VerbController < WireController
 kiosk-server/lib/kiosk/server/verb_controller.rb	def serve(command)
 kiosk-server/lib/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
-kiosk-server/lib/kiosk/server/verb_controller.rb	the reserved plane wins by first-match, because the operator
 kiosk-server/lib/kiosk/server/verb_registry.rb	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
 kiosk-server/lib/kiosk/server/well_known.rb	            kind:          "kiosk-pop",
 kiosk-server/lib/kiosk/server/well_known.rb	          - **Identity assertion (ID-JAG)** — not supported (planned).
@@ -1242,6 +1239,7 @@ kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_txt(base_url:, confi
 kiosk-server/lib/kiosk/server/well_known.rb	def self.api_catalog(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.auth_md(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.build(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/wire_controller.rb	    # Wire response (JSON): success is the handler's payload VERBATIM
 kiosk-server/lib/kiosk/server/wire_controller.rb	PowGate.gate(
 kiosk-server/lib/kiosk/server/wire_controller.rb	Wire response (JSON): success is the handler's payload VERBATIM
 kiosk-server/lib/kiosk/server/wire_controller.rb	def render_wire_error(error)
@@ -1540,7 +1538,7 @@ kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb name that is
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb name the engine draws itself
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	reserves every first path segment the engine draws under the mount
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	refuses a name declared as both a query and an action
-kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	registers the verbs of every declared handler, from an empty registry
+kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	registers the verbs of every handler, from an empty registry
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	does NOT match a path that merely shares the mount-path prefix as a substring
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	injects the headers on any /kiosk/* sub-path
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	injects the three Kiosk headers on /kiosk root

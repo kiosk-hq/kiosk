@@ -265,7 +265,7 @@ pay_thread = Thread.new do
   end
 end
 
-claimed = wait_until { booking_payment_status(inflight_id) == Booking::PAYING }
+claimed = wait_until { booking_payment_status(inflight_id) == "paying" }
 check(claimed, "the pay CLAIMED the booking (payment_status → paying) before the capture")
 check(settlements_for(inflight_id).zero?, "no settlement row exists for it — the capture has not returned")
 
@@ -290,7 +290,7 @@ ActiveSupport::Dependencies.interlock.permit_concurrent_loads { pay_thread.join 
 
 check(settlements_for(inflight_id).zero?,
       "still no settlement row — the engine's phase 3 has not run (this IS the window)")
-check(booking_payment_status(inflight_id) == Booking::PAID,
+check(booking_payment_status(inflight_id) == "paid",
       "the cashier flipped the booking to `paid` the instant the capture returned")
 
 state_window = payment_state(inflight_id)

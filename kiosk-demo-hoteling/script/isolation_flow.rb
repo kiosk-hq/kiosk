@@ -11,15 +11,10 @@
 #
 # Proves hoteling app-layer predicates enforce cross-tenant denial:
 #
-#   Assertion 1 — confirm_booking ownership denial (Gate-1 isolated):
-#     Principal A reserves room → booking_id rA.
-#     Principal B's pay call creates a settlement whose cart references rA
-#     (satisfies Gate-2) then calls POST /kiosk/confirm_booking {booking_id: rA}.
-#     → Must be denied (HTTP 403). Gate-1 WHERE id=rA AND
-#       user_id=kiosk.current_user_id() AND status='reserved' finds nothing
-#       because rA.user_id = A ≠ B.
-#     The 403 genuinely isolates Gate-1 ownership: Gate-2 (payment) is
-#     satisfied by B before the attempt, so payment cannot be the blocker.
+#   Assertion 1 — a principal pays only for its own booking:
+#     1a: Principal A reserves → rA. B signs a cart naming rA and calls
+#         POST /kiosk/pay → 403 forbidden; nothing is charged.
+#     1b: B calls POST /kiosk/confirm_booking {booking_id: rA} → 403.
 #
 #   Assertion 2 — my_bookings: exclusion + positive control:
 #     2a: B's my_bookings must NOT contain rA.
@@ -154,12 +149,7 @@ total_cents_a = rsv_a_resp["total_cents"].to_i
 abort "A's booking_id missing from response: #{JSON.generate(rsv_a_resp)}" unless booking_id_a
 STDERR.puts "  A reserved: booking_id=#{booking_id_a} total=#{format("€%.2f", total_cents_a / 100.0)}"
 
-# ── Step 5: B's pay creates a settlement referencing rA (satisfies Gate-2) ────
-# B signs intent + cart + payment mandates with B's registered RSA key. The cart's
-# line_items contain {booking_id: booking_id_a} so that Gate-2's jsonb-
-# containment check passes for B.  settlements.user_id is written from
-# the GUC (kiosk.current_user_id() = B), so s.user_id = B for Gate-2.
-# After this step, only Gate-1 can deny B's confirm_booking(rA).
+# ── Step 5: B tries to pay for rA (Assertion 1a) ─────────────────────────────
 now_b        = Time.now.to_i
 intent_id_b  = SecureRandom.uuid
 cart_id_b    = SecureRandom.uuid
@@ -212,8 +202,7 @@ rc_pay_b, pay_b_resp = WIRE.post_json(
     payment_mandate_jws: payment_b_jws },
   WIRE.bearer(token_b),
 )
-abort "B pay (for rA) failed (#{rc_pay_b}): #{JSON.generate(pay_b_resp)}" unless rc_pay_b == 200
-STDERR.puts "  B paid for rA: settlement_id=#{pay_b_resp["settlement_id"]} — Gate-2 now passes for B"
+STDERR.puts "  B pay for A's rA: HTTP #{rc_pay_b} #{pay_b_resp["code"].inspect} (expected 403 forbidden)"
 
 # ── Step 6: the principal is not an input (Assertion 3) ──────────────────────
 # Two halves, because neither proves the other.
@@ -305,11 +294,7 @@ abort "B my_bookings failed (#{rc_b_bookings}): #{JSON.generate(b_bookings_resp)
 b_booking_ids = Array(b_bookings_resp).map { |r| r["booking_id"] }
 STDERR.puts "  B my_bookings: #{b_booking_ids.inspect}"
 
-# ── Step 8: B calls confirm_booking on A's booking_id (Assertion 1) ──────────
-# B has a settlement referencing rA (Gate-2 ✓).
-# Gate-1 WHERE id=rA AND user_id=kiosk.current_user_id() AND status='reserved'
-# finds nothing because rA.user_id = A ≠ B → 403.
-# The 403 genuinely isolates Gate-1 ownership, not a payment gap.
+# ── Step 8: B calls confirm_booking on A's booking_id (Assertion 1b) ─────────
 rc_confirm_b, _confirm_b_resp = through_toll { |toll| WIRE.post_json(
   "/kiosk/confirm_booking",
   { booking_id: booking_id_a },
@@ -323,6 +308,7 @@ puts JSON.generate(
   user_id_b:               user_id_b,
   booking_id_a:            booking_id_a,
   booking_id_b:            booking_id_b,
+  b_pay_refusal:           [rc_pay_b, pay_b_resp["code"]],
   forged_refusal:          [rc_forge, forged_resp["code"], forged_resp["detail"]],
   b_confirm_booking_rc:    rc_confirm_b,
   b_booking_ids:           b_booking_ids,

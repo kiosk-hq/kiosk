@@ -7,6 +7,7 @@ WORK_TREE=/srv/kiosk
 GIT_DIR=/srv/kiosk.git
 export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.1/bin:$PATH"
 MAIN=0
+FAILED=
 while read -r _o _n ref; do [ "$ref" = "refs/heads/main" ] && MAIN=1; done
 [ "$MAIN" -eq 1 ] || { echo "remote: no main in push; nothing to deploy."; exit 0; }
 echo "remote: ==> checkout main ($(git --git-dir=$GIT_DIR rev-parse --short HEAD))"
@@ -17,8 +18,13 @@ for a in getgrocery atablefor hoteling skooti stylish philslist tudu prove; do
   echo "remote: ==> $a: bundle + migrate + restart"
   cd "$d"
   bundle install --jobs 2 >/dev/null 2>&1 || echo "remote:     WARN bundle install had output"
-  ( set -a; . /etc/kiosk-demo/$a.env; set +a; bundle exec rails db:migrate >/dev/null 2>&1; bundle exec rails db:seed >/dev/null 2>&1 ) || echo "remote:     WARN db:migrate (maybe none)"
+  if ! ( set -a && . /etc/kiosk-demo/$a.env && bundle exec rails db:migrate >/dev/null ); then
+    echo "remote:     FAIL $a: db:migrate failed; NOT restarted, its running process is the previous code"
+    FAILED="$FAILED $a"; continue
+  fi
+  ( set -a; . /etc/kiosk-demo/$a.env; set +a; bundle exec rails db:seed >/dev/null 2>&1 ) || echo "remote:     WARN db:seed"
   sudo systemctl restart "kiosk-demo@$a"
 done
 sudo systemctl reload caddy >/dev/null 2>&1 || true
+[ -z "$FAILED" ] || { echo "remote: ==> DEPLOY FAILED for:$FAILED. main is checked out in $WORK_TREE; fix, then re-push or migrate + restart those units by hand."; exit 1; }
 echo "remote: ==> deploy complete."

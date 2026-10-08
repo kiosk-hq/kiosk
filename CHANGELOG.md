@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: The deploy hook no longer restarts an app whose `db:migrate` failed, and the push exits non-zero naming it.
 - 2026-10-08: kiosk-pay-stripe settles only a `succeeded` card charge; demos and e2e reach that answer through kiosk-redteam's stripe-mock front.
 - 2026-10-08: getgrocery, hoteling and skooti configure a price checker over their own catalog; the engine checks the cart.
 - 2026-10-08: kiosk-pay-stripe ships the charge lookup getgrocery kept as its own copy; the demo uses the gem's.

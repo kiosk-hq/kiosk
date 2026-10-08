@@ -208,19 +208,27 @@ What each unit must carry. For EACH of the 7 apps:
 ## 7. Deploy new code (push-to-deploy) + housekeeping
 - [ ] **git push-to-deploy**: a bare repo per box with its own `post-receive` hook — its own work-tree,
       service names and deploy user, so it touches nothing else the box happens to host — that checks
-      out `main`, `bundle install`, `db:prepare`, **`db:seed`**, and restarts each app's service.
+      out `main`, `bundle install`, `db:migrate`, **`db:seed`**, and restarts each app's service.
 - [ ] ⚠ **THE HOOK IS `deploy/post-receive` IN THIS REPO, AND INSTALLING IT IS MANUAL.** On the live box it is
       `/srv/kiosk.git/hooks/post-receive` — executable, outside any clone — and it is the ONLY thing that turns
       a push into a deploy. Two consequences to act on:
       (a) **never re-clone or recreate `/srv/kiosk.git`** to realign it with `origin`; that discards the
       hook and leaves a bare repo that accepts pushes and deploys nothing. Realign with
       `git push --force-with-lease=main:<current-remote-sha> prod-demo main` INTO the existing repo.
-      (b) **on a new or rebuilt box, install it**: `scp deploy/post-receive box:/srv/kiosk.git/hooks/post-receive`
-      and `chmod +x` it there. If the live hook is edited on the box, copy it back into `deploy/post-receive`.
+      (b) **on a new or rebuilt box, AND after every change to `deploy/post-receive`, install it** — a push does
+      not update the hook it runs:
+      ```
+      scp deploy/post-receive <deploy-user>@<box>:/srv/kiosk.git/hooks/post-receive
+      ssh <deploy-user>@<box> chmod +x /srv/kiosk.git/hooks/post-receive
+      ```
+      If the live hook is edited on the box, copy it back into `deploy/post-receive`.
       What it does: on any push touching `refs/heads/main` it runs
       `git checkout -f main` into the single work-tree `/srv/kiosk`, then per demo `bundle install`,
       `rails db:migrate`, `rails db:seed` and `systemctl restart kiosk-demo@<app>` across all 8 units,
-      then `systemctl reload caddy`.
+      then `systemctl reload caddy`. **A failed `db:migrate` stops that unit**: it is not seeded or restarted, so it
+      keeps serving its previous process, while `/srv/kiosk` already holds the new `main`; the push prints
+      `DEPLOY FAILED for: <units>` and exits non-zero (the commits have landed regardless). Fix the cause, then
+      re-push or run `db:migrate` and `systemctl restart kiosk-demo@<app>` for those units by hand.
 - [ ] ⚠ **`db:seed` is not optional — omit it and the demos serve empty catalogs.** `db:prepare` seeds only a
       database it has just CREATED, so on every push after the first it is a no-op for content: a box whose hook
       runs `db:prepare` alone serves a partial catalog — hoteling with 5 properties instead of 100, skooti with

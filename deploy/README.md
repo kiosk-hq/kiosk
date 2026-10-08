@@ -82,9 +82,8 @@ account a push arrives as. That account is the one that needs the read and
 nobody else does, so every file is written to `ubuntu:ubuntu` at mode `0640` —
 two literal lines in the script. A box whose hook runs as another account sets
 `KIOSK_OWNER=<user>:<group>` in the environment. When the hook has lost its
-read the symptom is silent: `db:migrate` fails with `Permission denied` on the
-hook's own `source` and the push still prints `deploy complete` while the units
-keep serving.
+read, the hook's own `source` fails with `Permission denied`, no unit is
+migrated or restarted, and the push ends in `DEPLOY FAILED`.
 
 **What it does not touch.** Caddy (that is `deploy-caddy.sh`, which owns
 `/etc/caddy/Caddyfile` whole), Postgres, migrations, seeds, and the units.
@@ -435,8 +434,7 @@ created yet, and if one is ever added it must serve TLS.
 
 **Why a script and not a checklist line, said plainly.** The other half of this
 class -- the edge rate limit -- got a script and it landed; HSTS got a line in
-<!-- count: 47 ¦ from: grep -c '^ *- \[ \]' deploy/CHECKLIST.md -->
-`CHECKLIST.md`, whose 47 boxes are unticked in the repository and always
+`CHECKLIST.md`, whose boxes are unticked in the repository and always
 will be — the tracked copy is a template and an operator ticks their own —
 so its tick state carried no information at all. `check-live-hsts.sh` reads the WIRE rather than a config,
 because a config check run against this template would have said OK for the

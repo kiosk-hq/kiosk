@@ -22,7 +22,7 @@ class OrderDeliveredJob < ApplicationJob
   # states about a departure already due: `:async` runs a job on a thread pool,
   # so «enqueue with no delay» races the next HTTP call.
   def self.arrive!(order_id, slot_at)
-    wait = (slot_at || Time.current) - Time.current
+    wait = slot_at - Time.current
     return new.perform(order_id) if wait <= 0
 
     set(wait: wait.seconds).perform_later(order_id)

@@ -241,9 +241,6 @@ class Kiosk::StorefrontController < ActionController::API
               "change of mind is a NEW `create_order`; a PAID one moves only through " \
               "`reschedule_delivery`."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # `slot_at` and `address` are the two nullable columns on `orders` and travel
-  # as null rather than being dropped, so the row shape does not change with the
-  # order's completeness.
   output_schema type: "array",
                 description: "The principal's orders, newest first.",
                 items: {
@@ -253,15 +250,14 @@ class Kiosk::StorefrontController < ActionController::API
                     status:        { type: "string", enum: Order::STATUSES,
                                      description: "Where the BASKET stands: created → paying → paid, rescheduled once its window has been moved, then out_for_delivery and delivered as the shop's courier acts. Read payment_state for where the money stands." },
                     total_cents:   { type: "integer", description: "EUR cents." },
-                    slot_at:       { type: %w[string null], description: "The booked delivery window's start instant, ISO 8601 with offset, or null. " \
+                    slot_at:       { type: "string", description: "The booked delivery window's start instant, ISO 8601 with offset. " \
                                                                         "The offset is the DELIVERY zone's — the same one `delivery_slots`, " \
                                                                         "`create_order` and `reschedule_delivery` gave you for this window, so " \
                                                                         "the four verbs spell one instant one way." },
-                    slot_label:    { type: %w[string null], description: "The booked window rendered for a human, IN THE ZONE IT NAMES — " \
-                                                                        "e.g. \"08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})\" — or null when no window " \
-                                                                        "is booked. The wall clock is the delivery address's, not the caller's; " \
+                    slot_label:    { type: "string", description: "The booked window rendered for a human, IN THE ZONE IT NAMES — " \
+                                                                        "e.g. \"08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})\". The wall clock is the delivery address's, not the caller's; " \
                                                                         "`slot_at` carries the same instant with its resolved offset." },
-                    address:       { type: %w[string null], description: "The delivery address on the order, or null." },
+                    address:       { type: "string", description: "The delivery address on the order." },
                     payment_state: { type: "string", enum: %w[unpaid pending paid],
                                      description: "Where this order's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this order has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct." },
                   },
@@ -303,13 +299,13 @@ class Kiosk::StorefrontController < ActionController::API
                           # TimeWithZone whose `as_json` follows `Time.zone` and
                           # the encoder's `time_precision`, so the published
                           # bytes would be the app's configuration talking.
-                          "slot_at"       => slot_at&.in_time_zone(order_zone)&.iso8601,
+                          "slot_at"       => slot_at.in_time_zone(order_zone).iso8601,
                           # The window said out loud, zone named.
                           # `slot_at` carries the offset; nobody speaks an
                           # offset. This is the verb §11.6 sends an assistant to
                           # after a lost `pay`, so it is the row most likely to
                           # be read back TO a human.
-                          "slot_label"    => slot_at && DeliverySlots.label(slot_at, order_zone),
+                          "slot_label"    => DeliverySlots.label(slot_at, order_zone),
                           "address"       => address,
                           "payment_state" => Order.payment_state(status, paid) }
                       }

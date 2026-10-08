@@ -18,8 +18,8 @@ class CreateProductsAndOrders < ActiveRecord::Migration[ActiveRecord::Migration.
       t.references  :user, null: false, foreign_key: true, type: :uuid
       t.string      :status,      null: false, default: "created"
       t.integer     :total_cents, null: false, default: 0
-      t.timestamptz :slot_at
-      t.text        :address
+      t.timestamptz :slot_at, null: false
+      t.text        :address, null: false
       # The zone of the district the address routes to, recorded by the verb
       # that writes the order. No default: an INSERT that names no clock fails.
       t.string      :timezone, null: false

@@ -32,10 +32,10 @@ class KioskConformanceTest < ActiveSupport::TestCase
     # which clock it was quoted on. A fixture is no exception — a row that could
     # not name its clock is a row the wire could not have produced.
     @alice_order = Order.create!(user: @alice, status: Order::CREATED, total_cents: 449,
-                                 address: "1 Dame Street, Dublin 2",
+                                 slot_at: Time.current + 3600, address: "1 Dame Street, Dublin 2",
                                  timezone: DeliverySlots::DEFAULT_ZONE_NAME)
     @bob_order   = Order.create!(user: @bob,   status: Order::CREATED, total_cents: 449,
-                                 address: "9 Grafton Street, Dublin 2",
+                                 slot_at: Time.current + 3600, address: "9 Grafton Street, Dublin 2",
                                  timezone: DeliverySlots::DEFAULT_ZONE_NAME)
   end
 

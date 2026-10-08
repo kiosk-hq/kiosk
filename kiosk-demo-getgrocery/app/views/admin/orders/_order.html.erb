@@ -4,12 +4,8 @@
     <%= order_badge(order) %>
     <div class="order-meta">
       <span><span class="label">Total:</span> <%= order_money(order, order.total_cents) %></span>
-      <% if order.address.present? %>
-        <span><span class="label">Address:</span> <%= masked_address(order.address) %></span>
-      <% end %>
-      <% if order.slot_at %>
-        <span><span class="label">Slot:</span> <%= order_slot(order) %></span>
-      <% end %>
+      <span><span class="label">Address:</span> <%= masked_address(order.address) %></span>
+      <span><span class="label">Slot:</span> <%= order_slot(order) %></span>
       <span class="order-placed">Ordered <%= order_placed_at(order) %></span>
     </div>
   </div>

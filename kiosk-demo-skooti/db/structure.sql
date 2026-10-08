@@ -350,13 +350,13 @@ CREATE TABLE public.schema_migrations (
 CREATE TABLE public.scooters (
     id bigint NOT NULL,
     code character varying NOT NULL,
-    name character varying,
+    name character varying NOT NULL,
     kind character varying DEFAULT 'scooter'::character varying NOT NULL,
     needs_licence boolean DEFAULT false NOT NULL,
-    dock character varying,
+    dock character varying NOT NULL,
     status character varying DEFAULT 'available'::character varying NOT NULL,
-    lat numeric(10,6),
-    lng numeric(10,6),
+    lat numeric(10,6) NOT NULL,
+    lng numeric(10,6) NOT NULL,
     price_per_min_cents integer NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
     updated_at timestamp(6) without time zone NOT NULL

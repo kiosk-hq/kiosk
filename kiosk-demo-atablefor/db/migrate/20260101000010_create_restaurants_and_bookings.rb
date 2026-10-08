@@ -28,8 +28,8 @@ class CreateRestaurantsAndBookings < ActiveRecord::Migration[ActiveRecord::Migra
     create_table :bookings, id: :uuid do |t|
       t.references :user,             null: false, foreign_key: true, type: :uuid
       t.references :restaurant,       null: false, foreign_key: true
-      t.references :restaurant_table, foreign_key: true
-      t.timestamptz :seating_at
+      t.references :restaurant_table, null: false, foreign_key: true
+      t.timestamptz :seating_at,       null: false
       t.integer    :party_size, null: false
       t.string     :status,     null: false, default: "confirmed" # confirmed | cancelled
       t.timestamps

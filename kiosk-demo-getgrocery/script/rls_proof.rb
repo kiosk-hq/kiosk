@@ -54,6 +54,7 @@ ORDER_B_ID = "bbb00000-0000-0000-0000-000000000001"
     order.status      = "created"
     order.total_cents = 1599
     order.address     = addr
+    order.slot_at     = 1.day.from_now
     # `orders.timezone` is NOT NULL with no column default, so every writer names
     # the clock its window was quoted on. These fixtures are Dublin addresses, so
     # the origin's own zone is the truthful answer for them.

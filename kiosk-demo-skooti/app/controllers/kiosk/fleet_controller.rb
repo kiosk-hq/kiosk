@@ -31,7 +31,7 @@ class Kiosk::FleetController < ActionController::API
   # The empty closed object publishes "takes no arguments" as a fact rather than
   # as an absence the assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # `lat`/`lng` are nullable `numeric(10,6)`, so ActiveRecord hands back a
+  # `lat`/`lng` are `numeric(10,6)`, so ActiveRecord hands back a
   # BigDecimal and Rails renders that as a JSON **string**: `"52.3739"`.
   output_schema type: "array",
                 description: "The whole available fleet.",
@@ -39,13 +39,13 @@ class Kiosk::FleetController < ActionController::API
                   type: "object", additionalProperties: false,
                   properties: {
                     code:                { type: "string", description: "The ONLY vehicle handle on the wire — pass it to reserve as `scooter_code`." },
-                    name:                { type: %w[string null], description: "The vehicle's given name, or null." },
-                    dock:                { type: %w[string null], description: "Pickup dock/location, or null." },
+                    name:                { type: "string", description: "The vehicle's given name." },
+                    dock:                { type: "string", description: "Pickup dock/location." },
                     status:              { type: "string", description: "available — this verb lists only what is." },
                     kind:                { type: "string", description: "scooter | motorcycle." },
                     needs_licence:       { type: "boolean", description: "True for the KYC-gated combustion motorcycle: rent it with rent_motorcycle, not start_rental." },
-                    lat:                 { type: %w[string null], description: "Latitude as a decimal STRING (e.g. \"52.3739\"), or null." },
-                    lng:                 { type: %w[string null], description: "Longitude as a decimal STRING (e.g. \"4.8809\"), or null." },
+                    lat:                 { type: "string", description: "Latitude as a decimal STRING (e.g. \"52.3739\")." },
+                    lng:                 { type: "string", description: "Longitude as a decimal STRING (e.g. \"4.8809\")." },
                     price_per_min_cents: { type: "integer", description: "EUR cents PER MINUTE." },
                     currency:            { type: "string", description: "eur — the currency the cart must be signed in." },
                   },

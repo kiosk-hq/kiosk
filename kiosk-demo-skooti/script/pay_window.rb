@@ -208,9 +208,9 @@ check(payment_state(unpaid_id) == "unpaid",
       "chain correct")
 
 unpaid_refusal = verb_error(Kiosk::Server::Actions, "start_rental", reservation_id: unpaid_id)
-check(unpaid_refusal && unpaid_refusal.message.to_s.include?("no settlement for this reservation"),
-      "start_rental on it refuses with the flat «no settlement» — correct HERE, because nothing was " \
-      "ever charged (got #{unpaid_refusal&.message.inspect})")
+check(unpaid_refusal && unpaid_refusal.message.to_s.include?("this reservation is not paid"),
+      "start_rental on it refuses with «not paid — pay for it first» — correct HERE, because nothing " \
+      "was ever charged (got #{unpaid_refusal&.message.inspect})")
 
 puts "\n== (b) IN FLIGHT: capture started, outcome unknown =="
 
@@ -242,7 +242,7 @@ refusal_text = refusal&.message.to_s
 check(refusal_text.include?("in progress"),
       "start_rental names the outstanding capture instead of answering «no settlement» " \
       "(#{refusal_text[0, 120].inspect})")
-check(!refusal_text.include?("no settlement for this reservation"),
+check(!refusal_text.include?("this reservation is not paid"),
       "start_rental does NOT answer «no settlement for this reservation» about an in-flight charge")
 
 puts "\n== (c) PHASE-3 WINDOW: capture RETURNED, settlement row not yet written =="

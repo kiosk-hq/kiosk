@@ -424,6 +424,14 @@ namespace :check do
         puts "  FAIL  SKIP_PAY: expected 403, got #{result["http_start_rental"].inspect}"
       end
 
+      detail = result["start_rental_detail"].to_s
+      if detail.include?("pay for it first") && detail.include?("/pay")
+        puts "  OK  SKIP_PAY: the refusal says what to do — pay the reservation first"
+      else
+        failures << "skip_pay: the refusal does not say to pay the reservation first: #{detail.inspect}"
+        puts "  FAIL  SKIP_PAY: refusal detail #{detail.inspect}"
+      end
+
       # payment_setup answers about the PRINCIPAL, not about a payment that is
       # about to happen — so it must answer the same in the run where no pay
       # follows. Without this the verb would be exercised on the happy path

@@ -87,6 +87,10 @@ module RentalGates
       )
     end
 
-    OperationResult.refused(code: "forbidden", message: "no settlement for this reservation")
+    OperationResult.refused(
+      code:    "forbidden",
+      message: "this reservation is not paid — pay for it first: POST <endpoint>/pay with the cart " \
+               "mandate reserve's pay_hint describes, then call this verb again",
+    )
   end
 end

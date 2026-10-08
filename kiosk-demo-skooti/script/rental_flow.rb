@@ -261,6 +261,7 @@ puts JSON.generate(
   http_payment_setup:     rc_setup,
   payment_setup_status:   setup_status,
   http_start_rental:      rc_rental,
+  start_rental_detail:    (rental_resp["detail"] if rc_rental != 200 && rental_resp.is_a?(Hash)),
   user_id:                user_id,
   agent_id:               agent_id,
   reservation_id:         reservation_id,

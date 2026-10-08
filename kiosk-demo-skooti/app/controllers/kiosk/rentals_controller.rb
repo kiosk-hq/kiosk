@@ -94,6 +94,7 @@ class Kiosk::RentalsController < ActionController::API
   # gates; note that no `scooter_code` is accepted, by design.
   kind :action
   description "Verify gates (ownership, licence-free vehicle, payment) and issue an Ed25519 offline rental token for a licence-free scooter (no KYC). " \
+              "The reservation must be PAID first: reserve, then pay as reserve's pay_hint says, then call this. " \
               "Refuses a KYC-gated motorcycle (needs_licence in scooters_available) — use rent_motorcycle for those"
   input_schema type: "object",
                additionalProperties: false,
@@ -128,7 +129,8 @@ class Kiosk::RentalsController < ActionController::API
   # rent_motorcycle — the KYC-gated path. See {RentMotorcycleOperation}; Gate 0
   # runs before the argument guards and that ordering is published behaviour.
   kind :action
-  description "Rent a combustion-engine motorcycle — KYC-gated on age_over_18 AND licence_a (category-A licence); issues an Ed25519 offline rental token"
+  description "Rent a combustion-engine motorcycle — KYC-gated on age_over_18 AND licence_a (category-A licence); issues an Ed25519 offline rental token. " \
+              "The reservation must be PAID first: reserve, then pay as reserve's pay_hint says, then call this."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

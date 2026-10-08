@@ -161,11 +161,7 @@ BATTERY.record("CrossOwnerClose", rc == 403, "Bob close Alice's listing → #{rc
 # THIS BEAT READS THE WIRE, AND ON THE WIRE THE DECLARATION ANSWERS FIRST:
 # edit_listing and close_listing declare `listing_id` with `format: "uuid"`, and
 # a verb's arguments are validated on every call, so the refusal is the
-# operator's own typed 400 and no handler runs. The app's shape guard
-# ({ListingAccess.listing_id}) is the second door, for a caller that is not the
-# wire; `rake check:access_spec` is what holds THAT, and deleting the guard
-# leaves this beat green — which is why the two are asserted apart rather than
-# one being read as proof of the other. Four properties are asserted here: the
+# operator's own typed 400 and no handler runs. Four properties are asserted here: the
 # status is 400 (a client mistake reported as such), the problem document's
 # top-level `code` is the typed `bad_request` an assistant can branch on, the
 # `detail` NAMES the offending argument so a caller knows what to fix rather
@@ -174,8 +170,7 @@ MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE listings", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
 # THE SCAN IS TOLD WHAT THIS PROBE SENT. philslist answers a bad
-# argument by NAMING the value it got — `listing_id "…" is not a uuid`, and
-# `unknown category_slug …` on the write path — so the bytes searched for
+# argument by NAMING the value it got — so the bytes searched for
 # SQL_INTERNALS are partly the probe's own. Without `supplied:` a junk id
 # spelling `PG::` would be reported as a BREACH on its own echo, under a runner
 # whose prose says a BREACH means "fix the app, not the scenario".
@@ -286,7 +281,7 @@ BATTERY.record("MethodMismatch",
 # THE WORST SHAPE AN OUT-OF-ENUM FILTER CAN TAKE, and the reason it is in the
 # ADVERSARIAL battery rather than in a flow test. A handler that clamps an
 # unknown filter value back to its default — `status = "open" unless
-# Listing::STATUSES.include?(status)` — answers `status=deleted` with 200 and
+# Listing.statuses.key?(status)` — answers `status=deleted` with 200 and
 # the OPEN board. Not an empty list: a successful-looking answer to a DIFFERENT
 # QUESTION, with nothing in the response saying the filter had been discarded.
 # An assistant relaying it tells its human "here are the deleted listings" and

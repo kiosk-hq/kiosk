@@ -211,54 +211,11 @@ The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id`
 for **both** bound keys equals the human's id, and the posted listing's
 `owner_id` is the human.
 
-### The DB-free unit specs (`rake check:clock_spec`, `rake check:access_spec`)
+### Tests (`bin/rails test`)
 
-Every other task on this page boots a server against a seeded Postgres, and
-`check:register` pays an Equihash toll on the way in. Neither task here needs any
-of that: no database, no server, no python3, under a second each. They are what a
-contributor with a bare Ruby can run, and they are also the only place two of
-this board's properties are asserted at all rather than inferred from a wire
-round trip.
-
-`spec/` here is **not** an RSpec suite — the files are standalone Ruby assertion
-scripts, run through the tasks below, which is exactly how CI runs them.
-Typing `bundle exec rspec` will find no runner.
-
-**`rake check:clock_spec`** runs `spec/board_clock_spec.rb` **twice**, under
-`TZ=Etc/GMT-11` and `TZ=Etc/GMT+2`, because a helper that leaked the **server
-process's** zone into a published `posted_at` is invisible inside a single run:
-on the machine that wrote the code the process zone and the intended zone agree
-and every assertion passes. A classified ad is not delivered anywhere, so «when
-was this posted» is a question about the READER's own day — the instant is
-rendered in the zone the caller declared in `Kiosk-Timezone`, and the row names
-that zone. The spec checks `BoardClock.zone` answers the declared zone and the
-board's own only when nobody declared one, and that the declaration does not
-outlive the request; that the board fallback is a real IANA zone whose January
-and July differ rather than a frozen offset; that one instant publishes as two
-different strings for a Tokyo and a Montreal reader while the two strings still
-name **one epoch**, which is what keeps «newest first» the same order for
-everyone; that `publish` answers a `String` so the bytes on the wire are that
-module's decision and not the JSON encoder's `time_precision`; that its default
-argument follows the request rather than quietly rendering on the board clock
-while the row advertises the caller's; and that an absent instant publishes
-`nil`.
-
-**`rake check:access_spec`** runs `spec/listing_access_spec.rb` over the whole
-owner-scoped refusal surface — the two sentences `edit_listing` and
-`close_listing` share. A well-formed id passes through **byte-for-byte** in
-lower, upper and mixed case, because Postgres compares `uuid`
-canonically and the id is echoed back rather than re-read. Every other shape
-comes back **400 (`bad_request`)** naming the value, hinting at
-`my_listings`, leaking no database internals and raising nothing — the shape
-check is the only thing standing between a typo and a wrong 403, since
-ActiveRecord casts a malformed uuid to NULL rather than refusing it. Then the
-miss itself: `not_owner("edit")` and `not_owner("close")` are **403
-(`forbidden`)** carrying **exactly the same sentence**, so a caller walking id
-after id learns nothing about which of them are real, while the hint alone names
-the verb attempted. Finally the `STATUSES` map: exactly the two codes philslist
-refuses with, frozen, **no `not_found`** — the same no-enumeration argument
-written into the table — and an unmapped code raising a `KeyError` at the seam
-instead of guessing a status.
+`test/` holds Minitest tests: `BoardClock` renders `posted_at` on the reader's
+declared clock, and `edit_listing`/`close_listing` refuse a foreign listing and an
+absent one with the same 403.
 
 ### Watch it work
 
@@ -285,8 +242,6 @@ and pull request; the rest are local-only, for the reason given.
 | Task | Runs in CI | Why not |
 |---|---|---|
 | `demo:setup` | yes — the job's own setup step |  |
-| `check:clock_spec` | yes |  |
-| `check:access_spec` | yes |  |
 | `check:walkthrough` | yes |  |
 | `check:isolation` | yes |  |
 | `check:register` | yes |  |
@@ -302,14 +257,13 @@ and pull request; the rest are local-only, for the reason given.
 | `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. Refusals are plain `render json:, status:` naming a wire error `code`, which the wire carries into the RFC 9457 problem document an assistant branches on |
+| `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. The operations in `app/operations/` raise `Kiosk::Server::Errors` refusals, which the wire renders as the RFC 9457 problem document an assistant branches on |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only principal shape: an identity here is a verified JWT or it is nothing |
 | `script/bound_assistant.rb` | The ONE way a driver obtains an AGENT principal bound to a seeded human. It runs the shipped ceremony over real HTTP, and is hand-copied across the demos and held byte-identical by `bin/check-demo-copies`. Its HUMAN counterpart is `Kiosk::UserIdentityProviders::DeviseSession`, shipped by `kiosk-user-idp-devise` |
 | `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` / `script/binding_flow.rb` / `script/register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
 | `bin/demo` | The browse→post→edit→close walkthrough (POSIX shell, curl-driven) |
-| `spec/board_clock_spec.rb` | The DB-free proof of the reader-clock rendering, run under two `TZ` values by `rake check:clock_spec` |
-| `spec/listing_access_spec.rb` | The DB-free proof of the owner-scoped refusal surface — the `listing_id` shape guard and the one sentence a miss earns — run by `rake check:access_spec` |
-| `lib/tasks/demo.rake` | `rake check:clock_spec`, `:access_spec`, `demo:setup`, `:walkthrough`, `demo`, `:isolation`, `:redteam`, `:schema`, `:binding`, `:register` |
+| `test/` | Minitest tests, run by `bin/rails test` |
+| `lib/tasks/demo.rake` | `rake demo:setup`, `:walkthrough`, `demo`, `:isolation`, `:redteam`, `:schema`, `:binding`, `:register` |
 
 ## Make it real
 

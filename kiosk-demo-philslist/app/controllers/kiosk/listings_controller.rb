@@ -1,25 +1,9 @@
 # frozen_string_literal: true
 
-# philslist's WRITE surface: the three verbs an assistant reaches with
-# `POST /kiosk/<action-name>` — same shape as Kiosk::BoardController, `kind
-# :action` above each declaration.
-#
-# Each write reads its arguments off the request, hands them to an Operation and
-# renders what it answers; the business decisions live in
-# app/operations/, callable from a console or a rake task as well as the wire.
-#
-# Errors are Rails' idiom end to end: the wire's `code` vocabulary is a
-# closed table, not a class hierarchy, so a refusal is an ordinary
-# `render json:, status:` naming the code. `render_kiosk_result` is
-# the one place an {OperationResult} becomes a status.
+# The write verbs. The work is in app/operations.
 class Kiosk::ListingsController < ApplicationController
   include Kiosk::Handler
 
-  # post_listing — create a listing under the AUTHENTICATED principal. The owner
-  # is NOT an input: it is read from the identity the wire resolved, and an
-  # agent-supplied `owner_id` never reaches the handler — `additionalProperties:
-  # false` below plus §8.1 item 5's mandatory argument validation refuse it with
-  # a typed 400 naming the parameter. {PostListingOperation} is the second layer.
   kind :action
   description "Post a new classifieds listing owned by the authenticated principal, open from the " \
               "moment it lands. Ownership is NOT an input: it is taken from the identity the operator " \
@@ -31,15 +15,10 @@ class Kiosk::ListingsController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 # THE `categories` TABLE, not a copy of it — same proc
-                 # and same reason as `browse_listings`.
                  category_slug: { type: "string",
                                   enum: -> { Category.order(:slug).pluck(:slug) },
                                   description: "The section to post in (see browse_listings)." },
                  title:         { type: "string", description: "Short headline." },
-                 # The ONLY contact channel this board has: sellers are
-                 # pseudonymous and there is no relayed-message verb, so the
-                 # contact line is the human's choice and the human's words.
                  body:          { type: "string",
                                   description: "The listing description. A buyer who wants this item has no other way " \
                                                "to reach the seller — the board publishes no address for them and this " \
@@ -65,8 +44,8 @@ class Kiosk::ListingsController < ApplicationController
   })
   example_row({ listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", status: "open" })
   def post_listing
-    render_kiosk_result PostListingOperation.call(
-      principal_id:  kiosk_identity.user_id, # forged params[:owner_id] never consulted
+    render json: PostListingOperation.call(
+      principal_id:  kiosk_identity.user_id,
       agent_id:      kiosk_identity.agent_id,
       category_slug: params[:category_slug],
       title:         params[:title],
@@ -75,10 +54,6 @@ class Kiosk::ListingsController < ApplicationController
     )
   end
 
-  # edit_listing — OWNER-ONLY. The UPDATE is scoped by
-  # `Listing.own`, so Postgres evaluates
-  # `owner_id = kiosk.current_user_id()` against the transaction GUC; zero rows
-  # affected → 403, not 404, so ids cannot be enumerated. See {EditListingOperation}.
   kind :action
   description "Edit one of the authenticated principal's own listings " \
               "(owner-only; editing another owner's listing is forbidden)."
@@ -90,14 +65,6 @@ class Kiosk::ListingsController < ApplicationController
                                             "my_listings or browse_listings, verbatim." },
                  title:      { type: "string", description: "New headline." },
                  body:       { type: "string", description: "New description." },
-                 # NULLABLE, and the only one of the three that is: a listing may
-                 # be posted with no price at all (`post_listing` does not require
-                 # one) and both output schemas publish `price_text` as
-                 # string-or-null, so «no price» is a state a listing can be in
-                 # and an edit has to be able to return it there. An explicit
-                 # `null` is how — an OMITTED key leaves the value alone, which is
-                 # a different instruction. A title or a body cannot be cleared:
-                 # a listing with neither is not a listing.
                  price_text: { type: %w[string null],
                                description: "New display price, or an explicit `null` to clear it. " \
                                             "Omit the key to leave the current price unchanged." },
@@ -112,21 +79,12 @@ class Kiosk::ListingsController < ApplicationController
                 },
                 required: %w[listing_id updated]
   def edit_listing
-    # An ALLOWLIST, not a loop over caller keys: `permit` keeps `status`,
-    # `owner_id` and `created_by_agent_id` unwritable from the wire. Absent keys
-    # arrive ABSENT rather than as nils — that is what keeps "an explicit null
-    # clears price_text" a distinct instruction. The other half of that
-    # instruction is the DECLARATION: `price_text` is `["string", "null"]` above,
-    # so the null reaches this handler instead of being refused as an argument
-    # of the wrong type, and `title`/`body` are not, so neither can be cleared.
-    render_kiosk_result EditListingOperation.call(
+    render json: EditListingOperation.call(
       listing_id: params[:listing_id],
       changes:    params.permit(:title, :body, :price_text).to_h,
     )
   end
 
-  # close_listing — OWNER-ONLY, same owner-scoped WHERE; zero rows → 403. See
-  # {CloseListingOperation}.
   kind :action
   description "Close one of the authenticated principal's own listings " \
               "(owner-only; closing another owner's listing is forbidden)."
@@ -147,6 +105,6 @@ class Kiosk::ListingsController < ApplicationController
                 },
                 required: %w[listing_id status]
   def close_listing
-    render_kiosk_result CloseListingOperation.call(listing_id: params[:listing_id])
+    render json: CloseListingOperation.call(listing_id: params[:listing_id])
   end
 end

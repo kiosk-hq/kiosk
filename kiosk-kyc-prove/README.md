@@ -20,9 +20,9 @@ the host your callback lives on and the audience it mints attestations for.
 require "kiosk/kyc_providers/prove"
 
 Kiosk.configure do |c|
-  c.kyc_provider   = Kiosk::KycProviders::Prove.new(operator_id: "acme", intake_secret: ENV["PROVE_SECRET"])
+  c.kyc_provider   = Kiosk::KycProviders::Prove.new(operator_id: "acme", intake_secret: ENV.fetch("PROVE_SECRET"))
   c.kyc_claims     = %w[age_over_18]
-  c.kyc_issuer     = Kiosk::KycProviders::Prove.issuer
+  c.kyc_issuer     = Kiosk::KycProviders::Prove::HOSTED
   c.kyc_public_key = ENV["PROVE_PUBLIC_KEY_PEM"]
   c.kyc_audience   = "acme"
 end
@@ -37,9 +37,8 @@ kiosk-server then serves `request_kyc` and the broker's callback. The adapter:
   reached, or answers without `request_id`, `verification_url` and `nonce`;
 - accepts only attestations whose `operator` claim is your operator id.
 
-`Prove.broker_url` and `Prove.issuer` read `KIOSK_PROVE_BROKER_URL` and
-`KIOSK_PROVE_ISSUER`, defaulting to the hosted broker at
-`https://kyc.demo.kiosk.tech`.
+`Prove.new` talks to the hosted broker at `Prove::HOSTED`
+(`https://kyc.demo.kiosk.tech`); pass `url:` for another one.
 
 ## License
 

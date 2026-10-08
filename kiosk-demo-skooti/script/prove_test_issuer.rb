@@ -2,7 +2,7 @@
 
 require "openssl"
 require "jwt"
-require "kiosk/kyc_providers/prove"
+require_relative "../config/local_env"
 
 # ProveTestIssuer — a TEST-ONLY signer that mints attestations with the broker's
 # ProveKey PRIVATE key, for skooti's flow/redteam/isolation scaffolding that
@@ -19,8 +19,8 @@ require "kiosk/kyc_providers/prove"
 # the app boundary only works inside the BOOTED BROKER — and this file is
 # loaded into two FOREIGN processes, where it would break in two ways:
 #   * skooti's own Rails (check:rideflow, check:isolation, the KYC rake tasks):
-#     `Rails` resolves, but skooti's config has no `x.prove` block (skooti sets
-#     x.kiosk.prove_*), so key_pem comes back nil and OpenSSL::PKey::RSA.new(nil)
+#     `Rails` resolves, but skooti's config has no `x.prove` block,
+#     so key_pem comes back nil and OpenSSL::PKey::RSA.new(nil)
 #     raises TypeError — no NameError to point at the cause;
 #   * the bare-Ruby drivers (script/redteam_suite.rb, script/isolation_flow.rb):
 #     no Rails at all → NameError: uninitialized constant ProveKey::Rails.
@@ -34,9 +34,8 @@ require "kiosk/kyc_providers/prove"
 #         the dev/test key, which the broker's development and test env files
 #         read by that exact path. PROVE_KEY_PEM overrides on
 #         both sides, in the same precedence order.
-#   iss — Kiosk::KycProviders::Prove.issuer reads the same variable the broker's env
-#         files use (KIOSK_PROVE_ISSUER, defaulting to the deploy origin), and
-#         the two-server harness pins KIOSK_PROVE_ISSUER on BOTH sides.
+#   iss — KIOSK_PROVE_ISSUER, which the two-server harness pins on BOTH sides
+#         and config/local_env.rb defaults to the value skooti trusts.
 #   And the lockstep is CHECKED, not merely documented: the two-server
 #   check:redteam gate calls .assert_matches_broker! with the public key the
 #   RUNNING broker serves at GET /prove_key.pem, so a broker that changes its
@@ -100,11 +99,9 @@ module ProveTestIssuer
     @keypair ||= OpenSSL::PKey::RSA.new(key_pem)
   end
 
-  # The `iss` the minted claims carry — the KIOSK_PROVE_ISSUER value (and the
-  # same default) the broker stamps and skooti's c.kyc_issuer names, pinned on
-  # both sides by the two-server harness.
+  # The `iss` the minted claims carry: the one skooti's c.kyc_issuer names.
   def issuer
-    Kiosk::KycProviders::Prove.issuer
+    ENV.fetch("KIOSK_PROVE_ISSUER")
   end
 
   # The ProveKey PUBLIC half, PEM-encoded. The single-server KYC rake tasks

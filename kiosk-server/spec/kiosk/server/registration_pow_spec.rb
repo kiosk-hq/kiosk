@@ -20,7 +20,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     Kiosk.reset!
   end
 
-  let(:secret) { "registration-pow-secret" }
+  let(:secret) { "registration-pow-secret-at-least-32-bytes" }
 
   def configure(count:)
     Kiosk.configure do |c|

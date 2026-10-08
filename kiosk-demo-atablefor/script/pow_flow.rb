@@ -12,9 +12,7 @@
 #   4. Re-GET the SAME URL with the Kiosk-PoW header: [{challenge, nonce}] → 200
 #      + a bare array of open slots.
 #   5. Submit a deliberately wrong nonce against a fresh challenge → expect
-#      HTTP 403 (forbidden / invalid proof); assert on_bad_proof incremented
-#      FOR THIS IDENTITY, and that a second, innocent identity's count stayed 0
-#      (the counter is per-identity, not one shared tally).
+#      HTTP 403 (forbidden / invalid proof).
 #
 # THE WIRE. `availability` is a QUERY, so it is `GET <endpoint>/availability`
 # with its arguments in the query string — there is no `name` field and no
@@ -31,12 +29,7 @@
 #   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
 #   bundle exec ruby script/pow_flow.rb
 #
-# THE PARAMETERS ARE THE SERVER'S, NOT THIS DRIVER'S. Every solve below is
-# driven by the challenge the origin issued, so this file works unchanged at
-# either level of KIOSK_POW_DIFFICULTY — toy `low` (n=96 k=5, the default) or
-# the shipped `high` (n=168 k=7). It reports the served `params` back to
-# `rake check:pow`, which asserts them against the level it asked for, so the
-# toll a run pays is a fact off the wire rather than a banner.
+# The parameters are the server's: every solve follows the challenge it issued.
 #
 # Requirements:
 #   - The server must be running with KIOSK_POW_MODE=demo.
@@ -77,20 +70,6 @@ def equihash_solve(challenge)
   equihash_solve_uncounted(challenge)
 end
 
-# The TOY counter the demo initializer's on_bad_proof writes:
-# PER-IDENTITY in sqlite (one abuser's rejections never appear in anyone
-# else's count), but still truncated at boot, no TTL, and read by nothing but
-# this driver. It exists so step 5 below can assert the server counted the
-# rejected proof against THIS identity and nobody else's — it is NOT the
-# decayed, durable bad_proof_count a real provider needs.
-require_relative "../app/services/bad_proof_counter"
-# The path is OWNED by `rake check:pow`, which exports it to the server it
-# spawns and to this driver. No default on purpose: a second hand-typed literal
-# here can drift from the task's, open an empty sqlite, read 0 for every count
-# and report the zeros as a pass. A KeyError is the only honest answer when
-# nobody told this process where to look.
-BAD_PROOF_DB = ENV.fetch("KIOSK_BAD_PROOF_DB")
-
 def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
@@ -112,17 +91,7 @@ _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
-token    = reg.fetch("access_token")
-agent_id = reg.fetch("agent_id")
-
-# A second, INNOCENT identity: it registers and never submits a bad
-# proof, so its per-identity count must still be 0 after this flow's wrong
-# nonce lands on the first identity's tally.
-_key2, reg2 = equihash_register(
-  server: SERVER, issuer: ISSUER,
-  get_json: method(:get_json), post_json: method(:post_json),
-)
-other_agent_id = reg2.fetch("agent_id")
+token = reg.fetch("access_token")
 
 # Everything solved so far was a REGISTRATION toll: this is a snapshot of the
 # counter, not a subtraction, so it stays right if the gate's per-identity
@@ -177,16 +146,6 @@ rc_wrong, resp_wrong = availability_once([{ challenge: challenge_neg, nonce: bad
 unless rc_wrong == 403
   abort "expected HTTP 403 for wrong nonce, got #{rc_wrong}: #{JSON.generate(resp_wrong)}"
 end
-# PER-IDENTITY: the offender's count moved, the innocent identity's
-# did not — one bad client must not make everyone else suffer.
-bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, agent_id)
-unless bad_proof_count >= 1
-  abort "expected bad_proof_count >= 1 for the offending identity after wrong nonce, got #{bad_proof_count}"
-end
-other_bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, other_agent_id)
-unless other_bad_proof_count.zero?
-  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity"
-end
 
 # ── Step 4: re-POST with correct proof(s) → expect 200 served ──────────────
 
@@ -212,8 +171,6 @@ puts JSON.generate(
   proofs_solved:              POW_SOLVES[:total],
   registration_proofs_solved: registration_proofs,
   tolled_query_proofs:        proofs.size,
-  bad_proof_count:            bad_proof_count,
-  other_bad_proof_count:      other_bad_proof_count,
   availability_rows:          rows.size,
   # THE PARAMETERS THE WIRE ACTUALLY SERVED, so `rake check:pow`'s
   # verdict can assert which toll was paid instead of printing what it hoped

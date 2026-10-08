@@ -8,10 +8,9 @@ require "securerandom"
 # concern, deliberately not part of the domain-neutral kiosk-server core.
 #
 # The scooter verifies the signed rental token itself, with no server round-trip
-# at unlock time: skooti signs with its Ed25519 private key (sourced from
-# DevUnlockKey into Kiosk.configuration.unlock_signing_key in
-# config/initializers/kiosk.rb) and the public key is baked into every lock at
-# provisioning time.
+# at unlock time: skooti signs with its Ed25519 private key
+# (Kiosk.configuration.unlock_signing_key, set in config/initializers/kiosk.rb), and the
+# public key is baked into every lock at provisioning time.
 #
 # Canonical token wire format (split on the LAST "."):
 #   "<context_tag>|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"

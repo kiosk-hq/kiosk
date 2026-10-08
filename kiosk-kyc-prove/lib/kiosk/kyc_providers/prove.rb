@@ -19,14 +19,9 @@ module Kiosk
       # The broker's claim id for an attribute name, where the two differ.
       CLAIM_IDS = { "licence_a" => "licence_category:A" }.freeze
 
-      # The `iss` the broker signs with — `c.kyc_issuer`.
-      def self.issuer = ENV.fetch("KIOSK_PROVE_ISSUER", HOSTED)
-
-      def self.broker_url = ENV.fetch("KIOSK_PROVE_BROKER_URL", HOSTED)
-
       attr_reader :operator_id
 
-      def initialize(operator_id:, intake_secret:, url: self.class.broker_url)
+      def initialize(operator_id:, intake_secret:, url: HOSTED)
         raise ArgumentError, "the broker's intake secret for #{operator_id} is required" if intake_secret.to_s.empty?
 
         super()

@@ -203,7 +203,7 @@ check(errors.empty?, "every order_payment `data` satisfies the payload_schema #{
 # ── The same sweep against stripe-mock, through the real lookup ─────────────
 puts "\n── The real ChargeLookup against stripe-mock ──"
 
-mock_url = Rails.configuration.x.kiosk.stripe_mock_url
+mock_url = ENV["STRIPE_MOCK_URL"]
 abort "STRIPE_MOCK_URL is unset — this check must never reach Stripe" if mock_url.blank?
 abort "Stripe.api_base is #{::Stripe.api_base.inspect}, not the local mock" unless ::Stripe.api_base == mock_url
 

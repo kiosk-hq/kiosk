@@ -150,7 +150,7 @@ RSpec.describe "two origins on one deployment" do
       Kiosk.configure do |c|
         c.registration_pow_count  = 1
         c.registration_pow_params = { n: 8, k: 1 }
-        c.pow_secret              = "registration-pow-secret"
+        c.pow_secret              = "registration-pow-secret-at-least-32-bytes"
       end
     end
 

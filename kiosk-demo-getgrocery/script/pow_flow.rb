@@ -14,12 +14,7 @@
 # all. The 402 is an RFC 9457 problem document: `code` and `challenges` are
 # TOP-LEVEL members, not nested under an `error` object.
 #
-# THE PARAMETERS ARE THE SERVER'S, NOT THIS DRIVER'S. Every solve below is
-# driven by the challenge the origin issued, so this file works unchanged at
-# either level of KIOSK_POW_DIFFICULTY — toy `low` (n=96 k=5, the default) or
-# the shipped `high` (n=168 k=7). It reports the served `params` back to
-# `rake check:pow`, which asserts them against the level it asked for, so the
-# toll a run pays is a fact off the wire rather than a banner.
+# The parameters are the server's: every solve follows the challenge it issued.
 #
 # Usage (invoked by rake check:pow, which boots the server):
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby script/pow_flow.rb
@@ -36,20 +31,9 @@ require "securerandom"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
-# The TOY counter the initializer's on_bad_proof writes:
-# PER-IDENTITY in sqlite — this driver asserts its own wrong nonce was counted
-# against ITS identity and that an innocent second identity stayed at 0.
-# The path is OWNED by `rake check:pow`, which exports it to the server it spawns
-# and to this driver. No default on purpose: a second hand-typed literal here
-# can drift from the task's, open an empty sqlite, read 0 for every count and
-# report the zeros as a pass. A KeyError is the only honest answer when nobody
-# told this process where to look.
-BAD_PROOF_DB = ENV.fetch("KIOSK_BAD_PROOF_DB")
-
 # equihash_solve / equihash_register come from the shared helper; the solver
 # location is Kiosk::Pow::Equihash.solver_path, owned by the gem.
 require_relative "equihash_register"
-require_relative "../app/services/bad_proof_counter"
 
 # EVERY SOLVE THIS FLOW PAYS FOR, COUNTED WHERE THE SOLVER ACTUALLY RUNS.
 #
@@ -93,16 +77,7 @@ _key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: method(:get_json), post_json: method(:post_json),
 )
-auth     = { "Authorization" => "Bearer #{reg.fetch("access_token")}" }
-agent_id = reg.fetch("agent_id")
-
-# A second, INNOCENT identity: registers, never submits a bad proof —
-# its per-identity count must still be 0 after this flow's wrong nonce.
-_key2, reg2 = equihash_register(
-  server: SERVER, issuer: ISSUER,
-  get_json: method(:get_json), post_json: method(:post_json),
-)
-other_agent_id = reg2.fetch("agent_id")
+auth = { "Authorization" => "Bearer #{reg.fetch("access_token")}" }
 
 # Everything solved so far was a REGISTRATION toll: this is a snapshot of the
 # counter, not a subtraction, so it stays right if the gate's per-identity
@@ -125,20 +100,6 @@ bad = { "indices" => (1..proofs.first[:nonce]["indices"].length).to_a, "header_n
 rc_wrong, _ = get_json(CATALOG_URL,
   auth.merge("Kiosk-PoW" => JSON.generate([{ challenge: neg["challenges"].first, nonce: bad }])))
 abort "expected 403 for wrong nonce, got #{rc_wrong}" unless rc_wrong == 403
-# PER-IDENTITY: the offender's count moved, the innocent one's did not.
-# BOTH halves are asserted here, not just the innocent one: the
-# innocent check passes trivially against an EMPTY store, so on its own it
-# cannot tell "the counter is per-identity" from "this driver is reading a file
-# the server never wrote".
-bad_proof_count       = BadProofCounter.count(BAD_PROOF_DB, agent_id)
-other_bad_proof_count = BadProofCounter.count(BAD_PROOF_DB, other_agent_id)
-unless bad_proof_count >= 1
-  abort "expected bad_proof_count >= 1 for the offending identity after a wrong nonce, got #{bad_proof_count} — " \
-        "the server did not count it, or this driver is reading a different store (#{BAD_PROOF_DB})"
-end
-unless other_bad_proof_count.zero?
-  abort "expected bad_proof_count == 0 for the innocent identity, got #{other_bad_proof_count} — the counter is not per-identity"
-end
 
 # ── Correct proof → 200 served ──────────────────────────────────────────────
 rc_served, served_resp = get_json(CATALOG_URL, auth.merge("Kiosk-PoW" => JSON.generate(proofs)))
@@ -163,8 +124,6 @@ puts JSON.generate(
   proofs_solved:              POW_SOLVES[:total],
   registration_proofs_solved: registration_proofs,
   tolled_query_proofs:        proofs.size,
-  bad_proof_count:            bad_proof_count,
-  other_bad_proof_count:      other_bad_proof_count,
   catalog_rows:               rows.size,
   # THE PARAMETERS THE WIRE ACTUALLY SERVED, so `rake check:pow`'s
   # verdict can assert which toll was paid instead of printing what it hoped

@@ -13,12 +13,8 @@ require "openssl"
 #   3. The firmware host-test (firmware/host_test.c) can hard-code the public key.
 #
 # DEV/TEST ONLY. The private half ships world-readable in this public
-# repo, so it is NOT a key anything real may sign with: production resolves
-# KIOSK_UNLOCK_SIGNING_KEY_PEM in config/environments/production.rb and refuses
-# to boot without it. Nothing here reads ENV or decides posture — that lives in
-# the environment files (ENV-CONFIG-PLACEMENT), and the initializer wires
-# Kiosk.configuration.unlock_signing_key from
-# Rails.configuration.x.kiosk.unlock_signing_key_pem, never from this class.
+# repo, so it is NOT a key anything real may sign with: production refuses to
+# boot with it. The server reads KIOSK_UNLOCK_SIGNING_KEY_PEM, never this class.
 #
 # WHY IT EXISTS AS A CLASS OF ITS OWN, and why it deliberately does NOT read
 # Rails config: its callers are
@@ -31,8 +27,8 @@ require "openssl"
 # DevUnlockKey.public_key_pem      → PEM string
 # DevUnlockKey.public_key_raw32_hex → 64-char hex (the 32 bytes baked into firmware)
 class DevUnlockKey
-  # The shipped dev/test PEM. Same file config/environments/{development,test}.rb
-  # read, so the drivers' lock and the server's signer cannot drift apart.
+  # The shipped dev/test PEM, the same file config/local_env.rb
+  # reads, so the drivers' lock and the server's signer cannot drift apart.
   PEM_PATH = File.expand_path("../config/dev_unlock_key.pem", __dir__)
 
   # Read on FIRST USE, not at class-definition time. Production eager-loads

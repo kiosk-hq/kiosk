@@ -54,7 +54,7 @@ require "jwt"
 
 require "kiosk/kyc_providers/prove"
 
-PROVE_ISSUER   = Kiosk::KycProviders::Prove.issuer
+PROVE_ISSUER   = ENV.fetch("KIOSK_PROVE_ISSUER")
 PROVE_AUDIENCE = "getgrocery"
 
 SERVER = ENV.fetch("SERVER_URL")

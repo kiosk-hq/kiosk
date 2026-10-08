@@ -450,10 +450,3 @@ module Kiosk
     end
   end
 end
-
-# The operator-facing difficulty knob. Required last: it reads DEFAULT_N and
-# DEFAULT_K off the module above so the heavy level cannot drift from the
-# shipped default. It is ENV-only, so loading it costs a provider nothing.
-#
-# `equihash/solver.rb` is deliberately NOT required here — see solver_path.
-require_relative "equihash/difficulty"

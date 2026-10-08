@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **`Prove.issuer` and `Prove.broker_url` are removed**: the gem reads no ENV; pass `url:` and set `c.kyc_issuer` yourself.
+
 ## [0.5.12] — 2026-10-08
 
 - 2026-10-08: Version 0.5.12, the tree cut that matches skill 0.5.12; this gem's surface is unchanged.

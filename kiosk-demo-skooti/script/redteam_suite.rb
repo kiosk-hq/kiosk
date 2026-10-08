@@ -2,9 +2,7 @@
 
 # skooti redteam battery
 #
-# Exercises the full skooti chain: Equihash PoW (params from KIOSK_POW_DIFFICULTY,
-# resolved in Kiosk::Pow::Equihash::Difficulty; the run header prints the live pair
-# rather than this comment naming one) → reserve → pay →
+# Exercises the full skooti chain: Equihash-tolled register → reserve → pay →
 # start_rental (ownership/licence-free-vehicle/payment gates; licence-free
 # scooters are NOT KYC-gated).  Headline scenarios:
 #   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
@@ -90,12 +88,6 @@ require "json"
 # verification is exercised in isolation (an alg:none/weakened-sig regression is
 # caught). None of this weakens the real verification path.
 require_relative "prove_test_issuer"
-require "kiosk/kyc_providers/prove"
-# The Equihash params printed in the run header below are READ from the same
-# module the server initializer reads (`SKOOTI_REGISTRATION_POW_PARAMS`, in
-# config/initializers/kiosk.rb), never typed. It ships in kiosk-pow-equihash
-# and is ENV-only, so it loads outside a Rails boot.
-require "kiosk/pow/equihash"
 
 BASE_URL   = ENV.fetch("SERVER_URL")
 ISSUER     = ENV.fetch("KIOSK_ISSUER")
@@ -107,7 +99,7 @@ BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL")
 # through; a password literal in a driver is a second place for it to be true.
 RIDER_EMAIL   = ENV.fetch("RIDER_EMAIL")
 DEMO_PASSWORD = ENV.fetch("DEMO_PASSWORD")
-TRUSTED_ISSUER = Kiosk::KycProviders::Prove.issuer
+TRUSTED_ISSUER = ENV.fetch("KIOSK_PROVE_ISSUER")
 
 # Wrong signing key with the TRUSTED issuer — the only adversarial property is
 # the bad signature. Using the correct issuer ensures a weakened-sig regression
@@ -166,7 +158,7 @@ end
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 profile = Kiosk::Redteam::Profile.new(
-  pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof (params per KIOSK_POW_DIFFICULTY) and the client solves the real 402 challenge — the numeric value is not an Equihash param
+  pow_difficulty: 20,     # >0 flips on the /register gate; skooti gates with an Equihash proof and the client solves the real 402 challenge — the numeric value is not an Equihash param
   requires_kyc:   true,   # skooti has a KYC verifier — rent_motorcycle is attribute-gated and ExpiredKyc/ForgedKyc exercise /kyc; start_rental itself is NOT KYC-gated because it only ever activates licence-free vehicles: it REFUSES a needs_licence one instead of quietly unlocking it (MotorcycleViaStartRental)
 
   # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
@@ -643,25 +635,7 @@ EXPECTED_SKIP_NAMES = [].freeze
 
 puts "\n── skooti redteam battery ──"
 puts "  base_url:              #{BASE_URL}"
-# DERIVE THESE TWO LINES, NEVER TYPE THEM.  A hand-kept literal here restates
-# something the run already holds, so a flipped constructor argument or a changed
-# env leaves the header announcing one world while the battery attacks another.
-# What each half reads:
-#   • n / k — `Kiosk::Pow::Equihash::Difficulty.params`, the SAME plain module the server initializer
-#     reads into `c.registration_pow_params` (config/initializers/kiosk.rb), so
-#     KIOSK_POW_DIFFICULTY=high moves the /register gate and this line together
-#     instead of leaving the line claiming one level's pair against a server
-#     that is serving the other's — and no pair is retyped here to illustrate it,
-#     for the same reason.
-#     SAY WHERE IT COMES FROM: this is the DRIVER's environment, not a fact observed
-#     on the wire — the harness hands one environment to both processes (demo.rake
-#     spawns the server and then this script from it), which is precisely the
-#     arrangement the issuer is read under too.
-#   • pow_difficulty / requires_kyc — the `profile` object itself, i.e. the values
-#     every generic scenario reads to decide whether it is applicable
-#     (RegistrationWithoutPow skips on 0; the KYC trio skips on false).
-pow_params = Kiosk::Pow::Equihash::Difficulty.params
-puts "  register gate:         Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
+puts "  register gate:         Equihash n=96 k=5 " \
      "(profile pow_difficulty: #{profile.pow_difficulty} → RegistrationWithoutPow " \
      "#{profile.pow_difficulty > 0 ? %(applicable) : %(SKIPPED)})"
 puts "  requires_kyc:          #{profile.requires_kyc}"

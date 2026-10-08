@@ -33,7 +33,7 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
   end
 
   let(:identity) { build_identity }
-  let(:secret)   { "equihash-e2e-secret" }
+  let(:secret)   { "equihash-e2e-secret-of-at-least-32-bytes" }
   let(:count)    { 1 }
 
   # Policy that demands `count` equihash proofs at the KAT params.

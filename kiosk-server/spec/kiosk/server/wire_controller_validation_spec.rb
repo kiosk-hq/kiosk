@@ -94,7 +94,7 @@ RSpec.describe "Opt-in PoW-shape request validation (slice-1, K-479)" do
       c.roles             = %i[customer]
       c.agent_idp         = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
       c.reputation_policy = policy
-      c.pow_secret        = "test-pow-secret"
+      c.pow_secret        = "test-pow-secret-of-at-least-32-bytes"
     end
     Kiosk::Server::RequestValidation.reset!
 

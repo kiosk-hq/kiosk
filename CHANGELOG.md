@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **No framework gem reads ENV; every demo configures Kiosk in its initializer from ENV, with development and test values in `config/local_env.rb`.**
+
 - 2026-10-09: **`include Kiosk::Owned` gives a model `own`, the current principal's rows**; demos drop their `Arel.sql("kiosk.current_user_id()")` scopes.
 
 - 2026-10-09: **A handler registers itself**: the engine loads `app/controllers/kiosk/` and registers every class including `Kiosk::Handler`; `c.handlers` is removed.

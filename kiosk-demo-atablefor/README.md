@@ -118,11 +118,8 @@ bin/rails check:isolation   # cross-tenant denial (an operator's booking is only
 bin/rails check:redteam     # adversarial regression battery
 bin/rails check:schema      # self-discovery; asserts `pay` is absent
 bin/rails check:pow         # Equihash PoW gate (prices reservation-scalping at the door).
-                           # TOY params by default (n=96 k=5); KIOSK_POW_DIFFICULTY=high
-                           # runs it at the shipped n=168 k=7 (~10 s and ~1.3 GiB
-                           # per proof on the reference solver — that GiB is its
-                           # table, not a floor those params impose on every
-                           # solver; see kiosk-pow-equihash/README.md)
+                           # Equihash n=168 k=7: ~10 s and ~1.3 GiB per proof on
+                           # the reference solver (see kiosk-pow-equihash/README.md)
 bin/rails check:backoff     # count-based PoW backoff: solve once → the next 3 calls are free → the 4th is challenged again
 bin/rails check:reputation  # anti-scalping: PoW cost drops as a real booking history accrues
 bin/rails check:walkthrough # curl-driven tour of the wire surface

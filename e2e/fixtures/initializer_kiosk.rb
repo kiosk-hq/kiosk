@@ -1,196 +1,50 @@
 # frozen_string_literal: true
 
-# E2E-specific Kiosk configuration. Overrides the generator-produced
-# initializer (which has commented-out fields) with concrete values for
-# the demo: synthetic users (uuid), the engine's own agent IdP, two handler
-# controllers.
-#
-# THE VERBS ARE NOT HERE. They are ordinary Rails controllers under
-# app/controllers/kiosk/ — Kiosk::CatalogController (the salons query) and
-# Kiosk::BookingsController (the my_appointments query AND the book_appointment
-# action, one controller declaring both kinds).
-#
-# The audit sink it wires, DemoAuditSink, is named, not
-# required. Both agent and human authentication are real and neither is
-# stubbed: the human's is `kiosk-user-idp-devise`, the agent's is the engine's
-# own DefaultAgentIdp with no wiring at all.
-# run.sh copies it to app/services and
-# declares that an autoload-ONCE path, which is what makes it resolvable here:
-# Rails sets the reloadable autoloader up AFTER config/initializers run, so a
-# hand-written `require Rails.root.join(...)` was the only alternative.
-
-# Registration PoW gate uses Equihash (one PoW = Equihash). The params are
-# deliberately small — sized to keep the register solve well under a second, the
-# same posture the demos ship at their default difficulty — and
-# E2E_REGISTRATION_POW_PARAMS below is where they are written down. PoW is a
-# metered toll, tuned per provider — here it prices bot registration on the e2e
-# golden path so the harness exercises the real 402 → solve → retry handshake,
-# not a toll-free shortcut.
-#
-# NO (n, k) IS RESTATED IN THIS COMMENT. A pair named a few lines above the
-# constant that defines it, and retyped in two further files, is three
-# hand-kept copies of one value — and every copy is true the day it is
-# written. This harness resolves no difficulty knob at all, so nothing but a
-# hand edit can move the constant; a comment cannot read a value, so it
-# describes the params and lets the constant be the one
-# place they are stated.
+require "base64"
+require "stripe"
+require "kiosk/payment_providers/stripe"
+require "kiosk/user_identity_providers/devise"
 require "kiosk/pow/equihash"
 require "kiosk/reputation"
+
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+
 E2E_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
 
-# ── Where this file's env inputs come from ─────────────────────────────────
-# Nothing below resolves an environment variable. The PoW HMAC secret, the
-# Postgres role names, the issuer and the audit-sink paths are read from ENV
-# and published as `Rails.configuration.x.kiosk.*` by the block run.sh splices
-# into the generated app's config/environments/{development,production}.rb
-# (e2e/fixtures/environment_kiosk.rb) — the ENV-CONFIG-PLACEMENT split all
-# seven demos carry, enforced here by
-# bin/check-demo-copies. That file is also where the postures live: the PoW
-# secret's stable dev default and its fail-loud-outside-development raise, and
-# the audit sink's «redacted path required only when a sink path is set».
-
-require "kiosk/user_identity_providers/devise"
+Stripe.api_base = ENV.fetch("STRIPE_MOCK_URL")
 
 Kiosk.configure do |c|
   c.user_model     = "User"
   c.user_id_type   = :uuid
   c.user_id_column = :id
-
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
+  c.app_role       = "app_role"
+  c.system_role    = "app_role"
 
-  # Path C: RLS is optional; no enable_rls_on in this fixture. app_role /
-  # system_role are kept for the `run.sh` role pre-creation step (harmless).
-  #
-  # NOTE (load-bearing): `c.system_role=` is defined ONLY by
-  # Kiosk::RLS::ConfigurationExtension (kiosk-rls), which run.sh installs via
-  # a path override even though RLS itself is unused here. `app_role` is a
-  # kiosk-core attr; `system_role` is not — so this line is why the Gemfile
-  # `gem "kiosk-rls"` entry in run.sh is mandatory: dropping the gem makes
-  # this call raise NoMethodError at boot.
-  c.app_role    = Rails.configuration.x.kiosk.app_role
-  c.system_role = Rails.configuration.x.kiosk.system_role
+  c.issuer             = ENV.fetch("KIOSK_ISSUER")
+  c.additional_origins = ENV.fetch("KIOSK_ADDITIONAL_ORIGINS", "").split(",")
+  c.signing_key        = Base64.decode64(ENV.fetch("KIOSK_SIGNING_KEY_B64"))
+  c.roles              = %i[customer]
+  c.registration_role  = :customer
+  c.owner              = { name: "Combette E2E Demo", support: "demo@kiosk.tech" }
 
-  c.issuer = Rails.configuration.x.kiosk.issuer
-  c.additional_origins = Rails.configuration.x.kiosk.additional_origins
-  # ONE ROLE, AND THE HARNESS ASSERTS THE BINDING CEREMONY WITH ONE.
-  #
-  # A second declared role was considered and deliberately not added. It would
-  # buy the claim-ceremony assertion in `fixtures/claim_flow.rb` a DISTINCTION
-  # ("the token came back `customer`, not `owner`") on top of the equality it
-  # asserts today — but only if something here actually SOURCED the second role
-  # and something GATED on it: a `#kiosk_role` on the User model, a staff column
-  # to read it from, a staff human in the seeds, and a query that answers
-  # differently per role. Without all four the extra role is a declaration
-  # nothing produces and nothing consumes, and this harness is a walkthrough an
-  # adopter copies — an inert role would teach that `c.roles` is decoration.
-  # With all four it is a second copy of `kiosk-demo-stylish`, which exists and
-  # proves exactly that (`check:roles`, and four binding beats in its redteam
-  # suite). So the roles-from-IdP demonstration stays in the demo that is built
-  # for it, and the assertion here is the one that does NOT need a second role:
-  # the ceremony's unauthenticated opening request refuses `role`/`scope` — at
-  # the DECLARED value as much as an invented one — and the minted token carries
-  # the approving human's role rather than anything the caller sent.
-  c.roles  = %i[customer]
-  # Role pinned to every self-registered agent (agents cannot choose their own).
-  c.registration_role = :customer
-  c.owner  = { name: "Combette E2E Demo", support: "demo@kiosk.tech" }
-
-  # Registration PoW gate: 1 Equihash proof to register. POST /kiosk/auth/register
-  # returns 402 pow_required until a valid proof is attached (assistant.sh solves
-  # it with the bundled kiosk-pow-equihash/solve.py). Same mechanism the demos use.
   c.registration_pow_count  = 1
   c.registration_pow_params = E2E_REGISTRATION_POW_PARAMS
-  c.pow_secret              = Rails.configuration.x.kiosk.pow_secret
+  c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET")
 
-  # ── NO c.agent_idp ───────────────────────────────────────────────────────
-  # Deliberate, and the point of the line's absence. An assistant
-  # authenticates with the kiosk-pop JWT this very engine minted at
-  # `/kiosk/auth/register`, `/auth/login` or the binding ceremony — and the
-  # engine already ships the adapter that verifies its own tokens:
-  # `IdentityResolution.agent_idp` falls back to
-  # `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp` when nothing is
-  # configured, and that adapter checks `iss` as well as the signature. An
-  # adopter copying this file gets the shipped verifier rather than a
-  # hand-rolled composite, and assistant.sh asserts that a self-asserted
-  # `agent:u-…:a-…:r-…` bearer resolves to no identity here.
-  # SET THIS only to front an EXTERNAL agent-identity issuer (Entra Agent ID,
-  # Okta, an ID-JAG-style broker) by subclassing
-  # `Kiosk::AgentIdentityProviders::Base` — whose one hard constraint is that
-  # the `agent_id` you return must be a UUID.
-  # The provider's own web-session channel (Devise/Warden): authenticates the
-  # approving human on the account-binding pages (device verify, link mint,
-  # unlink). ONE channel in every environment — this is the shipped
-  # kiosk-user-idp-devise adapter reading the request's Warden user, not a
-  # stand-in, so an adopter reading this harness copies a real wiring.
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
-  # Stripe in test mode, against the local stripe-mock run.sh starts — any
-  # sk_test_ key is accepted there.
-  require "stripe"
-  require "kiosk/payment_providers/stripe"
-  if (mock = Rails.configuration.x.kiosk.stripe_mock_url)
-    Stripe.api_base = mock
-  end
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
-    api_key: "sk_test_mock", test_autocard: Rails.configuration.x.kiosk.test_autocard,
+    api_key: "sk_test_mock", test_autocard: ENV["KIOSK_TEST_AUTOCARD"] == "1",
   )
 
-  # The handler controllers, by NAME. This line is load-bearing and there is no
-  # convention that replaces it: the wire reaches a handler through the
-  # registry, nothing else in the app ever references these classes, and this
-  # harness boots DEVELOPMENT (eager_load = false), so without it Zeitwerk never
-  # loads them, the registry stays empty, and the origin answers `GET
-  # /kiosk/schema` with `queries=[] actions=[]`, 404s every verb path, and
-  # advertises `"capabilities": []`.
-
-  # ── The event tail lives in the DATABASE ────────────────────────────────
-  # The same line `rails generate kiosk:install` writes into an operator's
-  # initializer, kept here because this harness OVERWRITES the generated file
-  # with this fixture and would otherwise fall back to the in-process default.
-  # That default is a Hash in ONE process: correct for a unit suite and wrong
-  # for anything deployed, because an assistant reconnecting between sessions
-  # resumes from the id it last saw and a tail that died with the process can
-  # only answer `truncated: true`.
-  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
-
-  # Request-shape validation ON, as all seven demos have it. Two things ride
-  # on it: a malformed Kiosk-PoW proof answers a clear 400 instead of a silent
-  # re-challenge loop, and a verb's
-  # declared `input_schema` VALIDATES the arguments of every request to it
-  # rather than merely describing them, so the harness's reserved-name and
-  # closed-schema assertions are testing the real path. Needs `json_schemer`,
-  # which run.sh adds to the generated app's Gemfile.
-  c.validate_requests = true
-
-  # Every query/action answer is validated against the
-  # `output_schema` that verb declares, and a mismatch is a loud 500 rather
-  # than a lie shipped to an assistant. A DEVELOPMENT/CI assertion, not a
-  # request check — nothing a caller sends can trigger it — and it is what
-  # makes this demo's own CI task list a per-verb conformance proof of the
-  # descriptors rather than a smoke test.
+  c.event_store        = Kiosk::Server::EventStores::ActiveRecord.new
+  c.validate_requests  = true
   c.validate_responses = true
 
-  # ── The audit sink ──────────────────────────────────────────────────────
-  # Kiosk stores no audit trail; it emits one ActionEvent per action
-  # invocation to whatever callable an operator sets here, and stores nothing
-  # itself. THE DEFAULT IS NIL — and this harness proves that too: run.sh
-  # boots a SECOND time with KIOSK_AUDIT_SINK_FILE unset, and then this line
-  # leaves `audit_sink` nil, no event is built, and nothing is written
-  # anywhere.
-  #
-  # DemoAuditSink (app/services/demo_audit_sink.rb) is the OPERATOR's code, not the
-  # engine's: it appends the event to one JSONL file verbatim — arguments and
-  # all, because Kiosk hands them over in full and what happens to them is the
-  # operator's business and the operator's responsibility — and a redacted
-  # copy (`event.with_arg_types`) to a second one, to show that withholding
-  # the values is one call at this seam rather than a policy the engine
-  # imposed.
-  audit_path = Rails.configuration.x.kiosk.audit_sink_file
-  c.audit_sink =
-    audit_path && DemoAuditSink.new(
-      path:          audit_path,
-      redacted_path: Rails.configuration.x.kiosk.audit_sink_redacted_file,
-    )
+  # run.sh's second boot leaves KIOSK_AUDIT_SINK_FILE unset to prove the default is no sink.
+  if (audit_path = ENV["KIOSK_AUDIT_SINK_FILE"])
+    c.audit_sink = DemoAuditSink.new(path: audit_path, redacted_path: ENV.fetch("KIOSK_AUDIT_SINK_REDACTED_FILE"))
+  end
 end

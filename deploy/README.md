@@ -109,40 +109,13 @@ on no kiosk gem. Its env template is `env/kyc-demo.env.example` → copy to
 its Caddy vhost is `kyc.demo.kiosk.tech → 127.0.0.1:3008`. skooti trusts it as
 its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
 
-**PoW difficulty is a feature**: ALL seven demos honor the
-`KIOSK_POW_DIFFICULTY` knob (low default, high opt-in) in their env file. Six run
-a low/fast toll so a poker can register in well under a second and still SEE
-the toll; only
-**atablefor** — the designated production-grade showcase — ships the high
-memory+CPU-hard toll behind a "beware: intensive PoW" banner so the toll is
-tangible first-hand. (The toll prices abuse; it is not by itself a DoS shield,
-and there is deliberately no default edge throttle — see "Edge rate-limit"
-below.) Any other demo is knob-adjustable: set
-`KIOSK_POW_DIFFICULTY=high` on it too to feel its own toll.
-
-> **How it wires (WIRED).** All seven demos'
-> <!-- count: 7 ¦ from: git grep -l 'Kiosk::Pow::Equihash::Difficulty' -- 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l -->
-> initializers read
-> `ENV["KIOSK_POW_DIFFICULTY"]` (`low` default, `high` opt-in) via
-> `Kiosk::Pow::Equihash::Difficulty` and set their Equihash params accordingly:
-> - **low** → `{n:96,k:5}` — sub-second reference solve, poke-friendly.
-> - **high** → `{n:168,k:7}` — the shipped Equihash default: ~1.3 GiB and ~10 s
->   per proof on the reference (numpy) solver, the seconds measured on one
->   M-series laptop core and on no other hardware (the ~1.3 GiB is THAT
->   solver's sorted-nonce table, not a floor `(n=168, k=7)` imposes on every
->   implementation — a memory-optimised solver trades the table for time,
->   which is how Equihash 200/9's real footprint fell to ~144 MB) — a real
->   memory+CPU toll. Verified to clear (measured 8.9–9.5 s on that same
->   machine) end-to-end.
->
-> **Unset ⇒ low**, so local `demo:setup`/CI never pay the heavy toll and never
-> hang — the high params are the hosted-deploy setting only. When `high`, the
-> initializer also adds a `pow_difficulty` + `pow_notice` ("beware: memory- and
-> CPU-intensive proof-of-work…") to the `owner` block of
-> `/.well-known/kiosk.json`, and the 402 challenge already carries the heavy
-> `{n,k}` — so an AI assistant/reader sees the toll up front. Env files ship
-> only `atablefor` = `high` (the production-grade showcase); all six others =
-> `low` (each still knob-adjustable to `high`).
+**PoW difficulty is fixed per demo** in its `config/initializers/kiosk.rb`:
+atablefor, the production-grade showcase, tolls at Equihash n=168 k=7 (~1.3 GiB
+and ~10 s per proof on the reference solver, measured on one M-series laptop
+core) behind a "beware: intensive PoW" notice in `/.well-known/kiosk.json`; the
+other six toll at n=96 k=5, a sub-second solve. (The toll prices abuse; it is
+not by itself a DoS shield, and there is deliberately no default edge throttle —
+see "Edge rate-limit" below.)
 
 ## What the operator does vs. what's automated
 
@@ -498,8 +471,8 @@ assistant) can read what the origin offers before it registers. Everything else
 proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
 by design, and the "true" one-liner ships a copy-paste **solver**
 (`kiosk-pow-equihash/solve.py`). Hosted difficulty is
-`KIOSK_POW_DIFFICULTY=low` (n=96 k=5, ~0.2 s) in every `deploy/env/*.env.example`
-but atablefor's, which is intentionally ~9–10 s on an M-series laptop core, the
+n=96 k=5 (~0.2 s) in every demo
+but atablefor, which is intentionally ~9–10 s on an M-series laptop core, the
 only hardware either figure has ever been measured on — both rows of
 `kiosk-pow-equihash/bench/README.md`'s measured grid, which is where to re-run
 them for your own machine (you'll feel the high one — that's the point). Flow:

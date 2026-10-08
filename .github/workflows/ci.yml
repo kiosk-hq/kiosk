@@ -135,94 +135,9 @@ jobs:
       matrix:
         include:
           - demo: kiosk-demo-atablefor
-            # Restaurant table-booking: NO
-            # payments — check:book is the headline ("book a table for 2"),
-            # check:schema asserts pay ABSENT (capabilities [schema, queries,
-            # actions] — the 0.4 names the engine computes and demo.rake asserts;
-            # `query`/`run` were the retired 0.3 spelling, K-1067).
-            # check:binding is the human-IdP + account-linking beat (a diner links
-            # their assistant via the real Devise session, and the assistant's
-            # booking ties to the diner's account); unlike the sibling binding
-            # demos it carries no RFC 8628 poll timing, so it runs in CI.
-            # check:backoff is PoW-only (no RFC 8628 timing) and solves exactly
-            # ONE small Equihash proof at the CI-default `low` difficulty (n=96
-            # k=5, sub-second) before asserting the count-based grant, so it runs
-            # in CI. check:rls moved to getgrocery.
-            # check:walkthrough is the curl tour of the wire surface (bin/demo):
-            # no PoW, no RFC 8628 timing, no key — the same profile as the
-            # stylish/philslist walkthroughs already here, ~4 s. It was the one
-            # walkthrough no gate reached (K-618). It is NOT redundant with
-            # check:book, and the reason CHANGED with T-104 (K-837): the tour no
-            # longer leans on a seeded stub principal — that one, and the
-            # self-asserted bearer that named it, are deleted. It now EARNS its
-            # principal by running the shipped /kiosk/auth/register handshake
-            # through script/mint_agent_token.rb (whose only caller it is) and
-            # carries the engine-minted token through a series of `curl -sf`
-            # hops, which is what an adopter's shell script does and what no
-            # Ruby flow driver here does.
-            # Watched fail: break the JWKS route (config/routes.rb:60) or empty
-            # its key set — GET /kiosk/.well-known/jwks.json is fetched by
-            # NOTHING else in this demo, so `curl -sf` returns non-zero, `set
-            # -e` kills the tour, and check:book stays green.
-            # It goes LAST because `task walkthrough: :setup` reseeds, while
-            # check:backoff and check:book have no prerequisite and live off the
-            # job-level demo:setup.
-            # check:reputation is the ONLY task anywhere that boots the
-            # `:reputation` branch of ATABLEFOR_POW_MODE (dev/test resolve the
-            # mode to `:off`), and therefore the only thing that executes
-            # `c.reputation_factors` — the gate's DB read path, evaluated on
-            # every gated request of the flagship reputation demo. It was
-            # excluded as "the same heavy-PoW family as check:pow", and that is
-            # true only at KIOSK_POW_DIFFICULTY=high, which the hosted deploy
-            # sets and CI does not: at the CI-default `low` (n=96 k=5) the whole
-            # curve is six sub-second proofs, MEASURED at 4.1 s end to end
-            # including its own server boot (K-786) — cheaper than check:book.
-            # Same correction, same reasoning and the same measurement discipline
-            # as hoteling's check:browse (K-617). It has no `: :setup`
-            # prerequisite and books two tables, so it sits with the other
-            # prerequisite-free tasks, ahead of everything that reseeds.
-            # Watched fail: drop the `status: "confirmed"` from the
-            # reputation_factors count and the curve stays 2 → 2, so "proof count
-            # dropped after the first booking" goes red.
-            # check:pow was opted out for years as "the heavy anti-scalping
-            # toll... excluded on every demo", and that reason was never
-            # measured (K-790, subsuming K-841). The weight is a property of
-            # KIOSK_POW_DIFFICULTY=high, which the HOSTED deploy sets and
-            # which this workflow does not. Since T-110 the task FORWARDS the
-            # ambient KIOSK_POW_DIFFICULTY to the server it spawns (it used to
-            # drop it, so the opt-in was unreachable) and asserts the served
-            # (n, k) off the wire — which changes nothing here, because nothing
-            # in this job sets it, so CI still gets the `low` default
-            # (n=96 k=5). MEASURED at head: 2.7 s end to end
-            # INCLUDING its own server boot, i.e. cheaper than check:book, which
-            # this job already runs. That makes it the third exclusion whose
-            # stated reason described a configuration CI does not use, after
-            # check:browse (K-617) and check:link/check:reputation (K-786).
-            # It is worth the 2.7 s twice over: it is the ONLY beat anywhere
-            # that reaches the flat :demo branch of AtableforDemoPowPolicy and
-            # the c.on_bad_proof penalty counter, and atablefor's ONLY
-            # valid-solve->200 / wrong-nonce->403 pair — the toll this demo
-            # charges at registration was otherwise pinned by no gate at all.
-            # It has no `: :setup` prerequisite, so it sits with check:backoff
-            # ahead of everything that reseeds.
-            # Watched fail: drop the c.on_bad_proof lambda (initializers/
-            # kiosk.rb:317) and "on_bad_proof penalized: bad_proof_count=1"
-            # goes red with bad_proof_count=0, exit 1.
-            # check:wire_args_spec goes FIRST — it is the only task in this job
-            # that needs no server, no Postgres and no PoW (~0.4 s, a bare
-            # `ruby spec/wire_arguments_spec.rb`), so the cheapest signal fails
-            # first. 255 assertions over the pure guards: the `whole_number`
-            # table K-1027 was filed for, `party_size`'s three separate
-            # sentences (shape / floor / K-1047's int4 ceiling), `seating_time`
-            # and `seating_date` and `neighborhood` — each answering a value
-            # outside its domain with the servable set NAMED (K-717) — and
-            # `booking_id`'s blank-vs-malformed split. Until it existed the only
-            # executable coverage of ANY of them was check:redteam, which needs a
-            # booted origin, a seeded database and a live Equihash toll (T-137).
-            # Watched fail: restore the pre-K-1027 coercion (`size = raw.to_i`)
-            # and drop the `size > MAX_INT4` arm — 31 assertions go red, four of
-            # them the NoMethodError raises K-1027 was filed for (`true.to_i`,
-            # `false.to_i`, `[].to_i`), and the task exits 1.
+            # Table booking, no payments. Toll at Equihash n=168 k=7, as deployed.
+            # check:wire_args_spec first: no server, no database. Tasks without a
+            # setup prerequisite run before check:walkthrough, which reseeds.
             tasks: check:wire_args_spec check:backoff check:pow check:book check:reputation check:binding check:isolation check:redteam check:schema check:walkthrough
           - demo: kiosk-demo-getgrocery
             # check:agecheck = the alcohol 18+ age-gate (create_order rejects a
@@ -313,20 +228,9 @@ jobs:
             # the job-level demo:setup and BEFORE check:race, which stays last.
             # check:rls leaves RLS applied to `orders`; check:race's `: :setup`
             # drops the database, which is what clears it — do not reorder them.
-            # check:pow carried the same unmeasured "heavy catalog toll"
-            # opt-out as atablefor's, and the same correction applies (K-790):
-            # nothing in this job sets KIOSK_POW_DIFFICULTY, so CI runs the
-            # `low` default (n=96 k=5) — the task forwards whatever is ambient
-            # since T-110 and asserts the served (n, k) off the wire, which is
-            # what makes the opt-in path real without moving this cost.
-            # MEASURED at head: 3.7 s end to end INCLUDING
-            # its own reseed and server boot. It is getgrocery's only
-            # valid-solve->200 / wrong-nonce->403 pair on the catalog verb.
-            # It invokes demo:setup, so it RESEEDS: it sits with check:claim in
-            # the reseeding group, and BEFORE check:rls, which must stay
-            # immediately ahead of check:race for the reason below.
-            # Watched fail: drop the c.on_bad_proof lambda (initializers/
-            # kiosk.rb:285) and "on_bad_proof penalized" goes red, exit 1.
+            # check:pow is getgrocery's only valid-solve->200 / wrong-nonce->403
+            # pair on the catalog verb (n=96 k=5). It reseeds, so it sits with
+            # check:claim, before check:rls.
             #   check:reconcile  T-112 — the OTHER half of the stuck-`paying`
             #     story, and the half check:race cannot reach. check:race proves
             #     the sweep heals from a settlement row and refuses to guess
@@ -729,12 +633,13 @@ jobs:
           SECRET_KEY_BASE: ci-zeitwerk-check-throwaway-secret-key-base
           KIOSK_POW_SECRET: ci-zeitwerk-check-throwaway-pow-secret-not-a-real-key
           KIOSK_ISSUER: https://ci-zeitwerk-check.example.test
+          STRIPE_SECRET_KEY: sk_test_ci_zeitwerk_check
+          KIOSK_PROVE_BROKER_URL: https://kyc.example.test
+          KIOSK_PROVE_ISSUER: https://kyc.example.test
+          KIOSK_PROVE_INTAKE_SECRET: ci-zeitwerk-check-intake-secret
         run: |
-          # Minted here and exported to `bin/rails` alone: these two live for
-          # the length of this one command. Generated per run rather than
-          # pinned in this file — K-686 is precisely a key that was published
-          # by being written down — and NOT echoed, so the runner log never
-          # carries a private half.
+          # Keys are minted per run and never echoed.
+          export KIOSK_PROVE_PUBLIC_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).public_key.to_pem')"
           if [ "${{ matrix.demo }}" = "kiosk-demo-prove" ]; then
             export PROVE_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).to_pem')"
           fi

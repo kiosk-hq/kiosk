@@ -862,13 +862,6 @@ namespace :check do
     register → KYC → reserve → pay → start_rental) and asserts each attack is
     BLOCKED. The suite prints the count it actually ran; this list names them.
 
-    NO (n, k) IS NAMED HERE, and it is NOT derived either: the register params
-    follow KIOSK_POW_DIFFICULTY, so a literal on this line would be false the
-    moment an operator sets `high` — but a `desc` body is evaluated on EVERY
-    rake/rails task load, so reading the knob here would turn a documentation
-    string into a load-time failure mode. Naming the knob is the repair; the
-    suite's own run header prints the live pair.
-
     No count is kept here on purpose — a count kept here is a count that rots:
 
       BLOCKED  PayForOtherUseSelf    — C2: B pays for A's reservation, tries start_rental
@@ -1016,7 +1009,7 @@ namespace :check do
 
       # The driver mints valid/expired attestations via ProveTestIssuer and
       # forged ones with the same issuer — both read
-      # Kiosk::KycProviders::Prove.issuer, i.e. KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
+      # KIOSK_PROVE_ISSUER, so it MUST carry the same pinned iss the broker
       # stamps and skooti's server verifies against, or the valid-KYC control
       # mismatches iss.
 
@@ -1249,14 +1242,11 @@ namespace :check do
       failures << "events_url missing or malformed (got #{result['discovery_events_url'].inspect})"
       puts "  FAIL  events_url missing or malformed"
     end
-    # kyc_verification is kiosk-server's, declared only with a KYC broker, which
-    # this task does not boot. payment_setup is kiosk-server's too, served
-    # because the Stripe adapter names the principal a returning card-setup
-    # browser belongs to.
-    if (result["schema_event_topics"] || []) == ["booking_payment", "payment_setup"]
+    # kyc_verification and payment_setup are kiosk-server's.
+    if (result["schema_event_topics"] || []) == ["booking_payment", "kyc_verification", "payment_setup"]
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
-      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment payment_setup].inspect}"
+      failures << "catalogue topics #{(result['schema_event_topics'] || []).inspect} are not the declared #{%w[booking_payment kyc_verification payment_setup].inspect}"
       puts "  FAIL  catalogue topics are not the declared set"
     end
 
@@ -1463,10 +1453,8 @@ namespace :check do
       puts "\n── Running script/kyc_flow.rb (skooti + KYC broker) ──"
       # KIOSK_PROVE_ISSUER must reach the DRIVER too, not only the server: PART C
       # mints its own attestation through ProveTestIssuer, whose `iss` is
-      # Kiosk::KycProviders::Prove.issuer — and without this the driver falls back to the
-      # DEPLOYED broker origin while the booted broker stamps the harness's
-      # local one, so a perfectly-signed attestation comes back 403 «issuer
-      # mismatch».
+      # KIOSK_PROVE_ISSUER — without it a perfectly-signed attestation comes
+      # back 403 «issuer mismatch».
       driver_env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
                    "KIOSK_PROVE_BROKER_URL=#{broker[:broker_url]} " \
                    "KIOSK_PROVE_ISSUER=#{broker[:wiring]["KIOSK_PROVE_ISSUER"]}"

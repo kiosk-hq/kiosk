@@ -29,9 +29,9 @@ module Kiosk
       #   earlier mapping for that user; {CustomerRecord.save} when omitted
       # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture
       #   instead of requiring the hosted card entry
-      def initialize(customer_resolver: nil, customer_saver: nil, api_key: nil, test_autocard: false)
+      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, test_autocard: false)
         super()
-        @api_key           = api_key || ENV.fetch("STRIPE_SECRET_KEY", nil)
+        @api_key           = api_key
         unless customer_resolver && customer_saver
           require "kiosk/payment_providers/stripe/customer_record"
           customer_resolver ||= CustomerRecord.method(:resolve)

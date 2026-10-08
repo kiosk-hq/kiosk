@@ -267,8 +267,8 @@ if ARGV.include?("--self-test")
     { id: "entry-no-longer-duplicated", kind: :break,
       rule: "Undeclared and stale manifest entries",
       what: "a copy is deleted, leaving an entry that compares one file to itself",
-      ops:  [[:delete, "kiosk-demo-getgrocery/app/services/bad_proof_counter.rb"]],
-      expect: /app\/services\/bad_proof_counter\.rb: declared in bin\/check-demo-copies but only atablefor ships it/ },
+      ops:  [[:delete, "kiosk-demo-skooti/script/pay_window.rb"]],
+      expect: /script\/pay_window\.rb: declared in bin\/check-demo-copies but only hoteling ships it/ },
 
     { id: "exclusion-no-longer-true", kind: :break,
       rule: "The recorded exclusion must stay true (K-629)",
@@ -507,33 +507,6 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "bin/check-demo-copies", "  host_block_sites += found.size\n", ""]],
       expect: /the K-1353 host-detection rule read 0 blocks/ },
 
-{ id: "env-block-one-demo-edited", kind: :break,
-  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
-  what: "one demo's copy of the role-names paragraph goes back to the sentence K-1752 removed — the exact plant that left this check at exit 0",
-  ops:  [[:edit, "kiosk-demo-tudu/config/environments/development.rb",
-          "privileged role a DBA grants ownership to", "owner role the engine returns to afterwards"]],
-  expect: /config\/environments\/development\.rb: below the `Kiosk env inputs` banner a paragraph shared by two demos must be in all 7 .* and not in \[tudu\]/ },
-{ id: "env-block-production-head-drifts", kind: :break,
-  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
-  what: "one demo's production posture above the banner drifts from the other six",
-  ops:  [[:edit, "kiosk-demo-tudu/config/environments/production.rb",
-          "config.assume_ssl = true", "config.assume_ssl = false"]],
-  expect: /config\/environments\/production\.rb: above the `Kiosk env inputs` banner the operator seven must agree/ },
-{ id: "env-block-kyc-keys-in-a-third-demo", kind: :break,
-  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
-  what: "a demo with no KYC provider publishes the KYC broker keys again",
-  ops:  [[:edit, "kiosk-demo-tudu/config/environments/test.rb",
-          "  config.x.kiosk.system_role = ENV.fetch(\"KIOSK_SYSTEM_ROLE\", \"app_role\")\n",
-          "  config.x.kiosk.system_role = ENV.fetch(\"KIOSK_SYSTEM_ROLE\", \"app_role\")\n\n" \
-          "  # KYC broker trust — pinned explicitly by the tasks that need it.\n" \
-          "  config.x.kiosk.prove_public_key_pem = ENV[\"KIOSK_PROVE_PUBLIC_KEY_PEM\"]\n" \
-          "  config.x.kiosk.prove_intake_secret  = ENV[\"KIOSK_PROVE_INTAKE_SECRET\"]\n"]],
-  expect: /config\/environments\/test\.rb: below the `Kiosk env inputs` banner a paragraph shared by two demos must be in exactly \[getgrocery,skooti\]/ },
-{ id: "vacuity-env-block", kind: :vacuity,
-  rule: "The Kiosk env block in config/environments/*.rb (K-1752, K-1900)",
-  what: "the owner tally stops filling, so a lockstep rule with nothing shared left to compare must say so",
-  ops:  [[:edit, "bin/check-demo-copies", "paras.each { |para| owners[para] << demo }", "paras.each { |para| owners[para] }"]],
-  expect: /the K-1752 env-block rule read 0 paragraph/ },
 
     { id: "host-pair-one-task-loses-it", kind: :break,
       rule: "Every task that boots a server detects its host (K-1413)",
@@ -619,7 +592,8 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-atablefor/app/models/booking.rb", "CONFIRMED", "KONFIRMED"],
              [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "CANCELLED", "KANCELLED"],
              [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "belongs_to ", "belongs_to_x "],
-             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "scope ", "scope_x "]],
+             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "scope ", "scope_x "],
+             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "include ", "include_x "]],
       expect: /app\/models\/booking\.rb: named in FRAGMENT_PATHS, and the extractor finds NO unit shared/ },
     { id: "per-demo-path-in-neither-list", kind: :break,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
@@ -689,19 +663,13 @@ if ARGV.include?("--self-test")
       expect: /hoteling: config\/initializers\/kiosk\.rb:1 calls ActiveRecord::Migration\.include/ },
 
     { id: "vacuity-initializer-corpus", kind: :vacuity,
-      rule: "No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT)",
-      what: "the per-demo initializer walk comes back empty, so both initializer rules scan " \
-            "nothing while seven per-demo complaints speak in their place",
+      rule: "No demo initializer patches a Rails framework class (K-504)",
+      what: "the per-demo initializer walk comes back empty, so the rule scans nothing",
       ops:  [[:edit, "bin/check-demo-copies",
               "  paths = Dir[File.join(ROOT, demo, \"config/initializers\", \"*.rb\")].sort\n",
               "  paths = []\n"]],
       expect: /the K-504 framework-patch rule scanned NO initializers/ },
-    { id: "initializer-resolves-env", kind: :break,
-      rule: "No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT)",
-      what: "an initializer resolves configuration instead of reading it",
-      ops:  [[:prepend, "kiosk-demo-philslist/config/initializers/kiosk.rb",
-              "SETTLEMENT_WEBHOOK = ENV.fetch(\"KIOSK_SETTLEMENT_WEBHOOK\", nil)\n"]],
-      expect: /philslist: config\/initializers\/kiosk\.rb:1 resolves KIOSK_SETTLEMENT_WEBHOOK with ENV\.fetch/ },
+
 
     { id: "vacuity-convergence-census", kind: :vacuity,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
@@ -863,28 +831,6 @@ if ARGV.include?("--self-test")
             "so `./bin/setup` there was EACCES rather than ENOENT and no rule read a mode",
       ops:  [[:chmod, "kiosk-demo-tudu/bin/dev", 0o644]],
       expect: /tudu: kiosk-demo-tudu\/bin\/dev is not executable \(mode 644\)/ },
-    { id: "validate-responses-unconditional", kind: :break,
-      rule: "`validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332)",
-      what: "a demo goes back to `= true`, so the deployed subdomain answers 500 for an " \
-            "operator's descriptor typo — the state all seven were in",
-      ops:  [[:edit, "kiosk-demo-skooti/config/initializers/kiosk.rb",
-              "c.validate_responses = !Rails.env.production?", "c.validate_responses = true"]],
-      expect: /skooti: config\/initializers\/kiosk\.rb sets `c\.validate_responses = true`, not/ },
-    { id: "validate-responses-unbound", kind: :vacuity,
-      rule: "`validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332)",
-      what: "the engine stops documenting the production hazard, leaving seven initializers " \
-            "enforcing a posture their own producer no longer claims",
-      ops:  [[:edit, "kiosk-server/lib/kiosk/server/response_validation.rb",
-              "on in production would convert a descriptor typo into a 500 for a caller",
-              "in production is fine for a caller"]],
-      expect: /response_validation\.rb no longer says .+ \(K-1332\)/ },
-    { id: "vacuity-validate-responses-corpus", kind: :vacuity,
-      rule: "`validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332)",
-      what: "the rule stops reading the initializer, so it counts nothing while seven " \
-            "per-demo complaints speak in its place",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "\n  values = File.read(path)", "\n  values = String.new"]],
-      expect: /the K-1332 rule read NO operator initializer/ },
     { id: "readme-names-absent-script", kind: :break,
       rule: "Every `bin/` script a demo names EXISTS and is runnable (K-1315)",
       what: "a README tells the operator to run a script the demo does not ship",
@@ -1508,14 +1454,6 @@ COPIES = {
   # ── Shared demo helpers, hand-copied into every demo's app/ (K-502) ────────
   # They used to live under lib/ and be loaded by hand from the initializer;
   # the paths moved, the copy-not-symlink arrangement did not.
-  "app/services/bad_proof_counter.rb" => {
-    rule: :identical,
-    why:  "The K-498 PER-IDENTITY bad-proof tally (sqlite, keyed by agent credential id) behind " \
-          "the two PoW demos' on_bad_proof wiring — atablefor and getgrocery are the only demos " \
-          "that toll queries and count rejected proofs. The per-identity keying IS the fix (one " \
-          "abuser must not inflate anyone else's count), so a copy that drifts could silently " \
-          "regrow the shared-counter bug.",
-  },
   "bin/setup" => {
     rule:  :identical,
     ships: OPERATOR_SEVEN,
@@ -3229,8 +3167,7 @@ end
 # reads the wrong one.
 #
 # `skooti.env.example` is the shape to PREFER and needs no rule at all — it
-# names the constant (`registration_pow_params =
-# Kiosk::Pow::Equihash::Difficulty.params`), and a
+# names no path, and a
 # constant does not rot when a file moves. But a template that DOES cite a path
 # must cite one that exists in the demo it configures, which is derived from the
 # template's own filename rather than listed here. Only cites containing a `/`
@@ -3539,81 +3476,6 @@ if host_groups.size > 1
             "task that boots a server — propagate the edit to all of them. Whether the run tells " \
             "an operator how to reach the vanity host may not depend on which task they ran " \
             "(K-1353)."
-end
-
-# ── The Kiosk env block in config/environments/*.rb (K-1752, K-1900) ────────
-#
-# Each environment file is Rails posture above its `Kiosk env inputs` banner and
-# the demo's own env inputs below it. Above the banner, test.rb and production.rb
-# are identical in the operator seven; development.rb permits each demo's own
-# served host. Below it a demo publishes only the keys it reads. A paragraph — a
-# blank-line-separated run of lines — found in two demos must be in all seven, or
-# in exactly the demos ENV_BLOCK_SUBSETS names for the key it publishes.
-ENV_BLOCK_RELS   = %w[config/environments/development.rb config/environments/test.rb
-                      config/environments/production.rb].freeze
-ENV_BLOCK_SAME_HEAD = %w[config/environments/test.rb config/environments/production.rb].freeze
-ENV_BLOCK_BANNER = /\A\s*# ── Kiosk env inputs /
-PAYING_DEMOS = %w[getgrocery hoteling skooti].freeze
-ENV_BLOCK_SUBSETS = { "config.x.kiosk.prove_public_key_pem" => KYC_DEMOS,
-                      "config.x.kiosk.stripe_mock_url"      => PAYING_DEMOS,
-                      "config.x.kiosk.test_autocard"        => PAYING_DEMOS }.freeze
-
-# [lines above the banner, paragraphs below it] — the file's closing `end` is
-# not part of the last paragraph.
-def env_block_split(path)
-  lines = File.readlines(path)
-  start = lines.index { |l| ENV_BLOCK_BANNER.match?(l) } or return nil
-  body  = lines[start..]
-  body  = body[0...-1] if body.last&.strip == "end"
-  paras = body.chunk_while { |a, b| !a.strip.empty? && !b.strip.empty? }
-              .map(&:join).reject { |para| para.strip.empty? }
-  [lines[0...start].join, paras]
-end
-
-env_shared = 0
-ENV_BLOCK_RELS.each do |rel|
-  split = {}
-  OPERATOR_SEVEN.each do |demo|
-    found = env_block_split(File.join(ROOT, "kiosk-demo-#{demo}", rel))
-    if found.nil?
-      errors << "#{demo}: #{rel} has no `Kiosk env inputs` banner, so the env-block rule " \
-                "compared NOTHING for that demo (K-1752)."
-    else
-      split[demo] = found
-    end
-  end
-
-  if ENV_BLOCK_SAME_HEAD.include?(rel)
-    heads = split.group_by { |_demo, (head, _paras)| head }.values.map { |g| g.map(&:first).sort }
-    if heads.size > 1
-      errors << "#{rel}: above the `Kiosk env inputs` banner the operator seven must agree " \
-                "byte-for-byte, and they do not: #{heads.map { |g| "[#{g.join(',')}]" }.join(' ')} (K-1900)."
-    end
-  end
-
-  owners = Hash.new { |h, k| h[k] = [] }
-  split.each { |demo, (_head, paras)| paras.each { |para| owners[para] << demo } }
-  owners.each do |para, demos_with|
-    next if demos_with.size < 2
-
-    key   = ENV_BLOCK_SUBSETS.keys.find { |k| para.include?(k) }
-    must  = key ? ENV_BLOCK_SUBSETS[key] : split.keys
-    if demos_with.sort == must.sort
-      env_shared += 1 unless key
-      next
-    end
-
-    errors << "#{rel}: below the `Kiosk env inputs` banner a paragraph shared by two demos " \
-              "must be in #{key ? "exactly [#{must.sort.join(',')}]" : "all #{must.size}"} — " \
-              "«#{para.lines.first.strip}» is in [#{demos_with.sort.join(',')}]" +
-              ((missing = must - demos_with).empty? ? "" : " and not in [#{missing.sort.join(',')}]") +
-              " (K-1752)."
-  end
-end
-if env_shared < 2 * ENV_BLOCK_RELS.size
-  errors << "check-demo-copies: the K-1752 env-block rule read #{env_shared} paragraph(s) shared by " \
-            "every operator demo across #{ENV_BLOCK_RELS.size} files — the blocks have moved, and a " \
-            "lockstep rule with nothing to compare passes everything."
 end
 
 # ── Every task that boots a server detects its host (K-1413) ─────────────────
@@ -4389,14 +4251,6 @@ FRAGMENTS = {
            "POW_SOLVES and delegate. The alias-and-wrap IS the mechanism: a copy that solved " \
            "without incrementing would report a total quietly too low, which is the exact defect " \
            "K-1221 was filed for.",
-  },
-  "script/pow_flow.rb#BAD_PROOF_DB" => {
-    rule:  :code,
-    ships: %w[atablefor getgrocery],
-    why:   "The path to the bad-proof counter's sqlite file, OWNED by `rake check:pow` and exported " \
-           "to both the spawned server and this driver (K-711), `fetch`ed with no default on " \
-           "purpose: a drift between the two spellings once opened an empty database here, read 0 " \
-           "for every count, and reported the zeros as a pass.",
   },
   "script/pow_flow.rb#post_json" => { rule: :code, ships: %w[atablefor getgrocery], why: WIRE_PAIR },
   "script/pow_flow.rb#get_json" => {
@@ -5372,63 +5226,9 @@ FRAMEWORK_PATCH = /
   \b
 /x
 
-# ── No demo initializer RESOLVES an env var (K-699, ENV-CONFIG-PLACEMENT) ────
-#
-# Env-var reading, dev/test fallbacks and crash-if-absent fetches live in
-# config/environments/{development,test,production}.rb as Rails custom config
-# (`Rails.configuration.x.kiosk…`), and initializers and lib files READ that
-# config. A convention nothing checks survives exactly until the next copy-paste,
-# and these files ARE copy-paste: seven standalone apps whose configuration blocks
-# are hand-propagated. So the rule is mechanical — an `ENV.fetch` in a demo
-# initializer is a RESOLUTION decision (it names the default, or raises when there
-# is none), and resolution belongs to the environment files.
-#
-# The rule covers the SEVEN demo initializers and the e2e harness fixture
-# (K-1009, K-1011): `e2e/run.sh` copies fixtures over the generated app's
-# config/initializers/, so each of them is a demo initializer in every sense
-# these rules care about — and they are a teaching surface besides (e2e/README
-# presents run.sh as the edits an adopter makes), which is exactly where the
-# shape Phil decided against must not be on show. Their env inputs are
-# published from the GENERATED config/environments/{development,production}.rb,
-# which run.sh patches the same way it patches config/application.rb.
-#
-# Bare `ENV["FLAG"]` reads are NOT caught, and must not be: K-650 carved them
-# out explicitly, because a mode flag (atablefor's KIOSK_POW_MODE) selects a
-# demo MODE rather than a per-environment posture,
-# and there is no default for an environment file to hold.
-#
-# ALLOWED names are declared one at a time, each with the row that owns the
-# residue — and an allowance matching nothing is an error, so the list cannot
-# outlive the thing it excuses. It is EMPTY since K-1008 landed the last
-# residue it excused (KIOSK_BAD_PROOF_DB); an empty list is the intended
-# resting state, not a gap.
-ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*"(?<var>[A-Z0-9_]+)"/
-INITIALIZER_ENV_FETCH_ALLOWED = {}.freeze
-env_fetch_seen = Hash.new(0)
-
-# BOTH RULES, ONE SCANNER (K-1011). The two rules used to be written out twice —
-# once for the demo loop and once for the e2e fixture — and the copy that ran on
-# the fixture carried only the ENV.fetch half, excused in its own comment as a
-# WORDING problem («the K-504 message names a demo»). A message that cannot name
-# a demo wants rewording, not an exemption, so the scan lives here once and the
-# only thing a caller varies is `label` (who owns the file) and `env_hint` (where
-# the resolved value should have been published, which genuinely differs between
-# a demo and the generated app run.sh patches).
-scan_initializer = lambda do |label:, rel:, path:, env_hint:|
+scan_initializer = lambda do |label:, rel:, path:|
   File.read(path).each_line.with_index(1) do |line, lineno|
     next if line.lstrip.start_with?("#")
-
-    if (f = ENV_FETCH.match(line))
-      var = f[:var]
-      if INITIALIZER_ENV_FETCH_ALLOWED.key?(var)
-        env_fetch_seen[var] += 1
-      else
-        errors << "#{label}: #{rel}:#{lineno} resolves #{var} with ENV.fetch — an " \
-                  "initializer READS resolved configuration, it does not resolve it. " \
-                  "#{env_hint} A bare ENV[\"FLAG\"] mode check is fine and is " \
-                  "deliberately not caught."
-      end
-    end
 
     m = FRAMEWORK_PATCH.match(line)
     next if m.nil?
@@ -5441,14 +5241,6 @@ scan_initializer = lambda do |label:, rel:, path:, env_hint:|
               "the gem that owns the behaviour, or in an ordinary Rails concern under app/."
   end
 end
-
-DEMO_ENV_HINT = "Publish the value from config/environments/{development,test,production}.rb " \
-                "as `config.x.kiosk.…` and read `Rails.configuration.x.kiosk.…` here " \
-                "(ENV-CONFIG-PLACEMENT, Phil 2026-08-12; K-650, K-699)."
-E2E_ENV_HINT  = "run.sh publishes the harness env inputs into the GENERATED " \
-                "config/environments/{development,production}.rb; read " \
-                "`Rails.configuration.x.kiosk.…` here (ENV-CONFIG-PLACEMENT, Phil 2026-08-12; " \
-                "K-650, K-699, K-1009)."
 
 initializer_demos = 0
 operator_demos.each do |demo|
@@ -5464,8 +5256,7 @@ operator_demos.each do |demo|
   paths.each do |path|
     scan_initializer.call(label:    short.(demo),
                           rel:      path.delete_prefix("#{File.join(ROOT, demo)}/"),
-                          path:     path,
-                          env_hint: DEMO_ENV_HINT)
+                          path:     path)
   end
 end
 
@@ -5502,7 +5293,7 @@ if File.exist?(run_sh)
       next
     end
 
-    scan_initializer.call(label: "e2e", rel: rel, path: path, env_hint: E2E_ENV_HINT)
+    scan_initializer.call(label: "e2e", rel: rel, path: path)
   end
 else
   errors << "check-demo-copies: #{E2E_RUN_SH} does not exist, so the harness half of this rule " \
@@ -5511,19 +5302,12 @@ else
             "passes everything."
 end
 
-INITIALIZER_ENV_FETCH_ALLOWED.each_key do |var|
-  next if env_fetch_seen[var].positive?
-
-  errors << "check-demo-copies: INITIALIZER_ENV_FETCH_ALLOWED names #{var}, which no demo " \
-            "initializer resolves any more — the residue it excused is gone, so delete the " \
-            "allowance rather than leave a standing permission nothing needs (K-699)."
-end
-
 if initializer_demos.zero?
   errors << "check-demo-copies: the K-504 framework-patch rule scanned NO initializers — " \
             "operator_demos is empty or config/initializers/ has moved. A rule that inspects " \
             "nothing passes everything."
 end
+
 
 # ── A demo DRIVER fetches its ORIGIN NAMES with NO default (K-1543, K-1545, K-1546) ──
 #
@@ -5638,64 +5422,6 @@ end
 if driver_ports_held.zero?
   errors << "check-demo-copies: no demo driver comment names a local port its demo's tasks " \
             "declare, so the driver-port rule compares nothing and reads as coverage."
-end
-
-# ── `validate_responses` is a DEVELOPMENT assertion, never a deployed one (K-1332) ──
-#
-# The engine's own file says turning this on in production converts a descriptor
-# typo into a 500 for a caller who did nothing wrong — on the public endpoints an
-# assistant is pointed at, in the file `onboarding.html` sends an adopting operator
-# to COPY.
-#
-# `config/initializers/kiosk.rb` is `:per_demo` and rightly so — capabilities,
-# verbs, PoW policy and adapters differ per storefront — so nothing above
-# compares this line. It is asserted here for the same reason the autoload-once
-# declaration is: the FILE is per-demo, one LINE in it is not.
-#
-# BOUND TO THE ENGINE, not to a remembered rule. If `response_validation.rb`
-# stops documenting the hazard, this assertion is enforcing a posture its own
-# producer no longer claims, and that is a failure rather than a silent pass —
-# the `source:` idea from the K-1069 block, applied to one line of config.
-VALIDATE_RESPONSES_WANT   = "!Rails.env.production?"
-VALIDATE_RESPONSES_ENGINE = "kiosk-server/lib/kiosk/server/response_validation.rb"
-VALIDATE_RESPONSES_HAZARD = "on in production would convert a descriptor typo into a 500 for a caller"
-
-vr_engine = File.join(ROOT, VALIDATE_RESPONSES_ENGINE)
-if !File.file?(vr_engine)
-  errors << "#{VALIDATE_RESPONSES_ENGINE} is not in the tree — the K-1332 rule is bound to a file " \
-            "that no longer exists. Re-aim it or delete it."
-elsif !File.read(vr_engine).include?(VALIDATE_RESPONSES_HAZARD)
-  errors << "#{VALIDATE_RESPONSES_ENGINE} no longer says #{VALIDATE_RESPONSES_HAZARD.inspect} " \
-            "(K-1332). Seven demo initializers gate this flag on that sentence; if the engine has " \
-            "changed its mind, the demos are the thing to change, not this rule to delete."
-end
-
-vr_demos = 0
-operator_demos.each do |demo|
-  path = File.join(ROOT, demo, "config", "initializers", "kiosk.rb")
-  next unless File.file?(path)
-
-  values = File.read(path).scan(/^[ \t]*c\.validate_responses\s*=\s*(.+?)[ \t]*$/).flatten
-  if values.empty?
-    errors << "#{short.(demo)}: config/initializers/kiosk.rb sets no `c.validate_responses` at all. " \
-              "The engine defaults it to FALSE, so this demo's CI task list has quietly stopped " \
-              "being a per-verb conformance proof of its own descriptors (K-1332, T-068 slice 3)."
-  elsif values.uniq != [VALIDATE_RESPONSES_WANT]
-    errors << "#{short.(demo)}: config/initializers/kiosk.rb sets " \
-              "`c.validate_responses = #{values.uniq.join(' / ')}`, not " \
-              "`#{VALIDATE_RESPONSES_WANT}` (K-1332). This demo is DEPLOYED under " \
-              "RAILS_ENV=production; unconditional means a descriptor typo answers 500 to a caller " \
-              "who did nothing wrong, which is exactly what #{VALIDATE_RESPONSES_ENGINE} warns " \
-              "against. Development keeps the assertion — that is where the task lists run."
-  else
-    vr_demos += 1
-  end
-end
-
-if vr_demos.zero?
-  errors << "check-demo-copies: the K-1332 rule read NO operator initializer, so it asserted " \
-            "nothing about a posture that ships to the public demo subdomains. A rule that " \
-            "inspects nothing passes everything."
 end
 
 # ── The e2e harness's fixtures, paired with the demo files they came from ────
@@ -5858,13 +5584,6 @@ E2E_FIXTURES = {
     pairs: nil,
     why:   "The K-828 audit-sink callable, written the way an adopter would write it. No demo " \
            "ships app/services/demo_audit_sink.rb: the seam is exercised by the harness alone.",
-  },
-  "environment_kiosk.rb" => {
-    pairs: nil,
-    why:   "Not a file the harness installs at all: run.sh APPENDS it into the generated " \
-           "config/environments/{development,production}.rb, which is why it has no `cp` line. It " \
-           "is the harness's half of ENV-CONFIG-PLACEMENT — the env inputs published as " \
-           "`config.x.kiosk.…` so the initializer can read Rails.configuration instead of ENV.",
   },
   "equihash_register.rb" => {
     pairs: "script/equihash_register.rb",

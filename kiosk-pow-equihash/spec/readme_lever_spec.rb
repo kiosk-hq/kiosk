@@ -51,8 +51,7 @@ RSpec.describe "the README's solve/verify lever" do
   end
 
   # The SECOND lever, and it is the one most readers of this repository are
-  # actually under: `~530×` is the gem DEFAULT's, while `KIOSK_POW_DIFFICULTY=low`
-  # — n=96, k=5 — is what six of the seven hosted demos and `e2e/` charge (K-1276).
+  # actually under: `~530×` is the gem DEFAULT's, while n=96, k=5 is what six of the seven hosted demos and `e2e/` charge (K-1276).
   # Nothing anywhere said the deployed fleet buys an order of magnitude less
   # lever than the headline, so the README now says it; this pins it the same
   # way, by dividing this file's own two numbers, so a re-bench that moves the

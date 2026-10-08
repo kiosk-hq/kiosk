@@ -58,9 +58,4 @@ RSpec.describe Kiosk::KycProviders::Prove do
   it "refuses to be built without an intake secret" do
     expect { described_class.new(operator_id: "shop", intake_secret: "") }.to raise_error(ArgumentError)
   end
-
-  it "reads the broker's address and issuer from the environment, defaulting to the hosted broker" do
-    expect(described_class.issuer).to eq(ENV.fetch("KIOSK_PROVE_ISSUER", described_class::HOSTED))
-    expect(described_class.broker_url).to eq(ENV.fetch("KIOSK_PROVE_BROKER_URL", described_class::HOSTED))
-  end
 end

@@ -366,28 +366,17 @@ ruby -e '
   File.write(path, src.sub(/^(\s*)config\.api_only\s*=\s*true\s*$/) { "#{Regexp.last_match(1)}config.api_only = false" })
 ' || fail "could not turn api_only off for the Devise session middleware"
 
-# …and the harness's env inputs are PUBLISHED from the generated environment
-# files rather than resolved in the initializer. THE SPLIT IS FLEET-WIDE:
-# env-var reading, dev/test fallbacks and crash-if-absent fetches live in
-# config/environments/* as Rails custom config, and initializers READ
-# `Rails.configuration.x.kiosk.*`. All seven demos carry it, and this harness
-# — which e2e/README.md presents as the edits an adopter makes — carries it too. The variables themselves stay honourable from the outside:
-# this script exports KIOSK_ISSUER and the audit-sink paths before each boot and
-# the block below is what reads them.
-# BOTH files get the SAME block: the harness only ever boots development, but
-# KIOSK_POW_SECRET must still fail loud if the app is booted outside it, which
-# a development-only block could not do.
-KIOSK_ENV_BLOCK="$FIXTURES/environment_kiosk.rb" ruby -e '
-  block = File.read(ENV.fetch("KIOSK_ENV_BLOCK"))
-  %w[development production].each do |env|
-    path = "config/environments/#{env}.rb"
-    src  = File.read(path)
-    abort "e2e: could not find the closing end in #{path}" unless src =~ /\nend\s*\z/
-    File.write(path, src.sub(/\nend\s*\z/, "\n" + block + "end\n"))
-  end
-' || fail "could not publish the Kiosk env inputs into the generated environment files"
 
 ok "fixtures + generator output staged"
+
+# ─── the origin's environment ───────────────────────────────────────────
+SIGNING_KEY_PEM=$(openssl genrsa 2048 2>/dev/null)
+export KIOSK_SIGNING_KEY_B64=$(echo "$SIGNING_KEY_PEM" | base64)
+export KIOSK_POW_SECRET=$(openssl rand -hex 32)
+export STRIPE_MOCK_URL="http://127.0.0.1:12111"
+export KIOSK_TEST_AUTOCARD=1
+export KIOSK_ISSUER="http://127.0.0.1:$SERVER_PORT"
+export KIOSK_ADDITIONAL_ORIGINS="http://localhost:$SERVER_PORT"
 
 # ─── DB setup ───────────────────────────────────────────────────────────
 
@@ -440,11 +429,6 @@ psql -d "$DB_NAME" -qtA >/dev/null 2>&1 <<SQL || true
 SQL
 ok "live-key uniqueness enforced at the DB; revoked key may re-register"
 
-# ─── signing key for JWKS (kiosk-pop JWTs) ──────────────────────────────
-log "generate signing key for JWKS (kiosk-pop JWTs)"
-SIGNING_KEY_PEM=$(openssl genrsa 2048 2>/dev/null)
-export KIOSK_SIGNING_KEY_B64=$(echo "$SIGNING_KEY_PEM" | base64)
-ok "signing key generated"
 
 # ─── start server ───────────────────────────────────────────────────────
 
@@ -464,10 +448,6 @@ if ! curl -s -o /dev/null http://127.0.0.1:12111/v1/customers; then
   for _ in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:12111/v1/customers && break; sleep 0.3; done
   curl -s -o /dev/null http://127.0.0.1:12111/v1/customers || fail "stripe-mock did not start on 12111"
 fi
-export STRIPE_MOCK_URL="http://127.0.0.1:12111"
-export KIOSK_TEST_AUTOCARD=1
-export KIOSK_ISSUER="http://127.0.0.1:$SERVER_PORT"
-export KIOSK_ADDITIONAL_ORIGINS="http://localhost:$SERVER_PORT"
 # Where the operator's sink writes. Its PRESENCE is what makes the initializer
 # configure a sink at all, so the second boot below (which unsets it) is the
 # default-off proof.

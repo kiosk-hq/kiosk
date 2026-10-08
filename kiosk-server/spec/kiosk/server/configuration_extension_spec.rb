@@ -189,31 +189,16 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
     let(:signing_key) { Kiosk::Server::SigningKey.new(rsa) }
 
-    # Scrub BOTH env vars so these examples behave identically on machines
-    # that keep KIOSK_SIGNING_KEY_B64 in their env (mise.toml [env]) and on
-    # clean ones. Restore-or-delete in ensure so examples that set a var
-    # inside their body don't leak it into later examples.
-    around do |example|
-      original_pem = ENV.delete("KIOSK_SIGNING_KEY_PEM")
-      original_b64 = ENV.delete("KIOSK_SIGNING_KEY_B64")
-      example.run
-    ensure
-      original_pem ? ENV["KIOSK_SIGNING_KEY_PEM"] = original_pem : ENV.delete("KIOSK_SIGNING_KEY_PEM")
-      original_b64 ? ENV["KIOSK_SIGNING_KEY_B64"] = original_b64 : ENV.delete("KIOSK_SIGNING_KEY_B64")
+    it "raises when no key is configured" do
+      expect { Kiosk.configuration.signing_key }
+        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /c.signing_key is not set/)
     end
 
-    it "raises with generation instructions when no key is configured and no env var is set" do
-      expect {
-        Kiosk.configuration.signing_key
-      }.to raise_error(RuntimeError, /KIOSK_SIGNING_KEY_PEM or KIOSK_SIGNING_KEY_B64 is required/)
-    end
-
-    it "memoises the env-resolved key across accesses" do
+    it "does not read the environment" do
       ENV["KIOSK_SIGNING_KEY_PEM"] = rsa.to_pem
-      Kiosk.reset!
-      first  = Kiosk.configuration.signing_key
-      second = Kiosk.configuration.signing_key
-      expect(second).to equal(first)
+      expect { Kiosk.configuration.signing_key }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    ensure
+      ENV.delete("KIOSK_SIGNING_KEY_PEM")
     end
 
     it "accepts a SigningKey instance via the setter" do
@@ -232,25 +217,22 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       }.to raise_error(ArgumentError, /SigningKey or PEM string/)
     end
 
-    it "honours KIOSK_SIGNING_KEY_PEM env var for default resolution" do
-      ENV["KIOSK_SIGNING_KEY_PEM"] = rsa.to_pem
-      Kiosk.reset!
-      expect(Kiosk.configuration.signing_key.kid).to eq(signing_key.kid)
-    end
-
-    it "honours KIOSK_SIGNING_KEY_B64 env var for default resolution" do
-      require "base64"
-      ENV["KIOSK_SIGNING_KEY_B64"] = Base64.strict_encode64(rsa.to_pem)
-      Kiosk.reset!
-      expect(Kiosk.configuration.signing_key.kid).to eq(signing_key.kid)
-    end
-
-    it "Kiosk.reset! drops any configured key (next access without env raises)" do
+    it "Kiosk.reset! drops any configured key" do
       Kiosk.configure { |c| c.signing_key = signing_key }
       Kiosk.reset!
-      expect {
-        Kiosk.configuration.signing_key
-      }.to raise_error(RuntimeError, /KIOSK_SIGNING_KEY_PEM or KIOSK_SIGNING_KEY_B64 is required/)
+      expect { Kiosk.configuration.signing_key }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end
+  end
+
+  describe "pow_secret" do
+    it "refuses a secret shorter than 32 bytes" do
+      expect { Kiosk.configure { |c| c.pow_secret = "short" } }
+        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /at least 32 bytes \(got 5\)/)
+    end
+
+    it "accepts 32 bytes" do
+      Kiosk.configure { |c| c.pow_secret = "x" * 32 }
+      expect(Kiosk.configuration.pow_secret).to eq("x" * 32)
     end
   end
   # ─── K-1610: a lazy STORE default is allocated exactly once ────────────────

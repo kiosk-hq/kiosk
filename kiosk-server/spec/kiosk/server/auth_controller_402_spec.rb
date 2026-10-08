@@ -35,7 +35,7 @@ RSpec.describe "AuthController 402 WWW-Authenticate" do
       c.issuer                  = "https://demo.example"
       c.registration_pow_count  = 1
       c.registration_pow_params = KAT_PARAMS_REGISTER
-      c.pow_secret              = "registration-pow-secret"
+      c.pow_secret              = "registration-pow-secret-at-least-32-bytes"
     end
   end
 

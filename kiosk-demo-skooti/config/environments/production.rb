@@ -1,220 +1,26 @@
-require "active_support/core_ext/integer/time"
-require "openssl"
+# frozen_string_literal: true
 
 Rails.application.configure do
-  # Settings specified here will take precedence over those in config/application.rb.
-
-  # Code is not reloaded between requests.
   config.enable_reloading = false
-
-  # Eager load code on boot for better performance and memory savings (ignored by Rake tasks).
   config.eager_load = true
-
-  # Full error reports are disabled.
   config.consider_all_requests_local = false
-
-  # public/ files carry no digest, so browsers revalidate them against last-modified.
   config.public_file_server.headers = { "cache-control" => "no-cache" }
-
-  # Enable serving of images, stylesheets, and JavaScripts from an asset server.
-  # config.asset_host = "http://assets.example.com"
-
-  # Assume all access to the app is happening through a SSL-terminating reverse proxy.
   config.assume_ssl = true
-
-  # Caddy terminates TLS and sends HSTS (deploy/Caddyfile); the session cookie travels over HTTPS only.
   config.session_store :cookie_store, key: "_#{railtie_name.delete_suffix("_application")}_session", secure: true
-
-  # Log to STDOUT with the current request id as a default log tag.
   config.log_tags = [ :request_id ]
   config.logger   = ActiveSupport::TaggedLogging.logger(STDOUT)
-
-  # Change to "debug" to log everything (including potentially personally-identifiable information!).
   config.log_level = ENV.fetch("RAILS_LOG_LEVEL", "info")
-
-  # Prevent health checks from clogging up the logs.
   config.silence_healthcheck_path = "/up"
-
-  # Don't log any deprecations.
   config.active_support.report_deprecations = false
-
-  # Replace the default in-process memory cache store with a durable alternative.
-  # config.cache_store = :mem_cache_store
-
-  # Enable locale fallbacks for I18n (makes lookups for any locale fall back to
-  # the I18n.default_locale when a translation cannot be found).
   config.i18n.fallbacks = true
-
-  # Do not dump schema after migrations.
   config.active_record.dump_schema_after_migration = false
-
-  # Only use :id for inspections in production.
   config.active_record.attributes_for_inspect = [ :id ]
 
-  # Enable DNS rebinding protection and other `Host` header attacks.
-  # config.hosts = [
-  #   "example.com",     # Allow requests from example.com
-  #   /.*\.example\.com/ # Allow requests from subdomains like `www.example.com`
-  # ]
-  #
-  # Skip DNS rebinding protection for the default health check endpoint.
-  # config.host_authorization = { exclude: ->(request) { request.path == "/up" } }
-
-  # ── Kiosk env inputs ────────────────────────────────────────────────────
-  # ENV is read HERE, per environment, and published as Rails custom config
-  # (Rails.configuration.x.kiosk.*); initializers and lib code read the
-  # config, never ENV, and never raise — each environment's posture lives in
-  # that environment's file. A demo publishes only the keys it reads.
-
-  # The HMAC key every Kiosk PoW challenge is signed with — REQUIRED.
-  # This repo is public, so a shipped fallback would be world-readable:
-  # anyone could mint a self-signed challenge at trivial difficulty and forge
-  # a valid proof, silently turning proof-of-work off.
-  config.x.kiosk.pow_secret = ENV.fetch("KIOSK_POW_SECRET") do
-    raise <<~MSG
-      KIOSK_POW_SECRET is required in production.
-
-      It is the HMAC key every Kiosk PoW challenge is signed with. This repo is
-      public, so a shipped fallback would be world-readable — anyone could mint a
-      self-signed challenge at trivial difficulty and forge a valid proof,
-      silently turning proof-of-work off. Generate a long random value:
-
-        KIOSK_POW_SECRET=$(openssl rand -hex 32)
-    MSG
-  end
-  raise "KIOSK_POW_SECRET must be at least 32 bytes (got #{config.x.kiosk.pow_secret.bytesize}) — generate one with `openssl rand -hex 32`." if config.x.kiosk.pow_secret.bytesize < 32
-
-  # This operator's canonical origin — REQUIRED. It is advertised in
-  # /.well-known/kiosk.json, minted as the `iss` of every Kiosk JWT, and
-  # enforced as the `aud` of every assistant proof-of-possession; a silent
-  # localhost fallback would reject EVERY assistant with "proof audience
-  # mismatch" — a total, silent auth outage from one unset variable.
-  config.x.kiosk.issuer = ENV.fetch("KIOSK_ISSUER") do
-    raise <<~MSG
-      KIOSK_ISSUER is required in production.
-
-      It is this operator's canonical origin: advertised in
-      /.well-known/kiosk.json, minted as the `iss` of every Kiosk JWT, and
-      enforced as the `aud` of every assistant proof-of-possession. Falling
-      back to localhost here would reject EVERY assistant with "proof
-      audience mismatch".
-
-      Set it to the origin agents actually dial:
-        KIOSK_ISSUER=https://<this-demo>.demo.kiosk.tech
-    MSG
-  end
-
-  # ── Postgres role names ─────────────────────────────────────────────────
-  # `app_role` is the non-owner role a request-scoped session drops into when
-  # `enforce_db_role` is on; the `SET LOCAL ROLE` expires with the transaction, so
-  # nothing switches back. `system_role` is deployment vocabulary for the
-  # privileged role a DBA grants ownership to — nothing in kiosk-server or
-  # kiosk-rls reads it at runtime, so both names resolve to one default. WHICH
-  # roles a database actually has is deployment
-  # posture rather than a demo mode, so the names are resolved here with every
-  # other env input and the initializer reads the config, never ENV
-  # (ENV-CONFIG-PLACEMENT). Nothing in this repo SETS either variable: they are
-  # the seam an adopter whose database names its roles differently would use,
-  # and this file is where they would name them.
-  config.x.kiosk.app_role    = ENV.fetch("KIOSK_APP_ROLE",    "app_role")
-  config.x.kiosk.system_role = ENV.fetch("KIOSK_SYSTEM_ROLE", "app_role")
-
-  # KYC broker trust. NO pinned fallback key in production: the operator
-  # trusts ONLY an explicitly supplied broker public key, and with none set the
-  # engine's KycVerifier fails closed at the wire. The intake secret has no
-  # default either; it must equal the value the broker holds for THIS
-  # operator — the broker keys its registry by the operator_id the intake body
-  # carries, so the two sides pair by value, never by variable name.
-  config.x.kiosk.prove_public_key_pem = ENV["KIOSK_PROVE_PUBLIC_KEY_PEM"]
-  config.x.kiosk.prove_intake_secret  = ENV["KIOSK_PROVE_INTAKE_SECRET"]
-
-  # The Ed25519 key offline unlock/rental tokens are signed with — REQUIRED.
-  #
-  # There is deliberately NO fallback to the dev keypair at
-  # config/dev_unlock_key.pem. Its private half is
-  # world-readable in this public repo, so signing production tokens with it
-  # would let anyone with a clone mint a token every provisioned lock accepts —
-  # past reserve, past payment, past the ownership check, past KYC. It is a
-  # physical-access credential: the blast radius is a vehicle, not a row.
-  config.x.kiosk.unlock_signing_key_pem = ENV.fetch("KIOSK_UNLOCK_SIGNING_KEY_PEM") do
-    raise <<~MSG
-      KIOSK_UNLOCK_SIGNING_KEY_PEM is required in production.
-
-      It is the Ed25519 key this operator signs offline unlock/rental tokens
-      with; every lock verifies against its public half. The dev keypair at
-      config/dev_unlock_key.pem ships in this public repo, so falling back to
-      it would let anyone with a clone mint a token every provisioned lock
-      accepts. Generate a fresh key — and provision the locks with ITS public
-      half:
-
-        KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
-    MSG
-  end
-  # Fail at boot, not at the first unlock: a value that does not parse — or
-  # carries only the public half — would otherwise 500 the first start_rental,
-  # which is a request some human is standing next to a scooter waiting on.
-  begin
-    unlock_key = OpenSSL::PKey.read(config.x.kiosk.unlock_signing_key_pem)
-    unless unlock_key.oid == "ED25519"
-      raise "KIOSK_UNLOCK_SIGNING_KEY_PEM must be an Ed25519 key (got #{unlock_key.oid}) — the locks verify Ed25519 signatures; generate one with `openssl genpkey -algorithm ed25519`."
+  # config/dev_unlock_key.pem ships in a public repo: anyone could mint a token every lock accepts.
+  config.after_initialize do
+    dev_key = OpenSSL::PKey.read(Rails.root.join("config/dev_unlock_key.pem").read)
+    if Kiosk.configuration.unlock_signing_key.public_to_der == dev_key.public_to_der
+      raise "KIOSK_UNLOCK_SIGNING_KEY_PEM is the public dev key; generate one with `openssl genpkey -algorithm ed25519`"
     end
-    unlock_key.private_to_pem # raises unless the PRIVATE half is there
-  rescue OpenSSL::PKey::PKeyError => e
-    raise "KIOSK_UNLOCK_SIGNING_KEY_PEM does not parse as an Ed25519 PRIVATE key PEM (#{e.message}) — generate one with `openssl genpkey -algorithm ed25519`."
   end
-
-  # And refuse the SHIPPED DEV KEY ITSELF. The three checks above only prove
-  # the supplied value is *an* Ed25519 private key — pasting the world-
-  # readable config/dev_unlock_key.pem into the variable satisfies every one
-  # of them, and production boots signing tokens anyone with a clone can
-  # mint. Requiring the variable (above) closed the SILENT path to that key;
-  # this closes the explicit one, which is a plausible reaction to a boot
-  # that demands a PEM nobody has generated yet. Same refusal the demo's own
-  # test issuer keeps (script/prove_test_issuer.rb, where a dev-key fallback
-  # will not arm under a production env), one layer down.
-  #
-  # Compared on the PUBLIC half in DER, never on PEM text: one key
-  # re-serialised (raw vs PKCS#8, CRLF, a stray trailing newline) is a
-  # different string and the same credential.
-  dev_unlock_key_der =
-    begin
-      OpenSSL::PKey.read(Rails.root.join("config/dev_unlock_key.pem").read).public_to_der
-    rescue OpenSSL::PKey::PKeyError, Errno::ENOENT
-      # No dev key, or one that does not parse: nothing anybody could sign with.
-      nil
-    end
-  if unlock_key.public_to_der == dev_unlock_key_der
-    raise <<~MSG
-      KIOSK_UNLOCK_SIGNING_KEY_PEM is the DEV keypair shipped at
-      config/dev_unlock_key.pem — refusing to boot production with it.
-
-      Its PRIVATE half is world-readable in this public repo, so every
-      unlock/rental token signed with it can be forged by anyone with a
-      clone — past reserve, past payment, past the ownership check, past
-      KYC. It is a physical-access credential: the blast radius is a
-      vehicle, not a row. Supplying that key explicitly re-opens exactly
-      what requiring this variable closed.
-
-      Generate a FRESH key — and provision the locks with ITS public half:
-
-        KIOSK_UNLOCK_SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
-    MSG
-  end
-
-  # NEVER in production: the Stripe autocard test shim (a completed
-  # SetupIntent simulated without a hosted card-entry step) is pinned OFF
-  # here — the live demo runs the real hosted flow. Dev/test honour the flag.
-  config.x.kiosk.test_autocard = false
-
-  # Payment-provider credentials — REQUIRED by the initializer, which refuses
-  # to boot with neither. Deliberately NO placeholder here, unlike dev and
-  # test: a shipped `sk_test_…` placeholder boots an origin that ADVERTISES
-  # `pay` in its discovery document and then fails at the first charge, with a
-  # human waiting on it. A configured mock base URL is the one exception, and it
-  # is not a fallback — pointing a production process at a local stripe-mock is
-  # an explicit act, and it is what the eager-load gate does to boot this demo
-  # without carrying a key.
-  config.x.kiosk.stripe_mock_url   = ENV["STRIPE_MOCK_URL"].presence
-  config.x.kiosk.stripe_secret_key = ENV["STRIPE_SECRET_KEY"].presence ||
-                                     (config.x.kiosk.stripe_mock_url ? "sk_test_mock" : nil)
 end

@@ -273,27 +273,8 @@ namespace :check do
   desc <<~DESC
     Query-toll PoW demo (KIOSK_POW_MODE=demo): 402 → solve.py → 200, wrong nonce → 403.
 
-    RUNS AT TOY PARAMETERS BY DEFAULT — Equihash n=96 k=5, `KIOSK_POW_DIFFICULTY`'s
-    `low`. That is a sub-second solve, which is what keeps this task runnable in
-    CI and on a laptop, and it is NOT the toll a real operator charges.
-
-    To exercise the SHIPPED parameters — n=168 k=7, kiosk-pow-equihash's own
-    default and what the hosted atablefor serves:
-
-      KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow
-
-    Budget ~10 s and ~1.3 GiB of RSS PER PROOF from the reference solver
-    (bench/README.md, measured on one M-series laptop core) — that gibibyte is
-    that solver's sorted-nonce table, not a floor these params impose on every
-    solver. The flow pays that toll MORE THAN ONCE: registration is tolled too,
-    and script/equihash_register.rb solves it transparently for each identity
-    the flow mints. So the run COUNTS every solve and prints the total beside
-    its verdict instead of promising a number typed here. The task
-    prints the (n, k) it actually ran at, at boot and again beside its verdict,
-    so a recording can never leave a viewer guessing which toll they watched
-    being paid.
-
-    Requires python3 + numpy.
+    atablefor tolls at Equihash n=168 k=7 (~10 s and ~1.3 GiB per proof on the
+    reference solver). Requires python3 + numpy.
   DESC
   task :pow do
     # Requirement: python3 with numpy (the equihash solver is vectorised).
@@ -303,21 +284,6 @@ namespace :check do
       abort "numpy not found. Install with: pip install numpy\n" \
             "Then re-run: bundle exec rake check:pow"
     end
-
-    # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
-    #
-    # `check:pow` is the only end-to-end exercise of the proof-of-work plane in
-    # this repo, and it runs at `Kiosk::Pow::Equihash::Difficulty`'s `low` default while the
-    # shipped kiosk-pow-equihash default — and the hosted deploy — are n=168
-    # k=7, so a reader watching this task must be told which of the two they
-    # are seeing.
-    #
-    # So: the ambient `KIOSK_POW_DIFFICULTY` is FORWARDED to the server this
-    # task spawns, and the pair is read off {Kiosk::Pow::Equihash::Difficulty} — the same module
-    # the initializer reads — rather than typed here, then printed at boot and
-    # beside the verdict.
-    pow_level  = Kiosk::Pow::Equihash::Difficulty.level
-    pow_params = Kiosk::Pow::Equihash::Difficulty.params
 
     require "resolv"
 
@@ -347,38 +313,11 @@ namespace :check do
     kiosk_issuer = server_url
 
     puts "\n── Starting atablefor (PoW demo) on #{server_url} ──"
-    puts "  toll: Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
-         "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == Kiosk::Pow::Equihash::Difficulty::DEFAULT ? ", the default" : ""})"
-    if Kiosk::Pow::Equihash::Difficulty.high?
-      puts "  These are the SHIPPED parameters — the toll a real operator charges. " \
-           "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
-           "GiB is its table, not a floor these params impose on every solver. " \
-           "The flow solves MORE than one proof — registration is tolled too — " \
-           "and the count it actually paid is printed beside the verdict."
-    else
-      puts "  TOY parameters. The shipped kiosk-pow-equihash default is n=168 k=7 — " \
-           "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."
-    end
-
-    # ONE owner for the toy counter's location. The server and the driver are
-    # two processes that never meet; this task spawns both, so it is the only
-    # place the path can be stated once. Wiped HERE — the beat asserts exact
-    # counts, and the initializer must not truncate a store at boot in a file
-    # an adopter copies.
-    bad_proof_db = File.expand_path("../../tmp/bad-proof.sqlite3", __dir__)
-    require "fileutils"
     require "shellwords"
-    FileUtils.mkdir_p(File.dirname(bad_proof_db))
-    FileUtils.rm_f(bad_proof_db)
 
     env_vars = {
       "KIOSK_ISSUER"           => kiosk_issuer,
       "KIOSK_POW_MODE"         => "demo",
-      "KIOSK_BAD_PROOF_DB"     => bad_proof_db,
-      # Forwarded, not defaulted: `spawn` with an env Hash still inherits the
-      # parent's environment, but naming it here is what makes the server's
-      # level and the level printed above the SAME read.
-      "KIOSK_POW_DIFFICULTY"   => pow_level,
     }
     server_pid = spawn(
       env_vars,
@@ -417,29 +356,19 @@ namespace :check do
     # Run script/pow_flow.rb.
     flow_rb = File.expand_path("../../script/pow_flow.rb", __dir__)
     puts "\n── Running script/pow_flow.rb ──"
-    env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer} " \
-          "KIOSK_BAD_PROOF_DB=#{bad_proof_db.shellescape}"
+    env = "SERVER_URL=#{server_url} KIOSK_ISSUER=#{kiosk_issuer}"
     result = atablefor_run_flow(flow_rb, env)
 
     # ── Assertions ──
-    puts "\n── PoW assertions (Equihash n=#{pow_params[:n]} k=#{pow_params[:k]}, " \
-         "KIOSK_POW_DIFFICULTY=#{pow_level}) ──"
     failures = []
 
-    # WHICH TOLL WAS ACTUALLY PAID, asserted off the WIRE rather than
-    # printed off this task's own read. A banner naming the parameters is a
-    # claim; the challenge the server issued is evidence, and it is what follows
-    # an operator override or a policy this task cannot see. Without this the
-    # opt-in path could silently keep running at `low` and the recording would
-    # still say `high`.
     served_params = result["challenge_params"].is_a?(Hash) ? result["challenge_params"] : {}
-    if served_params["n"].to_i == pow_params[:n] && served_params["k"].to_i == pow_params[:k]
-      puts "  ✓  toll served at the level asked for: n=#{served_params["n"]} k=#{served_params["k"]}" \
-           "#{Kiosk::Pow::Equihash::Difficulty.high? ? " — the SHIPPED parameters" : " (toy; KIOSK_POW_DIFFICULTY=high for n=168 k=7)"}"
+    puts "\n── PoW assertions (Equihash n=#{served_params["n"]} k=#{served_params["k"]}) ──"
+    if served_params["n"].to_i == 168 && served_params["k"].to_i == 7
+      puts "  ✓  toll served at n=168 k=7"
     else
-      failures << "the wire served n=#{served_params["n"].inspect} k=#{served_params["k"].inspect}, " \
-                  "but KIOSK_POW_DIFFICULTY=#{pow_level} asks for n=#{pow_params[:n]} k=#{pow_params[:k]}"
-      puts "  ✗  toll parameters — served #{served_params.inspect}, wanted #{pow_params.inspect}"
+      failures << "the wire served n=#{served_params["n"].inspect} k=#{served_params["k"].inspect}, expected n=168 k=7"
+      puts "  ✗  toll parameters — served #{served_params.inspect}, wanted n=168 k=7"
     end
 
     # HOW MANY PROOFS THIS RUN ACTUALLY PAID FOR, counted by the driver where
@@ -483,32 +412,8 @@ namespace :check do
       puts "  ✗  wrong nonce returned #{result["http_wrong_nonce"].inspect}"
     end
 
-    bpc = result["bad_proof_count"].to_i
-    if bpc >= 1
-      puts "  ✓  on_bad_proof penalized: bad_proof_count=#{bpc}"
-    else
-      failures << "expected bad_proof_count>=1 after wrong nonce, got #{bpc}"
-      puts "  ✗  bad_proof_count=#{bpc} (expected >=1)"
-    end
-
-    # PER-IDENTITY: a second, innocent identity registered by the flow
-    # must be untouched by the first identity's wrong nonce — one bad client
-    # must not raise anyone else's count.
-    obpc = result["other_bad_proof_count"].to_i
-    if obpc.zero?
-      puts "  ✓  per-identity counter: innocent identity's bad_proof_count=0"
-    else
-      failures << "expected other_bad_proof_count=0 (per-identity), got #{obpc}"
-      puts "  ✗  other_bad_proof_count=#{obpc} (expected 0 — counter not per-identity)"
-    end
-
     if failures.empty?
-      puts "\n  All PoW assertions passed at Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
-           "(KIOSK_POW_DIFFICULTY=#{pow_level})."
-      unless Kiosk::Pow::Equihash::Difficulty.high?
-        puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow` " \
-             "runs the same flow at the shipped n=168 k=7."
-      end
+      puts "\n  All PoW assertions passed."
     else
       puts "\n  FAILED:"
       failures.each { |f| puts "    - #{f}" }

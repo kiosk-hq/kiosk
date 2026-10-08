@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **`c.signing_key` is required and no longer read from `KIOSK_SIGNING_KEY_*`; `c.pow_secret=` refuses a secret under 32 bytes.**
+
 - 2026-10-09: **`Kiosk::Owned` and `Kiosk.current_user_id`**; `Kiosk::Settlement.own` replaces `of_current_principal`, and `SessionContext.require_open!` is gone.
 
 - 2026-10-09: **`c.handlers` is removed**: classes including `Kiosk::Handler` register themselves, and the engine loads `app/controllers/kiosk/` on every reload.

@@ -45,8 +45,7 @@ not a security one (spec §4.2): `GET /kiosk/schema` is public, so there is
 nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. Registration is priced
-with one Equihash proof-of-work whose cost the operator picks with the
-`KIOSK_POW_DIFFICULTY` knob; skooti ships the `low` setting, lighter than the
+with one Equihash proof-of-work at n=96 k=5, lighter than the
 bundled solver's own default (see `before-after.md`) — the "I'm not a
 fly-by bot" cost. Renting the motorcycle
 additionally demands a signed KYC attestation carrying the required boolean

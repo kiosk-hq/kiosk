@@ -123,7 +123,7 @@ RSpec.describe "Kiosk-PoW header path (ADR-0022)" do
       c.roles             = %i[customer]
       c.agent_idp         = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
       c.reputation_policy = policy
-      c.pow_secret        = "test-pow-secret"
+      c.pow_secret        = "test-pow-secret-of-at-least-32-bytes"
       # THE SHAPE CHECK IS ON — the K-1399 default — AND THAT IS THIS FILE'S
       # OTHER ASSERTION (K-1410). These examples exercise the ADR-0022 header
       # transport with a RETIRED backend: argon2id, whose solution is a decimal

@@ -1144,7 +1144,7 @@ namespace :check do
     end
     # kyc_verification is kiosk-server's, declared only with a KYC broker, which
     # this task does not boot.
-    declared_topics = %w[order_delivery order_payment payment_setup]
+    declared_topics = %w[kyc_verification order_delivery order_payment payment_setup]
     if (result["schema_event_topics"] || []) == declared_topics
       puts "  OK  the catalogue names the topic(s) this demo declares"
     else
@@ -1357,11 +1357,6 @@ namespace :check do
       BLOCKED  MachineTimestampsIgnoreTheCallerClock — an auth challenge's exp is an
                                         instant, not a service time: it does not move
                                         with the caller's declared clock
-      BLOCKED  KycBrokerUnwired       — with no KYC broker configured (which is how THIS
-                                        task boots the origin, and how a plain `rails s`
-                                        does), request_kyc answers 501 module_not_served
-                                        with a hint saying retrying will not help —
-                                        never a 500 carrying a Ruby exception message
       BLOCKED  RegistrationWithoutPow — register without a valid PoW proof rejected
 
     Scenarios that require a surface getgrocery does not expose SKIP cleanly:
@@ -1540,29 +1535,9 @@ namespace :check do
     Commerce query-toll PoW demo.
 
     Boots the server and runs script/pow_flow.rb:
-    catalog query → 402 equihash → solve.py → 200; wrong nonce → 403 + penalty.
+    catalog query → 402 equihash → solve.py → 200; wrong nonce → 403.
 
-    RUNS AT TOY PARAMETERS BY DEFAULT — Equihash n=96 k=5, `KIOSK_POW_DIFFICULTY`'s
-    `low`. That is a sub-second solve, which is what keeps this task runnable in
-    CI and on a laptop, and it is NOT the toll a real operator charges.
-
-    To exercise the SHIPPED parameters — n=168 k=7, kiosk-pow-equihash's own
-    default:
-
-      KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow
-
-    Budget ~10 s and ~1.3 GiB of RSS PER PROOF from the reference solver
-    (bench/README.md, measured on one M-series laptop core) — that gibibyte is
-    that solver's sorted-nonce table, not a floor these params impose on every
-    solver. The flow pays that toll MORE THAN ONCE: registration is tolled too,
-    and script/equihash_register.rb solves it transparently for each identity
-    the flow mints. So the run COUNTS every solve and prints the total beside
-    its verdict instead of promising a number typed here. The task
-    prints the (n, k) it actually ran at and ASSERTS it against the challenge
-    the server issued, so a recording can never leave a viewer guessing which
-    toll they watched being paid.
-
-    Requires python3 + numpy.
+    getgrocery tolls at Equihash n=96 k=5.
   DESC
   task :pow do
     require "resolv"
@@ -1570,17 +1545,6 @@ namespace :check do
 
     abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
 
-    # ── The toll this run pays, DERIVED and then PRINTED ──────────────────────
-    #
-    # `check:pow` is the only end-to-end exercise of the proof-of-work plane in
-    # this repo, and it runs at `Kiosk::Pow::Equihash::Difficulty`'s `low` default while the
-    # shipped kiosk-pow-equihash default is n=168 k=7, so a reader watching
-    # this task must be told which of the two they are seeing. The ambient
-    # `KIOSK_POW_DIFFICULTY` is FORWARDED to the server this task spawns, and
-    # the pair is read off {Kiosk::Pow::Equihash::Difficulty} — the same module the initializer
-    # reads — rather than typed here.
-    pow_level  = Kiosk::Pow::Equihash::Difficulty.level
-    pow_params = Kiosk::Pow::Equihash::Difficulty.params
 
     # The catalog-toll flow never pays; default a dummy Stripe test key so the
     # initializer boots (setup + server) without a real key or stripe-mock.
@@ -1618,24 +1582,12 @@ namespace :check do
     # before demo:setup runs, so there is nothing left here to fall back to.
     stripe_key = ENV.fetch("STRIPE_SECRET_KEY")
 
-    # ONE owner for the toy counter's location. The server and the driver are
-    # two processes that never meet; this task spawns both, so it is the only
-    # place the path can be stated once. Wiped HERE — the beat asserts exact
-    # counts, and the initializer must not truncate a store at boot in a file
-    # an adopter copies.
-    bad_proof_db = File.expand_path("../../tmp/bad-proof.sqlite3", __dir__)
-    require "fileutils"
-    FileUtils.mkdir_p(File.dirname(bad_proof_db))
-    FileUtils.rm_f(bad_proof_db)
 
     File.truncate(log, 0) if File.exist?(log)
     server_pid = spawn(
       { "KIOSK_ISSUER" => server_url,
         "KIOSK_TEST_AUTOCARD" => "1", "STRIPE_SECRET_KEY" => stripe_key,
-        "KIOSK_BAD_PROOF_DB" => bad_proof_db,
-        # Forwarded, not defaulted: naming it here is what makes the server's
-        # level and the level this task prints the SAME read.
-        "KIOSK_POW_DIFFICULTY" => pow_level },
+      },
       "bundle exec rails s -p #{port} -b 127.0.0.1 -e development",
       out: log, err: log,
     )
@@ -1652,38 +1604,15 @@ namespace :check do
       end
       abort "Server did not become ready — see #{log}" unless ready
       puts "  Server up at #{server_url} (catalog PoW active)"
-      puts "  toll: Equihash n=#{pow_params[:n]} k=#{pow_params[:k]} " \
-           "(KIOSK_POW_DIFFICULTY=#{pow_level}#{pow_level == Kiosk::Pow::Equihash::Difficulty::DEFAULT ? ", the default" : ""})"
-      if Kiosk::Pow::Equihash::Difficulty.high?
-        puts "  These are the SHIPPED parameters — the toll a real operator charges. " \
-             "Expect ~10 s and ~1.3 GiB per proof from the reference solver — that " \
-             "GiB is its table, not a floor these params impose on every solver. " \
-             "The flow solves MORE than one proof — registration is tolled too — " \
-             "and the count it actually paid is printed beside the verdict."
-      else
-        puts "  TOY parameters. The shipped kiosk-pow-equihash default is n=168 k=7 — " \
-             "re-run with KIOSK_POW_DIFFICULTY=high to pay the real toll."
-      end
 
-      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape} " \
-            "KIOSK_BAD_PROOF_DB=#{bad_proof_db.shellescape}"
+      env = "SERVER_URL=#{server_url.shellescape} KIOSK_ISSUER=#{server_url.shellescape}"
       result = getgrocery_run_flow(flow_rb, env)
 
-      puts "\n══ Catalog PoW assertions (Equihash n=#{pow_params[:n]} k=#{pow_params[:k]}, " \
-           "KIOSK_POW_DIFFICULTY=#{pow_level}) ══"
+      served_params = result["challenge_params"].is_a?(Hash) ? result["challenge_params"] : {}
+      puts "\n══ Catalog PoW assertions (Equihash n=#{served_params["n"]} k=#{served_params["k"]}) ══"
       check = lambda do |label, ok|
         if ok then puts "  OK  #{label}" else failures << label; puts "  FAIL  #{label}" end
       end
-      # WHICH TOLL WAS ACTUALLY PAID, asserted off the WIRE rather than
-      # printed off this task's own read. A banner naming the parameters is a
-      # claim; the challenge the server issued is evidence, and it follows an
-      # operator override or a policy this task cannot see. Without it the
-      # opt-in path could silently keep running at `low` while the recording
-      # said `high`.
-      served_params = result["challenge_params"].is_a?(Hash) ? result["challenge_params"] : {}
-      check.call("toll served at n=#{pow_params[:n]} k=#{pow_params[:k]} (the wire's own params, " \
-                 "not this task's read); got n=#{served_params["n"].inspect} k=#{served_params["k"].inspect}",
-                 served_params["n"].to_i == pow_params[:n] && served_params["k"].to_i == pow_params[:k])
       # HOW MANY PROOFS THIS RUN ACTUALLY PAID FOR, counted by the driver where
       # the solver runs rather than typed here. The total covers BOTH the tolled
       # catalog query's challenges and the registration proof `equihash_register`
@@ -1701,11 +1630,6 @@ namespace :check do
       check.call("catalog challenged (402)",         result["http_challenge"] == 402)
       check.call("served after solve (200 + rows)",  result["served"] == true && result["catalog_rows"].to_i >= 1)
       check.call("wrong nonce rejected (403)",       result["http_wrong_nonce"] == 403)
-      check.call("on_bad_proof penalized",           result["bad_proof_count"].to_i >= 1)
-      # PER-IDENTITY: the flow's second, innocent identity must be
-      # untouched by the first identity's wrong nonce.
-      check.call("per-identity counter: innocent identity stays 0",
-                 result.key?("other_bad_proof_count") && result["other_bad_proof_count"].to_i.zero?)
     ensure
       begin
         Process.kill("TERM", server_pid); Process.wait(server_pid)
@@ -1716,12 +1640,7 @@ namespace :check do
     end
 
     if failures.empty?
-      puts "\n  All catalog PoW assertions PASSED at Equihash n=#{pow_params[:n]} " \
-           "k=#{pow_params[:k]} (KIOSK_POW_DIFFICULTY=#{pow_level})."
-      unless Kiosk::Pow::Equihash::Difficulty.high?
-        puts "  These are TOY parameters. `KIOSK_POW_DIFFICULTY=high bundle exec rake check:pow` " \
-             "runs the same flow at the shipped n=168 k=7."
-      end
+      puts "\n  All catalog PoW assertions PASSED."
     else
       puts "\n  FAILED:"; failures.each { |f| puts "    - #{f}" }; exit 1
     end

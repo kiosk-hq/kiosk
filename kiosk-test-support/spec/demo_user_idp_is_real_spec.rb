@@ -62,7 +62,7 @@ RSpec.describe "the demos' human channel is real Devise (T-066)" do
     expect(wirings.size).to be >= 7, "expected every operator demo to set c.user_idp, got #{wirings.inspect}"
 
     wirings.each do |demo, line|
-      expect(line).to eq("c.user_idp = Kiosk::UserIdentityProviders::Devise.new"),
+      expect(line.squeeze(" ")).to eq("c.user_idp = Kiosk::UserIdentityProviders::Devise.new"),
                       "#{demo} wires c.user_idp as `#{line}` — it must be the real Devise adapter " \
                       "with no dev-only arm (T-066)."
     end

@@ -71,7 +71,7 @@ User.find_or_initialize_by(id: HUMAN_ID).tap do |u|
   u.save!
 end
 # The card is a stripe-mock fixture, so it is seeded only against the mock.
-if Rails.configuration.x.kiosk.stripe_mock_url.present?
+if ENV["STRIPE_MOCK_URL"]
   Kiosk::PaymentProviders::Stripe::CustomerRecord.find_or_create_by!(user_id: HUMAN_ID) do |sc|
     sc.customer_id = HUMAN_CUS_ID
   end

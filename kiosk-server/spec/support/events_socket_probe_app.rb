@@ -119,7 +119,7 @@ Kiosk.configure do |c|
   # Every verb on this origin is tolled, so every scenario below also says
   # the stream is not (spec Section 8.5.3).
   c.reputation_policy = TOLL_EVERY_VERB
-  c.pow_secret = "probe-pow-secret"
+  c.pow_secret = "probe-pow-secret-of-at-least-32-bytes"
 end
 
 # The shipped re-authorisation period is thirty seconds. Shortened to one so a

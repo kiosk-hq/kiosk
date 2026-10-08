@@ -40,7 +40,6 @@ deploy/README.md ¦ 7 demos ¦ from: git ls-files 'kiosk-demo-*/config/initializ
 deploy/README.md ¦ six demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | grep -v getgrocery | wc -l ¦ the reset script reseeds every operator demo except getgrocery, which is reseeded additively.
 deploy/README.md ¦ two documents ¦ the two catalogue documents are named in full in the same sentence, so the numeral adds no claim the sentence does not already carry.
 
-deploy/env/atablefor.env.example ¦ 2 proofs ¦ the reputation schedule's first-contact cost, same figure and same reason as the checklist entry above.
 
 e2e/README.md ¦ four tables ¦ the database tables a settled mandate trail writes; the sentence enumerates them and no file list counts rows of a schema.
 
@@ -73,7 +72,6 @@ kiosk-pow-equihash/README.md ¦ 10 proofs ¦ an illustrative quotation of what a
 kiosk-server/README.md ¦ two endpoints ¦ the two reserved endpoints are named in full in the same sentence, and they are routes of this engine rather than a file set.
 
 deploy/CHECKLIST.md ¦ six demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | grep -v skooti | wc -l ¦ the operator demos other than skooti, which is the only one with firmware locks.
-deploy/README.md ¦ seven demos ¦ from: git grep -l 'Kiosk::Pow::Equihash::Difficulty' -- 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the demos that honour the difficulty knob, counted by the initializers that read it.
 deploy/README.md ¦ 8 apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ everything provisioned on the box, one environment template each.
 deploy/README.md ¦ three documents ¦ the always-free documents are named in full in the same sentence; they are routes of the engine rather than a file set.
 deploy/env/getgrocery.env.example ¦ eight apps ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l ¦ the Puma sizing paragraph's population, one template per app.

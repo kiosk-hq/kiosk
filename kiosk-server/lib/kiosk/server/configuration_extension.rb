@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "kiosk/server/errors"
 require "kiosk/server/verb_vocabulary"
 
 module Kiosk
@@ -128,24 +129,11 @@ module Kiosk
       end
       attr_accessor :skill_sha256
 
-      # RSA signing key used by the bundled kiosk-pop IdP to issue and
-      # verify JWTs (the account-binding ceremony's token poll mints
-      # through the same IdP).
-      #
-      # Resolution order:
-      #   1. explicit value set via `Kiosk.configure { |c| c.signing_key = ... }`
-      #      (accepts a {Kiosk::Server::SigningKey} or a PEM string)
-      #   2. PEM from the `KIOSK_SIGNING_KEY_PEM` env var, or base64-encoded
-      #      PEM from `KIOSK_SIGNING_KEY_B64` (single-line friendly for
-      #      mise.toml / dotenv)
-      #   3. otherwise RAISES with generation instructions. It RAISES rather
-      #      than generating a key for you, on purpose: a fresh per-boot key
-      #      silently invalidates every issued JWT — agents are forced to
-      #      re-register and lose their Stripe Customer card associations.
-      #
-      # @return [Kiosk::Server::SigningKey]
+      # The RSA key the engine signs and verifies its JWTs with. Required; a
+      # SigningKey or a PEM string.
       def signing_key
-        @signing_key ||= default_signing_key
+        @signing_key || raise(Errors::ConfigurationError,
+                              "c.signing_key is not set. Generate one with `openssl genrsa 2048`.")
       end
 
       def signing_key=(value)
@@ -538,11 +526,18 @@ module Kiosk
         @reputation_policy
       end
 
-      # HMAC key used to sign/verify challenges. Required when reputation_policy
-      # is set; a ConfigurationError is raised at gate-call time if it is nil.
-      # In production read from an env var / secrets manager:
-      #   c.pow_secret = ENV.fetch("KIOSK_POW_SECRET")
-      attr_accessor :pow_secret
+      # The HMAC key proof-of-work challenges are signed with, at least 32 bytes.
+      attr_reader :pow_secret
+
+      def pow_secret=(value)
+        if value.to_s.bytesize < 32
+          raise Errors::ConfigurationError,
+                "c.pow_secret must be at least 32 bytes (got #{value.to_s.bytesize}). " \
+                "Generate one with `openssl rand -hex 32`."
+        end
+
+        @pow_secret = value
+      end
 
       # Challenge TTL in seconds. Default 300 (5 minutes).
       attr_writer :pow_ttl
@@ -683,28 +678,6 @@ module Kiosk
         caps << "pay"     if has_pay
         caps << "events"  if has_events
         caps.freeze
-      end
-
-      def default_signing_key
-        pem = ENV["KIOSK_SIGNING_KEY_PEM"]
-        return Kiosk::Server::SigningKey.from_pem(pem) if pem && !pem.empty?
-
-        encoded = ENV["KIOSK_SIGNING_KEY_B64"]
-        if encoded && !encoded.empty?
-          require "base64"
-          return Kiosk::Server::SigningKey.from_pem(Base64.decode64(encoded))
-        end
-
-        raise <<~MSG
-          KIOSK_SIGNING_KEY_PEM or KIOSK_SIGNING_KEY_B64 is required.
-
-          Generate one with:
-            openssl genrsa 2048 | base64
-
-          Then set it in your environment or mise.toml:
-            [env]
-            KIOSK_SIGNING_KEY_B64 = "LS0tLS1CRUdJTi..."
-        MSG
       end
     end
   end

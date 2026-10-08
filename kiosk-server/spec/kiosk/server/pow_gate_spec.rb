@@ -22,7 +22,7 @@ RSpec.describe Kiosk::Server::PowGate do
     Kiosk::Reputation::Backends.reset!
   end
 
-  let(:secret)   { "test-pow-secret-for-unit-tests" }
+  let(:secret)   { "test-pow-secret-for-unit-tests-32b" }
   let(:identity) { build_identity }
 
   # ─── shared helper: a policy that ALWAYS demands an argon2id challenge ──

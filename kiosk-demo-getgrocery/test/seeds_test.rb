@@ -8,12 +8,11 @@ class SeedsTest < ActiveSupport::TestCase
   FIXTURE  = "cus_getgrocery_saved_card"
 
   def seed_with(mock_url)
-    config   = Rails.configuration.x.kiosk
-    previous = config.stripe_mock_url
-    config.stripe_mock_url = mock_url
+    previous = ENV["STRIPE_MOCK_URL"]
+    ENV["STRIPE_MOCK_URL"] = mock_url
     capture_io { Rails.application.load_seed }
   ensure
-    config.stripe_mock_url = previous
+    ENV["STRIPE_MOCK_URL"] = previous
   end
 
   test "against stripe-mock the account holder has the fixture card" do

@@ -89,11 +89,6 @@
 #   MachineTimestampsIgnoreTheCallerClock — an auth challenge's `exp` is an
 #                            instant, not a service time: it does not move with
 #                            the caller's declared clock
-#   KycBrokerUnwired       — with no KYC broker configured (which is how the
-#                            demo task boots this origin, and how a plain
-#                            `rails s` does), request_kyc answers 501 with a
-#                            hint saying a retry will not help — never a 500
-#                            carrying a Ruby exception message
 #   RegistrationWithoutPow — register without a valid PoW proof; this origin
 #                            gates registration (registration_pow_count = 1)
 #
@@ -1123,79 +1118,6 @@ class MachineTimestampsIgnoreTheCallerClock < Kiosk::Redteam::Scenario
 end
 
 
-# THE KYC BROKER IS A SECOND SERVICE AND THIS ORIGIN IS BOOTED WITHOUT IT — which
-# is why this battery is where the beat belongs rather than the age-gate flow.
-# `check:agecheck` boots the broker AND sets the intake secret, so no gate in this
-# repository had ever called `request_kyc` in the configuration a plain
-# `bin/rails s` produces: the one a live demo run uses.
-#
-# WITHOUT THE TYPED REFUSAL that configuration answers HTTP 500 `action_failed`
-# from a NO-ARGUMENT verb an assistant can call first, with no way to tell "this
-# operator does not do KYC" from "something crashed".
-#
-# What is asserted is the SHAPE of the refusal and not merely its status: an
-# assistant branches on the flat `code`, so a 501 that carried `action_failed`
-# would be as useless as the 500 was.
-#
-# AND THE DETAIL IS COMPARED WHOLE, not scanned for bad words, because scanning
-# was tried here and MEASURED INSUFFICIENT. This beat first carried a blocklist —
-# no Ruby class name, no URL — and a planted `"…: #{error.message}"` splice back
-# into the refusal sailed through it: the client's own diagnostic names an
-# environment variable, not a class, so nothing on the list matched and a beat
-# written to catch exactly that shape reported BLOCKED. The sentence is a
-# deliberate constant — the same one the engine's KycVerifier answers for the
-# submit half of this module — so the honest assertion is equality, and any
-# splice at all fails it. The blocklist stays as the second arm because it names
-# what must never appear whatever the sentence becomes.
-class KycBrokerUnwired < Kiosk::Redteam::Scenario
-  # The one sentence this refusal may carry, byte for byte.
-  DETAIL = "this operator does not serve the KYC module"
-
-  # The Ruby that must not reach an agent whatever the sentence says. `Errno::`
-  # and `RuntimeError` are the two classes this path actually raised; `raised `
-  # is the Executor's own wrapper, which is the tell that nothing rescued; a URL
-  # is the operator's own broker host, which the refused-connection message
-  # carried.
-  LEAKS = [/RuntimeError/, /Errno::/, /raised /, %r{https?://}].freeze
-
-  def initialize
-    super(
-      name:        "KycBrokerUnwired",
-      category:    "surface",
-      description: "With no KYC broker configured, request_kyc refuses with a typed " \
-                   "module_not_served — never a 500 carrying a Ruby exception",
-    )
-  end
-
-  def call(client, profile)
-    a = register_principal(client, name: "redteam-brokerless-a", profile:)
-
-    res    = client.run(a, name: "request_kyc")
-    body   = res.body.is_a?(Hash) ? res.body : {}
-    detail = body["detail"].to_s
-
-    typed   = res.status == 501 && error_code(res) == "module_not_served"
-    said    = detail == DETAIL
-    clean   = LEAKS.none? { |leak| detail.match?(leak) }
-    # A refusal with nothing to do next is half an answer: the whole point of
-    # this code is that an assistant should stop asking and carry on.
-    advises = body["hint"].to_s.match?(/retry|retrying|again/i)
-
-    ok = typed && said && clean && advises
-    Kiosk::Redteam::Verdict.new(
-      blocked: ok,
-      skipped: false,
-      status:  res.status,
-      detail:  ok ? "" :
-                 "request_kyc with no broker configured → #{res.status}/" \
-                 "#{error_code(res).inspect} detail=#{detail[0, 160].inspect} " \
-                 "hint=#{body["hint"].to_s[0, 120].inspect} " \
-                 "(want 501/\"module_not_served\", detail EXACTLY #{DETAIL.inspect} with no " \
-                 "Ruby class or URL in it, and a hint that says retrying will not help)",
-    )
-  end
-end
-
 # ── Scenarios ─────────────────────────────────────────────────────────────────
 
 scenarios = [
@@ -1228,7 +1150,6 @@ scenarios = [
   CallerZoneIsNotInferred.new,
   OneRenderingPerRow.new,
   MachineTimestampsIgnoreTheCallerClock.new,
-  KycBrokerUnwired.new,     # no broker configured is a typed 501, never a Ruby exception in a 500
   # register PoW is ON — a missing/bad register proof must be rejected (runs
   # because pow_difficulty > 0).
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,

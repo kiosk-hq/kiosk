@@ -41,15 +41,6 @@ RSpec.describe "the solver/verifier load boundary" do
     expect(status).to be_success, "requiring the verifier loaded open3:\n#{out}"
   end
 
-  it "does give the difficulty knob to the verifier — it is ENV-only and costs nothing" do
-    out, status = ruby(<<~RUBY)
-      require "kiosk/pow/equihash"
-      exit(Kiosk::Pow::Equihash::Difficulty.respond_to?(:params) ? 0 : 1)
-    RUBY
-
-    expect(status).to be_success, out
-  end
-
   it "defines `solve` when the solver is required" do
     out, status = ruby(<<~RUBY)
       require "kiosk/pow/equihash/solver"

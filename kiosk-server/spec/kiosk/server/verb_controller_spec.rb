@@ -153,7 +153,7 @@ RSpec.describe Kiosk::Server::VerbController do
         end.new
         Kiosk.configure do |c|
           c.reputation_policy = policy
-          c.pow_secret        = "test-pow-secret"
+          c.pow_secret        = "test-pow-secret-of-at-least-32-bytes"
         end
       end
 

@@ -6,7 +6,7 @@
 # a transition the assistant did not ask for. Everything else on this origin
 # answers a call; this answers a salon looking at its book.
 #
-# It is deliberately NOT in `c.handlers` and NOT drawn under the mount. An
+# It is deliberately NOT a Kiosk handler and NOT drawn under the mount. An
 # operator's own pages are its own business — the wire neither knows nor cares
 # that this is what moved the row — and putting it on the wire would teach the
 # opposite: that a push has to be paired with a verb.

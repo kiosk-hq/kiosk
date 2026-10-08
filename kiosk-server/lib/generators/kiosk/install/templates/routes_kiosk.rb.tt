@@ -19,7 +19,7 @@
 mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 
 # ── The verbs this origin serves ────────────────────────────────────────────
-# One line per verb declared by a controller named in `c.handlers`. The prefix
+# One line per verb your handler controllers declare. The prefix
 # is your `c.mount_path`, `/kiosk` unless you set another:
 #
 #   get  "/kiosk/catalog",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }

@@ -1,59 +1,9 @@
 # frozen_string_literal: true
 
-# The Rails engine — THE PROTOCOL PLANE, and only the protocol plane. A host
-# that puts
+# The Rails engine. `mount Kiosk::Server::Engine => Kiosk.configuration.mount_path`
+# draws the protocol plane under the mount and appends the discovery documents
+# to the host's root routes. The operator routes its own verbs.
 #
-#   mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-#
-# in its config/routes.rb gets every path whose shape is the SPEC's rather than
-# the operator's:
-#
-#   * the reserved wire     — GET schema (PUBLIC), POST pay
-#   * the OpenAPI document  — GET openapi.json (PUBLIC)
-#   * the kiosk-pop plane   — GET auth/challenge, POST auth/{register,login,revoke}
-#   * JWKS                  — GET .well-known/jwks.json (under the mount)
-#   * KYC attestation       — POST agents/kyc
-#   * the account-binding ceremony — the RFC 8628 claim wire, the link/claim/
-#     unlink endpoints, and the two HTML pages (verify, «Link an assistant»)
-#   * the discovery surface — /agents.txt, /agents.json, /auth.md,
-#     /.well-known/{agent-configuration,kiosk.json,api-catalog}
-#
-# IT DRAWS NO OPERATOR VERB, and that absence is deliberate rather than an
-# omission. The operator writes one explicit route per registered verb in their
-# own `config/routes/kiosk.rb`, GET for a query and POST for an action — see the
-# end of the `routes do` table below for the whole argument, and
-# {VerbController} for the shape of the line. The mount is drawn FIRST in that
-# file, so every protocol path here wins by Rails' own first-match.
-#
-# The discovery routes are ROOT-relative — the agents.txt v1.0 standard and
-# RFC 8615 (.well-known) place them at the origin root, so they cannot live
-# under a mount prefix. They are installed into the HOST's route set by the
-# `kiosk-server.root_discovery_routes` initializer below via
-# `Rails.application.routes.append`, GATED on the engine actually being
-# mounted: merely loading the gem must not add routes to a host that chose
-# not to mount. (`isolate_namespace` scopes CONSTANTS, not URLs, so an
-# engine installing root paths on the host is fine.)
-#
-# THE MOUNT IS THE ONLY WAY A HOST DRAWS THIS PLANE. Copying these paths into
-# the host's own routes file is not a second supported spelling: it is a table
-# the operator then owns, of paths that are the spec's, which this gem can no
-# longer keep in step. Rails' first-match still decides between two lines that do
-# reach the same path — a route drawn ABOVE the mount wins — and that is the
-# fact the mount-goes-first ordering rests on, not a route an operator writes.
-#
-# A path under the mount that this engine does NOT draw falls THROUGH to the
-# host's later routes — the mounted route set answers `X-Cascade: pass` and the
-# host's router carries on — which is what lets an operator draw their own verbs
-# below the mount at all. MEASURED on a booted demo, 2026-09-07: with the mount
-# first, `GET /kiosk/nope/nope` reached a host route drawn after it.
-#
-# The engine also auto-injects HeadersMiddleware into the host stack
-# (initializer below) — that happens on load, mounted or not, and it goes
-# OUTSIDE Rails' exception renderers so a routing 404 or an unhandled 500
-# under the mount carries the §3.6 headers too.
-#
-# The `kiosk:install` generator ships in lib/generators/kiosk/install.
-
 # `rails` first: rails/engine leans on ActiveSupport core_ext that only the
 # top-level entry point loads.
 require "rails"
@@ -150,86 +100,24 @@ module Kiosk
         app.config.filter_parameters += FILTERED_PARAMETERS
       end
 
-      # THE VERBS ARE REGISTERED BY THE ENGINE, not by the operator: an origin
-      # that leaves registration to the operator serves an empty catalog, a
-      # 404 wire and empty capabilities.
-      # `to_prepare` runs once at boot in production and again after every code
-      # reload in development, which is exactly the cadence a registry built
-      # from reloadable classes needs: the operator NAMES their handler
-      # controllers (`c.handlers`) and never writes reload plumbing.
-      # {HandlerRegistrations} rebuilds — drop, then re-declare — so a verb
-      # deleted from a controller leaves the catalog and stops being served,
-      # which a re-declare-only pass would miss. Runs for every host: with no
-      # handlers declared it empties the registries. Note the order Rails fixes
-      # — this runs BEFORE `eager_load!` — so in production a handler left out
-      # of the list is still registered afterwards, by being read; it is
-      # development, and every reload, where the omission shows.
+      # Rebuilds the registries at boot and after every development reload.
       config.to_prepare do
-        # FIRST, and the order matters: {SchemaSlots} latches "this origin has
-        # a data-derived slot" as declarations are read, so it has to be
-        # cleared BEFORE the rebuild below re-reads them. Clearing it after
-        # would throw away the latch the rebuild had just set, and an origin
-        # whose only proc lives in a reloaded class would fall back to
-        # boot-once caching without saying so.
         Kiosk::Server::SchemaSlots.reset!
         Kiosk::Server::HandlerRegistrations.reload!
-        # The catalog `GET <mount>/schema` serves is DERIVED from the registry
-        # that line just rebuilt, so it is invalidated in the same breath — a
-        # development reload that adds, renames or re-describes a verb must
-        # not leave the previous document (or its digest, which is the
-        # cache-busting version in every discovery link) in memory. The
-        # re-derivation itself is below, in `after_initialize`, and lazily on
-        # first read afterwards; this is only the drop.
         Kiosk::Server::SchemaDocument.reset!
-        # And the derived OpenAPI document, which is memoized per origin off
-        # the same registry. Its memo key already carries
-        # {SchemaDocument.digest}, so this drop is belt-and-braces rather than
-        # load-bearing — but a reload that leaves EITHER derived document in
-        # memory is the bug this hook exists to prevent, and the two should be
-        # dropped in the same breath they are derived from.
         Kiosk::Server::OpenApi.reset!
       end
 
-      # THE `schema` CATALOG AND ITS DIGEST, DERIVED ONCE, AT BOOT, BY THE
-      # PROCESS THAT WILL SERVE THEM.
-      #
-      # HERE, not in each demo, and not at deploy time:
-      #
-      #   * IN THE GEM. One host is one demo, so per-process derivation is
-      #     per-host derivation for free, and seven demos do not each carry a
-      #     copy of this.
-      #   * AT `after_initialize`, which Rails runs AFTER eager loading — so a
-      #     production host whose handler controllers register by being READ is
-      #     fully registered by now. `to_prepare` alone would derive from a
-      #     half-built registry in production.
-      #   * NOT PRE-GENERATED AND NOT COMMITTED. The verb roster is not the
-      #     only input: a `kiosk-server` PATCH bump can change the bytes too,
-      #     so the digest covers the registry, the origin config AND the gem
-      #     version ({SchemaDocument.digest_inputs}). Deriving in-process means
-      #     there is no second artefact on disk to drift from — drift is
-      #     impossible by construction rather than caught by a guard.
-      #
-      # It runs in EVERY environment, test included, deliberately: an
-      # initializer that skipped the test env would switch the check off in the
-      # one place it catches a mistake early.
+      # Derives the `schema` catalog after eager loading, in every environment.
       config.after_initialize do
         Kiosk::Server::SchemaDocument.derive!
       end
 
-      # One honest line when this origin has NO verbs at all — the state that
-      # answers `GET <mount>/schema` with an empty catalog and advertises
-      # `"capabilities": []`. Emitted from `after_initialize`, which runs AFTER
-      # eager loading, so a production app whose handlers register by being
-      # eager-loaded is not falsely accused.
       config.after_initialize do
-        next unless Kiosk.configuration.handlers.empty?
         next unless Kiosk::Server::Actions.known.empty? && Kiosk::Server::Queries.known.empty?
 
-        message =
-          "[kiosk-server] no queries or actions are registered: GET " \
-          "#{Kiosk.configuration.mount_path}/schema will answer with an empty catalog and the " \
-          "discovery documents will advertise no capabilities. Name your handler controllers " \
-          "in the initializer — Kiosk.configure { |c| c.handlers = %w[Kiosk::CatalogController] }."
+        message = "[kiosk-server] no queries or actions are registered. Put handler controllers " \
+                  "(classes including Kiosk::Handler) in #{Kiosk::Server::HandlerRegistrations::HANDLERS_DIR}."
         ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
       end
 
@@ -674,43 +562,8 @@ module Kiosk
         post "auth/assistants/update", to: "assistants#update"
         post "auth/assistants/unlink", to: "assistants#unlink"
 
-        # ── AND NOTHING FOR THE OPERATOR'S OWN VERBS ──────────────────────
-        #
-        # This table ENDS here, and the absence is the design. A mount that
-        # draws the PROTOCOL is an ordinary Rails engine; a mount that draws
-        # the OPERATOR'S verbs BY PATTERN — a catch-all `get "/:kiosk_verb"` /
-        # `post "/:kiosk_verb"` pair, matching ANY legal verb name and
-        # resolving it against the registry at request time — is route magic,
-        # and it is magic wherever the pattern is written, the operator's own
-        # routes file included.
-        #
-        # So the operator writes ONE EXPLICIT ROUTE PER VERB, in
-        # `config/routes/kiosk.rb`, with the METHOD FOLLOWING THE KIND — GET
-        # for a query, POST for an action — pinning the name with
-        # `defaults: { kiosk_verb: "<name>" }`. {VerbController} reads the name
-        # from that parameter.
-        #
-        # WHAT THIS COSTS, stated rather than implied: a verb added in
-        # development is not served until the routes file gains a line — which
-        # is a routes-file edit, and Rails does reload those. And a path under
-        # the mount that no line reaches matches NOTHING, so the answer is the
-        # host framework's ordinary 404 — Rails' HTML page, with no `code` and
-        # no `hint`, exactly as at any other unrouted path. The mount-path
-        # middleware still stamps the Section 3.6 version headers on it. An
-        # operator who wants the wire's own `404 verb_not_found` there may draw
-        # a catch-all ACTION of their own; nothing here requires one, because
-        # an assistant reads `GET <endpoint>/schema` and has no business
-        # dialing a name that is not in it.
-        # WHAT IT BUYS: `rails routes` lists the origin's actual wire, and the
-        # method a verb answers to is a fact you can read instead of a fact the
-        # dispatcher decides.
-        #
-        # THE RESERVED PLANE ABOVE WINS BY FIRST-MATCH, because the operator's
-        # file draws the mount FIRST and their verbs after it. That ordering
-        # is the backstop, not the control: an operator verb named `schema` or
-        # `pay` is REFUSED AT DECLARATION by {HandlerMixin::RESERVED_NAMES}, at
-        # boot, with the name and the reason — which is where they actually
-        # meet the rule.
+        # The operator's verbs are routed by the operator, one line each, in
+        # config/routes/kiosk.rb.
       end
     end
   end

@@ -5783,7 +5783,7 @@ E2E_FIXTURES = {
     rule:  :per_demo,
     pairs: nil,
     why:   "NO COUNTERPART, and the absence is the point. It is the salon's back office — an " \
-           "operator-side page OUTSIDE the mount and outside `c.handlers` — that marks an " \
+           "operator-side page OUTSIDE the mount and not a Kiosk handler — that marks an " \
            "appointment confirmed and pushes the `appointment_confirmed` topic. The harness needs " \
            "it because an event stream is only worth anything for a transition the caller did not " \
            "ask for, and every other surface here answers a request. The demos reach the same " \

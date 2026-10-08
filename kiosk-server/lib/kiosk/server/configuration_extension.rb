@@ -57,40 +57,6 @@ module Kiosk
         @enforce_db_role ||= false
       end
 
-      # The handler controllers that declare this origin's wire verbs — the
-      # classes that `include Kiosk::Handler`. NAME
-      # them; Kiosk loads and registers them.
-      #
-      #   Kiosk.configure do |c|
-      #     c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]
-      #   end
-      #
-      # A verb registers when its class body is read, and development does not
-      # eager-load `app/` — nothing would reference a handler controller,
-      # because the wire reaches it THROUGH the registry. Without this list the
-      # catalog is empty, the first `query`/`run` 404s, and the discovery
-      # documents (whose `capabilities` are computed from the live registry)
-      # advertise nothing. The engine drives the list from a `to_prepare` block
-      # ({HandlerRegistrations}), so registration is complete at boot in every
-      # environment and rebuilt after every reload in development — an edited,
-      # added or REMOVED verb all land without a restart.
-      #
-      # Strings, not constants, are the intended form: the list is re-resolved
-      # by name on each reload, and a Class object handed over here belongs to
-      # the boot generation. A class is accepted and reduced to its name.
-      #
-      # Do not rely on eager loading instead of this list. Rails runs the
-      # engine's `to_prepare` BEFORE `eager_load!` (Finisher:
-      # `run_prepare_callbacks` then `eager_load!`), so in production an
-      # unlisted handler still registers — by being read — and appears to work,
-      # while the same app in development serves it not at all and every reload
-      # drops it again. List every handler controller and the two environments
-      # agree.
-      attr_writer :handlers
-      def handlers
-        @handlers ||= []
-      end
-
       # Capabilities the server advertises in `/.well-known/kiosk.json`.
       #
       # Members are MODULE NAMES — the parts of the protocol this origin

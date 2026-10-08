@@ -414,17 +414,6 @@ module Kiosk
           declaration.instance_eval(&block) if block
           declaration.validate!(owner: self, name: name)
 
-          # HELD ON THE CLASS, REGISTERED BY {#kiosk_register!} — the same two
-          # steps a verb takes, and for the reason a verb takes them. Declaring
-          # STRAIGHT into the process-wide registry looked simpler and was
-          # wrong: a class body is read again on every Zeitwerk reload and
-          # again by an eager load after a lazy one, and the second read met
-          # its own first and raised «already declared on this origin» at boot.
-          # Worse in the other direction — a topic DELETED from a controller
-          # would have stayed in the catalogue until the process restarted,
-          # because nothing re-derives a registry that is only ever added to.
-          # The engine's `to_prepare` drops all three registries and rebuilds
-          # them from `c.handlers`; topics ride that same rebuild now.
           kiosk_topic_declarations[name] = {
             name: name,
             reach: declaration.reach_value || :principal,

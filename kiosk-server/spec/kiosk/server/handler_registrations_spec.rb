@@ -1,14 +1,5 @@
 # frozen_string_literal: true
 
-# {Kiosk::Server::HandlerRegistrations} — the rebuild the engine runs from
-# `to_prepare`, which is what makes a mixin-declared verb reachable in an
-# environment that does not eager-load (development). The end-to-end proof that
-# the ENGINE drives it, across a real reload cycle in a booted app, is
-# handler_registration_boot_spec.rb; this file pins the semantics.
-
-# An operator's handler controllers — the consumer's side, as everywhere else in
-# these specs. spec_helper resets every registry before each example, so
-# nothing here is registered until the code under test registers it.
 class SpecRegistrationsQueriesController < ApplicationController
   include Kiosk::Handler
 
@@ -33,9 +24,6 @@ class SpecRegistrationsActionsController < ApplicationController
   end
 end
 
-# Used by ONE example, which deletes a declaration from it to stand in for a
-# Zeitwerk reload that dropped a verb. Kept separate so the mutation cannot
-# reach another example under a random seed.
 class SpecRegistrationsDoomedController < ApplicationController
   include Kiosk::Handler
 
@@ -52,94 +40,70 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
   let(:queries) { Kiosk::Server::Queries }
   let(:actions) { Kiosk::Server::Actions }
 
-  describe ".reload!" do
-    it "registers the verbs of every declared handler, from an empty registry" do
-      expect(queries.known).to be_empty
-      expect(actions.known).to be_empty
+  around do |example|
+    saved = described_class.handlers.dup
+    described_class.handlers.clear
+    example.run
+  ensure
+    described_class.handlers.replace(saved)
+  end
 
-      described_class.reload!(%w[SpecRegistrationsQueriesController SpecRegistrationsActionsController])
+  def register(*names)
+    names.each { |name| described_class.handlers << name }
+    described_class.reload!
+  end
+
+  describe ".add" do
+    it "is called by include Kiosk::Handler" do
+      klass = stub_const("SpecRegistrationsIncludedController", Class.new(ApplicationController))
+      klass.include(Kiosk::Handler)
+
+      expect(described_class.handlers).to include("SpecRegistrationsIncludedController")
+    end
+  end
+
+  describe ".reload!" do
+    it "registers the verbs of every handler, from an empty registry" do
+      register("SpecRegistrationsQueriesController", "SpecRegistrationsActionsController")
 
       expect(queries.known).to contain_exactly("spec_browse")
       expect(actions.known).to contain_exactly("spec_post")
     end
 
-    it "registers a handler the wire can actually reach" do
-      described_class.reload!(%w[SpecRegistrationsQueriesController])
+    it "registers a handler the wire can reach" do
+      register("SpecRegistrationsQueriesController")
 
       expect(queries.fetch("spec_browse")).to be_a(Kiosk::Server::HandlerDispatch)
       expect(queries.describe("spec_browse")[:description]).to eq("Lists the board.")
     end
 
-    it "accepts a class but keeps only its NAME, so a reload cannot pin a stale generation" do
-      described_class.reload!([SpecRegistrationsQueriesController])
-
-      expect(queries.known).to contain_exactly("spec_browse")
-    end
-
-    it "is idempotent — running twice leaves one registration per verb" do
-      2.times { described_class.reload!(%w[SpecRegistrationsQueriesController]) }
+    it "is idempotent" do
+      register("SpecRegistrationsQueriesController")
+      described_class.reload!
 
       expect(queries.known).to eq(["spec_browse"])
     end
 
     it "drops a verb the handler no longer declares" do
-      described_class.reload!(%w[SpecRegistrationsDoomedController])
+      register("SpecRegistrationsDoomedController")
       expect(queries.known).to eq(["spec_doomed"])
 
-      # What a Zeitwerk reload does: the next generation of the class declares
-      # one verb fewer. The in-process suite has no reloader, so the missing
-      # declaration is the faithful stand-in.
       SpecRegistrationsDoomedController.kiosk_declarations.delete("spec_doomed")
-      described_class.reload!(%w[SpecRegistrationsDoomedController])
-
-      expect(queries.known).to be_empty
-    end
-
-    it "registers nothing when no handlers are declared" do
-      described_class.reload!([])
-
-      expect(queries.known).to be_empty
-      expect(actions.known).to be_empty
-    end
-
-    it "reads Kiosk.configuration.handlers when given no argument" do
-      Kiosk.configure { |c| c.handlers = %w[SpecRegistrationsActionsController] }
-
       described_class.reload!
 
-      expect(actions.known).to contain_exactly("spec_post")
+      expect(queries.known).to be_empty
     end
 
-    it "refuses a name that does not resolve, naming the slot" do
-      expect { described_class.reload!(%w[Kiosk::NoSuchController]) }
-        .to raise_error(Kiosk::Server::Errors::ConfigurationError,
-                        /handlers names "Kiosk::NoSuchController"/)
-    end
+    it "forgets a handler whose class no longer exists" do
+      register("Kiosk::NoSuchController")
 
-    it "refuses a class that does not include the mixin" do
-      expect { described_class.reload!(%w[ApplicationController]) }
-        .to raise_error(Kiosk::Server::Errors::ConfigurationError,
-                        /does not include Kiosk::Handler/)
-    end
-
-    it "refuses an anonymous class — it could not be re-resolved after a reload" do
-      anonymous = Class.new(ApplicationController) { include Kiosk::Handler }
-
-      expect { described_class.reload!([anonymous]) }
-        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /anonymous class/)
+      expect(described_class.handlers).to be_empty
     end
   end
 
-  # ── ONE NAME, ONE KIND (spec §8.3) ───────────────────────────────────────
-  #
-  # This is the CROSS-CLASS half: two SEPARATE controller classes cannot see
-  # each other, and this pass has just rebuilt both registries from a cleared
-  # state, which is the first moment the whole surface exists at once. The
-  # SAME-CLASS half — possible only since K-921 — is refused at declaration
-  # time and lives in handler_mixin_spec.rb.
   describe "one name, one kind" do
     it "refuses a name declared as both a query and an action" do
-      Object.const_set(:SpecCollidingQueriesController, Class.new(ApplicationController) do
+      stub_const("SpecCollidingQueriesController", Class.new(ApplicationController) do
         include Kiosk::Handler
         kind :query
         description "A name two kinds want."
@@ -147,7 +111,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
         output_schema true
         def spec_collide = render(json: [])
       end)
-      Object.const_set(:SpecCollidingActionsController, Class.new(ApplicationController) do
+      stub_const("SpecCollidingActionsController", Class.new(ApplicationController) do
         include Kiosk::Handler
         kind :action
         description "The same name, the other kind."
@@ -156,24 +120,14 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
         def spec_collide = render(json: {})
       end)
 
-      expect {
-        described_class.reload!(%w[SpecCollidingQueriesController SpecCollidingActionsController])
-      }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /spec_collide.*BOTH a query and an action/m)
-    ensure
-      Object.send(:remove_const, :SpecCollidingQueriesController)
-      Object.send(:remove_const, :SpecCollidingActionsController)
-    end
-
-    it "is silent when the two registries share no name" do
-      expect {
-        described_class.reload!(%w[SpecRegistrationsQueriesController SpecRegistrationsActionsController])
-      }.not_to raise_error
+      expect { register("SpecCollidingQueriesController", "SpecCollidingActionsController") }
+        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /spec_collide.*BOTH a query and an action/m)
     end
   end
 
   describe ".clear!" do
     it "empties both registries" do
-      described_class.reload!(%w[SpecRegistrationsQueriesController SpecRegistrationsActionsController])
+      register("SpecRegistrationsQueriesController", "SpecRegistrationsActionsController")
       expect(queries.known).not_to be_empty
       expect(actions.known).not_to be_empty
 

@@ -14,9 +14,7 @@ module Kiosk
     # the operator owns, where class-level macros bind to the next-defined method
     # and the handler is an ordinary controller action; `kind :query` / `kind
     # :action` is what decides which registry it lands in, and the same class may
-    # declare both. See {Kiosk::Handler}. The operator names those classes in
-    # `Kiosk.configuration.handlers` and {HandlerRegistrations} — driven by the
-    # engine's `to_prepare` — puts them here.
+    # declare both. See {Kiosk::Handler} and {HandlerRegistrations}.
     #
     # A handler runs inside a GUC-scoped {SessionContext}, so
     # `kiosk.current_user_id()` and friends are available for per-user scoping.

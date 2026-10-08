@@ -12,85 +12,14 @@ require "kiosk/server/wire_controller"
 
 module Kiosk
   module Server
-    # THE PER-VERB WIRE. One endpoint per registered verb, under the mount:
+    # The per-verb wire, one endpoint per registered verb under the mount:
     #
     #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
     #   POST <endpoint>/<action-name>          an action — JSON body
     #
-    # so `curl -H "Authorization: Bearer …" https://…/kiosk/catalog` is the
-    # whole invocation, and the HTTP method carries the read/write semantics:
-    # queries are GET, actions are POST. This is the ONLY way to reach an
-    # operator verb — a path that names no route matches nothing, so it is the
-    # host framework's ordinary 404, with no `code` and no `hint`.
-    #
-    # ── Where the routes come from ───────────────────────────────────────
-    #
-    # THE OPERATOR DRAWS THEM, one explicit line per registered verb, in their
-    # own `config/routes/kiosk.rb`:
-    #
-    #   get  "/kiosk/catalog",     to: "kiosk/server/verb#show",
-    #        defaults: { kiosk_verb: "catalog" }
-    #   post "/kiosk/place_order", to: "kiosk/server/verb#create",
-    #        defaults: { kiosk_verb: "place_order" }
-    #
-    # The METHOD follows the KIND, which is what the protocol already says a
-    # verb IS, and `defaults:` pins the name this controller reads. Nothing
-    # about the request path is inferred: `params[:kiosk_verb]` is a constant
-    # the route supplies.
-    #
-    # Hand-drawn routes buy an operator the one thing they most want out of a
-    # routes file — `rails routes` lists the verbs themselves — and they cost
-    # three things, each answered where it lands:
-    #
-    #   * declared-but-unrouted is a REAL bug class: every declared verb needs
-    #     its route. At runtime an unrouted verb is a 404 like any other path.
-    #   * the reserved plane wins by first-match, because the operator
-    #     draws `mount Kiosk::Server::Engine` FIRST and their verbs after it —
-    #     and, more strongly, {HandlerMixin::RESERVED_NAMES} refuses such a
-    #     declaration at boot.
-    #   * a verb added in development needs a line in the routes file.
-    #     Rails reloads routes when a routes file changes, so the reload is
-    #     still automatic; writing the line is not.
-    #
-    # ── Order of the gates ───────────────────────────────────────────────
-    #
-    #   1. identity            401  IdentityResolution
-    #   2. the verb exists     404  the registry (`verb_not_found` + name-hint)
-    #      …or wrong method    405  the OTHER registry, carrying `Allow:`
-    #      (both are reached only when a ROUTE hands this controller a name the
-    #      registry disagrees with — an origin whose routes and declarations
-    #      have drifted. A name with no route at all never gets here.)
-    #   3. the arguments       400  ArgumentDecoder + the declared input_schema,
-    #                               then the Kiosk-Timezone header
-    #   4. the toll            402  PowGate, via WireController#execute_wire
-    #
-    # IDENTITY RESOLVES FIRST because it is a precondition of every gate below
-    # it. The toll is priced against the caller's reputation, the argument
-    # check runs against a descriptor the caller may or may not be allowed to
-    # reach, and the handler runs inside a session bound to the identity — so
-    # resolving it first is the straight code path and any other order
-    # re-derives it later anyway.
-    #
-    # It is ORDINARY GATE ORDER and not an anti-enumeration measure: the order
-    # withholds nothing. `GET <endpoint>/schema` is PUBLIC and
-    # `/.well-known/api-catalog` hyperlinks every verb unauthenticated, so the
-    # complete list of verbs is one anonymous GET away whatever this controller
-    # answers first.
-    #
-    # ── The answer ───────────────────────────────────────────────────────
-    #
-    # SUCCESS is the handler's rendered payload, VERBATIM; ERRORS are RFC 9457
-    # problem documents. Neither is here: both seams live in {WireController},
-    # because there is exactly ONE answer shape on this wire and
-    # `GET <endpoint>/schema` and `POST <endpoint>/pay` answer it too. What this
-    # class adds to its parent is the name resolution, the method fork and the
-    # argument channel — nothing about how a response is written.
+    # Gates, in order: identity (401), the verb (404/405), the arguments
+    # (400), the toll (402). Answers and refusals are written by {WireController}.
     class VerbController < WireController
-      # A verb name (spec §8.1). Also the route constraint, so a path that
-      # cannot be a verb name never reaches this controller and stays a routing
-      # 404 — `/kiosk/Foo`, `/kiosk/foo-bar`, `/kiosk/9lives`.
-      NAME_SEGMENT = /[a-z][a-z0-9_]*/
-
       # GET <endpoint>/<query-name>
       def show
         serve(:query)
@@ -114,34 +43,8 @@ module Kiosk
         execute_wire(command: command, args: args, identity: identity, name: name)
       end
 
-      # The verb's published descriptor, or a refusal that says something
-      # useful — and the two refusals are deliberately DIFFERENT STATUSES.
-      #
-      # A ROUTE IS WHAT REACHES THIS METHOD, so the ordinary «that verb does
-      # not exist» case never arrives here at all: a path no line in the
-      # operator's routes file draws matches nothing and is the host
-      # framework's plain 404, with no `code` and no `hint`, exactly as at any
-      # other unrouted path.
-      #
-      # What DOES arrive here is a route whose `defaults: { kiosk_verb: … }`
-      # names something this origin does not register — a typo in the routes
-      # file, or a verb whose declaration was removed while its route stayed.
-      # That is `404 verb_not_found`, carrying the registry's own hint, which
-      # lists the registered names so a mistyped `listings` for
-      # `browse_listings` self-corrects without a schema round-trip. It is NOT
-      # `not_found`: that code means an ARGUMENT addressed something absent
-      # (spec §9.1 rule 2), and an assistant recovers from the two differently
-      # — re-read the catalogue, versus tell the human it is not there.
-      #
-      # A route drawn with the method of the OTHER KIND — `GET` at an action,
-      # `POST` at a query — is `405 method_not_allowed` with `Allow:` naming the
-      # method the verb does accept. The verb EXISTS, and answering a 404 of
-      # either kind would be a lie about it; RFC 9110 §15.5.6 already has the
-      # status for exactly this. It discloses nothing: `GET <endpoint>/schema`
-      # publishes every name and its kind to ANYONE, so a 405 tells a caller
-      # only what it could have read first. Note what this is NOT: dialing a
-      # verb with the wrong method at a path nobody drew that pair for reaches
-      # no route, so it is the plain 404 above and carries no `Allow` at all.
+      # 404 verb_not_found for an unknown name; 405 with `Allow:` for a known
+      # name called with the other kind's method.
       def descriptor_for!(command, name)
         registry, other = command == :query ? [Queries, Actions] : [Actions, Queries]
         return registry.describe(name) if registry.known.include?(name)

@@ -98,7 +98,6 @@ Kiosk.configure do |c|
   # on its own — the wire reaches it THROUGH the registry — so an unnamed class
   # is never autoloaded, the registry stays empty, and `/.well-known/kiosk.json`
   # advertises no capabilities at all.
-  c.handlers = %w[Kiosk::StorefrontController Kiosk::OrdersController]
 
   # Validate the `Kiosk-PoW` header's proofs against the normative PoW schema,
   # so a malformed proof gets a clear 400 instead of a silent re-issued 402

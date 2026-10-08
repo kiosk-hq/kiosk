@@ -53,7 +53,7 @@ module Kiosk
             return Conformance.fail(
               :routes,
               message: "this origin declares no verbs at all, so there is nothing to route. " \
-                       "Either no handler controller is named in `Kiosk.configuration.handlers`, " \
+                       "Either app/controllers/kiosk holds no handler controller, " \
                        "or the registry was read before the engine populated it — build the " \
                        "origin inside the example, not at file load.",
             )

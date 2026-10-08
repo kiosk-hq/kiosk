@@ -6,7 +6,7 @@
 # signing key the physical locks verify against.
 #
 # The verbs themselves are Rails controllers under app/controllers/kiosk/,
-# named in `c.handlers` below, and their writes are Operations under
+# and their writes are Operations under
 # app/operations/. What is left in this file is configuration — the PoW gate,
 # the payment provider, the identity providers, the KYC trust anchors, the
 # unlock key — which is what an initializer is for.
@@ -76,7 +76,6 @@ Kiosk.configure do |c|
   # development reload so an edited verb needs no restart. A verb registers when
   # its class LOADS and nothing loads a handler on its own, so an origin whose
   # controllers are not named here serves nothing at all.
-  c.handlers = %w[Kiosk::FleetController Kiosk::RentalsController]
 
   c.guc_namespace  = "app"
   c.schema         = "kiosk"

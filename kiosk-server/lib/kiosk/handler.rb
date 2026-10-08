@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "kiosk/server/handler_mixin"
+require "kiosk/server/handler_registrations"
 
 module Kiosk
   # Include into a controller of YOUR choosing to declare Kiosk **verbs** — the
@@ -39,39 +40,18 @@ module Kiosk
   #     end
   #   end
   #
-  # ONE CONTROLLER MAY DECLARE BOTH, and the example above does. Which verb kind
-  # reaches a handler is a property of the DECLARATION, not of the class, so a
-  # resource an operator thinks of as one thing — a board you browse and post to
-  # — is one controller. Split it when the domain splits, not because the
-  # framework said so. ({Kiosk::Server::HandlerMixin} carries the rest: the macro
-  # list, and where a `read_only!` guarantee would go if one is ever wanted.)
+  # One controller may declare both kinds. Kiosk imposes no superclass. Put
+  # handlers in app/controllers/kiosk: the engine loads that directory and
+  # every class including Kiosk::Handler registers itself.
   #
-  # Kiosk imposes no superclass — the include is the whole contract. Each
-  # declared method is registered in {Kiosk::Server::Queries} or
-  # {Kiosk::Server::Actions} and dispatched through Rails' own
-  # `Controller.action(…)`, so filters, `rescue_from` and `params` all behave as
-  # they do anywhere else in the app; a query runs inside the wire's GUC-scoped
-  # transaction like any other statement on that connection, so per-principal
-  # scoping (and RLS, where the operator opted in) applies to it. Name the class
-  # in `Kiosk.configuration.handlers` — that list is how the engine finds it,
-  # and it is the only way in.
+  # A descriptor slot may be a proc (`enum: -> { Category.pluck(:slug) }`),
+  # evaluated when the descriptor is served. See {Kiosk::Server::SchemaSlots}.
   #
-  # A DESCRIPTOR SLOT MAY BE A PROC when the constraint is a fact about the
-  # operator's data — `enum: -> { Category.pluck(:slug) }`. It is called when
-  # the descriptor is served rather than when the class body is read (which
-  # happens at `db:create` too), memoized, and refreshed on a short lifetime,
-  # so adding a row publishes itself with no restart and no deploy. See
-  # {Kiosk::Server::SchemaSlots}.
-  #
-  # A large query result opts into cursor pagination with `render_kiosk_page(rows,
-  # next_cursor:, total:)` instead of `render json:`. The BODY is the same bare
-  # array either way — the cursor leaves as an RFC 8288 `Link: …; rel="next"`
-  # response header and the total as `X-Total-Count` (spec §8.4).
-  #
-  # See {Kiosk::Server::HandlerMixin} for the macros.
+  # A large query result paginates with `render_kiosk_page(rows, next_cursor:, total:)`.
   module Handler
     def self.included(base)
       Kiosk::Server::HandlerMixin.install(base)
+      Kiosk::Server::HandlerRegistrations.add(base)
     end
   end
 end

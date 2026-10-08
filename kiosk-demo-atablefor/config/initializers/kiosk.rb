@@ -133,7 +133,6 @@ Kiosk.configure do |c|
   # Ordinary Rails controllers under app/controllers/kiosk/. This line only
   # NAMES them; the engine loads and registers them, re-running after every
   # development reload so an edited verb needs no restart.
-  c.handlers = %w[Kiosk::DiningRoomController Kiosk::BookingsController]
 
   c.guc_namespace  = "app"
   c.schema         = "kiosk"
@@ -242,7 +241,7 @@ Kiosk.configure do |c|
     # this provider's "proven completed action". It MUST NOT be reset to
     # Factors.empty or the policy can never grant relief.
     #
-    # `where(user_id:)` and NOT `Booking.owned_by_current_principal`, which is
+    # `where(user_id:)` and NOT `Booking.own`, which is
     # sitting right there and is the wrong tool: the gate runs BEFORE the
     # Executor opens its SessionContext, so `kiosk.current_user_id()` is not set
     # yet. The principal arrives as the hook's `identity:` argument instead.

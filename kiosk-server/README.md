@@ -11,7 +11,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `VerbController` also serves `POST <mount>/payment_setup` against the payment provider port, and `PaymentSetupController` the page the provider returns the human to; `VerbController` serves `POST <mount>/request_kyc` against the KYC provider port, and `KycCallbackController` the provider's callback; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
-- **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers named in `c.handlers` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
+- **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers in `app/controllers/kiosk/` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
 - **`Kiosk::Server::PaymentClaim`** — the PSP decorator that keeps §11.6's operator half: one capture per payable row, and a paid state anchored to the capture (see [Payments](#payments)).
 - **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `RegistrationPow`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
@@ -79,9 +79,6 @@ Kiosk.configure do |c|
   # sets neither line, and then no token carries a `role` claim.
   c.registration_role = :customer
   c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
-  # The controllers that declare this origin's verbs — see
-  # "Declaring queries and actions". Without them the origin serves no verbs.
-  c.handlers      = %w[Kiosk::CatalogController Kiosk::OrdersController]
   # c.mount_path  = "/kiosk"   # default
   # Optional: receive one event per action invocation — see "The audit sink".
   # Unset by default, and then nothing is emitted and nothing is stored.
@@ -478,29 +475,10 @@ class Kiosk::OrdersController < ApplicationController
 end
 ```
 
-Then **name them in the initializer**. That line is what puts the verbs on the
-wire:
-
-```ruby
-# config/initializers/kiosk.rb
-Kiosk.configure do |c|
-  c.handlers = %w[Kiosk::CatalogController Kiosk::OrdersController]
-end
-```
-
-A verb registers when its controller's class body is read, and nothing in your
-app ever references a handler controller — the wire reaches it *through* the
-registry. Name them and the engine takes it from there: it loads and registers
-them once at boot in production, and again after every code reload in
-development, so an edited, added or removed verb lands without restarting the
-server. You never write reload plumbing, and the catalog is identical in every
-environment.
-
-Name the classes as **strings**, not constants: the list is re-resolved on each
-reload, and a constant written here is the boot generation of the class, stale
-the moment Rails reloads it. A name that does not resolve, or a class that does
-not include the mixin, fails the boot loudly rather than serving a silent
-half-catalog.
+Put handler controllers in `app/controllers/kiosk/`. The engine loads that
+directory at boot and after every development reload, and each class that
+includes `Kiosk::Handler` registers its verbs, so an edited, added or removed
+verb lands without restarting the server.
 
 
 ### What the macros do
@@ -557,20 +535,6 @@ change under a caller between the catalog it read and the call it made.
 **Handler controllers are not routable.** Do not draw a route at one. They are
 reached only through the wire, which is where authentication, the proof-of-work
 gate and the transaction live; a direct request answers 404.
-
-**A handler that is not declared is not there at all.** Declaration happens when
-the class body is read. Rails eager-loads `app/controllers` in production, so a
-handler registers at boot whether or not you listed it — but development
-(`config.eager_load = false`) autoloads on first reference, and nothing
-references a handler controller, so an origin that names none of them serves
-**no verbs at all**: `GET <mount>/schema` returns an empty catalog, every verb
-path answers 404, and `/.well-known/kiosk.json` advertises
-`"capabilities": []` (they are computed from the live registry). `c.handlers` is
-what closes that: the engine registers the listed classes in both load modes and
-rebuilds them on every reload. When the list is empty and eager loading has put
-nothing in the registry either, the gem says so on the log at boot — and the
-only remedy it names is `c.handlers`, because there is no other way in.
-
 
 ### What you get inside a handler
 
@@ -638,13 +602,9 @@ There is no second way to declare a verb — no block you register from an
 initializer. A block there cannot be reloaded, cannot be reached by your
 filters, `rescue_from` or strong parameters, and would teach — in the very file
 an adopter copies — that Rails does not apply to the surface you expose to
-assistants. Write a controller, name it in `c.handlers`, and the initializer
+assistants. Write a controller in `app/controllers/kiosk/`, and the initializer
 keeps what an initializer is for: the identity providers, the payment provider,
 the PoW gates.
-
-Every registration is rebuilt from `c.handlers` on each `to_prepare` pass,
-so a handler class you forget to list stops being served even if something else
-in your app loads it. The list is the whole truth about what this origin serves.
 
 
 ## Well-known endpoint (no booted Rails app required)

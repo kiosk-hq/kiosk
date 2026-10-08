@@ -98,7 +98,6 @@ Kiosk.configure do |c|
   # development reload so an edited verb needs no restart. A verb registers when
   # its class LOADS and nothing loads a handler on its own, so an origin whose
   # controllers are not named here serves NOTHING.
-  c.handlers = %w[Kiosk::HotelsController Kiosk::ReservationsController]
 
   c.guc_namespace  = "app"
   c.schema         = "kiosk"

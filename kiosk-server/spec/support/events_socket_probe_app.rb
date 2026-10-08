@@ -111,7 +111,6 @@ end
 Kiosk.configure do |c|
   c.issuer    = "http://127.0.0.1:#{ENV.fetch("PROBE_PORT")}"
   c.additional_origins = ["http://localhost:#{ENV.fetch("PROBE_PORT")}"]
-  c.handlers  = ["ProbeController"]
   c.agent_idp = ProbeIdp.new
   # A real key, generated here: the engine crashes rather than inventing one
   # outside development, which is the posture we want and the reason a fixture

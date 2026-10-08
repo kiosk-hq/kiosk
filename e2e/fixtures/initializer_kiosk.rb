@@ -8,9 +8,7 @@
 # THE VERBS ARE NOT HERE. They are ordinary Rails controllers under
 # app/controllers/kiosk/ — Kiosk::CatalogController (the salons query) and
 # Kiosk::BookingsController (the my_appointments query AND the book_appointment
-# action, one controller declaring both kinds) — named in `c.handlers`
-# below, which is how the engine finds them. What is left in this file is
-# configuration, which is what an initializer is for.
+# action, one controller declaring both kinds).
 #
 # The audit sink it wires, DemoAuditSink, is named, not
 # required. Both agent and human authentication are real and neither is
@@ -146,7 +144,6 @@ Kiosk.configure do |c|
   # loads them, the registry stays empty, and the origin answers `GET
   # /kiosk/schema` with `queries=[] actions=[]`, 404s every verb path, and
   # advertises `"capabilities": []`.
-  c.handlers = %w[Kiosk::CatalogController Kiosk::BookingsController]
 
   # ── The event tail lives in the DATABASE ────────────────────────────────
   # The same line `rails generate kiosk:install` writes into an operator's

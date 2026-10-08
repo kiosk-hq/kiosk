@@ -304,7 +304,7 @@ cp "$FIXTURES/create_salons_and_appointments.rb" \
 # (the middleware half is the config.api_only patch below).
 cp "$FIXTURES/application_controller.rb" app/controllers/application_controller.rb
 # The salon's back office: one operator-side page, OUTSIDE the mount and
-# outside `c.handlers`, that marks an appointment confirmed and pushes the
+# not a Kiosk handler, that marks an appointment confirmed and pushes the
 # `appointment_confirmed` topic. It is what makes the event-stream leg a PUSH
 # rather than a reply — nothing the assistant calls produces that transition.
 cp "$FIXTURES/salon_desk_controller.rb" app/controllers/salon_desk_controller.rb
@@ -312,9 +312,7 @@ cp "$FIXTURES/user.rb"               app/models/user.rb
 cp "$FIXTURES/salon.rb"              app/models/salon.rb
 cp "$FIXTURES/appointment.rb"        app/models/appointment.rb
 cp "$FIXTURES/seeds.rb"              db/seeds.rb
-# The three wire verbs are ordinary Rails controllers, named in
-# `c.handlers` in the initializer below. `rails new --api` does not create
-# app/controllers/kiosk/, so make it before copying into it.
+# The wire verbs are ordinary Rails controllers in app/controllers/kiosk/.
 mkdir -p app/controllers/kiosk
 cp "$FIXTURES/catalog_controller.rb"  app/controllers/kiosk/catalog_controller.rb
 cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.rb
@@ -334,10 +332,6 @@ cp "$FIXTURES/demo_audit_sink.rb"    app/services/demo_audit_sink.rb
 cp "$FIXTURES/initializer_kiosk.rb"  config/initializers/kiosk.rb
 cp "$FIXTURES/devise_initializer.rb" config/initializers/devise.rb
 cp "$FIXTURES/routes.rb"             config/routes.rb
-# The wire surface itself, in its own file — the ninth showcase of what every
-# demo now does: config/routes.rb reaches it with Rails' own
-# `draw(:kiosk)`, it mounts the engine for the protocol plane, and it draws one
-# explicit route per registered verb with the method following the kind.
 mkdir -p config/routes
 cp "$FIXTURES/routes_kiosk.rb"       config/routes/kiosk.rb
 

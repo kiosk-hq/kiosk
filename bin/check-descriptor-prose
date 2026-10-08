@@ -143,8 +143,7 @@
 #             vacuity arm
 #             that names what it knows is a blind spot waiting for the corpus to
 #             grow, which is the failure this workspace has on record four times.
-#             (a) EVERY HANDLER CONTROLLER any origin declares — resolved from
-#             that origin's own `c.handlers`, class name to path — must yield at
+#             (a) EVERY HANDLER CONTROLLER in any origin's app/controllers/kiosk must yield at
 #             least one verb AND one property description, so a parser that
 #             stops reading ONE file goes red naming it, and a ninth controller
 #             or an eighth origin is covered the day it lands.
@@ -620,26 +619,12 @@ def reserved_argument_names(root)
   []
 end
 
-# `Kiosk::HotelsController` -> `kiosk/hotels_controller.rb`. Rails' own
-# underscore rule, written out because this script loads no ActiveSupport.
-def controller_file(class_name)
-  "#{class_name.split('::').map { |part| part.gsub(/([a-z\d])([A-Z])/, '\1_\2').downcase }.join('/')}.rb"
-end
-
-# The HANDLER CONTROLLERS this repository ships, as [origin, relative path] —
-# resolved from each origin's own `config/initializers/kiosk.rb`, which is the
-# list the registry reads at boot. Nothing here is a demo name, a controller
-# name or a count: an eighth origin, or a ninth controller inside one, is
-# covered the day it lands, and a file that stops parsing is named.
+# The handler controllers this repository ships, as [origin, relative path]:
+# every file in each demo's app/controllers/kiosk, the directory the engine loads.
 def handler_controllers(root)
-  Dir[File.join(root, "kiosk-demo-*/config/initializers/kiosk.rb")].sort.flat_map do |initializer|
-    dir    = File.expand_path("../../..", initializer)
-    origin = File.basename(dir)
-    names  = File.read(initializer)[/c\.handlers\s*=\s*%w\[([^\]]*)\]/m].to_s.scan(/[A-Z][\w:]*/)
-    names.filter_map do |class_name|
-      rel = File.join(origin, "app/controllers", controller_file(class_name))
-      File.file?(File.join(root, rel)) ? [origin, rel] : nil
-    end
+  Dir[File.join(root, "kiosk-demo-*/app/controllers/kiosk/**/*.rb")].sort.map do |path|
+    rel = path.delete_prefix("#{root}/")
+    [rel.split("/").first, rel]
   end
 end
 
@@ -661,18 +646,17 @@ def structural_faults(root, corpus)
   # file rather than on all of them.
   controllers = handler_controllers(root)
   if controllers.empty?
-    faults << "VACUITY: no handler controller was resolved from any " \
-              "`kiosk-demo-*/config/initializers/kiosk.rb` — the derivation that decides this " \
-              "check's subject has stopped answering, so every arm below is vacuous."
+    faults << "VACUITY: no handler controller found in any kiosk-demo-*/app/controllers/kiosk — " \
+              "every arm below is vacuous."
   end
   controllers.each do |origin, rel|
     mine = corpus.descriptions.select { |d| d.file == rel }
     if mine.none? { |d| d.kind == :verb }
-      faults << "VACUITY: #{rel} is named in #{origin}'s `c.handlers` and yielded NO verb " \
+      faults << "VACUITY: #{rel} in #{origin} yielded NO verb " \
                 "description — the parser has stopped reading it."
     end
     if mine.none? { |d| d.kind == :property }
-      faults << "VACUITY: #{rel} is named in #{origin}'s `c.handlers` and yielded NO property " \
+      faults << "VACUITY: #{rel} in #{origin} yielded NO property " \
                 "description — the parser has stopped reading its schemas."
     end
   end
@@ -750,7 +734,7 @@ def run_check(root, list: false)
   puts "SCOPE — `git ls-files -- '*.rb' '*.rake'`, parsed with Prism"
   puts "  #{verbs} verb description(s), #{props} property description(s) and #{params} " \
        "OpenAPI parameter description(s) in #{files.length} file(s), across " \
-       "#{origins(root).length} origin(s) with a `c.handlers`"
+       "#{origins(root).length} origin(s) with handler controllers"
   puts "  the ban reaches the #{decided} whose membership is declared beside the prose " \
        "(a property's sibling `required:` array, a parameter's own `required:` boolean); " \
        "a verb description has no such declaration and is counted"

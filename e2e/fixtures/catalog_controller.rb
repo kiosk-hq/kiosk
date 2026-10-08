@@ -10,9 +10,7 @@
 # `kind :query` is what puts this verb on `GET`, and it is a property of the
 # DECLARATION rather than of the class: Kiosk::BookingsController next
 # door declares a query AND an action, which is the harness's proof that one
-# controller can. Both classes are named in `c.handlers` in
-# config/initializers/kiosk.rb; without that line the engine has nothing to
-# register from and the origin serves no verbs at all.
+# controller can.
 #
 # The SQL here is deliberately RAW and deliberately unchanged from the
 # registered blocks a hand-written handler would carry.

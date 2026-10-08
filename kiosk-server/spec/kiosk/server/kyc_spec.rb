@@ -81,7 +81,7 @@ RSpec.describe Kiosk::Server::Kyc do
       c.kyc_audience   = "shop"
       c.kyc_public_key = kyc_key.public_key
     end
-    Kiosk::Server::HandlerRegistrations.reload!([])
+    Kiosk::Server::Kyc.register! if kyc_provider
   end
 
   before do

@@ -95,7 +95,6 @@ Kiosk.configure do |c|
   c.issuer      = "http://localhost"
   c.user_model  = "User"
   c.signing_key = Kiosk::Server::SigningKey.generate
-  c.handlers    = %w[BootHandlerController]
 
   case SCENARIO
   when "topic_without_store", "no_topic"

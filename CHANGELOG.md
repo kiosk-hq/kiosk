@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **A handler registers itself**: the engine loads `app/controllers/kiosk/` and registers every class including `Kiosk::Handler`; `c.handlers` is removed.
+
 ## [0.5.12] — 2026-10-08
 
 - 2026-10-08: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.12, matching skill 0.5.12.**

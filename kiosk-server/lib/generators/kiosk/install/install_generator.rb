@@ -13,9 +13,7 @@ module Kiosk
     #
     # Produces:
     #   - config/initializers/kiosk.rb           — Kiosk.configure block
-    #   - config/routes/kiosk.rb                 — the engine mount, plus the
-    #     section the operator's own per-verb routes go in
-    #   - `draw(:kiosk)` in config/routes.rb     — what reaches that file
+    #   - config/routes/kiosk.rb and `draw(:kiosk)` in config/routes.rb
     #   - db/migrate/<ts>_create_kiosk_schema.rb — schema + helper functions
     #   - db/migrate/<ts+1>_create_kiosk_identity_tables.rb
     #   - db/migrate/<ts+2>_create_kiosk_reservations.rb
@@ -71,9 +69,6 @@ module Kiosk
         template "initializer.rb.tt", "config/initializers/kiosk.rb"
       end
 
-      # The mount is what makes the gem a wire: bundling kiosk-server draws no
-      # route at all, so an app that installs without these two steps serves
-      # nothing — not even the discovery document an assistant reads first.
       def create_wire_routes
         template "routes_kiosk.rb.tt", "config/routes/kiosk.rb"
       end

@@ -69,8 +69,7 @@ error `code`, which the wire carries into the RFC 9457 problem document an
 assistant branches on. Every verb's `input_schema` is validated on every call,
 so an undeclared argument is a typed `400` naming it. Neither controller is
 routable — a handler is reached only through the wire.
-`config/initializers/kiosk.rb` is configuration only: it *names* the two
-controllers in `c.handlers`, it does not contain them.
+`config/initializers/kiosk.rb` is configuration only.
 
 ## Running it
 

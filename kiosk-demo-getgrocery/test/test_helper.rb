@@ -9,8 +9,7 @@
 # which verbs does this app declare, what does its router say about them, what
 # does a verb answer as a given principal, and does that answer satisfy the
 # schema the verb published. It reads all four from the same places the running
-# server does: the registry `config/initializers/kiosk.rb` populated through
-# `c.handlers`, `Rails.application.routes`, the registered handler under a
+# server does: the handler registry, `Rails.application.routes`, the registered handler under a
 # GUC-scoped session, and the engine's own response validator.
 #
 # The RSpec spelling is the same three lines with `conformance/rspec` in place

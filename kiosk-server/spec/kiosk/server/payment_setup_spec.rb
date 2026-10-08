@@ -38,7 +38,7 @@ RSpec.describe Kiosk::Server::PaymentSetup do
       c.event_store      = store
       c.payment_provider = provider
     end
-    Kiosk::Server::HandlerRegistrations.reload!([])
+    Kiosk::Server::PaymentSetup.register! if provider
   end
 
   before do

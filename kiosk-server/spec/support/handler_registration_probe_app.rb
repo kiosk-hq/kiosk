@@ -11,19 +11,8 @@
 # holds — the only thing `GET <mount>/schema`, the wire's name lookup and the
 # discovery documents' `capabilities` are ever computed from.
 #
-# Usage: ruby handler_registration_probe_app.rb <scenario>
-# Scenarios (one per subprocess, because a Rails app boots once per process):
-#
-#   development             eager_load=false + `c.handlers` — the case that was
-#                           BROKEN: nothing references a handler controller, so
-#                           without the engine's to_prepare the catalog is
-#                           empty. Then a real reload cycle three times over:
-#                           an EDITED description, an ADDED verb, a REMOVED one.
-#   development_undeclared  eager_load=false, handlers NOT declared — pins that
-#                           the declaration is what registers, not luck.
-#   production              eager_load=true, handlers NOT declared — the path
-#                           that already worked and must keep working untouched.
-#   production_declared     eager_load=true AND declared — no double vision.
+# Usage: ruby handler_registration_probe_app.rb development|production
+# development also runs three reloads: an edited, an added and a removed verb.
 
 require "bundler/setup"
 require "fileutils"
@@ -38,9 +27,6 @@ at_exit { FileUtils.remove_entry(ROOT) if File.directory?(ROOT) }
 CONTROLLER = File.join(ROOT, "app/controllers/kiosk/probe_controller.rb")
 FileUtils.mkdir_p(File.dirname(CONTROLLER))
 
-# The two REQUIRED descriptor declarations (T-073 = A). Written into every
-# generated verb because the mixin REFUSES a declaration without them — which
-# is exactly what a real operator's controller has to carry.
 SCHEMAS =
   %(  kind :query\n) +
   %(  input_schema type: "object", additionalProperties: false, properties: {}, required: []\n) +
@@ -64,8 +50,7 @@ end
 
 write_controller(verbs: %i[browse detail])
 
-eager  = SCENARIO.start_with?("production")
-declare = !SCENARIO.end_with?("undeclared") && SCENARIO != "production"
+eager = SCENARIO == "production"
 
 app = Class.new(Rails::Application) do
   config.root             = ROOT
@@ -81,17 +66,11 @@ Kiosk.configure do |c|
   c.issuer      = "http://localhost"
   c.user_model  = "User"
   c.signing_key = Kiosk::Server::SigningKey.generate
-  c.handlers    = %w[Kiosk::ProbeController] if declare
 end
 
 Rails.application.initialize!
 
-# THE BOOT DIGEST CHECK, IN A TEST (T-094 obligation 5 — the check runs under
-# test as well as in production). Read BEFORE anything asks for the digest:
-# `derived?` is true only
-# because the engine's `after_initialize` hook derived it, so this is the one
-# reading that distinguishes "computed at boot" from "computed by whoever
-# asked first". Everything after this line would make it true.
+# Read before anything asks for the digest, so it shows the boot derived it.
 DERIVED_AT_BOOT = Kiosk::Server::SchemaDocument.derived?
 
 def snapshot
@@ -117,8 +96,6 @@ end
 report = { "boot" => snapshot.merge("derived_at_boot" => DERIVED_AT_BOOT) }
 
 if SCENARIO == "development"
-  # A dev reload cycle, three times — exactly what Rails runs when a file
-  # changed between requests. No restart, no re-boot.
   write_controller(verbs: %i[browse detail], browse_description: "EDITED without a restart.")
   Rails.application.reloader.reload!
   report["after_edit"] = snapshot

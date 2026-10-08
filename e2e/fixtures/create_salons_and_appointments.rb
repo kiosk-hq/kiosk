@@ -7,7 +7,7 @@
 # `appointments` is owner-scoped via the `my_appointments` named query
 # (WHERE user_id = kiosk.current_user_id()), enforced in app-layer.
 #
-# Path C: raw SQL removed; isolation is app-layer (named queries), RLS optional.
+# Isolation is app-layer (named queries); RLS is optional.
 class CreateSalonsAndAppointments < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change
     create_table :salons do |t|

@@ -35,13 +35,13 @@ CREATE TABLE public.prove_requests (
     operator_id character varying NOT NULL,
     callback_url character varying NOT NULL,
     requested_claims jsonb DEFAULT '[]'::jsonb NOT NULL,
+    audience character varying,
     subject_handle character varying NOT NULL,
     nonce character varying NOT NULL,
     status character varying DEFAULT 'pending'::character varying NOT NULL,
     expires_at timestamp(6) without time zone NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    audience character varying
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -85,6 +85,5 @@ ALTER TABLE ONLY public.schema_migrations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20260804000001'),
-('20260804000002');
+('20260101000001');
 

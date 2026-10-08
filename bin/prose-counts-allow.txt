@@ -51,7 +51,6 @@ kiosk-demo-atablefor/README.md ¦ two actions ¦ from: cat kiosk-demo-atablefor/
 kiosk-demo-getgrocery/README.md ¦ 3 scenarios ¦ the cashier-check trio inside one red-team battery; the sentence names all three and the battery's own run prints its totals.
 
 
-kiosk-demo-philslist/README.md ¦ seven demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l ¦ the operator demos, every one of which took the post-install migration this paragraph is about.
 kiosk-demo-philslist/README.md ¦ three endpoints ¦ from: cat kiosk-demo-philslist/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ one endpoint per action verb, which is what the lifecycle walk uses.
 kiosk-demo-philslist/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-philslist/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.
 

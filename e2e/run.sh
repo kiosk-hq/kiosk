@@ -281,12 +281,9 @@ FIXTURES="$KIOSK_OSS/e2e/fixtures"
 mkdir -p db/migrate
 ts1="20260101000000"
 cp "$FIXTURES/create_users.rb" "db/migrate/${ts1}_create_users.rb"
-# 1b) The Devise login columns on that same table. Its timestamp must sort
-# AFTER create_users and BEFORE the generator's (which use Time.now).
-ts1b="20260101000001"
-cp "$FIXTURES/add_devise_columns_to_users.rb" "db/migrate/${ts1b}_add_devise_columns_to_users.rb"
-# 1c) The principal → Stripe Customer mapping kiosk-pay-stripe keeps.
-ts1c="20260101000002"
+# 1b) The principal → Stripe Customer mapping kiosk-pay-stripe keeps. Its
+# timestamp sorts before the generator's, which use Time.now.
+ts1c="20260101000001"
 cp "$FIXTURES/create_kiosk_pay_stripe_customers.rb" "db/migrate/${ts1c}_create_kiosk_pay_stripe_customers.rb"
 
 # 2) Generator-produced migrations.

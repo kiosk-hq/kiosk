@@ -111,8 +111,7 @@ e2e/
 ├── README.md                               # this file
 ├── requirements.txt                        # the harness's python dependencies: numpy for the Equihash register-PoW solver, websockets for the event-stream listener
 └── fixtures/                               # files copied into the generated app
-    ├── create_users.rb                     # provider's user table (UUID PK)
-    ├── add_devise_columns_to_users.rb      # the human-login columns on that table (email + encrypted_password)
+    ├── create_users.rb                     # provider's user table (UUID PK, Devise login columns)
     ├── create_salons_and_appointments.rb   # demo schema (salons + appointments)
     ├── application_controller.rb           # ActionController::Base (not ::API) — Devise's controllers inherit it and need `flash`
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models

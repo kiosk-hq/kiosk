@@ -7,21 +7,11 @@ no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
 `capabilities`, `agents.json` and `agents.txt`.
 
 The AP2 mandate and settlement TABLES are present and empty, and that is the
-canonical install rather than an oversight. Since the MIGRATIONS-FROM-SCRATCH
-decision every demo runs the same unmodified `rails g kiosk:install` and gets
-the same migrations, so philslist carries `kiosk.reservations`, the four
-mandate/settlement tables and `kiosk.kyc_attributes` alongside the identity
-ones — `check-demo-copies`'s `ONE_SET_EVERYWHERE` rule makes a per-demo subset
-a build failure, because per-demo subsets are how the fleet drifted before.
-The generator's output is not the whole of `db/migrate/`, and the difference
-is intent rather than drift: a kiosk schema change that lands AFTER install
-arrives as a NEW migration and never as an edit to one that has already
-shipped, so the fleet also carries
-`20260827000002_drop_kiosk_settlement_raw_jws` at the same timestamp in all
-seven operator demos. A reader diffing this directory against a fresh `rails g
-kiosk:install` should expect that generator's whole output PLUS whatever
-post-install kiosk migrations the fleet has taken since — the same set
-everywhere, held there by the same rule.
+canonical install rather than an oversight: every demo runs the same unmodified
+`rails g kiosk:install`, so philslist carries `kiosk.reservations`, the four
+mandate/settlement tables and the KYC tables alongside the identity ones.
+`db/migrate/` is that install's output plus the users and classifieds tables,
+each created in its final shape.
 Nothing writes them here: `POST /kiosk/pay` is drawn like everywhere else —
 the mount draws the whole protocol plane — but no `payment_provider` is
 configured, so the origin refuses before it reads a mandate and an empty
@@ -308,7 +298,7 @@ and pull request; the rest are local-only, for the reason given.
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, reservations, device_authorizations, mandates, kyc_attributes) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus the post-install kiosk migrations the whole fleet carries (today `drop_kiosk_settlement_raw_jws`; see above), plus `categories` + `listings` |
+| `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, reservations, device_authorizations, mandates, KYC, events) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `users`, Action Cable's table and `categories` + `listings` |
 | `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |

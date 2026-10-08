@@ -410,9 +410,9 @@ CREATE TABLE public.todos (
     title character varying NOT NULL,
     done boolean DEFAULT false NOT NULL,
     created_by_agent_id character varying,
+    due_at timestamp with time zone,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    due_at timestamp with time zone
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -422,11 +422,11 @@ CREATE TABLE public.todos (
 
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     email character varying,
     encrypted_password character varying DEFAULT ''::character varying NOT NULL,
-    display_name character varying
+    display_name character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -972,23 +972,14 @@ ALTER TABLE ONLY public.memberships
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20261007000003'),
-('20261007000001'),
-('20261005000001'),
-('20260929000001'),
-('20260920000002'),
-('20260920000001'),
-('20260917000001'),
-('20260910000001'),
-('20260827000002'),
-('20260827000001'),
-('20260820130117'),
-('20260820130116'),
-('20260820130115'),
-('20260820130114'),
-('20260820130113'),
-('20260820130112'),
-('20260719000001'),
-('20260718000001'),
-('20260101000000');
+('20260101000010'),
+('20260101000009'),
+('20260101000008'),
+('20260101000007'),
+('20260101000006'),
+('20260101000005'),
+('20260101000004'),
+('20260101000003'),
+('20260101000002'),
+('20260101000001');
 

@@ -143,7 +143,7 @@ and pull request; the rest are local-only, for the reason given.
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | The generator's kiosk migrations, plus the post-install kiosk migrations the whole fleet carries at identical timestamps (today `drop_kiosk_settlement_raw_jws`; a kiosk schema change after install arrives as a NEW file, never as an edit to a shipped one), plus the Stylish schema (users carry Devise login columns + a `staff_role`; `services` is the evergreen menu; `appointments` accumulate real bookings, capturing the booked `service_id` + `price_cents`, and their `slot` column's move to `timestamptz` is a NEW file for the same reason a kiosk one would be) |
+| `db/migrate/` | `users` (Devise login columns + a `staff_role`), the generator's kiosk migrations, Action Cable's table, then the Stylish schema: `salons`, `services` (the evergreen menu) and `appointments`, which accumulate real bookings and capture the booked `service_id` + `price_cents` |
 | `app/models/{user,salon,service,appointment}.rb` | Trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner); `Service` is a menu item priced in EUR cents |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` block — configuration only; it names the two handler controllers, it does not contain them |
 | `app/controllers/kiosk/front_desk_controller.rb` | The `salons` / `service_menu` / `availability` / `my_appointments` queries and the role-gated `salon_calendar` forecast — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |

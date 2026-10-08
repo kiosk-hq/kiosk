@@ -344,14 +344,14 @@ CREATE TABLE public.bookings (
     check_out date NOT NULL,
     total_cents integer NOT NULL,
     status character varying DEFAULT 'reserved'::character varying NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     confirmation_code character varying,
     payment_status character varying DEFAULT 'unpaid'::character varying NOT NULL,
     paid_by_user_id uuid,
     decision_due_at timestamp(6) without time zone,
     refunded_at timestamp(6) without time zone,
-    refund_psp_reference character varying
+    refund_psp_reference character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -363,13 +363,13 @@ CREATE TABLE public.properties (
     id bigint NOT NULL,
     name character varying NOT NULL,
     city character varying NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     neighbourhood character varying,
+    address character varying,
     stars integer DEFAULT 3 NOT NULL,
     amenities jsonb DEFAULT '[]'::jsonb NOT NULL,
-    address character varying,
-    timezone character varying DEFAULT 'Europe/Istanbul'::character varying NOT NULL
+    timezone character varying DEFAULT 'Europe/Istanbul'::character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -504,10 +504,10 @@ ALTER SEQUENCE public.stripe_customers_id_seq OWNED BY public.stripe_customers.i
 
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     email character varying,
-    encrypted_password character varying DEFAULT ''::character varying NOT NULL
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -1081,27 +1081,15 @@ ALTER TABLE ONLY public.bookings
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20261008000001'),
-('20261007000003'),
-('20261007000001'),
-('20261005000001'),
-('20260929000001'),
-('20260920000003'),
-('20260920000002'),
-('20260920000001'),
-('20260910000001'),
-('20260827000002'),
-('20260820140001'),
-('20260820130117'),
-('20260820130116'),
-('20260820130115'),
-('20260820130114'),
-('20260820130113'),
-('20260820130112'),
-('20260813000002'),
-('20260813000001'),
-('20260804000001'),
-('20260718000001'),
-('20260628000001'),
-('20260101000000');
+('20260101000011'),
+('20260101000010'),
+('20260101000009'),
+('20260101000008'),
+('20260101000007'),
+('20260101000006'),
+('20260101000005'),
+('20260101000004'),
+('20260101000003'),
+('20260101000002'),
+('20260101000001');
 

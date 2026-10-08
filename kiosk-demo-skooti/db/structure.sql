@@ -327,10 +327,10 @@ CREATE TABLE public.reservations (
     scooter_id bigint NOT NULL,
     status character varying DEFAULT 'reserved'::character varying NOT NULL,
     started_at timestamp with time zone,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     payment_status character varying DEFAULT 'unpaid'::character varying NOT NULL,
-    paid_by_user_id uuid
+    paid_by_user_id uuid,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -350,16 +350,16 @@ CREATE TABLE public.schema_migrations (
 CREATE TABLE public.scooters (
     id bigint NOT NULL,
     code character varying NOT NULL,
+    name character varying,
+    kind character varying DEFAULT 'scooter'::character varying NOT NULL,
+    needs_licence boolean DEFAULT false NOT NULL,
+    dock character varying,
     status character varying DEFAULT 'available'::character varying NOT NULL,
     lat numeric(10,6),
     lng numeric(10,6),
     price_per_min_cents integer NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    kind character varying DEFAULT 'scooter'::character varying NOT NULL,
-    needs_licence boolean DEFAULT false NOT NULL,
-    name character varying,
-    dock character varying
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -452,10 +452,10 @@ ALTER SEQUENCE public.stripe_customers_id_seq OWNED BY public.stripe_customers.i
 
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     email character varying,
-    encrypted_password character varying DEFAULT ''::character varying NOT NULL
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -955,27 +955,15 @@ ALTER TABLE ONLY public.reservations
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20261008000001'),
-('20261007000003'),
-('20261007000002'),
-('20261007000001'),
-('20261005000002'),
-('20261005000001'),
-('20260929000001'),
-('20260920000002'),
-('20260920000001'),
-('20260827000002'),
-('20260820140001'),
-('20260820130117'),
-('20260820130116'),
-('20260820130115'),
-('20260820130114'),
-('20260820130113'),
-('20260820130112'),
-('20260804000001'),
-('20260803000001'),
-('20260718000001'),
-('20260618131466'),
-('20260618131464'),
-('20260101000000');
+('20260101000011'),
+('20260101000010'),
+('20260101000009'),
+('20260101000008'),
+('20260101000007'),
+('20260101000006'),
+('20260101000005'),
+('20260101000004'),
+('20260101000003'),
+('20260101000002'),
+('20260101000001');
 

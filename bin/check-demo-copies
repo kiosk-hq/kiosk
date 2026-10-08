@@ -395,13 +395,12 @@ if ARGV.include?("--self-test")
               "DEMO_ID_IN_COMMENT = %q{MSG = \"K-480\"} + \"\n\"\n"]],
       expect: /Ripper no longer separates an id in a COMMENT from an id in a STRING/ },
 
-    { id: "migration-pair-drift", kind: :break,
+    { id: "migration-pair-undeclared", kind: :break,
       rule: "Cross-demo singleton pairs: the migrations neither rule above sees (K-648)",
-      what: "the hand-written migration that ships at demo-specific timestamps is edited in one demo",
-      ops:  [[:edit, "kiosk-demo-atablefor/db/migrate/20260721000001_add_devise_columns_to_users.rb",
-              "add_index :users, :email, unique: true",
-              "add_index :users, :email, unique: true, where: \"email IS NOT NULL\""]],
-      expect: /db\/migrate\/\*_add_devise_columns_to_users\.rb: declared :code — the copies must agree/ },
+      what: "a demo's own migration is copied into a second demo at another timestamp",
+      ops:  [[:copy, "kiosk-demo-philslist/db/migrate/20260101000010_create_categories_and_listings.rb",
+              "kiosk-demo-tudu/db/migrate/20260101000011_create_categories_and_listings.rb"]],
+      expect: /db\/migrate\/\*_create_categories_and_listings\.rb: ships in 2 demos at demo-specific timestamps/ },
 
     { id: "autoload-once-line-gone", kind: :break,
       rule: "The app/services autoload-once declaration (K-502, re-anchored by T-189)",
@@ -1671,122 +1670,56 @@ COPIES = {
     agree: OPERATION_RESULT_AGREE,
   },
 
-  # ── db/migrate — output of kiosk-server's install generator ────────────────
+  # ── db/migrate — one fresh install, the same files at the same timestamps ────
   #
-  # These are not hand-written: `rails g kiosk:install` emits them
-  # (kiosk-server/lib/generators/kiosk/install). A demo whose copy differs was not
-  # regenerated when the engine's schema moved, which otherwise surfaces only as a
-  # runtime column error in whichever demo nobody ran. All seven operator demos
-  # ship the SAME files at the SAME timestamps, because they are one
-  # `kiosk:install` run copied across — which is what lets the paths be declared
-  # here at all, and what GENERATOR_TEMPLATES below keeps true.
-  "db/migrate/20260820130112_create_kiosk_schema.rb" => {
-    rule: :identical, why: "kiosk:install 001 — the schema, the four current_*() helpers and the " \
+  # Every operator demo's db/migrate is one sequence: its users table, the
+  # `rails g kiosk:install` set (GENERATOR_TEMPLATES below holds those against
+  # the engine's templates), Action Cable's table, then the demo's own domain,
+  # each created in its final shape.
+  "db/migrate/20260101000001_create_users.rb" => {
+    rule:   :identical,
+    why:    "The users table the engine's identity tables reference, with Devise's login columns.",
+    except: {
+      "atablefor" => "adds display_name, the diner's name on the reservations board.",
+      "stylish"   => "adds staff_role, which the owner's session carries.",
+      "tudu"      => "adds display_name, the name a shared list's roster shows.",
+    },
+  },
+  "db/migrate/20260101000002_create_kiosk_schema.rb" => {
+    rule: :identical, why: "kiosk:install — the schema, the four current_*() helpers and the " \
                            "schema_major() marker the engine reads at boot.",
   },
-  "db/migrate/20260929000001_add_kiosk_schema_major.rb" => {
-    rule:  :identical,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:  "`kiosk.schema_major()` on the databases whose kiosk genesis predates it (T-103). The " \
-          "marker rides in migration 001, so a new adopter has nothing separate to run; these " \
-          "seven boxes recorded 001 before it carried the function, and a recorded migration " \
-          "never re-runs. NOT generator output, for the same reason the raw_jws DROP above is " \
-          "not. `ships:` is declared because prove adopts no engine schema and must not acquire " \
-          "a copy by accident.",
+  "db/migrate/20260101000003_create_kiosk_identity_tables.rb" => {
+    rule: :identical, why: "kiosk:install — agents, agent_tokens, agent_mappings.",
   },
-  "db/migrate/20261007000001_move_kiosk_kyc_to_the_person.rb" => {
-    rule:  :identical,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:   "The KYC grants move from the assistant account to the person and kiosk.kyc_requests " \
-           "is laid down, on databases built before migration 006 carried that shape.",
+  "db/migrate/20260101000004_create_kiosk_reservations.rb" => {
+    rule: :identical, why: "kiosk:install — reservations.",
   },
-  "db/migrate/20261007000003_tie_kiosk_kyc_to_the_user.rb" => {
-    rule:  :identical,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:   "The KYC grants and verifications gain the key to the user row, on databases built " \
-           "before migration 006 carried it.",
+  "db/migrate/20260101000005_create_kiosk_device_authorizations.rb" => {
+    rule: :identical, why: "kiosk:install — device_authorizations, the account-binding state.",
   },
-  "db/migrate/20261007000002_drop_kyc_verification_requests.rb" => {
-    rule:  :identical,
-    ships: KYC_DEMOS,
-    why:   "kiosk-server keeps the verifications request_kyc opens, so both KYC demos drop their " \
-           "own table." \
-           " " + KYC_SHIPS,
+  "db/migrate/20260101000006_create_kiosk_mandates.rb" => {
+    rule: :identical, why: "kiosk:install — the AP2 mandate trail.",
   },
-  "db/migrate/20261008000001_create_kiosk_pay_stripe_customers.rb" => {
-    rule:  :identical,
-    ships: %w[hoteling skooti],
-    why:   "The stripe_customers table kiosk-pay-stripe's CustomerRecord reads, laid down by the " \
-           "gem's own definition. getgrocery has carried the same table since before the gem " \
-           "owned it, under its own earlier create_stripe_customers migration, which inlines the " \
-           "DDL and is never edited — hence the different basename.",
+  "db/migrate/20260101000007_create_kiosk_kyc_attributes.rb" => {
+    rule: :identical, why: "kiosk:install — kiosk.kyc_attributes and kiosk.kyc_requests, keyed " \
+                           "on the person.",
   },
-  "db/migrate/20261005000001_add_kiosk_agents_issuer.rb" => {
-    rule:  :identical,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:  "`kiosk.agents.issuer` and the per-origin live-key index on the databases whose " \
-          "agents table predates them. Migration 002 carries both for a new adopter; NOT " \
-          "generator output for the same reason the schema_major marker above is not.",
+  "db/migrate/20260101000008_create_kiosk_events.rb" => {
+    rule: :identical, why: "kiosk:install — kiosk.events, the per-identity event tail. Laid down " \
+                           "whether or not this origin declares a topic: the route is drawn anyway.",
   },
-  "db/migrate/20260820130113_create_kiosk_identity_tables.rb" => {
-    rule: :identical, why: "kiosk:install 002 — agents (with kyc_verified_at, spending_cap_cents " \
-                           "and human_label declared in the CREATE since K-646), agent_tokens, " \
-                           "agent_mappings.",
-  },
-  "db/migrate/20260820130114_create_kiosk_reservations.rb" => {
-    rule: :identical, why: "kiosk:install 003 — reservations.",
-  },
-  "db/migrate/20260820130115_create_kiosk_device_authorizations.rb" => {
-    rule: :identical, why: "kiosk:install 004 — device_authorizations in the account-binding " \
-                           "shape, created outright (K-646 folded away the rebuild that used to " \
-                           "drop and recreate it).",
-  },
-  "db/migrate/20260820130116_create_kiosk_mandates.rb" => {
-    rule: :identical, why: "kiosk:install 005 — the AP2 mandate trail.",
-  },
-  "db/migrate/20260820130117_create_kiosk_kyc_attributes.rb" => {
-    rule: :identical, why: "kiosk:install 006 — kiosk.kyc_attributes, one row per granted " \
-                           "anonymized boolean (K-656; it was a jsonb column on agents before).",
-  },
-  "db/migrate/20261005000002_remove_kyc_jws_from_kyc_verification_requests.rb" => {
-    rule:  :identical,
-    ships: KYC_DEMOS,
-    why:   "The attestation travels on the `kyc_verification` event, so both KYC demos drop the " \
-           "column that held it for a status query." \
-           " " + KYC_SHIPS,
-  },
-  "db/migrate/20260920000002_create_solid_cable_messages.rb" => {
+  "db/migrate/20260101000009_create_solid_cable_messages.rb" => {
     rule: :identical, why: "Action Cable's pubsub queue, taken on the PRIMARY database rather " \
-                           "than the separate `cable` database Rails' template assumes (T-169). " \
-                           "It is a TRANSPORT that `message_retention` sweeps; the durable tail " \
-                           "an assistant resumes from is kiosk.events, above.",
+                           "than the separate `cable` database Rails' template assumes. It is a " \
+                           "TRANSPORT that `message_retention` sweeps; the durable tail an " \
+                           "assistant resumes from is kiosk.events, above.",
   },
-  "db/migrate/20260920000001_create_kiosk_events.rb" => {
-    rule: :identical, why: "kiosk:install 007 — kiosk.events, the per-identity event tail " \
-                           "(T-169). Canonical rather than opt-in for kyc_attributes' reason: " \
-                           "the route is drawn whether or not this origin declares a topic.",
-  },
-  "db/migrate/20260718000001_add_devise_columns_to_users.rb" => {
-    rule: :identical, why: "Devise columns for the demos that ship a human login. NOT generator " \
-                           "output — the demos' own, which is why it keeps its own timestamp.",
-  },
-  "db/migrate/20260101000000_create_users.rb" => {
-    rule: :code,
-    why:  "The demo's own users table, which the engine expects to exist. Two comment variants, " \
-          "one schema.",
-  },
-  "db/migrate/20260827000002_drop_kiosk_settlement_raw_jws.rb" => {
+  "db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb" => {
     rule:  :identical,
-    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    why:  "The DROP that K-948's removal of `kiosk.settlements.raw_jws` never shipped (K-1086). A " \
-          "column taken OUT of the canonical DDL needs a shipped `ALTER TABLE … DROP COLUMN` for " \
-          "exactly the reason a column put IN needs a shipped `ADD` — otherwise it survives, NOT " \
-          "NULL and defaultless, on every database provisioned while the old CREATE was head, and " \
-          "refuses every INSERT head issues. NOT generator output and deliberately not in the " \
-          "install-generator set: `kiosk:install` emits the fresh-install shape, whose CREATE never " \
-          "makes this column, so a new adopter has nothing to drop. `ships:` is declared because " \
-          "prove has no `kiosk.settlements` (it adopts no engine schema) and must not acquire a " \
-          "copy by accident.",
+    ships: %w[getgrocery hoteling skooti],
+    why:   "The stripe_customers table kiosk-pay-stripe's CustomerRecord reads, laid down by the " \
+           "gem's own definition, in the three demos that take money.",
   },
 
   # ── script/ — the per-demo flow drivers ────────────────────────────────────
@@ -2034,22 +1967,7 @@ GENERATOR_TEMPLATES = {
 #          artifact to hold either side against, so a drifting pair is
 #          RECORDED, not guarded, until the triage lands.
 #   why:   why two demos share the file at all.
-MIGRATION_PAIRS = {
-  "create_kyc_verification_requests.rb" => {
-    rule: :code,
-    why:   "the pending age/licence verification a demo started at the KYC broker, before " \
-           "kiosk-server kept them; dropped by 20261007000002. Both copies declare `broker_nonce` " \
-           "inline. Prose still differs per demo (skooti's row carries a licence claim, getgrocery's an age " \
-           "gate), which is why the rule is :code.",
-  },
-  "add_devise_columns_to_users.rb" => {
-    rule: :code,
-    why:  "the human-login columns for the four Devise demos. philslist, stylish and tudu were " \
-          "generated together, so their byte-identical copies share the 20260718000001 path the " \
-          "lockstep rule compares; atablefor grew its login later at 20260721000001 — a singleton " \
-          "path only this rule sees. Prose names each demo's own persona (Alice vs the diner).",
-  },
-}.freeze
+MIGRATION_PAIRS = {}.freeze
 
 # ── Normalisation ────────────────────────────────────────────────────────────
 #
@@ -5834,23 +5752,16 @@ E2E_FIXTURES = {
           "flow no operator ships.",
   },
   "create_users.rb" => {
-    rule: :code,
-    why:  "The users table kiosk-server's identity tables FK to. Comment-identical to the copy in " \
-          "all seven operator demos, and it must be: the harness proves the install generator " \
-          "against the same starting schema the demos were generated on. Paired by " \
-          "timestamp-stripped basename, the MIGRATION_PAIRS handle, because every demo stamps its " \
-          "own.",
-  },
-  "add_devise_columns_to_users.rb" => {
-    rule: :code,
-    why:  "The Devise login columns on that same table, comment-identical in all seven demos. Same " \
-          "argument and same handle as create_users.rb above.",
+    rule: :per_demo,
+    why:  "The users table kiosk-server's identity tables reference, with Devise's login columns. " \
+          "Byte-identical to the copy in getgrocery, hoteling, philslist and skooti; atablefor, " \
+          "stylish and tudu each add a column of their own, which is what makes the rule :per_demo.",
   },
   "create_kiosk_pay_stripe_customers.rb" => {
     rule: :identical,
     why:  "The stripe_customers table kiosk-pay-stripe's CustomerRecord keeps, byte-identical to " \
           "hoteling's and skooti's migration: the harness pays through the same adapter they do. " \
-          "Paired by timestamp-stripped basename, as create_users.rb above.",
+          "Paired by timestamp-stripped basename, because every demo stamps its own.",
   },
   "create_salons_and_appointments.rb" => {
     rule: :per_demo,

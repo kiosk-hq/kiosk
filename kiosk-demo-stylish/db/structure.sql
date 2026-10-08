@@ -313,11 +313,11 @@ CREATE TABLE public.appointments (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     salon_id bigint NOT NULL,
-    slot timestamp with time zone NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     service_id bigint,
-    price_cents integer
+    slot timestamp with time zone NOT NULL,
+    price_cents integer,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -340,9 +340,9 @@ CREATE TABLE public.ar_internal_metadata (
 CREATE TABLE public.salons (
     id bigint NOT NULL,
     name character varying NOT NULL,
+    timezone character varying DEFAULT 'Europe/Paris'::character varying NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    timezone character varying DEFAULT 'Europe/Paris'::character varying NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -444,11 +444,11 @@ ALTER SEQUENCE public.solid_cable_messages_id_seq OWNED BY public.solid_cable_me
 
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     email character varying,
     encrypted_password character varying DEFAULT ''::character varying NOT NULL,
-    staff_role character varying
+    staff_role character varying,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -956,25 +956,14 @@ ALTER TABLE ONLY public.appointments
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20261007000003'),
-('20261007000001'),
-('20261005000001'),
-('20260929000001'),
-('20260920000002'),
-('20260920000001'),
-('20260910000001'),
-('20260907000001'),
-('20260827000002'),
-('20260820130117'),
-('20260820130116'),
-('20260820130115'),
-('20260820130114'),
-('20260820130113'),
-('20260820130112'),
-('20260730000001'),
-('20260729000001'),
-('20260719000001'),
-('20260718000001'),
-('20260618131462'),
-('20260101000000');
+('20260101000010'),
+('20260101000009'),
+('20260101000008'),
+('20260101000007'),
+('20260101000006'),
+('20260101000005'),
+('20260101000004'),
+('20260101000003'),
+('20260101000002'),
+('20260101000001');
 

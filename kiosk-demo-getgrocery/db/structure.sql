@@ -361,10 +361,10 @@ CREATE TABLE public.orders (
     total_cents integer DEFAULT 0 NOT NULL,
     slot_at timestamp with time zone,
     address text,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     timezone character varying NOT NULL,
-    dispatch_at timestamp with time zone
+    dispatch_at timestamp with time zone,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -378,9 +378,9 @@ CREATE TABLE public.products (
     name character varying NOT NULL,
     price_cents integer NOT NULL,
     stock integer DEFAULT 0 NOT NULL,
+    age_restricted boolean DEFAULT false NOT NULL,
     created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
-    age_restricted boolean DEFAULT false NOT NULL
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -482,10 +482,10 @@ ALTER SEQUENCE public.stripe_customers_id_seq OWNED BY public.stripe_customers.i
 
 CREATE TABLE public.users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    created_at timestamp(6) without time zone NOT NULL,
-    updated_at timestamp(6) without time zone NOT NULL,
     email character varying,
-    encrypted_password character varying DEFAULT ''::character varying NOT NULL
+    encrypted_password character varying DEFAULT ''::character varying NOT NULL,
+    created_at timestamp(6) without time zone NOT NULL,
+    updated_at timestamp(6) without time zone NOT NULL
 );
 
 
@@ -1022,27 +1022,15 @@ ALTER TABLE ONLY public.orders
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
-('20261007000003'),
-('20261007000002'),
-('20261007000001'),
-('20261005000002'),
-('20261005000001'),
-('20260929000001'),
-('20260921000001'),
-('20260920000002'),
-('20260920000001'),
-('20260911000001'),
-('20260827000002'),
-('20260820130117'),
-('20260820130116'),
-('20260820130115'),
-('20260820130114'),
-('20260820130113'),
-('20260820130112'),
-('20260805000002'),
-('20260805000001'),
-('20260718000001'),
-('20260630000001'),
-('20260618131462'),
-('20260101000000');
+('20260101000011'),
+('20260101000010'),
+('20260101000009'),
+('20260101000008'),
+('20260101000007'),
+('20260101000006'),
+('20260101000005'),
+('20260101000004'),
+('20260101000003'),
+('20260101000002'),
+('20260101000001');
 

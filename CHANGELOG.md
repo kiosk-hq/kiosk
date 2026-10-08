@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-08: Each demo's `db/migrate` is one fresh install: users, the `kiosk:install` set, then its own tables in final form. Deployed databases are rebuilt (`deploy/CHECKLIST.md` §7b).
 - 2026-10-08: The deploy hook no longer restarts an app whose `db:migrate` failed, and the push exits non-zero naming it.
 - 2026-10-08: kiosk-pay-stripe settles only a `succeeded` card charge; demos and e2e reach that answer through kiosk-redteam's stripe-mock front.
 - 2026-10-08: getgrocery, hoteling and skooti configure a price checker over their own catalog; the engine checks the cart.

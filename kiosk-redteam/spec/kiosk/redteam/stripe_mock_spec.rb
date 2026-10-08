@@ -31,6 +31,12 @@ RSpec.describe Kiosk::Redteam::StripeMock do
     expect(intent.values_at("status", "amount", "amount_received")).to eq(["succeeded", 1599, 1599])
   end
 
+  it "relays a chunked stripe-mock answer as one parseable body" do
+    session = post("/v1/checkout/sessions", mode: "setup", customer: "cus_x", client_reference_id: "u1",
+                                            "payment_method_types[]" => "card", success_url: "https://x.test/r")
+    expect(session.values_at("object", "mode")).to eq(["checkout.session", "setup"])
+  end
+
   it "leaves an unconfirmed PaymentIntent as stripe-mock answers it" do
     intent = post("/v1/payment_intents", amount: 1599, currency: "eur")
     expect(intent.values_at("status", "amount_received")).to eq(["requires_payment_method", 0])

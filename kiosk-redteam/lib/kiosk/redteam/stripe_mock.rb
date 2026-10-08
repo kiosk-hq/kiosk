@@ -19,7 +19,7 @@ module Kiosk
       UPSTREAM_PORT = 12112
       URL           = "http://127.0.0.1:#{PORT}"
       LOG           = "/tmp/stripe-mock.log"
-      DROPPED       = %w[accept-encoding connection content-length host].freeze
+      DROPPED       = %w[accept-encoding connection content-length host transfer-encoding].freeze
 
       module_function
 

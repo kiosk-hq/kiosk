@@ -66,20 +66,18 @@ ROLES_TOTAL_NO_ENGINE = %w[kiosk-demo-prove].freeze
 # above a method does not flap this, and changing one line of its logic does.
 ROLES_TOTAL_DECLARED = {
   "kiosk-demo-stylish/app/models/user.rb" => [
-    "40d07e575f70d81a",
-    "TOTAL by construction (K-712h). Non-staff short-circuit to the literal " \
-    "'customer'; staff return `staff_role` only when it is a member of " \
-    "`Kiosk.configuration.roles` mapped to strings, and nil is not a member of " \
-    "that set — so the nil column value that a bare varchar with no CHECK " \
-    "constraint permits falls to the literal 'customer' fallback. The " \
-    "least-privileged declared role is also the correct direction for an " \
-    "authorization input.",
+    "38337e4b616c47f9",
+    "TOTAL by construction: `staff_role` is an enum validated on write to be " \
+    "'owner' or nil, and nil falls to the literal 'customer'.",
   ],
 }.freeze
 
 # Extract the source of a `def kiosk_role` body from a file, or nil.
 def roles_total_body(path)
   src = File.read(path)
+  endless = src.match(/^\s*def kiosk_role\s*=\s*(.+)$/)
+  return endless[1] if endless
+
   m = src.match(/^(\s*)def kiosk_role\b.*?\n(.*?)^\1end$/m)
   m && m[2]
 end

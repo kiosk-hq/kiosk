@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **stylish validates `staff_role` on write**, so `User#kiosk_role` is `staff_role || "customer"`.
+
 - 2026-10-09: **The demos keep their schema in `db/schema.rb`**; they no longer use kiosk-rls, and getgrocery's `check:rls` is gone.
 
 - 2026-10-09: **No framework gem reads ENV; every demo configures Kiosk in its initializer from ENV, with development and test values in `config/local_env.rb`.**

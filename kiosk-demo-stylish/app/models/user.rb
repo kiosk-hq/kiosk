@@ -1,42 +1,14 @@
 # frozen_string_literal: true
 
+# Salon staff and customers sign in with a password; an assistant's account is
+# a row with no credentials, reachable only through its Kiosk key.
 class User < ApplicationRecord
-  # Human account holders sign in with email + password (the session that
-  # approves assistant links on the verify page). Assistant accounts are
-  # rows in this same table WITHOUT credentials — kiosk-pop key possession
-  # is their only channel, so they can never drive the human surfaces.
   devise :database_authenticatable
 
-  # Appointments a customer booked for themselves.
+  enum :staff_role, { owner: "owner" }, validate: { allow_nil: true }
+
   has_many :appointments, dependent: :destroy
 
-  # Salon staff carry a role in the provider's own identity system
-  # (staff_role: 'owner'). Customers and credential-less assistant accounts
-  # have staff_role NULL. This column IS the role source for roles-from-IdP:
-  # `#kiosk_role` below hands it to the Devise adapter.
-  def staff? = staff_role.present?
-
-  # roles-from-IdP over the REAL Devise session. The Devise user-IdP adapter
-  # (kiosk-user-idp-devise) calls `user.kiosk_role` first when resolving the
-  # role for a signed-in principal; without this opt-in it would fall back to
-  # the first configured role (`:customer`), so a salon OWNER who signs in
-  # through /users/sign_in — the real operator path — would mint link codes as
-  # `customer` and see only their own bookings in `salon_calendar` (no whole
-  # book, no forecast). Map the provider's own `staff_role` onto the kiosk role:
-  # staff carry their staff_role ('owner'), everyone else is a 'customer' (the
-  # registration default). The result is always one of `Kiosk.configuration.roles`
-  # (%i[customer owner]) BY CONSTRUCTION rather than by convention: `staff_role`
-  # is a bare varchar with no CHECK constraint, so returning it verbatim would
-  # let one stray value in the provider's own table mint an assistant at a role
-  # the origin never configured. An
-  # unrecognised value now falls back to the LEAST privileged role rather than
-  # being trusted, which is the only safe direction for an authorization input.
-  # This is the ONLY channel by which a staff role reaches kiosk — there is no
-  # SSO-header stand-in beside it — so this method is what makes roles-from-IdP
-  # work at all.
-  def kiosk_role
-    return "customer" unless staff?
-
-    Kiosk.configuration.roles.map(&:to_s).include?(staff_role) ? staff_role : "customer"
-  end
+  # The Kiosk role the Devise adapter assigns this person's assistant.
+  def kiosk_role = staff_role || "customer"
 end

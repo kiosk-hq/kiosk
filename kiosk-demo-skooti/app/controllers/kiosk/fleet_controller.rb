@@ -1,38 +1,17 @@
 # frozen_string_literal: true
 
-# skooti's READ surface: the two verbs an assistant reaches with
-# `GET /kiosk/<query-name>`, one endpoint per verb, arguments in the query
-# string. Kiosk ships a MIXIN, not a base class — `include Kiosk::Handler` is the
-# whole contract — and each class-level macro records a declaration that the NEXT
-# `def` claims, so a method with no macros above it is a helper the wire cannot
-# see. The superclass is `ActionController::API` because the mixin leaves that
-# choice to the operator and skooti is `config.api_only = true`.
-#
-# `kind :query` above each declaration is what puts it on `GET`; the kind belongs
-# to the DECLARATION, not to the class, so one controller may declare
-# both. The five write verbs live next door in Kiosk::RentalsController.
+# The read verbs.
 class Kiosk::FleetController < ActionController::API
   include Kiosk::Handler
 
-  # ── scooters_available — the public fleet catalogue. No per-principal
-  # scoping: every authenticated agent may browse what is available.
   kind :query
-  # The unit lives on `price_per_min_cents`, the currency on `currency`, and
-  # «takes no parameters» is the empty closed `input_schema` below — so none of
-  # the three is restated here: a description carries semantics, the schema
-  # carries shape. What stays is semantics: a cart is signed at the total the
-  # OPERATOR quotes, not at a per-minute figure the assistant multiplies out.
   description "Browse the available fleet — each row carries the vehicle's name and pickup dock/location " \
               "so you can pick one by name or nearest dock. needs_licence flags the KYC-gated combustion " \
               "motorcycle (rent it via rent_motorcycle); licence-free scooters use start_rental. " \
               "A cart is signed at the total the operator quotes, never at a per-minute rate " \
               "multiplied out by the caller. Reference a " \
               "vehicle by its `code` (e.g. \"SK-001\") when reserving."
-  # The empty closed object publishes "takes no arguments" as a fact rather than
-  # as an absence the assistant has to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  # `lat`/`lng` are `numeric(10,6)`, so ActiveRecord hands back a
-  # BigDecimal and Rails renders that as a JSON **string**: `"52.3739"`.
   output_schema type: "array",
                 description: "The whole available fleet.",
                 items: {
@@ -59,44 +38,20 @@ class Kiosk::FleetController < ActionController::API
     lat: "52.3739", lng: "4.8809", price_per_min_cents: 15, currency: "eur",
   })
   def scooters_available
-    # `pluck` rather than loading models: naming the columns keeps the wire's
-    # field names AND THEIR ORDER a decision this handler makes rather than a
-    # side effect of the schema.
-    #
-    # `code` is the ONLY vehicle handle on the wire — reserve takes scooter_code.
-    # The numeric primary key is deliberately NOT selected: a row id no verb
-    # accepts is a dead field that invites the assistant to guess it is some
-    # verb's param (descriptor-house-style.md: "Never expose a row id that no
-    # verb consumes"). It still ORDERS the fleet — an ORDER BY needs no
-    # SELECT. The currency rides on every row so an external assistant knows to
-    # sign its cart in EUR; the cashier rejects any other currency at capture.
-    render json: Scooter.available
-                        .order(:id)
-                        .pluck(:code, :name, :dock, :status, :kind, :needs_licence,
-                               :lat, :lng, :price_per_min_cents)
-                        .map { |code, name, dock, status, kind, needs_licence, lat, lng, cents|
-                          { code:                code,
-                            name:                name,
-                            dock:                dock,
-                            status:              status,
-                            kind:                kind,
-                            needs_licence:       needs_licence,
-                            lat:                 lat,
-                            lng:                 lng,
-                            price_per_min_cents: cents,
-                            currency:            "eur" }
-                        }
+    render json: Scooter.available.order(:id).map { |scooter|
+      { code:                scooter.code,
+        name:                scooter.name,
+        dock:                scooter.dock,
+        status:              scooter.status,
+        kind:                scooter.kind,
+        needs_licence:       scooter.needs_licence,
+        lat:                 scooter.lat,
+        lng:                 scooter.lng,
+        price_per_min_cents: scooter.price_per_min_cents,
+        currency:            "eur" }
+    }
   end
 
-  # ── my_reservations — per-principal: the caller's OWN reservations only, with
-  # no filter it supplies. `own` is the ONE place the
-  # identity predicate is written — see Reservation for why it stays SQL-side.
-  #
-  # THE RECONCILIATION SURFACE: this is the "per-user query" protocol.md
-  # §11.6 sends an assistant to after a `pay` whose response it never read, so
-  # what it publishes about money is normative. `payment_state` is a TRI-state on
-  # purpose — §11.6 requires a third answer distinct from paid and not-paid,
-  # because "no record" is not evidence that no money moved.
   kind :query
   description "List this principal's fleet reservations (scoped to the authenticated account). " \
               "This is the query to re-read after a payment whose response never arrived: each row " \
@@ -119,29 +74,12 @@ class Kiosk::FleetController < ActionController::API
                   required: %w[reservation_id scooter_code status payment_state],
                 }
   def my_reservations
-    # The vehicle is named by its `code`, never by the numeric scooters.id: that
-    # primary key is not a param of any verb, so emitting it would be a dead
-    # field the assistant can only guess at.
-    #
-    # Every column is named through its OWN arel_table: both tables carry `id`,
-    # `status` and `created_at`, so an unqualified `:status` would be resolved by
-    # ActiveRecord rather than by this handler, invisibly.
-    #
-    # The settled flag is a CORRELATED EXISTS over the CALLER's settlements — one
-    # statement for the whole list — and it is only the second of the two
-    # witnesses {Reservation.payment_state} weighs.
-    reservations = Reservation.arel_table
-    settled_flag = Reservation.settled_flag(Kiosk::Settlement.own)
-    render json: Reservation.own
-                            .joins(:scooter)
-                            .order(reservations[:created_at].desc)
-                            .pluck(reservations[:id], Scooter.arel_table[:code], reservations[:status],
-                                   reservations[:payment_status], settled_flag)
-                            .map { |id, scooter_code, status, payment_status, settled|
-                              { reservation_id: id,
-                                scooter_code:   scooter_code,
-                                status:         status,
-                                payment_state:  Reservation.payment_state(payment_status, settled) }
-                            }
+    reservations = Reservation.own.with_settlement(Kiosk::Settlement.own).includes(:scooter).order(created_at: :desc)
+    render json: reservations.map { |reservation|
+      { reservation_id: reservation.id,
+        scooter_code:   reservation.scooter.code,
+        status:         reservation.status,
+        payment_state:  reservation.payment_state }
+    }
   end
 end

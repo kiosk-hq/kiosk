@@ -1,33 +1,9 @@
 # frozen_string_literal: true
 
-# skooti's WRITE surface: the four verbs an assistant reaches with
-# `POST /kiosk/<action-name>`, one endpoint per verb, arguments as the JSON body.
-# Same shape as Kiosk::FleetController, with `kind :action` above each
-# declaration, which is what puts it on `POST`.
-#
-# The four writes are three lines each: read the arguments off the request, hand
-# them to an Operation, render what it answers. The gate chains, the Ed25519
-# signature and the server-to-server KYC call live in app/operations/, which
-# keeps a `render` out of the middle of one and makes them callable from a
-# console or a rake task.
-#
-# Errors are Rails' idiom end to end: the wire's `code` vocabulary is a closed
-# table, not a class hierarchy, so a refusal is an ordinary `render json:,
-# status:` and `render_kiosk_result` is the one place an
-# {OperationResult} becomes one. `kyc_required` and `forbidden` are both 403, so
-# `rent_motorcycle`'s Gate 0 is a refusal only the rendered code can name.
-#
-# Nothing here means a 402. The 402s an assistant meets on this origin come from
-# the registration PoW gate, upstream of dispatch, never from a handler.
+# The write verbs. The work is in app/operations.
 class Kiosk::RentalsController < ActionController::API
   include Kiosk::Handler
 
-  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
-  #
-  # A rental can be settled BY SOMEBODY ELSE — the cashier deliberately lets
-  # principal B pay for A's reservation — so the audience is the reservation's
-  # OWNER and never the payer, who already knows. Before this the owner's only
-  # way to learn was to re-read `my_reservations` on a guess.
   topic :booking_payment do
     description "A reservation of yours was paid — possibly by somebody else settling it on " \
                 "your behalf. Activate the rental once this says `paid`."
@@ -35,13 +11,10 @@ class Kiosk::RentalsController < ActionController::API
                    properties: { reservation_id: { type: "string", format: "uuid" },
                                  payment_state:  { enum: %w[paid] } },
                    required: %w[reservation_id payment_state]
-    subject_reachable lambda { |reservation_id, identity|
-      Reservation.readable_by?(reservation_id, identity.user_id)
-    }
+    subject_reachable ->(reservation_id, identity) { Reservation.readable_by?(reservation_id, identity.user_id) }
   end
 
-  # What both rental verbs answer: they end in one activation ({RentalActivation}),
-  # so they publish one contract, and only their GATES differ.
+  # What both rental verbs answer.
   RENTAL = {
     type: "object",
     description: "The activated rental and the unlock link to hand to your human.",
@@ -65,12 +38,6 @@ class Kiosk::RentalsController < ActionController::API
     required: %w[scooter_code rental_token unlock_url exp],
   }.freeze
 
-  # reserve — the hold, and the quote a cart must be signed against. See
-  # {ReserveOperation}; the principal below is all this controller contributes,
-  # and it comes from the identity the wire resolved rather than from arguments,
-  # which is what makes a forged `user_id` in the body inert. The answer's
-  # fields, and the pay hint that spells the expected mandate out in words,
-  # are declared in `output_schema` rather than in this prose.
   kind :action
   description "Hold one fleet vehicle for the authenticated principal. Rentals here are METERED by " \
               "the minute, so what is settled up front is a single minute at that vehicle's rate — " \
@@ -107,16 +74,9 @@ class Kiosk::RentalsController < ActionController::API
     pay_hint: "pay in EUR with a cart mandate whose total_amount_cents == 15 …",
   })
   def reserve
-    return unless kiosk_given?(:scooter_code)
-
-    render_kiosk_result ReserveOperation.call(
-      principal_id: kiosk_identity.user_id,
-      scooter_code: params[:scooter_code],
-    )
+    render json: ReserveOperation.call(principal_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])
   end
 
-  # start_rental — the licence-FREE path. See {StartRentalOperation} for the
-  # gates; note that no `scooter_code` is accepted, by design.
   kind :action
   description "Verify gates (ownership, licence-free vehicle, payment) and issue an Ed25519 offline rental token for a licence-free scooter (no KYC). " \
               "The reservation must be PAID first: reserve, then pay as reserve's pay_hint says, then call this. " \
@@ -131,11 +91,9 @@ class Kiosk::RentalsController < ActionController::API
                required: ["reservation_id"]
   output_schema(**RENTAL)
   def start_rental
-    render_kiosk_result StartRentalOperation.call(reservation_id: params[:reservation_id])
+    render json: StartRentalOperation.call(reservation_id: params[:reservation_id])
   end
 
-  # rent_motorcycle — the KYC-gated path. See {RentMotorcycleOperation}; Gate 0
-  # runs before the argument guards and that ordering is published behaviour.
   kind :action
   description "Rent a combustion-engine motorcycle — KYC-gated on age_over_18 AND licence_a (category-A licence); issues an Ed25519 offline rental token. " \
               "The reservation must be PAID first: reserve, then pay as reserve's pay_hint says, then call this."
@@ -149,25 +107,7 @@ class Kiosk::RentalsController < ActionController::API
                required: ["reservation_id"]
   output_schema(**RENTAL)
   def rent_motorcycle
-    render_kiosk_result RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
+    render json: RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
   end
 
-  private
-
-  # Was the argument SUPPLIED AT ALL — a different question from "is it usable",
-  # and the only one that cannot be asked anywhere but here: an Operation taking
-  # a plain value cannot tell nil-because-absent from nil-because-null. That is
-  # why `reserve` answers an ABSENT `scooter_code` with "missing field" and a
-  # present-but-null one with "scooter not found: ". A guard clause, so the
-  # refusal is already rendered when the action returns.
-  #
-  # `reservation_id` and `request_id` do NOT go through this: those verbs ask
-  # `blank?`, which collapses absent, null, "" and `false` into one answer, so
-  # their guard belongs with the value, in {WireArguments}.
-  def kiosk_given?(field)
-    return true if params.key?(field)
-
-    render_kiosk_result(WireArguments.missing(field.to_s))
-    false
-  end
 end

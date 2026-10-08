@@ -92,11 +92,12 @@ namespace :check do
     sh "ruby #{Rails.root.join('script/rental_token_issuer_kat.rb')}"
   end
 
-  desc "Run spec/unlock_page_spec.rb, boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), then the " \
+  desc "Run test/unlock_page_test.rb, boot the server, run script/rental_flow.rb end-to-end (happy + all negative gates), then the " \
        "in-process capture-window regression (script/pay_window.rb), assert."
   task :rideflow do
-    puts "\n── unlock page spec (no server, no port) ──"
-    sh "bundle exec rails runner #{File.expand_path("../../spec/unlock_page_spec.rb", __dir__)}"
+    puts "\n── unlock page test (no server, no port) ──"
+    sh "RAILS_ENV=test bundle exec rails db:drop db:create db:schema:load"
+    sh "bundle exec rails test test/unlock_page_test.rb"
 
     require "resolv"
     require "net/http"
@@ -610,12 +611,8 @@ namespace :check do
     Runs demo:setup (clean DB + seed), boots the server, runs script/isolation_flow.rb
     with two fresh principals (A and B), and asserts all cross-tenant denial properties:
 
-      Assertion 1 (ownership denial — Gate 1 isolated): B rides a licence-free
-        scooter (Gate 1b) and settles a payment mandate referencing rA (Gate 2)
-        then calls start_rental on A's reservation_id. Gate 1
-        (user_id = kiosk.current_user_id() AND status='reserved') finds
-        nothing → 403. The 403 isolates Gate 1 ownership because Gate 1b and
-        Gate 2 are both genuinely satisfied by B (start_rental has no KYC gate).
+      Assertion 1a: B pays with a cart naming A's reservation → 403 forbidden.
+      Assertion 1b: B calls start_rental on A's reservation → 403.
       Assertion 2a (exclusion): B's my_reservations does NOT contain A's reservation.
       Assertion 2b (positive control): B's my_reservations DOES contain B's own
         reservation, proving the exclusion is not vacuous.
@@ -761,18 +758,24 @@ namespace :check do
     reservation_id_a  = result["reservation_id_a"]
     reservation_id_b  = result["reservation_id_b"]
     forged_refusal    = result["forged_refusal"] || []
+    b_pay_refusal     = result["b_pay_refusal"] || []
     b_start_rental_rc = result["b_start_rental_rc"]
     b_reservation_ids = result["b_reservation_ids"] || []
 
-    # ── Assertion 1: B's start_rental on A's reservation → 403 ──────────
-    # B passed Gate 1b (licence-free vehicle) and Gate 2 (payment for rA)
-    # before this attempt; the 403 therefore isolates Gate 1 ownership
-    # exclusively (start_rental has no KYC gate).
-    if b_start_rental_rc == 403
-      puts "  OK  Assertion 1: B's start_rental on A's rA #{reservation_id_a} → 403 (Gate 1 ownership denied; Gate 1b+2 passed)"
+    # ── Assertion 1a: B cannot pay for A's reservation ──────────────────
+    if b_pay_refusal.first(2) == [403, "forbidden"]
+      puts "  OK  Assertion 1a: B's pay for A's rA #{reservation_id_a} → 403 forbidden"
     else
-      failures << "ISOLATION HOLE: B's start_rental on A's reservation returned #{b_start_rental_rc.inspect} (expected 403) — Gate 1 ownership bypass"
-      puts "  FAIL  Assertion 1: B's start_rental on A's rA expected 403, got #{b_start_rental_rc.inspect} — isolation hole"
+      failures << "ISOLATION HOLE: B's pay for A's reservation answered #{b_pay_refusal.inspect} (expected 403 forbidden)"
+      puts "  FAIL  Assertion 1a: B's pay for A's rA → #{b_pay_refusal.inspect} (want 403 forbidden)"
+    end
+
+    # ── Assertion 1b: B's start_rental on A's reservation → 403 ─────────
+    if b_start_rental_rc == 403
+      puts "  OK  Assertion 1b: B's start_rental on A's rA #{reservation_id_a} → 403"
+    else
+      failures << "ISOLATION HOLE: B's start_rental on A's reservation returned #{b_start_rental_rc.inspect} (expected 403)"
+      puts "  FAIL  Assertion 1b: B's start_rental on A's rA expected 403, got #{b_start_rental_rc.inspect} — isolation hole"
     end
 
     # ── Assertion 2a: B's my_reservations excludes A's reservation ───────
@@ -1347,7 +1350,7 @@ namespace :check do
     Exits 0 when all hold; exits 1 on any miss. A red assertion = the KYC gate is
     broken (or leaked onto the scooter path) — fix the app, not the test.
 
-    RUNS spec/licence_flag_spec.rb FIRST. Beat B above and the redteam
+    RUNS test/licence_flag_test.rb FIRST. Beat B above and the redteam
     battery's MotorcycleViaStartRental both drive the real schema, so they only
     ever hand the licence gate a real Ruby boolean — the one input on which a
     fail-OPEN hand-rolled coercion and the correct cast agree. The spec presents
@@ -1356,9 +1359,9 @@ namespace :check do
     single `rails runner`.
   DESC
   task kyc: "demo:setup" do
-    spec = File.expand_path("../../spec/licence_flag_spec.rb", __dir__)
-    puts "\n── licence-flag fail-closed spec (no server, no port) ──"
-    sh "bundle exec rails runner #{spec}"
+    puts "\n── licence-flag fail-closed test (no server, no port) ──"
+    sh "RAILS_ENV=test bundle exec rails db:drop db:create db:schema:load"
+    sh "bundle exec rails test test/licence_flag_test.rb"
 
     require "resolv"
     require "net/http"

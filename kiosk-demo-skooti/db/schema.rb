@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_000001) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -23,7 +23,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
     t.string "status", default: "reserved", null: false
     t.timestamptz "started_at"
     t.string "payment_status", default: "unpaid", null: false
-    t.uuid "paid_by_user_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["scooter_id"], name: "index_reservations_on_scooter_id"

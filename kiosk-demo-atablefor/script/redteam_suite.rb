@@ -205,12 +205,9 @@ BATTERY.record("CrossOwnerCancel", rc == 403, "Bea cancel Diego's booking → #{
 # `code` is the typed `bad_request` an assistant can branch on, and NO SQL
 # internals reach the wire.
 #
-# The refusal usually comes from the schema layer: `cancel_booking` declares
-# `booking_id` as `{type: "string", format: "uuid"}` and `input_schema` is
-# validated on every call, so most of these are answered before
-# {WireArguments.booking_id} runs. The three properties above are asserted as
-# PROPERTIES rather than as a sentence for exactly that reason, and the
-# handler guard remains as defence in depth.
+# The refusal comes from the schema layer: `cancel_booking` declares `booking_id`
+# as `{type: "string", format: "uuid"}`, so the three properties are asserted
+# as PROPERTIES rather than as a sentence.
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE bookings", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
@@ -363,15 +360,12 @@ BATTERY.record("MethodMismatch",
 # from passing against a handler that refuses everything.
 #
 # THE THIRD FILTER, `neighborhood`, is the one no schema can hold: its served
-# set is DB-DERIVED, so it can never be an `enum` — the refusal comes from
-# {WireArguments.neighborhood} and names the neighbourhoods that exist, exactly
-# as the `date` guard names the horizon.
+# set is DB-DERIVED, so it can never be an `enum` — the refusal names the
+# neighbourhoods that exist, exactly as the `date` refusal names the horizon.
 #
-# THE HORIZON HAS TWO ENDS AND BOTH ARE PROBED. A date BEHIND it is refused by
-# the very same {WireArguments.seating_date} guard, because `Seatings.upcoming`
-# starts at today on the restaurant's own clock and drops today's already-started seatings.
-# It lives here rather than in a beat of its own because it is literally the
-# same guard answering the same question from the other side.
+# THE HORIZON HAS TWO ENDS AND BOTH ARE PROBED: a date BEHIND it is refused by
+# the same check, because `Seatings.upcoming` starts at today on the
+# restaurant's own clock.
 #
 # «PAST» ON THIS DEMO IS AN INSTANT, NOT A DAY: atablefor sells three named
 # evening SEATINGS rather than whole days, so tonight's 19:00 stops being
@@ -424,10 +418,7 @@ BATTERY.record("InvalidFilterIsNotAnEmptyList",
 # `2026-08-21` — never gets that far: `book_table` declares `format: "date"`
 # and the wire validates `input_schema` on every call, so the wire refuses the
 # spelling the descriptor does not advertise before any Ruby runs. It is worth
-# probing anyway, because it is what says the wire layer really is there: the
-# handler behind it refuses the same spelling ({WireArguments.iso_date}), so a
-# green probe here has to be attributed to a layer rather than assumed, and the
-# two together leave no way in.
+# probing anyway, because it is what says the wire layer really is there.
 #
 # Both are asserted as a TYPED 400 naming what was wrong — a 500 or a silent
 # success fails either one — and the horizon probe additionally has to name the
@@ -484,62 +475,9 @@ BATTERY.record("BookOutsideOfferedHorizon",
 # well-formed strings with wrong VALUES, which is the other half of the story
 # and not this one.
 #
-# WHICH LAYER ANSWERS WHICH, MEASURED at head rather than assumed, because it
-# differs per argument and the difference is the whole point of the beat:
-#
-#   * `party_size` — BOTH LAYERS REFUSE EVERY SHAPE BELOW. The handler guard
-#     {WireArguments.party_size} goes through {WireArguments.whole_number},
-#     which is json_schemer's own `integer` (so `2.0` is still a party of two
-#     — measured against this demo's bundle). A bare `raw.to_i` there is the
-#     hole: `true`, `false`, `[]`, `{}`, `[1]` and `{"a" => 1}` have no
-#     `to_i`, so each is a `NoMethodError` → `500 action_failed`, and
-#     `1.5.to_i` is 1, so a fractional party is SEATED as a party of one.
-#     WATCHED FAIL, run and restored: drop `party_size`'s declared `type` from
-#     `book_table`'s `input_schema` and these stay 400 off the second layer;
-#     with a bare `.to_i` restored underneath, the same mutation makes them
-#     a 500 for the six raising shapes and a CONFIRMED BOOKING for `1.5`.
-#     THE SAME MUTATION ON `availability` SAYS SOMETHING ELSE, and it is
-#     recorded rather than smoothed over: drop the type there and the QUERY
-#     decoder stops coercing, so the guard is handed the raw string `"2"` and
-#     refuses a legal party of two — this battery aborts on its first
-#     availability call. The second layer is the schema's `integer` exactly, so
-#     on the query half it is the DECODER that turns the wire's string into one;
-#     independent of the descriptor for `book_table`, downstream of it here.
-#   * `restaurant_id` and `restaurant_table_id` — BOTH LAYERS REFUSE EVERY
-#     SHAPE BELOW. The declared `{type: "integer", minimum: 1}` answers first;
-#     behind it {BookTableOperation}'s own `identifier` routes each through
-#     {WireArguments.whole_number} — json_schemer's `integer`, the same one
-#     `party_size` uses, so `2.0` still resolves to 2 — and only then asks
-#     `>= 1`.
-#     NEITHER ARGUMENT HAS A QUERY HALF, which is the one way this pair differs
-#     from `party_size`: `book_table` is the only verb on this origin that takes
-#     either (`availability` and `my_bookings` only ever RETURN them), so no
-#     {Kiosk::Server::ArgumentDecoder} sits anywhere in their path and this
-#     second layer is independent of the descriptor on both counts.
-#     WATCHED FAIL, run and restored: drop BOTH declared `type`s from
-#     `book_table`'s `input_schema` and all 62 probes stay 400 off the second
-#     layer; with a bare `.to_i` restored underneath, the same mutation breaks
-#     TWELVE of them — the six raising shapes × the two arguments, each a
-#     `500 action_failed` LEAKing `NoMethodError`.
-#     `1.5` DOES NOT BREACH UNDER THAT MUTATION AND THE REASON IS RECORDED
-#     RATHER THAN SMOOTHED OVER, because it is the more dangerous half: `.to_i`
-#     turns it into 1, and whether resolving to row 1 is a WRONG BOOKING or a
-#     400 depends on the SEEDED DATA, not on the guard. This beat's slot is not
-#     restaurant 1 table 1, so the mismatch falls out as "no such table 1 at
-#     restaurant 2" — a typed refusal naming a table nobody asked for, which is
-#     why the probes above stay green on that value. Measured on the
-#     descriptor-less path with a bare `.to_i` underneath:
-#     `BookTableOperation.call(restaurant_id: 1.5, restaurant_table_id: 1, …)`
-#     returned a CONFIRMED BOOKING at restaurant 1 table 1. A probe set cannot
-#     pin that half, so the guard has to.
-#   * `date` and `time` — the declared `format: "date"` and `enum` answer the
-#     non-string shapes; the handler guards behind them ({WireArguments
-#     .seating_date}, {WireArguments.seating_time}) read through `to_s`, so they
-#     cannot raise but they cannot refuse a shape either.
-#   * `booking_id` — the declared `format: "uuid"` answers first;
-#     {WireArguments.booking_id}'s `blank?`/`Kiosk::UuidCheck` behind it reads every
-#     shape without raising, so this half is two layers for the STRINGS
-#     MalformedUuidArg sends and the schema's alone for the container shapes here.
+# Every shape below is refused by the verb's declared `input_schema`, which is
+# validated on every call before the handler runs; the handlers read integer
+# arguments with `.to_i` only after that.
 #
 # AND THE ERROR BODY MUST NOT CARRY THE RUNTIME'S OWN VOCABULARY: these probes
 # are the ones most likely to reach a cast or a `NoMethodError`, so every
@@ -622,15 +560,11 @@ end
 # integer too LARGE for the column behind it.
 #
 # MEASURED on a booted origin without the declared bound: `party_size:
-# 2_147_483_648` passes `{type: "integer", minimum: 1}` (no ceiling), passes
-# {WireArguments.party_size} (a whole number >= 1), and reaches
-# `RestaurantTable.where(capacity.gteq(party_size))` — `capacity` is a
-# PostgreSQL `integer` — where ActiveRecord raises `ActiveModel::RangeError`
-# CASTING the comparison, on BOTH surfaces that take a party: `book_table`
-# (`book_table_operation.rb`) and `availability`
-# (`dining_room_controller.rb`), and both answer HTTP 500. `party_size`
-# declares the column's own width as its `maximum`, and the shared guard
-# mirrors it, so both are a typed 400 from the schema layer.
+# 2_147_483_648` passes `{type: "integer", minimum: 1}` (no ceiling) and reaches
+# `RestaurantTable.where(capacity: party_size..)` — `capacity` is a PostgreSQL
+# `integer` — where ActiveRecord raises `ActiveModel::RangeError` casting the
+# comparison, on both `book_table` and `availability`. `party_size` declares the
+# column's own width as its `maximum`, so both are a typed 400 from the schema layer.
 #
 # THE TWO IDENTIFIERS ARE DELIBERATELY NOT PROBED HERE, AND THAT IS MEASURED
 # RATHER THAN ASSUMED: `restaurant_id` and `restaurant_table_id` reach
@@ -656,8 +590,8 @@ shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body
 #
 # `neighborhood` is the right argument and the choice is measured, not
 # convenient: it is declared a bare `{type: "string"}` because the served set is
-# DB-derived, so json_schemer cannot refuse it and the value reaches
-# {WireArguments.neighborhood}, whose refusal NAMES it back. The two arguments
+# DB-derived, so json_schemer cannot refuse it and the value reaches the
+# handler, whose refusal NAMES it back. The two arguments
 # whose refusals also echo — `party_size` and the two identifiers — are answered
 # by the descriptor first, and json_schemer's message names the POINTER rather
 # than the value, so a needle sent there never reaches the body at all and the
@@ -715,8 +649,7 @@ BATTERY.record("HostileArgShapes",
 #     GRAMMAR the spelling must match and `2.0` is not an integer literal;
 #   * `{"party_size": 2.0}` on `book_table` (an action) is `200` and books a
 #     party of TWO — a JSON body is already typed, draft 2020-12 decides
-#     `integer` by VALUE, and {WireArguments.whole_number} agrees with it on
-#     purpose rather than reaching for `is_a?(Integer)`.
+#     `integer` by VALUE, and the handler reads it with `.to_i`.
 # `2.5` is not an integer on either half; INT_SHAPES' `1.5` above is that case,
 # so it is not repeated here.
 #
@@ -726,11 +659,6 @@ BATTERY.record("HostileArgShapes",
 # beat green on a question it stopped asking; and it checks the ANSWER echoed
 # `party_size` as the Integer 2, so "accepted" means "read as two" rather than
 # merely "not refused".
-#
-# WATCHED FAIL, run and restored: replace {WireArguments.whole_number}'s Float
-# arm with `is_a?(Integer)` — the strict reading of `integer`, i.e. the body half
-# behaving like the query half — and this beat alone goes red, `book_table`
-# answering 400 «party_size must be a whole number >= 1 — got 2.0».
 float_body_json = JSON.generate({ party_size: 2.0 })
 rc_fq, body_fq  = WIRE.get_json("/kiosk/availability", { party_size: "2.0" }, WIRE.bearer(TOKEN_A))
 float_slot      = open_slot

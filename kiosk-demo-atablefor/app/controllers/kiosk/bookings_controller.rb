@@ -1,33 +1,9 @@
 # frozen_string_literal: true
 
-# atablefor's WRITE surface: the two verbs an assistant reaches with
-# `POST /kiosk/<action-name>` — one endpoint per verb, arguments as
-# the JSON body. Same shape as Kiosk::DiningRoomController — this app's own
-# ApplicationController plus `include Kiosk::Handler` — and `kind :action` above
-# each declaration is what puts it on `POST`. Each write reads its arguments,
-# hands them to an Operation and renders what it answers.
-#
-# The wire's error-`code` vocabulary is a closed table, not a class hierarchy,
-# so a refusal is an ordinary `render json:, status:` naming the code, which the
-# wire carries verbatim into the RFC 9457 document's top-level `code`.
-# `render_kiosk_result` is the one place a refusal becomes a status.
-#
-# No `pay` verb and no payment provider here: a `deposit_eur` is a display-only
-# no-show hold settled at the restaurant, so nothing below is a 402 — the one an
-# assistant can meet on this origin comes from the PoW gate upstream of dispatch.
+# The write verbs. The work is in app/operations.
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Handler
 
-  # book_table — reserve a specific table at a chosen restaurant for a chosen
-  # upcoming seating, for the authenticated principal. The (restaurant_id,
-  # restaurant_table_id) come from an availability row; the (date, time) seating
-  # is re-validated through the same app/models/seatings.rb helper `availability`
-  # filters with, so it must be one of the CURRENT upcoming seatings.
-  # Contention is finite: a UNIQUE index on (restaurant_table_id, seating_at)
-  # among confirmed rows makes a table already held a clean 409 Conflict. No
-  # payment — any deposit shown is settled at the restaurant.
-  # The description says WHAT booking means and WHEN it is refused; it
-  # names no argument — `input_schema` below declares all five.
   kind :action
   description "Book a specific restaurant table for a chosen upcoming " \
               "seating, for the authenticated principal. Confirms the " \
@@ -49,30 +25,11 @@ class Kiosk::BookingsController < ApplicationController
                                         description: "The seating_date (YYYY-MM-DD) from the availability row." },
                  time:                { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
                                         description: "The seating_time HH:MM (24-hour), e.g. \"20:00\"." },
-                 # THE CEILING IS DECLARED, not merely enforced — a
-                 # refusal the published schema does not predict is its own
-                 # defect. It is the width of `bookings.party_size` (and of the
-                 # `restaurant_tables.capacity` this is compared against), so it
-                 # is the column's own bound and not an invented house limit.
                  party_size:          { type: "integer", minimum: 1,
                                         maximum: WireArguments::MAX_INT4,
                                         description: "Number of guests." },
                },
                required: ["restaurant_id", "restaurant_table_id", "date", "time", "party_size"]
-  # An action answers its own object. The five arguments come back echoed
-  # because a confirmation an assistant reads back to its human has to name WHAT
-  # was booked; `seating_at` is the absolute instant behind the (date, time).
-  #
-  # The confirmation carries `seating_label` for the same reason the availability
-  # row does. `date` and `time` here ECHO the caller's own arguments, which is
-  # exactly where the two sides may DISAGREE about which clock those words were
-  # in — a zoneless "20:00" is the restaurant's, per the guard above, whatever
-  # the assistant meant by it — and a booking confirmation is the artefact a
-  # human keeps. So the same zone-bearing rendering `availability` and
-  # `my_bookings` publish is on this row too, from the same {Seatings.label}:
-  # one label, one spelling, every surface that writes a seating out — and
-  # `timezone` names the clock,
-  # which is the RESTAURANT's rather than this aggregator's.
   output_schema type: "object",
                 description: "The confirmed booking.",
                 additionalProperties: false,
@@ -96,10 +53,6 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[booking_id restaurant_id restaurant_table_id party_size
                              date time seating_label seating_at timezone status]
-  # THE SEATING IS RESOLVED, NOT WRITTEN DOWN. A calendar literal here
-  # ages into a 400 the day that seating passes, so `example_params` and
-  # `example_row` are RESOLVABLE slots ({Kiosk::Server::SchemaSlots}) naming the
-  # same {Seatings} helpers `availability` uses — the three cannot drift.
   example_params({
     restaurant_id: 1, restaurant_table_id: 1,
     date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1], party_size: 2,
@@ -114,20 +67,16 @@ class Kiosk::BookingsController < ApplicationController
     status: "confirmed",
   })
   def book_table
-    render_kiosk_result BookTableOperation.call(
+    render json: BookTableOperation.call(
       principal_id:        kiosk_identity.user_id,
-      restaurant_id:       params[:restaurant_id],
-      restaurant_table_id: params[:restaurant_table_id],
+      restaurant_id:       params[:restaurant_id].to_i,
+      restaurant_table_id: params[:restaurant_table_id].to_i,
       date:                params[:date],
       time:                params[:time],
-      party_size:          params[:party_size],
+      party_size:          params[:party_size].to_i,
     )
   end
 
-  # cancel_booking — cancel one of the authenticated principal's own bookings,
-  # freeing the (table, seating) so it can be booked again. Owner-scoped: the
-  # WHERE gates on `user_id = kiosk.current_user_id()`, so a cross-principal
-  # cancel is a clean 403 — the booking is not found under the caller's identity.
   kind :action
   description "Cancel one of the authenticated principal's own table bookings " \
               "(requires the booking to belong to the principal). Frees the (table, seating)."
@@ -149,6 +98,6 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[booking_id status]
   def cancel_booking
-    render_kiosk_result CancelBookingOperation.call(booking_id: params[:booking_id])
+    render json: CancelBookingOperation.call(booking_id: params[:booking_id])
   end
 end

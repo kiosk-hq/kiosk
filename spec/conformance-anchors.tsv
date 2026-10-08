@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1911 anchors.
+# 1912 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -370,6 +370,7 @@ kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	THE CALLER'
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
+kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	class CourierDispatchJob < ApplicationJob
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	# district getgrocery serves is in Dublin today, so the answers are unchanged;
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	# so IST (UTC+1, summer) and GMT (UTC+0, winter) are both handled automatically
 kiosk-demo-getgrocery/app/models/dublin_zones.rb	THE CLOCK OF EACH DISTRICT THIS SHOP DELIVERS TO

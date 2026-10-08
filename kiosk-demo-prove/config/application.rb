@@ -38,6 +38,7 @@ module KioskDemoProve
 
     # Use SQL structure dump for parity with the sibling demos (pg_dump captures
     # the whole schema deterministically).
-    config.active_record.dump_schemas = :all
+    # public first: the kiosk tables reference public.users.
+    config.active_record.dump_schemas = "public,kiosk"
   end
 end

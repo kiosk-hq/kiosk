@@ -17,6 +17,65 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
 
+  create_table "public.bookings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.bigint "restaurant_id", null: false
+    t.bigint "restaurant_table_id", null: false
+    t.timestamptz "seating_at", null: false
+    t.integer "party_size", null: false
+    t.string "status", default: "confirmed", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["restaurant_id"], name: "index_bookings_on_restaurant_id"
+    t.index ["restaurant_table_id", "seating_at"], name: "idx_bookings_confirmed_table_seating", unique: true, where: "((status)::text = 'confirmed'::text)"
+    t.index ["restaurant_table_id"], name: "index_bookings_on_restaurant_table_id"
+    t.index ["user_id"], name: "index_bookings_on_user_id"
+  end
+
+  create_table "public.restaurant_tables", force: :cascade do |t|
+    t.bigint "restaurant_id", null: false
+    t.string "label", null: false
+    t.integer "capacity", null: false
+    t.integer "deposit_eur", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["restaurant_id", "label"], name: "index_restaurant_tables_on_restaurant_id_and_label", unique: true
+    t.index ["restaurant_id"], name: "index_restaurant_tables_on_restaurant_id"
+  end
+
+  create_table "public.restaurants", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "neighborhood"
+    t.string "cuisine"
+    t.string "timezone", default: "Europe/Lisbon", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "public.solid_cable_messages", force: :cascade do |t|
+    t.binary "channel", null: false
+    t.binary "payload", null: false
+    t.datetime "created_at", null: false
+    t.bigint "channel_hash", null: false
+    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
+    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
+    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
+  end
+
+  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "email"
+    t.string "encrypted_password", default: "", null: false
+    t.string "display_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "public.bookings", "public.restaurant_tables"
+  add_foreign_key "public.bookings", "public.restaurants"
+  add_foreign_key "public.bookings", "public.users"
+  add_foreign_key "public.restaurant_tables", "public.restaurants"
+
   create_table "kiosk.agent_mappings", primary_key: ["provider", "external_id"], force: :cascade do |t|
     t.text "provider", null: false
     t.text "external_id", null: false
@@ -176,63 +235,4 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
-
-  create_table "public.bookings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.bigint "restaurant_id", null: false
-    t.bigint "restaurant_table_id", null: false
-    t.timestamptz "seating_at", null: false
-    t.integer "party_size", null: false
-    t.string "status", default: "confirmed", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["restaurant_id"], name: "index_bookings_on_restaurant_id"
-    t.index ["restaurant_table_id", "seating_at"], name: "idx_bookings_confirmed_table_seating", unique: true, where: "((status)::text = 'confirmed'::text)"
-    t.index ["restaurant_table_id"], name: "index_bookings_on_restaurant_table_id"
-    t.index ["user_id"], name: "index_bookings_on_user_id"
-  end
-
-  create_table "public.restaurant_tables", force: :cascade do |t|
-    t.bigint "restaurant_id", null: false
-    t.string "label", null: false
-    t.integer "capacity", null: false
-    t.integer "deposit_eur", default: 0, null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["restaurant_id", "label"], name: "index_restaurant_tables_on_restaurant_id_and_label", unique: true
-    t.index ["restaurant_id"], name: "index_restaurant_tables_on_restaurant_id"
-  end
-
-  create_table "public.restaurants", force: :cascade do |t|
-    t.string "name", null: false
-    t.string "neighborhood"
-    t.string "cuisine"
-    t.string "timezone", default: "Europe/Lisbon", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
-
-  create_table "public.solid_cable_messages", force: :cascade do |t|
-    t.binary "channel", null: false
-    t.binary "payload", null: false
-    t.datetime "created_at", null: false
-    t.bigint "channel_hash", null: false
-    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
-    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
-    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
-  end
-
-  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.string "email"
-    t.string "encrypted_password", default: "", null: false
-    t.string "display_name"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_users_on_email", unique: true
-  end
-
-  add_foreign_key "public.bookings", "public.restaurant_tables"
-  add_foreign_key "public.bookings", "public.restaurants"
-  add_foreign_key "public.bookings", "public.users"
-  add_foreign_key "public.restaurant_tables", "public.restaurants"
 end

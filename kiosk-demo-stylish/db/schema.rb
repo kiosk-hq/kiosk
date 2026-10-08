@@ -17,6 +17,56 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
 
+  create_table "public.appointments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.bigint "salon_id", null: false
+    t.bigint "service_id"
+    t.timestamptz "slot", null: false
+    t.integer "price_cents"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["salon_id"], name: "index_appointments_on_salon_id"
+    t.index ["service_id"], name: "index_appointments_on_service_id"
+    t.index ["user_id"], name: "index_appointments_on_user_id"
+  end
+
+  create_table "public.salons", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "timezone", default: "Europe/Paris", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "public.services", force: :cascade do |t|
+    t.string "name", null: false
+    t.integer "price_cents", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "public.solid_cable_messages", force: :cascade do |t|
+    t.binary "channel", null: false
+    t.binary "payload", null: false
+    t.datetime "created_at", null: false
+    t.bigint "channel_hash", null: false
+    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
+    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
+    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
+  end
+
+  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "email"
+    t.string "encrypted_password", default: "", null: false
+    t.string "staff_role"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "public.appointments", "public.salons"
+  add_foreign_key "public.appointments", "public.services"
+  add_foreign_key "public.appointments", "public.users"
+
   create_table "kiosk.agent_mappings", primary_key: ["provider", "external_id"], force: :cascade do |t|
     t.text "provider", null: false
     t.text "external_id", null: false
@@ -176,54 +226,4 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
-
-  create_table "public.appointments", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.bigint "salon_id", null: false
-    t.bigint "service_id"
-    t.timestamptz "slot", null: false
-    t.integer "price_cents"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["salon_id"], name: "index_appointments_on_salon_id"
-    t.index ["service_id"], name: "index_appointments_on_service_id"
-    t.index ["user_id"], name: "index_appointments_on_user_id"
-  end
-
-  create_table "public.salons", force: :cascade do |t|
-    t.string "name", null: false
-    t.string "timezone", default: "Europe/Paris", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
-
-  create_table "public.services", force: :cascade do |t|
-    t.string "name", null: false
-    t.integer "price_cents", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
-
-  create_table "public.solid_cable_messages", force: :cascade do |t|
-    t.binary "channel", null: false
-    t.binary "payload", null: false
-    t.datetime "created_at", null: false
-    t.bigint "channel_hash", null: false
-    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
-    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
-    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
-  end
-
-  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.string "email"
-    t.string "encrypted_password", default: "", null: false
-    t.string "staff_role"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_users_on_email", unique: true
-  end
-
-  add_foreign_key "public.appointments", "public.salons"
-  add_foreign_key "public.appointments", "public.services"
-  add_foreign_key "public.appointments", "public.users"
 end

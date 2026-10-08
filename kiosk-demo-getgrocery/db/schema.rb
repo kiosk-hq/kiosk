@@ -17,6 +17,70 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
 
+  create_table "public.order_items", force: :cascade do |t|
+    t.uuid "order_id", null: false
+    t.bigint "product_id", null: false
+    t.integer "qty", default: 1, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["order_id"], name: "index_order_items_on_order_id"
+    t.index ["product_id"], name: "index_order_items_on_product_id"
+  end
+
+  create_table "public.orders", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.string "status", default: "created", null: false
+    t.integer "total_cents", default: 0, null: false
+    t.timestamptz "slot_at", null: false
+    t.text "address", null: false
+    t.string "timezone", null: false
+    t.timestamptz "dispatch_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_orders_on_user_id"
+  end
+
+  create_table "public.products", force: :cascade do |t|
+    t.string "sku", null: false
+    t.string "name", null: false
+    t.integer "price_cents", null: false
+    t.integer "stock", default: 0, null: false
+    t.boolean "age_restricted", default: false, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["sku"], name: "index_products_on_sku", unique: true
+  end
+
+  create_table "public.solid_cable_messages", force: :cascade do |t|
+    t.binary "channel", null: false
+    t.binary "payload", null: false
+    t.datetime "created_at", null: false
+    t.bigint "channel_hash", null: false
+    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
+    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
+    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
+  end
+
+  create_table "public.stripe_customers", force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.string "customer_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_stripe_customers_on_user_id", unique: true
+  end
+
+  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "email"
+    t.string "encrypted_password", default: "", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "public.order_items", "public.orders"
+  add_foreign_key "public.order_items", "public.products"
+  add_foreign_key "public.orders", "public.users"
+
   create_table "kiosk.agent_mappings", primary_key: ["provider", "external_id"], force: :cascade do |t|
     t.text "provider", null: false
     t.text "external_id", null: false
@@ -176,68 +240,4 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
-
-  create_table "public.order_items", force: :cascade do |t|
-    t.uuid "order_id", null: false
-    t.bigint "product_id", null: false
-    t.integer "qty", default: 1, null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["order_id"], name: "index_order_items_on_order_id"
-    t.index ["product_id"], name: "index_order_items_on_product_id"
-  end
-
-  create_table "public.orders", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.string "status", default: "created", null: false
-    t.integer "total_cents", default: 0, null: false
-    t.timestamptz "slot_at", null: false
-    t.text "address", null: false
-    t.string "timezone", null: false
-    t.timestamptz "dispatch_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_orders_on_user_id"
-  end
-
-  create_table "public.products", force: :cascade do |t|
-    t.string "sku", null: false
-    t.string "name", null: false
-    t.integer "price_cents", null: false
-    t.integer "stock", default: 0, null: false
-    t.boolean "age_restricted", default: false, null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["sku"], name: "index_products_on_sku", unique: true
-  end
-
-  create_table "public.solid_cable_messages", force: :cascade do |t|
-    t.binary "channel", null: false
-    t.binary "payload", null: false
-    t.datetime "created_at", null: false
-    t.bigint "channel_hash", null: false
-    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
-    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
-    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
-  end
-
-  create_table "public.stripe_customers", force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.string "customer_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_stripe_customers_on_user_id", unique: true
-  end
-
-  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.string "email"
-    t.string "encrypted_password", default: "", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_users_on_email", unique: true
-  end
-
-  add_foreign_key "public.order_items", "public.orders"
-  add_foreign_key "public.order_items", "public.products"
-  add_foreign_key "public.orders", "public.users"
 end

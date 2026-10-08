@@ -13,7 +13,7 @@ module Kiosk
     #
     # Produces:
     #   - config/initializers/kiosk.rb           — Kiosk.configure block
-    #   - `dump_schemas = :all` in config/application.rb, so schema.rb carries the kiosk schema
+    #   - `dump_schemas` in config/application.rb, so schema.rb carries the kiosk schema
     #   - config/routes/kiosk.rb and `draw(:kiosk)` in config/routes.rb
     #   - db/migrate/<ts>_create_kiosk_schema.rb — schema + helper functions
     #   - db/migrate/<ts+1>_create_kiosk_identity_tables.rb
@@ -70,9 +70,10 @@ module Kiosk
         template "initializer.rb.tt", "config/initializers/kiosk.rb"
       end
 
-      # schema.rb dumps only the search path's schemas unless told otherwise.
+      # schema.rb dumps only the search path's schemas unless told otherwise;
+      # public goes first because the kiosk tables reference the user table.
       def dump_kiosk_schema
-        application "config.active_record.dump_schemas = :all"
+        application %(config.active_record.dump_schemas = "public,#{options[:schema]}")
       end
 
       def create_wire_routes

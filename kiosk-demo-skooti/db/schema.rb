@@ -17,6 +17,62 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
 
+  create_table "public.reservations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.bigint "scooter_id", null: false
+    t.string "status", default: "reserved", null: false
+    t.timestamptz "started_at"
+    t.string "payment_status", default: "unpaid", null: false
+    t.uuid "paid_by_user_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["scooter_id"], name: "index_reservations_on_scooter_id"
+    t.index ["user_id"], name: "index_reservations_on_user_id"
+  end
+
+  create_table "public.scooters", force: :cascade do |t|
+    t.string "code", null: false
+    t.string "name", null: false
+    t.string "kind", default: "scooter", null: false
+    t.boolean "needs_licence", default: false, null: false
+    t.string "dock", null: false
+    t.string "status", default: "available", null: false
+    t.decimal "lat", precision: 10, scale: 6, null: false
+    t.decimal "lng", precision: 10, scale: 6, null: false
+    t.integer "price_per_min_cents", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+  end
+
+  create_table "public.solid_cable_messages", force: :cascade do |t|
+    t.binary "channel", null: false
+    t.binary "payload", null: false
+    t.datetime "created_at", null: false
+    t.bigint "channel_hash", null: false
+    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
+    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
+    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
+  end
+
+  create_table "public.stripe_customers", force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.string "customer_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_stripe_customers_on_user_id", unique: true
+  end
+
+  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "email"
+    t.string "encrypted_password", default: "", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "public.reservations", "public.scooters"
+  add_foreign_key "public.reservations", "public.users"
+
   create_table "kiosk.agent_mappings", primary_key: ["provider", "external_id"], force: :cascade do |t|
     t.text "provider", null: false
     t.text "external_id", null: false
@@ -176,60 +232,4 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
-
-  create_table "public.reservations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.bigint "scooter_id", null: false
-    t.string "status", default: "reserved", null: false
-    t.timestamptz "started_at"
-    t.string "payment_status", default: "unpaid", null: false
-    t.uuid "paid_by_user_id"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["scooter_id"], name: "index_reservations_on_scooter_id"
-    t.index ["user_id"], name: "index_reservations_on_user_id"
-  end
-
-  create_table "public.scooters", force: :cascade do |t|
-    t.string "code", null: false
-    t.string "name", null: false
-    t.string "kind", default: "scooter", null: false
-    t.boolean "needs_licence", default: false, null: false
-    t.string "dock", null: false
-    t.string "status", default: "available", null: false
-    t.decimal "lat", precision: 10, scale: 6, null: false
-    t.decimal "lng", precision: 10, scale: 6, null: false
-    t.integer "price_per_min_cents", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-  end
-
-  create_table "public.solid_cable_messages", force: :cascade do |t|
-    t.binary "channel", null: false
-    t.binary "payload", null: false
-    t.datetime "created_at", null: false
-    t.bigint "channel_hash", null: false
-    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
-    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
-    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
-  end
-
-  create_table "public.stripe_customers", force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.string "customer_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_stripe_customers_on_user_id", unique: true
-  end
-
-  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.string "email"
-    t.string "encrypted_password", default: "", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_users_on_email", unique: true
-  end
-
-  add_foreign_key "public.reservations", "public.scooters"
-  add_foreign_key "public.reservations", "public.users"
 end

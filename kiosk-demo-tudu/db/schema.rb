@@ -17,6 +17,72 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
 
+  create_table "public.invites", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "list_id", null: false
+    t.string "code_digest", null: false
+    t.uuid "created_by_account_id", null: false
+    t.datetime "expires_at", null: false
+    t.uuid "redeemed_by_account_id"
+    t.datetime "redeemed_at"
+    t.datetime "created_at", null: false
+    t.index ["code_digest"], name: "index_invites_on_code_digest", unique: true
+    t.index ["list_id"], name: "index_invites_on_list_id"
+  end
+
+  create_table "public.lists", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "account_id", null: false
+    t.string "title", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_lists_on_account_id"
+  end
+
+  create_table "public.memberships", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "list_id", null: false
+    t.uuid "account_id", null: false
+    t.string "role", default: "member", null: false
+    t.datetime "created_at", null: false
+    t.index ["account_id"], name: "index_memberships_on_account_id"
+    t.index ["list_id", "account_id"], name: "index_memberships_on_list_id_and_account_id", unique: true
+    t.index ["list_id"], name: "index_memberships_on_list_id"
+  end
+
+  create_table "public.solid_cable_messages", force: :cascade do |t|
+    t.binary "channel", null: false
+    t.binary "payload", null: false
+    t.datetime "created_at", null: false
+    t.bigint "channel_hash", null: false
+    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
+    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
+    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
+  end
+
+  create_table "public.todos", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "list_id", null: false
+    t.string "title", null: false
+    t.boolean "done", default: false, null: false
+    t.string "created_by_agent_id"
+    t.timestamptz "due_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["list_id"], name: "index_todos_on_list_id"
+  end
+
+  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "email"
+    t.string "encrypted_password", default: "", null: false
+    t.string "display_name"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "public.invites", "public.lists"
+  add_foreign_key "public.lists", "public.users", column: "account_id"
+  add_foreign_key "public.memberships", "public.lists"
+  add_foreign_key "public.memberships", "public.users", column: "account_id"
+  add_foreign_key "public.todos", "public.lists"
+
   create_table "kiosk.agent_mappings", primary_key: ["provider", "external_id"], force: :cascade do |t|
     t.text "provider", null: false
     t.text "external_id", null: false
@@ -176,70 +242,4 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
-
-  create_table "public.invites", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "list_id", null: false
-    t.string "code_digest", null: false
-    t.uuid "created_by_account_id", null: false
-    t.datetime "expires_at", null: false
-    t.uuid "redeemed_by_account_id"
-    t.datetime "redeemed_at"
-    t.datetime "created_at", null: false
-    t.index ["code_digest"], name: "index_invites_on_code_digest", unique: true
-    t.index ["list_id"], name: "index_invites_on_list_id"
-  end
-
-  create_table "public.lists", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "account_id", null: false
-    t.string "title", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["account_id"], name: "index_lists_on_account_id"
-  end
-
-  create_table "public.memberships", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "list_id", null: false
-    t.uuid "account_id", null: false
-    t.string "role", default: "member", null: false
-    t.datetime "created_at", null: false
-    t.index ["account_id"], name: "index_memberships_on_account_id"
-    t.index ["list_id", "account_id"], name: "index_memberships_on_list_id_and_account_id", unique: true
-    t.index ["list_id"], name: "index_memberships_on_list_id"
-  end
-
-  create_table "public.solid_cable_messages", force: :cascade do |t|
-    t.binary "channel", null: false
-    t.binary "payload", null: false
-    t.datetime "created_at", null: false
-    t.bigint "channel_hash", null: false
-    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
-    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
-    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
-  end
-
-  create_table "public.todos", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "list_id", null: false
-    t.string "title", null: false
-    t.boolean "done", default: false, null: false
-    t.string "created_by_agent_id"
-    t.timestamptz "due_at"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["list_id"], name: "index_todos_on_list_id"
-  end
-
-  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.string "email"
-    t.string "encrypted_password", default: "", null: false
-    t.string "display_name"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_users_on_email", unique: true
-  end
-
-  add_foreign_key "public.invites", "public.lists"
-  add_foreign_key "public.lists", "public.users", column: "account_id"
-  add_foreign_key "public.memberships", "public.lists"
-  add_foreign_key "public.memberships", "public.users", column: "account_id"
-  add_foreign_key "public.todos", "public.lists"
 end

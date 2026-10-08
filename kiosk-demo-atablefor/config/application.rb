@@ -18,6 +18,7 @@ module KioskDemoAtablefor
     # Initializers build objects from app/services, before the main autoloader is set up.
     config.autoload_once_paths << Rails.root.join("app/services").to_s
 
-    config.active_record.dump_schemas = :all
+    # public first: the kiosk tables reference public.users.
+    config.active_record.dump_schemas = "public,kiosk"
   end
 end

@@ -18,6 +18,83 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
 
+  create_table "public.bookings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.bigint "property_id", null: false
+    t.bigint "room_type_id", null: false
+    t.date "check_in", null: false
+    t.date "check_out", null: false
+    t.integer "total_cents", null: false
+    t.string "status", default: "reserved", null: false
+    t.string "confirmation_code"
+    t.string "payment_status", default: "unpaid", null: false
+    t.uuid "paid_by_user_id"
+    t.datetime "decision_due_at"
+    t.datetime "refunded_at"
+    t.string "refund_psp_reference"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["confirmation_code"], name: "index_bookings_on_confirmation_code", unique: true
+    t.index ["property_id"], name: "index_bookings_on_property_id"
+    t.index ["room_type_id"], name: "index_bookings_on_room_type_id"
+    t.index ["user_id"], name: "index_bookings_on_user_id"
+    t.exclusion_constraint "room_type_id WITH =, daterange(check_in, check_out) WITH &&", where: "(status)::text = ANY (ARRAY[('reserved'::character varying)::text, ('confirmed'::character varying)::text])", using: :gist, name: "bookings_no_overlapping_room_nights"
+  end
+
+  create_table "public.properties", force: :cascade do |t|
+    t.string "name", null: false
+    t.string "city", null: false
+    t.string "neighbourhood"
+    t.string "address"
+    t.integer "stars", default: 3, null: false
+    t.jsonb "amenities", default: [], null: false
+    t.string "timezone", default: "Europe/Istanbul", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["neighbourhood"], name: "index_properties_on_neighbourhood"
+    t.index ["stars"], name: "index_properties_on_stars"
+  end
+
+  create_table "public.room_types", force: :cascade do |t|
+    t.bigint "property_id", null: false
+    t.string "name", null: false
+    t.integer "nightly_price_cents", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["property_id"], name: "index_room_types_on_property_id"
+  end
+
+  create_table "public.solid_cable_messages", force: :cascade do |t|
+    t.binary "channel", null: false
+    t.binary "payload", null: false
+    t.datetime "created_at", null: false
+    t.bigint "channel_hash", null: false
+    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
+    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
+    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
+  end
+
+  create_table "public.stripe_customers", force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.string "customer_id", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["user_id"], name: "index_stripe_customers_on_user_id", unique: true
+  end
+
+  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.string "email"
+    t.string "encrypted_password", default: "", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["email"], name: "index_users_on_email", unique: true
+  end
+
+  add_foreign_key "public.bookings", "public.properties"
+  add_foreign_key "public.bookings", "public.room_types"
+  add_foreign_key "public.bookings", "public.users"
+  add_foreign_key "public.room_types", "public.properties"
+
   create_table "kiosk.agent_mappings", primary_key: ["provider", "external_id"], force: :cascade do |t|
     t.text "provider", null: false
     t.text "external_id", null: false
@@ -177,81 +254,4 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000011) do
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
-
-  create_table "public.bookings", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.bigint "property_id", null: false
-    t.bigint "room_type_id", null: false
-    t.date "check_in", null: false
-    t.date "check_out", null: false
-    t.integer "total_cents", null: false
-    t.string "status", default: "reserved", null: false
-    t.string "confirmation_code"
-    t.string "payment_status", default: "unpaid", null: false
-    t.uuid "paid_by_user_id"
-    t.datetime "decision_due_at"
-    t.datetime "refunded_at"
-    t.string "refund_psp_reference"
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["confirmation_code"], name: "index_bookings_on_confirmation_code", unique: true
-    t.index ["property_id"], name: "index_bookings_on_property_id"
-    t.index ["room_type_id"], name: "index_bookings_on_room_type_id"
-    t.index ["user_id"], name: "index_bookings_on_user_id"
-    t.exclusion_constraint "room_type_id WITH =, daterange(check_in, check_out) WITH &&", where: "(status)::text = ANY (ARRAY[('reserved'::character varying)::text, ('confirmed'::character varying)::text])", using: :gist, name: "bookings_no_overlapping_room_nights"
-  end
-
-  create_table "public.properties", force: :cascade do |t|
-    t.string "name", null: false
-    t.string "city", null: false
-    t.string "neighbourhood"
-    t.string "address"
-    t.integer "stars", default: 3, null: false
-    t.jsonb "amenities", default: [], null: false
-    t.string "timezone", default: "Europe/Istanbul", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["neighbourhood"], name: "index_properties_on_neighbourhood"
-    t.index ["stars"], name: "index_properties_on_stars"
-  end
-
-  create_table "public.room_types", force: :cascade do |t|
-    t.bigint "property_id", null: false
-    t.string "name", null: false
-    t.integer "nightly_price_cents", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["property_id"], name: "index_room_types_on_property_id"
-  end
-
-  create_table "public.solid_cable_messages", force: :cascade do |t|
-    t.binary "channel", null: false
-    t.binary "payload", null: false
-    t.datetime "created_at", null: false
-    t.bigint "channel_hash", null: false
-    t.index ["channel"], name: "index_solid_cable_messages_on_channel"
-    t.index ["channel_hash"], name: "index_solid_cable_messages_on_channel_hash"
-    t.index ["created_at"], name: "index_solid_cable_messages_on_created_at"
-  end
-
-  create_table "public.stripe_customers", force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.string "customer_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["user_id"], name: "index_stripe_customers_on_user_id", unique: true
-  end
-
-  create_table "public.users", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.string "email"
-    t.string "encrypted_password", default: "", null: false
-    t.datetime "created_at", null: false
-    t.datetime "updated_at", null: false
-    t.index ["email"], name: "index_users_on_email", unique: true
-  end
-
-  add_foreign_key "public.bookings", "public.properties"
-  add_foreign_key "public.bookings", "public.room_types"
-  add_foreign_key "public.bookings", "public.users"
-  add_foreign_key "public.room_types", "public.properties"
 end

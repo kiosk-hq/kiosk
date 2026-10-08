@@ -15,6 +15,7 @@ module KioskDemoTudu
     config.load_defaults 8.1
     config.autoload_lib(ignore: %w[assets tasks])
 
-    config.active_record.dump_schemas = :all
+    # public first: the kiosk tables reference public.users.
+    config.active_record.dump_schemas = "public,kiosk"
   end
 end

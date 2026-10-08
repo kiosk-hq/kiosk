@@ -262,7 +262,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   describe "config/application.rb" do
     it "dumps every schema, so schema.rb carries the kiosk tables" do
       invoke!
-      expect(read("config/application.rb")).to include("config.active_record.dump_schemas = :all")
+      expect(read("config/application.rb")).to include(%(config.active_record.dump_schemas = "public,kiosk"))
     end
   end
 

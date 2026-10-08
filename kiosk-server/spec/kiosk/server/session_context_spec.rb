@@ -123,9 +123,9 @@ RSpec.describe Kiosk::Server::SessionContext do
     end
   end
 
-  describe ".user_id" do
+  describe ".identity" do
     it "raises unauthenticated outside a session" do
-      expect { described_class.user_id }
+      expect { described_class.identity }
         .to raise_error(Kiosk::Server::Errors::Unauthenticated, /no Kiosk session is open/) { |e|
           expect(e.http_status).to eq(401)
         }
@@ -133,7 +133,7 @@ RSpec.describe Kiosk::Server::SessionContext do
 
     it "answers the principal inside a session" do
       described_class.open(connection: connection, identity: build_identity(user_id: "u-7")) do
-        expect(described_class.user_id).to eq("u-7")
+        expect(described_class.identity.user_id).to eq("u-7")
       end
     end
 

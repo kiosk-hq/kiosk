@@ -728,8 +728,8 @@ mna2=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/salons" \
 assert "…carrying no Allow either"      "$(echo "$mna2" | grep -ic '^Allow:')" "0"
 
 # ─── app-layer per-user isolation (the headline security property) ──────
-# my_appointments filters WHERE user_id = kiosk.current_user_id(), where the
-# GUC is set from the caller's authenticated identity (bearer token). With
+# my_appointments reads `Appointment.own`, the caller's authenticated identity
+# (bearer token). With
 # Alice AND Bob each owning one appointment, prove each principal sees ONLY
 # their own row — never the other's — even though both hit the same query.
 

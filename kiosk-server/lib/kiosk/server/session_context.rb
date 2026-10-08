@@ -21,10 +21,10 @@ module Kiosk
 
       def self.open? = !Thread.current[KEY].nil?
 
-      # The principal's user id. Raises outside a session, where a scope built
-      # on it would otherwise match nothing.
-      def self.user_id
-        return current.identity.user_id if open?
+      # The identity the wire resolved. Raises outside a session, where a scope
+      # built on it would otherwise match nothing.
+      def self.identity
+        return current.identity if open?
 
         raise Errors::Unauthenticated,
               "no Kiosk session is open. Wrap the call in " \

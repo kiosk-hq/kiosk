@@ -8,9 +8,8 @@
 # DECLARATION — the `kind` macro below — never of the class. Both are routed
 # in fixtures/routes_kiosk.rb.
 #
-# The SQL is deliberately RAW: `my_appointments` is the harness's headline
-# security assertion — per-principal isolation with no RLS — and it is the
-# SQL-side `kiosk.current_user_id()` predicate that proves it.
+# `my_appointments` is the harness's headline security assertion: per-principal
+# isolation through `Appointment.own`, with no RLS.
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Handler
 
@@ -50,7 +49,7 @@ class Kiosk::BookingsController < ApplicationController
   #
   # `subject_reachable` is re-run while the subscription stands, with no
   # request and therefore no session GUC, so it takes the principal from the
-  # identity it is handed rather than from `kiosk.current_user_id()`.
+  # identity it is handed rather than from `Kiosk.current_user_id`.
   topic :appointment_confirmed do
     description "The salon confirmed an appointment of yours. Nothing to call back: this is " \
                 "the salon acting, not an answer to a request of yours."
@@ -64,10 +63,7 @@ class Kiosk::BookingsController < ApplicationController
     }
   end
 
-  # my_appointments — per-user appointment list scoped by the session GUC.
-  # The WHERE is provider-controlled; the agent supplies no user filter.
-  # App-layer per-user isolation without RLS: the principal sees only rows
-  # where user_id matches kiosk.current_user_id(), enforced in the query.
+  # my_appointments — the principal's own appointments; the caller supplies no filter.
   kind :query
   description "List the appointments belonging to the authenticated principal. " \
               "The caller cannot widen this: the scope is the provider's, taken " \
@@ -96,11 +92,7 @@ class Kiosk::BookingsController < ApplicationController
   example_row({ id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
                 slot: -> { example_slot } })
   def my_appointments
-    render json: ActiveRecord::Base.connection.execute(
-      "SELECT id, salon_id, slot FROM appointments " \
-      "WHERE user_id = kiosk.current_user_id() " \
-      "ORDER BY id",
-    ).to_a
+    render json: Appointment.own.order(:id).map { { "id" => _1.id, "salon_id" => _1.salon_id, "slot" => _1.slot.iso8601 } }
   end
 
   # book_appointment — reserves a slot for the CALLING principal. The owner is
@@ -139,12 +131,7 @@ class Kiosk::BookingsController < ApplicationController
   example_row({ appointment_id: "3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f", salon_id: 1,
                 slot: -> { example_slot } })
   def book_appointment
-    # Identity is set via Kiosk::Server::SessionContext SET LOCAL —
-    # current_user_id() helper returns the principal. ActiveRecord doesn't
-    # have direct access; pull from PG.
-    user_id = ActiveRecord::Base.connection.execute(
-      "SELECT kiosk.current_user_id() AS uid",
-    ).first["uid"]
+    user_id = Kiosk.current_user_id
 
     appointment = Appointment.create!(
       user_id:  user_id,

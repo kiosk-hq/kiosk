@@ -163,18 +163,15 @@ class Kiosk::FrontDeskController < ApplicationController
                             }
   end
 
-  # salon_calendar — STAFF forecast, role-gated on kiosk.current_role(), the GUC
-  # set from the token's role claim (the bound human's IdP role):
+  # salon_calendar — STAFF forecast, role-gated on the token's role claim (the
+  # bound human's IdP role):
   #
   #   owner → the WHOLE book, every visitor's bookings, plus a FORECAST summary
   #           SUMMED from those bookings' captured prices.
   #   any other role → ONLY their own bookings, and no forecast.
   #
   # Un-bypassable: the role rides the token, not the request args, and the WHERE
-  # is provider-controlled. The gate reads the GUC rather than the mixin's
-  # `kiosk_identity` so the scoping predicate and the branch agree by
-  # construction, and so the query still works outside a wire request (an RLS
-  # journey test), where kiosk_identity is nil but the GUCs are set anyway.
+  # is provider-controlled.
   #
   # `reach :role` — a declared departure from spec §7.2, and the only verb in the
   # fleet carrying it: an `owner` reads EVERY principal's appointments. Sound only
@@ -232,7 +229,7 @@ class Kiosk::FrontDeskController < ApplicationController
                   ],
                 }
   def salon_calendar
-    role = Appointment.current_principal_role
+    role = Kiosk.current_role
 
     book = role == "owner" ? Appointment.all : Appointment.own
 

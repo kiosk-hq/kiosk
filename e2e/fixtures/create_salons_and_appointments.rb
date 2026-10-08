@@ -5,7 +5,7 @@
 # `salons` is open-read (any authenticated principal browses) via the
 # registered `salons` named query.
 # `appointments` is owner-scoped via the `my_appointments` named query
-# (WHERE user_id = kiosk.current_user_id()), enforced in app-layer.
+# (`Appointment.own`), enforced in app-layer.
 #
 # Isolation is app-layer (named queries); RLS is optional.
 class CreateSalonsAndAppointments < ActiveRecord::Migration[ActiveRecord::Migration.current_version]

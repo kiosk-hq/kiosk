@@ -16,6 +16,9 @@ Rails.application.routes.draw do
   # Devise needs this as its post-sign-in destination too.
   root "home#index"
 
+  # The page a rental verb's `unlock_url` opens, and the App Clip's launch URL.
+  get "/unlock", to: "unlock#show"
+
   # ── The Kiosk wire surface ────────────────────────────────────────────────
   # Mounted protocol plane + one explicit route per registered verb, drawn in
   # config/routes/kiosk.rb so the wire reads as one file and this one stays

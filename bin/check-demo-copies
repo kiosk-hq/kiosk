@@ -1470,7 +1470,9 @@ COPIES = {
               "philslist"  => "the same, for `body`: `post_listing` asks the assistant to put the " \
                               "seller's phone number or e-mail into the listing text. The board " \
                               "PUBLISHES that text — that is the product — but publishing it is no " \
-                              "reason to keep a second copy in the operator's request log." },
+                              "reason to keep a second copy in the operator's request log.",
+              "skooti"     => "the same, for `rt`: the rental token an `/unlock` URL carries opens a " \
+                              "vehicle for whoever holds it, so the page's request log must not keep it." },
     why:  "One log-hygiene posture for the operator seven, and the file an adopter copies. " \
           "kiosk-demo-prove does not ship it at all and needs no `except:`: the KYC broker " \
           "takes no password, no card and no session. The Kiosk wire's own credential fields " \

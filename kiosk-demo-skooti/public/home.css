@@ -47,3 +47,6 @@ header{background:var(--accent);color:#fff;padding:0 32px;height:60px;display:fl
 .hero p{font-size:16px;color:var(--muted)}
 footer{text-align:center;font-size:12px;color:var(--muted);padding:30px 0 40px}
 .tagline{font-size:13px;opacity:.9}
+.unlock .qr{display:flex;justify-content:center;margin:14px 0}
+.unlock .qr svg{width:min(100%,360px);height:auto;background:#fff}
+.unlock .token{word-break:break-all}

@@ -4,13 +4,10 @@
 # bin/make-qr — turn a skooti rental token into the App Clip launch QR.
 #
 # HOW THIS FITS THE DEMO:
-#   The AI assistant (agent) calls `start_rental` and receives a short-lived
-#   Ed25519 rental token, which it relays to its human.  THIS SCRIPT IS THE
-#   OPERATOR'S SIDE and runs in this checkout: the wire answers the token and
-#   no launch link, so an assistant driving the deployed origin cannot reach
-#   this script and cannot build the URL itself.  What it does here is turn a
-#   token into the App Clip launch URL and render its QR, so a demo can be
-#   shown on a screen; in the shipped product the tag is on the vehicle.
+#   `start_rental` and `rent_motorcycle` answer an `unlock_url` beside the
+#   token: the page at that URL shows the token and this same QR. This script
+#   builds the same URL from a token in hand, for a demo shown on a screen; in
+#   the shipped product the tag is on the vehicle.
 #
 #   Then it is the human's move: they scan or tap; iOS shows the App Clip
 #   banner; the clip launches, parses `rt=`, connects to the ESP32-C3 over
@@ -34,13 +31,12 @@
 #   - Saves tmp/skooti-unlock.svg (gitignored) for full-screen display.
 
 require "bundler/setup"
-require "rqrcode"
-require "cgi"
 require "json"
 require "optparse"
+require_relative "../app/services/unlock_link"
 
-DEMO_ROOT   = File.expand_path("..", __dir__)
-LAUNCH_HOST = "https://skooti.demo.kiosk.tech/unlock"
+DEMO_ROOT = File.expand_path("..", __dir__)
+ORIGIN    = "https://skooti.demo.kiosk.tech"
 
 # ── Parse CLI args ─────────────────────────────────────────────────────────────
 
@@ -98,15 +94,8 @@ else
 end
 
 # ── Build the launch URL ───────────────────────────────────────────────────────
-#
-# The token contains `|` (field separators) and `.` (before the base64url sig).
-# Both are not safe in a query-string value; CGI.escape encodes everything
-# except A-Z a-z 0-9 _ - . ~ (and encodes space as +, but tokens have no spaces).
-# We use ERB::Util.url_encode which follows RFC 3986 (encodes + as %2B, etc.)
-# but CGI.escape is identical for token characters — use CGI.escape for clarity.
 
-rt_encoded = CGI.escape(rental_token)
-launch_url = "#{LAUNCH_HOST}?scooter=#{options[:scooter]}&rt=#{rt_encoded}"
+launch_url = UnlockLink.url(origin: ORIGIN, scooter_code: options[:scooter], rental_token: rental_token)
 
 puts ""
 puts "Launch URL:"
@@ -115,7 +104,7 @@ puts ""
 
 # ── Render QR ─────────────────────────────────────────────────────────────────
 
-qr = RQRCode::QRCode.new(launch_url)
+qr = UnlockLink.qr(launch_url)
 
 # Terminal ANSI render
 puts qr.as_ansi(
@@ -128,7 +117,7 @@ puts qr.as_ansi(
 # SVG file (gitignored in tmp/)
 tmp_dir  = File.join(DEMO_ROOT, "tmp")
 svg_path = File.join(tmp_dir, "skooti-unlock.svg")
-File.write(svg_path, qr.as_svg(offset: 0, color: "000", shape_rendering: "crispEdges", module_size: 6))
+File.write(svg_path, UnlockLink.svg(launch_url))
 
 puts "SVG saved to: #{svg_path}"
 puts "Open it full-screen for easy scanning."

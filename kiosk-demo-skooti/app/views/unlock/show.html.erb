@@ -1,0 +1,19 @@
+<% content_for :title, "Unlock #{@scooter_code} — skooti" %>
+
+  <header>
+    <div class="logo">sko<span>oti</span></div>
+    <nav class="tagline">unlock <%= @scooter_code %></nav>
+  </header>
+
+  <div class="wrap">
+    <section class="sec">
+      <div class="sec-k">Unlock <%= @scooter_code %></div>
+      <div class="tryit unlock">
+        <h2>Scan this with your phone at the vehicle</h2>
+        <div class="qr"><%= raw @qr_svg %></div>
+        <p>Or open this page on your phone and tap the vehicle's NFC tag. The App Clip writes the token to the lock over Bluetooth; the lock checks it by itself.</p>
+        <p class="note">Unlock token — it opens <%= @scooter_code %> once, for a few minutes, for whoever holds it:</p>
+        <p class="card token"><%= @rental_token %></p>
+      </div>
+    </section>
+  </div>

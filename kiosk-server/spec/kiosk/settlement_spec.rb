@@ -32,8 +32,9 @@ RSpec.describe "Kiosk::Settlement and Kiosk::CartMandate" do
     defs = Kiosk::Server::SchemaDefinitions
     conn = ::ActiveRecord::Base.connection
     conn.execute(%(DROP SCHEMA IF EXISTS "#{SETTLEMENT_SPEC_SCHEMA}" CASCADE))
-    conn.execute(defs.helper_functions_sql(schema: SETTLEMENT_SPEC_SCHEMA, user_id_type: :uuid))
+    conn.execute(%(CREATE SCHEMA "#{SETTLEMENT_SPEC_SCHEMA}"))
     conn.execute(defs.mandates_sql(schema: SETTLEMENT_SPEC_SCHEMA, user_id_type: :uuid))
+    require "kiosk/owned"
     require_relative "../../app/models/kiosk/cart_mandate"
     require_relative "../../app/models/kiosk/settlement"
   end
@@ -81,11 +82,11 @@ RSpec.describe "Kiosk::Settlement and Kiosk::CartMandate" do
     own = settle(mine, [{ booking_id: "b-1" }])
     settle(other, [{ booking_id: "b-2" }])
 
-    expect(as(mine) { Kiosk::Settlement.of_current_principal.pluck(:id) }).to eq([own])
+    expect(as(mine) { Kiosk::Settlement.own.pluck(:id) }).to eq([own])
   end
 
   it "refuses to answer off the wire rather than answer nothing" do
-    expect { Kiosk::Settlement.of_current_principal.to_a }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
+    expect { Kiosk::Settlement.own.to_a }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
   end
 
   it "finds the settlement whose cart names a line item by the operator's own key" do

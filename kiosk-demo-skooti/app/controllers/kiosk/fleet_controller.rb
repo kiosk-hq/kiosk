@@ -89,7 +89,7 @@ class Kiosk::FleetController < ActionController::API
   end
 
   # ── my_reservations — per-principal: the caller's OWN reservations only, with
-  # no filter it supplies. `owned_by_current_principal` is the ONE place the
+  # no filter it supplies. `own` is the ONE place the
   # identity predicate is written — see Reservation for why it stays SQL-side.
   #
   # THE RECONCILIATION SURFACE: this is the "per-user query" protocol.md
@@ -131,8 +131,8 @@ class Kiosk::FleetController < ActionController::API
     # statement for the whole list — and it is only the second of the two
     # witnesses {Reservation.payment_state} weighs.
     reservations = Reservation.arel_table
-    settled_flag = Reservation.settled_flag(Kiosk::Settlement.of_current_principal)
-    render json: Reservation.owned_by_current_principal
+    settled_flag = Reservation.settled_flag(Kiosk::Settlement.own)
+    render json: Reservation.own
                             .joins(:scooter)
                             .order(reservations[:created_at].desc)
                             .pluck(reservations[:id], Scooter.arel_table[:code], reservations[:status],

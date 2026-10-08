@@ -40,7 +40,7 @@ class Kiosk::HouseholdController < ApplicationController
                 items: {
                   type: "object", additionalProperties: false,
                   properties: {
-                    account_id:   { type: "string", description: "uuid — the principal, from kiosk.current_user_id(). Pass it to remove_member as `account_id`." },
+                    account_id:   { type: "string", description: "uuid — the principal. Pass it to remove_member as `account_id`." },
                     agent_id:     { type: %w[string null], description: "The acting assistant, or null when a human session is calling." },
                     display_name: { type: "string", description: "The name this account shows to the people it shares lists with — the one it chose, or a stable opaque `member-<hex>` when it has chosen none. Never a login address." },
                   },
@@ -95,7 +95,7 @@ class Kiosk::HouseholdController < ApplicationController
   # The rows are {List.reachable_rows} — a MODEL PROJECTION, because the web UI's
   # `/lists` page publishes exactly these rows: one definition of a list
   # row, not two surfaces to keep in agreement. Its membership predicate is
-  # `Membership.of_current_principal`, a scope rather than a Ruby comparison.
+  # `Membership.own`, a scope rather than a Ruby comparison.
   def my_lists
     render json: List.reachable_rows
   end

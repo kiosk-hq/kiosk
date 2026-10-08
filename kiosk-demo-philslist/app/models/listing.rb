@@ -15,34 +15,7 @@ class Listing < ApplicationRecord
   validates :body, presence: true
   validates :status, inclusion: { in: STATUSES }
 
-  # ── THE isolation predicate ────────────────────────────────────────────────
-  # The one predicate in this demo deliberately written as SQL rather than as a
-  # Ruby comparison. Why:
-  #
-  # `kiosk.current_user_id()` is a STABLE Postgres function that reads the
-  # transaction-local GUC `app.current_user_id`. kiosk-server's SessionContext
-  # sets that GUC with `SET LOCAL`, from the identity the wire resolved, inside
-  # the very transaction the handler runs in — so the principal is never a value
-  # this process hands to the query. The database reads it, from state no request
-  # argument can reach, and it evaporates at COMMIT.
-  #
-  # `where(owner_id: <a ruby value>)` would be just as unforgeable *here* (the
-  # only value available is the same wire-resolved identity). What it would cost
-  # is the part that generalises: the predicate would stop being expressed in the
-  # terms an RLS policy is written in — spec §7 makes DB-enforced identity
-  # scoping a MUST and `kiosk.current_user_id()` is the seam where the app-layer
-  # predicate and the optional DB-layer policy are literally the same expression
-  # — and a demo is the reference other operators copy.
-  #
-  # `Arel.sql` over a frozen literal rather than an interpolated string: there is
-  # no caller-controlled value anywhere in this fragment. That is what makes it
-  # exempt from the no-raw-SQL rule rather than an exception to it.
-  scope :owned_by_current_principal, lambda {
-    # Off the wire there is no principal, so this predicate would be `= NULL`
-    # and answer nothing at all; refuse instead of returning a plausible zero.
-    Kiosk::Server::SessionContext.require_open!
-    where(arel_table[:owner_id].eq(Arel.sql("kiosk.current_user_id()")))
-  }
+  scope :own, -> { where(owner_id: Kiosk.current_user_id) }
 
   # The public classifieds board: the fifty newest open listings, every owner's.
   scope :on_board, lambda {

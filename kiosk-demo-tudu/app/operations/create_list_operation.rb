@@ -13,7 +13,7 @@ class CreateListOperation
   #   this is the one that would still hold if the schema were loosened.
   #
   #   An INSERT is the one place the principal must be spelled in Ruby: a READ
-  #   hides it in `Membership.of_current_principal`'s WHERE predicate, an INSERT
+  #   hides it in `Membership.own`'s WHERE predicate, an INSERT
   #   has none. Moving the column DEFAULT to `kiosk.current_user_id()` would keep
   #   the database the authority; that is a migration.
   def self.call(principal_id:, title:)

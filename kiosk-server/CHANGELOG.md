@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **`Kiosk::Owned` and `Kiosk.current_user_id`**; `Kiosk::Settlement.own` replaces `of_current_principal`, and `SessionContext.require_open!` is gone.
+
 - 2026-10-09: **`c.handlers` is removed**: classes including `Kiosk::Handler` register themselves, and the engine loads `app/controllers/kiosk/` on every reload.
 
 ## [0.5.12] — 2026-10-08

@@ -268,10 +268,10 @@ class Kiosk::StorefrontController < ActionController::API
     # same containment the operator's back office reads over ALL of them, so the
     # two surfaces are one behaviour with two authorities rather than two copies
     # of one SQL string (see {Order.settling}).
-    render json: Order.owned_by_current_principal
+    render json: Order.own
                       .order(created_at: :desc)
                       .pluck(:id, :status, :total_cents, :slot_at, :address, :timezone,
-                             Order.paid_flag(Kiosk::Settlement.of_current_principal))
+                             Order.paid_flag(Kiosk::Settlement.own))
                       .map { |id, status, total_cents, slot_at, address, timezone, paid|
                         # The clock this order was quoted on, READ OFF THE ROW
                         # and never re-parsed out of `address`. The district

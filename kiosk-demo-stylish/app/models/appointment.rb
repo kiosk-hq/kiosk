@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Appointment < ApplicationRecord
+  include Kiosk::Owned
+
   belongs_to :user
   belongs_to :salon
   # The service booked from the salon's menu. Optional: a bare salon booking
@@ -8,31 +10,6 @@ class Appointment < ApplicationRecord
   # owner's forecast.
   belongs_to :service, optional: true
 
-  # ── THE two GUC-borne assertions ───────────────────────────────────────────
-  # Every other statement in this demo is an ordinary relation; these two are
-  # deliberately written as SQL. Why:
-  #
-  # `kiosk.current_user_id()` and `kiosk.current_role()` are STABLE Postgres
-  # functions reading the transaction-local GUCs `app.current_user_id` /
-  # `app.current_role`. kiosk-server's SessionContext sets them with `SET LOCAL`,
-  # from the identity the wire resolved, inside the very transaction the handler
-  # runs in, and they evaporate at COMMIT. The mixin's `kiosk_identity` carries
-  # the same two facts and would be just as unforgeable — what it would cost is
-  # the part that generalises. Spec §7 makes DB-enforced identity scoping a MUST,
-  # and these are the seam where the app-layer predicate and the optional
-  # DB-layer RLS policy are LITERALLY the same expression. A demo is the
-  # reference other operators copy, so the predicate stays written in the terms
-  # an RLS policy is written in.
-  #
-  # `Arel.sql` over a frozen literal rather than an interpolated string: there is
-  # no caller-controlled value anywhere in either fragment. That is what makes
-  # them exempt from the no-raw-SQL rule rather than an exception to it.
-  scope :owned_by_current_principal, lambda {
-    # Off the wire there is no principal, so this predicate would be `= NULL`
-    # and answer nothing at all; refuse instead of returning a plausible zero.
-    Kiosk::Server::SessionContext.require_open!
-    where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
-  }
 
   # The staff role the bound human's IdP supplied, as the DB sees it. Read here
   # rather than off `kiosk_identity` so that the branch and the scope above

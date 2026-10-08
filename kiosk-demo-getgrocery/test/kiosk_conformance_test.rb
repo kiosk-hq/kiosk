@@ -95,7 +95,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # it fails if alice sees nothing, because a verb that answers everybody with
   # nothing would otherwise satisfy it while broken.
   #
-  # Watched fail: change `Order.owned_by_current_principal` to `Order.all` and
+  # Watched fail: change `Order.own` to `Order.all` and
   # this names the leaked rows.
   test "my_orders hands one shopper nothing belonging to another" do
     assert_kiosk_scoped_to_principal :my_orders, as: @alice, and_not: @bob

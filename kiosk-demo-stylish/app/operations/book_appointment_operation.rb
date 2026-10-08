@@ -12,7 +12,7 @@ class BookAppointmentOperation
   #   and can do that precisely because the value comes from the identity.
   #
   #   An INSERT is the one place the principal must be spelled in Ruby: the
-  #   queries next door hide it in `Appointment.owned_by_current_principal`'s
+  #   queries next door hide it in `Appointment.own`'s
   #   WHERE predicate, an INSERT has none. Moving the column's DEFAULT to
   #   `kiosk.current_user_id()` would keep the database the authority; a migration.
   def self.call(principal_id:, salon_id:, slot:, service_id:)

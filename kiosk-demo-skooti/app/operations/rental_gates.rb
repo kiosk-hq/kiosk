@@ -23,7 +23,7 @@ module RentalGates
   #
   # @return [Array(Reservation, nil), Array(nil, OperationResult)]
   def owned_reservation(reservation_id)
-    reservation = Reservation.owned_by_current_principal
+    reservation = Reservation.own
                              .still_reserved
                              .find_by(id: reservation_id)
     return [reservation, nil] if reservation
@@ -57,18 +57,13 @@ module RentalGates
   #
   # BOTH witnesses stay PRINCIPAL-SCOPED: the cashier deliberately lets B pay for
   # A's reservation (isolation flow), so "somebody paid" was never the question.
-  # And `paid_by_user_id` is compared through Arel, NOT as a hash value:
-  # `where(paid_by_user_id: Arel.sql("kiosk.current_user_id()"))` looks right and
-  # is silently wrong — `Arel.sql` returns a String subclass, so ActiveRecord
-  # binds the FUNCTION TEXT as a uuid value, casts it to NULL and matches no row.
   #
   # @return [OperationResult, nil] a refusal, or nil when the rental is paid for
   def payment_refusal(reservation_id)
-    paid_here = Reservation.owned_by_current_principal
+    paid_here = Reservation.own
                            .where(id: reservation_id, payment_status: Reservation::PAID)
-                           .where(Reservation.arel_table[:paid_by_user_id]
-                                             .eq(Arel.sql("kiosk.current_user_id()")))
-    settled = Kiosk::Settlement.of_current_principal
+                           .where(paid_by_user_id: Kiosk.current_user_id)
+    settled = Kiosk::Settlement.own
                         .joins(:cart_mandate)
                         .merge(Kiosk::CartMandate.referencing(reservation_id: reservation_id))
     return nil if paid_here.exists? || settled.exists?
@@ -76,7 +71,7 @@ module RentalGates
     # A reservation with a capture OUTSTANDING is neither paid nor unpaid, and
     # §11.6 forbids saying "no settlement" about it: name the third state, so the
     # assistant waits and reconciles rather than signing a fresh chain.
-    pending = Reservation.owned_by_current_principal
+    pending = Reservation.own
                          .where(id: reservation_id, payment_status: Reservation::PAYING)
     if pending.exists?
       return OperationResult.refused(

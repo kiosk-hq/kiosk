@@ -19,7 +19,7 @@
 #
 # It is NOT an Operation: it writes nothing, and there is no access DECISION to
 # put on the model. Ownership is not asked as a predicate at all — it is the ROW
-# COUNT of `Listing.owned_by_current_principal.where(id:).update_all(…)`, which
+# COUNT of `Listing.own.where(id:).update_all(…)`, which
 # keeps test and write in one statement no other transaction can slip between.
 module ListingAccess
   module_function

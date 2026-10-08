@@ -135,7 +135,7 @@ class Kiosk::HotelsController < ActionController::API
 
   # ── my_bookings — per-identity: the caller's OWN bookings only. The caller
   # supplies no filter; the scope is provider-controlled and un-bypassable, and
-  # `owned_by_current_principal` is the ONE place the identity predicate is
+  # `own` is the ONE place the identity predicate is
   # written (see Booking for why it stays SQL-side).
   #
   # THE RECONCILIATION SURFACE: the "per-user query" protocol.md §11.6 sends an
@@ -175,8 +175,8 @@ class Kiosk::HotelsController < ActionController::API
     # The settled flag is a CORRELATED EXISTS over the CALLER's settlements — one
     # statement for the whole list, not one query per row — and it is only the
     # second of the two witnesses {Booking.payment_state} weighs.
-    settled_flag = Booking.settled_flag(Kiosk::Settlement.of_current_principal)
-    render json: Booking.owned_by_current_principal
+    settled_flag = Booking.settled_flag(Kiosk::Settlement.own)
+    render json: Booking.own
                         .order(created_at: :desc)
                         .pluck(:id, :property_id, :room_type_id, :check_in, :check_out,
                                :total_cents, :status, :payment_status, settled_flag,

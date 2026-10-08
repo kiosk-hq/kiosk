@@ -18,6 +18,8 @@
 # move leaves it, and `out_for_delivery` → `delivered` is the shop's own end
 # of the bargain, written by nobody the caller can reach.
 class Order < ApplicationRecord
+  include Kiosk::Owned
+
   # The order states this app names, in one place so a gate, a refusal sentence
   # and a wire row cannot come to disagree about their spelling.
   CREATED     = "created"
@@ -57,32 +59,6 @@ class Order < ApplicationRecord
   belongs_to :user
   has_many :order_items, dependent: :destroy
 
-  # ── THE isolation predicate ────────────────────────────────────────────────
-  # getgrocery's handlers do not write SQL, yet this one fragment deliberately
-  # stays a SQL predicate rather than a Ruby comparison, for the reason the
-  # philslist pilot settled.
-  #
-  # `kiosk.current_user_id()` is a STABLE Postgres function reading the
-  # transaction-local GUC `app.current_user_id`, which kiosk-server's
-  # SessionContext sets with `SET LOCAL` — from the identity the wire resolved,
-  # inside the very transaction the request runs in — and which evaporates at
-  # COMMIT. A `where(user_id: <a ruby value>)` would be just as unforgeable
-  # here; what it would cost is the part that generalises. Spec §7 makes
-  # DB-enforced identity scoping a MUST, and this is the seam where the
-  # app-layer predicate and the optional DB-layer RLS policy are literally the
-  # same expression — which on THIS demo is not a hypothetical: `check:rls` is
-  # the fleet's only RLS enforcement proof and it applies its policies to this
-  # very table.
-  #
-  # `Arel.sql` over a frozen literal rather than an interpolated string: there
-  # is no caller-controlled value anywhere in this fragment. That is what makes
-  # it exempt from the no-raw-SQL rule rather than an exception to it.
-  scope :owned_by_current_principal, lambda {
-    # Off the wire there is no principal, so this predicate would be `= NULL`
-    # and answer nothing at all; refuse instead of returning a plausible zero.
-    Kiosk::Server::SessionContext.require_open!
-    where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
-  }
 
   # The rows `reschedule_delivery` may still move. Written here because the
   # verb and the pay path read the same lifecycle and must not each keep their
@@ -103,7 +79,7 @@ class Order < ApplicationRecord
   # looking at — which is what lets `my_orders` and the back office answer
   # "paid?" for a whole LIST in one statement instead of one query per row.
   # There is nothing here for a caller to control, which is the same exemption
-  # `owned_by_current_principal` above rests on: a frozen literal with no
+  # `own` above rests on: a frozen literal with no
   # interpolation is exempt from the no-raw-SQL rule rather than an exception to
   # it. Expressed as Arel it would be four nested NamedFunction nodes spelling
   # out CAST/json_build_array/json_build_object, and the one property that has
@@ -119,7 +95,7 @@ class Order < ApplicationRecord
   # references the order row being selected.
   #
   # The parameter is the whole point. `my_orders` passes
-  # `Kiosk::Settlement.of_current_principal`, so an assistant learns the paid state of
+  # `Kiosk::Settlement.own`, so an assistant learns the paid state of
   # its OWN orders and nothing else; `Admin::OrdersController` passes
   # `Kiosk::Settlement.all`, because an operator's back office that could only see one
   # principal's settlements would show every order unpaid. The AUTHORITY differs

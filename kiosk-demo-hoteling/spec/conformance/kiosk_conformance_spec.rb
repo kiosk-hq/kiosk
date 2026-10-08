@@ -112,7 +112,7 @@ RSpec.describe "Kiosk conformance" do
   # it fails if ada sees nothing, because a verb that answers everybody with
   # nothing would otherwise satisfy it while broken.
   #
-  # Watched fail: change `Booking.owned_by_current_principal` to `Booking.all`
+  # Watched fail: change `Booking.own` to `Booking.all`
   # and this names the leaked rows and the confirmation codes in them.
   it "hands one guest nothing belonging to another" do
     expect(:my_bookings).to be_scoped_to_principal(as: ada, and_not: ben)

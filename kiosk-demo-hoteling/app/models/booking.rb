@@ -5,6 +5,8 @@
 # reference the guest gives at the desk and is written by the same UPDATE that
 # confirms, never minted for a response.
 class Booking < ApplicationRecord
+  include Kiosk::Owned
+
   RESERVED  = "reserved"
   CONFIRMED = "confirmed"
   # The booking is off. A property that cannot honour what it sold says so
@@ -64,29 +66,6 @@ class Booking < ApplicationRecord
     where(id: booking_id, user_id: user_id).exists?
   end
 
-  # ── THE isolation predicate ────────────────────────────────────────────────
-  # The one predicate in this demo deliberately written as SQL rather than as a
-  # Ruby comparison. Why:
-  #
-  # `kiosk.current_user_id()` is a STABLE Postgres function reading the
-  # transaction-local GUC `app.current_user_id`, which kiosk-server's
-  # SessionContext sets with `SET LOCAL` — from the identity the wire resolved,
-  # inside the very transaction the request runs in — and which evaporates at
-  # COMMIT. A `where(user_id: <a ruby value>)` would be just as unforgeable here;
-  # what it would cost is the part that generalises. Spec §7 makes DB-enforced
-  # identity scoping a MUST, and this is the seam where the app-layer predicate
-  # and the optional DB-layer RLS policy are literally the same expression. A
-  # demo is the reference other operators copy.
-  #
-  # `Arel.sql` over a frozen literal rather than an interpolated string: there is
-  # no caller-controlled value anywhere in this fragment. That is what makes it
-  # exempt from the no-raw-SQL rule rather than an exception to it.
-  scope :owned_by_current_principal, lambda {
-    # Off the wire there is no principal, so this predicate would be `= NULL`
-    # and answer nothing at all; refuse instead of returning a plausible zero.
-    Kiosk::Server::SessionContext.require_open!
-    where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
-  }
 
   # ── THE room-night invariant, written ONCE ─────────────────────────────────
   # Nights are HALF-OPEN: a checkout day is the next guest's check-in day, so two
@@ -114,7 +93,7 @@ class Booking < ApplicationRecord
   # against `bookings.id` — the column of whichever row the enclosing SELECT is
   # looking at — which is what lets `my_bookings` answer "paid?" for a whole
   # LIST in one statement instead of one query per row. Nothing here is
-  # caller-controlled, the same exemption `owned_by_current_principal` rests on.
+  # caller-controlled, the same exemption `own` rests on.
   SETTLED_CART_REFERENCES_THIS_ROW = Arel.sql(
     "kiosk.cart_mandates.line_items @> " \
     "json_build_array(json_build_object('booking_id', bookings.id::text))::jsonb",
@@ -122,7 +101,7 @@ class Booking < ApplicationRecord
 
   # The settlements — OF THE RELATION THE CALLER IS ENTITLED TO SEE — whose cart
   # references the booking row being selected. `my_bookings` passes
-  # `Kiosk::Settlement.of_current_principal`; the parameter is what keeps the
+  # `Kiosk::Settlement.own`; the parameter is what keeps the
   # CONTAINMENT one expression while the AUTHORITY stays the caller's.
   #
   # @param settlements [ActiveRecord::Relation] settlements this caller may read

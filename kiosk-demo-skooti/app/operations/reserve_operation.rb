@@ -14,7 +14,7 @@ class ReserveOperation
   #   redteam battery's ForgedUserId beat asserts the row lands under the caller).
   #
   #   An INSERT is the one place the principal must be spelled in Ruby: every
-  #   READ hides it in `owned_by_current_principal`'s WHERE predicate, and an
+  #   READ hides it in `own`'s WHERE predicate, and an
   #   INSERT has no predicate to hide it in.
   #
   # @param scooter_code [Object] the raw wire value. PRESENCE is the controller's

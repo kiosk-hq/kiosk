@@ -12,7 +12,7 @@ class ReserveRoomOperation
   #   argument off the request, which is what makes a forged `user_id` in the
   #   body inert (the redteam battery's ForgedUserId beat asserts it). An INSERT
   #   is the one place the principal must be spelled in Ruby: every READ hides it
-  #   in a WHERE predicate (`Booking.owned_by_current_principal`), an INSERT has
+  #   in a WHERE predicate (`Booking.own`), an INSERT has
   #   none. Moving the column DEFAULT to `kiosk.current_user_id()` would make the
   #   database the authority; that is a migration, not a handler change.
   def self.call(principal_id:, agent_id:, property_id:, room_type_id:, check_in:, check_out:)

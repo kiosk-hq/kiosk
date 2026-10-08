@@ -16,30 +16,7 @@ class Membership < ApplicationRecord
   validates :role, inclusion: { in: ROLES }
   validates :account_id, uniqueness: { scope: :list_id }
 
-  # ── THE isolation predicate ────────────────────────────────────────────────
-  # The one predicate in this demo deliberately written as SQL rather than as a
-  # Ruby comparison. Why:
-  #
-  # `kiosk.current_user_id()` is a STABLE Postgres function reading the
-  # transaction-local GUC `app.current_user_id`, which kiosk-server's
-  # SessionContext sets with `SET LOCAL` — from the identity the wire resolved
-  # (or, on tudu's second door, the signed-in human) inside the very transaction
-  # the request runs in — and which evaporates at COMMIT. A `where(account_id:
-  # <a ruby value>)` would be just as unforgeable here; what it would cost is
-  # the part that generalises. Spec §7 makes DB-enforced identity scoping a
-  # MUST, and this is the seam where the app-layer predicate and the optional
-  # DB-layer RLS policy are literally the same expression. A demo is the
-  # reference other operators copy.
-  #
-  # `Arel.sql` over a frozen literal rather than an interpolated string: there
-  # is no caller-controlled value anywhere in this fragment. That is what makes
-  # it exempt from the no-raw-SQL rule rather than an exception to it.
-  scope :of_current_principal, lambda {
-    # Off the wire there is no principal, so this predicate would be `= NULL`
-    # and answer nothing at all; refuse instead of returning a plausible zero.
-    Kiosk::Server::SessionContext.require_open!
-    where(arel_table[:account_id].eq(Arel.sql("kiosk.current_user_id()")))
-  }
+  scope :own, -> { where(account_id: Kiosk.current_user_id) }
 
   # THE ACCESS DECISION, and it lives here rather than in a controller or an
   # Operation because it is a fact about the domain, not about a request: "may
@@ -66,7 +43,7 @@ class Membership < ApplicationRecord
   # @param require_owner [Boolean] tighten to role='owner' (invite/remove authority)
   # @return [Boolean]
   def self.reachable?(list_id, require_owner: false)
-    scope = of_current_principal.where(list_id: list_id)
+    scope = own.where(list_id: list_id)
     scope = scope.where(role: OWNER) if require_owner
     scope.exists?
   end
@@ -79,7 +56,7 @@ class Membership < ApplicationRecord
   # {Todo.rows_on}: the caller has already been through {ListAccess.check}, and
   # putting the membership predicate in the projection too would leave two copies
   # of one test and invite a future caller to mistake this for the guard. Note
-  # that the rows are NOT `of_current_principal` — the point of the verb is the
+  # that the rows are NOT `own` — the point of the verb is the
   # OTHER members — which is exactly why the gate in front of it is the only thing
   # standing between a caller and a foreign list's roster, and why it answers 403
   # rather than 404. See {List.reachable_rows} for why the shape lives on the
@@ -96,7 +73,7 @@ class Membership < ApplicationRecord
   # in this field.
   #
   # ── WHAT THE EVENT SURFACE READS, and why neither of these is
-  # {.of_current_principal} ──────────────────────────────────────────────────
+  # {.own} ──────────────────────────────────────────────────
   #
   # Every membership read above resolves the principal from `CurrentRequest`,
   # which is FIBER-LOCAL. Both callers below run where there is no request to

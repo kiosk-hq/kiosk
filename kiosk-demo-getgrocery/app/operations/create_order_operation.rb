@@ -20,7 +20,7 @@ class CreateOrderOperation
   # @param principal_id [String] the account the wire resolved, NEVER an argument
   #   off the request — which is why a forged `user_id` in the body is ignored.
   #   An INSERT is the one place the principal must be spelled in Ruby: every
-  #   READ hides it in `Order.owned_by_current_principal`'s WHERE predicate, and
+  #   READ hides it in `Order.own`'s WHERE predicate, and
   #   an INSERT has no predicate to hide it in.
   # @param items [Object] the raw cart, already unwrapped from
   #   ActionController::Parameters by the controller — its ELEMENT TYPE is a
@@ -64,7 +64,7 @@ class CreateOrderOperation
 
     # ONE transaction: the order row and its items are written together or not
     # at all. It joins the SessionContext transaction the wire already opened
-    # (where the GUCs `owned_by_current_principal` reads are SET LOCAL), so it
+    # (where the GUCs `own` reads are SET LOCAL), so it
     # states what belongs together rather than opening a second unit of
     # atomicity. `next` and never `return`: nothing here needs a non-local exit
     # out of the block.

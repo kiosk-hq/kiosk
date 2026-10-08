@@ -38,7 +38,7 @@ class ConfirmBookingOperation
       # other principals' booking ids. `exists?` and not `find_by!` — the bang
       # form's RecordNotFound renders as `not_found`, telling a prober the id is
       # unknown.
-      mine = Booking.owned_by_current_principal.where(id: booking_id)
+      mine = Booking.own.where(id: booking_id)
       row  = mine.pick(:status, :confirmation_code, :refund_psp_reference)
       unless row
         return OperationResult.refused(code: "forbidden", message: "booking not found or not yours")
@@ -55,21 +55,18 @@ class ConfirmBookingOperation
       #
       # Both witnesses stay PRINCIPAL-SCOPED, which is what keeps this gate about
       # payment BY THE CALLER (the cashier deliberately lets B pay for A's
-      # booking). `paid_by_user_id` is compared through an Arel NODE, never as a
-      # hash value — `Arel.sql` returns a String subclass, so ActiveRecord would
-      # bind the function TEXT as a uuid, cast it to NULL and match no row.
-      paid_here = Booking.owned_by_current_principal
+      # booking).
+      paid_here = Booking.own
                          .where(id: booking_id, payment_status: Booking::PAID)
-                         .where(Booking.arel_table[:paid_by_user_id]
-                                       .eq(Arel.sql("kiosk.current_user_id()")))
-      settled = Kiosk::Settlement.of_current_principal
+                         .where(paid_by_user_id: Kiosk.current_user_id)
+      settled = Kiosk::Settlement.own
                           .joins(:cart_mandate)
                           .merge(Kiosk::CartMandate.referencing(booking_id: booking_id))
       unless paid_here.exists? || settled.exists?
         # A capture OUTSTANDING is neither paid nor unpaid, and §11.6 forbids
         # publishing it as "no settlement". Name the third state, so the
         # assistant waits and reconciles rather than re-minting a chain.
-        pending = Booking.owned_by_current_principal
+        pending = Booking.own
                          .where(id: booking_id, payment_status: Booking::PAYING)
         if pending.exists?
           return OperationResult.refused(

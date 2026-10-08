@@ -18,7 +18,7 @@ class BookTableOperation
   #   argument off the request.
   #
   #   An INSERT is the one place the principal is spelled in Ruby: the
-  #   owner-scoped reads hide it in a WHERE (`owned_by_current_principal`), an
+  #   owner-scoped reads hide it in a WHERE (`own`), an
   #   INSERT has no predicate to hide it in. Both are un-forgeable — the identity
   #   comes from the Rack env the wire built, which no request argument can write
   #   — but only the WHERE keeps the DB as the authority.

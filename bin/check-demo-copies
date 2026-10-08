@@ -4590,15 +4590,17 @@ FRAGMENTS = {
            "in one copy is the drift this rule exists for, and a per-association name would report " \
            "it as a unit that merely stopped being shared.",
   },
+  "app/models/booking.rb#include" => {
+    rule:  :code,
+    ships: %w[atablefor hoteling],
+    why:   "`include Kiosk::Owned`, the framework's owner scope.",
+  },
   "app/models/booking.rb#scope" => {
     rule:  :per_demo,
     ships: %w[atablefor hoteling],
-    why:   "SAME MACRO, DIFFERENT SETS: atablefor declares `confirmed`, `on_board` and " \
-           "`owned_by_current_principal`; hoteling declares `live`, `owned_by_current_principal` " \
-           "and `overlapping`, the last being the room-night predicate its EXCLUDE constraint " \
-           "mirrors. `owned_by_current_principal` is the isolation predicate every owner-scoped " \
-           "read goes through and the two spellings differ only in the table they name, which is " \
-           "the right thing to differ.",
+    why:   "SAME MACRO, DIFFERENT SETS: atablefor declares `confirmed` and `on_board`; " \
+           "hoteling declares `live` and `overlapping`, the room-night predicate its EXCLUDE " \
+           "constraint mirrors.",
   },
 
   "app/models/booking.rb#CONFIRMED" => {

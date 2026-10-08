@@ -27,7 +27,7 @@
 #     map and must not be.
 #
 # WHAT IS DELIBERATELY NOT HERE. The row count that DECIDES the miss —
-# `Listing.owned_by_current_principal.where(id:).update_all(…)`, whose WHERE is
+# `Listing.own.where(id:).update_all(…)`, whose WHERE is
 # `owner_id = kiosk.current_user_id()` against a transaction-local GUC — is not
 # a pure function and must not be faked into one: what makes it un-bypassable is
 # that the principal comes from the database session rather than from an

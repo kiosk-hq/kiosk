@@ -28,7 +28,7 @@ class CompleteTodoOperation
     # is exact because `memberships.list_id` is NOT NULL: the subquery can never
     # yield the NULL that makes `IN` return unknown instead of false.
     completed = Todo.where(id: todo_id)
-                    .where(list_id: Membership.of_current_principal.select(:list_id))
+                    .where(list_id: Membership.own.select(:list_id))
                     .update_all(done: true, updated_at: Time.current)
 
     if completed.zero?

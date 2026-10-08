@@ -9,7 +9,7 @@ class CloseListingOperation
     id, refusal = ListingAccess.listing_id(listing_id)
     return refusal if refusal
 
-    updated = Listing.owned_by_current_principal
+    updated = Listing.own
                      .where(id: id)
                      .update_all(status: "closed", updated_at: Time.current)
 

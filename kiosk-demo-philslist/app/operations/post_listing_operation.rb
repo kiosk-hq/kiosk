@@ -8,7 +8,7 @@ class PostListingOperation
   #   argument off the request, which is what lets `post_listing` ignore a forged
   #   `owner_id` in the body. An INSERT is the one place the principal must be
   #   spelled in Ruby: the owner-scoped verbs next door hide it inside a WHERE
-  #   predicate (`Listing.owned_by_current_principal`), an INSERT has none. Both
+  #   predicate (`Listing.own`), an INSERT has none. Both
   #   are un-forgeable — the identity comes from the Rack env the wire built —
   #   but only the WHERE keeps the database as the authority; a column DEFAULT
   #   of `kiosk.current_user_id()` would close that gap.

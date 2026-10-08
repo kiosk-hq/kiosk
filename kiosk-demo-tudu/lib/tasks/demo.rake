@@ -414,9 +414,9 @@ namespace :check do
       Rails.application.eager_load!
       scopes = ActiveRecord::Base.descendants.flat_map do |model|
         model.singleton_class.instance_methods(false)
-             .grep(/_current_principal\z/).map { |name| [model, name] }
+             .grep(/\Aown\z/).map { |name| [model, name] }
       end
-      abort "VACUOUS — this app declares no *_current_principal scope at all" if scopes.empty?
+      abort "VACUOUS — this app declares no `own` scope at all" if scopes.empty?
       answered = scopes.reject do |model, name|
         begin
           model.public_send(name).count

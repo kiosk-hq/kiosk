@@ -45,7 +45,7 @@ class List < ApplicationRecord
   #   has to serve both readers ({OperationResult} makes the same choice for the
   #   write half, and for the same reason).
   def self.reachable_rows
-    joins(:memberships).merge(Membership.of_current_principal)
+    joins(:memberships).merge(Membership.own)
       .order(created_at: :desc, id: :asc)
       .pluck(:id, :title, Membership.arel_table[:role])
       .map { |id, title, role| { "list_id" => id, "title" => title, "role" => role } }

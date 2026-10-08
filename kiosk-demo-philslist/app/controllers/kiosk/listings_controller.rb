@@ -76,7 +76,7 @@ class Kiosk::ListingsController < ApplicationController
   end
 
   # edit_listing — OWNER-ONLY. The UPDATE is scoped by
-  # `Listing.owned_by_current_principal`, so Postgres evaluates
+  # `Listing.own`, so Postgres evaluates
   # `owner_id = kiosk.current_user_id()` against the transaction GUC; zero rows
   # affected → 403, not 404, so ids cannot be enumerated. See {EditListingOperation}.
   kind :action

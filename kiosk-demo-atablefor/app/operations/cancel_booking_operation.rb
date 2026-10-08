@@ -14,7 +14,7 @@ class CancelBookingOperation
     # `update_all` (not `update!`) is what keeps it one statement, and it skips
     # validations. The cancelled row leaves the confirmed set, so the unique
     # partial index frees the (table, seating) for a fresh booking.
-    cancelled = Booking.owned_by_current_principal
+    cancelled = Booking.own
                        .where(id: booking_id)
                        .where.not(status: Booking::CANCELLED)
                        .update_all(status: Booking::CANCELLED, updated_at: Time.current)

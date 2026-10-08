@@ -24,7 +24,7 @@ class EditListingOperation
     # `update_all`, not `update!`: one statement, so the ownership test and the
     # write cannot be separated by another transaction. `updated_at` always
     # bumps, so a patch supplying nothing still proves ownership by row count.
-    updated = Listing.owned_by_current_principal
+    updated = Listing.own
                      .where(id: id)
                      .update_all(patch.merge(updated_at: Time.current))
 

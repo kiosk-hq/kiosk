@@ -125,9 +125,9 @@ class Kiosk::FrontDeskController < ApplicationController
   end
 
   # my_appointments — scoped by the session GUC: the agent supplies no filter.
-  # `owned_by_current_principal` stays SQL-side — see Appointment.
+  # `own` stays SQL-side — see Appointment.
   kind :query
-  description "List this principal's appointments (scoped to authenticated user via kiosk.current_user_id())"
+  description "List this principal's appointments."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   # `id` here for the value book_appointment calls `appointment_id` — published
   # behaviour, named in the schema so an assistant reads it rather than meets it.
@@ -144,7 +144,7 @@ class Kiosk::FrontDeskController < ApplicationController
                   required: %w[id salon_id slot timezone],
                 }
   def my_appointments
-    render json: Appointment.owned_by_current_principal
+    render json: Appointment.own
                             .joins(:salon)
                             .order(:id)
                             .pluck("appointments.id", "appointments.salon_id",
@@ -234,7 +234,7 @@ class Kiosk::FrontDeskController < ApplicationController
   def salon_calendar
     role = Appointment.current_principal_role
 
-    book = role == "owner" ? Appointment.all : Appointment.owned_by_current_principal
+    book = role == "owner" ? Appointment.all : Appointment.own
 
     # `left_joins` because a bare salon booking carries no service: the row must
     # still appear, with a null service and a null captured price.

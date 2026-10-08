@@ -124,11 +124,10 @@ class Kiosk::BoardController < ApplicationController
   end
 
   # my_listings — per-identity: the caller's OWN listings only, with no filter
-  # to supply. `owned_by_current_principal` is the ONE place the identity
+  # to supply. `own` is the ONE place the identity
   # predicate is written; see Listing for why it stays SQL-side.
   kind :query
-  description "List the listings owned by the authenticated principal " \
-              "(scoped to kiosk.current_user_id())."
+  description "List the listings owned by the authenticated principal."
   # A verb that takes nothing still declares the empty closed object, so "takes
   # no arguments" is a published fact rather than an absence to interpret.
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
@@ -152,7 +151,7 @@ class Kiosk::BoardController < ApplicationController
                 }
   def my_listings
     zone = BoardClock.zone
-    render json: Listing.owned_by_current_principal
+    render json: Listing.own
                         .joins(:category)
                         .order(created_at: :desc, id: :asc)
                         .pluck("listings.id", "listings.title", "listings.price_text",

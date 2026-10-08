@@ -246,7 +246,7 @@ class Kiosk::DiningRoomController < ApplicationController
   # my_bookings — per-user booking list scoped by the session GUC. The scope is
   # provider-controlled; the agent supplies no filter. The principal can only
   # see rows where user_id matches kiosk.current_user_id(), enforced in the
-  # query itself — `owned_by_current_principal` is the ONE place that predicate
+  # query itself — `own` is the ONE place that predicate
   # is written.
   # Semantics only; naming the follow-on VERB in the description is
   # the sanctioned form, naming its argument is not.
@@ -289,7 +289,7 @@ class Kiosk::DiningRoomController < ApplicationController
                                seating_at timezone],
                 }
   def my_bookings
-    render json: Booking.owned_by_current_principal
+    render json: Booking.own
                         .joins(:restaurant, :restaurant_table)
                         .order(:seating_at)
                         .pluck("bookings.id", "bookings.restaurant_id", "restaurants.name",

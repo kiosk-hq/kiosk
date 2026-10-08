@@ -64,7 +64,7 @@ class RescheduleDeliveryOperation
       # read here because `update_all` cannot resolve "keep the old one" in SQL,
       # and because a move that names no new address must land on the clock this
       # order was booked on rather than on one re-parsed out of its address.
-      order = Order.owned_by_current_principal
+      order = Order.own
                    .reschedulable
                    .where(id: order_id)
                    .pick(:id, :address, :timezone)
@@ -77,10 +77,10 @@ class RescheduleDeliveryOperation
       end
 
       # ── Gate 4: a settlement of THIS principal for THIS order ────────────
-      # The payer must be the caller (`of_current_principal`, the GUC predicate)
+      # The payer must be the caller (`own`, the GUC predicate)
       # and the settled cart must name this order (`Kiosk::CartMandate.referencing`,
       # shared with the pay path and the back office): paying for A moves no B.
-      paid = Kiosk::Settlement.of_current_principal
+      paid = Kiosk::Settlement.own
                        .joins(:cart_mandate)
                        .merge(Kiosk::CartMandate.referencing(order_id: order_id))
       unless paid.exists?
@@ -88,7 +88,7 @@ class RescheduleDeliveryOperation
         # "this order is not paid yet" is the sentence protocol.md §11.6
         # forbids about one — it sends the assistant back to sign a fresh chain.
         # The claim is owner-scoped (see PaymentClaim).
-        if Order.owned_by_current_principal.where(id: order_id, status: Order::PAYING).exists?
+        if Order.own.where(id: order_id, status: Order::PAYING).exists?
           next OperationResult.refused(
             code:    "forbidden",
             message: "a payment for this order is in progress and its outcome is not yet known — " \
@@ -122,7 +122,7 @@ class RescheduleDeliveryOperation
       zone    = district ? DeliverySlots.zone_for(district) : Time.find_zone!(current_timezone)
       slot_at = DeliverySlots.slot_at(date, slot_id, zone)
 
-      Order.owned_by_current_principal
+      Order.own
            .where(id: row_id)
            .update_all(
              status:     Order::RESCHEDULED,

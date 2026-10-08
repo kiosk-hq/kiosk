@@ -7,6 +7,8 @@
 # only WHERE status = 'confirmed', so cancelling a booking is what frees the
 # (table, seating) for someone else.
 class Booking < ApplicationRecord
+  include Kiosk::Owned
+
   CONFIRMED = "confirmed"
   CANCELLED = "cancelled"
 
@@ -29,30 +31,6 @@ class Booking < ApplicationRecord
              .limit(50)
   }
 
-  # ── THE isolation predicate ────────────────────────────────────────────────
-  # atablefor's handlers do not write SQL, yet this fragment deliberately stays
-  # a SQL predicate rather than a Ruby comparison, for the reason the philslist
-  # pilot settled (see Listing#owned_by_current_principal).
-  #
-  # `kiosk.current_user_id()` is a STABLE Postgres function reading the
-  # transaction-local GUC `app.current_user_id`, which kiosk-server's
-  # SessionContext sets with `SET LOCAL` — from the identity the wire resolved,
-  # inside the very transaction the handler runs in — and which evaporates at
-  # COMMIT. The mixin's `kiosk_identity` carries the same principal and would be
-  # just as unforgeable; what it would cost is the part that generalises. Spec §7
-  # makes DB-enforced identity scoping a MUST, and this is the seam where the
-  # app-layer predicate and the optional DB-layer RLS policy are literally the
-  # same expression. A demo is the reference other operators copy.
-  #
-  # `Arel.sql` over a frozen literal rather than an interpolated string: there is
-  # no caller-controlled value anywhere in this fragment. That is what makes it
-  # exempt from the no-raw-SQL rule rather than an exception to it.
-  scope :owned_by_current_principal, lambda {
-    # Off the wire there is no principal, so this predicate would be `= NULL`
-    # and answer nothing at all; refuse instead of returning a plausible zero.
-    Kiosk::Server::SessionContext.require_open!
-    where(arel_table[:user_id].eq(Arel.sql("kiosk.current_user_id()")))
-  }
 
   # `seating_at` as EVERY verb of this demo publishes it, and the pin is two
   # separate decisions that were being made by one line.

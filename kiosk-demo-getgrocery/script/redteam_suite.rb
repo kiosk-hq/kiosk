@@ -99,8 +99,7 @@
 #   ForgedKyc              — same, with a self-asserted one
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=http://127.0.0.1:3001 \
-#   bundle exec ruby script/redteam_suite.rb
+#   SERVER_URL=http://127.0.0.1:3001 bundle exec ruby script/redteam_suite.rb
 
 require "date"
 require "json"

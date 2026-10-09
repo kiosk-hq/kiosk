@@ -21,9 +21,8 @@
 #     that puts foreign source in this process.
 #   * a DATA-FILE path read — allowed. skooti's `prove_test_issuer.rb` names
 #     the broker's dev PEM; a PEM is bytes, not code.
-#   * an OUT-OF-PROCESS app boot — allowed. `prove_broker_boot.rb`'s
-#     `BROKER_APP` names the broker's directory in order to SPAWN a second
-#     server there, which is K-663's accepted harness shape.
+#   * an OUT-OF-PROCESS app boot — allowed. Naming another app's directory in
+#     order to SPAWN a second server there is K-663's accepted harness shape.
 #
 # So the guard reads require statements and nothing else, and the synthetic
 # examples at the bottom pin that it stays that way.
@@ -148,7 +147,7 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
     end
 
     it "ALLOWS naming another app's directory in order to BOOT it (K-663)" do
-      rel = source("kiosk-demo-skooti/script/prove_broker_boot.rb",
+      rel = source("kiosk-demo-skooti/script/rental_flow.rb",
                    %(BROKER_APP = File.expand_path("../../kiosk-demo-prove", __dir__)\n) +
                    %(spawn({}, "bin/rails s", chdir: BROKER_APP)\n))
       expect(xapp_violations([rel])).to be_empty

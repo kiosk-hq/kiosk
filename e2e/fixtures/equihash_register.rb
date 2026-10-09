@@ -11,7 +11,7 @@
 # challenge → sign PoP → register; on a 402 pow_required it solves every
 # challenge with the shipped Python solver and retries the SAME register body,
 # sending the proof(s) in the Kiosk-PoW request header as raw JSON.
-# Same mechanism the demos use (kiosk-demo-skooti/script/equihash_register.rb).
+# Same mechanism the demos use (kiosk-demo-tudu/script/equihash_register.rb).
 #
 # Requires: json, jwt, openssl, securerandom, uri (callers already require most
 # of these). Callers supply get_json/post_json lambdas so the helper stays

@@ -64,8 +64,7 @@
 # problem document whose branch point is the TOP-LEVEL `code`.
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3002 KIOSK_ISSUER=http://127.0.0.1:3002 \
-#   bundle exec ruby script/redteam_suite.rb
+#   SERVER_URL=http://127.0.0.1:3002 bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
 # on a battery that produced no proofs at all; exits 2 when a beat could not be

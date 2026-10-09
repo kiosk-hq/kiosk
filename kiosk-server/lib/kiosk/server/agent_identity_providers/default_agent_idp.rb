@@ -66,7 +66,7 @@ module Kiosk
         #   * a watermark of `Time.now.to_i + 1` closes it, but then kills the
         #     NEXT token too, and `/auth/login` in that same second is the
         #     recovery path §6.3 itself names ("or by re-running /auth/login").
-        #     `kiosk-demo-tudu/script/link_flow.rb` walks exactly that sequence.
+        #     `kiosk-demo-tudu/test/wire/link_test.rb` walks exactly that sequence.
         #
         # Clamping here resolves both at once and puts the invariant in ONE
         # place instead of asking each caller to reason about it: a caller

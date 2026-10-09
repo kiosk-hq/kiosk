@@ -78,11 +78,7 @@
 # drives.
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3005 \
-#   KIOSK_ISSUER=http://127.0.0.1:3005 \
-#   ALICE_EMAIL=alice@example.com BOB_EMAIL=bob@example.com \
-#   OWNER_EMAIL=owner@combette.example DEMO_PASSWORD=… \
-#   bundle exec ruby script/redteam_suite.rb
+#   SERVER_URL=http://127.0.0.1:3005 bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED; exits 1 on any BREACH, and on a
 # battery that produced no proofs at all; exits 2 when a beat could not be
@@ -426,8 +422,7 @@ end
 #
 # It polls ONLY after the approval, so no `sleep` is needed: `slow_down` fires
 # on a SECOND poll of the same device_code inside the advertised interval, and
-# there is no first one here. (`script/binding_flow.rb` sleeps because it
-# deliberately polls once while pending, to show `authorization_pending`.)
+# there is no first one here.
 def claim_ceremony(session, key, pem, extra = {})
   rc, da = oauth_post("/kiosk/oauth/device_authorization",
                       { "client_id" => "redteam-claim", "public_key" => pem }.merge(extra))

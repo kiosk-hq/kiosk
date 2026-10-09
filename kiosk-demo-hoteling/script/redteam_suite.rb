@@ -51,8 +51,7 @@
 # must be rejected.
 #
 # Usage (from kiosk-demo-hoteling/):
-#   SERVER_URL=http://127.0.0.1:3003 KIOSK_ISSUER=http://127.0.0.1:3003 \
-#   bundle exec ruby script/redteam_suite.rb
+#   SERVER_URL=http://127.0.0.1:3003 bundle exec ruby script/redteam_suite.rb
 #
 # Exits non-zero if any applicable scenario reports a BREACH or if the
 # expected skip set does not match (catches profile typos that disable gates).

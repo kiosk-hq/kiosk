@@ -56,9 +56,7 @@
 # attack in the SAME environment this suite drives.
 #
 # Usage:
-#   SERVER_URL=http://127.0.0.1:3006 KIOSK_ISSUER=http://127.0.0.1:3006 \
-#   ALICE_EMAIL=alice@example.com BOB_EMAIL=bob@example.com \
-#   DEMO_PASSWORD=… bundle exec ruby script/redteam_suite.rb
+#   SERVER_URL=http://127.0.0.1:3006 bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
 # on a battery that produced no proofs at all; exits 2 when a beat could not be

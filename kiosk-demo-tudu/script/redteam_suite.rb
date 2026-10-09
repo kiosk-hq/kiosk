@@ -42,8 +42,7 @@
 #     while the role-less request still opens the ceremony
 #
 # Usage:
-#   SERVER_URL=… KIOSK_ISSUER=… HOLDER_ID=… HOLDER_EMAIL=… HOLDER_PASSWORD=… \
-#   bundle exec ruby script/redteam_suite.rb
+#   SERVER_URL=http://127.0.0.1:3007 bundle exec ruby script/redteam_suite.rb
 #
 # Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
 # on a battery that produced no proofs at all; exits 2 when a beat could not be

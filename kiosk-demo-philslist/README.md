@@ -58,7 +58,7 @@ Demonstrates:
   **multi-account household** beat: two assistants bound to the SAME account
   (a couple) share one board presence — a listing either posts shows under the
   shared account and to both assistants — each independently revocable, while
-  neither can touch a different owner's listing (`rake check:binding`)
+  neither can touch a different owner's listing (`test/wire/binding_test.rb`)
 
 ### Before / after
 
@@ -75,19 +75,7 @@ hidden PSP finds only a string column.
 ## Run the demo
 
 The demo lives in the Kiosk monorepo and resolves its gems by path
-(`../kiosk-*` in the Gemfile), so run it from its checked-out directory:
-
-```sh
-cd kiosk-demo-philslist
-bundle install
-bin/setup                        # seed, then serve the origin
-rake demo:setup check:walkthrough   # or assert it instead
-```
-
-`bin/setup` creates the Postgres database, loads the schema + seeds and leaves
-the origin running for an assistant to drive — see "Watch it work" below.
-`check:walkthrough` instead walks **browse → post → edit → close** with `curl` +
-`jq` output and asserts each step — no payment step, the visible contrast.
+(`../kiosk-*` in the Gemfile), so run it from its checked-out directory.
 
 ### Prerequisites
 
@@ -100,122 +88,60 @@ To run one of this demo's own tasks instead of the server:
 docker compose run --rm app bin/rails <task>
 ```
 
-The list below is the HOST path — what running `bin/rails demo:*` on your own machine
-needs. It is not shorter under containers; it is unnecessary.
+On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
-- **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: the demo tasks shell out to it directly, not only through ActiveRecord.
-- **python3 with numpy** — check with `python3 -c "import numpy"`. Registering an assistant pays an Equihash toll, and every task that registers one solves it with the bundled `solve.py`; without numpy the solver exits `this solver requires numpy` and the task fails at its first step.
+- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Postgres**, reachable — `pg_isready` returns OK.
+- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
 - **`curl` and `jq`** on PATH — `bin/demo` drives the walkthrough with them.
 
-> **`demo:setup` is destructive, and every task that depends on it inherits that.**
-> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
-> check, no confirmation prompt — so running it **DROPS and recreates**
-> `kiosk_philslist_development`. Nothing you left in that database survives.
-> The SERVER is `localhost`, read from the same `config/database.yml` — unless
-> `PGHOST` is exported, and then it is whatever host that names: the drop
-> follows it, and takes that server's `kiosk_philslist_development` instead.
->
-> Under `docker compose` the same drop still happens on every `up`, but it lands on the
-> Postgres that compose brings up, on this project's own volume. It cannot reach a
-> database on your machine: the compose file sets `PGHOST` to the container beside it
-> rather than passing yours through.
->
-> `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
+From this directory:
+
+```
+bin/rails demo:setup   # DROPS and recreates kiosk_philslist_development, then seeds the board
+bin/dev                # serves the origin on http://localhost:3000
+bin/demo               # the walkthrough, against that origin
+bin/rails test         # the tests; CI runs exactly this
+```
+
+`bin/setup` does the first two. The tests drive the origin over HTTP the way an
+assistant does.
 
 ## What the demo shows
 
-The walkthrough (`rake check:walkthrough`; `bin/demo` under the hood) prints:
+`bin/demo` walks Alice's assistant through the board with `curl`:
 
-1. **Binding** — Alice's assistant earns a token through the real ceremony: register under the Equihash toll, Alice signs in, link, claim
-2. **Discovery** — the well-known capabilities, asserting `pay` is **absent**
+1. **Binding** — the assistant registers under the Equihash toll, Alice signs in, and a link code binds it to her account
+2. **Discovery** — the well-known capabilities, with no `pay` among them
 3. **Browse** — `browse_listings` across the open, cross-owner board
-4. **Post → edit → close** — the full owned-listing lifecycle over the three
-   action endpoints, with `my_listings` reflecting the final state
+4. **Post → edit → close** — the owned-listing lifecycle over the three
+   action endpoints, with `my_listings` showing the final state
 
-After the walkthrough finishes, the server is torn down cleanly. Server logs
-are at `/tmp/kiosk-philslist-demo.log`.
+The tests in `test/wire/` hold the rest:
 
-### Cross-owner isolation (`rake check:isolation`)
-
-Alice and Bob each post a listing. Then: `browse_listings` returns both owners'
-listings (open board); Bob's `my_listings` excludes Alice's and includes his
-own; **Bob editing or closing Alice's listing → 403**; and a forged `owner_id`
-arg on Bob's `post_listing` is **refused `400 bad_request` naming `owner_id`**,
-not accepted-and-ignored — the schemas are `additionalProperties: false`, so
-the argument never reaches the handler (the legitimate row's DB `owner_id` is
-still Bob, taken from the token).
-
-### Adversarial battery (`rake check:redteam`)
-
-Asserts every attack is BLOCKED (0 BREACH) — every scenario the suite runs, in
-its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
-`CrossOwnerClose` (403), `MalformedUuidArg` (400, no SQL internals),
-`MissingAuth` (401), `GarbageToken` (401), `SelfAssertedTokenForgery` (401),
-`UnknownQuery` (404), `UnknownAction` (404),
-`UnregisteredVerbIsOrdinaryRefusal` (a POST to a name no verb registers draws
-no route: the ordinary 404 any undrawn path gets, bearer or not), `MethodMismatch` (a `GET` at an action's path draws no route either, so it
-is the same plain 404 and the write never runs),
-`OutOfEnumFilterIsNotSilentlyReinterpreted` (400 naming the live categories)
-`LikeMetacharactersAreEscaped` (an `_` in `keyword` matches an underscore,
-not any character) and `NoSellerPiiOnTheOpenBoard` (the open board names a
-seller by an opaque `seller-<hex>` pseudonym, carries no account address
-anywhere in the response, and keeps one handle per seller) and
-`ContactDetailsStayOutOfTheRequestLog` (the contact line `post_listing` asks an
-assistant to put in `body` is published on the board and filtered out of the
-`Parameters:` lines of the operator's own request log). Last comes the one
-beat this file does not hand-roll: `DeviceGrantRoleSelfSelection`, shared from
-`kiosk-redteam` by every demo — the account-binding claim ceremony's
-unauthenticated opening request must refuse a `role` at a value this origin
-DECLARES as firmly as an invented one, and a SKIP is scored as a breach here
-because this origin declares a role. The task prints the count
-it actually ran; that number is the length of this list.
-
-### Not-only-commerce proof (`rake check:schema`)
-
-Asserts the schema catalog (queries/actions + descriptions) **and** that the
-advertised `capabilities` do **not** include `pay`, `agents.json` carries no
-payments block, and `agents.txt` carries no `Protocols: ap2` / `Payments:`
-directives. The module set has exactly one home in the descriptor,
-`capabilities`, so that is the only member this beat reads it from. The same
-beat also asserts that `GET /kiosk/schema` answers **with no Authorization
-header at all**: the
-catalogue is public.
-
-### Registration PoW (`rake check:register`)
-
-Registration is priced even where nothing is sold: a fresh key registering with
-no proof gets **402 (`pow_required`)**, solving the challenge with the bundled
-solver and resubmitting gets **201**, and the minted token posts a listing
-(**200**) — while a bad `category_slug` on that post comes back as a clean
-**400** naming the valid categories, not a 500. The point is that the anti-flood
-toll is part of the wire contract, not a commerce feature — a free
-classifieds board wants it as much as a shop does. Needs python3 + numpy.
-
-### Account binding + multi-account household (`rake check:binding`)
-
-Two flows, one run, all over plain HTTP against the live app:
-
-1. **First contact (claim)** — an assistant with a fresh key opens the ceremony
-   at `/kiosk/oauth/device_authorization`; the human signs in through the real
-   Devise form (cookie + CSRF dance — no fixtures), approves on the verify
-   page, the assistant's possession-proof poll mints a token bound to the
-   human's account, and it **posts a listing** there.
-2. **Household (link + multi-account)** — the signed-in human mints a link
-   code, a **second** assistant redeems it and sees the same account's listings
-   — and **edits** the first assistant's listing (a household with separate
-   assistants). The human then unlinks the first assistant: its login 404s from
-   that moment while the second keeps working.
-
-The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id`
-for **both** bound keys equals the human's id, and the posted listing's
-`owner_id` is the human.
-
-### Tests (`bin/rails test`)
-
-`test/` holds Minitest tests: `BoardClock` renders `posted_at` on the reader's
-declared clock, and `edit_listing`/`close_listing` refuse a foreign listing and an
-absent one with the same 403.
+- **Isolation** — the board shows every seller's listings and `my_listings` only
+  the caller's; editing or closing another seller's listing is **403**; a forged
+  `owner_id` on `post_listing` is **refused `400 bad_request`** naming it, and a
+  listing's owner and posting assistant come from the token. `browse_listings`
+  publishes `reach: published`, and every query that claims `principal` reach
+  answers only the caller's rows.
+- **Red team** — `script/redteam_suite.rb` attacks the live origin and every
+  scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
+  `CrossOwnerClose`, `MalformedUuidArg`, `MissingAuth`, `GarbageToken`,
+  `SelfAssertedTokenForgery`, `UnknownQuery`, `UnknownAction`,
+  `UnregisteredVerbIsOrdinaryRefusal`, `MethodMismatch`,
+  `OutOfEnumFilterIsNotSilentlyReinterpreted`, `LikeMetacharactersAreEscaped`,
+  `NoSellerPiiOnTheOpenBoard`, `ContactDetailsStayOutOfTheRequestLog`, and the
+  shared `DeviceGrantRoleSelfSelection`.
+- **Not only commerce** — the capabilities are `schema`, `queries` and `actions`
+  only: no `pay`, no `events`; `agents.json` and `agents.txt` carry no payment
+  terms; the catalogue is public, and its examples satisfy their own schemas.
+- **Registration toll** — registering without a proof is **402 `pow_required`**,
+  even on a board that sells nothing; with one, the new assistant posts at once.
+- **Account binding** — the RFC 8628 device grant binds an assistant to the
+  human who approves it; two assistants linked to one household share its
+  listings, and unlinking one revokes its tokens — including one minted in the
+  same second — while the other keeps working.
 
 ### Watch it work
 
@@ -230,25 +156,6 @@ It discovers the wire, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `alice@example.com` / `philslist-demo-password` and approve it there.
 
-Everything under `check:` below asserts and exits non-zero when it breaks; that
-is what CI runs. `demo:setup` prepares the database.
-
-### Which of these run in CI
-
-A `check:` task asserts and goes red; a `demo:` task is one a person runs and
-reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
-and pull request; the rest are local-only, for the reason given.
-
-| Task | Runs in CI | Why not |
-|---|---|---|
-| `demo:setup` | yes — the job's own setup step |  |
-| `check:walkthrough` | yes |  |
-| `check:isolation` | yes |  |
-| `check:register` | yes |  |
-| `check:binding` | no | timing-sensitive: the account-binding ceremony polls on the advertised RFC 8628 device-grant interval, which flakes on a shared runner — the same exclusion as stylish's. |
-| `check:redteam` | yes |  |
-| `check:schema` | yes |  |
-
 ## Repo tour
 
 | Path | What's there |
@@ -260,10 +167,9 @@ and pull request; the rest are local-only, for the reason given.
 | `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. The operations in `app/operations/` raise `Kiosk::Server::Errors` refusals, which the wire renders as the RFC 9457 problem document an assistant branches on |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only principal shape: an identity here is a verified JWT or it is nothing |
 | `script/bound_assistant.rb` | The ONE way a driver obtains an AGENT principal bound to a seeded human. It runs the shipped ceremony over real HTTP, and is hand-copied across the demos and held byte-identical by `bin/check-demo-copies`. Its HUMAN counterpart is `Kiosk::UserIdentityProviders::DeviseSession`, shipped by `kiosk-user-idp-devise` |
-| `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` / `script/binding_flow.rb` / `script/register_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
-| `bin/demo` | The browse→post→edit→close walkthrough (POSIX shell, curl-driven) |
-| `test/` | Minitest tests, run by `bin/rails test` |
-| `lib/tasks/demo.rake` | `rake demo:setup`, `:walkthrough`, `demo`, `:isolation`, `:redteam`, `:schema`, `:binding`, `:register` |
+| `script/redteam_suite.rb` | The adversarial battery, run against a live origin |
+| `bin/demo` | The browse→post→edit→close walkthrough (curl-driven) |
+| `test/` | Minitest tests, run by `bin/rails test`; `test/wire/` drives the origin over HTTP |
 
 ## Make it real
 

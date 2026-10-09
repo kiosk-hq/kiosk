@@ -2,6 +2,28 @@
 
 require "kiosk/server"
 
+# A DB-free spent-id store. The shipped default is the database table, which
+# only the examples that need it reach (pow_spent_stores_spec).
+class MemoryPowSpentStore
+  def initialize
+    @ids   = {}
+    @mutex = Mutex.new
+  end
+
+  def claim(id, exp)
+    return false if id.nil?
+
+    @mutex.synchronize { @ids.key?(id) ? false : (@ids[id] = exp; true) }
+  end
+
+  def release(id) = @mutex.synchronize { @ids.delete(id) }
+  def spent?(id)  = @mutex.synchronize { @ids.key?(id) }
+
+  def mark_spent(id, exp)
+    @mutex.synchronize { @ids[id] = exp }
+  end
+end
+
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
@@ -18,6 +40,7 @@ RSpec.configure do |config|
 
   config.before(:each) do
     Kiosk.reset!
+    Kiosk.configure { |c| c.pow_spent_store = MemoryPowSpentStore.new }
     Kiosk::Server::Actions.reset!
     Kiosk::Server::Queries.reset!
     Kiosk::Server::Events.reset!
@@ -214,7 +237,7 @@ end
 module SlowStoreAllocation
   # Classes whose `.new` is the allocation inside a lazy configuration default.
   STORE_CLASSES = [
-    Kiosk::Server::PowSpentStore,
+    Kiosk::Server::PowSpentStores::ActiveRecord,
     Kiosk::Server::AuthChallengeStore,
     Kiosk::Server::RevocationStore,
     Kiosk::Server::DeviceAuthorizationStores::ActiveRecord,

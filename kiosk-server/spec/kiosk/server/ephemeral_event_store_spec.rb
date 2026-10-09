@@ -11,8 +11,8 @@
 #
 # The condition lives on the engine class rather than inside its
 # `after_initialize` block so it can be asserted without booting a production
-# Rails app, which is the shape `.shared_spent_store_warning` and
-# `.default_role_configuration_error` beside it already use. `topics` is an
+# Rails app, which is the shape `.default_role_configuration_error` beside it
+# already uses. `topics` is an
 # argument rather than a read of the process-global registry, so each example
 # states the whole shape of the origin it is describing. That the engine's
 # `after_initialize` block turns the condition into a refused boot is proven
@@ -72,8 +72,7 @@ RSpec.describe Kiosk::Server::Engine, ".ephemeral_event_store_error" do
 
   # An origin that declares no topic never emits, never serves `events` in its
   # catalogue and never advertises an `events_url`. Its store is an object
-  # nothing calls, and refusing to boot it would be a false accusation — the
-  # exact failure `.shared_spent_store_warning` takes care to avoid.
+  # nothing calls, and refusing to boot it would be a false accusation.
   it "does NOT refuse an origin that declares no topic at all" do
     expect(error(topics: [])).to be_nil
   end

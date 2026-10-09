@@ -226,7 +226,7 @@ module Kiosk
 
         # Record this poll and report whether the PREVIOUS one was less
         # than `interval` seconds ago. In-process state (like the default
-        # challenge/spent stores); a multi-process deployment that wants
+        # auth-challenge store); a multi-process deployment that wants
         # cross-process poll accounting fronts the endpoint with its own
         # rate limiter.
         def polled_too_fast?(hash, interval, now)

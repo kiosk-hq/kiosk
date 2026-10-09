@@ -336,8 +336,7 @@ its own counter, so with W workers the effective grant is **per-worker** (an
 identity may get up to `count` free calls from each worker it hits before being
 re-challenged there). The COUNT is authoritative only per worker. A provider
 running multiple processes MUST pass a shared store (Redis/DB) with the same two
-methods. (This mirrors `Kiosk::Server::PowSpentStore`'s in-process default and
-its cross-worker caveat.)
+methods.
 
 ## Reputation hit on bad proof
 
@@ -364,7 +363,7 @@ The server gate (`Kiosk::Server::PowGate`) reads these config slots:
 | `pow_ttl` | Integer (seconds) | `300` | Challenge validity window. |
 | `reputation_factors` | `(identity:, verb:) → Factors` callable | returns `Factors.empty` | Host-supplied callable that gathers reputation context per request. |
 | `on_bad_proof` | `(identity:) → void` callable | no-op | Called when a submitted proof has a wrong nonce. Increment `bad_proof_count` here. |
-| `pow_spent_store` | `PowSpentStore`-compatible | in-process TTL store | Tracks spent challenge ids to prevent proof replay. The default holds single-use PER PROCESS, so a multi-process deployment **MUST** override it with a shared store — `Kiosk::Server::PowSpentStores::ActiveRecord.new` ships for this; see kiosk-server's README, "Multi-process deployments". |
+| `pow_spent_store` | `#claim`/`#release`/`#spent?`/`#mark_spent` | `Kiosk::Server::PowSpentStores::ActiveRecord` (the `kiosk.pow_spent` table) | Tracks spent challenge ids so a proof is accepted once, across every process and deploy. See kiosk-server's README, "Multi-process deployments". |
 
 ```ruby
 Kiosk.configure do |c|

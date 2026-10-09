@@ -14,6 +14,7 @@ module Kiosk
     #   005 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
     #   006 create_kiosk_kyc_attributes        → kiosk.kyc_attributes and kiosk.kyc_requests, keyed on the person
     #   007 create_kiosk_events                → kiosk.events, the per-identity event tail
+    #   008 create_kiosk_pow_spent             → kiosk.pow_spent, spent proof-of-work challenge ids
     #
     # Pure functions: no database connection, no Rails dependency. Output
     # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
@@ -375,26 +376,10 @@ module Kiosk
         SQL
       end
 
-      # ─── optional: shared PoW spent-id table (NOT a canonical migration) ─
-
-      # Table backing {PowSpentStores::ActiveRecord}, the shared spent-id
-      # store a MULTI-PROCESS operator must configure so that PoW single-use
-      # holds across web workers.
-      #
-      # This is deliberately NOT one of the canonical migrations and the
-      # `kiosk:install` generator does not lay it down: the shipped default
-      # store is in-process ({PowSpentStore}) and a single-process operator
-      # needs no table at all. An operator raising `WEB_CONCURRENCY` above 1
-      # adds a one-line migration of their own that calls this — see the
-      # "Multi-process deployments" section of the kiosk-server README.
-      #
-      # `id` is the opaque challenge id (Section 10 of the protocol), so the
-      # PRIMARY KEY is the single-use gate itself: the store's `claim` is one
-      # `INSERT … ON CONFLICT (id) DO UPDATE … WHERE expires_at <= now()`
-      # statement, and the unique index — not application code — decides who
-      # won. `expires_at` mirrors the challenge `exp`; rows past it are
-      # reclaimable (challenge ids are random, so this only matters for
-      # pruning) and {PowSpentStores::ActiveRecord#prune!} deletes them.
+      # Table backing {PowSpentStores::ActiveRecord}, the default spent-id
+      # store (migration 008). `id` is the opaque challenge id, so the PRIMARY
+      # KEY is the single-use gate; `expires_at` mirrors the challenge `exp`
+      # and serves the TTL sweep.
       def pow_spent_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
@@ -410,9 +395,8 @@ module Kiosk
         SQL
       end
 
-      # The SHARED auth-challenge table for multi-process operators —
-      # the sibling of {.pow_spent_sql}, and not part of the canonical
-      # migration set for the same reason: a single-process operator does not
+      # The SHARED auth-challenge table for multi-process operators, and not
+      # part of the canonical migration set: a single-process operator does not
       # need it. See the kiosk-server README, "Multi-process deployments".
       #
       # `public_key` is the registering/logging-in PEM and it is the PRIMARY

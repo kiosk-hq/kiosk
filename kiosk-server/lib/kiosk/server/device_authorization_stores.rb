@@ -32,9 +32,8 @@ module Kiosk
       # expressible as `find` + `update`: single-use has to be decided BY THE
       # ROW, in one operation, or two concurrent redemptions of the same code
       # both pass a check made against a snapshot and both bind. The
-      # sibling controls in this gem take the same shape and say so in the same
-      # words -- {PowSpentStore#claim} ("NOT a read-then-write, which
-      # reintroduces the very TOCTOU this method closes") and
+      # sibling controls in this gem take the same shape:
+      # {PowSpentStores::ActiveRecord#claim} (one `INSERT ... ON CONFLICT`) and
       # {AuthChallengeStores::ActiveRecord#take} (one `DELETE ... RETURNING`).
       # An override that implements it as a read followed by {#update} is a
       # defect, not a style choice.

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **Spent proof-of-work ids live in the database by default**, so a deploy or a second worker no longer makes a spent proof spendable again; `kiosk:install` lays down `kiosk.pow_spent`.
+
 - 2026-10-09: **`Kiosk::OperationResult` and `render_kiosk_result` are removed**; operations raise `Kiosk::Server::Errors`. `PaymentClaim` pays only the owner's row.
 
 - 2026-10-09: **`Kiosk.current_role`** beside `Kiosk.current_user_id`; `SessionContext.user_id` becomes `SessionContext.identity`.

@@ -26,11 +26,6 @@ module Kiosk
     # happen to land on the same worker — roughly 1/N of the time — and the
     # failure reaches the AI assistant as an unexplained rejection of a
     # correctly-signed request, indistinguishable from a bad key.
-    #
-    # Naming note: the in-process store keeps its existing top-level constant
-    # ({AuthChallengeStore}) rather than moving to
-    # `AuthChallengeStores::InMemory` — renaming it would break every operator
-    # initializer that references it. Same call as {PowSpentStores}.
     module AuthChallengeStores
       # Challenge store backed by the `<schema>.auth_challenges` table
       # ({SchemaDefinitions.auth_challenge_sql}), shared by every process
@@ -42,7 +37,7 @@ module Kiosk
       #
       # == Why the table is not in the install generator
       #
-      # The six canonical migrations are what EVERY operator needs. This table
+      # The canonical migrations are what EVERY operator needs. This table
       # is needed only above `WEB_CONCURRENCY=1`, so it ships as SQL plus this
       # adapter and the operator adds the one-line migration when they scale
       # out. See the kiosk-server README, "Multi-process deployments".

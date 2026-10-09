@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1891 anchors.
+# 1892 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1555,6 +1555,7 @@ kiosk-server/spec/kiosk/server/kyc_spec.rb	lets every assistant of that person t
 kiosk-server/spec/kiosk/server/kyc_spec.rb	names the claims in its descriptor and publishes the topic
 kiosk-server/spec/kiosk/server/kyc_spec.rb	opens a verification of the declared claims for the principal
 kiosk-server/spec/kiosk/server/kyc_spec.rb	publishes neither request_kyc nor its topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	pushes an event its published payload schema accepts
 kiosk-server/spec/kiosk/server/kyc_spec.rb	records the grant on the person and pushes the attestation to them
 kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a fourth open verification with 429 quota_exceeded
 kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a wrong nonce, another subject, and an attestation the provider does not accept

@@ -17,5 +17,8 @@ module KioskDemoAtablefor
 
     # public first: the kiosk tables reference public.users.
     config.active_record.dump_schemas = "public,kiosk"
+
+    # The proof-of-work every registration and tolled query pays.
+    config.x.equihash = { n: 168, k: 7 }
   end
 end

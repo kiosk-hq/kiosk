@@ -8,6 +8,8 @@ ENV["KIOSK_SIGNING_KEY_B64"] ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2
 ENV["KIOSK_POW_SECRET"]      ||= "atablefor-local-pow-secret-not-a-secret"
 
 Rails.application.configure do
+  # Small proofs, so a test registers in milliseconds rather than seconds.
+  config.x.equihash = { n: 96, k: 5 }
   config.enable_reloading = false
   config.eager_load = ENV["CI"].present?
   config.public_file_server.headers = { "cache-control" => "public, max-age=3600" }

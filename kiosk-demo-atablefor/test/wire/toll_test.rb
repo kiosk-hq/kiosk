@@ -20,12 +20,12 @@ class TollTest < WireTest
 
   def solved(challenges) = challenges.map { { challenge: _1, nonce: Kiosk::Pow::Equihash.solve(_1) } }
 
-  test "a new diner's query costs two Equihash n=168 k=7 proofs, and only solved ones pay it" do
+  test "a new diner's query costs two Equihash proofs, and only solved ones pay it" do
     diner = register
     issued = challenges(diner)
-    assert_equal [{ "n" => 168, "k" => 7 }] * 2, issued.map { _1["params"].slice("n", "k") }
+    assert_equal [EQUIHASH_PARAMS.transform_keys(&:to_s)] * 2, issued.map { _1["params"].slice("n", "k") }
 
-    guessed = issued.map { { challenge: _1, nonce: { "indices" => (1..2**7).to_a, "header_nonce" => 0 } } }
+    guessed = issued.map { { challenge: _1, nonce: { "indices" => (1..2**EQUIHASH_PARAMS[:k]).to_a, "header_nonce" => 0 } } }
     assert_equal 403, availability(diner, guessed)
     assert_equal 200, availability(diner, solved(challenges(diner)))
   end

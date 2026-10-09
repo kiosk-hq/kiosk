@@ -7,7 +7,7 @@ require "kiosk/reputation"
 
 Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 
-EQUIHASH_PARAMS = { n: 168, k: 7 }.freeze
+EQUIHASH_PARAMS = Rails.configuration.x.equihash
 
 Kiosk.configure do |c|
   c.user_model     = "User"

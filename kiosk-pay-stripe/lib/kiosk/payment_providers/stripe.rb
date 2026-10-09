@@ -5,12 +5,8 @@ require "kiosk/payment_providers/stripe/version"
 
 module Kiosk
   module PaymentProviders
-    # Stripe PSP adapter. The human saves a card once, on the operator's Stripe
-    # account, as a Customer + PaymentMethod; purchases are then charged
-    # `off_session`. The principal→Customer mapping is {CustomerRecord}, the
-    # host's `stripe_customers` table, unless `customer_resolver:` and
-    # `customer_saver:` callables are given.
-    #
+    # Stripe PSP adapter: the human saves a card once on the operator's Stripe
+    # account, and purchases are charged `off_session`.
     # Always reference the SDK as `::Stripe` — bare `Stripe` is this class.
     class Stripe < Base
       VERSION = StripeVersion::VERSION
@@ -22,13 +18,9 @@ module Kiosk
       # Stripe substitutes the session id on the redirect.
       RETURN_QUERY = "session_id={CHECKOUT_SESSION_ID}"
 
-      # @param api_key [String] Stripe secret key
-      # @param customer_resolver [#call] `(user_id) -> customer_id | nil`;
-      #   {CustomerRecord.resolve} when omitted
-      # @param customer_saver [#call] `(user_id, customer_id)`; replaces any
-      #   earlier mapping for that user; {CustomerRecord.save} when omitted
-      # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture
-      #   instead of requiring the hosted card entry
+      # @param customer_resolver [#call] `(user_id) -> customer_id | nil`; {CustomerRecord.resolve} when omitted
+      # @param customer_saver [#call] `(user_id, customer_id)`; {CustomerRecord.save} when omitted
+      # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture instead of hosted card entry
       def initialize(api_key:, customer_resolver: nil, customer_saver: nil, test_autocard: false)
         super()
         @api_key           = api_key
@@ -48,8 +40,6 @@ module Kiosk
       # A hosted Checkout page in `mode: "setup"`. An open setup session for the
       # same return target is reused, so an assistant polling `payment_setup`
       # keeps handing its human the same link.
-      #
-      # @return [String] hosted Stripe Checkout URL
       def setup_url(user_id:, return_url:)
         success_url = "#{return_url}?#{RETURN_QUERY}"
         cus_id      = ensure_customer(user_id)
@@ -64,10 +54,7 @@ module Kiosk
           ).url
       end
 
-      # The principal the returning browser's Checkout Session was minted for,
-      # as Stripe answers it.
-      #
-      # @return [String, nil]
+      # The principal the returning browser's Checkout Session was minted for.
       def setup_return_user_id(params)
         session_id = params["session_id"].to_s
         return nil if session_id.empty?
@@ -75,28 +62,18 @@ module Kiosk
         ::Stripe::Checkout::Session.retrieve(session_id).client_reference_id
       end
 
-      # True when the principal must save a card before a charge. Never true
-      # under `test_autocard`.
       def setup_required?(user_id:)
         return false if @test_autocard
 
         !saved_method?(user_id: user_id)
       end
 
-      # True when the principal's Customer has a usable saved card.
       def saved_method?(user_id:)
         customer = live_customer(user_id)
         !customer.nil? && !saved_payment_method_for(customer).nil?
       end
 
-      # Charges the principal's saved card off_session; the mandate's payment
-      # method is not used. Only a `succeeded` intent settles, at what it
-      # received.
-      #
-      # @return [Hash] { psp_reference:, settled_amount_cents:, settled_at: }
-      # @raise [SetupRequired] when there is no card to charge
-      # @raise [PaymentFailed] when Stripe declines, or the intent did not
-      #   succeed, or its outcome is unknown
+      # Charges the principal's saved card off_session; the mandate's payment method is not used.
       def capture(cart_mandate, payment_method: nil)
         customer = live_customer(cart_mandate.user_id)
         pm = customer && saved_payment_method_for(customer)
@@ -149,12 +126,6 @@ module Kiosk
         }
       end
 
-      # Reverses a capture, back to the card it came from.
-      #
-      # @param psp_reference [String] the PaymentIntent {#capture} returned
-      # @return [Hash] { psp_reference:, refunded_psp_reference:,
-      #   refunded_amount_cents:, refunded_at: }
-      # @raise [PaymentFailed] when Stripe does not refund
       def refund(psp_reference:, amount_cents:)
         refund = ::Stripe::Refund.create(
           { payment_intent: psp_reference, amount: amount_cents },
@@ -170,10 +141,7 @@ module Kiosk
         raise PaymentFailed.new("the payment processor did not refund the charge", reason: :refund_failed)
       end
 
-      # TEST-ONLY: saves a test card on the principal's Customer through a
-      # confirmed SetupIntent and makes it the default, as the hosted page would.
-      #
-      # @return [String] the customer id
+      # TEST-ONLY: saves a test card as the Customer's default, as the hosted page would.
       def attach_test_card(user_id:, payment_method: "pm_card_visa")
         cus_id = ensure_customer(user_id)
         setup = ::Stripe::SetupIntent.create(
@@ -194,8 +162,6 @@ module Kiosk
 
       private
 
-      # The open `mode:setup` session for this customer and return target, or
-      # nil. A failed lookup degrades to minting a fresh session, and says so.
       def outstanding_setup_session(cus_id, success_url:)
         listed = ::Stripe::Checkout::Session.list(
           customer: cus_id, status: "open", limit: SETUP_SESSION_LIST_LIMIT,
@@ -228,8 +194,7 @@ module Kiosk
         obj.respond_to?(name) ? obj.public_send(name) : nil
       end
 
-      # A human-safe reason keyed on Stripe's stable error code; Stripe's own
-      # message can carry request ids.
+      # Keyed on Stripe's stable error code: Stripe's own message can carry request ids.
       def card_decline_message(error)
         case error.respond_to?(:code) ? error.code : nil
         when "expired_card"            then "the payment method has expired"
@@ -248,8 +213,7 @@ module Kiosk
         cus.id
       end
 
-      # The principal's Stripe Customer, or nil when none is mapped or Stripe
-      # no longer has the mapped one (deleted, or never in this account).
+      # nil when none is mapped or Stripe no longer has the mapped one.
       def live_customer(user_id)
         cus_id = @customer_resolver.call(user_id)
         return nil unless cus_id
@@ -260,7 +224,6 @@ module Kiosk
         raise unless e.code == "resource_missing"
       end
 
-      # The customer's default card, else its first attached one, else nil.
       def saved_payment_method_for(customer)
         customer.invoice_settings&.default_payment_method ||
           ::Stripe::PaymentMethod.list(customer: customer.id, type: "card").data.first&.id

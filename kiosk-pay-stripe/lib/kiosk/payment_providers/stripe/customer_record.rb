@@ -10,8 +10,7 @@ module Kiosk
       class CustomerRecord < ::ActiveRecord::Base
         self.table_name = "stripe_customers"
 
-        # The table, from a host migration's `change`, its user_id typed as
-        # `c.user_id_type`:
+        # From a host migration:
         #   def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
         def self.create_table(migration)
           migration.create_table :stripe_customers do |t|

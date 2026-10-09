@@ -74,12 +74,7 @@ SQLI_QUOTE_CALL = /\.quote(?:_string)?\s*\(/
 # Two kinds of entry, and they are not the same thing:
 #   DEBT     — really is the K-654 shape, owned by another row.
 #   ACCEPTED — correct code this regex cannot tell apart from the bad shape.
-SQLI_KNOWN = {
-  # ACCEPTED — the bind-PLACEHOLDER idiom, which is the opposite of a splice:
-  # `$1::uuid, $2::uuid, …` is generated from the ARITY of the id list and the
-  # ids themselves travel as binds. A worked example of what this guard wants.
-  "kiosk-demo-tudu/app/controllers/lists_controller.rb" => 1,
-}.freeze
+SQLI_KNOWN = {}.freeze
 
 # Every `[lineno, why, source]` this file splices, in file order.
 def sqli_violations(src)

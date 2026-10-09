@@ -37,7 +37,7 @@ module WireArguments
 
   def served_list(values) = values.empty? ? "none" : values.join(", ")
 
-  def refuse(message)
-    raise Kiosk::Server::Errors::BadRequest, message
+  def refuse(message, hint: nil)
+    raise Kiosk::Server::Errors::BadRequest.new(message, hint: hint)
   end
 end

@@ -192,7 +192,7 @@ if ARGV.include?("--self-test")
   # The floor is the number of guarded sections measured when this was written.
   # It is a MEASUREMENT, not a target: it may rise freely, and a fall means
   # either a guard was deleted or the vocabulary above stopped reading one.
-  SELF_TEST_VACUITY_FLOOR = 18
+  SELF_TEST_VACUITY_FLOOR = 17
 
   # The one rule with no `# ── … ──` banner, declared so the check below can tell
   # «an arm for an unbannered rule» from «an arm for a banner that has moved».
@@ -302,8 +302,8 @@ if ARGV.include?("--self-test")
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
       what: "an id lands in a `desc` body — what `rake -D` prints, K-1323's exact operator-facing shape",
       ops:  [[:edit, "kiosk-demo-hoteling/lib/tasks/demo.rake",
-              "DB-free unit spec for the WireArguments shape guards",
-              "DB-free unit spec for the WireArguments shape guards (K-1099)"]],
+              "The property's own decision — both branches, forced",
+              "The property's own decision (K-1099) — both branches, forced"]],
       expect: /lib\/tasks\/demo\.rake:\d+: a ledger id OUTSIDE a comment, in code this demo RUNS/ },
     { id: "vacuity-demo-ledger-ids", kind: :vacuity,
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
@@ -314,29 +314,18 @@ if ARGV.include?("--self-test")
 
     { id: "spec-harness-unit-drifts", kind: :break,
       rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
-      what: "one demo's copy of `guard` grows a rescue clause the other five do not have",
-      ops:  [[:edit, "kiosk-demo-tudu/spec/reader_clock_spec.rb",
-              "def guard(label)\n  yield\nrescue StandardError => e",
-              "def guard(label)\n  yield\nrescue StandardError, NameError => e"]],
-      expect: /guard: the demo spec copies must agree once comments and whitespace are normalised/ },
+      what: "one demo's copy of a `:code` test constant moves alone",
+      ops:  [[:edit, "kiosk-demo-tudu/test/reader_clock_test.rb",
+              "NOON_UTC = Time.utc(2026, 9, 14, 12)", "NOON_UTC = Time.utc(2026, 9, 14, 13)"]],
+      expect: /NOON_UTC: the demo spec copies must agree once comments and whitespace are normalised/ },
     { id: "spec-harness-undeclared-unit", kind: :break,
       rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
-      what: "a helper is copied into a second demo's spec, at a path no other demo has",
-      ops:  [[:edit, "kiosk-demo-stylish/spec/salon_clock_spec.rb",
-              "FAILURES = []", "FAILURES = []\n\ndef probe_shared_helper = :ok"],
-             [:edit, "kiosk-demo-skooti/spec/licence_flag_spec.rb",
-              "FAILURES = []", "FAILURES = []\n\ndef probe_shared_helper = :ok"]],
+      what: "a helper is copied into a second demo's test, at a path no other demo has",
+      ops:  [[:edit, "kiosk-demo-stylish/test/book_appointment_test.rb",
+              "require \"test_helper\"\n", "require \"test_helper\"\n\ndef probe_shared_helper = :ok\n"],
+             [:edit, "kiosk-demo-skooti/test/licence_flag_test.rb",
+              "require \"test_helper\"\n", "require \"test_helper\"\n\ndef probe_shared_helper = :ok\n"]],
       expect: /probe_shared_helper: defined in 2 demo spec\/test file\(s\).*declared NOWHERE/ },
-    { id: "spec-harness-undeclared-unit-half-path-keyed", kind: :break,
-      rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
-      what: "the same helper lands in ONE copy of the shared path AND in a demo-unique spec — the " \
-            "case the old justification said could not exist, and the message must COUNT the " \
-            "reach of the path-keyed rule rather than claim it is zero",
-      ops:  [[:edit, "kiosk-demo-atablefor/spec/wire_arguments_spec.rb",
-              "FAILURES = []", "FAILURES = []\n\ndef probe_reach_helper = :ok"],
-             [:edit, "kiosk-demo-stylish/spec/salon_clock_spec.rb",
-              "FAILURES = []", "FAILURES = []\n\ndef probe_reach_helper = :ok"]],
-      expect: /probe_reach_helper: defined in 2 .*1 of them sits at a relative path FRAGMENTS walks and 1 does not/ },
     { id: "vacuity-spec-harness-corpus", kind: :vacuity,
       rule: "THE DEMO SPEC HARNESS, HELD BY UNIT NAME RATHER THAN BY PATH (K-1536)",
       what: "the corpus glob stops matching, so a lockstep rule over nothing exits 0",
@@ -346,12 +335,10 @@ if ARGV.include?("--self-test")
       expect: /the demo-spec harness rule read 0 Ruby file\(s\)/ },
     { id: "spec-whole-file-copied-at-one-path", kind: :break,
       rule: "A SPEC PATH TWO DEMOS SHARE MUST REACH THE FILE MANIFEST (K-1550)",
-      what: "a whole spec file copied into a second demo at the SAME relative path, whose every " \
-            "unit name is ALREADY declared — so the name-keyed rule compares them, they agree, " \
-            "and the file itself is held by nothing (measured: bare guard exit 0)",
-      ops:  [[:copy, "kiosk-demo-philslist/spec/board_clock_spec.rb",
-              "kiosk-demo-tudu/spec/board_clock_spec.rb"]],
-      expect: %r{spec/board_clock_spec\.rb: 2 demos ship a file at this SAME relative path} },
+      what: "a whole test file copied into a second demo at the SAME relative path",
+      ops:  [[:copy, "kiosk-demo-philslist/test/board_clock_test.rb",
+              "kiosk-demo-tudu/test/board_clock_test.rb"]],
+      expect: %r{test/board_clock_test\.rb: 2 demos ship a file at this SAME relative path} },
     { id: "vacuity-spec-shared-path-key", kind: :vacuity,
       rule: "A SPEC PATH TWO DEMOS SHARE MUST REACH THE FILE MANIFEST (K-1550)",
       what: "the group key keeps its demo directory, so every path is unique by construction and " \
@@ -370,8 +357,8 @@ if ARGV.include?("--self-test")
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
       what: "the id follows a `\\n` inside the string, so a leading `\\b` never matched it (K-1537)",
       ops:  [[:edit, "kiosk-demo-hoteling/lib/tasks/demo.rake",
-              "desc \"DB-free unit spec for the WireArguments shape guards",
-              "desc \"\\nK-1099 DB-free unit spec for the WireArguments shape guards"]],
+              "desc \"The property's own decision",
+              "desc \"\\nK-1099 The property's own decision"]],
       expect: /lib\/tasks\/demo\.rake:\d+: a ledger id OUTSIDE a comment, in code this demo RUNS/ },
     { id: "vacuity-demo-ledger-escape-blind", kind: :vacuity,
       rule: "NO LEDGER ID IN CODE A DEMO RUNS (K-1383)",
@@ -408,12 +395,6 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-skooti/config/application.rb", /^.*autoload_once_paths.*\n/, ""]],
       expect: /skooti: config\/initializers\/kiosk\.rb names .* from app\/services but config\/application\.rb does not put app\/services/ },
 
-    { id: "operation-result-regrows", kind: :break,
-      rule: "What is LEFT in a per-demo operation_result.rb (K-792)",
-      what: "uncompared behaviour starts growing back inside a `:per_demo` file",
-      ops:  [[:edit, "kiosk-demo-hoteling/app/operations/operation_result.rb", "  }.freeze\nend\n",
-              "  }.freeze\n\n  def refused?\n    status != :ok\n  end\nend\n"]],
-      expect: /hoteling: app\/operations\/operation_result\.rb defines "refused\?"/ },
 
     { id: "controller-prose-stale", kind: :break,
       rule: "application_controller.rb's PROSE must stay true (K-1021)",
@@ -589,8 +570,7 @@ if ARGV.include?("--self-test")
     { id: "fragment-path-shares-nothing", kind: :break,
       rule: "A shared UNIT inside a `:per_demo` file (T-120)",
       what: "a rename leaves a declared FRAGMENT_PATHS entry contributing nothing (T-146)",
-      ops:  [[:edit, "kiosk-demo-atablefor/app/models/booking.rb", "CONFIRMED", "KONFIRMED"],
-             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "CANCELLED", "KANCELLED"],
+      ops:  [[:edit, "kiosk-demo-atablefor/app/models/booking.rb", "enum ", "enum_x "],
              [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "belongs_to ", "belongs_to_x "],
              [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "scope ", "scope_x "],
              [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "include ", "include_x "]],
@@ -636,9 +616,9 @@ if ARGV.include?("--self-test")
     { id: "coincidence-has-ended", kind: :break,
       rule: "A `:per_demo` subject whose copies have PARTIALLY CONVERGED (K-1262)",
       what: "a legitimate divergence inside a `:coincidence` — the OTHER diagnosis, not drift",
-      ops:  [[:edit, "kiosk-demo-skooti/app/operations/operation_result.rb",
-              "\"forbidden\" => :forbidden }", "\"forbidden\" => :forbidden, \"conflict\" => :conflict }"]],
-      expect: /app\/operations\/operation_result\.rb: `agree:` records \[philslist,skooti,tudu\] as a `:coincidence` and the coincidence has ended/ },
+      ops:  [[:edit, "kiosk-demo-skooti/test/test_helper.rb",
+              "require \"rails/test_help\"\n", "require \"rails/test_help\"\nrequire \"minitest/mock\"\n"]],
+      expect: /test\/test_helper\.rb: `agree:` records \[atablefor,skooti\] as a `:coincidence` and the coincidence has ended/ },
     # The agreed SIZE is matched as `\d+` rather than restated: it moves whenever one
     # of the three drivers is edited, and what this arm is for is the refusal and the cap.
     { id: "coincidence-over-the-cap", kind: :break,
@@ -750,8 +730,8 @@ if ARGV.include?("--self-test")
     { id: "e2e-fixture-diverges", kind: :break,
       rule: "The e2e fixture rule runs (T-118)",
       what: "the harness copy and the demo copy of one file stop agreeing",
-      ops:  [[:edit, "e2e/fixtures/salon.rb", /\nend\n\z/, "\n\n  def self.probe = :ok\nend\n"]],
-      expect: /e2e\/fixtures\/salon\.rb: declared `:identical` to app\/models\/salon\.rb/ },
+      ops:  [[:edit, "e2e/fixtures/create_kiosk_pay_stripe_customers.rb", /\nend\n\z/, "\n  # probe\nend\n"]],
+      expect: /e2e\/fixtures\/create_kiosk_pay_stripe_customers\.rb: declared `:identical`/ },
 
     { id: "comment-cites-dead-path", kind: :break,
       rule: "A comment in a compared file may not cite something that is not there",
@@ -773,45 +753,7 @@ if ARGV.include?("--self-test")
               "REST endpoints: one per verb, HTTP method = semantics.", "REST endpoints, one per verb."]],
       expect: /hoteling: config\/routes\/kiosk\.rb does not carry K-1069 claim `one-endpoint-per-verb` verbatim/ },
 
-    { id: "engine-words-it-differently", kind: :break,
-      rule: "The HOUSE SENTENCE, where the ENGINE says it too (K-1294)",
-      what: "the engine grows a fourth wording for the absent-field refusal — the deployed leak's shape",
-      ops:  [[:edit, "kiosk-server/lib/kiosk/server/errors.rb",
-              "BadRequest.new(\"missing field: \#{name}\", hint: hint)",
-              "BadRequest.new(\"missing param: \#{name}\", hint: hint)"]],
-      expect: /the absent-field refusal has 2 spellings across the demos and the engine/ },
-    { id: "vacuity-house-sentence", kind: :vacuity,
-      rule: "The HOUSE SENTENCE, where the ENGINE says it too (K-1294)",
-      what: "the slice stops reaching the refusal, so every producer reads as silent and agrees with nothing",
-      ops:  [[:edit, "bin/check-demo-copies", "HOUSE_SENTENCE_WINDOW = 400", "HOUSE_SENTENCE_WINDOW = 1"]],
-      expect: /the absent-field refusal cannot be read out of .*errors\.rb/ },
 
-    { id: "engine-widens-wire-date", kind: :break,
-      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
-      what: "the engine relaxes the one date spelling the wire has, changing the protocol for " \
-            "every adopting operator while no demo file moves at all",
-      ops:  [[:edit, "kiosk-server/lib/kiosk/server/argument_decoder.rb", '"%Y-%m-%d"', '"%d/%m/%Y"']],
-      expect: /a date on the wire has 2 accepted shapes across the demos and the engine/ },
-    { id: "demos-widen-wire-date-together", kind: :break,
-      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
-      what: "all three demo copies widen AT ONCE — the edit somebody makes to be helpful, which " \
-            "the `:code` lockstep cannot see because the three still agree with each other",
-      ops:  [[:each, "kiosk-demo-*/app/operations/wire_arguments.rb",
-              '/\A\d{4}-\d{2}-\d{2}\z/', '/\A\d{4}-\d{1,2}-\d{1,2}\z/']],
-      expect: /a date on the wire has 2 accepted shapes across the demos and the engine/ },
-    { id: "engine-drops-wire-date-roundtrip", kind: :break,
-      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
-      what: "the engine keeps the strptime and loses the round trip beside it, so it silently " \
-            "accepts `2026-9-1` and its field widths can no longer be read off it",
-      ops:  [[:edit, "kiosk-server/lib/kiosk/server/argument_decoder.rb",
-              'return if parsed && parsed.strftime("%Y-%m-%d") == value', "return if parsed"]],
-      expect: /the accepted shape of a wire date cannot be read out of .*argument_decoder\.rb/ },
-    { id: "vacuity-wire-date", kind: :vacuity,
-      rule: "The WIRE DATE RULE, where the ENGINE says it too (K-1467)",
-      what: "the slice stops reaching the shape, so every producer reads as silent and agrees " \
-            "with nothing",
-      ops:  [[:edit, "bin/check-demo-copies", "WIRE_DATE_WINDOW = 400", "WIRE_DATE_WINDOW = 1"]],
-      expect: /the accepted shape of a wire date cannot be read out of/ },
 
     { id: "lockfile-platforms-drift", kind: :break,
       rule: "every demo lockfile resolves for the SAME platforms (K-962)",
@@ -1275,7 +1217,9 @@ SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
 # duplicate fails the build until it is declared» would be untrue for it.
 EXTRA_SCANNED = [
   ".gitignore",
-  "spec/wire_arguments_spec.rb",
+  "spec/spec_helper.rb",
+  "test/test_helper.rb",
+  "test/wire_arguments_test.rb",
   "public/robots.txt",
   "public/favicon.ico",
   "public/404.html",
@@ -1308,17 +1252,6 @@ KYC_SHIPS =
   "KYC provider, so only they carry the broker harness and the migrations that retired their own " \
   "KYC table. A third demo growing a copy must be declared here."
 
-# The `app/operations/operation_result.rb` copies that AGREE, and why (K-1262).
-# Declared on the file entry and on its `#STATUSES` unit, so written once.
-OPERATION_RESULT_AGREE = {
-  %w[philslist skooti tudu] => {
-    rule: :coincidence,
-    why:  "Each map lists only `bad_request` and `forbidden` because those are the only refusals " \
-          "its own writes make: philslist answers a missing listing 403 so ids cannot be " \
-          "enumerated, tudu has no third refusal, and getgrocery's and skooti's KYC refusals " \
-          "are raised by the engine. A demo adding a refusal of its own is not drift.",
-  },
-}.freeze
 
 PROVE_SKELETON =
   "prove is a smaller API-only Rails app generated on its own; its whole skeleton differs from " \
@@ -1326,24 +1259,23 @@ PROVE_SKELETON =
 
 # ── The manifest ─────────────────────────────────────────────────────────────
 COPIES = {
-  # ── Outside the scan roots, compared anyway (K-629, T-048, K-643) ──────────
-  "spec/wire_arguments_spec.rb" => {
-    rule:  :per_demo,
-    ships: %w[atablefor hoteling],
-    why:   "The DB-free unit spec for each demo's WireArguments (T-116 wrote getgrocery's, T-137 " \
-           "copied the harness into the other two). `:per_demo` because the ASSERTIONS cannot be " \
-           "shared: they name each demo's own guards, sentences and columns — `party_size` and a " \
-           "seating roster here, a cart and a Dublin delivery clock there, an Istanbul room-night " \
-           "floor in the third — and a lockstep rule would demand three different files be one. " \
-           "What IS shared is the HARNESS the three copied on purpose, and since T-145 it is HELD " \
-           "rather than merely visible: this path is in FRAGMENT_PATHS below and every unit shared " \
-           "by two or more copies is declared there — `assert`, `guard`, `assert_typed_400`, " \
-           "`refusal_of`, `value_of`, `FAILURES` and `MAX` with `:code` semantics, plus each demo's " \
-           "own fixture `DAY` as `:per_demo`. EIGHT units, where T-145 counted five: `FAILURES`, " \
-           "`MAX` and `DAY` are shared too, and the discovery rule named all three by hand the " \
-           "moment the path was added, which is the whole reason that rule exists. hoteling's 404 " \
-           "arm stays its own helper and is compared to nothing, correctly — no sibling has one.",
+  "spec/spec_helper.rb" => {
+    rule: :per_demo,
+    ships: %w[hoteling prove],
+    why:  "Each demo's own RSpec setup.",
   },
+  "test/test_helper.rb" => {
+    rule: :per_demo,
+    ships: %w[atablefor getgrocery philslist skooti stylish tudu],
+    why:  "Each demo's own Minitest setup; the conformance helpers appear only where a test uses them.",
+    agree: { %w[atablefor skooti] => { rule: :coincidence, why: "Both need only the Rails test setup." } },
+  },
+  "test/wire_arguments_test.rb" => {
+    rule: :per_demo,
+    ships: %w[atablefor getgrocery],
+    why:  "Each demo's own argument checks.",
+  },
+  # ── Outside the scan roots, compared anyway (K-629, T-048, K-643) ──────────
   ".gitignore" => {
     rule: :identical,
     why:  "A skeleton file with no per-demo dimension: nothing in a .gitignore is per-port, " \
@@ -1569,7 +1501,7 @@ COPIES = {
   },
   "app/operations/wire_arguments.rb" => {
     rule: :per_demo,
-    ships: %w[atablefor getgrocery hoteling skooti],
+    ships: %w[atablefor getgrocery hoteling],
     why:  "The shape guard a demo's verbs open with (T-057/K-654). The `app/operations/` " \
           "CONVENTION went fleet-wide in T-083; this FILE did not, and `ships:` above is why that " \
           "distinction is now an exit code rather than a sentence — K-1031 found the prose here " \
@@ -1599,15 +1531,6 @@ COPIES = {
           "for that decision (list_access.rb / listing_access.rb), each a singleton path — a uuid " \
           "IS checked in both, so «an ACCESS answer rather than a shape one» was the wrong reason " \
           "for the right arrangement.",
-  },
-  "app/operations/operation_result.rb" => {
-    rule: :per_demo,
-    why:  "A subclass line and a STATUSES constant, nothing else: the shared half ships once " \
-          "in kiosk-server as {Kiosk::OperationResult}. Each map lists only the codes that " \
-          "demo's own operations refuse with, so the maps differ; the OPERATION_RESULT block at " \
-          "the bottom of this file holds that every copy subclasses the gem's class, declares " \
-          "its own STATUSES and defines no methods (K-792).",
-    agree: OPERATION_RESULT_AGREE,
   },
 
   # ── db/migrate — one fresh install, the same files at the same timestamps ────
@@ -2767,56 +2690,6 @@ if autoload_once_checked.zero?
             "nothing to read passes everything."
 end
 
-# ── What is LEFT in a per-demo operation_result.rb (K-792) ───────────────────
-#
-# `app/operations/operation_result.rb` is declared :per_demo, and :per_demo means
-# NOT COMPARED. The shared constructor and the ok/refused/status trio ship once
-# now, as Kiosk::OperationResult in kiosk-server, and each demo subclasses it — so
-# this block guards the promotion rather than the file's contents. It asserts the
-# three properties that make "not compared" honest:
-#
-#   1. the copy actually SUBCLASSES the gem's class — a demo that quietly went
-#      back to a standalone `class OperationResult` would be re-growing the
-#      duplication this closed, and every gate would stay green;
-#   2. it declares its OWN STATUSES — the base ships an empty map on purpose, so
-#      a demo that inherits it silently refuses nothing and only fails at the
-#      moment a refusal is rendered;
-#   3. it defines NO methods at all. That is the property that matters: a file
-#      that may hold only a subclass line and a constant has nowhere for
-#      uncompared behaviour to hide, which is why :per_demo is the right rule
-#      for what is left rather than a hole this check is looking away from.
-OPERATION_RESULT = "app/operations/operation_result.rb"
-
-(dups[OPERATION_RESULT] || {}).each do |demo, path|
-  src = File.read(path)
-
-  unless src.match?(/^class\s+OperationResult\s*<\s*Kiosk::OperationResult\b/)
-    errors << "#{short.(demo)}: #{OPERATION_RESULT} does not subclass Kiosk::OperationResult — the " \
-              "shared half (the constructor and the ok/refused/status trio) lives in kiosk-server " \
-              "since K-792, and a standalone class here re-grows the seven-copy duplication that " \
-              "promotion removed. This file is :per_demo, i.e. NOT compared, so nothing else would " \
-              "notice."
-  end
-
-  unless src.match?(/^\s+STATUSES\s*=/)
-    errors << "#{short.(demo)}: #{OPERATION_RESULT} declares no STATUSES map — Kiosk::OperationResult " \
-              "ships an EMPTY one on purpose (it does not know this app's refusals), so inheriting it " \
-              "means every refusal raises KeyError at render time instead of failing here."
-  end
-
-  defined_methods = Ripper.lex(src).each_cons(3).filter_map do |(_, t1, tok1), (_, t2, _), (_, _, tok3)|
-    next unless t1 == :on_kw && tok1 == "def"
-
-    t2 == :on_sp ? tok3 : nil
-  end
-  next if defined_methods.empty?
-
-  errors << "#{short.(demo)}: #{OPERATION_RESULT} defines #{defined_methods.map(&:inspect).join(', ')} " \
-            "— this file is :per_demo (NOT compared), so it may hold ONLY the subclass line and its " \
-            "own STATUSES map. Behaviour every demo shares goes into Kiosk::OperationResult in " \
-            "kiosk-server (K-792); behaviour one verb needs goes into that verb's Operation."
-end
-
 # ── application_controller.rb's PROSE must stay true (K-1021) ────────────────
 #
 # `app/controllers/application_controller.rb` is declared `:code`, and `:code`
@@ -3736,9 +3609,7 @@ FRAGMENT_PATHS = %w[
   app/controllers/home_controller.rb
   app/models/booking.rb
   app/models/user.rb
-  app/operations/operation_result.rb
   app/operations/wire_arguments.rb
-  spec/wire_arguments_spec.rb
   script/binding_flow.rb
   script/pay_window.rb
   script/pow_flow.rb
@@ -3754,6 +3625,9 @@ FRAGMENT_PATHS = %w[
 # that is also in FRAGMENT_PATHS, and on a blank reason. An undeclared exclusion
 # reads exactly like coverage, which is what this list exists to prevent.
 FRAGMENT_EXCLUDED = {
+  "spec/spec_helper.rb"         => "Each demo's own test setup; nothing in it is meant to be shared.",
+  "test/test_helper.rb"         => "Each demo's own test setup; nothing in it is meant to be shared.",
+  "test/wire_arguments_test.rb" => "Each demo's own argument checks.",
   "script/redteam_suite.rb" =>
     "What these seven copies still share by NAME is the `Scenario` subclass vocabulary — " \
     "`initialize`, `call`, `refused`, `check`, `pay_with_ref` — over beats that attack " \
@@ -3825,17 +3699,6 @@ SEEDED_HUMAN =
 FLOW_DEMOS = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 
 FRAGMENTS = {
-  "app/models/booking.rb#CANCELLED" => {
-    rule:  :code,
-    ships: %w[atablefor hoteling],
-    why:   "The booking is off, and it is the SAME WORD in both demos because it is the same " \
-           "word on the wire: each publishes `reserved | confirmed | cancelled` in its own " \
-           "`my_bookings` descriptor, so a second spelling here would be a demo telling an " \
-           "assistant a status its sibling never sends. atablefor cancels on the guest's own " \
-           "`cancel_booking`; hoteling cancels when the PROPERTY declines a paid booking and " \
-           "the charge is reversed (T-169). Different reasons, one vocabulary — which is " \
-           "exactly the case a per-demo file cannot hold on its own.",
-  },
   "app/operations/wire_arguments.rb#MAX_INT4" => {
     rule:  :code,
     ships: %w[atablefor getgrocery hoteling],
@@ -3848,46 +3711,6 @@ FRAGMENTS = {
            "`MAX_TOTAL_CENTS` it used to carry under its own name; holding the three in lockstep " \
            "is what stops the next demo inventing a fourth spelling of int4.",
   },
-  "app/operations/wire_arguments.rb#ISO_DATE" => {
-    rule:  :code,
-    ships: %w[atablefor getgrocery hoteling],
-    why:   "The anchored `YYYY-MM-DD` a date argument must be spelled as, and the only spelling any "\
-           "of the three accepts (ADR-0029, K-1406). It is one RULE rather than three coincidences: "\
-           "Phil's ruling is that a date on this wire is ISO 8601 and nothing else, so a copy that "\
-           "widened on its own would not be a local relaxation, it would be one origin answering a "\
-           "different protocol than the two beside it and than the specification. That is exactly "\
-           "the one-sided edit this rule exists for, and it is the edit somebody makes to be "\
-           "helpful. skooti takes no wire date at all, which is why it is not here.",
-  },
-  "app/operations/wire_arguments.rb#iso_date" => {
-    rule:  :code,
-    ships: %w[atablefor hoteling],
-    why:   "The parse behind {ISO_DATE} (ADR-0029, K-1406). `Date.iso8601` runs BEHIND the pattern "\
-           "and not instead of it, because ISO 8601 is a FAMILY -- a basic `20260901`, a datetime, "\
-           "an ISO week date and an ordinal date all parse through it -- while what the pattern "\
-           "still cannot answer is whether a well-shaped value names a real day (`2026-02-30`). "\
-           "Both halves are load-bearing, and a copy that kept one of them would pass a casual "\
-           "read: dropping the pattern re-admits four spellings nobody advertises, dropping the "\
-           "parse admits a February 30th. The three demos word their REFUSALS differently and are "\
-           "meant to -- each names the row an assistant gets a right value from -- so the sentence "\
-           "is deliberately not in here.",
-  },
-  "app/operations/wire_arguments.rb#missing" => {
-    rule:  :code,
-    ships: %w[hoteling skooti],
-    why:   "`missing field: <name>` — the sentence every verb in those three answers an absent " \
-           "argument with, and the one an assistant's error handling matches on. atablefor is " \
-           "deliberately NOT here: it words the same refusal `missing param: party_size` in " \
-           "{missing_party_size}, for the one verb that asks the question, so it has no method of " \
-           "this name to hold. That difference is real and predates this rule; what this rule " \
-           "stops is a FOURTH wording appearing inside the three that already agree. THE ENGINE " \
-           "IS THE FIFTH PRODUCER AND WAS OUTSIDE EVERY RULE IN THIS FILE UNTIL K-1294: it emits " \
-           "the same sentence on the auth plane, where an assistant meets it before any verb, and " \
-           "it shipped `missing field: key not found: :public_key` to the live fleet. The " \
-           "house-sentence section near the bottom of this file now reads this method's literal " \
-           "off the three copies and compares it with the engine's builder; the `ships:` list here " \
-           "is what that section derives its demo set from, so the two move together.",
-  },
 
   # ── spec/wire_arguments_spec.rb — atablefor, getgrocery, hoteling (T-145) ──
   #
@@ -3895,63 +3718,6 @@ FRAGMENTS = {
   # each demo's own and the file stays `:per_demo`; what the three copied on
   # purpose is the seven units below, and until this entry they were compared to
   # nothing at all.
-  "spec/wire_arguments_spec.rb#FAILURES" => {
-    rule:  :code,
-    ships: SPEC_HARNESS,
-    why:   "The accumulator that makes this a SPEC rather than a script: every failed assertion " \
-           "lands here and the tail exits non-zero on a non-empty list. A copy that collected " \
-           "failures and forgot to exit on them would print FAIL lines under a green task, which " \
-           "is the one failure mode a DB-free proof must not have.",
-  },
-  "spec/wire_arguments_spec.rb#assert" => {
-    rule:  :code,
-    ships: SPEC_HARNESS,
-    why:   "The assertion primitive — OK/FAIL on one line each, the failing message pushed to " \
-           "FAILURES. Three demos read their coverage off this format; a copy that words it " \
-           "differently makes three task logs stop being comparable at a glance.",
-  },
-  "spec/wire_arguments_spec.rb#guard" => {
-    rule:  :code,
-    ships: SPEC_HARNESS,
-    why:   "The reason a RAISE is a recorded failure and not a dead run: it rescues " \
-           "StandardError and NoMethodError around one labelled assertion and files the class and " \
-           "message as a FAILURE. T-137 measured what this buys — atablefor's watched fail turned " \
-           "four NoMethodErrors (the K-1027 class) into four named failures instead of aborting " \
-           "the file at the first one, which is what a bare script would have done.",
-  },
-  "spec/wire_arguments_spec.rb#assert_typed_400" => {
-    rule:  :code,
-    ships: SPEC_HARNESS,
-    why:   "The shape of a refusal, asserted identically in three demos: an OperationResult (not a " \
-           "raise, not nil), not ok?, `code == \"bad_request\"` and `status == :bad_request`. That " \
-           "triple is the wire contract a descriptor-less call is refused with, so the three copies " \
-           "asserting it in the same words is the point rather than a coincidence. hoteling's " \
-           "404 arm is a SEPARATE helper for exactly this reason — it is that demo's own answer " \
-           "and does not belong in a unit the other two share.",
-  },
-  "spec/wire_arguments_spec.rb#refusal_of" => {
-    rule:  :code,
-    ships: SPEC_HARNESS,
-    why:   "Half of the pair-or-refusal convention every guard in these modules answers with: a " \
-           "guard returns either `[value, nil]` or a refusal, and the spec reads one side with " \
-           "this and the other with {value_of}. Both are one line and both must agree, or a spec " \
-           "asserts on the wrong element of the pair and passes.",
-  },
-  "spec/wire_arguments_spec.rb#value_of" => {
-    rule:  :code,
-    ships: SPEC_HARNESS,
-    why:   "The other half of {refusal_of}'s convention — the accepted value, or nil when the call " \
-           "was refused. Stated as its own unit because the two are edited together and mean " \
-           "nothing apart.",
-  },
-  "spec/wire_arguments_spec.rb#MAX" => {
-    rule:  :code,
-    ships: SPEC_HARNESS,
-    why:   "`WireArguments::MAX_INT4`, read from the module under test rather than re-typed — the " \
-           "spec-side twin of the MAX_INT4 entry above. A copy that hard-codes 2_147_483_647 here " \
-           "would keep passing after the guard it tests moved, which is the whole reason the bound " \
-           "is read from the code in all three.",
-  },
 
   # ── script/binding_flow.rb — atablefor, philslist, stylish (T-136) ─────────
   #
@@ -4413,6 +4179,21 @@ FRAGMENTS = {
     ships: %w[atablefor hoteling],
     why:   "`include Kiosk::Owned`, the framework's owner scope.",
   },
+  "app/models/booking.rb#enum" => {
+    rule:  :per_demo,
+    ships: %w[atablefor hoteling],
+    why:   "Each booking's own lifecycle.",
+  },
+  "app/operations/wire_arguments.rb#refuse" => {
+    rule:  :code,
+    ships: %w[atablefor getgrocery hoteling],
+    why:   "Raises the 400 every argument check answers with.",
+  },
+  "app/operations/wire_arguments.rb#priceable_total!" => {
+    rule:  :per_demo,
+    ships: %w[getgrocery hoteling],
+    why:   "Each demo bounds its own total column.",
+  },
   "app/models/booking.rb#scope" => {
     rule:  :per_demo,
     ships: %w[atablefor hoteling],
@@ -4421,15 +4202,6 @@ FRAGMENTS = {
            "constraint mirrors.",
   },
 
-  "app/models/booking.rb#CONFIRMED" => {
-    rule:  :code,
-    ships: %w[atablefor hoteling],
-    why:   "`\"confirmed\"` — the status STRING both demos write and read back, atablefor through a " \
-           "`confirmed` scope and hoteling through its LIVE pair. A row's status is data an " \
-           "operator's own queries match on, so two demos spelling it differently would be two " \
-           "different answers to «is this booked», which is exactly the question a payment window " \
-           "asks.",
-  },
   "app/models/user.rb#public_name" => {
     rule:  :per_demo,
     ships: %w[atablefor tudu],
@@ -4445,16 +4217,6 @@ FRAGMENTS = {
            "each demo's home page is that storefront's own. Declared so the path is under the " \
            "discovery rule at all: a helper that appears in two of these seven controllers is a " \
            "thing to notice, and until this entry nothing would have.",
-  },
-  "app/operations/operation_result.rb#STATUSES" => {
-    agree: OPERATION_RESULT_AGREE,
-    rule:  :per_demo,
-    ships: %w[atablefor hoteling philslist skooti stylish tudu],
-    why:   "The status maps the file-level entry above argues for — a code an app never " \
-           "produces has no business having a mapping. Declared here for the " \
-           "same reason as home_controller's `index`: it puts a file whose shared half was already " \
-           "PROMOTED into kiosk-server (K-792) under the discovery rule, so the next method that " \
-           "grows in all seven copies is a failure rather than a discovery.",
   },
 }.freeze
 
@@ -4853,6 +4615,13 @@ DEMO_SPEC_SUBDIRS = %w[spec test].freeze
 #               name whose copies have ALL converged is an error, not a pass:
 #               that is the entry describing a state the tree has left.
 SPEC_UNITS = {
+  "LISBON" => { rule: :per_file, why: "A named zone in each clock test." },
+  "refusal" => { rule: :per_file, why: "Each test file's own assert_raises shorthand." },
+  "include" => { rule: :code, why: "The conformance assertions the Minitest helpers include." },
+  "kiosk_origin" => { rule: :code, why: "The conformance origin, where a demo's tests drive its handlers." },
+  "assert_kiosk_refused" => { rule: :per_file, why: "Each helper's refusal assertion." },
+  "NOON_UTC" => { rule: :code, why: "The instant two clock tests pin." },
+  "as" => { rule: :per_file, why: "Each helper opens a session as a principal." },
   "test" => {
     rule: :per_file,
     why:  "MINITEST'S OWN DECLARATION MACRO, not a hand-copied helper: `test \"…\" do` names one " \
@@ -4861,37 +4630,6 @@ SPEC_UNITS = {
           "above keys on the NAME and cannot tell a framework macro from a copied method — and " \
           "`:per_file` still says something true, since the day all of these agreed would mean " \
           "several files asserting one thing.",
-  },
-  "FAILURES" => {
-    rule: :code,
-    why:  "The accumulator that makes each of these files a SPEC rather than a script: every " \
-          "failed assertion lands here and the tail exits non-zero on a non-empty list. A copy " \
-          "that collected failures and forgot to exit on them would print FAIL lines under a " \
-          "green rake task, which is the one failure mode a DB-free proof must not have.",
-  },
-  "assert" => {
-    rule: :code,
-    why:  "The assertion primitive — one OK or FAIL line each, the failing message pushed to " \
-          "FAILURES. Seven demos' task logs are read off this format, and a copy that words or " \
-          "spaces it differently makes them stop being comparable at a glance. That is not " \
-          "hypothetical: skooti's copy padded OK by two spaces and nothing anywhere compared it.",
-  },
-  "guard" => {
-    rule: :code,
-    why:  "The reason a RAISE is a recorded failure and not a dead run: it rescues StandardError " \
-          "around one labelled assertion and files the class and message as a FAILURE, so a " \
-          "spec meets every assertion instead of aborting at the first exception. T-137 measured " \
-          "what that buys — atablefor's watched fail turned four NoMethodErrors into four named " \
-          "failures. Held here because three of these six copies used to name a DESCENDANT of " \
-          "StandardError beside it, which rescues nothing extra and reads as if it did.",
-  },
-  "assert_refusal" => {
-    rule: :code,
-    why:  "The four-part shape of an owner-scoped refusal, asserted identically in the two demos " \
-          "that have one: an OperationResult rather than a raise or a nil, not ok?, the declared " \
-          "`code`, and the declared `status` read through {guard}. The four together are the wire " \
-          "contract a caller meets, so two demos asserting it in the same words is the point " \
-          "rather than a coincidence.",
   },
   "TOKYO" => {
     rule: :code,
@@ -5425,10 +5163,8 @@ end
 E2E_FIXTURES = {
   # ── installed by run.sh, and the demos agree with them ────────────────────
   "salon.rb" => {
-    rule: :identical,
-    why:  "BYTE-IDENTICAL to stylish's app/models/salon.rb, and it should be: the harness stages " \
-          "stylish's own domain — salons and appointments — because that is the storefront the " \
-          "e2e wire drives. The one file in this directory where byte equality is the honest rule.",
+    rule: :per_demo,
+    why:  "stylish's salon reads its own clock (`zone`); the harness's salons have no timezone column.",
   },
   "devise_initializer.rb" => {
     rule: :code,
@@ -6161,251 +5897,6 @@ FRAMEWORK_CLAIMS.each do |id, claim|
               "`ships:`, and does not state it as #{claim[:must].inspect}. Add it to `ships:` if " \
               "the claim belongs there; a new copy of a framework claim may not appear silently."
   end
-end
-
-# ── The HOUSE SENTENCE, where the ENGINE says it too (K-1294) ────────────────
-#
-# `missing field: <name>` is the sentence an assistant's error handling matches on.
-# The FRAGMENTS entry for `app/operations/wire_arguments.rb#missing` holds the three
-# demos that ship it in lockstep, and the file set of every rule above is
-# `kiosk-demo-*` — while the ENGINE emits the same sentence on the auth plane, where
-# an assistant meets it FIRST, before it has read a catalogue or called a verb. So
-# the sentence is compared ACROSS the boundary here: the demos' refusal and the
-# engine's builder must open with the same literal, or one of them has drifted.
-#
-# READ OFF THE PRODUCER, NOT MATCHED AGAINST A REMEMBERED TEXT, and that distinction
-# is the whole rule rather than an implementation note: a pattern that already knows
-# the answer can only ever notice the answer VANISHING, never a producer
-# disagreeing. So each producer's own method body is sliced and whatever literal it
-# interpolates the field into is taken as its spelling; the rule compares those
-# spellings to each other and holds nothing else.
-#
-# WHAT THIS DOES NOT DO. It compares the LITERAL, not the behaviour: the engine's
-# own suite (`kiosk-server/spec/kiosk/server/wire_wording_spec.rb`) dispatches each
-# site and reads the detail off the wire, and it carries the sweep that stops a new
-# site building the sentence for itself. This rule answers the one question that
-# spec structurally cannot: whether the two INDEPENDENT producers, in two gems with
-# two suites, still say the same words.
-#
-# The demo side is DERIVED from the fragment entry rather than re-listed, so a demo
-# joining or leaving the house sentence moves both rules at once.
-HOUSE_SENTENCE_UNIT   = "app/operations/wire_arguments.rb#missing"
-HOUSE_SENTENCE_ENGINE = "kiosk-server/lib/kiosk/server/errors.rb"
-HOUSE_SENTENCE_ENTRY  = { HOUSE_SENTENCE_ENGINE => "def self.missing_field(",
-                          HOUSE_SENTENCE_UNIT   => "def missing(field)" }.freeze
-# How far past the entry point the refusal may be built. Both producers put it
-# on the next line or two; the window exists so an unrelated later method cannot
-# be read as this one's answer.
-HOUSE_SENTENCE_WINDOW = 400
-# «a literal, then the interpolated field» — the shape both producers use, with
-# the literal captured and nothing about it assumed.
-HOUSE_SENTENCE_RE     = /"([^"\n]*?)\#\{/
-
-# @return [String, nil] the sentence this producer interpolates the field into
-def house_sentence_of(path, entry)
-  src = code_source(path)
-  idx = src.index(entry)
-  return nil if idx.nil?
-
-  src[idx, HOUSE_SENTENCE_WINDOW][HOUSE_SENTENCE_RE, 1]
-end
-
-house_sentence_sites = {}
-
-house_engine_path = File.join(ROOT, HOUSE_SENTENCE_ENGINE)
-if File.file?(house_engine_path)
-  house_sentence_sites[HOUSE_SENTENCE_ENGINE] =
-    house_sentence_of(house_engine_path, HOUSE_SENTENCE_ENTRY.fetch(HOUSE_SENTENCE_ENGINE))
-else
-  errors << "#{HOUSE_SENTENCE_ENGINE} is not in the tree — the engine half of the house-sentence " \
-            "rule (K-1294) is aimed at a file that no longer exists. Re-aim it or delete it; a rule " \
-            "with no subject is not coverage."
-end
-
-house_rel   = HOUSE_SENTENCE_UNIT.split("#").first
-house_ships = (FRAGMENTS[HOUSE_SENTENCE_UNIT] || {})[:ships]
-if house_ships.nil?
-  errors << "the house-sentence rule (K-1294) derives its demo list from " \
-            "FRAGMENTS[#{HOUSE_SENTENCE_UNIT.inspect}], which is gone. The engine is then compared to " \
-            "nothing at all until that entry is restored or this rule is given another source."
-else
-  house_ships.each do |demo|
-    path = (dups[house_rel] || {})["kiosk-demo-#{demo}"]
-    if path.nil?
-      errors << "#{demo}: #{house_rel} is declared in `ships:` for the house sentence (K-1294) but " \
-                "is not in the tree."
-      next
-    end
-    house_sentence_sites["kiosk-demo-#{demo}/#{house_rel}"] =
-      house_sentence_of(path, HOUSE_SENTENCE_ENTRY.fetch(HOUSE_SENTENCE_UNIT))
-  end
-end
-
-# VACUITY: a producer this rule cannot read is not a producer that agrees. It is
-# reported as silence rather than folded into the spellings below, because a
-# `nil` quietly compared as one more value is how a rule starts confirming
-# agreement between one site and nothing.
-house_silent = house_sentence_sites.select { |_, sentence| sentence.nil? }.keys
-if house_silent.any?
-  errors << "the absent-field refusal cannot be read out of #{house_silent.join(', ')} (K-1294) — " \
-            "no `\"…\#{…}\"` sentence within #{HOUSE_SENTENCE_WINDOW} characters of its entry point. " \
-            "Either the producer was restructured, in which case this rule must be re-aimed at where " \
-            "it now builds the sentence, or it stopped building one at all. It may not simply become " \
-            "unreadable: an unread producer is compared to nothing."
-end
-
-house_spellings = house_sentence_sites.values.compact.uniq
-if house_spellings.size > 1
-  errors << "the absent-field refusal has #{house_spellings.size} spellings across the demos and the " \
-            "engine — " + house_sentence_sites.compact.map { |site, sentence| "#{site} says #{sentence.inspect}" }.join("; ") +
-            " (K-1294). An assistant's error handling matches on ONE of them; the deployed engine " \
-            "already shipped a fourth wording once — `missing field: key not found: :public_key`, a " \
-            "Ruby KeyError message on the auth plane — and nothing in this file could see it."
-end
-
-# ── The WIRE DATE RULE, where the ENGINE says it too (K-1467) ────────────────
-#
-# Spec §8.1 rule 9 — a date on the wire is `YYYY-MM-DD` and nothing else
-# (ADR-0029) — is implemented FOUR times in this repository. The FRAGMENTS entry
-# for `app/operations/wire_arguments.rb#ISO_DATE` holds the three demo copies in
-# lockstep, so they cannot drift from EACH OTHER. The fourth implementation is
-# the engine's `check_date!`, and it is the one an adopting operator actually
-# inherits: a verb declares `format: "date"` and the engine is what refuses the
-# value, by name, before any handler runs.
-#
-# Nothing compared those two until this rule, and the lockstep is blind in
-# exactly the two directions that matter. A UNIFORM widening — all three demos
-# edited at once, which is the shape of an edit somebody makes to be helpful —
-# keeps every `:code` comparison green. So does a widening on the ENGINE side,
-# where one relaxed line changes the protocol for every adopter simultaneously
-# and no demo file moves at all. That is the K-1294 shape, one wire element over.
-#
-# READ OFF THE PRODUCER, NOT MATCHED AGAINST A REMEMBERED SHAPE — the same
-# discipline the house-sentence section above is written to, and for the same
-# reason: a pattern that already knows the answer can only ever notice the
-# answer VANISHING, never a producer disagreeing. The complication here is that
-# the two producers do not share a NOTATION: the demos publish an anchored Ruby
-# regexp and the engine publishes a `strftime` format. So each is read in its
-# own notation and translated into ONE canonical shape — the widths of its digit
-# groups and the separators between them — and the rule compares those and holds
-# nothing else. `\A\d{4}-\d{2}-\d{2}\z` and `%Y-%m-%d` both canonicalise to
-# `4-2-2`; `%d/%m/%Y` gives `2/2/4` and `\A\d{4}-\d{1,2}-\d{1,2}\z` gives
-# `4-1,2-1,2`. A widening on either side is therefore a DIFFERENT shape rather
-# than an unreadable one, which is what makes the comparison a comparison.
-#
-# WHY THE ENGINE HAS TO NAME ITS FORMAT TWICE, and why one occurrence reads as
-# silence rather than as an answer. `Date.strptime("2026-9-1", "%Y-%m-%d")`
-# SUCCEEDS — strptime does not pin field widths — so the thing that actually
-# makes the engine's answer `4-2-2` is the round trip beside it,
-# `parsed.strftime(fmt) == value`. A body that names the format once has stopped
-# pinning the widths, and its accepted shape can no longer be read off it. This
-# rule says so instead of reading the strptime alone and reporting an agreement
-# it cannot see.
-#
-# WHAT THIS DOES NOT DO. It compares the accepted SHAPE, not the behaviour: the
-# engine's own suite and each demo's `check:wire_args_spec` are what dispatch a
-# real value and read the answer. It says nothing about the refusal SENTENCE
-# either — the three demos word theirs differently on purpose, each naming the
-# row an assistant gets a right value from, which the FRAGMENTS entry for
-# `#iso_date` records in as many words.
-WIRE_DATE_UNIT   = "app/operations/wire_arguments.rb#ISO_DATE"
-WIRE_DATE_ENGINE = "kiosk-server/lib/kiosk/server/argument_decoder.rb"
-WIRE_DATE_ENTRY  = { WIRE_DATE_ENGINE => "def check_date!(",
-                     WIRE_DATE_UNIT   => "ISO_DATE = " }.freeze
-# How far past the entry point the shape may be built. Both producers put it
-# within a line or two; the window exists so a later method cannot be read as
-# this one's answer.
-WIRE_DATE_WINDOW = 400
-# The demos' notation: an anchored Ruby regexp literal, captured as source.
-WIRE_DATE_DEMO_RE   = %r{ISO_DATE\s*=\s*/(\S+)/}
-# The engine's notation: a `strftime`/`strptime` format literal.
-WIRE_DATE_ENGINE_RE = /"(%[^"\n]*)"/
-
-# @return [String, nil] the digit-group shape of an anchored regexp source, or
-#   nil when it is not one this rule can read
-def wire_date_shape_from_regexp(source)
-  body = source.sub(/\A\\A/, "").sub(/\\z\z/, "")
-  return nil if body.empty?
-
-  out = body.gsub(/\\d\{(\d+(?:,\d*)?)\}/) { ::Regexp.last_match(1) }.gsub("\\d", "1")
-  out.include?("\\") ? nil : out
-end
-
-# @return [String, nil] the digit-group shape of a strftime format, or nil when
-#   it carries a directive whose width this rule cannot state
-def wire_date_shape_from_strftime(format)
-  out = format.gsub("%Y", "4").gsub("%y", "2").gsub("%m", "2").gsub("%d", "2").gsub("%j", "3")
-  out.include?("%") ? nil : out
-end
-
-wire_date_sites = {}
-
-wire_date_engine_path = File.join(ROOT, WIRE_DATE_ENGINE)
-if File.file?(wire_date_engine_path)
-  wire_src   = code_source(wire_date_engine_path)
-  wire_idx   = wire_src.index(WIRE_DATE_ENTRY.fetch(WIRE_DATE_ENGINE))
-  wire_fmts  = wire_idx.nil? ? [] : wire_src[wire_idx, WIRE_DATE_WINDOW].scan(WIRE_DATE_ENGINE_RE).flatten
-  if wire_fmts.uniq.length > 1
-    errors << "#{WIRE_DATE_ENGINE} parses a wire date with #{wire_fmts.uniq.map(&:inspect).join(' and ')} " \
-              "inside one method (K-1467). One of those is the parse and the other is the round trip " \
-              "that pins the field widths; while they disagree the engine accepts a shape neither of " \
-              "them states, and no demo copy can be compared with it."
-  end
-  wire_date_sites[WIRE_DATE_ENGINE] =
-    wire_fmts.length >= 2 && wire_fmts.uniq.length == 1 ? wire_date_shape_from_strftime(wire_fmts.first) : nil
-else
-  errors << "#{WIRE_DATE_ENGINE} is not in the tree — the engine half of the wire-date rule " \
-            "(K-1467) is aimed at a file that no longer exists. Re-aim it or delete it; a rule " \
-            "with no subject is not coverage."
-end
-
-wire_date_rel   = WIRE_DATE_UNIT.split("#").first
-wire_date_ships = (FRAGMENTS[WIRE_DATE_UNIT] || {})[:ships]
-if wire_date_ships.nil?
-  errors << "the wire-date rule (K-1467) derives its demo list from " \
-            "FRAGMENTS[#{WIRE_DATE_UNIT.inspect}], which is gone. The engine is then compared to " \
-            "nothing at all until that entry is restored or this rule is given another source."
-else
-  wire_date_ships.each do |demo|
-    path = (dups[wire_date_rel] || {})["kiosk-demo-#{demo}"]
-    if path.nil?
-      errors << "#{demo}: #{wire_date_rel} is declared in `ships:` for the wire-date rule (K-1467) " \
-                "but is not in the tree."
-      next
-    end
-    src = code_source(path)
-    idx = src.index(WIRE_DATE_ENTRY.fetch(WIRE_DATE_UNIT))
-    raw = idx.nil? ? nil : src[idx, WIRE_DATE_WINDOW][WIRE_DATE_DEMO_RE, 1]
-    wire_date_sites["kiosk-demo-#{demo}/#{wire_date_rel}"] = raw && wire_date_shape_from_regexp(raw)
-  end
-end
-
-# VACUITY: a producer this rule cannot read is not a producer that agrees — the
-# same reasoning as the house sentence above. A `nil` folded in as one more
-# value is how a rule starts confirming agreement between one site and nothing.
-wire_date_silent = wire_date_sites.select { |_, shape| shape.nil? }.keys
-if wire_date_silent.any?
-  errors << "the accepted shape of a wire date cannot be read out of #{wire_date_silent.join(', ')} " \
-            "(K-1467). A demo must build it from an anchored `ISO_DATE` regexp within " \
-            "#{WIRE_DATE_WINDOW} characters of that assignment; the engine must name ONE strftime " \
-            "format at least TWICE inside `check_date!` — once to parse and once to round-trip, " \
-            "which is the half that pins the field widths, because strptime alone accepts " \
-            "`2026-9-1`. A producer that has been restructured needs this rule re-aimed at where " \
-            "it now states the shape. It may not simply become unreadable: an unread producer is " \
-            "compared to nothing."
-end
-
-wire_date_shapes = wire_date_sites.values.compact.uniq
-if wire_date_shapes.size > 1
-  errors << "a date on the wire has #{wire_date_shapes.size} accepted shapes across the demos and " \
-            "the engine — " +
-            wire_date_sites.compact.map { |site, shape| "#{site} accepts #{shape.inspect}" }.join("; ") +
-            " (K-1467, ADR-0029). Spec §8.1 rule 9 says a date is `YYYY-MM-DD` and nothing else, " \
-            "and the engine's copy is the one an adopting operator inherits — so a disagreement " \
-            "here is one origin answering a different protocol from the others, not a local " \
-            "relaxation. The three demo copies are held in lockstep by FRAGMENTS, which means a " \
-            "UNIFORM widening of all three passes every other rule in this file and only this one " \
-            "can see it."
 end
 
 # ── Every `bin/` script a demo names EXISTS and is runnable (K-1315) ─────────

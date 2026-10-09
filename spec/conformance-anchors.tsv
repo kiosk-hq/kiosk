@@ -26,7 +26,11 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1898 anchors.
+# 1895 anchors.
+.github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
+.github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
+.github/workflows/ci.yml	      - name: Red-team battery
+.github/workflows/ci.yml	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -60,10 +64,12 @@ deploy/README.md	**The KYC broker is the odd one out**: the gem dir is `kiosk-de
 deploy/README.md	Runbook for hosting the 7 Kiosk demo Rails apps **plus the KYC broker**
 deploy/README.md	What the EDGE on that box is, measured over ssh 2026-09-15, read-only:
 deploy/README.md	by **Caddy** (auto-TLS), each app a loopback **Puma** under **systemd** — sized
+deploy/README.md	| `STRIPE_SECRET_KEY` | Stripe, test mode |
 deploy/README.md	| prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
 deploy/demo-reset.sh	# ADDITIVELY re-seeded, because it holds the orders REAL third-party assistants
 deploy/demo-reset.sh	# Those rows are evidence of a run that happened, and seeding cannot reproduce
 deploy/demo-reset.sh	# placed against this origin — the Hermes-verified order f8bc3efb among them.
+deploy/env/getgrocery.env.example	STRIPE_SECRET_KEY=sk_test_REPLACE_WITH_STRIPE_TEST_KEY
 deploy/env/hoteling.env.example	STRIPE_SECRET_KEY=sk_test_REPLACE_WITH_STRIPE_TEST_KEY
 deploy/env/skooti.env.example	KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech
 e2e/README.md	    ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
@@ -76,11 +82,13 @@ e2e/README.md	- **Multi-agent revocation** flows.
 e2e/README.md	- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface.
 e2e/README.md	- The `kiosk:install` Rails generator produces working migrations
 e2e/README.md	- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, signs intent → cart → payme
-e2e/README.md	- `SET LOCAL` GUCs flow correctly: the `book_appointment` Action reads `kiosk.current_user_id()` and the `my_appointments` query r
 e2e/README.md	./e2e/run.sh
 e2e/README.md	Path C removes raw SQL entirely
+e2e/README.md	RLS is optional and not used here.
 e2e/README.md	Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) runs locally and in CI.
 e2e/README.md	That a page's cursor rides in an RFC 8288 `Link` header is asserted only as an OpenAPI DECLARATION here
+e2e/README.md	The pay flow charges stripe-mock, Stripe's fixture server; no real Stripe call is made.
+e2e/README.md	The principal flows into handlers: the `book_appointment` Action reads `Kiosk.current_user_id`
 e2e/README.md	`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup.
 e2e/README.md	└── fixtures/                               # files copied into the generated app
 e2e/assistant.sh	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
@@ -234,9 +242,9 @@ e2e/assistant.sh	…while an identity-scoped 200 keeps private, no-store
 e2e/assistant.sh	…while the same request with a bad token is still 401
 e2e/assistant.sh	…with no Allow on it
 e2e/assistant.sh	…with no code to branch on
-e2e/fixtures/bookings_controller.rb	      "WHERE user_id = kiosk.current_user_id() " \
 e2e/fixtures/bookings_controller.rb	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	# controller may declare BOTH kinds: `my_appointments` is a query
+e2e/fixtures/bookings_controller.rb	Appointment.own.order(:id)
 e2e/fixtures/equihash_register.rb	body = { public_key: pem, signed: pop }
 e2e/fixtures/equihash_register.rb	def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil, key: OpenSSL::PKey::RSA.generate(2048))
 e2e/fixtures/equihash_register.rb	pop = JWT.encode(
@@ -259,11 +267,11 @@ e2e/schema_conformance.rb	  conforms("the pay REQUEST body", "#{B}/mandates.sche
 e2e/schema_conformance.rb	  conforms("the settlement this origin answered", "#{B}/mandates.schema.json",
 e2e/schema_conformance.rb	GET /.well-known/kiosk.json
 e2e/schema_conformance.rb	GET /kiosk/schema
+e2e/schema_conformance.rb	VIOLATES its own schema
 e2e/schema_conformance.rb	and the same schema REFUSES a broken copy of those very bytes
-e2e/schema_conformance.rb	example_params satisfies its own input_schema
-e2e/schema_conformance.rb	example_row satisfies its own output_schema
 e2e/schema_conformance.rb	no control mutation given
 e2e/schema_conformance.rb	published examples (the loop is not empty)
+e2e/schema_conformance.rb	satisfies its own schema
 e2e/schema_conformance.rb	the #{defn} mandate's claims
 e2e/schema_conformance.rb	the Kiosk-PoW header this origin ACCEPTED
 e2e/schema_conformance.rb	the pay REQUEST body
@@ -303,80 +311,73 @@ kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value 
 kiosk-core/lib/kiosk/protocol.rb	API_VERSION = "0.5.12"
 kiosk-core/spec/spec_helper.rb	require "kiosk"
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
+kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 kiosk-demo-atablefor/README.md	rollingly on the restaurant's own clock; "tonight at 8" lands on an open 2-top at 20:00.
-kiosk-demo-atablefor/app/controllers/home_controller.rb	# Set a Link header too, so a header-only agent finds the skill.
+kiosk-demo-atablefor/app/controllers/home_controller.rb	before_action { response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
-kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	ONE ROSTER PER RESTAURANT CLOCK
+kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	rosters = Restaurant.distinct.pluck(:timezone).to_h { [_1, Seatings.upcoming(zone: Time.find_zone!(_1))] }
+kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	tables = RestaurantTable.joins(:restaurant).where(capacity: party_size..)
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
 kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assistant here — it books the table.</h1>
 kiosk-demo-atablefor/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
 kiosk-demo-atablefor/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
 kiosk-demo-atablefor/app/views/layouts/home.html.erb	The href is the VERSIONED cut this operator pins, read from
-kiosk-demo-atablefor/before-after.md	`rake check:book` runs the errand with no human, no web sign-in and no payment:
+kiosk-demo-atablefor/before-after.md	`test/wire/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
 kiosk-demo-atablefor/before-after.md	rails g kiosk:install
-kiosk-demo-atablefor/config/initializers/kiosk.rb	        account_age_seconds:     nil,
-kiosk-demo-atablefor/config/initializers/kiosk.rb	        dispute_count:           nil,
-kiosk-demo-atablefor/config/initializers/kiosk.rb	    c.reputation_factors = ->(identity:, **) {
 kiosk-demo-atablefor/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-atablefor/config/initializers/kiosk.rb	# 0 confirmed bookings: 2 proofs · 1: 1 proof · 2+: free.
 kiosk-demo-atablefor/config/initializers/kiosk.rb	EQUIHASH_PARAMS = { n: 168, k: 7 }.freeze
 kiosk-demo-atablefor/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+kiosk-demo-atablefor/config/initializers/kiosk.rb	account_age_seconds:     nil,
+kiosk-demo-atablefor/config/initializers/kiosk.rb	c.reputation_factors = ->(identity:, **) {
+kiosk-demo-atablefor/config/initializers/kiosk.rb	dispute_count:           nil,
 kiosk-demo-atablefor/config/initializers/kiosk.rb	pow_difficulty: "high",
 kiosk-demo-atablefor/config/initializers/kiosk.rb	settled_purchases_count: Booking.confirmed.where(user_id: identity.user_id).count,
-kiosk-demo-atablefor/db/seeds.rb	# atablefor — a restaurant AGGREGATOR across a few Lisbon neighbourhoods, taking
-kiosk-demo-atablefor/db/seeds.rb	# upcoming evening seatings relative to NOW on each restaurant's own clock (see
-kiosk-demo-atablefor/lib/tasks/demo.rake	      failures << "expected served_after_2_bookings=true + challenge_after_2=nil; got served=#{served_2.inspect}, challenge=#{n_after_2.inspect}"
-kiosk-demo-atablefor/lib/tasks/demo.rake	      puts "  ✓  booking.booking_id present (#{booking_id})"
-kiosk-demo-atablefor/lib/tasks/demo.rake	      puts "  ✗  discovery capabilities include `pay` — must be ABSENT"
-kiosk-demo-atablefor/lib/tasks/demo.rake	      • challenge_after_2 == nil                   (no PoW issued to a proven principal)
-kiosk-demo-atablefor/lib/tasks/demo.rake	    booking_id = booking["booking_id"]
-kiosk-demo-atablefor/lib/tasks/demo.rake	  task :backoff do
-kiosk-demo-atablefor/lib/tasks/demo.rake	  task :book do
-kiosk-demo-atablefor/lib/tasks/demo.rake	  task :reputation do
-kiosk-demo-atablefor/lib/tasks/demo.rake	  task isolation: "demo:setup" do
-kiosk-demo-atablefor/lib/tasks/demo.rake	  task redteam: "demo:setup" do
-kiosk-demo-atablefor/lib/tasks/demo.rake	  task walkthrough: "demo:setup" do
-kiosk-demo-atablefor/lib/tasks/demo.rake	names the MUTABLE alias
-kiosk-demo-atablefor/lib/tasks/demo.rake	task :book do
-kiosk-demo-atablefor/lib/tasks/demo.rake	task :pow do
-kiosk-demo-atablefor/lib/tasks/demo.rake	task :reputation do
-kiosk-demo-atablefor/lib/tasks/demo.rake	task binding: "demo:setup" do
-kiosk-demo-atablefor/lib/tasks/demo.rake	which is not a skill-vX.Y.Z.md cut (§4.5)
-kiosk-demo-atablefor/lib/tasks/demo.rake	── Discovery-signal assertions (protocol.md §4.5) ──
-kiosk-demo-atablefor/script/book_flow.rb	# Reference agent driver: no-human restaurant table booking end-to-end.
-kiosk-demo-atablefor/script/book_flow.rb	# The headline: a 2-top at tonight's 20:00 seating ("a table for two tonight at 8").
-kiosk-demo-atablefor/script/book_flow.rb	slot = slots.find { |r| r["seating_time"] == "20:00" && r["capacity"].to_i >= party } || slots.first
-kiosk-demo-atablefor/script/pow_flow.rb	abort "expected HTTP 403 for wrong nonce, got #{rc_wrong}: #{JSON.generate(resp_wrong)}"
-kiosk-demo-atablefor/script/pow_flow.rb	rc_challenge, resp_challenge = availability_once
-kiosk-demo-atablefor/script/pow_flow.rb	rc_served, resp_served = availability_once(proofs)
-kiosk-demo-atablefor/script/pow_flow.rb	rc_wrong, resp_wrong = availability_once([{ challenge: challenge_neg, nonce: bad_nonce }])
+kiosk-demo-atablefor/db/seeds.rb	# A few Lisbon restaurants with named tables, and two diners who sign in with a
+kiosk-demo-atablefor/db/seeds.rb	# clock (app/models/seatings.rb), so nothing here goes stale.
 kiosk-demo-atablefor/script/redteam_suite.rb	BATTERY.record("WholeValuedFloatBody",
-kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected no challenge (n2=nil) after 2 bookings — principal must be proven. Got n2=#{n2}"
-kiosk-demo-atablefor/script/reputation_flow.rb	abort "expected proof count to drop after a booking: n1=#{n1} not < n0=#{n0}" unless n1 < n0
-kiosk-demo-atablefor/spec/wire_arguments_spec.rb	the two rosters DIFFER at one instant
+kiosk-demo-atablefor/test/wire/binding_test.rb	a diner links an assistant, and the assistant's bookings are the diner's
+kiosk-demo-atablefor/test/wire/binding_test.rb	assert_equal diego.id, Booking.find(booked.body["booking_id"]).user_id
+kiosk-demo-atablefor/test/wire/booking_test.rb	an assistant books a table for two tonight at eight and finds it in my_bookings
+kiosk-demo-atablefor/test/wire/booking_test.rb	table = open_tables(diner).find { _1["seating_time"] == "20:00" }
+kiosk-demo-atablefor/test/wire/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-atablefor/test/wire/discovery_test.rb	assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-atablefor/test/wire/discovery_test.rb	the home page and the board advertise the skill this origin pins
+kiosk-demo-atablefor/test/wire/isolation_test.rb	one diner can neither cancel nor see another's booking
+kiosk-demo-atablefor/test/wire/toll_test.rb	  test "the toll falls as the diner's confirmed bookings accrue" do
+kiosk-demo-atablefor/test/wire/toll_test.rb	a new diner's query costs two Equihash n=168 k=7 proofs, and only solved ones pay it
+kiosk-demo-atablefor/test/wire/toll_test.rb	assert_equal 403, availability(diner, guessed)
+kiosk-demo-atablefor/test/wire/toll_test.rb	assert_equal [402, "pow_required"], [status, body["code"]]
+kiosk-demo-atablefor/test/wire/toll_test.rb	assert_equal [{ "n" => 168, "k" => 7 }] * 2, issued.map
+kiosk-demo-atablefor/test/wire/toll_test.rb	test "the toll falls as the diner's confirmed bookings accrue" do
+kiosk-demo-atablefor/test/wire/toll_test.rb	test "under a backoff policy one solved toll buys the next three queries" do
+kiosk-demo-atablefor/test/wire/toll_test.rb	the toll falls as the diner's confirmed bookings accrue
+kiosk-demo-getgrocery/README.md	# kiosk-demo-getgrocery
+kiosk-demo-getgrocery/README.md	(the cart must be EUR, mirror the order at catalog prices, and sum correctly),
+kiosk-demo-getgrocery/README.md	**Honest scope:** the operator validates **format and zone only**.
 kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
-kiosk-demo-getgrocery/README.md	`STRIPE_MOCK_URL=http://localhost:12111` to boot the app secret-free.
-kiosk-demo-getgrocery/README.md	kiosk-redteam battery — every applicable attack BLOCKED
-kiosk-demo-getgrocery/README.md	silently booked. `check:shop` asserts a past slot is both hidden and rejected;
+kiosk-demo-getgrocery/README.md	bin/rails demo:reconcile   # settles orders stuck in `paying`; it reports, it does not assert
+kiosk-demo-getgrocery/README.md	local stripe-mock; export `STRIPE_MOCK_URL=http://localhost:12111` to boot the
+kiosk-demo-getgrocery/README.md	silently booked. `test/delivery_slots_test.rb` and `test/wire_arguments_test.rb`
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def create_order
-kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	THE CALLER'S DAY, ON THE SHOP'S CALENDAR.
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	WireArguments.caller_day(date, zone: zone, caller_zone: Kiosk::Server::CurrentRequest.timezone,
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
 kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	class CourierDispatchJob < ApplicationJob
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	# district getgrocery serves is in Dublin today, so the answers are unchanged;
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	# so IST (UTC+1, summer) and GMT (UTC+0, winter) are both handled automatically
-kiosk-demo-getgrocery/app/models/dublin_zones.rb	THE CLOCK OF EACH DISTRICT THIS SHOP DELIVERS TO
-kiosk-demo-getgrocery/app/models/product.rb	def self.age_restricted?(value)
-kiosk-demo-getgrocery/app/operations/create_order_operation.rb	Kiosk::Server::Kyc.require! if restricted
-kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	Gate 4: a settlement of THIS principal for THIS order
-kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	this order is not paid yet — reschedule_delivery only moves an ALREADY-PAID
-kiosk-demo-getgrocery/app/operations/wire_arguments.rb	AND IT IS READ AS PUBLISHED, NOT IN THE CALLER'S CALENDAR.
-kiosk-demo-getgrocery/app/operations/wire_arguments.rb	caller is asking about a day that is still current or
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	def zone_for(district) = Time.find_zone!(DublinZones::ZONES.fetch(district))
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE < at
+kiosk-demo-getgrocery/app/models/dublin_zones.rb	# The clock of each served district.
+kiosk-demo-getgrocery/app/operations/create_order_operation.rb	Kiosk::Server::Kyc.require! if items.any? { products[_1[:sku]].age_restricted? }
+kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	this order is not paid yet — reschedule_delivery moves an already-paid order
+kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	unless order.paid?
+kiosk-demo-getgrocery/app/operations/wire_arguments.rb	# A real calendar day that has not passed at the delivery address.
+kiosk-demo-getgrocery/app/operations/wire_arguments.rb	# The day a caller named, read on its own calendar (`Kiosk-Timezone`, else the
 kiosk-demo-getgrocery/app/services/price_checker.rb	unless presented.sort == ordered(order_id)
 kiosk-demo-getgrocery/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-getgrocery/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery
@@ -387,7 +388,8 @@ kiosk-demo-getgrocery/before-after.md	**Honesty note up front.**
 kiosk-demo-getgrocery/before-after.md	**The human is needed once.**
 kiosk-demo-getgrocery/before-after.md	Both flagship consumer-commerce connectors in Claude today, Uber Eats and
 kiosk-demo-getgrocery/before-after.md	ChatGPT-Agent food orders take 6–20 minutes, two to three times a human, and
-kiosk-demo-getgrocery/before-after.md	`rake check:shop` runs the errand end to end:
+kiosk-demo-getgrocery/before-after.md	`test/wire/shop_test.rb` runs the errand end to end:
+kiosk-demo-getgrocery/config/environments/development.rb	ENV["STRIPE_SECRET_KEY"]          ||= "sk_test_mock"
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_public_key = ENV.fetch("KIOSK_PROVE_PUBLIC_KEY_PEM")
@@ -401,52 +403,18 @@ kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_ove
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.payment_provider = Kiosk::Server::PaymentClaim.new(
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.signing_key       = Base64.decode64(ENV.fetch("KIOSK_SIGNING_KEY_B64"))
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	test_autocard: ENV["KIOSK_TEST_AUTOCARD"] == "1",
-kiosk-demo-getgrocery/config/local_env.rb	ENV["STRIPE_SECRET_KEY"]          ||= "sk_test_mock"
-kiosk-demo-getgrocery/config/routes/kiosk.rb	# 1. THE PROTOCOL PLANE IS MOUNTED, the ordinary Rails way. `schema`, `pay`, the
+kiosk-demo-getgrocery/config/routes/kiosk.rb	# verb this origin declares gets one route: GET for a query, POST for an action.
 kiosk-demo-getgrocery/config/routes/kiosk.rb	get  "/kiosk/catalog",             to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
 kiosk-demo-getgrocery/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
 kiosk-demo-getgrocery/config/routes/kiosk.rb	post "/kiosk/create_order",        to: "kiosk/server/verb#create", defaults: { kiosk_verb: "create_order" }
 kiosk-demo-getgrocery/db/migrate/20260101000011_create_products_and_orders.rb	      t.text        :address
-kiosk-demo-getgrocery/lib/tasks/demo.rake	      boot_env["STRIPE_SECRET_KEY"] = "sk_test_mock"
-kiosk-demo-getgrocery/lib/tasks/demo.rake	      exit exit_status
-kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "  OK  past-slot filter: no past slot to reject (booked tomorrow or before 08:00 Dublin) — filter is a no-op"
-kiosk-demo-getgrocery/lib/tasks/demo.rake	      puts "\n  redteam: BREACH DETECTED or error — see output above. Exit #{exit_status}."
-kiosk-demo-getgrocery/lib/tasks/demo.rake	    abort "numpy not found (pip install numpy)" unless system("python3 -c 'import numpy' 2>/dev/null")
-kiosk-demo-getgrocery/lib/tasks/demo.rake	    if psp_ref.match?(/\Api_/)
-kiosk-demo-getgrocery/lib/tasks/demo.rake	    mock_url = use_mock ? Kiosk::Redteam::StripeMock.start : nil
-kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :rls do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	  task :shop do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	  task isolation: "demo:setup" do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	  task redteam: "demo:setup" do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	E1 every emitted kyc_verification `data` satisfies the payload_schema this 
-kiosk-demo-getgrocery/lib/tasks/demo.rake	every order_delivery `data` satisfies the payload_schema this origin serves
-kiosk-demo-getgrocery/lib/tasks/demo.rake	psp_reference expected /^pi_/
-kiosk-demo-getgrocery/lib/tasks/demo.rake	task :claim do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	task :shop do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	task agecheck: "demo:setup" do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	task isolation: "demo:setup" do
-kiosk-demo-getgrocery/lib/tasks/demo.rake	task schema: "demo:setup" do
-kiosk-demo-getgrocery/script/claim_flow.rb	#   human's saved card (the seeded stripe_customers mapping; stripe-mock
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	  exp:              now + 600,
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	# Agent-side driver: no-human grocery order end-to-end.
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	# slot). This only asserts when there genuinely is a past slot for the queried
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	A REAL ASSISTANT TAKES THIS FROM THE HUMAN IT ACTS FOR, never from the
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	Prints ONE JSON line on stdout
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 3: query delivery_slots
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 4: create_order
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	Step 5: payment_setup (verify card is on file before paying)
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	delivery_slots rows must name the zone they are rendered in
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	missing_ids     = (1..6).to_a - returned_ids
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	no card-setup step here. This runs with KIOSK_TEST_AUTOCARD=1
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	pay: psp_reference expected 'pi_…' (real Stripe)
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	the row's label must name the same zone the row does
-kiosk-demo-getgrocery/script/getgrocery_flow.rb	unless missing_ids.empty?
-kiosk-demo-getgrocery/script/reconcile_flow.rb	every order_payment `data` satisfies the payload_schema
+kiosk-demo-getgrocery/db/schema.rb	t.boolean "age_restricted", default: false, null: false
+kiosk-demo-getgrocery/lib/tasks/demo.rake	  task reconcile: :environment do
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Applicable — must be BLOCKED
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # Not applicable — must SKIP (no KYC)
 kiosk-demo-getgrocery/script/redteam_suite.rb	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
-kiosk-demo-getgrocery/script/redteam_suite.rb	  # stripe-mock, so the adapter auto-provisions a test card at capture and the
 kiosk-demo-getgrocery/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
+kiosk-demo-getgrocery/script/redteam_suite.rb	  MachineTimestampsIgnoreTheCallerClock.new,
 kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
 kiosk-demo-getgrocery/script/redteam_suite.rb	TOLERANCE_SECONDS = 60
@@ -454,148 +422,178 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	The list is COMPLETE and each must
 kiosk-demo-getgrocery/script/redteam_suite.rb	class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
 kiosk-demo-getgrocery/script/redteam_suite.rb	class OneRenderingPerRow < Kiosk::Redteam::Scenario
 kiosk-demo-getgrocery/script/redteam_suite.rb	ended.status == 400 && error_code(ended) == "bad_request" && gone.include?(day) &&
+kiosk-demo-getgrocery/script/redteam_suite.rb	exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)
 kiosk-demo-getgrocery/script/redteam_suite.rb	no_caller_zone = bytes.none? { |b| b.include?(CLOCK_WEST) || b.include?(CLOCK_EAST) }
 kiosk-demo-getgrocery/script/redteam_suite.rb	the two clocks are 90000s apart
-kiosk-demo-getgrocery/spec/caller_clock_spec.rb	a DECLARED zone moves the answer: one day, two calendars
-kiosk-demo-getgrocery/spec/caller_clock_spec.rb	one rendering per row, at the district's clock
-kiosk-demo-getgrocery/spec/caller_clock_spec.rb	the caller's zone is DECLARED, and read from nothing else
-kiosk-demo-getgrocery/spec/caller_clock_spec.rb	the day the shop answers is identical bare and baited
-kiosk-demo-getgrocery/spec/wire_arguments_spec.rb	caller_day: a day the caller is still in is not past
+kiosk-demo-getgrocery/test/courier_states_test.rb	for an open window the courier leaves 20–30 minutes after payment and arrives five minutes later
+kiosk-demo-getgrocery/test/delivery_slots_test.rb	a window takes orders until picking and the drive no longer fit before it ends
+kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal 0, DeliverySlots.slot_at(Date.new(2026, 1, 15), 1).utc_offset
+kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal [2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH)
+kiosk-demo-getgrocery/test/delivery_slots_test.rb	test "windows are on the district's clock, across daylight saving" do
+kiosk-demo-getgrocery/test/delivery_slots_test.rb	the label names its zone
+kiosk-demo-getgrocery/test/delivery_slots_test.rb	windows are on the district's clock, across daylight saving
+kiosk-demo-getgrocery/test/stuck_paying_test.rb	the sweep acts on each answer the processor can give, and asks only when it has no receipt
+kiosk-demo-getgrocery/test/test_helper.rb	                iat: now, exp: now + 600 }
+kiosk-demo-getgrocery/test/test_helper.rb	  setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
+kiosk-demo-getgrocery/test/test_helper.rb	ENV["KIOSK_TEST_AUTOCARD"] = "1"
+kiosk-demo-getgrocery/test/test_helper.rb	setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
+kiosk-demo-getgrocery/test/wire/age_check_test.rb	wine is sold once the shopper's age check passes
+kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal [200, "ready"], [ready.status, ready.body["status"]]
+kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal [200, "setup_required"], [setup.status, setup.body["status"]]
+kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal [standalone.agent_id, HANA], claims.values_at("agent_id", "sub")
+kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal standalone.user_id, Order.find(left_behind["order_id"]).user_id
+kiosk-demo-getgrocery/test/wire/claim_test.rb	the same key, rebound to the human, pays with the human's saved card
+kiosk-demo-getgrocery/test/wire/discovery_test.rb	the well-known document and the schema describe this origin without a credential
+kiosk-demo-getgrocery/test/wire/isolation_test.rb	one shopper can neither move nor see another's order
+kiosk-demo-getgrocery/test/wire/shop_test.rb	    assert_match(/\Api_/, paid.body["psp_reference"])
+kiosk-demo-getgrocery/test/wire/shop_test.rb	an assistant with no human orders groceries for a delivery window and pays for them
+kiosk-demo-getgrocery/test/wire/shop_test.rb	assert_equal "D02", slot["district"]
+kiosk-demo-getgrocery/test/wire/shop_test.rb	assert_match(/\Api_/, paid.body["psp_reference"])
+kiosk-demo-getgrocery/test/wire/shop_test.rb	setup = assistant.run(shopper, name: "payment_setup")
+kiosk-demo-getgrocery/test/wire_arguments_test.rb	a caller's zone is only what it declares
+kiosk-demo-getgrocery/test/wire_arguments_test.rb	a delivery date is a real day that has not passed at the address
+kiosk-demo-getgrocery/test/wire_arguments_test.rb	a window too close to its end cannot be booked
+kiosk-demo-getgrocery/test/wire_arguments_test.rb	closes too soon
+kiosk-demo-getgrocery/test/wire_arguments_test.rb	test "an address outside the served districts is refused with the reason" do
+kiosk-demo-getgrocery/test/wire_arguments_test.rb	the day a caller names is read on its declared calendar
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
+kiosk-demo-hoteling/README.md	- `POST /kiosk/payment_setup` — check whether the principal has a saved payment method
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
 kiosk-demo-hoteling/README.md	Hotel booking demo operator for Kiosk.
 kiosk-demo-hoteling/README.md	always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-kiosk-demo-hoteling/README.md	bin/rails check:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the paym
-kiosk-demo-hoteling/README.md	bin/rails demo:setup       # create + load schema + seed the properties and rooms
+kiosk-demo-hoteling/README.md	bin/rails db:reset     # DROPS and recreates kiosk_hoteling_development, then seeds the hotels
+kiosk-demo-hoteling/README.md	bundle exec rspec      # the tests; CI runs exactly this
 kiosk-demo-hoteling/README.md	this origin serves, never the registered verb names. That is a MODELLING rule,
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def hotel_detail
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def search_hotels
-kiosk-demo-hoteling/app/models/property.rb	zone is a recorded column rather than a constant on the origin, because an
-kiosk-demo-hoteling/app/models/room_hold.rb	  # this as an expiry: nothing enforces it.
+kiosk-demo-hoteling/app/models/property.rb	# One hotel, sold on its own clock (`timezone`).
 kiosk-demo-hoteling/app/models/room_hold.rb	  PAY_BY = 15.minutes
-kiosk-demo-hoteling/app/models/room_hold.rb	# Nothing in this demo reads `expires_at` back: {ConfirmBookingOperation} gates on
-kiosk-demo-hoteling/app/models/room_hold.rb	# THE DEADLINE IS RECORDED, NOT ENFORCED, AND THAT IS THE HONEST SENTENCE.
-kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	Gate 2: THIS principal has paid for THIS booking
+kiosk-demo-hoteling/app/models/room_hold.rb	# guest is expected to have paid by. Nothing here enforces that deadline.
 kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	no settlement for this booking
-kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	          expires_at:    RoomHold::PAY_BY.from_now },
+kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	refuse "no settlement for this booking" unless booking.paid?
+kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	expires_at: RoomHold::PAY_BY.from_now)
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	def existing_property
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	def property_not_found
 kiosk-demo-hoteling/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-hoteling/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
-kiosk-demo-hoteling/before-after.md	`rake check:book` runs the errand with no human present:
+kiosk-demo-hoteling/before-after.md	`spec/wire/booking_spec.rb` runs the errand with no human present:
 kiosk-demo-hoteling/config/initializers/kiosk.rb	      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
 kiosk-demo-hoteling/db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb	def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
-kiosk-demo-hoteling/lib/tasks/demo.rake	        puts "  OK  SKIP_PAY: http_confirm_booking == 403"
-kiosk-demo-hoteling/lib/tasks/demo.rake	  task book: "demo:setup" do
-kiosk-demo-hoteling/lib/tasks/demo.rake	  task isolation: "demo:setup" do
-kiosk-demo-hoteling/lib/tasks/demo.rake	  task redteam: "demo:setup" do
-kiosk-demo-hoteling/lib/tasks/demo.rake	  task schema: "demo:setup" do
-kiosk-demo-hoteling/lib/tasks/demo.rake	  task search: "demo:setup" do
-kiosk-demo-hoteling/lib/tasks/demo.rake	availability for the SAME unknown id → 404 not_found (the two verbs agree)
-kiosk-demo-hoteling/lib/tasks/demo.rake	check.call(result["empty_filter_total"] == 0
-kiosk-demo-hoteling/lib/tasks/demo.rake	every booking_confirmation `data` satisfies the payload_schema this origin serves
-kiosk-demo-hoteling/lib/tasks/demo.rake	hotel_detail for an id nobody has → 404 not_found
-kiosk-demo-hoteling/lib/tasks/demo.rake	rule 1: a value OUTSIDE its declared domain → 400 bad_request
-kiosk-demo-hoteling/lib/tasks/demo.rake	rule 3: a FILTER that matched nothing → 200 with an EMPTY array
-kiosk-demo-hoteling/lib/tasks/demo.rake	task book: "demo:setup" do
-kiosk-demo-hoteling/lib/tasks/demo.rake	…and it lists the DOMAIN rather than echoing what was sent
-kiosk-demo-hoteling/lib/tasks/demo.rake	…and the refusal NAMES THE VALID VALUES an assistant may retry with
-kiosk-demo-hoteling/lib/tasks/demo.rake	…control: the same filter without the impossible price returns
-kiosk-demo-hoteling/script/hoteling_flow.rb	# ── Step 4b: payment_setup — the card check that MUST precede pay
-kiosk-demo-hoteling/script/pay_window.rb	RoomHold.where(user_id: USER_ID).delete_all
-kiosk-demo-hoteling/script/pay_window.rb	every booking_payment `data` satisfies the payload_schema
 kiosk-demo-hoteling/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,  # → BLOCKED (register PoW ON)
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
-kiosk-demo-hoteling/script/spending_cap_flow.rb	makes it a cap rather than a suggestion
-kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	answers BOTH properties the same way when the zone is read off the origin
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	echoes a calendar day back byte-identical
-kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property, not off this origin
+kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	sells the 15th at one property and refuses it as past at the other, at the same instant
+kiosk-demo-hoteling/spec/payment_window_spec.rb	reads a capture in flight pending, and a returned capture paid before its settlement row
+kiosk-demo-hoteling/spec/wire/booking_spec.rb	  it "does not confirm a booking nobody paid for" do
+kiosk-demo-hoteling/spec/wire/booking_spec.rb	RoomHold.where(resource_kind: RoomHold::RESOURCE_KIND
+kiosk-demo-hoteling/spec/wire/booking_spec.rb	does not confirm a booking nobody paid for
+kiosk-demo-hoteling/spec/wire/booking_spec.rb	reserves, pays, and hands back the confirmation code the hotel keeps
+kiosk-demo-hoteling/spec/wire/browse_spec.rb	prices depth instead of refusing it, and tolls every hold
+kiosk-demo-hoteling/spec/wire/discovery_spec.rb	describes itself in the well-known document and the schema, without a credential
+kiosk-demo-hoteling/spec/wire/isolation_spec.rb	cannot be paid for, confirmed, or seen by another guest
+kiosk-demo-hoteling/spec/wire/property_decision_spec.rb	the property's answer to a paid booking
+kiosk-demo-hoteling/spec/wire/search_spec.rb	answers a filter that matched nothing with an empty page, and an unknown value with the valid ones
+kiosk-demo-hoteling/spec/wire/search_spec.rb	answers one hotel's detail as a one-row array, and 404 for an id nobody has
+kiosk-demo-hoteling/spec/wire/spending_cap_spec.rb	refuses the stay that would cross it, however the currency is spelled
 kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
+kiosk-demo-philslist/README.md	  `owner_id` on `post_listing` is **refused `400 bad_request`** naming it, and a
+kiosk-demo-philslist/README.md	  scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
+kiosk-demo-philslist/README.md	  shared `DeviceGrantRoleSelfSelection`.
+kiosk-demo-philslist/README.md	  the caller's; editing or closing another seller's listing is **403**; a forged
 kiosk-demo-philslist/README.md	# philslist — Kiosk reference demo (NON-COMMERCE)
-kiosk-demo-philslist/README.md	### Adversarial battery (`rake check:redteam`)
 kiosk-demo-philslist/README.md	**not only for commerce**: it exercises the full query + action + `schema` +
-kiosk-demo-philslist/README.md	Asserts every attack is BLOCKED (0 BREACH) — every scenario the suite runs, in
+kiosk-demo-philslist/README.md	- **Red team** — `script/redteam_suite.rb` attacks the live origin and every
 kiosk-demo-philslist/README.md	The AP2 mandate and settlement TABLES are present and empty, and that is the
-kiosk-demo-philslist/README.md	`CrossOwnerClose` (403), `MalformedUuidArg` (400, no SQL internals),
 kiosk-demo-philslist/README.md	identity-binding surface with **no money on the wire at all** — no `pay` verb,
-kiosk-demo-philslist/README.md	its own order: `CrossTenantRead`, `ForgedUserId` (400), `CrossOwnerEdit` (403),
 kiosk-demo-philslist/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-philslist/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist
 kiosk-demo-philslist/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-philslist/config/initializers/kiosk.rb	# A classifieds board takes no money: no payment_provider, so `pay` is absent from discovery.
 kiosk-demo-philslist/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-philslist/lib/tasks/demo.rake	    if capabilities.include?("pay")
-kiosk-demo-philslist/lib/tasks/demo.rake	  task :walkthrough do
-kiosk-demo-philslist/lib/tasks/demo.rake	  task binding: "demo:setup" do
-kiosk-demo-philslist/lib/tasks/demo.rake	  task isolation: "demo:setup" do
-kiosk-demo-philslist/lib/tasks/demo.rake	  task redteam: "demo:setup" do
-kiosk-demo-philslist/lib/tasks/demo.rake	  task register: "demo:setup" do
-kiosk-demo-philslist/lib/tasks/demo.rake	  task schema: "demo:setup" do
-kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 5a: forged owner_id
-kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 5b: DB listings.owner_id == Bob
-kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 6a: the catalog declares browse_listings
-kiosk-demo-philslist/lib/tasks/demo.rake	Assertion 6b: #{probe.length} principal-reach verb(s) probed as Bob
-kiosk-demo-philslist/lib/tasks/demo.rake	failures << "agents.json carries a payments block — must be absent for a payment-less provider"
-kiosk-demo-philslist/lib/tasks/demo.rake	failures << "agents.txt carries AP2/Payments directives — must be absent"
-kiosk-demo-philslist/lib/tasks/demo.rake	failures << "discovery capabilities advertise `pay` (got #{capabilities.inspect}) — philslist takes no payments"
-kiosk-demo-philslist/lib/tasks/demo.rake	failures << "unauthenticated GET /kiosk/schema returned #{result["schema_status"].inspect}, want 200"
-kiosk-demo-philslist/lib/tasks/demo.rake	task schema: "demo:setup" do
-kiosk-demo-philslist/script/binding_flow.rb	results[:a2_edit] = rc
-kiosk-demo-philslist/script/binding_flow.rb	results[:a2_sees_listing] = rc == 200 && Array(mine2).any? { |r| r["listing_id"] == listing_id }
-kiosk-demo-philslist/script/binding_flow.rb	results[:unlink_same_second] = (jwt_claims(token1_fresh)["iat"] == Time.now.to_i) if token1_fresh
 kiosk-demo-philslist/script/redteam_suite.rb	BATTERY.record("NoSellerPiiOnTheOpenBoard",
+kiosk-demo-philslist/test/test_helper.rb	assert_equal 200, status, "GET #{path} with no credential"
+kiosk-demo-philslist/test/wire/binding_test.rb	    assert_equal 200, assistant.run(second.principal, name: "edit_listing", listing_id: listing, price_text: "€140").status
+kiosk-demo-philslist/test/wire/binding_test.rb	    assert_equal 401, my_listings(same_second).first
+kiosk-demo-philslist/test/wire/binding_test.rb	  test "a household's assistants share one account, and unlinking one revokes only its tokens" do
+kiosk-demo-philslist/test/wire/binding_test.rb	the device grant binds a new assistant to the human who approves it
+kiosk-demo-philslist/test/wire/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-philslist/test/wire/discovery_test.rb	agents.json and agents.txt carry no payment terms
+kiosk-demo-philslist/test/wire/discovery_test.rb	assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-philslist/test/wire/discovery_test.rb	assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
+kiosk-demo-philslist/test/wire/discovery_test.rb	assert_not agents_json.key?("payments")
+kiosk-demo-philslist/test/wire/discovery_test.rb	schema = published("/kiosk/schema")
+kiosk-demo-philslist/test/wire/discovery_test.rb	the well-known document and the schema describe a board that takes no money
+kiosk-demo-philslist/test/wire/isolation_test.rb	assert_equal [400, "bad_request"], [forged.status, forged.body["code"]]
+kiosk-demo-philslist/test/wire/isolation_test.rb	one seller can neither edit nor close another's listing
+kiosk-demo-philslist/test/wire/isolation_test.rb	only the board declares a reach beyond the caller, and every other query keeps to it
+kiosk-demo-philslist/test/wire/isolation_test.rb	test "one seller can neither edit nor close another's listing" do
+kiosk-demo-philslist/test/wire/isolation_test.rb	the owner and the posting assistant come from the token, never from an argument
+kiosk-demo-philslist/test/wire/registration_test.rb	registering costs an Equihash proof, and the new assistant posts at once
+kiosk-demo-philslist/test/wire/walkthrough_test.rb	bin/demo posts, edits and closes a listing as Alice's assistant
 kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this at the wire: every
 kiosk-demo-prove/README.md	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
 kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
 kiosk-demo-prove/README.md	# kiosk-demo-prove
 kiosk-demo-prove/README.md	## The three legs
+kiosk-demo-prove/README.md	- **Bound, single-use, TTL'd claim.** The claim binds to (subject + operator +
 kiosk-demo-prove/README.md	- **No replay across operators.** The claim carries `operator`/`aud`; the
-kiosk-demo-prove/README.md	Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
-kiosk-demo-prove/README.md	`base_url` — the origin the request arrived on — **not** the deploy origin. The
+kiosk-demo-prove/README.md	The broker mounts **no** Kiosk wire at all — neither of the two reserved
 kiosk-demo-prove/README.md	and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
+kiosk-demo-prove/README.md	bundle exec rspec      # the broker's own suite; CI runs exactly this
 kiosk-demo-prove/README.md	operator → broker (server-to-server)
 kiosk-demo-prove/README.md	verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own
 kiosk-demo-prove/README.md	| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", expires_at}` |
-kiosk-demo-prove/app/controllers/verifications_controller.rb	    # REGISTRATION record — the audience the broker holds for this allow-listed
+kiosk-demo-prove/app/controllers/verifications_controller.rb	        # The callback echoes it, so the operator can tell it from a replay.
+kiosk-demo-prove/app/controllers/verifications_controller.rb	    # The audience is the registered operator's, never the body's.
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    audience = operator[:audience].to_s
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    base = (Rails.configuration.x.prove.public_url || request.base_url).to_s.chomp("/")
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    nonce      = SecureRandom.urlsafe_base64(32)
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    request_id = SecureRandom.urlsafe_base64(32) # 256 bits
-kiosk-demo-prove/app/controllers/verifications_controller.rb	  # The link base: PROVE_PUBLIC_URL when the deploy pins one (read in
 kiosk-demo-prove/app/controllers/verifications_controller.rb	  REQUEST_TTL = 15 * 60
-kiosk-demo-prove/app/controllers/verifications_controller.rb	#     The broker mints an unguessable 256-bit request_id + nonce, stores a
 kiosk-demo-prove/app/controllers/verifications_controller.rb	attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
 kiosk-demo-prove/app/models/operator_registry.rb	  def callback_allowed?(operator, callback_url)
-kiosk-demo-prove/app/models/operator_registry.rb	# OperatorRegistry — the broker's intake trust model. The broker only
-kiosk-demo-prove/app/models/operator_registry.rb	# broker NEVER POSTs a callback to a URL a caller supplied free-form — it POSTs
-kiosk-demo-prove/app/models/operator_registry.rb	# serves operators it has been configured with. This is what refuses arbitrary
+kiosk-demo-prove/app/models/operator_registry.rb	# The operators this broker serves: each authenticates with its own secret,
+kiosk-demo-prove/app/models/operator_registry.rb	# and the broker posts its callbacks to that operator's registered host only.
+kiosk-demo-prove/app/models/operator_registry.rb	def callback_allowed?(operator, callback_url)
+kiosk-demo-prove/app/models/operator_registry.rb	uri.host == operator[:callback_host]
+kiosk-demo-prove/app/models/prove_request.rb	def confirmable? = pending? && !expired?
 kiosk-demo-prove/app/services/prove_key.rb	def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil)
-kiosk-demo-prove/lib/tasks/demo.rake	  task :test do
-kiosk-demo-prove/lib/tasks/demo.rake	task :test do
+kiosk-demo-prove/app/services/prove_key.rb	keypair, "RS256",
+kiosk-demo-prove/config/environments/development.rb	ENV["KIOSK_PROVE_ISSUER"]                   ||= "https://kyc.test.local"
+kiosk-demo-prove/config/initializers/prove.rb	Rails.configuration.x.prove.issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
+kiosk-demo-prove/config/initializers/prove.rb	Rails.configuration.x.prove.operators = %w[skooti getgrocery].to_h { |operator|
+kiosk-demo-prove/config/initializers/prove.rb	Rails.configuration.x.prove.public_url = ENV["PROVE_PUBLIC_URL"]
+kiosk-demo-prove/spec/requests/verifications_spec.rb	is single-use: a second approve on a confirmed request is rejected (no re-mint)
+kiosk-demo-prove/spec/requests/verifications_spec.rb	is un-confirmable once past its TTL
 kiosk-demo-prove/spec/requests/verifications_spec.rb	mints an attestation valid for one year
 kiosk-demo-prove/spec/requests/verifications_spec.rb	records a decline without minting
+kiosk-demo-prove/spec/requests/verifications_spec.rb	rejects a callback_url whose host is NOT allow-listed (SSRF/open-relay guard, 403)
+kiosk-demo-prove/spec/requests/verifications_spec.rb	rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)
 kiosk-demo-skooti/README.md	**What this KYC proves, and what it deliberately does not (honest scope).** The
 kiosk-demo-skooti/README.md	Reserve a vehicle by its code (inserts a `status='reserved'` row; the hold has no expiry/TTL — it stays until `start_rental` flips it to `active`)
 kiosk-demo-skooti/README.md	Scooter rental demo operator for Kiosk.
 kiosk-demo-skooti/README.md	Verify three gates (ownership, the vehicle being licence-free, and a settled payment for THIS reservation)
 kiosk-demo-skooti/README.md	attestation proves the assistant is *eligible* — that a valid category-A licence
-kiosk-demo-skooti/README.md	bin/rails check:rideflow    # the headline: register → scooters_available → reserve → payment_setup → pay → start_rental → offline unlock (no KYC leg — see check:kyc; plus the negative gates)
-kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	#   0. KYC attributes: age_over_18 AND licence_a  → 403 kyc_required if unmet
+kiosk-demo-skooti/README.md	bin/rails test         # the tests; CI runs exactly this
+kiosk-demo-skooti/app/models/reservation.rb	enum :status, { reserved: "reserved", active: "active" }
+kiosk-demo-skooti/app/models/reservation.rb	return "pending" if paying?
+kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	# attested `age_over_18` and `licence_a`.
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	Kiosk::Server::Kyc.require!
-kiosk-demo-skooti/app/operations/rental_gates.rb	def payment_refusal
-kiosk-demo-skooti/app/operations/reserve_operation.rb	        status:     Reservation::RESERVED,
-kiosk-demo-skooti/app/operations/start_rental_operation.rb	#   1b. the reserved vehicle is licence-FREE — a needs_licence motorcycle is
-kiosk-demo-skooti/app/operations/start_rental_operation.rb	#   2.  the principal has a settled payment for THIS reservation
-kiosk-demo-skooti/app/services/rental_token_issuer.rb	# Ed25519 offline rental-token authority for the skooti demo — a scooter-rental
+kiosk-demo-skooti/app/operations/rental.rb	Reservation.own.reserved.find_by(id: reservation_id) or refuse
+kiosk-demo-skooti/app/operations/rental.rb	def require_paid!(reservation)
+kiosk-demo-skooti/app/operations/rental.rb	return if reservation.paid?
+kiosk-demo-skooti/app/operations/reserve_operation.rb	reservation = Reservation.create!(user_id: principal_id, scooter: scooter)
+kiosk-demo-skooti/app/operations/start_rental_operation.rb	unless reservation.scooter.licence_free?
+kiosk-demo-skooti/app/services/rental_token_issuer.rb	# Signs the offline rental token a scooter lock verifies with no round trip,
 kiosk-demo-skooti/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
 kiosk-demo-skooti/before-after.md	**The step the assistant does not take, and cannot**
-kiosk-demo-skooti/before-after.md	`rake check:rideflow` runs the errand with no human account and no sign-in:
+kiosk-demo-skooti/before-after.md	`test/wire/rental_test.rb` runs the errand with no human account and no sign-in:
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
@@ -607,32 +605,19 @@ kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count  = 1
 kiosk-demo-skooti/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-kiosk-demo-skooti/lib/tasks/demo.rake	  task :rideflow do
-kiosk-demo-skooti/lib/tasks/demo.rake	  task isolation: "demo:setup" do
-kiosk-demo-skooti/lib/tasks/demo.rake	  task kyc: "demo:setup" do
-kiosk-demo-skooti/lib/tasks/demo.rake	  task redteam: "demo:setup" do
-kiosk-demo-skooti/lib/tasks/demo.rake	A1 403 hint points to request_kyc (agent can discover the path)
-kiosk-demo-skooti/lib/tasks/demo.rake	A1 rent_motorcycle without KYC → 403 kyc_required
-kiosk-demo-skooti/lib/tasks/demo.rake	C2 Gate 0 fails CLOSED on it — rent_motorcycle back to 403 kyc_required for an agent that HAD passed
-kiosk-demo-skooti/lib/tasks/demo.rake	task :kat do
-kiosk-demo-skooti/lib/tasks/demo.rake	task :rideflow do
-kiosk-demo-skooti/lib/tasks/demo.rake	task kyc: "demo:setup" do
 kiosk-demo-skooti/script/lock_sim.rb	  def unlock(token:, now:)
-kiosk-demo-skooti/script/pay_window.rb	an untouched reservation publishes payment_state=unpaid — the one answer that makes a fresh
-kiosk-demo-skooti/script/pay_window.rb	every booking_payment `data` satisfies the payload_schema
-kiosk-demo-skooti/script/pay_window.rb	my_reservations does NOT publish `unpaid` for a reservation whose capture may already have
-kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=paid on the CAPTURE alone, with zero settlement rows
-kiosk-demo-skooti/script/pay_window.rb	my_reservations publishes payment_state=pending while the capture is outstanding
-kiosk-demo-skooti/script/pay_window.rb	start_rental does NOT answer «this reservation is not paid» about an in-flight charge
-kiosk-demo-skooti/script/pay_window.rb	start_rental issues the rental token on the capture-anchored witness alone, no settlement row
-kiosk-demo-skooti/script/pay_window.rb	start_rental names the outstanding capture as in progress
-kiosk-demo-skooti/script/rental_flow.rb	# Flow: register (PoW) → scooters_available → reserve → payment_setup → pay → start_rental →
-kiosk-demo-skooti/script/rental_flow.rb	# ── Step 2: (no KYC) ─────────────────────────────────────────────────────────
-kiosk-demo-skooti/script/rental_flow.rb	# ── Step 3b: payment_setup — the card check that MUST precede pay
-kiosk-demo-skooti/script/rental_flow.rb	Issued by start_rental as an offline, self-verifying unlock credential.
-kiosk-demo-skooti/script/rental_flow.rb	Step 6: LockSim offline verify
-kiosk-demo-skooti/script/rental_token_issuer_kat.rb	issue: exp = now + 900
-kiosk-demo-stylish/Gemfile	gem "kiosk-rls",
+kiosk-demo-skooti/test/payment_window_test.rb	a capture in flight reads pending, and a returned capture reads paid before its settlement row
+kiosk-demo-skooti/test/payment_window_test.rb	an untouched reservation reads unpaid and does not start
+kiosk-demo-skooti/test/rental_token_issuer_test.rb	a token carries its scooter, reservation, lifetime and a fresh jti
+kiosk-demo-skooti/test/rental_token_issuer_test.rb	test "the known answer" do
+kiosk-demo-skooti/test/test_helper.rb	def lock(scooter_code) = LockSim.new(
+kiosk-demo-skooti/test/wire/isolation_test.rb	one principal can neither pay for, start, nor see another's reservation
+kiosk-demo-skooti/test/wire/kyc_test.rb	a check that passes without the licence opens no motorcycle
+kiosk-demo-skooti/test/wire/kyc_test.rb	a licence-free scooter needs no attestation
+kiosk-demo-skooti/test/wire/kyc_test.rb	a motorcycle opens once the rider's licence check passes
+kiosk-demo-skooti/test/wire/kyc_test.rb	an attestation that spells a boolean any other way grants nothing
+kiosk-demo-skooti/test/wire/rental_test.rb	a paid reservation of a licence-free scooter becomes a rental the lock opens once
+kiosk-demo-skooti/test/wire/rental_test.rb	assert_not once.unlock(token:, now:), "replayed"
 kiosk-demo-stylish/README.md	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
 kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**
 kiosk-demo-stylish/README.md	- A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a smal
@@ -640,54 +625,27 @@ kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of
 kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
 kiosk-demo-stylish/README.md	- Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its
 kiosk-demo-stylish/README.md	- Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string
+kiosk-demo-stylish/README.md	- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, asserted by `test/wire/binding_test.rb`
 kiosk-demo-stylish/README.md	- JWKS endpoint for JWT verification
 kiosk-demo-stylish/README.md	- `/.well-known/kiosk.json` discovery
 kiosk-demo-stylish/README.md	1. **First contact (claim)** — an assistant with a fresh key opens the ceremony at `/kiosk/oauth/device_authorizati
 kiosk-demo-stylish/README.md	2. **Human-initiated (link)** — the signed-in human mints a link code, a second assistant redeems it at `/kiosk/aut
 kiosk-demo-stylish/README.md	Deliberate, and the point of the line's absence.
-kiosk-demo-stylish/README.md	The task asserts every step, plus the DB ground truth: `kiosk.agents.user_id` for the bound key equals the human's 
-kiosk-demo-stylish/README.md	The walkthrough (`bin/demo`) prints these sections:
-kiosk-demo-stylish/README.md	`check:walkthrough` instead walks through discovery, named queries
+kiosk-demo-stylish/README.md	The test asserts every step, and that the booking landed on the human's own row.
+kiosk-demo-stylish/README.md	The walkthrough (`bin/demo`, against the origin `bin/dev` serves) prints these sections:
+kiosk-demo-stylish/README.md	bin/demo       # in a second terminal: a curl tour of that origin
 kiosk-demo-stylish/README.md	cd kiosk-demo-stylish
 kiosk-demo-stylish/README.md	| *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence.
 kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	  def book_appointment
 kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	  kind :action
-kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	# `POST /kiosk/book_appointment` — arguments in the JSON body, and `kind :action`
-kiosk-demo-stylish/app/operations/book_appointment_operation.rb	names no time zone — an appointment is an INSTANT, so pass an
+kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	# The write verb. The work is in app/operations.
+kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	an appointment is an instant, so a value 
 kiosk-demo-stylish/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-stylish/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish
-kiosk-demo-stylish/bin/demo	run an Action
+kiosk-demo-stylish/bin/demo	step "POST /kiosk/book_appointment"
 kiosk-demo-stylish/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-stylish/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-stylish/config/initializers/kiosk.rb	c.system_role    = "app_role"
 kiosk-demo-stylish/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-kiosk-demo-stylish/lib/tasks/demo.rake	  task :walkthrough do
-kiosk-demo-stylish/lib/tasks/demo.rake	  task binding: "demo:setup" do
-kiosk-demo-stylish/lib/tasks/demo.rake	  task isolation: "demo:setup" do
-kiosk-demo-stylish/lib/tasks/demo.rake	  task redteam: "demo:setup" do
-kiosk-demo-stylish/lib/tasks/demo.rake	  task register: "demo:setup" do
-kiosk-demo-stylish/lib/tasks/demo.rake	  task roles: "demo:setup" do
-kiosk-demo-stylish/lib/tasks/demo.rake	  task schema: "demo:setup" do
-kiosk-demo-stylish/lib/tasks/demo.rake	DB kiosk.agents.spending_cap_cents for assistant 1 == 12345
-kiosk-demo-stylish/lib/tasks/demo.rake	DB owner-agent allowed_roles == {owner} (inherited from IdP)
-kiosk-demo-stylish/lib/tasks/demo.rake	assistant 2 sees assistant 1's booking (same account)
-kiosk-demo-stylish/lib/tasks/demo.rake	check.call("DB owner-agent allowed_roles == {owner} (inherited from IdP)", owner_roles == "{owner}")
-kiosk-demo-stylish/lib/tasks/demo.rake	check.call("customer sign-in → token role == customer",      result["devise_customer_token_role"] == "customer")
-kiosk-demo-stylish/lib/tasks/demo.rake	check.call("owner salon_calendar carries a FORECAST summary", result["owner_sees_forecast"] == true)
-kiosk-demo-stylish/lib/tasks/demo.rake	descriptor_example_failures(queries:
-kiosk-demo-stylish/lib/tasks/demo.rake	human signed in via the real Devise form
-kiosk-demo-stylish/lib/tasks/demo.rake	re-rendered page shows the saved cap + label
-kiosk-demo-stylish/lib/tasks/demo.rake	result["devise_customer_token_role"] ==
-kiosk-demo-stylish/lib/tasks/demo.rake	result["owner_sees_forecast"] == true
-kiosk-demo-stylish/lib/tasks/demo.rake	set spending cap via the manage page → 200
-kiosk-demo-stylish/lib/tasks/demo.rake	task :walkthrough do
-kiosk-demo-stylish/lib/tasks/demo.rake	task binding: "demo:setup" do
-kiosk-demo-stylish/lib/tasks/demo.rake	task roles: "demo:setup" do
-kiosk-demo-stylish/script/descriptor_examples.rb	asserted almost nothing
-kiosk-demo-stylish/script/descriptor_examples.rb	example_params satisfies its own input_schema
-kiosk-demo-stylish/script/descriptor_examples.rb	example_row satisfies its own output_schema
-kiosk-demo-stylish/script/descriptor_examples.rb	exempt_names = Kiosk::Server::ArgumentDecoder::RESERVED.keys
-kiosk-demo-stylish/script/descriptor_examples.rb	published examples (the loop is not empty)
 kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerCalendarStaysOwnScoped — a customer's agent sees its OWN booking and
 kiosk-demo-stylish/script/redteam_suite.rb	#   CustomerLinkCannotCarryOwnerRole — a CUSTOMER (non-staff) signs in for real
 kiosk-demo-stylish/script/redteam_suite.rb	#   DeviceGrantCannotSelfSelectRole — the CLAIM ceremony's unauthenticated
@@ -700,60 +658,83 @@ kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantCannotSelf
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRebindCannotEscalate",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRoleComesFromTheApprover",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantVerifyPageNamesTheAccess",
-kiosk-demo-stylish/spec/salon_clock_spec.rb	THE ZONE IS A PROPERTY OF THE SALON, so the RENDERING follows it
-kiosk-demo-stylish/spec/salon_clock_spec.rb	carries no offset, so it names no instant
-kiosk-demo-stylish/spec/salon_clock_spec.rb	so two salons of one operator publish one booking on two clocks, and the row says which
+kiosk-demo-stylish/test/book_appointment_test.rb	a slot without an offset names no instant and is refused
+kiosk-demo-stylish/test/book_appointment_test.rb	one instant in any spelling is one booking, answered on the salon's clock
+kiosk-demo-stylish/test/test_helper.rb	def sign_in(email) = Kiosk::UserIdentityProviders::DeviseSession.new(live_url).sign_in!(email:, password: PASSWORD)
+kiosk-demo-stylish/test/wire/binding_test.rb	  test "a second assistant shares the account, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/wire/binding_test.rb	  test "an assistant the human approves on the verify page acts as that human" do
+kiosk-demo-stylish/test/wire/binding_test.rb	"spending_cap_cents" => "12345")
+kiosk-demo-stylish/test/wire/binding_test.rb	approve(sign_in("alice@example.com"), opened.body["user_code"])
+kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal 204, status
+kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal [404, 200], [login(first), login(second)]
+kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal [booked], my_appointments(second)
+kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal alice.id, Appointment.find(book(bound)["appointment_id"]).user_id
+kiosk-demo-stylish/test/wire/binding_test.rb	assert_includes page.body, "cap: 12345 cents"
+kiosk-demo-stylish/test/wire/binding_test.rb	test "a second assistant shares the account, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/wire/binding_test.rb	test "an assistant the human approves on the verify page acts as that human" do
+kiosk-demo-stylish/test/wire/binding_test.rb	test "the human names and caps an assistant on the manage page" do
+kiosk-demo-stylish/test/wire/discovery_test.rb	class DiscoveryTest < WireTest
+kiosk-demo-stylish/test/wire/discovery_test.rb	the well-known document and the schema describe this origin without a credential
+kiosk-demo-stylish/test/wire/isolation_test.rb	class IsolationTest < WireTest
+kiosk-demo-stylish/test/wire/isolation_test.rb	each human's assistant sees its own appointments and no one else's
+kiosk-demo-stylish/test/wire/registration_test.rb	test "registering costs a solved proof of work, and the token it buys reads the catalogue" do
+kiosk-demo-stylish/test/wire/roles_test.rb	assert_equal "customer", claims(alice)["role"]
+kiosk-demo-stylish/test/wire/roles_test.rb	assert_equal "owner", claims(owner)["role"]
+kiosk-demo-stylish/test/wire/roles_test.rb	assert_equal ["forecast", 2, 12_500], forecast.values_at("summary", "bookings", "forecast_cents")
+kiosk-demo-stylish/test/wire/roles_test.rb	class RolesTest < WireTest
+kiosk-demo-stylish/test/wire/roles_test.rb	test "the owner's assistant sees the whole book and a forecast of its prices" do
+kiosk-demo-stylish/test/wire/walkthrough_test.rb	bin/demo tours a running origin and books Alice one appointment
+kiosk-demo-stylish/test/wire/walkthrough_test.rb	test "bin/demo tours a running origin and books Alice one appointment" do
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
-kiosk-demo-tudu/README.md	### Adversarial battery (`rake check:redteam`)
+kiosk-demo-tudu/README.md	### Adversarial battery (`script/redteam_suite.rb`)
 kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
-kiosk-demo-tudu/README.md	The human web UI, running the SAME registered actions as the wire (one shared world)
+kiosk-demo-tudu/README.md	The human web UI, calling the same Operations as the wire; a refusal becomes a flash
 kiosk-demo-tudu/README.md	`PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound
 kiosk-demo-tudu/README.md	access**, **AI-assistant→AI-assistant collaboration expressed entirely at the app layer**, and
 kiosk-demo-tudu/README.md	critics claim GUC-style patterns can't handle: **membership-based many-to-many
 kiosk-demo-tudu/README.md	the **W5 account-link rebind** that migrates an assistant's work to a human.
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/household_controller.rb` | The `whoami` / `my_lists` / `list_todos` / `list_members` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |
-kiosk-demo-tudu/README.md	| `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`) — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. Refusals are plain `render json:, status:` naming a wire error code, which the wire renders as the problem document's top-level `code` |
-kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	# A read is a MODEL PROJECTION ({List.reachable_rows}, {Todo.rows_on},
-kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	# WHAT REPLACED EACH HALF. A write is an Operation in app/operations/, called
-kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	# exception. Nothing here looks a verb up in a registry, and nothing here
-kiosk-demo-tudu/app/controllers/lists_controller.rb	    conn = ActiveRecord::Base.connection
-kiosk-demo-tudu/app/controllers/lists_controller.rb	    rows = conn.exec_query(<<~SQL, "housemate_board", [HOUSEMATE_ID]).to_a
-kiosk-demo-tudu/app/models/invite.rb	# A single-use, TTL'd, HASHED collaboration code — tudu's own app-layer
-kiosk-demo-tudu/app/models/invite.rb	# `code_digest` is stored, and the plaintext is returned ONCE and travels
-kiosk-demo-tudu/app/operations/add_todo_operation.rb	names no time zone — a deadline is an INSTANT
-kiosk-demo-tudu/app/operations/invite_operation.rb	OperationResult.ok({ "code" => code, "expires_in" => TTL_SECONDS })
-kiosk-demo-tudu/app/operations/list_access.rb	return nil if Membership.reachable?(list_id, require_owner: require_owner)
+kiosk-demo-tudu/README.md	| `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`)
+kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	# Runs domain code as the signed-in human, under the same session the wire opens
+kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
+kiosk-demo-tudu/app/controllers/kiosk/todo_lists_controller.rb	deadline is an INSTANT, so a value without one is refused 
+kiosk-demo-tudu/app/controllers/lists_controller.rb	    Membership.where(account_id: HOUSEMATE_ID)
+kiosk-demo-tudu/app/controllers/lists_controller.rb	  def housemate_board
+kiosk-demo-tudu/app/controllers/lists_controller.rb	# Reads and writes go through the same projections and Operations the wire uses.
+kiosk-demo-tudu/app/controllers/lists_controller.rb	CreateListOperation.call(principal_id: identity.user_id, title: title)
+kiosk-demo-tudu/app/controllers/todos_controller.rb	AddTodoOperation.call(agent_id: identity.agent_id, list_id: params[:list_id], title: title)
+kiosk-demo-tudu/app/models/invite.rb	# A single-use collaboration code. Only its SHA-256 digest is stored; the
+kiosk-demo-tudu/app/models/invite.rb	scope :redeemable, -> { where(redeemed_at: nil, expires_at: Time.current..) }
+kiosk-demo-tudu/app/models/membership.rb	scope :own, -> { where(account_id: Kiosk.current_user_id) }
+kiosk-demo-tudu/app/operations/accept_invite_operation.rb	invite = Invite.redeemable.lock.find_by(code_digest: Invite.digest(code))
+kiosk-demo-tudu/app/operations/invite_operation.rb	{ code: code, expires_in: TTL.to_i }
+kiosk-demo-tudu/app/operations/list_access.rb	    return if Membership.own.exists?(list_id: list_id)
+kiosk-demo-tudu/app/operations/list_access.rb	return if Membership.own.exists?(list_id: list_id)
+kiosk-demo-tudu/app/operations/list_access.rb	return if Membership.own.owner.exists?(list_id: list_id)
 kiosk-demo-tudu/app/views/lists/index.html.erb	      <h2>Point your AI assistant here — it creates &amp; shares a todo list</h2>
 kiosk-demo-tudu/app/views/lists/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu
 kiosk-demo-tudu/config/initializers/kiosk.rb	  # it later moves that account's lists and memberships to the human.
-kiosk-demo-tudu/config/initializers/kiosk.rb	  c.assistant_claimed  = ->(agent:, previous_user_id:, user_id:) do
+kiosk-demo-tudu/config/initializers/kiosk.rb	  c.assistant_claimed = ->(agent:, from:, to:) do
 kiosk-demo-tudu/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-tudu/config/initializers/kiosk.rb	# No payment_provider: tudu takes no money, so discovery advertises no `pay`.
 kiosk-demo-tudu/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-kiosk-demo-tudu/lib/tasks/demo.rake	    PreLinkTokenAfterLink (401), NoLoginAddressOnTheRoster (a co-member's
-kiosk-demo-tudu/lib/tasks/demo.rake	    check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
-kiosk-demo-tudu/lib/tasks/demo.rake	  task collab: "demo:setup" do
-kiosk-demo-tudu/lib/tasks/demo.rake	  task isolation: "demo:setup" do
-kiosk-demo-tudu/lib/tasks/demo.rake	  task link: "demo:setup" do
-kiosk-demo-tudu/lib/tasks/demo.rake	  task redteam: "demo:setup" do
-kiosk-demo-tudu/lib/tasks/demo.rake	  task schema: "demo:setup" do
-kiosk-demo-tudu/lib/tasks/demo.rake	Alice reads it in her declared zone
-kiosk-demo-tudu/lib/tasks/demo.rake	Assertion 8a: the catalog declares
-kiosk-demo-tudu/lib/tasks/demo.rake	Assertion 8b: no principal-reach verb returned
-kiosk-demo-tudu/lib/tasks/demo.rake	Bob reads the SAME todo in his
-kiosk-demo-tudu/lib/tasks/demo.rake	check.call("agents.json carries NO payments block",                 !r["agents_json_has_payments"])
-kiosk-demo-tudu/lib/tasks/demo.rake	check.call("agents.txt carries NO `Protocols: ap2` / `Payments:`",  !r["agents_txt_has_ap2"] && !r["agents_txt_has_payments"])
-kiosk-demo-tudu/lib/tasks/demo.rake	check.call("discovery capabilities do NOT include `pay` (#{capabilities.inspect})", !capabilities.include?("pay"))
-kiosk-demo-tudu/lib/tasks/demo.rake	every delivered `data` satisfies the served payload_schema
-kiosk-demo-tudu/lib/tasks/demo.rake	task collab: "demo:setup" do
-kiosk-demo-tudu/lib/tasks/demo.rake	task schema: "demo:setup" do
-kiosk-demo-tudu/lib/tasks/demo.rake	the two rows name DIFFERENT zones
 kiosk-demo-tudu/script/redteam_suite.rb	#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("ChosenNameNeverTheAddress",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("NoLoginAddressOnTheRoster",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("PreLinkTokenAfterLink", rc == 401,
-kiosk-demo-tudu/spec/reader_clock_spec.rb	a thirteenth month is REFUSED rather than resolved here
-kiosk-demo-tudu/spec/reader_clock_spec.rb	a zoneless due_at is REFUSED with a typed bad_request
+kiosk-demo-tudu/test/wire/collab_test.rb	a deadline is one instant, read on each member's own clock
+kiosk-demo-tudu/test/wire/collab_test.rb	an invited assistant joins the list, and each todo names the assistant that added it
+kiosk-demo-tudu/test/wire/collab_test.rb	the owner's assistant is told of a member joining, adding, completing and being removed
+kiosk-demo-tudu/test/wire/discovery_test.rb	    assert_equal %w[actions events queries schema], kiosk["capabilities"].sort
+kiosk-demo-tudu/test/wire/discovery_test.rb	agents.json and agents.txt carry no payment directive
+kiosk-demo-tudu/test/wire/discovery_test.rb	assert_equal %w[actions events queries schema], kiosk["capabilities"].sort
+kiosk-demo-tudu/test/wire/discovery_test.rb	assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
+kiosk-demo-tudu/test/wire/discovery_test.rb	take no payment" do
+kiosk-demo-tudu/test/wire/discovery_test.rb	the well-known document and the schema describe this origin without a credential, and take no payment
+kiosk-demo-tudu/test/wire/isolation_test.rb	a member reads the list, and a stranger can neither read it, nor join it, nor see it
+kiosk-demo-tudu/test/wire/isolation_test.rb	the catalog declares which queries reach past the principal, and no query claiming the principal returns a shared list
+kiosk-demo-tudu/test/wire/link_test.rb	assert_equal 401, assistant.query(@headless, name: "my_lists").status
+kiosk-demo-tudu/test/wire/link_test.rb	linking a headless assistant moves its list to the human and ends every pre-link token
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	CLAIM_IDS = { "licence_a" => "licence_category:A" }.freeze
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
@@ -786,6 +767,8 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	idempotency_key: "#{cart_
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	off_session:    true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customer_record.rb	def self.create_table(migration)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customer_record.rb	t.column :user_id,     Kiosk.configuration.user_id_type, null: false
+kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_integration_spec.rb	# Real Stripe test-mode round-trip. Skipped unless STRIPE_SECRET_KEY is set
+kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_integration_spec.rb	attaches a test card then captures a real test payment
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#capture
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	#setup_required?
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	charges the customer's default saved card off_session, keyed by the cart mandate id
@@ -860,6 +843,8 @@ kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_K = 7
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_N = 168
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      def self.params(n: 168, k: 7)
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	    # The solver finds 2^k nonces whose BLAKE2b-256(seed ‖ nonce) outputs
+kiosk-pow-equihash/lib/kiosk/pow/equihash/solver.rb	Needs python3 + numpy on PATH (see README, "Solver (Python + numpy)").
+kiosk-pow-equihash/lib/kiosk/pow/equihash/solver.rb	raise SolverError, "solve.py exited non-zero: #{out}" unless status.success?
 kiosk-pow-equihash/solve.py	        "ERROR: this solver requires numpy.\n"
 kiosk-pow-equihash/solve.py	BUCKET_CAP = 32
 kiosk-pow-equihash/solve.py	Equihash PoW solver for Kiosk (default n=168, k=7).
@@ -893,11 +878,10 @@ kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
 kiosk-redteam/README.md	finds a real breach fails loudly: `Runner#all_blocked?` answers false and the
 kiosk-redteam/lib/kiosk/redteam/battery.rb	#{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked.
-kiosk-redteam/lib/kiosk/redteam/event_stream.rb	def self.payload_errors(schema_document, events)
+kiosk-redteam/lib/kiosk/redteam/runner.rb	        @client  = Kiosk::TestHelpers::Assistant.new(base_url:)
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	            name:        "WrongCurrencyCart",
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	class WrongCurrencyCart < Scenario
-kiosk-redteam/lib/kiosk/redteam/stripe_mock.rb	def start
 kiosk-reputation/README.md	      "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
 kiosk-reputation/README.md	  is the shipped default; `argon2id` is legacy.
 kiosk-reputation/README.md	  unproven_count_bonus:       1,    # extra proofs for principals with 0 purchases
@@ -1027,12 +1011,14 @@ kiosk-rls/README.md	**RLS is not Kiosk's primary security model.**
 kiosk-rls/README.md	This gem emits DDL and ships no rake tasks.
 kiosk-rls/README.md	When you opt in, `enable_rls_on` emits both `ENABLE ROW LEVEL SECURITY` **and** `FORCE ROW LEVEL SECURITY`
 kiosk-rls/README.md	`kiosk-rls` is an **optional** companion for providers who want an additional DB-level row enforcement layer
+kiosk-rls/README.md	an app that uses this gem needs `config.active_record.schema_format = :sql`
 kiosk-rls/lib/kiosk/rls/dsl.rb	    #   enable_rls_on(table)                      — full-table RLS turn-on
 kiosk-rls/lib/kiosk/rls/dsl.rb	    #   rename_kiosk_policy_on(table, from:, to:) — rename in place
 kiosk-rls/lib/kiosk/rls/emitter.rb	          %(ALTER TABLE #{quote_ident(table_name)} FORCE ROW LEVEL SECURITY)
 kiosk-rls/lib/kiosk/rls/emitter.rb	        def statements_for(table)
 kiosk-rls/lib/kiosk/rls/railtie.rb	          ActiveRecord::Migration.include(Kiosk::RLS::DSL)
 kiosk-server/CHANGELOG.md	- `rake kiosk:doctor` — follow-up.
+kiosk-server/CHANGELOG.md	`Kiosk::OperationResult` and `render_kiosk_result` are removed
 kiosk-server/LICENSE.txt	Version 2.0, January 2004
 kiosk-server/README.md	## What's in this release
 kiosk-server/README.md	- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account
@@ -1045,14 +1031,16 @@ kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_identity_tables.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_kyc_attributes.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_mandates.rb.tt",
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_pow_spent.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_reservations.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template "create_kiosk_schema.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	    # Every migration is a `create`: each table is created in its final shape,
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	desc "Generate the Kiosk initializer and its canonical base migrations."
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_events.rb.tt",
+kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_pow_spent.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	migration_template "create_kiosk_schema.rb.tt",
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	route "draw(:kiosk)"
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	template "routes_kiosk.rb.tt", "config/routes/kiosk.rb"
+kiosk-server/lib/kiosk/owned.rb	scope :own, -> { where(user_id: Kiosk.current_user_id) }
 kiosk-server/lib/kiosk/server/account_binding.rb	        # object and run the operator's `assistant_claimed` /
 kiosk-server/lib/kiosk/server/account_binding.rb	      # `requested_role:` IS NEVER A CLIENT'S ROLE, on either ceremony
 kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(public_key_pem:, user_id:, requested_role: nil)
@@ -1133,11 +1121,11 @@ kiosk-server/lib/kiosk/server/executor.rb	def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/executor.rb	resolves an identity — an {Executor} cannot be built without one.
 kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
-kiosk-server/lib/kiosk/server/handler_mixin.rb	def render_kiosk_result(result)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	two routes that never reach this line — render the envelope, or raise
 kiosk-server/lib/kiosk/server/handler_mixin.rb	vocabulary and extra envelope fields the Executor decodes and re-wraps
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
+kiosk-server/lib/kiosk/server/kyc.rb	unless secure_equal?(row.fetch("nonce"), body["nonce"].to_s)
 kiosk-server/lib/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	            "KYC attestation attributes must be an object of {name: true} booleans",
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        # Binds the attestation to this operator.
@@ -1238,7 +1226,7 @@ kiosk-server/lib/kiosk/server/wire_controller.rb	rescue_from Errors::Base, with:
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	reaches that file from config/routes.rb with Rails' own draw
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	does not fire assistant_claimed for a fresh key (nothing was re-bound)
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	fires assistant_claimed(agent:, previous_user_id:, user_id:)
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	fires assistant_claimed(agent:, from:, to:) with both accounts
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	registers a linked assistant account under the holder's user_id
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	warns the operator when a role-less ceremony lands on a multi-role origin
@@ -1717,6 +1705,7 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	issues `count` challenges with d
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	it "raises Forbidden" do
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	it "raises PowRequired"
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	nil reputation_policy (the default)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	pow_spent_store defaults to the database-backed store
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	re-challenge carries a well-formed NEW challenge (different id from the spent one)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	re-challenges when the ARGUMENTS differ
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
@@ -1726,7 +1715,6 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	renders the documented forbidden
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	scales the challenge TTL by `count`, so a sequential solver does not lose the first
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	verifies for the identical method + verb + args (the control)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	with a policy that always challenges
-kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	does NOT hold single-use across independent instances
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	is idempotent and visible to a second instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	keys the table on the challenge id, so the PK is the single-use gate
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	leaves exactly one row for N racing claims of one id
@@ -1884,6 +1872,12 @@ kiosk-test-support/README.md	For unit-shaped tests where you only care about cal
 kiosk-test-support/README.md	Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
 kiosk-test-support/README.md	The DSL is inert until you wire an executor. In production-shaped tests you wire `Kiosk::Server::TestExecutor` (ships with `kiosk-server`):
 kiosk-test-support/README.md	The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::Server::TestExecutor` from the shipped `kiosk-server` gem (above).
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	    class Assistant
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	def sign_mandate(principal, payload) = JWT.encode(payload, principal.rsa_key, "RS256")
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	key  = OpenSSL::PKey::RSA.generate(2048)
+kiosk-test-support/lib/kiosk/test_helpers/assistant/events.rb	def self.payload_errors(schema_document, events)
+kiosk-test-support/lib/kiosk/test_helpers/descriptor_examples.rb	PAGING = %w[limit cursor].freeze
+kiosk-test-support/lib/kiosk/test_helpers/descriptor_examples.rb	module DescriptorExamples
 kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def as_agent_of(user, role: nil, &block)
 kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def as_user(user, role: nil, &block)
 kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def kiosk_seed(table, count: 1, owner: nil, **attrs)
@@ -1896,6 +1890,8 @@ kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def query(sql)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def run_action(name, args)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def run_query(name, args)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	    class NullExecutor
+kiosk-test-support/lib/kiosk/test_helpers/stripe_mock.rb	stripe-mock not found. Install it: brew install stripe-mock
+kiosk-test-support/lib/kiosk/test_helpers/wire.rb	    class Wire
 kiosk-test-support/spec/descriptor_cross_reference_spec.rb	#{demo}: every verb description's cross-reference names params the target verb declares
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every verb declares #{REQUIRED_MACROS.join(
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the whole fleet (the lint is not vacuous)
@@ -1922,6 +1918,7 @@ kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def rack
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def role_for(user)
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def verify(request)
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	    # `active_for_authentication?` already gates the Warden user, so a locked
+kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise_session.rb	def sign_in!(email:, password:)
 kiosk-user-idp-devise/spec/kiosk/user_identity_providers/devise_spec.rb	    context "Rack env shim" do
 kiosk-user-idp-devise/spec/kiosk/user_identity_providers/devise_spec.rb	    context "shipped wire — ActionDispatch::Request" do
 kiosk-user-idp-devise/spec/kiosk/user_identity_providers/devise_spec.rb	    context "when current_user is present" do

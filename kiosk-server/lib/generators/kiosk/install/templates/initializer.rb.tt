@@ -1,197 +1,67 @@
 # frozen_string_literal: true
 
-# Kiosk configuration for this application.
-#
-# See https://kiosk.tech and the kiosk-server README for the full option
-# surface. Defaults here reflect the values the install generator was
-# invoked with — uncomment and adjust as needed.
+# Kiosk configuration. Every option: https://kiosk.tech and the kiosk-server README.
 
 Kiosk.configure do |c|
-  # ─── Principal (user) wiring ─────────────────────────────────────────
-  # Provider's user model class name as a String — resolved at request
-  # time by kiosk-server, not eagerly, to avoid load-order issues.
+  # Your user model class name, resolved at request time.
   c.user_model     = "<%= options[:user_table].classify %>"
 
-  # Type of users.id — :uuid (default), :bigint, :integer, or :text.
+  # Type of users.id: :uuid (default), :bigint, :integer or :text.
   c.user_id_type   = :<%= options[:user_id_type] %>
 
   # Column on `users` that holds the principal id. Default :id.
   c.user_id_column = :id
 
-  # ─── Validation ──────────────────────────────────────────────────────
-  # WHAT IS NOT A SETTING, so you know what these two flags are NOT for:
-  # coerce-then-validate on the per-verb wire is UNCONDITIONAL. Every call to
-  # <mount>/<verb-name> has its arguments coerced and checked against that
-  # verb's declared `input_schema` before your handler sees one, whatever is
-  # written here — spec §8.1 item 5 makes that an operator obligation, so a
-  # flag that could switch it off would be a flag for serving a non-conformant
-  # origin. It is why `json_schemer` is a real dependency of kiosk-server
-  # rather than an optional extra. The two flags below are different, smaller
-  # things, and both are opt-in with a default of `false`.
-
-  # The PoW-SHAPE check in front of the proof-of-work gate. A `Kiosk-PoW`
-  # header whose proofs cannot be parsed otherwise yields a fresh 402
-  # challenge, forever, with no diagnostic — the caller retries into a silent
-  # loop and nothing in your logs says why. On, a malformed shape is a clear
-  # 400 naming the shape it expected. It is NOT the gate: a well-formed but
-  # forged proof still fails the real cryptographic check. An absent proof is
-  # untouched, so the ordinary first no-pow request still gets its 402.
+  # coerce-then-validate on the per-verb wire is UNCONDITIONAL: arguments are
+  # always checked against the verb's `input_schema` (§8.1). These two flags add checks.
+  # A malformed `Kiosk-PoW` header gets a 400 naming the expected shape, not an endless 402.
   c.validate_requests = true
 
-  # Every query/action ANSWER validated against the `output_schema` that verb
-  # declares, so a descriptor that lies about its handler fails loudly instead
-  # of shipping a wrong shape to an assistant.
-  #
-  # NOT `true`, and the reason is the one kiosk-server's own
-  # response_validation.rb gives: with it on in production a descriptor typo
-  # becomes a 500 for a caller who did nothing wrong. Nothing a caller sends
-  # can trigger this check — the failure it reports is always yours — so it
-  # belongs in development and CI, where it is cheap to fix, and not in front
-  # of a live assistant. Your test suite keeps the whole assertion.
+  # Validates every answer against the verb's `output_schema`. Off in production,
+  # where a descriptor typo would become a 500 for a caller.
   c.validate_responses = !Rails.env.production?
 
-  # ─── Postgres surface ────────────────────────────────────────────────
-  # GUC namespace used in SET LOCAL statements (and RLS policies, if you
-  # opt in). Default "app" — change if your backend already uses app.*.
+  # GUC namespace for SET LOCAL (and RLS policies). Default "app".
   # c.guc_namespace = "<%= options[:guc_namespace] %>"
 
   # Postgres schema for Kiosk helper functions and tables.
   # c.schema = "<%= options[:schema] %>"
 
-  # ─── Opt-in: DB-level RLS defense-in-depth ───────────────────────────
-  # Kiosk's isolation comes from the sanctioned per-verb surface with
-  # app-layer authz. Postgres RLS is available as belt-and-suspenders:
-  # add `gem "kiosk-rls"`, include Kiosk::RLS::DSL into your migrations,
-  # and configure the DB roles (provider creates these — Kiosk does not).
+  # Opt-in Postgres RLS: add `gem "kiosk-rls"` and create these database roles yourself.
   # c.app_role        = "app_role"      # runtime role with NOBYPASSRLS
   # c.system_role     = "system_role"   # privileged role; owns the tables
   # c.enforce_db_role = true            # SET LOCAL ROLE app_role per request
 
-  # ─── Wire surface ────────────────────────────────────────────────────
-  # Issuer URL — MUST match `kiosk.issuer` in /.well-known/kiosk.json AND
-  # be the exact origin assistants dial (scheme + host, no trailing slash).
-  # Configured, not derived from the request Host: it anchors the AP2 mandate
-  # `iss` and the `aud` origin-binding, which Kiosk checks by strict equality.
-  # Get it wrong and the app still boots, then rejects EVERY assistant with
-  # "proof audience mismatch". This is the default origin; to serve another
-  # business from this deployment list it below, and point mere aliases of an
-  # origin at it with a redirect before any Kiosk verb.
+  # The exact origin assistants dial (scheme + host, no trailing slash); it must
+  # match `kiosk.issuer` in /.well-known/kiosk.json, or every proof is rejected.
   # c.issuer = "https://<your-host>"
 
-  # Further origins this deployment serves, each its own operator on the wire.
-  # The request host only selects among the origins listed here.
+  # Further origins this deployment serves, each its own operator.
   # c.additional_origins = ["https://<another-host>"]
 
-  # Role vocabulary your authz (app-layer policies, and RLS if opted in)
-  # branches on. Never include `:admin` — prefer job-titled roles like
-  # `:support`, `:master`.
-  #
-  # ROLES ARE TOTAL, OR YOU HAVE NONE. If you declare roles here, your
-  # `user_idp` MUST resolve one for EVERY human who can approve an assistant
-  # binding. A role for staff and nothing for customers is NOT a supported
-  # configuration: on an origin with more than one role, a binding that
-  # resolves no role falls back to `registration_role` below, so a member of
-  # staff whose role your IdP cannot answer silently gets an assistant that
-  # can only act as a customer. Declaring no roles at all is the other
-  # supported shape — then no binding carries a role and no token has one.
-  # Both are total; the MIXTURE is what is unsupported (kiosk.tech
-  # `protocol.md` §6.3).
-  #
-  # In practice the only way to acquire the mixture is to write `#kiosk_role`
-  # on your user model and let it answer nil. Make it TOTAL: return your
-  # least-privileged declared role instead. Whether a Ruby METHOD is total over
-  # your humans is not a fact a configuration file holds, so nothing can check
-  # that half at boot — kiosk-server warns in your log the first time a ceremony
-  # resolves no role on a multi-role origin, and that warning arrives at the
-  # first binding rather than at deploy. The CONFIGURATION half below is
-  # checked at boot, and refused.
-  #
-  # UNCOMMENT THESE TWO TOGETHER OR NEITHER. A declared role vocabulary with no
-  # `registration_role` is refused at boot: there is always a default role, and
-  # without one every assistant admitted with no role of its own would carry
-  # none at an origin whose verbs branch on one.
+  # Role vocabulary; set together with `registration_role`. Your `user_idp` must
+  # resolve a role for every human who can approve a binding (§6.3).
   # c.roles = %i[customer]
 
-  # The DEFAULT ROLE — what a self-registered assistant is pinned to (assistants
-  # cannot choose their own), and what a binding falls back to when the ceremony
-  # resolves no role. REQUIRED whenever `c.roles` above is set, and it must be
-  # one of them; name your least-privileged role. If you assign roles to nobody,
-  # leave both commented out — then no binding carries a role and no token has
-  # one, which is the other supported shape.
+  # The default role for self-registered assistants and role-less bindings; your least-privileged one.
   # c.registration_role = :customer
 
   # Owner block surfaced in /.well-known/kiosk.json.
   # c.owner = { name: "Your Company", support: "support@example.com" }
 
-  # ─── Pluggable identity adapters ─────────────────────────────────────
-  # Two DIFFERENT, both-OPTIONAL seams. You need NEITHER to start:
-  #
-  # AGENT-IdP (c.agent_idp) — verifies/mints AI-assistant credentials. Defaults
-  # to the bundled kiosk-pop DefaultAgentIdp, used with ZERO config: it verifies
-  # the tokens the register/login endpoints mint. Set it ONLY to front an
-  # external agent-identity issuer by implementing
-  # `Kiosk::AgentIdentityProviders::Base` — the only subclass Kiosk ships is
-  # the bundled DefaultAgentIdp named above, so an adapter fronting an
-  # external issuer is yours to write. If you do write one: the `agent_id` your
-  # adapter puts in a `Kiosk::Identity` MUST be a UUID string. Every agent_id
-  # column these migrations create — and the `current_agent_id()` helper RLS
-  # policies call — is typed `uuid`, with no equivalent of `user_id_type` to
-  # widen it, so an opaque external agent identifier has to be mapped onto a
-  # local uuid inside the adapter.
-  #   # c.agent_idp = MyExternalAgentIdp.new   # your Kiosk::AgentIdentityProviders::Base subclass
-  #
-  # USER-IdP (c.user_idp) — binds a real HUMAN account (and optionally its role)
-  # from your EXISTING session auth, so a human can approve/manage assistant
-  # links from your own frontend. The shipped worked example is
-  # `kiosk-user-idp-devise` (add `gem "kiosk-user-idp-devise"`):
-  #   # c.user_idp = Kiosk::UserIdentityProviders::Devise.new
+  # Optional: an agent IdP of your own (subclass Kiosk::AgentIdentityProviders::Base; agent ids must be UUIDs).
+  # c.agent_idp = MyExternalAgentIdp.new
 
-  # ─── If you run MORE THAN ONE process, read this ─────────────────────
-  # Spent proof-of-work ids live in the kiosk.pow_spent table (migration 008),
-  # shared by every process. `c.auth_challenge_store` is in-process: a
-  # challenge issued by one process is invisible to the one that gets the
-  # register/login, so the handshake fails. For more than one process, set
-  # the shared store from the kiosk-server README, "Multi-process deployments":
-  #   # c.auth_challenge_store = Kiosk::Server::AuthChallengeStores::ActiveRecord.new
+  # Optional: a user IdP binding your signed-in humans, e.g. `gem "kiosk-user-idp-devise"`.
+  # c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
-  # ─── The event tail ──────────────────────────────────────────────────
-  # WHERE THE EVENTS YOU EMIT ARE KEPT. Laid down by `bin/rails g kiosk:install`
-  # (migration 007) and set here, because the in-process default is wrong for
-  # every deployment.
-  #
-  # The operator keeps every event for 24 hours, so a subscriber that
-  # reconnects with `since` set to the last id it saw misses nothing. An
-  # in-process store loses the events inside that window on every restart and
-  # deploy.
-  #
-  # Delete this line while any handler controller of yours declares a
-  # `topic`, and a PRODUCTION boot is refused, naming the topics it found and
-  # this setting. An origin that declares no topic never emits, so it keeps
-  # the in-process default.
+  # With more than one process, the auth challenge store must be shared.
+  # c.auth_challenge_store = Kiosk::Server::AuthChallengeStores::ActiveRecord.new
+
+  # Events are kept 24 hours for reconnecting subscribers. Production refuses
+  # to boot with the in-process default while any handler declares a `topic`.
   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
 
-  # ─── Opt-in: the audit sink ──────────────────────────────────────────
-  # Kiosk does NOT keep an audit trail. It OFFERS one: set a callable here
-  # and it receives one `Kiosk::Server::ActionEvent` per action invocation —
-  # success and failure alike — with the action name, the {user_id, agent_id}
-  # pair, the role, the actor, the outcome, the error class and message, the
-  # timestamp, and the ARGUMENTS. Unset (the default), nothing is emitted and
-  # Kiosk stores nothing anywhere.
-  #
-  # THE ARGUMENTS ARRIVE IN FULL — whatever your verb takes: an address, a
-  # name, a cart, a booking reference. Kiosk does not redact them for you,
-  # because the retention policy for your customers' data is yours to set,
-  # not Kiosk's to assume. Whatever you write, and wherever you write it,
-  # YOU are the data controller for it: retention, encryption at rest,
-  # access control and deletion requests all land on you.
-  #
-  # If you want the shape without the values, that is one call:
-  #   # c.audit_sink = ->(e) { Rails.logger.info(e.with_arg_types.to_h.to_json) }
-  # Everything, values included — your call, made explicitly:
-  #   # c.audit_sink = ->(e) { AuditRow.create!(**e.to_h) }
-  # Per-field, because only you know which of your fields are hot:
-  #   # c.audit_sink = ->(e) { Siem.record(e.to_h.merge(args: e.args.except(:card_token))) }
-  #
-  # A sink that raises does not fail the action — the error is logged and the
-  # invocation stands.
+  # Optional audit sink: one ActionEvent per action, arguments in full and unredacted.
+  # c.audit_sink = ->(e) { Rails.logger.info(e.with_arg_types.to_h.to_json) }
 end

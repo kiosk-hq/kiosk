@@ -28,7 +28,7 @@ answer.
 
 ## With hoteling
 
-`spec/wire/booking_spec.rb` runs the errand with no human present: the assistant
+`spec/stories/booking_spec.rb` runs the errand with no human present: the assistant
 registers itself under the toll, reads `availability`, calls `reserve_room`,
 signs the three AP2 mandates and pays, and the booking is confirmed only once
 payment settles. Settlement goes through Stripe in test mode, and the test
@@ -36,9 +36,9 @@ charges a local stripe-mock, so the flow runs with no real card.
 
 Two things the incumbent flow cannot do follow from that. Payment is part of
 the wire rather than a handback, so the reservation completes in one exchange.
-And the booking is the assistant's own: `spec/wire/isolation_spec.rb`
+And the booking is the assistant's own: `spec/stories/privacy_spec.rb`
 and `script/redteam_suite.rb` assert a cross-tenant read and a forged `user_id` are
-refused, while `spec/wire/spending_cap_spec.rb` holds a per-assistant limit the
+refused, while `spec/stories/spending_cap_spec.rb` holds a per-assistant limit the
 operator sets.
 
 To watch an assistant drive it rather than a script, see "Watch it work" in

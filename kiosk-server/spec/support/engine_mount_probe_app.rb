@@ -22,6 +22,7 @@ require "rack/mock"
 
 class ProbeApp < Rails::Application
   config.eager_load = false
+  config.paths["config"] << File.expand_path("config", __dir__)
   config.hosts.clear
   config.secret_key_base = "engine-mount-probe"
   config.logger = Logger.new(IO::NULL)

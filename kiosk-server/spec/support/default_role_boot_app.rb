@@ -38,6 +38,7 @@ at_exit { FileUtils.remove_entry(ROOT) if File.directory?(ROOT) }
 app = Class.new(Rails::Application) do
   config.root             = ROOT
   config.eager_load       = false
+  config.paths["config"] << File.expand_path("config", __dir__)
   config.enable_reloading = false
   config.secret_key_base  = "default-role-boot"
   config.logger           = Logger.new(IO::NULL)

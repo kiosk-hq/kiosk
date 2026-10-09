@@ -27,6 +27,7 @@ LOG = StringIO.new
 
 class ProbeApp < Rails::Application
   config.eager_load = false
+  config.paths["config"] << File.expand_path("config", __dir__)
   config.hosts.clear
   config.secret_key_base = "filtered-parameters-probe"
   config.logger = ActiveSupport::Logger.new(LOG)

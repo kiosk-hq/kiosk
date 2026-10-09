@@ -18,6 +18,7 @@ require "bundler/setup"
 require "fileutils"
 require "json"
 require "tmpdir"
+require "active_job/railtie"
 require "kiosk/server"
 
 SCENARIO = ARGV.fetch(0)
@@ -55,6 +56,7 @@ eager = SCENARIO == "production"
 app = Class.new(Rails::Application) do
   config.root             = ROOT
   config.eager_load       = eager
+  config.paths["config"] << File.expand_path("config", __dir__)
   config.enable_reloading = !eager
   config.secret_key_base  = "handler-registration-probe"
   config.logger           = Logger.new(IO::NULL)

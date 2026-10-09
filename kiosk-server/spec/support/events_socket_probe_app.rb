@@ -103,6 +103,7 @@ end.new
 
 class ProbeApp < Rails::Application
   config.eager_load = false
+  config.paths["config"] << File.expand_path("config", __dir__)
   config.hosts.clear
   config.logger = Logger.new(LOG, level: Logger::ERROR)
   config.secret_key_base = "x" * 64

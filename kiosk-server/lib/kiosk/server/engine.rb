@@ -8,6 +8,7 @@
 # top-level entry point loads.
 require "rails"
 require "rails/engine"
+require "solid_cable"
 
 module Kiosk
   module Server

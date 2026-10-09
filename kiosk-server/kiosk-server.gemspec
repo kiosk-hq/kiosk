@@ -129,6 +129,8 @@ Gem::Specification.new do |spec|
   #                 channels of its own keeps its connection class and its
   #                 forgery protection untouched.
   spec.add_dependency "actioncable",   "~> 8.1"
+  # solid_cable   — carries the event stream between Puma workers and hosts.
+  spec.add_dependency "solid_cable",   "~> 4.0"
   # activerecord  — ActiveRecord::Base.lease_connection is how the auth plane,
   #                 the wire and the durable stores reach the database (NOT
   #                 `.connection`, which Rails 8.1 soft-deprecates and which

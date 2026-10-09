@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **kiosk-server depends on `solid_cable`**, the event stream's pubsub across workers; an operator no longer adds it.
+
 - 2026-10-09: **`assistant_claimed` receives `from:` and `to:` accounts, and `assistant_unlinked` an `account:`**, as `user_model` records instead of ids.
 
 - 2026-10-09: **Spent proof-of-work ids live in the database by default**, so a deploy or a second worker no longer makes a spent proof spendable again; `kiosk:install` lays down `kiosk.pow_spent`.

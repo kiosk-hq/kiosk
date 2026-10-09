@@ -13,19 +13,20 @@ class DeliverySlotsTest < ActiveSupport::TestCase
     assert_equal 9 * 3600, DeliverySlots.slot_at(AUGUST_7TH, 1, TOKYO).utc_offset
   end
 
-  test "a window that has begun is no longer bookable" do
+  test "a window takes orders until picking and the drive no longer fit before it ends" do
     travel_to DUBLIN.local(2026, 8, 7, 11) do
-      assert_equal [3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH)
+      assert_equal [2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH)
       assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH + 1)
-      assert_empty DeliverySlots.bookable_ids(AUGUST_7TH, TOKYO)
+      assert_equal [6], DeliverySlots.bookable_ids(AUGUST_7TH, TOKYO)
     end
-    travel_to(DUBLIN.local(2026, 8, 7, 23)) { assert_empty DeliverySlots.bookable_ids(AUGUST_7TH) }
+    travel_to(DUBLIN.local(2026, 8, 7, 11, 25)) { assert_includes DeliverySlots.bookable_ids(AUGUST_7TH), 2 }
+    travel_to(DUBLIN.local(2026, 8, 7, 11, 26)) { assert_equal [3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH) }
     travel_to(DUBLIN.local(2026, 8, 7, 6)) { assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH) }
   end
 
-  test "the soonest day steps over a day whose windows have all begun" do
-    travel_to(DUBLIN.local(2026, 8, 7, 23)) { assert_equal AUGUST_7TH + 1, DeliverySlots.soonest_date(DUBLIN) }
-    travel_to(DUBLIN.local(2026, 8, 7, 6)) { assert_equal AUGUST_7TH, DeliverySlots.soonest_date(DUBLIN) }
+  test "the soonest day steps over a day whose windows have all closed" do
+    travel_to(DUBLIN.local(2026, 8, 7, 19, 25)) { assert_equal AUGUST_7TH, DeliverySlots.soonest_date(DUBLIN) }
+    travel_to(DUBLIN.local(2026, 8, 7, 19, 26)) { assert_equal AUGUST_7TH + 1, DeliverySlots.soonest_date(DUBLIN) }
   end
 
   test "the label names its zone" do

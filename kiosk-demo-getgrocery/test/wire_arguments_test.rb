@@ -24,9 +24,9 @@ class WireArgumentsTest < ActiveSupport::TestCase
     end
   end
 
-  test "a window that has begun cannot be booked" do
-    travel_to SHOP.local(2026, 9, 7, 11) do
-      assert_match(/already started/, refusal { WireArguments.bookable_slot!(THE_7TH, 2, SHOP) }.message)
+  test "a window too close to its end cannot be booked" do
+    travel_to SHOP.local(2026, 9, 7, 11, 30) do
+      assert_match(/closes too soon/, refusal { WireArguments.bookable_slot!(THE_7TH, 2, SHOP) }.message)
       assert_nil WireArguments.bookable_slot!(THE_7TH, 3, SHOP)
     end
   end

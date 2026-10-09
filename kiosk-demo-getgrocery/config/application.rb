@@ -22,9 +22,5 @@ module KioskDemoGetgrocery
     config.active_job.queue_adapter = :async
     # public first: the kiosk tables reference public.users.
     config.active_record.dump_schemas = "public,kiosk"
-
-    # The courier leaves this long before the delivery window opens.
-    config.x.getgrocery.courier_lead_seconds =
-      ENV.fetch("GETGROCERY_COURIER_LEAD_SECONDS", rand(600..900).to_s).to_i
   end
 end

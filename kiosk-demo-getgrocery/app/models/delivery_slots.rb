@@ -7,6 +7,10 @@ module DeliverySlots
   WINDOW_HOURS = 2
   COUNT        = 6
 
+  # After payment the shop picks the basket, then the courier drives it over.
+  PICKING = 20..30 # minutes
+  DRIVE   = 5.minutes
+
   # The origin's zone, used where no address is involved: published examples.
   DEFAULT_ZONE_NAME = "Europe/Dublin"
 
@@ -21,7 +25,7 @@ module DeliverySlots
   # Tomorrow on the origin's clock: every window of it is still bookable.
   def example_date = now.to_date + 1
 
-  # Today, or tomorrow once today's last window has begun.
+  # Today, or tomorrow once today's last window has closed.
   def soonest_date(zone)
     today = now(zone).to_date
     bookable_ids(today, zone).empty? ? today + 1 : today
@@ -37,12 +41,15 @@ module DeliverySlots
     format("%02d:00–%02d:00 (%s)", hour, hour + WINDOW_HOURS, zone.name)
   end
 
-  # A window that has begun is no longer bookable.
-  def past?(date, slot_id, zone = default_zone, at: Time.current)
-    slot_at(date, slot_id, zone) <= at
+  # A window takes orders while a basket paid now still reaches the door inside it.
+  def closed?(date, slot_id, zone = default_zone, at: Time.current)
+    slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE < at
   end
 
   def bookable_ids(date, zone = default_zone, at: Time.current)
-    (1..COUNT).reject { |slot_id| past?(date, slot_id, zone, at: at) }
+    (1..COUNT).reject { |slot_id| closed?(date, slot_id, zone, at:) }
   end
+
+  # "14:35 (Europe/Dublin)".
+  def clock_label(time, zone) = "#{time.in_time_zone(zone).strftime("%H:%M")} (#{zone.name})"
 end

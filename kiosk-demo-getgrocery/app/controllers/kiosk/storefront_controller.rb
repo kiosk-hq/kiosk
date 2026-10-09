@@ -52,7 +52,7 @@ class Kiosk::StorefrontController < ActionController::API
               "getgrocery routes by postal district and delivers only inside the Dublin zones it " \
               "serves, so an address it cannot place — outside those zones, or with no district in it " \
               "at all — is not servable, and neither is a day already gone. An EMPTY " \
-              "array means every window on that day has already begun: try a later one. Get " \
+              "array means every window on that day closes too soon to deliver to: try a later one. Get " \
               "the REAL address from your human before calling. The operator checks only its FORM and " \
               "its zone — it cannot tell a plausible in-zone address from a real one — and " \
               "`create_order` needs the same address again, so an invented one books a delivery to " \

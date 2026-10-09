@@ -36,9 +36,9 @@ module WireArguments
   end
 
   def bookable_slot!(date, slot_id, zone)
-    return unless DeliverySlots.past?(date, slot_id, zone)
+    return unless DeliverySlots.closed?(date, slot_id, zone)
 
-    refuse "delivery slot #{slot_id} on #{date} has already started " \
+    refuse "delivery slot #{slot_id} on #{date} closes too soon to deliver an order placed now " \
            "(#{DeliverySlots.slot_at(date, slot_id, zone).iso8601}) — choose a later slot; call " \
            "delivery_slots again for the still-bookable windows"
   end

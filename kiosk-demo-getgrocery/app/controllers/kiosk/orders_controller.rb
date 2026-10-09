@@ -16,19 +16,19 @@ class Kiosk::OrdersController < ActionController::API
   end
 
   topic :order_delivery do
-    description "Your order is on its way, or has arrived. `out_for_delivery` carries the ETA — " \
-                "the delivery window this order was booked for, with the clock it was quoted " \
-                "on — and `delivered` means it is at the door. Nothing to call back: this is " \
-                "the shop acting, not an answer to a request of yours."
+    description "Your order is on its way, or has arrived. `out_for_delivery` comes 20–30 " \
+                "minutes after payment, or as a later window opens: get ready to meet the " \
+                "courier at the ETA it carries. `delivered`, five minutes later, means it is at " \
+                "the door. Nothing to call back: this is the shop acting."
     payload_schema type: "object", additionalProperties: false,
                    properties: { order_id:  { type: "string", format: "uuid" },
                                  status:    { enum: %w[out_for_delivery delivered] },
                                  eta:       { type: "string", format: "date-time",
-                                              description: "When the window opens. Present on " \
+                                              description: "When the courier arrives. Present on " \
                                                            "`out_for_delivery` only." },
                                  eta_label: { type: "string",
-                                              description: "The same window as a human reads " \
-                                                           "it, on the clock below." },
+                                              description: "The same time as a human reads it, " \
+                                                           "on the clock below." },
                                  timezone:  { type: "string",
                                               description: "The delivery district's clock — the " \
                                                            "one `eta_label` is written on." } },

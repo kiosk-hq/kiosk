@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# The courier leaves `courier_lead_seconds` before a paid order's window opens.
+# The courier leaves once the basket is picked, 20–30 minutes after payment,
+# and not before the order's window opens.
 class CourierDispatchJob < ApplicationJob
   queue_as :default
 
@@ -10,16 +11,11 @@ class CourierDispatchJob < ApplicationJob
     order = Order.awaiting_courier.find_by(id: order_id)
     return unless order
 
-    order.update!(dispatch_at: order.slot_at - Rails.configuration.x.getgrocery.courier_lead_seconds)
+    order.update!(dispatch_at: [rand(DeliverySlots::PICKING).minutes.from_now, order.slot_at].max)
     enqueue_for(order)
   end
 
-  # A departure already due runs inline: on the `:async` adapter an immediate
-  # enqueue would race the caller's next request.
-  def self.enqueue_for(order)
-    wait = order.dispatch_at - Time.current
-    wait.positive? ? set(wait: wait.seconds).perform_later(order.id) : new.perform(order.id)
-  end
+  def self.enqueue_for(order) = set(wait_until: order.dispatch_at).perform_later(order.id)
 
   def perform(order_id)
     order = Order.awaiting_courier.find_by(id: order_id)
@@ -27,14 +23,15 @@ class CourierDispatchJob < ApplicationJob
     return self.class.enqueue_for(order) if order.dispatch_at > Time.current
 
     order.out_for_delivery!
+    arrival = DeliverySlots::DRIVE.from_now
     Kiosk::Server::Events.emit(
       topic: :order_delivery, subject: order.id, identity_scope: [order.user_id],
       data: { "order_id"  => order.id,
               "status"    => "out_for_delivery",
-              "eta"       => order.slot_at.utc.iso8601,
-              "eta_label" => DeliverySlots.label(order.slot_at, order.zone),
+              "eta"       => arrival.utc.iso8601,
+              "eta_label" => DeliverySlots.clock_label(arrival, order.zone),
               "timezone"  => order.timezone },
     )
-    OrderDeliveredJob.arrive!(order)
+    OrderDeliveredJob.set(wait_until: arrival).perform_later(order.id)
   end
 end

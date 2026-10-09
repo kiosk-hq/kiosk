@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "kiosk/test_helpers"
+require "webmock/rspec"
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -26,3 +27,14 @@ end
 # Minimal stand-in for an ActiveRecord user row — enough to exercise
 # user_id / role extraction without dragging Rails in.
 FakeUser = Struct.new(:id, :role)
+
+# A WebMock answer carrying a JSON body.
+def json_return(status, body)
+  { status:, body: JSON.generate(body), headers: { "Content-Type" => "application/json" } }
+end
+
+# A WebMock answer carrying a problem document for `code`.
+def problem_return(code, status: 400, **members)
+  json_return(status, { "type" => "https://kiosk.tech/problems/#{code}", "status" => status, "code" => code }
+                        .merge(members.transform_keys(&:to_s)))
+end

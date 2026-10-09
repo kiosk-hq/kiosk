@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "json"
+require "json_schemer"
 
 require "kiosk/test_helpers/conformance/outcome"
 require "kiosk/test_helpers/conformance/verb"
@@ -378,30 +379,17 @@ module Kiosk
           nil
         end
 
-        # Schema failures as a list of strings. An origin MAY answer this
-        # itself — the engine-backed one does, so the test and the running
-        # server apply the identical check rather than two implementations that
-        # can disagree — and the fallback here is the same json_schemer call for
-        # origins that do not.
+        # Schema failures as strings; an origin that validates for itself answers them.
         def schema_errors(origin, payload, schema, verb, slot)
           if origin.respond_to?(:schema_errors)
             return Array(origin.schema_errors(payload, schema: schema, verb: verb.name,
                                               kind: verb.kind, slot: slot))
           end
 
-          require_schemer!
           JSONSchemer.schema(normalize(schema)).validate(normalize(payload)).map do |error|
             pointer = error["data_pointer"].to_s
             "#{pointer.empty? ? "(root)" : pointer}: #{error["error"]}"
           end
-        end
-
-        def require_schemer!
-          return if defined?(JSONSchemer)
-
-          require "json_schemer"
-        rescue LoadError
-          raise Errors::SchemaValidatorMissing
         end
 
         # The wire representation of a value: the same JSON round trip the

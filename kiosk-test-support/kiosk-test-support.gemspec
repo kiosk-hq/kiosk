@@ -27,6 +27,11 @@ Gem::Specification.new do |spec|
     It is wired into RSpec by `kiosk-rls-rspec` and into Minitest by
     `kiosk-rls-minitest`.
 
+    The ASSISTANT drives an origin over HTTP as an assistant does: it
+    registers, pays proof-of-work tolls, queries, runs, pays with signed
+    mandates and listens on the event stream. `Kyc` stands in for the
+    operator's KYC provider, and `StripeMock` fronts a local stripe-mock.
+
     No Postgres, no Rails, no test-framework dependency. The actual
     Executor (which runs SQL with the right GUCs) is provided by
     `kiosk-server` at runtime via `Kiosk::TestHelpers.executor=`.
@@ -44,6 +49,10 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "kiosk-core", "~> 0.5.0"
+  spec.add_dependency "kiosk-pow-equihash", "~> 0.5.0"
+  spec.add_dependency "jwt", ">= 2.0", "< 4.0"
+  spec.add_dependency "websocket-driver", "~> 0.7"
+  spec.add_dependency "json_schemer", ">= 2.3", "< 3.0"
 
   # Both adapters are exercised by this gem's own suite — that a fault reads
   # identically through each is the whole claim of a framework-agnostic core,
@@ -53,8 +62,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "minitest",     ">= 5", "< 7"
   spec.add_development_dependency "rspec",        "~> 3.13"
   spec.add_development_dependency "rake",         "~> 13.2"
-  # The fallback schema validator, for an origin that does not bring its own.
-  # An app running kiosk-server already has it as a runtime dependency and its
-  # origin validates through the engine's checker instead.
-  spec.add_development_dependency "json_schemer", ">= 2.0"
+  spec.add_development_dependency "webmock",      "~> 3.0"
 end

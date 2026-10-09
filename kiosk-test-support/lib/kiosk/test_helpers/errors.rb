@@ -5,8 +5,8 @@ module Kiosk
     # Structured error classes THIS GEM raises, from both of its halves — the
     # journey-test DSL and the conformance checks. Which half a class belongs
     # to is written beside it below, and the split is not decoration: an
-    # adopter wires the conformance checks first, and the two it can meet
-    # there are `OriginNotConfigured` and `SchemaValidatorMissing`.
+    # adopter wires the conformance checks first, and the one it can meet
+    # there is `OriginNotConfigured`.
     #
     # Framework-specific matchers (RSpec `be_rls_denied`, Minitest
     # `assert_rls_denied`) look for the DSL's by class.
@@ -67,30 +67,6 @@ module Kiosk
 
             Kiosk::TestHelpers::Conformance.origin =
               Kiosk::TestHelpers::Conformance::NullOrigin.new
-        MSG
-
-        def initialize(message = DEFAULT_MESSAGE)
-          super
-        end
-      end
-
-      # CONFORMANCE. Raised when a check needs to validate a payload against a
-      # declared schema and no JSON Schema implementation is loadable. An origin
-      # backed by the Kiosk engine never reaches this — json_schemer is a
-      # runtime dependency of kiosk-server — so it names the one case that does:
-      # a bare origin in an app that has not got one.
-      class SchemaValidatorMissing < StandardError
-        DEFAULT_MESSAGE = <<~MSG.strip
-          Checking a verb's answer against its declared output_schema needs a
-          JSON Schema implementation, and `require "json_schemer"` failed.
-
-          Add it to your test group:
-
-            gem "json_schemer"
-
-          An app running kiosk-server already has it: wire
-          Kiosk::Server::ConformanceOrigin, which validates through the engine's
-          own checker, so the test and the running server cannot disagree.
         MSG
 
         def initialize(message = DEFAULT_MESSAGE)

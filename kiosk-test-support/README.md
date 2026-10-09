@@ -58,6 +58,44 @@ end
 
 The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::Server::TestExecutor` from the shipped `kiosk-server` gem (above).
 
+## Driving the wire as an assistant
+
+`Kiosk::TestHelpers::Assistant` registers, pays proof-of-work tolls, queries, runs, pays with signed mandates and listens on `<endpoint>/events`, against any origin — a test's own live server or a deployment:
+
+```ruby
+require "kiosk/test_helpers/assistant"
+
+assistant = Kiosk::TestHelpers::Assistant.new(base_url: live_url)
+rider     = assistant.register!
+events    = assistant.events(rider)
+events.subscribe("kyc_verification")
+assistant.run(rider, name: "reserve", scooter_code: "SK-001")
+```
+
+Every answer carries its status, parsed body and headers. `Kiosk::TestHelpers::Wire` is the same transport without a principal: any method, any path, any headers.
+
+## Identity checks in tests
+
+A real identity check is a human showing documents to a provider; a test cannot do that, so `Kiosk::TestHelpers::Kyc` stands in for the operator's KYC provider for the length of each test and the test says how the check ends. The engine receives the provider's callback and runs the operator's code exactly as it would in production:
+
+```ruby
+require "kiosk/test_helpers/kyc"
+
+class KycTest < ActiveSupport::TestCase   # or an RSpec example group
+  include Kiosk::TestHelpers::Kyc
+
+  test "a motorcycle opens once the licence check passes" do
+    check = assistant.run(rider, name: "request_kyc")
+    kyc_check_passes(check.body["request_id"], age_over_18: true, licence_a: true)
+    # …
+  end
+end
+```
+
+`kyc_attestation(principal, **attributes)` signs an attestation an assistant submits to `POST <endpoint>/agents/kyc`. A check the human refuses sends nothing, so there is no helper for it.
+
+`Kiosk::TestHelpers::StripeMock.start` fronts a local [stripe-mock](https://github.com/stripe/stripe-mock) that answers a confirmed charge as paid.
+
 ## Status
 
 Pre-v1.0 alpha. The Journey DSL surface is stable across pre-v1.0 minor bumps; the executor contract may still evolve pre-v1.0 (`kiosk-server` ships `Kiosk::Server::TestExecutor` against it today).

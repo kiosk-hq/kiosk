@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **`Assistant` drives an origin as an assistant does; `Kyc` stands in for the KYC provider** so a test decides how a check ends. `Wire` and `StripeMock` move here.
+
 - 2026-10-09: **`LiveServer` and `SeededDatabase`** serve the app over HTTP from the test process on committed, seeded data; **`DescriptorExamples`** checks each published example against its schema.
 
 ## [0.5.12] — 2026-10-08

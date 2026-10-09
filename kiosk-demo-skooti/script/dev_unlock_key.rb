@@ -27,8 +27,7 @@ require "openssl"
 # DevUnlockKey.public_key_pem      → PEM string
 # DevUnlockKey.public_key_raw32_hex → 64-char hex (the 32 bytes baked into firmware)
 class DevUnlockKey
-  # The shipped dev/test PEM, the same file config/local_env.rb
-  # reads, so the drivers' lock and the server's signer cannot drift apart.
+  # The same key the development and test servers sign with.
   PEM_PATH = File.expand_path("../config/dev_unlock_key.pem", __dir__)
 
   # Read on FIRST USE, not at class-definition time. Production eager-loads

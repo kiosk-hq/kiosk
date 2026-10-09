@@ -73,5 +73,5 @@ Rails.application.configure do
   # (GET /prove_key.pem) and so work with ANY key here. Its private half ships
   # in this public repo, which is why production refuses to boot without an
   # explicit PROVE_KEY_PEM.
-  config.x.prove.key_pem = ENV.fetch("PROVE_KEY_PEM") { File.read(Rails.root.join("config/dev_prove_key.pem")) }
+  config.x.prove.key_pem = ENV.fetch("PROVE_KEY_PEM", File.read(Rails.root.join("config/dev_prove_key.pem")))
 end

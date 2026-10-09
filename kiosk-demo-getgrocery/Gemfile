@@ -25,12 +25,12 @@ gem "kiosk-core",       path: "../kiosk-core"
 gem "kiosk-server",       path: "../kiosk-server"
 gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
 gem "kiosk-reputation",   path: "../kiosk-reputation"
-gem "kiosk-redteam",      path: "../kiosk-redteam"
 gem "kiosk-pay-stripe",   path: "../kiosk-pay-stripe"
 gem "kiosk-kyc-prove",    path: "../kiosk-kyc-prove"
 gem "kiosk-user-idp-devise", path: "../kiosk-user-idp-devise"
 
 group :development, :test do
+  gem "kiosk-redteam", path: "../kiosk-redteam"
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 end
 

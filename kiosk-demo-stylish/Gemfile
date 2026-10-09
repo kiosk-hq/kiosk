@@ -35,14 +35,11 @@ gem "kiosk-all",                path: "../kiosk-all"
 gem "kiosk-core",               path: "../kiosk-core"
 gem "kiosk-server",             path: "../kiosk-server"
 gem "kiosk-pow-equihash",       path: "../kiosk-pow-equihash"
-# The shared adversarial harness. `script/redteam_suite.rb` runs its
-# DeviceGrantRoleSelfSelection scenario, so every demo asserts the SAME thing
-# about the account-binding claim ceremony instead of each one hand-rolling it.
-gem "kiosk-redteam",            path: "../kiosk-redteam"
 gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
 
 group :development, :test do
+  gem "kiosk-redteam", path: "../kiosk-redteam"
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 end

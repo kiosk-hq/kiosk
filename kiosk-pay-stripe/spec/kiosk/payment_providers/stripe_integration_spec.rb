@@ -14,11 +14,10 @@
 #      — mise exports it inside the getgrocery tree — unset it before running
 #      this suite rather than letting the skip above turn into a live call.
 #   2. `stripe-mock` is the test double. It is Stripe's own fixture server, it
-#      is what the group in stripe_setup_reuse_spec.rb drives, and it is what
-#      the demo tasks self-start when no key is set.
-#   3. The key is not copied to another demo. Only getgrocery wires the Stripe
-#      adapter at all; the other operator demos resolve a placeholder and take
-#      no money.
+#      is what the group in stripe_setup_reuse_spec.rb drives, and the demos'
+#      tests start it through Kiosk::TestHelpers::StripeMock.
+#   3. The key is not copied to another demo. getgrocery, hoteling and skooti
+#      wire the Stripe adapter, and their tests pay stripe-mock.
 #
 # The question this file exists to answer — does a saved card survive, so a
 # returning customer is not asked for it twice — is ANSWERED, by the

@@ -5,7 +5,7 @@ Stylish is a hair-styling salon-booking service (stylish.example), Kiosk-enabled
 - `/.well-known/kiosk.json` discovery
 - JWKS endpoint for JWT verification
 - Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string, an action is a `POST /kiosk/<action-name>` with its arguments as the JSON body, and the success body IS the result (no envelope). `GET /kiosk/schema`, `GET /kiosk/openapi.json` and `POST /kiosk/pay` keep their own paths; errors are RFC 9457 problem documents whose top-level `code` is what an assistant branches on
-- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
+- App-layer data isolation (two users, two views of the same table)
 - A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a small set of services, each with a EUR price, all always bookable (infinite capacity, overbooking allowed — the salon never fills up, so the demo never goes empty or stale and needs no reseed cron). The salon starts with zero bookings; real bookings accumulate as visitors book.
 - Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, asserted by `test/wire/binding_test.rb`
 - **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and the salon **owner** views the forecast. The owner's role, supplied by the operator's own identity system, is inherited by their assistant at link time, and the `salon_calendar` query gates on it (owner sees every booking + a *forecasted* € revenue — summed live from the actual bookings' prices, starting at €0 and growing as visitors book; a visitor sees only their own bookings and no forecast). Asserted by `test/wire/roles_test.rb`. (Multi-account is deferred, so a tester acts as a visitor **or** as the owner, not both at once.)
@@ -60,7 +60,7 @@ The walkthrough (`bin/demo`, against the origin `bin/dev` serves) prints these s
 2. **Discovery** — well-known + JWKS payloads, so an AI-assistant host like claude.ai sees what's behind the URL
 3. **A query** — `GET /kiosk/salons` and `GET /kiosk/availability`, each answering a bare JSON array scoped by app-layer authz
 4. **An Action** — `POST /kiosk/book_appointment` (the demo's lone registered Action), arguments in the JSON body, answering the booking object itself
-5. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block, RLS optional)
+5. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block)
 
 ### Account binding (`test/wire/binding_test.rb`)
 

@@ -1,12 +1,20 @@
 # kiosk-test-support
 
-Framework-agnostic journey-test DSL for the [Kiosk](https://kiosk.tech) test harnesses.
+Test helpers for [Kiosk](https://kiosk.tech) origins, and the journey-test DSL of the Kiosk test harnesses.
 
 ## What it does
 
+- `Kiosk::TestHelpers::Assistant` — registers, pays tolls, queries, runs actions, pays and listens for events against an origin, as an AI assistant does.
+- `Kiosk::TestHelpers::Wire` — the same transport without a principal: any method, any path, any headers.
+- `Kiosk::TestHelpers::Kyc` — stands in for the operator's KYC provider, so a test decides how an identity check ends.
+- `Kiosk::TestHelpers::StripeMock` — starts a local stripe-mock that answers a confirmed charge as paid.
+- `Kiosk::TestHelpers::LiveServer` — serves the app over HTTP from the test process and gives the test an assistant for it.
+- `Kiosk::TestHelpers::SeededDatabase` — each test starts from the seeds and leaves the database empty.
+- `Kiosk::TestHelpers::DescriptorExamples` — the examples a served `/kiosk/schema` publishes, each checked against its schema.
+
 Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mixed into RSpec / Minitest tests, the pluggable `executor` contract, a `NullExecutor` for self-tests, and the structured error classes that the framework-specific matchers and assertions look for.
 
-You normally don't install this gem directly — install one of the harnesses:
+The journey DSL comes with one of the harnesses:
 
 > **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
 

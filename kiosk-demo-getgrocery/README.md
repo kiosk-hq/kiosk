@@ -34,8 +34,8 @@ bin/rails demo:reconcile   # settles orders stuck in `paying`; it reports, it do
 ```
 
 `bin/setup` does the first two. The tests drive the origin over HTTP the way an
-assistant does, and the age-check tests boot the KYC broker in
-`kiosk-demo-prove`, which **drops and recreates `kiosk_prove_development`**.
+assistant does; the age-check tests stand in for the KYC broker with
+`Kiosk::TestHelpers::Kyc`.
 
 `test/kiosk_conformance_test.rb` is the file to copy when you add a Kiosk wire
 to an app of your own: the four properties the protocol makes normative of an
@@ -126,15 +126,18 @@ instant in a second spelling, and `my_orders` is the verb §11.6 sends an
 assistant to after a `pay` whose response was lost — which is exactly the row a
 human hears read back.
 
-`delivery_slots` returns only **still-bookable** windows: for **today** at the
-delivery address, a slot whose start has already passed *there* is dropped
-(querying at 11:00 Dublin hides
-`08:00–10:00` and `10:00–12:00`; if every window has begun, today yields no slots
-and the earliest is tomorrow — correct, not a bug). Future dates keep all slots.
-`create_order`/`reschedule_delivery` re-validate the same rule (consistency): a
-past-start slot for today is rejected with a clean **400 (`bad_request`)**, never
-silently booked. `test/delivery_slots_test.rb` and `test/wire_arguments_test.rb`
-pin the filter across DST and the caller's declared calendar.
+`delivery_slots` returns only **still-bookable** windows. A window takes orders
+while a basket paid now still reaches the door inside it: picking takes up to 30
+minutes and the drive 5, so on the delivery address's clock a window closes 35
+minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
+`10:00–12:00` until 11:25; once every window today has closed, the earliest is
+tomorrow). Future dates keep all slots. `create_order`/`reschedule_delivery`
+re-validate the same rule: a closed window is rejected with a clean **400
+(`bad_request`)**, never silently booked. After payment the courier sets out
+20–30 minutes later, or as a later window opens (`out_for_delivery`), and
+`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
+`test/wire_arguments_test.rb` pin the filter across DST and the caller's
+declared calendar.
 
 ## Age-restricted purchases (anonymized KYC)
 
@@ -144,8 +147,8 @@ completed an 18+ anonymized-KYC check via the shared **KYC broker** (kyc.demo.ki
 (`POST /kiosk/request_kyc` → human approves a broker link → the broker signs
 an anonymized `{age_over_18}` claim → the `kyc_verification` event carries it →
 submit it to `POST /kiosk/agents/kyc`).
-Non-restricted groceries need no KYC. `test/wire/age_check_test.rb` drives the
-full two-server flow.
+Non-restricted groceries need no KYC. `test/wire/age_check_test.rb` drives that
+flow with `Kiosk::TestHelpers::Kyc` standing in for the broker.
 
 This age-gate is the **proper home** of anonymized KYC: a low-liability
 *eligibility* check where the transaction closes. Anonymized KYC confirms a

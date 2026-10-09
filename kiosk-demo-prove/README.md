@@ -8,11 +8,11 @@ operator a **signed, anonymized, single-use** claim, bound to that one request.
 Each operator trusts the broker as an issuer once; it never registers with every
 government service (the broker does), and it never sees a document.
 
-Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is env-configurable (`KIOSK_PROVE_ISSUER`)
-and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
-verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own
-`base_url` — the origin the request arrived on — **not** the deploy origin. The
-two-server harness and specs pin their own local values on both sides.
+Deploy origin: **kyc.demo.kiosk.tech** (the registered demo domain). The issuer `iss` is `KIOSK_PROVE_ISSUER`,
+required in production; development and test set `https://kyc.test.local`. The
+public verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake
+request's own `base_url` — the origin the request arrived on — **not** the
+deploy origin.
 
 ## Not a Kiosk operator — an ISSUER
 
@@ -122,6 +122,6 @@ bundle exec rspec      # the broker's own suite; CI runs exactly this
 
 `docker compose up` seeds this broker and serves it on <http://localhost:3020>.
 No assistant talks to it: an operator asks it for one anonymized fact and the
-human approves that one request in a browser. getgrocery's
-`test/wire/age_check_test.rb` and skooti's `test/wire/kyc_test.rb` boot this
-broker and drive that flow end to end.
+human approves that one request in a browser. CI runs skooti's red-team
+battery against this broker; the demos' own KYC tests stand in for it with
+`Kiosk::TestHelpers::Kyc`.

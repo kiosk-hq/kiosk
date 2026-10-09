@@ -206,28 +206,6 @@ jobs:
           fi
           bin/rails zeitwerk:check
 
-      # The demos' check tasks query Postgres with psql; pin the client to the
-      # postgres:17 service's major.
-      #
-      # K-795 — THIS STEP RETRIES, AND IF IT IS RED, RE-RUN IT BEFORE YOU READ
-      # THE DIFF. Every command in it is a network fetch against a host we do
-      # not control (apt.postgresql.org, postgresql.org, the Ubuntu mirrors),
-      # and it has taken main red for a fetch that had nothing to do with the
-      # tree. A red head is then indistinguishable at a glance from a real
-      # regression and burns a pass re-reading a diff that was never at fault,
-      # which erodes the one signal the merge gate depends on. A bounded retry
-      # changes no RESULT — a persistent failure still fails the step on the
-      # third attempt — it only lowers the noise floor. The runner's own "Set
-      # up job" step has failed the same way and is GitHub-internal: nothing
-      # here can retry it, so a red run at THAT step is re-run, not triaged.
-      #
-      # `set -o pipefail` is load-bearing, not tidiness: the default shell is
-      # `bash -e`, so without it a failed `curl` is masked by `tee` exiting 0
-      # and this step writes an EMPTY signing key — which then fails later,
-      # somewhere else, as an apt signature error.
-      #
-      # The same three lines run in the demo-production-smoke and e2e jobs.
-      # They are one fragile fetch written three times; keep them in step.
       - name: Tests
         working-directory: ${{ matrix.demo }}
         run: |
@@ -1119,8 +1097,10 @@ jobs:
         working-directory: kiosk-demo-tudu
         run: bundle install
 
-      # psql pinned to the service's major, as in the demos job.
-      # Retries for the reason written out on the demos job's copy (K-795).
+      # psql pinned to the postgres:17 service's major. Every command is a fetch
+      # from a host we do not control, so a red attempt is retried twice before
+      # the step fails; `pipefail` stops a failed `curl` hiding behind `tee` and
+      # leaving an empty signing key.
       - name: Install PostgreSQL 17 client
         run: |
           set -o pipefail
@@ -1208,7 +1188,7 @@ jobs:
       - name: Install the e2e harness's python dependencies
         run: python -m pip install -r e2e/requirements.txt
 
-      # Retries for the reason written out on the demos job's copy (K-795).
+      # Retries as demo-production-smoke's copy does, for the reason written there.
       - name: Install PostgreSQL 17 client (postgres:17 service)
         run: |
           set -o pipefail

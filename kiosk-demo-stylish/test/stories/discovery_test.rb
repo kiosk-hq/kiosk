@@ -3,14 +3,14 @@
 require "test_helper"
 require "kiosk/test_helpers/descriptor_examples"
 
-class DiscoveryTest < WireTest
+class DiscoveryStory < StoryTest
   def get(path)
     status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
     assert_equal 200, status, "GET #{path} with no credential"
     body
   end
 
-  test "the well-known document and the schema describe this origin without a credential" do
+  test "an assistant that knows nothing finds out, without an account, what the salon offers and how to book" do
     kiosk  = get("/.well-known/kiosk.json")["kiosk"]
     schema = get("/kiosk/schema")
 
@@ -18,12 +18,12 @@ class DiscoveryTest < WireTest
     assert_not kiosk.key?("events_url")
     assert_equal [], schema["events"]
 
-    assert_equal %w[availability my_appointments salon_calendar salons service_menu], schema["queries"].map { _1["name"] }.sort
-    assert_equal %w[book_appointment], schema["actions"].map { _1["name"] }
-    (schema["queries"] + schema["actions"]).each do |descriptor|
-      assert_predicate descriptor["description"], :present?, descriptor["name"]
-    end
-    [schema["queries"].find { _1["name"] == "service_menu" }, schema["actions"].first].each do |descriptor|
+    queries = schema["queries"].index_by { _1["name"] }
+    actions = schema["actions"].index_by { _1["name"] }
+    assert_equal %w[availability my_appointments salon_calendar salons service_menu], queries.keys.sort
+    assert_equal %w[book_appointment], actions.keys
+    queries.merge(actions).each_value { assert_predicate _1["description"], :present?, _1["name"] }
+    [queries["service_menu"], actions["book_appointment"]].each do |descriptor|
       %w[input_schema example_params example_row].each { assert descriptor[_1], "#{descriptor["name"]} #{_1}" }
     end
 

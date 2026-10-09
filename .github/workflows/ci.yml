@@ -493,32 +493,8 @@ jobs:
           fi
           echo "all $ran gem suite(s) green on Ruby $version, the floor every gemspec declares."
 
-  # `spec/conformance-drift-baseline.tsv` is the anchors manifest's sibling: a
-  # GENERATED file recording each anchored region's fingerprint, so a conformance
-  # sweep can re-judge what MOVED instead of walking a work-list with no
-  # change-detection on it. It had no staleness check of any kind, where the
-  # manifest has one — and it showed: the first committed baseline's header read
-  # "sampling ~185 rows blind" where its own committed generator has emitted
-  # "sampling the matrix blind" since 918a56f2, so the file had been produced by a
-  # draft that no longer existed and nothing in the tree could say so.
-  #
-  # THE MANIFEST'S RULE IS NOT THE RULE HERE, deliberately. "Equal to what the
-  # generator would write at head" would force the baseline forward on every
-  # commit and set the sweep interval to zero, which is exactly what the drift
-  # design rejects — the lag IS the signal, and that is why no job runs the drift
-  # REPORT. `--check` asks the other question: could THIS generator have written
-  # THIS file? Row form and `pairs.sort` order, a header byte-equal to what the
-  # generator renders from the file's own recorded values, and every fingerprint
-  # re-measuring to its recorded value AT THE COMMIT THE FILE NAMES. None of that
-  # looks at head, so a baseline three hundred commits behind passes exactly as
-  # well as a fresh one.
-  #
-  # The --self-test step runs beside it because nothing else does: two of its
-  # twenty arms plant the defects K-1819 records — a hand-edited fingerprint,
-  # and a ref moved to the wrong commit — and until this step existed they
-  # fired only when a person typed the flag.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~1 s.
+  # The drift baseline is what --record would write: row form, header, and every
+  # fingerprint re-measuring at the commit its row names.
   conformance-drift-baseline:
     name: the drift baseline is self-consistent (bin/check-conformance-drift --check)
     runs-on: ubuntu-latest
@@ -526,11 +502,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          # --check re-measures every fingerprint at the commit the baseline
-          # names, which is an ANCESTOR of this head — often a long way back,
-          # because the baseline is meant to lag. The default depth-1 checkout
-          # does not have it, and the check would report the recorded ref as
-          # "not a commit in this repository" on every run.
+          # --check re-measures at the baseline's commits, which a shallow clone lacks.
           fetch-depth: 0
 
       - name: Set up Ruby
@@ -542,29 +514,11 @@ jobs:
       - name: The generated baseline is one its own generator could have written
         run: ./bin/check-conformance-drift --check
 
-      - name: The check is red on a plant of every arm, and non-vacuous here
+      - name: check-conformance-drift self-test
         run: ./bin/check-conformance-drift --self-test
 
-  # This repository is published out of a larger private workspace, and a
-  # shipped line that cites something from that workspace is a dangling pointer
-  # for every reader who will ever hold the repo. The class has now been caught
-  # five times (K-1049, K-1148, K-1149, K-1153, K-1154) and never once by the
-  # commit that introduced it: the only thing that asked the question lived
-  # outside both published repos and ran only when a periodic sweep ran. K-1154
-  # was 80 citation sites across live gem and demo code, shipping for weeks.
-  #
-  # bin/check-publication-paths asks it here instead, over `git ls-files`, so a
-  # PR that adds one is red before it merges. Its --self-test is a step of its
-  # own rather than a convention: the failure mode of a scan aimed at the wrong
-  # tree is an empty file set, which exits 0 and reads exactly like a clean
-  # repository, so the guard proves it is red on a plant of every pattern it
-  # carries and non-vacuous over this tree before its green run means anything.
-  #
-  # The same file, byte for byte, is the kiosk.tech repo's guard. Nothing across
-  # two repositories can enforce that, so each copy digests its own body against
-  # a recorded value and reddens here when it is edited without the twin.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~10 s for both steps.
+  # No shipped line cites private-workspace material, a developer path or a
+  # private key.
   publication-paths:
     name: nothing shipped cites what does not ship (bin/check-publication-paths)
     runs-on: ubuntu-latest
@@ -578,14 +532,16 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      - name: The guard is red on a plant of every pattern, and non-vacuous here
+      - name: check-publication-paths self-test
         run: ./bin/check-publication-paths --self-test
 
       - name: No shipped line cites material that does not ship with this repo
         run: ./bin/check-publication-paths
 
+  # Nothing a stranger reads names a ledger id, an ADR, the maintainer, or a
+  # path that is missing or untracked.
   shipped-archaeology:
-    name: no unresolvable citation in a shipped gem (bin/check-shipped-archaeology)
+    name: no unresolvable citation in shipped files (bin/check-shipped-archaeology)
     runs-on: ubuntu-latest
 
     steps:
@@ -597,10 +553,10 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      - name: The guard is red on a plant of every shape, and non-vacuous here
+      - name: check-shipped-archaeology self-test
         run: ./bin/check-shipped-archaeology --self-test
 
-      - name: No ledger id and no ADR reference in what a gem ships
+      - name: No unresolvable citation in what ships
         run: ./bin/check-shipped-archaeology
 
   # A property or parameter description served in a descriptor carries no bare
@@ -669,12 +625,8 @@ jobs:
       - name: check-demo-copies self-test
         run: ./bin/check-demo-copies --self-test
 
-  # A red-team beat that claims a 400 REFUSAL of a named argument must read the
-  # refusal's own words (T-210 item (u), from K-1762/K-1764/K-1767). The status
-  # and the `code` are the OPERATOR's, whatever the app does, so a beat that
-  # reads only those two ticks green for a refusal of anything else on the call
-  # — measured three times in one day, once with the app guard deleted.
-  # Stdlib Ruby only: no bundle, no services, no database.
+  # A red-team beat that claims a 400 refusal of a named argument reads the
+  # refusal's own words, not only the status and code.
   refusal-assertions:
     name: a 400-refusal beat reads the refusal's own words (bin/check-refusal-assertions)
     runs-on: ubuntu-latest
@@ -691,10 +643,6 @@ jobs:
       - name: Every beat claiming a 400 refusal reads the sentence it claims
         run: ./bin/check-refusal-assertions
 
-      # Its own step, for the sibling guards' reason: RA-1's violation set is
-      # EMPTY when the tree is healthy, so an extractor broken by an edit leaves
-      # the bare run at exit 0 and says nothing. The vacuity arms assert liveness
-      # on the DECLARATIONS rather than on the violations (K-1262's polarity).
       - name: check-refusal-assertions self-test
         run: ./bin/check-refusal-assertions --self-test
 

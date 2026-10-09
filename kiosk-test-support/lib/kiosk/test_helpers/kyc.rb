@@ -14,8 +14,8 @@ module Kiosk
     #
     #   include Kiosk::TestHelpers::Kyc
     #
-    #   opened = assistant.run(rider, name: "request_kyc")
-    #   kyc_check_passes(opened.body["request_id"], age_over_18: true)
+    #   check = rider.requests_verification
+    #   the_verification_service_confirms(check, age_over_18: true)
     module Kyc
       ISSUER   = "https://kyc.test.invalid"
       SETTINGS = %i[kyc_provider kyc_issuer kyc_public_key].freeze
@@ -52,11 +52,10 @@ module Kiosk
         base.public_send(after) { restore_kyc_provider }
       end
 
-      # The provider reports the check passed with these attributes, through the
-      # callback the engine gave it when the check was opened.
-      #
-      # @return [String] the attestation it delivered
-      def kyc_check_passes(request_id, **attributes)
+      # The person behind `check` (the answer to request_kyc) passed it with these
+      # attributes; the provider reports so through the callback the engine gave it.
+      def the_verification_service_confirms(check, **attributes)
+        request_id = check["request_id"]
         check  = @kyc_provider.check(request_id)
         jws    = @kyc_provider.attest(check.subject, check.audience, attributes)
         answer = Wire.new(base_url: URI.join(check.callback_url, "/").to_s)

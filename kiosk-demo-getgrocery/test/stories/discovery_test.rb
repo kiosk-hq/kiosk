@@ -3,14 +3,14 @@
 require "test_helper"
 require "kiosk/test_helpers/descriptor_examples"
 
-class DiscoveryTest < WireTest
+class DiscoveryStory < StoryTest
   def get(path)
     status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
     assert_equal 200, status, "GET #{path} with no credential"
     body
   end
 
-  test "the well-known document and the schema describe this origin without a credential" do
+  test "an assistant that knows nothing finds out, without an account, what the shop offers and how to buy" do
     kiosk  = get("/.well-known/kiosk.json")["kiosk"]
     schema = get("/kiosk/schema")
 

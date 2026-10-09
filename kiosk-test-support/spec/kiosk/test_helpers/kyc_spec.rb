@@ -34,7 +34,7 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
                                                           callback_url: "http://127.0.0.1:3001/kiosk/kyc/callback")
     callback = stub_request(:post, "http://127.0.0.1:3001/kiosk/kyc/callback").to_return(json_return(200, "ok" => true))
 
-    jws = kyc_check_passes(opened[:request_id], licence_a: true)
+    jws = the_verification_service_confirms({ "request_id" => opened[:request_id] }, licence_a: true)
 
     expect(callback.with { JSON.parse(_1.body) == { "request_id" => opened[:request_id], "nonce" => opened[:nonce], "kyc_jws" => jws } })
       .to have_been_requested
@@ -46,10 +46,10 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
                                                           callback_url: "http://127.0.0.1:3001/kiosk/kyc/callback")
     stub_request(:post, "http://127.0.0.1:3001/kiosk/kyc/callback").to_return(problem_return("forbidden", status: 403))
 
-    expect { kyc_check_passes(opened[:request_id]) }.to raise_error(/refused the KYC callback: 403/)
+    expect { the_verification_service_confirms({ "request_id" => opened[:request_id] }) }.to raise_error(/refused the KYC callback: 403/)
   end
 
   it "refuses a check it never opened" do
-    expect { kyc_check_passes("nope") }.to raise_error(ArgumentError, /"nope"/)
+    expect { the_verification_service_confirms({ "request_id" => "nope" }) }.to raise_error(ArgumentError, /"nope"/)
   end
 end

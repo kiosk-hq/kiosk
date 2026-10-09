@@ -89,12 +89,13 @@ A real identity check is a human showing documents to a provider; a test cannot 
 ```ruby
 require "kiosk/test_helpers/kyc"
 
-class KycTest < ActiveSupport::TestCase   # or an RSpec example group
+class LicenceStory < Kiosk::StoryTest   # or an RSpec group including Kiosk::TestHelpers::Story
   include Kiosk::TestHelpers::Kyc
 
   test "a motorcycle opens once the licence check passes" do
-    check = assistant.run(rider, name: "request_kyc")
-    kyc_check_passes(check.body["request_id"], age_over_18: true, licence_a: true)
+    rider = a_customer
+    check = rider.requests_verification
+    the_verification_service_confirms(check, age_over_18: true, licence_a: true)
     # …
   end
 end

@@ -497,12 +497,12 @@ COPIES = {
   },
   "test/wire/discovery_test.rb" => {
     rule: :per_demo,
-    ships: %w[atablefor getgrocery philslist skooti stylish tudu],
+    ships: %w[atablefor philslist skooti stylish tudu],
     why:  "Each origin's own capabilities, verbs and pages, read without a credential.",
   },
   "test/wire/isolation_test.rb" => {
     rule: :per_demo,
-    ships: %w[atablefor getgrocery philslist skooti stylish tudu],
+    ships: %w[atablefor philslist skooti stylish tudu],
     why:  "Cross-assistant isolation over each demo's own rows.",
   },
   "test/wire/registration_test.rb" => {
@@ -1414,7 +1414,6 @@ SPEC_UNITS = {
   "wire" => { rule: :per_file, why: "Each test's own transport." },
   "book" => { rule: :per_file, why: "Each demo's own booking verb and arguments." },
   "get" => { rule: :per_file, why: "Each discovery test's credential-free GET." },
-  "solved" => { rule: :per_file, why: "A solved toll for each test's own challenge." },
   "place" => { rule: :per_file, why: "Each getgrocery test places the order its own assertions need." },
   "attr_reader" => { rule: :per_file, why: "Each processor stub records what its own test reads back." },
   "initialize" => { rule: :per_file, why: "The processor stubs' constructors." },

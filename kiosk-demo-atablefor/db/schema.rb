@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -197,6 +197,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_01_01_000010) do
     t.index ["cart_mandate_id"], name: "idx_payment_mandates_cart"
     t.index ["user_id"], name: "idx_payment_mandates_user_id"
     t.unique_constraint ["user_id", "mandate_id"], name: "payment_mandates_user_id_mandate_id_key"
+  end
+
+  create_table "kiosk.pow_spent", id: :text, force: :cascade do |t|
+    t.timestamptz "expires_at", null: false
+    t.index ["expires_at"], name: "idx_pow_spent_expires_at"
   end
 
   create_table "kiosk.reservations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

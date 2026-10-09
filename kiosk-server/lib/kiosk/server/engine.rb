@@ -121,65 +121,6 @@ module Kiosk
         ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
       end
 
-      # ── The shared-spent-store warning ────────────────────────────────────
-      #
-      # A production origin that runs MORE THAN ONE process while keeping the
-      # in-process default spent store is NOT conforming (protocol.md Section
-      # 15.2 + the Section 16.1 operator profile): PoW single-use then holds
-      # PER WORKER, so one proof buys one request per worker.
-      #
-      # THIS IS A WARNING AND DELIBERATELY NOT A REFUSAL. A fail-closed boot
-      # is ruled out on two grounds, both recorded here so it is not quietly
-      # introduced: it would turn a routine `WEB_CONCURRENCY` 1→2 into an
-      # OUTAGE, and — decisively — a process-count check CANNOT SEE the case
-      # that matters, because on separate machines (Heroku dynos, k8s
-      # replicas) every process boots with a count of one while the
-      # requirement is violated exactly as hard. So there is no heuristic here
-      # at all: the condition is "the default store, in production, with PoW
-      # actually switched on".
-      #
-      # AND THE WARNING IS NOT THE MITIGATION — the DOCUMENTATION is. A log
-      # line is a weak control: logs are not read, least of all production
-      # warnings. So the initializer template, the demo initializers and the
-      # README carry the same WHY at greater length, where an operator meets
-      # it before the boot rather than after it. The
-      # reason it has to be written anywhere at all is that the failure is
-      # INVISIBLE BY CONSTRUCTION: a replayed proof leaves no log line, no
-      # metric and no failed request, so an operator who does nothing never
-      # learns they are non-conforming.
-      # The condition is a CLASS METHOD, not inline in the block, for one
-      # reason: an `after_initialize` body is reachable only by booting a real
-      # application in production mode, and a control whose condition cannot be
-      # unit-tested is a control nobody can prove fires. Returns the message,
-      # or nil when this origin has nothing to be warned about.
-      #
-      # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
-      # @param production [Boolean] normally `Rails.env.production?`
-      # @return [String, nil]
-      def self.shared_spent_store_warning(config:, production:)
-        return nil unless production
-        return nil unless config.pow_spent_store.is_a?(Kiosk::Server::PowSpentStore)
-        return nil unless config.reputation_policy || config.registration_pow_count.to_i.positive?
-
-        "[kiosk-server] pow_spent_store is the IN-PROCESS default while PoW is enabled in " \
-          "production. If this origin runs more than one process — Puma workers, several " \
-          "dynos or pods, or a rolling deploy that overlaps — proof single-use holds only " \
-          "per process, so one proof is accepted once PER PROCESS and the toll is silently " \
-          "discounted. Nothing reports it: a replayed proof produces no error, no metric " \
-          "and no log line. Set a SHARED store: c.pow_spent_store = " \
-          "Kiosk::Server::PowSpentStores::ActiveRecord.new — see the kiosk-server README, " \
-          "\"Multi-process deployments\"."
-      end
-
-      config.after_initialize do
-        message = Kiosk::Server::Engine.shared_spent_store_warning(
-          config: Kiosk.configuration, production: ::Rails.env.production?,
-        )
-        next unless message
-
-        ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
-      end
-
       # ── A WRONG `issuer` IS A SILENT AUTH OUTAGE ───────────────────────────
       #
       # Every assistant's proof is refused with "proof audience mismatch" while
@@ -253,10 +194,8 @@ module Kiosk
       # IT RAISES rather than warns, on the `signing_key` precedent: a fact
       # settled at boot whose silent wrong answer is invisible afterwards —
       # assistants that quietly cannot act, with nothing in the operator's logs
-      # or metrics to say why. The condition is a CLASS METHOD for
-      # {.shared_spent_store_warning}'s reason — an `after_initialize` body is
-      # reachable only by booting a real application, and a control whose
-      # condition cannot be unit-tested is a control nobody can prove fires.
+      # or metrics to say why. The condition is a class method so it is
+      # unit-testable without booting an application.
       # Returns the message, or nil when this origin has nothing to answer for.
       #
       # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
@@ -294,47 +233,11 @@ module Kiosk
 
       # ── A TAIL THAT DIES WITH THE PROCESS IS NOT A TAIL ───────────────────
       #
-      # `event_store` lazily instantiates the in-process {EventStore} when an
-      # operator sets none — a Hash and a Mutex inside ONE process. That is the
-      # suite's implementation and a single-process development convenience,
-      # and {EventStores} says in its own first paragraph that it is the wrong
-      # thing to deploy. The published contract is what makes it wrong rather
-      # than merely small: an operator MUST retain at least 24 hours of events
-      # per identity, and a store that is empty after a restart and unshared
-      # between workers retains nothing.
-      #
-      # WHY IT IS THE TOPIC DECLARATION THAT TRIGGERS THIS, and not the store
-      # on its own. An origin that declares no topic never emits, never serves
-      # `events` in its catalogue and never advertises an `events_url`; its
-      # store is an object nothing calls, and accusing it would be the false
-      # warning {.shared_spent_store_warning} takes such care to avoid. The
-      # MIXTURE is the defect — a declared topic and an ephemeral tail — which
-      # is the same conditional shape as {.default_role_configuration_error}
-      # one section up.
-      #
-      # WHY IT RAISES. On {.default_role_configuration_error}'s precedent: a
-      # fact settled at boot whose wrong answer is INVISIBLE afterwards. A lost
-      # tail produces no exception, no metric and no log line — the subscriber
-      # is simply told `truncated: true` every time it resumes, which reads as
-      # an ordinary answer. And the two objections that made the spent store a
-      # warning instead do not transfer: there is no routine operational change
-      # (a `WEB_CONCURRENCY` bump) that flips this condition, and the condition
-      # is EXACT rather than a heuristic — it asks which object the store IS,
-      # not how many processes there are.
-      #
-      # WHY ONLY IN PRODUCTION. The in-process store is the CORRECT store for
-      # the suite and for a one-process `rails server`, so refusing there would
-      # break the thing the default exists for. This still reaches our own tree
-      # on every push: the demo matrix runs `bin/rails zeitwerk:check` under
-      # `RAILS_ENV=production`, which loads the environment and therefore runs
-      # this block.
-      #
-      # The condition is a CLASS METHOD, for the reason its two siblings give:
-      # an `after_initialize` body is reachable only by booting a real
-      # application in production mode, and a control whose condition cannot be
-      # unit-tested is a control nobody can prove fires. `topics` is passed in
-      # rather than read from the process-global registry, so an example can
-      # state the origin's whole shape in its arguments.
+      # A production origin that declares an event topic must keep its events
+      # 24 hours, which the in-process {EventStore} cannot: it is empty after a
+      # restart and unshared between workers. Raised, because a lost tail is
+      # invisible afterwards. An origin with no topic never emits, so its store
+      # is not checked. A class method so the condition is unit-testable.
       #
       # @param config [Kiosk::Configuration] normally `Kiosk.configuration`
       # @param production [Boolean] normally `Rails.env.production?`

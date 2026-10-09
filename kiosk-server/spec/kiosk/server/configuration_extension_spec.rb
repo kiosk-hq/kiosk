@@ -235,26 +235,17 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.pow_secret).to eq("x" * 32)
     end
   end
-  # ─── K-1610: a lazy STORE default is allocated exactly once ────────────────
+  # ─── a lazy STORE default is allocated exactly once ────────────────────────
   #
-  # The PoW gate's «one proof id, exactly once» assertion failed in public CI
-  # run 34815855150 — two of twenty racing threads proceeded on ONE proof. The
-  # store's compare-and-set was not the defect and never had been: inside one
-  # `PowSpentStore` a second `claim` of a live id is impossible (the check and
-  # the set share a mutex, and the only two ways an entry leaves the hash —
-  # `prune!` and `release` — cannot free a claim that is about to verify `:ok`).
-  # The defect was one level up, in this file: `@pow_spent_store ||= …` is a
-  # read, an allocation and a write with no lock between them, so racing
-  # first-touchers each got a store of their OWN and each claim won in its own.
-  #
-  # These examples force that interleaving rather than hoping for it — see
-  # `with_slow_store_allocation` in spec_helper for why hoping does not work.
-  describe "lazy store defaults under a concurrent first touch (K-1610)" do
+  # `@x ||= Store.new` with no lock lets racing first-touchers each build a
+  # store of their own. These examples force that interleaving — see
+  # `with_slow_store_allocation` in spec_helper.
+  describe "lazy store defaults under a concurrent first touch" do
     # Every slot here is stateful: what the losers of the race record is lost
     # when the last write lands, and for `pow_spent_store` what is lost is the
     # spent-id set that makes a proof of work single-use.
     {
-      pow_spent_store:             Kiosk::Server::PowSpentStore,
+      pow_spent_store:             Kiosk::Server::PowSpentStores::ActiveRecord,
       auth_challenge_store:        Kiosk::Server::AuthChallengeStore,
       revocation_store:            Kiosk::Server::RevocationStore,
       device_authorization_store:  Kiosk::Server::DeviceAuthorizationStores::ActiveRecord,

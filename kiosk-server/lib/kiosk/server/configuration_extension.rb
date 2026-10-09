@@ -572,22 +572,14 @@ module Kiosk
         @on_bad_proof ||= ->(**) {}
       end
 
-      # In-process TTL store for spent challenge ids. A multi-process
-      # deployment (`WEB_CONCURRENCY > 1`, or several app hosts) **MUST**
-      # override this with a store shared by every process — with the default,
-      # PoW single-use holds per worker, so one proof is accepted once per
-      # worker (protocol.md Section 15.2 + the Section 16.1 operator
-      # profile state the requirement). {Kiosk::Server::PowSpentStores::ActiveRecord}
-      # ships as the ready override. The override MUST implement #claim as ONE
-      # atomic op (Redis SETNX / SQL INSERT..ON CONFLICT) — the gate claims
-      # before the verify, so a read-then-write reintroduces the replay
-      # TOCTOU.
+      # Spent PoW challenge ids, so a proof is accepted once. Defaults to the
+      # database table every process and every deploy share.
       #
-      # @return [Kiosk::Server::PowSpentStore, #claim(id, exp), #release(id), #spent?(id), #mark_spent(id, exp)]
+      # @return [#claim(id, exp), #release(id), #spent?(id), #mark_spent(id, exp)]
       attr_writer :pow_spent_store
       def pow_spent_store
         @pow_spent_store ||
-          LAZY_STORE_MUTEX.synchronize { @pow_spent_store ||= Kiosk::Server::PowSpentStore.new }
+          LAZY_STORE_MUTEX.synchronize { @pow_spent_store ||= Kiosk::Server::PowSpentStores::ActiveRecord.new }
       end
 
       # ── PoP auth handshake (challenge-response) ───────────────────────────

@@ -682,85 +682,6 @@ RSpec.describe Kiosk::Server::PowGate do
     end
   end
 
-  # ─── PowSpentStore unit tests ─────────────────────────────────────────────
-
-  describe Kiosk::Server::PowSpentStore do
-    let(:store) { described_class.new }
-    let(:id)    { "spent-store-test-#{SecureRandom.uuid}" }
-    let(:future_exp) { Time.now.to_i + 300 }
-
-    it "returns false for an unknown id" do
-      expect(store.spent?(id)).to be(false)
-    end
-
-    it "returns true after marking an id spent" do
-      store.mark_spent(id, future_exp)
-      expect(store.spent?(id)).to be(true)
-    end
-
-    it "prunes expired entries and returns false for them" do
-      past_exp = Time.now.to_i - 1
-      store.mark_spent(id, past_exp)
-      # Trigger prune by checking another id
-      store.spent?("trigger-prune-#{SecureRandom.uuid}")
-      expect(store.spent?(id)).to be(false)
-    end
-
-    # The OTHER pruning caller, and the one that matters: `claim` is what the
-    # gate calls on every tolled request, while `spent?` is a read no request
-    # makes. A store that swept only on `spent?` would grow without bound in a
-    # running origin, which is the reading the class note used to invite.
-    #
-    # Asserted on the ENTRY SET rather than on a return value, because a
-    # later `claim` of the expired id would sweep it itself and answer true
-    # either way — the question here is whether an UNRELATED claim sweeps.
-    it "prunes on the CLAIM path too, not only on a `spent?` read" do
-      expired = "expired-#{SecureRandom.uuid}"
-      store.mark_spent(expired, Time.now.to_i - 1)
-      store.claim("unrelated-#{SecureRandom.uuid}", future_exp)
-      expect(store.instance_variable_get(:@store)).not_to have_key(expired)
-    end
-
-    it "returns false safely for a nil id" do
-      expect(store.spent?(nil)).to be(false)
-    end
-
-    # ── atomic single-use claim (K-542) ────────────────────────────────────
-
-    it "#claim returns true the first time and false on a repeat of the same id" do
-      expect(store.claim(id, future_exp)).to be(true)
-      expect(store.claim(id, future_exp)).to be(false)
-    end
-
-    it "#claim returns false safely for a nil id" do
-      expect(store.claim(nil, future_exp)).to be(false)
-    end
-
-    it "#release frees a claimed id so it can be claimed again" do
-      store.claim(id, future_exp)
-      store.release(id)
-      expect(store.claim(id, future_exp)).to be(true)
-    end
-
-    # The core K-542 property, at the store contract: N threads racing to claim
-    # ONE id — exactly one wins. A non-atomic check-then-set would let several
-    # through.
-    it "lets exactly one of N racing threads claim the same id" do
-      race_id = "race-#{SecureRandom.uuid}"
-      n       = 50
-      latch   = Queue.new
-      threads = Array.new(n) do
-        Thread.new do
-          latch.pop
-          store.claim(race_id, future_exp)
-        end
-      end
-      n.times { latch.push(:go) }
-      wins = threads.map(&:value).count(true)
-      expect(wins).to eq(1)
-    end
-  end
-
   # ─── K-542: a valid proof is single-use even under concurrency ─────────────
   # pow_gate.rb used to `spent?` then (after the ~18 ms verify) `mark_spent`,
   # with no atomic claim in between: M parallel submissions of ONE valid proof
@@ -816,35 +737,6 @@ RSpec.describe Kiosk::Server::PowGate do
       expect(results.count(:proceed)).to eq(1)
       expect(results.count(:rechallenged)).to eq(n - 1)
     end
-
-    # ── K-1610 ──────────────────────────────────────────────────────────────
-    # The example above passed 2000 consecutive times on a workstation under
-    # 8-way CPU load, and failed once on a public runner (CI 34815855150:
-    # `expected: 1 got: 2`). What it cannot reach on demand is the window in
-    # `configuration_extension.rb` where the spent store itself is lazily
-    # built: a thread that arrives while `@pow_spent_store` is still nil
-    # allocates its OWN store and claims the id there, so the id is claimed
-    # once per store rather than once. This is that failure made deterministic
-    # — the shipped gate and the shipped store, with the ALLOCATION slowed so
-    # every thread is inside the window at once. Before the fix all 20 threads
-    # proceeded on one proof; the property being asserted is single-use, so
-    # that is a toll paid once and spent twenty times.
-    it "accepts it exactly once even when the spent store is built under the race" do
-      challenge = issue_challenge_via_gate(command: "query", body: { name: "menu" })
-      pow       = { challenge: challenge, nonce: "n" }
-      n         = 20
-
-      results = with_slow_store_allocation do
-        race(n) do
-          described_class.gate(identity: identity, command: "query", body: { name: "menu" }, pow: pow)
-        rescue Kiosk::Server::Errors::PowRequired
-          :rechallenged
-        end
-      end
-
-      expect(results.count(:proceed)).to eq(1)
-      expect(results.count(:rechallenged)).to eq(n - 1)
-    end
   end
 
   # ─── configuration extension defaults ─────────────────────────────────────
@@ -868,8 +760,9 @@ RSpec.describe Kiosk::Server::PowGate do
       expect { cb.call(identity: identity) }.not_to raise_error
     end
 
-    it "pow_spent_store defaults to a PowSpentStore instance" do
-      expect(Kiosk.configuration.pow_spent_store).to be_a(Kiosk::Server::PowSpentStore)
+    it "pow_spent_store defaults to the database-backed store" do
+      Kiosk.reset!
+      expect(Kiosk.configuration.pow_spent_store).to be_a(Kiosk::Server::PowSpentStores::ActiveRecord)
     end
 
     it "reputation_factors default returns Factors.empty when kiosk-reputation is loaded" do

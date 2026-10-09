@@ -2,53 +2,18 @@
 
 module Kiosk
   module Server
-    # Shared-store adapters for the PoW spent-id set.
-    #
-    # The DEFAULT spent store is {Kiosk::Server::PowSpentStore} — a Hash + Mutex
-    # living in ONE process (`configuration_extension.rb`, `pow_spent_store`).
-    # That is sufficient for a single-process operator and nothing else: the
-    # protocol states PoW proofs are single-use (protocol.md Section 15.2), and
-    # with an in-process set that property holds PER WORKER, so a proof replayed
-    # against a second Puma worker is accepted a second time.
-    #
-    # This module ships the reference implementation of the shared store the spec
-    # requires of a multi-process operator:
-    #
-    #   Kiosk.configure do |c|
-    #     c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
-    #   end
-    #
-    # Naming note: the in-process store is the top-level {PowSpentStore} and not
-    # a `PowSpentStores::InMemory` beside the adapter below. It is named in
-    # operator initializers, so the constant is part of the published surface
-    # and moving it would be a breaking rename for a tidier namespace.
+    # Stores for the PoW spent-id set (`config.pow_spent_store`). A store
+    # answers `claim(id, exp)` (atomic: true iff this caller claimed it),
+    # `release(id)`, `spent?(id)` and `mark_spent(id, exp)`.
     module PowSpentStores
-      # Spent-id store backed by the `<schema>.pow_spent` table
-      # ({SchemaDefinitions.pow_spent_sql}), shared by every process pointed at
-      # the same database. SQL with BIND PARAMETERS through the host's
-      # `::ActiveRecord::Base.lease_connection` — the same access idiom as
-      # {DeviceAuthorizationStores::ActiveRecord}, so no model class is defined
-      # and satellite neutrality holds. ActiveRecord is a declared dependency of
-      # this gem; nothing here touches it until an operation runs.
+      # The default store: the `<schema>.pow_spent` table
+      # ({SchemaDefinitions.pow_spent_sql}, laid down by `kiosk:install`), so a
+      # spent proof stays spent across workers, hosts and deploys. Plain SQL
+      # with bind parameters through `::ActiveRecord::Base.lease_connection`;
+      # no model class.
       #
-      # == Why the table is not in the install generator
-      #
-      # The six canonical migrations are what EVERY operator needs. This table
-      # is needed only above `WEB_CONCURRENCY=1`, so it ships as SQL plus this
-      # adapter and the operator adds the one-line migration when they scale
-      # out. See the kiosk-server README, "Multi-process deployments".
-      #
-      # == Transaction boundary
-      #
-      # A claim must be durable independently of the request that made it, or a
-      # rollback would un-spend a consumed proof. Both shipped gate call sites
-      # run OUTSIDE any transaction: {WireController#execute_wire} calls
-      # `PowGate.gate` before the `Executor.call` that opens the GUC-scoped
-      # transaction, and {AgentRegistration.call} calls
-      # `RegistrationPow.gate` before its own `conn.transaction`. An operator
-      # who wraps the whole request in a transaction of their own (a
-      # `before_action`-opened one, say) breaks that and must give this store
-      # its own connection.
+      # Every gate call site runs outside a transaction, so a claim is durable
+      # independently of the request that made it.
       class ActiveRecord
         # Seconds between opportunistic TTL sweeps. The sweep exists to bound
         # table growth, NOT for correctness (challenge ids are random, so an
@@ -65,12 +30,9 @@ module Kiosk
 
         # Atomically claim +id+ as spent until Unix timestamp +exp+.
         #
-        # ONE statement, per the contract {PowSpentStore#claim} documents: the
-        # PRIMARY KEY decides the winner, so N processes racing the same proof
-        # produce exactly one `true`. The `ON CONFLICT … DO UPDATE … WHERE
-        # s.expires_at <= now()` arm makes an already-expired row reclaimable
-        # in that same statement — never a read-then-write, which would
-        # reintroduce the TOCTOU {PowGate} closes.
+        # One statement: the PRIMARY KEY decides the winner, so N processes
+        # racing the same proof produce exactly one `true`; an expired row is
+        # reclaimable in that same statement.
         #
         # @param id  [String, nil]
         # @param exp [Integer] Unix timestamp at or after which the entry is stale
@@ -94,9 +56,8 @@ module Kiosk
           !rows.empty?
         end
 
-        # Release a previously-claimed +id+ (compensating op) — the shared
-        # counterpart of {PowSpentStore#release}, so a valid-but-insufficient
-        # or unauthenticated proof does not block the client's own retry.
+        # Release a previously-claimed +id+, so a valid-but-insufficient or
+        # unauthenticated proof does not block the client's own retry.
         # @param id [String, nil]
         def release(id)
           return if id.nil?
@@ -119,9 +80,7 @@ module Kiosk
           !row.nil?
         end
 
-        # Idempotent set with no claim semantics — the read-side/override
-        # counterpart of {PowSpentStore#mark_spent}. The gate itself uses
-        # {#claim}.
+        # Idempotent set with no claim semantics. The gate itself uses {#claim}.
         # @param id  [String, nil]
         # @param exp [Integer] Unix timestamp at or after which the entry is stale
         def mark_spent(id, exp)
@@ -161,17 +120,8 @@ module Kiosk
           prune! if due
         end
 
-        # `lease_connection`, not `connection` (following
-        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
-        # soft-deprecated in Rails 8.1 and RAISES under
-        # `permanent_connection_checkout = :disallowed` — and this store sits in
-        # front of `/auth/register` and every tolled verb, so that would be a
-        # 500 on the gate itself. `with_connection` would also be correct here
-        # (each method is one statement, deliberately outside any transaction);
-        # the lease is taken so the engine has ONE acquisition idiom, and it
-        # does not change the transaction story either way — the claim's
-        # durability comes from the call sites running before any transaction
-        # opens, not from which method fetched the connection.
+        # `lease_connection`: `connection` raises under
+        # `permanent_connection_checkout = :disallowed`.
         def connection = ::ActiveRecord::Base.lease_connection
         def table = %("#{Kiosk.configuration.schema}".pow_spent)
       end

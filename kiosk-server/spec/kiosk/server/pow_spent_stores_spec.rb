@@ -5,21 +5,6 @@ require "spec_helper"
 RSpec.describe Kiosk::Server::PowSpentStores do
   let(:live) { Time.now.to_i + 300 }
 
-  # The gap K-738 is about, made executable. This is NOT a defect of
-  # PowSpentStore — it is its documented scope — but it is the exact reason the
-  # protocol needs a normative sentence and the reference needs a shared store:
-  # two instances stand in for two Puma workers, and the SAME proof is accepted
-  # by both.
-  describe "the in-process default (Kiosk::Server::PowSpentStore)" do
-    it "does NOT hold single-use across independent instances" do
-      worker_a = Kiosk::Server::PowSpentStore.new
-      worker_b = Kiosk::Server::PowSpentStore.new
-
-      expect(worker_a.claim("k738-replay", live)).to be(true)
-      expect(worker_b.claim("k738-replay", live)).to be(true)
-    end
-  end
-
   describe Kiosk::Server::PowSpentStores::ActiveRecord do
     # Run against a real Postgres: a throwaway schema built from the shipped
     # `pow_spent_sql`, dropped afterwards. Connection comes from PG* env vars
@@ -99,7 +84,7 @@ RSpec.describe Kiosk::Server::PowSpentStores do
       end
     end
 
-    # ── the PowSpentStore contract, adapter-side ───────────────────────────
+    # ── the spent-store contract ───────────────────────────────────────
 
     describe "#claim" do
       it "returns true the first time and false after" do
@@ -222,7 +207,7 @@ RSpec.describe Kiosk::Server::PowSpentStores do
       expect(Kiosk.configuration.pow_spent_store).to equal(store)
     end
 
-    it "satisfies the whole PowSpentStore interface" do
+    it "answers the whole spent-store interface" do
       expect(store).to respond_to(:claim, :release, :spent?, :mark_spent)
     end
   end
@@ -241,9 +226,9 @@ RSpec.describe Kiosk::Server::PowSpentStores do
       expect(Kiosk::Server::SchemaDefinitions.pow_spent_sql).to include(%("acme".pow_spent))
     end
 
-    it "is NOT one of the canonical migrations the install generator lays down" do
+    it "is laid down by the install generator" do
       templates = Dir[File.expand_path("../../../lib/generators/kiosk/install/templates/*.tt", __dir__)]
-      expect(templates.map { |p| File.basename(p) }).not_to include(a_string_matching(/pow_spent/))
+      expect(templates.map { |p| File.basename(p) }).to include("create_kiosk_pow_spent.rb.tt")
     end
   end
 end

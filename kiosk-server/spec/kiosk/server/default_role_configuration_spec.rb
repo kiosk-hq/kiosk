@@ -16,12 +16,9 @@
 # exactly as it was — no role reaches its bindings, its tokens omit the `role`
 # claim, and it boots.
 #
-# The condition lives on the engine class rather than inside its
-# `after_initialize` block for the reason `.shared_spent_store_warning` does:
-# a block body is reachable only by booting a real application, and a control
-# whose condition cannot be unit-tested is a control nobody can prove fires.
-# That the block RAISES on it is proven separately, against a real boot, in
-# default_role_boot_spec.rb.
+# The condition lives on the engine class so it is unit-testable without a
+# boot; that the `after_initialize` block RAISES on it is proven against a real
+# boot in default_role_boot_spec.rb.
 RSpec.describe Kiosk::Server::Engine, ".default_role_configuration_error" do
   def error(config: Kiosk.configuration)
     described_class.default_role_configuration_error(config: config)

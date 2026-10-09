@@ -763,9 +763,8 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
     # window it cannot book — but an assistant may name a date it never read
     # from a `delivery_slots` response, so the ORDER has to refuse it too. That
     # is the belt to this beat's braces: {WireArguments.delivery_date} refuses
-    # `date < Date.today`. `getgrocery_flow.rb` pins the past-WINDOW guard, but
-    # only CONDITIONALLY — its probe is a no-op before 08:00 Dublin. This half
-    # is unconditional and is about the past DAY.
+    # `date < Date.today`. `test/wire_arguments_test.rb` pins the past-WINDOW
+    # guard; this half is about the past DAY.
     sku      = (client.query(a, name: "catalog").body.then { |b| b.is_a?(Array) ? b : [] }).first&.dig("sku")
     order    = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
                              delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: past)
@@ -953,7 +952,7 @@ end
 # «An operator publishes ONE rendering per row and not two — a second wall clock
 # in the caller's zone is a field pair that can disagree.» The first sentence of
 # that rule is asserted everywhere (every time-bearing row carries `timezone`,
-# and `check:schema` fails a row without one); the second was an absence — no row
+# and each published `output_schema` requires it); the second was an absence — no row
 # publishes a second wall clock, and nothing looked.
 #
 # THE PROBE READS THE SAME WINDOWS ON TWO CLOCKS. `delivery_slots` is called with

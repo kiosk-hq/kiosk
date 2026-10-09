@@ -9,6 +9,7 @@ class User < ApplicationRecord
 
   has_many :lists, foreign_key: :account_id, inverse_of: :account, dependent: :destroy
   has_many :memberships, foreign_key: :account_id, inverse_of: :account, dependent: :destroy
+  has_many :joined_lists, through: :memberships, source: :list
 
   # The name other members of a list see: the one the account chose, else a
   # pseudonym derived from its id. Never the email address, nor anything derived

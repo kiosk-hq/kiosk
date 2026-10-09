@@ -133,7 +133,7 @@ module Kiosk
         # second, which is what makes spec §6.3 / §15.4 — "an unlinked key's
         # tokens stop verifying" — literally true.
         config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
-        config.assistant_unlinked&.call(agent: agent_id, user_id: user_id)
+        config.assistant_unlinked&.call(agent: agent_id, account: config.user_model.constantize.find(user_id))
         { agent_id: agent_id }
       end
 
@@ -165,21 +165,8 @@ module Kiosk
           previous = existing.fetch("user_id")
           role     = resolved_role(config, requested_role)
 
-          # A re-bind to the SAME principal transitions nothing, so the hook does
-          # not fire. `assistant_claimed` is a NOTIFICATION — "this key's holder
-          # changed from A to B, migrate A's domain rows to B" — and a host is
-          # entitled to act on it; called with `previous_user_id == user_id` it
-          # would be told to migrate rows that are already this human's own, and
-          # a hook is the operator's code, so the guard belongs at the one place
-          # that knows whether a transition happened.
-          #
-          # ONLY the hook is skipped. The UPDATE still runs (it carries the
-          # roles-from-IdP `allowed_roles` remap — re-binding a key to the same
-          # human under a NEW role is a real change), and the watermark
-          # revocation + fresh token still happen, so nothing an assistant can
-          # observe on the wire moved. That an idempotent re-bind STILL revokes
-          # is normative: protocol.md §6.3 says so, and says the response is
-          # indistinguishable from any other rebind's.
+          # Re-binding to the same account still remaps the role and revokes
+          # (§6.3); only the hook, which moves data between accounts, is skipped.
           transition = previous.to_s != user_id.to_s
           # "No role" is a STATEMENT SHAPE, not a value (the same distinction
           # `executor.rb#settled_total_cents` draws about its window, and the
@@ -195,10 +182,9 @@ module Kiosk
               SET user_id = $1#{role_set}
               WHERE id = $2
             SQL
-            if transition
-              config.assistant_claimed&.call(
-                agent: agent_id, previous_user_id: previous, user_id: user_id,
-              )
+            if transition && config.assistant_claimed
+              accounts = config.user_model.constantize
+              config.assistant_claimed.call(agent: agent_id, from: accounts.find(previous), to: accounts.find(user_id))
             end
           end
 

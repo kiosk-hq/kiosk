@@ -153,22 +153,24 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(con).not_to have_received(:quote)
     end
 
-    it "fires assistant_claimed(agent:, previous_user_id:, user_id:)" do
+    it "fires assistant_claimed(agent:, from:, to:) with both accounts" do
+      stub_const("Account", Class.new { def self.find(id) = "account #{id}" })
       received = nil
       Kiosk.configure do |c|
-        c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) {
-          received = { agent: agent, previous_user_id: previous_user_id, user_id: user_id }
-        }
+        c.user_model = "Account"
+        c.assistant_claimed = ->(**accounts) { received = accounts }
       end
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
-      expect(received).to eq(
-        agent: "agent-known", previous_user_id: previous_user, user_id: user_id,
-      )
+      expect(received).to eq(agent: "agent-known", from: "account #{previous_user}", to: "account #{user_id}")
     end
 
     it "runs the hook inside the rebind transaction (a raising hook aborts the rebind)" do
-      Kiosk.configure { |c| c.assistant_claimed = ->(**) { raise "vertical migration failed" } }
+      stub_const("Account", Class.new { def self.find(id) = id })
+      Kiosk.configure do |c|
+        c.user_model = "Account"
+        c.assistant_claimed = ->(**) { raise "vertical migration failed" }
+      end
 
       expect { described_class.bind!(public_key_pem: pem, user_id: user_id) }
         .to raise_error(RuntimeError, /vertical migration failed/)
@@ -421,29 +423,11 @@ RSpec.describe Kiosk::Server::AccountBinding do
       end
 
       it "does NOT fire assistant_claimed (nothing transitioned)" do
-        fired = nil
-        Kiosk.configure do |c|
-          c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) {
-            fired = { agent: agent, previous_user_id: previous_user_id, user_id: user_id }
-          }
-        end
+        fired = false
+        Kiosk.configure { |c| c.assistant_claimed = ->(**) { fired = true } }
 
         described_class.bind!(public_key_pem: pem, user_id: user_id)
-        expect(fired).to be_nil
-      end
-
-      # The regression in one line: a hook that destroys on a no-op transition
-      # must never be reached with one.
-      it "never hands the hook a previous_user_id equal to user_id" do
-        seen = []
-        Kiosk.configure do |c|
-          c.assistant_claimed = ->(agent:, previous_user_id:, user_id:) {
-            seen << [previous_user_id, user_id]
-          }
-        end
-
-        described_class.bind!(public_key_pem: pem, user_id: user_id)
-        expect(seen).to be_empty
+        expect(fired).to be(false)
       end
 
       # A string/uuid-object mismatch must not defeat the comparison — the
@@ -636,15 +620,17 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(con).not_to have_received(:quote)
     end
 
-    it "fires assistant_unlinked(agent:, user_id:)" do
+    it "fires assistant_unlinked(agent:, account:) with the account" do
       route_exec_query(con) { [{ "id" => "agent-1" }] }
+      stub_const("Account", Class.new { def self.find(id) = "account #{id}" })
       received = nil
       Kiosk.configure do |c|
-        c.assistant_unlinked = ->(agent:, user_id:) { received = { agent: agent, user_id: user_id } }
+        c.user_model = "Account"
+        c.assistant_unlinked = ->(**unlinked) { received = unlinked }
       end
 
       described_class.unlink!(agent_id: "agent-1", user_id: user_id)
-      expect(received).to eq(agent: "agent-1", user_id: user_id)
+      expect(received).to eq(agent: "agent-1", account: "account #{user_id}")
     end
 
     it "raises NotFound when the agent is not bound to this holder (or already unlinked)" do

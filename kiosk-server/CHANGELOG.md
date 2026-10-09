@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **`assistant_claimed` receives `from:` and `to:` accounts, and `assistant_unlinked` an `account:`**, as `user_model` records instead of ids.
+
 - 2026-10-09: **Spent proof-of-work ids live in the database by default**, so a deploy or a second worker no longer makes a spent proof spendable again; `kiosk:install` lays down `kiosk.pow_spent`.
 
 - 2026-10-09: **`Kiosk::OperationResult` and `render_kiosk_result` are removed**; operations raise `Kiosk::Server::Errors`. `PaymentClaim` pays only the owner's row.

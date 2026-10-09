@@ -34,14 +34,10 @@ Kiosk.configure do |c|
   # An assistant registering with no human behind it gets a bare account; linking
   # it later moves that account's lists and memberships to the human.
   c.assistant_creation = ->(_pubkey) { User.create!.id }
-  c.assistant_claimed  = ->(agent:, previous_user_id:, user_id:) do
-    List.where(account_id: previous_user_id).update_all(account_id: user_id)
-    # One statement, so it reads a single snapshot; both columns are NOT NULL, so NOT IN is safe.
-    already_a_member = Membership.where(account_id: user_id).select(:list_id)
-    Membership.where(account_id: previous_user_id)
-              .where.not(list_id: already_a_member)
-              .update_all(account_id: user_id)
-    Membership.where(account_id: previous_user_id).delete_all
+  c.assistant_claimed = ->(agent:, from:, to:) do
+    from.lists.update_all(account_id: to.id)
+    from.memberships.where.not(list: to.joined_lists).update_all(account_id: to.id)
+    from.memberships.delete_all
   end
 
   c.pow_secret              = ENV.fetch("KIOSK_POW_SECRET")

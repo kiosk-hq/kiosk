@@ -360,19 +360,13 @@ module Kiosk
 
       # ── Account-binding hooks ──────────────────────────────────
 
-      # Optional callable fired when a KNOWN key is claimed onto (rebound to)
-      # an assistant-account holder's account — scenario TWO's upgrade path.
-      # Invoked with keywords `(agent:, previous_user_id:, user_id:)` inside
-      # the rebind transaction, so a raising hook rolls the rebind back.
-      # Core never touches provider-domain rows (satellite neutrality); this
-      # hook is where the vertical adopts/migrates the old standalone
-      # account's domain data if it wants to. Default nil (no-op).
+      # Called as `(agent:, from:, to:)` when an assistant's key moves from one
+      # account to another, inside the rebind transaction: the place to move
+      # the operator's own rows. `from` and `to` are `user_model` records.
       attr_accessor :assistant_claimed
 
-      # Optional callable fired when a binding is deactivated via
-      # POST /auth/unlink (registration-layer revocation). Invoked with
-      # keywords `(agent:, user_id:)` after the agent row is deactivated
-      # and its tokens are watermark-revoked. Default nil (no-op).
+      # Called as `(agent:, account:)` after an assistant is unlinked from
+      # `account`, a `user_model` record, and its tokens are revoked.
       attr_accessor :assistant_unlinked
 
       # ── Per-assistant spending cap ─────────────────────────────

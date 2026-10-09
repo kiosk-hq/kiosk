@@ -5,7 +5,7 @@ require "test_helper"
 class AssistantClaimedTest < ActiveSupport::TestCase
   setup { @alice, @bob, @list = household }
 
-  def claimed(from, to) = Kiosk.configuration.assistant_claimed.call(agent: nil, previous_user_id: from.id, user_id: to.id)
+  def claimed(from, to) = Kiosk.configuration.assistant_claimed.call(agent: nil, from:, to:)
 
   test "a headless account's lists and memberships move to the human who claims its assistant" do
     headless = User.create!

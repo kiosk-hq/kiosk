@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# HTML surface (ActionController::Base, not ::API — it renders views).
-# The engine draws the routes.
-
 require "action_controller"
 require "kiosk/server/account_binding"
 require "kiosk/server/link_code"
@@ -10,53 +7,23 @@ require "kiosk/server/signing_key"
 
 module Kiosk
   module Server
-    # The «Link an assistant» engine page (link flow — Kiosk
-    # extension): a session-authenticated account holder lists the
-    # assistant accounts bound to them, mints link codes, and unlinks.
-    #
-    #   GET  <mount>/auth/assistants        — the page
-    #   POST <mount>/auth/assistants/link   — mint a link code (shown once)
-    #   POST <mount>/auth/assistants/unlink — deactivate a binding
-    #
-    # HTML shim over the same services the JSON endpoints use
-    # ({LinkCode.mint}, {AccountBinding.unlink!}) — batteries-included
-    # like {DeviceVerifyController}; override the view by shipping
-    # app/views/kiosk/server/assistants/show.html.erb in the host app.
+    # «Link an assistant» page: a signed-in account holder lists, labels,
+    # links and unlinks their assistants. Host views override
+    # app/views/kiosk/server/assistants/show.html.erb.
     class AssistantsController < ::ActionController::Base
       include AccountHolderGate
       include BindingModuleGate
       prepend_before_action :refuse_unserved_binding
 
-      # What an unauthenticated visitor is told, on the 401 body and on the
-      # sign-in page this origin redirects a browser to.
       SIGN_IN_PROMPT = "Sign in to your account first to manage linked assistants."
       SIGN_IN_ALERT  = "Please sign in to manage your linked assistants."
 
-      # Host app view paths (configured by Rails on ActionController::Base)
-      # come first, so a provider's own templates override these.
+      # Host app view paths come first, so an operator's templates win.
       append_view_path File.expand_path("../../../app/views", __dir__)
       layout false
 
-      # AGENT-SIGNPOST. This is a HUMAN, browser-only page that
-      # happens to sit under the `/kiosk/…` prefix an assistant is told to
-      # probe. An assistant POSTing JSON here carries no CSRF token, so Rails
-      # raises ActionController::InvalidAuthenticityToken — and in production
-      # nothing downstream names the machine surface. ShowExceptions hands off
-      # to PublicExceptions, whose answer depends on the host and on what the
-      # caller negotiated: the host's static public/422.html — every Kiosk demo
-      # ships one — when the request offered `*/*` or no Accept at all; a
-      # generic `{"status":422,"error":"Unprocessable
-      # Content"}` echo on an explicit JSON Accept; and, on a host shipping no
-      # such page, PublicExceptions cascades and ShowExceptions#pass_response
-      # answers a BODYLESS 422 (`text/html`, `Content-Length: 0`). A human
-      # error page, a status echo, or nothing — none of the three points the
-      # caller anywhere. Give a JSON-shaped caller a body that at least NAMES
-      # a code and says where the wire is, and point it at the machine surface
-      # it was actually looking for. Not a problem document: this is not a
-      # wire endpoint and its code is not in the wire's closed vocabulary, so
-      # borrowing the shape would claim a contract this page does not have. A
-      # browser request is re-raised untouched: a genuine CSRF failure on a
-      # genuine form must keep failing exactly as it does today.
+      # A JSON caller without a CSRF token is an assistant at the wrong door:
+      # point it at the wire. Browser requests re-raise untouched.
       rescue_from ::ActionController::InvalidAuthenticityToken do |error|
         raise error unless json_request?
 
@@ -69,29 +36,8 @@ module Kiosk
         render_page
       end
 
-      # roles-from-IdP on the BROWSER path — the same capture
-      # {AuthController#link} performs for the JSON endpoint, and for
-      # the same reason: this page IS the account-binding link ceremony, so the
-      # role the provider's `user_idp` reports for the signed-in human
-      # (`@identity.role`) belongs on the link row. Both controllers resolve
-      # `@identity` from the SAME `Kiosk.configuration.user_idp&.verify`, so
-      # there is no case where the JSON surface can source a role and this one
-      # cannot; a surface that dropped it would make the ceremony's outcome
-      # depend on which door the human walked through.
-      #
-      # Both halves of {AccountBinding.bind!} depend on it, and dropping it
-      # costs the human their own access rather than merely defaulting it: at
-      # stylish, an OWNER minting from this page provisioned a `:customer`
-      # assistant, on a fresh key and on a rebind alike, because the ceremony
-      # then has nothing to remap `allowed_roles` FROM and falls back to what
-      # registration would assign. Passing the role is what carries the
-      # human's own standing onto the assistant that acts for them.
-      #
-      # `nil` stays meaningful and is NOT normalized here: a role-less
-      # `user_idp` (or a single-role provider) reports no role, and the binding
-      # then falls back to `registration_role`/absent. The role is never
-      # validated at mint; `bind!` validates it against `config.roles` at
-      # redeem, which is where the JSON path validates it too.
+      # The signed-in human's role goes on the link row, as on the JSON path;
+      # `bind!` validates it at redeem.
       def link
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
@@ -112,28 +58,13 @@ module Kiosk
         render_page(status: e.http_status)
       end
 
-      # Edit a bound assistant's human label and/or spending cap.
-      # Ownership-scoped: the UPDATE's WHERE pins both the agent id AND the
-      # session holder's user_id, so a holder may only touch their own live
-      # rows. Empty spending_cap_cents → NULL (unlimited); a non-integer
-      # value is rejected as a bad request.
+      # Edits a bound assistant's label and/or spending cap (blank cap → unlimited).
       def update
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
-        # `lease_connection`, not `connection` (following
-        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
-        # soft-deprecated in Rails 8.1 and RAISES under
-        # `permanent_connection_checkout = :disallowed`, which would turn this
-        # governance page into a 500 on a host that took the new default.
         conn = ::ActiveRecord::Base.lease_connection
 
-        # WHICH COLUMNS are assigned is a statement SHAPE — the form decides it
-        # and the column names are literals in this file. WHAT they are assigned
-        # is a value, and `human_label` in particular is FREE TEXT off a form,
-        # so it is the most caller-reachable value in the auth plane: `$N`,
-        # never text. `NULL` has no value to bind; the integer branch keeps its
-        # `Integer()` guard, which is now about answering 400 rather than about
-        # safety.
+        # Column names are literals; every value, above all the free-text label, is a bind.
         assignments = []
         binds       = []
 
@@ -156,8 +87,7 @@ module Kiosk
         end
 
         if assignments.any?
-          # The ownership predicate is the security boundary of this action:
-          # the caller supplies `agent_id`, the session supplies `user_id`.
+          # The ownership predicate is the security boundary: `agent_id` from the caller, `user_id` from the session.
           binds.concat([params[:agent_id].to_s, @identity.user_id, Kiosk.current_issuer])
           conn.exec_query(<<~SQL, "Kiosk assistant update", binds)
             UPDATE #{Kiosk.configuration.schema}.agents
@@ -180,25 +110,13 @@ module Kiosk
 
       def render_page(status: :ok)
         @assistants = bound_assistants
-        # The cap editor below is rendered unconditionally, and on an origin
-        # that wires no `config.spending_cap` seam the number it saves is
-        # stored on the assistant's row and read by nothing: `Executor
-        # #enforce_spending_cap!` returns on `seam.nil?` before it looks at the
-        # column. A control that binds nothing must SAY so where it is rendered,
-        # so the page asks the configuration rather than assuming a seam. The
-        # field still submits — the governance surface (a human setting policy on
-        # an origin that may not be the one that charges) is deliberate, stated in
-        # stylish's initializer, and `check:binding` drives it end to end.
+        # Without a `config.spending_cap` seam the saved cap binds nothing; the page says so.
         @spending_cap_enforced = !Kiosk.configuration.spending_cap.nil?
-        # Forms post to <page>/link, <page>/unlink and <page>/update;
-        # recompute the page path so the view works at any mount and after POSTs.
         @page_path = request.path.sub(%r{/(link|unlink|update)\z}, "")
         render :show, status: status
       end
 
-      # A machine caller for signposting purposes: an explicit JSON `Accept`, or
-      # a JSON request body. Deliberately narrow — anything ambiguous (`*/*`, a
-      # form post, no headers at all) counts as a browser.
+      # An explicit JSON Accept or a JSON body; anything ambiguous counts as a browser.
       def json_request?
         return true if request.format.json?
 
@@ -207,12 +125,7 @@ module Kiosk
         false
       end
 
-      # The signpost body. Non-wire `error.code` on purpose: this endpoint is
-      # not a wire verb, so it must not borrow a code from the spec's closed
-      # error table. The SHAPE is deliberately not the wire's either — the
-      # wire answers RFC 9457 problem documents, and this is an HTML page for
-      # a signed-in human, so a JSON body here is a courtesy to an assistant
-      # that dialed the wrong door rather than a contract anything parses.
+      # Not a problem document: this page is not a wire endpoint.
       def wrong_door_envelope
         {
           ok:    false,
@@ -227,23 +140,10 @@ module Kiosk
         }
       end
 
-      # The holder's live agent rows — id, key fingerprint, created_at,
-      # human_label, spending_cap_cents, and settled_cents (this assistant's
-      # settled spend, summed from the settlements receipt table via a
-      # correlated subquery, respecting the optional rolling window).
-      # Read-only SELECT on kiosk.agents (Kiosk's own table; satellite
-      # neutrality holds).
-      #
-      # An origin with no payment surface may never have run the mandates
-      # migration: when the correlated subquery hits a settlements table that is
-      # not there, fall back to a spend-free listing (settled 0) so the
-      # governance page still works. THAT failure and no other — every other
-      # StatementInvalid (a bind list the statement does not match, a renamed
-      # column, a type Postgres refuses) is a defect in this file and must reach
-      # the operator instead of rendering a 200 with settled 0.
+      # The holder's live agents with their settled spend. Without a settlements
+      # table (no payment surface) the spend falls back to 0.
       def bound_assistants
         config = Kiosk.configuration
-        # `lease_connection` for the reason `#update` records above.
         conn   = ::ActiveRecord::Base.lease_connection
         rows =
           begin
@@ -258,21 +158,12 @@ module Kiosk
         rows.to_a.map { |row| present(row) }
       end
 
-      # Matched by class NAME for the reason `executor.rb#unique_violation?`
-      # records: this file must not force `PG` to load.
+      # By class name, so this file does not load `PG`.
       def missing_table?(error)
         error.cause&.class&.name == "PG::UndefinedTable"
       end
 
-      # `settled_spend:` toggles the correlated settlements subquery. false
-      # (or a schema with no settlements table) yields a constant 0.
-      #
-      # Returns `[sql, binds]` together rather than the SQL alone: the two
-      # branches declare DIFFERENT numbers of parameters (the spend-free one has
-      # no window), and Postgres rejects a bind list that does not match the
-      # statement it is sent with — so the statement and its arguments have to
-      # be built in one place or the fallback breaks the moment a window is
-      # configured.
+      # Returns `[sql, binds]` together: the two branches take different bind counts.
       def bound_assistants_query(config, settled_spend:)
         window_days = settled_spend ? config.spending_cap_window_days&.to_i : nil
         sql = <<~SQL
@@ -285,14 +176,7 @@ module Kiosk
         [sql, [@identity.user_id, Kiosk.current_issuer, *Array(window_days)]]
       end
 
-      # Correlated subquery summing this agent's settled spend from the
-      # settlements table (COALESCE → 0 when it has settled nothing, or the
-      # table has no rows), honouring spending_cap_window_days when set.
-      #
-      # WHETHER there is a window is a statement shape (no predicate at all
-      # when there is none); HOW MANY DAYS is a value, so it is `$3` through
-      # `make_interval` — the same treatment `executor.rb#settled_total_cents`
-      # gives the identical expression.
+      # This agent's settled spend, within `spending_cap_window_days` when set.
       def settled_cents_expr(config, settled_spend:)
         return "0" unless settled_spend
 

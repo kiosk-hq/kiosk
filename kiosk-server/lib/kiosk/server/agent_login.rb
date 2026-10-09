@@ -2,39 +2,19 @@
 
 module Kiosk
   module Server
-    # Existing-identity login: prove control of an ALREADY-registered public key
-    # (via the PoP handshake) and mint a fresh access token.
-    #
-    # Unlike {AgentRegistration}, this creates no user and no agent row — it
-    # serves a key the provider has already seen. A public key the provider does
-    # NOT know is a 404 ("register first"), never a silent new account. Multiple
-    # concurrent logins with the same key are fine: each mints an independent
-    # short-lived token, and siblings are never invalidated (revocation is
-    # explicit, via `/auth/revoke`).
+    # Login with an already-registered public key: proves possession and mints a
+    # fresh token. An unknown key is a 404, never a new account.
     module AgentLogin
       module_function
 
       def call(public_key_pem:, signed:)
         config = Kiosk.configuration
-        # `.to_s` first so a wrong-typed field (number/object/array from the JSON
-        # body) yields a clean 400 downstream via PopVerifier's invalid-key guard,
-        # not a NoMethodError 500 here.
         pem    = public_key_pem.to_s.strip
 
         # Prove possession BEFORE any lookup or state change.
         payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)
         AuthChallenge.consume!(public_key_pem: pem, nonce: payload.fetch(:nonce))
 
-        # `lease_connection`, not `connection` (following
-        # `wire_controller.rb`): `ActiveRecord::Base.connection` is
-        # soft-deprecated in Rails 8.1 and RAISES under
-        # `permanent_connection_checkout = :disallowed`. This site is one
-        # statement in no transaction, so `with_connection` would be correct
-        # too — it takes the lease anyway, because a login runs inside a Rails
-        # request that already holds one, and because this engine keeps ONE
-        # connection idiom rather than two.
-        #
-        # The key is CALLER-SUPPLIED — it is the request body — so it is `$1`.
         conn = ::ActiveRecord::Base.lease_connection
         row  = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [pem, Kiosk.current_issuer]).to_a.first
           SELECT id, user_id, allowed_roles FROM #{config.schema}.agents
@@ -54,9 +34,7 @@ module Kiosk
         { access_token: token }
       end
 
-      # `allowed_roles` comes back as a Postgres text[] literal ("{customer}")
-      # or an Array depending on adapter casting. The token carries the agent's
-      # registered role, not the server's registration_role default.
+      # `allowed_roles` is an Array or a text[] literal ("{customer}"), by adapter.
       def primary_role(allowed_roles)
         case allowed_roles
         when Array then allowed_roles.first

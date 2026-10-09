@@ -3,10 +3,7 @@
 module Kiosk
   module Server
     module EventStores
-      # The deployed event store: the `<schema>.events` table
-      # ({SchemaDefinitions.events_sql}), shared by every process on the
-      # database, through the host's connection with no model class.
-      #
+      # The deployed event store: the `<schema>.events` table, shared by every process on the database.
       #   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
       class ActiveRecord
         # The published retention floor: at least this much history per identity.
@@ -25,9 +22,7 @@ module Kiosk
           @mutex           = Mutex.new
         end
 
-        # @param identity_key [String] a user_id
-        # @param event [Hash] string-keyed, WITHOUT "id"
-        # @return [Integer] the id the sequence assigned
+        # `event` is string-keyed, without "id"; returns the id the sequence assigned.
         def append(identity_key, event)
           prune_if_due!
 
@@ -44,7 +39,7 @@ module Kiosk
           rows.first["id"].to_i
         end
 
-        # @return [Array<Hash>] this identity's events with a greater id, ascending
+        # This identity's events after the cursor `id`, ascending.
         def since(identity_key, id)
           sql = <<~SQL
             SELECT id, topic, subject, occurred_at, data
@@ -56,7 +51,7 @@ module Kiosk
                     .to_a.map { |row| to_event(row) }
         end
 
-        # @return [Integer] the origin's current maximum id, 0 on a fresh origin
+        # The origin's maximum id, 0 when empty.
         def head
           row = connection.exec_query(
             %(SELECT COALESCE(MAX(id), 0) AS head FROM #{table}), "Kiosk events head"

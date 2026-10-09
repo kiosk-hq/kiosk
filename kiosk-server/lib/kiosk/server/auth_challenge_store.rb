@@ -4,34 +4,14 @@ require "openssl"
 
 module Kiosk
   module Server
-    # In-process TTL store binding a public key to its outstanding, single-use
-    # auth challenge nonce (the server side of the PoP challenge-response).
+    # In-process store of each public key's outstanding challenge nonce. Not
+    # shared across workers: a multi-process origin sets
+    # `c.auth_challenge_store = AuthChallengeStores::ActiveRecord.new`.
     #
-    # `GET /auth/challenge` calls {#put}; `POST /auth/{register,login}` calls
-    # {#take}, which succeeds at most once per issued challenge — a matched
-    # nonce is deleted so it can never be replayed.
-    #
-    # Mutex-guarded, pruned opportunistically, and NOT shared across web
-    # workers. Multi-process providers MUST override — the referent
-    # implementation ships beside this one:
-    # `Kiosk.configure { |c| c.auth_challenge_store =
-    # Kiosk::Server::AuthChallengeStores::ActiveRecord.new }`, or any object
-    # answering the two methods below. Unshared, the failure is fail-CLOSED —
-    # worker B cannot find worker A's nonce, so a correctly-signed handshake is
-    # rejected.
-    # The interface contract is:
-    #
-    #   put(public_key_pem, nonce, exp) → void    (exp is a Unix timestamp)
-    #   take(public_key_pem, nonce)     → Boolean  (true iff a live, matching
-    #                                     challenge existed; consumes it)
+    #   put(public_key_pem, nonce, exp) → void     (exp is a Unix timestamp)
+    #   take(public_key_pem, nonce)     → Boolean  (consumes a live, matching challenge)
     class AuthChallengeStore
-      # Hard cap on live entries. GET /auth/challenge is unauthenticated and
-      # un-rate-limited, so pruning expired entries alone does not bound memory
-      # within the TTL window — a distinct-key flood can issue rate×TTL LIVE
-      # challenges before any expire. The cap evicts the oldest live entry once
-      # reached, so the store can never exceed this many entries.
-      # A single-process provider under real load holds far fewer; an override
-      # (Redis) enforces its own bound. Configurable via the constructor.
+      # Bounds memory under an unauthenticated flood of live challenges.
       DEFAULT_MAX_ENTRIES = 50_000
 
       def initialize(max_entries: DEFAULT_MAX_ENTRIES)
@@ -41,18 +21,7 @@ module Kiosk
         raise ArgumentError, "max_entries must be positive" if @max_entries < 1
       end
 
-      # Record +nonce+ as the outstanding challenge for +public_key_pem+ until
-      # Unix timestamp +exp+. Overwrites any prior challenge for the same key —
-      # only the most recently issued challenge is valid.
-      #
-      # Two bounds keep the store from growing without limit under an
-      # unauthenticated distinct-key flood (GET /auth/challenge needs no auth):
-      #   1. prune! first drops every already-EXPIRED entry;
-      #   2. a hard SIZE CAP (@max_entries) then evicts the oldest LIVE entry if
-      #      still at capacity — the piece prune! alone cannot provide, since a
-      #      flood of unexpired keys never triggers expiry.
-      # Re-issuing an existing key moves it to newest (delete-then-insert), so
-      # the eviction order is genuinely oldest-first by last issue.
+      # Replaces any earlier challenge for the key; evicts the oldest at capacity.
       def put(public_key_pem, nonce, exp)
         prune!
         @mutex.synchronize do
@@ -62,11 +31,6 @@ module Kiosk
         end
       end
 
-      # Consume the challenge for +public_key_pem+ iff one exists, matches
-      # +nonce+, and has not expired. Single-use: a successful match deletes the
-      # entry.
-      #
-      # @return [Boolean]
       def take(public_key_pem, nonce)
         prune!
         now = Time.now.to_i
@@ -83,9 +47,6 @@ module Kiosk
         end
       end
 
-      # Drop every challenge whose exp has passed. Called automatically by
-      # {#put} before each insert and by {#take} before each look-up, so
-      # expired entries never accumulate.
       def prune!
         now = Time.now.to_i
         @mutex.synchronize { @store.reject! { |_, (_, exp)| exp <= now } }
@@ -93,8 +54,6 @@ module Kiosk
 
       private
 
-      # Constant-time nonce comparison — a challenge nonce is a bearer secret
-      # for the duration of the handshake, so avoid leaking it through timing.
       def constant_time_eq?(a, b)
         return false if a.nil? || b.nil? || a.bytesize != b.bytesize
 

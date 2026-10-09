@@ -7,73 +7,17 @@ require "kiosk/server/errors"
 
 module Kiosk
   module Server
-    # Decodes a QUERY's arguments out of the URL query string, per the
-    # normative query-string encoding. The numbered clauses below restate that
-    # rule and name the code in this file that enforces each half of it.
-    #
-    # ── The rule, and where each half of it lives here ───────────────────
-    #
-    #   (1) a query's arguments live in the query string, an action's in a
-    #       JSON body — so this module is reached from the GET half of the
-    #       wire only. {Kiosk::Server::VerbController} is its one caller.
-    #   (2) SCALARS are `name=value`; strings UTF-8 percent-encoded,
-    #       booleans the literals `true`/`false`, numbers JSON number
-    #       literals, dates `YYYY-MM-DD`. Rack unescapes; {#coerce} recovers
-    #       the declared type.
-    #   (3) ARRAYS OF SCALARS are a repeated BRACKETED name. On the wire that
-    #       is spelled PERCENT-ENCODED — `a%5B%5D=v` — because stock Apache
-    #       Tomcat answers 400 to a raw `[` in a query string and OAS §C.4.4
-    #       requires the encoding; it decodes to `a[]`, and Rack parses both
-    #       spellings identically (measured on the shipped Rack 3.2.6), so
-    #       serving both costs nothing. A BARE repeated `a=1&a=2` is NOT an
-    #       array — Rack keeps only the last value and a server MUST NOT
-    #       invent one. See {#fold_declared_arrays} for the ONE exception the
-    #       rule does allow, which is type coercion rather than invention.
-    #   (4) OBJECTS are `o%5Bk%5D=v`, ONE LEVEL, **SCALAR LEAVES ONLY**. An
-    #       array-valued leaf — `o%5Bk%5D%5B%5D=v` — is expressible in no
-    #       OpenAPI style and breaks four of the twelve surveyed validators,
-    #       so {#reject_undecodable_shapes!} refuses it.
-    #   (5) NOTHING DEEPER IS A QUERY. Two levels of nesting, or an array of
-    #       objects, is an ACTION (POST) — refused here with a 400 that says
-    #       so, rather than half-decoded.
-    #   (6) TYPES COME FROM `input_schema`. Every value arrives from the wire
-    #       as a String; the declared type is recovered BEFORE validation and
-    #       BEFORE the handler sees it, and a value that will not coerce is
-    #       `400 bad_request` NAMING the parameter.
-    #   (7) `limit` and `cursor` are RESERVED names — always accepted, never
-    #       required to be declared. {RESERVED} carries the types they coerce
-    #       to when a verb does not declare them itself.
-    #   (8) ABSENT ≠ EMPTY. `?title=` decodes to the empty string under the
-    #       key `:title`; a `title` that was never sent has no key at all.
-    #       Nothing here fills a missing key in, and nothing drops an empty
-    #       one.
-    #
-    # ── What this module does NOT do ─────────────────────────────────────
-    #
-    # It does not VALIDATE. Coercion answers "can this string be the declared
-    # type at all"; whether the resulting value satisfies the rest of the
-    # schema (`enum`, `minimum`, `required`, `additionalProperties`) is
-    # {RequestValidation.validate_arguments!}'s job, which runs on the
-    # coerced result. The split is deliberate: json_schemer cannot validate a
-    # string against `{type: "integer"}`, so coercion has to come first.
+    # Decodes a query's arguments from the URL query string and coerces them
+    # to the types `input_schema` declares. Validation runs afterwards, on the
+    # coerced result (RequestValidation).
     module ArgumentDecoder
       module_function
 
-      # The reserved parameter names (rule 7) and the type each coerces to
-      # when the verb's own `input_schema` does not declare it. A verb that
-      # DOES declare one wins — its declaration is more specific than this
-      # default, and the pagination contract does not forbid a verb from
-      # constraining its own `limit`.
+      # Reserved names and their types when a verb does not declare them itself.
       RESERVED = { "limit" => "integer", "cursor" => "string" }.freeze
 
-      # Decode one query string into the argument hash a handler receives.
-      #
-      # @param query_string [String, nil] `request.query_string` — no leading `?`
-      # @param input_schema [Hash, nil] the verb's declared `input_schema`
-      #   (symbol- or string-keyed; the macro produces symbols)
-      # @return [Hash{Symbol=>Object}] arguments, coerced to their declared types
-      # @raise [Errors::BadRequest] naming the parameter, for anything the
-      #   rule forbids or that will not coerce
+      # @param input_schema [Hash, nil] the verb's `input_schema`, symbol- or string-keyed
+      # @raise [Errors::BadRequest] naming the parameter
       def decode(query_string, input_schema: nil)
         raw = parse!(query_string)
         raw = fold_declared_arrays(raw, query_string, input_schema)
@@ -81,38 +25,17 @@ module Kiosk
         coerce_all(raw, input_schema)
       end
 
-      # ── parsing ─────────────────────────────────────────────────────────
-
-      # Rack's own parser, so the percent-encoded and the raw bracket
-      # spellings fold into ONE result without a second implementation of
-      # bracket parsing. Its three refusals — a name used as both scalar and
-      # array (`a=1&a%5B%5D=2`), a nesting depth past the configured limit,
-      # and an undecodable percent escape — all descend from
-      # `Rack::BadRequest` and all mean the same thing on the wire.
       def parse!(query_string)
         Rack::Utils.parse_nested_query(query_string.to_s)
       rescue ::Rack::BadRequest
-        # Rack's own message is not appended. The three refusals "all mean the
-        # same thing on the wire" — the sentence above says so four lines up —
-        # so the caller's remedy is SHAPE_HINT's grammar, not a library
-        # sentence that changes with the Rack version.
         raise Errors::BadRequest.new(
           "the query string could not be decoded",
           hint: SHAPE_HINT,
         )
       end
 
-      # The ONE case where a bare repeated `a=1&a=2` becomes an array, and
-      # the reason it is not the "invented array" rule (3) forbids: the verb
-      # DECLARED `type: "array"`, so turning the wire's values into one is
-      # type coercion, exactly as turning `"4"` into `4` is. Rack has already
-      # thrown all but the last value away by then, so the values are
-      # re-read from the flat parse — which keys repeats by their literal
-      # name and keeps every one of them.
-      #
-      # Where the schema does NOT declare an array, Rack's last-wins stands
-      # and nothing here touches it. Where the wire used the bracketed
-      # spelling, Rack has already produced an Array and this is a no-op.
+      # A bare repeated `a=1&a=2` becomes an array only when the verb declares
+      # `type: "array"`; otherwise Rack's last value wins.
       def fold_declared_arrays(raw, query_string, input_schema)
         flat = nil
         raw.each_with_object({}) do |(name, value), out|
@@ -127,8 +50,6 @@ module Kiosk
         end
       end
 
-      # ── the shapes a query cannot carry (rules 4 and 5) ─────────────────
-
       def reject_undecodable_shapes!(raw)
         raw.each do |name, value|
           case value
@@ -139,9 +60,6 @@ module Kiosk
         raw
       end
 
-      # An array element that is not a scalar means the wire sent
-      # `items%5B%5D%5Bsku%5D=milk` — an array of objects, which rule (5)
-      # says is an ACTION.
       def reject_nonscalar_elements!(name, value)
         value.each do |element|
           next if element.nil? || element.is_a?(::String)
@@ -154,9 +72,7 @@ module Kiosk
         end
       end
 
-      # Two refusals that read alike and mean different things, so they say
-      # different things: an ARRAY leaf is rule (4)'s scalar-leaves-only
-      # narrowing, a HASH leaf is rule (5)'s depth limit.
+      # An array leaf is the scalar-leaves rule; a hash leaf is the depth limit.
       def reject_nonscalar_leaves!(name, value)
         value.each do |key, leaf|
           next if leaf.nil? || leaf.is_a?(::String)
@@ -175,18 +91,13 @@ module Kiosk
         end
       end
 
-      # ── coercion (rule 6) ───────────────────────────────────────────────
-
       def coerce_all(raw, input_schema)
         raw.each_with_object({}) do |(name, value), out|
           out[name.to_sym] = coerce(value, property_for(name, input_schema), name.to_s)
         end
       end
 
-      # The declared property for a wire name: the verb's own declaration
-      # first, then the reserved-name default (rule 7), then nothing — an
-      # undeclared parameter keeps the String the wire sent, and whether it is
-      # allowed at all is the validator's question, not this one's.
+      # An undeclared parameter stays a String; whether it is allowed is the validator's call.
       def property_for(name, input_schema)
         declared = fetch(fetch(input_schema, :properties), name)
         return declared unless declared.nil?
@@ -223,10 +134,7 @@ module Kiosk
         refuse(path, value, "a number", "a JSON number literal, e.g. 4 or 4.5")
       end
 
-      # Rule (2) names the two literals, so those two are all this accepts:
-      # `1`, `on`, `yes` and `TRUE` are Rails idioms, not wire spellings, and
-      # accepting them here would put a second boolean grammar on a wire whose
-      # whole point is that one is published.
+      # Only the literals `true` and `false`.
       def to_boolean(value, path)
         scalar!(value, "a boolean", path)
         return true  if value == "true"
@@ -235,11 +143,7 @@ module Kiosk
         refuse(path, value, "a boolean", "the literal true or false")
       end
 
-      # A declared string stays a String — JSON has no date type and rule (2)
-      # spells dates as strings. What the declared `format` buys is that an
-      # unparseable one is refused HERE, naming the parameter, instead of
-      # reaching a handler that will `Date.parse` it into a 500 or, worse,
-      # answer an invalid filter with a valid-looking empty list.
+      # A string stays a String; a declared `format` is checked here.
       def to_string(value, property, path)
         scalar!(value, "a string", path)
         case fetch(property, :format).to_s
@@ -284,10 +188,6 @@ module Kiosk
         end
       end
 
-      # ── helpers ─────────────────────────────────────────────────────────
-
-      # A declaration written by the `input_schema` macro is symbol-keyed; one
-      # read back from JSON is string-keyed. Both are the same declaration.
       def fetch(hash, key)
         return nil unless hash.is_a?(::Hash)
         return hash[key.to_sym] if hash.key?(key.to_sym)
@@ -295,9 +195,7 @@ module Kiosk
         hash[key.to_s]
       end
 
-      # The one type to coerce to. A union (`["integer", "null"]` — the way a
-      # nullable parameter is spelled in draft 2020-12) coerces to its first
-      # non-null member; an absent `type` means no coercion at all.
+      # A nullable union like `["integer", "null"]` coerces to its non-null member.
       def declared_type(property)
         type = fetch(property, :type)
         case type

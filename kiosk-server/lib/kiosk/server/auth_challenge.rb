@@ -4,17 +4,12 @@ require "securerandom"
 
 module Kiosk
   module Server
-    # Server side of the PoP challenge-response handshake.
-    #
-    # {.issue} mints a fresh single-use nonce for a public key and records it in
-    # the configured {AuthChallengeStore} with a short TTL. {.consume!} verifies
-    # and burns it, raising {Errors::Unauthenticated} when no live challenge
-    # matches (stale, already-spent, or never issued).
+    # Server side of the proof-of-possession challenge: a single-use, short-lived
+    # nonce per public key.
     module AuthChallenge
       module_function
 
-      # @return [Hash] { challenge:, exp: } — `challenge` is the nonce the agent
-      #   must echo inside its signed JWS; `exp` is the Unix expiry.
+      # The agent signs `challenge` into its JWS; `exp` is the Unix expiry.
       def issue(public_key_pem:, now: Time.now)
         config = Kiosk.configuration
         nonce  = SecureRandom.urlsafe_base64(32)
@@ -23,10 +18,6 @@ module Kiosk
         { challenge: nonce, exp: exp }
       end
 
-      # Burn the outstanding challenge for +public_key_pem+ matching +nonce+.
-      # Single-use: a matched challenge is deleted so it can never be replayed.
-      #
-      # @raise [Errors::Unauthenticated] if no live, matching challenge exists.
       def consume!(public_key_pem:, nonce:)
         ok = Kiosk.configuration.auth_challenge_store.take(public_key_pem.to_s.strip, nonce.to_s)
         return true if ok

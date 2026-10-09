@@ -6,20 +6,15 @@ require "rack"
 
 module Kiosk
   module Server
-    # The Action Cable connection behind `<endpoint>/events`. The upgrade is
-    # authenticated by {IdentityResolution.resolve}, the call every verb makes,
-    # from the `Authorization` header — never the query string, which access
-    # logs record.
+    # The Action Cable connection behind `<endpoint>/events`, authenticated from the
+    # `Authorization` header, never the query string, which access logs record.
     class EventsConnection < ::ActionCable::Connection::Base
-      # A String, because Action Cable serialises every `identified_by` value;
-      # the full identity is the plain reader below.
+      # A String: Action Cable serialises every `identified_by` value.
       identified_by :kiosk_identity_key
 
       attr_reader :kiosk_identity
 
-      # Action Cable beats every 3 seconds (a constant in 8.1); a client that
-      # surfaces every frame to an agent drowns in them. One ping in ten is
-      # 30 seconds, inside every idle timeout on the path, and only here.
+      # Action Cable beats every 3 seconds; forwarding one in ten keeps a client from drowning in them.
       BEATS_PER_PING = 10
 
       # The one channel a frame here may name; see {KioskEvents}.
@@ -28,8 +23,7 @@ module Kiosk
       # A subscriber never publishes (spec Section 8.5.5), so no `message`.
       COMMANDS = %w[subscribe unsubscribe].freeze
 
-      # Spec Section 8.5.6: the credential is re-checked at least every 60
-      # seconds, on every socket — including one that holds no subscription.
+      # §8.5.6: the credential is re-checked at least every 60 seconds, on every socket.
       class_attribute :reauthorise_every, default: 30
 
       def connect
@@ -38,10 +32,7 @@ module Kiosk
         self.kiosk_identity_key = identity.user_id.to_s
       end
 
-      # Subscriptions declared in the URL (spec Section 8.5.4), for a client
-      # that cannot send, become the `subscribe` commands it would have sent:
-      #
-      #   wss://<origin>/kiosk/events?topic=todo:list_4f1e&topic=delivery&since=880
+      # Subscriptions declared in the URL (§8.5.4) become `subscribe` commands.
       def handle_open
         super
         return unless @kiosk_identity
@@ -60,10 +51,7 @@ module Kiosk
         super if (@beats % BEATS_PER_PING).zero?
       end
 
-      # Every frame is answered (spec Sections 8.5.4, 8.5.7). One that names
-      # no subscription closes the socket with `reconnect: false`; one that
-      # names a subscription it cannot act on is rejected by that identifier;
-      # a repeated `subscribe` for a live one is confirmed again, not replayed.
+      # Every frame is answered (§8.5.4, §8.5.7); a repeated `subscribe` is confirmed again, not replayed.
       def dispatch_websocket_message(websocket_message)
         frame = parse_object(websocket_message) || {}
         command = frame["command"]
@@ -81,8 +69,7 @@ module Kiosk
         super
       end
 
-      # Whether the socket's credential still resolves; when not, closes with
-      # `token_expired` or `revoked` (spec Section 8.5.6).
+      # Closes with `token_expired` or `revoked` once the credential no longer resolves (§8.5.6).
       def kiosk_credential_holds?
         return true if resolve_identity
 

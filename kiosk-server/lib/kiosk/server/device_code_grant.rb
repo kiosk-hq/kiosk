@@ -2,78 +2,25 @@
 
 module Kiosk
   module Server
-    # Pure-Ruby service module for the claim half of the account-binding
-    # ceremony on the RFC 8628 Device Authorization Grant wire.
-    # Two entry points:
+    # The claim ceremony on the RFC 8628 device-grant wire: binds an agent key
+    # to an existing human account once the human approves.
     #
-    #   .start    — POST /oauth/device_authorization handler logic
-    #   .exchange — POST /oauth/token (grant_type=device_code) handler
-    #                logic
-    #
-    # == Why Kiosk keeps this alongside proof-of-possession auth
-    #
-    # The primary auth is proof-of-possession (/auth/challenge → /auth/register
-    # | /auth/login): an agent proves it holds a private key and gets a token
-    # bound to a synthetic principal — no human. The claim ceremony serves the
-    # ONE case PoP cannot: binding an agent key to an *existing HUMAN*
-    # account (auth.md "User Claimed"). The request carries the agent's
-    # public key; the human approves the `user_code` on the provider's
-    # session-authenticated verify page, and {DeviceVerification.approve}
-    # attaches the authorization to THAT `user_id` — and to that human's own
-    # ROLE, which is the only place a bound assistant's role comes from. The poll then proves
-    # possession of the key (BIND-POP) and {AccountBinding.bind!} creates the
-    # durable key→account link — fresh key registers a linked assistant
-    # account, known key rebinds with its reputation carried over. The token
-    # returned is a standard kiosk-pop JWT (same {AgentIdentityProviders::
-    # DefaultAgentIdp} path as /auth/login); thereafter the agent refreshes
-    # via /auth/login — the ceremony never repeats.
-    #
-    # It is NOT gated by KYC — human approval + key possession are the only
-    # preconditions (KYC stays agent-only).
-    #
-    # Controllers in this gem are thin shims over these methods — the
-    # same way {WireController} is a shim over {Executor}. Logic lives
-    # here so it can be unit-tested and driven in-process without a BOOTED
-    # Rails app (rake tasks, batch jobs, tests that simulate the OAuth
-    # interactions).
+    #   .start    — POST /oauth/device_authorization
+    #   .exchange — POST /oauth/token (grant_type=device_code)
     module DeviceCodeGrant
-      # OAuth grant_type literal per RFC 8628 §3.4.
       GRANT_TYPE = "urn:ietf:params:oauth:grant-type:device_code"
 
-      # Recommended polling interval (seconds) the server tells the
-      # client to honour. Clients that ignore it receive `slow_down` and
-      # MUST bump their interval by 5s (RFC 8628 §3.5). 5s is a sane
-      # default; ergonomic for human-interactive flows.
+      # Seconds; a faster poll gets `slow_down` (RFC 8628 §3.5).
       DEFAULT_POLL_INTERVAL = 5
 
-      # In-process poll-rate registry entries older than this are pruned
-      # (a code's usable life is DEFAULT_EXPIRES_IN = 900s; one hour is a
-      # comfortable superset).
+      # Seconds a poll time is remembered; longer than any code lives.
       POLL_REGISTRY_TTL = 3600
       @poll_registry = {}
       @poll_mutex    = Mutex.new
 
       module_function
 
-      # Issue a new claim authorization. `public_key_pem` is REQUIRED — the
-      # ceremony's product is a binding for exactly this key, and the
-      # possession proof at the poll verifies against it (BIND-POP). The
-      # caller (controller) has already run {PopVerifier.load_public_key}
-      # so only well-formed RSA-2048+ keys reach here.
-      #
-      # THERE IS NO `requested_role:` HERE, AND ITS ABSENCE IS THE CONTROL.
-      # A `:claim` row is born ROLE-LESS, always: the request that opens the
-      # ceremony is unauthenticated, so nothing it says about a role is
-      # evidence of anything. The row's `requested_role` is stamped later, by
-      # {DeviceVerification.approve}, from the APPROVING HUMAN's own
-      # `Identity#role` — the roles-from-IdP source the link direction also
-      # reads at mint. Having no parameter to pass is what makes "the agent
-      # never self-selects" a property of the code path rather than a
-      # validation someone has to remember to run.
-      #
-      # @return [Hash] {device_code:, user_code:, expires_in:, interval:, da:}
-      #   `user_code` is the display form (XXXX-XXXX); only its hash is
-      #   persisted.
+      # No role parameter on purpose: the row takes the approving human's role.
       def start(client_id:,
                 public_key_pem:,
                 store: Kiosk.configuration.device_authorization_store,
@@ -97,17 +44,8 @@ module Kiosk
         }
       end
 
-      # Exchange a polled device_code for an access token. State-machine
-      # outcomes map to RFC 8628 §3.5 error codes. On an approved row the
-      # poll MUST carry `signed` — the same challenge-response JWS over
-      # {aud, nonce, jti} as register/login — verified against the row's
-      # public key BEFORE any binding (BIND-POP: failed proof →
-      # `invalid_client`, the row is NOT consumed, the client may retry
-      # with a valid proof). A valid proof binds via {AccountBinding.bind!},
-      # consumes the row (single-use) and returns a standard kiosk-pop JWT.
-      #
-      # @return [Hash] success: {ok: true, access_token:, token_type:, expires_in:, scope:}
-      #                failure: {ok: false, error: <RFC code>, description:}
+      # Returns `{ok: true, access_token:, …}` or `{ok: false, error:, description:}`
+      # with an RFC 8628 §3.5 error code.
       def exchange(device_code:,
                    signed: nil,
                    store: Kiosk.configuration.device_authorization_store,
@@ -121,14 +59,10 @@ module Kiosk
         da   = store.find_by_device_code_hash(hash)
         return failure(:invalid_grant, "unknown device_code") if da.nil?
 
-        # RFC 8628 §3.5 slow_down: a client polling faster than the
-        # advertised interval is told to back off (and MUST add 5s).
         if polled_too_fast?(hash, interval, now)
           return failure(:slow_down, "polling faster than the advertised interval")
         end
 
-        # Lazy expiry — bump status BEFORE state check so subsequent
-        # polls see `:expired` rather than re-checking the clock.
         if da.expired_at_time?(now) && (da.pending? || da.approved?)
           store.update(da.expire)
           return failure(:expired_token, "the device_code has expired")
@@ -148,22 +82,15 @@ module Kiosk
         end
       end
 
-      # Test/dev helper: forget all recorded poll times (the slow_down
-      # registry is process-local state, like {DeviceAuthorizationStores::
-      # InMemory#reset!}).
       def reset_poll_registry!
         @poll_mutex.synchronize { @poll_registry.clear }
       end
 
-      # ─── helpers ──────────────────────────────────────────────────────
-
       class << self
         private
 
-        # BIND-POP: possession of the row's key is
-        # proven BEFORE the binding is created. Any proof failure —
-        # missing `signed`, bad signature, stale/missing challenge nonce —
-        # maps to OAuth `invalid_client` and leaves the row approved.
+        # Possession of the row's key is proven before binding; a failed proof
+        # is `invalid_client` and leaves the row approved for a retry.
         def bind_and_mint(da:, signed:, store:, now:)
           if signed.nil? || signed.to_s.empty?
             return failure(
@@ -183,24 +110,11 @@ module Kiosk
             return failure(:invalid_client, e.message)
           end
 
-          # Same atomic single-use claim as {LinkCode.redeem}: the
-          # `:approved` branch that reached here was decided against the
-          # snapshot read at the top of {.exchange}, so two concurrent polls of
-          # one device_code would otherwise both mint a token. This row always
-          # binds `da.public_key_pem`, fixed when the row was created, so the
-          # race cannot bind a SECOND key the way a link code can -- what it
-          # buys here is that "single-use" means one token, and that both
-          # ceremonies get single-use from the same primitive.
+          # Atomic, so two concurrent polls mint one token.
           if store.claim_consume(da, now: now).nil?
             return failure(:invalid_grant, "device_code already used")
           end
 
-          # `da.requested_role` is the APPROVING HUMAN's role, stamped onto the
-          # row by {DeviceVerification.approve} — never anything the polling
-          # client sent (the authorization request refuses `role`/`scope`
-          # outright). `nil` when this provider's `user_idp` reports no role,
-          # and {AccountBinding.bind!} then falls back to `registration_role`
-          # exactly as before.
           result = AccountBinding.bind!(
             public_key_pem: da.public_key_pem,
             user_id:        da.user_id,
@@ -213,9 +127,7 @@ module Kiosk
             token_type:   "Bearer",
             expires_in:   JwtIssuer::DEFAULT_EXPIRES_IN,
           }
-          # RFC 6749 §5.1 `scope`: the scope actually GRANTED. It is the role the
-          # approving human holds, which is the only scope this ceremony can
-          # produce — never an echo of a requested one, because none is accepted.
+          # RFC 6749 §5.1: the granted scope is the approving human's role.
           response[:scope] = da.requested_role if da.requested_role
           response
         end
@@ -224,11 +136,7 @@ module Kiosk
           { ok: false, error: error.to_s, description: description }
         end
 
-        # Record this poll and report whether the PREVIOUS one was less
-        # than `interval` seconds ago. In-process state (like the default
-        # auth-challenge store); a multi-process deployment that wants
-        # cross-process poll accounting fronts the endpoint with its own
-        # rate limiter.
+        # Per process; a multi-process origin rate-limits at its edge.
         def polled_too_fast?(hash, interval, now)
           @poll_mutex.synchronize do
             @poll_registry.delete_if { |_, at| now - at > POLL_REGISTRY_TTL }

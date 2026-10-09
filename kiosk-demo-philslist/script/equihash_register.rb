@@ -1,38 +1,16 @@
 # frozen_string_literal: true
 
-# Shared registration helper for the philslist demo flows.
-#
-# Registration is gated by ONE Equihash proof (see config/initializers/kiosk.rb).
-# This helper does the full handshake: challenge → sign PoP → register; on a 402
-# it solves every challenge with the shipped Python solver and retries the SAME
-# register body, sending the proof(s) in the Kiosk-PoW request header as raw
-# JSON rather than in the body — which is what lets a GET carry one too.
-#
-# IT LIVES IN script/, NOT IN lib/, AND THAT IS THE POINT. It is a FLOW-DRIVER
-# helper — its only callers are the scripts in this directory and the demo rake
-# tasks that run them — so it has no business in the Rails application's
-# autoload path. In lib/ it would be loaded by `rails server` and then have to
-# be hand-excluded again from `config.autoload_lib(ignore: …)`.
-#
-# Requires: json, jwt, net/http, uri, openssl, securerandom (the caller already
-# requires most of these) plus the kiosk-pow-equihash gem, which owns the
-# solver.
+# Agent registration through the Equihash toll, for the philslist demo drivers.
 
 require "kiosk/pow/equihash/solver"
 
-# Solve one Equihash challenge with the solver kiosk-pow-equihash ships.
-# The gem owns both solve.py and its location, so a driver names neither; a
-# solver failure comes back as its own message rather than a backtrace.
 def equihash_solve(challenge)
   Kiosk::Pow::Equihash.solve(challenge)
 rescue Kiosk::Pow::Equihash::SolverError => e
   abort e.message
 end
 
-# Send one request through the toll: on a 402, solve every challenge the
-# problem document carries and send the request once more with the proofs in
-# the Kiosk-PoW header. The block takes the extra headers and answers
-# [code, body, …]; the answer comes back whole.
+# Sends the request; on a 402, solves every challenge and resends with the proofs in the Kiosk-PoW header.
 def through_toll
   answer = yield({})
   rc, body = answer
@@ -44,19 +22,7 @@ def through_toll
   yield({ "Kiosk-PoW" => JSON.generate(proofs) })
 end
 
-# Register a fresh agent through the Equihash-gated /auth/register.
-#
-# @param server [String] base URL (e.g. http://localhost:3006)
-# @param issuer [String] issuer origin for the PoP `aud` claim
-# @param get_json [#call] ->(url) { [code, body] }
-# @param post_json [#call] ->(url, body, headers = {}) { [code, body] }
-#   (the header slot carries the Kiosk-PoW proof on the retry)
-# @return [Array(OpenSSL::PKey::RSA, Hash, Integer)] the keypair, the register
-#   response, and the response CODE. The code is returned so a driver
-#   that REPORTS `http_register` reports what the server actually answered
-#   instead of writing `201` down beside a comment explaining why it must be
-#   201 — a rake task cannot "assert" a constant the driver typed. It is the
-#   third element, so the many callers that bind only `key, reg` are unaffected.
+# Returns [key, register response, status code].
 def equihash_register(server:, issuer:, get_json:, post_json:)
   key = OpenSSL::PKey::RSA.generate(2048)
   pem = key.public_key.to_pem
@@ -69,8 +35,7 @@ def equihash_register(server:, issuer:, get_json:, post_json:)
   )
 
   body = { public_key: pem, signed: pop }
-  # The PoP nonce is NOT consumed on a 402 (the gate runs before the challenge
-  # is spent), so the retry resubmits the SAME signed proof with the PoW.
+  # A 402 does not spend the challenge, so the retry resubmits the same signed proof.
   rc, reg = through_toll { |toll| post_json.call("#{server}/kiosk/auth/register", body, toll) }
 
   abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201

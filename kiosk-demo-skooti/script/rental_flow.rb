@@ -1,10 +1,7 @@
 # frozen_string_literal: true
 
-# Rents SK-001 the way an assistant does — register, reserve, pay, start the
-# rental — and prints the rental as one JSON line. bin/make-qr and
-# bin/ble-unlock hand its token to a real lock. SERVER_URL is the origin's
-# issuer, which registration and the mandates name.
-#
+# Rents SK-001 the way an assistant does and prints the rental as one JSON line,
+# whose token bin/make-qr and bin/ble-unlock hand to a real lock.
 #   SERVER_URL=http://localhost:3004 bundle exec ruby script/rental_flow.rb
 
 require "json"

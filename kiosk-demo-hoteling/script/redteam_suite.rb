@@ -13,18 +13,14 @@ require "date"
 BASE_URL = ENV.fetch("SERVER_URL")
 ISSUER   = BASE_URL
 
-# Dates far enough in the future to avoid conflicts with existing data.
-# Each redteam run starts with a clean DB (db:reset), so these are stable.
+# Clear of today's inventory; every run starts from db:reset.
 CHECK_IN  = (Date.today + 30).to_s.freeze
 CHECK_OUT = (Date.today + 33).to_s.freeze
 NIGHTS    = 3
 
-# Helper: iterate all properties to find first available room for CHECK_IN..CHECK_OUT.
-# Multiple scenarios run sequentially against the same DB; earlier scenarios may
-# exhaust room types at one property, so we iterate until availability is found.
+# First property with a room free for CHECK_IN..CHECK_OUT; earlier beats may exhaust one.
 FIND_AVAILABLE = lambda { |client, principal|
   props_resp = client.query(principal, name: "properties")
-  # A non-paginating query answers a BARE ARRAY — the rows themselves.
   all_props  = props_resp.body.is_a?(Array) ? props_resp.body : []
   raise "redteam(hoteling): no properties in catalog" if all_props.empty?
 
@@ -41,43 +37,21 @@ FIND_AVAILABLE = lambda { |client, principal|
         "(#{all_props.size} properties checked)"
 }
 
-# ── Profile ───────────────────────────────────────────────────────────────────
-
 profile = Kiosk::Redteam::Profile.new(
-  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
-  # RegistrationWithoutPow RUN (a missing/bad register proof must be rejected).
-  # The Client ignores the magnitude (PoW solving is driven by the server's 402
-  # challenges); only "> 0" matters here.
+  # Register PoW is on, so RegistrationWithoutPow runs; only > 0 matters.
   pow_difficulty: 1,
   requires_kyc:   false,  # no KYC gate
 
-  # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
-  # `Kiosk.configuration.roles` for this origin (config/initializers/kiosk.rb).
-  # The claim ceremony's beat must name a role this origin ACTUALLY declares:
-  # an invented one is refused even by an implementation that lets a DECLARED
-  # role through, so a battery probing only an invented role stays green over a
-  # real hole. The scenario also derives one off the wire, so a stale list here
-  # weakens the probe rather than emptying it.
-
-  # The currency this operator prices in — WrongCurrencyCart probes with one
-  # that is NOT it.
+  # declared_roles mirrors config/initializers/kiosk.rb: DeviceGrantRoleSelfSelection must name a real role.
+  # WrongCurrencyCart probes with a currency other than this one.
   currency:       "eur",
   declared_roles: %w[customer],
 
-  # ── per-user query — CrossTenantRead ─────────────────────────────────────
   per_user_query: "my_bookings",
 
-  # ── row_id_key / result_id_key ────────────────────────────────────────────
-  # Query rows (my_bookings) carry "booking_id" (the same name confirm_booking takes).
-  # The reserve_room action answers its OWN object, whose "booking_id" is a
-  # top-level member: an action's result IS that object, unwrapped.
   row_id_key:    "booking_id",
   result_id_key: "booking_id",
 
-  # ── create_owned ─────────────────────────────────────────────────────────
-  # Browse properties → check availability → reserve_room.
-  # Iterates all properties to avoid exhausting a single property's room types.
-  # Returns { id: booking_id, code: room_type_name, total_cents:, nights: }.
   create_owned: lambda { |client, principal|
     found = FIND_AVAILABLE.call(client, principal)
     prop  = found[:prop]
@@ -104,13 +78,7 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # ── forge_action / forge_args — ForgedUserId ─────────────────────────────
-  # B calls reserve_room with user_id: A.user_id injected, and the wire itself
-  # REFUSES it: `reserve_room` publishes `additionalProperties: false` and does
-  # not declare `user_id`, so the injected principal is a typed 400 before the
-  # handler runs. The generic scenario accepts EITHER outcome — a 4xx refusal,
-  # or a 200 whose row never surfaces under A — because what it asserts is the
-  # ownership property, not one particular way of enforcing it.
+  # The scenario injects user_id; reserve_room's schema forbids extra properties, so it is a 400.
   forge_action: "reserve_room",
   forge_args:   lambda { |client, principal_a, _principal_b|
     found = FIND_AVAILABLE.call(client, principal_a)
@@ -125,18 +93,13 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # ── gated_action / gated_args — UnpaidGatedAction, C2 ───────────────────
   gated_action: "confirm_booking",
   gated_args:   ->(ref) { { booking_id: ref[:id] } },
 
-  # …but it CONSUMES nothing, so C3 has no surface here: the verb reads the
-  # property's answer and a second read returns the same answer. Declared
-  # rather than omitted, so the skip carries a reason into the printed run.
+  # confirm_booking spends nothing, so SpentResourceReuse skips with this reason.
   gated_action_consumes: false,
 
-  # ── pay_for — MandatePrincipalSwap, MandateReplay, C2 ───────────────────
-  # scope=lodging, one line item with qty + price_cents + booking_id, as
-  # reserve_room's pay_hint asks.
+  # scope=lodging, one line per booking, as reserve_room's pay_hint asks.
   pay_for: lambda { |_client, principal, owned_ref|
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -181,16 +144,6 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  nil,
 )
 
-# ── Local scenarios: the cashier check (PaymentClaim) ────────────
-# The generic battery proves ownership/payment gates, and its
-# WrongCurrencyCart covers the unit of account; these two prove the operator
-# counts what lands on the counter — a single booking, and the total.
-# Each uses the AGENT'S OWN booking (no cross-ownership needed): the check is
-# monetary only, so an own-booking cart at the wrong price/currency is the
-# clean isolation of the cashier check.
-
-# A total below the operator's quoted booking price must be caught even though
-# the mandate chain is internally consistent (payment mirrors the cart).
 class TamperedPriceCart < Kiosk::Redteam::Scenario
   def initialize
     super(
@@ -205,8 +158,7 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
     owned = profile.create_owned.call(client, a)
     m = profile.pay_for.call(client, a, owned)
 
-    # Pay 100c less than quoted, keeping the priced line consistent with the
-    # lowered total so ONLY the quoted-total check can reject it.
+    # Lower the line price too, so only the quoted-total check can reject it.
     nights        = owned[:nights].to_i.nonzero? || NIGHTS
     lowered_total = owned[:total_cents].to_i - 100
     m[:cart] = m[:cart].merge(
@@ -214,14 +166,11 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
       total_amount_cents: lowered_total,
     )
     resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-    # 403 by name, not the delegated `blocked?` set: a 401 would say the
-    # credential was rejected, which means the cashier never priced this cart.
+    # 403 by name: a 401 would mean the cashier never priced this cart.
     verdict_from(resp, expect: 403, detail: "below-quote total settled (HTTP #{resp.status})")
   end
 end
 
-# Correct priced lines but an inflated total (still within the intent cap,
-# payment mirrors the cart) must be caught by the line-sum consistency check.
 class InflatedTotalCart < Kiosk::Redteam::Scenario
   def initialize
     super(
@@ -243,26 +192,7 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 end
 
-# A malformed booking_id must come back as a TYPED 400, never a 500.
-# Two surfaces, one guard (Kiosk::UuidCheck): confirm_booking's `booking_id` arg, and the
-# `{"booking_id":…}` reference inside a signed cart mandate that the cashier
-# prices at capture. Without the guard, Postgres raises InvalidTextRepresentation
-# on the `::uuid` cast — not a Kiosk error, so it escapes as a raw 500 with the
-# PG message attached, and on the PAY path a 500 is the worst possible answer
-# because an assistant cannot tell it from "the charge may have gone through".
-#
-# Asserts three properties, not one: HTTP 400 (a client mistake reported as such),
-# the problem document's top-level `code == "bad_request"` (typed, so an
-# assistant can branch on it), and no SQL internals anywhere in the body. A
-# generic `blocked?` verdict would accept a 403 or a 401 here, so this scenario
-# builds its Verdict directly.
-#
-# The ARG-shaped probes are refused one layer EARLIER — `booking_id`
-# declares `format: "uuid"` and `input_schema` is validated on every call — so
-# that half now comes from the declared contract rather than from Kiosk::UuidCheck
-# inside the handler. Same status, same code, same no-leak property; the guard
-# behind it still stands for what reaches it, which is the signed-cart probe
-# below that no input_schema covers.
+# confirm_booking's arg is refused by its schema; the signed-cart ref reaches Kiosk::UuidCheck at capture.
 class MalformedUuidArg < Kiosk::Redteam::Scenario
   MALFORMED     = ["not-a-uuid", "1; DROP TABLE bookings", ""].freeze
   SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
@@ -287,12 +217,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
             pay_with_ref(client, a, junk), supplied: junk)
     end
 
-    # CONTROL — without it the pay assertion above could pass vacuously: any 400
-    # `bad_request` raised EARLIER in the pay pipeline (mandate chain, scope,
-    # amounts) would satisfy it without the cashier ever being reached. A
-    # WELL-FORMED but nonexistent booking_id must therefore come back as the
-    # cashier's own "booking not found" 403 — proving the request really does
-    # get that far, and that the shape check is not swallowing the authz answer.
+    # CONTROL: a well-formed unknown booking_id gets the cashier's 403, so the 400s above reached it.
     control = pay_with_ref(client, a, "00000000-0000-4000-8000-000000000000")
     unless control.status == 403
       failures << "CONTROL well-formed-but-unknown booking_id → HTTP #{control.status} " \
@@ -309,14 +234,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
 
   private
 
-  # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker. hoteling answers a bad
-  # `booking_id` by naming it back, so the bytes scanned for SQL_INTERNALS are
-  # partly the probe's own; a junk id spelling `PG::` would otherwise be
-  # reported as a BREACH on its own echo, under a runner whose prose says a
-  # BREACH means "fix the app, not the scenario". The default is nil, which
-  # discounts nothing: forgetting to declare risks a FALSE BREACH, never a
-  # missed leak.
+  # `supplied:` discounts the probe's own echoed bytes from the leak scan.
   def check(failures, statuses, label, resp, supplied: nil)
     statuses << resp.status
     scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
@@ -327,10 +245,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
                 "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
   end
 
-  # Deliberately reserves NOTHING: the shape guard runs before the cashier takes
-  # a connection, so a cart naming a junk booking_id needs no booking behind it —
-  # and this scenario therefore consumes no room from the shared availability the
-  # other scenarios draw on.
+  # Reserves nothing: the shape check runs before the cashier looks the booking up.
   def pay_with_ref(client, principal, junk)
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -345,25 +260,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   end
 end
 
-# Two principals must not be able to hold the same room-night.
-# A `reserve_room` that validates only room-type↔property and
-# check_out > check_in — never re-applying the overlap exclusion its OWN
-# `availability` query defines, with no database constraint behind it — lets A
-# and B both reserve, and both PAY for, one physical room, leaving the operator
-# owing two guests one bed. Nothing else reaches it: every other scenario picks
-# its room FROM availability, where the exclusion is applied, so none of them
-# ever asks for a room that is gone.
-#
-# Four probes, because the interesting failures sit on both sides of the guard:
-#   1. same nights, DIFFERENT principal        → 409 (the headline: two settlements, one bed)
-#   2. OVERLAPPING nights, SAME principal      → 409 (overlap is a range test, not equality)
-#   3. ABUTTING nights (checkout day == next check-in day) → 200 (the guard must
-#      not be over-broad: a hotel does sell that bed to the next guest)
-#   4. hotel_detail for those dates omits the taken room type, while the
-#      undated call still lists it and SAYS the list is a catalogue
-#
-# It uses its own dates, deliberately disjoint from CHECK_IN..CHECK_OUT, so it
-# neither consumes nor depends on the inventory the other scenarios share.
+# Probes: same nights (B), overlapping nights (A), abutting nights (control), dated hotel_detail.
 class DoubleBookedRoom < Kiosk::Redteam::Scenario
   DBL_IN       = (Date.today + 60).to_s.freeze
   DBL_OUT      = (Date.today + 63).to_s.freeze
@@ -406,9 +303,7 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
     conflict(failures, statuses, "A reserve_room overlapping nights",
              reserve(client, a, pid, rid, DBL_IN_OVL, DBL_OUT_OVL))
 
-    # 3 — POSITIVE CONTROL. Without it probes 1-2 would pass against a handler
-    # that simply refused every reservation. Check-out day is the next guest's
-    # check-in day, so this must still succeed.
+    # 3 — CONTROL: checkout day is the next guest's check-in day, so this must succeed.
     adjacent = reserve(client, b, pid, rid, DBL_OUT, DBL_OUT_ADJ)
     statuses << adjacent.status
     unless adjacent.status == 200
@@ -416,9 +311,7 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
                   "(want 200; a checkout day is the next guest's check-in day)"
     end
 
-    # 4 — the other way in: hotel_detail listed every room type with no date and
-    # no booking filter, so an assistant going search → hotel_detail →
-    # reserve_room read a catalogue as if it were an offer.
+    # 4 — dated hotel_detail must not offer the taken room; undated must say it is a catalogue.
     dated = client.query(a, name: "hotel_detail", property_id: pid,
                             check_in: DBL_IN, check_out: DBL_OUT)
     statuses << dated.status
@@ -447,8 +340,7 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
                           check_in:, check_out:)
   end
 
-  # A 409 `conflict` — not merely "not 200": a 500 also fails to create the row,
-  # and would satisfy any weaker assertion while telling an assistant nothing.
+  # Exactly 409 conflict: a 500 also creates no row.
   def conflict(failures, statuses, label, resp)
     statuses << resp.status
     code = resp.body.is_a?(Hash) ? resp.body["code"] : nil
@@ -470,10 +362,7 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
     nil
   end
 
-  # hotel_detail answers a ONE-ROW ARRAY: it is a query, and a query
-  # that does not paginate answers rows. `.first` is the whole unwrap, and an
-  # EMPTY array — no property with that id — falls through to `{}` here rather
-  # than needing a 404 branch.
+  # hotel_detail answers a one-row array; empty means no such property.
   def detail(resp)
     Array(resp.body).first || {}
   end
@@ -483,21 +372,9 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
   end
 end
 
-# ── The shape of the wire itself — two beats about the ROUTER, not a handler ──
-#
-# Both dial paths and methods the redteam Client will not construct (it only
-# ever builds a legal per-verb call), so they issue one raw request each. They
-# stage nothing and touch no inventory: the point is what the ROUTER answers,
-# not what any handler does.
+# Raw requests the redteam Client will not build: unregistered paths and wrong methods.
 module RawWire
-  # One raw request under the given principal's bearer.
-  #
-  # A NIL principal is the ANONYMOUS probe and is a different question,
-  # not a degenerate case of the same one: it asks whether a credential changes
-  # the answer. At a path naming no registered verb it must not — the routing
-  # miss is decided before any credential is read — so the anonymous caller and
-  # the authenticated one get the same plain 404.
-  # @return [Array(Net::HTTPResponse, Hash)] the response and its parsed body
+  # A nil principal sends no bearer.
   def raw(principal, method, path, body = nil)
     uri     = URI("#{BASE_URL}#{path}")
     headers = { "Content-Type" => "application/json" }
@@ -509,70 +386,18 @@ module RawWire
   end
 end
 
-# THE STANDING HOSTILE-SHAPE BEAT.
-#
-# Postgres does free shape-checking on wire arguments and ActiveRecord does not.
-# Interpolate `property_id`/`check_in`/`check_out` into `::integer`/`::date`
-# casts and junk RAISES, which the handler turns into a typed refusal; hand the
-# same value to ActiveRecord and `where(property_id: "abc")` silently CASTS to
-# `= 0` and `where(property_id: true)` to `= 1` — a wrong answer delivered as
-# success. The guards in `app/operations/wire_arguments.rb` are what hold the
-# refusal, and this is the standing beat that re-sends the hostile shapes on
-# every run so they cannot quietly stop firing.
-#
-# WHICH LAYER ANSWERS THESE TODAY, measured rather than assumed, because it
-# changes what the beat is worth. Every SHAPE probe below is currently refused
-# by the ENGINE — `input_schema` declares `property_id` an integer and `check_in`
-# a `format: "date"` string, and the wire validates both on every call, so a boolean,
-# an array, an object or `"abc"` never reaches the handler at all. So this beat
-# does NOT prove hoteling's own guards fire; it pins the CONTRACT an assistant
-# depends on (a typed 400, no 5xx, no wrong answer served as a 200) across both
-# layers, and it goes red if either one stops holding — an engine that stops
-# validating, or a descriptor that widens a type or drops
-# `additionalProperties: false`.
-#
-# TWO PROBES DO REACH HOTELING'S OWN CODE, and they are here for exactly that
-# reason:
-#   • an unknown `property_id` is `404 not_found` and NOT `200 []`
-#     ({WireArguments.existing_property!}) — the empty list would assert the
-#     hotel exists and merely has no rooms;
-#   • a stay nobody can price is a typed 400 and not a crash: `check_in:
-#     "0000-01-01"` is a well-formed date the schema accepts, and the
-#     739,000-night stay it asks for overflows `bookings.total_cents` (a 4-byte
-#     integer) with `ActiveModel::RangeError`, which the wire would answer
-#     `500 action_failed`.
-#
-# WHAT IS PROBED, NAMED RATHER THAN CLAIMED. A summary sentence — «every
-# argument its verbs take» — is unverifiable, and goes false the moment an
-# argument is added or a constant is passed to every call site instead of being
-# varied. The claim is therefore an enumeration, checkable against this method
-# rather than believed:
-#
-#   reserve_room   property_id, room_type_id  (INT_SHAPES)
-#                  check_in, check_out        (DATE_SHAPES)
-#   availability   property_id, check_in, check_out (the string spellings a
-#                  query can express, plus the two BRACKET spellings)
-#   search_hotels  min_stars, max_price_cents (junk + out-of-range integers +
-#                                              one past int4)
-#                  neighbourhood, amenity     (off-enum strings)
-#
-# An argument NOT in that list is not covered here — say so by extending the
-# list, never by widening the sentence.
+# Unknown property_id and an unpriceable stay reach hoteling's own guards; the schema refuses the rest.
 class HostileArgShapes < Kiosk::Redteam::Scenario
   include RawWire
 
-  # An error body must never carry the database's own vocabulary, re-asserted
-  # here because these probes are the ones most likely to reach a cast.
+  # Database vocabulary no error body may carry.
   LEAKS = ["::uuid", "::integer", "::date", "PG::", "22P02", "invalid input syntax",
            "ActiveRecord::", "ActiveModel::", "RangeError"].freeze
 
-  # Far enough out that nothing here competes with the shared inventory the
-  # other beats draw on — deliberately clear of DoubleBookedRoom's +60..+66
-  # window. Nothing below is expected to succeed, so nothing is consumed either.
+  # Clear of the shared inventory and DoubleBookedRoom's window; nothing here books.
   PROBE_IN  = (Date.today + 80).to_s.freeze
   PROBE_OUT = (Date.today + 83).to_s.freeze
 
-  # The five families the row names, per argument type.
   INT_SHAPES  = [true, false, [], {}, [1], { "a" => 1 }, "abc", nil, 1.5, "0x10"].freeze
   DATE_SHAPES = [true, [], {}, nil, 20260901, "nope", "", "2026-02-30", "09/01/2026",
                  "2026-09-01'; --", ["2026-09-01"]].freeze
@@ -590,7 +415,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     @failures = []
     prop, room = live_pair(client, a)
 
-    # ── the ACTION path: real JSON types ────────────────────────────────────
+    # Action path: real JSON types.
     INT_SHAPES.each do |v|
       refused "reserve_room property_id=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: v, room_type_id: room,
@@ -606,19 +431,13 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                             check_in: v, check_out: PROBE_OUT),
               supplied: v
-      # …and the SAME shapes on `check_out`, so the second half of the stay is
-      # pinned too: a descriptor that widened `check_out` to an untyped string,
-      # or a guard that stopped parsing it, would otherwise leave this beat
-      # green.
       refused "reserve_room check_out=#{v.inspect}",
               client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                             check_in: PROBE_IN, check_out: v),
               supplied: v
     end
 
-    # ── the QUERY path: everything is a string on the wire, so the hostile
-    # shapes an assistant can still express are junk scalars and the two
-    # BRACKET spellings that decode to an Array and a Hash. ─────────────────
+    # Query path: junk strings and the two bracket spellings that decode to an Array and a Hash.
     %w[abc true 0x10].each do |v|
       refused "availability property_id=#{v.inspect}",
               client.query(a, name: "availability", property_id: v,
@@ -643,26 +462,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
       note "availability #{bracket}", res.code.to_i, doc, supplied: [bracket, PROBE_IN]
     end
 
-    # ── search_hotels' FILTERS, which no beat probed at all ─────────────────
-    #
-    # Two are declared integers with a range (`min_stars` 1..5,
-    # `max_price_cents` >= 0) and two are declared string ENUMS
-    # (`neighbourhood`, `amenity`). WHICH LAYER ANSWERS WHICH, named rather than
-    # assumed:
-    #
-    #   * the two INTEGERS are refused by the schema alone: the decoder
-    #     coerces through `Integer(v, 10)` and the validator applies the
-    #     declared range — `min_stars` 1..5, `max_price_cents` 0..MAX_INT4. The
-    #     handler reads them with `.to_i`. Drop `max_price_cents`' `maximum:` and
-    #     the BEYOND_INT4 probe below comes back 200 with rows: a filter the
-    #     origin could not represent, answered as though it had.
-    #   * the two ENUMS are still one layer: `neighbourhood` and `amenity` are
-    #     fed straight to a `where`/`offering`, so the
-    #     schema's `enum` is the only thing that refuses an off-list value.
-    #
-    # Which is precisely why all four need a standing probe: a filter that
-    # silently matched nothing would answer `200 []` — «no hotel is like that»
-    # in reply to a question the origin never understood.
+    # search_hotels filters: integer ranges and enums; a silent miss would answer 200 [].
     beyond_int4 = 2_147_483_648 # one past PostgreSQL `integer`
     %W[abc true 0 9 1.5 0x10 #{beyond_int4}].each do |v|
       refused "search_hotels min_stars=#{v.inspect}",
@@ -679,15 +479,14 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               client.query(a, name: "search_hotels", amenity: v), supplied: v
     end
 
-    # The filters' own CONTROL: a well-formed filter pair must still answer 200
-    # with an array, or the refusals above prove nothing about search_hotels.
+    # CONTROL: well-formed filters still answer 200 with an array.
     filtered = client.query(a, name: "search_hotels", min_stars: 1, max_price_cents: 10_000_000)
     unless filtered.status == 200 && filtered.body.is_a?(Array)
       @failures << "CONTROL well-formed search_hotels filters → HTTP #{filtered.status} " \
                    "#{filtered.body.inspect[0, 80]} (want 200 + an array)"
     end
 
-    # ── the two that reach hoteling's OWN guards ────────────────────────────
+    # The two that reach hoteling's own guards.
     unknown = client.query(a, name: "availability", property_id: 999_999,
                               check_in: PROBE_IN, check_out: PROBE_OUT)
     unless unknown.status == 404 && body_code(unknown) == "not_found"
@@ -696,23 +495,13 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
                    "assert the hotel exists and merely has no rooms)"
     end
 
-    # The unpriceable stay, ASKED FROM THE FAR END. A century-ago `check_in`
-    # with a normal check_out is refused by {WireArguments.bookable!} FIRST —
-    # still a typed 400, so the assertion would keep passing while never
-    # reaching the guard it exists for. A near check_in with a check_out at the
-    # end of the calendar asks the same question (a stay whose total overflows
-    # `bookings.total_cents`) from the side the past-date floor does not stand
-    # on.
+    # Asked from the far end: an old check_in would hit the past-date refusal first.
     refused "reserve_room check_out=\"9999-12-31\" (unpriceable stay)",
             client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
                           check_in: PROBE_IN, check_out: "9999-12-31"),
             supplied: "9999-12-31"
 
-    # ── CONTROL ─────────────────────────────────────────────────────────────
-    #
-    # Without it every assertion above could pass vacuously on an origin that
-    # refuses EVERYTHING — a broken bearer, a wrong verb name, a dead handler.
-    # A well-formed call must still answer 200 with a list.
+    # CONTROL: a well-formed call answers 200, so the refusals are not vacuous.
     control = client.query(a, name: "availability", property_id: prop,
                               check_in: PROBE_IN, check_out: PROBE_OUT)
     unless control.status == 200 && control.body.is_a?(Array)
@@ -729,8 +518,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
   private
 
-  # A property/room-type pair that really exists, so the ONLY thing wrong with
-  # each probe is the shape under test.
+  # A real property/room pair, so only the shape under test is wrong.
   def live_pair(client, principal)
     props = client.query(principal, name: "properties").body
     raise "redteam(hoteling): no properties" unless props.is_a?(Array) && props.any?
@@ -749,14 +537,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     note(label, resp.status, resp.body.is_a?(Hash) ? resp.body : {}, supplied: supplied)
   end
 
-  # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker. hoteling names the value it
-  # got in most of these refusals — `property_id "abc" is not an integer`,
-  # `invalid check_in/check_out: …` — so the bytes scanned for LEAKS are partly
-  # the probe's own, and a value spelling `PG::` would otherwise be reported as
-  # a BREACH on its own echo, under a runner whose prose says a BREACH means
-  # "fix the app, not the scenario". The default is nil, which discounts
-  # nothing: forgetting to declare risks a FALSE BREACH, never a missed leak.
+  # `supplied:` discounts the probe's own echoed bytes from the leak scan.
   def note(label, status, doc, supplied: nil)
     scan = Kiosk::Redteam::LeakScan.scan(doc, LEAKS, supplied: supplied)
     return if status == 400 && doc["code"] == "bad_request" && !scan.leak?
@@ -766,21 +547,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 end
 
-# `POST /kiosk/query` and `POST /kiosk/run` name no verb this hotel registers,
-# so no line in config/routes/kiosk.rb draws them and nothing under the mount
-# matches: they answer the ordinary 404 any undrawn path gets — no privileged
-# endpoint hiding behind a generic-sounding word, and no second conformance
-# surface to attack. Those two names are what a caller hunting for a
-# multiplexed endpoint tries first, which is why the beat dials them rather
-# than a nonsense word.
-#
-# BOTH CALLERS ARE PROBED, and the point is that they answer ALIKE. A routing
-# miss is decided before any credential is read, so a bearer buys nothing here
-# and neither caller gets a problem document to read anything out of.
-#
-# A multiplexer here is exactly what an attacker would reach for, because it
-# takes the verb name from the BODY, where no route constraint and no
-# input_schema can see it.
+# The two names a caller hunting for a multiplexed endpoint tries first.
 class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   include RawWire
 
@@ -817,13 +584,6 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   end
 end
 
-# The wrong HTTP method at a registered verb's path draws no route: this hotel
-# draws `POST /kiosk/reserve_room` and `GET /kiosk/my_bookings` and nothing else
-# at either path, so the other method is the same plain 404 an undrawn path
-# gets. What the beat is FOR is the security half — the verb must never RUN for
-# the method it was not declared with, and no `Allow` may hand an attacker a map
-# of the surface. Probed in BOTH directions, because the fork is symmetric: a
-# GET at the action `reserve_room`, and a POST at the query `my_bookings`.
 class MethodMismatch < Kiosk::Redteam::Scenario
   include RawWire
 
@@ -859,37 +619,11 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   end
 end
 
-# ── NO AVAILABILITY IN THE PAST, AND NO BOOKING INTO IT ───────────────────────
-#
-# There must be zero availability for past dates, and no booking into them.
-# Unguarded, `reserve_room` with `check_in: "1900-01-01"` answers 200 with a
-# real booking and a real quote, and `availability` for those nights lists
-# rooms.
-#
-# BOTH HALVES ARE PROBED, and the second is not redundant. The read side is the
-# primary fix — an assistant must never SEE a room it cannot book — but an
-# assistant may name a date it never read from an availability response, which
-# is exactly how a stay in the past gets sold. So the sale is guarded too,
-# from the same {WireArguments.bookable!}, and both are asserted here.
-#
-# THE CONTROLS ARE WHAT MAKE IT NON-VACUOUS. A handler that refused EVERY date,
-# or one that answered `[]` to everything, would satisfy the refusals alone. So
-# each probe is paired with the same call at a FUTURE date, which must be
-# answered: rooms listed, and a hold minted.
-#
-# TODAY IS DELIBERATELY NOT PROBED AS A REFUSAL. hoteling's floor is the DAY, in
-# the property's clock (Europe/Istanbul), and today is bookable — a same-day
-# arrival is an ordinary room-night. Probing "today must be accepted" from a
-# runner on an arbitrary clock would be a test of the RUNNER's timezone, not of
-# the operator's, so the beat asserts the two ends that are unambiguous from any
-# clock: a century ago is refused, a month out is answered.
+# Today is not probed: the floor is the property's day (Europe/Istanbul), not the runner's.
 class PastStay < Kiosk::Redteam::Scenario
   PAST_IN  = "1900-01-01"
   PAST_OUT = "1900-01-04"
-  # Its OWN nights, deliberately disjoint from CHECK_IN..CHECK_OUT, so the
-  # control HOLD neither consumes nor depends on the inventory the generic
-  # scenarios share — the same arrangement {DoubleBookedRoom} makes and for the
-  # same reason.
+  # Own nights, disjoint from the shared inventory, for the control hold.
   CTL_IN  = (Date.today + 90).to_s.freeze
   CTL_OUT = (Date.today + 93).to_s.freeze
 
@@ -909,7 +643,7 @@ class PastStay < Kiosk::Redteam::Scenario
     failures = []
     statuses = []
 
-    # ── Half 1: the READ side. Zero availability for a past date. ───────────
+    # Read side: no availability for a past date.
     past_avail = client.query(a, name: "availability",
                               property_id: prop_id, check_in: PAST_IN, check_out: PAST_OUT)
     statuses << past_avail.status
@@ -933,7 +667,7 @@ class PastStay < Kiosk::Redteam::Scenario
                   "rows=#{ctl_rows.size} (a handler that refused every date would pass the probe above)"
     end
 
-    # ── Half 2: the WRITE side. A past room-night cannot be held. ───────────
+    # Write side: no hold for a past room-night.
     past_hold = client.run(a, name: "reserve_room", property_id: prop_id, room_type_id: room_id,
                                                     check_in: PAST_IN, check_out: PAST_OUT)
     statuses << past_hold.status
@@ -943,8 +677,7 @@ class PastStay < Kiosk::Redteam::Scenario
                   "(want 400 bad_request; a 200 here is a sold room-night from last century)"
     end
 
-    # CONTROL for half 2 — the same call at a future date must mint a hold, so
-    # the refusal above cannot be an unrelated argument or ownership answer.
+    # CONTROL: the same call at a future date must hold.
     ctl_room = ctl_rows.first ? ctl_rows.first["room_type_id"] : room_id
     ctl_hold = client.run(a, name: "reserve_room", property_id: prop_id, room_type_id: ctl_room,
                                                    check_in: CTL_IN, check_out: CTL_OUT)
@@ -964,11 +697,7 @@ class PastStay < Kiosk::Redteam::Scenario
 
   private
 
-  # The refusal this origin owes for a value outside a verb's domain: spec
-  # §9.1's first branch — 400 `bad_request` NAMING what it accepts. The date in
-  # the sentence is read in the PROPERTY's locale, which is not necessarily the
-  # runner's, so the assertion is "a calendar date is named", never a literal
-  # equal to this machine's `Date.today`.
+  # §9.1: 400 bad_request naming a date, read in the property's locale, not this machine's.
   def refusal?(resp)
     detail = resp.body.is_a?(Hash) ? resp.body["detail"].to_s : ""
     resp.status == 400 && error_code(resp) == "bad_request" &&
@@ -976,18 +705,9 @@ class PastStay < Kiosk::Redteam::Scenario
   end
 end
 
-# ── Scenario list ─────────────────────────────────────────────────────────────
-#
-# The generic Kiosk::Redteam battery plus hoteling's own beats (3 cashier-check
-# + 2 input-shape + 1 date + 1 inventory + the 2 wire-shape beats, per the
-# header above). The expected skips are the 3 KYC variants and C3
-# SpentResourceReuse — RegistrationWithoutPow runs, because register PoW is ON.
-# NO TOTALS ARE WRITTEN DOWN HERE: the run prints `scenarios.size` and the skip
-# count below, and a total written here is a total that rots.
-
 scenarios = [
   Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
-  Kiosk::Redteam::Scenarios::SpentResourceReuse.new,      # C3 — skips: see header
+  Kiosk::Redteam::Scenarios::SpentResourceReuse.new,      # C3 — skips: nothing is spent
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
@@ -995,10 +715,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
-  # The CLAIM-ceremony sibling of the line above: PrivilegeSelfSelection covers
-  # `/auth/register`, where the role is never client-supplied; this covers the
-  # other door — the unauthenticated `device_authorization` request that opens
-  # the account-binding ceremony.
+  # The claim ceremony's door: the unauthenticated device_authorization request.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   Kiosk::Redteam::Scenarios::WrongCurrencyCart.new,                                  # cashier check — currency
   TamperedPriceCart.new,                                  # cashier check — below quote
@@ -1015,13 +732,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,  # → BLOCKED (register PoW ON)
 ]
 
-# ── Expected-applicable assertion ─────────────────────────────────────────────
-#
-# hoteling has no KYC — these 3 KYC variants are expected to be skipped, and so
-# is C3, whose gated action spends nothing here (`gated_action_consumes: false`
-# on the profile above). RegistrationWithoutPow is NOT skipped: register PoW is
-# ON, so it runs and must be BLOCKED. If this set changes, a profile key was
-# silently set to nil, disabling a gate scenario that should be applicable.
+# No KYC, and confirm_booking spends nothing; register PoW is on, so RegistrationWithoutPow runs.
 EXPECTED_SKIP_NAMES = %w[
   ExpiredKyc
   ForgedKyc
@@ -1029,20 +740,8 @@ EXPECTED_SKIP_NAMES = %w[
   SpentResourceReuse
 ].freeze
 
-# ── Run ───────────────────────────────────────────────────────────────────────
-
 puts "\n── hoteling redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-# DERIVE BOTH, NEVER TYPE THEM.  A typed `requires_kyc: false` sitting directly
-# under a line that already reads `profile.pow_difficulty` off the object lets
-# one flipped constructor argument 940 lines up leave the banner announcing the
-# opposite of the battery it introduces.  The ON/OFF gloss is derived for the
-# same reason: `1 (register PoW ON)` and `0 (register PoW ON)` are both
-# printable, and only one of them is ever true.
-#
-# These are the values every generic scenario reads to decide whether it is
-# applicable — RegistrationWithoutPow skips on 0, the KYC trio skips on false —
-# so the banner now says exactly what the run below will do.
 puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW #{profile.pow_difficulty.to_i > 0 ? "ON" : "OFF"})"
 puts "  requires_kyc:   #{profile.requires_kyc}"
 puts "  scenarios:      #{scenarios.size} (#{EXPECTED_SKIP_NAMES.size} expected skips)"
@@ -1051,13 +750,7 @@ puts ""
 runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
 results = runner.run(scenarios)
 
-# ── Summary ───────────────────────────────────────────────────────────────────
-#
-# The gem prints it and the gem answers the exit status: 0 only when at least
-# one attack ran and every attack that ran was blocked, 1 on a breach or on a
-# battery that proved nothing, 2 when the skips are not the ones named above —
-# a profile key that has silently gone nil disables a gate scenario, and that
-# must not read as a clean run.
+# report! exits 0 when every attack ran and was blocked, 1 on a breach or nothing run, 2 on unexpected skips.
 battery = Kiosk::Redteam::Battery.new
 battery.absorb(results)
 exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)

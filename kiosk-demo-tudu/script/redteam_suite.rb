@@ -10,10 +10,6 @@ require "uri"
 require "openssl"
 require "securerandom"
 
-# The shared harness: the wire the beats that need no cookie jar attack over,
-# the ledger this battery files its verdicts into, the leak oracle its
-# hostile-input beats ask, and the one library beat further down. Everything in
-# this file that is not about tudu is the gem's.
 require "kiosk/redteam"
 
 SERVER   = ENV.fetch("SERVER_URL")
@@ -22,26 +18,14 @@ HOLDER   = "00000000-0000-0000-0000-000000000001"
 EMAIL    = "alice@example.com"
 PASSWORD = "tudu-demo-password"
 
-# ── the human's browser session, and the wire helpers built on it ──────────
-#
-# ONE mechanism, shared: kiosk-user-idp-devise ships the cookie jar, the CSRF
-# read and the sign-in POST as Kiosk::UserIdentityProviders::DeviseSession,
-# the client end of the adapter this origin authenticates its humans with.
-# Five hand-copied jars would be five things free to drift. These wrappers
-# keep this driver's call sites unchanged.
 require "kiosk/user_identity_providers/devise_session"
 
-# tudu's battery drives BOTH channels, so it holds both drivers. WIRE is the
-# plain wire — an agent's Bearer call, and the header that carries it. SESSION
-# is the human's browser, cookie jar and all, because four beats here attack
-# the account-binding ceremony, which only a signed-in human can open.
+# WIRE carries an agent's Bearer call; SESSION is the human's browser, for the binding ceremony.
 WIRE    = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
 SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
 def request(req) = SESSION.request(req)
 
-# session: true sends the human's cookie jar (the Devise session channel);
-# agent calls send only their Bearer header — never the human's cookies.
 def post_json(path, body, headers = {}) = SESSION.post_json(path, body, headers)
 def get_json(path, params = {}, headers = {}) = SESSION.get_json(path, params, headers)
 
@@ -53,26 +37,19 @@ end
 
 require_relative "equihash_register"
 
-# The equihash_register helper injects full-URL get/post callables (tudu's own
-# post_json/get_json take a path), so wrap them to accept a full URL. The plain
-# GET wrapper carries no cookie jar — register needs no session.
+# equihash_register calls full URLs; tudu's helpers take a path.
 GET_URL  = ->(url)                 { get_json(url.delete_prefix(SERVER)) }
 POST_URL = ->(url, body, hdrs = {}) { post_json(url.delete_prefix(SERVER), body, hdrs) }
 
-# Register a fresh agent, solving the register PoW transparently (register is
-# uniformly tolled). Returns the keypair too — the pre-link scenario re-uses it.
 def register_agent(_label)
   key, reg = equihash_register(server: SERVER, issuer: ISSUER, get_json: GET_URL, post_json: POST_URL)
   { key: key, pem: key.public_key.to_pem,
     token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id") }
 end
 
-# One ledger for every beat below — the hand-written ones about tudu's own
-# verbs and the library one about the ceremony every origin serves — printed in
-# one vocabulary and answered by one exit status.
 BATTERY = Kiosk::Redteam::Battery.new
 
-# ── Fixtures: an owner with a private list; a member; an outsider ────────────
+# Fixtures: an owner with a private list, a member, an outsider.
 owner    = register_agent("owner")
 member   = register_agent("member")
 outsider = register_agent("outsider")
@@ -84,18 +61,10 @@ rc, inv = post_json("/kiosk/invite", { list_id: list_id }, WIRE.bearer(owner[:to
 invite_code = inv["code"]
 post_json("/kiosk/accept_invite", { code: invite_code }, WIRE.bearer(member[:token]))
 
-# ── CrossTenantRead — outsider list_todos on the private list → 403 ──────────
 rc, = get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(outsider[:token]))
 BATTERY.record("CrossTenantRead", rc == 403, "outsider list_todos → #{rc} (want 403)")
 
-# ── ForgedUserId — outsider create_list with a forged account_id ─────────────
-#
-# WHAT THIS BEAT PROVES. `input_schema` is validated on every call and
-# `create_list` declares `additionalProperties: false` with `title` as its only
-# property — the principal is not one of its inputs — so the forgery is REFUSED
-# before the handler runs, with a typed 400 naming the offending parameter.
-# Both halves are asserted: the wire refuses it, AND the outsider's LEGITIMATE
-# list lands under the outsider and never under the owner.
+# The principal is not an input of create_list, so a forged account_id is refused with a 400.
 rc, forged = post_json("/kiosk/create_list",
                        { title: "Forged", account_id: owner[:user_id] },
                        WIRE.bearer(outsider[:token]))
@@ -110,47 +79,24 @@ BATTERY.record("ForgedUserId",
                "forged account_id → #{rc}/#{forged['code'].inspect} (want 400/bad_request naming account_id); " \
                "owner's lists #{o_ids.inspect} exclude the outsider's #{outsider_list.inspect}")
 
-# ── MalformedUuidArg — junk ids must be a typed 400, never a 500 ────────────
-# tudu casts three wire-supplied ids `::uuid` — `list_id` (via the
-# ListAccess check every membership-gated verb opens with),
-# complete_todo's `todo_id`, and remove_member's `account_id`. Without the
-# Kiosk::UuidCheck guards a malformed value makes Postgres raise
-# InvalidTextRepresentation, which is not a Kiosk error and escapes as a raw 500
-# carrying the PG message. Three properties are asserted, not one: the status is
-# 400 (a client mistake reported as such), the problem document's top-level
-# `code` is the typed `bad_request` an assistant can branch on, and NO SQL
-# internals reach the wire. All three ids are probed — a guard on the choke point
-# alone would leave complete_todo and remove_member's account_id open.
+# Junk ids must be a typed 400 naming the argument, never a 500 carrying SQL internals.
 MALFORMED_IDS = ["not-a-uuid", "1; DROP TABLE todos", "", "  "].freeze
 SQL_INTERNALS = ["::uuid", "PG::", "22P02", "invalid input syntax"].freeze
 
 uuid_probes = MALFORMED_IDS.flat_map do |junk|
   [
-    # list_id via the membership guard — a QUERY, so the junk rides the query string.
+    # A query: the junk rides the query string.
     [-> { get_json("/kiosk/list_todos", { list_id: junk }, WIRE.bearer(owner[:token])) },
      "list_todos", "list_id"],
-    # todo_id — the id the web door hands over raw.
     [-> { post_json("/kiosk/complete_todo", { todo_id: junk }, WIRE.bearer(owner[:token])) },
      "complete_todo", "todo_id"],
-    # account_id — the second id, on a verb whose FIRST id is well-formed.
+    # The second id, on a verb whose first id is well-formed.
     [-> { post_json("/kiosk/remove_member", { list_id: list_id, account_id: junk }, WIRE.bearer(owner[:token])) },
      "remove_member", "account_id"],
   ].map do |probe, verb, arg|
     rc, resp = probe.call
-    # THE SCAN IS TOLD WHAT THIS PROBE SENT. tudu answers a bad id by
-    # NAMING it back (`list_id "…" is not a uuid`), so the bytes searched for
-    # SQL_INTERNALS are partly the probe's own; without `supplied:` a junk id
-    # spelling `PG::` would be reported as a BREACH on its own echo, under a
-    # runner whose prose says a BREACH means "fix the app, not the scenario".
-    # {Kiosk::Redteam::LeakScan} discounts a needle only where those exact bytes
-    # lie inside one contiguous run the probe supplied — not a blind `gsub`,
-    # which could erase a real leak instead.
+    # tudu echoes the bad id back; `supplied:` keeps that echo from reading as a leak.
     scan = Kiosk::Redteam::LeakScan.scan(resp, SQL_INTERNALS, supplied: junk)
-    # THE DETAIL MUST NAME THE ARGUMENT. A 400 and a `bad_request` are what
-    # EVERY typed refusal on this wire carries, so without this line the beat
-    # ticks green for a refusal of something else on the call — and on these
-    # verbs the id is declared `format: "uuid"`, so the argument validation is
-    # what answers and it names the argument it refused.
     ok = rc == 400 && resp["code"] == "bad_request" &&
          resp["detail"].to_s.include?(arg) && !scan.leak?
     [ok, "#{verb}(#{junk.inspect})→#{rc}/#{resp['code'].inspect}" \
@@ -161,30 +107,17 @@ BATTERY.record("MalformedUuidArg", uuid_probes.all? { |ok, _| ok },
                "malformed list_id/todo_id/account_id → #{uuid_probes.map(&:last).join(', ')} " \
                "(want 400/\"bad_request\", a detail naming the argument, and no SQL internals)")
 
-# ── MissingAuth / GarbageToken → 401 ────────────────────────────────────────
 rc, = get_json("/kiosk/my_lists")
 BATTERY.record("MissingAuth", rc == 401, "unauthenticated request → #{rc} (want 401)")
 rc, = get_json("/kiosk/my_lists", {}, WIRE.bearer("not-a-real-token"))
 BATTERY.record("GarbageToken", rc == 401, "garbage token → #{rc} (want 401)")
 
-# ── UnknownQuery / UnknownAction → 404 ──────────────────────────────────────
 rc, = get_json("/kiosk/frobnicate", {}, WIRE.bearer(owner[:token]))
 BATTERY.record("UnknownQuery", rc == 404, "unknown query → #{rc} (want 404)")
 rc, = post_json("/kiosk/nope", {}, WIRE.bearer(owner[:token]))
 BATTERY.record("UnknownAction", rc == 404, "unknown action → #{rc} (want 404)")
 
-# ── UnregisteredVerbIsOrdinaryRefusal — a path naming no verb is refused ─────
-# `POST /kiosk/query` and `POST /kiosk/run` name no verb this origin registers,
-# so no line in config/routes/kiosk.rb draws them and nothing under the mount
-# matches: the answer is the ordinary 404 any undrawn path gets — no privileged
-# endpoint behind a generic-sounding word, and no second conformance surface to
-# attack. Those two names are what a caller hunting for a multiplexed endpoint
-# tries first, which is why the beat dials them rather than a nonsense word.
-#
-# BOTH CALLERS ARE PROBED, and the point is that they answer ALIKE. A routing
-# miss is decided before any credential is read, so a bearer buys nothing here:
-# the anonymous caller and the authenticated one get the same 404, and neither
-# gets a Kiosk problem document to read anything out of.
+# A multiplexed-endpoint name is an ordinary 404, with or without a bearer.
 unregistered = %w[query run].flat_map do |name|
   authed = WIRE.request(:post, "/kiosk/#{name}", body: { name: "my_lists" },
                         headers: WIRE.bearer(owner[:token]))
@@ -197,41 +130,27 @@ BATTERY.record("UnregisteredVerbIsOrdinaryRefusal",
                "unregistered verb names #{unregistered.map(&:last).join(', ')} " \
                "(want a plain 404 with no problem-document code, bearer or not)")
 
-# ── MethodMismatch — a GET at an action's path does not serve the write ──────
-# This origin draws `POST /kiosk/create_list` and nothing else at that path, so
-# a GET matches no route and is the same ordinary 404 an undrawn path gets. What
-# the beat is FOR is the security half: the wrong method must never reach the
-# action. The catalogue is where a caller learns which method a verb takes.
+# A GET at an action's path must never reach the action.
 res404 = WIRE.request(:get, "/kiosk/create_list", headers: WIRE.bearer(owner[:token]))
 BATTERY.record("MethodMismatch",
                res404.status == 404 && res404["allow"].nil? && res404.body["code"].nil?,
                "GET an action → #{res404.status} Allow=#{res404['allow'].inspect} " \
                "(want a plain 404, no Allow, no problem-document code)")
 
-# ── InviteCodeReplay — the member's used code, replayed by outsider → 403 ────
 rc, = post_json("/kiosk/accept_invite", { code: invite_code }, WIRE.bearer(outsider[:token]))
 BATTERY.record("InviteCodeReplay", rc == 403, "replay of used invite code → #{rc} (want 403)")
 
-# ── RevokedMemberAccess — remove the member, its next read is blocked → 403 ─
 post_json("/kiosk/remove_member", { list_id: list_id, account_id: member[:user_id] }, WIRE.bearer(owner[:token]))
 rc, = get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(member[:token]))
 BATTERY.record("RevokedMemberAccess", rc == 403, "removed member's next read → #{rc} (want 403)")
 
-# ── Session-channel scenarios: Alice signs in for unlink + link ─────────────
 begin
   SESSION.sign_in!(email: EMAIL, password: PASSWORD)
 rescue Kiosk::UserIdentityProviders::DeviseSession::SignInError => e
   abort "#{e.message} — RevokedAgentKey needs a live Devise session"
 end
 
-# RevokedAgentKey — link a fresh assistant to Alice, unlink it, login → 404.
-# A bare terminal 404 does not discriminate — AgentLogin's lookup
-# (`WHERE public_key = … AND revoked_at IS NULL`) returns the identical 404
-# for a key that was NEVER linked, so a beat that only checks the last status
-# would still "pass" if link/claim silently failed. Assert every precondition
-# on the way in (link 201, claim 201, an agent_id back), and add a POSITIVE
-# CONTROL — login on the freshly-claimed key succeeds (200) BEFORE unlink —
-# so the terminal 404 can only be read as "this key was just revoked".
+# A login that succeeds before unlink proves the final 404 means revoked, not never linked.
 rc_link, link = post_json("/kiosk/auth/link", {}, { session: true })
 rk = OpenSSL::PKey::RSA.generate(2048); rpem = rk.public_key.to_pem
 rc_claim, claimed = post_json("/kiosk/auth/claim", { code: link["link_code"], public_key: rpem, signed: pop_proof(rk, rpem) })
@@ -246,61 +165,19 @@ BATTERY.record("RevokedAgentKey",
                "pre-revoke login=#{rc_prelogin} (want 200) unlink=#{rc_unlink} (want 204) " \
                "post-revoke login=#{rc} (want 404)")
 
-# PreLinkTokenAfterLink — an agent registers headless, creates a list, then
-# rebinds to Alice (assistant_claimed migrates the list). A rebind is a
-# principal change, so — like unlink — it watermark-revokes the key's pre-link
-# tokens. The PRE-LINK token no longer authenticates at all → 401.
+# A rebind watermark-revokes the key's pre-link tokens.
 pl = register_agent("prelink")
 rc, plc = post_json("/kiosk/create_list", { title: "Pre-link list" }, WIRE.bearer(pl[:token]))
 pl_list = plc["list_id"]
 rc, link2 = post_json("/kiosk/auth/link", {}, { session: true })
-# Cross a second boundary so the pre-link token (minted at register above) is
-# unambiguously older than the rebind watermark — JWT iat is second-resolution.
+# JWT iat is second-resolution: the pre-link token must predate the rebind watermark.
 sleep 1.1
 rc, = post_json("/kiosk/auth/claim", { code: link2["link_code"], public_key: pl[:pem], signed: pop_proof(pl[:key], pl[:pem]) })
 rc, = get_json("/kiosk/list_todos", { list_id: pl_list }, WIRE.bearer(pl[:token]))
 BATTERY.record("PreLinkTokenAfterLink", rc == 401,
                "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
 
-# ── NoLoginAddressOnTheRoster ────────────────────────────────────────────────
-#
-# THE BEAT THAT HAS TO SURVIVE A REFACTOR, and tudu's twin of philslist's
-# NoSellerPiiOnTheOpenBoard. `list_members` is the most cross-principal verb
-# tudu has — the rows ARE other accounts — so a projection that reached for
-# `users.email` would hand every housemate on a shared list every other
-# housemate's LOGIN ADDRESS. Consent bought the roster; it never bought the
-# credential, and spec Section 7.2 says so at EVERY reach rather than only at
-# `published`. The projection is one `pluck` line; nothing
-# but an assertion stops a future edit from putting the column back.
-#
-# THE PROBE RUNS AS AN ASSISTANT BOUND TO ALICE and reads the SEEDED household
-# ("Flat 3B"), because that is the only roster on this origin whose members are
-# HUMANS WITH ADDRESSES — the three fixture agents above are headless accounts
-# with no email at all, so a probe over their list would pass vacuously no
-# matter what the projection did. Alice reading Bob's row is exactly the
-# position that matters: a consented co-member, learning what the
-# verb tells it about the people it already shares a list with.
-#
-# Four things are asserted, and the last three are what make the first
-# non-vacuous:
-#   1. NO account address anywhere in the response — the RAW BODY is searched
-#      for Alice's seeded address and for `@` at all, not just the field that
-#      would carry it. A leak that moved to another key, or into a debug
-#      field, is the same leak.
-#   2. Every row carries a non-empty `display_name`. A handler that dropped the
-#      field entirely would fail here, so the beat cannot be passed by
-#      publishing nothing.
-#   3. The seeded household still reads as a household — "Alice" and "Bob", the
-#      names those accounts chose. This is the half philslist does NOT have:
-#      an opaque handle would satisfy (1) and (2) and destroy the verb, since
-#      "who added the tent?" is what a roster is for.
-#   4. A HEADLESS account — one that chose no name, which is every
-#      assistant-created principal — is named by an opaque `member-<12 hex>`,
-#      distinct per account. That pins the fallback's shape and its derivation
-#      from the account UUID rather than from anything a reader can enumerate.
-#
-# SESSION is still signed in as Alice from the scenarios above, so the ordinary
-# link/claim/login ceremony is all it takes to stand where an assistant stands.
+# A co-member's roster must name people by display_name, never by login address (§7.2).
 pii_rc_link, pii_link = post_json("/kiosk/auth/link", {}, { session: true })
 pii_key = OpenSSL::PKey::RSA.generate(2048)
 pii_pem = pii_key.public_key.to_pem
@@ -315,12 +192,7 @@ household = Array(mine).find { |r| r["title"] == "Flat 3B" }
 rc_roster, roster = get_json("/kiosk/list_members", { list_id: household && household["list_id"] }, pii_bearer)
 rc_who, who = get_json("/kiosk/whoami", {}, pii_bearer)
 
-# `is_a?(Array)` on every body before indexing it, philslist's rule: a verb that
-# 500s answers with a problem-document HASH, and a beat that assumed an array
-# would die with a TypeError instead of reporting a BREACH. This is not
-# hypothetical here — restoring the old projection makes `list_members` render a
-# payload its own `output_schema` rejects, so the engine answers 500 and this
-# beat must still say WHY.
+# A 500 answers with a Hash; guard before indexing so the beat still reports why.
 raw_roster   = JSON.generate(roster) + JSON.generate(who)
 roster_rows  = roster.is_a?(Array) ? roster : []
 who_rows     = who.is_a?(Array) ? who : []
@@ -330,12 +202,7 @@ named        = roster_rows.length >= 2 &&
                roster_names.all? { |n| n.is_a?(String) && !n.strip.empty? }
 recognisable = (roster_names & %w[Alice Bob]).sort == %w[Alice Bob]
 
-# The headless half: the fixture agents' own list. Both principals on it
-# registered through /auth/register, so neither has an address OR a chosen name.
-# The outsider is re-invited first, because RevokedMemberAccess above removed
-# the original member — a one-row roster would prove the pseudonym's SHAPE
-# without proving it is per-account, and per-account is half of what makes it a
-# name rather than a constant.
+# Headless accounts get a distinct opaque `member-<12 hex>`; re-invite so the roster has two.
 _, rejoin = post_json("/kiosk/invite", { list_id: list_id }, WIRE.bearer(owner[:token]))
 post_json("/kiosk/accept_invite", { code: rejoin["code"] }, WIRE.bearer(outsider[:token]))
 rc_headless, headless = get_json("/kiosk/list_members", { list_id: list_id }, WIRE.bearer(owner[:token]))
@@ -358,25 +225,7 @@ BATTERY.record("NoLoginAddressOnTheRoster",
                "household reading as Alice+Bob, and each headless account an opaque " \
                "`member-<12 hex>`)")
 
-# ── ChosenNameNeverTheAddress ────────────────────────────────────────────────
-#
-# The other end of the same rule, and the reason tudu carries a `display_name`
-# field on its sign-up form when atablefor (whose diners are seeded) does not:
-# tudu is the fleet's ONE demo with open registration, so if a visitor cannot
-# name themselves, every real person who joins a household is published as a
-# hash — safe, and useless to the people who invited them. This walks the
-# shipped surfaces end to end: the real Devise form, the real list page.
-#
-# ITS OWN COOKIE JAR, deliberately. SESSION is Alice's browser and the beats
-# above still need it; Devise also refuses a sign-up from an already-signed-in
-# session, so sharing one jar would have made this beat pass for the wrong
-# reason.
-#
-# NOTE WHAT IS *NOT* ASSERTED: that the whole page carries no `@`. The layout
-# greets a signed-in human with their own address, which is a disclosure to its
-# own owner and no disclosure at all. The assertion is scoped to the Members
-# block — the one place a page names OTHER people — which is the same
-# distinction Section 7.2 draws.
+# Sign-up's chosen name, not the address, is what the Members block shows. Its own cookie jar.
 signup       = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 chosen_name  = "Cassie Housemate"
 signup_email = "cassie-#{SecureRandom.hex(4)}@example.com"
@@ -388,10 +237,7 @@ signup_res   = signup.post_form("/users",
                                 "user[password]"              => PASSWORD,
                                 "user[password_confirmation]" => PASSWORD)
 lists_page   = signup.get_html("/lists")
-# The token is read from the NEW-LIST form specifically, not from the first one
-# on the page: the layout renders a `button_to "Sign out"` above the yield, and
-# with per-form CSRF tokens the document's first token is bound to
-# (DELETE, /users/sign_out) and is rejected at (POST, /lists) with a 422.
+# Per-form CSRF: take the token from the new-list form, not the sign-out button above it.
 new_list_form = lists_page.body.to_s[%r{<form[^>]*action="/lists"[^>]*>.*?</form>}m].to_s
 create_res   = signup.post_form("/lists",
                                 "authenticity_token" => signup.csrf_token(new_list_form),
@@ -408,27 +254,7 @@ BATTERY.record("ChosenNameNeverTheAddress",
                "#{members_html.gsub(/\s+/, ' ').strip.inspect} " \
                "(want the chosen name #{chosen_name.inspect} there and no address in it)")
 
-# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
-#
-# The one beat in this file that is NOT hand-rolled: it comes from
-# `kiosk-redteam`, so every demo runs the SAME assertion about the
-# account-binding claim ceremony and a demo cannot be left out of it by
-# forgetting to copy a block.
-#
-# It exists because the coverage for role self-selection rested on a condition
-# nobody re-measured: the shared `PrivilegeSelfSelection` scenario probes
-# `/auth/register` only, and the ceremony beats lived in ONE demo's suite. The
-# other six were safe purely because each declares a single role — a mitigation
-# that expires unnoticed the day a demo declares a second one.
-#
-# `declared_roles` names what `config/initializers/kiosk.rb` declares here. The
-# scenario ALSO derives a declared role from the wire (the `role` claim of a
-# token this origin mints at registration), so a stale list weakens the probe
-# rather than emptying it — an invented role was refused by the vulnerable code
-# too, which is why a probe that names only one cannot fail.
-# `on_skip: :breach` on purpose: this origin declares a role, so "could not
-# test" is a failure of the harness rather than a property of the provider, and
-# a silent third state is what let the last one hide.
+# Shared kiosk-redteam beat; this origin declares a role, so a skip is a breach.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   client:  Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
@@ -436,9 +262,4 @@ BATTERY.scenario(
   on_skip: :breach,
 )
 
-# ── Verdict ──────────────────────────────────────────────────────────────────
-# The gem answers it: 0 only when at least one attack ran and every attack that
-# ran was blocked, 1 on a breach or on a battery that proved nothing, 2 when a
-# beat skipped that this origin was not expected to skip. tudu expects no skips
-# at all — every beat above is about a surface it has.
 exit BATTERY.report!

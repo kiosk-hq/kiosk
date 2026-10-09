@@ -17,42 +17,19 @@ ORDER_DAY = (Date.today + 1).iso8601
 BASE_URL = ENV.fetch("SERVER_URL")
 ISSUER   = BASE_URL
 
-# ── Profile ───────────────────────────────────────────────────────────────────
-
 profile = Kiosk::Redteam::Profile.new(
-  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
-  # RegistrationWithoutPow RUN (a missing/bad register proof must be rejected).
-  # The Client ignores the magnitude (PoW solving is driven by the server's 402
-  # challenges); only "> 0" matters here.
+  # Register PoW is on; only "> 0" matters, the server's 402 challenges set the real difficulty.
   pow_difficulty: 1,
   requires_kyc:   false,
 
-  # ── declared_roles — DeviceGrantRoleSelfSelection ────────────────────────
-  # `Kiosk.configuration.roles` for this origin (config/initializers/kiosk.rb).
-  # The claim ceremony's beat must name a role this origin ACTUALLY declares:
-  # an invented one is refused even by an implementation that lets a DECLARED
-  # role through, so a battery probing only an invented role stays green over a
-  # real hole. The scenario also derives one off the wire, so a stale list here
-  # weakens the probe rather than emptying it.
-
-  # The currency this operator prices in — WrongCurrencyCart probes with one
-  # that is NOT it.
   currency:       "eur",
   declared_roles: %w[customer],
   per_user_query: "my_orders",
 
-  # result_id_key: create_order's response body IS the order object, so the key
-  #                is read straight off it — body["order_id"] (no envelope)
-  # row_id_key:    my_orders rows carry an "order_id" field (it matches the
-  #                consumer param name so an assistant copies the same key)
   result_id_key: "order_id",
   row_id_key:    "order_id",
 
-  # create_owned: query catalog → pick first in-stock product → create_order
-  # (delivery slot + address are REQUIRED — delivery is part of the order).
-  # Returns { id:, total_cents:, items: [{sku, qty, price_cents}] } — the items
-  # are kept so pay_for can build a cart that MIRRORS the order at catalog
-  # prices (the PaymentClaim cashier check requires it).
+  # The items are kept so pay_for can mirror the order at catalog prices (the cashier check).
   create_owned: ->(client, principal) {
     catalog_resp = client.query(principal, name: "catalog")
     # A non-paginating query answers a BARE ARRAY — there is no `rows` to unwrap.
@@ -81,20 +58,8 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # forge_args: returns base args for create_order — which needs a delivery slot
-  #             and an in-zone address on top of its items (user_id injected by
-  #             the ForgedUserId scenario, never declared here)
   forge_action: "create_order",
   forge_args: ->(client, _principal_a, _principal_b) {
-    # Query the catalog as B to get a valid sku for create_order; the
-    # ForgedUserId scenario adds user_id: A's UUID on top of these args.
-    #
-    # WHAT THIS BEAT PROVES. `create_order` publishes
-    # `additionalProperties: false` and does not declare `user_id` — the
-    # principal is not one of its inputs — and the wire validates `input_schema`
-    # on every call, so the forged argument is REFUSED (400 bad_request naming
-    # it) rather than accepted and silently ignored. The ownership half is
-    # proved too: nothing B creates ever appears under A.
     catalog_resp = client.query(_principal_b, name: "catalog")
     catalog = catalog_resp.body.is_a?(Array) ? catalog_resp.body : []
     raise "redteam: catalog empty for forge_args" if catalog.empty?
@@ -106,9 +71,7 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # gated_action — gated on ownership + settled payment, and ONE reschedule per
-  # order: the second attempt is the C3 spent-resource beat. (The verb is on the
-  # line below and is not repeated here.)
+  # One reschedule per order: the second attempt is the spent-resource beat.
   gated_action: "reschedule_delivery",
   gated_args:   ->(owned_ref) {
     {
@@ -117,11 +80,7 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # pay_for: build RS256 intent + cart mandates referencing order_id, with
-  # item lines MIRRORING the order at catalog prices (cashier check).
-  # No card-setup step: this suite runs with KIOSK_TEST_AUTOCARD=1 against
-  # stripe-mock, so the adapter auto-provisions a test card at capture and the
-  # off_session charge settles. The gates under test are pure Kiosk logic.
+  # No card-setup step: KIOSK_TEST_AUTOCARD=1 against stripe-mock provisions a test card at capture.
   pay_for: ->(_client, principal, owned_ref) {
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
@@ -163,13 +122,7 @@ profile = Kiosk::Redteam::Profile.new(
   kyc_forged:  nil,
 )
 
-# ── Local scenarios: the cashier check (PaymentClaim) ────────────
-# The generic battery proves ownership/payment gates, and its
-# WrongCurrencyCart covers the unit of account; these two prove the operator
-# counts what lands on the counter — the line prices and the total.
-
-# A tampered per-line price (with total and cap adjusted to stay
-# chain-consistent) must be caught by the catalog-mirror check.
+# A below-catalog line price, with total and cap kept chain-consistent.
 class TamperedPriceCart < Kiosk::Redteam::Scenario
   def initialize
     super(
@@ -193,14 +146,11 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
       total_amount_cents: tampered_total,
     )
     resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-    # 403 by name, not the delegated `blocked?` set: a 401 would say the
-    # credential was rejected, which means the cashier never priced this cart.
+    # 403 exactly: a 401 would mean the cashier never priced this cart.
     verdict_from(resp, expect: 403, detail: "below-catalog line price settled (HTTP #{resp.status})")
   end
 end
 
-# Correct lines but an inflated total (within the intent cap, payment mirrors
-# the cart) must be caught by the sum check.
 class InflatedTotalCart < Kiosk::Redteam::Scenario
   def initialize
     super(
@@ -216,31 +166,14 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
     m = profile.pay_for.call(client, a, owned)
     m[:cart] = m[:cart].merge(total_amount_cents: owned[:total_cents].to_i + 100)
     resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-    # 403 by name — see TamperedPriceCart above.
     verdict_from(resp, expect: 403, detail: "total above the order's catalog sum settled (HTTP #{resp.status})")
   end
 end
 
-# A cart of the wrong SHAPE is a client mistake and must come back as a typed
-# 400, never as a 500. An `items.empty?` guard under a message promising "a
-# non-empty array" is an emptiness check wearing a type check's words, and
-# `items` is not validated at the wire either (request_validation.rb: "ONLY the
-# PoW proof(s) are validated"), so a String, a Hash, or an array of Strings
-# reaches `.map` / `it[:sku]` and raises a raw NoMethodError or TypeError that
-# executor.rb turns into ActionFailed — a 500 on this demo's headline action,
-# the one the onboarding page is modelled on.
-#
-# The schema refuses a mis-shaped cart before the handler runs; what this pins
-# is that the refusal is a typed 400.
-#
-# Asserts HTTP 400 AND a top-level `code == "bad_request"` AND no Ruby internals
-# in the body: "not 200" would accept exactly the 500s at issue.
 class MalformedItemsCart < Kiosk::Redteam::Scenario
   ADDRESS = "1 Redteam St, Dublin 1"
   RUBY_INTERNALS = ["NoMethodError", "TypeError", "undefined method", "no implicit conversion"].freeze
 
-  # Each is a shape an assistant can plausibly send: the whole cart as one
-  # object, a bare list of skus, a stringified cart, a count.
   BAD_ITEMS = [
     ["a String",             "sourdough-bread"],
     ["a Hash (one item, unwrapped)", { sku: "sourdough-bread", qty: 1 }],
@@ -279,8 +212,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
                   "#{scan.leak ? " LEAKS #{scan.leak.inspect}" : ""}#{scan.note}"
     end
 
-    # CONTROL — a well-formed cart must still place an order. Without it every
-    # probe above would pass against a handler that rejected all input.
+    # Control: a well-formed cart still places an order.
     catalog_body = client.query(a, name: "catalog").body
     catalog = catalog_body.is_a?(Array) ? catalog_body : []
     control = client.run(a, name: "create_order",
@@ -300,56 +232,13 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
   end
 end
 
-# THE STANDING HOSTILE-SHAPE BEAT.
-#
-# Postgres does free shape-checking on wire arguments and ActiveRecord does not,
-# and getgrocery has both classes of the consequence. `order_id` interpolated
-# into a `::uuid` cast is class one, held by {Kiosk::UuidCheck}. `delivery_slot_id` /
-# `qty` read with a bare `.to_i` — which `true`, `false`, an Array and an object
-# all answer with NoMethodError — is class two: a `500 action_failed` for an
-# argument the published `input_schema` already declares an integer, held by
-# reading through `.to_s` first. This is the standing beat that re-sends those
-# hostile shapes on every run. {MalformedItemsCart} stands for the `items`
-# CONTAINER — a String, a bare Hash, an array of strings, `[]`, absent; this one
-# takes the scalar arguments it does not, AND the `qty` INSIDE a well-formed
-# element, which otherwise falls between the two beats: `qty` is half of class
-# two above and `MalformedItemsCart` never varies an element's fields.
-#
-# WHAT IS PROBED, NAMED RATHER THAN CLAIMED. create_order: `items[].qty`,
-# `delivery_slot_id`, `delivery_date`, `delivery_address`. reschedule_delivery:
-# `order_id`. An argument not on that list is not covered here — extend the
-# list, never widen the sentence.
-#
-# WHICH LAYER ANSWERS WHAT, measured rather than assumed. `delivery_slot_id`
-# declares `type: "integer", minimum: 1, maximum: 6` and `order_id` declares
-# `format: "uuid"`, so `input_schema` validation refuses those shapes
-# BEFORE the handler — for them this beat pins the CONTRACT (typed 400, no 5xx,
-# no wrong answer served as 200) across both layers and goes red if either
-# stops holding, e.g. if a descriptor widened the type or dropped
-# `additionalProperties: false`.
-#
-# `delivery_address` IS DIFFERENT, and it is why this beat is not merely a
-# schema test: it is declared a bare `type: "string"`, because its domain is not
-# expressible in JSON Schema — the served zone is a list of Dublin districts
-# an operator edits. Every string reaches getgrocery's OWN guard, so an
-# out-of-zone address is refused by {WireArguments.served_district} and nothing
-# but that guard stands behind it.
-#
-# `delivery_date` declares `format: "date"`, so the wire refuses every spelling
-# but `YYYY-MM-DD` before the handler runs. Two things it still cannot say are
-# {WireArguments.delivery_date}'s: that a well-shaped value names a real DAY
-# (`2026-02-30` does not), and that the day has not already gone — the delivery
-# horizon rolls forward every midnight, which no declaration can track.
+# Hostile shapes on create_order's scalar arguments, items[].qty, and reschedule_delivery's order_id.
 class HostileArgShapes < Kiosk::Redteam::Scenario
   ADDRESS = "2 Redteam Row, Dublin 2"
 
-  # An error body must never carry the runtime's or the database's own
-  # vocabulary: that is the same property {MalformedItemsCart} asserts, and
-  # these probes are the ones most likely to reach a cast.
   LEAKS = ["NoMethodError", "TypeError", "undefined method", "no implicit conversion",
            "::uuid", "PG::", "22P02", "invalid input syntax", "ActiveRecord::"].freeze
 
-  # The five families the row names.
   SHAPES = [true, false, [], {}, [1], { "a" => 1 }, "abc", 1.5].freeze
 
   def initialize
@@ -368,9 +257,6 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     good_items = [{ sku: catalog.first["sku"], qty: 1 }]
 
-    # ── schema-declared integers and uuids ──────────────────────────────────
-    #
-    # `delivery_slot_id`: the schema refuses every shape below; `2.0` is slot 2.
     SHAPES.each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
@@ -380,8 +266,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               client.run(a, name: "reschedule_delivery", order_id: v, delivery_slot_id: 1, delivery_date: ORDER_DAY),
               supplied: v
     end
-    # Out of the declared 1..6 range — the same refusal, from the schema's
-    # `minimum`/`maximum` rather than its `type`.
+    # Outside the declared slot range 1..6.
     [0, -1, 7, 999].each do |v|
       refused "create_order delivery_slot_id=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
@@ -389,24 +274,6 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               supplied: v
     end
 
-    # ── `qty`, INSIDE a well-formed items element ───────────────────────────
-    #
-    # The container is correct in every call here — one element, a real sku —
-    # so the ONLY thing wrong is the element's own `qty`, which is class two of
-    # the shape problem above: a bare `.to_i` guard, and `true`/`false`/`[]`/
-    # `{}` have none, so each is a `500 action_failed` for a value
-    # `input_schema` already declares `{type: "integer", minimum: 1}`.
-    #
-    # BOTH LAYERS REFUSE ALL TEN VALUES BELOW, and the second layer is easy to
-    # lose: a guard reading `(item[:qty] || 1).to_s.to_i` agrees with the schema
-    # on eight of them but lets `false` and `1.5` BOTH out as a legal quantity 1
-    # — `||` reads `false` as absent, and `"1.5".to_i` is 1 — leaving the schema
-    # as the only refusal for those two. `wire_arguments.rb` mirrors the schema's
-    # own `integer` instead (whole numbers, `2.0` included, because json_schemer
-    # accepts that — measured), so a 400 here is two refusals rather than one.
-    # The non-vacuity proof is a mutation: drop `qty`'s declared type from
-    # `input_schema` and these stay 400 instead of booking `false` and `1.5` as
-    # one unit.
     sku = catalog.first["sku"]
     (SHAPES + [0, -1]).each do |v|
       refused "create_order items[0].qty=#{v.inspect}",
@@ -415,36 +282,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               supplied: { sku: sku, qty: v }
     end
 
-    # ── MAGNITUDE, the axis every probe above misses ────────────────────────
-    #
-    # Everything above varies `qty`'s TYPE, and `[0, -1]` sit just under the
-    # declared `minimum: 1`. An integer LARGE enough to matter is a separate
-    # axis, and a beat can vary every shape there is without ever reaching it —
-    # which is how a `500 action_failed` for a body the published descriptor
-    # calls VALID hides behind a full set of type probes.
-    #
-    # TWO probes, because there are two bounded columns behind one argument and
-    # they give way at different widths. Both numbers are DERIVED from the
-    # catalogue row this run actually got, so a reseed at other prices cannot
-    # quietly make either vacuous:
-    #
-    #   · UNPRICEABLE CART — `qty` is a legal `order_items.qty` (int4) and the
-    #     cart still cannot be TOTALLED: `price_cents * qty` passes
-    #     `orders.total_cents`, also int4. MEASURED on a booted origin with no
-    #     total guard in front, `qty: 30_000_000` of the 89-cent `milk-0.5l` →
-    #     `ActiveModel::RangeError: 2670000000 is out of range …` out of
-    #     `Order.insert!`, served as **HTTP 500 `action_failed`**. The refusal
-    #     it must be instead comes from {WireArguments.priceable_total!}, which
-    #     is reached only once the prices are resolved — no schema can express
-    #     a bound on a SUM of other rows' values.
-    #   · UNSTORABLE QUANTITY — `qty` itself past int4, which IS expressible
-    #     per-property and so is refused by the descriptor's own `maximum`
-    #     before the handler runs at all.
-    #
-    # The non-vacuity proof is a mutation, one bound at a time:
-    # drop `maximum` from `qty` in `input_schema` and the second probe reaches
-    # the handler; delete the `priceable_total` call from
-    # {CreateOrderOperation} and the first goes back to 500.
+    # Magnitude: a total past int4 (refused by the handler's sum check) and a qty past int4 (by the schema).
     price = catalog.first["price_cents"].to_i
     raise "redteam(getgrocery): catalogue row has no price_cents" unless price.positive?
 
@@ -457,14 +295,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               supplied: { sku: sku, qty: v }
     end
 
-    # ── the two bare strings, where getgrocery's OWN guards are the only
-    # thing standing (see the header) ───────────────────────────────────────
-    # A date on this wire is `YYYY-MM-DD` and nothing else, so the spellings a
-    # loose reader would take are probed here beside the junk: the one-element
-    # array `"[2026-09-01]"`, the basic-ISO `"20260101"`, and `"09/01/2026"`,
-    # which is day-first to some senders and month-first to others — the value
-    # the rule was decided on, and the one an accepting origin answers without
-    # telling anybody which reading it took.
+    # A date is `YYYY-MM-DD` only; an ambiguous `09/01/2026` must not be guessed at.
     ["nope", "2026-13-45", "0000-01-01", "true",
      "[2026-09-01]", "20260101", "09/01/2026"].each do |v|
       refused "create_order delivery_date=#{v.inspect}",
@@ -472,6 +303,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
                             delivery_address: ADDRESS, delivery_date: v),
               supplied: v
     end
+    # The served zone is the demo's own guard; the schema says only `string`.
     ["", "   ", "1 Main St, Cork", "Dublin 99", "somewhere"].each do |v|
       refused "create_order delivery_address=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
@@ -479,10 +311,6 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               supplied: v
     end
 
-    # ── CONTROL ─────────────────────────────────────────────────────────────
-    #
-    # Without it every assertion above could pass vacuously on an origin that
-    # refuses EVERYTHING. A well-formed order must still be placed.
     control = client.run(a, name: "create_order", items: good_items,
                             delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS)
     unless control.status == 200
@@ -499,14 +327,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
   private
 
-  # `supplied:` is what this probe put on the wire, and it is what stops the
-  # leak assertion being decided by the attacker. getgrocery names the value it
-  # got — `invalid delivery_date: nope`, `qty must be a whole number >= 1 —
-  # got …` — so the bytes scanned for LEAKS are partly the probe's own, and a
-  # `delivery_address` spelling `PG::` would otherwise be reported as a BREACH
-  # on its own echo, under a runner whose prose says a BREACH means "fix the
-  # app, not the scenario". The default is nil, which discounts nothing:
-  # forgetting to declare risks a FALSE BREACH, never a missed leak.
+  # `supplied:` keeps the probe's own echoed bytes from reading as a leak.
   def refused(label, resp, supplied: nil)
     doc  = resp.body.is_a?(Hash) ? resp.body : {}
     scan = Kiosk::Redteam::LeakScan.scan(resp.body, LEAKS, supplied: supplied)
@@ -517,25 +338,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 end
 
-# ── The wire's own shape: two scenarios about paths, not about this shop ─────
-#
-# Both dial raw paths, so they use Net::HTTP directly rather than the Client's
-# verb helpers — the Client speaks REGISTERED verbs, and what is under test here
-# is what happens at a path that is not one.
-
-# A path that answers more than the ordinary refusal is a second conformance
-# surface, and a second conformance surface is somewhere an attacker looks for
-# the gate the first one has. `POST /kiosk/query` and `POST /kiosk/run` name no
-# verb this shop registers, so no line in config/routes/kiosk.rb draws them and
-# nothing under the mount matches: they answer the ordinary 404 any undrawn path
-# gets — no privileged endpoint hiding behind a generic-sounding word, and
-# nothing naming a replacement an attacker could probe. Those two names are
-# what a caller hunting for a multiplexed endpoint tries first, which is why
-# the beat dials them rather than a nonsense word.
-#
-# BOTH CALLERS ARE PROBED, and the point is that they answer ALIKE. A routing
-# miss is decided before any credential is read, so a bearer buys nothing here
-# and neither caller gets a problem document to read anything out of.
+# The paths a caller hunting for a multiplexed endpoint tries first; with or without a bearer.
 class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   UNREGISTERED = %w[query run].freeze
 
@@ -577,12 +380,7 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   end
 end
 
-# A GET at an ACTION's path draws no route here — this shop draws `POST
-# /kiosk/create_order` and nothing else at that path — so it is the same
-# ordinary 404 any undrawn path gets. What the beat is FOR is the security half:
-# the wrong method must never reach the action, and must never carry an `Allow`
-# an attacker could read as a map of the surface. The catalogue at
-# `GET /kiosk/schema` is where a caller learns which method a verb takes.
+# The wrong method never reaches the action and carries no `Allow` header mapping the surface.
 class MethodMismatch < Kiosk::Redteam::Scenario
   def initialize
     super(
@@ -613,21 +411,7 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   end
 end
 
-# A `date` in the PAST on `delivery_slots` must be a typed 400 naming the
-# earliest bookable day — not `200 []` (spec §9.1).
-#
-# WHY THE ADVERSARIAL BATTERY OWNS THIS. The empty list this replaces was not a
-# missing check, it was an AMBIGUOUS ANSWER: `DeliverySlots.bookable_ids`
-# rejects every window whose start has passed, and every window of a past day
-# has, so a date thirty days back returned byte-identical bytes to TODAY once
-# the last window has begun. One of those two is worth retrying tomorrow and
-# the other never will be, and an assistant reading `[]` could not tell which
-# it had. Two answers that cannot be told apart is the shape this battery
-# exists to catch.
-#
-# The CONTROL is what makes the beat non-vacuous: a FUTURE date at the same
-# in-zone address must still be ANSWERED, or a handler that refused every date
-# would pass.
+# A past date must be a typed 400 naming the earliest bookable day, not an ambiguous `200 []` (§9.1).
 class PastDeliveryDate < Kiosk::Redteam::Scenario
   ADDRESS = "1 Redteam St, Dublin 1"
 
@@ -648,24 +432,12 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
     bad = client.query(a, name: "delivery_slots", date: past, delivery_address: ADDRESS)
     ctl = client.query(a, name: "delivery_slots", date: future, delivery_address: ADDRESS)
 
-    # The refusal must NAME the earliest bookable day, and that day is read in
-    # the OPERATOR's locale (Europe/Dublin) — which is not necessarily the
-    # runner's. So the assertion is "a calendar date is named", not a literal
-    # equal to this machine's `Date.today`: pinning the runner's clock into the
-    # expectation would make the beat fail across a timezone boundary for a
-    # reason that has nothing to do with the behaviour under test.
+    # The named day is in the operator's zone, not the runner's, so only its shape is asserted.
     detail  = bad.body.is_a?(Hash) ? bad.body["detail"].to_s : ""
     named   = detail.include?("in the past") && detail.match?(/\d{4}-\d{2}-\d{2}/)
     refused = bad.status == 400 && error_code(bad) == "bad_request" && named
     control = ctl.status == 200 && ctl.body.is_a?(Array) && ctl.body.any?
 
-    # ── THE WRITE HALF ──────────────────────────────────────────────────────
-    # The read side is the primary guarantee — an assistant must never SEE a
-    # window it cannot book — but an assistant may name a date it never read
-    # from a `delivery_slots` response, so the ORDER has to refuse it too. That
-    # is the belt to this beat's braces: {WireArguments.delivery_date} refuses
-    # `date < Date.today`. `test/wire_arguments_test.rb` pins the past-WINDOW
-    # guard; this half is about the past DAY.
     sku      = (client.query(a, name: "catalog").body.then { |b| b.is_a?(Array) ? b : [] }).first&.dig("sku")
     order    = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
                              delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: past)
@@ -673,8 +445,6 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
     order_refused = order.status == 400 && error_code(order) == "bad_request" &&
                     o_detail.include?("in the past") && o_detail.match?(/\d{4}-\d{2}-\d{2}/)
 
-    # CONTROL for the write half — the SAME cart at a future date must place an
-    # order, so the refusal above cannot be an unrelated cart or address answer.
     order_ctl = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
                               delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: future)
     order_control = order_ctl.status == 200 && order_ctl.body.is_a?(Hash) &&
@@ -697,83 +467,21 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
   end
 end
 
-# ── THE THREE TIME-ZONE RULES NOTHING PROBED (spec §3.8.5, §3.8.9, §3.8.11) ──
-#
-# A caller's clock is a declared header and an answer's clock is a property of
-# the serviced resource. Three of the rules that follow from that are ABSENCES —
-# things an operator must not do — and an absence is true of this shop because
-# of how it happens to be built, with nothing that would go red if it were built
-# the other way. These three beats are the probes for them, and they share one
-# shape: SEND THE SAME REQUEST ON TWO CLOCKS TWENTY-FIVE HOURS APART AND SEE
-# WHAT MOVES.
-#
-# Two zones, chosen for two reasons. Neither observes DST, so a local date is a
-# fixed offset from UTC and this script needs no tzinfo — it runs outside a
-# Rails boot. And they are 25 hours apart, which is more than a day, so their
-# calendar dates DIFFER at every instant there is; a probe built on them has no
-# time-of-day branch and no window where it proves nothing.
+# Two fixed-offset zones 25 hours apart: their calendar dates differ at every instant.
 CLOCK_EAST = "Pacific/Kiritimati" # UTC+14, no DST
 CLOCK_WEST = "Pacific/Niue"       # UTC-11, no DST
 
-# READ THE DAY FROM AN INSTANT SLIGHTLY AHEAD OF NOW. The control below needs a
-# day the WEST clock is still inside when the LAST of its requests lands, and
-# without the lead there is one second a day — the instant Niue's midnight
-# passes — where the day is computed as current and is over by the time it is
-# asked about. Five minutes is far longer than the whole battery.
+# Read the day slightly ahead so it is still current when the last request lands.
 CLOCK_PROBE_LEAD = 300
 
-# The local calendar day in a zone whose offset never changes, as `YYYY-MM-DD`.
 def clock_probe_day(offset_hours)
   (Time.now.utc + CLOCK_PROBE_LEAD + (offset_hours * 3600)).to_date.iso8601
 end
 
-# ── CallerZoneIsNotInferred — §3.8.5's MUST NOT ──────────────────────────────
-#
-# «It MUST NOT source the caller's zone from the token, `Accept-Language`, IP
-# geolocation or the TCP peer.» That is an ABSENCE, and an absence is what this
-# workspace has learned to distrust: the fleet obeys it because the engine reads
-# ONE env key and no demo consults a second source, which is a fact about how
-# this code happens to be written rather than anything a gate could catch
-# changing.
-#
-# SO THE PROBE IS A DIFFERENTIAL, not an inspection. One `delivery_slots` call
-# is repeated three times with the SAME arguments and NO `Kiosk-Timezone`:
-# once bare, once carrying a Kiribati locale with Kiribati geolocation hints,
-# once carrying Niue's. The two baits point at clocks a day apart on either side
-# of this shop's own, so an operator that inferred a zone from ANY of those
-# headers would answer one of them differently from the other — and both are
-# asserted byte-identical to the bare answer.
-#
-# WHAT MAKES IT NON-VACUOUS is the control, and it runs FIRST. Three clauses,
-# on this very verb and this very day:
-#
-#   * an unreadable `Kiosk-Timezone` is a 400 naming the header, so the origin
-#     demonstrably READS the value rather than falling back on it;
-#   * the WEST clock — the one this day belongs to — is answered 200 with rows;
-#   * the EAST clock, twenty-five hours ahead, is a typed 400 naming that same
-#     day, because the day has entirely ended on that calendar.
-#
-# The third is the strong one: ONE argument, TWO declared zones, TWO different
-# answers. An origin that read no clock at all — or that read one and then
-# judged the day on its own — could not produce it, so "the baits changed
-# nothing" cannot be a vacuous pass. It needs two zones more than a calendar day
-# apart, which is why the pair at the top of this section is the pair it is:
-# anything closer has a time-of-day branch where their dates agree and the
-# clause would prove nothing.
-#
-# WHAT THE PROBE DOES NOT REACH, said out loud rather than left to be assumed:
-# the TCP PEER, which a client cannot forge from the outside (`X-Forwarded-For`
-# and its proxy siblings are the closest a request can come and are what is sent
-# here), and the TOKEN, because nothing in this engine's claim set carries a
-# zone, so there is no value for an operator to read off one. Both are asserted
-# where they ARE reachable: `test/wire_arguments_test.rb` builds the Rack env
-# itself and requires the declared zone to be read from neither.
+# §3.8.5: the caller's zone is never inferred from locale or geolocation headers.
 class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
   ADDRESS = "1 Redteam St, Dublin 1"
 
-  # Every source §3.8.5 forbids, in the spellings a request can actually carry:
-  # the locale a country maps to, and the three header shapes a reverse proxy
-  # writes a geolocated address into.
   BAIT_EAST = { "Accept-Language" => "gil-KI, gil;q=0.9",
                 "X-Forwarded-For" => "202.6.96.1",
                 "CF-IPCountry"    => "KI",
@@ -791,9 +499,6 @@ class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
     )
   end
 
-  # A shape the wire cannot read. It is refused BY NAME rather than fallen back
-  # on, which is what makes it usable as a control: the refusal names the header
-  # and so can only have come from reading it.
   UNREADABLE = "+03:00"
 
   def call(client, profile)
@@ -804,11 +509,7 @@ class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
       client.query(a, name: "delivery_slots", date: day, delivery_address: ADDRESS, headers: headers)
     end
 
-    # THE CONTROL, FIRST — this origin reads the declared clock, and the clock
-    # it is told MOVES the answer. `day` is the WEST clock's today, so it is a
-    # day that clock is still inside and one the EAST clock left behind hours
-    # ago: 25 hours apart, that is true at every instant rather than most of
-    # them.
+    # Control: the declared header is read and moves the answer.
     declared = ask.call("Kiosk-Timezone" => CLOCK_WEST)
     ended    = ask.call("Kiosk-Timezone" => CLOCK_EAST)
     garbled  = ask.call("Kiosk-Timezone" => UNREADABLE)
@@ -848,35 +549,7 @@ class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
   end
 end
 
-# ── OneRenderingPerRow — §3.8.9's second sentence ────────────────────────────
-#
-# «An operator publishes ONE rendering per row and not two — a second wall clock
-# in the caller's zone is a field pair that can disagree.» The first sentence of
-# that rule is asserted everywhere (every time-bearing row carries `timezone`,
-# and each published `output_schema` requires it); the second was an absence — no row
-# publishes a second wall clock, and nothing looked.
-#
-# THE PROBE READS THE SAME WINDOWS ON TWO CLOCKS. `delivery_slots` is called with
-# no `date`, so both calls ask for the soonest windows this shop has and the
-# ONLY difference between them is the caller's declared zone. Two things are
-# then asserted, and the second is the one the rule is actually about:
-#
-#   the shared windows are BYTE-IDENTICAL — a second rendering in the caller's
-#   zone would move with it;
-#
-#   and neither answer names the caller's zone ANYWHERE in its bytes — which
-#   catches a second rendering that happens not to differ today, and catches it
-#   in a field this beat never had to know the name of.
-#
-# The comparison is per shared `delivery_slot_id` rather than array-to-array,
-# because a window can begin between the two calls and drop out of the second
-# answer; that is this shop's own clock advancing, not the caller's zone moving
-# anything. The shared set being non-empty is asserted, so the loop cannot pass
-# by comparing nothing.
-#
-# NON-VACUITY: every row must carry a `timezone` whose name is NEITHER caller
-# zone and whose value appears in the row's own `label`. So the answer really is
-# publishing a wall clock and naming its zone — it is simply never the caller's.
+# §3.8.9: one rendering per row, never a second wall clock in the caller's zone.
 class OneRenderingPerRow < Kiosk::Redteam::Scenario
   ADDRESS   = "1 Redteam St, Dublin 1"
   RENDERING = %w[date slot_at label timezone].freeze
@@ -901,18 +574,16 @@ class OneRenderingPerRow < Kiosk::Redteam::Scenario
     east = ask.call(CLOCK_EAST)
     answered = [west, east].all? { |r| r.status == 200 && r.body.is_a?(Array) && r.body.any? }
 
+    # Compared per shared slot: a window may begin between the two calls and drop out.
     rows_w = answered ? west.body.to_h { |r| [r["delivery_slot_id"], r] } : {}
     rows_e = answered ? east.body.to_h { |r| [r["delivery_slot_id"], r] } : {}
     shared = rows_w.keys & rows_e.keys
     agree  = shared.any? &&
              shared.all? { |id| RENDERING.all? { |f| rows_w[id][f] == rows_e[id][f] } }
 
-    # The caller's zone must not appear in EITHER answer, in any field.
     bytes    = [west, east].map { |r| JSON.generate(r.body) }
     no_caller_zone = bytes.none? { |b| b.include?(CLOCK_WEST) || b.include?(CLOCK_EAST) }
 
-    # …and the answers DO publish a wall clock and DO name its zone, or the
-    # clause above would be true of a row that renders nothing at all.
     renders = answered && (rows_w.values + rows_e.values).all? { |r|
       zone = r["timezone"].to_s
       !zone.empty? && zone != CLOCK_WEST && zone != CLOCK_EAST && r["label"].to_s.include?(zone)
@@ -933,28 +604,7 @@ class OneRenderingPerRow < Kiosk::Redteam::Scenario
   end
 end
 
-# ── MachineTimestampsIgnoreTheCallerClock — §3.8.11 ──────────────────────────
-#
-# «Machine timestamps are not service times and are unaffected.» An `exp` is an
-# INSTANT — a moment a credential stops working — and no clock anybody declares
-# changes when that moment is. Nothing here renders one on a caller's clock.
-#
-# THE PROBE IS THE SAME DIFFERENTIAL AT A DIFFERENT ENDPOINT. Two auth
-# challenges, seconds apart, on clocks 25 hours apart: their `exp` values must
-# be within a minute of each other. The number that separates the two answers is
-# not close — a value rendered on the caller's clock would be 90,000 seconds
-# away, and a run cannot take 90,000 seconds — so the assertion has no tuning in
-# it.
-#
-# NON-VACUITY: both `exp` values must be integers in the FUTURE. A field that
-# has gone missing, or gone to zero on both sides, would otherwise satisfy
-# "these two agree" perfectly.
-#
-# THIS COVERS ONE MACHINE TIMESTAMP, the auth challenge's, and it is the engine's
-# rather than this shop's — which is why it lives beside the two beats above
-# instead of in every suite. A bearer's own `iat`/`exp`, skooti's unlock-token
-# `exp` and tudu's `expires_in` are held where they are minted, each against a
-# pinned instant, rather than over this wire.
+# §3.8.11: a machine timestamp (the auth challenge's exp) does not move with the caller's clock.
 class MachineTimestampsIgnoreTheCallerClock < Kiosk::Redteam::Scenario
   TOLERANCE_SECONDS = 60
 
@@ -997,10 +647,7 @@ class MachineTimestampsIgnoreTheCallerClock < Kiosk::Redteam::Scenario
 end
 
 
-# ── Scenarios ─────────────────────────────────────────────────────────────────
-
 scenarios = [
-  # Applicable — must be BLOCKED
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
   Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
@@ -1010,55 +657,33 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
-  # The CLAIM-ceremony sibling of the line above: PrivilegeSelfSelection covers
-  # `/auth/register`, where the role is never client-supplied; this covers the
-  # other door — the unauthenticated `device_authorization` request that opens
-  # the account-binding ceremony.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   Kiosk::Redteam::Scenarios::WrongCurrencyCart.new,
   TamperedPriceCart.new,
   InflatedTotalCart.new,
-  MalformedItemsCart.new,   # a mis-shaped `items` is a typed 400, never a 500
-  HostileArgShapes.new,     # boolean/array/object/junk shapes on the other args → typed 400
-  UnregisteredVerbIsOrdinaryRefusal.new, # a path naming no verb → the ordinary refusal
-  MethodMismatch.new,       # a GET at an action draws no route → a plain 404, no write
-  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
-  # The three §3.8 time-zone rules that were held by construction until they
-  # were probed: a clock is DECLARED and never inferred, a row is rendered
-  # once, and a machine timestamp is not a service time.
+  MalformedItemsCart.new,
+  HostileArgShapes.new,
+  UnregisteredVerbIsOrdinaryRefusal.new,
+  MethodMismatch.new,
+  PastDeliveryDate.new,
   CallerZoneIsNotInferred.new,
   OneRenderingPerRow.new,
   MachineTimestampsIgnoreTheCallerClock.new,
-  # register PoW is ON — a missing/bad register proof must be rejected (runs
-  # because pow_difficulty > 0).
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,
-  # Not applicable — must SKIP (no KYC)
+  # No KYC here — these must SKIP.
   Kiosk::Redteam::Scenarios::MissingKyc.new,
   Kiosk::Redteam::Scenarios::ExpiredKyc.new,
   Kiosk::Redteam::Scenarios::ForgedKyc.new,
 ]
 
-# ── Expected-applicable assertion ─────────────────────────────────────────────
 EXPECTED_SKIP_NAMES = %w[
   ExpiredKyc
   ForgedKyc
   MissingKyc
 ].freeze
 
-# ── Run ───────────────────────────────────────────────────────────────────────
-
 puts "\n── getgrocery redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-# DERIVE BOTH, NEVER TYPE THEM.  A typed `requires_kyc: false` sitting directly
-# under a line that already reads `profile.pow_difficulty` off the object lets
-# one flipped constructor argument 660 lines up leave the banner announcing the
-# opposite of the battery it introduces.  The ON/OFF gloss is derived for the
-# same reason: `1 (register PoW ON)` and `0 (register PoW ON)` are both
-# printable, and only one of them is ever true.
-#
-# These are the values every generic scenario reads to decide whether it is
-# applicable — RegistrationWithoutPow skips on 0, the KYC trio skips on false —
-# so the banner now says exactly what the run below will do.
 puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW #{profile.pow_difficulty.to_i > 0 ? "ON" : "OFF"})"
 puts "  requires_kyc:   #{profile.requires_kyc}"
 puts ""
@@ -1066,13 +691,7 @@ puts ""
 runner  = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile:)
 results = runner.run(scenarios)
 
-# ── Summary ───────────────────────────────────────────────────────────────────
-#
-# The gem prints it and the gem answers the exit status: 0 only when at least
-# one attack ran and every attack that ran was blocked, 1 on a breach or on a
-# battery that proved nothing, 2 when the skips are not the ones named above —
-# a profile key that has silently gone nil disables a gate scenario, and that
-# must not read as a clean run.
+# Exit 0 only when attacks ran and all were blocked; 2 when the skips differ from EXPECTED_SKIP_NAMES.
 battery = Kiosk::Redteam::Battery.new
 battery.absorb(results)
 exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)

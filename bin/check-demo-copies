@@ -576,7 +576,7 @@ COPIES = {
   },
   "script/equihash_register.rb" => {
     rule: :code,
-    why:  "The register handshake with the Equihash toll; each header names its own demo and port.",
+    why:  "The register handshake with the Equihash toll; each header names its own demo.",
   },
   "app/services/price_checker.rb" => {
     rule:  :per_demo,

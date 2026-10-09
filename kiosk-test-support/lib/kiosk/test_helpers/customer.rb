@@ -63,8 +63,15 @@ module Kiosk
       # The answer says whether a card is on file, or carries the page where the person saves one.
       def sets_up_payment = does(:payment_setup)
 
-      # The answer carries the page the assistant hands to its person.
-      def requests_verification = does(:request_kyc)
+      # Listens for the check's outcome, then asks for it; the answer carries the page
+      # the assistant hands to its person.
+      def requests_verification
+        listens_for(:kyc_verification)
+        does(:request_kyc)
+      end
+
+      # Whether the origin reports `check` (a #requests_verification answer) passed.
+      def hears_verification_passed(check) = hears(:kyc_verification, about: check["request_id"])["status"] == "approved"
 
       # Hands the origin an identity attestation the person obtained elsewhere.
       def presents(attestation) = Answer.new(@assistant.kyc(principal, attestation_jws: attestation))

@@ -104,6 +104,37 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     end
   end
 
+  describe "an identity check" do
+    let(:news) { instance_double(Kiosk::TestHelpers::Assistant::Events, subscribe: nil) }
+    let(:published) do
+      { "events" => [{ "name" => "kyc_verification", "payload_schema" => { "type" => "object", "required" => %w[status] } }] }
+    end
+
+    before do
+      allow(assistant).to receive(:events).and_return(news)
+      stub_request(:get, "#{origin}/kiosk/schema").to_return(json_return(200, published))
+      stub_request(:post, "#{origin}/kiosk/request_kyc").to_return(json_return(200, "request_id" => "r1"))
+    end
+
+    def outcome(status) = allow(news).to receive(:await) { |&match| [{ "topic" => "kyc_verification", "subject" => "r1", "data" => { "status" => status } }].find(&match) }
+
+    it "listens for its outcome before asking for it" do
+      allow(news).to receive(:subscribe) { expect(a_request(:post, "#{origin}/kiosk/request_kyc")).not_to have_been_made }
+
+      expect(customer.requests_verification["request_id"]).to eq("r1")
+      expect(news).to have_received(:subscribe).with("kyc_verification")
+    end
+
+    it "is heard to pass when the origin reports that check approved, and not otherwise" do
+      check = customer.requests_verification
+
+      outcome("approved")
+      expect(customer.hears_verification_passed(check)).to be(true)
+      outcome("rejected")
+      expect(customer.hears_verification_passed(check)).to be(false)
+    end
+  end
+
   describe "#hears" do
     let(:news) { instance_double(Kiosk::TestHelpers::Assistant::Events) }
     let(:published) do

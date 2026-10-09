@@ -103,7 +103,7 @@ end
 
 - `a_customer(as:)` registers an assistant; `a_newcomer(as:)` holds a key and no account yet; `published(path)` reads what the origin shows anyone.
 - `Customer#asks` and `#does` answer an `Answer` (`ok?`, `refused?(code)`, `detail`, `hint`, `rows`, `header`, `tolls_paid`, `solved_toll`, `next_page`); `asks(…, unpaid: true)` or `asks(…, proofs: […])` leaves the toll to the story.
-- `Customer#sets_up_payment` and `#requests_verification` run the engine's `payment_setup` and `request_kyc`; `#pays(total:, scope:, line_items:, currency:)` signs the intent, cart and payment mandates for a quote.
+- `Customer#sets_up_payment` and `#requests_verification` run the engine's `payment_setup` and `request_kyc`, and `#hears_verification_passed(check)` waits for that check's outcome; `#pays(total:, scope:, line_items:, currency:)` signs the intent, cart and payment mandates for a quote.
 - `Customer#account`, `#role` and `#claims` read its credential; `#signs_back_in`, `#with_a_fresh_credential`, `#redeems(link_code)`, `#asks_to_be_linked`, `#polls` and `#collects` are the sign-in and linking ceremonies.
 - `Customer#listens_for`, `#follows(*topics, subject:, since:)` and `#hears(topic, about:, on:, **data)` read the event stream, holding each heard payload to the schema the origin publishes for its topic.
 - `a_person(email:, password:)` signs a person in on the operator's site through `kiosk-user-idp-devise`'s `DeviseSession`: `links(customer)`, `link_code`, `approves(user_code)`, `unlinks(customer)`, `visits(path)`.
@@ -122,7 +122,7 @@ class LicenceStory < Kiosk::StoryTest   # or an RSpec group including Kiosk::Tes
     rider = a_customer
     check = rider.requests_verification
     the_verification_service_confirms(check, age_over_18: true, licence_a: true)
-    # …
+    assert rider.hears_verification_passed(check)
   end
 end
 ```

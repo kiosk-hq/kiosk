@@ -49,12 +49,9 @@
 require "json"
 require "json_schemer"
 require "net/http"
+require "kiosk/test_helpers/descriptor_examples"
 require "kiosk/test_helpers/wire"
 require "uri"
-# The RESERVED wire names, read from the engine rather than restated (§4). Its
-# own requires are `date`, `time`, `rack` and `kiosk/server/errors` — all
-# loadable without Rails, which is what lets this bare `ruby` process have them.
-require "kiosk/server/argument_decoder"
 
 SERVER  = ENV.fetch("SERVER_URL")
 # LIVE MODE — the same file, pointed at a DEPLOYED origin instead of at the app
@@ -307,84 +304,22 @@ end
 
 # ── 4. §8.3 — a descriptor's EXAMPLES against that descriptor's OWN schemas ──
 #
-# Matrix SPEC-084. The catalog publishes `example_params` and `example_row` so
-# an assistant can copy one verbatim as a starting call; the spec says the
-# example ILLUSTRATES the contract and the SCHEMA is the contract where they
-# disagree. Nothing checked that they agree at all, so a verb could ship an
-# example its own `input_schema` rejects — and the assistant that copied it
-# would get a 400 from the origin that published it.
-#
-# The bytes here are the SERVED catalog, so this validates what an assistant
-# actually reads, not what a controller file says.
-examples_checked = 0
-%w[queries actions].each do |kind|
-  Array(catalog[kind]).each do |descriptor|
-    name = descriptor["name"]
-
-    if descriptor.key?("example_params")
-      # `limit` and `cursor` are RESERVED (§8.1 item 6, §8.4): the wire always
-      # accepts them and a verb never declares them, so an `input_schema` with
-      # `additionalProperties: false` still takes one and an `example_params`
-      # may legitimately show one. {RequestValidation#validate_arguments!}
-      # drops exactly this set — minus any the verb declares for itself, which
-      # is the more specific statement — before validating a real request, so a
-      # check that did not would refuse an example the origin ACCEPTS. Read
-      # from the engine's own constant; a second copy is the drift this file
-      # exists to catch elsewhere.
-      declared_props = Kiosk::Server::ArgumentDecoder.fetch(descriptor["input_schema"], :properties)
-      exempt = Kiosk::Server::ArgumentDecoder::RESERVED.keys -
-               (declared_props.is_a?(Hash) ? declared_props.keys.map(&:to_s) : [])
-      payload = descriptor["example_params"]
-      payload = payload.reject { |key, _| exempt.include?(key) } if payload.is_a?(Hash)
-
-      schema = JSONSchemer.schema(descriptor["input_schema"],
-                                  meta_schema: "https://json-schema.org/draft/2020-12/schema")
-      errors = schema.validate(payload).to_a
-      examples_checked += 1
-      if errors.empty?
-        ok "#{name}: example_params satisfies its own input_schema"
-      else
-        bad "#{name}: example_params VIOLATES its own input_schema",
-            errors.first(3).map { |e| e["error"] }.join("; ")
-      end
-    end
-
-    next unless descriptor.key?("example_row")
-
-    # `example_row` is ONE ELEMENT of the answer, so for a query — whose
-    # output_schema is an array schema (§8.2) — it is checked against `items`,
-    # not against the array. An action's answer is the object itself.
-    out = descriptor["output_schema"]
-    row_schema = if out.is_a?(Hash) && out["type"] == "array" && out["items"]
-                   # `$defs` stay in scope: `items` is routinely a `$ref` into them.
-                   out.reject { |k, _| %w[type description items].include?(k) }
-                      .merge(out["items"].is_a?(Hash) ? out["items"] : {})
-                 else
-                   out
-                 end
-    next if row_schema == true || row_schema.nil?
-
-    schema = JSONSchemer.schema(row_schema,
-                                meta_schema: "https://json-schema.org/draft/2020-12/schema")
-    errors = schema.validate(descriptor["example_row"]).to_a
-    examples_checked += 1
-    if errors.empty?
-      ok "#{name}: example_row satisfies its own output_schema"
-    else
-      bad "#{name}: example_row VIOLATES its own output_schema",
-          errors.first(3).map { |e| e["error"] }.join("; ")
-    end
+# The catalog publishes `example_params` and `example_row` for an assistant to
+# copy verbatim as a starting call, so each must satisfy the schema beside it.
+# These are the SERVED bytes, not what a controller file says. This origin's
+# fixtures declare four examples, so fewer means the loop asserted almost nothing.
+examples = Kiosk::TestHelpers::DescriptorExamples.of(catalog)
+examples.each do |example|
+  if (violation = example.violation)
+    bad "#{example.verb}: #{example.slot} VIOLATES its own schema", violation
+  else
+    ok "#{example.verb}: #{example.slot} satisfies its own schema"
   end
 end
-
-# The control for the loop itself. A `for` over an empty list passes silently,
-# and this origin's fixtures declare four examples; a refactor that stopped
-# publishing them would turn the whole block above into a no-op that prints
-# nothing and fails nothing.
-if examples_checked >= 4
-  ok "…across #{examples_checked} published examples (the loop is not empty)"
+if examples.size >= 4
+  ok "…across #{examples.size} published examples (the loop is not empty)"
 else
-  bad "descriptor examples were checked", "only #{examples_checked} examples found in the served " \
+  bad "descriptor examples were checked", "only #{examples.size} examples found in the served " \
       "catalog — the §8.3 loop above asserted almost nothing"
 end
 

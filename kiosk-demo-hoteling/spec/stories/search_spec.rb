@@ -5,11 +5,13 @@ require "story_helper"
 RSpec.describe "Finding a hotel", type: :story do
   let(:guest) { a_guest }
 
+  def total(found) = found.header("x-total-count").to_i
+
   it "a guest pages through every hotel in town, and a narrow search fits on one page" do
     first = guest.searches(limit: 20)
     expect(first).to be_ok
     expect(first.rows).to be_an(Array).and have_attributes(size: 20)
-    expect(first.total).to be > 20
+    expect(total(first)).to be > 20
 
     second = guest.turns_to(first.next_page)
     expect(second.rows).to be_present
@@ -18,7 +20,7 @@ RSpec.describe "Finding a hotel", type: :story do
     narrow = guest.searches(neighbourhood: "Beşiktaş", min_stars: 4, max_price_cents: 30_000)
     expect(narrow.rows).to be_an(Array)
     expect(narrow.next_page).to be_nil
-    expect(narrow.total).to eq(narrow.rows.size)
+    expect(total(narrow)).to eq(narrow.rows.size)
   end
 
   it "a guest reads one hotel's rooms, and is told when a hotel does not exist" do
@@ -35,7 +37,7 @@ RSpec.describe "Finding a hotel", type: :story do
   it "a search that matches nothing comes back empty, and a neighbourhood the city does not have is answered with the ones it does" do
     nothing = guest.searches(neighbourhood: "Sultanahmet", max_price_cents: 1)
     expect(nothing).to be_ok
-    expect([nothing.rows, nothing.total]).to eq([[], 0])
+    expect([nothing.rows, total(nothing)]).to eq([[], 0])
     expect(guest.searches(neighbourhood: "Sultanahmet").rows).to be_present
 
     atlantis = guest.searches(neighbourhood: "Atlantis")
@@ -48,7 +50,7 @@ RSpec.describe "Finding a hotel", type: :story do
     one = guest.searches(limit: 0)
     expect(one).to be_ok
     expect(one.rows.size).to eq(1)
-    expect(one.total).to be > 1
+    expect(total(one)).to be > 1
     expect(guest.searches(limit: -5).rows.size).to eq(1)
     expect(guest.searches(limit: 500).rows.size).to eq(50)
   end

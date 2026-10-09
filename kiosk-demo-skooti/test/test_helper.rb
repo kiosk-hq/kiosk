@@ -16,20 +16,13 @@ class Rider < Kiosk::TestHelpers::Customer
   def vehicles_nearby = asks(:scooters_available).rows
   def reservations = asks(:my_reservations).rows
   def reserves(vehicle, **extra) = does(:reserve, scooter_code: vehicle, **extra)
-  def sets_up_payment = does(:payment_setup)
   def rides(reservation) = does(:start_rental, reservation_id: reservation["reservation_id"])
   def rides_motorcycle(reservation) = does(:rent_motorcycle, reservation_id: reservation["reservation_id"])
 
   # Signs a cart for the quoted upfront minute of `reservation`.
   def pays_for(reservation)
-    now   = Time.now.to_i
     price = reservation["price_per_min_cents"]
-    mandate = { user_id: principal.user_id, agent_id: principal.agent_id, iss: origin, currency: "eur",
-                iat: now, exp: now + 600 }
-    intent = mandate.merge(id: SecureRandom.uuid, scope: "mobility", cap_amount_cents: price)
-    pays(intent:, cart: mandate.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: price,
-                                      line_items: [{ qty: 1, price_cents: price,
-                                                     reservation_id: reservation["reservation_id"] }]))
+    pays(total: price, scope: "mobility", line_items: [{ qty: 1, price_cents: price, reservation_id: reservation["reservation_id"] }])
   end
 end
 

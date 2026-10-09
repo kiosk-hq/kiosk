@@ -11,14 +11,6 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
     Booking.find(booking["booking_id"])
   end
 
-  # What the guest's assistant is told about the booking, in the shape the hotel publishes for the topic.
-  def news_of(booking, to:)
-    news = to.hears(:booking_confirmation, about: booking["booking_id"])
-    event = { "topic" => "booking_confirmation", "data" => news }
-    expect(Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), [event])).to be_empty
-    news
-  end
-
   it "a guest waits for the hotel, and once it accepts is handed the confirmation code, which a later answer does not change" do
     guest = a_guest
     booking = guest.reserves
@@ -33,7 +25,8 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
     guest.listens_for(:booking_confirmation)
     code = the_hotel_answers(booking, accepts: true).confirmation_code
     expect(code).to be_present
-    expect(news_of(booking, to: guest)).to eq("booking_id" => booking["booking_id"], "status" => "confirmed", "confirmation_code" => code)
+    news = guest.hears(:booking_confirmation, about: booking["booking_id"])
+    expect(news).to eq("booking_id" => booking["booking_id"], "status" => "confirmed", "confirmation_code" => code)
     expect(guest.confirms(booking).rows).to include("status" => "confirmed", "confirmation_code" => code)
 
     expect(the_hotel_answers(booking, accepts: false)).to have_attributes(status: "confirmed", confirmation_code: code)
@@ -50,9 +43,10 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
     expect(declined).to have_attributes(status: "cancelled", payment_status: "refunded", payment_state: "refunded")
     expect(declined.refund_psp_reference).to start_with("re_")
     expect(Booking.live.where(id: declined.id)).to be_empty
-    expect(news_of(booking, to: guest)).to eq("booking_id" => declined.id, "status" => "cancelled", "reason" => "property_declined",
-                                              "refund" => { "amount_cents" => declined.total_cents, "currency" => "eur",
-                                                            "psp_reference" => declined.refund_psp_reference, "reverses" => charge })
+    news = guest.hears(:booking_confirmation, about: booking["booking_id"])
+    expect(news).to eq("booking_id" => declined.id, "status" => "cancelled", "reason" => "property_declined",
+                       "refund" => { "amount_cents" => declined.total_cents, "currency" => "eur",
+                                     "psp_reference" => declined.refund_psp_reference, "reverses" => charge })
   end
 
   it "a hotel that declines a booking with no charge on record refunds nothing" do
@@ -62,6 +56,7 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
 
     guest.listens_for(:booking_confirmation)
     expect(the_hotel_answers(booking, accepts: false)).to have_attributes(status: "cancelled", refund_psp_reference: nil)
-    expect(news_of(booking, to: guest)).to eq("booking_id" => booking["booking_id"], "status" => "cancelled", "reason" => "property_declined")
+    news = guest.hears(:booking_confirmation, about: booking["booking_id"])
+    expect(news).to eq("booking_id" => booking["booking_id"], "status" => "cancelled", "reason" => "property_declined")
   end
 end

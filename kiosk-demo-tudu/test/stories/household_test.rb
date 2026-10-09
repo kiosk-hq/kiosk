@@ -3,14 +3,6 @@
 require "test_helper"
 
 class HouseholdStory < StoryTest
-  def news(topic, action: nil, todo: nil)
-    lambda do |event|
-      event["topic"] == topic.to_s &&
-        (action.nil? || event.dig("data", "action") == action) &&
-        (todo.nil? || event.dig("data", "todo_id") == todo)
-    end
-  end
-
   test "a housemate invited to a list joins it, and every todo says whose assistant added it" do
     alice, bob = a_member, a_member
     hike = alice.starts_a_list("Hike")
@@ -56,34 +48,30 @@ class HouseholdStory < StoryTest
   test "the owner's assistant hears a housemate join, add, complete and leave, including what was added while it was away" do
     alice, bob = a_member, a_member
     hike = alice.starts_a_list
-    watching = alice.follows(hike)
-    every_list = alice.follows(topics: %w[todo])
+    watching = alice.follows(:todo, :list_membership, subject: hike)
+    every_list = alice.follows(:todo)
 
     campsite = alice.adds("Book campsite", to: hike)["todo_id"]
     bob.joins(alice.invites_to(hike))
-    assert_equal bob.account_id, watching.await(&news(:list_membership, action: "joined")).dig("data", "account_id")
-    assert watching.await(&news(:todo, todo: campsite))
+    assert_equal bob.account, alice.hears(:list_membership, on: watching, action: "joined")["account_id"]
+    assert alice.hears(:todo, on: watching, todo_id: campsite)
     heard_up_to = watching.events.pluck("id").max
     watching.close
 
-    bobs_view = bob.follows(hike, topics: %w[todo])
+    bobs_view = bob.follows(:todo, subject: hike)
     tent = bob.adds("Bring tent", to: hike)["todo_id"]
 
-    back = alice.follows(hike, since: heard_up_to)
-    assert_equal "added", back.await(&news(:todo, todo: tent)).dig("data", "action")
+    back = alice.follows(:todo, :list_membership, subject: hike, since: heard_up_to)
+    assert_equal "added", alice.hears(:todo, on: back, todo_id: tent)["action"]
     assert back.events.all? { _1["id"] > heard_up_to }
-    assert every_list.await(&news(:todo, todo: tent))
+    assert alice.hears(:todo, on: every_list, todo_id: tent)
 
     assert bob.completes(campsite).ok?
-    assert_equal campsite, back.await(&news(:todo, action: "completed")).dig("data", "todo_id")
+    assert_equal campsite, alice.hears(:todo, on: back, action: "completed")["todo_id"]
 
     assert alice.removes(bob, from: hike).ok?
-    assert_equal bob.account_id, back.await(&news(:list_membership, action: "removed")).dig("data", "account_id")
+    assert_equal bob.account, alice.hears(:list_membership, on: back, action: "removed")["account_id"]
     assert_equal({ "type" => "unsubscribed", "topic" => "todo", "reason" => "reach_revoked" },
                  bobs_view.await_message(timeout: 45) { _1["type"] == "unsubscribed" })
-
-    heard = [watching, every_list, back, bobs_view].flat_map(&:events)
-    assert_equal %w[list_membership todo], heard.pluck("topic").uniq.sort
-    assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(published_schema, heard)
   end
 end

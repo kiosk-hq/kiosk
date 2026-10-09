@@ -5,11 +5,9 @@
 #   SERVER_URL=http://localhost:3004 bundle exec ruby script/rental_flow.rb
 
 require "json"
-require "securerandom"
 require "kiosk/test_helpers/assistant"
 
-issuer = ENV.fetch("SERVER_URL")
-client = Kiosk::TestHelpers::Assistant.new(base_url: issuer)
+client = Kiosk::TestHelpers::Assistant.new(base_url: ENV.fetch("SERVER_URL"))
 rider  = client.register!
 
 reservation = client.run(rider, name: "reserve", scooter_code: "SK-001")
@@ -17,12 +15,8 @@ abort "reserve: #{reservation.status} #{reservation.body}" unless reservation.st
 reservation_id = reservation.body.fetch("reservation_id")
 price          = reservation.body.fetch("price_per_min_cents")
 
-now     = Time.now.to_i
-mandate = { user_id: rider.user_id, agent_id: rider.agent_id, iss: issuer, currency: "eur", iat: now, exp: now + 600 }
-intent  = mandate.merge(id: SecureRandom.uuid, scope: "mobility", cap_amount_cents: price)
-cart    = mandate.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: price,
-                        line_items: [{ qty: 1, price_cents: price, reservation_id: }])
-paid = client.pay(rider, intent:, cart:)
+quote = client.mandates(rider, total: price, scope: "mobility", line_items: [{ qty: 1, price_cents: price, reservation_id: }])
+paid  = client.pay(rider, **quote)
 abort "pay: #{paid.status} #{paid.body}" unless paid.status == 200
 
 rental = client.run(rider, name: "start_rental", reservation_id:)

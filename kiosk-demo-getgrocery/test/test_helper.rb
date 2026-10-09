@@ -34,7 +34,7 @@ end
 class Shopper < Kiosk::TestHelpers::Customer
   HOME = "42 Camden Street, Dublin 2"
 
-  def browses = asks(:catalog)
+  def browses(**) = asks(:catalog, **)
   def delivery_windows(address: HOME, **) = asks(:delivery_slots, delivery_address: address, **)
   def orders_placed = asks(:my_orders).rows
 
@@ -46,14 +46,8 @@ class Shopper < Kiosk::TestHelpers::Customer
 
   # Signs a cart that names the order and every item in it at the catalog price.
   def pays_for(order)
-    now   = Time.now.to_i
-    total = order["total_cents"]
     lines = @baskets.fetch(order["order_id"]).map { { sku: _1, qty: 1, price_cents: Product.find_by!(sku: _1).price_cents } }
-    mandate = { user_id: principal.user_id, agent_id: principal.agent_id, iss: origin, currency: "eur",
-                iat: now, exp: now + 600 }
-    intent = mandate.merge(id: SecureRandom.uuid, scope: "grocery", cap_amount_cents: total)
-    pays(intent:, cart: mandate.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: total,
-                                      line_items: [{ order_id: order["order_id"] }] + lines))
+    pays(total: order["total_cents"], scope: "grocery", line_items: [{ order_id: order["order_id"] }] + lines)
   end
 
   def moves(order, to_window:, on: Date.current + 1)

@@ -4,15 +4,9 @@ require "story_helper"
 require "kiosk/test_helpers/descriptor_examples"
 
 RSpec.describe "Discovering the hotel", type: :story do
-  def get(path)
-    status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
-    expect(status).to eq(200), "GET #{path} with no credential"
-    body
-  end
-
   it "an assistant that knows nothing finds out, without an account, what the hotel offers and how to book" do
-    kiosk  = get("/.well-known/kiosk.json")["kiosk"]
-    schema = get("/kiosk/schema")
+    kiosk  = published("/.well-known/kiosk.json")["kiosk"]
+    schema = published("/kiosk/schema")
 
     expect(kiosk["capabilities"]).to include("schema", "queries", "actions", "pay", "events")
     expect(kiosk["events_url"]).to match(%r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z})
@@ -36,7 +30,7 @@ RSpec.describe "Discovering the hotel", type: :story do
   end
 
   it "the landing page advertises the skill this origin pins" do
-    pinned = get("/.well-known/kiosk.json").dig("kiosk", "skill", "url")
+    pinned = published("/.well-known/kiosk.json").dig("kiosk", "skill", "url")
     expect(pinned).to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
 
     page = Net::HTTP.get_response(URI("#{live_url}/"))

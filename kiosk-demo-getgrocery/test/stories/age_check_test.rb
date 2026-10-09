@@ -13,10 +13,9 @@ class AgeCheckStory < StoryTest
     assert refused.refused?(:kyc_required), refused
     assert_includes refused.hint, "request_kyc"
 
-    shopper.listens_for(:kyc_verification)
     check = shopper.requests_verification
     the_verification_service_confirms(check, age_over_18: true)
-    assert_equal "approved", shopper.hears(:kyc_verification, about: check["request_id"])["status"]
+    assert shopper.hears_verification_passed(check)
 
     wine = shopper.orders("table-red-wine")
     assert wine.ok?, wine

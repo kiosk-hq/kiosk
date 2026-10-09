@@ -15,7 +15,7 @@ require "test_helper"
 # It runs with no server, no proof-of-work and no bearer token: the calls go
 # through the registered handler under a GUC-scoped session, so what is being
 # asserted is the operator's own code rather than the wire in front of it. The
-# wire itself is driven by the tests under `test/wire/`.
+# wire itself is driven by the stories under `test/stories/`.
 class KioskConformanceTest < ActiveSupport::TestCase
   # Two principals with a shopping history each. `my_orders` answers whoever is
   # calling, so a scoping assertion needs both sides seeded: one to see rows and

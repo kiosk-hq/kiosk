@@ -20,11 +20,10 @@ class LicenceCheckStory < StoryTest
     assert refused.refused?(:kyc_required), refused
     assert_includes refused.hint, "request_kyc"
 
-    rider.listens_for(:kyc_verification)
     check = rider.requests_verification
     assert check["verification_url"], check
     the_verification_service_confirms(check, age_over_18: true, licence_a: true)
-    assert_equal "approved", rider.hears(:kyc_verification, about: check["request_id"])["status"]
+    assert rider.hears_verification_passed(check)
 
     rental = rider.rides_motorcycle(motorcycle)
     assert rental.ok?, rental

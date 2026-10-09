@@ -1,25 +1,18 @@
 # frozen_string_literal: true
 
 require "test_helper"
-require "kiosk/pow/equihash/solver"
 
 class TollStory < StoryTest
   setup { toll(SHIPPED_TOLL) }
 
   # A search for a table for two, carrying whatever proofs of work the assistant offers.
-  def looks_for_a_table(diner, proofs: nil)
-    headers = Kiosk::TestHelpers::Wire.bearer(diner.principal.token)
-    headers["Kiosk-PoW"] = JSON.generate(proofs) if proofs
-    Kiosk::TestHelpers::Answer.new(Kiosk::TestHelpers::Wire.new(base_url: live_url).get("/kiosk/availability", { party_size: 2 }, headers))
-  end
+  def looks_for_a_table(diner, proofs: nil) = diner.asks(:availability, party_size: 2, unpaid: true, proofs:)
 
   def the_toll_for(diner)
     asked = looks_for_a_table(diner)
     assert asked.refused?(:pow_required), asked
-    asked["challenges"]
+    asked
   end
-
-  def solves(challenges) = challenges.map { { challenge: _1, nonce: Kiosk::Pow::Equihash.solve(_1) } }
 
   def guesses(challenges)
     challenges.map { { challenge: _1, nonce: { "indices" => (1..2**EQUIHASH_PARAMS[:k]).to_a, "header_nonce" => 0 } } }
@@ -27,18 +20,18 @@ class TollStory < StoryTest
 
   test "a new diner's search costs two proofs of work, and only solved ones pay it" do
     diner = a_diner
-    toll = the_toll_for(diner)
-    assert_equal [EQUIHASH_PARAMS.transform_keys(&:to_s)] * 2, toll.map { _1["params"].slice("n", "k") }
+    challenges = the_toll_for(diner)["challenges"]
+    assert_equal [EQUIHASH_PARAMS.transform_keys(&:to_s)] * 2, challenges.map { _1["params"].slice("n", "k") }
 
-    assert looks_for_a_table(diner, proofs: guesses(toll)).refused?(:forbidden)
-    assert looks_for_a_table(diner, proofs: solves(the_toll_for(diner))).ok?
+    assert looks_for_a_table(diner, proofs: guesses(challenges)).refused?(:forbidden)
+    assert looks_for_a_table(diner, proofs: the_toll_for(diner).solved_toll).ok?
   end
 
   test "the toll falls as the diner's confirmed bookings accrue" do
     diner = a_diner
-    assert_equal 2, the_toll_for(diner).size
+    assert_equal 2, the_toll_for(diner)["challenges"].size
     assert diner.books.ok?
-    assert_equal 1, the_toll_for(diner).size
+    assert_equal 1, the_toll_for(diner)["challenges"].size
     assert diner.books.ok?
     assert looks_for_a_table(diner).ok?
   end
@@ -49,7 +42,7 @@ class TollStory < StoryTest
     ))
     diner = a_diner
 
-    assert looks_for_a_table(diner, proofs: solves(the_toll_for(diner))).ok?
+    assert looks_for_a_table(diner, proofs: the_toll_for(diner).solved_toll).ok?
     assert Array.new(3) { looks_for_a_table(diner) }.all?(&:ok?)
     assert looks_for_a_table(diner).refused?(:pow_required)
   end

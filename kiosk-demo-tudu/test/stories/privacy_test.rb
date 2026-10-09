@@ -27,15 +27,15 @@ class PrivacyStory < StoryTest
   end
 
   test "a list belongs to whoever started it, whoever the arguments name" do
-    forged = @stranger.does(:create_list, title: "Forged", account_id: @owner.account_id)
+    forged = @stranger.does(:create_list, title: "Forged", account_id: @owner.account)
     assert forged.refused?(:bad_request), forged
     assert_includes forged["detail"], "account_id"
 
-    assert_equal @stranger.account_id, List.find(@stranger.starts_a_list).account_id
+    assert_equal @stranger.account, List.find(@stranger.starts_a_list).account_id
   end
 
   test "only queries the catalog says reach past the assistant's own account ever show a shared list" do
-    queries = published_schema["queries"]
+    queries = published("/kiosk/schema")["queries"]
     assert_equal({ "my_lists" => "consented", "list_todos" => "consented", "list_members" => "consented", "whoami" => "principal" },
                  queries.to_h { [_1["name"], _1["reach"]] }.slice("my_lists", "list_todos", "list_members", "whoami"))
 

@@ -4,15 +4,9 @@ require "test_helper"
 require "kiosk/test_helpers/descriptor_examples"
 
 class DiscoveryStory < StoryTest
-  def get(path)
-    status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
-    assert_equal 200, status, "GET #{path} with no credential"
-    body
-  end
-
   test "an assistant that knows nothing finds out, without an account, what the salon offers and how to book" do
-    kiosk  = get("/.well-known/kiosk.json")["kiosk"]
-    schema = get("/kiosk/schema")
+    kiosk  = published("/.well-known/kiosk.json")["kiosk"]
+    schema = published("/kiosk/schema")
 
     assert_equal %w[actions queries schema], kiosk["capabilities"].sort
     assert_not kiosk.key?("events_url")
@@ -33,7 +27,7 @@ class DiscoveryStory < StoryTest
   end
 
   test "the landing page advertises the skill this origin pins" do
-    pinned = get("/.well-known/kiosk.json").dig("kiosk", "skill", "url")
+    pinned = published("/.well-known/kiosk.json").dig("kiosk", "skill", "url")
     assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
 
     page = Net::HTTP.get_response(URI("#{live_url}/"))

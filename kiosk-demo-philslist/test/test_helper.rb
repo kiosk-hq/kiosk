@@ -38,12 +38,5 @@ end
 class StoryTest < Kiosk::StoryTest
   def a_seller = a_customer(as: Seller)
 
-  # What the board publishes to anyone, with no account.
-  def published(path)
-    status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
-    assert_equal 200, status, "GET #{path} with no credential"
-    body
-  end
-
   def ids(listings) = listings.pluck("listing_id")
 end

@@ -91,7 +91,7 @@ subject: Bob joining arrives live, Bob's todo added while it was disconnected
 arrives on reconnecting with `since`, Bob ticking off Alice's todo arrives live as
 `completed`, and Bob's removal arrives live while his
 own subscription to the list is withdrawn (`unsubscribed`, `reach_revoked`).
-Every delivered `data` is checked against the `payload_schema` the origin serves.
+Every event the story waits for is checked against the `payload_schema` the origin serves.
 
 ### W5 rebind + list transfer (`test/stories/link_test.rb`)
 

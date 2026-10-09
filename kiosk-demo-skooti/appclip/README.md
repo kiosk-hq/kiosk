@@ -207,7 +207,7 @@ Same encoding requirement as QR: the `rt=` value must be percent-encoded.
 
 | Claim | Status |
 |-------|--------|
-| Server Ed25519 rental-token issue + verify chain (register → reserve → pay → start_rental) | **PROVEN** (`test/wire/rental_test.rb`) |
+| Server Ed25519 rental-token issue + verify chain (register → reserve → pay → start_rental) | **PROVEN** (`test/stories/ride_test.rb`) |
 | Firmware Ed25519 offline verify (domain tag + 6-field parse) + Ruby↔C interop | **PROVEN** (`make test`) |
 | One-shot jti replay prevention within a boot (in-RAM `jti_store`, 64 entries) | **PROVEN** (`make test` jti-store tests) |
 | The same store ACROSS a lock reboot | **NOT SHIPPED** — the table is in RAM; wiring it to NVS is the adopter's step, see `firmware/README.md` |

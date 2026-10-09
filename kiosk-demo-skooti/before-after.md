@@ -27,7 +27,7 @@ the final step is physical rather than a form post.
 
 ## With skooti
 
-`test/wire/rental_test.rb` runs the errand with no human account and no sign-in: the
+`test/stories/ride_test.rb` runs the errand with no human account and no sign-in: the
 assistant generates a keypair, proves possession, pays the Equihash
 registration toll, reserves `SK-001`, signs the three AP2 mandates, pays, and
 calls `start_rental`. The server checks three gates — the reservation is the
@@ -44,7 +44,7 @@ as it relays a card-setup link. The human's tap on the NFC tag
 launches the App Clip, and the clip writes the token to the lock.
 
 A licence-free scooter needs no identity check at all. The signed KYC
-attestation gates `rent_motorcycle` instead (`test/wire/kyc_test.rb`), where a licence
+attestation gates `rent_motorcycle` instead (`test/stories/licence_check_test.rb`), where a licence
 is the point.
 
 ## What an operator adds

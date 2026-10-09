@@ -29,7 +29,7 @@ product.
 
 ## With getgrocery
 
-`test/wire/shop_test.rb` runs the errand end to end: the assistant registers itself
+`test/stories/shop_test.rb` runs the errand end to end: the assistant registers itself
 under the toll, reads `catalog` and `delivery_slots`, calls `create_order` with
 a slot and an in-zone address, and pays. The catalog returns in-stock items
 only, so the assistant resolves substitutions by reasoning over it — no

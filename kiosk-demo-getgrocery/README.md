@@ -147,7 +147,7 @@ completed an 18+ anonymized-KYC check via the shared **KYC broker** (kyc.demo.ki
 (`POST /kiosk/request_kyc` → human approves a broker link → the broker signs
 an anonymized `{age_over_18}` claim → the `kyc_verification` event carries it →
 submit it to `POST /kiosk/agents/kyc`).
-Non-restricted groceries need no KYC. `test/wire/age_check_test.rb` drives that
+Non-restricted groceries need no KYC. `test/stories/age_check_test.rb` drives that
 flow with `Kiosk::TestHelpers::Kyc` standing in for the broker.
 
 This age-gate is the **proper home** of anonymized KYC: a low-liability
@@ -171,5 +171,5 @@ The human side of the claim ceremony (verify page, link mint, unlink)
 authenticates through a **real Devise session** — `kiosk-user-idp-devise`
 reading the Warden user, the same channel every other demo uses. The seeded
 shopper `hana@example.com` signs in at `/users/sign_in`, and
-`test/wire/claim_test.rb` drives that form rather than asserting a bearer. Assistants never touch this
+`test/stories/claim_test.rb` drives that form rather than asserting a bearer. Assistants never touch this
 channel — kiosk-pop key possession is their only credential.

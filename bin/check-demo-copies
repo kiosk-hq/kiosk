@@ -1257,20 +1257,8 @@ COPIES = {
   },
   "app/controllers/application_controller.rb" => {
     rule: :code,
-    why:  "ActionController::Base (not API) so the human-facing Devise pages get cookies, flash " \
-          "and CSRF. Per-demo prose only — and ONE sentence of that prose is checked rather than " \
-          "trusted (K-1021, see the block below): the superclass each copy's header says its " \
-          "`Kiosk::*Controller`s have must be the one those files declare. `:code` compares " \
-          "modulo comments, so without that arm the header is guarded by nothing, which is how " \
-          "K-1017's false «kiosk-server ships their bases» sentence lived in eight copies.",
-  },
-  "app/controllers/users/sessions_controller.rb" => {
-    rule: :identical,
-    why:  "The K-533 sign-OUT signpost: Devise answers a session-less DELETE with a zero-byte " \
-          "401 claiming to be JSON, and this hands the caller a JSON courtesy body instead — " \
-          "deliberately NOT the wire's RFC 9457 problem document, which is what «the Kiosk " \
-          "error envelope» used to claim it was (K-1092). " \
-          "The four Devise demos must give an agent the SAME answer.",
+    why:  "Standard Rails ApplicationController plus the one-line include of the Devise adapter's " \
+          "wire signpost; ActionController::Base (not API) so the human pages get cookies, flash and CSRF.",
   },
   "app/controllers/home_controller.rb" => {
     rule: :per_demo,

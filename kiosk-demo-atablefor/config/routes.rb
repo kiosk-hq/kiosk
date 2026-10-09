@@ -2,10 +2,8 @@
 
 Rails.application.routes.draw do
 
-  # Human diner sign-in: the web session that mints the link code binding an
-  # assistant to the diner's account. The sessions controller only answers a
-  # JSON sign-out with a pointer to the wire; the rest is Devise's own.
-  devise_for :users, controllers: { sessions: "users/sessions" }
+  # Human sign-in (Devise): the web session that approves assistant links.
+  devise_for :users, controllers: { sessions: "kiosk/user_identity_providers/devise/sessions" }
 
   # Public root page: what this demo is + the assistant-facing "point your AI
   # assistant here" cue + a live, read-only reservations board (upcoming

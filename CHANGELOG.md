@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **kiosk-user-idp-devise answers a JSON caller at the human sign-in and sign-out pages with a pointer to the wire**; the demos include it instead of carrying copies.
+
 - 2026-10-09: **Demo tests load no red-team code**: they drive the wire with kiosk-test-support's `Assistant` and stand in for the KYC provider; the attack batteries run on their own.
 
 - 2026-10-09: **A demo resets with `bin/rails db:reset` and is tested with `bin/rails test`**; its `check:` and `demo:setup` rake tasks are gone.

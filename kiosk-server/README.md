@@ -543,9 +543,6 @@ you `render`. On top of that:
   an RFC 8288 `Link: <…?cursor=…>; rel="next"` response header and the
   matching-row count as `X-Total-Count`. `Kiosk::Server::Cursor` has an offset
   helper; pass `total:` only when you know it.
-- `render_kiosk_result(result)` — answer with a `Kiosk::OperationResult`: a
-  success renders its value, a refusal renders its code, message and hint at the
-  status your subclass's `STATUSES` maps the code to.
 - `include Kiosk::Owned` — gives a model with a `user_id` column the scope
   `own`, the current principal's rows. `Kiosk.current_user_id` is the same id,
   for a column with another name.

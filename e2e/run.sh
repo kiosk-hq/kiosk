@@ -274,7 +274,7 @@ cp "$FIXTURES/create_kiosk_pay_stripe_customers.rb" "db/migrate/${ts1c}_create_k
 # 2) Generator-produced migrations.
 bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null
 
-# 3) Demo schema (salons + appointments + RLS). Timestamp = now + 60s —
+# 3) Demo schema (salons + appointments). Timestamp = now + 60s —
 # enough to run after the kiosk:install migrations (which use Time.now)
 # while staying inside Rails's «migration timestamp ≤ now + 1day» check.
 ts3=$(ruby -e "puts (Time.now + 60).utc.strftime('%Y%m%d%H%M%S')")

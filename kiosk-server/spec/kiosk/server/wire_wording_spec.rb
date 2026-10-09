@@ -15,11 +15,8 @@
 #
 # which is the json gem's wording rather than this protocol's.
 #
-# `missing field: <name>` is the HOUSE SENTENCE: the demos answer an absent
-# argument with it, bin/check-demo-copies calls it "the one an assistant's
-# error handling matches on" and holds three demos to it — but that rule's file
-# set is `kiosk-demo-*`, so the engine, which is the one place a FOURTH wording
-# was being emitted, was outside every mechanism in the tree.
+# `missing field: <name>` is the house sentence: the demos answer an absent
+# argument with it, and the engine must too.
 #
 # Two arms, and they answer different questions. The behavioural ones pin what
 # each SITE answers today; the source sweep at the bottom is what stops the

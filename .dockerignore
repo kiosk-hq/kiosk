@@ -6,9 +6,8 @@
 # machine-local, or has no bearing on a build.
 #
 # This file is an instruction to the build beside it: `Dockerfile` in this same
-# directory. `bin/check-demo-copies` fails on a container ignore-file with no
-# recipe at or above it, which is what three separate waves left behind here
-# before the recipe existed.
+# directory. `bin/check-demo-copies` fails on a container ignore-file outside a
+# build context.
 
 # Version control and CI.
 .git

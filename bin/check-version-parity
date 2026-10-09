@@ -1,30 +1,15 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Version parity, as kiosk.tech/spec/protocol.md §14.1 states it.
-#
-# Before 1.0 every number is the same MAJOR.MINOR.PATCH: `API_VERSION`,
-# `MIN_CLIENT`, every gem, every Gemfile.lock entry for a kiosk-* gem, and the
-# skill cut kiosk-server's default and every demo pin. From 1.0 they share
-# MAJOR.MINOR, and `MIN_CLIENT` may not be newer than `API_VERSION`.
-#
-# Also held, because the cut moves them in the same change:
-#   - every inter-gem `kiosk-*` dependency is `~> MAJOR.MINOR.0`;
-#   - each gem's version comes from its one `lib/**/version.rb`;
-#   - the `rel="kiosk"` discovery signal in each operator demo reads
-#     `Kiosk.configuration.skill_url` (§4.5) in both a view and a controller,
-#     and no file under app/ hardcodes a skill url.
-#
-# Stdlib and git only; no bundle, no database, no network.
-#
-# Usage:
-#   bin/check-version-parity          # check
-#   bin/check-version-parity --list   # also print every version compared
+# check-version-parity — protocol.md §14.1: before 1.0, API_VERSION, MIN_CLIENT, every gem,
+# every lockfile kiosk-* entry and every skill pin share one MAJOR.MINOR.PATCH (from 1.0,
+# MAJOR.MINOR). Also: inter-gem deps are `~> MAJOR.MINOR.0`, each gem's version comes from
+# one version.rb, and each demo emits rel="kiosk" from Kiosk.configuration.skill_url.
 
 require "rubygems"
 
-unless (unknown = ARGV - ["--list"]).empty?
-  warn "check-version-parity: unrecognised argument(s): #{unknown.join(' ')} (it takes `--list` only)"
+unless ARGV.empty?
+  warn "check-version-parity: takes no arguments"
   exit 2
 end
 
@@ -45,21 +30,16 @@ min_client = read_constant("MIN_CLIENT")
 pre_one    = api.split(".").first.to_i.zero?
 rule       = pre_one ? "#{api} exactly (pre-1.0: full parity)" : "series #{series(api)} (from 1.0: MINOR compatibility)"
 errors     = []
-listing    = [["Kiosk::Protocol::API_VERSION", api]]
 
 agrees = ->(version) { pre_one ? version == api : series(version) == series(api) }
 check  = lambda do |where, version|
-  listing << [where, version]
   errors << "#{where} is #{version}; must be #{rule}" unless agrees.(version)
 end
 
 if pre_one
   check.("Kiosk::Protocol::MIN_CLIENT", min_client)
-else
-  listing << ["Kiosk::Protocol::MIN_CLIENT", min_client]
-  if series(min_client) != series(api) || Gem::Version.new(min_client) > Gem::Version.new(api)
-    errors << "MIN_CLIENT #{min_client} must be in series #{series(api)} and not newer than API_VERSION #{api}"
-  end
+elsif series(min_client) != series(api) || Gem::Version.new(min_client) > Gem::Version.new(api)
+  errors << "MIN_CLIENT #{min_client} must be in series #{series(api)} and not newer than API_VERSION #{api}"
 end
 
 # ── Gems ─────────────────────────────────────────────────────────────────────
@@ -136,8 +116,6 @@ initializers.map { File.expand_path("../../..", _1) }.each do |dir|
 
   forms.each { |form, count| errors << "#{demo}: no #{form} emits rel=\"kiosk\" from #{ACCESSOR}" if count.zero? }
 end
-
-listing.each { |where, version| puts format("%-60s %s", where, version) } if ARGV.include?("--list")
 
 if errors.empty?
   puts "check-version-parity: OK — #{specs.size} gems, lockfiles and #{pins.size} skill pins at #{rule}"

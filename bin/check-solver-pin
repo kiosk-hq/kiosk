@@ -1,24 +1,10 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# check-solver-pin — the Equihash solver this repository ships is the solver the
-# published skill pins.
-#
-# The skill tells an assistant to fetch https://kiosk.tech/pow/solve-<digest>.py,
-# verify its sha256 against the pin beside the URL, and refuse it on a mismatch.
-# So three files must be byte-identical:
-#
-#   kiosk-pow-equihash/solve.py              the solver the demos and e2e run
-#   kiosk.tech/pow/solve.py                  the current solver, named by PowGate's hint
-#   kiosk.tech/pow/solve-<digest>.py         the file the newest skill cut pins
-#
-# and the newest cut's sha256 must be the digest of those bytes.
-#
-# The kiosk.tech files are read from a sibling checkout at ../kiosk.tech. Without
-# one the check prints SKIP and exits 0, unless KIOSK_REQUIRE_SITE_SIBLING=1 is
-# set, which is how ci.yml's `published-bytes` job runs it.
-#
-# Usage: bin/check-solver-pin
+# check-solver-pin — kiosk-pow-equihash/solve.py, kiosk.tech/pow/solve.py and the
+# solve-<digest>.py the newest skill cut pins are byte-identical, and the pinned sha256
+# is their digest. Reads ../kiosk.tech; without it prints SKIP and exits 0, unless
+# KIOSK_REQUIRE_SITE_SIBLING=1.
 
 require "digest"
 

@@ -55,12 +55,9 @@
 #       8032 bounds by the group order — names an axis the vector set respells
 #       the scalar on. R6's shape, on the other half of the signature: "the
 #       scalar is below the group order" reads identically on this page whether
-#       a vector can reach it or not, and until K-1603 none could. The lock
-#       accepted a scalar one group order above the canonical one, both Ruby
-#       readers refused the same bytes, and the whole `sig` axis — five vectors
-#       — was about how the 64 bytes are SPELLED in base64 and could not see
-#       it. So a rule making this claim is asked for an axis on which some
-#       vector moves the scalar itself.
+#       a vector can reach it or not, and an axis that only respells the 64
+#       bytes in base64 cannot. So a rule making this claim is asked for an
+#       axis on which some vector moves the scalar itself.
 #   R7  The section carries a LIMITS subsection, and it is not empty. A page
 #       that only ever states what IS true reads as complete whether it is or
 #       not; the limits are where it says what it does not claim, and they are
@@ -286,8 +283,8 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
                   "(#{scalars.join(', ')}) but names #{named.join(', ')}, and the vector " \
                   "set respells the scalar only on " \
                   "#{scalar.empty? ? '(no axis at all)' : scalar.join(', ')} — a claim " \
-                  "about which 64 bytes are a signature that no vector can reach is the " \
-                  "shape K-1603 found: #{text.lines.first.strip.inspect}"
+                  "about which 64 bytes are a signature that no vector can reach: " \
+                  "#{text.lines.first.strip.inspect}"
     end
 
     universals = BYTE_UNIVERSAL.select { |word| plain.downcase.include?(word) }
@@ -505,11 +502,9 @@ def self_test
     problems.any? { |problem| problem.start_with?("R7") && problem.include?("category error") }
   }]
 
-  # T-201 rule 3 — THE ORIGINAL MOTIVATING DEFECT OF R6, in the bytes it
-  # actually had. This is the `reservation_id` cell the grammar shipped with,
-  # marker and all, planted back into the LIVE page: it passed R1-R5 for as
-  # long as it existed while the three readers disagreed on 128 of the 256
-  # single-byte cases, and R6 is the arm that had to redden on it.
+  # R6's motivating defect: an earlier `reservation_id` cell, planted into the
+  # live page. It passes R1-R5 while the three readers disagree on 128 of the
+  # 256 single-byte cases; R6 must redden on it.
   arms << ["S19 the original defect: the shipped reservation_id cell, live page", lambda {
     original = "| 2 | `reservation_id` | opaque, non-empty, any bytes but `\\|` and NUL — " \
                "a newline, a tab, a control character or multibyte UTF-8 all pass. No " \
@@ -525,9 +520,8 @@ def self_test
     problems.any? { |problem| problem.start_with?("R6") && problem.include?("any bytes") }
   }]
 
-  # T-201 rule 3 — the ORIGINAL motivating defect of R2, in the shape it
-  # actually had: the live page states the signature rule, and the vector set is
-  # the one that shipped before this gate existed, whose axes stop at `fresh`.
+  # R2's motivating defect: the live page's signature rule against a vector set
+  # whose axes stop at `fresh`.
   arms << ["S12 the original defect: the live page's signature rule against the pre-sig axes", lambda {
     pre_sig_axes = %w[count empty tag int jti length fresh]
     problems, = analyse(File.read(PAGE), pre_sig_axes)
@@ -545,12 +539,9 @@ def self_test
     problems.any? { |problem| problem.include?("no live subject and cannot fail — the page has stopped stating the range") }
   }]
 
-  # T-201 rule 3 — THE ORIGINAL MOTIVATING DEFECT OF R8, on the LIVE page and
-  # against the vector set AS IT SHIPPED BEFORE K-1603: the `sig` axis existed,
-  # with five vectors, and every one of them respelt the base64 ENCODING of a
-  # fixed 64 bytes. No vector moved the scalar, so nothing could reach the
-  # accept the lock was giving. The page's scalar rule against that set is the
-  # exact state K-1603 found, and R8 is the arm that has to redden on it.
+  # R8's motivating defect: the live page's scalar rule against a vector set
+  # whose `sig` vectors only respell the base64 of fixed 64 bytes, so none
+  # moves the scalar. R8 must redden on it.
   arms << ["S22 the original defect: the live page's scalar rule against a set that respells no scalar", lambda {
     problems, = analyse(File.read(PAGE), SkootiTokenVectors.axes,
                         SkootiTokenVectors.exhaustive_axes, [])

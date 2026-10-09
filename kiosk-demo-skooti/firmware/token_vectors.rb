@@ -229,7 +229,7 @@ module SkootiTokenVectors
   # encoding. `check_grammar_coverage.rb`'s R8 lets a rule on the page state
   # the scalar range only while naming an axis one of these is on, for R6's
   # reason: a rule about which 64 bytes are a signature reads the same on the
-  # page whether a vector reaches it or not, and before K-1603 none did.
+  # page whether a vector reaches it or not.
   # Membership is checked below rather than trusted, so a renamed transform is
   # a loud failure and not a quietly empty list.
   SCALAR_WIRES = %i[malleated_sig order_sig].freeze
@@ -486,9 +486,7 @@ module SkootiTokenVectors
   end
 
   # The axes carrying at least one vector that respells the signature's SCALAR.
-  # Derived from the vectors, so deleting them empties this and R8 reddens —
-  # which is the state the grammar was in when K-1603 found the lock taking a
-  # scalar at or above the group order that both Ruby readers refused.
+  # Derived from the vectors, so deleting them empties this and R8 reddens.
   #
   # @return [Array<String>] axis names
   def self.scalar_axes

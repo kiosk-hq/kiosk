@@ -3,18 +3,7 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # Mandate principal-swap: B signs a cart mandate claiming A's identity.
-      #
-      # Attack:
-      #   1. A and B register.
-      #   2. A creates an owned resource.
-      #   3. B calls profile.pay_for with A's mandate payloads (user_id /
-      #      agent_id belonging to A) but submits the pay command under B's
-      #      bearer token.  client.pay signs the payloads with B's RSA key.
-      #   4. BLOCKED iff the provider rejects the pay (mandate principal must
-      #      match the authenticated signer, or ownership must be A's).
-      #
-      # Skipped when: profile.pay_for or profile.create_owned is nil.
+      # B pays, under its own token and key, mandates claiming A's identity: must be refused.
       class MandatePrincipalSwap < Scenario
         def initialize
           super(
@@ -33,21 +22,11 @@ module Kiosk
 
           owned_ref = profile.create_owned.call(client, a)
 
-          # Obtain mandate payloads built with A's identity (user_id, agent_id).
           mandates = profile.pay_for.call(client, a, owned_ref)
 
-          # Submit those A-identity payloads signed by B's key under B's token.
-          # The server must detect the mismatch (claimed principal ≠ signer /
-          # authenticated agent) and reject.
           resp = client.pay(b, intent: mandates[:intent], cart: mandates[:cart])
 
-          # Mandate verification is an AUTHORIZATION decision: the claimed
-          # principal is not the signer, so the pay is refused 403
-          # forbidden/rls_denied. A 402 would mean the payment instrument was
-          # declined before the mandates were ever verified — the swap
-          # unexamined — and a 401 would mean B's own token was rejected.
-          # NEITHER counts as blocked: pinning the status is what keeps this
-          # scenario about the swap.
+          # Only 403: a 402 or 401 means the swap was never examined.
           verdict_from(
             resp,
             expect:      403,

@@ -4,57 +4,16 @@ require "kiosk/pow/cuckoo/version"
 
 module Kiosk
   module Pow
-    # Cuckatoo-Cycle proof-of-work backend for Kiosk.
-    #
-    # Clean-room implementation from the Cuckatoo algorithm spec (Tromp's
-    # doc/spec and doc/mathspec).  Only the VERIFIER is implemented here —
-    # the cheap, asymmetric, security-critical side, and the half an operator
-    # has to trust.  Solving is a separate program: the reference solver is
-    # `solve_cuckoo.py`, packaged beside this file.
-    #
-    # == Primitives (both clean-room, permissive):
-    #
-    # BLAKE2b-256 — pure Ruby from the public-domain BLAKE2 spec.  No
-    #   external dependency; no code from Tromp's repo.
-    #
-    # SipHash-2-4 (Cuckatoo non-standard init) — pure Ruby from the
-    #   public-domain SipHash spec with one deviation: keys are used directly
-    #   as v0..v3 WITHOUT XOR-ing the 0x736f6d65... magic constants.
-    #
-    # == Wire API
-    #
-    # The composite proof `nonce` is a Hash:
-    #   { header_nonce: <u32>, cycle: [42 strictly-ascending edge indices] }
-    # (String or Symbol keys are both accepted.)
-    #
-    # `verify(salt:, params:, nonce:)` builds:
-    #   header = salt_bytes ‖ LE32(header_nonce)
-    # derives the four siphash keys via blake2b-256(header), then runs the
-    # Cuckatoo cycle verifier and an optional difficulty-target check.
-    #
-    # == Difficulty target
-    #
-    # When `params[:target]` is set (Integer in [0, 2^256)), the verifier
-    # additionally asserts:
-    #   blake2b-256( sorted_cycle_edges_packed_as_LE_u64 ) < target
-    # where the 32-byte hash is treated as a big-endian 256-bit integer.
-    # `nil` target (the default) accepts any valid cycle.
+    # Cuckatoo Cycle proof-of-work verifier, clean-room from Tromp's spec.
+    # The proof `nonce` is { header_nonce: <u32>, cycle: [42 ascending edge indices] };
+    # the solver is `solve_cuckoo.py`, packaged beside this file.
     module Cuckoo
-      # Algorithm identifier used in challenge params.
       NAME = "cuckatoo"
 
-      # 64-bit mask for all arithmetic.
       MASK64 = (1 << 64) - 1
       private_constant :MASK64
 
-      # -----------------------------------------------------------------------
-      # BLAKE2b-256 — pure Ruby, clean-room from the public-domain BLAKE2 spec.
-      # Covers sequential mode (fanout=1, depth=1), no key, no salt/personalization.
-      # Output: 32 bytes.
-      # Reference: https://www.blake2.net/blake2.pdf (public domain)
-      # -----------------------------------------------------------------------
-
-      # BLAKE2b initialization values (identical to the first 8 SHA-512 IVs).
+      # BLAKE2b-256, sequential mode, no key (https://www.blake2.net/blake2.pdf).
       BLAKE2B_IV = [
         0x6a09e667f3bcc908, 0xbb67ae8584caa73b,
         0x3c6ef372fe94f82b, 0xa54ff53a5f1d36f1,
@@ -63,7 +22,6 @@ module Kiosk
       ].freeze
       private_constant :BLAKE2B_IV
 
-      # Message schedule permutations for 10 base rounds (cycled to 12).
       BLAKE2B_SIGMA = [
         [ 0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15],
         [14, 10,  4,  8,  9, 15, 13,  6,  1, 12,  0,  2, 11,  7,  5,  3],
@@ -78,13 +36,11 @@ module Kiosk
       ].freeze
       private_constant :BLAKE2B_SIGMA
 
-      # Right-rotate a 64-bit integer by n positions.
       def self.rotr64(x, n)
         ((x >> n) | (x << (64 - n))) & MASK64
       end
       private_class_method :rotr64
 
-      # BLAKE2b G mixing function; modifies v in place.
       def self.b2b_g(v, a, b, c, d, x, y)
         v[a] = (v[a] + v[b] + x) & MASK64
         v[d] = rotr64(v[d] ^ v[a], 32)
@@ -97,19 +53,12 @@ module Kiosk
       end
       private_class_method :b2b_g
 
-      # BLAKE2b compression function.
-      # Modifies h (8-element u64 array) in place.
-      # m is a 16-element u64 message block.
-      # counter is the total bytes processed so far (fits in 64 bits for our inputs).
-      # last_block triggers the finalization flag.
       def self.b2b_compress(h, m, counter, last_block)
-        # Working vector: v[0..7] = current state h, v[8..15] = IV constants.
         v = h.dup + BLAKE2B_IV.dup
         v[12] ^= counter & MASK64
-        # v[13] ^= upper 64 bits of counter — always 0 for inputs < 2^64 bytes.
-        v[14] ^= MASK64 if last_block  # invert all bits of v[14] (finalize flag)
+        v[14] ^= MASK64 if last_block
 
-        # 12 rounds of mixing (SIGMA is 10 rows; rows 10 and 11 reuse rows 0 and 1).
+        # 12 rounds; rows 10 and 11 reuse SIGMA rows 0 and 1.
         12.times do |r|
           s = BLAKE2B_SIGMA[r % 10]
           b2b_g(v, 0, 4,  8, 12, m[s[ 0]], m[s[ 1]])
@@ -122,20 +71,12 @@ module Kiosk
           b2b_g(v, 3, 4,  9, 14, m[s[14]], m[s[15]])
         end
 
-        # Fold the working vector back into the state.
         8.times { |i| h[i] ^= v[i] ^ v[i + 8] }
       end
       private_class_method :b2b_compress
 
-      # Compute BLAKE2b-256 (32-byte output, no key) of +input+ (raw bytes String).
-      # Implements sequential hashing mode: fanout=1, depth=1, all other params=0.
-      #
-      # Public so specs can test it directly against Python hashlib.blake2b vectors.
       def self.blake2b256(input)
-        # Parameter block word 0 (LE u64):
-        #   byte 0 = outlen=32 (0x20), byte 1 = keylen=0,
-        #   byte 2 = fanout=1,  byte 3 = maxdepth=1
-        #   → 0x0000_0000_0101_0020
+        # Parameter block word 0: outlen=32, keylen=0, fanout=1, maxdepth=1.
         p0 = 0x0000_0000_0101_0020
 
         h = BLAKE2B_IV.dup
@@ -145,14 +86,12 @@ module Kiosk
         data_len = data.bytesize
 
         if data_len == 0
-          # Empty input: compress one zero block with counter=0 and final=true.
           b2b_compress(h, [0] * 16, 0, true)
         else
           offset = 0
           loop do
             remaining = data_len - offset
             if remaining <= 128
-              # Final (possibly partial) block — pad to 128 bytes with zeros.
               padded = data[offset, remaining].ljust(128, "\x00")
               b2b_compress(h, padded.unpack("Q<16"), data_len, true)
               break
@@ -164,29 +103,14 @@ module Kiosk
           end
         end
 
-        # First 4 u64 words packed as little-endian = 32 bytes.
         h[0, 4].pack("Q<4")
       end
 
-      # -----------------------------------------------------------------------
-      # SipHash-2-4 — Cuckatoo non-standard initialization.
-      #
-      # Standard SipHash-2-4 XORs k0..k3 with the "magic constants"
-      # (0x736f6d65..., 0x646f7261..., 0x6c796765..., 0x74656462...).
-      # Cuckatoo deliberately omits that step: keys feed directly into v0..v3.
-      #
-      # Reference: public-domain SipHash spec by Jean-Philippe Aumasson and
-      # Daniel J. Bernstein (https://131002.net/siphash/siphash.pdf).
-      # Non-standard init documented in Tromp's doc/spec for Cuckoo Cycle.
-      # -----------------------------------------------------------------------
-
-      # Left-rotate a 64-bit integer by n positions.
       def self.rotl64(x, n)
         ((x << n) | (x >> (64 - n))) & MASK64
       end
       private_class_method :rotl64
 
-      # One SipRound (standard left-rotation schedule: 13, 16, 17, 21, 32).
       def self.sipround(v0, v1, v2, v3)
         v0 = (v0 + v1) & MASK64
         v1 = rotl64(v1, 13) ^ v0
@@ -202,25 +126,19 @@ module Kiosk
       end
       private_class_method :sipround
 
-      # Cuckatoo SipHash-2-4 with non-standard init.
-      #
-      # @param k0..k3 [Integer] 64-bit key words (from blake2b-256 of header)
-      # @param nonce  [Integer] 64-bit input value (edge endpoint index)
-      # @return      [Integer] 64-bit hash output
+      # SipHash-2-4 as Cuckatoo uses it: the keys are NOT XORed with the standard magic constants.
       def self.siphash(k0, k1, k2, k3, nonce)
         v0 = k0
         v1 = k1
         v2 = k2
         v3 = k3 ^ nonce
 
-        # 2 compression rounds (c=2)
         v0, v1, v2, v3 = sipround(v0, v1, v2, v3)
         v0, v1, v2, v3 = sipround(v0, v1, v2, v3)
 
         v0 ^= nonce
         v2 ^= 0xff
 
-        # 4 finalization rounds (d=4)
         v0, v1, v2, v3 = sipround(v0, v1, v2, v3)
         v0, v1, v2, v3 = sipround(v0, v1, v2, v3)
         v0, v1, v2, v3 = sipround(v0, v1, v2, v3)
@@ -229,47 +147,27 @@ module Kiosk
         (v0 ^ v1) ^ (v2 ^ v3)
       end
 
-      # -----------------------------------------------------------------------
-      # Cuckatoo Cycle verifier
-      # -----------------------------------------------------------------------
-
-      # Verify a Cuckatoo proof cycle.
-      #
-      # @param keys     [Array<Integer>] [k0, k1, k2, k3] — four u64 siphash keys
-      # @param edgebits [Integer]        log2 of the graph size (e.g. 29)
-      # @param cycle    [Array<Integer>] strictly-ascending edge indices (length = proofsize)
-      # @param proofsize [Integer]       cycle length (default 42)
-      # @return [Boolean]
       def self.verify_cycle(keys:, edgebits:, cycle:, proofsize: 42)
         n_nodes = 1 << edgebits
         mask    = n_nodes - 1
         k0, k1, k2, k3 = keys
         ps      = proofsize
 
-        # Proof must have exactly proofsize edges.
         return false unless cycle.length == ps
 
         uvs_size = 2 * ps
         uvs = Array.new(uvs_size, 0)
 
-        # Compute U/V endpoints; verify strictly-ascending and in-range.
         cycle.each_with_index do |edge, n|
-          # A non-Integer edge (nil, String, Float, …) means a malformed proof,
-          # which must return false, never raise — comparing a String
-          # with an Integer throws ArgumentError.
           return false unless edge.is_a?(Integer)
           return false if edge >= n_nodes
-          return false if n > 0 && edge <= cycle[n - 1]   # strict ascending (also deduplicates)
+          return false if n > 0 && edge <= cycle[n - 1]
           uvs[2 * n]     = siphash(k0, k1, k2, k3, 2 * edge) & mask
           uvs[2 * n + 1] = siphash(k0, k1, k2, k3, 2 * edge + 1) & mask
         end
 
-        # Walk the single cycle on node-PAIRS (via >> 1).
-        #
-        # At each step i, we are at a U-side (even i) or V-side (odd i) node.
-        # We scan for the unique other endpoint j (same parity, same node-pair
-        # value when both right-shifted by 1) and follow edge j to its partner
-        # (j ^ 1).  The walk must return to i=0 after exactly proofsize steps.
+        # Walk the cycle: from endpoint i find the one same-parity endpoint j on the
+        # same node (>> 1), cross edge j to j ^ 1, and return to 0 in proofsize steps.
         i = 0
         n = 0
 
@@ -277,58 +175,32 @@ module Kiosk
           j = i
           k = i
 
-          # Scan all same-parity indices (step by 2) for a partner.
           loop do
             k = (k + 2) % uvs_size
             break if k == i
             if (uvs[k] >> 1) == (uvs[i] >> 1)
-              return false if j != i    # BRANCH: more than one partner found
+              return false if j != i
               j = k
             end
           end
 
-          return false if j == i            # DEAD_END: no partner found
-          return false if uvs[j] == uvs[i] # DEAD_END: partner is same exact node (degenerate)
+          return false if j == i
+          return false if uvs[j] == uvs[i]
 
-          i = j ^ 1   # cross the edge to the other endpoint
+          i = j ^ 1
           n += 1
-          break if i == 0   # returned to start
+          break if i == 0
         end
 
-        n == ps   # must complete exactly proofsize steps
+        n == ps
       end
 
-      # -----------------------------------------------------------------------
-      # Public API (backend contract)
-      # -----------------------------------------------------------------------
-
-      # Build algorithm-specific challenge params.
-      #
-      # @param edgebits  [Integer] log2 of graph size (required)
-      # @param proofsize [Integer] cycle length (default 42)
-      # @param target    [Integer, nil] 256-bit difficulty target as Integer,
-      #                                or nil to accept any valid cycle
-      # @return [Hash]
+      # `target` is a 256-bit Integer the sorted cycle's BLAKE2b-256 must stay below; nil accepts any cycle.
       def self.params(edgebits:, proofsize: 42, target: nil)
         { edgebits:, proofsize:, target: }
       end
 
-      # Read the three challenge parameters as the numbers the verifier's
-      # arithmetic needs, or answer all-nil when any of them cannot be read.
-      #
-      # The sibling of {Equihash.coerce_params}, and for the same reason: a
-      # verifier that cannot evaluate the question must answer `false`, never
-      # raise. `params` reaches {.verify} from the challenge object, so a
-      # degenerate value is an operator misconfiguration rather than something
-      # a caller chose — but a raise out of a backend leaves
-      # `Challenge.verify`'s Symbol contract through the floor, so it is the
-      # verifier's job to stay inside it either way.
-      #
-      # `target` is nil-or-Integer by the {.params} contract; nil means «accept
-      # any valid cycle» and is passed through, anything uncoercible fails the
-      # whole read.
-      #
-      # @return [Array(Integer, Integer, Integer), Array(nil, nil, nil)]
+      # All-nil when unreadable, so {.verify} answers false instead of raising.
       def self.coerce_params(params)
         return [nil, nil, nil] unless params.is_a?(Hash)
 
@@ -343,13 +215,6 @@ module Kiosk
       end
       private_class_method :coerce_params
 
-      # Verify a Cuckatoo proof-of-work.
-      #
-      # @param salt   [String] raw bytes (the provider's per-challenge salt)
-      # @param params [Hash]   as returned by {.params}
-      # @param nonce  [Hash]   { header_nonce: Integer, cycle: Array<Integer> }
-      #                        (String or Symbol keys are both accepted)
-      # @return [Boolean]
       def self.verify(salt:, params:, nonce:)
         return false unless nonce.is_a?(Hash)
 
@@ -357,22 +222,11 @@ module Kiosk
         cycle        = nonce[:cycle]        || nonce["cycle"]
         return false if header_nonce.nil? || cycle.nil?
 
-        # A cycle that is not an Array is a malformed proof, and it is the one
-        # shape of it a CALLER supplies: an Integer has no #each_with_index, and
-        # a String of the right #length walks straight past {verify_cycle}'s
-        # first guard into the same NoMethodError.
         return false unless cycle.is_a?(Array)
 
         edgebits, proofsize, target = coerce_params(params)
         return false if edgebits.nil?
 
-        # Build the header: salt bytes ‖ header_nonce as LE u32 (4 bytes). Its
-        # length is salt.bytesize + 4 — 80 bytes only for a 76-byte salt (the
-        # Grin KAT). The gem's own solve_parity salt is shorter, so its header
-        # is shorter too; nothing here assumes either size.
-        # header_nonce is client-supplied. A non-numeric/non-coercible value
-        # means a malformed proof, which must return false, never raise
-        # Integer() throws ArgumentError/TypeError on "abc", [1], {}.
         header_nonce = begin
           Integer(header_nonce)
         rescue ArgumentError, TypeError
@@ -380,11 +234,9 @@ module Kiosk
         end
         header = salt.b + [header_nonce].pack("V")
 
-        # Derive SipHash keys from the header.
         hdr32          = blake2b256(header)
         k0, k1, k2, k3 = hdr32.unpack("Q<4")
 
-        # Run the Cuckatoo cycle verifier.
         return false unless verify_cycle(
           keys:      [k0, k1, k2, k3],
           edgebits:  edgebits,
@@ -392,13 +244,10 @@ module Kiosk
           proofsize: proofsize
         )
 
-        # Optional difficulty-target check:
-        #   blake2b-256( sorted cycle edges as LE u64 ) < target
         if target
           cycle_packed = cycle.sort.pack("Q<*")
           cycle_hash   = blake2b256(cycle_packed)
-          # Interpret the 32-byte hash as a big-endian 256-bit integer and
-          # compare against the Integer target (the .params contract).
+          # The hash is read as a big-endian integer.
           hash_int = cycle_hash.unpack("C*").reduce(0) { |acc, b| (acc << 8) | b }
           return false if hash_int >= target
         end

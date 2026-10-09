@@ -3,26 +3,8 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # Pay-for-A, use-as-B (C2) — the headline Phase-1 I-1 scenario.
-      #
-      # Attack:
-      #   1. A registers (no KYC needed — A just creates a resource).
-      #   2. B registers + KYC (if required).
-      #   3. A creates an owned resource → owned_ref_A.
-      #   4. B builds + pays a cart mandate referencing owned_ref_A but with
-      #      B's own user_id/agent_id (mandate is legitimately B's, so payment
-      #      is expected to succeed — the cart simply references A's resource).
-      #   5. B invokes profile.gated_action on owned_ref_A.
-      #   6. BLOCKED iff denied 403 forbidden/rls_denied — the ownership gate
-      #      must check that the authenticated principal owns the resource, not
-      #      just that payment exists for it.  Any OTHER refusal is a different
-      #      gate answering, and this scenario names its own.
-      #
-      # This is Gate-1: "who owns this resource?" checked at gated_action time,
-      # not at pay time.
-      #
-      # Skipped when: profile.gated_action, profile.create_owned, or
-      # profile.pay_for is nil.
+      # B pays a mandate that references A's resource, then invokes the gated
+      # action on it: the ownership gate must refuse at use time, not only at pay time.
       class PayForOtherUseSelf < Scenario
         def initialize
           super(
@@ -40,11 +22,6 @@ module Kiosk
           a = client.register!
           b = client.register!
 
-          # B KYC'd (so the gated action isn't blocked by missing KYC; we
-          # want to test the ownership gate specifically).  That result is
-          # asserted rather than discarded: an attestation the provider refused
-          # leaves B un-attested, and the KYC gate then answers in the
-          # ownership gate's name.
           kyc_resp = (submit_valid_kyc(client, b, profile) if profile.requires_kyc)
           failure  = setup_failure(
             kyc_resp,
@@ -54,21 +31,12 @@ module Kiosk
           )
           return failure if failure
 
-          # A creates the resource (A owns it).
           owned_ref_a = profile.create_owned.call(client, a)
 
-          # B builds mandates with B's own identity but referencing A's resource.
           mandates = profile.pay_for.call(client, b, owned_ref_a)
           pay_resp = client.pay(b, intent: mandates[:intent], cart: mandates[:cart])
 
-          # Payment may or may not succeed depending on whether the provider
-          # validates resource ownership at pay time.  An EARLY OWNERSHIP CHECK
-          # is a 403 forbidden / rls_denied — the same gate, moved to pay time.
-          # Nothing wider counts: admit any blocked? at all and a 402 decline
-          # (the card, the toll, no payment method on file) or a 401 expired
-          # token would be reported as "blocked at pay step (early ownership
-          # check)" while the attack was never attempted — a pass naming a gate
-          # the scenario had not reached.
+          # Only 403 forbidden / rls_denied at pay time is the same ownership gate, moved earlier.
           if pay_resp.status == 403 && %w[forbidden rls_denied].include?(error_code(pay_resp))
             return Verdict.new(
               blocked: true,
@@ -78,8 +46,7 @@ module Kiosk
             )
           end
 
-          # Anything else non-200 at pay time is a setup failure, not the gate:
-          # B never got to try A's resource, so nothing was proved either way.
+          # Any other non-200 at pay time means the attack was never attempted.
           failure = setup_failure(
             pay_resp,
             step:    "B's payment for A's resource",
@@ -89,15 +56,10 @@ module Kiosk
           )
           return failure if failure
 
-          # B tries to invoke the gated action on A's resource.
           gated_args = profile.gated_args ? profile.gated_args.call(owned_ref_a) : { id: owned_ref_a[:id] }
           resp       = client.run(b, name: profile.gated_action, **gated_args)
 
-          # This scenario knows which gate must fire: ownership, checked at use
-          # time. A 402 here means the payment gate answered — but B DID pay, so
-          # that is a different bug, not this one; a 403 kyc_required means the
-          # KYC gate answered. NEITHER counts as blocked — this scenario is
-          # about the OWNERSHIP gate and nothing else.
+          # Only the ownership gate counts: B did pay, so a 402 or kyc_required is another gate.
           verdict_from(
             resp,
             expect:      403,

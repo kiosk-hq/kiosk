@@ -6,23 +6,9 @@ require "kiosk/rls/emitter"
 
 module Kiosk
   module RLS
-    # DSL methods callable from any host that provides `#execute(sql_string)`.
-    # In the canonical Rails case the host is `ActiveRecord::Migration`, and
-    # {Kiosk::RLS::Railtie} mixes this module in for you — a Rails app writes
-    # no wiring. Any other host includes it itself; see {Kiosk::RLS}.
-    #
-    # The migration verbs (evolving policies) — the list enumerates itself, so
-    # it carries no count above it to fall out of step with an append:
-    #
-    #   enable_rls_on(table)                      — full-table RLS turn-on
-    #   add_kiosk_policy_to(table, action)        — single-policy addition
-    #   change_kiosk_policy_on(table, action)     — replace-in-place
-    #   remove_kiosk_policy_from(table, ...)      — single-policy removal
-    #   rename_kiosk_policy_on(table, from:, to:) — rename in place
+    # RLS migration verbs for any host that provides `#execute(sql)`;
+    # Rails migrations get them through {Kiosk::RLS::Railtie}.
     module DSL
-      # Wrap a table in RLS: turn it on, GRANT the runtime role, declare
-      # policies, attach a mandatory comment.
-      #
       # @example
       #   enable_rls_on :rentals do
       #     policy :select, using: "user_id = kiosk.current_user_id()"
@@ -36,8 +22,6 @@ module Kiosk
         emit_rls(Emitter.statements_for(table))
       end
 
-      # Add a single policy to an already-enabled table. Default name
-      # `<table>_<action>` matches the convention `enable_rls_on` uses.
       def add_kiosk_policy_to(table_name, action, name: nil, using: nil, check: nil)
         policy = Policy.new(
           name:   name || default_policy_name(table_name, action),
@@ -48,8 +32,7 @@ module Kiosk
         emit_rls([Emitter.create_policy_sql(table_name.to_s, policy)])
       end
 
-      # Replace a policy in place. PG has no `CREATE OR REPLACE POLICY`, so
-      # this issues DROP + CREATE.
+      # PG has no `CREATE OR REPLACE POLICY`.
       def change_kiosk_policy_on(table_name, action, name: nil, using: nil, check: nil)
         policy_name = name || default_policy_name(table_name, action)
         emit_rls([
@@ -61,15 +44,12 @@ module Kiosk
         ])
       end
 
-      # Remove a single policy. If a custom name was used at creation, pass
-      # it as `name:`; otherwise the default `<table>_<action>` is assumed.
       def remove_kiosk_policy_from(table_name, action, name: nil)
         policy_name = name || default_policy_name(table_name, action)
         emit_rls([Emitter.drop_policy_sql(table_name.to_s, policy_name)])
       end
 
-      # Rename a policy without redefining it. `from:` defaults to the
-      # convention name `<table>_<from>`; `to:` is the new name verbatim.
+      # A Symbol `from:` names the convention policy `<table>_<from>`.
       def rename_kiosk_policy_on(table_name, from:, to:)
         from_name = from.is_a?(Symbol) ? default_policy_name(table_name, from) : from.to_s
         to_name   = to.to_s
@@ -82,10 +62,6 @@ module Kiosk
         "#{table_name}_#{action}"
       end
 
-      # How to ship SQL to PostgreSQL. By default delegates to `self.execute`
-      # (which `ActiveRecord::Migration` provides). Override in tests or
-      # alternative hosts (e.g. a Sequel migration) by aliasing `emit_rls`
-      # to your own runner.
       def emit_rls(statements)
         statements.each { |sql| execute(sql) }
       end

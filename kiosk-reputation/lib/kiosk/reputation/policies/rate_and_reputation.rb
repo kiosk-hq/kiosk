@@ -3,51 +3,9 @@
 module Kiosk
   module Reputation
     module Policies
-      # EXAMPLE policy — providers are expected to REPLACE this wholesale.
-      #
-      # This is the shipped illustrative policy for the "scrape-vs-buy" pattern
-      # on a read-heavy endpoint. Its thresholds and count-curve are opinionated
-      # defaults; tune them or write a domain-specific subclass instead.
-      #
-      # == Difficulty via N×PoW (equihash)
-      #
-      # Equihash has no continuous difficulty dial (memory is fixed by (n,k)).
-      # The anti-abuse lever is PROOF COUNT: a normal client solves 1 proof, a
-      # suspicious one a handful, an abuser ~10 — each an INDEPENDENT challenge
-      # (distinct salt, no amortisation). This policy therefore returns a
-      # `count`, which the gate turns into that many challenges.
-      #
-      # == Logic
-      #
-      # Serve without challenge when ALL of:
-      #   - settled_purchases_count >= proven_purchases_threshold (principal has paid)
-      #   - request_rate_per_min   <= low_rate_threshold          (not flooding)
-      #   - bad_proof_count        == 0                          (no bad-faith history)
-      #
-      # Otherwise demand `count` equihash proofs, where `count` is:
-      #
-      #   count = base_count
-      #     + ceil((rate - low_rate_threshold) / rate_step) * rate_count_step [if rate > threshold]
-      #     + unproven_count_bonus                                            [if 0 purchases]
-      #     + bad_proof_count * bad_proof_count_factor                        [bad-faith escalation]
-      #   count = count.clamp(count_min, count_max)
-      #
-      # The `bad_proof_count_factor` is intentionally high so that a few invalid
-      # proofs push a principal into a hard tier quickly. An honest client solver
-      # never submits a wrong proof.
-      #
-      # == Constructor params (all have sane defaults)
-      # @param proven_purchases_threshold [Integer]  min settled purchases to be "proven"
-      # @param low_rate_threshold         [Integer]  max req/min considered low-rate
-      # @param base_count                 [Integer]  proofs demanded when challenging at all
-      # @param rate_count_step            [Integer]  proof increment per rate_step req/min above threshold
-      # @param rate_step                  [Integer]  req/min bucket size for rate escalation
-      # @param unproven_count_bonus       [Integer]  extra proofs for principals with 0 purchases
-      # @param bad_proof_count_factor     [Integer]  count += bad_proof_count * this factor
-      # @param count_min                  [Integer]  floor proofs when issuing any challenge
-      # @param count_max                  [Integer]  ceiling proofs (hard cap)
-      # @param equihash_n                 [Integer]  equihash n parameter (solver memory)
-      # @param equihash_k                 [Integer]  equihash k parameter (tree depth)
+      # Example policy, meant to be replaced: free for a proven, low-rate principal
+      # with no bad proofs; otherwise a number of independent equihash proofs that
+      # grows with request rate, no purchases and past bad proofs.
       class RateAndReputation < Policy
         def initialize(
           proven_purchases_threshold: 5,
@@ -59,9 +17,7 @@ module Kiosk
           bad_proof_count_factor:     3,
           count_min:                  1,
           count_max:                  10,
-          # Matches Kiosk::Pow::Equihash defaults (benchmark-chosen).
-          # Literals, not the constant, so this gem stays loadable without
-          # kiosk-pow-equihash present; a provider overrides per policy.
+          # Kiosk::Pow::Equihash defaults as literals, so this gem loads without it.
           equihash_n:                 168,
           equihash_k:                 7
         )
@@ -77,10 +33,6 @@ module Kiosk
           @equihash_params            = { n: equihash_n, k: equihash_k }
         end
 
-        # @param identity [Object] opaque
-        # @param verb     [Symbol]
-        # @param factors  [Factors]
-        # @return [Hash{alg:, params:, count:}] or nil
         def challenge_for(identity:, verb:, factors:)
           purchases   = factors.settled_purchases_count.to_i
           rate        = factors.request_rate_per_min.to_i
@@ -109,16 +61,13 @@ module Kiosk
         def compute_count(purchases, rate, bad_proofs)
           count = @base_count
 
-          # High request rate: one proof increment per rate_step req/min above the threshold.
           if rate > @low_rate_threshold
             excess = rate - @low_rate_threshold
             count += @rate_count_step * excess.fdiv(@rate_step).ceil
           end
 
-          # Unproven principal (zero purchases): extra proofs.
           count += @unproven_count_bonus if purchases.zero?
 
-          # Bad proofs escalate fast — each invalid proof is a clear bad-faith signal.
           count += bad_proofs * @bad_proof_count_factor
 
           count.clamp(@count_min, @count_max)

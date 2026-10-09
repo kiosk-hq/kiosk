@@ -5,30 +5,12 @@ require "base64"
 
 module Kiosk
   module Redteam
-    # Base class for all adversarial scenarios.
-    #
-    # Subclasses override {#call} to drive a hostile request sequence against
-    # the provider and return a {Verdict}.
-    #
-    # A scenario PASSES (blocked: true) when the provider correctly rejects
-    # the attack.  A scenario that finds a real breach must return
-    # blocked: false — the Runner then exits non-zero.
-    #
-    # When a profile lacks the surface a scenario needs, {#call} returns a
-    # skip Verdict (blocked: false, skipped: true, detail: "SKIP — …") — a
-    # distinct third state, NOT a pass: it does not count towards the blocked
-    # count, and the demo's expected-applicable assertion catches a skip that
-    # was not meant to happen.
-    #
-    # @abstract Override {#call} in subclasses.
+    # Base class for adversarial scenarios. Subclasses implement #call and
+    # return a Verdict: blocked when the origin refused the attack, skipped
+    # when the profile lacks the surface the scenario needs.
     class Scenario
-      # @return [String] short human-readable name used in Runner output
       attr_reader :name
-
-      # @return [String] attack category (e.g. "authorization", "mandate", "kyc")
       attr_reader :category
-
-      # @return [String] description of what this scenario tests
       attr_reader :description
 
       def initialize(name:, category:, description:)
@@ -37,70 +19,20 @@ module Kiosk
         @description = description
       end
 
-      # Execute the adversarial scenario.
-      #
-      # @param client  [Kiosk::TestHelpers::Assistant]  HTTP driver pointed at the provider under test
-      # @param profile [Profile] provider-specific configuration
-      # @return [Verdict]
       def call(client, profile) # rubocop:disable Lint/UnusedMethodArgument
         raise NotImplementedError, "#{self.class}#call is not implemented"
       end
 
       private
 
-      # Return a skip Verdict when the profile lacks the surface this scenario
-      # exercises.  A skip is NOT a pass — it is a distinct third state that
-      # does not count towards the blocked count and does not fail the battery.
-      #
-      # Two things catch a spurious skip.  {Runner#all_blocked?} refuses to go
-      # green on a battery with no proofs at all, so a profile that skips
-      # EVERYTHING cannot exit 0.  Above that floor, the expected-applicable
-      # assertion in each demo names which skips are expected for that provider
-      # and fails when the set changes.
-      #
-      # @param reason [String] human-readable reason, e.g. "no per_user_query"
-      # @return [Verdict]
       def skip_verdict(reason)
         Verdict.new(blocked: false, skipped: true, status: 0, detail: "SKIP — #{reason}")
       end
 
-      # Wrap a server Response into a Verdict.
-      #
-      # A scenario that knows WHICH gate must fire says so with +expect+ /
-      # +expect_code+: only those status(es) and denial code(s) count as a
-      # genuine refusal of THIS attack, and anything else — a refusal from an
-      # unrelated gate, a mis-routed 404, a crash — is not a pass. The failing
-      # detail names what was demanded and what came back, so a verdict that
-      # moves is auditable without re-running the battery by hand.
-      #
-      # With neither given, the verdict delegates to {Kiosk::Redteam.blocked?},
-      # which admits either of 401/403 or any recognised denial code. That is
-      # honest ONLY for a scenario whose attack several different gates may
-      # legitimately refuse; every such call site states which gates it admits.
-      #
-      # 5xx is never blocked, whatever is asked for — a crash cannot masquerade
-      # as enforcement (see {Kiosk::Redteam.blocked?}).
-      #
-      # HTTP 402 is never blocked unless `expect_code:` names the code that came
-      # back. Three wire codes share that status and two of them are not
-      # refusals at all, so `expect: 402` alone demands nothing; on the
-      # permissive path a 402 returns the "could not test" verdict
-      # {#payment_required_stall} builds, which is not a pass and not a breach
-      # laid at the provider's door.
-      #
-      # @param response    [Kiosk::TestHelpers::Wire::Response]
-      # @param expect      [Integer, Array<Integer>, nil] status(es) that count
-      #   as a refusal of this attack; nil admits the whole blocked? set.
-      # @param expect_code [String, Array<String>, nil] the problem document's `code`
-      #   value(s) that count; nil does not inspect the code.
-      # @param detail      [String] extra context to append on breach
-      # @return [Verdict]
+      # +expect+ / +expect_code+ name the gate that must refuse; with neither,
+      # any status or code Kiosk::Redteam.blocked? accepts counts.
       def verdict_from(response, expect: nil, expect_code: nil, detail: nil)
         if expect.nil? && expect_code.nil?
-          # A bare 402 cannot be delegated: pow_required, payment_setup_required
-          # and payment_failed all ride that status, and scoring any of them a
-          # block would print BLOCKED for an attack that never executed. Name
-          # which one answered instead of guessing.
           stall = payment_required_stall(response)
           return stall if stall
 
@@ -119,7 +51,6 @@ module Kiosk
         misses << "want error.code #{Array(expect_code).map(&:inspect).join("/")}" \
           if expect_code && !Array(expect_code).include?(code)
         misses << "5xx is never a block" if response.status >= 500
-        # Naming 402 without naming the code names nothing.
         misses << "HTTP 402 is conclusive only with an explicit expect_code — " \
                   "#{Kiosk::Redteam::PAYMENT_REQUIRED_CODES.keys.join("/")} all ride that status" \
           if response.status == 402 && expect_code.nil?
@@ -134,34 +65,7 @@ module Kiosk
         )
       end
 
-      # A 402 answer means the attack was NOT evaluated — say so, rather than
-      # scoring it either way.
-      #
-      # `Kiosk::Server::Errors::CODES` maps three codes onto HTTP 402, and
-      # counting any of them as an "explicit auth/authz rejection" prints
-      # `BLOCKED ✓ … (HTTP 402)` for an attack that never ran.  Two of the three
-      # are nothing of the sort: `pow_required` says "pay the toll and retry",
-      # while `payment_setup_required` says the attacker never put a card on
-      # file.
-      #
-      # The half of that which is this harness's own doing is closed here:
-      # {Kiosk::TestHelpers::Assistant} solves the toll and re-sends the identical
-      # request ONCE, on every verb and not only on registration.  So a
-      # `pow_required` that still arrives here survived a PAID retry — the
-      # verdict says so, and it is a statement about the provider rather than
-      # about a gap in the harness.
-      #
-      # The verdict is NOT blocked (a battery cannot claim a proof it did not
-      # earn) and NOT skipped (a skip is invisible to `all_blocked?`, so a
-      # consumer without the demos' expected-skip assertion would go green while
-      # a scenario quietly stopped testing).  It reads as a breach line carrying
-      # a detail that says which of the three answered and that this is a
-      # could-not-test, so the operator is not sent hunting for a hole.
-      #
-      # @param response [Kiosk::TestHelpers::Wire::Response]
-      # @param step     [String, nil] what was being attempted, e.g. "the
-      #   expired attestation this scenario submits to /kyc"
-      # @return [Verdict, nil] nil when the response is not a 402 answer
+      # A 402 means the attack was not evaluated: neither blocked nor skipped, so it cannot pass silently.
       def payment_required_stall(response, step: nil)
         reason = Kiosk::Redteam.payment_required_reason(response)
         return nil unless reason
@@ -177,21 +81,7 @@ module Kiosk
         )
       end
 
-      # Assert a SETUP step succeeded — a call a scenario makes to reach the
-      # state it means to attack, as opposed to the attack itself.  Returns a
-      # diagnostic non-blocked Verdict when it did not, or nil to continue.
-      #
-      # Discarding a setup response is how one gate ends up certifying another.
-      # If the payment a KYC scenario stages is itself refused 402, the gated
-      # action that follows is refused by the PAYMENT gate — and that
-      # refusal is what gets printed as "BLOCKED ✓ MissingKyc".  The KYC gate
-      # could be deleted outright and the line would not change.
-      #
-      # @param response [Kiosk::TestHelpers::Wire::Response, nil] nil (a setup step that is a no-op for
-      #   this profile) passes
-      # @param step     [String] what was being staged, e.g. "the payment ..."
-      # @param because  [String] what a downstream refusal would be misread as
-      # @return [Verdict, nil]
+      # A failed setup step must not let a later refusal from another gate pass as this one's.
       def setup_failure(response, step:, because:)
         return nil if response.nil? || response.status == 200
 
@@ -204,46 +94,24 @@ module Kiosk
         )
       end
 
-      # Read the problem document's top-level `code` defensively — a body may be a
-      # plain String, and the body itself may not be a Hash at all.
-      #
-      # @param response [Kiosk::TestHelpers::Wire::Response]
-      # @return [String, nil]
       def error_code(response)
         Kiosk::Redteam.error_code(response)
       end
 
-      # Submit a valid KYC attestation for the principal, using the profile's
-      # kyc_valid callable.  No-op when profile.kyc_valid is nil.
-      #
-      # @param client    [Kiosk::TestHelpers::Assistant]
-      # @param principal [Kiosk::TestHelpers::Assistant::Principal]
-      # @param profile   [Profile]
-      # @return [Kiosk::TestHelpers::Wire::Response, nil]
       def submit_valid_kyc(client, principal, profile)
         return nil unless profile.kyc_valid
 
         client.kyc(principal, attestation_jws: profile.kyc_valid.call(principal.user_id))
       end
 
-      # Tamper a JWT bearer token by flipping a claim in the payload segment
-      # WITHOUT re-signing.  The server MUST reject this with 401.
-      #
-      # Strategy: base64url-decode the payload, increment a numeric claim or
-      # append a sentinel to a string claim, re-encode.  The original signature
-      # segment is kept, so it no longer matches the modified payload.
-      #
-      # @param token [String] original JWT (3 dot-separated base64url segments)
-      # @return [String] structurally valid but signature-invalid JWT
+      # Changes a payload claim and keeps the original signature.
       def tamper_token(token)
         header, payload_b64, sig = token.split(".", 3)
         return token if payload_b64.nil?
 
-        # Pad to a multiple of 4 for urlsafe_decode64
         padded  = payload_b64 + ("=" * ((4 - payload_b64.length % 4) % 4))
         claims  = JSON.parse(Base64.urlsafe_decode64(padded))
 
-        # Flip a well-known claim; try several in priority order.
         if claims.key?("role")
           claims["role"] = claims["role"] == "admin" ? "superadmin" : "admin"
         elsif claims.key?("sub")
@@ -258,23 +126,8 @@ module Kiosk
         [header, new_payload, sig].join(".")
       end
 
-      # Extract rows from a query Response body.
-      #
-      # @param response [Kiosk::TestHelpers::Wire::Response]
-      # @return [Array<Hash>]
-      # ONE SHAPE (spec §8.2): a query answers a BARE JSON ARRAY of rows,
-      # paginating or not. Truncation is an RFC 8288 `Link` header, not a body
-      # field, so there is nothing left to unwrap.
-      #
-      # THE `{"rows": …}` BRANCH IS KEPT, AND ON PURPOSE. What this method
-      # defends against is a VACUOUS PASS: an ownership check that asks "does
-      # A's list contain the row B created" reads `[]` off a shape it does not
-      # understand, concludes "not leaked", and reports BLOCKED for an origin
-      # it never actually tested. A redteam battery is pointed at THIRD-PARTY
-      # origins, including ones still serving an older cut, and silently scoring
-      # such an origin BLOCKED is far worse than reading a shape the current
-      # spec no longer produces.
-      # It costs two lines and it cannot produce a false ATTACK.
+      # A query answers a bare Array (§8.2); the `rows` envelope is read too so an
+      # older origin's rows are not mistaken for an empty, unleaked list.
       def rows_from(response)
         body = response.body
         return body if body.is_a?(Array)

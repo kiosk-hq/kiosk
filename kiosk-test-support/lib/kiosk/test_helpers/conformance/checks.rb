@@ -9,45 +9,16 @@ require "kiosk/test_helpers/conformance/verb"
 module Kiosk
   module TestHelpers
     module Conformance
-      # The four checks, as pure functions of an ORIGIN.
-      #
-      # Each takes an origin (see {Conformance} for the contract) and returns an
-      # {Outcome}. None of them knows what a test framework is: the Minitest and
-      # RSpec adapters turn an Outcome into a `flunk` or a matcher failure and
-      # render its `message` verbatim, which is what makes the same fault read
-      # identically in both.
-      #
-      # The four properties are the ones the protocol makes normative of an
-      # origin — its routes resolve, a verb executes, a query answers the shape
-      # it declared, and data access is scoped to the authenticated principal.
-      # An operator cannot demonstrate conformance to a document without a way
-      # to run its claims, and these are that way.
+      # The four conformance checks, as pure functions of an origin returning an
+      # {Outcome}; the Minitest and RSpec adapters render its message verbatim.
       module Checks
-        # `params:` sentinel. The default is not `{}` — it is "the verb's own
-        # `example_params` if it declared one, otherwise the empty object", so
-        # the cheapest true assertion an adopter can write also executes the
-        # example their descriptor publishes. Pass `params: {}` to mean the
-        # empty object literally.
+        # `params:` default: the verb's own `example_params`, else `{}`.
         EXAMPLE = :__kiosk_example_params__
 
         module_function
 
-        # ── 1. ROUTES ───────────────────────────────────────────────────────
-        #
-        # Every declared verb has a route, that route reaches the wire's verb
-        # controller under the name it was declared by, and the METHOD follows
-        # the KIND: GET for a query, POST for an action.
-        #
-        # A verb declared and never routed is a 404 to every caller, and it is
-        # invisible to the origin's own tests unless one happens to call that
-        # verb. This is the check that makes it visible.
-        #
-        # It asks the ROUTER, not a file: a verb declared by metaprogramming is
-        # in the registry and in the route table, and both are what this reads.
-        #
-        # VACUITY ARM. An origin declaring no verbs at all FAILS. An empty
-        # registry — the likeliest way for this whole suite to be green and mean
-        # nothing — must not read as "all zero of my verbs are routed".
+        # Every declared verb is routed to the verb wire under its own name, GET
+        # for a query and POST for an action. No verbs at all fails.
         def routes(origin)
           verbs = origin.verbs
           if verbs.empty?
@@ -80,12 +51,7 @@ module Kiosk
           end
         end
 
-        # ── 2. VERB EXECUTES ────────────────────────────────────────────────
-        #
-        # Called with these arguments as this principal, the verb answers rather
-        # than refusing. A refusal is reported with the wire code, the message
-        # and the hint the error carried, because on this path those strings are
-        # written for exactly this reader.
+        # Called with these arguments as this principal, the verb answers rather than refusing.
         def executes(origin, name, params: EXAMPLE, as: nil)
           verb = find_verb(origin, name)
           return verb if verb.is_a?(Outcome)
@@ -112,23 +78,8 @@ module Kiosk
           )
         end
 
-        # ── 3. THE ANSWER MATCHES THE DECLARED SHAPE ────────────────────────
-        #
-        # `output_schema` is REQUIRED of every verb and, with no response
-        # envelope, is the ONLY machine-readable statement of what a call
-        # returns. A descriptor that MIS-states the shape is worse than one that
-        # says nothing: the assistant shapes its parse from it and never meets
-        # the handler that disagrees.
-        #
-        # Arguments are checked against `input_schema` FIRST and reported
-        # separately, because a failing example in a descriptor is a different
-        # defect from a handler rendering the wrong shape, and telling them
-        # apart is most of the value.
-        #
-        # A verb with no `output_schema` FAILS rather than skipping. Both
-        # schemas are required of every verb and the mixin raises at class-body
-        # load for a declaration missing either, so an absent one here means the
-        # origin is not what it claims to be.
+        # The arguments satisfy the verb's input_schema and its answer satisfies
+        # its output_schema; the two failures are reported separately.
         def declared_shape(origin, name, params: EXAMPLE, as: nil)
           verb = find_verb(origin, name)
           return verb if verb.is_a?(Outcome)
@@ -185,29 +136,8 @@ module Kiosk
           end
         end
 
-        # ── 4. DATA ACCESS IS SCOPED TO THE PRINCIPAL ───────────────────────
-        #
-        # `reach: :principal` is the default and the norm, and across a fleet it
-        # is spelled nowhere — a declaration that says nothing means it. So the
-        # strongest claim an origin makes about data access is the one it makes
-        # by silence, and this is the check that executes it.
-        #
-        # The assertion is DISJOINTNESS, not emptiness, and it carries its own
-        # positive control:
-        #
-        #   1. VACUITY ARM — if the first principal's answer is empty there is
-        #      nothing to be scoped from, and the check FAILS. A verb that
-        #      answers `[]` to everybody would otherwise pass while broken,
-        #      which is the exact shape of a pattern that matches nothing and
-        #      reads as coverage.
-        #   2. DISJOINTNESS — no row the second principal sees may equal a row
-        #      the first sees. Whole-row comparison, so it needs no id-column
-        #      convention and no configuration.
-        #   3. REACH AGREEMENT — a verb declared `published` is SUPPOSED to
-        #      answer both principals the same, so asserting disjointness on it
-        #      asserts the opposite of the descriptor. That is a failure naming
-        #      the declared reach, so a verb whose reach was widened without its
-        #      tests being revisited goes red.
+        # No row `as:` sees reaches `and_not:`, compared whole-row. An empty first
+        # answer fails (no positive control), and so does a `published` verb.
         def principal_scope(origin, name, as:, and_not:, params: EXAMPLE)
           verb = find_verb(origin, name)
           return verb if verb.is_a?(Outcome)
@@ -269,11 +199,7 @@ module Kiosk
           end
         end
 
-        # ── internal ────────────────────────────────────────────────────────
-
-        # The verb by name, or a failing Outcome naming what IS declared — a
-        # typo in a test should be answerable without a schema round-trip, the
-        # same courtesy the wire's own unknown-name hint extends to an agent.
+        # The verb by name, or a failing Outcome listing the declared ones.
         def find_verb(origin, name)
           wanted = name.to_s
           found  = origin.verbs.find { |verb| verb.name == wanted }
@@ -288,23 +214,11 @@ module Kiosk
           )
         end
 
-        # The wire codes that mean «that is not yours», as a REFUSAL rather than
-        # as a broken call.
-        #
-        # A verb may scope by narrowing its answer or by refusing outright, and
-        # refusing is the STRONGER of the two — an origin that answers 404 to a
-        # row it will not show does not even confirm that the row exists. So a
-        # 403 or a 404 to the second principal is this check passing, not
-        # failing. Nothing wider is accepted: a 400 means the arguments were
-        # wrong, which is a defect in the test rather than scoping, and a 500 is
-        # a defect in the handler; both must stay red.
-        #
-        # Read by STATUS and not by class, so this stays framework-agnostic and
-        # holds for any origin whose refusals answer the wire's own codes.
+        # Refusing the second principal outright scopes as well as narrowing does;
+        # a 400 or 500 stays a failure.
         SCOPING_REFUSALS = [403, 404].freeze
 
-        # The refusal an `executes` outcome carries, as «403 forbidden», or nil
-        # when it did not fail or did not fail by refusing.
+        # «403 forbidden», or nil when the outcome is not a scoping refusal.
         def refusal_status(outcome)
           return nil unless outcome.failed?
 
@@ -314,12 +228,6 @@ module Kiosk
           [status, outcome.details[:error_code]].compact.join(" ")
         end
 
-        # How a principal is NAMED in a failure sentence.
-        #
-        # `inspect` on an ActiveRecord row prints every column, which buries the
-        # sentence that matters under a fixture — measured on a real demo, where
-        # a two-row leak rendered behind two full `#<User …>` dumps. A principal
-        # is identified by its id; anything without one is inspected as before.
         def principal_label(subject)
           subject.respond_to?(:id) ? "#{subject.class}(#{subject.id})" : subject.inspect
         end
@@ -371,8 +279,7 @@ module Kiosk
           problems
         end
 
-        # Ask the origin's router. A router that raises for "no route" and one
-        # that returns nil are both normal; neither is a check failure.
+        # Some routers raise for "no route", others return nil.
         def recognize(origin, path, http_method)
           origin.recognize(path, method: http_method)
         rescue StandardError
@@ -392,16 +299,12 @@ module Kiosk
           end
         end
 
-        # The wire representation of a value: the same JSON round trip the
-        # answer makes on its way to a caller, so a schema check here sees what
-        # a caller sees rather than the Ruby objects behind it.
+        # The value as a caller receives it, after the JSON round trip.
         def normalize(value)
           JSON.parse(JSON.generate([value])).first
         end
 
-        # The comparable rows of an answer. A query answers an Array; an action
-        # answers one object, which is a single "row" for the purpose of
-        # disjointness.
+        # An action's single object counts as one row.
         def rows_of(answer)
           normalized = normalize(answer)
           normalized.is_a?(Array) ? normalized : [normalized].compact

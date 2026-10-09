@@ -6,52 +6,18 @@ require "argon2"
 require "kiosk/pow/version"
 
 module Kiosk
-  # Argon2id memory-hard proof-of-work backend for Kiosk.
-  #
-  # Provider-side Ruby verify + the shipped Python solver (solve.py).
-  # The wire protocol is algorithm-agnostic; kiosk-reputation dispatches here
-  # when "argon2id" (NAME) is the demanded algorithm.
-  #
-  # == Canonical PoW computation (byte-identical in Ruby verify and Python solve)
-  #
-  # Primitive: raw Argon2id (libargon2), type = Argon2id, version = 0x13 (19),
-  # hash_len = 32 bytes.
-  #
-  #   Argon2id(password: nonce.to_s,   # decimal ASCII string encoded as UTF-8
-  #            salt:     raw_salt_bytes, # ≥ 8 raw bytes; wire base64 decoded upstream
-  #            m_cost:   params[:m],     # memory in KiB
-  #            t_cost:   params[:t],     # iterations
-  #            parallelism: params[:p],  # 1
-  #            version:  0x13, hash_len: 32)
-  #
-  # A nonce is a valid solution iff leading_zero_bits(digest) >= params[:d].
+  # Argon2id memory-hard proof-of-work backend, dispatched by kiosk-reputation for "argon2id".
+  # A nonce is valid iff leading_zero_bits(Argon2id(nonce.to_s, salt, m, t, p, v=0x13, 32 bytes)) >= d,
+  # byte-identical to the Python solver.
   module Pow
-    # Algorithm name advertised in the challenge.
     NAME = "argon2id"
 
-    # Build the algorithm-specific challenge params for a difficulty tier.
-    #
-    # @param d [Integer] required leading zero bits (0 = no challenge)
-    # @param m [Integer] memory in KiB (default 64 MiB = 65_536 KiB)
-    # @param t [Integer] iterations (default 1)
-    # @param p [Integer] parallelism (default 1; the Python solver also uses p=1)
-    # @return [Hash{m: Integer, t: Integer, p: Integer, d: Integer}]
+    # d: required leading zero bits; m: memory in KiB.
     def self.params(d:, m: 65_536, t: 1, p: 1)
       { m:, t:, p:, d: }
     end
 
-    # One raw Argon2id evaluation — 32 raw bytes.
-    #
-    # Uses {Argon2::Ext.argon2id_hash_raw} directly (bypasses the Password
-    # high-level API which converts m_cost to a power-of-two exponent).
-    # libargon2's `argon2id_hash_raw` always uses version 0x13 (ARGON2_VERSION_13),
-    # which is identical to argon2-cffi's `version=19` — byte-identical output
-    # is verified by the `parity` Rake task.
-    #
-    # @param salt   [String] raw bytes (≥ 8 bytes); decoding from base64 happens upstream
-    # @param params [Hash]   as returned by {.params}
-    # @param nonce  [#to_s] the nonce (converted to decimal ASCII string, e.g. "0", "1234")
-    # @return [String] 32 raw bytes (binary encoding)
+    # Raw libargon2 call: the Password API would turn m_cost into a power-of-two exponent.
     def self.digest(salt:, params:, nonce:)
       password = nonce.to_s.b
       m = Integer(params[:m])
@@ -73,28 +39,10 @@ module Kiosk
       result
     end
 
-    # Verify a proof: one Argon2id eval + leading-zero-bits check.
-    #
-    # CHEAP relative to solving (~2^d evals on the client side), but costs `m`
-    # KiB of memory — the provider's ASIC-resistance tunable.
-    # Exactly ONE eval; no loop.
-    #
-    # @param salt   [String]  raw bytes (≥ 8 bytes)
-    # @param params [Hash]    as returned by {.params}
-    # @param nonce  [#to_s]
-    # @return [Boolean]
     def self.verify(salt:, params:, nonce:)
       leading_zero_bits(digest(salt:, params:, nonce:)) >= params[:d]
     end
 
-    # Count the number of leading zero BITS in a binary digest string.
-    #
-    # Spans bytes: a fully-zero byte contributes 8, then continues into the
-    # next byte. This is the difficulty check for the search-form PoW: a nonce
-    # is valid iff this count over its digest is >= params[:d].
-    #
-    # @param bytes [String] raw binary bytes (e.g. the 32-byte Argon2id output)
-    # @return [Integer]
     def self.leading_zero_bits(bytes)
       return 0 if bytes.empty?
 
@@ -103,9 +51,6 @@ module Kiosk
         if b == 0
           count += 8
         else
-          # Integer#bit_length returns the number of bits needed to represent b
-          # (position of the highest set bit + 1), so 8 - bit_length = leading zeros.
-          # Examples: 0x80 (128) → 8-8=0; 0x40 (64) → 8-7=1; 0x02 (2) → 8-2=6.
           count += 8 - b.bit_length
           break
         end

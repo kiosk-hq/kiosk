@@ -2,25 +2,8 @@
 
 module Kiosk
   module Redteam
-    # Runs a battery of adversarial scenarios against a Kiosk provider and
-    # aggregates the results.
-    #
-    # Intended to back a rake task:
-    #
-    #   runner = Kiosk::Redteam::Runner.new(base_url: server_url, profile: profile)
-    #   runner.run(scenarios)
-    #   exit 1 unless runner.all_blocked?
-    #
-    # Use THAT form, not `exit 1 if runner.breaches.any?`: `breaches` answers
-    # `[]` when `run` never happened, so the `if` idiom exits 0 for a battery
-    # that never ran — fail-open, on the gate whose whole job is to fail
-    # closed.  `all_blocked?` is false until a non-empty run has produced
-    # verdicts.
-    #
-    # Output per scenario:
-    #   "  BLOCKED ✓ <name> (HTTP <status>)" — attack correctly blocked
-    #   "  SKIP    — <name> (<reason>)"   — profile lacks the surface (not a pass)
-    #   "  BREACH  ✗ <name> — <detail>"   — attack NOT blocked (real finding)
+    # Runs scenarios and prints a BLOCKED / SKIP / BREACH line for each.
+    # Gate on `exit 1 unless runner.all_blocked?`: `breaches` is empty when nothing ran.
     class Runner
       def initialize(base_url:, profile:)
         @client  = Kiosk::TestHelpers::Assistant.new(base_url:)
@@ -28,10 +11,6 @@ module Kiosk
         @results = nil
       end
 
-      # Run all scenarios and return the results array.
-      #
-      # @param scenarios [Array<Scenario>] scenarios to run in order
-      # @return [Array<Hash{scenario: Scenario, verdict: Verdict}>]
       def run(scenarios)
         @results = scenarios.map do |scenario|
           verdict = scenario.call(@client, @profile)
@@ -40,10 +19,7 @@ module Kiosk
             reason = verdict.detail.delete_prefix("SKIP — ")
             puts "  SKIP    — #{scenario.name} (#{reason})"
           elsif verdict.blocked
-            # The status is part of the claim: "BLOCKED" alone does not say
-            # WHICH gate answered, so a battery that went green because an
-            # unrelated 404 or 402 satisfied a permissive check reads exactly
-            # like one that proved the gate.
+            # The status says which gate answered.
             puts "  BLOCKED ✓ #{scenario.name} (HTTP #{verdict.status})"
           else
             puts "  BREACH  ✗ #{scenario.name} — #{verdict.detail}"
@@ -53,39 +29,19 @@ module Kiosk
         end
       end
 
-      # Returns all results where the attack was not rejected and not skipped.
-      # An empty array means no breaches (battery clean).
-      #
-      # @return [Array<Hash{scenario: Scenario, verdict: Verdict}>]
       def breaches
         return [] unless @results
 
         @results.reject { |r| r[:verdict].skipped || r[:verdict].blocked }
       end
 
-      # Results where the attack WAS rejected — the proofs the battery earned.
-      #
-      # @return [Array<Hash{scenario: Scenario, verdict: Verdict}>]
       def blocked
         return [] unless @results
 
         @results.select { |r| !r[:verdict].skipped && r[:verdict].blocked }
       end
 
-      # @return [Boolean] true only when every non-skipped scenario was blocked
-      #   (i.e. no breaches) AND at least one scenario actually ran.  Skipped
-      #   scenarios do NOT count as passes.
-      #
-      # That second clause is the floor.  "No breaches" is satisfied by a
-      # battery in which NOTHING was exercised: skip every scenario — one nil
-      # profile key does it — and without the clause this would answer true, so
-      # `exit 1 unless all_blocked?` would exit 0 on a run that proved nothing.
-      # A demo's EXPECTED_SKIP_NAMES assertion cannot carry that weight: it
-      # lives in the consuming demos, hand-copied per demo, and cannot protect a
-      # consumer that has not written it; this gem's own exit predicate can.
-      # The demos keep their assertion — it names WHICH skips are expected,
-      # which is genuinely per-provider data — but the floor beneath it is the
-      # gem's: never green without at least one proof.
+      # Never green without at least one proof: a battery that skipped everything proved nothing.
       def all_blocked?
         return false if @results.nil? || @results.empty?
 

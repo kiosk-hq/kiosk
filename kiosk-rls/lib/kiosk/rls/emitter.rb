@@ -2,23 +2,13 @@
 
 module Kiosk
   module RLS
-    # Compiles RLS objects ({Policy}, {Table}) into PostgreSQL DDL statements.
-    # Pure functions; no database connection required.
-    #
-    # Canonical sequence emitted by `enable_rls_on`:
-    # ENABLE ROW LEVEL SECURITY, FORCE ROW LEVEL SECURITY, GRANT table
-    # privileges, optional sequence grants, CREATE POLICY for each declaration,
-    # COMMENT ON TABLE.  FORCE is required so RLS applies to the table owner;
-    # without it Postgres exempts the owner and RLS is a no-op.
+    # Compiles {Table} and {Policy} into PostgreSQL DDL.
     module Emitter
       class << self
-        # Full emission for a {Table} — returns Array<String> of SQL
-        # statements ready to run via ActiveRecord::Migration#execute (or any
-        # other one-string-at-a-time executor).
         def statements_for(table)
           stmts = []
           stmts << enable_rls_sql(table.name)
-          stmts << force_rls_sql(table.name)
+          stmts << force_rls_sql(table.name) # without FORCE the table owner bypasses RLS
           stmts << grant_table_sql(table.name, table.app_role)
           table.sequences.each do |seq|
             stmts << grant_sequence_sql(seq, table.app_role)
@@ -72,15 +62,12 @@ module Kiosk
 
         private
 
-        # Quote a SQL identifier. Splits on dots so `public.tasks` becomes
-        # `"public"."tasks"`. Defensive against embedded double-quotes.
         def quote_ident(name)
           name.to_s.split(".").map { |part|
             %("#{part.gsub('"', '""')}")
           }.join(".")
         end
 
-        # Quote a SQL string literal — single-quoted, single-quote-escaped.
         def quote_literal(text)
           %('#{text.to_s.gsub("'", "''")}')
         end

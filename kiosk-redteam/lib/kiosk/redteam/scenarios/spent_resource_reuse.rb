@@ -3,23 +3,8 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # Spent resource reuse (C3): a resource already consumed cannot be
-      # activated again.
-      #
-      # Attack:
-      #   1. A registers (+ valid KYC if required).
-      #   2. A creates an owned resource, pays, and invokes gated_action once
-      #      (expected to succeed — first use is legitimate).
-      #   3. A invokes gated_action AGAIN on the same owned_ref.
-      #   4. BLOCKED iff the second invocation is denied.
-      #
-      # Skipped when: profile.gated_action, profile.create_owned, or
-      # profile.pay_for is nil — or when profile.gated_action_consumes is
-      # false, which says the gated action SPENDS NOTHING. An origin whose
-      # gated action reads back a decision the operator made on its own is
-      # correct to answer it twice, and there is no C3 surface on it at all;
-      # running the beat anyway would report a breach against the intended
-      # behaviour.
+      # A consumed resource cannot be used again: the second gated_action call
+      # must be refused. Skipped when gated_action_consumes is false.
       class SpentResourceReuse < Scenario
         def initialize
           super(
@@ -37,10 +22,6 @@ module Kiosk
 
           a = client.register!
 
-          # SETUP, not the attack: an attestation that was not accepted makes
-          # the first use fail for a reason that has nothing to do with C3.
-          # (The pay below needs no such assertion — the first-use control
-          # already requires a 200.)
           kyc_resp = (submit_valid_kyc(client, a, profile) if profile.requires_kyc)
           failure  = setup_failure(
             kyc_resp,
@@ -56,8 +37,6 @@ module Kiosk
 
           gated_args = profile.gated_args ? profile.gated_args.call(owned_ref) : { id: owned_ref[:id] }
 
-          # First use — expected to succeed (if it fails, provider has a bug
-          # of a different kind; surface that clearly).
           first_resp = client.run(a, name: profile.gated_action, **gated_args)
           unless first_resp.status == 200
             return Verdict.new(
@@ -68,14 +47,7 @@ module Kiosk
             )
           end
 
-          # Second use — must be denied by the RESOURCE-STATE gate: the resource
-          # is no longer in a usable state for this principal, which all three
-          # consuming demos render as 403 forbidden. A 402 here would mean the
-          # payment gate answered — but A paid, and the first use succeeded —
-          # and a 401 would mean A's token died mid-scenario. NEITHER counts as
-          # blocked. A provider that models re-use as 409 `conflict` instead
-          # would have to widen this deliberately; note that 409 does not count
-          # as blocked today either, so nothing silently changed for it.
+          # Only the resource-state gate's 403 counts: A paid, and the first use succeeded.
           second_resp = client.run(a, name: profile.gated_action, **gated_args)
 
           verdict_from(

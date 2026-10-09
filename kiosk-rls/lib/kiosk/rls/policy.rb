@@ -2,18 +2,7 @@
 
 module Kiosk
   module RLS
-    # Value object representing one PostgreSQL row-level-security policy
-    # declaration.
-    #
-    # @!attribute [r] name
-    #   The policy name as it lives in `pg_policy` (e.g. `rentals_select`).
-    # @!attribute [r] action
-    #   One of `:select`, `:insert`, `:update`, `:delete`, `:all`.
-    # @!attribute [r] using
-    #   The `USING (...)` predicate (read-side filter). nil if not applicable.
-    # @!attribute [r] check
-    #   The `WITH CHECK (...)` predicate (write-side filter). nil if not
-    #   applicable.
+    # One PostgreSQL row-level-security policy: `using` filters reads, `check` writes.
     Policy = Data.define(:name, :action, :using, :check) do
       ACTIONS = %i[select insert update delete all].freeze
 

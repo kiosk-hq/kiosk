@@ -3,25 +3,9 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # A chain-consistent mandate pair denominated in a currency the operator
-      # does not price in must not settle.
-      #
-      # This is a CASHIER check rather than an authorization one, and the
-      # distinction is the whole point of the scenario. `kiosk-server` verifies
-      # that the intent, the cart and the payment agree with each other; it has
-      # no opinion about what those agreeing numbers MEAN, because the catalogue
-      # is the operator's. So a cart whose every link says `usd` is internally
-      # perfect and still has to be refused — by the operator, at capture — or a
-      # caller sets the unit of account and the operator ships goods for
-      # whatever the weakest currency it names is worth.
-      #
-      # Requires {Profile#currency}, {Profile#create_owned} and
-      # {Profile#pay_for}; skips when any of the three is absent.
+      # A consistent mandate pair in a currency the operator does not price in
+      # must be refused by the operator at capture.
       class WrongCurrencyCart < Scenario
-        # The probe's currency is one the operator does NOT price in, picked
-        # from a short list rather than hard-coded, so an operator that prices
-        # in dollars is probed with euros instead of being probed with its own
-        # currency and printing BLOCKED for a cart that was never foreign.
         ALTERNATIVES = %w[usd eur gbp jpy].freeze
 
         def initialize
@@ -47,12 +31,7 @@ module Kiosk
           m[:intent] = m[:intent].merge(currency: foreign)
           m[:cart]   = m[:cart].merge(currency: foreign)
           resp = client.pay(a, intent: m[:intent], cart: m[:cart])
-          # THE REFUSAL HAS TO COME FROM THE CASHIER, so the status is named
-          # rather than delegated. Delegating admits the whole `blocked?` set,
-          # and a `401` in it says the CREDENTIAL was rejected -- the cart never
-          # reached the counter, and scoring that a block prints BLOCKED for an
-          # attack that never executed. Same reason a bare `402` is not
-          # delegated either (see `verdict_from`).
+          # A 401 would mean the cart never reached the operator's capture check.
           verdict_from(resp,
                        expect: 403,
                        detail: "a #{foreign} cart settled at a #{native.upcase} operator " \

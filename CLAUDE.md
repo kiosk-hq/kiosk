@@ -78,9 +78,9 @@ universal agent skill is `skill.md` on the same site.
   no toolchain pin is tracked (`mise.toml`, `.mise.toml` and
   `.ruby-version` are gitignored). Per-gem bundles: `cd <gem> && bundle install &&
   bundle exec rspec` (`kiosk-rls-minitest`: `bundle exec rake test`).
-- Demos: `bin/rails demo:setup`, then the flow tasks
-  (`check:walkthrough`/`shop`/`book`/`rideflow`/`collab`, `check:isolation`,
-  `check:redteam`). Postgres required.
+- Demos: `bin/rails db:reset` prepares one, `bin/rails test` (hoteling and
+  kiosk-demo-prove: `bundle exec rspec`) tests it, and CI also runs its
+  `script/redteam_suite.rb` against a started server. Postgres required.
 - Full e2e: `./e2e/run.sh` (Postgres + jq). CI: `.github/workflows/ci.yml`
   (gems matrix + demos matrix + e2e). A demo task's namespace says what it is:
   `check:` ASSERTS and goes red, `demo:` is one a person runs and reads. Which
@@ -127,8 +127,7 @@ universal agent skill is `skill.md` on the same site.
   with no per-demo dimension (the T-048 statics, the three error pages,
   `puma.rb`, `environments/{test,production}.rb`) ARE declared in the manifest,
   `:identical` with prove as the stated exception (K-643) — as are `bin/setup`
-  and `bin/dev`, which stopped being generator output when K-1315 pointed setup
-  at the demo's own `demo:setup`. Beside that manifest, the same script derives
+  and `bin/dev`. Beside that manifest, the same script derives
   one thing from the scripts themselves: every `bin/<name>` a demo's `bin/`
   scripts or its README NAME must resolve to an existing, executable file.
 - The four `kiosk-demo-*/before-after.md` are a PUBLISHED narrative and every

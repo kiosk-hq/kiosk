@@ -1,27 +1,10 @@
-# The container path for every demo in this repository — ONE image, eight apps.
+# One image for every demo in this repository. The demos resolve the kiosk
+# gems through `path: "../kiosk-<gem>"`, so the build context is the whole
+# repository; each demo's compose.yaml picks the working directory.
 #
-# WHY ONE IMAGE RATHER THAN EIGHT. The demos are eight standalone Rails apps,
-# and the kiosk gems are resolved through `path: "../kiosk-<gem>"` wherever a
-# demo depends on them, so a build context that contains only one demo cannot
-# install its dependencies:
-# the context has to be this repository. Once it is, per-demo images buy
-# nothing and cost something real — getgrocery's `check:agecheck` and skooti's
-# `check:kyc`/`check:redteam` boot the KYC broker in `kiosk-demo-prove`, so an
-# image carrying one demo's bundle could not run three of the headline tasks.
-# This image bundles every demo; each demo's compose.yaml picks the working
-# directory. The gem sets overlap almost entirely, so the eight installs share
-# nearly all of their work.
-#
-# WHAT THE IMAGE CARRIES vs WHAT COMPOSE PROVIDES. The image carries what the
-# demo CODE shells out to and cannot supply for itself: the `psql` client, pinned to the database's major (the
-# demos' `check:*` tasks query Postgres with it directly, not only through ActiveRecord),
-# python3 with numpy (every task that registers an assistant pays an Equihash
-# toll and solves it with the bundled `solve.py`), and `curl` + `jq` (the three
-# demos whose walkthrough is a shell tour drive it with them). Compose provides
-# what is a SERVER rather than a tool: Postgres, on its own volume, on the
-# compose project's own network. That split is what makes the container path
-# need no host database — the demo talks to a Postgres that belongs to the
-# demo, as its superuser.
+# The image carries the tools demo code runs: python3 with numpy (registering
+# an assistant solves an Equihash toll with the bundled solve.py), and curl and
+# jq for the shell walkthroughs. Compose provides Postgres.
 #
 # The Ruby version is a build argument, and `bin/check-demo-copies` holds it to
 # a version this repository's CI actually runs and to the floor the gemspecs
@@ -38,26 +21,12 @@ RUN apt-get update -qq \
       ca-certificates \
       curl \
       git \
-      gnupg \
       jq \
       libpq-dev \
       libyaml-dev \
       python3 \
       python3-numpy \
  && rm -rf /var/lib/apt/lists/*
-
-# The psql client comes from PGDG rather than from the base image, pinned to the
-# SAME major the compose database runs, for the reason ci.yml gives where it does
-# the same thing.
-RUN set -eux; \
-    . /etc/os-release; \
-    echo "deb https://apt.postgresql.org/pub/repos/apt ${VERSION_CODENAME}-pgdg main" \
-      > /etc/apt/sources.list.d/pgdg.list; \
-    curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
-      > /etc/apt/trusted.gpg.d/pgdg.asc; \
-    apt-get update -qq; \
-    apt-get install --no-install-recommends -y postgresql-client-17; \
-    rm -rf /var/lib/apt/lists/*
 
 ENV BUNDLE_JOBS=4 \
     BUNDLE_RETRY=3 \

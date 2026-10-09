@@ -43,11 +43,7 @@
       </p>
     </form>
 
-    <%# UI affordance only: the human must actively tick each fact before the
-        "Yes" button enables. This is a client-side gate — the broker's POST
-        /verify approve path reads only `decision`, so the two-server test
-        harness (which POSTs decision=approve directly, no checkbox fields)
-        is unaffected. "No" stays enabled at all times. %>
+    <%# "Yes" enables once every fact is ticked; the server reads only `decision`. %>
     <script>
       (function () {
         var boxes = Array.prototype.slice.call(

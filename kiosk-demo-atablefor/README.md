@@ -21,8 +21,7 @@ scanning it) that this is a Kiosk endpoint to point an assistant at — not a
 human web-booking form. A human diner *does* have a **real account** at the
 restaurant (Devise sign-in, promoted as **Staff login**) and can **link their AI
 assistant** to it: the diner signs in, mints a link code, the assistant redeems
-it, and the assistant's bookings then tie to the diner's account
-(`check:binding`).
+it, and the assistant's bookings then tie to the diner's account.
 
 Every confirmed reservation shows on a **public, read-only reservations board**
 (`/reservations`, and inline on the home page) as *party size · restaurant
@@ -84,46 +83,24 @@ To run one of this demo's own tasks instead of the server:
 docker compose run --rm app bin/rails <task>
 ```
 
-The list below is the HOST path — what running `bin/rails demo:*` on your own machine
-needs. It is not shorter under containers; it is unnecessary.
+On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
-- **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: the demo tasks shell out to it directly, not only through ActiveRecord.
-- **python3 with numpy** — check with `python3 -c "import numpy"`. Registering an assistant pays an Equihash toll, and every task that registers one solves it with the bundled `solve.py`; without numpy the solver exits `this solver requires numpy` and the task fails at its first step.
-- **`curl` and `jq`** on PATH — `bin/demo` drives the walkthrough with them.
-
-> **`demo:setup` is destructive, and every task that depends on it inherits that.**
-> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
-> check, no confirmation prompt — so running it **DROPS and recreates**
-> `kiosk_atablefor_development`. Nothing you left in that database survives.
-> The SERVER is `localhost`, read from the same `config/database.yml` — unless
-> `PGHOST` is exported, and then it is whatever host that names: the drop
-> follows it, and takes that server's `kiosk_atablefor_development` instead.
->
-> Under `docker compose` the same drop still happens on every `up`, but it lands on the
-> Postgres that compose brings up, on this project's own volume. It cannot reach a
-> database on your machine: the compose file sets `PGHOST` to the container beside it
-> rather than passing yours through.
->
-> `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
+- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Postgres**, reachable — `pg_isready` returns OK.
+- **python3 with numpy** — every assistant pays an Equihash toll at n=168 k=7
+  (~10 s and ~1.3 GiB per proof), solved by the bundled `solve.py`.
 
 From this directory:
 
 ```
-bin/rails test             # the argument checks the verbs' input schemas cannot express, and the per-restaurant seating clock
-bin/rails demo:setup       # DROPS and recreates the DB, then seeds the Lisbon restaurant roster, their tables, and diners
-bin/rails check:book        # the headline: register → availability → book_table(party 2) → my_bookings
-bin/rails check:binding     # a diner signs in (Devise), links their assistant, and its booking ties to the diner
-bin/rails check:isolation   # cross-tenant denial (an operator's booking is only yours)
-bin/rails check:redteam     # adversarial regression battery
-bin/rails check:schema      # self-discovery; asserts `pay` is absent
-bin/rails check:pow         # Equihash PoW gate (prices reservation-scalping at the door).
-                           # Equihash n=168 k=7: ~10 s and ~1.3 GiB per proof on
-                           # the reference solver (see kiosk-pow-equihash/README.md)
-bin/rails check:backoff     # count-based PoW backoff: solve once → the next 3 calls are free → the 4th is challenged again
-bin/rails check:reputation  # anti-scalping: PoW cost drops as a real booking history accrues
-bin/rails check:walkthrough # curl-driven tour of the wire surface
+bin/rails demo:setup   # DROPS and recreates kiosk_atablefor_development, then seeds restaurants, tables and diners
+bin/dev                # serves the origin on http://localhost:3000
+bin/rails test         # the tests; CI runs exactly this
 ```
+
+`bin/setup` does the first two. The tests drive the origin over HTTP the way an
+assistant does; each one registers an assistant and pays its toll, so the run
+takes a few minutes.
 
 ### Watch it work
 
@@ -136,28 +113,6 @@ bin/rails check:walkthrough # curl-driven tour of the wire surface
 It discovers the wire, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `bea@example.com` / `atablefor-demo-password` and approve it there.
-
-Everything under `check:` below asserts and exits non-zero when it breaks; that
-is what CI runs. `demo:setup` prepares the database.
-
-### Which of these run in CI
-
-A `check:` task asserts and goes red; a `demo:` task is one a person runs and
-reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
-and pull request; the rest are local-only, for the reason given.
-
-| Task | Runs in CI | Why not |
-|---|---|---|
-| `demo:setup` | yes — the job's own setup step |  |
-| `check:walkthrough` | yes |  |
-| `check:book` | yes |  |
-| `check:pow` | yes |  |
-| `check:reputation` | yes |  |
-| `check:backoff` | yes |  |
-| `check:binding` | yes |  |
-| `check:isolation` | yes |  |
-| `check:schema` | yes |  |
-| `check:redteam` | yes |  |
 
 Each restaurant offers its named tables (varying capacities, some with an EUR
 no-show hold) for three evening seatings (19:00 · 20:00 · 21:00), computed

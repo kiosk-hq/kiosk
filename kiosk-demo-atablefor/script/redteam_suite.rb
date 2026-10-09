@@ -101,7 +101,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # point of the boundary: `my_bookings` and `cancel_booking` scope by ACCOUNT,
 # so two assistants linked to one diner would legitimately see each other's
 # bookings and CrossTenantRead would be asserting the opposite of the truth.
-# Diego and Bea are separate account holders (db/seeds.rb); the rake task
+# Diego and Bea are separate account holders (db/seeds.rb); the caller
 # passes their credentials in the environment.
 #
 # `agent_id` is MINTED by `/auth/register` and is a uuid because the schema

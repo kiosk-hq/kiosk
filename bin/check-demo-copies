@@ -1655,6 +1655,10 @@ COPIES = {
                            "TRANSPORT that `message_retention` sweeps; the durable tail an " \
                            "assistant resumes from is kiosk.events, above.",
   },
+  "db/migrate/20261009000002_create_kiosk_pow_spent.rb" => {
+    rule: :identical, why: "kiosk:install — kiosk.pow_spent, the spent proof-of-work ids every " \
+                           "process and deploy shares.",
+  },
   "db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb" => {
     rule:  :identical,
     ships: %w[getgrocery hoteling skooti],
@@ -1889,6 +1893,7 @@ GENERATOR_TEMPLATES = {
   "create_kiosk_mandates.rb.tt"              => { emits: "create_kiosk_mandates.rb" },
   "create_kiosk_kyc_attributes.rb.tt"        => { emits: "create_kiosk_kyc_attributes.rb" },
   "create_kiosk_events.rb.tt"                => { emits: "create_kiosk_events.rb" },
+  "create_kiosk_pow_spent.rb.tt"             => { emits: "create_kiosk_pow_spent.rb" },
 }.freeze
 
 # ── Cross-demo singleton pairs (K-648) ───────────────────────────────────────

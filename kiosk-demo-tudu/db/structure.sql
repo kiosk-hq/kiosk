@@ -272,6 +272,16 @@ CREATE TABLE kiosk.payment_mandates (
 
 
 --
+-- Name: pow_spent; Type: TABLE; Schema: kiosk; Owner: -
+--
+
+CREATE TABLE kiosk.pow_spent (
+    id text NOT NULL,
+    expires_at timestamp with time zone NOT NULL
+);
+
+
+--
 -- Name: reservations; Type: TABLE; Schema: kiosk; Owner: -
 --
 
@@ -549,6 +559,14 @@ ALTER TABLE ONLY kiosk.payment_mandates
 
 
 --
+-- Name: pow_spent pow_spent_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
+--
+
+ALTER TABLE ONLY kiosk.pow_spent
+    ADD CONSTRAINT pow_spent_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: reservations reservations_pkey; Type: CONSTRAINT; Schema: kiosk; Owner: -
 --
 
@@ -754,6 +772,13 @@ CREATE INDEX idx_payment_mandates_cart ON kiosk.payment_mandates USING btree (ca
 --
 
 CREATE INDEX idx_payment_mandates_user_id ON kiosk.payment_mandates USING btree (user_id);
+
+
+--
+-- Name: idx_pow_spent_expires_at; Type: INDEX; Schema: kiosk; Owner: -
+--
+
+CREATE INDEX idx_pow_spent_expires_at ON kiosk.pow_spent USING btree (expires_at);
 
 
 --
@@ -972,6 +997,7 @@ ALTER TABLE ONLY public.memberships
 SET search_path TO "$user", public;
 
 INSERT INTO "schema_migrations" (version) VALUES
+('20261009000002'),
 ('20260101000010'),
 ('20260101000009'),
 ('20260101000008'),

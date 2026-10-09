@@ -58,7 +58,7 @@ Demonstrates:
   **multi-account household** beat: two assistants bound to the SAME account
   (a couple) share one board presence — a listing either posts shows under the
   shared account and to both assistants — each independently revocable, while
-  neither can touch a different owner's listing (`test/wire/binding_test.rb`)
+  neither can touch a different owner's listing (`test/stories/household_test.rb`)
 
 ### Before / after
 
@@ -112,7 +112,7 @@ assistant does.
 4. **Post → edit → close** — the owned-listing lifecycle over the three
    action endpoints, with `my_listings` showing the final state
 
-The tests in `test/wire/` hold the rest:
+The stories in `test/stories/` hold the rest:
 
 - **Isolation** — the board shows every seller's listings and `my_listings` only
   the caller's; editing or closing another seller's listing is **403**; a forged
@@ -164,7 +164,7 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `script/bound_assistant.rb` | The ONE way a driver obtains an AGENT principal bound to a seeded human. It runs the shipped ceremony over real HTTP, and is hand-copied across the demos and held byte-identical by `bin/check-demo-copies`. Its HUMAN counterpart is `Kiosk::UserIdentityProviders::DeviseSession`, shipped by `kiosk-user-idp-devise` |
 | `script/redteam_suite.rb` | The adversarial battery, run against a live origin |
 | `bin/demo` | The browse→post→edit→close walkthrough (curl-driven) |
-| `test/` | Minitest tests, run by `bin/rails test`; `test/wire/` drives the origin over HTTP |
+| `test/` | Minitest tests, run by `bin/rails test`; `test/stories/` drives the origin over HTTP as sellers' assistants |
 
 ## Make it real
 

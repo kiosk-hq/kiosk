@@ -20,7 +20,7 @@ discovery funnel is the product.
 
 ## With atablefor
 
-`test/wire/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
+`test/stories/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
 the assistant registers itself, reads `availability`, calls `book_table` for a
 party of two and reads `my_bookings` back. A reservation
 takes no money, so the card step and its PSD2 challenge — the wall that ends
@@ -38,10 +38,10 @@ mass-claim prime-time two-tops to resell. Kiosk prices that at the door:
 - That toll falls as a booking history accrues:
   two proofs unproven, one after a first confirmed booking, free with a real
   history. A scalper renting identities pays every time, and the factor is a
-  `COUNT(*)` of confirmed bookings rather than a dial. `test/wire/toll_test.rb`
+  `COUNT(*)` of confirmed bookings rather than a dial. `test/stories/toll_test.rb`
   holds both.
 
-An assistant sees and cancels only its own bookings: `test/wire/isolation_test.rb`
+An assistant sees and cancels only its own bookings: `test/stories/privacy_test.rb`
 and `script/redteam_suite.rb` assert that a cross-tenant read, a cross-owner cancel and
 a forged `user_id` are each refused.
 

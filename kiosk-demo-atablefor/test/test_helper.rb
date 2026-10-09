@@ -4,13 +4,26 @@ ENV["RAILS_ENV"] ||= "test"
 
 require_relative "../config/environment"
 require "rails/test_help"
-require "kiosk/test_helpers/live_server"
+require "kiosk/story_test"
 
-# Drives this origin over HTTP as an assistant does. The query toll is off
-# unless a test turns it on; registration is tolled as shipped.
-class WireTest < ActiveSupport::TestCase
-  include Kiosk::TestHelpers::LiveServer
+# A diner's AI assistant: looks for an open table, books it, reads the
+# diner's bookings back and cancels one.
+class Diner < Kiosk::TestHelpers::Customer
+  def open_tables(party: 2, **filters) = asks(:availability, party_size: party, **filters).rows
 
+  def books(table = open_tables.first, party: 2, **extra)
+    does(:book_table, party_size: party, restaurant_id: table["restaurant_id"],
+                      restaurant_table_id: table["restaurant_table_id"],
+                      date: table["seating_date"], time: table["seating_time"], **extra)
+  end
+
+  def cancels(booking) = does(:cancel_booking, booking_id: booking["booking_id"])
+  def bookings = asks(:my_bookings).rows.pluck("booking_id")
+end
+
+# Searching for a table is free unless a story turns the toll on;
+# registering is tolled as shipped.
+class StoryTest < Kiosk::StoryTest
   SHIPPED_TOLL = Kiosk.configuration.reputation_policy
 
   setup { toll(nil) }
@@ -18,15 +31,5 @@ class WireTest < ActiveSupport::TestCase
 
   def toll(policy) = Kiosk.configuration.reputation_policy = policy
 
-  def wire = @wire ||= Kiosk::TestHelpers::Wire.new(base_url: live_url)
-
-  def open_tables(diner) = assistant.query(diner, name: "availability", party_size: 2).body
-
-  def book(diner, table = open_tables(diner).first)
-    assistant.run(diner, name: "book_table", party_size: 2,
-                      **table.slice("restaurant_id", "restaurant_table_id").symbolize_keys,
-                      date: table["seating_date"], time: table["seating_time"])
-  end
-
-  def my_booking_ids(diner) = assistant.query(diner, name: "my_bookings").body.map { _1["booking_id"] }
+  def a_diner = a_customer(as: Diner)
 end

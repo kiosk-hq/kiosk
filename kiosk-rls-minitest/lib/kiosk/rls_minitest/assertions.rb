@@ -4,19 +4,13 @@ require "minitest/assertions"
 
 module Kiosk
   module RLSMinitest
-    # Minitest assertions for the structured Kiosk error classes. Mixed
-    # into `Minitest::Test` (and friends) automatically when the user
-    # `include Kiosk::TestHelpers` — the hook that does it lives in
-    # `kiosk/rls_minitest/integration.rb`, which reopens {Kiosk::TestHelpers}
-    # rather than declaring a constant of its own.
+    # Minitest assertions for the Kiosk error classes; {Kiosk::TestHelpers} mixes them in.
     module Assertions
-      # Pass when the block raises {Kiosk::TestHelpers::Errors::RLSDenied}.
       def assert_rls_denied(msg = nil, &block)
         assert_raises_kiosk(Kiosk::TestHelpers::Errors::RLSDenied, msg, &block)
       end
 
-      # Pass when the block does NOT raise RLSDenied. Errors of other
-      # classes propagate unchanged.
+      # Errors of other classes propagate unchanged.
       def refute_rls_denied(msg = nil)
         yield
       rescue Kiosk::TestHelpers::Errors::RLSDenied => e
@@ -24,12 +18,10 @@ module Kiosk
         flunk(message)
       end
 
-      # Pass when the block raises {Kiosk::TestHelpers::Errors::QuotaExceeded}.
       def assert_quota_exceeded(msg = nil, &block)
         assert_raises_kiosk(Kiosk::TestHelpers::Errors::QuotaExceeded, msg, &block)
       end
 
-      # Pass when the block does NOT raise QuotaExceeded.
       def refute_quota_exceeded(msg = nil)
         yield
       rescue Kiosk::TestHelpers::Errors::QuotaExceeded => e
@@ -54,9 +46,7 @@ module Kiosk
   end
 end
 
-# Spec-DSL bridges: `proc { ... }.must_raise_rls_denied`. Minitest's
-# `expect.rb` defines these helpers when loaded; we register the matchers
-# defensively only if the spec mode is loaded.
+# Spec-DSL bridges (`proc { ... }.must_raise_rls_denied`), when minitest/spec is loaded.
 if defined?(Minitest::Expectations)
   module Minitest::Expectations
     infect_an_assertion :assert_rls_denied,      :must_raise_rls_denied,      :block

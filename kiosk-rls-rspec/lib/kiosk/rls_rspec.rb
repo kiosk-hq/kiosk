@@ -10,19 +10,10 @@ require "kiosk/rls_rspec/matchers"
 
 module Kiosk
   module RLSRSpec
-    # The metadata tags that pull in the journey DSL. Both get the SAME
-    # surface — they differ only in the name a group tags itself with, so a
-    # test can move between them without changing a helper call. Nothing here
-    # drives a live model: `:kiosk_agent` is a tag, not a mode.
+    # Metadata tags that pull in the same journey DSL; `:kiosk_agent` is a tag, not a live model.
     JOURNEY_TYPES = %i[kiosk_journey kiosk_agent].freeze
 
-    # Register the journey DSL include for the journey metadata tags with
-    # the given RSpec configuration. Called automatically on require if
-    # RSpec is already loaded; providers using an unusual load order can
-    # invoke it manually.
-    #
-    # @example
-    #   RSpec.configure { |c| Kiosk::RLSRSpec.install!(c) }
+    # Runs on require; call it yourself only under an unusual load order.
     def self.install!(config = RSpec.configuration)
       JOURNEY_TYPES.each do |type|
         config.include(Kiosk::TestHelpers::Journey, type: type)

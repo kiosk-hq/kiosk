@@ -2,8 +2,7 @@
 
 require "rspec/expectations"
 
-# Matcher: `expect { ... }.to be_rls_denied`
-# Succeeds when the block raises {Kiosk::TestHelpers::Errors::RLSDenied}.
+# `expect { ... }.to be_rls_denied`
 RSpec::Matchers.define :be_rls_denied do
   supports_block_expectations
 
@@ -31,8 +30,7 @@ RSpec::Matchers.define :be_rls_denied do
   end
 end
 
-# Matcher: `expect { ... }.to be_quota_exceeded`
-# Succeeds when the block raises {Kiosk::TestHelpers::Errors::QuotaExceeded}.
+# `expect { ... }.to be_quota_exceeded`
 RSpec::Matchers.define :be_quota_exceeded do
   supports_block_expectations
 

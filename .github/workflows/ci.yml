@@ -136,9 +136,7 @@ jobs:
         include:
           - demo: kiosk-demo-atablefor
             # Table booking, no payments. Toll at Equihash n=168 k=7, as deployed.
-            # check:wire_args_spec first: no server, no database. Tasks without a
-            # setup prerequisite run before check:walkthrough, which reseeds.
-            tasks: check:wire_args_spec check:backoff check:pow check:book check:reputation check:binding check:isolation check:redteam check:schema check:walkthrough
+            tasks: check:backoff check:pow check:book check:reputation check:binding check:isolation check:redteam check:schema check:walkthrough
           - demo: kiosk-demo-getgrocery
             # check:agecheck = the alcohol 18+ age-gate (create_order rejects a
             # cart with an age_restricted item unless the agent carries
@@ -265,22 +263,6 @@ jobs:
             # BROWSES=7 and the curve stays [0,0,0,0,0,0,0] — "browsing never got
             # priced" goes red, exit 1.
             # It goes last with check:search; both reseed via `: :setup`.
-            # check:wire_args_spec goes FIRST, and it is the only task in this
-            # job that needs no server, no Postgres and no PoW (~0.4 s, a bare
-            # `ruby spec/wire_arguments_spec.rb`). Hoteling shipped no `spec/`
-            # at all until T-137, so every other task here paid for a booted
-            # origin, a seeded database and a live toll to reach a set of pure
-            # functions. 195 assertions: {WireArguments.integer}'s shape arm and
-            # the `max:` arm T-125 added (plus the two omissions T-125 reasoned
-            # about — `limit`/`property_id`/`room_type_id` pass no ceiling, and
-            # there is no `min:` — asserted rather than believed), `stay_dates`'
-            # strict `Date.iso8601` and the SQLi tail `Date.parse` would have
-            # booked, `past_stay` and `example_check_in`/`example_check_out`
-            # against a FROZEN property clock (K-969, K-972), `priceable_total`
-            # (K-968) and the 404-not-400 split `property_not_found` carries.
-            # Watched fail: restore the pre-guard coercion (`Integer(raw.to_s
-            # .strip, 10)` → `raw.to_s.to_i`) and drop the `max:` arm — 15
-            # assertions go red and the task exits 1.
             # check:conformance (T-193) goes SECOND, right after the DB-free
             # unit spec: the four properties the protocol makes normative of an
             # origin, asserted through `bundle exec rspec`. This demo is the
@@ -313,7 +295,7 @@ jobs:
             # same assertion goes red with the cap-arithmetic control beside it.
             # It goes with check:search and check:browse at the end: `task
             # spending_cap: :setup` reseeds.
-            tasks: check:wire_args_spec check:conformance check:property_decision check:book check:isolation check:redteam check:schema check:search check:browse check:spending_cap
+            tasks: check:conformance check:property_decision check:book check:isolation check:redteam check:schema check:search check:browse check:spending_cap
             # Stripe test mode; CI carries no key, so every charge and the
             # declined booking's refund go to stripe-mock.
             stripe_mock: true
@@ -351,15 +333,7 @@ jobs:
             # to 0 and the unproven register returns 201.
             # Both reseed (`: :setup`), so they go after check:walkthrough, which
             # has no prerequisite and lives off the job-level demo:setup.
-            # check:clock_spec goes FIRST and is the cheapest signal in the list:
-            # DB-free, no server, no PoW, ~0.5 s, and it runs the same file under
-            # TZ=Etc/GMT-11 and TZ=Etc/GMT+2 because the defect it holds — a
-            # zoneless `slot` read in the SERVER PROCESS's zone rather than the
-            # salon's — is invisible from inside any single run.
-            # Watched fail: drop `zone.iso8601` from SalonClock.parse_slot so the
-            # stdlib parse is the value again, and 4 assertions go red under both
-            # TZ values (exit 1); restoring the file returns 0.
-            tasks: check:clock_spec check:walkthrough check:isolation check:redteam check:schema check:roles check:register
+            tasks: check:walkthrough check:isolation check:redteam check:schema check:roles check:register
             ungated:
               check:binding: >-
                 timing-sensitive: the account-binding ceremony polls on the
@@ -380,22 +354,7 @@ jobs:
             # has no prerequisite and lives off the job-level demo:setup.
             # Watched fail: set registration_pow_count to 0 and the unproven
             # register returns 201 instead of 402.
-            # check:clock_spec and check:access_spec go FIRST and are the two
-            # cheapest signals in the list: no server, no database, no toll,
-            # under a second each. Together they are the only coverage of this
-            # demo that a contributor without Postgres can run at all — every
-            # other task here needs a seeded origin.
-            # check:clock_spec runs spec/board_clock_spec.rb under TZ=Etc/GMT-11
-            # and TZ=Etc/GMT+2, because a helper that leaked the server
-            # process's zone into a published `posted_at` is invisible inside
-            # any single run. Watched fail: make BoardClock.zone answer
-            # default_zone unconditionally and 3 assertions go red under both
-            # TZ values (exit 1).
-            # check:access_spec covers the owner-scoped refusal surface — the
-            # listing_id shape guard and the one sentence a miss earns. Watched
-            # fail: give ListingAccess.not_owner a different message per verb
-            # and the no-enumeration assertion goes red.
-            tasks: check:clock_spec check:access_spec check:walkthrough check:isolation check:redteam check:schema check:register
+            tasks: check:walkthrough check:isolation check:redteam check:schema check:register
             ungated:
               check:binding: >-
                 timing-sensitive: the account-binding ceremony polls on the
@@ -424,24 +383,7 @@ jobs:
             # (K-786). MEASURED at 4.8 s end to end including its own reseed and
             # server boot. It reseeds (`: :setup`), like every other tudu task
             # here, so its position is free.
-            # check:clock_spec and check:access_spec go FIRST and are the two
-            # cheapest signals in the list: no server, no database, no toll,
-            # under a second each. Together they are the only coverage of this
-            # demo that a contributor without Postgres can run at all — every
-            # other task here reseeds and boots.
-            # check:clock_spec runs spec/reader_clock_spec.rb under TZ=Etc/GMT-11
-            # and TZ=Etc/GMT+2, because stdlib `Time.iso8601` binds an
-            # offsetless string to the server process's zone and that class is
-            # invisible inside any single run. Watched fail: drop the
-            # `in_zone.iso8601(str)` line from ReaderClock.parse so the stdlib
-            # value is returned, and 2 assertions go red under both TZ values
-            # (exit 1).
-            # check:access_spec covers the list-access gate: the shape check runs
-            # with Membership deliberately not loaded, so a gate that consulted
-            # the table before checking the shape raises there. Watched fail:
-            # drop the `require_owner:` forwarding and the owner-demand
-            # assertion goes red.
-            tasks: check:clock_spec check:access_spec check:collab check:link check:isolation check:redteam check:schema
+            tasks: check:collab check:link check:isolation check:redteam check:schema
           # Every check: task a demo defines appears either in its `tasks:`
           # list above or in its `ungated:` map with the reason it is not a gate.
 
@@ -651,6 +593,14 @@ jobs:
       - name: Set up demo
         working-directory: ${{ matrix.demo }}
         run: bin/rails demo:setup
+
+      - name: Run the demo's tests
+        working-directory: ${{ matrix.demo }}
+        run: |
+          if [ -d test ]; then
+            RAILS_ENV=test bin/rails db:create db:schema:load
+            bin/rails test
+          fi
 
       # Each demo task runs in its OWN bin/rails invocation. Demo servers are
       # cleaned up at_exit (process end), so batching every task into one

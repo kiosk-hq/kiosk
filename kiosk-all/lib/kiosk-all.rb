@@ -1,21 +1,7 @@
 # frozen_string_literal: true
 
-# kiosk-all — meta-gem for the Kiosk production stack.
-# Requiring it pulls in kiosk-core + kiosk-server.
-#
-# NOT ON RUBYGEMS YET, so `bundle add kiosk-all` does not resolve. Publication
-# status and the canonical install line are stated once, in the monorepo
-# README's Install section: https://github.com/kiosk-hq/kiosk#install
-#
-# See https://kiosk.tech.
-#
-# Not pulled in (intentional):
-#   - kiosk-rls — opt-in DB-level defense-in-depth; hosts that want RLS
-#     add it explicitly (see the kiosk-rls README).
-#   - kiosk-test-support, kiosk-rls-rspec, kiosk-rls-minitest — host adds
-#     these to dev/test groups per their stack.
-#   - Adapter gems (kiosk-user-idp-*, kiosk-pay-*) — providers pick one
-#     per market/stack.
+# kiosk-all — meta-gem for the Kiosk production stack: kiosk-core + kiosk-server.
+# kiosk-rls, the test-support gems and adapter gems are added by the host.
 
 require "kiosk/all/version"
 

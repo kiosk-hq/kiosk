@@ -79,9 +79,7 @@ require_relative "bound_assistant"
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
 
-# The seeded humans behind the two assistants (db/seeds.rb). Credentials arrive
-# in the environment from the rake task, the way check:binding's HOLDER_EMAIL /
-# HOLDER_PASSWORD do — never as literals in a driver.
+# The seeded humans behind the two assistants (db/seeds.rb).
 ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
 BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
 PASSWORD    = ENV.fetch("DEMO_PASSWORD")
@@ -108,7 +106,7 @@ rc, alice_post = WIRE.post_json("/kiosk/post_listing",
                                 { category_slug: "furniture",
                                   title: "Redteam target", body: "Alice's listing" },
                                 ALICE.bearer)
-abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)} — run rake demo:setup" unless rc == 200
+abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)} — run bin/rails demo:setup" unless rc == 200
 alice_listing_id = alice_post["listing_id"]
 abort "no listing_id from A's post: #{JSON.generate(alice_post)}" unless alice_listing_id
 
@@ -409,7 +407,7 @@ rc_log, _log_post = WIRE.post_json("/kiosk/post_listing",
                                      title: "Redteam #{title_sentinel}",
                                      body:  "Call me on #{body_sentinel}" },
                                    ALICE.bearer)
-request_log  = File.expand_path("../log/development.log", __dir__)
+request_log  = File.expand_path("../log/#{ENV.fetch("RAILS_ENV", "development")}.log", __dir__)
 log_text     = File.exist?(request_log) ? File.read(request_log, encoding: "UTF-8", invalid: :replace, undef: :replace) : ""
 param_lines  = log_text.each_line.select { |line| line.include?("Parameters:") }
 body_logged  = param_lines.any? { |line| line.include?(body_sentinel) }
@@ -417,7 +415,7 @@ title_logged = param_lines.any? { |line| line.include?(title_sentinel) }
 BATTERY.record("ContactDetailsStayOutOfTheRequestLog",
                rc_log == 200 && title_logged && !body_logged,
                "post_listing → #{rc_log}; across #{param_lines.length} `Parameters:` line(s) in " \
-               "log/development.log the body sentinel is #{body_logged ? 'FOUND' : 'absent'} and the " \
+               "#{File.basename(request_log)} the body sentinel is #{body_logged ? 'FOUND' : 'absent'} and the " \
                "title sentinel is #{title_logged ? 'found' : 'MISSING'} " \
                "(want 200, the contact line masked on every one of them, and the unfiltered title present)")
 

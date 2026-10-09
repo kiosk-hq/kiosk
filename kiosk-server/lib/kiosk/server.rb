@@ -56,7 +56,6 @@ require "kiosk/server/handler_dispatch"
 require "kiosk/server/handler_mixin"
 require "kiosk/server/handler_registrations"
 require "kiosk/handler"
-require "kiosk/operation_result"
 require "kiosk/server/executor"
 require "kiosk/server/column_spending_cap"
 require "kiosk/server/payment_claim"
@@ -133,9 +132,6 @@ module Kiosk
     #                                         verbs as ordinary Rails actions; each
     #                                         declaration's `kind` says whether it
     #                                         is a query or an action
-    #   - {Kiosk::OperationResult}          — answer-or-refusal value object a write
-    #                                         Operation returns; subclass it and
-    #                                         declare your own STATUSES map
     #   - {Kiosk::Server::Result}           — success payload value type; it
     #                                         renders {Result#to_payload}, which
     #                                         is the answer body verbatim

@@ -621,16 +621,6 @@ module Kiosk
           render json: { rows: rows, next_cursor: next_cursor, total: total }
         end
 
-        # Answer with a {Kiosk::OperationResult}: a success renders its value
-        # as-is, a refusal renders `{ error: { code, message, hint } }` at the
-        # status its subclass maps the code to, which the wire carries as the
-        # problem document's `code`, `detail` and `hint`.
-        def render_kiosk_result(result)
-          return render json: result.value if result.ok?
-
-          render json: { error: result.error }, status: result.status
-        end
-
         # The one place a Rails-native raise becomes a wire code. Three kinds
         # of raise reach it:
         #

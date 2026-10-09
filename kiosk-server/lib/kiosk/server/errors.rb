@@ -464,43 +464,30 @@ module Kiosk
         def extensions  = @extra
       end
 
-      # ── RAILS-DUPLICATE CODES ─────────────────────────────────────────
-      # Each of the five classes below restates what its bare HTTP status
-      # already says, i.e. exactly the parallel framework Kiosk deliberately
-      # does not have. Do not raise them from new code — render the status
-      # (handlers) or raise {WireError} / the Rails exception. They survive
-      # only because the gem's own protocol internals and some demo
-      # initializers still raise them. `quota_exceeded` has NO class here and
-      # needs none: the code is live on the wire — getgrocery and skooti refuse
-      # a fourth outstanding KYC intake with it — but through
-      # `OperationResult.refused`, which is the operator-side spelling, so the
-      # engine raises it nowhere.
+      # ── Refusals an operator raises ─────────────────────────────────────
+      # An Operation or handler refuses with one of these; the wire renders it
+      # as a problem document and a web controller can `rescue_from` it.
 
-      # DUPLICATE of a bare 400. Malformed body, unknown verb, missing
-      # required arg.
+      # 400: the arguments are wrong.
       class BadRequest < Base
         CODE        = "bad_request"
         HTTP_STATUS = 400
       end
 
-      # DUPLICATE of a bare 401. Missing or invalid identity — no token,
-      # expired token, wrong issuer.
+      # 401: no valid identity.
       class Unauthenticated < Base
         CODE        = "unauthenticated"
         HTTP_STATUS = 401
       end
 
-      # DUPLICATE of a bare 403. Identity valid but not permitted.
+      # 403: not permitted to this principal.
       class Forbidden < Base
         CODE        = "forbidden"
         HTTP_STATUS = 403
       end
 
-      # DUPLICATE of a bare 404. An ARGUMENT addressed a resource that does not
-      # exist -- spec §9.1 rule 2, and that is the whole of what it means: an
-      # unknown VERB NAME is {VerbNotFound} below, because an assistant recovers
-      # from the two differently and `code` is the only field the spec lets it
-      # branch on.
+      # 404: an argument names something that does not exist (spec §9.1 rule 2);
+      # an unknown verb is {VerbNotFound}.
       class NotFound < Base
         CODE        = "not_found"
         HTTP_STATUS = 404

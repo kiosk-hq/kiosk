@@ -45,7 +45,6 @@ RSpec.describe Kiosk::Server::PaymentClaim do
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id uuid NOT NULL,
         payment_status varchar NOT NULL DEFAULT 'unpaid',
-        paid_by_user_id uuid,
         updated_at timestamp NOT NULL DEFAULT now()
       )
     SQL
@@ -72,13 +71,12 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   let(:conn)   { ::ActiveRecord::Base.connection }
   let(:schema) { CLAIM_SPEC_SCHEMA }
   let(:owner)  { SecureRandom.uuid }
-  let(:payer)  { SecureRandom.uuid }
+  let(:payer)  { owner }
   let(:row)    { conn.select_value(%(INSERT INTO "#{schema}".payables (user_id) VALUES ('#{owner}') RETURNING id)) }
   let(:psp)    { ClaimSpecPsp.new }
-  let(:options) { { payer_column: "paid_by_user_id" } }
   subject(:claim) do
     described_class.new(psp, currency: "eur", table: "#{schema}.payables", reference: "booking_id",
-                             query: "my_bookings", **options)
+                             query: "my_bookings")
   end
 
   # Every capture it was asked for, and what it was told to do on the next.
@@ -103,7 +101,6 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   end
 
   def status(id = row) = conn.select_value(%(SELECT payment_status FROM "#{schema}".payables WHERE id = '#{id}'))
-  def payer_of(id = row) = conn.select_value(%(SELECT paid_by_user_id FROM "#{schema}".payables WHERE id = '#{id}'))
 
   def settle(id)
     agent = SecureRandom.uuid
@@ -127,12 +124,11 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     SQL
   end
 
-  it "captures once, records the payer, and flips the row to paid when the capture returns" do
+  it "captures once and flips the row to paid when the capture returns" do
     claim.capture(cart_for(row))
 
     expect(psp.captures.size).to eq(1)
     expect(status).to eq("paid")
-    expect(payer_of).to eq(payer)
     expect(paid).to eq([row])
   end
 
@@ -184,7 +180,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   it "releases the claim when the cart total is not the operator's price, and charges nothing" do
     expect { claim.capture(cart_for(row, total: 1)) }
       .to raise_error(Kiosk::Server::Errors::Forbidden, /cart total 1 does not equal .*500/)
-    expect([status, payer_of, psp.captures]).to eq(["unpaid", nil, []])
+    expect([status, psp.captures]).to eq(["unpaid", []])
   end
 
   it "refuses with the reason the operator's catalog gives" do
@@ -226,14 +222,10 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect { claim.capture(cart_for("1; DROP TABLE x")) }.to raise_error(Kiosk::Server::Errors::BadRequest, /not a uuid/)
   end
 
-  context "with an owner column" do
-    let(:options) { { owner_column: "user_id" } }
-
-    it "claims only the payer's own row" do
-      expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /not found or not yours/)
-      claim.capture(cart_for(row, user_id: owner))
-      expect(status).to eq("paid")
-    end
+  it "refuses a principal paying for another principal's row" do
+    expect { claim.capture(cart_for(row, user_id: SecureRandom.uuid)) }
+      .to raise_error(Kiosk::Server::Errors::Forbidden, /not found or not yours/)
+    expect([status, psp.captures]).to eq(["unpaid", []])
   end
 
   it "forwards the declared port and nothing else" do
@@ -250,6 +242,6 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     other = ClaimSpecPsp.new
     claim.over(other).capture(cart_for(row))
 
-    expect([other.captures.size, psp.captures.size, payer_of]).to eq([1, 0, payer])
+    expect([other.captures.size, psp.captures.size]).to eq([1, 0])
   end
 end

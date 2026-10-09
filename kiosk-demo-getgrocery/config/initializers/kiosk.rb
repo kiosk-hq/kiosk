@@ -41,7 +41,7 @@ Kiosk.configure do |c|
       test_autocard: ENV["KIOSK_TEST_AUTOCARD"] == "1",
     ),
     currency: "eur", table: "orders", reference: "order_id", query: "my_orders",
-    status_column: "status", unpaid: "created", owner_column: "user_id",
+    status_column: "status", unpaid: "created",
   )
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(order_id) { CourierDispatchJob.arm!(order_id) }

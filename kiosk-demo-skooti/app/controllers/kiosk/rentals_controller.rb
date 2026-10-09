@@ -5,8 +5,7 @@ class Kiosk::RentalsController < ActionController::API
   include Kiosk::Handler
 
   topic :booking_payment do
-    description "A reservation of yours was paid — possibly by somebody else settling it on " \
-                "your behalf. Activate the rental once this says `paid`."
+    description "A reservation of yours was paid. Activate the rental once this says `paid`."
     payload_schema type: "object", additionalProperties: false,
                    properties: { reservation_id: { type: "string", format: "uuid" },
                                  payment_state:  { enum: %w[paid] } },

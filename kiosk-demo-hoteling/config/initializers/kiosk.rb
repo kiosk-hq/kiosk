@@ -43,7 +43,7 @@ Kiosk.configure do |c|
       test_autocard: ENV["KIOSK_TEST_AUTOCARD"] == "1",
     ),
     currency: "eur", table: "bookings", reference: "booking_id",
-    query: "my_bookings", owner_column: "user_id",
+    query: "my_bookings",
   )
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(booking_id) { Booking.captured!(booking_id) }

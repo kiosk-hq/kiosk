@@ -23,7 +23,7 @@ module Kiosk
     #
     #   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     #     psp, currency: "eur", table: "bookings", reference: "booking_id",
-    #          query: "my_bookings", payer_column: "paid_by_user_id",
+    #          query: "my_bookings",
     #   )
     #   c.cart_price_checker = PriceChecker            # call(booking_id, lines) → cents | refusal
     #   c.after_payment      = ->(id) { Booking.paid!(id) }   # optional
@@ -39,10 +39,9 @@ module Kiosk
       # @param query [String] the per-user query that publishes the row's payment state
       # @param status_column [String]
       # @param unpaid [String] the status a payable row waits in
-      # @param payer_column [String, nil] records who paid, from the signed cart
-      # @param owner_column [String, nil] restricts the claim to the payer's own rows
+      # @param owner_column [String] the row's owner; a principal pays only for its own rows
       def initialize(psp, currency:, table:, reference:, query:, status_column: "payment_status",
-                     unpaid: "unpaid", payer_column: nil, owner_column: nil)
+                     unpaid: "unpaid", owner_column: "user_id")
         @psp           = psp
         @currency      = currency.to_s.downcase
         @table         = table
@@ -50,10 +49,8 @@ module Kiosk
         @query         = query
         @status_column = status_column
         @unpaid        = unpaid
-        @payer_column  = payer_column
         @owner_column  = owner_column
-        @options       = { currency:, table:, reference:, query:, status_column:, unpaid:, payer_column:,
-                           owner_column: }
+        @options       = { currency:, table:, reference:, query:, status_column:, unpaid:, owner_column: }
         return unless psp.respond_to?(:setup_return_user_id)
 
         define_singleton_method(:setup_return_user_id) { |params| @psp.setup_return_user_id(params) }
@@ -153,37 +150,21 @@ module Kiosk
       end
 
       def take(id, payer)
-        binds = [PAYING, id, @unpaid]
-        set   = ""
-        where = ""
-        if @payer_column
-          binds << payer
-          set = ", #{column(@payer_column)} = $#{binds.size}::uuid"
-        end
-        if @owner_column
-          binds << payer
-          where = " AND #{column(@owner_column)} = $#{binds.size}::uuid"
-        end
         connection.exec_query(
-          "UPDATE #{table} SET #{column(@status_column)} = $1#{set}, updated_at = now() " \
-          "WHERE id = $2::uuid AND #{column(@status_column)} = $3#{where} RETURNING id",
-          "Kiosk payment claim", binds
+          "UPDATE #{table} SET #{column(@status_column)} = $1, updated_at = now() " \
+          "WHERE id = $2::uuid AND #{column(@status_column)} = $3 AND #{column(@owner_column)} = $4::uuid " \
+          "RETURNING id",
+          "Kiosk payment claim", [PAYING, id, @unpaid, payer]
         ).rows.any?
       end
 
       def refuse_unclaimable!(id, payer)
-        binds = [id]
-        owner = ""
-        if @owner_column
-          binds << payer
-          owner = " AND #{column(@owner_column)} = $2::uuid"
-        end
         status = connection.exec_query(
-          "SELECT #{column(@status_column)} FROM #{table} WHERE id = $1::uuid#{owner}",
-          "Kiosk payment claim", binds
+          "SELECT #{column(@status_column)} FROM #{table} WHERE id = $1::uuid AND #{column(@owner_column)} = $2::uuid",
+          "Kiosk payment claim", [id, payer]
         ).rows.first&.first
 
-        deny(@owner_column ? "#{noun} not found or not yours" : "#{noun} not found") if status.nil?
+        deny "#{noun} not found or not yours" if status.nil?
         if status == PAYING && settled?(id)
           mark_paid!(id)
           deny "#{noun} #{id} is already paid"
@@ -196,11 +177,9 @@ module Kiosk
         deny "#{noun} #{id} is already paid (#{status}) — do not pay it again"
       end
 
-      # Clears the payer on release: a payer left on an unpaid row reads as a charge.
       def flip(id, to:)
-        clear = @payer_column && to == @unpaid ? ", #{column(@payer_column)} = NULL" : ""
         connection.exec_update(
-          "UPDATE #{table} SET #{column(@status_column)} = $1#{clear}, updated_at = now() " \
+          "UPDATE #{table} SET #{column(@status_column)} = $1, updated_at = now() " \
           "WHERE id = $2::uuid AND #{column(@status_column)} = $3",
           "Kiosk payment claim", [to, id.to_s, PAYING]
         )

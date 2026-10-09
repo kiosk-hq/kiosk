@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **`Kiosk::OperationResult` and `render_kiosk_result` are removed**; operations raise `Kiosk::Server::Errors`. `PaymentClaim` pays only the owner's row.
+
 - 2026-10-09: **`Kiosk.current_role`** beside `Kiosk.current_user_id`; `SessionContext.user_id` becomes `SessionContext.identity`.
 
 - 2026-10-09: **The `schema_major()` boot check is removed**, and `kiosk:install` sets `dump_schemas` so `schema.rb` carries the kiosk tables.

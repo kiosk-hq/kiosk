@@ -576,49 +576,6 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
     end
   end
 
-  describe "render_kiosk_result" do
-    let(:result_class) do
-      Class.new(Kiosk::OperationResult) { const_set(:STATUSES, { "conflict" => :conflict }.freeze) }
-    end
-
-    before do
-      results = result_class
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-        kind :action
-        description "Books a table when the party fits, and refuses when it does not."
-        input_schema type: "object", additionalProperties: false,
-                     properties: { party: { type: "integer" } }, required: %w[party]
-        output_schema true
-        define_method(:book) do
-          render_kiosk_result(
-            if params[:party].to_i > 4
-              results.refused(code: "conflict", message: "no table for that party", hint: "try 4 or fewer")
-            else
-              results.ok({ "booking_id" => "b-1" })
-            end,
-          )
-        end
-      end
-      stub_const("SpecResultController", klass)
-    end
-
-    it "renders a success's value as the answer" do
-      result = execute(:run, { name: "book", party: 2 })
-      expect(result.payload).to eq("booking_id" => "b-1")
-    end
-
-    it "renders a refusal with its code, sentence, hint and the subclass's status" do
-      expect { execute(:run, { name: "book", party: 9 }) }
-        .to raise_error(Kiosk::Server::Errors::Base) { |e|
-          expect(e.code).to eq("conflict")
-          expect(e.http_status).to eq(409)
-          expect(e.message).to eq("no table for that party")
-          expect(e.hint).to eq("try 4 or fewer")
-        }
-    end
-  end
-
   describe "the end-to-end wire path" do
     let(:token) do
       Kiosk::Server::JwtIssuer.issue(

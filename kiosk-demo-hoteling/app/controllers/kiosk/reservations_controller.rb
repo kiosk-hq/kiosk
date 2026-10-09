@@ -31,8 +31,7 @@ class Kiosk::ReservationsController < ActionController::API
   end
 
   topic :booking_payment do
-    description "A booking of yours was paid — possibly by somebody else settling it on " \
-                "your behalf. Confirm it once this says `paid`."
+    description "A booking of yours was paid. Confirm it once this says `paid`."
     payload_schema type: "object", additionalProperties: false,
                    properties: { booking_id:    { type: "string", format: "uuid" },
                                  payment_state: { enum: %w[paid] } },

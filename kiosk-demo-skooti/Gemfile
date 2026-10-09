@@ -48,3 +48,7 @@ end
 # ─── Demo helpers ──────────────────────────────────────────────────────────
 # Used by bin/make-qr to generate the App Clip launch QR (ANSI terminal + SVG).
 gem "rqrcode"
+
+group :test do
+  gem "kiosk-test-support", path: "../kiosk-test-support"
+end

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **`LiveServer` and `SeededDatabase`** serve the app over HTTP from the test process on committed, seeded data; **`DescriptorExamples`** checks each published example against its schema.
+
 ## [0.5.12] — 2026-10-08
 
 - 2026-10-08: Version 0.5.12, the tree cut that matches skill 0.5.12; this gem's surface is unchanged.

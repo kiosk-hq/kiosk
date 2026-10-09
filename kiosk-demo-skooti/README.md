@@ -89,50 +89,29 @@ To run one of this demo's own tasks instead of the server:
 docker compose run --rm app bin/rails <task>
 ```
 
-The list below is the HOST path — what running `bin/rails demo:*` on your own machine
-needs. It is not shorter under containers; it is unnecessary.
+On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
-- **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: the demo tasks shell out to it directly, not only through ActiveRecord.
-- **python3 with numpy** — check with `python3 -c "import numpy"`. Registering an assistant pays an Equihash toll, and every task that registers one solves it with the bundled `solve.py`; without numpy the solver exits `this solver requires numpy` and the task fails at its first step.
-
-> **`demo:setup` is destructive, and every task that depends on it inherits that.**
-> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
-> check, no confirmation prompt — so running it **DROPS and recreates**
-> `kiosk_skooti_development`. Nothing you left in that database survives.
-> The SERVER is `localhost`, read from the same `config/database.yml` — unless
-> `PGHOST` is exported, and then it is whatever host that names: the drop
-> follows it, and takes that server's `kiosk_skooti_development` instead.
->
-> Under `docker compose` the same drop still happens on every `up`, but it lands on the
-> Postgres that compose brings up, on this project's own volume. It cannot reach a
-> database on your machine: the compose file sets `PGHOST` to the container beside it
-> rather than passing yours through.
->
-> `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
->
-> **AND SOME TASKS DROP A SECOND DATABASE, IN ANOTHER DEMO.** `check:kyc`, `check:redteam`
-> boot the app in `kiosk-demo-prove` and set its database up the same destructive
-> way, so running any of them also **DROPS and recreates** `kiosk_prove_development`. That is another
-> demo's data, and nothing you left in it survives either.
+- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Postgres**, reachable — `pg_isready` returns OK.
+- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
+- **stripe-mock** on PATH for the tests — `brew install stripe-mock`.
 
 From this directory:
 
 ```
-bin/rails demo:setup       # DROPS and recreates the DB, then seeds the fleet
-bin/rails check:rideflow    # the headline: register → scooters_available → reserve → payment_setup → pay → start_rental → offline unlock (no KYC leg — see check:kyc; plus the negative gates)
-bin/rails check:kyc         # the KYC-gated motorcycle path (age_over_18 + licence_a)
-bin/rails check:isolation   # cross-tenant + cross-scooter denial
-bin/rails check:redteam     # adversarial regression battery
-bin/rails check:schema      # self-discovery over the schema verb
-bin/rails check:kat         # known-answer test for the offline rental-token issuer (DB-free)
+bin/rails demo:setup   # DROPS and recreates kiosk_skooti_development, then seeds the fleet
+bin/dev                # serves the origin on http://localhost:3000
+bin/rails test         # the tests; CI runs exactly this
 ```
 
-Two more entry points are hardware-side rather than rake tasks: `bin/make-qr`
-renders the scooter QR codes, and `bin/ble-unlock` writes a rental token to a
-flashed ESP32-C3 lock over BLE from a laptop — the no-iPhone way to see the lock
-click. Both are documented in `firmware/README.md`; `bin/ble-unlock` is
-UNVERIFIED until it is run against a real board.
+`bin/setup` does the first two. The tests drive the origin over HTTP the way an
+assistant does, and the KYC and red-team tests boot the broker in
+`kiosk-demo-prove`, which **drops and recreates `kiosk_prove_development`**.
+
+Two more entry points are hardware-side: `bin/make-qr` renders the scooter QR
+codes, and `bin/ble-unlock` writes a rental token to a flashed ESP32-C3 lock
+over BLE from a laptop. Both are documented in `firmware/README.md`;
+`bin/ble-unlock` is UNVERIFIED until it is run against a real board.
 
 ### Watch it work
 
@@ -145,25 +124,6 @@ UNVERIFIED until it is run against a real board.
 It discovers the wire, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `ada@example.com` / `skooti-demo-password` and approve it there.
-
-Everything under `check:` below asserts and exits non-zero when it breaks; that
-is what CI runs. `demo:setup` prepares the database.
-
-### Which of these run in CI
-
-A `check:` task asserts and goes red; a `demo:` task is one a person runs and
-reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
-and pull request; the rest are local-only, for the reason given.
-
-| Task | Runs in CI | Why not |
-|---|---|---|
-| `demo:setup` | yes — the job's own setup step |  |
-| `check:kat` | yes |  |
-| `check:rideflow` | yes |  |
-| `check:isolation` | yes |  |
-| `check:redteam` | yes |  |
-| `check:schema` | yes |  |
-| `check:kyc` | yes |  |
 
 See `before-after.md` for why AI assistants stall at scooter rental today and
 what this demo proves.

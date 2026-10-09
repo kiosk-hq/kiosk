@@ -306,14 +306,9 @@ jobs:
             # binding, single-use, TTL, SSRF/open-relay guard, signed claim).
             tasks: check:test
           - demo: kiosk-demo-skooti
-            # check:kyc = the KYC attribute gate (combustion motorcycle needs
-            # age_over_18 + licence_a; the electric scooter is licence-free) — now
-            # a TWO-SERVER integration: it boots the KYC broker
-            # (kiosk-demo-prove) on its own port and drives the cross-app flow, as
-            # does check:redteam (the broker-flavored theft/cross-operator/forged-
-            # callback beats). So this job also bundles the sibling broker app.
+            # Its tests boot the KYC broker, so the job bundles that app too.
             prove_broker: kiosk-demo-prove
-            tasks: check:kat check:rideflow check:kyc check:isolation check:redteam check:schema
+            tasks: ""
             stripe_mock: true
           - demo: kiosk-demo-stylish
             # check:roles is the roles-from-IdP gate, and the ONLY place the

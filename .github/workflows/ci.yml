@@ -712,28 +712,8 @@ jobs:
       - name: check-demo-copies self-test
         run: ./bin/check-demo-copies --self-test
 
-  # Does every place a demo restates its red-team beat list still agree with the
-  # beats that demo's suite actually registers? (T-078, and T-105/K-901, which
-  # commissioned the same script from the same files without naming each other)
-  #
-  # K-709 and K-710 were this defect: six driver headers told the reader
-  # registration carried no PoW while each solved one a few dozen lines below,
-  # and five suite headers disagreed with the scenarios beneath them — stylish's
-  # naming a beat that did not exist and omitting three that did. Both were
-  # repaired by hand, and the class came back twice more: philslist's
-  # two wire-shape beats arrived with the per-verb cutover and the header
-  # was never updated, and the 2026-08-26 wave found a `verified` K-710 carrying
-  # a verification sentence that had itself gone false. Every one of those
-  # repairs corrected a hand-kept list by hand, and every gate stayed green
-  # throughout, because nothing in this repository read a beat name in prose. It
-  # does now — and the hour it was written it found two live omissions, one in
-  # atablefor's header and one in tudu's README.
-  #
-  # This one compares
-  # a demo's redteam PROSE — the suite header, the check:redteam rake desc, the
-  # README battery section — against that demo's own suite REGISTRATIONS, and
-  # since K-1482 against its ASSERTIONS too: a sentence there may not attribute
-  # an HTTP status to a beat whose own implementation never names it.
+  # Does each red-team suite header still name the beats the suite registers,
+  # and only the HTTP statuses each beat's own assertion checks? (T-078, K-1482)
   # Stdlib Ruby only: no bundle, no services, no database.
   redteam-beat-lists:
     name: redteam prose names the beats — and the statuses — that run (bin/check-redteam-headers)
@@ -748,11 +728,11 @@ jobs:
           ruby-version: "4.0.1"
           bundler-cache: false
 
-      - name: Every restatement of a beat list agrees with the suite that runs it
+      - name: Every suite header agrees with the beats that run
         run: ./bin/check-redteam-headers
 
-      # Its own step, for the reason the sibling self-tests are: two of the seven
-      # rules are BANS, and a ban's violation set is EMPTY when the tree is
+      # Its own step, for the reason the sibling self-tests are: R3 is a BAN, and a
+      # ban's violation set is EMPTY when the tree is
       # healthy, so an extractor broken by an edit leaves the bare run at exit 0
       # and says nothing. The vacuity arms assert liveness on the DECLARATIONS —
       # that the extractors still find entries to judge — rather than on the

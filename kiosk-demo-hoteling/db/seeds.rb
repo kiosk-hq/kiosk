@@ -1,48 +1,18 @@
 # frozen_string_literal: true
 
-# Seed hotel properties and room types for the hoteling demo, plus the two
-# human guest accounts.
-#
-# Agents still self-register via /kiosk/auth/register (proof-of-possession
-# handshake) and get their OWN credential-less account row. The two humans here
-# are the other principal: they sign in at /users/sign_in with a real Devise
-# session, which is the channel the account-binding surfaces (device verify
-# page, link mint, unlink) authenticate.
-#
-# SCALE. hoteling seeds ~100 coined Istanbul hotels so an
-# unpaginated list would overwhelm an assistant (the "analysis paralysis /
-# silent truncation" case). That makes `search_hotels` (paginated,
-# multi-parameter) and `hotel_detail` (fetch one) genuinely necessary rather
-# than cosmetic. The five originally-named properties are seeded FIRST and
-# unchanged (booking / isolation / redteam flows discover ids dynamically, but
-# keeping these stable is cheap insurance) with their search columns backfilled.
-# All prices are EUR cents (the cashier check rejects any other currency).
+# A hundred coined Istanbul hotels, priced in EUR cents per night — enough that
+# an assistant has to search and page rather than read the whole list — and two
+# guests who sign in with a password. Assistants register themselves on the wire.
 
-# AMENITY_POOL and NEIGHBOURHOOD_POOL are defined in config/initializers/kiosk.rb
-# (loaded at boot) so the search_hotels `amenity` / `neighbourhood` enums and
-# these seeds share one closed vocabulary each. The assertion below is the half
-# a shared constant cannot do on its own: the five hand-written originals name
-# their district as a literal, and a typo there would seed a property no filter
-# value reaches.
-
-# ── Human guest accounts (Devise credentials) ───────────────────────────────
-# Demo-only credentials, re-applied by every seed run (the hosted fleet seeds on each deploy).
-# STABLE UUIDs so a driver can name a guest without a lookup. Ada is the guest
-# who approves an assistant on the verify page; Ben is the SEPARATE account on
-# the far side of the isolation boundary.
-ADA_ID = "00000000-0000-0000-0000-000000000001"
-BEN_ID = "00000000-0000-0000-0000-000000000002"
-DEMO_PASSWORD = "hoteling-demo-password"
-
-User.find_or_initialize_by(id: ADA_ID).tap do |u|
-  u.email    = "ada@example.com"
-  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
-  u.save!
-end
-User.find_or_initialize_by(id: BEN_ID).tap do |u|
-  u.email    = "ben@example.com"
-  u.password = DEMO_PASSWORD unless u.valid_password?(DEMO_PASSWORD)
-  u.save!
+# ── Two guests who sign in with a password ──────────────────────────────────
+password = "hoteling-demo-password"
+guests = { "00000000-0000-0000-0000-000000000001" => "ada@example.com",
+           "00000000-0000-0000-0000-000000000002" => "ben@example.com" }.map do |id, email|
+  User.find_or_initialize_by(id:).tap do |guest|
+    guest.email    = email
+    guest.password = password unless guest.valid_password?(password)
+    guest.save!
+  end
 end
 
 # ── The five originals (kept, with search columns backfilled) ────────────────
@@ -147,6 +117,5 @@ while Property.count < target_total
   end
 end
 
-puts "Seeded: #{Property.count} properties, #{RoomType.count} room types " \
-     "across #{Property.distinct.count(:neighbourhood)} neighbourhoods, " \
-     "#{User.where.not(email: nil).count} human guest accounts"
+Rails.logger.info "Seeded: #{Property.count} properties, #{RoomType.count} room types " \
+                  "across #{Property.distinct.count(:neighbourhood)} neighbourhoods, #{guests.size} guests"

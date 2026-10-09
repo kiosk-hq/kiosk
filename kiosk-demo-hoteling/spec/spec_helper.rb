@@ -5,6 +5,7 @@
 # other. kiosk-demo-getgrocery is the Minitest spelling of the same.
 
 ENV["RAILS_ENV"] ||= "test"
+ENV["KIOSK_TEST_AUTOCARD"] = "1"
 
 require_relative "../config/environment"
 require "rspec/rails"
@@ -18,7 +19,12 @@ RSpec.configure do |config|
   config.expect_with(:rspec) { |c| c.syntax = :expect }
   config.disable_monkey_patching!
 
-  # `rake check:conformance` loads the test database before this runs.
   config.use_transactional_fixtures = true
   config.infer_spec_type_from_file_location!
+
+  # The property answers at once, and accepts, unless an example says otherwise.
+  config.before do
+    Rails.configuration.x.hoteling.decision_delay_seconds = 0
+    Rails.configuration.x.hoteling.decline_rate           = 0
+  end
 end

@@ -1,0 +1,46 @@
+# frozen_string_literal: true
+
+require "wire_helper"
+require "kiosk/test_helpers/descriptor_examples"
+
+RSpec.describe "discovering this origin", :wire do
+  def get(path)
+    status, body = Kiosk::Redteam::Wire.new(base_url: live_url).get_json(path)
+    expect(status).to eq(200), "GET #{path} with no credential"
+    body
+  end
+
+  it "describes itself in the well-known document and the schema, without a credential" do
+    kiosk  = get("/.well-known/kiosk.json")["kiosk"]
+    schema = get("/kiosk/schema")
+
+    expect(kiosk["capabilities"]).to include("schema", "queries", "actions", "pay", "events")
+    expect(kiosk["events_url"]).to match(%r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z})
+    expect(schema["events"].map { _1["name"] }.sort).to eq(%w[booking_confirmation booking_payment payment_setup])
+
+    queries = schema["queries"].index_by { _1["name"] }
+    actions = schema["actions"].index_by { _1["name"] }
+    %w[properties availability my_bookings search_hotels hotel_detail].each do |name|
+      expect(queries.dig(name, "description")).to be_present, name
+    end
+    %w[reserve_room confirm_booking payment_setup].each do |name|
+      expect(actions.dig(name, "description")).to be_present, name
+    end
+    queries.values_at("search_hotels", "hotel_detail").each do |descriptor|
+      expect(descriptor.values_at("input_schema", "example_params", "example_row")).to all(be_present)
+    end
+
+    examples = Kiosk::TestHelpers::DescriptorExamples.of(schema)
+    expect(examples.size).to be >= 4
+    expect(examples.filter_map(&:violation)).to be_empty
+  end
+
+  it "advertises on its landing page the skill it pins" do
+    pinned = get("/.well-known/kiosk.json").dig("kiosk", "skill", "url")
+    expect(pinned).to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
+
+    page = Net::HTTP.get_response(URI("#{live_url}/"))
+    expect(page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]).to eq(pinned)
+    expect(page["Link"][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]).to eq(pinned)
+  end
+end

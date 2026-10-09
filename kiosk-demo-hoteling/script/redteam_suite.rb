@@ -189,8 +189,8 @@ profile = Kiosk::Redteam::Profile.new(
   gated_action_consumes: false,
 
   # ── pay_for — MandatePrincipalSwap, MandateReplay, C2 ───────────────────
-  # Shape mirrors script/hoteling_flow.rb: scope=lodging, one line item with
-  # qty + price_cents + booking_id, as reserve_room's pay_hint asks.
+  # scope=lodging, one line item with qty + price_cents + booking_id, as
+  # reserve_room's pay_hint asks.
   pay_for: lambda { |_client, principal, owned_ref|
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid

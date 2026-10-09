@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1892 anchors.
+# 1900 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -325,7 +325,7 @@ kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assis
 kiosk-demo-atablefor/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
 kiosk-demo-atablefor/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
 kiosk-demo-atablefor/app/views/layouts/home.html.erb	The href is the VERSIONED cut this operator pins, read from
-kiosk-demo-atablefor/before-after.md	`test/wire/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
+kiosk-demo-atablefor/before-after.md	`test/stories/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
 kiosk-demo-atablefor/before-after.md	rails g kiosk:install
 kiosk-demo-atablefor/config/application.rb	config.x.equihash = { n: 168, k: 7 }
 kiosk-demo-atablefor/config/environments/test.rb	config.x.equihash = { n: 96, k: 5 }
@@ -341,22 +341,22 @@ kiosk-demo-atablefor/config/initializers/kiosk.rb	settled_purchases_count: Booki
 kiosk-demo-atablefor/db/seeds.rb	# A few Lisbon restaurants with named tables, and two diners who sign in with a
 kiosk-demo-atablefor/db/seeds.rb	# clock (app/models/seatings.rb), so nothing here goes stale.
 kiosk-demo-atablefor/script/redteam_suite.rb	BATTERY.record("WholeValuedFloatBody",
-kiosk-demo-atablefor/test/wire/binding_test.rb	a diner links an assistant, and the assistant's bookings are the diner's
-kiosk-demo-atablefor/test/wire/binding_test.rb	assert_equal diego.id, Booking.find(booked.body["booking_id"]).user_id
-kiosk-demo-atablefor/test/wire/booking_test.rb	an assistant books a table for two tonight at eight and finds it in my_bookings
-kiosk-demo-atablefor/test/wire/booking_test.rb	table = open_tables(diner).find { _1["seating_time"] == "20:00" }
-kiosk-demo-atablefor/test/wire/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk["capabilities"].sort
-kiosk-demo-atablefor/test/wire/discovery_test.rb	assert_equal %w[actions queries schema], kiosk["capabilities"].sort
-kiosk-demo-atablefor/test/wire/discovery_test.rb	the home page and the board advertise the skill this origin pins
-kiosk-demo-atablefor/test/wire/isolation_test.rb	one diner can neither cancel nor see another's booking
-kiosk-demo-atablefor/test/wire/toll_test.rb	  test "the toll falls as the diner's confirmed bookings accrue" do
-kiosk-demo-atablefor/test/wire/toll_test.rb	a new diner's query costs two Equihash proofs, and only solved ones pay it
-kiosk-demo-atablefor/test/wire/toll_test.rb	assert_equal 403, availability(diner, guessed)
-kiosk-demo-atablefor/test/wire/toll_test.rb	assert_equal [402, "pow_required"], [status, body["code"]]
-kiosk-demo-atablefor/test/wire/toll_test.rb	assert_equal [EQUIHASH_PARAMS.transform_keys(&:to_s)] * 2, issued.map
-kiosk-demo-atablefor/test/wire/toll_test.rb	test "the toll falls as the diner's confirmed bookings accrue" do
-kiosk-demo-atablefor/test/wire/toll_test.rb	test "under a backoff policy one solved toll buys the next three queries" do
-kiosk-demo-atablefor/test/wire/toll_test.rb	the toll falls as the diner's confirmed bookings accrue
+kiosk-demo-atablefor/test/stories/booking_test.rb	a diner with no account books a table for two at eight and finds it among their bookings
+kiosk-demo-atablefor/test/stories/booking_test.rb	table = diner.open_tables.find { _1["seating_time"] == "20:00" }
+kiosk-demo-atablefor/test/stories/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-atablefor/test/stories/discovery_test.rb	assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-atablefor/test/stories/discovery_test.rb	the home page and the reservations board point an assistant at the skill this origin pins
+kiosk-demo-atablefor/test/stories/link_test.rb	Diego links his assistant from the restaurant site, and the table it books is his
+kiosk-demo-atablefor/test/stories/link_test.rb	assert_equal diego.id, Booking.find(booking["booking_id"]).user_id
+kiosk-demo-atablefor/test/stories/privacy_test.rb	one diner can neither cancel nor see another's booking
+kiosk-demo-atablefor/test/stories/toll_test.rb	  test "the toll falls as the diner's confirmed bookings accrue" do
+kiosk-demo-atablefor/test/stories/toll_test.rb	a new diner's search costs two proofs of work, and only solved ones pay it
+kiosk-demo-atablefor/test/stories/toll_test.rb	assert asked.refused?(:pow_required), asked
+kiosk-demo-atablefor/test/stories/toll_test.rb	assert looks_for_a_table(diner, proofs: guesses(challenges)).refused?(:forbidden)
+kiosk-demo-atablefor/test/stories/toll_test.rb	assert_equal [EQUIHASH_PARAMS.transform_keys(&:to_s)] * 2, challenges.map
+kiosk-demo-atablefor/test/stories/toll_test.rb	test "the toll falls as the diner's confirmed bookings accrue" do
+kiosk-demo-atablefor/test/stories/toll_test.rb	test "under a backoff policy one solved toll buys the next three searches" do
+kiosk-demo-atablefor/test/stories/toll_test.rb	the toll falls as the diner's confirmed bookings accrue
 kiosk-demo-getgrocery/README.md	# kiosk-demo-getgrocery
 kiosk-demo-getgrocery/README.md	(the cart must be EUR, mirror the order at catalog prices, and sum correctly),
 kiosk-demo-getgrocery/README.md	**Honest scope:** the operator validates **format and zone only**.
@@ -395,7 +395,7 @@ kiosk-demo-getgrocery/before-after.md	**Honesty note up front.**
 kiosk-demo-getgrocery/before-after.md	**The human is needed once.**
 kiosk-demo-getgrocery/before-after.md	Both flagship consumer-commerce connectors in Claude today, Uber Eats and
 kiosk-demo-getgrocery/before-after.md	ChatGPT-Agent food orders take 6–20 minutes, two to three times a human, and
-kiosk-demo-getgrocery/before-after.md	`test/wire/shop_test.rb` runs the errand end to end:
+kiosk-demo-getgrocery/before-after.md	`test/stories/shop_test.rb` runs the errand end to end:
 kiosk-demo-getgrocery/config/environments/development.rb	ENV["STRIPE_SECRET_KEY"]          ||= "sk_test_mock"
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
@@ -438,24 +438,23 @@ kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal [2, 3, 4, 5, 6], 
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	test "windows are on the district's clock, across daylight saving" do
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	the label names its zone
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	windows are on the district's clock, across daylight saving
+kiosk-demo-getgrocery/test/stories/age_check_test.rb	a shopper buys wine once a verification service confirms they are over 18
+kiosk-demo-getgrocery/test/stories/claim_test.rb	an assistant that started on its own is linked to Hana and pays with her saved card
+kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal "ready", hanas.sets_up_payment["status"]
+kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal "setup_required", standalone.sets_up_payment["status"]
+kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal HANA, hanas.account
+kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal [[HANA, standalone.principal.agent_id]], Kiosk::Settlement.pluck(:user_id, :agent_id)
+kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal standalone.principal.user_id, Order.find(left_behind["order_id"]).user_id
+kiosk-demo-getgrocery/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the shop offers and how to buy
+kiosk-demo-getgrocery/test/stories/privacy_test.rb	one shopper can neither move nor see another's delivery
+kiosk-demo-getgrocery/test/stories/shop_test.rb	a paid order is not charged again
+kiosk-demo-getgrocery/test/stories/shop_test.rb	a shopper with no account orders groceries for tomorrow morning and pays
+kiosk-demo-getgrocery/test/stories/shop_test.rb	assert_equal "08:00–10:00 (Europe/Dublin)", window["label"]
+kiosk-demo-getgrocery/test/stories/shop_test.rb	assert_equal ["paid", "08:00–10:00 (Europe/Dublin)"], placed.values_at("payment_state", "slot_label")
 kiosk-demo-getgrocery/test/stuck_paying_test.rb	the sweep acts on each answer the processor can give, and asks only when it has no receipt
-kiosk-demo-getgrocery/test/test_helper.rb	                iat: now, exp: now + 600 }
 kiosk-demo-getgrocery/test/test_helper.rb	  setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
 kiosk-demo-getgrocery/test/test_helper.rb	ENV["KIOSK_TEST_AUTOCARD"] = "1"
 kiosk-demo-getgrocery/test/test_helper.rb	setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
-kiosk-demo-getgrocery/test/wire/age_check_test.rb	wine is sold once the shopper's age check passes
-kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal [200, "ready"], [ready.status, ready.body["status"]]
-kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal [200, "setup_required"], [setup.status, setup.body["status"]]
-kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal [standalone.agent_id, HANA], claims.values_at("agent_id", "sub")
-kiosk-demo-getgrocery/test/wire/claim_test.rb	assert_equal standalone.user_id, Order.find(left_behind["order_id"]).user_id
-kiosk-demo-getgrocery/test/wire/claim_test.rb	the same key, rebound to the human, pays with the human's saved card
-kiosk-demo-getgrocery/test/wire/discovery_test.rb	the well-known document and the schema describe this origin without a credential
-kiosk-demo-getgrocery/test/wire/isolation_test.rb	one shopper can neither move nor see another's order
-kiosk-demo-getgrocery/test/wire/shop_test.rb	    assert_match(/\Api_/, paid.body["psp_reference"])
-kiosk-demo-getgrocery/test/wire/shop_test.rb	an assistant with no human orders groceries for a delivery window and pays for them
-kiosk-demo-getgrocery/test/wire/shop_test.rb	assert_equal "D02", slot["district"]
-kiosk-demo-getgrocery/test/wire/shop_test.rb	assert_match(/\Api_/, paid.body["psp_reference"])
-kiosk-demo-getgrocery/test/wire/shop_test.rb	setup = assistant.run(shopper, name: "payment_setup")
 kiosk-demo-getgrocery/test/wire_arguments_test.rb	a caller's zone is only what it declares
 kiosk-demo-getgrocery/test/wire_arguments_test.rb	a delivery date is a real day that has not passed at the address
 kiosk-demo-getgrocery/test/wire_arguments_test.rb	a window too close to its end cannot be booked
@@ -482,7 +481,7 @@ kiosk-demo-hoteling/app/operations/wire_arguments.rb	def existing_property
 kiosk-demo-hoteling/app/operations/wire_arguments.rb	def property_not_found
 kiosk-demo-hoteling/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-hoteling/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
-kiosk-demo-hoteling/before-after.md	`spec/wire/booking_spec.rb` runs the errand with no human present:
+kiosk-demo-hoteling/before-after.md	`spec/stories/booking_spec.rb` runs the errand with no human present:
 kiosk-demo-hoteling/config/initializers/kiosk.rb	      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0,
 kiosk-demo-hoteling/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
@@ -495,17 +494,18 @@ kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	echoes a calenda
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	sells the 15th at one property and refuses it as past at the other, at the same instant
 kiosk-demo-hoteling/spec/payment_window_spec.rb	reads a capture in flight pending, and a returned capture paid before its settlement row
-kiosk-demo-hoteling/spec/wire/booking_spec.rb	  it "does not confirm a booking nobody paid for" do
-kiosk-demo-hoteling/spec/wire/booking_spec.rb	RoomHold.where(resource_kind: RoomHold::RESOURCE_KIND
-kiosk-demo-hoteling/spec/wire/booking_spec.rb	does not confirm a booking nobody paid for
-kiosk-demo-hoteling/spec/wire/booking_spec.rb	reserves, pays, and hands back the confirmation code the hotel keeps
-kiosk-demo-hoteling/spec/wire/browse_spec.rb	prices depth instead of refusing it, and tolls every hold
-kiosk-demo-hoteling/spec/wire/discovery_spec.rb	describes itself in the well-known document and the schema, without a credential
-kiosk-demo-hoteling/spec/wire/isolation_spec.rb	cannot be paid for, confirmed, or seen by another guest
-kiosk-demo-hoteling/spec/wire/property_decision_spec.rb	the property's answer to a paid booking
-kiosk-demo-hoteling/spec/wire/search_spec.rb	answers a filter that matched nothing with an empty page, and an unknown value with the valid ones
-kiosk-demo-hoteling/spec/wire/search_spec.rb	answers one hotel's detail as a one-row array, and 404 for an id nobody has
-kiosk-demo-hoteling/spec/wire/spending_cap_spec.rb	refuses the stay that would cross it, however the currency is spelled
+kiosk-demo-hoteling/spec/stories/booking_spec.rb	  it "a booking nobody paid for is not confirmed" do
+kiosk-demo-hoteling/spec/stories/booking_spec.rb	RoomHold.where(resource_kind: RoomHold::RESOURCE_KIND
+kiosk-demo-hoteling/spec/stories/booking_spec.rb	a booking nobody paid for is not confirmed
+kiosk-demo-hoteling/spec/stories/booking_spec.rb	a guest with no account books three nights, pays, and gets the confirmation code the hotel keeps
+kiosk-demo-hoteling/spec/stories/discovery_spec.rb	an assistant that knows nothing finds out, without an account, what the hotel offers and how to book
+kiosk-demo-hoteling/spec/stories/hotel_answer_spec.rb	The hotel's answer to a paid booking
+kiosk-demo-hoteling/spec/stories/privacy_spec.rb	another guest can neither pay for, confirm, nor see them
+kiosk-demo-hoteling/spec/stories/search_spec.rb	a guest reads one hotel's rooms, and is told when a hotel does not exist
+kiosk-demo-hoteling/spec/stories/search_spec.rb	a search that matches nothing comes back empty, and a neighbourhood the city does not have is answered with the ones it does
+kiosk-demo-hoteling/spec/stories/search_spec.rb	def total(found) = found.header("x-total-count").to_i
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
+kiosk-demo-hoteling/spec/stories/toll_spec.rb	an assistant reading the hotel list over and over pays more each time instead of being turned away, and every hold is tolled
 kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
 kiosk-demo-philslist/README.md	  `owner_id` on `post_listing` is **refused `400 bad_request`** naming it, and a
 kiosk-demo-philslist/README.md	  scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
@@ -522,25 +522,25 @@ kiosk-demo-philslist/config/initializers/kiosk.rb	  c.registration_pow_count  = 
 kiosk-demo-philslist/config/initializers/kiosk.rb	# A classifieds board takes no money: no payment_provider, so `pay` is absent from discovery.
 kiosk-demo-philslist/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-philslist/script/redteam_suite.rb	BATTERY.record("NoSellerPiiOnTheOpenBoard",
-kiosk-demo-philslist/test/test_helper.rb	assert_equal 200, status, "GET #{path} with no credential"
-kiosk-demo-philslist/test/wire/binding_test.rb	    assert_equal 200, assistant.run(second.principal, name: "edit_listing", listing_id: listing, price_text: "€140").status
-kiosk-demo-philslist/test/wire/binding_test.rb	    assert_equal 401, my_listings(same_second).first
-kiosk-demo-philslist/test/wire/binding_test.rb	  test "a household's assistants share one account, and unlinking one revokes only its tokens" do
-kiosk-demo-philslist/test/wire/binding_test.rb	the device grant binds a new assistant to the human who approves it
-kiosk-demo-philslist/test/wire/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk["capabilities"].sort
-kiosk-demo-philslist/test/wire/discovery_test.rb	agents.json and agents.txt carry no payment terms
-kiosk-demo-philslist/test/wire/discovery_test.rb	assert_equal %w[actions queries schema], kiosk["capabilities"].sort
-kiosk-demo-philslist/test/wire/discovery_test.rb	assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
-kiosk-demo-philslist/test/wire/discovery_test.rb	assert_not agents_json.key?("payments")
-kiosk-demo-philslist/test/wire/discovery_test.rb	schema = published("/kiosk/schema")
-kiosk-demo-philslist/test/wire/discovery_test.rb	the well-known document and the schema describe a board that takes no money
-kiosk-demo-philslist/test/wire/isolation_test.rb	assert_equal [400, "bad_request"], [forged.status, forged.body["code"]]
-kiosk-demo-philslist/test/wire/isolation_test.rb	one seller can neither edit nor close another's listing
-kiosk-demo-philslist/test/wire/isolation_test.rb	only the board declares a reach beyond the caller, and every other query keeps to it
-kiosk-demo-philslist/test/wire/isolation_test.rb	test "one seller can neither edit nor close another's listing" do
-kiosk-demo-philslist/test/wire/isolation_test.rb	the owner and the posting assistant come from the token, never from an argument
-kiosk-demo-philslist/test/wire/registration_test.rb	registering costs an Equihash proof, and the new assistant posts at once
-kiosk-demo-philslist/test/wire/walkthrough_test.rb	bin/demo posts, edits and closes a listing as Alice's assistant
+kiosk-demo-philslist/test/stories/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-philslist/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the board offers and how to post
+kiosk-demo-philslist/test/stories/discovery_test.rb	assert_equal %w[actions queries schema], kiosk["capabilities"].sort
+kiosk-demo-philslist/test/stories/discovery_test.rb	assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
+kiosk-demo-philslist/test/stories/discovery_test.rb	assert_not agents_json.key?("payments")
+kiosk-demo-philslist/test/stories/discovery_test.rb	schema = published("/kiosk/schema")
+kiosk-demo-philslist/test/stories/discovery_test.rb	the board tells every agent it takes no money
+kiosk-demo-philslist/test/stories/household_test.rb	    assert his.edits(bookshelf, price_text: "€140").ok?
+kiosk-demo-philslist/test/stories/household_test.rb	    assert same_second.asks(:my_listings).refused?(:unauthenticated)
+kiosk-demo-philslist/test/stories/household_test.rb	  test "a couple's two assistants share one board presence, and unlinking one shuts out only that one" do
+kiosk-demo-philslist/test/stories/household_test.rb	Alice approves a new assistant on the board's site, and it posts as her
+kiosk-demo-philslist/test/stories/joining_test.rb	an assistant that will not pay the registration toll cannot join, one that does posts at once
+kiosk-demo-philslist/test/stories/privacy_test.rb	a listing belongs to the seller whose assistant posted it, whoever the arguments name
+kiosk-demo-philslist/test/stories/privacy_test.rb	assert forged.refused?(:bad_request), forged
+kiosk-demo-philslist/test/stories/privacy_test.rb	assert_includes forged["detail"], "owner_id"
+kiosk-demo-philslist/test/stories/privacy_test.rb	one seller can neither edit nor close another's listing
+kiosk-demo-philslist/test/stories/privacy_test.rb	only the board is public; every question about the seller's own listings shows nothing of anyone else's
+kiosk-demo-philslist/test/stories/privacy_test.rb	test "one seller can neither edit nor close another's listing" do
+kiosk-demo-philslist/test/stories/selling_test.rb	Alice's assistant posts an oak desk, lowers its price and closes it (bin/demo)
 kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this at the wire: every
 kiosk-demo-prove/README.md	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
 kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
@@ -599,7 +599,7 @@ kiosk-demo-skooti/app/services/rental_token_issuer.rb	# Signs the offline rental
 kiosk-demo-skooti/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
 kiosk-demo-skooti/before-after.md	**The step the assistant does not take, and cannot**
-kiosk-demo-skooti/before-after.md	`test/wire/rental_test.rb` runs the errand with no human account and no sign-in:
+kiosk-demo-skooti/before-after.md	`test/stories/ride_test.rb` runs the errand with no human account and no sign-in:
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch("KIOSK_PROVE_ISSUER")
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
@@ -616,21 +616,22 @@ kiosk-demo-skooti/test/payment_window_test.rb	a capture in flight reads pending,
 kiosk-demo-skooti/test/payment_window_test.rb	an untouched reservation reads unpaid and does not start
 kiosk-demo-skooti/test/rental_token_issuer_test.rb	a token carries its scooter, reservation, lifetime and a fresh jti
 kiosk-demo-skooti/test/rental_token_issuer_test.rb	test "the known answer" do
-kiosk-demo-skooti/test/test_helper.rb	def lock(scooter_code) = LockSim.new(
-kiosk-demo-skooti/test/wire/isolation_test.rb	one principal can neither pay for, start, nor see another's reservation
-kiosk-demo-skooti/test/wire/kyc_test.rb	a check that passes without the licence opens no motorcycle
-kiosk-demo-skooti/test/wire/kyc_test.rb	a licence-free scooter needs no attestation
-kiosk-demo-skooti/test/wire/kyc_test.rb	a motorcycle opens once the rider's licence check passes
-kiosk-demo-skooti/test/wire/kyc_test.rb	an attestation that spells a boolean any other way grants nothing
-kiosk-demo-skooti/test/wire/rental_test.rb	a paid reservation of a licence-free scooter becomes a rental the lock opens once
-kiosk-demo-skooti/test/wire/rental_test.rb	assert_not once.unlock(token:, now:), "replayed"
+kiosk-demo-skooti/test/stories/licence_check_test.rb	a licence-free scooter needs no licence check
+kiosk-demo-skooti/test/stories/licence_check_test.rb	a rider confirmed as an adult but without a motorcycle licence gets no motorcycle
+kiosk-demo-skooti/test/stories/licence_check_test.rb	a rider rides a motorcycle once a verification service confirms their motorcycle licence
+kiosk-demo-skooti/test/stories/licence_check_test.rb	an attestation that spells the answer any other way than true proves nothing
+kiosk-demo-skooti/test/stories/privacy_test.rb	one rider can neither pay for, ride, nor see another's reservation
+kiosk-demo-skooti/test/stories/ride_test.rb	a rider with no account reserves a scooter nearby, pays for the first minute and unlocks it
+kiosk-demo-skooti/test/stories/ride_test.rb	assert_not lock.unlock(token:, now:), "replayed"
+kiosk-demo-skooti/test/stories/ride_test.rb	the lock opens only this scooter, only before the rental expires, only with skooti's signature, and only once
+kiosk-demo-skooti/test/test_helper.rb	def the_lock_on(vehicle) = LockSim.new(
 kiosk-demo-stylish/README.md	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
 kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**
 kiosk-demo-stylish/README.md	- A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a smal
 kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table)
 kiosk-demo-stylish/README.md	- Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its
 kiosk-demo-stylish/README.md	- Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string
-kiosk-demo-stylish/README.md	- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, asserted by `test/wire/binding_test.rb`
+kiosk-demo-stylish/README.md	- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, asserted by `test/stories/linking_test.rb`
 kiosk-demo-stylish/README.md	- JWKS endpoint for JWT verification
 kiosk-demo-stylish/README.md	- `/.well-known/kiosk.json` discovery
 kiosk-demo-stylish/README.md	1. **First contact (claim)** — an assistant with a fresh key opens the ceremony at `/kiosk/oauth/device_authorizati
@@ -662,31 +663,31 @@ kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("OwnerLinkIgnoresForge
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("SelfAssertedTokenForgery",
 kiosk-demo-stylish/test/book_appointment_test.rb	a slot without an offset names no instant and is refused
 kiosk-demo-stylish/test/book_appointment_test.rb	one instant in any spelling is one booking, answered on the salon's clock
-kiosk-demo-stylish/test/test_helper.rb	def sign_in(email) = Kiosk::UserIdentityProviders::DeviseSession.new(live_url).sign_in!(email:, password: PASSWORD)
-kiosk-demo-stylish/test/wire/binding_test.rb	  test "a second assistant shares the account, and unlinking the first leaves the second" do
-kiosk-demo-stylish/test/wire/binding_test.rb	  test "an assistant the human approves on the verify page acts as that human" do
-kiosk-demo-stylish/test/wire/binding_test.rb	"spending_cap_cents" => "12345")
-kiosk-demo-stylish/test/wire/binding_test.rb	approve(sign_in("alice@example.com"), opened.body["user_code"])
-kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal 204, status
-kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal [404, 200], [login(first), login(second)]
-kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal [booked], my_appointments(second)
-kiosk-demo-stylish/test/wire/binding_test.rb	assert_equal alice.id, Appointment.find(book(bound)["appointment_id"]).user_id
-kiosk-demo-stylish/test/wire/binding_test.rb	assert_includes page.body, "cap: 12345 cents"
-kiosk-demo-stylish/test/wire/binding_test.rb	test "a second assistant shares the account, and unlinking the first leaves the second" do
-kiosk-demo-stylish/test/wire/binding_test.rb	test "an assistant the human approves on the verify page acts as that human" do
-kiosk-demo-stylish/test/wire/binding_test.rb	test "the human names and caps an assistant on the manage page" do
-kiosk-demo-stylish/test/wire/discovery_test.rb	class DiscoveryTest < WireTest
-kiosk-demo-stylish/test/wire/discovery_test.rb	the well-known document and the schema describe this origin without a credential
-kiosk-demo-stylish/test/wire/isolation_test.rb	class IsolationTest < WireTest
-kiosk-demo-stylish/test/wire/isolation_test.rb	each human's assistant sees its own appointments and no one else's
-kiosk-demo-stylish/test/wire/registration_test.rb	test "registering costs a solved proof of work, and the token it buys reads the catalogue" do
-kiosk-demo-stylish/test/wire/roles_test.rb	assert_equal "customer", claims(alice)["role"]
-kiosk-demo-stylish/test/wire/roles_test.rb	assert_equal "owner", claims(owner)["role"]
-kiosk-demo-stylish/test/wire/roles_test.rb	assert_equal ["forecast", 2, 12_500], forecast.values_at("summary", "bookings", "forecast_cents")
-kiosk-demo-stylish/test/wire/roles_test.rb	class RolesTest < WireTest
-kiosk-demo-stylish/test/wire/roles_test.rb	test "the owner's assistant sees the whole book and a forecast of its prices" do
-kiosk-demo-stylish/test/wire/walkthrough_test.rb	bin/demo tours a running origin and books Alice one appointment
-kiosk-demo-stylish/test/wire/walkthrough_test.rb	test "bin/demo tours a running origin and books Alice one appointment" do
+kiosk-demo-stylish/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
+kiosk-demo-stylish/test/stories/discovery_test.rb	class DiscoveryStory < StoryTest
+kiosk-demo-stylish/test/stories/linking_test.rb	  test "Alice approves the code her assistant shows her, and it books in her name" do
+kiosk-demo-stylish/test/stories/linking_test.rb	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/stories/linking_test.rb	"spending_cap_cents" => "12345")
+kiosk-demo-stylish/test/stories/linking_test.rb	assert first.signs_back_in.refused?(:not_found)
+kiosk-demo-stylish/test/stories/linking_test.rb	assert second.signs_back_in.ok?
+kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal [booked], second.appointments
+kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal account_of(:alice), Appointment.find(alice.books["appointment_id"]).user_id
+kiosk-demo-stylish/test/stories/linking_test.rb	assert_includes page.body, "cap: 12345 cents"
+kiosk-demo-stylish/test/stories/linking_test.rb	signs_in(:alice).approves(request["user_code"])
+kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice approves the code her assistant shows her, and it books in her name" do
+kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice names her assistant and caps its spending on the assistants page" do
+kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/stories/privacy_test.rb	Alice's assistant sees Alice's appointment and not Bob's
+kiosk-demo-stylish/test/stories/privacy_test.rb	class PrivacyStory < StoryTest
+kiosk-demo-stylish/test/stories/registration_test.rb	test "a new assistant pays a proof-of-work toll to register, then finds the salon" do
+kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal "customer", alice.role
+kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal "owner", owner.role
+kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal ["forecast", 2, 12_500], forecast.values_at("summary", "bookings", "forecast_cents")
+kiosk-demo-stylish/test/stories/salon_book_test.rb	class SalonBookStory < StoryTest
+kiosk-demo-stylish/test/stories/salon_book_test.rb	test "the owner's assistant sees every booking and what they will bring in" do
+kiosk-demo-stylish/test/stories/walkthrough_test.rb	test "the bin/demo tour of a running salon books Alice one appointment" do
+kiosk-demo-stylish/test/stories/walkthrough_test.rb	the bin/demo tour of a running salon books Alice one appointment
+kiosk-demo-stylish/test/test_helper.rb	def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: "combette-demo-password")
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 kiosk-demo-tudu/README.md	### Adversarial battery (`script/redteam_suite.rb`)
 kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
@@ -723,19 +724,19 @@ kiosk-demo-tudu/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.registe
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("ChosenNameNeverTheAddress",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("NoLoginAddressOnTheRoster",
 kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record("PreLinkTokenAfterLink", rc == 401,
-kiosk-demo-tudu/test/wire/collab_test.rb	a deadline is one instant, read on each member's own clock
-kiosk-demo-tudu/test/wire/collab_test.rb	an invited assistant joins the list, and each todo names the assistant that added it
-kiosk-demo-tudu/test/wire/collab_test.rb	the owner's assistant is told of a member joining, adding, completing and being removed
-kiosk-demo-tudu/test/wire/discovery_test.rb	    assert_equal %w[actions events queries schema], kiosk["capabilities"].sort
-kiosk-demo-tudu/test/wire/discovery_test.rb	agents.json and agents.txt carry no payment directive
-kiosk-demo-tudu/test/wire/discovery_test.rb	assert_equal %w[actions events queries schema], kiosk["capabilities"].sort
-kiosk-demo-tudu/test/wire/discovery_test.rb	assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
-kiosk-demo-tudu/test/wire/discovery_test.rb	take no payment" do
-kiosk-demo-tudu/test/wire/discovery_test.rb	the well-known document and the schema describe this origin without a credential, and take no payment
-kiosk-demo-tudu/test/wire/isolation_test.rb	a member reads the list, and a stranger can neither read it, nor join it, nor see it
-kiosk-demo-tudu/test/wire/isolation_test.rb	the catalog declares which queries reach past the principal, and no query claiming the principal returns a shared list
-kiosk-demo-tudu/test/wire/link_test.rb	assert_equal 401, assistant.query(@headless, name: "my_lists").status
-kiosk-demo-tudu/test/wire/link_test.rb	linking a headless assistant moves its list to the human and ends every pre-link token
+kiosk-demo-tudu/test/stories/discovery_test.rb	    assert_equal %w[actions events queries schema], kiosk["capabilities"].sort
+kiosk-demo-tudu/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the household lists offer and how to use them
+kiosk-demo-tudu/test/stories/discovery_test.rb	assert_equal %w[actions events queries schema], kiosk["capabilities"].sort
+kiosk-demo-tudu/test/stories/discovery_test.rb	assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
+kiosk-demo-tudu/test/stories/discovery_test.rb	nothing the household lists publish for assistants asks for a payment
+kiosk-demo-tudu/test/stories/household_test.rb	a deadline is one moment, which each housemate reads on their own clock
+kiosk-demo-tudu/test/stories/household_test.rb	a deadline with no offset is refused, because each housemate would read a different moment
+kiosk-demo-tudu/test/stories/household_test.rb	a housemate invited to a list joins it, and every todo says whose assistant added it
+kiosk-demo-tudu/test/stories/household_test.rb	the owner's assistant hears a housemate join, add, complete and leave, including what was added while it was away
+kiosk-demo-tudu/test/stories/link_test.rb	Alice links an assistant that started on its own: its list becomes hers, and every credential it held before stops working
+kiosk-demo-tudu/test/stories/link_test.rb	assert @on_its_own.asks(:my_lists).refused?(:unauthenticated)
+kiosk-demo-tudu/test/stories/privacy_test.rb	a housemate reads the list, and a stranger can neither read it, nor join it, nor see it exists
+kiosk-demo-tudu/test/stories/privacy_test.rb	only queries the catalog says reach past the assistant's own account ever show a shared list
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	CLAIM_IDS = { "licence_a" => "licence_category:A" }.freeze
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
@@ -1869,8 +1870,12 @@ kiosk-test-support/README.md	The DSL is inert until you wire an executor. In pro
 kiosk-test-support/README.md	The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::Server::TestExecutor` from the shipped `kiosk-server` gem (above).
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	    class Assistant
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	def sign_mandate(principal, payload) = JWT.encode(payload, principal.rsa_key, "RS256")
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	iss: base_url, currency:, iat: now, exp: now + 600 }
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	key  = OpenSSL::PKey::RSA.generate(2048)
 kiosk-test-support/lib/kiosk/test_helpers/assistant/events.rb	def self.payload_errors(schema_document, events)
+kiosk-test-support/lib/kiosk/test_helpers/customer.rb	Answer.new(@assistant.pay(principal, **@assistant.mandates(principal, total:, scope:, line_items:, currency:)))
+kiosk-test-support/lib/kiosk/test_helpers/customer.rb	def sets_up_payment = does(:payment_setup)
+kiosk-test-support/lib/kiosk/test_helpers/customer.rb	errors = Assistant::Events.payload_errors(@assistant.schema, [event])
 kiosk-test-support/lib/kiosk/test_helpers/descriptor_examples.rb	PAGING = %w[limit cursor].freeze
 kiosk-test-support/lib/kiosk/test_helpers/descriptor_examples.rb	module DescriptorExamples
 kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def as_agent_of(user, role: nil, &block)
@@ -1886,6 +1891,9 @@ kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def query(sql)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def run_action(name, args)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def run_query(name, args)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	    class NullExecutor
+kiosk-test-support/lib/kiosk/test_helpers/person.rb	@site = UserIdentityProviders::DeviseSession.new(origin).sign_in!(email:, password:)
+kiosk-test-support/lib/kiosk/test_helpers/person.rb	raise "the site did not unlink #{customer.principal.agent_id}: #{status}" unless status == 204
+kiosk-test-support/lib/kiosk/test_helpers/story.rb	raise "GET #{path} with no credential answered #{status}" unless status == 200
 kiosk-test-support/lib/kiosk/test_helpers/stripe_mock.rb	stripe-mock not found. Install it: brew install stripe-mock
 kiosk-test-support/lib/kiosk/test_helpers/wire.rb	    class Wire
 kiosk-test-support/spec/descriptor_cross_reference_spec.rb	#{demo}: every verb description's cross-reference names params the target verb declares

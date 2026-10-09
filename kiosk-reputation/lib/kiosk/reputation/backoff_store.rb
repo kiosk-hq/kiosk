@@ -36,9 +36,6 @@ module Kiosk
     #   Kiosk.configure { |c| c.reputation_policy =
     #     Kiosk::Reputation::Policies::Backoff.new(
     #       count: 50, base: {...}, store: MyRedisBackoffStore.new) }
-    #
-    # (Mirrors {Kiosk::Server::PowSpentStore}'s in-process default + cross-worker
-    # caveat.)
     class BackoffStore
       def initialize
         @counter = {}

@@ -185,60 +185,24 @@ what can be neither.
 
 ## Multi-process deployments
 
-One setting is **not** optional once you run more than one process.
-
-The PoW gate enforces that a proof is single-use by recording spent challenge
-ids in `c.pow_spent_store`, and the default
-(`Kiosk::Server::PowSpentStore`) is an **in-process** Hash. With
-`WEB_CONCURRENCY > 1`, or several app hosts behind a load balancer, each worker
-keeps its own spent set — so one proof is accepted **once per worker**, and the
-single-use property the protocol states (kiosk.tech `protocol.md` §15.2, and the
-§16.1 operator profile) no longer holds. An operator running multiple processes
-**MUST** point every one of them at the same spent-id store.
-
-**And you will not find this out by running the system.** A replayed proof is
-not an error: it verifies, it is accepted, the request succeeds. There is no
-exception, no metric, no log line and no failed request — nothing anywhere that
-distinguishes a discounted toll from a paid one. Scaling from one worker to two
-is a routine change that silently stops this origin conforming, which is why the
-requirement is written here rather than left to be noticed. kiosk-server does
-log a `warn` line at boot when a **production** origin has PoW enabled and is
-still on the in-process default; treat that as a reminder, not as a control —
-this section is the control.
-
-A ready one ships in this gem, backed by a single table:
-
-```ruby
-# db/migrate/…_create_kiosk_pow_spent.rb
-class CreateKioskPowSpent < ActiveRecord::Migration[8.1]
-  def up   = execute(Kiosk::Server::SchemaDefinitions.pow_spent_sql)
-  def down = execute(%(DROP TABLE IF EXISTS "#{Kiosk.configuration.schema}".pow_spent))
-end
-```
-
-```ruby
-# config/initializers/kiosk.rb
-Kiosk.configure do |c|
-  c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new
-end
-```
-
-This table is **not** part of `bin/rails g kiosk:install` — a single-process
-operator does not need it, so it is added deliberately when you scale out.
+The PoW gate keeps spent challenge ids in `c.pow_spent_store`, by default
+`Kiosk::Server::PowSpentStores::ActiveRecord`: the `kiosk.pow_spent` table that
+`bin/rails g kiosk:install` lays down. Every process and every deploy shares it,
+so a proof is accepted once (kiosk.tech `protocol.md` §15.2).
 
 Any other backend works: the contract is `claim(id, exp) → Boolean`,
 `release(id)`, `spent?(id)`, `mark_spent(id, exp)`, and `claim` **MUST** be one
 atomic operation (Redis `SET … NX EX`, or SQL `INSERT … ON CONFLICT`). A
 read-then-write reintroduces exactly the replay race the gate closes.
 
-`c.auth_challenge_store` is in-process too, and needs the same treatment for a
-different reason: a challenge issued by one worker is invisible to the worker
+`c.auth_challenge_store` is in-process, and an operator running more than one
+process **MUST** share it: a challenge issued by one worker is invisible to the worker
 that gets the `register`/`login`, so the handshake fails **closed** — a
 correctly-signed request is rejected, and the AI assistant cannot tell that
 apart from a bad key. Above one process it succeeds only when both requests
 land on the same worker.
 
-The same two lines, against the sibling table:
+A ready one ships in this gem, backed by a single table:
 
 ```ruby
 # db/migrate/…_create_kiosk_auth_challenges.rb
@@ -255,7 +219,8 @@ Kiosk.configure do |c|
 end
 ```
 
-Not in `bin/rails g kiosk:install` either, and for the same reason. Any other
+This table is not in `bin/rails g kiosk:install`: a single-process operator
+does not need it. Any other
 backend works: the contract is `put(public_key_pem, nonce, exp)` /
 `take(public_key_pem, nonce) → Boolean`, and `take` **MUST** be one atomic
 operation (SQL `DELETE … RETURNING`, Redis `GETDEL`) so the store, not the

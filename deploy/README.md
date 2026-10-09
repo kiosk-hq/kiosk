@@ -421,22 +421,15 @@ directory can fix it, and `check-live-hsts.sh` only reports it if you pass the
 hostname explicitly.
 
 
-## Scaling past one worker — shared stores REQUIRED
+## Scaling past one worker — a shared auth-challenge store REQUIRED
 
-Everything above assumes the shipped `WEB_CONCURRENCY=1`. Raising it (or putting
-a second app host behind the balancer) changes one security property: the PoW
-**spent-id set** is in-process by default, so single-use — which the protocol
-states normatively (`protocol.md` §15.2, §16.1) — degrades to *once per worker*,
-and N workers accept the same proof N times. The auth-challenge store is
-in-process for the same reason, and breaks the register/login handshake outright
-(challenge on worker A, redeem on worker B).
-
-So before you raise the number: add the `pow_spent` table and set
-`c.pow_spent_store = Kiosk::Server::PowSpentStores::ActiveRecord.new`, and give
-`c.auth_challenge_store` a shared implementation. Both are ~5 lines in the
-initializer — see kiosk-server's README, "Multi-process deployments". This is
-the same class of operator obligation as the edge rate-limit above: the app
-cannot do it for you.
+Everything above assumes the shipped `WEB_CONCURRENCY=1`. The PoW spent-id set
+is already in the database (`kiosk.pow_spent`), shared by every worker. The
+auth-challenge store is in-process, so raising the number (or putting a second
+app host behind the balancer) breaks the register/login handshake (challenge on
+worker A, redeem on worker B). Before you raise it, give `c.auth_challenge_store`
+a shared implementation — see kiosk-server's README, "Multi-process
+deployments".
 
 ## Payments — Stripe TEST mode
 

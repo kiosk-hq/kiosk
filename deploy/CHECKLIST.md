@@ -22,10 +22,9 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
       demo smoke tests (`check:shop`/`check:book`/`check:backoff`) there.
 - [ ] **Lean Puma** for a small box: `WEB_CONCURRENCY=1` (or 0) + `RAILS_MAX_THREADS=5` per app —
       what every `deploy/env/*.env.example` already ships, so a copied template needs no edit here.
-- [ ] **If you raise `WEB_CONCURRENCY` above 1**, the PoW spent-id store and the auth-challenge store
-      must be shared across workers first — both default to in-process, so PoW single-use degrades to
-      once-per-worker and the auth handshake breaks. See kiosk-server's README,
-      "Multi-process deployments". Nothing else on this list changes.
+- [ ] **If you raise `WEB_CONCURRENCY` above 1**, the auth-challenge store must be shared across
+      workers first — it defaults to in-process, so the auth handshake breaks. See kiosk-server's
+      README, "Multi-process deployments". Nothing else on this list changes.
 - [ ] `git clone` the reference repo (or push-to-deploy — see §7).
 
 ## 3. Databases (one Postgres cluster)

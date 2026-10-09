@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **Spent proof-of-work ids live in the database by default**, so a deploy or a second worker no longer makes a spent proof spendable again; `kiosk:install` lays down `kiosk.pow_spent`.
+
 - 2026-10-09: **`c.signing_key` is required and no longer read from `KIOSK_SIGNING_KEY_*`; `c.pow_secret=` refuses a secret under 32 bytes.**
 
 - 2026-10-09: **`Kiosk::Owned` and `Kiosk.current_user_id`**; `Kiosk::Settlement.own` replaces `of_current_principal`, and `SessionContext.require_open!` is gone.

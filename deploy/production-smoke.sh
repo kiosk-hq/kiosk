@@ -422,11 +422,7 @@ smoke_stylish() {
   fi
 
   echo "── Assertion 7: JSON POST at the human sign-in form → 422 + the wrong-door JSON body ──"
-  # The DEMO half of the agent-signpost has no other gate: the engine half is
-  # pinned by rspec, but each demo's own ApplicationController rescue is only
-  # ever exercised by a human-shaped POST here (assertion 4). A regression puts
-  # this back to a bodyless 422 — an answer the caller cannot act on.
-  # Production is the only place it reproduces (dev renders the debug page).
+  # The app's WireSignpost include; only production reproduces it (dev renders the debug page).
   signpost="$(curl -s -X POST "${PROXY_HEADERS[@]}" \
     -H "Content-Type: application/json" -H "Accept: application/json" \
     --data '{"user":{"email":"probe@example.com","password":"probe"}}' \
@@ -442,11 +438,7 @@ smoke_stylish() {
   fi
 
   echo "── Assertion 8: JSON DELETE /users/sign_out → 401 + the wrong-door JSON body ──"
-  # Devise answers a session-less sign-out with `head :unauthorized`: 401,
-  # Content-Type: application/json, ZERO bytes — a content type promising JSON
-  # with nothing to parse. Users::SessionsController hands JSON-shaped callers
-  # that courtesy body instead; navigational and 204 paths stay Devise's. It is
-  # NOT the wire's RFC 9457 problem document and does not claim to be.
+  # Devise alone answers a bodyless 401; the adapter's SessionsController adds the JSON body.
   signout="$(curl -s -X DELETE "${PROXY_HEADERS[@]}" -H "Accept: application/json" "${BASE}/users/sign_out")"
   signout_code="$(curl -s -o /dev/null -w '%{http_code}' -X DELETE "${PROXY_HEADERS[@]}" \
     -H "Accept: application/json" "${BASE}/users/sign_out")"

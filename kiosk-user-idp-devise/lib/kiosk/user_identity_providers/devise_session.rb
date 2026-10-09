@@ -6,34 +6,9 @@ require "uri"
 
 module Kiosk
   module UserIdentityProviders
-    # The CLIENT side of this adapter: the ONE way a driver obtains a HUMAN
-    # principal from an origin that authenticates its humans with Devise.
-    #
-    # {Kiosk::UserIdentityProviders::Devise} is the SERVER end — it reads the
-    # Warden user off an incoming request. This is the other end of the same
-    # contract, and the two belong together: an origin wired to that adapter
-    # has no stub user-IdP that would hand a caller a synthetic
-    # `user:u-<uuid>` bearer, so anything needing the human half of a
-    # ceremony — approving an assistant on the device-verify page, minting a
-    # link code, unlinking — has to hold a real browser session. That means
-    # the real form: GET /users/sign_in for the cookie and the CSRF token,
-    # POST the credentials, keep the Set-Cookie.
-    #
-    # Nothing in it is a test double: it drives the shipped Devise routes over
-    # real HTTP exactly as a browser does. It is here rather than beside each
-    # caller because the handshake written out inline in every driver that
-    # needs it is how one mechanism becomes seven.
-    #
-    # `session: true` is the only knob — it marks the calls that are the
-    # HUMAN's (cookies attached); an agent's calls carry their own Bearer and
-    # must never carry the human's cookies, which is why the jar is opt-in per
-    # request rather than always-on.
-    #
-    #   require "kiosk/user_identity_providers/devise_session"
-    #
-    #   session = Kiosk::UserIdentityProviders::DeviseSession.new(ENV.fetch("SERVER_URL"))
-    #   session.sign_in!(email: "alice@example.com", password: "…")
-    #   rc, link = session.post_json("/kiosk/auth/link", {}, { session: true })
+    # Signs a human in to a Devise origin through its real form and keeps the
+    # session cookie; `session: true` on a call sends that cookie, so an
+    # assistant's own Bearer calls never carry it.
     class DeviseSession
       # Raised when the sign-in handshake does not reach a signed-in session.
       class SignInError < StandardError; end
@@ -46,8 +21,7 @@ module Kiosk
         @cookies = {}
       end
 
-      # Sign a human in through the real Devise form. Returns self so callers can
-      # chain; raises SignInError with the server's status when it does not take.
+      # Raises SignInError unless Devise answers the form with a redirect.
       def sign_in!(email:, password:)
         form = get_html("/users/sign_in")
         raise SignInError, "sign-in form: #{form.code}" unless form.code.to_i == 200
@@ -56,8 +30,6 @@ module Kiosk
                         "authenticity_token" => csrf_token(form.body),
                         "user[email]"        => email,
                         "user[password]"     => password)
-        # Devise answers a successful form sign-in with a redirect; a REJECTED one
-        # re-renders the form (200), so the status is the whole assertion.
         raise SignInError, "sign-in failed: #{res.code}" unless [302, 303].include?(res.code.to_i)
 
         self
@@ -85,9 +57,7 @@ module Kiosk
         request(req)
       end
 
-      # POST JSON. `session: true` in the headers Hash sends the human's cookie
-      # jar; without it the call carries only what the caller passed — which is how
-      # an agent's Bearer call stays an agent's call.
+      # `session: true` in the headers sends the human's cookies.
       def post_json(path, body, headers = {})
         headers = headers.dup
         session = headers.delete(:session)
@@ -97,7 +67,7 @@ module Kiosk
         parsed(request(req))
       end
 
-      # GET JSON. Same rule: cookies only on `session: true`.
+      # `session: true` in the headers sends the human's cookies.
       def get_json(path, params = {}, headers = {})
         headers = headers.dup
         session = headers.delete(:session)
@@ -115,25 +85,7 @@ module Kiosk
 
       def cookie_header = @cookies.map { |k, v| "#{k}=#{v}" }.join("; ")
 
-      # Send a request this driver built itself, still absorbing Set-Cookie.
-      # PUBLIC because a couple of drivers dial shapes the wrappers above will not
-      # construct on purpose — a GET at an action's path to prove it 405s, a POST
-      # with a deliberately wrong content type. They still belong in the jar.
-      #
-      # Absorb Set-Cookie on EVERY response: Rails rotates the session cookie on
-      # sign-in, and a jar that only reads the sign-in response goes stale.
-      #
-      # TLS IS DERIVED FROM THE TARGET'S SCHEME and from nothing else, so
-      # `DeviseSession.new("https://stylish.demo.kiosk.tech")` reaches a
-      # deployed origin and `…("http://127.0.0.1:3005")` reaches a local one,
-      # with no flag telling this driver which it is talking to. The line is
-      # written out here rather than taken from
-      # {Kiosk::TestHelpers::Wire.http_for}, which is where the rest of this
-      # repository's client drivers get it: this gem is a Devise IdP adapter
-      # and may not depend on a test-support gem to open a socket.
-      # The scheme is read off the REQUEST rather than off `@uri`, because
-      # {#uri_for} lets a caller pass a fully-qualified URL and that target is
-      # the one being dialled.
+      # Sends a request built by the caller, absorbing every Set-Cookie; TLS follows the target's scheme.
       def request(req)
         target = req.uri || @uri
         http = Net::HTTP.new(target.host, target.port)

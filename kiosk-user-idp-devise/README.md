@@ -38,6 +38,21 @@ Kiosk.configure do |c|
 end
 ```
 
+## Pointing assistants at the wire
+
+An assistant that POSTs JSON at the sign-in page, or signs out with no session, gets a JSON body naming `/.well-known/kiosk.json` (`422 invalid_authenticity_token`, `401 not_signed_in`) instead of an empty error. Browsers are answered as before.
+
+```ruby
+class ApplicationController < ActionController::Base
+  include Kiosk::UserIdentityProviders::Devise::WireSignpost
+end
+```
+
+```ruby
+# config/routes.rb
+devise_for :users, controllers: { sessions: "kiosk/user_identity_providers/devise/sessions" }
+```
+
 ## Driving the sign-in from a script
 
 An origin wired to this adapter has no stub user-IdP, so anything that needs the HUMAN half of a ceremony — approving an assistant on the device-verify page, minting a link code, unlinking — has to hold a real browser session. `DeviseSession` is that session, and it is the client end of the same contract the adapter above serves:

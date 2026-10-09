@@ -740,7 +740,7 @@ jobs:
       - name: check-redteam-headers self-test
         run: ./bin/check-redteam-headers --self-test
 
-  # A driver beat that claims a 400 REFUSAL of a named argument must read the
+  # A red-team beat that claims a 400 REFUSAL of a named argument must read the
   # refusal's own words (T-210 item (u), from K-1762/K-1764/K-1767). The status
   # and the `code` are the OPERATOR's, whatever the app does, so a beat that
   # reads only those two ticks green for a refusal of anything else on the call

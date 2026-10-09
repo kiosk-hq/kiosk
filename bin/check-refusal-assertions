@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# check-refusal-assertions — a demo driver beat that claims a 400 REFUSAL of a
+# check-refusal-assertions — a red-team beat that claims a 400 REFUSAL of a
 # NAMED argument must read the refusal's own words, not only its status and its
 # code (T-210 item (u), from K-1762, K-1764 and K-1767).
 #
@@ -46,50 +46,24 @@
 #   took the corpus from four candidate hits to three real ones (tudu's two
 #   «Mallory … invite code → 403» beats are correct as they stand).
 #
-# ── HOW A PREDICATE IS READ, AND WHY IT IS MORE THAN ONE HOP ────────────────
+# ── HOW A PREDICATE IS READ ─────────────────────────────────────────────────
 #
-# A driver is split across two files by design: a flow script probes the wire
-# and prints ONE JSON line, and the rake task asserts over the parsed hash. So
-# the predicate `r["zoneless_due_status"] == 400` carries its evidence one file
-# away, and a guard that read only the rake file would report every such beat.
-# Every hop below is therefore followed, and every one of them is mechanical:
-#
-#   1. LOCAL. Every bare identifier in the predicate is resolved to the NEAREST
-#      PRECEDING assignment in the same file, and that assignment's expression —
-#      through a trailing `do`/`{` block — is read as part of the predicate.
-#      That is what reaches `uuid_probes = …flat_map do … ok = rc == 400 && … end`.
-#   1b. THE HELPER, in a `script/*.rb` only. A probe lifted into a method —
-#      atablefor's `uuid_guard_verdict` — carries the test in its body. In a
-#      `*.rake` the helpers are plumbing (`<demo>_run_flow` and friends) and
-#      following them lends every beat in the file an `e.message` it never
-#      reads; see the note on `predicate_reading`.
-#   2. THE SEAM. Every string key read out of a hash (`result["bad_cat_lists_valid"]`)
-#      is looked up in that demo's `script/*.rb` as `key:` or `[:key] =`, and the
-#      value expression there is read too — with hop 1 applied again to it.
+# Every bare identifier in the predicate is resolved to the NEAREST PRECEDING
+# assignment in the same file, and that assignment's expression — through a
+# trailing `do`/`{` block — is read as part of the predicate. That is what
+# reaches `uuid_probes = …flat_map do … ok = rc == 400 && … end`. A probe lifted
+# into a method — atablefor's `uuid_guard_verdict` — carries the test in its
+# body, so a helper the predicate calls is read too.
 #
 # NEAREST PRECEDING, not every assignment of that name: a file with a dozen
-# `result = …` lines would otherwise lend one beat's evidence to another, which
-# is exactly how a first draft of this guard read a status-only beat as covered.
-#
-# AND ONE CONVENTION IS HONOURED RATHER THAN FOUGHT: a beat whose sentence is
-# asserted by the ELLIPSIS-CONTINUATION beat immediately after it is covered —
-# `«rule 1: a value OUTSIDE its declared domain → 400 bad_request»` followed by
-# `«…and the refusal NAMES THE VALID VALUES an assistant may retry with»` is one
-# statement in two lines of output, and hoteling's §9.1 trio is written that way
-# deliberately. What that is NOT is a sentence beat that starts a new statement
-# on a different key, which is how K-1767 read on the output and in the file.
+# `result = …` lines would otherwise lend one beat's evidence to another.
 #
 # ── WHAT IT DOES NOT COVER, measured rather than guessed ────────────────────
 #
-#   * THE `failures << "…"` IDIOM. Three demos pair a label with a condition by
-#     CONTROL FLOW rather than by argument position, and this guard reads only
-#     the two forms where the label and the predicate are arguments of ONE call
-#     (`check.call(…)` and `<battery>.record(…)`). Measured over the same corpus
-#     with the enclosing `if`/`unless` taken as the predicate, the wider shape
-#     adds exactly two hits and both are false: hoteling's and skooti's
-#     `CONTROL well-formed-but-unknown <id>` beats, which WANT a 403 and name
-#     400 only as the thing that must not happen. A negation a pattern cannot
-#     see is a worse trade than a stated blind spot.
+#   * A LABEL PAIRED WITH A CONDITION BY CONTROL FLOW. This guard reads only the
+#     form where the label and the predicate are arguments of ONE call
+#     (`<battery>.record(…)`); a beat that WANTS a 403 and names 400 only as the
+#     thing that must not happen is a negation a pattern cannot see.
 #   * A BEAT WHOSE LABEL IS NOT A LITERAL. skooti registers its beats from a
 #     hash table, so the name is a variable at the call. Those are COUNTED and
 #     printed, never failed: nothing here can read a claim it cannot see, and
@@ -111,8 +85,8 @@ require "tmpdir"
 
 ROOT = File.expand_path("..", __dir__)
 
-# The two call forms whose label and predicate are arguments of one call.
-RECEIVERS = ["check.call", ".record"].freeze
+# The call form whose label and predicate are arguments of one call.
+RECEIVER = ".record"
 
 # A claim this guard is entitled to read as «the argument validation could have
 # produced this». `403`/`404` are deliberately absent: see RA-1's note.
@@ -298,32 +272,6 @@ def expression_at(lines, i, cap: 60)
   text
 end
 
-# The flow scripts of a demo, as one text — the other half of a driver.
-def flow_sources(demo_dir)
-  Dir.glob(File.join(demo_dir, "script/*.rb")).sort.map { |f| File.read(f) }
-end
-
-# Where a driver's JSON key is BUILT: `key: <expr>` or `results[:key] = <expr>`.
-def key_definitions(flow_srcs, key)
-  out = +""
-  flow_srcs.each do |src|
-    lines = src.lines
-    lines.each_with_index do |line, i|
-      next unless line.match?(/^\s*#{Regexp.escape(key)}:\s*\S/) ||
-                  line.match?(/\[:#{Regexp.escape(key)}\]\s*=[^=]/) ||
-                  line.match?(/\["#{Regexp.escape(key)}"\]\s*=[^=]/)
-
-      expr = expression_at(lines, i)
-      out << expr
-      # hop 1 again, inside the flow file
-      expr.scan(/\b([a-z_][a-z0-9_]*)\b/).flatten.uniq.each do |v|
-        out << nearest_assignment(src, v, i + 1)
-      end
-    end
-  end
-  out
-end
-
 # A `def <name>` … `end` in `src`, matched on the definition's own indentation.
 # A driver that lifts its probe into a helper — atablefor's `uuid_guard_verdict`
 # is the live one — carries its evidence there rather than in an assignment.
@@ -337,54 +285,17 @@ def method_definition(src, name)
   lines[start..stop].join
 end
 
-# The predicate PLUS everything it delegates to: locals, helper methods, and the
-# driver seam. Each hop is applied to everything gathered so far, so a beat that
-# delegates to a helper that reads a flow key is followed the whole way.
-#
-# THE METHOD HOP IS FOR PROBE SCRIPTS ONLY, and the restriction is measured
-# rather than tidy. In a `script/*.rb` a helper is the probe itself —
-# atablefor's `uuid_guard_verdict` builds the response and tests it — so its
-# body is part of the predicate. In a `*.rake` the helpers are PLUMBING: every
-# beat there reads a value out of the flow's JSON (hop 2), while the file's own
-# `<demo>_run_flow` handles subprocesses and error reporting and so contains
-# `e.message`, `start_with?` and friends. Following it from a rake beat lends
-# every assertion in the file a `message` it never reads, which read a planted
-# status-only beat as covered on the first run of this guard.
-def predicate_reading(predicate, src, line, flow_srcs, follow_methods:)
+# The predicate PLUS everything it delegates to: the locals it reads, then the
+# helper methods any of that calls.
+def predicate_reading(predicate, src, line)
   text = predicate.dup
   predicate.scan(/\b([a-z_][a-z0-9_]*)\b/).flatten.uniq.each do |v|
     text << " " << nearest_assignment(src, v, line)
   end
-  if follow_methods
-    text.scan(/\b([a-z_][a-z0-9_]*)\b/).flatten.uniq.each do |v|
-      text << " " << method_definition(src, v)
-    end
-  end
-  # Keys read out of a hash, in the predicate and in whatever it delegated to.
-  text.scan(/\[\s*["']([a-z_][a-z0-9_]*)["']\s*\]/).flatten.uniq.each do |key|
-    text << " " << key_definitions(flow_srcs, key)
+  text.scan(/\b([a-z_][a-z0-9_]*)\b/).flatten.uniq.each do |v|
+    text << " " << method_definition(src, v)
   end
   text
-end
-
-# THE CONTINUATION CONVENTION, which is the drivers' own and not one invented
-# here: a beat whose label opens with an ellipsis is the previous beat's
-# sentence continued, and an operator reads the two as one statement —
-# «OK rule 1: a value OUTSIDE its declared domain → 400 bad_request» followed by
-# «OK …and the refusal NAMES THE VALID VALUES an assistant may retry with».
-# hoteling's §9.1 rule-1 trio is the live instance, and splitting a status from
-# its sentence THAT way loses nothing: both run, both are printed, and neither
-# can pass while the other fails. What it is not is philslist's K-1767 shape,
-# where the sentence lived in a beat that started a new statement on a different
-# flow key — which reads, on the output and in the file, as two properties one
-# of which might simply not be there.
-def continuation_evidence?(site, src, flow_srcs, path)
-  line, body = site
-  prose, predicate = prose_and_predicate(body)
-  return false unless prose.strip.match?(/\A["'](?:…|\.\.\.)/)
-
-  predicate_reading(predicate, src, line, flow_srcs,
-                    follow_methods: path.include?("/script/")).match?(EVIDENCE)
 end
 
 # ── the check ────────────────────────────────────────────────────────────────
@@ -398,15 +309,10 @@ def check(root)
     demo   = File.basename(demo_dir)
     fields = constrained_input_fields(demo_dir)
     stats[:fields] += fields.length
-    flow_srcs = flow_sources(demo_dir)
-
-    files = (Dir.glob(File.join(demo_dir, "lib/tasks/*.rake")) +
-             Dir.glob(File.join(demo_dir, "script/*.rb"))).sort
-    files.each do |f|
+    Dir.glob(File.join(demo_dir, "script/*.rb")).sort.each do |f|
       src = File.read(f)
       rel = f.delete_prefix("#{root}/")
-      sites = RECEIVERS.flat_map { |r| call_sites(src, r) }.sort_by(&:first)
-      sites.each_with_index do |(line, body), i|
+      call_sites(src, RECEIVER).each do |line, body|
         prose, predicate = prose_and_predicate(body)
         if prose.strip.empty?
           stats[:unreadable] += 1
@@ -421,14 +327,8 @@ def check(root)
         next if named.empty?
 
         stats[:named] += 1
-        reading = predicate_reading(predicate, src, line, flow_srcs,
-                                    follow_methods: f.include?("/script/"))
-        if reading.match?(EVIDENCE)
+        if predicate_reading(predicate, src, line).match?(EVIDENCE)
           stats[:evidenced] += 1
-          next
-        end
-        if (nxt = sites[i + 1]) && continuation_evidence?(nxt, src, flow_srcs, f)
-          stats[:continued] += 1
           next
         end
 
@@ -445,8 +345,8 @@ def check(root)
 
   # ── vacuity ────────────────────────────────────────────────────────────────
   if stats[:assertions].zero?
-    failures << "[RA-V1] no readable beat was found in any demo's `lib/tasks/*.rake` or " \
-                "`script/*.rb` — the extractor reads nothing, so RA-1 cannot fail on anything"
+    failures << "[RA-V1] no readable beat was found in any demo's `script/*.rb` — the extractor " \
+                "reads nothing, so RA-1 cannot fail on anything"
   end
   if stats[:fields].zero?
     failures << "[RA-V2] no demo declares an input property with a `format`/`enum`/`pattern`/" \
@@ -466,8 +366,7 @@ def check(root)
   notes << "beats read: #{stats[:assertions]} (#{stats[:unreadable]} whose label is not a " \
            "literal, not read — see the header); claiming a 400 refusal: #{stats[:refusal_claims]}; " \
            "also naming a constrained argument: #{stats[:named]}; of those, reading the " \
-           "refusal's words: #{stats[:evidenced]}, and #{stats[:continued]} read by an " \
-           "ellipsis-continuation beat immediately after"
+           "refusal's words: #{stats[:evidenced]}"
 
   Report.new(failures: failures, notes: notes, stats: stats)
 end
@@ -481,7 +380,6 @@ end
 # be answered by, so an arm that reddens for another reason is not a pass.
 
 CORPUS_GLOBS = [
-  "kiosk-demo-*/lib/tasks/*.rake",
   "kiosk-demo-*/script/*.rb",
   "kiosk-demo-*/app/**/*.rb",
 ].freeze
@@ -526,23 +424,19 @@ def self_test
 
   run.call("GREEN — the tree as it stands", nil) { nil }
 
-  # RA-1, hop 0: the predicate is right there. K-1764 as it stood.
-  run.call("RA-1 — tudu's zoneless due_at beat back to status-and-code", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-tudu/lib/tasks/demo.rake"),
-         "r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\" &&\n" \
-         "               r[\"zoneless_due_detail\"].to_s.include?(\"due_at\")",
-         "r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\"")
+  # RA-1, hop 0: the predicate is right there.
+  run.call("RA-1 — philslist's out-of-enum filter beat back to status-and-code", "RA-1") do |root|
+    edit(File.join(root, "kiosk-demo-philslist/script/redteam_suite.rb"),
+         "detail_bad.include?(\"bikes\") && detail_bad.include?(\"housing\") &&\n", "")
   end
 
   # The plant above, behind a comment carrying an unbalanced `(`. The walkers
   # read an argument list by counting delimiters, so one counted inside a comment
   # would move where the call ends and the rule would read another beat's body.
   run.call("RA-1 — a comment carrying a stray `(` does not move where the beat ends", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-tudu/lib/tasks/demo.rake"),
-         "r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\" &&\n" \
-         "               r[\"zoneless_due_detail\"].to_s.include?(\"due_at\")",
-         "# the app's own check ( defeated\n" \
-         "               r[\"zoneless_due_status\"] == 400 && r[\"zoneless_due_code\"] == \"bad_request\"")
+    edit(File.join(root, "kiosk-demo-philslist/script/redteam_suite.rb"),
+         "detail_bad.include?(\"bikes\") && detail_bad.include?(\"housing\") &&\n",
+         "# the app's own check ( defeated\n")
   end
 
   # RA-1, hop 1: the beat delegates to a local computed above it. K-1762.
@@ -552,46 +446,23 @@ def self_test
          "         !scan.leak?")
   end
 
-  # RA-1, hop 2: the evidence lives in the flow script, one file away. K-1767.
-  run.call("RA-1 — philslist's bad-category evidence leaves the flow script", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-philslist/script/register_flow.rb"),
-         "bad_cat_lists_valid:  %w[furniture bikes electronics housing free].all? { |c| badcat_msg.include?(c) },",
-         "bad_cat_lists_valid:  rc_badcat == 400,")
-  end
-
   # The scope line: a 403 claim is NOT in scope, because the argument validation
-  # cannot produce one. tudu's two Mallory beats are the live example.
+  # cannot produce one. tudu's invite-code replay is the live example.
   run.call("GREEN — a status-only beat claiming a 403 stays out of scope", nil) do |root|
-    edit(File.join(root, "kiosk-demo-tudu/lib/tasks/demo.rake"),
-         "check.call(\"Mallory garbage invite code → 403\"",
-         "check.call(\"Mallory garbage invite code → 403 (code refused)\"")
+    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+         "\"replay of used invite code → \#{rc} (want 403)\"",
+         "\"replay of used invite code → \#{rc} (want 403, code refused)\"")
   end
 
   # And the other half of that line: the SAME beat, re-labelled as a 400 claim,
   # must be caught — so the scope is the claim and not the wording around it.
   run.call("RA-1 — the same beat re-labelled as a 400 claim is in scope", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-tudu/lib/tasks/demo.rake"),
-         "check.call(\"Mallory garbage invite code → 403\"",
-         "check.call(\"Mallory garbage invite code → 400\"")
-  end
-
-  # The continuation convention, in both directions. hoteling's §9.1 rule-1 trio
-  # is the live instance: a status beat whose sentence is the `…` beat under it.
-  run.call("RA-1 — hoteling's rule-1 sentence stops being a continuation", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-hoteling/lib/tasks/demo.rake"),
-         '"…and the refusal NAMES THE VALID VALUES an assistant may retry with"',
-         '"the refusal NAMES THE VALID VALUES an assistant may retry with"')
-  end
-  run.call("RA-1 — hoteling's continuation keeps its label and stops reading the detail", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-hoteling/lib/tasks/demo.rake"),
-         'check.call(result["bad_enum_names_values"] == true,',
-         'check.call(result["http_bad_enum"] == 400,')
+    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+         "\"replay of used invite code → \#{rc} (want 403)\"",
+         "\"replay of used invite code → \#{rc} (want 400)\"")
   end
 
   run.call("RA-V1 — no beat is readable anywhere", "RA-V1") do |root|
-    Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/*.rake")).each do |p|
-      File.write(p, File.read(p).gsub("check.call(", "noop("))
-    end
     Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb")).each do |p|
       File.write(p, File.read(p).gsub(/\.record\(/, ".noop("))
     end
@@ -607,8 +478,7 @@ def self_test
   end
 
   run.call("RA-V3 — no beat claims a 400 refusal any more", "RA-V3") do |root|
-    (Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/*.rake")) +
-     Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb"))).each do |p|
+    Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb")).each do |p|
       File.write(p, File.read(p).gsub("400", "4oo").gsub("bad_request", "bad_req"))
     end
   end
@@ -618,8 +488,7 @@ def self_test
   # constrained argument read nothing. RA-1 reddens beside it; the arm demands the
   # RA-V4 tag, which is the one that says the PATTERN died rather than the tree.
   run.call("RA-V4 — no predicate reads a refusal's words any more", "RA-V4") do |root|
-    (Dir.glob(File.join(root, "kiosk-demo-*/lib/tasks/*.rake")) +
-     Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb"))).each do |p|
+    Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb")).each do |p|
       File.write(p, File.read(p).gsub(EVIDENCE) { |m| m.chars.join("-") })
     end
   end
@@ -636,7 +505,7 @@ def self_test
 
   if failures.empty?
     puts "check-refusal-assertions --self-test: OK — #{arms.length} arm(s): the rule at each hop " \
-         "it reads, the 403 scope line in both directions, the ellipsis continuation in both, and " \
+         "it reads, the 403 scope line in both directions, and " \
          "#{armed_v.length} vacuity arm(s) over #{declared_v.length} in-band vacuity check(s)."
     exit 0
   end

@@ -2,42 +2,10 @@
 
 module Kiosk
   module TestHelpers
-    # In-memory executor that records every call without touching Postgres.
-    # Lives here so the harness gems can run their own self-tests; providers
-    # can also use it for unit-shaped tests that don't need real RLS.
-    #
-    # The real executor (`Kiosk::Server::TestExecutor`, ships with
-    # `kiosk-server`) implements the same contract:
-    #
-    #   - `with_identity(identity, &block)` — opens a transaction-shaped
-    #     scope where `current_*` GUCs are set from `identity`, yields, and
-    #     rolls back. `identity` is a `Kiosk::Identity` or `nil`
-    #     (anonymous). Implementations MAY choose to nest the call; the
-    #     NullExecutor simply pushes onto a stack.
-    #   - `query(sql)` — executes raw SQL under the current identity, returns
-    #     rows. It is SQL and not a verb name: `run_query` below is the verb.
-    #   - `run_query(name, args)` — invokes a named Query verb and returns its
-    #     rows. Without it half of every origin's wire — every `kind :query`
-    #     declaration — has no test seam at all, because a query verb is not
-    #     reachable through `query` (which takes SQL) or `run_action` (which
-    #     resolves against the Action registry).
-    #   - `run_action(name, args)` / `pay_action(name, args)` — invokes
-    #     a named Action / pay-Action; returns whatever the Action would.
-    #   - `seed(table, attrs, count:)` — bulk-insert factory; runs as
-    #     `system_role`, so it can populate tables under RLS.
-    #
-    # Pre-load a deterministic result with the helper named for the kind the
-    # verb records: one `enqueue_<kind>` per kind, no exceptions. If nothing
-    # is queued, returns `[]` for either flavour of query and `nil` for
-    # actions / seeds.
-    #
-    # Pre-load deterministic errors with `enqueue_error(:rls_denied)` /
-    # `:quota_exceeded` — the next matching call raises.
+    # In-memory executor that records every call without touching Postgres; the
+    # contract `Kiosk::Server::TestExecutor` implements. Queue results with
+    # `enqueue_<kind>` and errors with `enqueue_error`.
     class NullExecutor
-      # One recorded call. The journey DSL stamps `kind` (:query, :run_query,
-      # :run_action, :pay_action, :seed) plus the relevant `args`; `identity` is whatever
-      # `with_identity` is currently scoping. `identity` is `nil` for
-      # `as_anonymous` / unscoped calls.
       Call = Data.define(:kind, :args, :identity)
 
       attr_reader :calls
@@ -49,10 +17,6 @@ module Kiosk
         @errors         = Hash.new { |h, k| h[k] = [] }
       end
 
-      # Push a scoped identity, yield, pop. Mirrors the request-shaped
-      # transaction the real executor opens; we don't actually open any
-      # transaction here — recording the identity stack is enough for
-      # most journey-shaped self-tests.
       def with_identity(identity)
         @identity_stack.push(identity)
         yield
@@ -85,29 +49,19 @@ module Kiosk
         next_result_or_raise(:seed)
       end
 
-      # --- Test-rig helpers ----------------------------------------------------
-
-      # Queue a result for the next call of `kind`. One helper per kind,
-      # spelled `enqueue_<kind>` for the kind that verb stamps on its Call.
       def enqueue_query(result)       = @queues[:query]       << result
       def enqueue_run_query(result)   = @queues[:run_query]   << result
       def enqueue_run_action(result)  = @queues[:run_action]  << result
       def enqueue_pay_action(result)  = @queues[:pay_action]  << result
       def enqueue_seed(result)        = @queues[:seed]        << result
 
-      # Queue an error for the next call of `kind`. `error` is :rls_denied,
-      # :quota_exceeded, or a class.
+      # `error` is :rls_denied, :quota_exceeded, or a class.
       def enqueue_error(kind, error = :rls_denied)
         @errors[kind] << error
       end
 
-      # Filter recorded calls. Handy for assertions:
-      #   executor.calls_of(:run_action).map { |c| c.args[:name] }
       def calls_of(kind) = @calls.select { |c| c.kind == kind }
 
-      # The current identity (top of stack) or `nil` if nothing scoped. This is
-      # the way to ask: the stack itself is private, and a call's identity at
-      # the time it ran is on the recorded {Call}.
       def current_identity = @identity_stack.last
 
       private

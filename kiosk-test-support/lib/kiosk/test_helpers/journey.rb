@@ -4,30 +4,11 @@ require "securerandom"
 
 module Kiosk
   module TestHelpers
-    # The journey-test DSL. Mixed into RSpec example
-    # groups tagged `type: :kiosk_journey` (via `kiosk-rls-rspec`) and into
-    # Minitest test cases via `include Kiosk::TestHelpers` (via
-    # `kiosk-rls-minitest`).
-    #
-    # All identity-scoping helpers (`as_agent_of`, `as_user`, `as_agent`,
-    # `as_anonymous`) require a block; they delegate to the executor's
-    # `#with_identity` so the SQL/Action calls in the block run with the
-    # right GUCs and roll back at the end.
-    #
-    # Calls outside any scope (`query("…")` at the top of the example)
-    # raise under `Kiosk::Server::TestExecutor` (default deny); use
-    # `as_anonymous` to assert that explicitly. The bundled `NullExecutor`
-    # does not enforce scope — it records the unscoped call and returns its
-    # default result.
+    # The journey-test DSL, for RSpec `type: :kiosk_journey` groups and Minitest
+    # cases. The `as_*` scopes take a block and delegate to the executor.
     module Journey
-      # Scope to an agent identity acting on behalf of `user`. Generates a
-      # synthetic `agent_id` for this scope.
-      #
-      # @param user [#id, #role] the principal record; `user.id` becomes
-      #   `current_user_id`. Tests typically pass an ActiveRecord row, but
-      #   any object exposing `#id` works.
-      # @param role [String, Symbol, nil] explicit role; falls back to
-      #   `user.role` if the user responds, else the first configured role.
+      # @param user [#id, #role] the principal; `user.id` becomes `current_user_id`
+      # @param role [String, Symbol, nil] defaults to `user.role`, else the first configured role
       def as_agent_of(user, role: nil, &block)
         identity = Kiosk::Identity.new(
           user_id:  user_id_of(user),
@@ -38,7 +19,6 @@ module Kiosk
         scope_to(identity, &block)
       end
 
-      # Scope to a human identity (web/mobile channel). No agent_id.
       def as_user(user, role: nil, &block)
         identity = Kiosk::Identity.new(
           user_id: user_id_of(user),
@@ -48,10 +28,7 @@ module Kiosk
         scope_to(identity, &block)
       end
 
-      # Scope to a synthetic-user agent labelled `name`. For greenfield-style
-      # tests where there is no real `users` row to anchor to.
-      # The synthetic user_id is deterministic from `name` so repeated calls
-      # in the same test refer to the same principal.
+      # An agent for a synthetic user named `name`, when no `users` row exists.
       def as_agent(name, role: nil, &block)
         identity = Kiosk::Identity.new(
           user_id:  "synthetic:#{name}",
@@ -62,49 +39,29 @@ module Kiosk
         scope_to(identity, &block)
       end
 
-      # Scope to no identity (no GUCs set). Used to verify that RLS denies
-      # by default. Passes `nil` to the executor's `with_identity`.
       def as_anonymous(&block)
         scope_to(nil, &block)
       end
 
-      # Execute a SQL string under the current identity. Returns rows
-      # (executor-dependent shape; typically an Array of Hashes).
-      #
-      # This takes SQL, not a verb name. To call a declared query verb — the
-      # `kind :query` half of an origin's wire — use {#run_query}.
+      # Raw SQL; a query verb is {#run_query}.
       def query(sql)
         TestHelpers.require_executor!.query(sql)
       end
 
-      # Invoke a Query verb by name with keyword args, under the current
-      # identity. Returns the rows the verb answers.
-      #
-      # It is the read-side twin of {#run_action}, and the two together are the
-      # whole of an origin's verb surface: `kind :query` puts a declaration in
-      # the Query registry, `kind :action` in the Action registry, and nothing
-      # else reaches either.
       def run_query(name, **args)
         TestHelpers.require_executor!.run_query(name, args)
       end
 
-      # Invoke an Action by name with keyword args. Returns whatever the
-      # Action returns (typically a result Hash or `Kiosk::Mandate`).
       def run_action(name, **args)
         TestHelpers.require_executor!.run_action(name, args)
       end
 
-      # Invoke a pay-Action by name. Same contract as `run_action`.
-      # `Kiosk::Server::TestExecutor` does not exercise settlement through the
-      # always-rolls-back RLS journey scope, so it raises `NotImplementedError`;
-      # settlement runs via `Executor#verb_pay` + a `kiosk-pay-*` provider.
+      # `Kiosk::Server::TestExecutor` raises `NotImplementedError` here.
       def pay_action(name, **args)
         TestHelpers.require_executor!.pay_action(name, args)
       end
 
-      # Factory-style seeder. Runs as `system_role`, so it can populate
-      # tables that have RLS enabled. `owner:` is sugar for a `user_id`
-      # foreign key.
+      # Runs as `system_role`, so it can seed RLS tables; `owner:` sets `user_id`.
       def kiosk_seed(table, count: 1, owner: nil, **attrs)
         attrs = attrs.merge(user_id: user_id_of(owner)) if owner
         TestHelpers.require_executor!.seed(table, attrs, count: count)

@@ -7,13 +7,9 @@ require "uri"
 
 module Kiosk
   module TestHelpers
-    # A local stripe-mock, Stripe's own fixture server: a demo suite charges and
-    # refunds against it with no key and no money moving.
-    #
-    # stripe-mock answers every confirmed PaymentIntent `requires_payment_method`
-    # with nothing received. A small front on {PORT} passes everything through
-    # to it and answers a confirmed create as Stripe does for a test card:
-    # `succeeded`, the whole amount received.
+    # A local stripe-mock for demo suites. stripe-mock leaves a confirmed
+    # PaymentIntent unpaid, so a front on {PORT} relays to it and answers a
+    # confirmed create as Stripe does for a test card: `succeeded`, fully received.
     module StripeMock
       PORT          = 12111
       UPSTREAM_PORT = 12112

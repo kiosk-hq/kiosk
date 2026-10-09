@@ -7,44 +7,12 @@ require "kiosk/test_helpers/conformance"
 module Kiosk
   module TestHelpers
     module Conformance
-      # RSpec wiring for the four conformance checks.
-      #
-      # Required by name — `require "kiosk/test_helpers/conformance/rspec"` —
-      # and never by `require "kiosk/test_helpers"`, which is what lets this gem
-      # depend on no test framework while shipping wiring for two.
-      #
-      #   require "kiosk/test_helpers/conformance/rspec"
-      #
-      #   RSpec.describe "the Kiosk wire" do
-      #     it "routes every verb it declares" do
-      #       expect(kiosk_origin).to have_a_route_for_every_verb
-      #     end
-      #
-      #     it "answers what catalog publishes" do
-      #       expect(:catalog).to answer_its_declared_schema
-      #     end
-      #
-      #     it "scopes my_orders to the caller" do
-      #       expect(:my_orders).to be_scoped_to_principal(as: alice, and_not: bob)
-      #     end
-      #   end
-      #
-      # Every matcher takes the same keywords as the Minitest assertions
-      # (`params:`, `as:`, `and_not:`, `origin:`) and renders the same
-      # {Outcome#message}, so a fault found in one framework and reproduced in
-      # the other reads identically.
+      # RSpec matchers for the four conformance checks; required by name only.
       module RSpecHelpers
-        # The configured origin, so `expect(kiosk_origin).to …` reads as the
-        # sentence it is. Every matcher also falls back to it, so an example
-        # that passes nil still works.
         def kiosk_origin = Conformance.require_origin!
       end
 
-      # Shared by the four matchers: the origin to use and the keywords to
-      # forward. RSpec's matcher DSL hands a block ONE positional Hash — a
-      # keyword call to a matcher is converted on the way in — so the matchers
-      # take `|options = {}|` and read it here rather than declaring keyword
-      # parameters that would never be filled.
+      # The matcher DSL hands keywords to a block as one positional Hash.
       module RSpecOptions
         module_function
 
@@ -60,18 +28,8 @@ module Kiosk
   end
 end
 
-# Matcher: `expect(kiosk_origin).to have_a_route_for_every_verb`
-#
-# Every verb this origin declares has a route, reaching the wire's verb
-# controller under its own name, with the method its kind requires. An origin
-# that declares NO verbs fails — an empty registry must not read as "all zero of
-# my verbs are routed".
-#
-# Three ways to name the origin, in this order: the SUBJECT, then an explicit
-# `origin:`, then the configured one. The `|options = {}|` is load-bearing and
-# not decoration — a matcher defined with no block parameter is still CALLABLE
-# with keywords, and Ruby then discards the Hash RSpec hands it, so the keyword
-# is accepted and dropped and the verdict is about a different origin.
+# `expect(kiosk_origin).to have_a_route_for_every_verb`
+# Without `|options = {}|` a keyword `origin:` would be silently dropped.
 RSpec::Matchers.define :have_a_route_for_every_verb do |options = {}|
   match do |origin|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.routes(
@@ -85,11 +43,7 @@ RSpec::Matchers.define :have_a_route_for_every_verb do |options = {}|
   description { "have a route for every declared verb" }
 end
 
-# Matcher: `expect(:catalog).to execute_as_a_kiosk_verb`
-#
-# `params:` defaults to the verb's own `example_params`, so the cheapest true
-# assertion an adopter can write also executes the example their descriptor
-# publishes.
+# `expect(:catalog).to execute_as_a_kiosk_verb`
 RSpec::Matchers.define :execute_as_a_kiosk_verb do |options = {}|
   match do |name|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.executes(
@@ -105,12 +59,7 @@ RSpec::Matchers.define :execute_as_a_kiosk_verb do |options = {}|
   description { "execute as a Kiosk verb" }
 end
 
-# Matcher: `expect(:catalog).to answer_its_declared_schema`
-#
-# The arguments satisfy the verb's `input_schema` and the answer satisfies its
-# `output_schema`. A verb missing either declaration fails rather than skipping:
-# both are required of every verb, so an absent one means the origin is not what
-# it claims to be.
+# `expect(:catalog).to answer_its_declared_schema`
 RSpec::Matchers.define :answer_its_declared_schema do |options = {}|
   match do |name|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.declared_shape(
@@ -129,11 +78,7 @@ RSpec::Matchers.define :answer_its_declared_schema do |options = {}|
   description { "answer the shape its own output_schema declares" }
 end
 
-# Matcher: `expect(:my_orders).to be_scoped_to_principal(as: alice, and_not: bob)`
-#
-# No row `as:` sees reaches `and_not:` — and `as:` must see something, or the
-# matcher fails for having no positive control. A verb declared
-# `reach: :published` fails too: it is SUPPOSED to answer both the same.
+# `expect(:my_orders).to be_scoped_to_principal(as: alice, and_not: bob)`
 RSpec::Matchers.define :be_scoped_to_principal do |options = {}|
   match do |name|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.principal_scope(

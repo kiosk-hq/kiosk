@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **A story's `Person` links, approves and unlinks assistants**, and a `Customer` pays a quote, signs back in, follows news checked against its schema; `kiosk/story_spec` is RSpec's form.
+
 - 2026-10-09: **`Kiosk::StoryTest` and `Kiosk::TestHelpers::Story`** let a test tell an operator's business story through a `Customer` who asks, does, pays and hears.
 
 - 2026-10-09: **`Assistant` drives an origin as an assistant does; `Kyc` stands in for the KYC provider** so a test decides how a check ends. `Wire` and `StripeMock` move here.

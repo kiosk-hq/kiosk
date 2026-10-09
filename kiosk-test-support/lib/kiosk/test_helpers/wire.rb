@@ -44,6 +44,9 @@ module Kiosk
 
       def self.bearer(token) = { "Authorization" => "Bearer #{token}" }
 
+      # A solved proof of work for each challenge, as the `Kiosk-PoW` header carries them.
+      def self.solve(challenges) = challenges.map { { challenge: _1, nonce: Kiosk::Pow::Equihash.solve(_1) } }
+
       attr_reader :base_url
 
       def initialize(base_url:, pay_tolls: false, open_timeout: 10, read_timeout: 30)
@@ -75,7 +78,7 @@ module Kiosk
         challenges = answer.body["challenges"] if @pay_tolls && answer.status == 402 && answer.body.is_a?(Hash)
         return answer unless challenges.is_a?(Array) && challenges.any?
 
-        proofs = challenges.map { { challenge: _1, nonce: Kiosk::Pow::Equihash.solve(_1) } }
+        proofs = self.class.solve(challenges)
         deliver(klass, uri, body, headers.merge("Kiosk-PoW" => JSON.generate(proofs)), &form).with(proofs: proofs.size)
       end
 

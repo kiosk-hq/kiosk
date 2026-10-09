@@ -54,12 +54,21 @@ module Kiosk
         wire.post("/kiosk/agents/kyc", { kyc_jws: attestation_jws }, wire.bearer(principal.token))
       end
 
-      def query(principal, name:, headers: {}, **params)
-        wire.get("/kiosk/#{name}", params, wire.bearer(principal.token).merge(headers))
+      # `pay_tolls: false` answers a proof-of-work toll instead of paying it.
+      def query(principal, name:, headers: {}, pay_tolls: true, **params)
+        (pay_tolls ? wire : unpaid).get("/kiosk/#{name}", params, wire.bearer(principal.token).merge(headers))
       end
 
       def run(principal, name:, headers: {}, **args)
         wire.post("/kiosk/#{name}", args, wire.bearer(principal.token).merge(headers))
+      end
+
+      # The intent and cart mandates for a quote of `total` cents, for #pay.
+      def mandates(principal, total:, scope:, line_items:, currency: "eur")
+        now    = Time.now.to_i
+        common = { user_id: principal.user_id, agent_id: principal.agent_id, iss: base_url, currency:, iat: now, exp: now + 600 }
+        intent = common.merge(id: SecureRandom.uuid, scope:, cap_amount_cents: total)
+        { intent:, cart: common.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: total, line_items:) }
       end
 
       def pay(principal, intent:, cart:, payment_method: "pm_demo")
@@ -83,14 +92,37 @@ module Kiosk
 
       def sign_mandate(principal, payload) = JWT.encode(payload, principal.rsa_key, "RS256")
 
-      def events(principal) = Events.new(base_url:, token: principal.token)
+      # Signs in again with the key it holds.
+      def login(key) = wire.post("/kiosk/auth/login", possession(key))
+
+      # Redeems a link code a person minted on the operator's site.
+      def claim(code, key) = wire.post("/kiosk/auth/claim", { code: }.merge(possession(key)))
+
+      # Polls for the credential a person grants on the operator's site (RFC 8628 §3.4).
+      def device_token(device_code, key)
+        wire.post_form("/kiosk/oauth/token", "grant_type" => "urn:ietf:params:oauth:grant-type:device_code",
+                                             "device_code" => device_code, "signed" => proof_of_possession(key))
+      end
+
+      # A proof that the assistant holds `key`, over a fresh challenge and bound to this origin.
+      def proof_of_possession(key)
+        _, challenge = wire.get_json("/kiosk/auth/challenge", public_key: key.public_key.to_pem)
+        JWT.encode({ aud: base_url, nonce: challenge["challenge"], jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
+      end
+
+      # What the origin publishes about itself at `/kiosk/schema`.
+      def schema = @schema ||= wire.get_json("/kiosk/schema").last
+
+      def events(principal) = Events.new(base_url:, token: principal.token).tap { (@connections ||= []) << _1 }
+
+      # Closes every event connection it opened.
+      def disconnect = @connections&.each(&:close)
 
       private
 
       def register(pow:, wire_role: nil)
         key  = OpenSSL::PKey::RSA.generate(2048)
-        pem  = key.public_key.to_pem
-        body = { public_key: pem, signed: proof_of_possession(key, pem) }
+        body = possession(key)
         body[:role] = wire_role if wire_role
         response = case pow
                    when :solve then wire.post("/kiosk/auth/register", body)
@@ -100,10 +132,7 @@ module Kiosk
         [response, key]
       end
 
-      def proof_of_possession(key, pem)
-        _, challenge = wire.get_json("/kiosk/auth/challenge", public_key: pem)
-        JWT.encode({ aud: base_url, nonce: challenge["challenge"], jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
-      end
+      def possession(key) = { public_key: key.public_key.to_pem, signed: proof_of_possession(key) }
 
       def unpaid = Wire.new(base_url:)
     end

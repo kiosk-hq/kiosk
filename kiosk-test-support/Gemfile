@@ -5,3 +5,4 @@ gemspec
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
 gem "kiosk-core", path: "../kiosk-core"
 gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
+gem "kiosk-user-idp-devise", path: "../kiosk-user-idp-devise"

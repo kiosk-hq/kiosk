@@ -6,6 +6,7 @@ Test helpers for [Kiosk](https://kiosk.tech) origins, and the journey-test DSL o
 
 - `Kiosk::TestHelpers::Assistant` — registers, pays tolls, queries, runs actions, pays and listens for events against an origin, as an AI assistant does.
 - `Kiosk::TestHelpers::Wire` — the same transport without a principal: any method, any path, any headers.
+- `Kiosk::StoryTest` / `Kiosk::TestHelpers::Story` — a test told as a business story by customers' assistants and the people on the operator's site.
 - `Kiosk::TestHelpers::Kyc` — stands in for the operator's KYC provider, so a test decides how an identity check ends.
 - `Kiosk::TestHelpers::StripeMock` — starts a local stripe-mock that answers a confirmed charge as paid.
 - `Kiosk::TestHelpers::LiveServer` — serves the app over HTTP from the test process and gives the test an assistant for it.
@@ -81,6 +82,31 @@ assistant.run(rider, name: "reserve", scooter_code: "SK-001")
 ```
 
 Every answer carries its status, parsed body and headers. `Kiosk::TestHelpers::Wire` is the same transport without a principal: any method, any path, any headers.
+
+## Telling a business story
+
+`Kiosk::StoryTest` (Minitest), or `require "kiosk/story_spec"` and `type: :story` (RSpec), serves the app from the test process and tells a story through `Customer`s, which a demo subclasses with its own business actions:
+
+```ruby
+class Shopper < Kiosk::TestHelpers::Customer
+  def orders(*skus) = does(:create_order, items: skus.map { { sku: _1, qty: 1 } })
+  def pays_for(order) = pays(total: order["total_cents"], scope: "grocery", line_items: [{ order_id: order["order_id"] }])
+end
+
+class ShopStory < Kiosk::StoryTest
+  test "a shopper orders and pays" do
+    shopper = a_customer(as: Shopper)
+    assert shopper.pays_for(shopper.orders("banana")).ok?
+  end
+end
+```
+
+- `a_customer(as:)` registers an assistant; `a_newcomer(as:)` holds a key and no account yet; `published(path)` reads what the origin shows anyone.
+- `Customer#asks` and `#does` answer an `Answer` (`ok?`, `refused?(code)`, `detail`, `hint`, `rows`, `header`, `tolls_paid`, `solved_toll`, `next_page`); `asks(…, unpaid: true)` or `asks(…, proofs: […])` leaves the toll to the story.
+- `Customer#sets_up_payment` and `#requests_verification` run the engine's `payment_setup` and `request_kyc`; `#pays(total:, scope:, line_items:, currency:)` signs the intent, cart and payment mandates for a quote.
+- `Customer#account`, `#role` and `#claims` read its credential; `#signs_back_in`, `#with_a_fresh_credential`, `#redeems(link_code)`, `#asks_to_be_linked`, `#polls` and `#collects` are the sign-in and linking ceremonies.
+- `Customer#listens_for`, `#follows(*topics, subject:, since:)` and `#hears(topic, about:, on:, **data)` read the event stream, holding each heard payload to the schema the origin publishes for its topic.
+- `a_person(email:, password:)` signs a person in on the operator's site through `kiosk-user-idp-devise`'s `DeviseSession`: `links(customer)`, `link_code`, `approves(user_code)`, `unlinks(customer)`, `visits(path)`.
 
 ## Identity checks in tests
 

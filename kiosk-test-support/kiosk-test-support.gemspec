@@ -63,4 +63,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rspec",        "~> 3.13"
   spec.add_development_dependency "rake",         "~> 13.2"
   spec.add_development_dependency "webmock",      "~> 3.0"
+
+  # `Person` signs in through its DeviseSession, which every operator demo already carries.
+  spec.add_development_dependency "kiosk-user-idp-devise", "~> 0.5.0"
 end

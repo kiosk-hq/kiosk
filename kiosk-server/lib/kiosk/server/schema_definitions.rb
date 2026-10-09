@@ -4,30 +4,13 @@ require "kiosk/server/version"
 
 module Kiosk
   module Server
-    # Pure SQL generators for the canonical Kiosk migrations `kiosk:install`
-    # emits, each of which creates its tables in their final shape.
-    #
-    #   001 create_kiosk_schema                → schema + four current_*() helpers + the schema-major marker
-    #   002 create_kiosk_identity_tables       → agents, agent_tokens, agent_mappings
-    #   003 create_kiosk_reservations          → kiosk.reservations
-    #   004 create_kiosk_device_authorizations → kiosk.device_authorizations (account binding)
-    #   005 create_kiosk_mandates              → intent_mandates, cart_mandates, payment_mandates, settlements (AP2 trail)
-    #   006 create_kiosk_kyc_attributes        → kiosk.kyc_attributes and kiosk.kyc_requests, keyed on the person
-    #   007 create_kiosk_events                → kiosk.events, the per-identity event tail
-    #   008 create_kiosk_pow_spent             → kiosk.pow_spent, spent proof-of-work challenge ids
-    #
-    # Pure functions: no database connection, no Rails dependency. Output
-    # is SQL strings the host migration framework (`ActiveRecord::Migration#execute`)
-    # runs. The shipped `kiosk:install` generator
-    # (lib/generators/kiosk/install) copies ActiveRecord::Migration class
-    # files into the host's `db/migrate/` that invoke these.
+    # The SQL of the migrations `kiosk:install` emits, one method per
+    # migration, each creating its tables in their final shape. No database
+    # connection; the host's migrations `execute` it.
     module SchemaDefinitions
       module_function
 
-      # ─── 001 create_kiosk_schema ───────────────────────────────────────
-
-      # CREATE SCHEMA + four `<schema>.current_*()` STABLE helpers, typed
-      # against the provider's user-id type.
+      # 001: the schema and the `current_*()` GUC readers.
       def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
         schema       ||= Kiosk.configuration.schema
         guc_namespace ||= Kiosk.configuration.guc_namespace
@@ -55,20 +38,8 @@ module Kiosk
         SQL
       end
 
-      # ─── 002 create_kiosk_identity_tables ──────────────────────────────
-
-      # `agents` — credential per (user × agent host); `agent_tokens` —
-      # issued tokens for revocation; `agent_mappings` — external IdP
-      # subject ↔ local `agent_id` mapping.
-      #
-      # `agents` carries two OPTIONAL, nullable columns:
-      #
-      #   spending_cap_cents — per-assistant spend cap; NULL = unlimited (the
-      #                        default), 0 = disabled. Enforced by the pay path
-      #                        via the `config.spending_cap` seam
-      #                        ({ColumnSpendingCap} reads this column).
-      #   human_label        — a human-friendly name for the manage-assistants
-      #                        page.
+      # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled),
+      # `agent_tokens`, `agent_mappings`.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -114,11 +85,7 @@ module Kiosk
         SQL
       end
 
-      # ─── 003 create_kiosk_reservations ─────────────────────────────────
-
-      # Atomic reserve-then-pay primitive. TTL row in `kiosk.reservations`
-      # holds inventory while AP2 mandate trail completes; expiry releases
-      # automatically.
+      # 003: TTL rows holding inventory while the mandate chain completes.
       def reservations_sql(schema: nil, user_id_type: nil)
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -144,34 +111,8 @@ module Kiosk
         SQL
       end
 
-      # ─── 004 create_kiosk_device_authorizations ────────────────────────
-
-      # The account-binding state machine table: one row per
-      # device-authorization / link request — created on
-      # /oauth/device_authorization (or the human-initiated link page), mutated
-      # by /oauth/device/verify (approve/deny), consumed by /oauth/token
-      # (device_code grant). Read and written by
-      # {DeviceAuthorizationStores::ActiveRecord}, the durable store.
-      #
-      #   - `user_code_hash` — the human-displayable short code (8 chars from
-      #     the 31-char read-aloud-unambiguous alphabet, XXXX-XXXX) is stored
-      #     HASHED ONLY (SHA-256 hex, matching `agent_tokens.token_hash`); the
-      #     plaintext lives only in the response to the initiating client and
-      #     on the verify page.
-      #   - `device_code_hash` — SHA-256 hex of the actual device_code, which is
-      #     likewise never persisted.
-      #   - `public_key_pem` — the key the ceremony binds (BIND-POP proves
-      #     possession of it before any binding).
-      #   - `kind` — `claim` (agent-initiated) or `link` (human-initiated, rows
-      #     born pre-approved and already bound to the human).
-      #   - `requested_role` — A MISNOMER, and kept on purpose.
-      #     Nothing requests it: on a `claim` row it is written at APPROVAL
-      #     from the approving human's `Identity#role`, on a `link` row at MINT
-      #     from the minting human's own — never by a client, which is refused
-      #     outright for naming a role. Read it as `approved_role`.
-      #     The spelling stays because renaming a shipped column means a new
-      #     migration in each of the seven demo `db/schema.rb` files — a
-      #     migration wave for a word.
+      # 004: account-binding requests; codes are stored hashed only.
+      # `requested_role` is the approving human's role, never a client's.
       def device_authorizations_sql(schema: nil, user_id_type: nil)
         schema      ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -209,31 +150,9 @@ module Kiosk
         SQL
       end
 
-      # ─── 005 create_kiosk_mandates ─────────────────────────────────────
-
-      # AP2 mandate trail: three signed mandate tables — `intent_mandates`
-      # (spending envelope signed by the user), `cart_mandates`
-      # (agent-assembled cart within the envelope), `payment_mandates`
-      # (assistant-signed payment mandate carrying the payment instrument) —
-      # plus `settlements` (PSP settlement receipt). Each signed-mandate row
-      # carries its original JWS so the chain is auditable end-to-end.
-      #
-      # A SETTLEMENT HAS NO `raw_jws`, AND THAT IS THE POINT. The three
-      # mandate tables each hold one — the assistant signed those, and §11.6's
-      # replay check compares all three byte for byte — but a settlement is a
-      # SERVER-MINTED receipt: nobody signs it, so there is no signature to
-      # store. A column here would read like the sibling tables' load-bearing
-      # one and invite the misreading that a settlement gives «non-repudiation
-      # both ways»; it does not. An operator counter-signature would be a new
-      # normative protocol element, not a column.
-      #
-      # `id` is a SERVER-generated uuid PK (`gen_random_uuid()`) — never
-      # supplied by the caller, so one principal cannot pre-occupy or block
-      # another's row on these (currently RLS-less) tables. The agent-signed
-      # mandate id lives in `mandate_id text NOT NULL` for audit + idempotency,
-      # made unique PER PRINCIPAL via `UNIQUE (user_id, mandate_id)`. The FK
-      # chain references the SERVER ids; `UNIQUE (cart_mandate_id)` on
-      # settlements anchors one settlement per cart.
+      # 005: the AP2 trail. `id` is server-generated; the signed mandate id is
+      # `mandate_id`, unique per principal. A settlement is server-minted, so it
+      # carries no `raw_jws`.
       def mandates_sql(schema: nil, user_id_type: nil)
         schema       ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -310,20 +229,7 @@ module Kiosk
         SQL
       end
 
-      # ─── 006 create_kiosk_kyc_attributes ───────────────────────────────
-
-      # The KYC tables, both keyed on the PERSON (the principal), never on an
-      # assistant account: what was attested is a fact about the human, and it
-      # goes when their row in the host's user table does.
-      #
-      # `kyc_attributes` — one row per anonymized boolean a verified attestation
-      # granted. The grant IS the row, so every gate is an EXISTS and no reader
-      # judges a spelling of `true`; only the names are stored.
-      #
-      # `kyc_requests` — one row per verification `request_kyc` opened at the
-      # KYC provider: the provider's request id, the principal it is for, the
-      # one-time value the provider's callback must echo, and when it was
-      # approved.
+      # 006: KYC grants and open verifications, keyed on the person.
       def kyc_attributes_sql(schema: nil, user_id_type: nil, user_table: nil)
         schema       ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -350,10 +256,7 @@ module Kiosk
         SQL
       end
 
-      # The event tail behind {EventStores::ActiveRecord}, laid down by every
-      # install. `id` is the origin's one monotonic cursor. `identity_key` is a
-      # user_id as text: the engine alone reads it and never joins it. The two
-      # indexes serve a tail read after a cursor and the retention sweep.
+      # 007: the event tail; `id` is the origin's one monotonic cursor.
       def events_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
@@ -376,10 +279,7 @@ module Kiosk
         SQL
       end
 
-      # Table backing {PowSpentStores::ActiveRecord}, the default spent-id
-      # store (migration 008). `id` is the opaque challenge id, so the PRIMARY
-      # KEY is the single-use gate; `expires_at` mirrors the challenge `exp`
-      # and serves the TTL sweep.
+      # 008: spent proof-of-work challenge ids; the primary key is the single-use gate.
       def pow_spent_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
@@ -395,22 +295,8 @@ module Kiosk
         SQL
       end
 
-      # The SHARED auth-challenge table for multi-process operators, and not
-      # part of the canonical migration set: a single-process operator does not
-      # need it. See the kiosk-server README, "Multi-process deployments".
-      #
-      # `public_key` is the registering/logging-in PEM and it is the PRIMARY
-      # KEY, because the store's contract is "at most one outstanding challenge
-      # per key" — re-issuing overwrites, which the key plus
-      # `ON CONFLICT DO UPDATE` states in ONE statement. `expires_at` mirrors
-      # the challenge TTL; every read carries `expires_at > now()`, so an
-      # expired row can never be taken and the index below serves only
-      # {AuthChallengeStores::ActiveRecord#prune!}.
-      #
-      # NOTE the failure direction, because it is the opposite of `pow_spent`:
-      # an unshared challenge store cannot FIND a nonce another worker issued,
-      # so the handshake fails CLOSED (a rejected, correctly-signed request)
-      # rather than accepting something it should not.
+      # Not in the canonical set: the shared auth-challenge table a multi-process
+      # operator adds. At most one outstanding challenge per key.
       def auth_challenge_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
@@ -427,9 +313,6 @@ module Kiosk
         SQL
       end
 
-      # ─── helpers ───────────────────────────────────────────────────────
-
-      # The host's user table, read off `config.user_model` when a migration runs.
       def configured_user_table = Kiosk.configuration.user_model.to_s.constantize.table_name
 
       def user_id_cast(user_id_type)

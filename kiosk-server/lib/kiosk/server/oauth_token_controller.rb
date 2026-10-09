@@ -1,40 +1,13 @@
 # frozen_string_literal: true
 
-# The engine draws the route.
-
 require "action_controller"
 require "kiosk/server/device_code_grant"
 require "kiosk/server/headers"
 
 module Kiosk
   module Server
-    # POST <endpoint>/oauth/token — the polling end of the claim
-    # ceremony. See RFC 6749 §3.2 (token endpoint) + RFC 8628 §3.4
-    # (device_code grant). Only the device_code grant is served: the
-    # endpoint completes the account binding; it is not a
-    # general OAuth token service — kiosk-pop remains the only auth
-    # story, and the JWT returned here is minted through the very same
-    # DefaultAgentIdp path as /auth/login.
-    #
-    # Request: `application/x-www-form-urlencoded`
-    #   grant_type   required — `urn:ietf:params:oauth:grant-type:device_code`
-    #   device_code  required
-    #   signed       required once approved — compact RS256 JWS over
-    #                {aud, nonce, jti} proving possession of the key the
-    #                ceremony binds (BIND-POP; same handshake as
-    #                register/login: GET /auth/challenge first)
-    #
-    # Success response (200):
-    #   { "access_token": "<kiosk-pop JWT>", "token_type": "Bearer",
-    #     "expires_in": 3600, "scope": "customer" }
-    #
-    # Error response (400; 401 for invalid_client) per RFC 6749 §5.2 +
-    # RFC 8628 §3.5:
-    #   { "error": "authorization_pending" | "slow_down"
-    #            | "access_denied"          | "expired_token"
-    #            | "invalid_grant"          | "invalid_client"
-    #            | "invalid_request"        | "unsupported_grant_type",
-    #     "error_description": "..." }
+    # POST <endpoint>/oauth/token: the assistant polls the claim ceremony
+    # (RFC 8628 §3.4). Only the device_code grant is served.
     class OauthTokenController < ::ActionController::API
       include BindingModuleGate
       prepend_before_action :refuse_unserved_binding

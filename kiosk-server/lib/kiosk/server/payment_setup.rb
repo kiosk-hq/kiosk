@@ -9,9 +9,7 @@ require "kiosk/server/failure_log"
 module Kiosk
   module Server
     # `payment_setup`: can this principal pay now, or which page must their
-    # human finish first. Served against the provider port
-    # ({Kiosk::PaymentProviders::Base}) on every origin with a
-    # `payment_provider`, so it is the same on every PSP.
+    # human finish first. Served on every origin with a `payment_provider`.
     module PaymentSetup
       NAME        = "payment_setup"
       RETURN_PATH = "payment_setup/return"
@@ -88,11 +86,8 @@ module Kiosk
           "#{Kiosk.current_issuer.to_s.chomp("/")}#{Kiosk.configuration.mount_path}/#{RETURN_PATH}"
         end
 
-        # The human's browser is back from the setup page. The request is
-        # unauthenticated, so it is only a hint: the provider says whose setup
-        # it reports, and readiness is asked again. True, with the topic
-        # pushed, only when the provider confirms that principal is ready.
-        # Never raises — the human is owed the page whatever the PSP does.
+        # Unauthenticated, so only a hint: the provider names the principal and
+        # readiness is asked again. Never raises.
         def returned(params)
           return false unless Events.fetch(NAME)
 

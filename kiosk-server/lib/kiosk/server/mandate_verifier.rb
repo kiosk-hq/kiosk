@@ -4,47 +4,18 @@ require "jwt"
 
 module Kiosk
   module Server
-    # Verifies agent-signed AP2 mandate JWS and builds the value objects.
-    #
-    # Trust model for every mandate in the chain (intent, cart):
-    #   * Signature key = the *registered* agent's public key (looked up by
-    #     the authenticated agent_id — a revoked agent has no key).
-    #   * `iss` MUST equal the provider's own issuer (forged-provenance guard).
-    #   * The mandate is bound to the AUTHENTICATED principal: the payload's
-    #     `agent_id`/`user_id` must match the verified {Kiosk::Identity}, not
-    #     just be internally consistent — an agent cannot sign on behalf of a
-    #     different principal than the one it authenticated as.
-    #   * All of `id, user_id, agent_id, iss, iat, exp` are REQUIRED (presence
-    #     enforced at decode; `exp` also rejects an unexpiring mandate). A
-    #     mandate missing any of them is rejected outright.
-    #
-    # `verify_cart` additionally enforces the AP2 spending envelope: the cart
-    # must reference the presented intent and stay within its cap.
+    # Verifies the agent-signed AP2 mandate chain (intent → cart → payment):
+    # signed by the authenticated agent's key, issued for this origin, bound to
+    # the authenticated principal, and within the intent's cap.
     module MandateVerifier
-      # The mandate `currency` domain, closed on ISO 4217 alpha-3. Matched
-      # against the CANONICAL form — {canonical_currency} has already trimmed
-      # and lower-cased — so `"EUR"`,
-      # `"eur"` and `"  eur "` all reach here as `eur` and all pass, while
-      # `"Euro"`, `"US"`, `"978"` and `"\u20ac"` do not.
-      #
-      # ASCII `a-z` and exactly three of them, deliberately: `\w` and `[[:alpha:]]`
-      # would admit `_`, digits and non-Latin letters respectively, none of which
-      # can be an alpha-3 code, and `String#downcase` does not fold every script to
-      # `a-z` — so a Unicode-permissive class would let through bytes no PSP takes.
-      # The reasoning for a SHAPE rather than a list is at {require_currency!};
-      # this constant is only where the shape is written down once.
+      # §11.1: an ISO 4217 alpha-3 code, matched after {canonical_currency}.
       CURRENCY_CODE = /\A[a-z]{3}\z/
 
       module_function
 
-      # Verify an IntentMandate JWS → {Kiosk::Mandate::IntentMandate}.
       def verify_intent(raw_jws:, identity:)
         payload = decode_and_check(raw_jws, identity)
-        # `cap_amount_cents` is a REQUIRED intent field (spec AP2 table). ABSENT
-        # would nil-coerce to 0 in the verify_cart cap comparison, making that
-        # comparison vacuous; reject it here, before any .to_i.
         require_amount!(payload, :cap_amount_cents)
-        # CANONICAL, not the raw bytes — see `require_currency!`.
         currency = require_currency!(payload)
 
         Kiosk::Mandate::IntentMandate.new(
@@ -57,30 +28,15 @@ module Kiosk
         )
       end
 
-      # Verify a PaymentMandate JWS → {Kiosk::Mandate::PaymentMandate},
-      # enforcing that it is bound to `cart` and matches its amount/currency.
-      #
-      # `payment_method` is OPTIONAL: in the SetupIntent model the assistant
-      # authorises the charge but never presents a card — the provider's PSP
-      # resolves the principal's on-file card. An assistant may still send one;
-      # an absent field is accepted rather than rejected.
+      # `payment_method` is optional: the PSP charges the principal's card on file.
       def verify_payment(raw_jws:, identity:, cart:)
         payload = decode_and_check(raw_jws, identity)
-        # `amount_cents` is a REQUIRED payment field (spec AP2 table). ABSENT
-        # would nil-coerce to 0 below, so a payment omitting it would "match" a
-        # 0-cent cart and persist a 0-cent row; reject before any .to_i.
         require_amount!(payload, :amount_cents)
         currency = require_currency!(payload)
 
         unless payload[:cart_mandate_id] == cart.id
           raise Errors::Forbidden.new("payment not bound to the cart")
         end
-        # Both sides are CANONICAL here: `cart.currency` came out of
-        # `verify_cart`, which ran this same guard. Comparing the raw payload
-        # byte-for-byte against it would refuse `"EUR"` against an `"eur"` cart
-        # — one code spelled two ways — while still letting the two spellings
-        # open two spending-cap tallies, which is the same defect from the
-        # other end.
         unless payload[:amount_cents].to_i == cart.total_amount_cents.to_i &&
                currency == cart.currency
           raise Errors::Forbidden.new("payment amount/currency does not match cart")
@@ -97,14 +53,8 @@ module Kiosk
         )
       end
 
-      # Verify a CartMandate JWS → {Kiosk::Mandate::CartMandate}, enforcing
-      # that it is bound to `intent` and stays within the intent's cap.
       def verify_cart(raw_jws:, identity:, intent:)
         payload = decode_and_check(raw_jws, identity)
-        # `total_amount_cents` is a REQUIRED cart field (spec AP2 table). ABSENT
-        # would nil-coerce to 0 in the cap comparison below (0 <= any cap) and
-        # in verify_payment's amount match, making both vacuous and persisting a
-        # 0-cent cart row; reject before any .to_i.
         require_amount!(payload, :total_amount_cents)
         currency = require_currency!(payload)
         require_line_items!(payload)
@@ -123,11 +73,7 @@ module Kiosk
           raise Errors::Forbidden.new("cart not bound to the intent",
                                       hint: "expected intent_mandate_id #{intent.id.inspect}")
         end
-        # Currency guard: the cap comparison is meaningless across
-        # currencies — 4999 "USD" is NOT within a 5000 "EUR" cap. verify_payment
-        # already checks amount AND currency together; the intent→cart cap must
-        # do the same, or an agent could bypass a EUR cap by pricing the cart in
-        # a weaker unit. Reject the mismatch before comparing the amounts.
+        # A cap is meaningless across currencies.
         if cart.currency != intent.currency
           raise Errors::Forbidden.new(
             "cart currency does not match intent cap currency",
@@ -144,17 +90,7 @@ module Kiosk
         cart
       end
 
-      # Reject a REQUIRED amount field that is ABSENT (nil) or NON-POSITIVE,
-      # BEFORE any `.to_i` coercion. `nil.to_i` is 0, so an omitted amount would
-      # otherwise satisfy the spending-envelope checks vacuously (0 <= cap,
-      # 0 == 0) and persist a 0-cent row.
-      #
-      # A NEGATIVE amount launders the spending cap. A negative cart total
-      # passes the cap comparison (−100000 <= 5000), matches a negative payment,
-      # settles on any PSP that echoes the amount, and drives the settlements SUM
-      # negative — permanently RAISING this agent's effective cap by that amount.
-      # Zero is equally meaningless. Every mandate amount is a positive integer
-      # number of cents; reject anything else here, before the envelope checks.
+      # Before any `.to_i`: nil, zero or negative would launder the cap.
       def require_amount!(payload, field)
         value = payload[field]
         if value.nil?
@@ -172,34 +108,7 @@ module Kiosk
         )
       end
 
-      # Reject a cart whose `line_items` are ABSENT or are not an array.
-      #
-      # `line_items` is REQUIRED and cannot be optional, because the settlement
-      # and reconciliation path READS it and has no fallback: the demos'
-      # `my_orders` join and the `line_items @> …::jsonb` replace-guard the
-      # pay-race fix stands on both look inside it. An assistant that omitted it
-      # could legally pay and leave the operator holding a settlement it cannot
-      # match to any domain object — degraded audit and reconciliation with no
-      # error raised anywhere, which is the worst shape a money path can have.
-      #
-      # The alternative — leave it optional and tell operators whose
-      # reconciliation depends on it to reject the omission themselves — is
-      # DECLINED: it makes every operator re-implement the same guard and makes
-      # the wire mean different things at different origins.
-      #
-      # `Errors::Forbidden`, not `BadRequest`, because that is what every other
-      # missing REQUIRED mandate field answers here (`require_amount!`,
-      # `require_currency!`) — a mandate that does not carry what a mandate must
-      # carry is not authorisation, and the assistant learns the same way for
-      # all of them.
-      #
-      # An EMPTY array does NOT conform either. `[]` is present, so it
-      # satisfies both the schema's `required` and the nil-check below, while
-      # carrying exactly as much reconciliation value as omission does — the
-      # same defect in a shape that passes a presence test. §11.2
-      # says so normatively ("MUST carry at least one entry") and
-      # `mandates.schema.json` states `minItems: 1`; this is the same
-      # constraint at the verifier, so the two refuse the same set.
+      # §11.2: at least one entry; the settlement is reconciled from it.
       def require_line_items!(payload)
         value = payload[:line_items]
         if value.nil?
@@ -226,108 +135,8 @@ module Kiosk
         )
       end
 
-      # Reject an ABSENT (nil) required `currency`. With both intent and cart
-      # omitting it, the cap guard (`nil != nil` → false) and the
-      # verify_payment match (`nil == nil` → true) both pass vacuously, then the
-      # NOT NULL currency column 500s after partial persist (same class as the missing-amount case).
-      #
-      # PRESENCE IS NOT THE CONSTRAINT, so presence is not the whole check.
-      # `{currency: ""}` and `{currency: 5}` must be refused HERE, because
-      # nothing downstream refuses them, and that is the part worth writing
-      # down: the §11.2 rules compare the three mandates' currencies to EACH
-      # OTHER (`cart.currency != intent.currency`, `payment.currency ==
-      # cart.currency`)
-      # and never to a domain, so `""` on all three is internally consistent the
-      # whole way through the chain. It then reaches the PSP as the `currency` of a
-      # real charge (`kiosk-pay-stripe`'s `currency: cart_mandate.currency`) and
-      # becomes the key `Executor#settled_total_cents` scopes the spending-cap
-      # tally by. A non-String does the same and additionally binds a type that
-      # column is not. Mandates arrive as signed JWS payloads and are never
-      # validated against
-      # `mandates.schema.json`, so the schema is not the check either.
-      #
-      # ONLY WHAT THE SPEC ALREADY SAYS IS ENFORCED HERE. The published schema
-      # types this member `string`, so a non-String is refused; an empty or
-      # all-blank string is not a code under any reading of the ISO 4217 that same
-      # schema names; and §11.1 closes the domain to an alpha-3 code, which is
-      # {CURRENCY_CODE} above. Nothing beyond that is minted here — a guard that
-      # invented its own allow-list would be writing wire rather than enforcing
-      # it.
-      #
-      # IT RETURNS THE CANONICAL FORM, AND THE RETURN VALUE IS THE POINT. A
-      # guard that only raised, leaving every caller to build its mandate out of
-      # the RAW payload bytes, would put those bytes in the key §11.5's
-      # spending-cap tally is scoped by (`Executor#settled_total_cents`): `"eur"`
-      # and `"EUR"` would be TWO tallies for one currency, and an assistant that
-      # alternated the spelling between chains would collect the cap TWICE.
-      # `" eur "` does it more quietly still, because the emptiness test below
-      # strips and an identity test would not.
-      #
-      # SO THE FOLD BELONGS HERE, AT THE BOUNDARY WHERE AN UNTRUSTED SIGNED
-      # PAYLOAD BECOMES A VERIFIED VALUE OBJECT — not at the query. A query-side
-      # fold would leave non-canonical bytes in the operator's own tables and
-      # oblige every future reader to remember it; canonicalising once, here, makes
-      # the §11.2 comparisons, the persisted rows, the PSP call and the tally all
-      # key on the same value BY CONSTRUCTION. (`settled_total_cents` folds its
-      # column too, and that is not a second mechanism: it reaches rows written
-      # BEFORE this guard existed, which no boundary can retro-fit.)
-      #
-      # LOWER case is the canonical form, and it is not a coin toss. Stripe is the
-      # only shipped PSP adapter and `kiosk-pay-stripe` passes `cart_mandate.currency`
-      # straight into `PaymentIntent.create`; the vendored client documents that
-      # parameter, and the value it reads back, as «Three-letter ISO currency code,
-      # in lowercase». It is also what the specification's own worked example
-      # prints.
-      #
-      # WHAT THIS IS NOT. It does not decide whether an operator's currency domain
-      # admits two spellings — §11.1 leaves that to the operator and still does.
-      # It decides that WHEN it admits them, they are one currency: §11.5 obliges
-      # the operator to refuse a `pay` that would push the settled total past the
-      # cap, and a tally keyed on raw bytes computes a total that is not the total.
-      #
-      # {CURRENCY_CODE} IS WHERE THE DOMAIN IS CLOSED. Without it `"Euro"`,
-      # `"US"` and `"xyz"` are all accepted, signed into the chain and passed
-      # verbatim to the PSP, so a human who typed a currency NAME is told their
-      # card has failed. §11.1 says `currency` MUST be an ISO 4217 alpha-3 code
-      # and that an operator MUST refuse anything that is not three ASCII
-      # letters; this is that
-      # sentence in code, and the two must move together or the implementation
-      # contradicts the spec.
-      #
-      # WHY A SHAPE AND NOT A LIST, because that is the judgement and it should not
-      # have to be re-derived from the diff. THREE MEASURED REASONS:
-      #
-      #   1. THERE IS NO SOURCE TO TAKE A LIST FROM. The vendored stripe client is
-      #      the only PSP integration this repository ships and it carries NO
-      #      enumeration — it documents the parameter as «Three-letter ISO currency
-      #      code, in lowercase. Must be a supported currency» and defers to a
-      #      server-side set. ISO's own register is not vendored here and no
-      #      currency gem is in the bundle. A list would therefore be TYPED, and a
-      #      hand-kept enumeration is this workspace's most-repeated failure.
-      #   2. A LIST WOULD NOT CLOSE THE HOLE ANYWAY. Stripe's supported set is
-      #      NARROWER than ISO 4217, so `xau` and `xxx` — real ISO codes — fail at
-      #      the PSP exactly as `xyz` does. The failure this guard removes is the
-      #      one it CAN remove without data: the plausible human mistakes, which
-      #      are the ones with a name rather than a code («Euro», «US», «dollars»).
-      #   3. NUMERIC-3 IS OUT, AND FOR A MEASURED REASON RATHER THAN A TASTE ONE.
-      #      ISO 4217 publishes `978` alongside `EUR`, so «an ISO 4217 code» read
-      #      literally admits it — and the PSP does not, by its own documented
-      #      contract. Admitting it here would guarantee a payment failure. §11.1
-      #      says alpha-3 in those words so the document and this line agree.
-      #
-      # WHAT REMAINS OPEN, said plainly rather than left to be discovered: three
-      # letters that name no currency still pass. That is the operator's MINIMUM
-      # refusal, not the whole domain — §11.1 says an operator MAY refuse further,
-      # and most will, because their PSP does it for them one call later.
-      #
-      # `Errors::Forbidden`, not `BadRequest`, because `currency` is one of the
-      # seven limbs of the mandate carve-out (§9.1, §11.1): a mandate that does not
-      # carry what a mandate must carry has authorised nothing. The two mandate
-      # checks that answer 400 are named in §9.1 and neither is this one. The
-      # domain refusal joins that class rather than starting a second one: §9.1
-      # publishes that list, and a 400 here would contradict it.
-      #
-      # @return [String] the canonical currency — trimmed and lower-cased
+      # §11.1: refuses a non-String, blank or non-alpha-3 currency and returns
+      # the canonical form, so the spending-cap tally has one key per currency.
       def require_currency!(payload)
         value = payload[:currency]
         if value.nil?
@@ -355,22 +164,12 @@ module Kiosk
         )
       end
 
-      # The canonical spelling of a currency, and the ONE definition of it in the
-      # engine — `Executor#settled_total_cents` calls this rather than carrying a
-      # second copy, so the tally can never fold differently from the boundary
-      # that fills its column. PUBLIC on purpose: an operator whose own code reads
-      # `settlements.currency` needs the same fold and should not have to re-derive
-      # it. Non-String and blank inputs are the caller's problem — `require_currency!`
-      # has already refused them by the time this runs.
-      #
-      # @param value [String] a currency as it was spelled
-      # @return [String] the same currency, trimmed and lower-cased
+      # Public: an operator reading `settlements.currency` needs the same fold.
       def canonical_currency(value)
         value.to_s.strip.downcase
       end
 
-      # Reject a timestamp claim that is not a number (Integer/Float NumericDate),
-      # BEFORE it reaches `Time.at` — `Time.at("...")` raises TypeError → 500.
+      # Before `Time.at`, which raises on a String.
       def require_numeric_timestamp!(payload, field)
         return if payload[field].is_a?(Numeric)
 
@@ -380,14 +179,10 @@ module Kiosk
         )
       end
 
-      # A mandate authorises a single near-term transaction. Anything longer is
-      # treated as effectively non-expiring, which the spec says MUST be
-      # rejected. 24 h leaves generous headroom over the ~10 min the flows use.
+      # Longer than this counts as non-expiring, which the spec refuses.
       MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
 
-      # Reject a mandate whose remaining lifetime (exp − now) exceeds the maximum.
-      # Uses exp − now, not exp − iat, so a future-dated iat cannot be used to
-      # sneak an effectively non-expiring exp past the cap.
+      # exp − now, not exp − iat, so a future-dated iat cannot stretch it.
       def enforce_max_lifetime!(payload)
         return if payload[:exp].to_i - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
 
@@ -399,16 +194,8 @@ module Kiosk
       end
       private_class_method :require_amount!, :require_numeric_timestamp!, :enforce_max_lifetime!
 
-      # Every mandate MUST carry these claims (spec, AP2 mandate section).
-      # Presence is enforced at decode time; `iss`/`user_id`/`agent_id` are
-      # additionally value-checked below. `id` and `iat` are presence-only, and
-      # the list must name them: without it a mandate missing `id` or `iat`
-      # decodes and passes silently, because the JWT library requires only
-      # `exp`.
       REQUIRED_CLAIMS = %w[id user_id agent_id iss iat exp].freeze
 
-      # Decode + verify the JWS and run the checks shared by every mandate
-      # in the chain. Returns the symbol-keyed payload Hash.
       def decode_and_check(raw_jws, identity)
         key    = AgentIdentityProviders::DefaultAgentIdp.new.agent_payment_key(identity.agent_id)
         issuer = Kiosk.current_issuer
@@ -418,13 +205,7 @@ module Kiosk
         if payload[:iss] != issuer
           raise Errors::Forbidden.new("mandate issuer mismatch", hint: "expected #{issuer.inspect}")
         end
-        # Compare the principal as STRING on BOTH sides. The agent
-        # signs the mandate's `user_id`/`agent_id` with whatever the register
-        # response returned (a String — AgentRegistration stringifies user_id),
-        # but on a bigint-PK host the authenticated {Kiosk::Identity} carries
-        # the raw Integer that the token's `sub` round-trips as. A strict `==`
-        # ("42" == 42) is always false, so every mandate on a bigint host was
-        # wrongly Forbidden. Normalising to string keeps uuid hosts unchanged.
+        # As strings: a bigint-PK host's identity carries an Integer.
         unless payload[:agent_id].to_s == identity.agent_id.to_s &&
                payload[:user_id].to_s == identity.user_id.to_s
           raise Errors::Forbidden.new(
@@ -433,25 +214,14 @@ module Kiosk
           )
         end
 
-        # `iat`/`exp` reach `Time.at` in the mandate constructors. A
-        # numeric-STRING exp slips past JWT's decode-time expiry check (it
-        # coerces via to_i) and a string iat is not checked by JWT at all, so
-        # both would raise `TypeError` in `Time.at(String)` as an HTTP 500.
-        # Validate the type here → a clean 400, before any Time.at.
         require_numeric_timestamp!(payload, :iat)
         require_numeric_timestamp!(payload, :exp)
-        # JWT rejects an EXPIRED mandate but not an effectively
-        # non-expiring one (exp in the year 3000). The spec says a non-expiring
-        # mandate MUST be rejected — cap the lifetime.
         enforce_max_lifetime!(payload)
 
         payload
       rescue ::JWT::ExpiredSignature
         raise Errors::Forbidden.new("mandate expired")
       rescue ::JWT::MissingRequiredClaim
-        # The JWT gem's own "Missing required claim …" text is not published —
-        # REQUIRED_CLAIMS above is this protocol's own answer to
-        # the same question and cannot drift from what the decode enforces.
         raise Errors::Forbidden.new(
           "mandate missing a required claim",
           hint: "a mandate carries #{REQUIRED_CLAIMS.join(", ")}",
@@ -462,12 +232,7 @@ module Kiosk
           hint: "a mandate is a compact RS256 JWS signed with the agent's payment key",
         )
       rescue Kiosk::AgentIdentityProviders::InvalidToken
-        # agent_payment_key raises this when the authenticated agent_id has no
-        # live kiosk.agents row (revoked or deleted between auth and now). It is
-        # NOT an Errors::Base, so it escaped these rescues and the controller's
-        # Errors::Base rescue as an HTTP 500 (same 500-not-4xx class as the
-        # other guarded paths, whose guard only covered the nil-agent_id sibling).
-        # A revoked/absent agent has no signing key → clean 403 Forbidden.
+        # The agent was revoked between authentication and now.
         raise Errors::Forbidden.new(
           "mandate agent has no registered payment key",
           hint: "the authenticated agent is revoked or unknown",

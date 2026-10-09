@@ -60,15 +60,11 @@ module Kiosk
           )
         end
 
-        # Not registered as either: let the registry raise its own
-        # VerbNotFound, whose hint names what IS registered for this kind.
+        # Neither: the registry's own 404 names what is registered.
         registry.describe(name)
       end
 
-      # A query's arguments come off the query string and have to have their
-      # declared types recovered ({ArgumentDecoder}); an action's arrive as
-      # JSON and already carry them. There is no third channel: a query string
-      # on a POST is not read, and a body on a GET is not read.
+      # Query string for a query, JSON body for an action; never both.
       def arguments_for(command, name, descriptor)
         args = if command == :query
                  ArgumentDecoder.decode(request.query_string, input_schema: descriptor[:input_schema])
@@ -76,28 +72,13 @@ module Kiosk
                  parse_body!
                end
 
-        # UNCONDITIONAL, deliberately. `input_schema` is REQUIRED on every
-        # verb and §8.1 item 5 makes the operator coerce-then-validate before
-        # the handler sees an argument, so a per-verb endpoint that validated
-        # only when a flag was set would be non-conformant with the flag off —
-        # and the typed 400 for an invalid filter value would fall out of the
-        # schema layer on some origins and not others. `validate_requests`
-        # covers something else: the opt-in SHAPE checks on a `Kiosk-PoW`
-        # header and on the RESERVED plane's own request bodies, both of
-        # which §16.3 anchor 1 makes a SHOULD rather than a MUST.
-        #
-        # Which is why `json_schemer` is a runtime dependency of this gem (see
-        # the gemspec): an origin that cannot load a validator
-        # cannot serve a conformant wire. It is still required lazily, and a
-        # vendored checkout without it still gets {Errors::ConfigurationError}
-        # naming the gem rather than a LoadError at boot.
+        # Unconditional: §8.1 item 5 makes coerce-then-validate a MUST.
         RequestValidation.validate_arguments!(
           args, input_schema: descriptor[:input_schema], verb: name
         )
 
         args
       end
-
     end
   end
 end

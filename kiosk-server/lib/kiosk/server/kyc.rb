@@ -12,10 +12,8 @@ require "kiosk/server/kyc_verifier"
 module Kiosk
   module Server
     # The KYC module: `request_kyc`, the provider's callback, the
-    # `kyc_verification` topic and the grants, all keyed on the PERSON (the
-    # principal), served against {Kiosk::KycProviders::Base} on every origin
-    # with a `kyc_provider`. The operator declares `kyc_claims` and gates with
-    # {.require!}.
+    # `kyc_verification` topic and the per-person grants. The operator declares
+    # `kyc_claims` and gates with {.require!}.
     module Kyc
       NAME          = "request_kyc"
       TOPIC         = "kyc_verification"
@@ -87,7 +85,6 @@ module Kiosk
             "#{OPEN_WINDOW / 60} minutes after it was opened. A check your human refuses sends no event."
         end
 
-        # `request_kyc`.
         def call(_args)
           user_id = CurrentRequest.identity.user_id.to_s
           refuse_over_cap!(user_id)
@@ -115,9 +112,7 @@ module Kiosk
           "#{Kiosk.current_issuer.to_s.chomp("/")}#{Kiosk.configuration.mount_path}/#{CALLBACK_PATH}"
         end
 
-        # The provider's `POST <endpoint>/kyc/callback`: `{request_id, nonce,
-        # kyc_jws}`. Verifies the attestation against the open request's
-        # principal, records the grant and pushes the event.
+        # The provider's `POST <endpoint>/kyc/callback`.
         def callback(body)
           body       = body.transform_keys(&:to_s)
           request_id = body["request_id"].to_s

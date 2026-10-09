@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# The reserved wire surface — `schema` and `pay`. These paths are the spec's,
-# not the operator's, so the ENGINE draws them and the host mounts it.
-
 require "action_controller"
 require "action_dispatch/http/parameters"
 require "cgi"
@@ -18,57 +15,14 @@ require "kiosk/server/schema_document"
 
 module Kiosk
   module Server
-    # The wire's own two RESERVED endpoints, and the base class every other
-    # wire surface inherits its seams from:
-    #
-    #   GET  <endpoint>/schema   the catalog     — PUBLIC
-    #   POST <endpoint>/pay      settle an AP2 cart
-    #
-    # The two share no request path. `schema` resolves no identity,
-    # pays no toll and never reaches the {Executor}; it writes {SchemaDocument}
-    # straight out under a public cache policy. Everything below the `pay`
-    # action — parse, resolve, toll, execute, render — is the wire the rest of
-    # this class and {VerbController} are about.
-    #
-    # Every OTHER verb is one endpoint per verb, served by {VerbController},
-    # which subclasses this one.
-    #
-    # Wire response (JSON): success is the handler's payload VERBATIM
-    # ({Result#to_payload}), error is an RFC 9457 problem document
-    # ({Errors::Base#to_problem}) under `application/problem+json`. Both seams
-    # live HERE, not in the subclass, because there is exactly ONE answer shape
-    # and {VerbController} has nothing of its own to add. A paginating query is
-    # not a third shape either: its page facts ride the `Link` (RFC 8288) and
-    # `X-Total-Count` response headers and its body is the same bare array —
-    # see {#add_pagination_headers}.
-    #
-    # Identity resolution: {IdentityResolution.resolve} — the
-    # agent IdP first (`Kiosk.configuration.agent_idp`, defaulting to the
-    # bundled kiosk-pop DefaultAgentIdp so a zero-config install works),
-    # then `Kiosk.configuration.user_idp` (web/mobile sessions on the same
-    # endpoints). Adapter `#verify(request)` returns a {Kiosk::Identity}
-    # or `nil`; nothing resolved becomes 401.
+    # The reserved `GET <endpoint>/schema` (public) and `POST <endpoint>/pay`,
+    # and the base every wire controller inherits its seams from.
+    # Wire response (JSON): success is the handler's payload VERBATIM; an error
+    # is an RFC 9457 problem document.
     class WireController < ::ActionController::API
-      # Every Kiosk wire error — raised by the Executor, a gate, a verifier
-      # or a handler dispatch — renders as the spec's problem document from
-      # this ONE seam, Rails' own idiom rather than a hand-rolled rescue
-      # inside each action.
       rescue_from Errors::Base, with: :render_wire_error
 
-      # A body that is not JSON at all, answered as a Kiosk `bad_request`
-      # rather than as Rails' generic 400.
-      #
-      # WHY IT NEEDS ITS OWN LINE. {#parse_body!} already turns a
-      # `JSON::ParserError` into {Errors::BadRequest} — but on the per-verb
-      # wire it never gets the chance: {VerbController#serve} reads
-      # `params[:kiosk_verb]` first, and touching `params` makes Rails parse
-      # the body, so a malformed body raises out of the PARAMETER layer before
-      # any Kiosk code runs. A Rails host's `rescue_responses` maps that to
-      # 400, but renders it through PublicExceptions — an HTML or plain-text
-      # body with no `code`. Every other refusal on this wire is a problem
-      # document; without this line, malformed JSON would be the one hole in
-      # the error contract, and the shape of the hole depends on the host's
-      # exception app rather than on the protocol.
+      # Touching `params` parses the body before any Kiosk code runs.
       rescue_from ::ActionDispatch::Http::Parameters::ParseError do
         render_wire_error(
           Errors.malformed_json(
@@ -78,53 +32,19 @@ module Kiosk
         )
       end
 
-      # GET <endpoint>/schema — A PUBLIC ENDPOINT UNDER THE MOUNT.
-      #
-      # No identity, no toll, and it does not go through {Executor} at all: the
-      # answer is {SchemaDocument}'s bytes, derived at boot, written straight
-      # out. Three things it deliberately does NOT do, and they stand together:
-      #
-      #   * NO BEARER GATE. The document holds verb names, descriptions,
-      #     input/output schemas and examples — nothing per-agent and no
-      #     secret. Gating it while `/.well-known/*` is wide open would be an
-      #     inconsistency that raises a question instead of answering one, and
-      #     the decisive test is «does this need the backend, or is it a static
-      #     file?»: it is a static file.
-      #   * NO TOLL. A toll needs an identity to charge, and there is none
-      #     here; `:schema` is not a policy verb at all — see {Executor::VERBS}.
-      #   * NO `Vary: Authorization, Kiosk-PoW`. See
-      #     {Headers.add_public_cache_policy}: a public document that varies on
-      #     headers it does not read is one a shared cache can never reuse.
-      #
-      # The `?v=<digest>` fork is the cache-busting half, not a second
-      # endpoint: same bytes either way, only the TTL differs. A `v` that does
-      # NOT match still answers the CURRENT catalogue — an assistant holding a
-      # stale link gets a true answer with a short TTL rather than a 404 it
-      # cannot act on.
+      # No identity, no toll. A stale `?v=` still gets the current catalog,
+      # with the short TTL.
       def schema
         render_public_document(
           SchemaDocument.json, version: SchemaDocument.digest, etag: SchemaDocument.etag
         )
       end
 
-      # POST <endpoint>/pay — the one RESERVED endpoint on this path. Its wire
-      # NAME is its command name, so the name travels to the request
-      # fingerprint exactly as a per-verb call's does and its `"<METHOD> <verb>"`
-      # half needs no special case.
-      #
-      # parse_body! runs inside the action, so the rescue_from above covers it:
-      # a malformed body raises Errors::BadRequest, which must render a 400
-      # problem document, not escape as an uncaught 500 (the same
-      # parse-outside-rescue class fixed for
-      # AuthController/KycAttestationController).
       def pay
         body     = parse_body!
         identity = resolve_identity!
 
-        # The body against the object §17 publishes for it — AFTER identity, so
-        # this endpoint keeps {VerbController}'s documented gate order (401
-        # before 400) rather than telling an anonymous caller which member of
-        # the mandate bundle it got wrong.
+        # After identity: 401 before 400.
         RequestValidation.validate_body!(body, exchange: "POST <endpoint>/pay")
 
         execute_wire(command: :pay, args: body, identity: identity, name: "pay")
@@ -132,18 +52,7 @@ module Kiosk
 
       private
 
-      # THE ONE PLACE A PUBLIC KIOSK DOCUMENT IS WRITTEN — the mirror of
-      # {#render_wire_body}, and the two are deliberately not the same seam.
-      #
-      # Shared by `schema` here and by {OpenApiController#show}: two derived,
-      # identity-free descriptions of the same registry, so anything either
-      # does about caching the other must do too. One seam rather than four
-      # steps and the Rails workaround below copied into a second controller.
-      #
-      # @param json    [String] the serialized body, already JSON
-      # @param version [String] the digest this URL's `?v=` is compared against
-      # @param etag    [String] the STRONG entity tag, already quoted
-      # @param content_type [String, nil] overrides `application/json`
+      # Shared with {OpenApiController#show}.
       def render_public_document(json, version:, etag:, content_type: nil)
         Kiosk::Server::Headers.add_to(response.headers)
         Kiosk::Server::Headers.add_public_cache_policy(
@@ -158,22 +67,11 @@ module Kiosk
           render(**options)
         end
 
-        # LAST, and it exists to undo one line of Rails.
-        # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept`
-        # on any render whose format was negotiated from the request's `Accept`
-        # header — a sound default, and wrong here: these endpoints answer the
-        # same bytes to every caller whatever they ask for, so the header
-        # states a variance that does not exist and splits a shared cache by
-        # Accept string for nothing. It fires only when the header is BLANK at
-        # render time, so it cannot be pre-empted by setting the value we want,
-        # which is none.
+        # Last: Rails stamps `Vary: Accept` at render time.
         response.headers.delete("Vary")
       end
 
-      # RFC 9110 §13.1.2 — does the caller already hold these bytes? Written
-      # out rather than taken from `fresh_when`, which hashes the validator it
-      # is given: the ETag here IS the digest the discovery documents publish,
-      # and an operator comparing the two by eye should find the same string.
+      # RFC 9110 §13.1.2; not `fresh_when`, which hashes the validator it is given.
       def if_none_match?(etag)
         raw = request.get_header("HTTP_IF_NONE_MATCH").to_s
         return false if raw.empty?
@@ -182,53 +80,13 @@ module Kiosk
         raw.split(",").any? { |tag| tag.strip.delete_prefix("W/") == etag }
       end
 
-      # The toll, the session and the render — everything after the arguments
-      # are in hand and the identity is resolved.
-      #
-      # Shared with {VerbController}, which reaches the same three gates by a
-      # different route: its verb name is a PATH SEGMENT and a query's
-      # arguments arrive in the query string, so it does its own parsing and
-      # then hands the result here.
-      #
-      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
-      #   because `reputation_factors` and `Policy#challenge_for` both take it
-      #   as `verb:` and every shipped policy branches on those three symbols.
-      # @param name [String] the WIRE name — the path segment. `pay` passes its
-      #   own; a per-verb call passes the registered verb.
+      # `command` is the policy verb ({Executor::VERBS}); `name` the wire name.
       def execute_wire(command:, args:, identity:, name:)
-        # The request fingerprint: SHA256("<METHOD> <verb>\n<canonical args>").
-        # The spec requires every challenge to be request-bound (§10, §15.2)
-        # and leaves the digest itself to the operator; this is the engine's.
-        #
-        # It binds a challenge to the exact call — the HTTP method, the verb
-        # name as it appears in the path, and the canonical JSON of the
-        # arguments — so a proof solved for `GET /catalog?city=Lisbon` is
-        # spendable on nothing else. The method and the path-borne verb name
-        # are both IN the digest precisely because this wire is one endpoint
-        # per verb: a formula that hashed the arguments alone would let a proof
-        # solved for one verb be spent on another.
-        # THE CALLER'S OWN CLOCK is input, so it is refused with the arguments,
-        # before the toll: a caller does not pay for a proof to learn its header
-        # is unreadable. Parsed once here so every handler gets the same zone
-        # (nil when none was declared) and one refusal wording.
+        # Refused with the arguments, before the toll.
         timezone = CallerTimezone.from_env(request.env)
         toll!(identity: identity, command: command, name: name, body: args)
 
-        # Carry the resolved identity and the wire request down to the handler
-        # layer. A handler registered as a controller action (`include
-        # Kiosk::Handler`) is dispatched as a Rails sub-request built from these:
-        # the identity lands in `env["kiosk.identity"]` (readable as
-        # `kiosk_identity`), and the caller's headers/address are seeded from
-        # this env. A handler declared directly as a callable, rather than
-        # through the mixin, ignores both.
-        #
-        # `handler_headers` is the only thing that travels the other way:
-        # {HandlerDispatch} writes the handler's own `Cache-Control` into it,
-        # so §3.7.4's "an operator MAY relax a 200 to `private, max-age=N`" is
-        # a permission an operator can actually exercise. It is applied to the
-        # response BEFORE {#render_result}, which is what puts it in front of
-        # {Headers.add_cache_policy} — the seam that keeps an operator's own
-        # policy and refuses a shared-cache one.
+        # A handler's own `Cache-Control` comes back here, ahead of the cache policy (§3.7.4).
         handler_headers = {}
         result = CurrentRequest.with(identity: identity, env: request.env,
                                      handler_headers: handler_headers,
@@ -246,38 +104,10 @@ module Kiosk
         render_result(result)
       end
 
-      # THE TOLL, on its own — the whole of what a caller pays before a Kiosk
-      # surface answers, and nothing else.
-      #
-      # It is its own method, with one caller below, because the toll is one
-      # idea and {#execute_wire} is four.
-      #
-      # @param identity [Kiosk::Identity] the resolved caller
-      # @param command [Symbol] the gate/policy verb — one of {Executor::VERBS},
-      #   because `reputation_factors` and `Policy#challenge_for` both take it
-      #   as `verb:` and every shipped policy branches on those three symbols
-      # @param name [String] the WIRE verb name, as it appears in the path —
-      #   half of the request fingerprint, with the request method
-      # @param body [Hash] the arguments the fingerprint binds to
       def toll!(identity:, command:, name:, body:)
-        # Read the submitted proof(s) from the `Kiosk-PoW` request HEADER, NOT
-        # the body: the body is ONLY verb args, so the challenge fingerprint
-        # binds to the plain body untouched, and a GET (schema) can carry its
-        # proof via the header too (a GET has no body). proofs_from_header
-        # raises Errors::BadRequest (→ 400) on malformed header JSON, inside
-        # the caller's rescue.
         pow = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
 
-        # Request-shape validation — `config.validate_requests` DEFAULTS TRUE
-        # (see the accessor for why) and this runs only when a proof was
-        # actually submitted: validate each parsed proof against the
-        # vendored normative schema so a MALFORMED proof (e.g.
-        # `{solutions:[…]}` instead of `{challenge:,nonce:}`) raises a clear
-        # 400 with a shape hint — instead of PowGate silently ignoring it and
-        # re-issuing a fresh 402 on every retry. An ABSENT proof is left
-        # untouched (the initial request must still get its normal 402
-        # challenge), and a WELL-FORMED proof passes through unchanged to the
-        # gate below, which still does the real cryptographic check.
+        # A malformed proof is a 400, not a silent fresh 402.
         if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
           RequestValidation.validate_proofs!(pow)
         end
@@ -288,48 +118,13 @@ module Kiosk
         )
       end
 
-      # How a SUCCESS reaches the wire: the handler's payload, VERBATIM. No
-      # `ok`, no `kind`, no wrapper — the status line says success and
-      # `output_schema` says what the shape is.
-      #
-      # ONE seam for every endpoint, never overridden in {VerbController}, so
-      # there is nowhere for the two to disagree.
       def render_result(result)
         add_pagination_headers(result)
         render_wire_body(result.to_payload, status: result.http_status)
       end
 
-      # PAGINATION LEAVES THE BODY (spec §8.4). The two facts a page
-      # carries about itself are transport metadata, so they travel as response
-      # headers and the body stays the bare array every other query answers:
-      #
-      #   Link: <…?limit=20&cursor=20>; rel="next"             RFC 8288
-      #   X-Total-Count: 97
-      #
-      # `Link` is RFC 8288 (Web Linking) and is the reason a paginating query
-      # needs no body shape of its own. `X-Total-Count` is NOT a
-      # standard — no RFC defines it — it is a de-facto convention adopted here
-      # because it is widely used and immediately understood; the spec says so
-      # in those words rather than citing an RFC that does not exist.
-      #
-      # WHEN EACH IS EMITTED, and both rules are about not stating something
-      # untrue:
-      #
-      #   * `Link` — only on a TRUNCATED page. Its ABSENCE is what "this is the
-      #     last page" means; there is no positive last-page signal to emit.
-      #   * `X-Total-Count` — the number of rows MATCHING the query, across all
-      #     pages. On a COMPLETE array answer that is the array's own length and
-      #     the wire fills it in for every query, paginating or not. On a
-      #     TRUNCATED page only the handler can know it, so it is emitted only
-      #     when the handler passed `total:` to `render_kiosk_page`; defaulting
-      #     to the payload length there would publish the PAGE size as the
-      #     total, which is worse than saying nothing.
-      #
-      # Not cached, and that needs no special case: {Headers.add_cache_policy}
-      # already puts `private, no-store` on every verb response (spec §3.7.4),
-      # so a page cannot be served to a second caller, and §3.7.3 forbids
-      # `public`/`s-maxage` on this plane outright. The CDN story is for
-      # `GET <endpoint>/schema` alone.
+      # §8.4: `Link` only on a truncated page; `X-Total-Count` is the array's
+      # length on a complete answer, else only what the handler passed.
       def add_pagination_headers(result)
         return unless result.kind == :rows
 
@@ -343,28 +138,12 @@ module Kiosk
         response.headers["X-Total-Count"] = total.to_s unless total.nil?
       end
 
-      # RFC 8288 §3: a `Link` field value is a comma-separated list, so an
-      # operator that already set one keeps it and ours is appended. Ours is
-      # always the only `rel="next"` — nothing else on this wire emits one.
       def add_link_header(value)
         existing = response.headers["Link"].to_s
         response.headers["Link"] = existing.empty? ? value : "#{existing}, #{value}"
       end
 
-      # The next page's URI, built from THIS request: the same path and the
-      # same arguments, with `cursor` replaced by the new opaque token.
-      #
-      # Built by editing the RAW query string rather than by re-serialising
-      # parsed params, because a query's arguments include the bracket spellings
-      # §8.1 defines (`amenity%5B%5D=`, `filter%5Bcity%5D=`) and a round trip
-      # through a parser is a chance to hand back something the caller did not
-      # send. Dropping the incoming `cursor` and appending the new one is the
-      # whole edit.
-      #
-      # ABSOLUTE, not relative. RFC 8288 permits a URI-Reference resolved
-      # against the request URI, and an assistant that follows the target
-      # verbatim — which is the point of a Link header — is better served by a
-      # URI it can fetch without a resolution step.
+      # Edits the raw query string, so the caller's bracket spellings survive.
       def next_page_link(cursor)
         pairs = request.query_string.to_s.split("&").reject do |pair|
           pair.split("=", 2).first == "cursor"
@@ -374,11 +153,6 @@ module Kiosk
         %(<#{request.base_url}#{request.path}?#{pairs.join("&")}>; rel="next")
       end
 
-      # How an ERROR reaches the wire: an RFC 9457 problem document under its
-      # own media type. The media type is the half a generic client reads —
-      # `application/json` with a `title` field would be indistinguishable
-      # from any other JSON — and the top-level `code` extension member is the
-      # half an assistant branches on.
       def render_wire_error(error)
         render_wire_body(
           error.to_problem,
@@ -396,11 +170,6 @@ module Kiosk
       end
 
       def parse_body!
-        # `request.raw_post` is Rails-safe — works even if a prior
-        # middleware (Rails' ParamsWrapper, for example) has already
-        # consumed the body stream. We deliberately bypass `params`
-        # because Executor wants the unwrapped wire shape, not the
-        # controller-name-wrapped form ActionController::API materialises.
         raw = request.raw_post
         return {} if raw.nil? || raw.empty?
 
@@ -417,37 +186,11 @@ module Kiosk
         )
       end
 
-      # The host's primary ActiveRecord connection — every caller on this
-      # origin is served from the same pool, and the resolved identity this
-      # takes is not used in choosing it.
-      #
-      # `lease_connection`, not `connection`: Rails 8.1 soft-deprecates
-      # `ActiveRecord::Base.connection`, and under
-      # `config.active_record.permanent_connection_checkout = :disallowed` it
-      # RAISES — so the whole wire surface would 500 on a host that has opted
-      # into the new default. The lease is the semantics this seam needs and
-      # `with_connection` is deliberately not used: {SessionContext} sets four
-      # transaction-local GUCs, and `pay` spans THREE separate transactions
-      # around an irreversible capture, so every one of them must land on the
-      # same connection for the whole request — which is exactly what a lease
-      # held "for the entire duration of the request" guarantees and what a
-      # checked-back-in connection would not.
+      # A lease: the GUCs and `pay`'s three transactions need one connection per request.
       def connection_for(_identity)
         ::ActiveRecord::Base.lease_connection
       end
 
-      # The ONE place a wire response is written. Everything both wires must
-      # carry regardless of body shape lives here: the three version-handshake
-      # headers, the cache policy (spec §3.7 — `Vary: Authorization,
-      # Kiosk-PoW` on every wire response, `no-store` on a 402), the RFC 7235
-      # challenge that de-overloads the two 402 gates, and any header the
-      # error itself requires (`Allow` on a 405, RFC 9110 §15.5.6).
-      #
-      # @param body [Hash, Array] the response body, already in its final shape
-      # @param status [Integer, Symbol] the HTTP status
-      # @param error [Errors::Base, nil] the error being rendered, when it is one
-      # @param content_type [String, nil] overrides `application/json` — the
-      #   error path renders `application/problem+json`
       def render_wire_body(body, status:, error: nil, content_type: nil)
         Kiosk::Server::Headers.add_to(response.headers)
         Kiosk::Server::Headers.add_cache_policy(
@@ -464,17 +207,7 @@ module Kiosk
         render(**options)
       end
 
-      # RFC 7235 challenge header that de-overloads the two 402 gates:
-      # the header NAMES the gate, the JSON body still CARRIES the payload
-      # (the PoW N-challenge list / the payment_setup pointer). Keyed on the
-      # wire CODE, not the exception class — so a handler that
-      # RENDERS `payment_setup_required` gets the same challenge header as
-      # the gate that raises it. nil for every other code (no header
-      # emitted; `payment_failed` deliberately bare — no scheme names it).
-      #
-      # The `Payment` scheme params (`realm`, `method`) are isolated here so a
-      # change in the still-draft IETF scheme (draft-ryan-httpauth-payment) is
-      # a one-place edit.
+      # RFC 7235: the header names which 402 gate answered, keyed on the code.
       def www_authenticate_for(error)
         issuer = Kiosk.current_issuer
         case error.code

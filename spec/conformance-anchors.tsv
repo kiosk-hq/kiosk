@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1893 anchors.
+# 1891 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -417,12 +417,11 @@ kiosk-demo-getgrocery/config/routes/kiosk.rb	post "/kiosk/create_order",        
 kiosk-demo-getgrocery/db/migrate/20260101000011_create_products_and_orders.rb	      t.text        :address
 kiosk-demo-getgrocery/db/schema.rb	t.boolean "age_restricted", default: false, null: false
 kiosk-demo-getgrocery/lib/tasks/demo.rake	  task reconcile: :environment do
-kiosk-demo-getgrocery/script/redteam_suite.rb	  # Applicable — must be BLOCKED
-kiosk-demo-getgrocery/script/redteam_suite.rb	  # Not applicable — must SKIP (no KYC)
-kiosk-demo-getgrocery/script/redteam_suite.rb	  # register PoW is ON (registration_pow_count=1): a positive difficulty makes
+kiosk-demo-getgrocery/script/redteam_suite.rb	  # No KYC here — these must SKIP.
 kiosk-demo-getgrocery/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
 kiosk-demo-getgrocery/script/redteam_suite.rb	  MachineTimestampsIgnoreTheCallerClock.new,
-kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,     # a past date is a named 400 on the read AND the write side
+kiosk-demo-getgrocery/script/redteam_suite.rb	  PastDeliveryDate.new,
+kiosk-demo-getgrocery/script/redteam_suite.rb	  pow_difficulty: 1,
 kiosk-demo-getgrocery/script/redteam_suite.rb	# Red-team battery for getgrocery: attacks a running server and asserts every attack is refused.
 kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
 kiosk-demo-getgrocery/script/redteam_suite.rb	TOLERANCE_SECONDS = 60
@@ -652,9 +651,7 @@ kiosk-demo-stylish/bin/demo	step "POST /kiosk/book_appointment"
 kiosk-demo-stylish/config/initializers/kiosk.rb	  c.registration_pow_count  = 1
 kiosk-demo-stylish/config/initializers/kiosk.rb	Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
 kiosk-demo-stylish/config/routes/kiosk.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-kiosk-demo-stylish/script/redteam_suite.rb	# ── DeviceGrantCannotSelfSelectRole ──────────────────────────────────────────
-kiosk-demo-stylish/script/redteam_suite.rb	# ── DeviceGrantRoleSelfSelection — the SHARED framework beat ─────────────────
-kiosk-demo-stylish/script/redteam_suite.rb	# ── SelfAssertedTokenForgery — OVER THE LIVE WIRE ────────────────────────────
+kiosk-demo-stylish/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("CustomerCalendarStaysOwnScoped",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("CustomerLinkCannotCarryOwnerRole",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantCannotSelfSelectRole",
@@ -662,6 +659,7 @@ kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRebindCann
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantRoleComesFromTheApprover",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("DeviceGrantVerifyPageNamesTheAccess",
 kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("OwnerLinkIgnoresForgedClaimBody",
+kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record("SelfAssertedTokenForgery",
 kiosk-demo-stylish/test/book_appointment_test.rb	a slot without an offset names no instant and is refused
 kiosk-demo-stylish/test/book_appointment_test.rb	one instant in any spelling is one booking, answered on the salon's clock
 kiosk-demo-stylish/test/test_helper.rb	def sign_in(email) = Kiosk::UserIdentityProviders::DeviseSession.new(live_url).sign_in!(email:, password: PASSWORD)

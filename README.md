@@ -143,13 +143,8 @@ test suite; each gem's own tests live under its own `spec/`. **`.github/`**
 holds the one CI pipeline, `workflows/ci.yml` — the gems matrix, the demos
 matrix and `e2e/run.sh`, on every push and pull request.
 
-A demo's rake tasks say what they are by their namespace. A `rake check:*` task
-ASSERTS: it exits non-zero when the property it names breaks. A `rake demo:*`
-task is one a person runs and reads — `demo:setup` prepares the database,
-getgrocery's `demo:reconcile` reports on stuck orders — and neither can go red.
-Not every `check:` task runs in CI; a few are too heavy or too timing-sensitive
-for a shared runner. Which is which is stated in every demo README's **"Which of
-these run in CI"** table, read off `.github/workflows/ci.yml`.
+Each demo's tests drive it over HTTP the way an assistant does; CI runs them
+with `bin/rails test` (`bundle exec rspec` in hoteling and kiosk-demo-prove).
 
 **Four of the demos — `atablefor`, `getgrocery`, `hoteling`, `skooti` — also
 carry a `before-after.md`**: a contrast between what an AI assistant can do at

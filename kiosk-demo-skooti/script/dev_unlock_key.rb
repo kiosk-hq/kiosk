@@ -2,26 +2,10 @@
 
 require "openssl"
 
-# The FIXED DEV/TEST Ed25519 rental-token keypair, read from
-# config/dev_unlock_key.pem. The private half signs rental tokens in
-# development and test; the public half is what the lock simulator and the
-# firmware host-test verify against.
-#
-# It is a fixed keypair (not per-boot ephemeral) so that:
-#   1. Rental token signatures are stable across process restarts.
-#   2. The known-answer vector (script/rental_token_issuer_kat.rb) reproduces exactly.
-#   3. The firmware host-test (firmware/host_test.c) can hard-code the public key.
-#
-# DEV/TEST ONLY. The private half ships world-readable in this public
-# repo, so it is NOT a key anything real may sign with: production refuses to
-# boot with it. The server reads KIOSK_UNLOCK_SIGNING_KEY_PEM, never this class.
-#
-# WHY IT EXISTS AS A CLASS OF ITS OWN, and why it deliberately does NOT read
-# Rails config: its callers are
-# BARE-RUBY drivers with no Rails at all — script/rental_flow.rb and
-# script/kyc_flow.rb provision their LockSim with the dev public half, and
-# script/rental_token_issuer_kat.rb signs with the dev private half. Reaching for
-# Rails.configuration here would make all three die outside a booted app.
+# The fixed development and test Ed25519 rental-token keypair from
+# config/dev_unlock_key.pem, for scripts and tests that run without Rails: the
+# lock simulator, the firmware fixtures and the known-answer test agree on it.
+# The key is public, so production refuses to boot with it.
 #
 # DevUnlockKey.private_key         → OpenSSL::PKey::PKey (Ed25519, private)
 # DevUnlockKey.public_key_pem      → PEM string

@@ -136,7 +136,7 @@ BATTERY = Kiosk::Redteam::Battery.new
 # aggregator, excluding any [restaurant_table_id, seating_at] pairs.
 def open_slot(exclude = [])
   rc, avail = WIRE.get_json("/kiosk/availability", { party_size: 2 }, WIRE.bearer(TOKEN_A))
-  abort "availability failed (#{rc}): #{JSON.generate(avail)} — run rake demo:setup" unless rc == 200
+  abort "availability failed (#{rc}): #{JSON.generate(avail)} — run bin/rails db:reset" unless rc == 200
   rows = Array(avail).reject { |r| exclude.include?([r["restaurant_table_id"], r["seating_at"]]) }
   slot = rows.first
   abort "no open table for a 2-top (excluding #{exclude.inspect})" unless slot
@@ -156,7 +156,7 @@ end
 # ── Fixture: Diego books a table (target for cross-owner probes) ──────────────
 slot_a = open_slot
 rc, diego_book = book_slot(TOKEN_A, slot_a)
-abort "A book_table failed (#{rc}): #{JSON.generate(diego_book)} — run rake demo:setup" unless rc == 200
+abort "A book_table failed (#{rc}): #{JSON.generate(diego_book)} — run bin/rails db:reset" unless rc == 200
 diego_booking_id = diego_book["booking_id"]
 abort "no booking_id from A's booking: #{JSON.generate(diego_book)}" unless diego_booking_id
 

@@ -68,7 +68,7 @@ BASE_URL = ENV.fetch("SERVER_URL")
 ISSUER   = ENV.fetch("KIOSK_ISSUER")
 
 # Dates far enough in the future to avoid conflicts with existing data.
-# Each redteam run starts with a clean DB (demo:setup), so these are stable.
+# Each redteam run starts with a clean DB (db:reset), so these are stable.
 CHECK_IN  = (Date.today + 30).to_s.freeze
 CHECK_OUT = (Date.today + 33).to_s.freeze
 NIGHTS    = 3

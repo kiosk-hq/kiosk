@@ -186,9 +186,9 @@ abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no bound
 
 # ── Fixture: A books an appointment (target for cross-tenant probes) ──────────
 rc, salons = WIRE.get_json("/kiosk/salons", {}, ALICE.bearer)
-abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run bin/rails demo:setup" unless rc == 200
+abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run bin/rails db:reset" unless rc == 200
 salon_id = Array(salons).first&.fetch("salon_id")
-abort "no salons seeded — run bin/rails demo:setup" unless salon_id
+abort "no salons seeded — run bin/rails db:reset" unless salon_id
 
 rc, appt_a = WIRE.post_json(
        "/kiosk/book_appointment",

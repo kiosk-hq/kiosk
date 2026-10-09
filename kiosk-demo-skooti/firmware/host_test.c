@@ -60,7 +60,7 @@ static void check(int condition, const char *description)
 
 /* --------------------------------------------------------------------------
  * Known-answer vector — the same message, key and signature
- * script/rental_token_issuer_kat.rb mints and prints
+ * test/rental_token_issuer_test.rb pins
  * -------------------------------------------------------------------------- */
 
 /* Dev public key — 32 raw bytes (matches hex above) */

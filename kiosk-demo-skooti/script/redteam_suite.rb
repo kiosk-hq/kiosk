@@ -91,7 +91,7 @@ require_relative "prove_test_issuer"
 
 BASE_URL   = ENV.fetch("SERVER_URL")
 ISSUER     = ENV.fetch("KIOSK_ISSUER")
-# The broker's base URL (set by the two-server check:redteam harness). The
+# The broker's base URL (test/wire/redteam_test.rb passes it). The
 # broker-flavored beats (theft / cross-operator / forged-callback) drive it.
 BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL")
 # The seeded rider the SelfAssertedUserBearerForgery beat signs in as for its
@@ -680,7 +680,7 @@ motorcycle_forged_kyc = lambda do
   a = client.register!(name: "redteam-mc-fkyc")
 
   # Reserve + pay for the motorcycle so ONLY the KYC-attribute gate can be the
-  # thing that blocks (isolates Gate 0, exactly like the check:kyc happy path).
+  # thing that blocks (isolates Gate 0, as test/wire/kyc_test.rb does).
   fleet = client.query(a, name: "scooters_available")
   mc    = Array(fleet.body).find { |r| r["code"] == "MC-001" }
   raise "redteam(skooti): MC-001 not in fleet" unless mc

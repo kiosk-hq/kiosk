@@ -124,7 +124,7 @@ member   = register_agent("member")
 outsider = register_agent("outsider")
 
 rc, created = post_json("/kiosk/create_list", { title: "Redteam target" }, WIRE.bearer(owner[:token]))
-abort "owner create_list failed (#{rc}) — run rake demo:setup" unless rc == 200
+abort "owner create_list failed (#{rc}) — run bin/rails db:reset" unless rc == 200
 list_id = created["list_id"]
 rc, inv = post_json("/kiosk/invite", { list_id: list_id }, WIRE.bearer(owner[:token]))
 invite_code = inv["code"]

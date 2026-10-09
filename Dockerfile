@@ -80,12 +80,7 @@ RUN set -eux; \
       (cd "$demo" && bundle install); \
     done
 
-# The default command is the same for every demo because the setup task is:
-# `demo:setup` drops, recreates, loads the schema and seeds — against the
-# compose project's own Postgres — and then the app serves on $PORT. Each
-# demo's compose.yaml supplies the working directory and the port.
-#
-# The bind address is 0.0.0.0 because the only thing that can reach it is the
-# port compose publishes to the host; the flow drivers the demo tasks boot for
-# themselves keep binding 127.0.0.1, inside this container, as they do on a host.
-CMD ["sh", "-c", "bin/rails demo:setup && exec bin/rails server -b 0.0.0.0 -p ${PORT:?compose must set PORT}"]
+# Every demo starts the same way: `db:reset` drops, recreates, loads the schema
+# and seeds the compose project's own Postgres, then the app serves on $PORT.
+# Each demo's compose.yaml supplies the working directory and the port.
+CMD ["sh", "-c", "bin/rails db:reset && exec bin/rails server -b 0.0.0.0 -p ${PORT:?compose must set PORT}"]

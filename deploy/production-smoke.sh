@@ -292,7 +292,7 @@ smoke_stylish() {
   trap cleanup EXIT
 
   echo "── Preparing the throwaway smoke DB ${KIOSK_STYLISH_DB} (drop/create/schema:load/seed) ──"
-  # db:prepare would migrate; mirror demo:setup instead: load schema.rb, then seed. RAILS_ENV is
+  # db:prepare would migrate; load schema.rb and seed instead. RAILS_ENV is
   # production — the whole point — but the DATABASE is the throwaway `_smoke` one,
   # dropped by drop_smoke_db (which refuses any non-`_smoke` name). Rails' own
   # protected-environments guard is left ARMED: the recreated database has no

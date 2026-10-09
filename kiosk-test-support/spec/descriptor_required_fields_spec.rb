@@ -9,7 +9,7 @@
 # enforcement — an origin with an incomplete descriptor does not boot. This is
 # the FLOOR under it: it reads the eight origins' sources directly, needs no
 # database and no Rails, runs in a second in the gems matrix, and names the
-# offending verb rather than failing somewhere inside a demo's `rake demo:setup`
+# offending verb rather than failing somewhere inside a demo's `bin/rails db:reset`
 # fifteen minutes into the demos matrix. It also covers the case the engine
 # cannot see: a verb whose declaration is present but EMPTY, and an origin
 # nobody remembered to name in `c.handlers` (the class never loads, so the

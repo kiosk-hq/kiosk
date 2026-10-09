@@ -73,8 +73,7 @@ if HELPER.nil? || HELPER.empty?
   abort "usage: ruby crosscheck_grammar.rb <path to host_test_crosscheck>"
 end
 
-# Minimal config carrier so the issuer loads without booting Rails — the same
-# shape script/rental_token_issuer_kat.rb stands up for the same reason.
+# Minimal config carrier so the issuer loads without booting Rails.
 unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
   module Kiosk
     # Exposes only the accessor RentalTokenIssuer reads.

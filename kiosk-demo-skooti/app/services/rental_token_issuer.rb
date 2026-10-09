@@ -166,11 +166,8 @@ module RentalTokenIssuer
     # `String#b` never raises, so after this line the answer is a function of
     # the bytes alone and this reader asks the lock's question.
     #
-    # Reference-verifier surface — the production unlock path never calls this;
-    # the scooter lock (script/lock_sim.rb / the firmware) does the verifying.
-    # This Ruby verifier is the known-answer-vector anchor the KAT
-    # (script/rental_token_issuer_kat.rb) runs the firmware's expected wire vector
-    # through, so the byte-exact contract stays cross-checked without a lock.
+    # The lock verifies tokens; this Ruby verifier is the reference the
+    # known-answer test and the firmware cross-check hold it to.
     #
     # @param token [String] wire token
     # @param now   [Integer] current unix timestamp (seconds)

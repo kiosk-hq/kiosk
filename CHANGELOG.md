@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **A demo resets with `bin/rails db:reset` and is tested with `bin/rails test`**; its `check:` and `demo:setup` rake tasks are gone.
+
 - 2026-10-09: **Every demo refuses with exceptions, keeps statuses in enums, reads its principal's rows through `own`, and pays only for its own rows**; its argument checks are Minitest or RSpec tests.
 
 - 2026-10-09: **getgrocery refuses with exceptions, keeps order status in an enum, and reads a principal's orders through `Order.own`**; its argument checks are Minitest tests.

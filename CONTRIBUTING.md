@@ -64,18 +64,13 @@ bundle exec rspec
 `bundle exec rake test`.
 
 **One demo.** Each demo is a standalone Rails app with its own bundle and its
-own README. Read that README first: its prerequisites block and its "Which of these
-run in CI" table. Then:
+own README; read that README first. Then:
 
 ```bash
 cd kiosk-demo-hoteling
-bundle exec rake -T          # what this demo can do
+bin/rails db:reset           # drops the development database, loads the schema, seeds it
+bin/rails test               # its tests (hoteling and kiosk-demo-prove: bundle exec rspec)
 ```
-
-`rake demo:setup` **drops and recreates that demo's database** before loading
-the schema and seeding — unconditionally, with no prompt. Run the tasks one at a
-time: a batched `rake a b c` stops at the first task that exits the process and
-says nothing about the ones that never ran.
 
 **The whole wire.** `./e2e/run.sh` builds a throwaway Rails app, installs the
 gems by path, runs the generator and the migrations, boots a server, drives a

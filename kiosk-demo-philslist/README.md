@@ -82,11 +82,6 @@ The demo lives in the Kiosk monorepo and resolves its gems by path
 **The short way is `docker compose up` in this directory, and it needs none of the list
 below.** It builds the image every demo here shares, brings up a Postgres that belongs to
 this compose project, and serves the demo on <http://localhost:3006>.
-To run one of this demo's own tasks instead of the server:
-
-```
-docker compose run --rm app bin/rails <task>
-```
 
 On your own machine you need:
 
@@ -98,7 +93,7 @@ On your own machine you need:
 From this directory:
 
 ```
-bin/rails demo:setup   # DROPS and recreates kiosk_philslist_development, then seeds the board
+bin/rails db:reset     # DROPS and recreates kiosk_philslist_development, then seeds the board
 bin/dev                # serves the origin on http://localhost:3000
 bin/demo               # the walkthrough, against that origin
 bin/rails test         # the tests; CI runs exactly this

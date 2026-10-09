@@ -83,11 +83,6 @@ possession is their only credential.
 **The short way is `docker compose up` in this directory, and it needs none of the list
 below.** It builds the image every demo here shares, brings up a Postgres that belongs to
 this compose project, and serves the demo on <http://localhost:3004>.
-To run one of this demo's own tasks instead of the server:
-
-```
-docker compose run --rm app bin/rails <task>
-```
 
 On your own machine you need:
 
@@ -99,7 +94,7 @@ On your own machine you need:
 From this directory:
 
 ```
-bin/rails demo:setup   # DROPS and recreates kiosk_skooti_development, then seeds the fleet
+bin/rails db:reset     # DROPS and recreates kiosk_skooti_development, then seeds the fleet
 bin/dev                # serves the origin on http://localhost:3000
 bin/rails test         # the tests; CI runs exactly this
 ```

@@ -33,11 +33,6 @@ bin/demo       # in a second terminal: a curl tour of that origin
 **The short way is `docker compose up` in this directory, and it needs none of the list
 below.** It builds the image every demo here shares, brings up a Postgres that belongs to
 this compose project, and serves the demo on <http://localhost:3005>.
-To run one of this demo's own tasks instead of the server:
-
-```
-docker compose run --rm app bin/rails <task>
-```
 
 On your own machine you need:
 
@@ -49,7 +44,7 @@ On your own machine you need:
 From this directory:
 
 ```
-bin/rails demo:setup   # DROPS and recreates kiosk_stylish_development, then seeds the salon
+bin/rails db:reset     # DROPS and recreates kiosk_stylish_development, then seeds the salon
 bin/dev                # serves the origin on http://localhost:3000
 bin/rails test         # the tests; CI runs exactly this
 ```
@@ -123,7 +118,6 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `bin/demo` | The walkthrough — curl and jq against a running origin |
 | `app/models/salon_clock.rb` | The origin's default IANA zone and the one writer every verb publishes an instant with |
 | `test/` | `bin/rails test`: `test/wire/` drives the origin over HTTP as an assistant does; `book_appointment_test.rb` holds the salon's clock |
-| `lib/tasks/demo.rake` | `bin/rails demo:setup` |
 
 ## Make it real
 

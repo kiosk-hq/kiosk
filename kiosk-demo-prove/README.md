@@ -109,62 +109,19 @@ today, and no free/assurance claim beyond account-possession is made. Vendor KYC
 **The short way is `docker compose up` in this directory, and it needs none of the list
 below.** It builds the image every demo here shares, brings up a Postgres that belongs to
 this compose project, and serves the demo on <http://localhost:3020>.
-To run one of this demo's own tasks instead of the server:
 
-```
-docker compose run --rm app bin/rails <task>
-```
-
-The list below is the HOST path — what running `bin/rails demo:*` on your own machine
-needs. It is not shorter under containers; it is unnecessary.
-
-- **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
-
-> **`demo:setup` is destructive, and every task that depends on it inherits that.**
-> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
-> check, no confirmation prompt — so running it **DROPS and recreates**
-> `kiosk_prove_development`. Nothing you left in that database survives.
-> The SERVER is `localhost`, read from the same `config/database.yml` — unless
-> `PGHOST` is exported, and then it is whatever host that names: the drop
-> follows it, and takes that server's `kiosk_prove_development` instead.
->
-> Under `docker compose` the same drop still happens on every `up`, but it lands on the
-> Postgres that compose brings up, on this project's own volume. It cannot reach a
-> database on your machine: the compose file sets `PGHOST` to the container beside it
-> rather than passing yours through.
->
-> **`check:test` DROPS A DIFFERENT DATABASE.** It runs the same
-> `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
-> is `kiosk_prove_test` — the `test:` database, not `kiosk_prove_development`.
+On your own machine you need Ruby 3.2.0 or newer and a reachable Postgres. From this directory:
 
 ```sh
 bundle install
-bin/rails demo:setup   # DROPS and recreates the DB, then loads the schema and seeds
-bin/rails check:test    # the broker's own rspec suite
+bin/rails db:reset     # DROPS and recreates kiosk_prove_development, loads the schema, seeds it
+bundle exec rspec      # the broker's own suite; CI runs exactly this
 ```
 
 ### Watch it work
 
 `docker compose up` seeds this broker and serves it on <http://localhost:3020>.
 No assistant talks to it: an operator asks it for one anonymized fact and the
-human approves that one request in a browser. To watch that happen end to end,
-run getgrocery's `check:agecheck` or skooti's `check:kyc` — each boots this
-broker itself.
-
-Everything under `check:` below asserts and exits non-zero when it breaks; that
-is what CI runs. `demo:setup` prepares the database.
-
-### Which of these run in CI
-
-A `check:` task asserts and goes red; a `demo:` task is one a person runs and
-reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
-and pull request; the rest are local-only, for the reason given.
-
-| Task | Runs in CI | Why not |
-|---|---|---|
-| `demo:setup` | yes — the job's own setup step |  |
-| `check:test` | yes |  |
-
-The full cross-app flow (operator gates a regulated action via the broker) is
-driven by skooti's two-server `check:kyc`, which boots this broker on its own
-port and points skooti's `c.kyc_issuer` / `c.kyc_public_key` at it.
+human approves that one request in a browser. getgrocery's
+`test/wire/age_check_test.rb` and skooti's `test/wire/kyc_test.rb` boot this
+broker and drive that flow end to end.

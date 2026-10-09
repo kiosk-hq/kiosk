@@ -106,7 +106,7 @@ rc, alice_post = WIRE.post_json("/kiosk/post_listing",
                                 { category_slug: "furniture",
                                   title: "Redteam target", body: "Alice's listing" },
                                 ALICE.bearer)
-abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)} — run bin/rails demo:setup" unless rc == 200
+abort "A post_listing failed (#{rc}): #{JSON.generate(alice_post)} — run bin/rails db:reset" unless rc == 200
 alice_listing_id = alice_post["listing_id"]
 abort "no listing_id from A's post: #{JSON.generate(alice_post)}" unless alice_listing_id
 

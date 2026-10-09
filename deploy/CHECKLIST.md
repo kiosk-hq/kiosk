@@ -140,7 +140,7 @@ What each unit must carry. For EACH of the 7 apps:
       gate; run it by hand whenever you deploy a tree CI has not seen. **If an initializer ever learns to raise outside
       dev/test, add the variable HERE and in `.github/workflows/ci.yml` in the same commit** — these two are one gate
       written twice, and this copy is the one a human types.
-- [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails demo:setup` (seed).
+- [ ] `bundle install` · `RAILS_ENV=production bin/rails assets:precompile db:prepare` · `bin/rails db:reset` (seed).
 - [ ] Enable the systemd unit: `systemctl enable --now kiosk-demo@<app>` (per `deploy/kiosk-demo@.service`, binds 127.0.0.1:<port>).
 
 ## 6. Front with Caddy (auto-TLS)

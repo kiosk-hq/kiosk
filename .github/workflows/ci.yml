@@ -671,12 +671,6 @@ jobs:
   # with the reason — and an UNDECLARED duplicate fails too, so a new copy cannot
   # appear silently, which is how six of them got here.
   #
-  # Since K-1046 it also holds ONE FRAGMENT rather than a whole file: the
-  # `<demo>_run_flow` helper K-1043 hand-copied into every demo's
-  # lib/tasks/demo.rake — the directory the path rule does not scan — because a
-  # block that is byte-identical in six rake files is not "per-demo by
-  # construction".
-  #
   # Stdlib Ruby only: no bundle, no services, no database, ~1 s for the
   # check and ~10 s for the self-test step beside it.
   demo-file-sync:

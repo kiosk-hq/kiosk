@@ -1,108 +1,11 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# check-live-skill-pin — does the DEPLOYED fleet serve the skill cut this tree
-# ships? `--network` is A MANUAL TRIAGE TOOL and must never be a CI job; read
-# the next section before wiring it into one. `--offline` is a different
-# question with a different answer — since K-1361 it is a step of ci.yml's
-# `published-bytes` job, the one job that checks kiosk.tech out beside this
-# repo.
-#
-# WHY THIS EXISTS (K-1075). Every operator's `/.well-known/kiosk.json` carries a
-# `kiosk.skill` block — a URL naming one immutable `skill-vX.Y.Z.md` and the
-# sha256 an assistant is told to verify before following it. That pin is the
-# only instruction an assistant ever gets about HOW to speak this wire, and it
-# is baked into each demo's initializer, so it moves only when a deploy carries
-# a new commit to the box. Between a skill cut and the next deploy the fleet
-# therefore serves an OLDER cut than the repo ships, and nothing anywhere says
-# so: the served pin is internally consistent (the sha really is that file's
-# sha), the dual-check an assistant runs PASSES, and the drift is silent by
-# construction.
-#
-# It was found by hand. K-1075 was filed after someone curled all seven origins
-# and noticed they answered `skill-v0.4.5.md` while head shipped `skill-v0.4.7`
-# — three cuts of behavioural instruction, including the paragraph that first
-# tells an assistant `reach` exists, absent from what the fleet points at. That
-# is a question a script can ask in two seconds, and this is that script.
-#
-# MEASURED WHEN THIS WAS WRITTEN (2026-08-27, --network, all seven origins
-# answering HTTP 200 on discovery while tudu's and skooti's human pages were
-# still 500): every one of the seven serves `skill-v0.4.5.md`
-# (d2ad8442a4c7…) where the tree ships `skill-v0.4.8.md` (885828cf7d7e…) —
-# three cuts behind, exit 1. That is K-1075's hand-run finding, now
-# mechanically reproducible. WATCHED, both directions, same run: with tudu's
-# initializer temporarily repinned to v0.4.5, tudu's live row turned `ok` while
-# the other six stayed FAIL and the tree-side cross-check went FAIL on the
-# diverged pin — so the comparison is a comparison and not a constant.
-#
-# WHY `--network` IS NOT A CI JOB, AND MUST NOT BECOME ONE.
-# It measures the LIVE fleet against the WORKING TREE, and those two are
-# supposed to differ: every commit that cuts a skill makes this red, and it
-# stays red — correctly — until someone deploys. A gate that is red on a clean
-# tree gets switched off, and a switched-off gate is worth less than no gate
-# (the same reasoning that kept `check-conformance-drift` a report rather than
-# a gate, K-1123). So that mode answers a question a HUMAN asks at deploy time:
-# "is the fleet still serving what we shipped?" — it does not answer "is the
-# tree correct", which is what CI is for.
-#
-# AND WHY `--offline` IS ONE (K-1361). It probes nothing; it reads the tree,
-# and in the umbrella layout it cross-checks the pins against the newest cut on
-# disk — the one assertion that catches a wave re-pinning to a SUPERSEDED cut
-# whose digest is perfectly correct. That is a property of the tree, it is
-# never red on a clean one, and until K-1361 nothing in CI asked it. MEASURED
-# 2026-09-07: sibling-less, this mode exits 0 on a uniform half-relink (all
-# seven demos and the engine default moved to an older cut with every
-# `skill_sha256` left behind) and exits 0 again on a one-hex-digit corruption
-# of every `skill_sha256`. Beside a kiosk.tech checkout, both are exit 1. So
-# the offline half is worth running ONLY where the sibling is, which is why it
-# lives in `published-bytes` and not in one of the single-checkout jobs — there
-# it would print SKIP and exit 0 forever.
-#
-# WHAT IT DOES NOT COVER, stated because an over-claimed guard is how a blind
-# spot survives:
-#   * NOT the tree-side agreement of the pins. That `skill_sha256` equals the
-#     sha256 of the file `skill_url` names is `kiosk-test-support/spec/
-#     skill_pin_spec.rb`, run with the sibling in the same CI job. The offline
-#     half below only resolves the expectation, cross-checks it against the
-#     newest cut on disk, and refuses to proceed on an ambiguous one.
-#   * NOT whether kiosk.tech actually SERVES the cut the fleet points at.
-#   * NOT the human pages. Discovery is a separate surface and answers 200 on
-#     origins whose HTML is 500 — measured on this fleet, 2026-08-27, while
-#     K-1074's outage was live. That is why this reads ONLY
-#     `/.well-known/kiosk.json` and reports a pin from any origin that serves
-#     one, however sick the rest of the app is.
-#
-# WHAT IT READS
-#   * The origins: the per-demo map in `deploy/README.md`. Not a list in here —
-#     a list in here is the thing that rots. A demo is a Kiosk OPERATOR (and so
-#     probed) iff it has `config/initializers/kiosk.rb`; that is what excludes
-#     the KYC broker, which serves `kyc.demo.kiosk.tech`, depends on no kiosk
-#     gem and publishes no discovery document at all. The parser FAILS CLOSED:
-#     every demo with a kiosk initializer must get a host out of the table, so
-#     a renamed subdomain is an error here rather than an origin silently
-#     dropped from the sweep.
-#   * The expectation: each demo's own `skill_url` + `skill_sha256`, which is
-#     what a deploy of HEAD would put on that box. In the umbrella layout it is
-#     ALSO cross-checked against the newest `../kiosk.tech/skill-v*.md` on disk
-#     and that file's real sha256; outside it (public CI clones this repo alone)
-#     that cross-check is skipped and says so.
-#
-# EXIT CODES
-#   0  every probed origin serves exactly the pin this tree ships
-#   1  drift, an origin that could not be measured, or an ambiguous expectation
-#   2  usage
-#
-# CI ARM: bin/check-live-skill-pin --offline
-# Usage: bin/check-live-skill-pin [--offline | --network | --all]
-#
-#   --offline  (default)  no network. Resolves the origins and the pin a deploy
-#                         of HEAD would serve, and says what it did not probe.
-#                         The default is offline on purpose: the workspace's
-#                         gate-script warning sweep re-runs every Ruby script in
-#                         this directory under `ruby -w` WITH NO ARGUMENTS, so
-#                         the no-argument mode must stay network-free.
-#   --network             probe the fleet. This is the mode the tool is for.
-#   --all                 both.
+# check-live-skill-pin — every operator demo pins a skill cut (skill_url + skill_sha256) and has a
+# host in deploy/README.md; beside a ../kiosk.tech checkout, the pin is the newest published cut.
+# --network also fetches each origin's /.well-known/kiosk.json and compares the served pin.
+# --network is a manual deploy-time check, never CI: the fleet lags the tree until the next deploy.
+# Usage: bin/check-live-skill-pin [--offline (default) | --network]
 
 require "digest"
 require "json"
@@ -112,8 +15,6 @@ require "uri"
 ROOT           = File.expand_path("..", __dir__)
 DEPLOY_README  = File.join(ROOT, "deploy", "README.md")
 SERVER_DEFAULT = File.join(ROOT, "kiosk-server", "lib", "kiosk", "server", "configuration_extension.rb")
-# Umbrella layout only: the parent of this repo also holds the kiosk.tech
-# checkout. Public CI clones this repo alone, so its absence is normal.
 SITE_ROOT      = File.expand_path("../kiosk.tech", ROOT)
 HOST_RE        = /\A[a-z0-9-]+\.demo\.kiosk\.tech\z/
 
@@ -169,8 +70,7 @@ def cuts_on_disk
      .sort_by(&:first)
 end
 
-# GET with retries. A transient blip must not read as drift, so "could not
-# reach it" and "reached it and the pin is wrong" are different answers.
+# GET with retries, so a transient blip is reported as unreachable rather than as drift.
 def fetch_json(url, attempts: 3)
   last = nil
   attempts.times do |i|
@@ -197,11 +97,7 @@ def fetch_json(url, attempts: 3)
   [nil, "unreachable after #{attempts} attempts (#{last})"]
 end
 
-# ── Offline: the origins, and the pin a deploy of HEAD would serve ───────────
-#
-# Returns {demo => {host:, url:, sha256:}} — the work-list --network probes.
-# Returns {} when the expectation is ambiguous, because probing against an
-# expectation nobody can state is worse than not probing.
+# {demo => {host:, url:, sha256:}} — the pin a deploy of HEAD would serve; {} when unresolved.
 def resolve_expectation
   puts "── Tree: the origins, and the pin a deploy of HEAD would serve ──"
 
@@ -215,8 +111,7 @@ def resolve_expectation
     host = hosts[demo]
     if host.nil?
       fail! "kiosk-demo-#{demo} configures the engine but deploy/README.md maps no " \
-            "`*.demo.kiosk.tech` host to it — an operator that cannot be probed is not a " \
-            "skipped row, it is an unmeasured one"
+            "`*.demo.kiosk.tech` host to it; add its row to the per-demo map"
       next
     end
 
@@ -239,8 +134,6 @@ def resolve_expectation
     pass "#{expected.size} operator origin(s), all pinning #{File.basename(pins[0][0])} " \
          "(#{short(pins[0][1])}…): #{expected.keys.sort.join(', ')}"
   else
-    # Not a failure: demos are allowed to diverge in principle, and each is
-    # compared against ITS OWN pin below. It is worth saying out loud, though.
     pass "#{expected.size} operator origin(s), pinning #{pins.length} DIFFERENT cuts: " \
          "#{expected.map { |d, e| "#{d}→#{File.basename(e[:url])}" }.sort.join(', ')}"
   end
@@ -266,12 +159,11 @@ def resolve_expectation
     pins.each do |url, sha|
       if File.basename(url) == File.basename(newest_path) && sha == newest_sha
         pass "#{File.basename(url)} is the newest of #{cuts.length} cut(s) in ../kiosk.tech and " \
-             "its sha256 is #{short(newest_sha)}… — the expectation is unambiguous"
+             "its sha256 is #{short(newest_sha)}…"
       else
         fail! "the demos pin #{File.basename(url)} (#{short(sha)}…) but the newest cut on disk " \
-              "is #{File.basename(newest_path)} (#{short(newest_sha)}…) — a skill edit ends in a " \
-              "version bump and relinking is part of it; fix the tree before asking what the " \
-              "fleet serves"
+              "is #{File.basename(newest_path)} (#{short(newest_sha)}…); relink every demo and the " \
+              "engine default to the newest cut"
       end
     end
   end
@@ -339,17 +231,17 @@ def check_live(expected)
 end
 
 mode = ARGV[0] || "--offline"
-unless ["--offline", "--network", "--all"].include?(mode)
-  warn "usage: #{$PROGRAM_NAME} [--offline | --network | --all]"
+unless ["--offline", "--network"].include?(mode)
+  warn "usage: #{$PROGRAM_NAME} [--offline | --network]"
   exit 2
 end
 
 expectation = resolve_expectation
-check_live(expectation) if ["--network", "--all"].include?(mode)
+check_live(expectation) if mode == "--network"
 
 puts
 if mode == "--offline"
-  puts "(no origin probed — this mode reads the tree only; pass --network or --all)"
+  puts "(no origin probed — this mode reads the tree only; pass --network)"
 end
 SKIPS.each { puts "skipped: #{_1}" }
 if FAILURES.empty?

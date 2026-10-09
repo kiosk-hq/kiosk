@@ -87,7 +87,7 @@ bin/dev                # serves the origin on http://localhost:3000
 bundle exec rspec      # the tests; CI runs exactly this
 ```
 
-`bin/setup` does the first two. The tests in `spec/wire/` drive the origin over
+`bin/setup` does the first two. The stories in `spec/stories/` drive the origin over
 HTTP the way an assistant does. `spec/conformance/` is written with the matchers
 `kiosk-test-support` ships, and is the file to copy when you are adding a Kiosk
 wire to an app of your own; `kiosk-demo-getgrocery` is the same surface in

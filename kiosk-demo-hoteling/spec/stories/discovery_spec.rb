@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require "wire_helper"
+require "story_helper"
 require "kiosk/test_helpers/descriptor_examples"
 
-RSpec.describe "discovering this origin", :wire do
+RSpec.describe "Discovering the hotel", type: :story do
   def get(path)
     status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
     expect(status).to eq(200), "GET #{path} with no credential"
     body
   end
 
-  it "describes itself in the well-known document and the schema, without a credential" do
+  it "an assistant that knows nothing finds out, without an account, what the hotel offers and how to book" do
     kiosk  = get("/.well-known/kiosk.json")["kiosk"]
     schema = get("/kiosk/schema")
 
@@ -35,7 +35,7 @@ RSpec.describe "discovering this origin", :wire do
     expect(examples.filter_map(&:violation)).to be_empty
   end
 
-  it "advertises on its landing page the skill it pins" do
+  it "the landing page advertises the skill this origin pins" do
     pinned = get("/.well-known/kiosk.json").dig("kiosk", "skill", "url")
     expect(pinned).to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
 

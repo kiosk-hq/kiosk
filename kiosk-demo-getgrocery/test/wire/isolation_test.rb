@@ -3,7 +3,7 @@
 require "test_helper"
 
 class IsolationTest < WireTest
-  def reschedule(shopper, order) = client.run(shopper, name: "reschedule_delivery", order_id: order["order_id"],
+  def reschedule(shopper, order) = assistant.run(shopper, name: "reschedule_delivery", order_id: order["order_id"],
                                                        delivery_slot_id: 2, delivery_date:)
 
   test "one shopper can neither move nor see another's order" do

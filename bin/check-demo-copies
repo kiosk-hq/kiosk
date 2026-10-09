@@ -3085,8 +3085,6 @@ SPEC_UNITS = {
     why:  "Each file's own mixins, concatenated in file order: the live-server harness, the " \
           "conformance assertions, the seeded-database or KYC helpers its tests need.",
   },
-  "client" => { rule: :code, why: "The assistant every wire test drives, bound to the live server." },
-  "register" => { rule: :code, why: "A fresh assistant through the shipped register ceremony." },
   "wire" => {
     rule: :per_file,
     why:  "The bare transport: atablefor and tudu memoise one per test, stylish builds one per " \

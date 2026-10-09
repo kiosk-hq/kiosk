@@ -4,8 +4,8 @@ require "test_helper"
 
 # An assistant inherits its human's role from the sign-in it was linked over.
 class RolesTest < WireTest
-  def calendar(assistant)
-    answer = client.query(assistant, name: "salon_calendar")
+  def calendar(principal)
+    answer = assistant.query(principal, name: "salon_calendar")
     assert_equal 200, answer.status, answer.body
     answer.body
   end

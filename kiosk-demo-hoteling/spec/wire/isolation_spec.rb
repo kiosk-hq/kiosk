@@ -16,7 +16,7 @@ RSpec.describe "one guest's bookings", :wire do
     expect([confirmed.status, confirmed.body["detail"]]).to eq([403, "booking not found or not yours"])
 
     bobs_id = reserve(bob, check_in: Date.current + 60)["booking_id"]
-    expect(client.query(bob, name: "my_bookings").body.map { _1["booking_id"] }).to eq([bobs_id])
+    expect(assistant.query(bob, name: "my_bookings").body.map { _1["booking_id"] }).to eq([bobs_id])
     expect(Booking.find(bobs_id).user_id).to eq(bob.user_id)
   end
 
@@ -25,7 +25,7 @@ RSpec.describe "one guest's bookings", :wire do
     bob   = register
 
     stay   = bookable_room(bob, check_in: Date.current + 60, check_out: Date.current + 63)
-    forged = client.run(bob, name: "reserve_room", **stay, user_id: alice.user_id)
+    forged = assistant.run(bob, name: "reserve_room", **stay, user_id: alice.user_id)
     expect([forged.status, forged.body["code"]]).to eq([400, "bad_request"])
     expect(forged.body["detail"]).to include("user_id")
   end

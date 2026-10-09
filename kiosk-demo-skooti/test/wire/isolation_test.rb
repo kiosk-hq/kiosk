@@ -13,11 +13,11 @@ class IsolationTest < WireTest
     assert_equal [403, "forbidden"], [paid.status, paid.body["code"]]
 
     assert_equal 200, pay(alice, alices).status
-    started = client.run(bob, name: "start_rental", reservation_id: alices_id)
+    started = assistant.run(bob, name: "start_rental", reservation_id: alices_id)
     assert_equal 403, started.status
 
     bobs_id = reserve(bob, "SK-001")["reservation_id"]
-    listed = client.query(bob, name: "my_reservations").body.map { _1["reservation_id"] }
+    listed = assistant.query(bob, name: "my_reservations").body.map { _1["reservation_id"] }
     assert_equal [bobs_id], listed
     assert_equal bob.user_id, Reservation.find(bobs_id).user_id
   end
@@ -26,7 +26,7 @@ class IsolationTest < WireTest
     alice = register
     bob   = register
 
-    forged = client.run(bob, name: "reserve", scooter_code: "SK-001", user_id: alice.user_id)
+    forged = assistant.run(bob, name: "reserve", scooter_code: "SK-001", user_id: alice.user_id)
     assert_equal [400, "bad_request"], [forged.status, forged.body["code"]]
     assert_includes forged.body["detail"], "user_id"
   end

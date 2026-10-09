@@ -39,10 +39,10 @@ class ClaimTest < WireTest
   test "the same key, rebound to the human, pays with the human's saved card" do
     standalone = register
     left_behind = order(standalone, "banana")
-    setup = client.run(standalone, name: "payment_setup")
+    setup = assistant.run(standalone, name: "payment_setup")
     assert_equal [200, "setup_required"], [setup.status, setup.body["status"]]
 
-    grant = client.device_authorization(client_id: "getgrocery-claim", public_key: standalone.rsa_key.public_key.to_pem)
+    grant = assistant.device_authorization(client_id: "getgrocery-claim", public_key: standalone.rsa_key.public_key.to_pem)
     assert_equal 200, grant.status, grant.body
     assert_empty %w[device_code user_code verification_uri expires_in interval] - grant.body.keys
     approve_as_hana(grant.body["user_code"])
@@ -53,7 +53,7 @@ class ClaimTest < WireTest
     assert_empty my_order_ids(hana)
     assert_equal standalone.user_id, Order.find(left_behind["order_id"]).user_id
 
-    ready = client.run(hana, name: "payment_setup")
+    ready = assistant.run(hana, name: "payment_setup")
     assert_equal [200, "ready"], [ready.status, ready.body["status"]]
     groceries = order(hana, "banana")
     paid = pay(hana, groceries)

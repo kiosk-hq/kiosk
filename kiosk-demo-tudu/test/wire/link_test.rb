@@ -5,8 +5,8 @@ require "kiosk/user_identity_providers/devise_session"
 
 class LinkTest < WireTest
   setup do
-    @assistant = register
-    @list_id   = create_list(@assistant)
+    @headless = register
+    @list_id   = create_list(@headless)
   end
 
   def alice = @alice ||= Kiosk::UserIdentityProviders::DeviseSession.new(live_url).sign_in!(email: "alice@example.com", password: "tudu-demo-password")
@@ -31,22 +31,22 @@ class LinkTest < WireTest
   def login(key)
     logged_in = wire.post("/kiosk/auth/login", { public_key: key.public_key.to_pem, signed: proof(key) })
     assert_equal 200, logged_in.status, logged_in.body
-    @assistant.with(token: logged_in.body.fetch("access_token"))
+    @headless.with(token: logged_in.body.fetch("access_token"))
   end
 
-  def owns_hike?(assistant) = client.query(assistant, name: "my_lists").body.include?({ "list_id" => @list_id, "title" => "Hike", "role" => "owner" })
+  def owns_hike?(principal) = assistant.query(principal, name: "my_lists").body.include?({ "list_id" => @list_id, "title" => "Hike", "role" => "owner" })
 
   test "linking a headless assistant moves its list to the human and ends every pre-link token" do
     code = link_code
     sleep(1.0 - (Time.now.to_f % 1.0))
-    same_second = login(@assistant.rsa_key)
-    claimed = claim(@assistant.rsa_key, code)
-    assert_equal [ALICE_ID, @assistant.agent_id], claimed.values_at("user_id", "agent_id")
+    same_second = login(@headless.rsa_key)
+    claimed = claim(@headless.rsa_key, code)
+    assert_equal [ALICE_ID, @headless.agent_id], claimed.values_at("user_id", "agent_id")
 
-    assert_equal 401, client.query(@assistant, name: "my_lists").status
-    assert_equal 401, client.query(same_second, name: "my_lists").status
+    assert_equal 401, assistant.query(@headless, name: "my_lists").status
+    assert_equal 401, assistant.query(same_second, name: "my_lists").status
 
-    relogged = login(@assistant.rsa_key)
+    relogged = login(@headless.rsa_key)
     assert_equal ALICE_ID, JWT.decode(relogged.token, nil, false).first["sub"]
     assert owns_hike?(relogged)
     assert_equal ALICE_ID, List.find(@list_id).account_id
@@ -57,16 +57,16 @@ class LinkTest < WireTest
   end
 
   test "re-linking an assistant already bound to the human moves nothing and destroys nothing" do
-    claim(@assistant.rsa_key)
-    relinked = claim(@assistant.rsa_key)
-    assert_equal [ALICE_ID, @assistant.agent_id], relinked.values_at("user_id", "agent_id")
+    claim(@headless.rsa_key)
+    relinked = claim(@headless.rsa_key)
+    assert_equal [ALICE_ID, @headless.agent_id], relinked.values_at("user_id", "agent_id")
 
-    assert owns_hike?(@assistant.with(token: relinked.fetch("access_token")))
+    assert owns_hike?(@headless.with(token: relinked.fetch("access_token")))
     assert_equal ["Flat 3B", "Hike"], List.joins(:memberships).where(memberships: { account_id: ALICE_ID }).pluck(:title).sort
   end
 
   test "the list page shows a member the roster and turns away a human who is not on the list" do
-    claim(@assistant.rsa_key)
+    claim(@headless.rsa_key)
     page = alice.get_html("/lists/#{@list_id}")
     assert_equal "200", page.code
     assert_includes page.body, "Alice <span class=\"role\">(owner)</span>"

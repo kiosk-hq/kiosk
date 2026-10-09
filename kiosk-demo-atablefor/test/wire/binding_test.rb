@@ -18,11 +18,11 @@ class BindingTest < WireTest
     claimed, agent = session.post_json("/kiosk/auth/claim", { code: link["link_code"], public_key: pem, signed: })
     assert_equal [201, diego.id], [claimed, agent["user_id"]]
 
-    assistant = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: agent["agent_id"], user_id: agent["user_id"],
-                                              token: agent["access_token"], rsa_key: key)
-    booked = book(assistant)
+    bound = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: agent["agent_id"], user_id: agent["user_id"],
+                                                          token: agent["access_token"], rsa_key: key)
+    booked = book(bound)
     assert_equal 200, booked.status, booked.body
-    assert_equal [booked.body["booking_id"]], my_booking_ids(assistant)
+    assert_equal [booked.body["booking_id"]], my_booking_ids(bound)
     assert_equal diego.id, Booking.find(booked.body["booking_id"]).user_id
   end
 end

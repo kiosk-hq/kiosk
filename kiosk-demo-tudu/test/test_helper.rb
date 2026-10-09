@@ -5,7 +5,6 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "kiosk/test_helpers/live_server"
-require "kiosk/test_helpers/assistant"
 
 module ActiveSupport
   class TestCase
@@ -31,28 +30,25 @@ class WireTest < ActiveSupport::TestCase
 
   ALICE_ID = "00000000-0000-0000-0000-000000000001"
 
-  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
   def wire = @wire ||= Kiosk::TestHelpers::Wire.new(base_url: live_url)
 
-  def register = client.register!
-
   def create_list(owner, title = "Hike")
-    created = client.run(owner, name: "create_list", title:)
+    created = assistant.run(owner, name: "create_list", title:)
     assert_equal 200, created.status, created.body
     created.body["list_id"]
   end
 
   def invite(owner, list_id)
-    invited = client.run(owner, name: "invite", list_id:)
+    invited = assistant.run(owner, name: "invite", list_id:)
     assert_equal 200, invited.status, invited.body
     invited.body["code"]
   end
 
   def join(member, code)
-    accepted = client.run(member, name: "accept_invite", code:)
+    accepted = assistant.run(member, name: "accept_invite", code:)
     assert_equal 200, accepted.status, accepted.body
     accepted.body
   end
 
-  def list_ids(principal) = client.query(principal, name: "my_lists").body.map { _1["list_id"] }
+  def list_ids(principal) = assistant.query(principal, name: "my_lists").body.map { _1["list_id"] }
 end

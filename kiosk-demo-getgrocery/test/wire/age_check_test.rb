@@ -17,13 +17,13 @@ class AgeCheckTest < WireTest
     assert refused?(refused), refused.body
     assert_includes refused.body["hint"], "request_kyc"
 
-    events = client.events(shopper)
+    events = assistant.events(shopper)
     events.subscribe("kyc_verification")
-    check = client.run(shopper, name: "request_kyc")
+    check = assistant.run(shopper, name: "request_kyc")
     assert_equal 200, check.status
     assert check.body["verification_url"]
-    2.times { assert_equal 200, client.run(shopper, name: "request_kyc").status }
-    capped = client.run(shopper, name: "request_kyc")
+    2.times { assert_equal 200, assistant.run(shopper, name: "request_kyc").status }
+    capped = assistant.run(shopper, name: "request_kyc")
     assert_equal [429, "quota_exceeded"], [capped.status, capped.body["code"]]
 
     kyc_check_passes(check.body["request_id"], age_over_18: true)
@@ -52,20 +52,20 @@ class AgeCheckTest < WireTest
   test "an attestation someone else signed grants nothing" do
     shopper = register
     claims, = JWT.decode(kyc_attestation(shopper, age_over_18: true), nil, false)
-    forged = client.kyc(shopper, attestation_jws: JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), "RS256"))
+    forged = assistant.kyc(shopper, attestation_jws: JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), "RS256"))
     assert_equal 403, forged.status
     assert refused?(buy_wine(shopper))
 
-    assert_equal 200, client.kyc(shopper, attestation_jws: kyc_attestation(shopper, age_over_18: true)).status
+    assert_equal 200, assistant.kyc(shopper, attestation_jws: kyc_attestation(shopper, age_over_18: true)).status
     assert_equal 200, buy_wine(shopper).status
   end
 
   test "an attestation that spells the boolean any other way grants nothing" do
     shopper = register
-    assert_equal 200, client.kyc(shopper, attestation_jws: kyc_attestation(shopper, age_over_18: true)).status
+    assert_equal 200, assistant.kyc(shopper, attestation_jws: kyc_attestation(shopper, age_over_18: true)).status
     assert_equal 200, buy_wine(shopper).status
 
-    spelled = client.kyc(shopper, attestation_jws: kyc_attestation(shopper, age_over_18: "true"))
+    spelled = assistant.kyc(shopper, attestation_jws: kyc_attestation(shopper, age_over_18: "true"))
     assert_equal [200, {}], [spelled.status, spelled.body["attributes"]]
     assert refused?(buy_wine(shopper))
   end

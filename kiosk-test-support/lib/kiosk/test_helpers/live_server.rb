@@ -2,6 +2,7 @@
 
 require "puma"
 require "socket"
+require "kiosk/test_helpers/assistant"
 
 module Kiosk
   module TestHelpers
@@ -46,6 +47,10 @@ module Kiosk
       end
 
       def live_url = LiveServer.url
+
+      def assistant = @assistant ||= Assistant.new(base_url: live_url)
+
+      def register = assistant.register!
     end
   end
 end

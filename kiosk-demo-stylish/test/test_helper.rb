@@ -8,7 +8,6 @@ require "rails/test_help"
 require "kiosk/server/conformance_origin"
 require "kiosk/test_helpers/conformance/minitest"
 require "kiosk/test_helpers/live_server"
-require "kiosk/test_helpers/assistant"
 require "kiosk/user_identity_providers/devise_session"
 
 Kiosk::TestHelpers::Conformance.origin = Kiosk::Server::ConformanceOrigin.new
@@ -35,15 +34,13 @@ class WireTest < ActiveSupport::TestCase
 
   PASSWORD = "combette-demo-password"
 
-  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
-
   def sign_in(email) = Kiosk::UserIdentityProviders::DeviseSession.new(live_url).sign_in!(email:, password: PASSWORD)
 
   # A fresh assistant, registered through the toll and then bound to the human by a link code.
   def bind(email)
-    assistant = client.register!
+    key = register.rsa_key
     _, link = sign_in(email).post_json("/kiosk/auth/link", {}, { session: true })
-    claim(assistant.rsa_key, link.fetch("link_code"))
+    claim(key, link.fetch("link_code"))
   end
 
   def claim(key, code)
@@ -53,7 +50,7 @@ class WireTest < ActiveSupport::TestCase
                                   token: claimed["access_token"], rsa_key: key)
   end
 
-  def login(assistant) = post("/kiosk/auth/login", public_key: assistant.rsa_key.public_key.to_pem, signed: proof(assistant.rsa_key)).first
+  def login(principal) = post("/kiosk/auth/login", public_key: principal.rsa_key.public_key.to_pem, signed: proof(principal.rsa_key)).first
 
   # A possession proof for `key`, over a fresh challenge from this origin.
   def proof(key)
@@ -61,18 +58,19 @@ class WireTest < ActiveSupport::TestCase
     JWT.encode({ aud: live_url, nonce: challenge.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
   end
 
-  def book(assistant, **args)
-    booked = client.run(assistant, name: "book_appointment", salon_id: Salon.first.id, slot: 1.week.from_now.iso8601, **args)
+  def book(principal, **args)
+    booked = assistant.run(principal, name: "book_appointment", salon_id: Salon.first.id, slot: 1.week.from_now.iso8601, **args)
     assert_equal 200, booked.status, booked.body
     booked.body
   end
 
-  def my_appointments(assistant) = client.query(assistant, name: "my_appointments").body.map { _1["id"] }
+  def my_appointments(principal) = assistant.query(principal, name: "my_appointments").body.map { _1["id"] }
 
-  def claims(assistant) = JWT.decode(assistant.token, nil, false).first
+  def claims(principal) = JWT.decode(principal.token, nil, false).first
 
   private
 
   def wire = Kiosk::TestHelpers::Wire.new(base_url: live_url)
+
   def post(path, body) = wire.post_json(path, body)
 end

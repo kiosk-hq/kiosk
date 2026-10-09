@@ -5,7 +5,7 @@ require "kiosk/user_identity_providers/devise_session"
 
 # A human links assistants to their own account, and unlinks them.
 class BindingTest < WireTest
-  Assistant = Data.define(:key, :token) do
+  Linked = Data.define(:key, :token) do
     def principal = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: claims["agent_id"], user_id: claims["sub"], token:, rsa_key: key)
     def claims = JWT.decode(token, nil, false).first
   end
@@ -31,16 +31,16 @@ class BindingTest < WireTest
     _, link = @session.post_json("/kiosk/auth/link", {}, { session: true })
     status, claimed = @session.post_json("/kiosk/auth/claim", { code: link.fetch("link_code"), public_key: key.public_to_pem, signed: proof(key) })
     assert_equal [201, @alice.id], [status, claimed["user_id"]]
-    Assistant.new(key:, token: claimed.fetch("access_token"))
+    Linked.new(key:, token: claimed.fetch("access_token"))
   end
 
-  def login(assistant) = @session.post_json("/kiosk/auth/login", { public_key: assistant.key.public_to_pem, signed: proof(assistant.key) })
+  def login(bound) = @session.post_json("/kiosk/auth/login", { public_key: bound.key.public_to_pem, signed: proof(bound.key) })
 
   def my_listings(token) = @session.get_json("/kiosk/my_listings", {}, { "Authorization" => "Bearer #{token}" })
 
   test "the device grant binds a new assistant to the human who approves it" do
     key = OpenSSL::PKey::RSA.generate(2048)
-    opened = client.device_authorization(client_id: "philslist-test", public_key: key.public_to_pem)
+    opened = assistant.device_authorization(client_id: "philslist-test", public_key: key.public_to_pem)
     assert_equal 200, opened.status
     assert_empty %w[device_code user_code verification_uri expires_in interval] - opened.body.keys
     device_code, user_code = opened.body.values_at("device_code", "user_code")
@@ -56,12 +56,12 @@ class BindingTest < WireTest
     Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
     granted = poll(device_code, key)
     assert_equal "200", granted.code, granted.body
-    assistant = Assistant.new(key:, token: JSON.parse(granted.body).fetch("access_token"))
-    assert_equal @alice.id, assistant.claims["sub"]
+    bound = Linked.new(key:, token: JSON.parse(granted.body).fetch("access_token"))
+    assert_equal @alice.id, bound.claims["sub"]
 
-    listing = post_listing(assistant.principal)
+    listing = post_listing(bound.principal)
     assert_equal @alice.id, Listing.find(listing).owner_id
-    assert_includes @session.get_html("/kiosk/auth/assistants").body, assistant.claims["agent_id"]
+    assert_includes @session.get_html("/kiosk/auth/assistants").body, bound.claims["agent_id"]
   end
 
   test "a household's assistants share one account, and unlinking one revokes only its tokens" do
@@ -69,7 +69,7 @@ class BindingTest < WireTest
     second = link_assistant
     listing = post_listing(first.principal, price_text: "€150")
     assert_includes my_listings(second.token).last.map { _1["listing_id"] }, listing
-    assert_equal 200, client.run(second.principal, name: "edit_listing", listing_id: listing, price_text: "€140").status
+    assert_equal 200, assistant.run(second.principal, name: "edit_listing", listing_id: listing, price_text: "€140").status
 
     proof = proof(first.key)
     sleep(1 - (Time.now.to_f % 1) + 0.02)
@@ -80,7 +80,7 @@ class BindingTest < WireTest
 
     assert_equal 401, my_listings(first.token).first
     assert_equal 401, my_listings(same_second).first
-    write = client.run(first.principal.with(token: same_second), name: "edit_listing", listing_id: listing, price_text: "€1")
+    write = assistant.run(first.principal.with(token: same_second), name: "edit_listing", listing_id: listing, price_text: "€1")
     assert_equal 401, write.status
     assert_equal "€140", Listing.find(listing).price_text
 

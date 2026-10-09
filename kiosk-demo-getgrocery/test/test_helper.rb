@@ -8,7 +8,6 @@ require "rails/test_help"
 require "kiosk/server/conformance_origin"
 require "kiosk/test_helpers/conformance/minitest"
 require "kiosk/test_helpers/live_server"
-require "kiosk/test_helpers/assistant"
 require "kiosk/test_helpers/stripe_mock"
 
 # The conformance matchers read this origin from the handler registry, the
@@ -38,16 +37,12 @@ class WireTest < ActiveSupport::TestCase
 
   setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
 
-  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
-
-  def register = client.register!
-
   def delivery_date = (Date.current + 1).iso8601
 
-  def catalog(shopper) = client.query(shopper, name: "catalog").body.index_by { _1["sku"] }
+  def catalog(shopper) = assistant.query(shopper, name: "catalog").body.index_by { _1["sku"] }
 
   def create_order(shopper, skus, delivery_slot_id: 1, **args)
-    client.run(shopper, name: "create_order", items: skus.map { { sku: _1, qty: 1 } },
+    assistant.run(shopper, name: "create_order", items: skus.map { { sku: _1, qty: 1 } },
                         delivery_slot_id:, delivery_date:, delivery_address: DELIVERY_ADDRESS, **args)
   end
 
@@ -67,8 +62,8 @@ class WireTest < ActiveSupport::TestCase
     intent = mandate.merge(id: SecureRandom.uuid, scope: "grocery", cap_amount_cents: total)
     cart   = mandate.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: total,
                            line_items: [{ order_id: order.fetch("order_id") }] + lines)
-    client.pay(shopper, intent:, cart:)
+    assistant.pay(shopper, intent:, cart:)
   end
 
-  def my_order_ids(shopper) = client.query(shopper, name: "my_orders").body.map { _1["order_id"] }
+  def my_order_ids(shopper) = assistant.query(shopper, name: "my_orders").body.map { _1["order_id"] }
 end

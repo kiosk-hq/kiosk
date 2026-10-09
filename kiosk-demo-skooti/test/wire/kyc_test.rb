@@ -6,7 +6,7 @@ require "kiosk/test_helpers/kyc"
 class KycTest < WireTest
   include Kiosk::TestHelpers::Kyc
 
-  def rent_motorcycle(rider, reservation) = client.run(rider, name: "rent_motorcycle", reservation_id: reservation["reservation_id"])
+  def rent_motorcycle(rider, reservation) = assistant.run(rider, name: "rent_motorcycle", reservation_id: reservation["reservation_id"])
 
   def paid_reservation(rider, scooter_code)
     reservation = reserve(rider, scooter_code)
@@ -22,13 +22,13 @@ class KycTest < WireTest
     assert_equal [403, "kyc_required"], [refused.status, refused.body["code"]]
     assert_includes refused.body["hint"], "request_kyc"
 
-    events = client.events(rider)
+    events = assistant.events(rider)
     events.subscribe("kyc_verification")
-    check = client.run(rider, name: "request_kyc")
+    check = assistant.run(rider, name: "request_kyc")
     assert_equal 200, check.status
     assert check.body["verification_url"]
-    2.times { assert_equal 200, client.run(rider, name: "request_kyc").status }
-    capped = client.run(rider, name: "request_kyc")
+    2.times { assert_equal 200, assistant.run(rider, name: "request_kyc").status }
+    capped = assistant.run(rider, name: "request_kyc")
     assert_equal [429, "quota_exceeded"], [capped.status, capped.body["code"]]
 
     kyc_check_passes(check.body["request_id"], age_over_18: true, licence_a: true)
@@ -53,7 +53,7 @@ class KycTest < WireTest
     rider = register
     reservation = paid_reservation(rider, "MC-001")
 
-    kyc_check_passes(client.run(rider, name: "request_kyc").body["request_id"], age_over_18: true)
+    kyc_check_passes(assistant.run(rider, name: "request_kyc").body["request_id"], age_over_18: true)
 
     refused = rent_motorcycle(rider, reservation)
     assert_equal [403, "kyc_required"], [refused.status, refused.body["code"]]
@@ -62,10 +62,10 @@ class KycTest < WireTest
   test "an attestation that spells a boolean any other way grants nothing" do
     rider = register
     reservation = paid_reservation(rider, "MC-001")
-    assert_equal 200, client.kyc(rider, attestation_jws: kyc_attestation(rider, age_over_18: true, licence_a: true)).status
+    assert_equal 200, assistant.kyc(rider, attestation_jws: kyc_attestation(rider, age_over_18: true, licence_a: true)).status
     assert_equal 200, rent_motorcycle(rider, reservation).status
 
-    spelled = client.kyc(rider, attestation_jws: kyc_attestation(rider, age_over_18: "true", licence_a: 1))
+    spelled = assistant.kyc(rider, attestation_jws: kyc_attestation(rider, age_over_18: "true", licence_a: 1))
     assert_equal [200, {}], [spelled.status, spelled.body["attributes"]]
     refused = rent_motorcycle(rider, reservation)
     assert_equal [403, "kyc_required"], [refused.status, refused.body["code"]]
@@ -75,7 +75,7 @@ class KycTest < WireTest
     rider, thief = register, register
     reservation = paid_reservation(thief, "MC-001")
 
-    stolen = client.kyc(thief, attestation_jws: kyc_attestation(rider, age_over_18: true, licence_a: true))
+    stolen = assistant.kyc(thief, attestation_jws: kyc_attestation(rider, age_over_18: true, licence_a: true))
     assert_equal 403, stolen.status
     refused = rent_motorcycle(thief, reservation)
     assert_equal [403, "kyc_required"], [refused.status, refused.body["code"]]
@@ -84,6 +84,6 @@ class KycTest < WireTest
   test "a licence-free scooter needs no attestation" do
     rider = register
     reservation = paid_reservation(rider, "SK-001")
-    assert_equal 200, client.run(rider, name: "start_rental", reservation_id: reservation["reservation_id"]).status
+    assert_equal 200, assistant.run(rider, name: "start_rental", reservation_id: reservation["reservation_id"]).status
   end
 end

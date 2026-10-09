@@ -6,7 +6,7 @@ RSpec.describe "searching the hotels", :wire do
   let(:guest) { register }
 
   def search(**params) = query("search_hotels", **params)
-  def query(name, **params) = client.query(guest, name:, **params)
+  def query(name, **params) = assistant.query(guest, name:, **params)
   def next_page(answer) = answer["link"].to_s[/<([^>]*)>\s*;\s*rel="next"/, 1]
   def follow(link) = search(**URI.decode_www_form(URI(link).query).to_h.symbolize_keys)
   def total(answer) = answer["x-total-count"]&.to_i

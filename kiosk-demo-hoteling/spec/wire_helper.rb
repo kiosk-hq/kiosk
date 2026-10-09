@@ -2,26 +2,22 @@
 
 require "spec_helper"
 require "kiosk/test_helpers/live_server"
-require "kiosk/test_helpers/assistant"
 require "kiosk/test_helpers/stripe_mock"
 
 # Drives this origin over HTTP as an assistant does.
 module WireHelpers
-  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
-
-  def register = client.register!
 
   def bookable_room(guest, check_in:, check_out:)
-    client.query(guest, name: "properties").body.each do |property|
+    assistant.query(guest, name: "properties").body.each do |property|
       stay  = { property_id: property["property_id"], check_in: check_in.iso8601, check_out: check_out.iso8601 }
-      rooms = client.query(guest, name: "availability", **stay).body
+      rooms = assistant.query(guest, name: "availability", **stay).body
       return stay.merge(room_type_id: rooms.first["room_type_id"]) if rooms.any?
     end
     raise "no room is free for #{check_in}..#{check_out}"
   end
 
   def reserve(guest, check_in: Date.current + 30, check_out: check_in + 3)
-    booking = client.run(guest, name: "reserve_room", **bookable_room(guest, check_in:, check_out:))
+    booking = assistant.run(guest, name: "reserve_room", **bookable_room(guest, check_in:, check_out:))
     expect(booking.status).to eq(200), booking.body.inspect
     booking.body
   end
@@ -34,10 +30,10 @@ module WireHelpers
     cart   = mandate.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: total,
                            line_items: [{ qty: booking.fetch("nights"), price_cents: booking.fetch("nightly_price_cents"),
                                           booking_id: booking.fetch("booking_id") }])
-    client.pay(guest, intent:, cart:)
+    assistant.pay(guest, intent:, cart:)
   end
 
-  def confirm(guest, booking) = client.run(guest, name: "confirm_booking", booking_id: booking.fetch("booking_id"))
+  def confirm(guest, booking) = assistant.run(guest, name: "confirm_booking", booking_id: booking.fetch("booking_id"))
 end
 
 RSpec.configure do |config|

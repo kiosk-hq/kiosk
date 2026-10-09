@@ -6,7 +6,7 @@ RSpec.describe "booking a room", :wire do
   it "reserves, pays, and hands back the confirmation code the hotel keeps" do
     guest   = register
     booking = reserve(guest)
-    setup   = client.run(guest, name: "payment_setup")
+    setup   = assistant.run(guest, name: "payment_setup")
     expect([setup.status, setup.body["status"]]).to eq([200, "ready"])
     expect(pay(guest, booking).status).to eq(200)
 
@@ -15,7 +15,7 @@ RSpec.describe "booking a room", :wire do
     code = confirmed.body["confirmation_code"]
     expect(code).to be_present
 
-    listed = client.query(guest, name: "my_bookings").body.find { _1["booking_id"] == booking["booking_id"] }
+    listed = assistant.query(guest, name: "my_bookings").body.find { _1["booking_id"] == booking["booking_id"] }
     expect(listed["confirmation_code"]).to eq(code)
     expect(Booking.find(booking["booking_id"])).to have_attributes(status: "confirmed", confirmation_code: code)
     expect(Kiosk::Settlement.where(user_id: guest.user_id).count).to eq(1)
@@ -25,7 +25,7 @@ RSpec.describe "booking a room", :wire do
   it "does not confirm a booking nobody paid for" do
     guest   = register
     booking = reserve(guest)
-    setup   = client.run(guest, name: "payment_setup")
+    setup   = assistant.run(guest, name: "payment_setup")
     expect([setup.status, setup.body["status"]]).to eq([200, "ready"])
 
     refused = confirm(guest, booking)

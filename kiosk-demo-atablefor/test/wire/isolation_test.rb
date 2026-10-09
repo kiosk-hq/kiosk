@@ -8,7 +8,7 @@ class IsolationTest < WireTest
     bob   = register
     alices = book(alice).body["booking_id"]
 
-    cancelled = client.run(bob, name: "cancel_booking", booking_id: alices)
+    cancelled = assistant.run(bob, name: "cancel_booking", booking_id: alices)
     assert_equal [403, "forbidden"], [cancelled.status, cancelled.body["code"]]
     assert_predicate Booking.find(alices), :confirmed?
 
@@ -23,7 +23,7 @@ class IsolationTest < WireTest
     bob   = register
     table = open_tables(bob).first
 
-    forged = client.run(bob, name: "book_table", user_id: alice.user_id, party_size: 2,
+    forged = assistant.run(bob, name: "book_table", user_id: alice.user_id, party_size: 2,
                              restaurant_id: table["restaurant_id"], restaurant_table_id: table["restaurant_table_id"],
                              date: table["seating_date"], time: table["seating_time"])
     assert_equal [400, "bad_request"], [forged.status, forged.body["code"]]

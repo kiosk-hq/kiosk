@@ -5,14 +5,14 @@ require "test_helper"
 class RentalTest < WireTest
   test "a paid reservation of a licence-free scooter becomes a rental the lock opens once" do
     rider = register
-    assert_includes client.query(rider, name: "scooters_available").body.map { _1["code"] }, "SK-001"
+    assert_includes assistant.query(rider, name: "scooters_available").body.map { _1["code"] }, "SK-001"
 
     reservation = reserve(rider, "SK-001")
-    setup = client.run(rider, name: "payment_setup")
+    setup = assistant.run(rider, name: "payment_setup")
     assert_equal [200, "ready"], [setup.status, setup.body["status"]]
     assert_equal 200, pay(rider, reservation).status
 
-    rental = client.run(rider, name: "start_rental", reservation_id: reservation["reservation_id"])
+    rental = assistant.run(rider, name: "start_rental", reservation_id: reservation["reservation_id"])
     assert_equal 200, rental.status, rental.body
     token = rental.body["rental_token"]
     assert_equal token.rpartition(".").first.split("|")[4].to_i, rental.body["exp"]
@@ -42,10 +42,10 @@ class RentalTest < WireTest
   test "an unpaid reservation does not start, and the refusal says to pay first" do
     rider = register
     reservation = reserve(rider, "SK-001")
-    setup = client.run(rider, name: "payment_setup")
+    setup = assistant.run(rider, name: "payment_setup")
     assert_equal [200, "ready"], [setup.status, setup.body["status"]]
 
-    refusal = client.run(rider, name: "start_rental", reservation_id: reservation["reservation_id"])
+    refusal = assistant.run(rider, name: "start_rental", reservation_id: reservation["reservation_id"])
     assert_equal 403, refusal.status
     assert_includes refusal.body["detail"], "pay for it first"
     assert_includes refusal.body["detail"], "/pay"
@@ -53,10 +53,10 @@ class RentalTest < WireTest
 
   test "my_reservations lists the caller's own reservations" do
     rider = register
-    assert_empty client.query(rider, name: "my_reservations").body
+    assert_empty assistant.query(rider, name: "my_reservations").body
 
     reservation = reserve(rider, "SK-001")
-    listed = client.query(rider, name: "my_reservations").body
+    listed = assistant.query(rider, name: "my_reservations").body
     assert_equal [reservation["reservation_id"]], listed.map { _1["reservation_id"] }
   end
 end

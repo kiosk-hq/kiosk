@@ -10,12 +10,12 @@ class CollabTest < WireTest
   end
 
   def add_todo(who, zone: nil, **args)
-    added = client.run(who, name: "add_todo", list_id: @list_id, headers: clock(zone), **args)
+    added = assistant.run(who, name: "add_todo", list_id: @list_id, headers: clock(zone), **args)
     assert_equal 200, added.status, added.body
     added.body["todo_id"]
   end
 
-  def todos(who, zone: nil) = client.query(who, name: "list_todos", list_id: @list_id, headers: clock(zone)).body.index_by { _1["todo_id"] }
+  def todos(who, zone: nil) = assistant.query(who, name: "list_todos", list_id: @list_id, headers: clock(zone)).body.index_by { _1["todo_id"] }
   def clock(zone) = zone ? { "Kiosk-Timezone" => zone } : {}
   def stream(who) = Kiosk::TestHelpers::Assistant::Events.new(base_url: live_url, token: who.token)
 
@@ -24,13 +24,13 @@ class CollabTest < WireTest
     assert_equal({ "list_id" => @list_id, "joined" => true }, join(@bob, invite(@alice, @list_id)))
     bobs_todo = add_todo(@bob, title: "Bring tent")
 
-    roles = ->(who) { client.query(who, name: "my_lists").body.to_h { [_1["list_id"], _1["role"]] } }
+    roles = ->(who) { assistant.query(who, name: "my_lists").body.to_h { [_1["list_id"], _1["role"]] } }
     assert_equal "owner",  roles.(@alice)[@list_id]
     assert_equal "member", roles.(@bob)[@list_id]
 
     attribution = todos(@bob).transform_values { _1["created_by_agent_id"] }
     assert_equal({ alices_todo => @alice.agent_id, bobs_todo => @bob.agent_id }, attribution)
-    members = client.query(@alice, name: "list_members", list_id: @list_id).body
+    members = assistant.query(@alice, name: "list_members", list_id: @list_id).body
     assert_equal %w[member owner], members.map { _1["role"] }.sort
   end
 
@@ -49,7 +49,7 @@ class CollabTest < WireTest
     assert_includes bobs["due_label"], "(America/New_York)"
     assert_equal ReaderClock::DEFAULT_ZONE_NAME, todos(@alice)[todo_id]["timezone"]
 
-    zoneless = client.run(@alice, name: "add_todo", list_id: @list_id, title: "no zone", due_at: "2026-09-08T14:00:00")
+    zoneless = assistant.run(@alice, name: "add_todo", list_id: @list_id, title: "no zone", due_at: "2026-09-08T14:00:00")
     assert_equal [400, "bad_request"], [zoneless.status, zoneless.body["code"]]
     assert_includes zoneless.body["detail"], "due_at"
   end
@@ -81,11 +81,11 @@ class CollabTest < WireTest
     assert back.events.all? { _1["id"] > cursor }
     assert any_list.await(&bobs)
 
-    assert_equal 200, client.run(@bob, name: "complete_todo", todo_id: alices_todo).status
+    assert_equal 200, assistant.run(@bob, name: "complete_todo", todo_id: alices_todo).status
     completed = back.await { _1["topic"] == "todo" && _1.dig("data", "action") == "completed" }
     assert_equal alices_todo, completed.dig("data", "todo_id")
 
-    assert_equal 200, client.run(@alice, name: "remove_member", list_id: @list_id, account_id: @bob.user_id).status
+    assert_equal 200, assistant.run(@alice, name: "remove_member", list_id: @list_id, account_id: @bob.user_id).status
     removed = back.await { _1["topic"] == "list_membership" && _1.dig("data", "action") == "removed" }
     assert_equal @bob.user_id, removed.dig("data", "account_id")
     revoked = bobs_stream.await_message(timeout: 45) { _1["type"] == "unsubscribed" }

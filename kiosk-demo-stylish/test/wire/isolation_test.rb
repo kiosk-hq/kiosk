@@ -18,7 +18,7 @@ class IsolationTest < WireTest
     alice = bind("alice@example.com")
     bob   = bind("bob@example.com")
 
-    forged = client.run(bob, name: "book_appointment", salon_id: Salon.first.id, slot: 1.week.from_now.iso8601,
+    forged = assistant.run(bob, name: "book_appointment", salon_id: Salon.first.id, slot: 1.week.from_now.iso8601,
                              user_id: alice.user_id)
     assert_equal [400, "bad_request"], [forged.status, forged.body["code"]]
     assert_includes forged.body["detail"], "user_id"

@@ -20,7 +20,7 @@ class BindingTest < WireTest
 
   test "an assistant the human approves on the verify page acts as that human" do
     key = OpenSSL::PKey::RSA.generate(2048)
-    opened = client.device_authorization(client_id: "stylish-test", public_key: key.public_key.to_pem)
+    opened = assistant.device_authorization(client_id: "stylish-test", public_key: key.public_key.to_pem)
     assert_equal 200, opened.status
     assert_empty %w[device_code user_code verification_uri expires_in interval] - opened.body.keys
 
@@ -33,9 +33,9 @@ class BindingTest < WireTest
     assert_equal "200", granted.code, granted.body
 
     token = JSON.parse(granted.body)["access_token"]
-    assistant = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: nil, user_id: nil, token:, rsa_key: key)
-    assert_equal alice.id, claims(assistant)["sub"]
-    assert_equal alice.id, Appointment.find(book(assistant)["appointment_id"]).user_id
+    bound = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: nil, user_id: nil, token:, rsa_key: key)
+    assert_equal alice.id, claims(bound)["sub"]
+    assert_equal alice.id, Appointment.find(book(bound)["appointment_id"]).user_id
   end
 
   test "a second assistant shares the account, and unlinking the first leaves the second" do
@@ -51,13 +51,13 @@ class BindingTest < WireTest
   end
 
   test "the human names and caps an assistant on the manage page" do
-    assistant = bind("alice@example.com")
+    bound = bind("alice@example.com")
     human = sign_in("alice@example.com")
     page = human.get_html("/kiosk/auth/assistants")
-    assert_includes page.body, assistant.agent_id
+    assert_includes page.body, bound.agent_id
 
     updated = human.post_form("/kiosk/auth/assistants/update", "authenticity_token" => human.csrf_token(page.body),
-                                                               "agent_id" => assistant.agent_id,
+                                                               "agent_id" => bound.agent_id,
                                                                "human_label" => "Alice booking bot",
                                                                "spending_cap_cents" => "12345")
     assert_equal "200", updated.code

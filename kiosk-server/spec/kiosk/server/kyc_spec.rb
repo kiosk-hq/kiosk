@@ -241,6 +241,18 @@ RSpec.describe Kiosk::Server::Kyc do
                                "data" => { "request_id" => request_id, "status" => "approved", "kyc_jws" => jws })
     end
 
+    it "pushes an event its published payload schema accepts" do
+      callback(request_id: request_id, nonce: nonce, kyc_jws: attestation)
+      schema = JSON.parse(JSON.generate(Kiosk::Server::Events.fetch("kyc_verification")[:payload_schema]))
+      expect(JSONSchemer.schema(schema).validate(store.since("u-1", 0).first["data"]).to_a).to be_empty
+    end
+
+    it "lets only the person who opened a verification subscribe to it" do
+      reachable = Kiosk::Server::Events.fetch("kyc_verification")[:subject_reachable]
+      expect(reachable.call(request_id, build_identity(user_id: "u-1"))).to be(true)
+      expect(reachable.call(request_id, build_identity(user_id: "u-2"))).to be(false)
+    end
+
     it "is good once: the same callback again finds no open verification" do
       callback(request_id: request_id, nonce: nonce, kyc_jws: attestation)
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: attestation).first).to eq(404)

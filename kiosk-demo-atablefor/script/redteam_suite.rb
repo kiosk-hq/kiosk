@@ -1,75 +1,7 @@
 # frozen_string_literal: true
 
-# Adversarial regression battery for atablefor (restaurant table-booking).
-#
-# Runs a set of attacks against the live surface (availability / my_bookings
-# queries; book_table / cancel_booking actions) and asserts each is BLOCKED.
-# atablefor has no payment or KYC surface, so the battery covers the attacks
-# that actually apply — cross-tenant reads, forged principal args, cross-owner
-# cancels, and the auth/dispatch boundary.
-#
-# Scenarios (each must be BLOCKED):
-#   CrossTenantRead   — Bea's my_bookings must NOT contain Diego's booking
-#   ForgedUserId      — a forged user_id on book_table is REFUSED (400
-#                       bad_request naming it), and Bea's legitimate booking
-#                       never surfaces under Diego
-#   CrossOwnerCancel  — Bea cancel_booking on Diego's booking → 403
-#   MalformedUuidArg  — a junk booking_id on cancel_booking is a typed 400
-#                       with no SQL internals on the wire — never a 500
-#   RegisterWithoutPoP — register with no proof-of-possession JWS → not 201
-#   MissingAuth       — a request with no Authorization → 401
-#   GarbageToken      — an unparseable bearer token → 401
-#   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
-#                       resolves to NO identity → 401, unconditionally and in
-#                       THIS (development) environment: agent auth has no
-#                       cleartext parser to fall back to
-#   UnknownQuery      — an unregistered query name → 404
-#   UnknownAction     — an unregistered action name → 404
-#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
-#                       draws no route, so it answers the ordinary 404 any
-#                       undrawn path gets, bearer or not
-#   MethodMismatch    — a GET at an action's path draws no route, so it is the
-#                       same ordinary 404 and never serves the write
-#   InvalidFilterIsNotAnEmptyList — an availability filter naming a seating
-#     time, a date or a NEIGHBOURHOOD that does not exist is a typed 400
-#     NAMING the valid values, never a 200 with an empty rows array and never
-#     a 500
-#   BookOutsideOfferedHorizon — book_table on a well-formed date OUTSIDE the
-#     rolling horizon availability offers is a typed 400 NAMING the bookable
-#     dates, never a confirmed booking for a seating that was never offered;
-#     and the BASIC-form `YYYYMMDD` spelling, which is not the one any
-#     availability row hands out, is refused by BOTH layers
-#   HostileArgShapes — boolean/array/object/junk values on book_table's
-#     party_size, restaurant_id, restaurant_table_id, date and time, on
-#     availability's party_size (including the two bracket spellings) and on
-#     cancel_booking's booking_id are a typed 400 with no runtime vocabulary on
-#     the wire — never a 500 and never a wrong answer served as 200. The beat's
-#     own comment enumerates which layer answers which argument; it does not
-#     claim more than it probes. It ALSO carries a control on its own oracle: a
-#     neighborhood value that spells three of the leak strings must be BLOCKED,
-#     never a BREACH on its own echo.
-#   WholeValuedFloatBody — the ONE beat here that asserts an ACCEPTANCE: the
-#     two halves of the wire disagree about `2.0` ON PURPOSE (spec §8.1 item
-#     8), so `?party_size=2.0` on the availability QUERY is a typed 400 while
-#     `{"party_size": 2.0}` on the book_table ACTION books a party of TWO —
-#     and a one-sided battery is how the accepted half drifts
-#   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
-#     the account-binding claim ceremony's UNAUTHENTICATED opening request
-#     refuses `role`/`scope` at a DECLARED value as well as an invented one,
-#     while the role-less request still opens the ceremony
-#
-# THE WIRE. A query is `GET <endpoint>/<query-name>` carrying its arguments
-# in the query string; an action is `POST <endpoint>/<action-name>` carrying
-# them as the JSON body. A success body IS the result; an error is an RFC 9457
-# problem document whose branch point is the TOP-LEVEL `code`.
-#
-# Usage:
-#   SERVER_URL=http://127.0.0.1:3002 bundle exec ruby script/redteam_suite.rb
-#
-# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
-# on a battery that produced no proofs at all; exits 2 when a beat could not be
-# exercised and was not expected to skip.
-# A BREACH = a real hole in atablefor — fix the app, not the scenario.
+# Red-team battery for atablefor: attacks a running server and asserts every attack is refused.
+# Usage: SERVER_URL=http://127.0.0.1:3002 bundle exec ruby script/redteam_suite.rb
 
 require "date"
 require "json"

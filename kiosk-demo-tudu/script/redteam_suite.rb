@@ -1,52 +1,7 @@
 # frozen_string_literal: true
 
-# Adversarial regression battery for tudu (multi-user collaborative todo app).
-#
-# Runs a set of attacks against the live surface (my_lists / list_todos /
-# list_members queries; create_list / add_todo / complete_todo / invite /
-# accept_invite / remove_member actions) and asserts each is BLOCKED. tudu has
-# no payment or KYC surface, so the battery covers the attacks that apply —
-# membership isolation, forged principal args, the auth/dispatch boundary, PLUS
-# tudu-specific collaboration attacks (invite replay, revoked-member access,
-# revoked-agent login, pre-link token reach).
-#
-# Standard scenarios (each must be BLOCKED):
-#   CrossTenantRead   — a non-member's list_todos on a private list → 403
-#   ForgedUserId      — forged account_id on create_list REFUSED (400), and the
-#                       caller's own list still belongs to the caller
-#   MalformedUuidArg  — a junk list_id/todo_id/account_id on the wire-facing
-#                       verbs is a typed 400 with no SQL internals — never a 500
-#   MissingAuth       — a request with no Authorization → 401
-#   GarbageToken      — an unparseable bearer token → 401
-#   UnknownQuery      — an unregistered query name → 404
-#   UnknownAction     — an unregistered action name → 404
-#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
-#                       draws no route, so it answers the ordinary 404 any
-#                       undrawn path gets, bearer or not
-#   MethodMismatch    — a GET at an action's path draws no route, so it is the
-#                       same ordinary 404 and never serves the write
-# tudu-specific scenarios:
-#   InviteCodeReplay      — an already-used invite code is rejected → 403
-#   RevokedMemberAccess   — a removed member's next read is blocked → 403
-#   RevokedAgentKey       — an unlinked agent's login is denied → 404
-#   PreLinkTokenAfterLink — a token minted before rebind is watermark-revoked by
-#                           the rebind (principal change) → 401
-#   NoLoginAddressOnTheRoster — a co-member's list_members carries display names
-#                           and NO account address anywhere in the body
-#   ChosenNameNeverTheAddress — a visitor who signs up with a display name is
-#                           named by it on a roster, never by what they log in
-#                           with (the other end of the same rule)
-#   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
-#     the account-binding claim ceremony's UNAUTHENTICATED opening request
-#     refuses `role`/`scope` at a DECLARED value as well as an invented one,
-#     while the role-less request still opens the ceremony
-#
-# Usage:
-#   SERVER_URL=http://127.0.0.1:3007 bundle exec ruby script/redteam_suite.rb
-#
-# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
-# on a battery that produced no proofs at all; exits 2 when a beat could not be
-# exercised and was not expected to skip.
+# Red-team battery for tudu: attacks a running server and asserts every attack is refused.
+# Usage: SERVER_URL=http://127.0.0.1:3007 bundle exec ruby script/redteam_suite.rb
 
 require "json"
 require "jwt"

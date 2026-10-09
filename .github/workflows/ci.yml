@@ -685,34 +685,6 @@ jobs:
       - name: check-demo-copies self-test
         run: ./bin/check-demo-copies --self-test
 
-  # Does each red-team suite header still name the beats the suite registers,
-  # and only the HTTP statuses each beat's own assertion checks? (T-078, K-1482)
-  # Stdlib Ruby only: no bundle, no services, no database.
-  redteam-beat-lists:
-    name: redteam prose names the beats — and the statuses — that run (bin/check-redteam-headers)
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Set up Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "4.0.1"
-          bundler-cache: false
-
-      - name: Every suite header agrees with the beats that run
-        run: ./bin/check-redteam-headers
-
-      # Its own step, for the reason the sibling self-tests are: R3 is a BAN, and a
-      # ban's violation set is EMPTY when the tree is
-      # healthy, so an extractor broken by an edit leaves the bare run at exit 0
-      # and says nothing. The vacuity arms assert liveness on the DECLARATIONS —
-      # that the extractors still find entries to judge — rather than on the
-      # violations, which is the polarity K-1262 established.
-      - name: check-redteam-headers self-test
-        run: ./bin/check-redteam-headers --self-test
-
   # A red-team beat that claims a 400 REFUSAL of a named argument must read the
   # refusal's own words (T-210 item (u), from K-1762/K-1764/K-1767). The status
   # and the `code` are the OPERATOR's, whatever the app does, so a beat that

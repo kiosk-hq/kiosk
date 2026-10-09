@@ -1,60 +1,7 @@
 # frozen_string_literal: true
 
-# hoteling redteam battery
-#
-# Exercises the hoteling chain: register (PoW-gated) → no KYC → reserve_room →
-# pay → confirm_booking (ownership, then payment, then the property's answer).
-# Headline scenario:
-#   C2  PayForOtherUseSelf  — B's pay for A's booking is refused
-#
-# C3 SpentResourceReuse is SKIPPED here, and the profile says so in one flag
-# rather than this file quietly leaving the beat out. `confirm_booking` spends
-# nothing: the property decides, and the verb reads that decision back. Reading
-# it twice is the intended behaviour, so there is no consumed resource to
-# re-activate and the beat would score correct behaviour a breach.
-#
-# Three cashier-check beats attack PaymentClaim (the monetary
-# check run at capture, before Stripe captures) — the first from the shared
-# kiosk-redteam library, the other two local to this file:
-#   WrongCurrencyCart  — pay own booking in usd → 403
-#   TamperedPriceCart  — pay below the operator's quoted booking price → 403
-#   InflatedTotalCart  — cart total ≠ sum of its line items → 403
-# Plus two input-shape beats, one date beat and one inventory beat:
-#   MalformedUuidArg   — a junk booking_id, as an arg AND inside a signed cart,
-#                        is a typed 400 with no SQL internals — never a 500
-#   HostileArgShapes   — every hostile SHAPE (boolean, array, object, junk
-#                        integer, unparseable and out-of-horizon date) on the
-#                        integer and date arguments is a typed 400 too
-#   PastStay           — a check_in before today is a typed 400 on BOTH
-#                        availability and reserve_room: never rooms, never a
-#                        hold
-#   DoubleBookedRoom   — a room-night already held cannot be reserved again by
-#                        anyone, on the same or overlapping dates → 409
-#
-# And two beats about the shape of the wire itself:
-#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
-#                        draws no route, so it answers the ordinary 404 any
-#                        undrawn path gets, bearer or not
-#   MethodMismatch     — the wrong method at a registered verb's path draws no
-#                        route either, so it is the same plain 404 with no
-#                        `Allow`, and the verb never runs.
-#
-# THE WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
-# arguments in the query string, an action is `POST <endpoint>/<action-name>`
-# with its arguments as the JSON body, a success body IS the result (a bare
-# array from a non-paginating query, the action's own object from an action),
-# and an error is an RFC 9457 problem document whose branch point is the
-# TOP-LEVEL `code` (`message` became `detail`).
-#
-# KYC scenarios are SKIPPED (hoteling has no KYC). RegistrationWithoutPow RUNS:
-# register PoW is ON (registration_pow_count=1), so a missing/bad register proof
-# must be rejected.
-#
-# Usage (from kiosk-demo-hoteling/):
-#   SERVER_URL=http://127.0.0.1:3003 bundle exec ruby script/redteam_suite.rb
-#
-# Exits non-zero if any applicable scenario reports a BREACH or if the
-# expected skip set does not match (catches profile typos that disable gates).
+# Red-team battery for hoteling: attacks a running server and asserts every attack is refused.
+# Usage: SERVER_URL=http://127.0.0.1:3003 bundle exec ruby script/redteam_suite.rb
 
 require "kiosk/redteam"
 require "jwt"

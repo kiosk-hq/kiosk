@@ -1,67 +1,7 @@
 # frozen_string_literal: true
 
-# Adversarial regression battery for philslist (non-commerce classifieds).
-#
-# Runs a set of attacks against the live surface (browse_listings / my_listings
-# queries; post_listing / edit_listing / close_listing actions) and asserts each
-# is BLOCKED. philslist has no payment or KYC surface, so the battery covers the
-# attacks that actually apply — cross-owner reads AND WRITES, forged principal
-# args, and the auth/dispatch boundary.
-#
-# Scenarios (each must be BLOCKED):
-#   CrossTenantRead  — Bob's my_listings must NOT contain Alice's listing
-#   ForgedUserId     — forged owner_id on post_listing ignored (belongs to Bob)
-#   CrossOwnerEdit   — Bob edit_listing on Alice's listing → 403
-#   CrossOwnerClose  — Bob close_listing on Alice's listing → 403
-#   MalformedUuidArg — a junk listing_id on edit_listing/close_listing is a
-#                      typed 400 whose detail NAMES the argument, with no SQL
-#                      internals on the wire — never a 500
-#   MissingAuth      — a request with no Authorization → 401
-#   GarbageToken     — an unparseable bearer token → 401
-#   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
-#                      resolves to NO identity, in EVERY environment, while a
-#                      genuinely-bound token is answered
-#   UnknownQuery     — an unregistered query name → 404
-#   UnknownAction    — an unregistered action name → 404
-#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
-#                      draws no route, so it answers the ordinary 404 any
-#                      undrawn path gets, bearer or not
-#   MethodMismatch   — a GET at an action's path draws no route, so it is the
-#                      same ordinary 404 and never serves the write
-#   OutOfEnumFilterIsNotSilentlyReinterpreted — a browse_listings
-#                      `category_slug` outside the LIVE `categories` table is a
-#                      typed 400 naming the sections that exist, NEVER a 200
-#                      answering a different question
-#   LikeMetacharactersAreEscaped — a browse_listings `keyword` carrying LIKE
-#                      metacharacters matches them LITERALLY: `_` and `%` are
-#                      not live wildcards, so a search is never answered a
-#                      WIDER question than it asked
-#   NoSellerPiiOnTheOpenBoard — the cross-owner board names sellers by an
-#                      opaque, per-seller pseudonym and carries no account
-#                      address anywhere in the response
-#   ContactDetailsStayOutOfTheRequestLog — the contact line `post_listing` asks
-#                      an assistant to put in `body` is published on the board and
-#                      filtered out of the operator's own request log
-#   DeviceGrantRoleSelfSelection (from `kiosk-redteam`, shared by every demo) —
-#     the account-binding claim ceremony's UNAUTHENTICATED opening request
-#     refuses `role`/`scope` at a DECLARED value as well as an invented one,
-#     while the role-less request still opens the ceremony
-#
-# THE TWO PRINCIPALS ARE EARNED, NOT ASSERTED. Alice and Bob are bound
-# through the shipped ceremony — Equihash-tolled `/auth/register` → the human's
-# real Devise sign-in → `/auth/link` → `/auth/claim` (script/bound_assistant.rb) —
-# because nothing turns a written-down `agent:u-…:a-…:r-…` string into an
-# identity: the ceremony is the only way to hold a principal here. That is also
-# why the SelfAssertedTokenForgery beat below is an ordinary over-the-wire
-# attack in the SAME environment this suite drives.
-#
-# Usage:
-#   SERVER_URL=http://127.0.0.1:3006 bundle exec ruby script/redteam_suite.rb
-#
-# Exits 0 when every scenario is BLOCKED (0 BREACH); exits 1 on any BREACH, and
-# on a battery that produced no proofs at all; exits 2 when a beat could not be
-# exercised and was not expected to skip.
-# A BREACH = a real hole in philslist — fix the app, not the scenario.
+# Red-team battery for philslist: attacks a running server and asserts every attack is refused.
+# Usage: SERVER_URL=http://127.0.0.1:3006 bundle exec ruby script/redteam_suite.rb
 
 require "json"
 require "securerandom"

@@ -1,74 +1,7 @@
 # frozen_string_literal: true
 
-# skooti redteam battery
-#
-# Exercises the full skooti chain: Equihash-tolled register → reserve → pay →
-# start_rental (ownership/licence-free-vehicle/payment gates; licence-free
-# scooters are NOT KYC-gated).  Headline scenarios:
-#   C2  PayForOtherUseSelf  — B pays for A's reservation, B tries start_rental
-#   C3  SpentResourceReuse  — re-start_rental on an active reservation
-#       KYC verifier variants — expired / forged attestation rejected at /kyc
-#   MotorcycleForgedKyc      — a forged attestation self-asserting
-#                              {age_over_18, licence_a} is rejected, so the
-#                              KYC-attribute-gated rent_motorcycle stays 403.
-#   MotorcycleViaStartRental — the KYC gate cannot be walked around by VERB:
-#                              reserve(MC-001) → pay → start_rental must be
-#                              refused, not answered with an unlock token.
-#   IssuedKycJwsTheft        — a REAL issuer-signed jws minted for victim B via
-#                              the stub-issuer approve page cannot be replayed by
-#                              attacker A (KycVerifier binds sub to the caller),
-#                              so A's rent_motorcycle stays 403.
-#
-# Three cashier-check beats attack PaymentClaim (the monetary check
-# run at capture, before Stripe captures) — the first from the shared
-# kiosk-redteam library, the other two local to this file:
-#   WrongCurrencyCart  — pay own reservation in usd → 403
-#   TamperedPriceCart  — pay below the operator's quoted rental price → 403
-#   InflatedTotalCart  — cart total ≠ sum of its line items → 403
-# Plus two input-shape beats:
-#   MalformedUuidArg   — a junk reservation_id, as an arg AND inside a signed
-#                        cart, is a typed 400 with no SQL internals — never a 500
-#   HostileArgShapes   — every hostile SHAPE (boolean/array/object/number) on
-#                        scooter_code and reservation_id is a typed 400 too,
-#                        never a 500. It also carries a control on its own ORACLE: a
-#                        scooter_code spelling three of the leak strings must
-#                        be BLOCKED, not a BREACH on its echo
-#
-# Two broker beats attack the cross-operator KYC callback:
-#   CrossOperatorClaimReplay — a broker-signed claim addressed to ANOTHER
-#                        operator is rejected at skooti's /kiosk/kyc/callback
-#   ForgedCallbackNoSig — a callback whose jws is wrong-key (or absent) is
-#                        rejected, so no kyc_verification event is sent and
-#                        the gate never opens
-#
-# And two forgery beats at the identity boundary, both over the wire in the
-# SAME environment the drivers run in:
-#   SelfAssertedTokenForgery — a self-asserted `agent:u-…:a-…:r-owner` bearer
-#                        resolves to NO identity (401), while the genuinely
-#                        bound token is still answered
-#   SelfAssertedUserBearerForgery — a forged `user:u-<uuid>` bearer at
-#                        /kiosk/auth/link is 401, while the seeded rider's real
-#                        Devise session is answered
-#
-# And two beats about the shape of the wire itself:
-#   UnregisteredVerbIsOrdinaryRefusal — a POST to a name no verb registers
-#                        draws no route, so it answers the ordinary 404 any
-#                        undrawn path gets, bearer or not
-#   MethodMismatch     — the wrong method at a registered verb's path draws no
-#                        route either, so it is the same plain 404 with no
-#                        `Allow`, and the verb never runs.
-#
-# THE WIRE, throughout: a query is `GET <endpoint>/<query-name>` with its
-# arguments in the query string, an action is `POST <endpoint>/<action-name>`
-# with its arguments as the JSON body, a success body IS the result, and an
-# error is an RFC 9457 problem document whose branch point is the TOP-LEVEL
-# `code` (`message` became `detail`).
-#
-# Usage (from kiosk-demo-skooti/):
-#   SERVER_URL=http://127.0.0.1:3004 bundle exec ruby script/redteam_suite.rb
-#
-# Exits non-zero if any applicable scenario reports a BREACH or if the
-# expected skip set does not match (catches profile typos that disable gates).
+# Red-team battery for skooti: attacks a running server and asserts every attack is refused.
+# Usage: SERVER_URL=http://127.0.0.1:3004 bundle exec ruby script/redteam_suite.rb
 
 require "kiosk/redteam"
 require "jwt"

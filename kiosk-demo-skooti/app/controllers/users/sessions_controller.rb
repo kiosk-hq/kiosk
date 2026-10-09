@@ -1,29 +1,8 @@
 # frozen_string_literal: true
 
 module Users
-  # AGENT-SIGNPOST — the sign-OUT half of the sign-IN signpost ApplicationController
-  # carries for the human sign-in page.
-  #
-  # `DELETE /users/sign_out` from a caller that holds no web session is answered
-  # by Devise with `head :unauthorized` (SessionsController#verify_signed_out_user
-  # → respond_to_on_destroy(non_navigational_status: :unauthorized)). For a
-  # JSON-shaped caller that is a 401 carrying `Content-Type: application/json`
-  # and ZERO bytes — a content type promising JSON with nothing to parse, which
-  # is less actionable than an honest HTML error. Hand that caller a JSON body
-  # instead, with the same pointer to the wire the sign-in signpost gives.
-  #
-  # NOT «the Kiosk error envelope»: that phrase names the wire CONTRACT, and the
-  # wire's contract is a FLAT RFC 9457 problem document served as
-  # `application/problem+json` — the `{ok:false, error:{…}}` shape below is not
-  # a wire shape at all. `/users/sign_out` is a browser page, not a wire verb,
-  # so this body is a COURTESY to a caller that dialed the wrong door rather
-  # than a contract anything parses, and its `error.code` is deliberately
-  # non-wire. kiosk-server's own wrong-door
-  # signposts render the same shape and record the same choice.
-  #
-  # Everything else is Devise's behaviour untouched: browsers (navigational
-  # formats) still get the redirect + flash, and a REAL sign-out still answers
-  # `204 No Content`, where an empty body is the correct answer and says so.
+  # An assistant that signs out of a human page it never signed in to gets a
+  # pointer to the wire instead of an empty 401.
   class SessionsController < Devise::SessionsController
     private
 

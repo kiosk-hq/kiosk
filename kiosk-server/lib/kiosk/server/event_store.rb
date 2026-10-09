@@ -2,13 +2,8 @@
 
 module Kiosk
   module Server
-    # The in-process event store: the default for tests and a one-process
-    # development boot. A deployed origin sets {EventStores::ActiveRecord}; the
-    # engine refuses to boot production with this one and a declared topic.
-    #
-    # A store answers #append, #since, #head and #truncated?; #prune_before is
-    # this one's own. The tail is keyed by user_id, so every assistant of one
-    # human sees the same stream.
+    # The in-process event store for tests and one-process development; production refuses it once
+    # a topic is declared. Tails are keyed by user_id, so every assistant of one human shares one.
     class EventStore
       def initialize
         @mutex  = Mutex.new
@@ -17,12 +12,8 @@ module Kiosk
         @floor  = 0
       end
 
-      # Appends to one identity's tail under the origin's next id — one counter
-      # for the origin, so one cursor resumes every subscription on a socket.
-      #
-      # @param identity_key [String] a user_id
-      # @param event [Hash] string-keyed, WITHOUT "id" — this assigns it
-      # @return [Integer] the assigned id
+      # One id counter per origin, so one cursor resumes every subscription on a socket.
+      # `event` is string-keyed, without "id"; returns the assigned id.
       def append(identity_key, event)
         @mutex.synchronize do
           @seq += 1
@@ -31,15 +22,14 @@ module Kiosk
         end
       end
 
-      # @param id [Integer] the caller's cursor; events at or below it are theirs already
-      # @return [Array<Hash>] this identity's events with a greater id, ascending
+      # This identity's events after the cursor `id`, ascending.
       def since(identity_key, id)
         @mutex.synchronize do
           @by_key[identity_key.to_s].select { |event| event["id"] > id.to_i }
         end
       end
 
-      # @return [Integer] the origin's current maximum id, 0 on a fresh origin
+      # The origin's maximum id, 0 when empty.
       def head = @mutex.synchronize { @seq }
 
       # True when an id above the caller's cursor has been pruned; a cursor one
@@ -48,7 +38,6 @@ module Kiosk
         @mutex.synchronize { @floor > id.to_i + 1 }
       end
 
-      # Drops everything below +id+.
       def prune_before(id)
         @mutex.synchronize do
           @floor = id.to_i

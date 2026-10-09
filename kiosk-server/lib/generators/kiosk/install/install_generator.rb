@@ -6,36 +6,8 @@ require "rails/generators/migration"
 
 module Kiosk
   module Generators
-    # Bootstrap generator for a host Rails app adopting Kiosk.
-    #
-    # Invocation:
-    #   bin/rails g kiosk:install
-    #
-    # Produces:
-    #   - config/initializers/kiosk.rb           — Kiosk.configure block
-    #   - `dump_schemas` in config/application.rb, so schema.rb carries the kiosk schema
-    #   - config/routes/kiosk.rb and `draw(:kiosk)` in config/routes.rb
-    #   - db/migrate/<ts>_create_kiosk_schema.rb — schema + helper functions
-    #   - db/migrate/<ts+1>_create_kiosk_identity_tables.rb
-    #   - db/migrate/<ts+2>_create_kiosk_reservations.rb
-    #   - db/migrate/<ts+3>_create_kiosk_device_authorizations.rb
-    #   - db/migrate/<ts+4>_create_kiosk_mandates.rb
-    #   - db/migrate/<ts+5>_create_kiosk_kyc_attributes.rb
-    #   - db/migrate/<ts+6>_create_kiosk_events.rb
-    #   - db/migrate/<ts+7>_create_kiosk_pow_spent.rb
-    #
-    # Every migration is a `create`: each table is created in its final shape,
-    # so a fresh adopter installs the schema outright.
-    #
-    # Each migration file is a thin wrapper that calls into
-    # {Kiosk::Server::SchemaDefinitions} at host-app runtime, so the SQL
-    # is regenerated against the current `Kiosk.configuration` when
-    # `bin/rails db:migrate` runs.
-    #
-    # Class-option flags map to the generator-time arguments passed into
-    # the SchemaDefinitions methods (the migration files embed them
-    # literally — config drift between generation time and migrate time
-    # only matters for fields the operator deliberately overrides).
+    # `bin/rails g kiosk:install`: writes the Kiosk initializer, the wire routes
+    # and the migrations, which call {Kiosk::Server::SchemaDefinitions} at migrate time.
     class InstallGenerator < ::Rails::Generators::Base
       include ::Rails::Generators::Migration
 
@@ -53,10 +25,7 @@ module Kiosk
       class_option :guc_namespace, type: :string, default: "app",
                                    desc: "GUC namespace prefix used in the session GUC names"
 
-      # Rails::Generators::Migration requires a class-level
-      # next_migration_number. We bump a counter so the migrations
-      # created in one invocation get strictly-ascending UTC timestamps
-      # (otherwise `db/migrate` glob sort is non-deterministic).
+      # Ascending timestamps within one run, so the migrations sort in order.
       @migration_counter = 0
       class << self
         def next_migration_number(_dirname)

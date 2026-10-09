@@ -4,10 +4,8 @@ require "kiosk/server/handler_mixin"
 require "kiosk/server/handler_registrations"
 
 module Kiosk
-  # Include into a controller of YOUR choosing to declare Kiosk **verbs** — the
-  # sanctioned surface an assistant reaches under the mount. A verb is either a
-  # QUERY (`GET <mount>/<name>`, a read) or an ACTION (`POST <mount>/<name>`, a
-  # write), and each declaration says which it is with `kind`.
+  # Include into any controller to declare verbs: a query (`GET <mount>/<name>`)
+  # or an action (`POST <mount>/<name>`). Handlers live in app/controllers/kiosk.
   #
   #   class Kiosk::BoardController < ApplicationController   # your base class
   #     include Kiosk::Handler
@@ -39,15 +37,6 @@ module Kiosk
   #       render json: { order_id: order.id, total_cents: order.total_cents }
   #     end
   #   end
-  #
-  # One controller may declare both kinds. Kiosk imposes no superclass. Put
-  # handlers in app/controllers/kiosk: the engine loads that directory and
-  # every class including Kiosk::Handler registers itself.
-  #
-  # A descriptor slot may be a proc (`enum: -> { Category.pluck(:slug) }`),
-  # evaluated when the descriptor is served. See {Kiosk::Server::SchemaSlots}.
-  #
-  # A large query result paginates with `render_kiosk_page(rows, next_cursor:, total:)`.
   module Handler
     def self.included(base)
       Kiosk::Server::HandlerMixin.install(base)

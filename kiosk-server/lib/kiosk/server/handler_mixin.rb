@@ -10,200 +10,24 @@ require "kiosk/server/handler_dispatch"
 
 module Kiosk
   module Server
-    # Implementation behind `include Kiosk::Handler`. Operators never name this
-    # module — they include the public one, which is the whole of the contract:
-    #
-    #   Kiosk ships a MIXIN, not a base class. Which superclass a handler
-    #   controller has is the operator's decision, so nothing here inherits,
-    #   and the only requirement is that the including class BE a controller —
-    #   dispatch goes through `Controller.action(…)`.
-    #
-    # ── The macros ───────────────────────────────────────────────────────
-    # Each macro records a declaration; the NEXT `def` claims all pending ones
-    # and becomes a wire verb (`method_added`, the classic). A method defined
-    # with no pending declarations is NOT a verb — the macros are the opt-in, so
-    # a controller's helper methods stay invisible to the wire.
-    #
-    #   reach          — OPTIONAL, and the DEFAULT is the strong case. Whose rows
-    #                    this verb may touch: `:principal` (default — only the
-    #                    calling principal's own, which is spec §7.2's absolute
-    #                    requirement), `:published`, `:consented` or `:role`.
-    #                    See the long note below.
-    #   kind           — REQUIRED. `:query` (reached by `GET <mount>/<name>`) or
-    #                    `:action` (`POST <mount>/<name>`). THE single source of
-    #                    truth for which verb reaches this handler, and it is a
-    #                    property of the DECLARATION: one controller may declare
-    #                    both, in any order. It is required rather than
-    #                    defaulted because either default silently assigns an
-    #                    HTTP method — a write behind `GET` is the expensive
-    #                    direction of that mistake.
-    #   description    — semantics ONLY: what this verb does, how, and what it
-    #                    returns IN MEANING. Never a field list, a type, a
-    #                    required marker, or a param name.
-    #   input_schema   — REQUIRED. JSON Schema for the params. THE input
-    #                    contract: every name, type, enum and range lives here.
-    #   output_schema  — REQUIRED. JSON Schema for what comes back, so an
-    #                    assistant knows the result shape without a
-    #                    call-and-observe probe. Both are required of every verb
-    #                    by protocol.md Section 8.3 and by
-    #                    `schema-descriptor.schema.json`, and a declaration
-    #                    missing either RAISES here, at class-body load.
-    #   example_params — OPTIONAL. A params object an assistant can copy verbatim.
-    #   example_row    — OPTIONAL. A worked example of the result.
-    #   wire_name      — OPTIONAL. The name agents call it by, when it cannot be
-    #                    the method name (a Ruby keyword, or a name that would
-    #                    collide with a controller method).
-    #
-    # ── `reach` — WHOSE ROWS A VERB MAY TOUCH ────────────────────────────
-    # Spec §7.2's DEFAULT is absolute: every read is scoped to the authenticated
-    # `user_id` and another `user_id`'s rows are never readable. But a
-    # legitimate operator domain can need wider reach — philslist's open board,
-    # tudu's shared lists, stylish's owner calendar are three shipped examples —
-    # because data separation is the operator's business logic, and Kiosk's job
-    # is to SUPPLY the means (an identity resolved before dispatch, the four
-    # GUCs, a principal that is never a wire input), not to dictate the model.
-    #
-    # So the default is unchanged and stays absolute, and any DEPARTURE from it
-    # is declared — explicitly, per verb, and published on the wire — rather than
-    # being an implicit consequence of how a handler happens to be written:
-    #
-    #   :principal  DEFAULT. This verb touches only the calling principal's own
-    #               rows, or rows that belong to no principal at all (a catalogue,
-    #               a price list). Declare nothing and you have declared this.
-    #   :published  The operator PUBLISHES these owner-carrying rows to every
-    #               principal, by intent — a classifieds board. Costly by design:
-    #               §7.2 forbids putting an account's login identifier in such a
-    #               row.
-    #   :consented  A principal SHARED them, and the authorising artefact is one
-    #               the operator can point at — tudu's single-use invite becomes
-    #               a membership, and the membership is what permits the read.
-    #               The spec calls this the stronger of the two sharing claims.
-    #   :role       The reach depends on the caller's operator-ASSIGNED `role`
-    #               claim — stylish's salon owner sees the whole book, everyone
-    #               else sees their own bookings. A role is never client-requested
-    #               (§5.4), which is what keeps this from being a self-service
-    #               escalation.
-    #
-    # DECLARING A REACH DOES NOT MAKE IT CORRECT — it makes it REVIEWABLE. An
-    # undeclared cross-principal read is a defect whether or not the operator
-    # meant it; that asymmetry is the whole point, because "unless the operator
-    # intends otherwise" would have swallowed §7.2 whole (every leak is intended
-    # from the leaker's side).
-    #
-    # ── A SLOT MAY BE A PROC, for a schema derived from DATA ──────────────
-    # Any part of `input_schema`, `output_schema`, `example_params` or
-    # `example_row` may be a zero-arity proc:
-    #
-    #   input_schema type: "object", additionalProperties: false,
-    #                properties: {
-    #                  category_slug: { type: "string",
-    #                                   enum: -> { Category.pluck(:slug) } },
-    #                }
-    #
-    # Use it when the constraint IS a fact about the operator's rows. Do NOT
-    # write the plain call — `enum: Category.pluck(:slug)` runs while the class
-    # body is read, which is `db:create`, `db:migrate` and `assets:precompile`
-    # too, and it captures a list that then goes stale for the life of the
-    # process. The proc is called when the descriptor is SERVED, memoized, and
-    # re-resolved on a short lifetime, so adding a category publishes itself
-    # without a restart and without a deploy. {Kiosk::Server::SchemaSlots}
-    # carries the mechanism and the concurrency argument. `description`,
-    # `kind`, `reach` and `wire_name` are NOT resolvable: the first is prose
-    # semantics, two are routing facts fixed when the route is drawn, and
-    # `reach` is a security claim about the verb — a claim computed from the
-    # operator's rows could change under a caller between the catalog it read
-    # and the call it made.
-    #
-    # ── Errors ───────────────────────────────────────────────────────────
-    # Rails' idiom, end to end: `render json:, status:` answers the wire with
-    # the status' lone code; a body naming an explicit vocabulary `error.code`
-    # (a 403 `rls_denied`, a SPECIFIC 402) — the HANDLER-side spelling, since
-    # what TRAVELS is the flat top-level `code` — travels verbatim; and
-    # a raise Rails knows a status for — `params.require`, RecordNotFound,
-    # anything in `config.action_dispatch.rescue_responses` — is mapped by
-    # the one `rescue_from` this include installs
-    # ({InstanceMethods#kiosk_rescue_to_wire}). No Kiosk error classes in
-    # handler code; the wire-only gate classes remain raisable.
-    #
-    # ── What is NOT here ─────────────────────────────────────────────────
-    # There is no `params:` macro — no free-text name → hint hash: a hint is
-    # either a constraint (schema) or a meaning (description), and there is no
-    # third thing. Spec §8.3 carries no such key either, so a descriptor this
-    # registry builds does not have a slot for one.
-    #
-    # ── The read-only guarantee this mixin does NOT make ─────────────────
-    # One mixin serves both kinds, so "this class provably cannot write" is not
-    # readable off the include. That is deliberate: the same namespace
-    # legitimately both answers queries and performs actions, and forcing a
-    # split at class granularity would fragment a cohesive resource for a
-    # reason the domain does not have.
-    #
-    # The property is DEFERRED, not lost. If it is ever wanted it returns as an
-    # OPT-IN controller-level macro — `read_only!` / `query_only!`, refusing an
-    # `action` declaration in the class body and saying so at boot — which is
-    # strictly better: it STATES the guarantee instead of implying it from which
-    # module was included, and only the operators who want it pay for it. That
-    # macro is deliberately not built here; this paragraph is where it goes.
+    # Implementation behind `include Kiosk::Handler`. The macros above a `def` make it a wire verb;
+    # a method with no pending declaration stays off the wire.
     module HandlerMixin
       KINDS = %i[action query].freeze
 
-      # The four reaches of spec §7.2, in the order the spec names them. The
-      # first is the DEFAULT and is what a declaration that says nothing means:
-      # an operator gets the absolute per-principal scoping by writing nothing at
-      # all, and pays a line only to depart from it.
+      # The four reaches of §7.2; the first is the default.
       REACHES = %i[principal published consented role].freeze
 
-      # What an undeclared `reach` means. Not a fallback for a missing
-      # declaration the way `kind` refuses to have one: `kind` silently assigns
-      # an HTTP method and either default is a mistake, while every possible
-      # default here except the strictest would silently widen a verb.
+      # The strictest reach, so an undeclared verb is never widened.
       DEFAULT_REACH = :principal
 
-      # ── spec §8.1 / §8.3, enforced where the mistake is made ─────────────
-      #
-      # A verb name is ONE path segment on the wire, so the three rules the
-      # spec states about names are properties a DECLARATION either has or does
-      # not, and all three are checked here — at class-body load, naming the
-      # class and the method — rather than discovered later as a verb that is
-      # merely unreachable.
-      #
-      # `NAME_PATTERN` is §8.1's `^[a-z][a-z0-9_]*$`, the same expression the
-      # engine's route constraint uses; a name that fails it could never be
-      # routed at all.
+      # §8.1: a verb name is one path segment.
       NAME_PATTERN = /\A[a-z][a-z0-9_]*\z/
 
-      # `RESERVED_NAMES` are the first path segments the ENGINE itself draws
-      # under the mount, and this list is the PRIMARY control rather than a
-      # courtesy. Rails' first-match still protects those paths — the
-      # operator draws the mount FIRST in config/routes/kiosk.rb and their own
-      # verb routes after it, so a verb called `schema` is shadowed, never
-      # shadowing — but that ordering is now a property of a file somebody
-      # writes rather than of a table the engine controls end to end, and being
-      # silently unreachable was always a worse answer than a boot-time refusal
-      # that says which name is taken and why. THIS is where an operator meets
-      # the rule: an `ArgumentError` as the class body loads, naming the class,
-      # the method and the taken name. `.well-known` is drawn too and is
-      # deliberately absent: it cannot match NAME_PATTERN, so no declaration can
-      # collide with it.
-      #
-      # This list mirrors the engine's own route table: a route added there
-      # needs its name added here, or a shadowed name quietly re-opens.
-      #
-      # `query` and `run` are NOT on this list, and that is the check earning
-      # its keep in the other direction: the engine draws no such segments, so
-      # reserving them would be reserving nothing — a boot-time refusal for a
-      # name that is, in fact, free. An operator may declare a verb called
-      # `query` or `run`; none does, and one that did would be served at
-      # `<endpoint>/query` like any other.
+      # First path segments the engine draws under the mount; keep in step with its routes.
       RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 
-      # The descriptor fields REQUIRED on every verb. Both are
-      # contracts a caller acts on — `input_schema` is what the wire coerces
-      # and validates arguments against (§8.1 item 5),
-      # `output_schema` is the ONLY machine-readable statement of the answer
-      # shape now that the envelope's `kind` is gone (§8.2) — so a verb that
-      # omits either publishes an incomplete contract, and the engine refuses
-      # to register one rather than serving it.
+      # Required on every verb (§8.3); a declaration missing either is refused at class load.
       REQUIRED_DECLARATIONS = %i[input_schema output_schema].freeze
 
       # Installs the mixin. Called from Kiosk::Handler.included.
@@ -216,50 +40,28 @@ module Kiosk
             "Kiosk does not impose one."
         end
 
-        # Idempotent: an operator's own base class may carry the include and its
-        # subclasses declare verbs, so the same install can arrive twice down one
-        # ancestry. Re-running it would re-register the filters below.
+        # An operator's base class and its subclass may both include the mixin.
         return if base.respond_to?(:kiosk_declarations)
 
         base.extend(ClassMethods)
         base.include(InstanceMethods)
 
-        # The wire request is authenticated at WireController by bearer token /
-        # proof-of-possession — never by a cookie session — and this sub-dispatch
-        # is server-internal, so it can never present a CSRF token. Without this,
-        # every real app (Rails sets protect_from_forgery on ActionController::Base
-        # by default) would answer every action with InvalidAuthenticityToken.
-        # ActionController::API has no forgery protection to skip.
+        # The wire authenticates by bearer token, never by cookie, so CSRF protection does not apply.
         base.skip_forgery_protection if base.respond_to?(:skip_forgery_protection)
 
-        # Belt and braces: if an operator ALSO draws a route to a handler
-        # controller, that route must not become an unauthenticated, CSRF-exempt
-        # way in. Only a dispatch through the Kiosk seam sets the marker.
+        # A route drawn straight at a handler controller must not bypass the wire.
         base.before_action(:kiosk_require_wire_dispatch!) if base.respond_to?(:before_action)
 
-        # THE ONE Rails-raise → wire-code seam. Registered at include time, so
-        # any `rescue_from` the operator declares later — below the include, or
-        # in a subclass — matches first and wins; this is the floor, not a
-        # ceiling. See
-        # {InstanceMethods#kiosk_rescue_to_wire} for what it maps.
+        # Registered at include time, so an operator's own `rescue_from` declared later wins.
         base.rescue_from(StandardError, with: :kiosk_rescue_to_wire) if base.respond_to?(:rescue_from)
       end
 
-      # Registry for a kind. Not a constant map: `Actions`/`Queries` must be
-      # resolved lazily so this file can be required before them.
+      # Resolved lazily so this file can be required before the registries.
       def self.registry_for(kind)
         kind == :action ? Actions : Queries
       end
 
-      # The scope a `topic` block is evaluated in, and its whole job is to keep
-      # a topic's `reach` and `description` OUT of `kiosk_pending`.
-      #
-      # `kiosk_pending` belongs to verbs: `method_added` drains it onto the next
-      # method defined in the class. So a topic declared the way a verb is —
-      # `topic :todo` followed by bare `reach` / `description` — would attach
-      # those values to whatever verb happened to be defined after it, silently
-      # and with no error anywhere. The block is what closes that, and it is why
-      # this macro reads differently from its neighbours.
+      # Evaluates a `topic` block, keeping its declarations out of the verb macros' pending state.
       class TopicDeclaration
         attr_reader :reach_value, :description_value, :payload_schema_value,
                     :subject_reachable_value
@@ -288,15 +90,10 @@ module Kiosk
           @payload_schema_value = schema || kwargs
         end
 
-        # `(subject, identity) -> Boolean`, re-run on every subscribe AND on the
-        # re-authorisation timer — never reading {CurrentRequest}, which is
-        # fiber-local and does not reach a socket callback.
+        # `(subject, identity) -> Boolean`; runs outside any request, so it cannot read {CurrentRequest}.
         def subject_reachable(callable) = @subject_reachable_value = callable
 
-        # What is required is that the macro was CALLED, not that its value is
-        # truthy: spec Section 8.5.1 types a topic's `description` as a string
-        # or `null`, on the same terms as a verb's, so `description nil` is an
-        # operator saying "no prose" rather than one who forgot.
+        # Each macro must be called; `description nil` is a valid answer (§8.5.1).
         def validate!(owner:, name:)
           missing = Events::REQUIRED - declared
           return if missing.empty?
@@ -314,10 +111,7 @@ module Kiosk
       end
 
       module ClassMethods
-        # ── the macros ─────────────────────────────────────────────────
-
-        # :query or :action — which HTTP method reaches the next-defined
-        # method. Per DECLARATION, so a controller may carry both.
+        # Which HTTP method reaches the next-defined method; one controller may declare both.
         def kind(value)
           unless KINDS.include?(value)
             raise ArgumentError,
@@ -329,10 +123,7 @@ module Kiosk
           kiosk_pending[:kind] = value
         end
 
-        # Whose rows this verb may touch (spec §7.2). Omit it and the
-        # verb is `:principal` — the absolute case, and the one most operators
-        # want. Declared per DECLARATION, like `kind`, so one controller may hold
-        # an owner-scoped verb and a published one.
+        # Whose rows the next verb may touch (§7.2); the default is :principal.
         def reach(value)
           unless REACHES.include?(value)
             raise ArgumentError,
@@ -372,29 +163,7 @@ module Kiosk
           kiosk_pending[:wire_name] = name.to_s
         end
 
-        # Declare an EVENT TOPIC — a standing feed a subscriber holds, rather
-        # than a verb a caller invokes.
-        #
-        #   topic :todo do
-        #     reach :consented
-        #     description "A todo on a list you can reach was added or completed, " \
-        #                 "by any member or by a human in the browser."
-        #     payload_schema type: "object", additionalProperties: false,
-        #                    properties: { todo_id: { type: "string" },
-        #                                  done:    { type: "boolean" } },
-        #                    required: %w[todo_id done]
-        #     subject_reachable ->(subject, identity) { Membership.reachable?(subject, identity) }
-        #   end
-        #
-        # IT TAKES A BLOCK, unlike every macro above it, and the difference is
-        # load-bearing rather than stylistic — see {HandlerMixin::TopicDeclaration}.
-        #
-        # The name is validated HERE, at declaration time, against the same two
-        # rules a verb name meets: it is a path-legal wire name, and it is not a
-        # segment the engine itself draws. A topic is not routed, but it IS a
-        # `topic` argument on the subscribe frame and a name in the published
-        # catalogue, so the same vocabulary applies and a clash with a reserved
-        # segment would be a name an operator can declare and nothing can reach.
+        # Declares an event topic; the block holds `reach`, `description`, `payload_schema` and `subject_reachable`.
         def topic(name, &block)
           name = name.to_s
 
@@ -423,11 +192,7 @@ module Kiosk
           }
         end
 
-        # ── binding ────────────────────────────────────────────────────
-
-        # Binds the pending declarations to the method just defined. `super`
-        # first: AbstractController::Base hooks method_added too (to invalidate
-        # its action_methods cache) and must keep running.
+        # `super` first: AbstractController::Base also hooks method_added.
         def method_added(method_name)
           super
           pending = @kiosk_pending
@@ -437,25 +202,17 @@ module Kiosk
           kiosk_declare(method_name, pending)
         end
 
-        # wire name → declaration, for the verbs declared on THIS class. ONE
-        # entry per name is the invariant, not an implementation detail: a name
-        # is one path segment and one kind, so a second declaration under the
-        # same name is refused rather than stored (see
-        # {#kiosk_refuse_bad_declaration!}).
+        # Wire name → declaration for the verbs on this class, one per name.
         def kiosk_declarations
           @kiosk_declarations ||= {}
         end
 
-        # This class's topic declarations, by wire name. Same shape and same
-        # lifecycle as {#kiosk_declarations}: filled as the class body is read,
-        # drained into the process-wide registry by {#kiosk_register!}.
+        # Wire name → declaration for the topics on this class.
         def kiosk_topic_declarations
           @kiosk_topic_declarations ||= {}
         end
 
-        # Re-registers this class's verbs AND topics in the process-wide
-        # registries. Runs automatically as the class body is read; call it
-        # directly only to restore registrations after a test reset.
+        # Runs as the class body is read; call it directly only to restore registrations after a test reset.
         def kiosk_register!
           kiosk_declarations.each_value { |declaration| kiosk_register_one(declaration) }
           kiosk_topic_declarations.each_value { |declaration| Events.register(**declaration) }
@@ -479,9 +236,7 @@ module Kiosk
           kiosk_register_one(declaration)
         end
 
-        # The name rules of spec §8.1 / §8.3 and the required descriptor
-        # fields, raised at DECLARATION time so the operator meets them at boot
-        # with the class and the method in hand.
+        # The §8.1/§8.3 name rules and required fields, refused at class load.
         def kiosk_refuse_bad_declaration!(declaration)
           name = declaration[:wire_name]
           where = "#{self}##{declaration[:method_name]}"
@@ -496,18 +251,7 @@ module Kiosk
               "no default to fall back on."
           end
 
-          # ONE NAME, ONE DECLARATION, for the half a single class body can see.
-          # The cross-class half is {HandlerRegistrations.refuse_cross_kind_collisions!},
-          # which is the first moment the whole surface exists at once; this is
-          # the same rule caught earlier, where the operator has both methods in
-          # hand.
-          #
-          # A code reload does NOT come through here: the engine's `to_prepare`
-          # calls {ClassMethods#kiosk_register!}, which re-registers from the
-          # declarations already stored, and a reloaded class body is read on a
-          # NEW class object whose `kiosk_declarations` starts empty. So a clash
-          # at this point is always two declarations in one generation of one
-          # class body — an operator mistake with no legitimate reading.
+          # One name declared twice in one class body; the cross-class case is {HandlerRegistrations}.
           clash = kiosk_declarations[name]
           if clash && clash[:kind] != declaration[:kind]
             raise ArgumentError,
@@ -578,79 +322,29 @@ module Kiosk
         end
       end
 
-      # Handler-side helpers. All private, so none of them can be mistaken for
-      # a controller action.
+      # Handler-side helpers, private so none is mistaken for a controller action.
       module InstanceMethods
         private
 
-        # The {Kiosk::Identity} the wire resolved for this request — the acting
-        # assistant-account (and agent, when an assistant is calling). nil when
-        # the handler was reached outside a wire request (an RLS journey test).
-        # The four GUCs are already set on the connection either way, so SQL-side
-        # scoping does not depend on this.
+        # The acting {Kiosk::Identity}; nil outside a wire request.
         def kiosk_identity
           request.env[HandlerDispatch::IDENTITY_KEY]
         end
 
-        # The wire name this dispatch arrived under — differs from the method
-        # name only when the class declared `wire_name`.
+        # Differs from the method name only under `wire_name`.
         def kiosk_wire_name
           request.env[HandlerDispatch::DISPATCH_KEY]
         end
 
-        # Answer a query with ONE PAGE of rows plus an opaque cursor the
-        # assistant echoes back in `cursor` to fetch the next one. A nil
-        # next_cursor means this is the last page. See {Kiosk::Server::Cursor}
-        # for the offset-cursor helper.
-        #
-        # `total` is how many rows MATCH the query across all pages, not how
-        # many this page carries. It becomes the `X-Total-Count` response
-        # header. Pass it only if you know it: nil omits the header, which is
-        # the honest answer for a keyset cursor over an uncounted set, and is
-        # why this is not defaulted to `rows.length` — on a TRUNCATED page that
-        # would state the page size as the total.
-        #
-        # WHAT THE ASSISTANT SEES. Not this hash: the body is the bare
-        # `rows` array, exactly like a non-paginating query's, and the two page
-        # facts leave as response headers — `Link: <…?cursor=…>; rel="next"`
-        # (RFC 8288) and `X-Total-Count`. The hash below is the INTERNAL
-        # carrier between a Rails-dispatched handler and {HandlerDispatch},
-        # which rebuilds the {Kiosk::Server::Page} from it.
+        # One page of rows; a nil `next_cursor` is the last page. `total` counts every matching row and
+        # nil omits `X-Total-Count`. The body stays the bare rows; the page facts leave as headers.
         def render_kiosk_page(rows, next_cursor: nil, total: nil)
           request.env[HandlerDispatch::PAGE_KEY] = true
           render json: { rows: rows, next_cursor: next_cursor, total: total }
         end
 
-        # The one place a Rails-native raise becomes a wire code. Three kinds
-        # of raise reach it:
-        #
-        #   * a Kiosk wire error ({Errors::Base}) — re-raised untouched: it
-        #     already names its code, and the Kiosk seam renders it.
-        #   * an exception Rails knows a status for — looked up in Rails' OWN
-        #     table (`config.action_dispatch.rescue_responses`, the registry
-        #     the host app already extends for its libraries: Pundit's
-        #     NotAuthorizedError → :forbidden and so on; Active Record adds
-        #     RecordNotFound → :not_found when it boots). The status' lone
-        #     wire code ({Errors::STATUS_CODES}) is rendered as the ordinary
-        #     error envelope — so `params.require` answers `bad_request` and
-        #     a model lookup miss answers `not_found` with no Kiosk classes
-        #     in the handler. 402 and 500 have no lone code and are never
-        #     guessed.
-        #   * anything else — re-raised, so the {Executor} wraps it as
-        #     `action_failed` exactly as it always has.
-        #
-        # THE EXCEPTION'S OWN SENTENCE DOES NOT TRAVEL. This branch exists
-        # for exceptions the operator did NOT author — «no Kiosk classes in the
-        # handler» is its whole purpose — so its message is always some
-        # library's wording: rendered, a `params.require(:sku)` handler would
-        # put actionpack's «param is missing or the value is empty or invalid:
-        # sku» on a 400 problem document. The wire gets
-        # {Errors.rescued_wire}'s sentence and hint for the code this
-        # seam decided; the class, the message and the backtrace go to the
-        # operator's log ({FailureLog}), the way {Executor}'s two 500 paths
-        # already send theirs. An operator who means to SPEAK to the agent has
-        # two routes that never reach this line — render the envelope, or raise
-        # an {Errors::Base} — and both are pinned by the suite.
+        # Maps a raise Rails knows a status for to its lone wire code; anything else is re-raised.
+        # The exception's own message goes to the operator's log, never onto the wire.
         def kiosk_rescue_to_wire(exception)
           raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
 
@@ -662,10 +356,7 @@ module Kiosk
             "verb #{kiosk_wire_name.inspect} answered #{code} for #{exception.class}", exception
           )
 
-          # Hand the exception to {HandlerDispatch} so the wire error it builds
-          # for this render carries it as `cause`. Operator-side only:
-          # it reaches the audit sink and nothing else, because a `cause` is not
-          # part of any problem document.
+          # Reaches the audit sink as `cause`; never part of the problem document.
           request.env[HandlerDispatch::RESCUED_KEY] = exception
 
           render json: {
@@ -674,28 +365,7 @@ module Kiosk
           }, status: Kiosk::Server::Errors::CODES.fetch(code)
         end
 
-        # Handler controllers are reachable ONLY through the Kiosk wire, which
-        # is where authentication, the PoW gate and the GUC-scoped transaction
-        # live. A route drawn straight at one would bypass all three, so it 404s
-        # — the same answer the operator's app gives for any other path it does
-        # not serve.
-        #
-        # THE BODY IS A FLAT RFC 9457 PROBLEM DOCUMENT, built by
-        # {Errors::VerbNotFound} itself so it cannot drift from the one the wire
-        # renders. `verb_not_found` and not `not_found`: the
-        # caller dialed a path that is not a wire verb path at all, so nothing
-        # was ADDRESSED, and the hint below tells it to call the verb's own
-        # route -- which is precisely the `verb_not_found` recovery. This render is CLIENT-FACING and nothing re-wraps it: the
-        # guard returns early under sub-dispatch, so it only ever fires on a
-        # route the operator drew straight at a handler controller, where there
-        # is a machine on the other end and no human page in sight.
-        #
-        # NOT the same call as {#kiosk_rescue_to_wire} above, which keeps the
-        # nested shape ON PURPOSE: that one is the internal sub-dispatch
-        # protocol between a handler and {HandlerDispatch}, whose `error.code`
-        # vocabulary and extra envelope fields the Executor decodes and re-wraps
-        # before anything reaches a client. Flattening it would change the seam,
-        # not the wire.
+        # A route drawn straight at a handler controller answers 404 `verb_not_found`.
         def kiosk_require_wire_dispatch!
           return if request.env.key?(HandlerDispatch::DISPATCH_KEY)
 

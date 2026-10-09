@@ -1,20 +1,10 @@
 # frozen_string_literal: true
 
-# kiosk-server — the Rails engine, the wire/auth/discovery controllers, the
-# install generator, and the pure-Ruby pieces they build on (well-known doc
-# builder, OpenAPI document builder, headers, schema-migration SQL). See
-# https://kiosk.tech.
-#
-# This is a Rails gem: railties, actionpack, activerecord and activesupport
-# are declared runtime dependencies (see the gemspec) and are loaded here
-# unconditionally. Individual files require the framework piece they use.
+# kiosk-server: the Rails engine, its wire, auth and discovery controllers, and
+# the install generator. See https://kiosk.tech.
 
 require "kiosk"
 
-# ActiveRecord::Base.lease_connection is how the auth plane and the durable
-# device-authorization store reach the database; nothing in this gem
-# provides an alternative for those paths. Every statement they run carries
-# BIND PARAMETERS — this gem calls `connection.quote` nowhere.
 require "active_record"
 
 require "kiosk/server/version"
@@ -78,19 +68,6 @@ require "kiosk/server/mandate_verifier"
 
 require "kiosk/server/engine"
 
-# Controllers. Every controller this gem ships is required here AND named in
-# the manifest below, and `server_controller_manifest_spec.rb` derives the set
-# from the directory and holds both lists to it — so neither can quietly fall
-# behind a controller somebody adds. The surfaces: the wire (WireController for
-# the reserved `schema`/`pay`, VerbController for the operator's own verbs),
-# the derived OpenAPI document (OpenApiController), the discovery surface
-# (DiscoveryController — agents.txt/json, agent-configuration, kiosk.json,
-# api-catalog, auth.md), JWKS (JwksController), the kiosk-pop auth surface
-# (AuthController — NOT OAuth — plus the link/claim/unlink binding endpoints),
-# the KYC attestation surface (KycAttestationController), and the
-# account-binding ceremony's OAuth-wire and HTML controllers
-# (OauthDeviceAuthorizationController, OauthTokenController,
-# DeviceVerifyController, AssistantsController).
 require "kiosk/server/wire_controller"
 require "kiosk/server/verb_controller"
 require "kiosk/server/payment_setup_controller"
@@ -114,37 +91,23 @@ module Kiosk
     #   Wire plane:
     #   - {Kiosk::Server::Executor}         — wire dispatch (query/run/pay/schema)
     #   - {Kiosk::Server::WireController}   — Rails controller wrapping Executor
-    #   - {Kiosk::Server::VerbController}   — the per-verb wire:
-    #                                         GET <endpoint>/<query-name>,
-    #                                         POST <endpoint>/<action-name>
-    #   - {Kiosk::Server::PaymentSetup}     — `payment_setup` and its topic, against the provider port
-    #   - {Kiosk::Server::PaymentSetupController} — GET <endpoint>/payment_setup/return,
-    #                                         the page the provider returns the human to
-    #   - {Kiosk::Server::Kyc}              — `request_kyc`, its topic and the grants, against the KYC provider port
-    #   - {Kiosk::Server::KycCallbackController} — POST <endpoint>/kyc/callback, the provider's report
-    #   - {Kiosk::Server::ArgumentDecoder}  — a query string → typed arguments,
-    #                                         per the normative encoding rule
-    #   - {Kiosk::Server::Actions}          — Action registry (name → handler + descriptor)
-    #   - {Kiosk::Server::Queries}          — read-side query registry
-    #   - {Kiosk::Handler}                  — the mixin an operator includes into
-    #                                         a controller of their own to declare
-    #                                         verbs as ordinary Rails actions; each
-    #                                         declaration's `kind` says whether it
-    #                                         is a query or an action
-    #   - {Kiosk::Server::Result}           — success payload value type; it
-    #                                         renders {Result#to_payload}, which
-    #                                         is the answer body verbatim
-    #   - {Kiosk::Server::Errors}           — exception hierarchy + RFC 9457
-    #                                         problem-document serialisation
-    #   - {Kiosk::Server::SessionContext}   — transaction + four transaction-local GUCs
-    #   - {Kiosk::Server::ActionEvent}      — one action invocation, as the
-    #                                         operator's audit sink receives it
-    #   - {Kiosk::Server::AuditSink}        — the audit seam: emits one event per
-    #                                         action invocation to `c.audit_sink`
-    #                                         (default: no sink, nothing emitted)
+    #   - {Kiosk::Server::VerbController}   — the per-verb wire: GET <endpoint>/<query>, POST <endpoint>/<action>
+    #   - {Kiosk::Server::PaymentSetup}     — `payment_setup` and its topic
+    #   - {Kiosk::Server::PaymentSetupController} — GET <endpoint>/payment_setup/return
+    #   - {Kiosk::Server::Kyc}              — `request_kyc`, its topic and the grants
+    #   - {Kiosk::Server::KycCallbackController} — POST <endpoint>/kyc/callback
+    #   - {Kiosk::Server::ArgumentDecoder}  — query string → typed arguments
+    #   - {Kiosk::Server::Actions}          — action registry
+    #   - {Kiosk::Server::Queries}          — query registry
+    #   - {Kiosk::Handler}                  — mixin declaring verbs as Rails controller actions
+    #   - {Kiosk::Server::Result}           — success payload value type
+    #   - {Kiosk::Server::Errors}           — exception hierarchy + RFC 9457 problem documents
+    #   - {Kiosk::Server::SessionContext}   — transaction + transaction-local GUCs
+    #   - {Kiosk::Server::ActionEvent}      — one action invocation, as the audit sink receives it
+    #   - {Kiosk::Server::AuditSink}        — emits one event per action invocation to `c.audit_sink`
     #
-    #   Auth plane (kiosk-pop proof-of-possession — the default IdP):
-    #   - {Kiosk::Server::AgentRegistration} — register an agent key (POW-gated)
+    #   Auth plane (kiosk-pop proof-of-possession, the default IdP):
+    #   - {Kiosk::Server::AgentRegistration} — register an agent key
     #   - {Kiosk::Server::AgentLogin}        — challenge/response login → access token
     #   - {Kiosk::Server::PopVerifier}       — verifies the proof-of-possession signature
     #   - {Kiosk::Server::AuthController}    — Rails controller for the kiosk-pop surface
@@ -158,71 +121,44 @@ module Kiosk
     #   - {Kiosk::Server::KycAttestationController} — Rails controller for the KYC surface
     #
     #   Signing / discovery:
-    #   - {Kiosk::Server::WellKnown}        — discovery generator: kiosk.json (build), agents.txt, agents.json, agent-configuration, api-catalog (RFC 9727), auth.md
-    #   - {Kiosk::Server::DiscoveryController} — serves those six discovery docs
-    #   - {Kiosk::Server::OpenApi}          — OpenAPI 3.1 description of this
-    #                                         origin's verbs, derived from the
-    #                                         registries and memoized per origin
-    #   - {Kiosk::Server::OpenApiController} — Rails controller serving
-    #                                         <mount>/openapi.json
+    #   - {Kiosk::Server::WellKnown}        — discovery documents
+    #   - {Kiosk::Server::DiscoveryController} — serves the discovery documents
+    #   - {Kiosk::Server::OpenApi}          — OpenAPI 3.1 description of this origin's verbs
+    #   - {Kiosk::Server::OpenApiController} — serves <mount>/openapi.json
     #   - {Kiosk::Server::SigningKey}       — RSA keypair value object
     #   - {Kiosk::Server::Jwks}             — JWKS document builder (RFC 7517)
-    #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify (kiosk-pop access tokens)
-    #   - {Kiosk::Server::JwksController}   — Rails controller serving /.well-known/jwks.json
+    #   - {Kiosk::Server::JwtIssuer}        — RS256 sign / verify
+    #   - {Kiosk::Server::JwksController}   — serves /.well-known/jwks.json
     #
     #   Event plane:
-    #   - {Kiosk::Server::Events}           — topic registry (name → reach + payload
-    #                                         schema + the operator's subject rule),
-    #                                         and `emit`, the one line an operator
-    #                                         writes at the transition
-    #   - {Kiosk::Server::EventStore}       — the per-identity tail, in process:
-    #                                         the TEST implementation of the seam
+    #   - {Kiosk::Server::Events}           — topic registry and `emit`
+    #   - {Kiosk::Server::EventStore}       — in-process tail, for tests
     #   - {Kiosk::Server::EventStores}      — ActiveRecord-backed tail, the default
-    #                                         a deployed operator gets
-    #   - {Kiosk::Server::EventsCable}      — this engine's OWN Action Cable server,
-    #                                         its origin allowance and stream naming
-    #   - {Kiosk::Server::EventsConnection} — the socket's identity, resolved by the
-    #                                         same chain every verb uses
-    #   - {KioskEvents}                     — the channel, deliberately TOP-LEVEL:
-    #                                         Action Cable constantizes the name
-    #                                         straight out of the subscribe frame,
-    #                                         so it is a wire constant
+    #   - {Kiosk::Server::EventsCable}      — the engine's own Action Cable server
+    #   - {Kiosk::Server::EventsConnection} — the socket's identity
+    #   - {KioskEvents}                     — the channel; top-level because its name is on the wire
     #
     #   Infra:
-    #   - {Kiosk::Server::Headers}          — composes the three response headers
+    #   - {Kiosk::Server::Headers}          — composes the response headers
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for the canonical migrations
     #   - {Kiosk::Server::Engine}           — Rails engine
     #
-    #   Account-binding ceremony (the RFC 8628 machinery revived
-    #   as the key-bound claim/link surface; kiosk-pop stays the only token
-    #   story):
+    #   Account-binding ceremony (RFC 8628 claim/link):
     #   - {Kiosk::Server::DeviceAuthorization}        — ceremony state machine (kind: claim/link)
-    #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapters (durable ActiveRecord default + InMemory)
-    #   - {Kiosk::Server::DeviceCodeGrant}            — claim flow service: .start + .exchange (BIND-POP)
-    #   - {Kiosk::Server::DeviceVerification}         — verify-page helpers: .find_pending + .approve + .deny
-    #   - {Kiosk::Server::AccountBinding}             — fresh-register / rebind / unlink + the assistant_claimed / assistant_unlinked hooks
-    #   - {Kiosk::Server::LinkCode}                   — link flow service: .mint + .redeem
-    #   - {Kiosk::Server::BindingModuleGate}          — the `501 module_not_served` refusal every binding endpoint runs first
-    #   - {Kiosk::Server::AccountHolderGate}          — the signed-in-human gate the ceremony's two HTML pages share
+    #   - {Kiosk::Server::DeviceAuthorizationStores}  — storage adapters
+    #   - {Kiosk::Server::DeviceCodeGrant}            — claim flow: .start + .exchange
+    #   - {Kiosk::Server::DeviceVerification}         — verify-page helpers
+    #   - {Kiosk::Server::AccountBinding}             — fresh-register / rebind / unlink + hooks
+    #   - {Kiosk::Server::LinkCode}                   — link flow: .mint + .redeem
+    #   - {Kiosk::Server::BindingModuleGate}          — the `501 module_not_served` refusal
+    #   - {Kiosk::Server::AccountHolderGate}          — the signed-in-human check for the HTML pages
     #   - {Kiosk::Server::OauthDeviceAuthorizationController} — POST /oauth/device_authorization
-    #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token (device_code grant)
-    #   - {Kiosk::Server::DeviceVerifyController}      — GET/POST /oauth/device/verify (HTML, overridable views)
-    #   - {Kiosk::Server::AssistantsController}        — «Link an assistant» page (HTML, overridable views)
+    #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token
+    #   - {Kiosk::Server::DeviceVerifyController}      — GET/POST /oauth/device/verify
+    #   - {Kiosk::Server::AssistantsController}        — «Link an assistant» page
 
-    # Absolute path to the pinned reference listener shipped inside this gem.
-    #
-    # The event stream is a WebSocket, and an assistant that hand-rolls a
-    # client for it gets the subprotocol token, the string-inside-a-string
-    # `identifier` or the resume contract wrong and is dropped with no
-    # diagnostic. So the same posture as the Equihash solver: ONE file, pinned
-    # by SHA-256 in the published skill, fetched from kiosk.tech.
-    #
-    # This accessor exists so nothing hardcodes a checkout path — the gem is
-    # installed, not cloned, and only the running file's own directory knows
-    # where it landed. Its python dependency is `requirements.txt` beside it.
-    #
-    # @return [String]
+    # Path to the pinned reference event-stream listener shipped in this gem.
     def self.listener_path
       File.expand_path("../../listen.py", __dir__)
     end

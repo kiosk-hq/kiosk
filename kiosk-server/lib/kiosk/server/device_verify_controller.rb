@@ -1,74 +1,30 @@
 # frozen_string_literal: true
 
-# HTML surface (ActionController::Base, not ::API — it renders views).
-# The engine draws the routes.
-
 require "action_controller"
 require "kiosk/server/device_verification"
 require "kiosk/server/signing_key"
 
 module Kiosk
   module Server
-    # The human half of the claim ceremony — the verify page:
-    #
-    #   GET  <mount>/oauth/device/verify[?user_code=…] — code entry, then
-    #        the consent panel (key fingerprint + requested-at + the access
-    #        the approver is about to hand over)
-    #   POST <mount>/oauth/device/verify — approve / deny decision, which is
-    #        where the ceremony's ROLE is captured
-    #
-    # Session-authenticated via the provider's `user_idp` (binding
-    # approval is the session channel's job) — an
-    # unauthenticated visitor gets a 401 telling them to sign in to the
-    # provider first. Batteries-included: the minimal views under
-    # app/views/kiosk/server/device_verify are rendered by default and a
-    # host overrides them by shipping same-named templates in its own
-    # app/views (host view paths take precedence).
-    #
-    # Phishing guards (the verify page is the ceremony's social surface):
-    # the panel always shows WHAT is being linked — the key's RFC 7638
-    # fingerprint, when it asked, and the access the approval hands over —
-    # and code entry is attempt-capped per session on top of the codes being
-    # single-use, short-TTL and stored hashed.
-    #
-    # THE ROLE IS CAPTURED HERE, AND DISCLOSED HERE. `@identity.role` — the
-    # provider's own answer for the human whose session this is — is both what
-    # the panel names and what {DeviceVerification.approve} stamps onto the
-    # row, so the human reads the very value the token will carry. Both halves
-    # are needed and neither alone is enough: a role the requester picked for
-    # itself is an escalation even when the page discloses it, and a correct
-    # role the page never names is an approval given blind.
+    # The verify page where a signed-in human approves or denies an assistant
+    # link. The role the panel shows is the role the approval stamps: the
+    # human's own, never one the assistant asked for.
     class DeviceVerifyController < ::ActionController::Base
       include AccountHolderGate
       include BindingModuleGate
       prepend_before_action :refuse_unserved_binding
 
-      # What an unauthenticated visitor is told, on the 401 body and on the
-      # sign-in page this origin redirects a browser to.
       SIGN_IN_PROMPT = "Sign in to your account first, then re-open this page to approve the assistant link."
       SIGN_IN_ALERT  = "Please sign in to approve the assistant link."
 
-      # Failed user_code lookups tolerated per session before a 429.
-      # Generous for fat-fingering; hopeless for guessing one of the
-      # 31^8 ≈ 8.5 × 10^11 codes ({DeviceAuthorization::USER_CODE_ALPHABET}).
+      # Failed code lookups per session before a 429, against 31^8 possible codes.
       MAX_CODE_ATTEMPTS = 10
 
-      # Host app view paths (configured by Rails on ActionController::Base)
-      # come first, so a provider's own templates override these.
+      # Host templates of the same name override these.
       append_view_path File.expand_path("../../../app/views", __dir__)
       layout false
 
-      # AGENT-SIGNPOST — same rule as {AssistantsController}, whose
-      # copy carries the full explanation. Short version: an assistant that
-      # POSTs JSON to this human consent page trips Rails' forgery gate, and
-      # in production Rails answers with the host's generic error material —
-      # a static public/422.html, a bare status echo, or (on a host with no
-      # error page) a bodyless 422 — never a pointer to the wire. Answer a
-      # JSON-shaped caller with the courtesy body below + a pointer to the
-      # wire; re-raise for browsers so real CSRF failures still fail. NOT «the
-      # Kiosk error envelope»: that names the wire CONTRACT, and the wire's is
-      # a flat RFC 9457 problem document. {#wrong_door_envelope} below records
-      # why this page deliberately does not borrow it.
+      # An assistant POSTing JSON here is pointed at the wire; browsers still fail CSRF.
       rescue_from ::ActionController::InvalidAuthenticityToken do |error|
         raise error unless json_request?
 
@@ -98,9 +54,6 @@ module Kiosk
         @role      = @identity.role
         case params[:decision].to_s
         when "approve"
-          # The role travels with the approval, from the approving human's own
-          # identity — see the class comment. `@identity.role` is nil for a
-          # role-less `user_idp`, which binds at `registration_role`/absent.
           DeviceVerification.approve(
             user_code: @user_code, user_id: @identity.user_id, role: @identity.role,
           )
@@ -121,9 +74,6 @@ module Kiosk
 
       private
 
-      # A machine caller for signposting purposes: an explicit JSON `Accept`,
-      # or a JSON request body. Deliberately narrow — anything ambiguous
-      # counts as a browser and keeps today's behaviour.
       def json_request?
         return true if request.format.json?
 
@@ -132,12 +82,7 @@ module Kiosk
         false
       end
 
-      # The signpost body. Non-wire `error.code` on purpose: this endpoint is
-      # not a wire verb, so it must not borrow a code from the spec's closed
-      # error table. The SHAPE is deliberately not the wire's either — the
-      # wire answers RFC 9457 problem documents, and this is an HTML page for
-      # a signed-in human, so a JSON body here is a courtesy to an assistant
-      # that dialed the wrong door rather than a contract anything parses.
+      # Deliberately not a wire problem document or wire error code: this page is not the wire.
       def wrong_door_envelope
         {
           ok:    false,
@@ -164,9 +109,7 @@ module Kiosk
         true
       end
 
-      # RFC 7638 thumbprint of the key the ceremony would bind — the same
-      # identifier kiosk-pop uses as JWK `kid`, so what the human approves
-      # is checkable against what the assistant printed.
+      # The key's RFC 7638 thumbprint, the `kid` the assistant prints.
       def key_fingerprint(authorization)
         return nil if authorization&.public_key_pem.nil?
 

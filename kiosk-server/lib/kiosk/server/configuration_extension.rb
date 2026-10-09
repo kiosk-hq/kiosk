@@ -5,87 +5,27 @@ require "kiosk/server/verb_vocabulary"
 
 module Kiosk
   module Server
-    # Adds server-specific fields to {Kiosk::Configuration} via include.
-    # Stacks on top of the base Configuration attributes from kiosk-core
-    # (`user_model`, `user_id_type`, `guc_namespace`, `schema`, `app_role`,
-    # `roles`, `issuer`, …).
-    #
-    # See the Discovery section of the spec for the well-known shape.
+    # Server settings, added to {Kiosk::Configuration}.
     module ConfigurationExtension
-      # Serialises the FIRST touch of every lazy default below that allocates a
-      # STATEFUL object — the four store slots.
-      #
-      # `@x ||= Store.new` is a read, an allocation and a write with nothing
-      # between them, so N threads racing the first touch of a slot each read
-      # nil, each allocate, and each go on using the store THEY built; the last
-      # write wins and silently discards whatever the losers recorded in theirs.
-      # For `pow_spent_store` that is a double-spent proof of work, which is
-      # measured rather than argued: with the allocation slowed at this seam,
-      # 20 threads racing ONE valid proof through {PowGate.gate} all returned
-      # `:proceed`, every one of them. The store's own compare-and-set was never the
-      # defect — the threads were holding twenty different stores, and each
-      # claim won in its own.
-      #
-      # The read path stays lock-free: the mutex is entered only while the ivar
-      # is still unset, so a settled slot costs one ivar read and nothing else
-      # (these sit on the hot path — `pow_spent_store` on every tolled verb,
-      # `revocation_store` on every access-token check). It is held at the
-      # MODULE rather than per instance because a per-instance mutex would need
-      # a lazy default of its own and inherit the identical race.
-      #
-      # Only stateful slots take it. The value defaults in this file
-      # (`mount_path`, `pow_ttl`, `skill_url`, …) allocate immutable, equal
-      # values, so a racing duplicate is indistinguishable from the winner.
+      # Serialises the first touch of each lazy store slot, so racing threads
+      # cannot each build their own store (a double-spent proof of work).
       LAZY_STORE_MUTEX = Mutex.new
 
-      # URL prefix at which kiosk-server is mounted under the provider's
-      # origin. Default: `/kiosk` (the spec's suggested default mount path).
-      # The well-known document advertises `endpoint = origin + mount_path`.
+      # Default `/kiosk`. Discovery advertises `endpoint = origin + mount_path`.
       attr_writer :mount_path
       def mount_path
         @mount_path ||= Kiosk::Protocol::DEFAULT_MOUNT_PATH
       end
 
-      # When true, SessionContext appends `SET LOCAL ROLE <app_role>` inside
-      # EVERY request transaction (query / run / pay verbs) — the DB-privilege
-      # backstop for opt-in RLS enforcement. app_role must then hold complete
-      # GRANTs on every table those verbs touch: the kiosk.* mandate tables
-      # (kiosk.agents, kiosk.intent_mandates, kiosk.cart_mandates,
-      # kiosk.payment_mandates, kiosk.settlements, …) and all application
-      # tables reached by registered queries and actions. Default false.
+      # When true, every request transaction runs `SET LOCAL ROLE <app_role>`;
+      # that role then needs grants on every table the verbs touch. Default false.
       attr_writer :enforce_db_role
       def enforce_db_role
         @enforce_db_role ||= false
       end
 
-      # Capabilities the server advertises in `/.well-known/kiosk.json`.
-      #
-      # Members are MODULE NAMES — the parts of the protocol this origin
-      # serves — drawn from the canonical set `schema`, `queries`, `actions`,
-      # `pay` and emitted in that order. Computed from the live registry — NOT
-      # a static list — so the document never advertises a module the provider
-      # hasn't wired:
-      #   * `schema`  — present whenever ≥1 query OR ≥1 action is registered
-      #     (schema is the self-description of those).
-      #   * `queries` — present iff ≥1 named query is registered.
-      #   * `actions` — present iff ≥1 action is registered.
-      #   * `pay`     — present iff a payment provider (AP2) is configured.
-      #
-      # WHY MODULES AND NOT VERB NAMES — AND IT IS A MODELLING RULE, NOT A
-      # SECURITY ONE. Nothing here is withheld: the catalog is public, the
-      # derived OpenAPI document is public, and `/.well-known/api-catalog`
-      # hyperlinks every verb unauthenticated. The reason is that a second copy
-      # of the verb list would be a second SOURCE OF TRUTH for it, and the two
-      # would drift; the catalog is the contract and this document is the
-      # pointer. A module set tells an assistant which branches of the skill
-      # apply, which is what its Step 1 actually needs.
-      #
-      # HTTP methods are never encoded here: the method follows the
-      # KIND of the verb (a query is GET, an action is POST), which the
-      # catalog states per verb.
-      #
-      # A provider may still pin an explicit list via `c.capabilities = [...]`;
-      # that override is returned verbatim.
+      # Module names advertised in `/.well-known/kiosk.json`. Default: computed
+      # from what is registered and configured; a set value is returned verbatim.
       attr_writer :capabilities
       def capabilities
         return @capabilities if @capabilities
@@ -93,44 +33,27 @@ module Kiosk
         computed_capabilities
       end
 
-      # Owner block for the well-known document. Free-form hash, e.g.
-      # `{ name: ..., support: ... }`. Providers should
-      # set at minimum a contact email.
+      # Free-form owner block for discovery, e.g. `{ name:, support: }`.
       attr_writer :owner
       def owner
         @owner ||= {}
       end
 
-      # Minimum client version this deployment ADVERTISES — on BOTH surfaces
-      # that carry it: `kiosk.min_client` in `/.well-known/kiosk.json` (see
-      # {WellKnown}) and the per-response `Kiosk-Min-Client` header (see
-      # {Headers}). Default: {Kiosk::Protocol::MIN_CLIENT}. Advisory only: no
-      # code compares any incoming request's client version against it, so a
-      # bump is informational. Both surfaces read THIS value, so a provider
-      # that bumps it advertises one number, not two.
+      # Advertised in discovery and the `Kiosk-Min-Client` header. Advisory only.
       attr_writer :min_client
       def min_client
         @min_client ||= Kiosk::Protocol::MIN_CLIENT
       end
 
-      # Skill descriptor advertised in `/.well-known/kiosk.json` (the
-      # "Dual-check" contract in skill.md): the canonical, versioned skill
-      # URL plus the SHA-256 of its content, so an agent can verify the
-      # skill it cached (or is about to fetch) is the one this provider
-      # was built against.
-      #
-      # The `skill` block is emitted only when `skill_sha256` is set — a
-      # stale hash baked into the gem would be worse than no block at all.
-      # Providers set it in the initializer and update it when they adopt
-      # a newer skill version.
+      # The skill this origin was built against. Discovery emits the `skill`
+      # block only when `skill_sha256` is set.
       attr_writer :skill_url
       def skill_url
         @skill_url ||= "https://kiosk.tech/skill-v0.5.12.md"
       end
       attr_accessor :skill_sha256
 
-      # The RSA key the engine signs and verifies its JWTs with. Required; a
-      # SigningKey or a PEM string.
+      # Required. A SigningKey or a PEM string.
       def signing_key
         @signing_key || raise(Errors::ConfigurationError,
                               "c.signing_key is not set. Generate one with `openssl genrsa 2048`.")
@@ -150,27 +73,16 @@ module Kiosk
                        end
       end
 
-      # Number of independent Equihash proofs required at agent registration
-      # (`POST /auth/register`). Default 0 = disabled (open registration).
-      # Providers that gate physical-service access, or want to price fresh
-      # identity minting, set e.g. 1. When > 0, registration uses the SAME
-      # Equihash challenge-response as the reputation gate (see {RegistrationPow}),
-      # so `pow_secret` must also be set and `kiosk-pow-equihash` loaded.
+      # Equihash proofs required at `POST /auth/register`. Default 0 (open).
+      # Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
       attr_writer :registration_pow_count
       def registration_pow_count
         @registration_pow_count ||= 0
       end
 
-      # Equihash params for the registration gate. Default nil → the shipped
-      # `kiosk-pow-equihash` defaults (`Kiosk::Pow::Equihash.params`). Override
-      # to demand different (n, k).
+      # Equihash (n, k) for registration. Default nil: the gem's own params.
       attr_accessor :registration_pow_params
 
-      # There is no SHA256 leading-zero-bits registration hashcash: the spec
-      # settles on "one PoW = Equihash", and SHA256 — the most ASIC-optimised
-      # hash on Earth — is the opposite of the CPU-hard PoW that calls for.
-      # This setter exists only to say so. Use `registration_pow_count`
-      # (Equihash) instead.
       def registration_difficulty=(_)
         raise ArgumentError,
           "registration_difficulty (SHA256 hashcash) was removed — spec amended, " \
@@ -178,87 +90,34 @@ module Kiosk
           "`c.pow_secret`."
       end
 
-      # Role assigned to every self-registered agent. Self-registration mints a
-      # Bearer token with no human in the loop, so the role is pinned by the
-      # provider server-side — an agent CANNOT choose its own role (that would
-      # be a privilege-selection primitive: the role lands in a transaction-local GUC
-      # every RLS policy trusts). Privileged roles are obtainable only through
-      # the human-approved device-grant flow.
-      #
-      # REQUIRED WHENEVER {#roles} IS NON-EMPTY, and unused otherwise. There is
-      # always a default role: this value is what a binding falls back to when
-      # the ceremony resolves none, and what a self-registration — which has no
-      # human in it at all — is pinned to. An origin that declares a role
-      # vocabulary and leaves this unset would land both on the EMPTY role set
-      # and mint tokens with no `role` claim while its verbs branch on one, so
-      # {Engine.default_role_configuration_error} REFUSES that origin at boot,
-      # naming this setting (kiosk.tech `protocol.md` §6.3).
-      #
-      # An origin that declares NO roles is untouched, and nothing here is
-      # required of it. It leaves this unset, its agents get NO role
-      # (`agents.allowed_roles` is the EMPTY array, never NULL, because the
-      # shipped migration declares that column `NOT NULL`), and it boots. A
-      # provider that needs roles on only some accounts may still assign them
-      # inside its `assistant_creation` hook.
-      #
-      # When set, it must be one of {#roles}.
+      # The role every self-registered agent is pinned to, and the default a
+      # binding falls back to. Required, and one of {#roles}, when {#roles} is set.
       #   Kiosk.configure { |c| c.roles = %i[customer]; c.registration_role = :customer }
       attr_accessor :registration_role
 
-      # Provider-supplied factory that creates the assistant account backing a
-      # self-registered agent. Optional.
-      #
-      # When set, `AgentRegistration` invokes this proc with ONE argument — the
-      # registrant's public key — and USES its RETURN VALUE as the principal
-      # (`agents.user_id`). The provider creates its OWN record (satisfying its
-      # OWN model validations) and returns that record's id. Because the id
-      # comes from the provider's own row, this works for bigint AND uuid PKs —
-      # which is why the framework never generates the principal id itself.
-      # Returning nil raises a ConfigurationError.
-      #
-      # When unset, registration falls back to `user_model.constantize.create!`
-      # (the greenfield default — works only for models without required
-      # attributes). A real Rails app with e.g. `validates :email, presence:`
-      # should set this hook to avoid a 500 at registration.
-      #
-      #   Kiosk.configure do |c|
-      #     c.assistant_creation = ->(pubkey) do
-      #       AssistantAccount.create!(kind: :agent).id
-      #     end
-      #   end
+      # Optional `->(public_key) { record_id }` creating the account behind a
+      # self-registered agent. Unset: `user_model.constantize.create!`.
       attr_accessor :assistant_creation
 
-      # The anonymized attributes this origin's gated actions need, e.g.
-      # %w[age_over_18]. `request_kyc` asks the `kyc_provider` for them and
-      # {Kyc.require!} gates on them.
+      # Anonymized attributes gated actions need, e.g. %w[age_over_18].
       attr_writer :kyc_claims
       def kyc_claims
         @kyc_claims || []
       end
 
-      # Issuer string of the trusted KYC attestation provider.
-      # Must match the `iss` claim of submitted KYC JWS tokens.
+      # Must match the `iss` of submitted KYC attestations.
       attr_writer :kyc_issuer
       def kyc_issuer
         @kyc_issuer
       end
 
-      # The audience this operator accepts on a KYC attestation — the `aud`
-      # claim the KYC provider mints the attestation FOR. {KycVerifier} rejects
-      # any attestation whose `aud` does not equal this value, so a claim the
-      # broker minted for operator A cannot be replayed to operator B at the
-      # WIRE level (not merely by a demo's own callback). Defaults to
-      # `Kiosk.current_issuer` — the origin being served — so a provider that does nothing
-      # binds attestations to its origin automatically. An operator whose KYC
-      # provider addresses it by a stable handle (rather than its per-deploy
-      # origin URL) sets this to that handle.
+      # The `aud` a KYC attestation must carry. Default: the origin being served.
       attr_writer :kyc_audience
       def kyc_audience
         @kyc_audience || Kiosk.current_issuer
       end
 
-      # RSA public key ({OpenSSL::PKey::RSA} or PEM string) of the trusted
-      # KYC provider. Used by {KycVerifier} to verify attestation JWS tokens.
+      # The KYC provider's RSA key: an OpenSSL::PKey or a PEM string.
       def kyc_public_key
         @kyc_public_key
       end
@@ -274,16 +133,7 @@ module Kiosk
                           end
       end
 
-      # Storage adapter for {Kiosk::Server::DeviceAuthorization} rows (the
-      # account-binding ceremony state machine). Lazy default: the durable
-      # {DeviceAuthorizationStores::ActiveRecord} store (over
-      # `kiosk.device_authorizations`, migration 004) — the ceremony is
-      # cross-process by nature (the human approves in a browser while the
-      # agent polls from another process), so an in-memory store cannot serve
-      # it. {DeviceAuthorizationStores::InMemory} stays shipped for tests and
-      # is assigned explicitly through the writer.
-      #
-      # @return [DeviceAuthorizationStores::Base]
+      # Account-binding ceremony state. Default: the shared database store.
       attr_writer :device_authorization_store
       def device_authorization_store
         @device_authorization_store ||
@@ -293,72 +143,26 @@ module Kiosk
           end
       end
 
-      # WHERE THE PER-IDENTITY EVENT TAIL LIVES.
-      #
-      # The default below is IN-PROCESS and is correct for the suite and for a
-      # single-process development boot and for nothing that is deployed: it is
-      # gone on restart. The operator keeps every event for 24 hours so a
-      # subscriber that reconnects with `since` misses nothing, and a restart
-      # would lose the events inside that window.
-      #
-      # A deployed operator sets
-      #
+      # Per-identity event tail. The default is in-process and lost on restart;
+      # a production origin with event topics must set
       #   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
-      #
-      # which `rails generate kiosk:install` writes into the initializer.
-      #
-      # AND IT IS NOT LEFT TO THE OPERATOR TO REMEMBER. A production origin
-      # that declares an event topic and leaves the default below in place does
-      # not boot: {Server::Engine.ephemeral_event_store_error} names the topics
-      # it found and the setting to add. An origin that declares NO topic is
-      # untouched — it never emits, so the store below is an object nothing
-      # calls, and the suite and development are untouched in every case.
-      #
-      # @return [EventStore]
       attr_writer :event_store
       def event_store
         @event_store ||
           LAZY_STORE_MUTEX.synchronize { @event_store ||= Kiosk::Server::EventStore.new }
       end
 
-      # Operator sign-in path the engine redirects a browser to when an
-      # UNAUTHENTICATED human hits the manage-assistants page
-      # (`<mount>/auth/assistants`) or the claim ceremony's verify page
-      # (`<mount>/oauth/device/verify`). Optional, default nil.
-      #
-      # The engine stays IdP-neutral — it cannot hardcode a sign-in URL
-      # (Devise's `/users/sign_in` is app-specific). When a provider sets this
-      # to its own sign-in path, {AccountHolderGate#require_account_holder!}
-      # redirects a browser visitor there (with a flash alert + a stored
-      # return-to) instead of rendering the bare 401. When left nil — or for a
-      # non-HTML/API request — the plain 401 is preserved, so the API contract
-      # is unaffected.
+      # Optional sign-in path a browser is redirected to from the assistants and
+      # verify pages. Unset, or for an API request: a plain 401.
       attr_accessor :sign_in_path
 
-      # ── The account-binding module ─────────────────────────────
-
-      # Whether this origin SERVES account binding — the claim ceremony and the
-      # link-code redeem. Binding is an OPTIONAL module, as are payment, KYC
-      # and the event stream; each of those is declined by leaving its own
-      # setting unset (the stream: by declaring no topic).
-      # Default true.
-      #
-      #   Kiosk.configure { |c| c.serve_account_binding = false }
-      #
-      # Set false and every binding path answers `501 module_not_served` — the
-      # refusal the wire names for a module this origin does not serve
-      # ({BindingModuleGate}). Discovery does not move: the auth block is core
-      # discovery and carries all six URLs on every origin, and `capabilities`
-      # has no binding member, so an assistant STARTS the ceremony and branches
-      # on the answer rather than reading a flag.
+      # Default true. False answers every binding path `501 module_not_served`.
       attr_writer :serve_account_binding
       def serve_account_binding
         return @serve_account_binding unless @serve_account_binding.nil?
 
         true
       end
-
-      # ── Account-binding hooks ──────────────────────────────────
 
       # Called as `(agent:, from:, to:)` when an assistant's key moves from one
       # account to another, inside the rebind transaction: the place to move
@@ -369,68 +173,23 @@ module Kiosk
       # `account`, a `user_model` record, and its tokens are revoked.
       attr_accessor :assistant_unlinked
 
-      # ── Per-assistant spending cap ─────────────────────────────
-
-      # Optional callable returning the spending cap (in cents) for an assistant,
-      # or nil for no cap. Invoked `(agent_id:) → Integer | nil` in the pay path
-      # BEFORE the irreversible PSP capture; a cap of 0 disables the assistant's
-      # payments entirely. Default nil = the feature is off (no enforcement, no
-      # lookup — existing behaviour unchanged). A ready-made column-backed
-      # implementation is {Kiosk::Server::ColumnSpendingCap} (reads
+      # Optional `(agent_id:) → cents | nil`, checked before capture; 0 blocks payments.
+      # {Kiosk::Server::ColumnSpendingCap} reads
       # `agents.spending_cap_cents`, the column edited by the manage-assistants
-      # page); a provider storing caps elsewhere supplies its own callable.
+      # page.
       attr_accessor :spending_cap
 
-      # Rolling window in days over which settled spend is summed against the
-      # cap. Default nil = all-time cumulative. E.g. 7 for a weekly allowance.
+      # Days of settled spend summed against the cap. Default nil: all time.
       attr_accessor :spending_cap_window_days
 
-      # ── The operator's price, for {PaymentClaim} ─────────────────────────
-
-      # The operator's catalog: `call(id, lines) → Integer | String`. Given the
-      # payable row the cart names and the cart's item lines as signed, it
-      # answers that row's price in cents, or a String saying why the cart is
-      # refused. {PaymentClaim} does the rest.
+      # `call(id, lines) → cents | String`: the payable row's price, or why the cart is refused.
       attr_accessor :cart_price_checker
 
       # Optional `call(id)`, run once the capture for row `id` has returned.
       attr_accessor :after_payment
 
-      # ── Request-shape validation ──────────────────────────────────────────
-
-      # When true, {WireController} validates a PRESENT `pow` field on a wire
-      # request against the vendored normative PoW schema BEFORE {PowGate.gate}
-      # consumes it, and rejects a malformed shape with a `bad_request` (400)
-      # carrying a hint naming the expected shape — instead of a silent
-      # re-challenge loop (a malformed pow whose proofs {PowGate.extract_proofs}
-      # cannot parse yields [], so the gate re-issues a fresh 402 forever with no
-      # diagnostic).
-      #
-      # It ALSO holds every RESERVED-plane JSON request body to the object §17
-      # publishes for it — register, login, claim, unlink, the KYC attestation
-      # and `pay` ({RequestValidation::BODY_SCHEMAS} is the list) — so a
-      # wrong-typed member is a 400 naming the member rather than whatever a
-      # verifier downstream raises about it. §16.3 anchor 1 makes that a
-      # SHOULD for an operator, which is why it is this flag rather than
-      # unconditional, and why turning it off leaves an origin conformant.
-      #
-      # This is a SHAPE check in front of the gate — NOT a replacement for it: a
-      # well-formed-but-forged proof still fails the real cryptographic
-      # verification inside the gate. An ABSENT pow is untouched (the initial
-      # no-pow request still gets its normal 402 challenge). `json_schemer` is a
-      # RUNTIME dependency of this gem, not an optional extra
-      # tied to this flag — it is still required LAZILY, so a vendored checkout
-      # missing it gets a {Errors::ConfigurationError} naming the gem rather than
-      # a LoadError at boot.
-      #
-      # **DEFAULT TRUE, and the asymmetry with the flag below is the whole
-      # reason.** OFF is the setting that produces the silent failure: a
-      # malformed `Kiosk-PoW` yields no parseable proofs, so the gate re-issues
-      # a fresh 402 forever with no diagnostic, and the assistant on the other
-      # end can neither see nor fix what it sent. ON produces a 400 naming the
-      # shape. Every one of the seven showcase origins sets it on, and
-      # `rails g kiosk:install` writes it on, so an adopter who skips the
-      # generator gets the same behaviour as one who does not.
+      # Default true. Malformed `Kiosk-PoW` and reserved-endpoint bodies are a 400
+      # naming the problem, rather than an endless re-challenge.
       attr_writer :validate_requests
       def validate_requests
         return @validate_requests unless @validate_requests.nil?
@@ -438,54 +197,16 @@ module Kiosk
         true
       end
 
-      # When true, every query/action answer is validated against the
-      # `output_schema` that verb DECLARES, and a mismatch raises — see
-      # {ResponseValidation} for why the check exists and where it runs.
-      #
-      # DEFAULT FALSE, and deliberately NOT the flag above, which defaults TRUE.
-      # `validate_requests` polices what a CALLER sent; this polices what the
-      # OPERATOR's own handler rendered. Nothing a caller does can trigger it,
-      # the failure it reports is always an operator-side bug, and it costs one
-      # schema validation per answer — so it belongs in development and CI,
-      # where a descriptor that lies about its handler is cheap to fix, and not
-      # in front of a production caller who did nothing wrong. THE REASON DOES
-      # NOT TRANSFER: a request-shape refusal is a 400 to a caller who
-      # sent a bad request, not a 500 to one who did nothing wrong, which is why
-      # the two defaults point opposite ways. Uses `json_schemer` on the same
-      # lazily-required terms as `validate_requests`.
+      # Default false. Checks each answer against its verb's `output_schema`
+      # and raises on mismatch: an operator-side bug, so for development and CI.
       attr_writer :validate_responses
       def validate_responses
         @validate_responses ||= false
       end
 
-      # ── The audit seam ────────────────────────────────────────────────────
-
-      # THE AUDIT SINK — a callable the operator sets to receive one
-      # {Kiosk::Server::ActionEvent} per action invocation, success and
-      # failure alike. **Default nil: nothing is emitted and Kiosk stores
-      # nothing.**
-      #
-      #   c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
-      #
-      # Kiosk keeps no audit trail of its own: there is no table in the
-      # canonical migration set for it, and this seam is the whole of the
-      # interface. Where the events go, how long they are kept and what PII
-      # they carry are the operator's to decide and the operator's to answer
-      # for.
-      #
-      # **THE ARGUMENTS ARRIVE IN FULL, AND THAT IS DELIBERATE.**
-      # `event.args` is exactly what the handler received — an address, a
-      # name, a cart, a booking reference. Kiosk does not redact them for you,
-      # because a redaction Kiosk chose would be a retention policy Kiosk
-      # invented for your data. Whatever you write, you are the controller
-      # for. {Kiosk::Server::ActionEvent#with_arg_types} and `#without_args`
-      # make withholding them one call, if that is what you want.
-      #
-      # A sink that raises does NOT fail the action (see
-      # {Kiosk::Server::AuditSink}); a non-callable here is rejected now,
-      # rather than becoming a silently missing audit trail at runtime.
-      #
-      # @return [#call, nil]
+      # Optional callable receiving one {Kiosk::Server::ActionEvent} per action
+      # invocation, arguments unredacted. Default nil: nothing is emitted.
+      # A sink that raises does not fail the action.
       attr_reader :audit_sink
 
       def audit_sink=(value)
@@ -498,19 +219,9 @@ module Kiosk
         @audit_sink = value
       end
 
-      # ── PoW challenge-response gate ───────────────────────────────────────
-
-      # Reputation policy that decides when and how hard to challenge a request.
-      # Default nil = never challenge (zero overhead; existing behaviour unchanged).
-      # Set to a `Kiosk::Reputation::Policy` instance (or any object responding to
-      # `#challenge_for(identity:, verb:, factors:) → {alg:,params:,count:}|nil`
-      # (`count` is the N×PoW proof-count escalation lever; the gate defaults it
-      # to 1 when omitted).
-      #
-      # THE VERB IT IS HANDED IS `:run`, NEVER `:action`, and a
-      # policy that branches on the wrong spelling is REFUSED HERE rather than
-      # declining to toll every write in silence. See {VerbVocabulary} for why
-      # the refusal is a load error and not an alias.
+      # Decides when and how hard to challenge. Default nil: never.
+      # `#challenge_for(identity:, verb:, factors:) → {alg:, params:, count:} | nil`;
+      # the verb it receives is `:run`, never `:action`.
       def reputation_policy=(value)
         VerbVocabulary.assert!(value, :challenge_for, "reputation_policy #challenge_for") unless value.nil?
         @reputation_policy = value
@@ -520,7 +231,7 @@ module Kiosk
         @reputation_policy
       end
 
-      # The HMAC key proof-of-work challenges are signed with, at least 32 bytes.
+      # HMAC key for proof-of-work challenges, at least 32 bytes.
       attr_reader :pow_secret
 
       def pow_secret=(value)
@@ -533,22 +244,13 @@ module Kiosk
         @pow_secret = value
       end
 
-      # Challenge TTL in seconds. Default 300 (5 minutes).
+      # Seconds. Default 300.
       attr_writer :pow_ttl
       def pow_ttl
         @pow_ttl ||= 300
       end
 
-      # Callable `(identity:, verb:) → Kiosk::Reputation::Factors` that the
-      # host supplies to let the policy see reputation context. Default returns
-      # `Factors.empty` (all fields nil) — safe when kiosk-reputation IS loaded
-      # (which it must be when a policy is set). The body is a lambda, so
-      # `Kiosk::Reputation::Factors` is NOT referenced at definition time;
-      # nil-policy apps without kiosk-reputation still boot.
-      #
-      # It receives the SAME coarse verb the policy does, so it carries the
-      # same trap and the same refusal: a factors lambda branching on
-      # `:action` is rejected at configuration time.
+      # `(identity:, verb:) → Kiosk::Reputation::Factors`. Default: empty factors.
       def reputation_factors=(value)
         VerbVocabulary.assert!(value, nil, "reputation_factors callable") unless value.nil?
         @reputation_factors = value
@@ -558,81 +260,39 @@ module Kiosk
         @reputation_factors ||= ->(**) { ::Kiosk::Reputation::Factors.empty }
       end
 
-      # Callable `(identity:) → void` invoked when a submitted proof is
-      # cryptographically invalid (wrong nonce). The host increments the
-      # principal's `bad_proof_count` here. Default: no-op.
+      # `(identity:)`, called on a cryptographically invalid proof. Default: no-op.
       attr_writer :on_bad_proof
       def on_bad_proof
         @on_bad_proof ||= ->(**) {}
       end
 
-      # Spent PoW challenge ids, so a proof is accepted once. Defaults to the
-      # database table every process and every deploy share.
-      #
-      # @return [#claim(id, exp), #release(id), #spent?(id), #mark_spent(id, exp)]
+      # Spent challenge ids, so a proof is accepted once. Default: the shared database table.
       attr_writer :pow_spent_store
       def pow_spent_store
         @pow_spent_store ||
           LAZY_STORE_MUTEX.synchronize { @pow_spent_store ||= Kiosk::Server::PowSpentStores::ActiveRecord.new }
       end
 
-      # ── PoP auth handshake (challenge-response) ───────────────────────────
-
-      # In-process store binding a public key to its outstanding, single-use
-      # auth challenge nonce (the server side of `/auth/challenge`). Override
-      # with a shared-store implementation in multi-process deployments —
-      # §15.2 requires it, and one ships in this gem:
-      # {AuthChallengeStores::ActiveRecord}, backed by
-      # {SchemaDefinitions.auth_challenge_sql}. Unshared, the handshake fails
-      # CLOSED: worker B cannot see the nonce worker A issued, so a
-      # correctly-signed `register`/`login` is rejected roughly (N-1)/N of the
-      # time and the AI assistant cannot tell that from a bad key.
-      #
-      # @return [Kiosk::Server::AuthChallengeStore, #put, #take]
+      # Outstanding auth nonces. The default is in-process; a multi-process
+      # deployment needs {AuthChallengeStores::ActiveRecord} (§15.2).
       attr_writer :auth_challenge_store
       def auth_challenge_store
         @auth_challenge_store ||
           LAZY_STORE_MUTEX.synchronize { @auth_challenge_store ||= Kiosk::Server::AuthChallengeStore.new }
       end
 
-      # Auth-challenge lifetime in seconds — the window an agent has between
-      # `GET /auth/challenge` and its signed `POST /auth/{register,login}`.
-      #
-      # At registration the agent must ALSO solve the Equihash PoW
-      # (`registration_pow_count` proofs) inside this same window before it can
-      # POST /auth/register. The PoW solve window is `pow_ttl * count` (see
-      # PowGate#issue_challenges). SO THE DEFAULT DERIVES FROM THE PoW WINDOW
-      # rather than being a flat number, and always exceeds it (with 60s
-      # headroom), scaling when a provider raises `pow_ttl` or
-      # `registration_pow_count`. A flat default shorter than a single-proof
-      # window (pow_ttl = 300s) expires a legitimate slow solver's auth nonce
-      # mid-solve — with the burned PoW proofs already spent. Set explicitly to
-      # override, but keep it above `pow_ttl * registration_pow_count`.
+      # Seconds between `GET /auth/challenge` and the signed POST. Default covers
+      # the registration proof-of-work window plus 60s.
       attr_writer :auth_challenge_ttl
       def auth_challenge_ttl
         @auth_challenge_ttl ||= pow_ttl * [registration_pow_count.to_i, 1].max + 60
       end
 
-      # Per-agent token-revocation watermark store backing `/auth/revoke`
-      # ("log out other sessions"), `/auth/unlink` and the claim rebind.
-      # Consulted by {JwtIssuer.verify} on every access-token check. Override
-      # with a shared/durable implementation in multi-process deployments; set
-      # to nil to disable revocation enforcement.
-      #
-      # THE INTERFACE IS THREE METHODS, NOT TWO. `watermark_for` is
-      # read by {AgentIdentityProviders::DefaultAgentIdp} so a token minted in
-      # the same wall-clock second as a revocation is dated AT the watermark
-      # instead of being born already-revoked. An override that omits it keeps
-      # working — the IdP falls back to the clock — but re-opens that
-      # one-second aperture for its own deployment, which §6.3's MUST forbids
-      # on the rebind, so a durable store SHOULD implement all three.
-      #
-      # @return [Kiosk::Server::RevocationStore, #revoke_all, #revoked?, #watermark_for, nil]
+      # Revocation watermarks, checked on every access token. nil disables
+      # revocation. Implement `watermark_for` too, or same-second rebinds leak (§6.3).
       attr_writer :revocation_store
       def revocation_store
-        # `defined?` rather than a truthiness test, here and inside the lock:
-        # nil is a MEANINGFUL value for this slot (it disables revocation
-        # enforcement), so an operator's explicit `= nil` must not be re-defaulted.
+        # nil is a meaningful value here, so `defined?` rather than truthiness.
         return @revocation_store if defined?(@revocation_store)
 
         LAZY_STORE_MUTEX.synchronize do
@@ -644,13 +304,7 @@ module Kiosk
 
       private
 
-      # Compute the advertised module list from the live registry, in the
-      # canonical order schema, queries, actions, pay, events.
-      # See {#capabilities}.
-      #
-      # `events` is LAST and it is fifth, not inserted among the four: the spec
-      # pins the order, and an origin that has never served events must keep
-      # advertising exactly the string it advertised before this member existed.
+      # The spec's order; `events` stays last.
       def computed_capabilities
         has_queries = Kiosk::Server::Queries.known.any?
         has_actions = Kiosk::Server::Actions.known.any?

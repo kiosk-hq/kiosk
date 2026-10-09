@@ -11,45 +11,15 @@ require "kiosk/server/queries"
 
 module Kiosk
   module Server
-    # Central dispatcher. Receives a verb (one of {VERBS}) + args +
-    # {Kiosk::Identity} + a database connection. Opens {SessionContext}
-    # (transaction + four transaction-local GUCs), routes to the
-    # appropriate verb method, returns {Result} on success or raises
-    # {Errors::Base} subclass on failure.
-    #
-    # This implements the dispatch that {WireController} and
-    # {VerbController} wrap, factored out of the controller so it is testable
-    # without Rails.
+    # Runs one call for an identity inside a {SessionContext}; returns a {Result} or raises {Errors::Base}.
     class Executor
-      # The three GATE/POLICY verbs — the coarse kind of a call, NOT wire
-      # paths — and what THIS dispatcher serves. ONE list: the set the toll and
-      # the policy classify by is the same set this dispatcher routes.
-      #
-      # None of these three is a URL: `query` and `run`
-      # are how a per-verb GET and a per-verb POST are classified for the toll
-      # and the session, and `pay` is both a classification and a reserved path
-      # segment. They stay symbols rather than becoming path names because
-      # `reputation_factors` and `Policy#challenge_for` both take one as
-      # `verb:` and every shipped policy branches on these three.
-      #
-      # `schema` is NOT one of them and is not tolled: `GET <endpoint>/schema`
-      # and the derived `/kiosk/openapi.json` are both public, and neither
-      # resolves an identity — an {Executor} cannot be built without one.
-      #
-      # An unknown kind is a clean 400.
+      # The coarse kinds of call shared by the toll, the policy and this dispatcher; not wire paths.
       VERBS = %i[query run pay].freeze
 
-      # Verbs that open their own transaction boundaries because they perform
-      # an irreversible external side effect (a PSP capture) that a DB
-      # ROLLBACK cannot undo. Everything else runs inside one wrapping
-      # SessionContext; these manage their own SessionContext(s) instead.
+      # Kinds with an irreversible external effect (a PSP capture) that manage their own transactions.
       SELF_MANAGED_VERBS = %i[pay].freeze
 
-      # @param name [String, nil] the query/action wire name. Always supplied
-      #   on the wire — it is a PATH SEGMENT, not a body field — which is why a
-      #   verb is free to declare an argument literally called `name` (none
-      #   does). Only `pay` ignores
-      #   it: its name is its kind.
+      # `name` is the query/action path segment; `pay` ignores it.
       def self.call(kind:, args:, identity:, connection:, name: nil)
         new(connection: connection, identity: identity).call(kind: kind, args: args, name: name)
       end
@@ -89,28 +59,8 @@ module Kiosk
 
       private
 
-      # THE AUDIT SEAM. Wraps the `run` branch above and emits ONE
-      # {ActionEvent} per invocation to the operator's `audit_sink` — `ok` when
-      # the handler returned, `error` when anything raised, and the raise is
-      # re-raised untouched either way. With no sink configured nothing is
-      # built and nothing is emitted: Kiosk offers the interface, the operator
-      # owns the data — see {AuditSink}.
-      #
-      # WHY HERE AND NOWHERE ELSE. This is the one place that sees every action
-      # invocation exactly once. `POST <endpoint>/<action-name>` is the only
-      # route to an action, and it reaches
-      # {WireController#execute_wire} → `Executor.call(kind: :run)`; a direct
-      # `Executor.call` (an RLS journey, an operator's own script) arrives at
-      # the same line. Putting it in {#verb_run} instead would put it INSIDE
-      # the SessionContext, where a failed action's rollback would take the
-      # emission with it; putting it in the controller would miss the direct
-      # callers and would sit inside the toll, where nothing has been invoked
-      # yet.
-      #
-      # OUTSIDE the SessionContext block, deliberately: a sink is somebody
-      # else's code and it must not be able to hold this origin's database
-      # transaction open, and a failed action's ROLLBACK must not erase the
-      # record of what rolled back.
+      # Emits one {ActionEvent} per action to the operator's audit sink. Outside the SessionContext,
+      # so a rollback cannot erase the record and a sink cannot hold the transaction open.
       def audited(name, args)
         return yield unless AuditSink.configured?
 
@@ -125,19 +75,12 @@ module Kiosk
         result
       end
 
-      # An action is what gets audited, so an unregistered name is skipped:
-      # `Actions.fetch` is about to raise a 404 for it and nothing was
-      # invoked. (While the trail was a table this filter was also what
-      # satisfied a foreign key; the FK is gone and the reason is now simply
-      # the definition of «an action invocation».)
+      # Only a registered action counts as invoked; an unknown name is about to answer 404.
       def emit(name, args, status, error, invoked_at)
         return if name.nil? || name.to_s.empty?
         return unless Actions.known.include?(name.to_s)
 
-        # `symbolize` because the event must carry the arguments AS THE HANDLER
-        # RECEIVED THEM — {#verb_run} symbolizes its own copy, and a sink that
-        # reached for `event.args[:slot]` on the wire's string keys would find
-        # nothing and never say so.
+        # The args as the handler received them, with symbol keys.
         AuditSink.emit(
           ActionEvent.build(identity: identity, name: name.to_s, args: symbolize(args),
                             status: status, error: error, invoked_at: invoked_at),
@@ -152,17 +95,7 @@ module Kiosk
         end
       end
 
-      # ─── query ─────────────────────────────────────────────────────────
-
-      # A query handler returns either a bare Array of rows (the unchanged,
-      # unpaginated case) or a {Page} (rows + an opaque next_cursor, and
-      # optionally the matching-row total) to opt into cursor pagination. The
-      # handler reads the optional `limit`/`cursor` args itself; the Executor
-      # only threads the two page facts onto the {Result}, from which the wire
-      # writes them as the `Link` and `X-Total-Count` response headers. The
-      # BODY is the rows either way (spec §8.2).
-      # Any other return value (e.g. a Hash from an idiosyncratic query) is
-      # passed through as the rows payload unchanged, preserving back-compat.
+      # A handler returns rows or a {Page}; the page facts become the `Link` and `X-Total-Count` headers (§8.2).
       def verb_query(args, name = nil)
         args = symbolize(args)
         raise Errors::BadRequest, "query name required" if name.nil? || name.to_s.empty?
@@ -189,8 +122,6 @@ module Kiosk
         validate_response!(Queries, :query, name, result)
       end
 
-      # ─── run ───────────────────────────────────────────────────────────
-
       def verb_run(args, name = nil)
         args = symbolize(args)
         raise Errors::BadRequest, "action name required" if name.nil? || name.to_s.empty?
@@ -211,16 +142,7 @@ module Kiosk
         validate_response!(Actions, :action, name, Result.new(kind: :value, payload: value))
       end
 
-      # ─── the declared output shape ─────────────────────────────────────
-
-      # Checks the answer against the `output_schema` the verb published, when
-      # the operator asked for it (`Kiosk.configuration.validate_responses`;
-      # default off — see {ResponseValidation} for why it is a
-      # development/CI assertion rather than a request check).
-      #
-      # It validates {Result#to_payload} — the answer shape — so the check is
-      # exactly the body the caller receives. Returns the Result so it can wrap
-      # the return value.
+      # Checks the answer against the published `output_schema` when `validate_responses` is on.
       def validate_response!(registry, kind, name, result)
         return result unless Kiosk.configuration.validate_responses
 
@@ -233,70 +155,12 @@ module Kiosk
         result
       end
 
-      # ─── pay ───────────────────────────────────────────────────────────
-
-      # Settles an AP2 cart. `pay` is a SELF_MANAGED_VERB: it owns its
-      # transaction boundaries because the PSP capture in phase 2 is an
-      # irreversible external effect a DB ROLLBACK cannot undo, so it MUST
-      # NOT run inside a wrapping transaction.
-      #
-      # The agent presents the whole trail (intent → cart); we verify and
-      # persist both before charging, so the cart row's intent FK resolves.
-      #
-      # Three phases, capture strictly between two DB transactions:
-      #   P1  verify + persist the mandate trail (GUC-scoped transaction — no
-      #       RLS policy on the mandate tables yet). No external effect yet.
-      #                            FAIL ⇒ nothing charged, rows rolled back.
-      #       A UNIQUE violation here is not automatically a `409`. It means
-      #       "this principal has presented one of these mandate ids before",
-      #       and there are two of those. If the SAME chain (all three
-      #       `raw_jws`, byte for byte) already has a SETTLEMENT row, this call
-      #       is a REPLAY of a completed payment and answers `200` with that
-      #       settlement — the same answer the original call gave, which is
-      #       what `idempotent` means. Anything else — a mandate id reused with
-      #       different content, or a chain whose cart was never captured or
-      #       whose capture is still in flight — stays `409 conflict`, BEFORE
-      #       any capture. See {#settled_replay}.
-      #   P2  irreversible PSP capture, OUTSIDE any DB transaction, keyed for
-      #       idempotency by cart.id. A charge FAILURE (decline / auth-required /
-      #       timeout) is translated by the adapter into a PSP-agnostic
-      #       PaymentFailed and surfaced here as a typed `payment_failed` (402),
-      #       NOT a raw 500. A DEFINITIVE decline moved no money and is
-      #       safe to retry; an UNKNOWN outcome (timeout) must be reconciled via
-      #       my_orders before any retry, so a lost-response retry can't
-      #       double-charge.
-      #   P3  record the settlement (fresh GUC-scoped transaction).
-      #       FAIL ⇒ charge + trail exist, settlement row missing. This engine
-      #              has no reconciliation worker, so for the whole of that
-      #              window the ONLY durable record of the money is at the PSP.
-      #       The danger is not the missing row, it is what an operator
-      #       PUBLISHES about it. "No settlement row" is not "not paid", and
-      #       protocol.md §11.6 forbids an operator from answering a
-      #       reconciling query with `not paid` while a capture may be
-      #       outstanding, and forbids an assistant from re-signing on
-      #       anything short of a positive `not paid`. {PaymentClaim} closes
-      #       it: it claims the operator's row before the capture and flips
-      #       it to `paid` the instant the capture returns.
+      # Settles an AP2 cart. The PSP capture runs outside any transaction, between phases 1 and 3 (§11.6).
       def verb_pay(args)
         args = symbolize(args)
 
-        # ── THE ORIGIN ANSWERS BEFORE THE ARGUMENTS DO ───────────────────────
-        # `pay` is drawn on every mounted host, provider or no provider.
-        # Whether this origin does payments AT ALL is a fact about the ORIGIN,
-        # so it is answered before anything about the request is looked at.
-        # Run the three mandate guards below first instead and an empty POST at
-        # a payment-free origin comes back `400 args.intent_mandate_jws
-        # required` — an instruction to go and sign three mandates, issued by
-        # an origin that could never settle them. The least informative answer
-        # must not win.
+        # Whether this origin serves payments is answered before any argument is read.
         provider = Kiosk.configuration.payment_provider
-        # `module_not_served` (501) and not `forbidden` (403). The
-        # paragraph above already says why this guard runs first -- "whether
-        # this origin does payments at all is a fact about the ORIGIN" -- and
-        # that is the sentence that names the code: `forbidden` means
-        # "authenticated, but this identity may not do this", while this refusal
-        # is origin-wide and true of every caller. `capabilities` drops `pay`
-        # for the same origin, so the discovery document and the wire agree.
         if provider.nil?
           raise Errors::ModuleNotServed.new(
             "this operator does not serve the payment module",
@@ -304,11 +168,7 @@ module Kiosk
           )
         end
 
-        # Payment is agent-only: the AP2 mandate chain is signed by the agent's
-        # payment key. A non-agent principal (e.g. a web/mobile user_idp session,
-        # agent_id nil) has no payment key, so reject it cleanly
-        # here rather than letting agent_payment_key(nil) raise InvalidToken →
-        # HTTP 500 downstream (same 500-not-4xx class as the other guarded paths).
+        # Mandates are agent-signed, so a principal without an agent id cannot pay.
         if identity.agent_id.nil?
           raise Errors::Forbidden, "payment requires an agent identity (mandates are agent-signed)"
         end
@@ -320,21 +180,12 @@ module Kiosk
         raise Errors::BadRequest, "args.cart_mandate_jws required"     if raw_cart.nil?    || raw_cart.to_s.empty?
         raise Errors::BadRequest, "args.payment_mandate_jws required"  if raw_payment.nil? || raw_payment.to_s.empty?
 
-        # Pre-check: if the provider knows the principal has no saved payment
-        # method, return a clean 402 NOW — before Phase 1 persists anything.
-        # This prevents burning the mandate ids on a charge that cannot
-        # succeed, so the agent can retry after the human completes the
-        # SetupIntent flow without hitting the UNIQUE (user_id, mandate_id)
-        # idempotency key.
+        # Refused before phase 1 so the mandate ids are not burned on a charge that cannot succeed.
         if provider.respond_to?(:setup_required?) && provider.setup_required?(user_id: identity.user_id)
           raise Errors::PaymentSetupRequired
         end
 
-        # Phase 1 — verify + persist the full mandate trail (GUC-scoped
-        # transaction; no RLS policy on the mandate tables yet). The persist
-        # helpers return the SERVER-generated uuid PKs, which thread the FK
-        # chain. A unique violation (same signed mandate replayed) rolls the tx
-        # back and propagates here, where it becomes a clean 409 Conflict.
+        # Phase 1: verify and persist the mandate chain. A unique violation means the chain was presented before.
         intent  = nil
         cart    = nil
         cart_row = nil
@@ -343,10 +194,7 @@ module Kiosk
           SessionContext.open(connection: connection, identity: identity) do
             intent  = MandateVerifier.verify_intent(raw_jws: raw_intent, identity: identity)
             cart    = MandateVerifier.verify_cart(raw_jws: raw_cart, identity: identity, intent: intent)
-            # Per-assistant spending cap. Checked here — after the cart
-            # is known, before any mandate row is persisted and before the
-            # irreversible capture — so a rejection rolls back cleanly (nothing
-            # persisted, no charge, no burned mandate id).
+            # Before any persist or capture, so a refusal burns nothing.
             enforce_spending_cap!(cart)
             payment = MandateVerifier.verify_payment(raw_jws: raw_payment, identity: identity, cart: cart)
             intent_row = persist_intent_mandate(intent)
@@ -356,7 +204,7 @@ module Kiosk
         rescue StandardError => e
           raise unless unique_violation?(e)
 
-          # The chain has been seen. Which of the two cases is it?
+          # An identical, settled chain answers its settlement; anything else is a conflict, before any capture.
           replay = settled_replay(intent: intent, cart: cart, payment: payment)
           return replay if replay
 
@@ -369,23 +217,7 @@ module Kiosk
           )
         end
 
-        # Phase 2 — irreversible external capture. OUTSIDE any DB transaction.
-        # The assistant-presented payment_method is threaded from the verified
-        # PaymentMandate so the PSP charges THAT instrument (nil in the
-        # SetupIntent model — the adapter resolves the on-file card itself).
-        #
-        # Belt-and-suspenders: if the PSP raises SetupRequired at capture time
-        # (e.g. the on-file card was detached between the pre-check and now),
-        # surface a clean 402 rather than a 500.
-        #
-        # A normal charge FAILURE (card declined, authentication required,
-        # insufficient funds, or a processor timeout) must not escape as a raw
-        # 500 with the mandate trail already burned. The adapter
-        # translates its PSP-specific error into a PSP-agnostic PaymentFailed
-        # carrying a human-safe message (no raw PSP internals); map it to the
-        # typed `payment_failed` wire error (402). The hint depends on whether
-        # the outcome was DEFINITIVE (safe to retry) or UNKNOWN (check
-        # my_orders first so a lost-response retry can't double-charge).
+        # Phase 2: the irreversible capture. A definitive decline is safe to retry; an unknown outcome is not.
         settled = begin
           provider.capture(cart, payment_method: payment.payment_method)
         rescue Kiosk::PaymentProviders::SetupRequired
@@ -403,8 +235,7 @@ module Kiosk
           raise Errors::PaymentFailed.new(e.message, hint: hint)
         end
 
-        # Phase 3 — record settlement (fresh GUC-scoped transaction; no RLS
-        # policy on the mandate tables yet).
+        # Phase 3: record the settlement.
         settlement_id = nil
         SessionContext.open(connection: connection, identity: identity) do
           settlement_id = persist_settlement(cart_row_id: cart_row, cart: cart, settled: settled)
@@ -418,45 +249,8 @@ module Kiosk
         })
       end
 
-      # ─── the settled replay ────────────────────────────────────────────
-
-      # Answers a re-presented chain whose payment ALREADY COMPLETED with the
-      # settlement the first call returned, or `nil` when this is not that case.
-      #
-      # WHY THIS EXISTS. `pay` publishes no idempotency header because the
-      # mandate `id`s are one (protocol.md §11.6), and an assistant whose `pay`
-      # response was lost is REQUIRED to re-send the identical chain. Answering
-      # that duty with `409 conflict` and no settlement data at all would make
-      # the safe retry the uninformative one, leaving the assistant to
-      # reconcile through a per-user query to learn whether its own purchase
-      # had happened. An error status is not idempotence — it is a different
-      # answer to the same request. So a replay of a SETTLED chain returns
-      # exactly what the original returned.
-      #
-      # THE BOUNDARY, and it is the whole safety argument. This method answers
-      # only for a chain that is BOTH:
-      #
-      #   IDENTICAL — the stored `raw_jws` of all three mandate rows equals the
-      #     three JWS strings presented now, byte for byte. A mandate `id`
-      #     re-used with DIFFERENT content is a different request wearing an
-      #     old name, and it must not be handed a settlement it did not buy.
-      #   SETTLED — a settlement row exists for that cart mandate. `UNIQUE
-      #     (cart_mandate_id)` makes it the one settlement of that cart.
-      #
-      # Everything else keeps `409 conflict`, raised BEFORE the capture: a
-      # chain still in flight, and a chain whose capture never ran or never
-      # returned. There is no settlement to hand back in either, and re-running
-      # the capture for a re-presented chain is precisely the double charge
-      # §11.6 exists to prevent. Note what this method structurally cannot do:
-      # it returns a Result or nil, and it is reached only from the phase-1
-      # rescue — the capture in phase 2 is below the `return`, so a replay
-      # cannot re-capture, and it writes nothing, so it cannot mint a second
-      # settlement.
-      #
-      # Runs in its own SessionContext: phase 1's transaction was rolled back
-      # by the unique violation, so this needs a live one of its own.
-      #
-      # @return [Result, nil]
+      # The settlement of an identical, already-settled chain, or nil. It writes nothing and runs
+      # before the capture, so a replay can neither charge nor settle twice.
       def settled_replay(intent:, cart:, payment:)
         return nil if intent.nil? || cart.nil? || payment.nil?
 
@@ -474,11 +268,7 @@ module Kiosk
         })
       end
 
-      # The settlement of THIS EXACT chain, or nil. One statement, all binds:
-      # the three `raw_jws` equalities are the "byte for byte" half of §11.6's
-      # identical-retry rule, expressed where the bytes actually are. Scoped to
-      # the acting principal on every mandate row — the uniqueness the wire
-      # promises is per `user_id`, so the lookup is too.
+      # Byte-identical chain, scoped to the acting principal on every mandate row.
       def settlement_for_chain(intent:, cart:, payment:)
         schema = Kiosk.configuration.schema
         sql = <<~SQL
@@ -499,12 +289,7 @@ module Kiosk
         ]).to_a.first
       end
 
-      # Inserts the intent-mandate row under the open SessionContext
-      # (GUC-scoped transaction; no RLS policy on the mandate tables yet). The
-      # PK is SERVER-generated (`gen_random_uuid()` DEFAULT) — never the
-      # agent-supplied id, which lands in `mandate_id` for audit + per-principal
-      # idempotency. Persists the verified `expires_at`. Returns the server id
-      # the cart row references by FK.
+      # The signed id goes to `mandate_id`; the row id is server-generated and returned.
       def persist_intent_mandate(intent)
         schema = Kiosk.configuration.schema
         sql = <<~SQL
@@ -520,22 +305,10 @@ module Kiosk
         ])
       end
 
-      # Inserts the cart-mandate row under the open SessionContext (GUC-scoped
-      # transaction; no RLS policy on the mandate tables yet). The PK is
-      # SERVER-generated; the agent-signed id lands in `mandate_id`.
-      # `intent_mandate_id` references the SERVER intent id returned by phase 1
-      # (`intent_row_id`), NOT the signed `cart.intent_mandate_id` — the DB FK
-      # uses server ids; the cryptographic intent↔cart binding is checked
-      # separately in MandateVerifier#verify_cart. Persists the verified
-      # `expires_at`. Returns the server id the payment row references by FK.
+      # References the server intent id; the signed intent-cart binding is checked by MandateVerifier.
       def persist_cart_mandate(cart, intent_row_id:)
         schema = Kiosk.configuration.schema
-        # `$6::jsonb` is the ONE hand-written cast in these four statements.
-        # Every other placeholder takes its type from the INSERT's target
-        # column, but `line_items` arrives as JSON *text* and the cast is what
-        # says "parse this, do not store it as a json string" — the difference
-        # between a jsonb array a `@> '[…]'::jsonb` containment can match and a
-        # scalar string it never will.
+        # `line_items` arrives as JSON text; the cast stores a jsonb array rather than a string.
         sql = <<~SQL
           INSERT INTO #{schema}.cart_mandates
             (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
@@ -550,18 +323,9 @@ module Kiosk
         ])
       end
 
-      # Inserts the signed payment-mandate row under the open SessionContext
-      # (GUC-scoped transaction; no RLS policy on the mandate tables yet). The
-      # PK is SERVER-generated; `cart_mandate_id` references the SERVER cart id
-      # returned by phase 1 (`cart_row_id`), threading the FK chain. The
-      # agent-signed id lands in `mandate_id`; `raw_jws` carries the full signed
-      # token for audit. `UNIQUE (user_id, mandate_id)` prevents replay.
       def persist_payment_mandate(cart_row_id:, payment:)
         schema = Kiosk.configuration.schema
-        # payment_method is optional in the SetupIntent model (the principal's
-        # on-file card is the funding source, not a presented PM). Persist
-        # "on_file" as a clear audit sentinel when absent — the column is NOT
-        # NULL and "on_file" is unambiguous: funded from the on-file card.
+        # No presented payment method means the on-file card funded the charge.
         pm_db = payment.payment_method.to_s.empty? ? "on_file" : payment.payment_method
         sql = <<~SQL
           INSERT INTO #{schema}.payment_mandates
@@ -577,16 +341,7 @@ module Kiosk
         ])
       end
 
-      # Inserts the settlement receipt row under the open SessionContext
-      # (GUC-scoped transaction; no RLS policy on the mandate tables yet). The
-      # PK is SERVER-generated; `cart_mandate_id` references the SERVER cart id
-      # returned by phase 1 (`cart_row_id`), so the FK resolves. This is a
-      # server-side settlement receipt (no agent-signed id), so there is no
-      # `mandate_id` and no `raw_jws` either: nobody signs a settlement, so
-      # there is no signature to store. The signed half of the trail is the
-      # three mandate rows this method's callers have already written.
-      # `UNIQUE (cart_mandate_id)` is its idempotency anchor.
-      # Returns the new settlement server id.
+      # Nobody signs a settlement, so it has no `mandate_id` or `raw_jws`; `UNIQUE (cart_mandate_id)` keeps it single.
       def persist_settlement(cart_row_id:, cart:, settled:)
         schema = Kiosk.configuration.schema
         sql = <<~SQL
@@ -602,66 +357,18 @@ module Kiosk
         ])
       end
 
-      # True when `error` is a DB unique-constraint violation. Matched by class
-      # NAME, not constant: this file must not force either constant to LOAD.
-      # `PG` is not a runtime dependency at all (the host app brings the
-      # adapter), and while the gemspec does declare `activerecord`, the gem's
-      # own fast unit env does not require it — so naming
-      # ActiveRecord::RecordNotUnique / PG::UniqueViolation directly would raise
-      # NameError there. A standard optional-dependency pattern.
+      # Matched by class name so neither ActiveRecord nor PG has to be loaded.
       def unique_violation?(error)
         %w[ActiveRecord::RecordNotUnique PG::UniqueViolation].include?(error.class.name)
       end
 
-      # Runs an `INSERT … RETURNING id` with BIND PARAMETERS and returns the
-      # server-generated uuid PK.
-      #
-      # THE POINT. Every value the pay path writes travels as `$1…$N`, OUT of
-      # the SQL text — so there is no `connection.quote` left to forget,
-      # and no reading of a value as SQL is possible in the first place. A
-      # heredoc with every field spliced through a private `q()` would be safe
-      # too, but it is also the idiom the demos ship as the reference others
-      # copy, so the engine does not write one.
-      #
-      # TYPES. Postgres infers each parameter's type from the INSERT's target
-      # column (uuid / bigint / timestamptz / text), exactly as it inferred the
-      # unknown-typed literals the interpolated form produced — so uuid columns
-      # still reject a non-uuid, and a `Time` still lands as the same instant.
-      # The single exception is `line_items`, whose argument is JSON text and
-      # therefore carries an explicit `::jsonb` cast; see
-      # {#persist_cart_mandate}. `spec/kiosk/server/executor_persistence_spec.rb`
-      # asserts all three against a real Postgres, because none of it is
-      # visible in the SQL text or to a FakeConnection.
-      #
-      # `exec_query`, NOT `exec_insert`: `exec_insert` rewrites the statement —
-      # `sql_for_insert` looks the table's primary key up and appends its OWN
-      # `RETURNING "id"` — which would both duplicate the clause these
-      # statements already carry and cost a schema round trip.
-      #
-      # WHAT IS STILL INTERPOLATED, and why it is not the same thing: the
-      # SCHEMA NAME (`Kiosk.configuration.schema`). That is an identifier the
-      # operator sets in their own initializer, not a value any caller can
-      # reach — an identifier cannot be a bind parameter in Postgres, so no
-      # amount of binding would move it.
-      #
-      # @param name [String] statement label for the query log
-      # @param sql [String] statement carrying `$N` placeholders and `RETURNING id`
-      # @param binds [Array] one value per placeholder, in order
-      # @return [String] the server-generated uuid primary key
+      # Every value is a bind parameter; only the operator-set schema name is interpolated.
+      # `exec_query`, because `exec_insert` would append a second `RETURNING`.
       def insert_returning_id(name, sql, binds)
         connection.exec_query(sql, name, binds).to_a.first.fetch("id")
       end
 
-      # ─── spending cap ───────────────────────────────────────
-
-      # Raises Errors::SpendingCapExceeded when the acting assistant's cap would
-      # be exceeded by this cart. No-op when no `config.spending_cap` seam is
-      # configured or the assistant is uncapped (seam returns nil). Called inside
-      # the phase-1 transaction BEFORE any persist, so a rejection rolls back and
-      # never burns a mandate id or reaches the irreversible capture. cap 0 =
-      # disabled. Best-effort at pay time (not a hard lock): a concurrent
-      # double-spend could slip one charge over the cap — acceptable under the
-      # metered-toll model.
+      # Best-effort at pay time. A nil seam or a nil cap means uncapped.
       def enforce_spending_cap!(cart)
         seam = Kiosk.configuration.spending_cap
         return if seam.nil?
@@ -670,11 +377,7 @@ module Kiosk
         return if cap.nil? # this assistant is uncapped
 
         window_days = Kiosk.configuration.spending_cap_window_days
-        # Scope the tally to the cart's currency — summing cents across
-        # currencies is meaningless (4999 USD is not within a 5000 EUR cap) and
-        # a cross-currency sum could erode the cap. The SCOPE is the currency,
-        # not the spelling of it — `settled_total_cents` canonicalises both the
-        # value it is handed and the column it reads.
+        # One tally per currency: cents are not fungible across currencies.
         spent = settled_total_cents(agent_id: identity.agent_id, window_days: window_days,
                                     currency: cart.currency)
         return if spent + cart.total_amount_cents.to_i <= cap.to_i
@@ -686,39 +389,11 @@ module Kiosk
         )
       end
 
-      # Sums this agent's settled spend IN A SINGLE CURRENCY (optionally within a
-      # rolling window of `window_days`) from the settlements receipt table,
-      # under the open SessionContext. Scoping by currency keeps the tally
-      # comparable to a same-currency cap — cents are not fungible across
-      # currencies. Returns cents (0 when the agent has settled nothing).
-      #
-      # A STRING IS NOT A CURRENCY, AND THAT IS WHY THE SCOPE IS FOLDED.
-      # `settlements.currency` is written from the cart mandate, which the
-      # ASSISTANT signs, so a tally scoped by byte equality would make `"eur"`
-      # and `"EUR"` two tallies for one currency: alternate the spelling between
-      # chains and the cap is collected twice. §11.5 obliges the operator to
-      # refuse a `pay` that would push the settled TOTAL past the cap, and a
-      # split tally is not the total.
-      #
-      # BOTH SIDES ARE FOLDED, and the two folds are not redundant. The BIND is
-      # folded because a caller may hand over a cart the verifier never
-      # canonicalised. The COLUMN is folded for rows written BEFORE
-      # `MandateVerifier#require_currency!` began canonicalising its input —
-      # those are already on disk in whatever case they arrived in, and no
-      # boundary can reach back for them. New rows are canonical by
-      # construction, so the column fold is a legacy accommodation rather than
-      # the mechanism; it is deliberately NOT the place the invariant lives.
-      # It costs nothing in plan terms either: `settlements` carries indexes on
-      # `user_id` and `cart_mandate_id` only, so this predicate was never
-      # index-served.
+      # Settled cents for this agent in one currency, case-folded on both sides so `eur` and `EUR` are one tally.
       def settled_total_cents(agent_id:, window_days:, currency:)
         schema = Kiosk.configuration.schema
         binds  = [agent_id, MandateVerifier.canonical_currency(currency)]
-        # The window is a STATEMENT SHAPE, not a value: with no window there is
-        # no predicate at all, so that stays a branch on the SQL text. The
-        # number of days is a third BIND — `make_interval(days => $3)`, never
-        # interpolated into the SQL text — which is what lets this file hold no
-        # `connection.quote` at all.
+        # No window means no predicate; the day count is still a bind.
         window = ""
         if window_days
           binds << window_days.to_i
@@ -732,28 +407,7 @@ module Kiosk
         connection.exec_query(sql, "Kiosk settled total", binds).to_a.first.fetch("total").to_i
       end
 
-      # ─── helpers ───────────────────────────────────────────────────────
-
-      # A handler raised something that is not an {Errors::Base}. The WIRE gets
-      # the verb and the exception CLASS; the exception's own MESSAGE goes to
-      # the operator's log and no further.
-      #
-      # The message is an arbitrary Ruby or library sentence — on any verb that
-      # echoes an argument it can carry the caller's own bytes back out, and it
-      # moves whenever a dependency is upgraded, so it is an undeclared and
-      # unversioned part of the wire. It is also the ONLY diagnostic the
-      # operator has for a crash in their own handler, which is why it is
-      # logged rather than dropped: the `hint` these two sites raise has
-      # promised "See server logs for the backtrace" since before anything
-      # wrote one.
-      #
-      # The line itself is built by {FailureLog}, which is the ONE place that
-      # knows what a dropped message looks like in an operator's log — Rails'
-      # logger when the host app has booted, `Kernel#warn` otherwise (rake
-      # tasks, consoles, this gem's own specs), and a logger that itself raises
-      # must not turn one failure into two. The mixin's `rescue_from` seam
-      # keeps the same promise and calls the same helper: two spellings of one
-      # log format would be two things to hold in step.
+      # The handler's message goes to the operator's log, never onto the wire.
       def report_handler_failure(kind, name, error)
         FailureLog.report("#{kind} #{name.inspect} raised #{error.class}", error)
       end

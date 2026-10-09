@@ -2,52 +2,15 @@
 
 module Kiosk
   module Server
-    # Pure-Ruby service module for the human-facing half of the claim
-    # ceremony — i.e. what runs when the account holder lands at
-    # `<endpoint>/oauth/device/verify` in their own browser.
-    #
-    # Three operations:
-    #
-    #   .find_pending(user_code:) — lookup by user_code with the visual
-    #                                XXXX-XXXX dash stripped; only
-    #                                pending rows are visible
-    #   .approve(user_code:, user_id:, role:) — transition pending →
-    #                                approved, capturing the approving
-    #                                human's principal AND their role.
-    #                                `role:` is REQUIRED — see below
-    #   .deny(user_code:)           — transition pending → denied
-    #
-    # Codes are stored hashed only: the typed code is normalised, hashed
-    # ({DeviceAuthorization.hash_user_code}) and matched against
-    # `user_code_hash`.
-    #
-    # **Scope.** This module owns the state-machine half of verification
-    # (the part that ALL providers do identically). The consent-screen UI
-    # ships as {DeviceVerifyController} + minimal overridable engine views
-    # (Devise-style batteries); a provider may also call these helpers from
-    # its own controller for a fully bespoke page.
-    #
-    # THAT INVITATION IS WHY `.approve` HAS NO DEFAULT FOR `role:`.
-    # A host that takes it up is writing the ONE step of the ceremony where an
-    # authenticated human is present, and the role of the binding is decided
-    # there or nowhere. Were the keyword to default to `nil`, a bespoke page
-    # that simply did not know about it would produce role-less bindings
-    # silently — and neither the caller nor the row could tell that omission
-    # from a deliberate "this approver holds no role". Naming it is mandatory;
-    # passing `nil` is legal and means the second of those two, which is what
-    # an origin with a role-less `user_idp` genuinely reports.
+    # The human half of the claim ceremony: find, approve or deny a pending
+    # authorization by the code the human typed. An operator's own consent
+    # page may call these instead of {DeviceVerifyController}.
     module DeviceVerification
-      # Raised when the user_code does not resolve to a pending row.
-      # Distinct from {DeviceAuthorization::StateError} which signals a
-      # logic error in the calling code; this one signals the *user*
-      # entered a stale or wrong code.
+      # The human typed a wrong or expired code.
       class CodeNotFoundError < StandardError; end
 
       module_function
 
-      # Normalise, hash, then look up. Returns the {DeviceAuthorization} if
-      # a pending row matches; `nil` otherwise. Callers render their own
-      # "code not recognised" / "code expired" pages on `nil`.
       def find_pending(user_code:, store: Kiosk.configuration.device_authorization_store)
         normalized = normalize_user_code(user_code)
         return nil if normalized.empty?
@@ -55,34 +18,8 @@ module Kiosk
         store.find_by_user_code_hash(DeviceAuthorization.hash_user_code(normalized))
       end
 
-      # Transition pending → approved, stamping the approving account
-      # holder's user_id AND their role. Raises {CodeNotFoundError} when no
-      # pending row matches.
-      #
-      # `role:` IS THE CLAIM CEREMONY'S ROLE SOURCE. Pass `user_idp`'s
-      # `Identity#role` for the human whose session is approving — the same
-      # value {AuthController#link} captures onto a link row at mint. The claim
-      # row was created by an UNAUTHENTICATED request and carries no role of
-      # its own, so this call is the only place a claim ceremony can acquire
-      # one, and a bound assistant can therefore never carry more than its
-      # approver holds.
-      #
-      # IT IS REQUIRED, AND IT ACCEPTS `nil`. The two are not in tension: what
-      # is mandatory is SAYING what the approver holds, not that they hold
-      # something. `role: nil` is the honest answer for an origin whose
-      # `user_idp` reports no role, and it leaves the row role-less — the
-      # binding lands at `registration_role`/absent. What the required keyword
-      # rules out is the third possibility: a caller who never considered the
-      # question and got a role-less binding by default.
-      #
-      # Its one engine caller ({DeviceVerifyController}) passes the approving
-      # identity's role, and the OTHER role-less `approve` — the one
-      # {LinkCode.mint} calls without a role, legitimately, because a link row
-      # is minted BY the human and already carries theirs — is
-      # {DeviceAuthorization#approve}, a different method on the value object.
-      # This module never sees a `:link` row at all: {LinkCode.mint} stores its
-      # row already `:approved`, and {.find_pending} returns only `:pending`
-      # ones.
+      # `role:` is the approving human's own role (`user_idp`'s `Identity#role`,
+      # nil when it reports none); it is required so a custom page cannot omit it by accident.
       def approve(user_code:, user_id:, role:,
                   store: Kiosk.configuration.device_authorization_store)
         raise ArgumentError, "user_id required" if user_id.nil? || user_id.to_s.empty?
@@ -93,7 +30,6 @@ module Kiosk
         store.update(da.approve(user_id: user_id, role: role))
       end
 
-      # Transition pending → denied.
       def deny(user_code:, store: Kiosk.configuration.device_authorization_store)
         da = find_pending(user_code: user_code, store: store)
         raise CodeNotFoundError, "user_code does not match any pending authorization" if da.nil?
@@ -101,12 +37,7 @@ module Kiosk
         store.update(da.deny)
       end
 
-      # User-typed codes arrive with the visual `XXXX-XXXX` dash + any
-      # ambient whitespace from copy/paste. Storage hashes the raw 8-char
-      # form, so normalise before hashing. Case-insensitive because some
-      # keyboards / browsers auto-capitalise; we upcase into the
-      # uppercase-only 31-char code alphabet
-      # ({DeviceAuthorization::USER_CODE_ALPHABET}).
+      # Drops the `XXXX-XXXX` dash and whitespace; the alphabet is uppercase.
       def normalize_user_code(raw)
         raw.to_s.gsub(/[\s\-]/, "").upcase
       end

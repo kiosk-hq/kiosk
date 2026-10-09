@@ -8,12 +8,8 @@ require "rack"
 
 module Kiosk
   module Server
-    # The engine's own Action Cable server — not `ActionCable.server`, so the
-    # host's connection class and forgery setting stay the host's.
-    #
-    # One stream per (identity, topic): `kiosk:events:<user_id>:<topic>`. A
-    # subject is not in the name, so a caller cannot mint pubsub channels; the
-    # channel filters by subject.
+    # The engine's own Action Cable server, so the host's connection class and forgery setting stay
+    # the host's. One stream per (identity, topic); the channel filters by subject.
     module EventsCable
       STREAM_PREFIX = "kiosk:events"
 
@@ -52,10 +48,7 @@ module Kiosk
             config.connection_class = -> { Kiosk::Server::EventsConnection }
             config.cable = cable_config
             config.logger = resolved_logger
-            # The upgrade is authorised by the `Authorization` header, which a
-            # page cannot attach cross-origin, so there is no ambient
-            # credential to defend; the `Origin` check would refuse every
-            # non-browser client.
+            # Authorised by the `Authorization` header, which a page cannot attach cross-origin.
             config.disable_request_forgery_protection = true
           end
         end

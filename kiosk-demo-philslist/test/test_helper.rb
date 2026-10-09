@@ -4,9 +4,9 @@ ENV["RAILS_ENV"] ||= "test"
 
 require_relative "../config/environment"
 require "rails/test_help"
-require "kiosk/test_helpers/live_server"
+require "kiosk/story_test"
 
-# The categories enum is read from the table, which every wire test reseeds.
+# The categories enum is read from the table, which every story reseeds.
 Kiosk::Server::SchemaSlots.refresh_seconds = 0
 
 module ActiveSupport
@@ -19,21 +19,31 @@ module ActiveSupport
   end
 end
 
-# Drives this origin over HTTP as an assistant does.
-class WireTest < ActiveSupport::TestCase
-  include Kiosk::TestHelpers::LiveServer
+# A seller's AI assistant on the board: browses it, posts a listing, edits and
+# closes it, and looks over the seller's own listings.
+class Seller < Kiosk::TestHelpers::Customer
+  def browses = asks(:browse_listings).rows
+  def own_listings = asks(:my_listings).rows
 
-  PASSWORD = "philslist-demo-password"
-
-  def post_listing(seller, **listing)
-    posted = assistant.run(seller, name: "post_listing", category_slug: "furniture", title: "Bookshelf", body: "Pine", **listing)
-    assert_equal 200, posted.status, posted.body
-    posted.body["listing_id"]
+  def posts(category: "furniture", title: "Bookshelf", body: "Pine", **details)
+    does(:post_listing, category_slug: category, title:, body:, **details)
   end
 
+  def edits(listing, **changes) = does(:edit_listing, listing_id: listing["listing_id"], **changes)
+  def closes(listing) = does(:close_listing, listing_id: listing["listing_id"])
+
+  def price_of(listing) = own_listings.find { _1["listing_id"] == listing["listing_id"] }["price_text"]
+end
+
+class StoryTest < Kiosk::StoryTest
+  def a_seller = a_customer(as: Seller)
+
+  # What the board publishes to anyone, with no account.
   def published(path)
     status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
     assert_equal 200, status, "GET #{path} with no credential"
     body
   end
+
+  def ids(listings) = listings.pluck("listing_id")
 end

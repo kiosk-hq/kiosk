@@ -580,18 +580,8 @@ jobs:
       - name: No property description restates its own `required:` array
         run: ./bin/check-descriptor-prose
 
-  # The demos are eight standalone Rails apps, so shared application code is not
-  # shared — it is HAND-COPIED, and until now nothing checked the copies still
-  # agreed. The solver-path constant in equihash_register.rb (then at lib/, now
-  # script/) was renamed in three of its five copies and nobody noticed for
-  # three weeks. bin/check-demo-copies makes that
-  # a red build: every relative path present in two or more demos must be
-  # declared identical, identical-modulo-prose, or a deliberate per-demo variant
-  # with the reason — and an UNDECLARED duplicate fails too, so a new copy cannot
-  # appear silently, which is how six of them got here.
-  #
-  # Stdlib Ruby only: no bundle, no services, no database, ~1 s for the
-  # check and ~10 s for the self-test step beside it.
+  # Files copied between demos agree as their manifest declares, and a new copy
+  # fails until it is declared.
   demo-file-sync:
     name: duplicated demo files agree (bin/check-demo-copies)
     runs-on: ubuntu-latest
@@ -608,20 +598,6 @@ jobs:
       - name: Hand-copied demo files agree, or the divergence is declared
         run: ./bin/check-demo-copies
 
-      # Its own step, for the reason the publication-paths and
-      # descriptor-prose self-tests each have one — and here the argument is the
-      # COUNT. This one script holds many independent invariants behind the one
-      # exit code above — how many is derived by `--self-test --list` and
-      # deliberately not typed here or in the script, because a typed cardinal of
-      # itself is what K-1340 found wrong twice — so a reverted regex takes one
-      # of them out of service
-      # while the step above stays green; K-1240 measured exactly that shape one
-      # repository over. The self-test copies this checkout into throwaway
-      # directories, plants one faithful break per invariant (a one-sided edit, a
-      # stale `except:`, a converged copy, a claim dropped from one document),
-      # and requires each to come back red NAMING its invariant. It writes
-      # nothing outside its tmpdir and needs no bundle, no services and no
-      # database. ~10 s (K-1267).
       - name: check-demo-copies self-test
         run: ./bin/check-demo-copies --self-test
 

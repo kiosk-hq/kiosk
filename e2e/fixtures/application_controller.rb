@@ -15,11 +15,5 @@
 # class. Widening it to ::Base therefore DOES reach them; what an
 # assistant sees is unchanged because the wire answers JSON through the
 # mount's own gates, never through a session.
-#
-# That sentence is CHECKED, not trusted: bin/check-demo-copies reads the
-# superclasses out of the fixture controllers beside this file and fails when
-# the names or the superclass named here disagree. A comment about a
-# superclass is exactly the kind that goes quietly false when somebody moves
-# one.
 class ApplicationController < ActionController::Base
 end

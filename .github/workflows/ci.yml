@@ -197,6 +197,7 @@ jobs:
           KIOSK_PROVE_INTAKE_SECRET: ci-zeitwerk-check-intake-secret
         run: |
           # Keys are minted per run and never echoed.
+          export KIOSK_SIGNING_KEY_B64="$(ruby -rbase64 -ropenssl -e 'print Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')"
           export KIOSK_PROVE_PUBLIC_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).public_key.to_pem')"
           if [ "${{ matrix.demo }}" = "kiosk-demo-prove" ]; then
             export PROVE_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).to_pem')"

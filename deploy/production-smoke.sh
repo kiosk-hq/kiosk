@@ -521,6 +521,7 @@ smoke_prove() {
   # throwaway keypair (nothing pins it: assertion 6 only asserts /prove_key.pem
   # serves ITS public half).
   export PROVE_KEY_PEM="${PROVE_KEY_PEM:-$(ruby -e 'require "openssl"; print OpenSSL::PKey::RSA.new(2048).to_pem')}"
+  export KIOSK_PROVE_ISSUER="${KIOSK_PROVE_ISSUER:-https://kyc.smoke.test}"
   # database.yml (production) connects as this role (CI: postgres; local: login).
   export KIOSK_PROVE_DB_USER="${KIOSK_PROVE_DB_USER:-postgres}"
   export KIOSK_PROVE_DB_PASSWORD="${KIOSK_PROVE_DB_PASSWORD:-}"

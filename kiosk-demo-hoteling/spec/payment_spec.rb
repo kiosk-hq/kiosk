@@ -38,11 +38,6 @@ RSpec.describe "paying for a booking" do
     end
   end
 
-  before do
-    Rails.configuration.x.hoteling.decision_delay_seconds = 0
-    Rails.configuration.x.hoteling.decline_rate           = 0
-  end
-
   it "refuses a principal paying for somebody else's booking" do
     expect { cashier.capture(cart(ben)) }
       .to raise_error(Kiosk::Server::Errors::Forbidden, "booking not found or not yours")

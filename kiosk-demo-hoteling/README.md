@@ -77,65 +77,26 @@ To run one of this demo's own tasks instead of the server:
 docker compose run --rm app bin/rails <task>
 ```
 
-The list below is the HOST path — what running `bin/rails demo:*` on your own machine
-needs. It is not shorter under containers; it is unnecessary.
+On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
-- **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: the demo tasks shell out to it directly, not only through ActiveRecord.
-- **python3 with numpy** — check with `python3 -c "import numpy"`. Registering an assistant pays an Equihash toll, and every task that registers one solves it with the bundled `solve.py`; without numpy the solver exits `this solver requires numpy` and the task fails at its first step.
-
-> **`demo:setup` is destructive, and every task that depends on it inherits that.**
-> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
-> check, no confirmation prompt — so running it **DROPS and recreates**
-> `kiosk_hoteling_development`. Nothing you left in that database survives.
-> The SERVER is `localhost`, read from the same `config/database.yml` — unless
-> `PGHOST` is exported, and then it is whatever host that names: the drop
-> follows it, and takes that server's `kiosk_hoteling_development` instead.
->
-> Under `docker compose` the same drop still happens on every `up`, but it lands on the
-> Postgres that compose brings up, on this project's own volume. It cannot reach a
-> database on your machine: the compose file sets `PGHOST` to the container beside it
-> rather than passing yours through.
->
-> **`check:conformance` DROPS A DIFFERENT DATABASE.** It runs the same
-> `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
-> is `kiosk_hoteling_test` — the `test:` database, not `kiosk_hoteling_development`.
->
-> `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
+- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Postgres**, reachable — `pg_isready` returns OK.
+- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
+- **stripe-mock** on PATH for the tests — `brew install stripe-mock`.
 
 From this directory:
 
 ```
-bin/rails check:property_decision # the property's OWN answer, minutes after the money: both branches forced and the two-to-five minute wait collapsed, because an 80/20 draw behind a real wait is something no flow can assert. Accepting mints the confirmation code — the only thing in this demo that does — and `confirm_booking` reads it back; declining cancels the booking, refunds the guest's money to the card that paid through the Stripe adapter, frees the room-nights by status alone, and the event names where the money went
-bin/rails check:conformance # `bundle exec rspec`: the WireArguments checks, owner-only payment, and the properties the protocol makes normative of this origin: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `properties`, `my_bookings`, `search_hotels` and `availability` answer payloads their own `output_schema` accepts; and `my_bookings` hands one guest nothing belonging to another, with the positive control that the first guest must actually see something. Runs in RAILS_ENV=test against its own database — no server, no toll, no PSP
-bin/rails demo:setup       # create + load schema + seed the properties and rooms
-bin/rails check:book        # the headline: register → availability → reserve_room → payment_setup → pay → confirm_booking (plus the payment-gate negative)
-bin/rails check:browse      # browse-heavy priced-pagination PoW demo — depth is priced, not banned
-bin/rails check:isolation   # cross-tenant denial (a booking is only yours)
-bin/rails check:redteam     # adversarial regression battery
-bin/rails check:schema      # self-discovery over the schema verb
-bin/rails check:search      # pagination over the ~100-hotel catalogue: a truncated page carries `Link: …; rel="next"`, following it returns a DISJOINT page, a complete result carries no link, and hotel_detail resolves a summary row's id (404 for one nobody has)
-bin/rails check:spending_cap # the per-assistant spending cap: a stay under it settles, one that would cross it is `403 spending_cap_exceeded` with nothing written — and the two are spelled "eur" and "EUR" on purpose, because two spellings of one ISO 4217 code are ONE tally. The operator's cap is written into `kiosk.agents.spending_cap_cents`, the column `ColumnSpendingCap` reads
+bin/rails demo:setup   # DROPS and recreates kiosk_hoteling_development, then seeds the hotels
+bin/dev                # serves the origin on http://localhost:3000
+bundle exec rspec      # the tests; CI runs exactly this
 ```
 
-**Every task above that touches the database reseeds first.** Each of them except
-`demo:setup` itself declares `: :setup`, so
-running any of them DROPS and recreates `kiosk_hoteling_development` before it
-starts — nothing you left in the database survives a run, and that is what makes
-each of them repeatable. `check:conformance` is outside it: it runs in
-`RAILS_ENV=test` against `kiosk_hoteling_test`, which it drops and rebuilds
-itself, so it neither reads nor disturbs the development data the tasks above
-share.
-
-**`spec/` is an ordinary RSpec suite.** `spec/conformance/` is written with the
-matchers `kiosk-test-support` ships, and is the file to copy when you are adding a
-Kiosk wire to an app of your own; `kiosk-demo-getgrocery` is the same surface in
-Minitest. `check:book` was the one exception, and it was not
-repeatable: the driver always picks the same property for the same three nights
-and books it twice (happy path, then the payment-gate negative), so one pass took
-that property's whole inventory — the negative's unpaid hold is never released,
-by design — and a second `bin/rails check:book` aborted with «availability
-returned empty rows».
+`bin/setup` does the first two. The tests in `spec/wire/` drive the origin over
+HTTP the way an assistant does. `spec/conformance/` is written with the matchers
+`kiosk-test-support` ships, and is the file to copy when you are adding a Kiosk
+wire to an app of your own; `kiosk-demo-getgrocery` is the same surface in
+Minitest.
 
 ### Watch it work
 
@@ -148,28 +109,6 @@ returned empty rows».
 It discovers the wire, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `ada@example.com` / `hoteling-demo-password` and approve it there.
-
-Everything under `check:` below asserts and exits non-zero when it breaks; that
-is what CI runs. `demo:setup` prepares the database.
-
-### Which of these run in CI
-
-A `check:` task asserts and goes red; a `demo:` task is one a person runs and
-reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
-and pull request; the rest are local-only, for the reason given.
-
-| Task | Runs in CI | Why not |
-|---|---|---|
-| `demo:setup` | yes — the job's own setup step |  |
-| `check:property_decision` | yes |  |
-| `check:conformance` | yes |  |
-| `check:book` | yes |  |
-| `check:spending_cap` | yes |  |
-| `check:isolation` | yes |  |
-| `check:redteam` | yes |  |
-| `check:schema` | yes |  |
-| `check:search` | yes |  |
-| `check:browse` | yes |  |
 
 See `before-after.md` for why AI assistants stall at hotel booking today and
 what this demo proves.

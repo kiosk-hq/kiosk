@@ -63,14 +63,29 @@ gem "kiosk-all", github: "kiosk-hq/kiosk"
 ```ruby
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
-  c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
+  c.issuer        = "https://api.acme.example"
+  # Further origins this deployment serves, each a separate operator with its
+  # own discovery document and assistant accounts. Redirect an alias of the
+  # same business to `c.issuer` instead.
+  # c.additional_origins = ["https://shop.acme.example"]
+  c.user_model    = "User"
+  c.user_id_type  = :uuid
+  c.roles         = %i[customer master support]
+  # The DEFAULT ROLE. Required whenever `c.roles` is set, and refused at boot
+  # when it is missing: there is always a default role, so an assistant
+  # admitted with no role of its own — a self-registration, or a binding whose
+  # approving human resolves none — lands on this one rather than on nothing.
+  # Name your least-privileged role. An origin that assigns roles to nobody
+  # sets neither line, and then no token carries a `role` claim.
+  c.registration_role = :customer
+  c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
+  # c.mount_path  = "/kiosk"   # default
+  # Optional: receive one event per action invocation — see "The audit sink".
+  # Unset by default, and then nothing is emitted and nothing is stored.
+  # c.audit_sink  = ->(event) { AuditRow.create!(**event.to_h) }
+  # c.capabilities = %w[schema queries actions pay] # optional override; computed from the registry by default
 end
 ```
-
-**The default is no sink**: nothing is emitted, nothing is built, and Kiosk
-writes nothing to any table of its own. It keeps no audit table of its own at
-all, and will not grow one: an audit trail the framework keeps is a retention
-policy the framework decided for your customers' data.
 
 ### KYC
 
@@ -183,17 +198,6 @@ land on the same worker.
 A ready one ships in this gem, backed by a single table:
 
 ```ruby
-# config/initializers/kiosk.rb
-Kiosk.configure do |c|
-  c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
-end
-```
-
-**The default is no sink**: nothing is emitted, nothing is built, and Kiosk
-writes nothing to any table of its own. It keeps no audit table of its own at
-all, and will not grow one: an audit trail the framework keeps is a retention
-policy the framework decided for your customers' data.
-
 # db/migrate/…_create_kiosk_auth_challenges.rb
 class CreateKioskAuthChallenges < ActiveRecord::Migration[8.1]
   def up   = execute(Kiosk::Server::SchemaDefinitions.auth_challenge_sql)
@@ -204,14 +208,17 @@ end
 ```ruby
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
-  c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
+  c.auth_challenge_store = Kiosk::Server::AuthChallengeStores::ActiveRecord.new
 end
 ```
 
-**The default is no sink**: nothing is emitted, nothing is built, and Kiosk
-writes nothing to any table of its own. It keeps no audit table of its own at
-all, and will not grow one: an audit trail the framework keeps is a retention
-policy the framework decided for your customers' data.
+This table is not in `bin/rails g kiosk:install`: a single-process operator
+does not need it. Any other
+backend works: the contract is `put(public_key_pem, nonce, exp)` /
+`take(public_key_pem, nonce) → Boolean`, and `take` **MUST** be one atomic
+operation (SQL `DELETE … RETURNING`, Redis `GETDEL`) so the store, not the
+application, decides which of two concurrent presentations wins.
+
 
 ## The audit sink
 

@@ -47,8 +47,6 @@ kiosk-all/README.md ¦ two gems ¦ from: grep -c add_dependency kiosk-all/kiosk-
 
 kiosk-demo-atablefor/README.md ¦ two actions ¦ from: cat kiosk-demo-atablefor/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ the actions this demo declares; the sentence names the controller each lives in.
 
-kiosk-demo-getgrocery/README.md ¦ 3 scenarios ¦ the cashier-check trio inside one red-team battery; the sentence names all three and the battery's own run prints its totals.
-
 
 kiosk-demo-philslist/README.md ¦ three endpoints ¦ from: cat kiosk-demo-philslist/app/controllers/kiosk/*.rb | grep -c '^  kind :action' ¦ one endpoint per action verb, which is what the lifecycle walk uses.
 kiosk-demo-philslist/README.md ¦ two controllers ¦ from: git ls-files 'kiosk-demo-philslist/app/controllers/kiosk/*.rb' | wc -l ¦ the handler controllers the initializer names.

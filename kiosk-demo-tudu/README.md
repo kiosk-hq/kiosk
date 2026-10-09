@@ -36,22 +36,7 @@ Demonstrates:
 - **Full human web UI** (NOT api_only) — the tutorial-plain scaffold (lists,
   todos, invite, the manage-assistants page) is the video centerpiece.
 
-## Run the demo
-
-The demo lives in the Kiosk monorepo and resolves its gems by path
-(`../kiosk-*` in the Gemfile), so run it from its checked-out directory:
-
-```sh
-cd kiosk-demo-tudu
-bundle install
-bin/setup                   # seed, then serve the origin
-rake demo:setup check:collab   # or assert it instead
-```
-
-`bin/setup` creates the Postgres database, loads the schema + seeds and leaves
-the origin running for an assistant to drive — see "Watch it work" below.
-`check:collab` instead walks the collaboration happy path (two AI assistants, a
-shared list via invite, attribution asserted).
+## Running it
 
 ### Prerequisites
 
@@ -64,31 +49,26 @@ To run one of this demo's own tasks instead of the server:
 docker compose run --rm app bin/rails <task>
 ```
 
-The list below is the HOST path — what running `bin/rails demo:*` on your own machine
-needs. It is not shorter under containers; it is unnecessary.
+On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
-- **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: the demo tasks shell out to it directly, not only through ActiveRecord.
-- **python3 with numpy** — check with `python3 -c "import numpy"`. Registering an assistant pays an Equihash toll, and every task that registers one solves it with the bundled `solve.py`; without numpy the solver exits `this solver requires numpy` and the task fails at its first step.
+- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Postgres**, reachable — `pg_isready` returns OK.
+- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
 
-> **`demo:setup` is destructive, and every task that depends on it inherits that.**
-> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
-> check, no confirmation prompt — so running it **DROPS and recreates**
-> `kiosk_tudu_development`. Nothing you left in that database survives.
-> The SERVER is `localhost`, read from the same `config/database.yml` — unless
-> `PGHOST` is exported, and then it is whatever host that names: the drop
-> follows it, and takes that server's `kiosk_tudu_development` instead.
->
-> Under `docker compose` the same drop still happens on every `up`, but it lands on the
-> Postgres that compose brings up, on this project's own volume. It cannot reach a
-> database on your machine: the compose file sets `PGHOST` to the container beside it
-> rather than passing yours through.
->
-> `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
+From this directory:
+
+```
+bin/rails demo:setup   # DROPS and recreates kiosk_tudu_development, then seeds the household
+bin/dev                # serves the origin on http://localhost:3000
+bin/rails test         # the tests; CI runs exactly this
+```
+
+`bin/setup` does the first two. The tests drive the origin over HTTP the way an
+assistant does.
 
 ## What the demo shows
 
-### Collaboration happy path (`rake check:collab`)
+### Collaboration (`test/wire/collab_test.rb`)
 
 Two PoP-registered AI assistants share a list with no spec change: Alice's AI assistant
 creates "Hike" and mints an invite; Bob's AI assistant accepts it and joins as a
@@ -102,7 +82,7 @@ both. So `todos.due_at` is a `timestamptz` holding one absolute MOMENT, an
 assistant resolves «tomorrow at two» on the clock of the human who said it
 before it reaches the wire, and every read renders it in the zone the CALLER
 declares in the `Kiosk-Timezone` header — with `timezone` on the row saying
-which. The task asserts exactly that: Alice reads it in `Europe/Istanbul`, Bob
+which. The test asserts exactly that: Alice reads it in `Europe/Istanbul`, Bob
 reads the same todo in `America/New_York`, the two labels differ, and the
 instant does not. A caller that declares nothing gets this household's own
 clock, stated in the row rather than assumed. And a `due_at` carrying no offset
@@ -118,16 +98,17 @@ arrives on reconnecting with `since`, Bob ticking off Alice's todo arrives live 
 own subscription to the list is withdrawn (`unsubscribed`, `reach_revoked`).
 Every delivered `data` is checked against the `payload_schema` the origin serves.
 
-### W5 rebind + list transfer (`rake check:link`)
+### W5 rebind + list transfer (`test/wire/link_test.rb`)
 
 An assistant registers **headless** and creates the "Hike" list; Alice signs in
 through the real Devise form, mints a link code, and the assistant's key redeems
-it → **rebind**: the `assistant_claimed` hook migrates the list to Alice. The
-pre-link token's principal owns nothing after migration; the assistant re-logs
-in and sees the list under Alice; Alice's browser sees it too; Alice ends with
-≥2 non-revoked AI assistants. DB ground truth is checked via `psql`.
+it → **rebind**: the `assistant_claimed` hook migrates the list to Alice. Every
+pre-link token stops verifying, including one minted in the rebind's own second;
+the assistant re-logs in and sees the list under Alice; Alice's browser sees it
+too; a second linked AI assistant leaves the first one bound. Re-linking an
+assistant already bound to Alice moves nothing and destroys nothing.
 
-### Membership isolation (`rake check:isolation`)
+### Membership isolation (`test/wire/isolation_test.rb`)
 
 Mallory (a non-member) is walled out: her `my_lists` is empty; `list_todos` /
 `list_members` on a private list → 403; a forged `account_id` on her
@@ -138,7 +119,7 @@ in the DB; used/garbage invite codes → 403. A genuine member is the positive
 control (she DOES see and read the list), and after `remove_member` her next
 read → 403.
 
-### Adversarial battery (`rake check:redteam`)
+### Adversarial battery (`script/redteam_suite.rb`, run by `test/wire/redteam_test.rb`)
 
 Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 (the forged `account_id` is refused `400`, not accepted-and-ignored),
@@ -159,16 +140,16 @@ list page names them by it). Plus `DeviceGrantRoleSelfSelection`, the shared
 unauthenticated opening request refuses `role`/`scope` at a DECLARED value
 as well as an invented one, while the role-less request still opens it.
 
-### Not-only-commerce proof (`rake check:schema`)
+### Not-only-commerce proof (`test/wire/discovery_test.rb`)
 
 Asserts the schema catalog (queries/actions + non-empty descriptions, including
 `invite`/`accept_invite`) **and** that the advertised `capabilities` do **not**
 include `pay`, `agents.json` carries no payments block, and `agents.txt` carries
 no `Protocols: ap2` / `Payments:` directives.
 
-### Tests (`bin/rails test`)
+### In-process tests
 
-`test/` holds Minitest tests against the test database: the reader clock a
+The rest of `test/` runs against the test database without a server: the reader clock a
 deadline is published on, the list-access refusals, and the write Operations —
 an invite is single-use, the last owner cannot be removed, a deadline is stored
 as one instant.
@@ -195,7 +176,7 @@ refusal is an RFC 9457 problem document — branch on its top-level `code`.
 
 Human↔assistant linking is **not** one of the verbs in the table above — it's
 the W5 ceremony (`POST /kiosk/auth/link` mint → `POST /kiosk/auth/claim`
-redeem), driven by `script/link_flow.rb`.
+redeem), driven by `test/wire/link_test.rb`.
 
 ### Watch it work
 
@@ -210,24 +191,6 @@ It discovers the wire, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `alice@example.com` / `tudu-demo-password` and approve it there.
 
-Everything under `check:` below asserts and exits non-zero when it breaks; that
-is what CI runs. `demo:setup` prepares the database.
-
-### Which of these run in CI
-
-A `check:` task asserts and goes red; a `demo:` task is one a person runs and
-reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
-and pull request; the rest are local-only, for the reason given.
-
-| Task | Runs in CI | Why not |
-|---|---|---|
-| `demo:setup` | yes — the job's own setup step |  |
-| `check:collab` | yes |  |
-| `check:link` | yes |  |
-| `check:isolation` | yes |  |
-| `check:redteam` | yes |  |
-| `check:schema` | yes |  |
-
 ## Repo tour
 
 | Path | What's there |
@@ -239,9 +202,9 @@ and pull request; the rest are local-only, for the reason given.
 | `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`) — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the wire renders as a problem document |
 | `app/models/membership.rb`, `app/operations/list_access.rb` | Who may reach a list: `Membership.own` is the principal's memberships, `ListAccess` the 403 a stranger gets |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, calling the same Operations as the wire; a refusal becomes a flash |
-| `script/collab_flow.rb` / `script/link_flow.rb` / `script/isolation_flow.rb` / `script/redteam_suite.rb` / `script/schema_flow.rb` | One-JSON-line flow drivers the rake tasks assert on |
-| `test/` | `bin/rails test` |
-| `lib/tasks/demo.rake` | `demo:setup`, `check:collab`, `:link`, `:isolation`, `:redteam`, `:schema`, `demo` |
+| `script/redteam_suite.rb` | The adversarial battery, runnable against any tudu origin |
+| `test/` | `bin/rails test`; `test/wire/` drives a live origin over HTTP |
+| `lib/tasks/demo.rake` | `demo:setup` |
 
 ## Make it real
 

@@ -6,8 +6,8 @@ ENV["KIOSK_TEST_AUTOCARD"] = "1"
 require_relative "../config/environment"
 require "rails/test_help"
 require "kiosk/test_helpers/live_server"
-require "kiosk/redteam"
-require "kiosk/redteam/stripe_mock"
+require "kiosk/test_helpers/assistant"
+require "kiosk/test_helpers/stripe_mock"
 require_relative "../script/dev_unlock_key"
 require_relative "../script/lock_sim"
 
@@ -15,11 +15,11 @@ require_relative "../script/lock_sim"
 class WireTest < ActiveSupport::TestCase
   include Kiosk::TestHelpers::LiveServer
 
-  setup { Stripe.api_base = Kiosk::Redteam::StripeMock.start }
+  setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
 
-  def client = @client ||= Kiosk::Redteam::Client.new(base_url: live_url)
+  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
 
-  def register = client.register!(name: "rider")
+  def register = client.register!
 
   def reserve(rider, scooter_code)
     reservation = client.run(rider, name: "reserve", scooter_code:)

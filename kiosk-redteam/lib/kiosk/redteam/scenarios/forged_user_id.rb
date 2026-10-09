@@ -39,8 +39,8 @@ module Kiosk
           return skip_verdict("no forge_action") unless profile.forge_action
           return skip_verdict("no forge_args")   unless profile.forge_args
 
-          a = register_principal(client, name: "redteam-fui-a", profile:)
-          b = register_principal(client, name: "redteam-fui-b", profile:)
+          a = client.register!
+          b = client.register!
 
           base_args   = profile.forge_args.call(client, a, b)
           forged_args = base_args.merge(FORGED_ARG.to_sym => a.user_id)
@@ -141,7 +141,7 @@ module Kiosk
         # Try to extract the resource id from the action response body using
         # the profile-supplied result_id_key.  No provider names are hard-coded.
         #
-        # @param response      [Response]
+        # @param response      [Kiosk::TestHelpers::Wire::Response]
         # @param result_id_key [String]   e.g. "reservation_id", "order_id", "id"
         # @return [String, nil]
         # True when the refusal's own text names +key+ — the property this

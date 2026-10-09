@@ -9,7 +9,7 @@ module Kiosk
     # A provider's battery is never all framework. Some attacks are generic and
     # arrive as {Scenario} subclasses out of this gem's library; some are about
     # THAT provider's own verbs and its own bugs, and are written by hand
-    # against the raw {Wire}. Before this class the two were separate harnesses
+    # against the raw {Kiosk::TestHelpers::Wire}. Before this class the two were separate harnesses
     # with separate ledgers, separate printing and separate exit blocks, so a
     # beat written in one shape could not be run by a suite written in the
     # other without being rewritten. A Battery files both, prints both the same
@@ -97,7 +97,7 @@ module Kiosk
       # it, and its verdict lands in the same ledger as the beats around it.
       #
       # @param scenario [Scenario]
-      # @param client   [Client]
+      # @param client   [Kiosk::TestHelpers::Assistant]
       # @param profile  [Profile]
       # @param on_skip  [Symbol] `:skip` files the third state; `:breach` files
       #   a breach instead. Use `:breach` when this origin HAS the surface the

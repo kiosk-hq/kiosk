@@ -6,7 +6,7 @@ require "kiosk/user_identity_providers/devise_session"
 # A human links assistants to their own account, and unlinks them.
 class BindingTest < WireTest
   Assistant = Data.define(:key, :token) do
-    def principal = Kiosk::Redteam::Principal.new(agent_id: claims["agent_id"], user_id: claims["sub"], token:, rsa_key: key)
+    def principal = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: claims["agent_id"], user_id: claims["sub"], token:, rsa_key: key)
     def claims = JWT.decode(token, nil, false).first
   end
 

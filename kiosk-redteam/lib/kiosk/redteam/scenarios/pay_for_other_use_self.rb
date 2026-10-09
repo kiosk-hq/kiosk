@@ -37,8 +37,8 @@ module Kiosk
           return skip_verdict("no create_owned") unless profile.create_owned
           return skip_verdict("no pay_for")      unless profile.pay_for
 
-          a = register_principal(client, name: "redteam-c2-a", profile:)
-          b = register_principal(client, name: "redteam-c2-b", profile:)
+          a = client.register!
+          b = client.register!
 
           # B KYC'd (so the gated action isn't blocked by missing KYC; we
           # want to test the ownership gate specifically).  That result is

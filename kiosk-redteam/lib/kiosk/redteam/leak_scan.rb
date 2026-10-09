@@ -62,7 +62,7 @@ module Kiosk
     # the wire. A beat that FORGETS it degrades to the undiscounted oracle
     # exactly: a possible false BREACH, never a missed leak. The safe direction
     # is the default, which is why this is a keyword with a default rather than a
-    # channel threaded implicitly through {Response}.
+    # channel threaded implicitly through {Kiosk::TestHelpers::Wire::Response}.
     module LeakScan
       # @!attribute leak   [String, nil] first needle the app itself produced
       # @!attribute echoed [Array<String>] needles present ONLY as the probe's

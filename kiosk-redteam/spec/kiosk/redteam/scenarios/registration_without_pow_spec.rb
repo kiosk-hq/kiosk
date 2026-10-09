@@ -6,7 +6,7 @@ require_relative "support"
 RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   subject(:scenario) { described_class.new }
 
-  let(:client) { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
+  let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
 
   # The scenario posts /register up to three times, in order:
   #   1. pow: :skip   2. pow: "0"   3. the CONTROL solve (only when 1 and 2

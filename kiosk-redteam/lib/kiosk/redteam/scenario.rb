@@ -39,7 +39,7 @@ module Kiosk
 
       # Execute the adversarial scenario.
       #
-      # @param client  [Client]  HTTP driver pointed at the provider under test
+      # @param client  [Kiosk::TestHelpers::Assistant]  HTTP driver pointed at the provider under test
       # @param profile [Profile] provider-specific configuration
       # @return [Verdict]
       def call(client, profile) # rubocop:disable Lint/UnusedMethodArgument
@@ -88,7 +88,7 @@ module Kiosk
       # {#payment_required_stall} builds, which is not a pass and not a breach
       # laid at the provider's door.
       #
-      # @param response    [Response]
+      # @param response    [Kiosk::TestHelpers::Wire::Response]
       # @param expect      [Integer, Array<Integer>, nil] status(es) that count
       #   as a refusal of this attack; nil admits the whole blocked? set.
       # @param expect_code [String, Array<String>, nil] the problem document's `code`
@@ -145,7 +145,7 @@ module Kiosk
       # file.
       #
       # The half of that which is this harness's own doing is closed here:
-      # {Client#with_pow_retry} solves the toll and re-sends the identical
+      # {Kiosk::TestHelpers::Assistant} solves the toll and re-sends the identical
       # request ONCE, on every verb and not only on registration.  So a
       # `pow_required` that still arrives here survived a PAID retry — the
       # verdict says so, and it is a statement about the provider rather than
@@ -158,7 +158,7 @@ module Kiosk
       # a detail that says which of the three answered and that this is a
       # could-not-test, so the operator is not sent hunting for a hole.
       #
-      # @param response [Response]
+      # @param response [Kiosk::TestHelpers::Wire::Response]
       # @param step     [String, nil] what was being attempted, e.g. "the
       #   expired attestation this scenario submits to /kyc"
       # @return [Verdict, nil] nil when the response is not a 402 answer
@@ -187,7 +187,7 @@ module Kiosk
       # refusal is what gets printed as "BLOCKED ✓ MissingKyc".  The KYC gate
       # could be deleted outright and the line would not change.
       #
-      # @param response [Response, nil] nil (a setup step that is a no-op for
+      # @param response [Kiosk::TestHelpers::Wire::Response, nil] nil (a setup step that is a no-op for
       #   this profile) passes
       # @param step     [String] what was being staged, e.g. "the payment ..."
       # @param because  [String] what a downstream refusal would be misread as
@@ -207,33 +207,19 @@ module Kiosk
       # Read the problem document's top-level `code` defensively — a body may be a
       # plain String, and the body itself may not be a Hash at all.
       #
-      # @param response [Response]
+      # @param response [Kiosk::TestHelpers::Wire::Response]
       # @return [String, nil]
       def error_code(response)
         Kiosk::Redteam.error_code(response)
       end
 
-      # Register a principal.  Any PoW solving is driven entirely by the
-      # server's 402 Equihash challenges, not by profile.pow_difficulty:
-      # that integer is INERT — accepted but never read by the Client (see
-      # {Client#register_raw}).  It is threaded through only so callers don't
-      # have to change; scenarios read it directly to decide applicability.
-      #
-      # @param client  [Client]
-      # @param name    [String]
-      # @param profile [Profile]
-      # @return [Principal]
-      def register_principal(client, name:, profile:)
-        client.register!(name: name, pow_difficulty: profile.pow_difficulty)
-      end
-
       # Submit a valid KYC attestation for the principal, using the profile's
       # kyc_valid callable.  No-op when profile.kyc_valid is nil.
       #
-      # @param client    [Client]
-      # @param principal [Principal]
+      # @param client    [Kiosk::TestHelpers::Assistant]
+      # @param principal [Kiosk::TestHelpers::Assistant::Principal]
       # @param profile   [Profile]
-      # @return [Response, nil]
+      # @return [Kiosk::TestHelpers::Wire::Response, nil]
       def submit_valid_kyc(client, principal, profile)
         return nil unless profile.kyc_valid
 
@@ -274,7 +260,7 @@ module Kiosk
 
       # Extract rows from a query Response body.
       #
-      # @param response [Response]
+      # @param response [Kiosk::TestHelpers::Wire::Response]
       # @return [Array<Hash>]
       # ONE SHAPE (spec §8.2): a query answers a BARE JSON ARRAY of rows,
       # paginating or not. Truncation is an RFC 8288 `Link` header, not a body

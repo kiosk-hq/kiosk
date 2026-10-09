@@ -89,7 +89,7 @@ class PaymentWindowTest < ActiveSupport::TestCase
 
     events = Kiosk.configuration.event_store.since(@rider.id, 0).select { _1["topic"] == "booking_payment" }
     assert_equal [id], events.map { _1["subject"] }
-    assert_empty Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)
+    assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)
   end
 
   test "racing pays charge a reservation once" do

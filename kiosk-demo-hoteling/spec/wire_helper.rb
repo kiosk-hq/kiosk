@@ -2,15 +2,14 @@
 
 require "spec_helper"
 require "kiosk/test_helpers/live_server"
-require "kiosk/redteam"
-require "kiosk/redteam/stripe_mock"
-require "kiosk/pow/equihash/solver"
+require "kiosk/test_helpers/assistant"
+require "kiosk/test_helpers/stripe_mock"
 
 # Drives this origin over HTTP as an assistant does.
 module WireHelpers
-  def client = @client ||= Kiosk::Redteam::Client.new(base_url: live_url)
+  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
 
-  def register = client.register!(name: "guest")
+  def register = client.register!
 
   def bookable_room(guest, check_in:, check_out:)
     client.query(guest, name: "properties").body.each do |property|
@@ -39,20 +38,10 @@ module WireHelpers
   end
 
   def confirm(guest, booking) = client.run(guest, name: "confirm_booking", booking_id: booking.fetch("booking_id"))
-
-  # A query read with its headers, its toll paid: the answer and the proofs it cost.
-  def tolled_get(guest, path, **params)
-    wire   = Kiosk::Redteam::Wire.new(base_url: live_url)
-    answer = wire.get(path, params, wire.bearer(guest.token))
-    return [answer, 0] unless answer.status == 402
-
-    proofs = answer.body.fetch("challenges").map { { challenge: _1, nonce: Kiosk::Pow::Equihash.solve(_1) } }
-    [wire.get(path, params, wire.bearer(guest.token).merge("Kiosk-PoW" => JSON.generate(proofs))), proofs.size]
-  end
 end
 
 RSpec.configure do |config|
   config.include Kiosk::TestHelpers::LiveServer, :wire
   config.include WireHelpers, :wire
-  config.before(:each, :wire) { Stripe.api_base = Kiosk::Redteam::StripeMock.start }
+  config.before(:each, :wire) { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
 end

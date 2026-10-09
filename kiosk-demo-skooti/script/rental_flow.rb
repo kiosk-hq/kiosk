@@ -9,11 +9,11 @@
 
 require "json"
 require "securerandom"
-require "kiosk/redteam"
+require "kiosk/test_helpers/assistant"
 
 issuer = ENV.fetch("SERVER_URL")
-client = Kiosk::Redteam::Client.new(base_url: issuer)
-rider  = client.register!(name: "rider")
+client = Kiosk::TestHelpers::Assistant.new(base_url: issuer)
+rider  = client.register!
 
 reservation = client.run(rider, name: "reserve", scooter_code: "SK-001")
 abort "reserve: #{reservation.status} #{reservation.body}" unless reservation.status == 200

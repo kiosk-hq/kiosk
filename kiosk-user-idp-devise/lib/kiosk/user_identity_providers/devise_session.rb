@@ -128,9 +128,9 @@ module Kiosk
       # deployed origin and `…("http://127.0.0.1:3005")` reaches a local one,
       # with no flag telling this driver which it is talking to. The line is
       # written out here rather than taken from
-      # {Kiosk::Redteam::Wire.http_for}, which is where the rest of this
+      # {Kiosk::TestHelpers::Wire.http_for}, which is where the rest of this
       # repository's client drivers get it: this gem is a Devise IdP adapter
-      # and may not depend on an adversarial test harness to open a socket.
+      # and may not depend on a test-support gem to open a socket.
       # The scheme is read off the REQUEST rather than off `@uri`, because
       # {#uri_for} lets a caller pass a fully-qualified URL and that target is
       # the one being dialled.

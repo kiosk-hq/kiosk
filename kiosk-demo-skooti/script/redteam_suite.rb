@@ -89,17 +89,14 @@ require "json"
 # caught). None of this weakens the real verification path.
 require_relative "prove_test_issuer"
 
-BASE_URL   = ENV.fetch("SERVER_URL")
-ISSUER     = ENV.fetch("KIOSK_ISSUER")
-# The broker's base URL (test/wire/redteam_test.rb passes it). The
-# broker-flavored beats (theft / cross-operator / forged-callback) drive it.
-BROKER_URL = ENV.fetch("KIOSK_PROVE_BROKER_URL")
-# The seeded rider the SelfAssertedUserBearerForgery beat signs in as for its
-# positive control. db/seeds.rb owns both values and the rake task passes them
-# through; a password literal in a driver is a second place for it to be true.
-RIDER_EMAIL   = ENV.fetch("RIDER_EMAIL")
-DEMO_PASSWORD = ENV.fetch("DEMO_PASSWORD")
-TRUSTED_ISSUER = ENV.fetch("KIOSK_PROVE_ISSUER")
+BASE_URL = ENV.fetch("SERVER_URL")
+ISSUER   = BASE_URL
+# The KYC broker as config/environments/development.rb points this origin at it.
+BROKER_URL     = "http://127.0.0.1:3020"
+TRUSTED_ISSUER = ProveTestIssuer.issuer
+# The seeded rider (db/seeds.rb).
+RIDER_EMAIL   = "ada@example.com"
+DEMO_PASSWORD = "skooti-demo-password"
 
 # Wrong signing key with the TRUSTED issuer — the only adversarial property is
 # the bad signature. Using the correct issuer ensures a weakened-sig regression
@@ -132,7 +129,7 @@ def broker_approve(request_id)
   uri = URI("#{BROKER_URL}/verify")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/x-www-form-urlencoded")
   req.body = URI.encode_www_form(request: request_id, decision: "approve")
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   res.code.to_i
 end
 
@@ -140,7 +137,7 @@ def post_kyc_callback(body)
   uri = URI("#{BASE_URL}/kiosk/kyc/callback")
   req = Net::HTTP::Post.new(uri, "Content-Type" => "application/json")
   req.body = JSON.generate(body)
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   res.code.to_i
 end
 
@@ -148,7 +145,7 @@ end
 # An event lands in the tail before the callback answers, so a short read after
 # the callback has returned sees every event there is.
 def kyc_events_for(principal)
-  stream = Kiosk::Redteam::EventStream.new(base_url: BASE_URL, token: principal.token)
+  stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: principal.token)
   stream.subscribe("kyc_verification", since: 0)
   stream.listen(2)
 ensure
@@ -294,7 +291,7 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-price-a", profile:)
+    a = client.register!
     owned = profile.create_owned.call(client, a)
     m = profile.pay_for.call(client, a, owned)
 
@@ -326,7 +323,7 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-total-a", profile:)
+    a = client.register!
     owned = profile.create_owned.call(client, a)
     m = profile.pay_for.call(client, a, owned)
     # pay_for's single priced line sums to total_cents; inflate the total only.
@@ -378,7 +375,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-uuid-a", profile:)
+    a = client.register!
     # Clear rent_motorcycle's Gate 0 so the uuid guard BEHIND it is reachable.
     # A plain `kyc_valid` attestation is not enough: Gate 0 tests the NAMED
     # attributes, so without them every probe would come back 403 kyc_required
@@ -504,7 +501,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a         = register_principal(client, name: "redteam-shapes-a", profile:)
+    a         = client.register!
     @failures = []
 
     SHAPES.each do |v|
@@ -664,7 +661,7 @@ results = runner.run(scenarios)
 # 403 kyc_required. A weakened signature check (e.g. alg:none) would let the
 # agent mint its own licence and unlock a combustion motorcycle — a real BREACH.
 motorcycle_forged_kyc = lambda do
-  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+  client = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
   # NO `pow_difficulty:` HERE, AND NOT IN THE OTHER SIX LOCAL BEATS EITHER.
   # The kwarg is INERT: `Client#register!` accepts it and `build_register` never
   # reads it — the `@param pow_difficulty` line above `Client#register_raw` says
@@ -677,7 +674,7 @@ motorcycle_forged_kyc = lambda do
   # backwards-compat shim for callers already passing it, and scenarios read the
   # profile value directly for APPLICABILITY (RegistrationWithoutPow), which is a real
   # read these beats do not make.
-  a = client.register!(name: "redteam-mc-fkyc")
+  a = client.register!
 
   # Reserve + pay for the motorcycle so ONLY the KYC-attribute gate can be the
   # thing that blocks (isolates Gate 0, as test/wire/kyc_test.rb does).
@@ -758,8 +755,8 @@ mc_beat = motorcycle_forged_kyc.call
 # start_rental were broken outright, or if pay/reserve had silently failed —
 # "blocked" would prove nothing about the gate.
 motorcycle_via_start_rental = lambda do
-  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  a = client.register!(name: "redteam-mc-verbswap")
+  client = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
+  a = client.register!
 
   # Reserve + pay for a vehicle, and return its reservation_id.
   reserve_and_pay = lambda do |code|
@@ -849,12 +846,12 @@ mc_verbswap_beat = motorcycle_via_start_rental.call
 # kyc_required. A bug that dropped the sub check would let any agent replay
 # someone else's licence — a real BREACH.
 kyc_jws_theft = lambda do
-  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
+  client = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
 
   # Victim B obtains a REAL broker-signed attestation: subscribe → request_kyc →
   # approve on the broker → the kyc_verification event carries the jws.
-  b = client.register!(name: "redteam-kyc-victim-b")
-  stream_b = Kiosk::Redteam::EventStream.new(base_url: BASE_URL, token: b.token)
+  b = client.register!
+  stream_b = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: b.token)
   stream_b.subscribe("kyc_verification")
   req_b = client.run(b, name: "request_kyc")
   raise "redteam(skooti): request_kyc(B) failed (#{req_b.status})" unless req_b.status == 200
@@ -867,7 +864,7 @@ kyc_jws_theft = lambda do
   raise "redteam(skooti): B's kyc_verification event carried no jws" if victim_jws.to_s.empty?
 
   # Attacker A reserves + pays its OWN motorcycle so ONLY the KYC gate can block.
-  a = client.register!(name: "redteam-kyc-attacker-a")
+  a = client.register!
   fleet = client.query(a, name: "scooters_available")
   mc    = Array(fleet.body).find { |r| r["code"] == "MC-001" }
   raise "redteam(skooti): MC-001 not in fleet (theft beat)" unless mc
@@ -921,8 +918,8 @@ theft_beat = kyc_jws_theft.call
 # that dropped the operator check would let a claim solicited by/for another
 # operator unlock skooti — a real BREACH.
 cross_operator_replay = lambda do
-  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  a = client.register!(name: "redteam-xop")
+  client = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
+  a = client.register!
 
   # Open a real skooti request so the callback correlates to a pending row.
   req = client.run(a, name: "request_kyc")
@@ -987,8 +984,8 @@ xop_beat = cross_operator_replay.call
 # must reject → no kyc_verification event → agent stays 403. A weakened signature
 # check would let anyone forge a callback and unlock — a real BREACH.
 forged_callback_no_sig = lambda do
-  client = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-  a = client.register!(name: "redteam-fcb")
+  client = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
+  a = client.register!
 
   req = client.run(a, name: "request_kyc")
   raise "redteam(skooti): request_kyc(fcb) failed (#{req.status})" unless req.status == 200
@@ -1028,8 +1025,8 @@ fcb_beat = forged_callback_no_sig.call
 # Two beats about the wire rather than about the fleet. They share one
 # principal: neither touches the fleet or the reservations table, so nothing is
 # staged and there is nothing for a second identity to isolate.
-wire_probe = Kiosk::Redteam::Client.new(base_url: BASE_URL)
-                                   .register!(name: "redteam-wire-shape")
+wire_probe = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
+                                   .register!
 
 # One raw request, bypassing the redteam Client — the whole point is to dial
 # paths and methods the Client will not construct.
@@ -1045,7 +1042,7 @@ raw_wire = lambda do |method, path, body = nil, bearer: true|
   headers["Authorization"] = "Bearer #{wire_probe.token}" if bearer
   req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
   req.body = JSON.generate(body) if body
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   [res, (JSON.parse(res.body) rescue {})]
 end
 
@@ -1143,7 +1140,7 @@ self_asserted_token_forgery = lambda do
   probe = lambda do |token|
     uri = URI("#{BASE_URL}/kiosk/my_reservations")
     req = Net::HTTP::Get.new(uri, { "Authorization" => "Bearer #{token}" })
-    Kiosk::Redteam::Wire.http_for(uri).request(req).code.to_i
+    Kiosk::TestHelpers::Wire.http_for(uri).request(req).code.to_i
   end
 
   forgeries = [

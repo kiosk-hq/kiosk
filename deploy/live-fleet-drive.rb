@@ -4,8 +4,8 @@
 # Drive the DEPLOYED fleet with the code this repository ships.
 #
 # WHAT IT IS. A hand-run, deploy-time probe. It takes every vhost out of
-# deploy/Caddyfile, dials it over https with `Kiosk::Redteam::Wire` and
-# `Kiosk::Redteam::Client` — the same two drivers a demo's own battery uses —
+# deploy/Caddyfile, dials it over https with `Kiosk::TestHelpers::Wire` and
+# `Kiosk::TestHelpers::Assistant` — the same two drivers a demo's own battery uses —
 # and then runs `e2e/schema_conformance.rb` against the bytes each origin
 # served. That last step is the only way §16.3's "every wire object validates
 # against its JSON Schema" is ever asserted about a byte a DEPLOYMENT produced
@@ -111,8 +111,8 @@ class Drive
 
   def initialize(origin)
     @origin   = origin
-    @wire     = Kiosk::Redteam::Wire.new(base_url: origin)
-    @client   = Kiosk::Redteam::Client.new(base_url: origin)
+    @wire     = Kiosk::TestHelpers::Wire.new(base_url: origin)
+    @client   = Kiosk::TestHelpers::Assistant.new(base_url: origin)
     @breaches = []
     @errors   = []
     @passes   = 0
@@ -181,7 +181,7 @@ class Drive
 
   def registration_probes
     { "an unproven registration" => :skip, "a malformed proof" => "0" }.each do |beat, pow|
-      response = @client.register_raw(name: "live-fleet-drive", pow: pow)
+      response = @client.register_raw(pow: pow)
       if response.status == 201
         breach beat, "HTTP 201 — the origin MINTED AN AGENT for a caller that proved nothing. " \
                      "This also means this run created state; deploy/demo-reset.sh clears it."
@@ -203,7 +203,7 @@ class Drive
     query = Array(catalog["queries"]).first&.fetch("name", nil)
     return skip "the query-plane probes", "this origin publishes no query" unless query
 
-    forged = @wire.get("/kiosk/#{query}", {}, Kiosk::Redteam::Wire.bearer("not.a.token"))
+    forged = @wire.get("/kiosk/#{query}", {}, Kiosk::TestHelpers::Wire.bearer("not.a.token"))
     judge "a forged bearer at /kiosk/#{query}", forged, [401, 403]
 
     anon = @wire.get("/kiosk/#{query}")
@@ -313,8 +313,8 @@ def self_test
   # TLS from the target's scheme. A fleet is served over https, so a driver that
   # cannot is a runner that reaches nothing — and it fails by CONNECTION RESET,
   # which reads like the box being down rather than like a bug here.
-  https = Kiosk::Redteam::Wire.http_for(URI("https://one.demo.kiosk.tech/kiosk/schema"))
-  plain = Kiosk::Redteam::Wire.http_for(URI("http://127.0.0.1:3001/kiosk/schema"))
+  https = Kiosk::TestHelpers::Wire.http_for(URI("https://one.demo.kiosk.tech/kiosk/schema"))
+  plain = Kiosk::TestHelpers::Wire.http_for(URI("http://127.0.0.1:3001/kiosk/schema"))
   check.call("the drivers this script uses dial TLS for an https origin", https.use_ssl?)
   check.call("…and do not for a local http one", !plain.use_ssl?)
 

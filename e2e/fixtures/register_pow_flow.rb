@@ -18,7 +18,7 @@
 #
 # Usage (invoked by assistant.sh — needs a running server + numpy on PATH):
 #   SERVER_URL=… KIOSK_ISSUER=… KIOSK_ADDITIONAL_ORIGINS=… bundle exec ruby register_pow_flow.rb
-require "jwt"; require "json"; require "net/http"; require "kiosk/redteam/wire"; require "uri"; require "openssl"; require "securerandom"; require "base64"
+require "jwt"; require "json"; require "net/http"; require "kiosk/test_helpers/wire"; require "uri"; require "openssl"; require "securerandom"; require "base64"
 
 SERVER = ENV.fetch("SERVER_URL")
 ISSUER = ENV.fetch("KIOSK_ISSUER")
@@ -27,13 +27,13 @@ def post_json(url, body, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = JSON.generate(body)
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
 def get_json(url, headers = {})
   uri = URI(url)
-  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 

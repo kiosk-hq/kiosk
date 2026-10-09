@@ -18,7 +18,7 @@ RSpec.describe Kiosk::Redteam::Scenario do
   end
 
   def response(status, body = {})
-    Kiosk::Redteam::Response.new(status:, body:)
+    Kiosk::TestHelpers::Wire::Response.new(status:, body:)
   end
 
   describe "#verdict_from without expect/expect_code (permissive)" do
@@ -78,6 +78,11 @@ RSpec.describe Kiosk::Redteam::Scenario do
       v = scenario.verdict_from(response(402, problem("pow_required")))
       expect(v.skipped).to be(false)
       expect(v.blocked).to be(false)
+    end
+
+    it "says the toll was already paid when it was demanded again" do
+      paid = Kiosk::TestHelpers::Wire::Response.new(status: 402, body: problem("pow_required"), proofs: 1)
+      expect(scenario.verdict_from(paid).detail).to include("already solved every issued challenge")
     end
 
     it "still blocks a 200 envelope carrying a real denial code" do

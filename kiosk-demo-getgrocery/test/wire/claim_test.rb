@@ -27,7 +27,7 @@ class ClaimTest < WireTest
 
   def poll_token(shopper, device_code)
     pem = shopper.rsa_key.public_key.to_pem
-    _, challenge = Kiosk::Redteam::Wire.new(base_url: live_url).get_json("/kiosk/auth/challenge", public_key: pem)
+    _, challenge = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json("/kiosk/auth/challenge", public_key: pem)
     proof = JWT.encode({ aud: live_url, nonce: challenge["challenge"], jti: SecureRandom.uuid, iat: Time.now.to_i },
                        shopper.rsa_key, "RS256")
     answer = Net::HTTP.post_form(URI("#{live_url}/kiosk/oauth/token"),

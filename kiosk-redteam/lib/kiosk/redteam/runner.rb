@@ -23,7 +23,7 @@ module Kiosk
     #   "  BREACH  ✗ <name> — <detail>"   — attack NOT blocked (real finding)
     class Runner
       def initialize(base_url:, profile:)
-        @client  = Client.new(base_url:)
+        @client  = Kiosk::TestHelpers::Assistant.new(base_url:)
         @profile = profile
         @results = nil
       end

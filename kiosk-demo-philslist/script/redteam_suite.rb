@@ -77,18 +77,18 @@ require "kiosk/redteam"
 require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER")
+ISSUER = SERVER
 
 # The seeded humans behind the two assistants (db/seeds.rb).
-ALICE_EMAIL = ENV.fetch("ALICE_EMAIL")
-BOB_EMAIL   = ENV.fetch("BOB_EMAIL")
-PASSWORD    = ENV.fetch("DEMO_PASSWORD")
+ALICE_EMAIL = "alice@example.com"
+BOB_EMAIL   = "bob@example.com"
+PASSWORD    = "philslist-demo-password"
 
 # THE WIRE. An action is `POST <endpoint>/<action-name>` carrying its
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
 # them in the query string. A success body IS the result; an error is an RFC
 # 9457 problem document whose branch point is the TOP-LEVEL `code`.
-WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
+WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
 
 # One ledger for every beat below — the hand-written ones about philslist's own
 # verbs and the library one about the ceremony every origin serves — printed in
@@ -407,7 +407,7 @@ rc_log, _log_post = WIRE.post_json("/kiosk/post_listing",
                                      title: "Redteam #{title_sentinel}",
                                      body:  "Call me on #{body_sentinel}" },
                                    ALICE.bearer)
-request_log  = File.expand_path("../log/#{ENV.fetch("RAILS_ENV", "development")}.log", __dir__)
+request_log  = File.expand_path("../log/development.log", __dir__)
 log_text     = File.exist?(request_log) ? File.read(request_log, encoding: "UTF-8", invalid: :replace, undef: :replace) : ""
 param_lines  = log_text.each_line.select { |line| line.include?("Parameters:") }
 body_logged  = param_lines.any? { |line| line.include?(body_sentinel) }
@@ -442,7 +442,7 @@ BATTERY.record("ContactDetailsStayOutOfTheRequestLog",
 # a silent third state is what let the last one hide.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  client:  Kiosk::Redteam::Client.new(base_url: SERVER),
+  client:  Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
   profile: Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
   on_skip: :breach,
 )

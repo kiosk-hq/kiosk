@@ -35,7 +35,7 @@ module Kiosk
           return skip_verdict("no pay_for")      unless profile.pay_for
           return skip_verdict("gated_action spends nothing") unless profile.gated_action_consumes
 
-          a = register_principal(client, name: "redteam-srr-a", profile:)
+          a = client.register!
 
           # SETUP, not the attack: an attestation that was not accepted makes
           # the first use fail for a reason that has nothing to do with C3.

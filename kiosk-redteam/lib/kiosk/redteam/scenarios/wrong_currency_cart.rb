@@ -41,7 +41,7 @@ module Kiosk
 
           foreign = ALTERNATIVES.find { |c| c != native }
 
-          a     = register_principal(client, name: "redteam-cur-a", profile:)
+          a     = client.register!
           owned = profile.create_owned.call(client, a)
           m     = profile.pay_for.call(client, a, owned)
           m[:intent] = m[:intent].merge(currency: foreign)

@@ -8,8 +8,8 @@ require "rails/test_help"
 require "kiosk/server/conformance_origin"
 require "kiosk/test_helpers/conformance/minitest"
 require "kiosk/test_helpers/live_server"
-require "kiosk/redteam"
-require "kiosk/redteam/stripe_mock"
+require "kiosk/test_helpers/assistant"
+require "kiosk/test_helpers/stripe_mock"
 
 # The conformance matchers read this origin from the handler registry, the
 # router and a GUC-scoped session, as the running server does.
@@ -36,11 +36,11 @@ class WireTest < ActiveSupport::TestCase
 
   DELIVERY_ADDRESS = "42 Camden Street, Dublin 2"
 
-  setup { Stripe.api_base = Kiosk::Redteam::StripeMock.start }
+  setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
 
-  def client = @client ||= Kiosk::Redteam::Client.new(base_url: live_url)
+  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
 
-  def register = client.register!(name: "shopper")
+  def register = client.register!
 
   def delivery_date = (Date.current + 1).iso8601
 

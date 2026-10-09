@@ -189,11 +189,9 @@ gem "kiosk-pow-equihash",  path: "@KIOSK_OSS@/kiosk-pow-equihash"
 gem "kiosk-user-idp-devise", path: "@KIOSK_OSS@/kiosk-user-idp-devise"
 # The payment provider: Stripe, against the local stripe-mock this script starts.
 gem "kiosk-pay-stripe",    path: "@KIOSK_OSS@/kiosk-pay-stripe"
-# kiosk-redteam ships Kiosk::Redteam::Wire.http_for, the one place this
-# repository decides http vs https. The fixtures and schema_conformance.rb open
-# their sockets through it, so SERVER_URL may name a deployed TLS origin and
-# not only this harness's own localhost app.
-gem "kiosk-redteam",       path: "@KIOSK_OSS@/kiosk-redteam"
+# The fixtures and schema_conformance.rb open their sockets through
+# Kiosk::TestHelpers::Wire.http_for, so SERVER_URL may name a TLS origin.
+gem "kiosk-test-support",  path: "@KIOSK_OSS@/kiosk-test-support"
 
 # Devise backs the HUMAN half of the account-binding ceremony. The adapter above
 # only reads the request's Warden user, so the provider's own Devise install is
@@ -424,11 +422,11 @@ log "start rails server on port $SERVER_PORT"
 port_held=$(lsof -ti ":$SERVER_PORT" | tr '\n' ' ' || true)
 [ -z "$port_held" ] || fail "port $SERVER_PORT is already held by pid $port_held— this run would drive that server instead of the one it starts. Stop it and run again."
 # The pay flow charges a local stripe-mock, Stripe's own fixture server, behind
-# kiosk-redteam's front that answers a confirmed charge as paid; no key. One
+# kiosk-test-support's front that answers a confirmed charge as paid; no key. One
 # already listening on its port is reused.
 if ! curl -s -o /dev/null http://127.0.0.1:12111/v1/customers; then
-  ruby -I"$KIOSK_OSS/kiosk-redteam/lib" -rkiosk/redteam/stripe_mock \
-    -e 'Kiosk::Redteam::StripeMock.start; sleep' > "$TMP_DIR/stripe-mock.log" 2>&1 &
+  ruby -I"$KIOSK_OSS/kiosk-test-support/lib" -rkiosk/test_helpers/stripe_mock \
+    -e 'Kiosk::TestHelpers::StripeMock.start; sleep' > "$TMP_DIR/stripe-mock.log" 2>&1 &
   STRIPE_MOCK_PID=$!
   for _ in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:12111/v1/customers && break; sleep 0.3; done
   curl -s -o /dev/null http://127.0.0.1:12111/v1/customers || fail "stripe-mock did not start on 12111"

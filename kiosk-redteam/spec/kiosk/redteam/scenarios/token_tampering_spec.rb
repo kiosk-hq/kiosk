@@ -10,7 +10,7 @@ require "base64"
 RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   subject(:scenario) { described_class.new }
 
-  let(:client) { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
+  let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
   # The probe dials the profile's own `per_user_query`, because that is the one
   # verb a profile declares this origin actually ROUTES — a name it does not
   # route answers a routing 404 before the credential is read.

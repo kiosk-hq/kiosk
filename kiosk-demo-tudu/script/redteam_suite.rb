@@ -63,10 +63,10 @@ require "securerandom"
 require "kiosk/redteam"
 
 SERVER   = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
-HOLDER   = ENV.fetch("HOLDER_ID")
-EMAIL    = ENV.fetch("HOLDER_EMAIL")
-PASSWORD = ENV.fetch("HOLDER_PASSWORD")
+ISSUER   = SERVER
+HOLDER   = "00000000-0000-0000-0000-000000000001"
+EMAIL    = "alice@example.com"
+PASSWORD = "tudu-demo-password"
 
 # ── the human's browser session, and the wire helpers built on it ──────────
 #
@@ -81,7 +81,7 @@ require "kiosk/user_identity_providers/devise_session"
 # plain wire — an agent's Bearer call, and the header that carries it. SESSION
 # is the human's browser, cookie jar and all, because four beats here attack
 # the account-binding ceremony, which only a signed-in human can open.
-WIRE    = Kiosk::Redteam::Wire.new(base_url: SERVER)
+WIRE    = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
 SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
 def request(req) = SESSION.request(req)
@@ -477,7 +477,7 @@ BATTERY.record("ChosenNameNeverTheAddress",
 # a silent third state is what let the last one hide.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  client:  Kiosk::Redteam::Client.new(base_url: SERVER),
+  client:  Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
   profile: Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
   on_skip: :breach,
 )

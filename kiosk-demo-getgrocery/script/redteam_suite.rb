@@ -114,7 +114,7 @@ require "uri"
 ORDER_DAY = (Date.today + 1).iso8601
 
 BASE_URL = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
+ISSUER   = BASE_URL
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 
@@ -279,7 +279,7 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-price-a", profile:)
+    a = client.register!
     owned = profile.create_owned.call(client, a)
     m = profile.pay_for.call(client, a, owned)
 
@@ -310,7 +310,7 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-total-a", profile:)
+    a = client.register!
     owned = profile.create_owned.call(client, a)
     m = profile.pay_for.call(client, a, owned)
     m[:cart] = m[:cart].merge(total_amount_cents: owned[:total_cents].to_i + 100)
@@ -360,7 +360,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a        = register_principal(client, name: "redteam-items-a", profile:)
+    a        = client.register!
     failures = []
     statuses = []
 
@@ -460,7 +460,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a         = register_principal(client, name: "redteam-shapes-a", profile:)
+    a         = client.register!
     @failures = []
     catalog   = client.query(a, name: "catalog").body
     raise "redteam(getgrocery): empty catalog" unless catalog.is_a?(Array) && catalog.any?
@@ -648,7 +648,7 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-unregistered-a", profile:)
+    a = client.register!
 
     results = UNREGISTERED.flat_map do |name|
       [[a.token, ""], [nil, " (anon)"]].map do |token, tag|
@@ -657,7 +657,7 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
         headers["Authorization"] = "Bearer #{token}" if token
         req = Net::HTTP::Post.new(uri, headers)
         req.body = JSON.generate(name: "catalog")
-        res  = Kiosk::Redteam::Wire.http_for(uri).request(req)
+        res  = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
         body = (JSON.parse(res.body) rescue {})
         [res.code.to_i == 404 && body["code"].nil?,
          "POST /kiosk/#{name}#{tag} → #{res.code}/#{body["code"].inspect} " \
@@ -693,9 +693,9 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a   = register_principal(client, name: "redteam-method-a", profile:)
+    a   = client.register!
     uri = URI("#{BASE_URL}/kiosk/create_order")
-    res = Kiosk::Redteam::Wire.http_for(uri)
+    res = Kiosk::TestHelpers::Wire.http_for(uri)
                    .request(Net::HTTP::Get.new(uri, "Authorization" => "Bearer #{a.token}"))
     body    = (JSON.parse(res.body) rescue {})
     allow   = res["allow"]
@@ -739,7 +739,7 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-pastdate-a", profile:)
+    a = client.register!
 
     past   = (Date.today - 30).iso8601
     future = (Date.today + 7).iso8601
@@ -896,7 +896,7 @@ class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
   UNREADABLE = "+03:00"
 
   def call(client, profile)
-    a   = register_principal(client, name: "redteam-inferzone-a", profile:)
+    a   = client.register!
     day = clock_probe_day(-11)
 
     ask = lambda do |headers|
@@ -989,7 +989,7 @@ class OneRenderingPerRow < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-onerender-a", profile:)
+    a = client.register!
 
     ask = lambda do |zone|
       client.query(a, name: "delivery_slots", delivery_address: ADDRESS,
@@ -1066,7 +1066,7 @@ class MachineTimestampsIgnoreTheCallerClock < Kiosk::Redteam::Scenario
   end
 
   def call(_client, _profile)
-    wire = Kiosk::Redteam::Wire.new(base_url: BASE_URL)
+    wire = Kiosk::TestHelpers::Wire.new(base_url: BASE_URL)
     pem  = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
     path = "/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}"
 

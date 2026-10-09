@@ -18,7 +18,7 @@ class KycTest < WireTest
     assert_equal [403, "kyc_required"], [refused.status, refused.body["code"]]
     assert_includes refused.body["hint"], "request_kyc"
 
-    stream = Kiosk::Redteam::EventStream.new(base_url: live_url, token: rider.token)
+    stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: live_url, token: rider.token)
     stream.subscribe("kyc_verification")
     request = client.run(rider, name: "request_kyc")
     assert_equal 200, request.status
@@ -43,7 +43,7 @@ class KycTest < WireTest
     assert lock("MC-001").unlock(token: rental.body["rental_token"], now: Time.now.to_i)
 
     events = Kiosk.configuration.event_store.since(rider.user_id, 0).select { _1["topic"] == "kyc_verification" }
-    assert_empty Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)
+    assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)
     reachable = Kiosk::Server::Events.fetch("kyc_verification")[:subject_reachable]
     stranger = Kiosk::Identity.new(user_id: SecureRandom.uuid, role: "customer", actor: "agent", agent_id: SecureRandom.uuid)
     owner    = Kiosk::Identity.new(user_id: rider.user_id, role: "customer", actor: "agent", agent_id: rider.agent_id)

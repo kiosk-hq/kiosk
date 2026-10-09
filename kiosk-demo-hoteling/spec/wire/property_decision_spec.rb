@@ -13,7 +13,7 @@ RSpec.describe "the property's answer to a paid booking", :wire do
 
   def confirmations(user_id)
     events = Kiosk.configuration.event_store.since(user_id, 0).select { _1["topic"] == "booking_confirmation" }
-    expect(Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)).to be_empty
+    expect(Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)).to be_empty
     events.map { _1["data"] }
   end
 

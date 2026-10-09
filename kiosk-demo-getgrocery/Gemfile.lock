@@ -34,10 +34,7 @@ PATH
   specs:
     kiosk-redteam (0.5.12)
       base64
-      json_schemer (>= 2.3, < 3.0)
-      jwt (>= 2.0, < 4.0)
-      kiosk-pow-equihash (~> 0.5.0)
-      websocket-driver (~> 0.7)
+      kiosk-test-support (~> 0.5.0)
 
 PATH
   remote: ../kiosk-reputation
@@ -64,7 +61,11 @@ PATH
   remote: ../kiosk-test-support
   specs:
     kiosk-test-support (0.5.12)
+      json_schemer (>= 2.3, < 3.0)
+      jwt (>= 2.0, < 4.0)
       kiosk-core (~> 0.5.0)
+      kiosk-pow-equihash (~> 0.5.0)
+      websocket-driver (~> 0.7)
 
 PATH
   remote: ../kiosk-user-idp-devise

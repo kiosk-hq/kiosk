@@ -12,16 +12,16 @@ finds a real breach fails loudly: `Runner#all_blocked?` answers false and the
 caller exits non-zero. Fix the provider, keep the scenario as a permanent
 regression.
 
-**No Rails, no `kiosk-core`.** The harness speaks the wire and nothing else, so
+**No Rails.** The harness speaks the wire and nothing else, so
 it can be pointed at any Kiosk origin — your own app in CI, or a third party's
 deployment. Everything provider-specific (which verbs exist, how to create an
 owned row, how to build a mandate) lives in a `Profile` you supply; no provider
 name is hard-coded in the gem.
 
 **`http` or `https` is decided by the base URL you pass and by nothing else.**
-There is no TLS flag and no environment variable: `Client`, `Wire` and anything
-a `Runner` builds open their socket through `Kiosk::Redteam::Wire.http_for`,
-which reads the scheme off the target. So `base_url:
+There is no TLS flag and no environment variable: the scenarios attack through
+`Kiosk::TestHelpers::Assistant` and `Kiosk::TestHelpers::Wire` from
+`kiosk-test-support`, which read the scheme off the target. So `base_url:
 "http://127.0.0.1:3000"` is a local app and `base_url:
 "https://example.com"` is that deployment, with the same code and the same
 profile. Point it at a deployment you do not own and remember what a battery
@@ -59,10 +59,9 @@ default.
 gem "kiosk-redteam", github: "kiosk-hq/kiosk", group: :development
 ```
 
-The registration toll is real Equihash: the client solves the server's 402
-challenges by shelling out to the reference solver that ships inside
-`kiosk-pow-equihash` (a runtime dependency of this gem), so the machine running
-the battery needs **`python3` with `numpy`** on `PATH`. Point a battery at an
+The registration toll is real Equihash: the assistant client solves the server's
+402 challenges with the reference solver that ships inside `kiosk-pow-equihash`,
+so the machine running the battery needs **`python3` with `numpy`** on `PATH`. Point a battery at an
 origin whose PoW is off and nothing is solved and nothing is needed.
 
 ## Usage
@@ -76,7 +75,7 @@ require "kiosk/redteam"
 SERVER = ENV.fetch("SERVER_URL", "http://127.0.0.1:3000")
 
 profile = Kiosk::Redteam::Profile.new(
-  # >0 means this origin is expected to gate /auth/register with Equihash.
+  # >0 means this origin is expected to gate /auth/register with a toll.
   pow_difficulty: 1,
   # The roles this origin declares (Kiosk.configuration.roles), as strings.
   declared_roles: %w[customer],
@@ -143,13 +142,12 @@ file per row:
 | `ExpiredKyc` | kyc | an attestation whose `exp` has passed is rejected |
 | `ForgedKyc` | kyc | an attestation with a wrong issuer or a bad signature is rejected |
 
-Beside them the gem ships `Client` (register + PoW payment, kyc, query / run /
-pay with RS256 mandate signing, and the OAuth device-authorization request),
-`Profile`, `Scenario`, `Verdict`, `Response`, `Principal`, `Runner`, `Wire`,
-`Battery`, `LeakScan` — the shared oracle that decides whether a refusal
-leaked the runtime's own vocabulary, discounting needles the probe itself
-supplied — and `EventStream`, the assistant's side of `<endpoint>/events`:
-subscribe to a topic, then wait for the event or assert that none arrived.
+Beside them the gem ships `Profile`, `Scenario`, `Verdict`, `Runner`,
+`Battery` and `LeakScan`, which decides whether a refusal leaked the runtime's
+own vocabulary, discounting needles the attack itself supplied. A scenario
+receives a `Kiosk::TestHelpers::Assistant` — register, query, run, pay with
+signed mandates, kyc, and the device-authorization request — and its
+`events(principal)` is the assistant's side of `<endpoint>/events`.
 
 ## Your own beats, in the same battery
 
@@ -159,7 +157,7 @@ Kiosk origin has to survive; the interesting half is always the attacks on
 Two classes carry that half, and they are the reason a hand-written beat and a
 library scenario can sit in one run.
 
-`Wire` is the raw wire: an arbitrary method at an arbitrary path with arbitrary
+`Kiosk::TestHelpers::Wire` is the raw wire: an arbitrary method at an arbitrary path with arbitrary
 headers, which is what an attack on the REQUEST rather than on the principal
 needs — a forged or absent `Authorization`, a verb nobody registered, the wrong
 method at a real verb's path, an assertion on `Allow:` rather than on a body. A
@@ -171,8 +169,8 @@ available on `raw_body` for a `LeakScan`.
 whole run — hand-written beats and library scenarios together:
 
 ```ruby
-wire    = Kiosk::Redteam::Wire.new(base_url: SERVER)
-client  = Kiosk::Redteam::Client.new(base_url: SERVER)
+wire    = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
+client  = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 battery = Kiosk::Redteam::Battery.new
 
 # your own beat, against your own verb
@@ -216,7 +214,7 @@ class UnknownVerbIs404 < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    principal = register_principal(client, name: "redteam-unknown", profile:)
+    principal = client.register!
     verdict_from(client.query(principal, name: "no_such_verb"), expect: 404)
   end
 end

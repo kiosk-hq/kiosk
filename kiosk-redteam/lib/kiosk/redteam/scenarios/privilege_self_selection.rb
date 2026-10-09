@@ -39,17 +39,12 @@ module Kiosk
           )
         end
 
-        def call(client, profile)
-          resp = client.register_raw(
-            name:           "redteam-priv-escalation",
-            pow_difficulty: profile.pow_difficulty,
-            pow:            :solve,
-            wire_role:      ESCALATED_ROLE,
-          )
+        def call(client, _profile)
+          resp = client.register_raw(wire_role: ESCALATED_ROLE)
 
           # A refusal (non-201, no token) also means no escalation happened —
           # provided registration works here at all.
-          return refusal_verdict(client, profile, resp) unless resp.status == 201
+          return refusal_verdict(client, resp) unless resp.status == 201
 
           token       = resp.body.is_a?(Hash) ? resp.body["access_token"] : nil
           issued_role = token && token_role(token)
@@ -69,7 +64,7 @@ module Kiosk
         # The injected registration was refused.  That is role-pinning only if
         # the SAME registration without the injected role succeeds; a crash is
         # never a gate, and a server refusing everything is not one either.
-        def refusal_verdict(client, profile, resp)
+        def refusal_verdict(client, resp)
           if resp.status >= 500 || resp.status.zero?
             return Verdict.new(
               blocked: false, skipped: false, status: resp.status,
@@ -78,11 +73,7 @@ module Kiosk
             )
           end
 
-          control = client.register_raw(
-            name:           "redteam-priv-control",
-            pow_difficulty: profile.pow_difficulty,
-            pow:            :solve,
-          )
+          control = client.register_raw
           control_token = control.body.is_a?(Hash) ? control.body["access_token"] : nil
           unless control.status == 201 && control_token
             return Verdict.new(

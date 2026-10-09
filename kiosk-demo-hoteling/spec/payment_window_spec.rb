@@ -2,7 +2,7 @@
 
 require "spec_helper"
 require "kiosk/test_helpers/live_server"
-require "kiosk/redteam"
+require "kiosk/test_helpers/assistant"
 
 # A booking reads `paid` from the moment the PSP captures, not from the moment
 # the settlement row lands; and racing pays charge it at most once.
@@ -99,7 +99,7 @@ RSpec.describe "the window between a capture and its settlement" do
 
     events = Kiosk.configuration.event_store.since(guest.id, 0).select { _1["topic"] == "booking_payment" }
     expect(events.map { _1["subject"] }).to eq([id])
-    expect(Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)).to be_empty
+    expect(Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)).to be_empty
   end
 
   it "charges a booking once however many pays race for it" do

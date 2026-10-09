@@ -38,17 +38,9 @@ module Kiosk
         def call(client, profile)
           return skip_verdict("pow_difficulty is 0 (no PoW gate)") unless profile.pow_difficulty > 0
 
-          resp_skip = client.register_raw(
-            name:           "redteam-rpow-skip",
-            pow_difficulty: profile.pow_difficulty,
-            pow:            :skip,
-          )
+          resp_skip = client.register_raw(pow: :skip)
 
-          resp_zero = client.register_raw(
-            name:           "redteam-rpow-zero",
-            pow_difficulty: profile.pow_difficulty,
-            pow:            "0",
-          )
+          resp_zero = client.register_raw(pow: "0")
 
           problems = [
             not_a_pow_rejection("pow: :skip", resp_skip),
@@ -60,11 +52,7 @@ module Kiosk
           # a real Equihash solve.
           control = nil
           if problems.empty?
-            control = client.register_raw(
-              name:           "redteam-rpow-control",
-              pow_difficulty: profile.pow_difficulty,
-              pow:            :solve,
-            )
+            control = client.register_raw
             unless control.status == 201 && token_of(control)
               problems << "CONTROL FAILED: a properly solved registration must return 201 with " \
                           "an access_token — got HTTP #{control.status} #{control.body.inspect}. " \

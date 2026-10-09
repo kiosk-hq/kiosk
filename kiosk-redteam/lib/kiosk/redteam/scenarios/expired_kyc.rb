@@ -30,7 +30,7 @@ module Kiosk
           return skip_verdict("no create_owned")         unless profile.create_owned
           return skip_verdict("no pay_for")              unless profile.pay_for
 
-          a = register_principal(client, name: "redteam-expkyc-a", profile:)
+          a = client.register!
 
           kyc_resp = client.kyc(a, attestation_jws: profile.kyc_expired.call(a.user_id))
 

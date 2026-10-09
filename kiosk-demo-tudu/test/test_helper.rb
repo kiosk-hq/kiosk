@@ -5,7 +5,7 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "kiosk/test_helpers/live_server"
-require "kiosk/redteam"
+require "kiosk/test_helpers/assistant"
 
 module ActiveSupport
   class TestCase
@@ -31,10 +31,10 @@ class WireTest < ActiveSupport::TestCase
 
   ALICE_ID = "00000000-0000-0000-0000-000000000001"
 
-  def client = @client ||= Kiosk::Redteam::Client.new(base_url: live_url)
-  def wire = @wire ||= Kiosk::Redteam::Wire.new(base_url: live_url)
+  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
+  def wire = @wire ||= Kiosk::TestHelpers::Wire.new(base_url: live_url)
 
-  def register = client.register!(name: "assistant")
+  def register = client.register!
 
   def create_list(owner, title = "Hike")
     created = client.run(owner, name: "create_list", title:)

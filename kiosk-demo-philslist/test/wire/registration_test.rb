@@ -4,7 +4,7 @@ require "test_helper"
 
 class RegistrationTest < WireTest
   test "registering costs an Equihash proof, and the new assistant posts at once" do
-    unproven = client.register_raw(name: "seller", pow: :skip)
+    unproven = client.register_raw(pow: :skip)
     assert_equal [402, "pow_required"], [unproven.status, unproven.body["code"]]
     assert_not_empty unproven.body["challenges"]
 

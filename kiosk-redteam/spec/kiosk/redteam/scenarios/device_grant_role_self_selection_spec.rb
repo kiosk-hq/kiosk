@@ -7,7 +7,7 @@ require_relative "support"
 RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
   subject(:scenario) { described_class.new }
 
-  let(:client)     { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
+  let(:client)     { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
   let(:profile)    { minimal_profile(declared_roles: %w[customer owner]) }
   let(:device_url) { "#{BASE_URL}/kiosk/oauth/device_authorization" }
 

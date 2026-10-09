@@ -114,7 +114,7 @@ in the DB; used/garbage invite codes → 403. A genuine member is the positive
 control (she DOES see and read the list), and after `remove_member` her next
 read → 403.
 
-### Adversarial battery (`script/redteam_suite.rb`, run by `test/wire/redteam_test.rb`)
+### Adversarial battery (`script/redteam_suite.rb`)
 
 Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 (the forged `account_id` is refused `400`, not accepted-and-ignored),

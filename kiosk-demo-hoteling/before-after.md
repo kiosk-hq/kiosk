@@ -37,7 +37,7 @@ charges a local stripe-mock, so the flow runs with no real card.
 Two things the incumbent flow cannot do follow from that. Payment is part of
 the wire rather than a handback, so the reservation completes in one exchange.
 And the booking is the assistant's own: `spec/wire/isolation_spec.rb`
-and `spec/wire/redteam_spec.rb` assert a cross-tenant read and a forged `user_id` are
+and `script/redteam_suite.rb` assert a cross-tenant read and a forged `user_id` are
 refused, while `spec/wire/spending_cap_spec.rb` holds a per-assistant limit the
 operator sets.
 

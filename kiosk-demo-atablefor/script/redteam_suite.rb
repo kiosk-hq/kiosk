@@ -86,7 +86,7 @@ require "kiosk/redteam"
 require_relative "bound_assistant"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER")
+ISSUER = SERVER
 
 # ── The two principals, EARNED rather than asserted ──────────────────────────
 #
@@ -101,8 +101,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # point of the boundary: `my_bookings` and `cancel_booking` scope by ACCOUNT,
 # so two assistants linked to one diner would legitimately see each other's
 # bookings and CrossTenantRead would be asserting the opposite of the truth.
-# Diego and Bea are separate account holders (db/seeds.rb); the caller
-# passes their credentials in the environment.
+# Diego and Bea are separate account holders (db/seeds.rb).
 #
 # `agent_id` is MINTED by `/auth/register` and is a uuid because the schema
 # says so: `kiosk.agents.id`, every `kiosk.*_mandates.agent_id` and
@@ -110,11 +109,9 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # else is one the shipped tables cannot store. A driver cannot choose it at
 # all, which is the strongest form of that guarantee.
 DIEGO = bind_assistant(server: SERVER, issuer: ISSUER,
-                       email:    ENV.fetch("HOLDER_A_EMAIL"),
-                       password: ENV.fetch("HOLDER_A_PASSWORD"))
+                       email: "diego@example.com", password: "atablefor-demo-password")
 BEA   = bind_assistant(server: SERVER, issuer: ISSUER,
-                       email:    ENV.fetch("HOLDER_B_EMAIL"),
-                       password: ENV.fetch("HOLDER_B_PASSWORD"))
+                       email: "bea@example.com", password: "atablefor-demo-password")
 
 DIEGO_UUID = DIEGO.user_id
 BEA_UUID   = BEA.user_id
@@ -125,7 +122,7 @@ TOKEN_B    = BEA.token
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
 # them in the query string. A success body IS the result; an error is an RFC
 # 9457 problem document whose branch point is the TOP-LEVEL `code`.
-WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
+WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 # One ledger for every beat below — the hand-written ones about atablefor's own
 # verbs and the library one about the ceremony every origin serves — printed in
@@ -700,7 +697,7 @@ BATTERY.record("WholeValuedFloatBody",
 # a silent third state is what let the last one hide.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  client:  Kiosk::Redteam::Client.new(base_url: SERVER),
+  client:  Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
   profile: Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer]),
   on_skip: :breach,
 )

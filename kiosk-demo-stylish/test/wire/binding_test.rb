@@ -33,7 +33,7 @@ class BindingTest < WireTest
     assert_equal "200", granted.code, granted.body
 
     token = JSON.parse(granted.body)["access_token"]
-    assistant = Kiosk::Redteam::Principal.new(agent_id: nil, user_id: nil, token:, rsa_key: key)
+    assistant = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: nil, user_id: nil, token:, rsa_key: key)
     assert_equal alice.id, claims(assistant)["sub"]
     assert_equal alice.id, Appointment.find(book(assistant)["appointment_id"]).user_id
   end

@@ -127,7 +127,7 @@ FUTURE_SLOT = lambda { |n, hour = 9|
 PAST_SLOT = "1900-01-01T09:00:00Z"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER")
+ISSUER = SERVER
 
 # The seeded humans this battery drives (db/seeds.rb). Only the owner carries a
 # `staff_role`; Alice and Bob are plain customers. All three are ordinary Devise
@@ -137,10 +137,10 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 #
 # Emails and password arrive in the environment, never as literals here.
 OWNER_ID      = "00000000-0000-0000-0000-0000000000a0"
-OWNER_EMAIL   = ENV.fetch("OWNER_EMAIL")
-ALICE_EMAIL   = ENV.fetch("ALICE_EMAIL")
-BOB_EMAIL     = ENV.fetch("BOB_EMAIL")
-DEMO_PASSWORD = ENV.fetch("DEMO_PASSWORD")
+OWNER_EMAIL   = "owner@combette.example"
+ALICE_EMAIL   = "alice@example.com"
+BOB_EMAIL     = "bob@example.com"
+DEMO_PASSWORD = "combette-demo-password"
 
 # The owner's browser session, signed in once and reused by the beats below.
 def owner_session
@@ -152,7 +152,7 @@ end
 # arguments as the JSON body; a query is `GET <endpoint>/<query-name>` carrying
 # them in the query string. A success body IS the result; an error is an RFC
 # 9457 problem document whose branch point is the TOP-LEVEL `code`.
-WIRE = Kiosk::Redteam::Wire.new(base_url: SERVER)
+WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
 
 def pop_proof(key, pem)
   _rc, ch = WIRE.get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
@@ -416,7 +416,7 @@ def oauth_post(path, form)
   uri = URI("#{SERVER}#{path}")
   req = Net::HTTP::Post.new(uri)
   req.set_form_data(form)
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   [res.code.to_i, (JSON.parse(res.body) rescue {})]
 end
 
@@ -765,7 +765,7 @@ BATTERY.record("UntypedBookingInput", bad_failures.empty?,
 # a silent third state is what let the last one hide.
 BATTERY.scenario(
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-  client:  Kiosk::Redteam::Client.new(base_url: SERVER),
+  client:  Kiosk::TestHelpers::Assistant.new(base_url: SERVER),
   profile: Kiosk::Redteam::Profile.new(pow_difficulty: 1, declared_roles: %w[customer owner]),
   on_skip: :breach,
 )

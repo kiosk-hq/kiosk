@@ -25,7 +25,7 @@ module Kiosk
           return skip_verdict("no gated_action") unless profile.gated_action
           return skip_verdict("no create_owned") unless profile.create_owned
 
-          a = register_principal(client, name: "redteam-uga-a", profile:)
+          a = client.register!
 
           # KYC if the provider requires it (so the gated action is only
           # blocked by missing payment, not by missing KYC).  Asserting that

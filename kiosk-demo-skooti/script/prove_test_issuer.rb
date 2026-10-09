@@ -17,7 +17,7 @@ module ProveTestIssuer
     @keypair ||= OpenSSL::PKey::RSA.new(File.read(KEY))
   end
 
-  def issuer = ENV.fetch("KIOSK_PROVE_ISSUER")
+  def issuer = "https://kyc.test.local"
   def audience = "skooti"
 
   def attest(user_id:, attributes: nil) = sign(user_id, Time.now.to_i, attributes)

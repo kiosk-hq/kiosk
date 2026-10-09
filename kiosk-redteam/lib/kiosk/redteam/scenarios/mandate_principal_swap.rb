@@ -28,8 +28,8 @@ module Kiosk
           return skip_verdict("no pay_for")      unless profile.pay_for
           return skip_verdict("no create_owned") unless profile.create_owned
 
-          a = register_principal(client, name: "redteam-mps-a", profile:)
-          b = register_principal(client, name: "redteam-mps-b", profile:)
+          a = client.register!
+          b = client.register!
 
           owned_ref = profile.create_owned.call(client, a)
 

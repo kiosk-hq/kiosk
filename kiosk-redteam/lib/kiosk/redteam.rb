@@ -1,13 +1,9 @@
 # frozen_string_literal: true
 
+require "kiosk/test_helpers/assistant"
 require "kiosk/redteam/version"
-require "kiosk/redteam/principal"
-require "kiosk/redteam/response"
 require "kiosk/redteam/verdict"
 require "kiosk/redteam/leak_scan"
-require "kiosk/redteam/wire"
-require "kiosk/redteam/event_stream"
-require "kiosk/redteam/client"
 require "kiosk/redteam/scenario"
 require "kiosk/redteam/runner"
 require "kiosk/redteam/profile"
@@ -39,7 +35,6 @@ module Kiosk
   #
   # == Quick start
   #
-  #   client  = Kiosk::Redteam::Client.new(base_url: "http://localhost:3001")
   #   runner  = Kiosk::Redteam::Runner.new(base_url: ..., profile: my_profile)
   #   results = runner.run(my_scenarios)
   #   exit 1 unless runner.all_blocked?
@@ -100,7 +95,7 @@ module Kiosk
     # Read the problem document's `code` defensively — the body may not be a
     # Hash at all (a successful query answers a bare ARRAY).
     #
-    # @param response [Response]
+    # @param response [Kiosk::TestHelpers::Wire::Response]
     # @return [String, nil]
     # THE WIRE: an error is an RFC 9457 problem document and the branch
     # point is the TOP-LEVEL `code` — a problem document is flat, so there is
@@ -121,7 +116,7 @@ module Kiosk
     # {PAYMENT_REQUIRED_CODES} whatever the status says — a response whose
     # status and code disagree is the least conclusive of all.
     #
-    # @param response [Response]
+    # @param response [Kiosk::TestHelpers::Wire::Response]
     # @return [String, nil]
     def self.payment_required_reason(response)
       code = error_code(response)
@@ -154,7 +149,7 @@ module Kiosk
     # `expect_code:` — instead of leaning on this predicate, which has no way to
     # tell the three apart for it.
     #
-    # @param response [Response]
+    # @param response [Kiosk::TestHelpers::Wire::Response]
     # @return [Boolean]
     def self.blocked?(response)
       # status 0 is this gem's connection-error sentinel; >= 500 is a crash.

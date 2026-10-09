@@ -88,7 +88,7 @@ module Kiosk
         end
 
         def call(client, profile)
-          wire_role, setup = wire_declared_role(client, profile)
+          wire_role, setup = wire_declared_role(client)
           return setup if setup
 
           declared = (profile.declared_roles + [wire_role]).compact.uniq
@@ -155,10 +155,8 @@ module Kiosk
         # registration did not happen — a scenario that could not establish its
         # own probe set says so instead of falling back to the undeclared role,
         # which is the vacuous probe this whole file exists to replace.
-        def wire_declared_role(client, profile)
-          resp = client.register_raw(
-            name: "redteam-device-grant-role", pow_difficulty: profile.pow_difficulty, pow: :solve,
-          )
+        def wire_declared_role(client)
+          resp = client.register_raw
           if (failure = setup_failure(
             resp.status == 201 ? nil : resp,
             step:    "the CONTROL registration this scenario reads a declared role from",

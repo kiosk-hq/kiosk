@@ -6,9 +6,9 @@ RSpec.describe "browsing the catalogue", :wire do
   it "prices depth instead of refusing it, and tolls every hold" do
     guest = register
     curve = Array.new(7) do
-      answer, proofs = tolled_get(guest, "/kiosk/properties")
+      answer = client.query(guest, name: "properties")
       expect(answer.status).to eq(200)
-      proofs
+      answer.proofs
     end
     expect(curve).to start_with(0).and include(be_positive)
     expect(curve).to eq(curve.sort)

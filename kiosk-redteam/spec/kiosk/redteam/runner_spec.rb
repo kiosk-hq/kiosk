@@ -93,7 +93,7 @@ RSpec.describe Kiosk::Redteam::Runner do
     it "passes the client (not nil) and the profile to each scenario" do
       s = instance_double(Kiosk::Redteam::Scenario, name: "Probe")
       expect(s).to receive(:call) do |client, passed_profile|
-        expect(client).to be_a(Kiosk::Redteam::Client)
+        expect(client).to be_a(Kiosk::TestHelpers::Assistant)
         expect(passed_profile).to be(profile)
         blocked_verdict
       end

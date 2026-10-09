@@ -5,9 +5,10 @@ require "wire_helper"
 RSpec.describe "searching the hotels", :wire do
   let(:guest) { register }
 
-  def search(**params) = tolled_get(guest, "/kiosk/search_hotels", **params).first
-  def query(name, **params) = tolled_get(guest, "/kiosk/#{name}", **params).first
+  def search(**params) = query("search_hotels", **params)
+  def query(name, **params) = client.query(guest, name:, **params)
   def next_page(answer) = answer["link"].to_s[/<([^>]*)>\s*;\s*rel="next"/, 1]
+  def follow(link) = search(**URI.decode_www_form(URI(link).query).to_h.symbolize_keys)
   def total(answer) = answer["x-total-count"]&.to_i
 
   it "pages a long result with a Link to the next page, and a complete one without" do
@@ -16,7 +17,7 @@ RSpec.describe "searching the hotels", :wire do
     expect(first.body).to be_an(Array).and have_attributes(size: 20)
     expect(total(first)).to be > 20
 
-    second = tolled_get(guest, URI(next_page(first)).request_uri).first
+    second = follow(next_page(first))
     expect(second.body).to be_present
     expect(second.body.pluck("property_id") & first.body.pluck("property_id")).to be_empty
 

@@ -5,9 +5,9 @@ require "kiosk/pow/equihash/solver"
 
 class CatalogTollTest < WireTest
   def browse(shopper, proofs = nil)
-    headers = Kiosk::Redteam::Wire.bearer(shopper.token)
+    headers = Kiosk::TestHelpers::Wire.bearer(shopper.token)
     headers["Kiosk-PoW"] = JSON.generate(proofs) if proofs
-    Kiosk::Redteam::Wire.new(base_url: live_url).get_json("/kiosk/catalog", {}, headers)
+    Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json("/kiosk/catalog", {}, headers)
   end
 
   def solved(challenge) = { challenge:, nonce: Kiosk::Pow::Equihash.solve(challenge) }

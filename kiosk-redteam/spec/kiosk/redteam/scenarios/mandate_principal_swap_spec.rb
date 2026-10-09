@@ -6,7 +6,7 @@ require_relative "support"
 RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
   subject(:scenario) { described_class.new }
 
-  let(:client) { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
+  let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
 
   let(:profile) do
     minimal_profile(pay_for: pay_for_callable)

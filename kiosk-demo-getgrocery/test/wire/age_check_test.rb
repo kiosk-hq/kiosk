@@ -23,7 +23,7 @@ class AgeCheckTest < WireTest
     assert_equal [403, "kyc_required"], [refused.status, refused.body["code"]]
     assert_includes refused.body["hint"], "request_kyc"
 
-    stream = Kiosk::Redteam::EventStream.new(base_url: live_url, token: shopper.token)
+    stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: live_url, token: shopper.token)
     stream.subscribe("kyc_verification")
     request = client.run(shopper, name: "request_kyc")
     assert_equal 200, request.status
@@ -49,7 +49,7 @@ class AgeCheckTest < WireTest
     assert_equal 200, paid.status, paid.body
 
     events = Kiosk.configuration.event_store.since(shopper.user_id, 0).select { _1["topic"] == "kyc_verification" }
-    assert_empty Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)
+    assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)
     reachable = Kiosk::Server::Events.fetch("kyc_verification")[:subject_reachable]
     owner    = Kiosk::Identity.new(user_id: shopper.user_id, role: "customer", actor: "agent", agent_id: shopper.agent_id)
     stranger = Kiosk::Identity.new(user_id: SecureRandom.uuid, role: "customer", actor: "agent", agent_id: SecureRandom.uuid)

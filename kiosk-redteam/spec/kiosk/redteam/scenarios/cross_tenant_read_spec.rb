@@ -6,7 +6,7 @@ require_relative "support"
 RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
   subject(:scenario) { described_class.new }
 
-  let(:client) { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
+  let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
 
   # Profile with per_user_query and create_owned
   let(:profile) do

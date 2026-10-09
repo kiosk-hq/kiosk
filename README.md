@@ -85,7 +85,7 @@ settled the `alpha` engine underneath it is.
 | `kiosk-rls` | Opt-in RLS DSL + migration helpers; declares policies in a migration and compiles them to PostgreSQL DDL | alpha |
 | `kiosk-server` | Rails engine, routes, kiosk-pop auth surface, executor | alpha |
 | `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server — **once the gems are published**; today it is one `github:` line, see [Install](#install) | alpha |
-| `kiosk-test-support` | Shared test helpers, factories, RSpec matchers | alpha |
+| `kiosk-test-support` | Conformance checks, the assistant-side wire client and a KYC provider stand-in for tests | alpha |
 
 ### Plugins & adapters
 

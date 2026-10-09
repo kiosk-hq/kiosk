@@ -38,7 +38,7 @@ module Kiosk
           return skip_verdict("no per_user_query") unless profile.per_user_query
           return skip_verdict("no create_owned")   unless profile.create_owned
 
-          a = register_principal(client, name: "redteam-ctr-a", profile:)
+          a = client.register!
           owned_ref = profile.create_owned.call(client, a)
           owned_id  = owned_ref[:id].to_s
 
@@ -56,7 +56,7 @@ module Kiosk
             )
           end
 
-          b = register_principal(client, name: "redteam-ctr-b", profile:)
+          b = client.register!
           resp = client.query(b, name: profile.per_user_query)
 
           # B's query must be ANSWERED and merely not contain A's row. A non-2xx

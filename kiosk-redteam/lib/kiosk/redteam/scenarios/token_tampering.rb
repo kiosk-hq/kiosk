@@ -44,14 +44,14 @@ module Kiosk
             )
           end
 
-          b = register_principal(client, name: "redteam-tt-b", profile:)
+          b = client.register!
 
           tampered = tamper_token(b.token)
 
           # Use the tampered token to call any endpoint (query or a dummy run).
           # We craft a minimal principal that carries the tampered bearer token
           # but still has a valid RSA key (so sign_mandate would work if called).
-          tampered_principal = Principal.new(
+          tampered_principal = Kiosk::TestHelpers::Assistant::Principal.new(
             agent_id: b.agent_id,
             user_id:  b.user_id,
             token:    tampered,

@@ -5,7 +5,7 @@ require "kiosk/test_helpers/descriptor_examples"
 
 RSpec.describe "discovering this origin", :wire do
   def get(path)
-    status, body = Kiosk::Redteam::Wire.new(base_url: live_url).get_json(path)
+    status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
     expect(status).to eq(200), "GET #{path} with no credential"
     body
   end

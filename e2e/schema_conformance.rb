@@ -49,7 +49,7 @@
 require "json"
 require "json_schemer"
 require "net/http"
-require "kiosk/redteam/wire"
+require "kiosk/test_helpers/wire"
 require "uri"
 # The RESERVED wire names, read from the engine rather than restated (§4). Its
 # own requires are `date`, `time`, `rack` and `kiosk/server/errors` — all
@@ -170,7 +170,7 @@ end
 
 def get(path, headers = {})
   uri = URI("#{SERVER}#{path}")
-  res = Kiosk::Redteam::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
   [res.code.to_i, res.body]
 end
 
@@ -178,7 +178,7 @@ def post(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
   req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
   req.body = body
-  res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   [res.code.to_i, res.body]
 end
 

@@ -65,7 +65,7 @@ require "uri"
 require "date"
 
 BASE_URL = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
+ISSUER   = BASE_URL
 
 # Dates far enough in the future to avoid conflicts with existing data.
 # Each redteam run starts with a clean DB (db:reset), so these are stable.
@@ -255,7 +255,7 @@ class TamperedPriceCart < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-price-a", profile:)
+    a = client.register!
     owned = profile.create_owned.call(client, a)
     m = profile.pay_for.call(client, a, owned)
 
@@ -286,7 +286,7 @@ class InflatedTotalCart < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-total-a", profile:)
+    a = client.register!
     owned = profile.create_owned.call(client, a)
     m = profile.pay_for.call(client, a, owned)
     # pay_for's line items sum to total_cents; inflate the total only.
@@ -330,7 +330,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a        = register_principal(client, name: "redteam-uuid-a", profile:)
+    a        = client.register!
     failures = []
     statuses = []
 
@@ -434,8 +434,8 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-dbl-a", profile:)
-    b = register_principal(client, name: "redteam-dbl-b", profile:)
+    a = client.register!
+    b = client.register!
     failures = []
     statuses = []
 
@@ -558,7 +558,7 @@ module RawWire
     headers["Authorization"] = "Bearer #{principal.token}" if principal
     req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
     req.body = JSON.generate(body) if body
-    res = Kiosk::Redteam::Wire.http_for(uri).request(req)
+    res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
     [res, (JSON.parse(res.body) rescue {})]
   end
 end
@@ -640,7 +640,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a         = register_principal(client, name: "redteam-shapes", profile:)
+    a         = client.register!
     @failures = []
     prop, room = live_pair(client, a)
 
@@ -849,7 +849,7 @@ class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-unregistered-verb", profile:)
+    a = client.register!
 
     probes = %w[query run].flat_map do |name|
       [[a, ""], [nil, " (anon)"]].map do |principal, tag|
@@ -891,7 +891,7 @@ class MethodMismatch < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a = register_principal(client, name: "redteam-method-mismatch", profile:)
+    a = client.register!
 
     probes = [
       [:get,  "/kiosk/reserve_room", nil],
@@ -956,7 +956,7 @@ class PastStay < Kiosk::Redteam::Scenario
   end
 
   def call(client, profile)
-    a        = register_principal(client, name: "redteam-paststay-a", profile:)
+    a        = client.register!
     found    = FIND_AVAILABLE.call(client, a)
     prop_id  = found[:prop]["property_id"]
     room_id  = found[:room]["room_type_id"]

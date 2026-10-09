@@ -17,7 +17,7 @@ class CollabTest < WireTest
 
   def todos(who, zone: nil) = client.query(who, name: "list_todos", list_id: @list_id, headers: clock(zone)).body.index_by { _1["todo_id"] }
   def clock(zone) = zone ? { "Kiosk-Timezone" => zone } : {}
-  def stream(who) = Kiosk::Redteam::EventStream.new(base_url: live_url, token: who.token)
+  def stream(who) = Kiosk::TestHelpers::Assistant::Events.new(base_url: live_url, token: who.token)
 
   test "an invited assistant joins the list, and each todo names the assistant that added it" do
     alices_todo = add_todo(@alice, title: "Book campsite")
@@ -94,6 +94,6 @@ class CollabTest < WireTest
     delivered = [live, any_list, back, bobs_stream].flat_map(&:events)
     [any_list, back, bobs_stream].each(&:close)
     assert_equal %w[list_membership todo], delivered.map { _1["topic"] }.uniq.sort
-    assert_empty Kiosk::Redteam::EventStream.payload_errors(wire.get_json("/kiosk/schema").last, delivered)
+    assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(wire.get_json("/kiosk/schema").last, delivered)
   end
 end

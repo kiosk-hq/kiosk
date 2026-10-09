@@ -35,7 +35,7 @@ class CourierStatesTest < ActiveSupport::TestCase
     assert_predicate order.reload, :delivered?
     arrived = events_since(head).sole
     assert_equal({ "order_id" => order.id, "status" => "delivered" }, arrived["data"])
-    assert_empty Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), [left, arrived])
+    assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), [left, arrived])
     assert_kiosk_answer_matches_declared_schema :my_orders, as: @shopper
 
     head = @events.head

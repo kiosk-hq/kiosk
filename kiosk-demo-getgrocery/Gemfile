@@ -23,7 +23,6 @@ gem "kiosk-kyc-prove",    path: "../kiosk-kyc-prove"
 gem "kiosk-user-idp-devise", path: "../kiosk-user-idp-devise"
 
 group :development, :test do
-  gem "kiosk-redteam", path: "../kiosk-redteam"
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 end
 
@@ -33,4 +32,9 @@ group :test do
   # and that data access is scoped to the calling principal. `test/` wires the
   # Minitest adapter; the RSpec adapter ships in the same gem and needs no other.
   gem "kiosk-test-support", path: "../kiosk-test-support"
+end
+
+# The attack battery: script/redteam_suite.rb.
+group :development do
+  gem "kiosk-redteam", path: "../kiosk-redteam", require: false
 end

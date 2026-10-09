@@ -18,7 +18,7 @@ class StuckPayingTest < ActiveSupport::TestCase
   end
 
   setup do
-    Stripe.api_base = Kiosk::Redteam::StripeMock.start
+    Stripe.api_base = Kiosk::TestHelpers::StripeMock.start
     @shopper = User.create!
     @banana  = Product.create!(sku: "banana", name: "Banana", price_cents: 149, stock: 80)
   end
@@ -62,7 +62,7 @@ class StuckPayingTest < ActiveSupport::TestCase
 
     healed = Kiosk.configuration.event_store.since(@shopper.id, head)
     assert_equal [charged.id, settled.id].sort, healed.map { _1["subject"] }.sort
-    assert_empty Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), healed)
+    assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), healed)
   end
 
   test "a retried pay on an order with a receipt heals it instead of charging again" do

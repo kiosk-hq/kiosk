@@ -5,7 +5,7 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "kiosk/test_helpers/live_server"
-require "kiosk/redteam"
+require "kiosk/test_helpers/assistant"
 
 # The categories enum is read from the table, which every wire test reseeds.
 Kiosk::Server::SchemaSlots.refresh_seconds = 0
@@ -26,9 +26,9 @@ class WireTest < ActiveSupport::TestCase
 
   PASSWORD = "philslist-demo-password"
 
-  def client = @client ||= Kiosk::Redteam::Client.new(base_url: live_url)
+  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
 
-  def register = client.register!(name: "seller")
+  def register = client.register!
 
   def post_listing(seller, **listing)
     posted = client.run(seller, name: "post_listing", category_slug: "furniture", title: "Bookshelf", body: "Pine", **listing)
@@ -37,7 +37,7 @@ class WireTest < ActiveSupport::TestCase
   end
 
   def published(path)
-    status, body = Kiosk::Redteam::Wire.new(base_url: live_url).get_json(path)
+    status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
     assert_equal 200, status, "GET #{path} with no credential"
     body
   end

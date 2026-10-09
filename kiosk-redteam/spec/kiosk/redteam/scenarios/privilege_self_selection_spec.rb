@@ -7,7 +7,7 @@ require_relative "support"
 RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
   subject(:scenario) { described_class.new }
 
-  let(:client)  { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
+  let(:client)  { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
   let(:profile) { minimal_profile }
 
   # A JWS whose payload carries the given role claim (signature is irrelevant —

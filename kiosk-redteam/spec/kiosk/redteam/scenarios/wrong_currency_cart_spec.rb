@@ -6,7 +6,7 @@ require_relative "support"
 RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart do
   subject(:scenario) { described_class.new }
 
-  let(:client)  { Kiosk::Redteam::Client.new(base_url: BASE_URL) }
+  let(:client)  { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
   let(:profile) { minimal_profile(currency: "eur", pay_for: pay_for_callable) }
 
   describe "#call — non-vacuity" do

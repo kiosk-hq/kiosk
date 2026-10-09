@@ -5,7 +5,7 @@ ENV["RAILS_ENV"] ||= "test"
 require_relative "../config/environment"
 require "rails/test_help"
 require "kiosk/test_helpers/live_server"
-require "kiosk/redteam"
+require "kiosk/test_helpers/assistant"
 
 # Drives this origin over HTTP as an assistant does. The query toll is off
 # unless a test turns it on; registration is tolled as shipped.
@@ -19,11 +19,11 @@ class WireTest < ActiveSupport::TestCase
 
   def toll(policy) = Kiosk.configuration.reputation_policy = policy
 
-  def client = @client ||= Kiosk::Redteam::Client.new(base_url: live_url)
+  def client = @client ||= Kiosk::TestHelpers::Assistant.new(base_url: live_url)
 
-  def wire = @wire ||= Kiosk::Redteam::Wire.new(base_url: live_url)
+  def wire = @wire ||= Kiosk::TestHelpers::Wire.new(base_url: live_url)
 
-  def register = client.register!(name: "diner")
+  def register = client.register!
 
   def open_tables(diner) = client.query(diner, name: "availability", party_size: 2).body
 

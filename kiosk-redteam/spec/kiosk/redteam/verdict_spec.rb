@@ -4,7 +4,7 @@ require "spec_helper"
 
 RSpec.describe "Kiosk::Redteam.blocked?" do
   def response(status, body = {})
-    Kiosk::Redteam::Response.new(status:, body:)
+    Kiosk::TestHelpers::Wire::Response.new(status:, body:)
   end
 
   # ── Explicit block statuses ──────────────────────────────────────────────

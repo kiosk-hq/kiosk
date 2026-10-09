@@ -29,8 +29,8 @@ module Kiosk
           return skip_verdict("no pay_for")      unless profile.pay_for
           return skip_verdict("no create_owned") unless profile.create_owned
 
-          a = register_principal(client, name: "redteam-mr-a", profile:)
-          b = register_principal(client, name: "redteam-mr-b", profile:)
+          a = client.register!
+          b = client.register!
 
           owned_ref = profile.create_owned.call(client, a)
           mandates  = profile.pay_for.call(client, a, owned_ref)
@@ -38,7 +38,7 @@ module Kiosk
           # Capture A's raw JWS before submitting (including the payment mandate).
           intent_jws  = client.sign_mandate(a, mandates[:intent])
           cart_jws    = client.sign_mandate(a, mandates[:cart])
-          payment     = client.build_payment_mandate(a, cart: mandates[:cart])
+          payment     = client.payment_mandate(a, cart: mandates[:cart])
           payment_jws = client.sign_mandate(a, payment)
 
           # A pays legitimately (consuming the mandate).

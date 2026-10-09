@@ -31,11 +31,15 @@ gem "kiosk-reputation",         path: "../kiosk-reputation"
 gem "kiosk-user-idp-devise",    path: "../kiosk-user-idp-devise"
 
 group :development, :test do
-  gem "kiosk-redteam", path: "../kiosk-redteam"
   # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
   gem "debug", platforms: %i[ mri windows ], require: "debug/prelude"
 end
 
 group :test do
   gem "kiosk-test-support", path: "../kiosk-test-support"
+end
+
+# The attack battery: script/redteam_suite.rb.
+group :development do
+  gem "kiosk-redteam", path: "../kiosk-redteam", require: false
 end

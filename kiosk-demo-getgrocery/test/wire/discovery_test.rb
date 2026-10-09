@@ -5,7 +5,7 @@ require "kiosk/test_helpers/descriptor_examples"
 
 class DiscoveryTest < WireTest
   def get(path)
-    status, body = Kiosk::Redteam::Wire.new(base_url: live_url).get_json(path)
+    status, body = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json(path)
     assert_equal 200, status, "GET #{path} with no credential"
     body
   end

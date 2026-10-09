@@ -42,7 +42,7 @@ mass-claim prime-time two-tops to resell. Kiosk prices that at the door:
   holds both.
 
 An assistant sees and cancels only its own bookings: `test/wire/isolation_test.rb`
-and `test/wire/redteam_test.rb` assert that a cross-tenant read, a cross-owner cancel and
+and `script/redteam_suite.rb` assert that a cross-tenant read, a cross-owner cancel and
 a forged `user_id` are each refused.
 
 ## What an operator adds

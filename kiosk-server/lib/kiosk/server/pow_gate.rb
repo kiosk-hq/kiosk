@@ -5,111 +5,27 @@ require "json"
 
 module Kiosk
   module Server
-    # PoW challenge-response gate.
-    #
-    # Called by {WireController#execute_wire} AFTER identity resolution and
-    # BEFORE {Executor.call}, so it stands in front of every endpoint that
-    # reaches the executor: each declared verb, through {VerbController}, and
-    # the reserved `pay`, through {WireController#pay}. When
-    # `Kiosk.configuration.reputation_policy` is nil
-    # (the default), {.gate} returns `:proceed` immediately — zero overhead,
-    # no `kiosk-reputation` references evaluated. This is the invariant that
-    # keeps all existing tests, demos, and e2e flows byte-for-byte unchanged.
-    #
-    # == Soft dependency on kiosk-reputation
-    #
-    # `kiosk-server` does NOT hard-require `kiosk-reputation` at load time.
-    # References to `Kiosk::Reputation::*` only appear inside the policy-present
-    # branch of {.gate}. A host that sets `reputation_policy` is expected to
-    # have `kiosk-reputation` (and its configured backend) already loaded; if it
-    # isn't, {.gate} raises {Errors::ConfigurationError} with a clear message.
-    #
-    # == Anti-DoS cheap-before-expensive ordering
-    #
-    # On a submitted proof, `Kiosk::Reputation::Challenge.verify` enforces:
-    #   1. HMAC sig + request-fingerprint binding (cheap constant-time compare)
-    #   2. Expiry check (integer compare)
-    #   3. Parameter re-derivation: the challenge must name the alg/params this
-    #      server's live config demands right now, not merely params we once
-    #      signed (see the `expect:` argument below)
-    #   4. Equihash backend eval (at n=168 k=7: ~18 ms + KB of RAM for a VALID
-    #      proof — memory is the asymmetry, since SOLVING the same proof costs
-    #      the reference numpy solver ~1.3 GiB. That is THAT solver's
-    #      sorted-nonce table, not a floor (n=168, k=7) imposes on every
-    #      solver — a memory-optimised solver trades the table for time,
-    #      which is how Equihash 200/9's real footprint fell to ~144 MB.)
-    # A flood of forged, expired or off-spec proofs is rejected at step 1/2/3
-    # without burning a backend evaluation. Cheap-before-expensive holds INSIDE
-    # step 4 too: the backend checks structure before hashing and folds
-    # the tree as it hashes, so a proof that gets this far and is simply wrong
-    # costs ~0.3 ms, not the full ~18 ms.
-    #
-    # == Spent-id set
-    #
-    # Valid proofs are recorded in `config.pow_spent_store`, by default the
-    # database table every process shares ({PowSpentStores::ActiveRecord}).
+    # The proof-of-work toll, in front of every verb that reaches the executor.
+    # With no `reputation_policy` it returns `:proceed` and touches nothing;
+    # `kiosk-reputation` is required only when a policy is set.
     module PowGate
       module_function
 
-      # Compute the request fingerprint used for challenge binding. The spec
-      # requires every challenge to be request-bound (§10, §15.2) and leaves the
-      # digest itself to the operator; this is the one the engine computes:
-      #
-      #     SHA256("<METHOD> <verb>\n<canonical args>")
-      #
-      # It covers the HTTP METHOD, the VERB NAME as it appears in the path,
-      # and the canonical (key-order-independent) JSON serialisation of the
-      # arguments. The proof travels in the `Kiosk-PoW` HEADER, NOT in the
-      # body, so all three are identical at issue time (no proof) and verify
-      # time (proof in the header) — the fingerprint matches on retry.
-      #
-      # WHY METHOD AND VERB. On this wire the verb name is a PATH SEGMENT and
-      # the method carries the read/write fork, so both are properties of the
-      # request itself rather than of its body — which is what lets the digest
-      # reach them directly. A proof solved for `GET /catalog?city=Lisbon` is
-      # therefore spendable on nothing else: not on `POST /catalog`, not on
-      # another verb with the same arguments.
-      #
-      # @param method [String] the HTTP request method ("GET", "POST", …)
-      # @param verb   [String, Symbol] the wire verb name (the path segment)
-      # @param body   [Hash, nil] the arguments
-      # @return [String] SHA-256 hex digest
+      # §10, §15.2: SHA256("<METHOD> <verb>\n<canonical args>"), so a proof is
+      # spendable on this request only. The proof rides in a header, not the body.
       def request_fingerprint(method:, verb:, body:)
         Digest::SHA256.hexdigest(
           "#{method.to_s.upcase} #{verb}\n#{canonical_json(body || {})}"
         )
       end
 
-      # Gate a request through the reputation policy.
-      #
-      # @param identity [Kiosk::Identity]
-      # @param command  [String, Symbol]  the gate/POLICY verb — one of
-      #   {Executor::VERBS}; this is what `reputation_factors` and
-      #   `Policy#challenge_for` branch on, and it is NOT what the fingerprint
-      #   binds to
-      # @param method   [String]          the HTTP request method — half of the
-      #   request fingerprint
-      # @param verb     [String, Symbol]  the WIRE verb name (the path segment)
-      #   — the other half
-      # @param body     [Hash, nil]       the verb args (the proof rides in the header, never here)
-      # @param pow      [Array, Hash, nil] proof(s) parsed from the `Kiosk-PoW` header, or nil
-      #
-      # @return [:proceed]  when the request may proceed to {Executor}
-      # @raise  [Errors::PowRequired]       (HTTP 402) when a challenge must be solved
-      # @raise  [Errors::Forbidden]         (HTTP 403) when a submitted proof is invalid
-      # @raise  [Errors::ConfigurationError] when the policy is set but pow_secret is
-      #   missing, or the difficulty it demands is one no proof could satisfy
+      # `command` is the policy verb ({Executor::VERBS}); `verb` is the wire name
+      # the fingerprint binds.
       def gate(identity:, command:, body:, pow:, method: "POST", verb: nil)
         config = Kiosk.configuration
         policy = config.reputation_policy
 
-        # ── Fast path (default, nil policy) ──────────────────────────────────
-        # No kiosk-reputation references evaluated here, and no store, secret or
-        # backend is touched: an origin that has configured no policy pays
-        # nothing for this gate standing in front of every verb.
         return :proceed if policy.nil?
-
-        # ── Policy present: guard checks ─────────────────────────────────────
 
         unless defined?(::Kiosk::Reputation)
           raise Errors::ConfigurationError,
@@ -124,13 +40,11 @@ module Kiosk
             "Set: Kiosk.configure { |c| c.pow_secret = ENV.fetch('KIOSK_POW_SECRET') }"
         end
 
-        # ── Ask the policy ───────────────────────────────────────────────────
-
         fp      = request_fingerprint(method: method, verb: verb || command, body: body)
         factors = config.reputation_factors.call(identity: identity, verb: command.to_sym)
         spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
 
-        return :proceed if spec.nil?  # policy decided not to challenge this request
+        return :proceed if spec.nil?
 
         result = enforce(
           spec:         spec,
@@ -141,14 +55,7 @@ module Kiosk
           on_bad_proof: -> { config.on_bad_proof.call(identity: identity) },
         )
 
-        # ── Post-verify hook (duck-typed, opt-in) ────────────────────────────
-        # We only reach here when `enforce` verified the submitted proof(s)
-        # without raising (a real solve). Policies that define
-        # #on_proof_verified (e.g. the count-based Backoff strategy) use this to
-        # record the solve — e.g. grant the identity N ungated follow-up calls.
-        # Duck-typed: a policy without the hook (RateAndReputation, the base
-        # Policy, …) is completely unaffected. Never reached on the nil-spec
-        # path above (no enforce ran → no new grant).
+        # Optional policy hook, reached only after a real solve.
         if policy.respond_to?(:on_proof_verified)
           policy.on_proof_verified(identity: identity)
         end
@@ -156,50 +63,22 @@ module Kiosk
         result
       end
 
-      # Verify a set of submitted proofs against a `spec` bound to `fingerprint`,
-      # or raise to demand them. Shared by the reputation gate ({.gate}) and the
-      # registration gate ({RegistrationPow}), which differ only in how they
-      # derive `spec`/`fingerprint` and whether a principal exists yet.
-      #
-      # @param spec         [Hash]     `{alg:, params:, count:}` (count defaults to 1)
-      # @param fingerprint  [String]   request fingerprint the challenges bind to
-      # @param pow          [Hash, nil] submitted proof(s)
-      # @param secret       [String]   HMAC key for challenge sig
-      # @param config       [Kiosk::Configuration]
-      # @param on_bad_proof [#call]    invoked on a cryptographically invalid proof
-      # @return [:proceed]
-      # @raise  [Errors::PowRequired] (402) when more valid proofs are needed
-      # @raise  [Errors::Forbidden]   (403) on a bad-faith (wrong) proof
-      # @raise  [Errors::ConfigurationError] when `spec` names a difficulty the
-      #   registered backend refuses
+      # Shared by {.gate} and {RegistrationPow}.
       def enforce(spec:, fingerprint:, pow:, secret:, config:, on_bad_proof:)
-        # ── Is this difficulty answerable at all? ─────────────────────────────
-        # Before anything is minted or verified. `spec` comes from operator
-        # configuration — the policy's `challenge_for`, or
-        # `config.registration_pow_params` — and nothing between here and the
-        # wire re-reads it, so a degenerate `{n: 0}` produces challenges that
-        # every honest solve fails. Refuse at the source instead, the way a
-        # missing `pow_secret` already does.
         validate_spec_params!(spec)
 
-        # ── How many independent proofs must this request carry? ──────────────
-        # Equihash has no continuous difficulty dial — escalation is by PROOF
-        # COUNT (N×PoW). Each challenge has a distinct salt, so there is no
-        # amortisation across them. `count` defaults to 1 when spec omits it.
+        # Equihash has no difficulty dial: escalation is by proof count.
         count     = pow_count(spec)
         submitted = extract_proofs(pow)
 
-        # ── No proof submitted — issue `count` fresh, independent challenges ──
         if submitted.empty?
           raise Errors::PowRequired.new(
             challenges: issue_challenges(count, spec, fingerprint, secret, config),
           )
         end
 
-        # ── Proofs submitted — verify each. We need `count` DISTINCT, unspent,
-        #    valid proofs to proceed. A single cryptographically WRONG proof is
-        #    bad faith → 403 immediately.
-        accepted = {} # challenge id => exp (dedup by id; ignores repeats)
+        # `count` distinct, unspent, valid proofs; one wrong proof is a 403.
+        accepted = {}
         submitted.each do |proof|
           challenge = symbolize_keys(proof[:challenge] || proof["challenge"] || {})
           nonce     = proof[:nonce] || proof["nonce"]
@@ -207,11 +86,6 @@ module Kiosk
 
           next if id.nil? || accepted.key?(id)
 
-          # Cheap structural pre-check: a well-formed proof echoes the
-          # challenge object verbatim, `params` included. A missing/non-Hash
-          # `params` would blow up in the challenge sig computation
-          # (`nil.sort_by`) as an HTTP 500 — reject it here as a clean 400,
-          # before the claim or any hash work.
           unless challenge[:params].is_a?(Hash)
             raise Errors::BadRequest.new(
               "malformed PoW proof: challenge.params is missing or not an object",
@@ -220,24 +94,10 @@ module Kiosk
           end
 
           # Atomically claim the id as spent BEFORE the expensive verify.
-          # The FIRST of N racing submitters of one valid proof wins the claim
-          # and proceeds; the losers get false and treat it as a replay — a
-          # replayed/already-spent proof does not count toward the quota, but it
-          # is NOT bad faith (an at-least-once HTTP retry may resend a served
-          # proof), so skip it without penalty. Claiming before the verify also
-          # means a bad proof's id is consumed: one issued challenge can drive
-          # at most one verify.
+          # A lost claim is a replay: skipped, not penalised.
           next unless config.pow_spent_store.claim(id, challenge[:exp].to_i)
 
-          # Cheap sig + expiry + parameter checks first (inside
-          # Challenge.verify), then the one cheap backend eval.
-          #
-          # `expect` is the alg/params THIS request's `spec` just re-derived
-          # from live config (the policy, or `config.registration_pow_params`
-          # for register) — the same source `issue_challenges` mints from.
-          # Passing it means a challenge is honoured only at the difficulty the
-          # server demands right now, not merely at the difficulty its HMAC
-          # says we once minted.
+          # `expect`: honoured only at the difficulty live config demands now.
           outcome = ::Kiosk::Reputation::Challenge.verify(
             challenge:            challenge,
             nonce:                nonce,
@@ -252,41 +112,19 @@ module Kiosk
             accepted[id] = challenge[:exp].to_i
           when :bad_proof
             on_bad_proof.call
-            # The id stays CLAIMED (consumed): a proof that reached the backend
-            # had a valid sig + live expiry, i.e. it targeted a real issued
-            # challenge — burning it is what stops one free challenge from
-            # fuelling unlimited garbage-proof verifies.
-            #
-            # A bare "wrong" is a dead end — an agent that hand-rolled its own
-            # Equihash solver gets this 403 with nothing to act on. Name the
-            # ONE recovery step (run the shipped solver) without naming WHICH
-            # check failed: the construction stays out of band, and the agent
-            # is steered away from both improvised solvers and the unvetted
-            # PyPI packages it otherwise reaches for.
+            # The id stays consumed, so one challenge drives at most one verify.
             raise Errors::Forbidden.new("invalid proof of work", hint: POW_INVALID_HINT)
           when :expired, :bad_sig, :bad_params
-            # Doesn't count; falls through to a fresh re-challenge below if the
-            # quota isn't met. No on_bad_proof (honest clock skew / retry). The
-            # sig didn't authenticate this challenge (or it is already dead), so
-            # release the claim — never retain a forged-sig id (it would let an
-            # attacker fill the spent store with junk exp anchors).
-            #
-            # :bad_params joins them deliberately: a challenge naming off-spec
-            # difficulty is either OURS from before a difficulty change (an
-            # honest client, owed a fresh challenge at the new params — 402,
-            # never 403) or forged with a leaked secret (which a 402 loop denies
-            # just as effectively, at no cost to us since no hash loop ran).
+            # Not bad faith (clock skew, a difficulty change): release the claim
+            # and re-challenge below.
             config.pow_spent_store.release(id)
           end
         end
 
         if accepted.size >= count
-          # Quota met: the accepted ids stay claimed → single-use is enforced.
           :proceed
         else
-          # Quota unmet: release the valid-but-insufficient proofs so a follow-up
-          # retry (which is re-issued fresh challenges) is not blocked by our own
-          # claim — preserving the no-burn-on-partial-submission property.
+          # Released, so the retry with fresh challenges is not blocked by our own claim.
           accepted.each_key { |id| config.pow_spent_store.release(id) }
           raise Errors::PowRequired.new(
             challenges: issue_challenges(count, spec, fingerprint, secret, config),
@@ -294,30 +132,8 @@ module Kiosk
         end
       end
 
-      # Parse the PoW proof(s) out of the `Kiosk-PoW` request HEADER. The proof
-      # is carried in a header, NOT in the request body: the body is ONLY verb
-      # args, so the challenge fingerprint binds to the plain body untouched,
-      # and a GET (schema) can carry its proof too — a body is not available on
-      # a GET.
-      #
-      # `raw` is the raw header value — for repeated same-name headers Rack joins
-      # them with "\n" (`env["HTTP_KIOSK_POW"]`), so we split on "\n" first, then
-      # normalise each line into an array of proofs. The forms accepted, all
-      # flattening to one proofs list (b3 dual-accept):
-      #   * one proof         `Kiosk-PoW: {"challenge":…,"nonce":…}`
-      #   * a JSON array       `Kiosk-PoW: [{…},{…}]`
-      #   * repeated lines     `Kiosk-PoW: {A}` / `Kiosk-PoW: {B}` (joined by "\n")
-      #   * comma-combined     `Kiosk-PoW: {A},{B}` (RFC 7230 lets a proxy
-      #     comma-join duplicate headers) — wrapping in `[…]` makes it a JSON array
-      # Raw minified JSON is used (no base64): a minified proof is all-VCHAR /
-      # no-newline, a valid HTTP header value.
-      #
-      # Returns `nil` when the header is absent/blank (the initial request must
-      # still receive its normal 402 challenge). Malformed JSON raises
-      # {Errors::BadRequest} with a hint naming the header + expected shape.
-      #
-      # @param raw [String, nil] the raw `Kiosk-PoW` header value (`HTTP_KIOSK_POW`)
-      # @return [Array<Hash>, nil] a flat list of proofs, or nil when absent
+      # One proof, a JSON array, repeated header lines (Rack joins them with
+      # "\n") or comma-joined ones; nil when absent.
       def proofs_from_header(raw)
         return nil if raw.nil?
 
@@ -333,19 +149,12 @@ module Kiosk
 
         proofs.empty? ? nil : proofs
       rescue JSON::ParserError
-        # The json gem's own parser text is deliberately NOT appended:
-        # it is that library's sentence rather than this protocol's, it moves
-        # when the dependency is upgraded, and it echoes the caller's own bytes
-        # back on a header path reachable before any credential is presented.
-        # POW_HEADER_HINT already names the shape the header must have.
         raise Errors::BadRequest.new(
           "malformed Kiosk-PoW header",
           hint: POW_HEADER_HINT,
         )
       end
 
-      # Human-readable description of the expected Kiosk-PoW header shape,
-      # echoed in the 400 hint: name the shape so the agent can self-correct.
       POW_HEADER_HINT =
         "the Kiosk-PoW header carries the proof(s) as raw minified JSON: a single " \
         "proof {\"challenge\": <the challenge object from the 402, echoed verbatim>, " \
@@ -354,27 +163,12 @@ module Kiosk
         "work. Solve every challenge issued in the pow_required 402 and echo it " \
         "back verbatim."
 
-      # The published reference solver, unversioned. First-party (kiosk.tech)
-      # so skill and solver come from ONE origin we control, and deliberately
-      # NOT the content-addressed URL the skill pins: a server naming a solver
-      # does not know which skill cut its caller read, so it names the copy
-      # that is allowed to move and lets the skill supply the digest.
-      # It is the ONE place in this gem the URL is written, because {WellKnown} renders it into `/auth.md`
-      # too and a second literal is a second thing to keep in step.
+      # Unversioned: the server cannot know which skill cut its caller read.
       POW_SOLVER_URL = "https://kiosk.tech/pow/solve.py"
 
-      # Hint on the 403 raised for a cryptographically WRONG proof.
-      # Sibling of POW_HEADER_HINT: that one names the SHAPE a malformed proof
-      # must take (400), this one names the TOOL a wrong proof must be produced
-      # with (403). Deliberately says nothing about the Equihash construction,
-      # the parameters, or which of the verifier's checks failed — the only
-      # actionable fact is «use the shipped solver», and the solver itself is
-      # the executable spec.
       POW_INVALID_HINT =
         "solve with the reference solver at #{POW_SOLVER_URL} — " \
         "a hand-written Equihash solver will not match this verifier"
-
-      # ── Internal helpers (all module_function so they're callable from above) ──
 
       def blank?(obj)
         obj.nil? || (obj.respond_to?(:empty?) && obj.empty?)
@@ -391,16 +185,6 @@ module Kiosk
         )
       end
 
-      # Raise unless the registered backend accepts `spec`'s parameters.
-      #
-      # {Errors::ConfigurationError}, not a 4xx: no caller chose these values
-      # and no caller can correct them. The message names the two places a
-      # `spec` comes from, because the raise happens inside the gate and the
-      # defect is in the operator's configuration.
-      #
-      # Backends that do not implement `.valid_params?` are unconstrained, and
-      # `Backends.valid_params?` answers true for them — so this method is a
-      # no-op for every backend but equihash today, by design.
       def validate_spec_params!(spec)
         alg    = spec[:alg]    || spec["alg"]
         params = spec[:params] || spec["params"]
@@ -414,31 +198,17 @@ module Kiosk
           "your reputation_policy returns from #challenge_for."
       end
 
-      # Number of independent proofs the policy demands for this request.
-      # Defaults to 1 (single-proof) when the spec omits `count`. Floored at 1.
       def pow_count(spec)
         n = (spec[:count] || spec["count"] || 1).to_i
         n < 1 ? 1 : n
       end
 
-      # Issue `count` independent challenges — each gets its own random salt and
-      # id (via Challenge.issue defaults) but binds to the SAME request
-      # fingerprint, so all N must be solved to prove work for THIS request.
-      #
-      # The per-challenge TTL scales with `count`: a slow honest client solving
-      # N proofs sequentially must not have the first challenge expire before it
-      # reaches the last one. TTL = pow_ttl * count (min pow_ttl at count 1).
+      # TTL scales with `count`, so the first expires no sooner than the last is solved.
       def issue_challenges(count, spec, fp, secret, config)
         ttl = config.pow_ttl * [count, 1].max
         Array.new(count) { issue_challenge(spec, fp, secret, ttl) }
       end
 
-      # Normalise the submitted `pow` field into a list of `{challenge:, nonce:}`
-      # proofs. Accepts:
-      #   * plural:   { proofs: [ {challenge:, nonce:}, ... ] }  (N×PoW wire)
-      #   * singular: { challenge:, nonce: }                     (N=1 convenience)
-      #   * a bare Array of proofs
-      # Returns [] for anything blank/unrecognised.
       def extract_proofs(pow)
         return [] if blank?(pow)
         return pow if pow.is_a?(Array)
@@ -451,8 +221,6 @@ module Kiosk
         []
       end
 
-      # Recursively serialise a value to JSON with all Hash keys sorted.
-      # This ensures the fingerprint is key-order-independent.
       def canonical_json(obj)
         case obj
         when Hash

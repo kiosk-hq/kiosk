@@ -2,56 +2,19 @@
 
 require "jwt"
 require "openssl"
-require "rails" # Rails.logger, in #log_audience_mismatch
+require "rails"
 
 module Kiosk
   module Server
-    # Verifies an agent's proof-of-possession JWS for the auth handshake.
-    #
-    # A public key proves nothing on its own — it is public. The agent proves
-    # control of the matching PRIVATE key by signing a compact RS256 JWS whose
-    # payload carries:
-    #
-    #   aud   — the origin the agent actually dialed. MUST equal this provider's
-    #           issuer/origin. This is the relay defense: a signature produced
-    #           for provider M cannot be replayed at provider L, because L checks
-    #           aud == L. Same audience-binding principle as the mandate `iss`
-    #           guard (see {MandateVerifier}); modelled on WebAuthn origin
-    #           binding — the agent binds the origin IT connected to, not one
-    #           echoed back by the server.
-    #   nonce — the single-use challenge from GET /auth/challenge. Freshness +
-    #           anti-replay; bound to this key by {AuthChallengeStore}.
-    #   pub   — RFC 7638 thumbprint of the presented public key (binds the proof
-    #           to this exact key). Optional but verified when present.
-    #   jti   — unique id.
-    #
-    # Returns the symbol-keyed payload on success; raises an {Errors::Base}
-    # subclass otherwise. Does NOT touch the challenge store — the caller burns
-    # the nonce via {AuthChallenge.consume!} only after a clean verify.
+    # Verifies an agent's proof-of-possession JWS: RS256 by the presented key,
+    # `aud` equal to this origin (the relay defence), and the challenge `nonce`.
+    # The caller burns the nonce only after a clean verify.
     module PopVerifier
-      # Hint on the 401 raised for an audience mismatch.
-      #
-      # It names NO origin — not the configured issuer, not any other host.
-      # The previous wording appended "(this provider is <issuer>)", which
-      # handed the caller a concrete `aud` value read out of a RESPONSE. That
-      # is the exact move the audience binding exists to stop: a hostile server
-      # could answer any handshake with "(this provider is <bank>)", and a
-      # helpful agent would sign a fresh PoP for <bank> with its own key and
-      # post it back — a signature the hostile server then replays at <bank>'s
-      # /auth/login for full account takeover. Echoing an origin the caller did
-      # not dial is only ever safe when it equals the origin the caller dialed,
-      # and this module cannot observe that (see {.log_audience_mismatch}), so
-      # it echoes nothing at all. The agent already knows the one correct
-      # value: the origin it typed into its own request URL.
+      # Names no origin: an echoed one is what a relaying server would exploit.
       AUDIENCE_HINT =
         "sign `aud` = the origin you connected to, taken from your own request " \
         "URL — never from a value echoed back in a response"
 
-      # The claims a proof MUST carry, named ONCE so the decode below and the
-      # hint the wire publishes cannot drift apart. The JWT gem's own
-      # "Missing required claim …" wording is not published: it is that
-      # library's sentence, not this protocol's, and this path is reachable
-      # before any credential is presented.
       PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
 
       PROOF_CLAIMS_HINT =
@@ -103,11 +66,7 @@ module Kiosk
         logger ? logger.warn(message) : warn(message)
       end
 
-      # Parse the presented public key, rejecting anything that isn't a usable
-      # RSA-2048+ public key with a clear client error rather than a raw crash.
-      # Public: the account-binding surface (POST /oauth/device_authorization,
-      # POST /auth/claim) reuses this exact check so the key floor cannot
-      # drift between registration and binding.
+      # Also the key floor of account binding.
       def load_public_key(pem)
         rsa = OpenSSL::PKey::RSA.new(pem)
         if rsa.n.num_bits < SigningKey::MIN_KEY_BITS
@@ -117,8 +76,6 @@ module Kiosk
         end
         rsa
       rescue OpenSSL::PKey::PKeyError
-        # OpenSSL's error text names its own internals and is not published
-        # here; the hint names what a usable key looks like instead.
         raise Errors::BadRequest.new(
           "invalid public key",
           hint: "send a PEM-encoded RSA public key of at least " \

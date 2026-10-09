@@ -4,13 +4,8 @@ require "jwt"
 
 module Kiosk
   module Server
-    # Verifies a KYC attestation JWS, submitted by an assistant or by the
-    # provider's callback, against `kyc_public_key` (RS256):
-    #
-    #   { sub: <user_id>, level: "verified", iss: <kyc_issuer>, aud: <kyc_audience>,
-    #     iat:, exp:, attributes: { <name>: true, ... } }   # attributes optional
-    #
-    # `iss`, `aud`, `sub` (as Strings) and `level` must match; only attributes
+    # Verifies a KYC attestation JWS against `kyc_public_key`: `iss`, `aud`,
+    # `sub` and `level: "verified"` must match; only attributes
     # that are literally `true` are granted.
     module KycVerifier
       # Named once for the decode and the published hint.
@@ -18,12 +13,6 @@ module Kiosk
 
       module_function
 
-      # @param raw_jws [String] compact JWS string
-      # @param subject [String] the principal the attestation must name
-      # @return [Hash] symbol-keyed payload claims on success
-      # @raise [Errors::Forbidden]       on any verification failure
-      # @raise [Errors::ModuleNotServed] when no `kyc_public_key` is configured,
-      #   i.e. this origin does not serve the KYC module at all
       def verify(raw_jws:, subject:)
         config = Kiosk.configuration
         key    = config.kyc_public_key

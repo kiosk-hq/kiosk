@@ -5,11 +5,8 @@ require "kiosk/server/wire_controller"
 
 module Kiosk
   module Server
-    # POST <endpoint>/kyc/callback — the KYC provider reports an approved
-    # verification: `{request_id, nonce, kyc_jws}`. Server to server, so it is
-    # authenticated by the open request, its nonce and the signed attestation,
-    # never by a session. `POST <endpoint>/request_kyc` is an ordinary verb,
-    # served by {VerbController}.
+    # POST <endpoint>/kyc/callback — the KYC provider reports an approval.
+    # Authenticated by the open request, its nonce and the signed attestation.
     class KycCallbackController < WireController
       def create
         Kyc.served!

@@ -6,40 +6,16 @@ require "kiosk/uuid_check"
 
 module Kiosk
   module Server
-    # The operator half of §11.6, as a decorator over the PSP adapter.
-    #
-    # Before the capture it claims the operator's own payable row, `unpaid →
-    # paying`, with one conditional UPDATE: a second `pay` for that row, on any
-    # mandate chain, matches nothing and is refused before the processor is
-    # reached. When the capture returns it flips the row to `paid`, so the paid
-    # state the operator publishes rests on the capture and not on the
-    # settlement row the engine writes after it. A definitive decline releases
-    # the claim; an unknown outcome keeps it, so the row reads *pending* until
-    # it is resolved.
-    #
-    # Under the claim it checks the signed cart: the operator's currency, priced
-    # lines that sum to the total, and a total equal to the operator's own price
-    # for the row, which `c.cart_price_checker` answers from its catalog:
-    #
-    #   c.payment_provider = Kiosk::Server::PaymentClaim.new(
-    #     psp, currency: "eur", table: "bookings", reference: "booking_id",
-    #          query: "my_bookings",
-    #   )
-    #   c.cart_price_checker = PriceChecker            # call(booking_id, lines) → cents | refusal
-    #   c.after_payment      = ->(id) { Booking.paid!(id) }   # optional
+    # §11.6 over a PSP adapter: claims the operator's payable row `unpaid →
+    # paying` before the capture, checks the cart against the operator's price,
+    # and flips the row to `paid` once the capture returns.
     class PaymentClaim
       PAYING = "paying"
       PAID   = "paid"
 
-      # @param psp the PSP adapter that captures
-      # @param currency [String] the one currency this operator prices in
-      # @param table [String] the operator's payable table, which has `id uuid`
-      #   and `updated_at`
+      # @param table [String] the payable table, with `id uuid` and `updated_at`
       # @param reference [String] the cart line-item key naming the row, e.g. "order_id"
       # @param query [String] the per-user query that publishes the row's payment state
-      # @param status_column [String]
-      # @param unpaid [String] the status a payable row waits in
-      # @param owner_column [String] the row's owner; a principal pays only for its own rows
       def initialize(psp, currency:, table:, reference:, query:, status_column: "payment_status",
                      unpaid: "unpaid", owner_column: "user_id")
         @psp           = psp

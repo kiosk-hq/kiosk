@@ -2,55 +2,12 @@
 
 module Kiosk
   module Server
-    # Equihash proof-of-work gate for agent registration (`POST /auth/register`).
-    #
-    # Pricing fresh identity minting is optional: when
-    # `config.registration_pow_count` is 0 (the default) {.gate} returns
-    # immediately. When > 0, registration must carry `count` valid Equihash
-    # proofs, using the SAME challenge machinery as the reputation gate
-    # ({PowGate} + `Kiosk::Reputation::Challenge`) — one PoW, one wire format.
-    #
-    # The challenges bind to the public key being registered (via the request
-    # fingerprint), so a proof solved for one key cannot be reused for another,
-    # and there is no principal yet, so a bad proof cannot be attributed to a
-    # reputation record — it is simply rejected (403).
-    #
-    # == Anti-DoS: one challenge → at most one verify
-    #
-    # This gate runs UNAUTHENTICATED, before PopVerifier, so a caller can take a
-    # free 402 challenge and resubmit it with a valid HMAC sig but garbage
-    # indices. {PowGate.enforce} claims the challenge id atomically BEFORE the
-    # equihash verify, so a bad proof CONSUMES its challenge: a replay of
-    # the same id is turned away with a fresh re-challenge (402) without a second
-    # verify. One issued challenge therefore drives at most one hash-loop verify.
-    #
-    # What each of those verifies COSTS is bounded too: the Equihash verifier
-    # checks cheapest-first and hashes lazily, so a garbage proof stops at the
-    # first tree node that does not cancel — 0.30 ms measured at n=168 k=7,
-    # against ~18 ms for a real proof. A verifier that hashed eagerly would
-    # charge the full ~18 ms for garbage, which is the asymmetry an attacker
-    # wants.
-    #
-    # Both bound the cost PER REQUEST, neither bounds the request RATE — a
-    # caller who keeps taking fresh 402s keeps buying verifies, and at
-    # WEB_CONCURRENCY=1 a plain flood of any endpoint saturates the worker
-    # anyway. Bounding the rate is the operator's half, and it is REQUIRED, not
-    # optional: an edge rate-limit in front of the app (see deploy/Caddyfile and
-    # deploy/README.md "Edge rate-limit"). No setting in this gem substitutes
-    # for it.
+    # Optional proof-of-work toll on `POST /auth/register`, bound to the key
+    # being registered. It bounds the cost per request, not the rate: an edge
+    # rate limit is required (deploy/README.md "Edge rate-limit").
     module RegistrationPow
       module_function
 
-      # @param public_key_pem [String]         the key being registered (normalised)
-      # @param pow            [Array, nil] submitted proof(s) parsed from the
-      #   `Kiosk-PoW` header (a flat list of `{challenge:, nonce:}`), or nil
-      # @param config         [Kiosk::Configuration]
-      # @return [void]
-      # @raise  [Errors::PowRequired]       (402) when valid proofs are needed
-      # @raise  [Errors::Forbidden]         (403) on a bad-faith proof
-      # @raise  [Errors::ConfigurationError] when the gate is on but misconfigured —
-      #   kiosk-reputation absent, `pow_secret` unset, or `registration_pow_params`
-      #   naming a difficulty no proof could satisfy (raised by {PowGate.enforce})
       def gate(public_key_pem:, pow:, config: Kiosk.configuration)
         count = config.registration_pow_count.to_i
         return if count <= 0
@@ -70,8 +27,6 @@ module Kiosk
 
         params = config.registration_pow_params || ::Kiosk::Pow::Equihash.params
         spec   = { alg: "equihash", params: params, count: count }
-        # Bind the challenges to THIS public key — a proof for one key is useless
-        # for another. `pow` is excluded from the fingerprint (added on retry).
         fp = PowGate.request_fingerprint(method: "POST", verb: "auth/register",
                                          body: { public_key: public_key_pem })
 
@@ -81,7 +36,7 @@ module Kiosk
           pow:          pow,
           secret:       secret,
           config:       config,
-          on_bad_proof: -> {}, # no principal yet — nothing to penalise
+          on_bad_proof: -> {},
         )
         nil
       end

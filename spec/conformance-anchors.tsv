@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1895 anchors.
+# 1900 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -359,9 +359,10 @@ kiosk-demo-getgrocery/README.md	# kiosk-demo-getgrocery
 kiosk-demo-getgrocery/README.md	(the cart must be EUR, mirror the order at catalog prices, and sum correctly),
 kiosk-demo-getgrocery/README.md	**Honest scope:** the operator validates **format and zone only**.
 kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
+kiosk-demo-getgrocery/README.md	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
 kiosk-demo-getgrocery/README.md	bin/rails demo:reconcile   # settles orders stuck in `paying`; it reports, it does not assert
 kiosk-demo-getgrocery/README.md	local stripe-mock; export `STRIPE_MOCK_URL=http://localhost:12111` to boot the
-kiosk-demo-getgrocery/README.md	silently booked. `test/delivery_slots_test.rb` and `test/wire_arguments_test.rb`
+kiosk-demo-getgrocery/README.md	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def create_order
@@ -369,7 +370,11 @@ kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	WireArgumen
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
+kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	    arrival = DeliverySlots::DRIVE.from_now
 kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	class CourierDispatchJob < ApplicationJob
+kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	order.update!(dispatch_at: [rand(DeliverySlots::PICKING).minutes.from_now, order.slot_at].max)
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	  DRIVE   = 5.minutes
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	  PICKING = 20..30 # minutes
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	def zone_for(district) = Time.find_zone!(DublinZones::ZONES.fetch(district))
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE < at
 kiosk-demo-getgrocery/app/models/dublin_zones.rb	# The clock of each served district.
@@ -543,10 +548,10 @@ kiosk-demo-prove/README.md	## The three legs
 kiosk-demo-prove/README.md	- **Bound, single-use, TTL'd claim.** The claim binds to (subject + operator +
 kiosk-demo-prove/README.md	- **No replay across operators.** The claim carries `operator`/`aud`; the
 kiosk-demo-prove/README.md	The broker mounts **no** Kiosk wire at all — neither of the two reserved
-kiosk-demo-prove/README.md	and defaults to that origin (`https://kyc.demo.kiosk.tech`); the public
 kiosk-demo-prove/README.md	bundle exec rspec      # the broker's own suite; CI runs exactly this
 kiosk-demo-prove/README.md	operator → broker (server-to-server)
-kiosk-demo-prove/README.md	verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake request's own
+kiosk-demo-prove/README.md	public verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake
+kiosk-demo-prove/README.md	required in production; development and test set `https://kyc.test.local`. The
 kiosk-demo-prove/README.md	| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", expires_at}` |
 kiosk-demo-prove/app/controllers/verifications_controller.rb	        # The callback echoes it, so the operator can tell it from a replay.
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    # The audience is the registered operator's, never the body's.
@@ -621,8 +626,7 @@ kiosk-demo-skooti/test/wire/rental_test.rb	assert_not once.unlock(token:, now:),
 kiosk-demo-stylish/README.md	- **Roles from a configured IdP** — stylish has two entrances: a **visitor** books a service off the menu, and
 kiosk-demo-stylish/README.md	- **The AGENT-IdP seam** (`c.agent_idp`) is **not** one of them: this demo sets **nothing**
 kiosk-demo-stylish/README.md	- A `book_appointment` Action + an `availability`/`service_menu` query — an **evergreen service menu**: a smal
-kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-dept
-kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table); RLS available as optional defense-in-depth
+kiosk-demo-stylish/README.md	- App-layer data isolation (two users, two views of the same table)
 kiosk-demo-stylish/README.md	- Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its
 kiosk-demo-stylish/README.md	- Authenticated REST wire surface — **one endpoint per verb**: a query is a `GET /kiosk/<query-name>` with its arguments in the query string
 kiosk-demo-stylish/README.md	- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, asserted by `test/wire/binding_test.rb`
@@ -1885,6 +1889,7 @@ kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def pay_action(name, 
 kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def query(sql)
 kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def run_action(name, **args)
 kiosk-test-support/lib/kiosk/test_helpers/journey.rb	      def run_query(name, **args)
+kiosk-test-support/lib/kiosk/test_helpers/live_server.rb	# Serves the app over HTTP from the test process, on a free port that
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def pay_action(name, args)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def query(sql)
 kiosk-test-support/lib/kiosk/test_helpers/null_executor.rb	      def run_action(name, args)

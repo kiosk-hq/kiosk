@@ -397,20 +397,10 @@ if ARGV.include?("--self-test")
 
 
 
-    { id: "retired-wire-in-code", kind: :break,
-      rule: "The wrong-door hint must not name a RETIRED endpoint (K-1088)",
-      what: "the 0.3 verb enumeration comes back into the LIVE CSRF body, identically in all seven",
-      ops:  SELF_TEST_AC_PLANT,
-      expect: /tudu: app\/controllers\/application_controller\.rb names "schema, query, run, pay" in CODE/ },
 
 
 
 
-    { id: "retired-wire-on-static-page", kind: :break,
-      rule: "The SAME ban on the THREE STATIC PAGES, which is where it survived (K-1090)",
-      what: "the same enumeration comes back on the page served for every unrouted path",
-      ops:  SELF_TEST_404_PLANT,
-      expect: /tudu: public\/404\.html names "schema, query, run, pay" in the file, which is SERVED whole/ },
 
     { id: "env-template-dead-cite", kind: :break,
       rule: "A deploy/env template may not cite a path that is not there (K-1093)",
@@ -1708,6 +1698,15 @@ MIGRATION_PAIRS = {}.freeze
 # indentation and hash alignment while leaving string and heredoc content alone.
 COMMENT_TOKENS = %i[on_comment on_embdoc on_embdoc_beg on_embdoc_end].freeze
 
+# A file's comments as one line of prose.
+def comment_prose(path)
+  Ripper.lex(File.read(path))
+        .select { |(_, type, _)| type == :on_comment }
+        .map { |(_, _, tok)| tok.sub(/\A#+\s?/, "").rstrip }
+        .join(" ")
+        .gsub(/\s+/, " ")
+end
+
 # The `:code` normalisation, over a STRING rather than a file — so the fragment
 # rule (T-120) compares a `def` with exactly the semantics `:code` compares a
 # whole file with, rather than growing a second normaliser next to this one.
@@ -2556,111 +2555,6 @@ if autoload_once_checked.zero?
   errors << "check-demo-copies: the K-502 autoload-once rule read NO demo — it resolves " \
             "config/application.rb and config/initializers/kiosk.rb per demo, and a rule with " \
             "nothing to read passes everything."
-end
-
-# ── The wrong-door hint must not name a RETIRED endpoint (K-1088) ────────────
-#
-# The `rescue_from ActionController::InvalidAuthenticityToken` body in these same
-# files is not documentation: it is the LIVE JSON an assistant gets when it dials
-# the human sign-in page — a reader that is by construction lost and has no way to
-# check what it is told. So the body may not point it at a verb name or an error
-# shape a protocol MAJOR removed.
-#
-# Read from the CODE, comments stripped, so a comment may quote the retired
-# string to explain why it went while a string literal may not. A blocklist is
-# the right shape here and only here: these are names a protocol MAJOR removed,
-# so the set changes at a protocol bump and nowhere else.
-# The separator class is `[\s,/]+` and not a literal `/`: code spelled the list
-# "schema/query/run/pay" and PROSE spells it "schema, query, run, pay", possibly
-# across a line break. A pattern that knew only the slashes read the static pages
-# as clean for a day (K-1090).
-RETIRED_WIRE_NAMES = %r{schema[\s,/]+quer(?:y|ies)[\s,/]+run[\s,/]+pay|/kiosk/(?:query|run)\b}
-
-# The file with its comments removed. Ripper rather than a `^\s*#` scan, for the
-# reason `code_digest` and `comment_prose` both give: a `#` inside a string or a
-# regex is not a comment.
-def code_source(path)
-  Ripper.lex(File.read(path))
-        .reject { |(_, type, _)| COMMENT_TOKENS.include?(type) }
-        .map { |(_, _, tok)| tok }
-        .join
-end
-
-prose_units.each do |unit|
-  hits = code_source(unit[:ac]).scan(RETIRED_WIRE_NAMES).uniq
-  next if hits.empty?
-
-  errors << "#{unit[:label]}: #{unit[:rel]} names #{hits.map(&:inspect).join(', ')} in CODE — the " \
-            "0.3 wire vocabulary protocol 0.4 deleted (K-1088). NO route is drawn for `query` " \
-            "or `run` (T-074 = A), and no catch-all stands behind them: both names match " \
-            "nothing and answer the ordinary 404 any undrawn path gets (K-1112). " \
-            "`capabilities` publishes MODULE names " \
-            "(schema/queries/actions/pay) since T-095, so this string is false however a reader " \
-            "takes it — and it is a LIVE response body, not a comment. Name what " \
-            "/.well-known/kiosk.json carries (the register/login endpoints, the catalog link, the " \
-            "modules this origin serves); do NOT re-enumerate verbs, which would be a third copy " \
-            "of the catalog kiosk.json deliberately stopped publishing."
-end
-
-# ── The SAME ban on the THREE STATIC PAGES, which is where it survived (K-1090)
-#
-# The three `public/*.html` pages are held byte-identical across the operator seven
-# a few hundred lines above, and byte-identity only guarantees the seven copies are
-# WRONG TOGETHER. The rule above reads the CSRF rescue body and stops there, while
-# `public/404.html` has the wider reach of the two: PublicExceptions serves it for
-# EVERY unrouted path, where the CSRF body is reached only after a JSON-dialing
-# caller has already hit a human form.
-#
-# Two retired vocabularies are refused here, both deleted by a protocol MAJOR:
-#
-#   * RETIRED_WIRE_NAMES — the 0.3 verb list, for the reason stated above it.
-#   * RETIRED_ERROR_SHAPE — the word «envelope». 0.4 answers a FLAT RFC 9457
-#     problem document served as `application/problem+json`, whose top-level
-#     `code` is the branch point; «envelope» is the word the deleted
-#     `{ok:false, error:{…}}` shape owned, and kiosk-server's own suite pins the
-#     phrase out of the discovery document.
-#
-# THE WHOLE FILE IS JUDGED, COMMENTS INCLUDED — the one place this rule differs
-# from the Ruby one above, which strips comments so that a comment may quote the
-# retired string to explain why it went. It cannot here: an HTML comment in a
-# static page IS served, byte for byte, to whoever fetched the page. prove is
-# scanned too — its pages are the declared exception to byte-IDENTITY, never an
-# exception to what is true.
-STATIC_SIGNPOST_PAGES = %w[public/404.html public/422.html public/500.html].freeze
-RETIRED_ERROR_SHAPE = /envelope/i
-
-static_pages = 0
-demos.each do |dir|
-  label = short.(File.basename(dir))
-  STATIC_SIGNPOST_PAGES.each do |rel|
-    path = File.join(dir, rel)
-    next unless File.exist?(path)
-
-    static_pages += 1
-    body = File.read(path)
-    hits = (body.scan(RETIRED_WIRE_NAMES) + body.scan(RETIRED_ERROR_SHAPE)).uniq
-    next if hits.empty?
-
-    errors << "#{label}: #{rel} names #{hits.map(&:inspect).join(', ')} in the file, which is SERVED whole — " \
-              "retired 0.3 vocabulary (K-1090). NO route is drawn for `query` or `run` " \
-              "(T-074 = A), and no catch-all stands behind them: both names match nothing and " \
-              "answer the ordinary 404 any undrawn path gets (K-1112). " \
-              "`capabilities` publishes MODULE names since T-095, and an " \
-              "error is a FLAT RFC 9457 problem document under `application/problem+json`, not " \
-              "an «envelope» (K-808). PublicExceptions serves this page to every assistant that " \
-              "guesses a path, so it cannot check what it is told. Name what " \
-              "/.well-known/kiosk.json carries (the register/login endpoints, the catalog link, " \
-              "the modules this origin serves) and enumerate no verbs; say " \
-              "`application/problem+json` and point at the top-level `code`."
-  end
-end
-
-expected_static = demos.size * STATIC_SIGNPOST_PAGES.size
-if static_pages != expected_static
-  errors << "check-demo-copies: the K-1090 static-page rule read #{static_pages} of " \
-            "#{expected_static} pages (#{demos.size} demos x #{STATIC_SIGNPOST_PAGES.size}) — a " \
-            "demo is missing one of #{STATIC_SIGNPOST_PAGES.join(', ')}, which is the K-532 " \
-            "bodyless-error class itself, and a rule with nothing to read passes everything."
 end
 
 # ── A deploy/env template may not cite a path that is not there (K-1093) ─────

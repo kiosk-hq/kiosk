@@ -22,75 +22,30 @@ To run one of this demo's own tasks instead of the server:
 docker compose run --rm app bin/rails <task>
 ```
 
-The list below is the HOST path — what running `bin/rails demo:*` on your own machine
-needs. It is not shorter under containers; it is unnecessary.
+On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install` — the floor every kiosk gem declares in its `required_ruby_version`.
-- **Postgres**, reachable — `pg_isready` returns OK — with `psql` on PATH: the demo tasks shell out to it directly, not only through ActiveRecord.
-- **python3 with numpy** — check with `python3 -c "import numpy"`. Registering an assistant pays an Equihash toll, and every task that registers one solves it with the bundled `solve.py`; without numpy the solver exits `this solver requires numpy` and the task fails at its first step.
+- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Postgres**, reachable — `pg_isready` returns OK.
+- **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
+- **stripe-mock** on PATH for the tests — `brew install stripe-mock`.
 
-> **`demo:setup` is destructive, and every task that depends on it inherits that.**
-> It runs `db:drop db:create db:schema:load db:seed` unconditionally — no environment
-> check, no confirmation prompt — so running it **DROPS and recreates**
-> `kiosk_getgrocery_development`. Nothing you left in that database survives.
-> `KIOSK_GETGROCERY_DB` overrides that name in development too, so an export points the drop
-> at whatever it names.
-> The SERVER is `localhost`, read from the same `config/database.yml` — unless
-> `PGHOST` is exported, and then it is whatever host that names: the drop
-> follows it, and takes that server's `kiosk_getgrocery_development` instead.
->
-> Under `docker compose` the same drop still happens on every `up`, but it lands on the
-> Postgres that compose brings up, on this project's own volume. It cannot reach a
-> database on your machine: the compose file sets `PGHOST` to the container beside it
-> rather than passing yours through.
->
-> **`check:conformance` DROPS A DIFFERENT DATABASE.** It runs the same
-> `db:drop db:create` under `RAILS_ENV=test`, so what it **DROPS and recreates**
-> is `kiosk_getgrocery_test` — the `test:` database, not `kiosk_getgrocery_development`.
->
-> `bin/setup` is the shortcut, and it inherits the drop: `bundle install`, then `bin/rails demo:setup`, then `bin/rails log:clear tmp:clear`, then `bin/dev`.
->
-> **AND ONE TASK DROPS A SECOND DATABASE, IN ANOTHER DEMO.** `check:agecheck`
-> boots the app in `kiosk-demo-prove` and sets its database up the same destructive
-> way, so running it also **DROPS and recreates** `kiosk_prove_development`. That is another
-> demo's data, and nothing you left in it survives either.
+From this directory:
 
-## Flows
-
-```sh
-cd kiosk-demo-getgrocery
-bundle install
-bin/setup            # seed, then serve the origin — see "Watch it work" below
-rake demo:setup check:shop   # or assert it instead: no-human register → order (slot+address) → pay
+```
+bin/rails demo:setup       # DROPS and recreates kiosk_getgrocery_development, then seeds the catalog
+bin/dev                    # serves the origin on http://localhost:3000
+bin/rails test             # the tests; CI runs exactly this
+bin/rails demo:reconcile   # settles orders stuck in `paying`; it reports, it does not assert
 ```
 
-Two test directories, and they are different things. `test/` is an ordinary
-Minitest suite — `bin/rails test`, or `rake check:conformance`, which prepares
-the test database first. `test/kiosk_conformance_test.rb` is the CONFORMANCE
-suite: the four properties the protocol makes normative of an origin, asserted
-with the matchers `kiosk-test-support` ships. That is the file to copy when you
-are adding a Kiosk wire to an app of your own; `kiosk-demo-hoteling` is the same
-surface written in RSpec. Beside it sit this shop's own DB-backed regressions,
-which drive a verb through the same GUC-scoped session and assert what it
-answers — `test/create_order_inputs_test.rb` holds `create_order` to placing an
-order and nothing else, so an `order_id` argument is refused by name rather
-than silently ignored.
+`bin/setup` does the first two. The tests drive the origin over HTTP the way an
+assistant does, and the age-check tests boot the KYC broker in
+`kiosk-demo-prove`, which **drops and recreates `kiosk_prove_development`**.
 
-| Task | What it proves |
-|---|---|
-| `rake demo:setup` | idempotent db drop / create / load / seed |
-| `rake check:shop` | no-human happy path: register → catalog → delivery_slots (in-zone Dublin address required; a district-less/out-of-zone address → clean 400) → create_order (delivery slot + in-zone address required) → payment_setup → pay (cart mirrors the order at catalog EUR prices, off_session PaymentIntent) → my_orders (paid) |
-| `rake check:delivery` | the shop's own two transitions, which no call of the assistant's produces: a courier leaves ten to fifteen minutes before the published window and the basket arrives inside it, each pushed on the `order_delivery` topic — the departure carrying the window as its ETA, on the clock the order was quoted on. Asserts the lead lands in `dispatch_at`, that an order the courier holds can no longer be rescheduled, that a delivered basket does not arrive twice, and that a departure whose window moved after it was scheduled defers instead of sending a courier early |
-| `rake check:claim` | claim-rebind: a standalone assistant (own key, own synthetic account, `payment_setup → setup_required`) is re-bound to the seeded human's account after verify-page approval — agent_id stays, user_id remaps, the old order is NOT migrated — then pays a new order with the human's saved card (`payment_setup → ready`) |
-| `rake check:isolation` | adversarial cross-tenant + order-ownership denial |
-| `rake check:schema` | self-discovery over the schema verb |
-| `rake check:redteam` | kiosk-redteam battery — every applicable attack BLOCKED (incl. the cashier-check trio: wrong-currency, tampered-price, inflated-total carts, plus RegistrationWithoutPow — register PoW is on, `registration_pow_count=1`), 3 generic KYC scenarios skip (the age-gate is exercised by `check:agecheck`) |
-| `rake check:agecheck` | alcohol 18+ age-gate via the KYC broker (two-server): alcohol order without KYC → 403 → request_kyc → broker approve → `kyc_verification` event over a real socket, carrying the attestation → submit → 200 → pay; non-alcohol order needs no KYC (200 directly); forged age attestation rejected |
-| `rake check:pow` | catalog-toll PoW at Equihash n=96 k=5: 402 → solve → 200, wrong nonce → 403 |
-| `rake check:race` | pay-path regression (real DB, real threads): an in-flight `/pay` can't have its order's items swapped out from under it — `create_order` names no existing order, so a concurrent expensive cart lands on its own row — and N racing `/pay` capture at most once; a malformed cart `order_id` is a typed 400, not a 500, and a well-formed one `reschedule_delivery` cannot move is a 403; an order stranded in `paying` heals from its settlement row while an unprovable one keeps its claim |
-| `rake check:reconcile` | stuck-`paying` reconciliation against the processor's own answer: charged → the order is `paid`; not charged → the claim is released and the order is `created` and payable again; no answer → UNRESOLVED, the claim kept and the cart-mandate ids reported. A settlement row still heals the order without the processor being asked at all. The first two answers come from a scripted processor — the only way to reach them without moving real money — and then kiosk-pay-stripe's real `ChargeLookup` runs against stripe-mock, whose canned PaymentIntent sits in a status that would release a claim on its own and does not, because it names no cart of ours |
-| `rake demo:reconcile` | **operator utility, not a gate** — it reports rather than asserts, and cannot go red; resolves orders stuck in `paying`, from the settlement row where there is one and from Stripe where there is not — a charge on file flips the order to `paid`, a cancelled or declined one releases the claim, and everything Stripe cannot answer for is listed as UNRESOLVED with the cart-mandate ids to check by hand, never blind-released |
-| `rake check:conformance` | the four properties the protocol makes normative of this origin, through `bin/rails test`: every declared verb resolves to a route with the method its kind requires; the read surface executes as an authenticated principal, running each verb's own published `example_params` where it has one; `catalog`, `my_orders` and `delivery_slots` answer payloads their own `output_schema` accepts; and `my_orders` hands one principal nothing belonging to another — with the positive control that the first principal must actually see something, so a verb that answered everybody with nothing could not pass. It runs the rest of `test/` in the same pass: `create_order` places an order and takes no existing one to amend, so an `order_id` argument is a 400 naming it that writes nothing rather than a silently ignored second billable order, and two ordinary calls are two distinct orders; and the shop's own `out_for_delivery` and `delivered`, written by the courier jobs, reach `my_orders` in the shape it declares; and the seeded account holder's saved card is mapped only against stripe-mock. No server, no PoW, no bearer: it runs in `RAILS_ENV=test` against its own database |
+`test/kiosk_conformance_test.rb` is the file to copy when you add a Kiosk wire
+to an app of your own: the four properties the protocol makes normative of an
+origin, asserted with the matchers `kiosk-test-support` ships.
+`kiosk-demo-hoteling` is the same surface written in RSpec.
 
 ### Watch it work
 
@@ -104,31 +59,6 @@ than silently ignored.
 It discovers the wire, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `hana@example.com` / `getgrocery-demo-password` and approve it there.
-
-Everything under `check:` below asserts and exits non-zero when it breaks; that
-is what CI runs. `demo:setup` prepares the database.
-
-### Which of these run in CI
-
-A `check:` task asserts and goes red; a `demo:` task is one a person runs and
-reads. `.github/workflows/ci.yml` runs the tasks marked **yes** on every push
-and pull request; the rest are local-only, for the reason given.
-
-| Task | Runs in CI | Why not |
-|---|---|---|
-| `demo:setup` | yes — the job's own setup step |  |
-| `demo:reconcile` | no | not a gate — a person runs it and reads the output |
-| `check:conformance` | yes |  |
-| `check:shop` | yes |  |
-| `check:claim` | yes |  |
-| `check:isolation` | yes |  |
-| `check:schema` | yes |  |
-| `check:redteam` | yes |  |
-| `check:race` | yes |  |
-| `check:reconcile` | yes |  |
-| `check:pow` | yes |  |
-| `check:agecheck` | yes |  |
-| `check:delivery` | yes |  |
 
 See `before-after.md` for why AI assistants stall at grocery delivery today and
 what this demo proves.
@@ -208,9 +138,8 @@ delivery address, a slot whose start has already passed *there* is dropped
 and the earliest is tomorrow — correct, not a bug). Future dates keep all slots.
 `create_order`/`reschedule_delivery` re-validate the same rule (consistency): a
 past-start slot for today is rejected with a clean **400 (`bad_request`)**, never
-silently booked. `check:shop` asserts a past slot is both hidden and rejected;
-`test/delivery_slots_test.rb` and `test/wire_arguments_test.rb` pin the filter
-across DST and the caller's declared calendar.
+silently booked. `test/delivery_slots_test.rb` and `test/wire_arguments_test.rb`
+pin the filter across DST and the caller's declared calendar.
 
 ## Age-restricted purchases (anonymized KYC)
 
@@ -220,8 +149,8 @@ completed an 18+ anonymized-KYC check via the shared **KYC broker** (kyc.demo.ki
 (`POST /kiosk/request_kyc` → human approves a broker link → the broker signs
 an anonymized `{age_over_18}` claim → the `kyc_verification` event carries it →
 submit it to `POST /kiosk/agents/kyc`).
-Non-restricted groceries need no KYC. `rake check:agecheck` drives the full
-two-server flow.
+Non-restricted groceries need no KYC. `test/wire/age_check_test.rb` drives the
+full two-server flow.
 
 This age-gate is the **proper home** of anonymized KYC: a low-liability
 *eligibility* check where the transaction closes. Anonymized KYC confirms a
@@ -231,11 +160,9 @@ high-liability actions where the operator needs to know *who* is on the hook.
 (getgrocery is a second broker operator; deploy allow-listing is a follow-up.)
 
 Payments need `STRIPE_SECRET_KEY` (sk_test_…, real test-mode charge) or a
-local stripe-mock — the tasks self-start one when no key is set; export
-`STRIPE_MOCK_URL=http://localhost:12111` to boot the app secret-free.
-`check:claim` always runs against stripe-mock: the human's saved card is a
-seeded `stripe_customers` mapping served by the mock's card fixture, so no
-real customer exists to charge.
+local stripe-mock; export `STRIPE_MOCK_URL=http://localhost:12111` to boot the
+app secret-free, and the seeds then map the shopper's saved card to the mock's
+card fixture. The tests always run against stripe-mock.
 
 A test-mode key, where an operator has one, belongs in this demo's own
 gitignored `mise.toml` (copy `mise.toml.example`) and is for hand-driven demo
@@ -245,6 +172,6 @@ there.
 The human side of the claim ceremony (verify page, link mint, unlink)
 authenticates through a **real Devise session** — `kiosk-user-idp-devise`
 reading the Warden user, the same channel every other demo uses. The seeded
-shopper `hana@example.com` signs in at `/users/sign_in`, and `check:claim`
-drives that form rather than asserting a bearer. Assistants never touch this
+shopper `hana@example.com` signs in at `/users/sign_in`, and
+`test/wire/claim_test.rb` drives that form rather than asserting a bearer. Assistants never touch this
 channel — kiosk-pop key possession is their only credential.

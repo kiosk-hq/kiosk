@@ -1,62 +1,74 @@
 # frozen_string_literal: true
 
-# `bin/rails test` for this demo, which is what an adopting operator reaches for
-# first. The Kiosk pieces are three lines and they are the whole of the wiring:
-# require the engine-backed ORIGIN, require the MINITEST adapter, and hand the
-# one to the other.
-#
-# The origin is what answers the four questions the conformance checks ask —
-# which verbs does this app declare, what does its router say about them, what
-# does a verb answer as a given principal, and does that answer satisfy the
-# schema the verb published. It reads all four from the same places the running
-# server does: the handler registry, `Rails.application.routes`, the registered handler under a
-# GUC-scoped session, and the engine's own response validator.
-#
-# The RSpec spelling is the same three lines with `conformance/rspec` in place
-# of `conformance/minitest` — kiosk-demo-hoteling is the worked example of that
-# half.
-
 ENV["RAILS_ENV"] ||= "test"
+ENV["KIOSK_TEST_AUTOCARD"] = "1"
 
 require_relative "../config/environment"
 require "rails/test_help"
-
 require "kiosk/server/conformance_origin"
 require "kiosk/test_helpers/conformance/minitest"
+require "kiosk/test_helpers/live_server"
+require "kiosk/redteam"
+require "kiosk/redteam/stripe_mock"
 
+# The conformance matchers read this origin from the handler registry, the
+# router and a GUC-scoped session, as the running server does.
 Kiosk::TestHelpers::Conformance.origin = Kiosk::Server::ConformanceOrigin.new
 
 module ActiveSupport
   class TestCase
-    # Not parallelised. Each conformance call opens its own GUC-scoped
-    # transaction on the connection the example is already using, and forked
-    # workers would each need their own seeded database for a scoping assertion
-    # that is about two principals sharing one.
     include Kiosk::TestHelpers::Conformance::Assertions
 
-    # ── What a REGRESSION example needs beside those four matchers ──────────
-    #
-    # The conformance checks ask whether a verb is reachable and whether its
-    # answer has the declared SHAPE. This demo's own examples ask the other
-    # question — what a verb actually ANSWERS, and what it wrote while doing it
-    # — and they reach a handler through the same origin, so the two kinds of
-    # example run against one wiring. Both helpers live here rather than in each
-    # example file so that two files cannot come to disagree about how a refusal
-    # is recognised.
-
-    # The origin this suite is wired to: the registry, the router, and a
-    # GUC-scoped session with the verb's own `input_schema` validated first.
     def kiosk_origin = Kiosk::TestHelpers::Conformance.require_origin!
 
-    # A refusal reaches a caller as the wire's own typed error rather than as a
-    # return value, so an example asserts on the RAISE and reads the `code` off
-    # it. The CODE and not the status: two of this origin's refusals are both
-    # 403, so the status cannot tell them apart.
+    # A refusal carries the wire's own `code`; two of this origin's refusals share 403.
     def assert_kiosk_refused
       error = assert_raises(StandardError) { yield }
-      assert_respond_to error, :code,
-                        "a refusal must carry the wire's own code (got #{error.class})"
+      assert_respond_to error, :code, "a refusal must carry the wire's own code (got #{error.class})"
       error
     end
   end
+end
+
+# Drives this origin over HTTP as an assistant does.
+class WireTest < ActiveSupport::TestCase
+  include Kiosk::TestHelpers::LiveServer
+
+  DELIVERY_ADDRESS = "42 Camden Street, Dublin 2"
+
+  setup { Stripe.api_base = Kiosk::Redteam::StripeMock.start }
+
+  def client = @client ||= Kiosk::Redteam::Client.new(base_url: live_url)
+
+  def register = client.register!(name: "shopper")
+
+  def delivery_date = (Date.current + 1).iso8601
+
+  def catalog(shopper) = client.query(shopper, name: "catalog").body.index_by { _1["sku"] }
+
+  def create_order(shopper, skus, delivery_slot_id: 1, **args)
+    client.run(shopper, name: "create_order", items: skus.map { { sku: _1, qty: 1 } },
+                        delivery_slot_id:, delivery_date:, delivery_address: DELIVERY_ADDRESS, **args)
+  end
+
+  def order(shopper, *skus)
+    placed = create_order(shopper, skus)
+    assert_equal 200, placed.status, placed.body
+    placed.body.merge("skus" => skus)
+  end
+
+  # The cart mirrors the order: its id, then every item at the catalog price.
+  def pay(shopper, order)
+    now   = Time.now.to_i
+    total = order.fetch("total_cents")
+    lines = order.fetch("skus").map { { sku: _1, qty: 1, price_cents: Product.find_by!(sku: _1).price_cents } }
+    mandate = { user_id: shopper.user_id, agent_id: shopper.agent_id, iss: live_url, currency: "eur",
+                iat: now, exp: now + 600 }
+    intent = mandate.merge(id: SecureRandom.uuid, scope: "grocery", cap_amount_cents: total)
+    cart   = mandate.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: total,
+                           line_items: [{ order_id: order.fetch("order_id") }] + lines)
+    client.pay(shopper, intent:, cart:)
+  end
+
+  def my_order_ids(shopper) = client.query(shopper, name: "my_orders").body.map { _1["order_id"] }
 end

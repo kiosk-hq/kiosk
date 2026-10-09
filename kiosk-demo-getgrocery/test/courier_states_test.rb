@@ -2,33 +2,62 @@
 
 require "test_helper"
 
-# THE TWO STATES THE SHOP WRITES ON ITS OWN reach `my_orders` in the shape it
-# declares. {CourierDispatchJob} and {OrderDeliveredJob} are the only writers of
-# `out_for_delivery` and `delivered`, and no call of the assistant's produces
-# either, so the `status` enum is held against the writers themselves rather
-# than against a fixture that copies the constant.
+# The shop's own two transitions: the courier leaves `courier_lead_seconds`
+# before a paid order's window opens, and the basket arrives as it opens.
 class CourierStatesTest < ActiveSupport::TestCase
+  LEAD = 2 * 60 * 60
+
   setup do
     @shopper = User.create!(email: "courier@example.test", password: "conformance-fixture-password")
-    @order   = Order.create!(user: @shopper, status: "paid", total_cents: 449,
-                             slot_at: Time.current + 3600, address: "1 Dame Street, Dublin 2",
-                             timezone: DeliverySlots::DEFAULT_ZONE_NAME)
-    # A lead longer than the distance to the window, so the courier is due at once.
     @lead = Rails.configuration.x.getgrocery.courier_lead_seconds
-    Rails.configuration.x.getgrocery.courier_lead_seconds = 2 * 60 * 60
+    Rails.configuration.x.getgrocery.courier_lead_seconds = LEAD
+    @events = Kiosk.configuration.event_store
   end
 
-  teardown do
-    Rails.configuration.x.getgrocery.courier_lead_seconds = @lead
+  teardown { Rails.configuration.x.getgrocery.courier_lead_seconds = @lead }
+
+  def paid_order(window) = Order.create!(user: @shopper, status: "paid", total_cents: 449, slot_at: window,
+                                         address: "1 Dame Street, Dublin 2", timezone: DeliverySlots::DEFAULT_ZONE_NAME)
+
+  def events_since(head) = @events.since(@shopper.id, head)
+
+  test "a courier due before the window leaves at once, with the window as its ETA, and the basket then arrives" do
+    window = 1.hour.from_now.change(usec: 0)
+    order  = paid_order(window)
+    head   = @events.head
+
+    CourierDispatchJob.arm!(order.id)
+    order.reload
+    assert_equal ["out_for_delivery", window - LEAD], [order.status, order.dispatch_at]
+    left = events_since(head).sole
+    assert_equal ["order_delivery", order.id], left.values_at("topic", "subject")
+    assert_equal({ "order_id" => order.id, "status" => "out_for_delivery", "eta" => window.utc.iso8601,
+                   "eta_label" => DeliverySlots.label(window, DeliverySlots.default_zone),
+                   "timezone" => DeliverySlots::DEFAULT_ZONE_NAME }, left["data"])
+    assert_not Order.reschedulable.exists?(order.id), "a basket the courier carries cannot be moved"
+    assert_kiosk_answer_matches_declared_schema :my_orders, as: @shopper
+
+    head = @events.head
+    OrderDeliveredJob.new.perform(order.id)
+    assert_equal "delivered", order.reload.status
+    arrived = events_since(head).sole
+    assert_equal({ "order_id" => order.id, "status" => "delivered" }, arrived["data"])
+    assert_empty Kiosk::Redteam::EventStream.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), [left, arrived])
+    assert_kiosk_answer_matches_declared_schema :my_orders, as: @shopper
+
+    head = @events.head
+    OrderDeliveredJob.new.perform(order.id)
+    assert_empty events_since(head), "a delivered basket does not arrive twice"
   end
 
-  test "an order out for delivery, then delivered, answers the declared shape" do
-    CourierDispatchJob.arm!(@order.id)
-    assert_equal "out_for_delivery", @order.reload.status
-    assert_kiosk_answer_matches_declared_schema :my_orders, as: @shopper
+  test "a window days away arms a courier that does not leave, even when an old schedule fires" do
+    order = paid_order(2.days.from_now)
+    CourierDispatchJob.arm!(order.id)
+    assert_operator order.reload.dispatch_at, :>, Time.current
 
-    OrderDeliveredJob.new.perform(@order.id)
-    assert_equal "delivered", @order.reload.status
-    assert_kiosk_answer_matches_declared_schema :my_orders, as: @shopper
+    head = @events.head
+    CourierDispatchJob.new.perform(order.id)
+    assert_equal "paid", order.reload.status
+    assert_empty events_since(head)
   end
 end

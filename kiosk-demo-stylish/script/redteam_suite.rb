@@ -135,8 +135,7 @@ ISSUER = ENV.fetch("KIOSK_ISSUER")
 # them is the column the Devise adapter reads through `User#kiosk_role`; there
 # is no second, role-carrying channel.
 #
-# Emails and password arrive in the environment from the rake task, the way
-# check:binding's HOLDER_EMAIL / HOLDER_PASSWORD do — never as literals here.
+# Emails and password arrive in the environment, never as literals here.
 OWNER_ID      = "00000000-0000-0000-0000-0000000000a0"
 OWNER_EMAIL   = ENV.fetch("OWNER_EMAIL")
 ALICE_EMAIL   = ENV.fetch("ALICE_EMAIL")
@@ -187,9 +186,9 @@ abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no bound
 
 # ── Fixture: A books an appointment (target for cross-tenant probes) ──────────
 rc, salons = WIRE.get_json("/kiosk/salons", {}, ALICE.bearer)
-abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run rake demo:setup" unless rc == 200
+abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run bin/rails demo:setup" unless rc == 200
 salon_id = Array(salons).first&.fetch("salon_id")
-abort "no salons seeded — run rake demo:setup" unless salon_id
+abort "no salons seeded — run bin/rails demo:setup" unless salon_id
 
 rc, appt_a = WIRE.post_json(
        "/kiosk/book_appointment",

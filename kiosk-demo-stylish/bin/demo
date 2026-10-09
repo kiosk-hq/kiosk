@@ -1,192 +1,75 @@
 #!/usr/bin/env bash
-# Kiosk demo walkthrough — a curl-driven tour of the wire surface.
+# A curl tour of a running stylish origin (bin/dev): binding, discovery, queries,
+# a booking, and isolation between two humans' assistants.
 #
-# Run via `rake check:walkthrough` (after `rake demo:setup`), or directly when
-# the demo database is already prepared.
+#   bin/demo                                   # the origin bin/dev serves
+#   SERVER_URL=http://localhost:3005 bin/demo  # any other
 
 set -euo pipefail
 
 APP_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PORT="${KIOSK_DEMO_PORT:-3005}"
-SERVER_URL="http://127.0.0.1:$PORT"
-
-# The seeded humans this walkthrough acts for (db/seeds.rb). Their ASSISTANTS'
-# tokens are minted below, after the server is up, by running the real binding
-# ceremony — see the "Binding" heading. There is no self-asserted bearer this
-# script could write down instead: the demo carries no parser for one, so the
-# walkthrough does the same thing a real assistant does to get a token.
-# The slot this walkthrough books, COMPUTED rather than written down.
-# `book_appointment` refuses an instant that has already passed, so a calendar
-# literal here ages into a 400 on the walkthrough's headline action. `date -v`
-# is BSD/macOS and `date -d` is GNU; trying both is the portable idiom and keeps
-# this script free of a Ruby boot just to add thirty days.
-DEMO_SLOT="$(date -u -v+30d '+%Y-%m-%dT14:00:00Z' 2>/dev/null \
-             || date -u -d '+30 days' '+%Y-%m-%dT14:00:00Z')"
-
-ALICE_EMAIL="${ALICE_EMAIL:-alice@example.com}"
-BOB_EMAIL="${BOB_EMAIL:-bob@example.com}"
-DEMO_PASSWORD="${DEMO_PASSWORD:-combette-demo-password}"
+SERVER_URL="${SERVER_URL:-http://localhost:3000}"
+DEMO_PASSWORD="combette-demo-password"
+# book_appointment refuses a slot that has passed, so the slot is a month ahead.
+DEMO_SLOT="$(date -u -v+30d '+%Y-%m-%dT14:00:00Z' 2>/dev/null || date -u -d '+30 days' '+%Y-%m-%dT14:00:00Z')"
 
 heading() { printf "\n\033[1;36m── %s ──\033[0m\n" "$1"; }
 step()    { printf "\n  \033[1;33m▶\033[0m %s\n" "$1"; }
-say()     { printf "  %s\n" "$1"; }
-fail()    { printf "\n  \033[1;31m✗ %s\033[0m\n" "$1" >&2; exit 1; }
 
-cleanup() {
-  if [[ -n "${SERVER_PID:-}" ]]; then
-    kill "$SERVER_PID" 2>/dev/null || true
-    wait "$SERVER_PID" 2>/dev/null || true
-  fi
-}
-trap cleanup EXIT
+for tool in curl jq; do
+  command -v "$tool" >/dev/null || { echo "missing: $tool" >&2; exit 1; }
+done
 
-require_tool() {
-  command -v "$1" >/dev/null 2>&1 \
-    || { echo "missing: $1 — install it then re-run" >&2; exit 1; }
-}
-require_tool curl
-require_tool jq
-
-# The wire: one endpoint per verb. A query is a GET whose arguments are the
-# query string; an action is a POST whose arguments are the JSON body. A success
-# body IS the result — no envelope to unwrap, so no `.rows`/`.value` below.
-#   q  <token> <query-name> [query-string]
+# A query is a GET with its arguments in the query string; an action is a POST
+# with its arguments as the JSON body. The body IS the result.
+#   q   <token> <query-name>
 #   run <token> <action-name> <json-body>
-q()   { curl -sS "$SERVER_URL/kiosk/$2${3:+?$3}" -H "Authorization: Bearer $1"; }
-run() { curl -sS -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
+q()   { curl -sSf "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1"; }
+run() { curl -sSf -X POST "$SERVER_URL/kiosk/$2" -H "Authorization: Bearer $1" \
           -H "Content-Type: application/json" -d "$3"; }
 
-# Bind one assistant to one seeded human and print its access token.
-#
-# There is no shortcut left to take: script/bound_assistant.rb runs the shipped
-# ceremony over real HTTP — the Equihash-tolled /kiosk/auth/register, the
-# human's own /users/sign_in form, /kiosk/auth/link, /kiosk/auth/claim — and
-# the token that comes back is one this provider minted for a key it saw.
-# ~a second per assistant, most of it the Equihash toll and the RSA keygen.
+# Register a fresh assistant, sign the human in, link, claim; print its token.
 #   bind <email>
 bind() {
-  SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$SERVER_URL" \
-  HOLDER_EMAIL="$1" HOLDER_PASSWORD="$DEMO_PASSWORD" \
+  SERVER_URL="$SERVER_URL" HOLDER_EMAIL="$1" HOLDER_PASSWORD="$DEMO_PASSWORD" \
     bundle exec ruby -r"$APP_ROOT/script/bound_assistant" -e '
-      puts bind_assistant(server:   ENV.fetch("SERVER_URL"),
-                          issuer:   ENV.fetch("KIOSK_ISSUER"),
-                          email:    ENV.fetch("HOLDER_EMAIL"),
-                          password: ENV.fetch("HOLDER_PASSWORD")).token
+      puts bind_assistant(server: ENV["SERVER_URL"], issuer: ENV["SERVER_URL"],
+                          email: ENV["HOLDER_EMAIL"], password: ENV["HOLDER_PASSWORD"]).token
     '
 }
 
-# ─── boot ────────────────────────────────────────────────────────────
-
-heading "Starting stylish (the demo provider, serving Combette on Park) on port $PORT"
-KIOSK_ISSUER="$SERVER_URL" \
-  bundle exec rails s -p "$PORT" -b 127.0.0.1 -e development \
-  >/tmp/kiosk-demo.log 2>&1 &
-SERVER_PID=$!
-
-for _ in $(seq 1 30); do
-  if curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null 2>&1; then
-    say "✓ Server up at $SERVER_URL"
-    break
-  fi
-  sleep 1
-done
-
-curl -sf "$SERVER_URL/.well-known/kiosk.json" >/dev/null || {
-  echo "server did not become ready — see /tmp/kiosk-demo.log" >&2
-  exit 1
-}
-
-# ─── binding: the assistants EARN their tokens ────────────────────────
-
 heading "Binding: each assistant earns a token through the real ceremony"
-
 step "Alice's assistant: register (Equihash toll) → Alice signs in → link → claim"
-ALICE_TOKEN="$(bind "$ALICE_EMAIL")"
-[[ -n "$ALICE_TOKEN" ]] || fail "could not bind an assistant for $ALICE_EMAIL"
-say "✓ Alice's assistant holds a kiosk-pop JWT this provider minted"
-
-step "Bob's assistant: the same ceremony, a separate human and a separate key"
-BOB_TOKEN="$(bind "$BOB_EMAIL")"
-[[ -n "$BOB_TOKEN" ]] || fail "could not bind an assistant for $BOB_EMAIL"
-say "✓ Bob's assistant holds its own token — two accounts, two keys"
-
-# ─── discovery ───────────────────────────────────────────────────────
+ALICE_TOKEN="$(bind alice@example.com)"
+step "Bob's assistant: the same ceremony, another human, another key"
+BOB_TOKEN="$(bind bob@example.com)"
 
 heading "Discovery: what is this provider?"
-
 step "GET /.well-known/kiosk.json"
-curl -sf "$SERVER_URL/.well-known/kiosk.json" \
-  | jq '.kiosk | {version, endpoint, issuer, capabilities, owner}'
+curl -sSf "$SERVER_URL/.well-known/kiosk.json" | jq '.kiosk | {version, endpoint, issuer, capabilities, owner}'
+step "GET /kiosk/.well-known/jwks.json — the keys its tokens verify against"
+curl -sSf "$SERVER_URL/kiosk/.well-known/jwks.json" | jq '.keys[0] | {kty, use, alg, kid}'
 
-step "GET <endpoint>/.well-known/jwks.json — public verification keys"
-curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json" \
-  | jq '.keys[0] | {kty, use, alg, kid}'
-
-# ─── authenticated SQL ───────────────────────────────────────────────
-
-heading "Alice's agent reads data (named queries)"
-
-step "List salons (publicly visible)"
+heading "Alice's assistant reads"
+step "salons"
 q "$ALICE_TOKEN" salons | jq '.'
-
-step "Browse the salon's OPEN services (evergreen menu — always bookable, infinite capacity)"
+step "availability — every service is always open"
 q "$ALICE_TOKEN" availability | jq 'map({service, open, price_eur})'
-
-step "Count appointments visible to Alice (initially 0 — bookings accumulate during the demo)"
+step "my_appointments — none yet"
 q "$ALICE_TOKEN" my_appointments | jq 'length'
 
-# ─── run an Action ───────────────────────────────────────────────────
-
-heading "Alice's agent books a haircut — picks a service off the menu"
-
-SALON_ID=$(q "$ALICE_TOKEN" salons | jq -r '.[0].salon_id')
-
-# Pick the first open service from the availability query (all always bookable).
-SERVICE_ID=$(q "$ALICE_TOKEN" availability | jq -r '.[0].service_id')
-
-step "POST /kiosk/book_appointment for salon $SALON_ID with service $SERVICE_ID"
+heading "Alice's assistant books a service off the menu"
+SALON_ID="$(q "$ALICE_TOKEN" salons | jq -r '.[0].salon_id')"
+SERVICE_ID="$(q "$ALICE_TOKEN" availability | jq -r '.[0].service_id')"
+step "POST /kiosk/book_appointment"
 run "$ALICE_TOKEN" book_appointment \
-  "{\"salon_id\":$SALON_ID,\"service_id\":$SERVICE_ID,\"slot\":\"$DEMO_SLOT\"}" \
-  | jq '.'
+  "{\"salon_id\":$SALON_ID,\"service_id\":$SERVICE_ID,\"slot\":\"$DEMO_SLOT\"}" | jq '.'
 
-# ─── App-layer isolation ─────────────────────────────────────────────
-
-heading "App-layer isolation: Alice and Bob can only see their own"
-
-step "Alice sees her appointment (count = 1)"
+heading "Isolation: the same query, two humans"
+step "Alice sees her appointment"
 q "$ALICE_TOKEN" my_appointments | jq 'length'
-
-step "Bob sees 0 (same query, different identity)"
+step "Bob sees none"
 q "$BOB_TOKEN" my_appointments | jq 'length'
 
-# ─── done ────────────────────────────────────────────────────────────
-
-heading "Demo complete"
-say "Server log:        /tmp/kiosk-demo.log"
-say "DB:                kiosk_stylish_development"
-say ""
-say "Try it yourself (the wire is plain HTTP — curl + jq). \$TOKEN is what an"
-say "assistant earns at /kiosk/auth/register + /kiosk/auth/claim — the ceremony"
-say "run at the top of this walkthrough; 'rake check:binding' walks it step by"
-say "step. It is an ordinary kiosk-pop JWT and it expires, so mint a fresh one."
-say "  a query is a GET at its own endpoint, and the body IS the result:"
-say "    curl -sS $SERVER_URL/kiosk/salons \\"
-say "      -H \"Authorization: Bearer \$TOKEN\" | jq '.'"
-say "  an action is a POST at its own endpoint, arguments in the JSON body:"
-say "    curl -sS -X POST $SERVER_URL/kiosk/book_appointment \\"
-say "      -H \"Authorization: Bearer \$TOKEN\" \\"
-say "      -H 'Content-Type: application/json' \\"
-say "      -d '{\"salon_id\":1,\"slot\":\"$DEMO_SLOT\"}' | jq '.'"
-say "      (the slot must be in the FUTURE — a time that has passed is a 400.)"
-say ""
-say "Both identity seams ran for real above:"
-say "  • AGENT-IdP (c.agent_idp): UNSET, deliberately. The engine's own"
-say "    DefaultAgentIdp verifies the kiosk-pop JWTs it minted at /auth/register"
-say "    and /auth/claim — the tokens the two assistants earned at the start of"
-say "    this run. Set it only to front an EXTERNAL agent-identity issuer, by"
-say "    implementing Kiosk::AgentIdentityProviders::Base — the only subclass"
-say "    Kiosk ships is the DefaultAgentIdp above, so that adapter is yours to"
-say "    write; the agent_id it returns must be a UUID."
-say "  • USER-IdP (c.user_idp): kiosk-user-idp-devise, the shipped worked"
-say "    example, which this demo runs in every environment. Alice and Bob"
-say "    signed in on the real form to approve their assistants."
+heading "Try it yourself"
+printf '  curl -sS %s/kiosk/salons -H "Authorization: Bearer $TOKEN" | jq .\n' "$SERVER_URL"

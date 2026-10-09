@@ -3,28 +3,8 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # Cross-tenant read isolation: principal B must not see rows owned by A.
-      #
-      # Attack:
-      #   1. A registers and creates an owned resource (via profile.create_owned).
-      #   2. CONTROL — A's OWN per_user_query must answer 200 and contain A's
-      #      row under profile.row_id_key.
-      #   3. B registers and queries profile.per_user_query; the query must be
-      #      ANSWERED (HTTP 200).
-      #   4. BLOCKED iff B's answered rows do NOT include A's resource id.
-      #   5. BREACH  iff B's rows DO include it, iff B's query is not answered,
-      #      or iff the control leg does not hold.
-      #
-      # The control is not decoration. "B's rows do not contain A's id"
-      # is satisfied by every way of returning nothing: a provider with no
-      # isolation logic whose query happens to answer `[]`, a `row_id_key` that
-      # names no field in the rows (under which a REAL leak reads as clean), a
-      # 404 from a query name that was never registered, a 402 toll, a 500. The
-      # control pins the one reading that makes the absence meaningful — this
-      # query DOES return this key for its owner — and step 3 refuses to score
-      # an unanswered query as isolation.
-      #
-      # Skipped when: profile.per_user_query or profile.create_owned is nil.
+      # B's per_user_query must answer 200 without A's row, and A's own query
+      # must return it: without that control, an empty answer proves nothing.
       class CrossTenantRead < Scenario
         def initialize
           super(
@@ -42,7 +22,6 @@ module Kiosk
           owned_ref = profile.create_owned.call(client, a)
           owned_id  = owned_ref[:id].to_s
 
-          # ── CONTROL: the probe below can see a row when there is one to see ──
           control = client.query(a, name: profile.per_user_query)
           unless control.status == 200 && rows_contain?(control, profile.row_id_key, owned_id)
             return Verdict.new(
@@ -59,14 +38,7 @@ module Kiosk
           b = client.register!
           resp = client.query(b, name: profile.per_user_query)
 
-          # B's query must be ANSWERED and merely not contain A's row. A non-2xx
-          # is not isolation: a 404 means the query name never resolved, a 402
-          # means a toll fired before any policy ran, a 5xx is a crash — and the
-          # gem's own invariant is that a crash can never count as a block
-          # (see Kiosk::Redteam.blocked?). NONE of the three counts as blocked,
-          # and the status must be pinned to keep it that way: the empty
-          # `rows_from` of an error envelope is indistinguishable from a
-          # correctly isolated empty result.
+          # An unanswered query is not isolation: an error envelope also reads as no rows.
           unless resp.status == 200
             return Verdict.new(
               blocked: false,

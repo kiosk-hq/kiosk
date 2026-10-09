@@ -3,16 +3,7 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # Missing KYC: the KYC gate must fire before the gated action.
-      #
-      # Attack:
-      #   1. A registers (NO KYC submitted).
-      #   2. A creates an owned resource and pays.
-      #   3. A invokes profile.gated_action WITHOUT a prior KYC call.
-      #   4. BLOCKED iff denied (HTTP 403 or domain error).
-      #
-      # Skipped when: profile.requires_kyc is false, or profile.gated_action /
-      # profile.create_owned / profile.pay_for is nil.
+      # The gated action must be refused, after payment, when no KYC was submitted.
       class MissingKyc < Scenario
         def initialize
           super(
@@ -35,10 +26,6 @@ module Kiosk
           mandates   = profile.pay_for.call(client, a, owned_ref)
           pay_resp   = client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
 
-          # The payment is SETUP: "after payment" is half this scenario's claim.
-          # Discard its response and a pay that comes back 402 leaves the gated
-          # action to be refused by the PAYMENT gate — a refusal that would
-          # print as BLOCKED ✓ MissingKyc.
           failure = setup_failure(
             pay_resp,
             step:    "the payment this scenario stages before the gated action",
@@ -50,10 +37,7 @@ module Kiosk
           gated_args = profile.gated_args ? profile.gated_args.call(owned_ref) : { id: owned_ref[:id] }
           resp       = client.run(a, name: profile.gated_action, **gated_args)
 
-          # Admits several gates deliberately: providers refuse a KYC-less
-          # principal with 403 kyc_required, and some answer 401 by treating an
-          # unattested principal as unauthenticated. The payment gate is the one
-          # confusion that mattered, and the setup assertion above rules it out.
+          # 403 kyc_required, or 401 from an origin that treats the principal as unauthenticated.
           verdict_from(resp, detail: "gated action succeeded without KYC (HTTP #{resp.status})")
         end
       end

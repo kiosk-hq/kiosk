@@ -7,72 +7,12 @@ require "openssl"
 module Kiosk
   module Redteam
     module Scenarios
-      # Privilege self-selection at the ACCOUNT-BINDING CLAIM CEREMONY.
-      #
-      # {PrivilegeSelfSelection} is this scenario's sibling and covers the OTHER
-      # door: `POST /auth/register`, where the role is pinned from
-      # `config.registration_role` and the body is never read. This one covers
-      # the wider door — RFC 8628 `POST <endpoint>/oauth/device_authorization`,
-      # the UNAUTHENTICATED request that opens the claim half of the binding
-      # ceremony.
-      #
-      # == Why this exists, and why it is not a hypothetical
-      #
-      # That request carries no Cookie and no Authorization header, so anything
-      # in it is an assertion by a stranger. An origin that reads `role` (or its
-      # OAuth spelling `scope`) off it, writes it onto the authorization row and
-      # bakes it into the JWT the token poll returns — with membership of
-      # `config.roles` as the ONLY filter — hands a stranger the role they asked
-      # for. Measured on a booted provider declaring two roles: `role=owner`
-      # reached a token whose `role` claim was `owner`, approved by a plain
-      # customer whose consent page never showed the word.
-      #
-      # In this engine the role comes from the APPROVING HUMAN's own identity,
-      # captured at the verify page, and `role`/`scope` on the opening request
-      # are REFUSED (400 `invalid_request`) rather than ignored — a silently
-      # dropped parameter leaves the caller believing it got what it asked for.
-      #
-      # == Why the probe must name a DECLARED role
-      #
-      # A vulnerable origin refuses an UNDECLARED role all the same:
-      # `config.roles` is the filter either way, so `role=master` comes back 400
-      # whether or not the escalation is live. A battery that injects only an
-      # invented role therefore CANNOT FAIL, and prints BLOCKED against a live
-      # escalation — the blind spot {PrivilegeSelfSelection}'s
-      # `ESCALATED_ROLE = "master"` has by construction.
-      #
-      # So the probe set here is built from roles the origin actually HAS:
-      #
-      #   1. every role in `profile.declared_roles`, when the demo supplies them;
-      #   2. PLUS one derived from the wire — the `role` claim of a token this
-      #      origin mints for a freshly registered agent. That derivation is the
-      #      floor that cannot go stale: an origin whose declared set grows
-      #      while a hand-kept profile list does not is still probed with a real
-      #      role, because the token is read from the provider under test rather
-      #      than from a constant. (An origin whose `config.roles` grows to two
-      #      while the battery still describes one is precisely how a recorded
-      #      mitigation expires without anyone noticing.)
-      #   3. PLUS {UNDECLARED_ROLE}, which proves nothing on its own and is kept
-      #      only so the verdict line shows both filters answering.
-      #
-      # Each role is probed under BOTH spellings, `role=` and `scope=`, because
-      # a vulnerable origin reads `params[:role] || params[:scope]` and a guard
-      # on one of them leaves the other open.
-      #
-      # == Control
-      #
-      # A refusal is free: an origin that refused every `device_authorization`
-      # would print BLOCKED here. So the same request WITHOUT the parameter must
-      # still open the ceremony — 200 with a well-formed `XXXX-XXXX` user_code.
-      #
-      # Applicable to every provider: the binding ceremony is engine surface,
-      # not a per-demo feature. Skipped only when the origin declares no role at
-      # all, in which case there is no declared role for a client to name and
-      # the escalation has nothing to escalate to.
+      # The unauthenticated device_authorization request must refuse a
+      # client-chosen role or scope. Probed with roles the origin actually
+      # declares, since a vulnerable origin refuses an undeclared one too; the
+      # role-less request must still open the ceremony.
       class DeviceGrantRoleSelfSelection < Scenario
-        # A role no provider declares. On its own it proves NOTHING — a
-        # vulnerable origin refuses it too. It is probed so the verdict detail
-        # shows the declared and undeclared filters side by side.
+        # Refused by a vulnerable origin too; probed only to show both filters in the detail.
         UNDECLARED_ROLE = "master"
 
         # RFC 8628 §3.2 user codes as this engine mints them.
@@ -123,7 +63,6 @@ module Kiosk
 
         private
 
-        # The probe list, as [label, param, value] triples.
         def probe_labels(declared)
           declared.flat_map do |role|
             %i[role scope].map do |param|
@@ -135,7 +74,6 @@ module Kiosk
           end
         end
 
-        # The same request WITHOUT the parameter must still open the ceremony.
         def control(client)
           key  = OpenSSL::PKey::RSA.generate(2048)
           resp = client.device_authorization(
@@ -146,15 +84,7 @@ module Kiosk
            "CONTROL role-less request -> HTTP #{resp.status} user_code=#{code.inspect}"]
         end
 
-        # A role this origin genuinely declares, read off the wire rather than
-        # from a constant: register an agent through the ordinary path (paying
-        # the registration toll if there is one) and read the `role` claim of
-        # the token the origin itself minted.
-        #
-        # Returns [role_or_nil, nil] on success and [nil, Verdict] when the
-        # registration did not happen — a scenario that could not establish its
-        # own probe set says so instead of falling back to the undeclared role,
-        # which is the vacuous probe this whole file exists to replace.
+        # The `role` claim of a token this origin mints at registration.
         def wire_declared_role(client)
           resp = client.register_raw
           if (failure = setup_failure(
@@ -177,8 +107,7 @@ module Kiosk
             "DECLARED role has nothing to name here"
         end
 
-        # Read the `role` claim from a JWS access token WITHOUT verifying it —
-        # only what the server chose to put there matters.
+        # Unverified: only what the server put there matters.
         def token_role(token)
           payload_b64 = token.to_s.split(".")[1]
           return nil if payload_b64.nil?

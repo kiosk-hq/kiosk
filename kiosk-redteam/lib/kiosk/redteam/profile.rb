@@ -2,127 +2,26 @@
 
 module Kiosk
   module Redteam
-    # Provider-specific configuration supplied to each generic attack scenario.
+    # What an origin tells the generic scenarios about itself. A nil field skips
+    # the scenarios that need that surface.
     #
-    # A Profile tells scenarios everything they need to know about the provider
-    # under test — which actions exist, how to create owned resources, how to
-    # build payment mandates, and how to mint KYC attestations for test variants.
-    # No provider name is hard-coded in the gem; all provider knowledge lives
-    # here, supplied by the demo that boots the redteam battery.
-    #
-    # == Required fields (nil = skip scenarios that need that surface)
-    #
-    # @!attribute pow_difficulty [Integer]
-    #   Caller-side flag: >0 means the provider is expected to gate /register
-    #   with Equihash (the actual n/k parameters and count-escalation ride in
-    #   the server's 402 challenges — this integer does not encode leading-zero
-    #   bits). 0 means no PoW is required; {RegistrationWithoutPow} is skipped.
-    #
-    # @!attribute declared_roles [Array<String>]
-    #   The roles this origin DECLARES (`Kiosk.configuration.roles`), as
-    #   strings. Read by {Scenarios::DeviceGrantRoleSelfSelection}, which must
-    #   name a role the origin actually has: an origin that honours a
-    #   client-chosen role still refuses an UNDECLARED one, so a probe that only
-    #   injects `role: "master"` cannot fail and prints BLOCKED against a live
-    #   escalation.
-    #
-    #   Empty is legal and costs nothing: that scenario ALSO derives a declared
-    #   role from the wire (the `role` claim of a token this origin itself
-    #   mints at registration), so the probe set is never vacuous even when this
-    #   list is stale or absent. Supply it anyway when the origin declares more
-    #   than one role — the registration role is only ever ONE of them, and the
-    #   escalation being hunted here is precisely a SECOND, more privileged one.
-    #
-    # @!attribute requires_kyc [Boolean]
-    #   Whether the provider's gated action requires a prior KYC attestation.
-    #   When false, all KYC scenarios ({MissingKyc}, {ExpiredKyc}, {ForgedKyc})
-    #   are skipped.
-    #
-    # @!attribute currency [String, nil]
-    #   The ISO 4217 code this operator prices in, as it appears on the wire
-    #   (lower case). Read by {Scenarios::WrongCurrencyCart}, which builds a
-    #   mandate pair denominated in a DIFFERENT currency and demands a refusal;
-    #   skipped when nil. It is stated rather than guessed because a probe that
-    #   happened to name the operator's own currency would print BLOCKED for a
-    #   cart that was never foreign.
-    #
-    # @!attribute per_user_query [String, nil]
-    #   Name of the named query that returns the authenticated principal's own
-    #   rows (e.g. "my_orders", "my_reservations").  Required by
-    #   {CrossTenantRead}; skipped when nil.
-    #
-    # @!attribute row_id_key [String]
-    #   The key in each returned row hash that holds the resource ID.
-    #   Defaults to "id".
-    #
-    # @!attribute result_id_key [String]
-    #   The key in a forge_action's own response object that holds the newly
-    #   created resource's ID.  Often differs from row_id_key because action
-    #   responses use provider-specific names (e.g. "reservation_id", "order_id")
-    #   while query rows normalise to "id".  Defaults to row_id_key.
-    #
-    # @!attribute create_owned [#call, nil]
-    #   Callable: `(client, principal) -> owned_ref (Hash)`.
-    #   Creates a resource owned by `principal` and returns a Hash with at
-    #   least `:id` (String) and any extra keys needed downstream.
-    #   Required by {CrossTenantRead}, {ForgedUserId} (indirectly),
-    #   {UnpaidGatedAction}, {MissingKyc}, {SpentResourceReuse},
-    #   {PayForOtherUseSelf}.  Skipped when nil.
-    #
-    # @!attribute forge_action [String, nil]
-    #   Name of the run action that accepts a `user_id` argument which the
-    #   server should ignore (ownership must derive from the authenticated
-    #   token, not caller-supplied).  Required by {ForgedUserId}; skipped
-    #   when nil.
-    #
-    # @!attribute forge_args [#call, nil]
-    #   Callable: `(client, principal_a, principal_b) -> Hash`.
-    #   Returns the base arguments for `forge_action` (without `user_id`),
-    #   using the provided client and principals if needed (e.g. to look up
-    #   a resource code).  The scenario injects `user_id: a.user_id`.
-    #
-    # @!attribute gated_action [String, nil]
-    #   Name of the run action that is gated behind payment (and optionally
-    #   KYC).  Required by {UnpaidGatedAction}, {MissingKyc}, {ExpiredKyc},
-    #   {ForgedKyc}, {SpentResourceReuse}, {PayForOtherUseSelf}; skipped
-    #   when nil.
-    #
-    # @!attribute gated_action_consumes [Boolean]
-    #   Whether invoking `gated_action` SPENDS the owned resource, so that a
-    #   second invocation must be refused. True for an action that turns a paid
-    #   hold into a delivered thing — an unlock token, a dispatched order.
-    #   False when the action is a READ of a decision the operator makes on its
-    #   own: calling it twice is then correct behaviour and there is no C3
-    #   surface to attack, so {SpentResourceReuse} is skipped rather than
-    #   reporting a breach against an idempotent verb. Defaults to true,
-    #   because an action reached through a payment gate usually does consume
-    #   something; an origin whose does not must say so.
-    #
-    # @!attribute gated_args [#call, nil]
-    #   Callable: `(owned_ref) -> Hash`.
-    #   Returns the arguments for `gated_action` given an owned_ref.
-    #
-    # @!attribute pay_for [#call, nil]
-    #   Callable: `(client, principal, owned_ref) -> { intent: Hash, cart: Hash }`.
-    #   Builds the intent and cart mandate payloads for the given principal and
-    #   resource.  The scenario submits these via `client.pay`.  Required by
-    #   {MandatePrincipalSwap}, {MandateReplay}, {SpentResourceReuse},
-    #   {PayForOtherUseSelf}; skipped when nil.
-    #
-    # @!attribute kyc_valid [#call, nil]
-    #   Callable: `(user_id) -> JWS String`.
-    #   Mints a valid, unexpired KYC attestation for the given user_id.
-    #   nil when the provider does not use KYC.
-    #
-    # @!attribute kyc_expired [#call, nil]
-    #   Callable: `(user_id) -> JWS String`.
-    #   Mints an expired KYC attestation (exp in the past).
-    #   nil when the provider does not use KYC.
-    #
-    # @!attribute kyc_forged [#call, nil]
-    #   Callable: `(user_id) -> JWS String`.
-    #   Mints a KYC attestation with a wrong issuer or bad signature.
-    #   nil when the provider does not use KYC.
+    #   pow_difficulty        >0 when /register is gated by a PoW toll; 0 skips RegistrationWithoutPow
+    #   declared_roles        the roles the origin declares; DeviceGrantRoleSelfSelection needs a real one
+    #   requires_kyc          whether the gated action needs a KYC attestation
+    #   currency              the ISO 4217 code the origin prices in, lower case (WrongCurrencyCart)
+    #   per_user_query        query returning the caller's own rows (CrossTenantRead)
+    #   row_id_key            key of a row's id in query results
+    #   result_id_key         key of the new resource's id in forge_action's result
+    #   create_owned          (client, principal) -> Hash with at least :id
+    #   forge_action          action whose caller-supplied user_id the server must ignore
+    #   forge_args            (client, principal_a, principal_b) -> Hash, without user_id
+    #   gated_action          action gated behind payment (and KYC when requires_kyc)
+    #   gated_action_consumes false when calling gated_action twice is correct (skips SpentResourceReuse)
+    #   gated_args            (owned_ref) -> Hash
+    #   pay_for               (client, principal, owned_ref) -> { intent:, cart: }
+    #   kyc_valid             (user_id) -> a valid attestation JWS
+    #   kyc_expired           (user_id) -> an expired attestation JWS
+    #   kyc_forged            (user_id) -> an attestation with a wrong issuer or signature
     class Profile
       attr_reader :pow_difficulty,
                   :currency,

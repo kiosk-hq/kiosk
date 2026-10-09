@@ -3,15 +3,7 @@
 module Kiosk
   module Redteam
     module Scenarios
-      # Unpaid gated action: the pay gate must fire before the gated action.
-      #
-      # Attack:
-      #   1. A registers (+ valid KYC if profile.requires_kyc).
-      #   2. A creates an owned resource.
-      #   3. A invokes profile.gated_action WITHOUT paying first.
-      #   4. BLOCKED iff denied (HTTP 401/403 or a recognised denial code).
-      #
-      # Skipped when: profile.gated_action or profile.create_owned is nil.
+      # The gated action must be refused when nothing was paid for the resource.
       class UnpaidGatedAction < Scenario
         def initialize
           super(
@@ -27,11 +19,7 @@ module Kiosk
 
           a = client.register!
 
-          # KYC if the provider requires it (so the gated action is only
-          # blocked by missing payment, not by missing KYC).  Asserting that
-          # result is the ONLY thing separating this scenario from MissingKyc:
-          # if the attestation was not accepted, the refusal below is the KYC
-          # gate wearing the payment gate's name.
+          # A refused attestation would let the KYC gate answer in the payment gate's name.
           kyc_resp = (submit_valid_kyc(client, a, profile) if profile.requires_kyc)
           failure  = setup_failure(
             kyc_resp,
@@ -46,19 +34,7 @@ module Kiosk
 
           resp = client.run(a, name: profile.gated_action, **gated_args)
 
-          # Admits several gates deliberately: an ownership-and-settlement gate
-          # that finds no settlement row answers 403, and a provider that treats
-          # an unsettled principal as unauthenticated answers 401. The KYC
-          # confusion is ruled out by the setup assertion above.
-          #
-          # A 402 does not count. It reads like the payment gate, but the status
-          # alone cannot say WHICH of pow_required (a toll — the action never
-          # ran) / payment_setup_required (no card on file) / payment_failed
-          # (the rail declined after every gate said yes) came back, and only
-          # the last two are about paying for THIS resource.
-          # Measured: all three consuming demos answer 403 here, so nothing
-          # moves; a provider whose pay gate really does answer 402 must name
-          # its code with expect_code: rather than have this scenario guess.
+          # 401 or 403; a 402 cannot say which of its three codes answered.
           verdict_from(resp, detail: "gated action succeeded without payment (HTTP #{resp.status})")
         end
       end

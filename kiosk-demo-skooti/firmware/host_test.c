@@ -881,7 +881,7 @@ static void test_pubkey_low_order(void)
     "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|00000000000000000000000000000013." \
     "WGZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmZmYBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 
-    printf("\n[16] Low-order public keys: the K-1617 forgery, refused\n");
+    printf("\n[16] Low-order public keys: a forged token is refused\n");
 
     /* The order-8 key IS canonical — that is the whole trap. */
     check(skooti_pubkey_is_canonical(ORDER8_PUBKEY) == 1,
@@ -907,11 +907,11 @@ static void test_pubkey_low_order(void)
 
     /* THE FORGERY, end to end. Before the low-order refusal both answered 1. */
     result = skooti_verify_token(ORDER8_PUBKEY, FORGED_ORDER8_TOKEN, SCOOTER_CODE, NOW_FRESH);
-    check(result == 0, "order-8 forged token via skooti_verify_token → 0 (K-1617 closed)");
+    check(result == 0, "order-8 forged token via skooti_verify_token → 0");
 
     result = skooti_verify_wire(ORDER8_PUBKEY, FORGED_ORDER8_TOKEN,
                                 strlen(FORGED_ORDER8_TOKEN), SCOOTER_CODE, NOW_FRESH);
-    check(result == 0, "order-8 forged token via skooti_verify_wire → 0 (K-1617 closed)");
+    check(result == 0, "order-8 forged token via skooti_verify_wire → 0");
 
 #undef FORGED_ORDER8_TOKEN
 }

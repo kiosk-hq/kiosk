@@ -13,10 +13,7 @@
 
 CC      ?= cc
 
-# ONE FLAG LIST, SHARED BY EVERY TARGET — because two lists is how K-1609
-# happened. `test` and `test-asan` each carried their own `-std=c99 …` string,
-# so the declaration this build needs could be absent from one and present in
-# neither, and nothing lined them up.
+# One flag list, shared by every target.
 #
 # WHY THE FEATURE-TEST MACRO IS LOAD-BEARING RATHER THAN DECORATION: `strnlen`
 # is POSIX.1-2008, and POSIX says a program that wants it must ask for that
@@ -147,12 +144,8 @@ $(TARGET)_crosscheck: crosscheck_main.c verify.c $(ED25519_SRCS) $(HDRS)
 # Tools; Linux: apt install clang).  If none is available, the bounded decoder
 # (dst_cap guard) is the real fix regardless — use `make test` instead.
 #
-# `ASAN_CC` is a variable rather than a hard-coded `clang` for the reason
-# K-1609 records: this target used to name `clang` where every other target
-# honours `CC`, so one job was building the same sources with two compilers
-# without saying so, and the two disagreed about whether a missing declaration
-# was fatal.  Whoever runs this picks the compiler ONCE, here or in the
-# environment, and `make portability` below runs every compiler on the machine.
+# The sanitizer compiler is named once, here or in the environment;
+# `make portability` below runs every compiler on the machine.
 # --------------------------------------------------------------------------
 ASAN_CC     ?= clang
 ASAN_TARGET := $(TARGET)_asan
@@ -170,34 +163,10 @@ test-asan: $(ASAN_TARGET)
 	@echo "ASan: no overflow detected (all cases above passed cleanly)"
 
 # --------------------------------------------------------------------------
-# make portability: these sources through EVERY C compiler on this machine
-#
-# K-1609 shipped because this firmware had only ever been compiled by one
-# compiler on one libc, and the CI job that first ran it on a second of each
-# failed to build at all.  A local target cannot conjure a second libc — but it
-# can do the two things that ARE local, and between them they cover the defect:
-#
-#   1. every distinct compiler driver installed here, not just `$(CC)`.  On a
-#      Linux runner that is gcc AND clang, which is exactly the pair whose
-#      disagreement about implicit declarations hid the fault for one step and
-#      exposed it in the next.
-#   2. the POSIX.1-2008 feature level `BASE_CFLAGS` asks for, which on macOS is
-#      STRICTER than the default — so a name this code takes from a BSD or GNU
-#      extension rather than from POSIX fails here, where it would otherwise
-#      have waited for a runner to say so.
-#
-# `-fsyntax-only`, so it is seconds rather than a build; the failure this
-# catches is a declaration, and a declaration is a front-end question.  Exits
-# non-zero on the first compiler that refuses the sources, naming it.
-#
-# IT DEDUPES ON THE RESOLVED PATH *AND* ON THE VERSION STRING, because each key
-# alone overcounts on one of the two platforms and the printed count is a claim.
-# MEASURED, first run of this target on ubuntu-latest: version-string alone said
-# «3 distinct compiler(s)» for gcc, clang and cc — where `cc` is the SAME binary
-# as gcc through the alternatives symlink and only prints a different argv[0] in
-# its first line.  Path alone is no better: on macOS `/usr/bin/cc` and
-# `/usr/bin/clang` are two separate files that are one compiler, and neither is
-# a symlink for `readlink -f` to resolve.
+# make portability: syntax-check these sources with every distinct C compiler
+# on this machine, at the POSIX.1-2008 level BASE_CFLAGS asks for. Compilers
+# are deduplicated by resolved path and version string, since `cc` is often
+# another compiler under a second name.
 # --------------------------------------------------------------------------
 portability:
 	@seen=''; paths=''; n=0; \

@@ -46,6 +46,12 @@ PATH
       railties (~> 8.1)
 
 PATH
+  remote: ../kiosk-test-support
+  specs:
+    kiosk-test-support (0.5.12)
+      kiosk-core (~> 0.5.0)
+
+PATH
   remote: ../kiosk-user-idp-devise
   specs:
     kiosk-user-idp-devise (0.5.12)
@@ -324,6 +330,7 @@ DEPENDENCIES
   kiosk-redteam!
   kiosk-reputation!
   kiosk-server!
+  kiosk-test-support!
   kiosk-user-idp-devise!
   pg (~> 1.1)
   puma (>= 5.0)
@@ -372,6 +379,7 @@ CHECKSUMS
   kiosk-redteam (0.5.12)
   kiosk-reputation (0.5.12)
   kiosk-server (0.5.12)
+  kiosk-test-support (0.5.12)
   kiosk-user-idp-devise (0.5.12)
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
   loofah (2.25.2) sha256=2007f746959ac65552456e04b433e83deb22759ab38c838b4445c70e43425918

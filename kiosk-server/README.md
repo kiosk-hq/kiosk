@@ -39,9 +39,7 @@ against an app on either, so for most "add Kiosk to an existing Rails app" this
 is the first thing to check, not a footnote. Older Rails lines are untested
 here, so they are not claimed; widening the floor means adding a CI leg first.
 
-**Ruby `>= 3.2.0`**, the floor every Kiosk gemspec declares — and one CI leg
-runs the suites on exactly that floor, read out of a gemspec at job time, so it
-is a tested number rather than an asserted one.
+**Ruby `>= 4.0`**, which every Kiosk gemspec declares and CI runs.
 
 **PostgreSQL.** The kiosk schema, the identity tables and the optional RLS
 backstop are Postgres; no other database is supported.

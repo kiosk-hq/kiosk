@@ -33,9 +33,7 @@ in the repository (`.ruby-version` and `mise.toml` are gitignored so you manage
 your own toolchain — `kiosk-demo-getgrocery/mise.toml.example` is the tracked
 template).
 
-- **Ruby.** Every gemspec declares `required_ruby_version >= 3.2.0`, and CI runs
-  both ends: one leg on the declared floor, read out of a gemspec at job time,
-  and one on the newest release the demos run.
+- **Ruby 4.0 or newer.** Every gemspec declares it, and CI runs on 4.0.
 - **PostgreSQL.** The kiosk schema and the identity tables are Postgres.
   `e2e/run.sh` additionally creates a group role, so
   running the harness needs the privilege to `CREATE ROLE` — managed Postgres

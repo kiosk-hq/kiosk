@@ -44,7 +44,7 @@ says which and why. When the gems are published this section is where the
 | Requirement | Why, and what it rules out |
 |---|---|
 | **Rails `~> 8.1`** | `kiosk-server` declares `railties`, `actionpack`, `activerecord` and `activesupport` at `~> 8.1`, and it is the only gemspec that names Rails at all. **That excludes Rails 7.x and 8.0.x** — bundler will refuse to resolve against an app on either, so this is a precondition and not a footnote. Older Rails lines are untested here, so they are not claimed; widening the floor means adding a CI leg first. |
-| **Ruby `>= 3.2.0`** | Every gemspec declares this floor, and CI exercises **both ends** of the range: one leg on the declared floor, read out of a gemspec at job time, and one on the newest release the demos run. The floor is a tested number rather than an asserted one. |
+| **Ruby `>= 4.0`** | Every gemspec declares it, and CI runs on 4.0. |
 | **PostgreSQL** | The kiosk schema, the identity tables and the optional RLS backstop are Postgres. No other database is supported. |
 | **An existing account model** | `c.user_model` names it, and `c.user_id_type` must match its primary key. Kiosk adds an assistant identity beside your users; it does not replace them. |
 

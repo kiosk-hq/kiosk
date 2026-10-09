@@ -74,8 +74,7 @@ universal agent skill is `skill.md` on the same site.
 ## Repo specifics
 
 - Ruby 4.0.1 — what `.github/workflows/ci.yml` installs at every `setup-ruby`
-  step but the declared-floor leg, which reads the floor out of a gemspec;
-  no toolchain pin is tracked (`mise.toml`, `.mise.toml` and
+  step, and every gemspec declares `>= 4.0`; no toolchain pin is tracked (`mise.toml`, `.mise.toml` and
   `.ruby-version` are gitignored). Per-gem bundles: `cd <gem> && bundle install &&
   bundle exec rspec` (`kiosk-rls-minitest`: `bundle exec rake test`).
 - Demos: `bin/rails db:reset` prepares one, `bin/rails test` (hoteling and

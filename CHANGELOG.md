@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-09: **Every gem requires Ruby 4.0**, the version CI runs; the Ruby 3.2 CI leg is gone.
+
 - 2026-10-09: **The `bin/check-*` scripts check code, not prose**: the prose-count, red-team-header and other prose rules are gone; each script now says only what it checks.
 
 - 2026-10-09: **kiosk-user-idp-devise answers a JSON caller at the human sign-in and sign-out pages with a pointer to the wire**; the demos include it instead of carrying copies.

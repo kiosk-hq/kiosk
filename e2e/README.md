@@ -37,8 +37,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
   repository-wide, so a clone carries none and each developer manages their
   own. What the harness is gated on is the version `.github/workflows/ci.yml`'s
   `e2e` job names at its `setup-ruby` step (`4.0.1` today, typed in the
-  workflow); nothing here is exercised below it. The gems' declared floor,
-  which CI does test both ends of, is `>= 3.2.0`.
+  workflow), which is also the gems' declared floor.
 - **PostgreSQL** reachable (default: `localhost` with the running user as superuser; e.g. `brew services start postgresql`)
 - **`rails` gem** — the script installs it automatically if missing
 - **`curl`** and **`jq`** on the PATH

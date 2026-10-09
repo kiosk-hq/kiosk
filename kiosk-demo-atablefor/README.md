@@ -80,7 +80,7 @@ this compose project, and serves the demo on <http://localhost:3002>.
 
 On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
 - **python3 with numpy** — every assistant pays an Equihash toll at n=168 k=7
   (~10 s and ~1.3 GiB per proof), solved by the bundled `solve.py`.

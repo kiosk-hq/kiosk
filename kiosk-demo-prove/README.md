@@ -110,7 +110,7 @@ today, and no free/assurance claim beyond account-possession is made. Vendor KYC
 below.** It builds the image every demo here shares, brings up a Postgres that belongs to
 this compose project, and serves the demo on <http://localhost:3020>.
 
-On your own machine you need Ruby 3.2.0 or newer and a reachable Postgres. From this directory:
+On your own machine you need Ruby 4.0 or newer and a reachable Postgres. From this directory:
 
 ```sh
 bundle install

@@ -38,7 +38,7 @@ Gem::Specification.new do |spec|
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 4.0"
 
   spec.metadata["homepage_uri"]     = spec.homepage
   spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
@@ -130,7 +130,7 @@ Gem::Specification.new do |spec|
   #                 forgery protection untouched.
   spec.add_dependency "actioncable",   "~> 8.1"
   # solid_cable   — carries the event stream between Puma workers and hosts.
-  spec.add_dependency "solid_cable",   ">= 3.0", "< 5"
+  spec.add_dependency "solid_cable",   "~> 4.0"
   # activerecord  — ActiveRecord::Base.lease_connection is how the auth plane,
   #                 the wire and the durable stores reach the database (NOT
   #                 `.connection`, which Rails 8.1 soft-deprecates and which

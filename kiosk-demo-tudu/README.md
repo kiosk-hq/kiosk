@@ -46,7 +46,7 @@ this compose project, and serves the demo on <http://localhost:3007>.
 
 On your own machine you need:
 
-- **Ruby 3.2.0 or newer**, then `bundle install`.
+- **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
 - **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
 

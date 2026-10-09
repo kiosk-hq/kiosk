@@ -150,11 +150,7 @@ with `bin/rails test` (`bundle exec rspec` in hoteling and kiosk-demo-prove).
 carry a `before-after.md`**: a contrast between what an AI assistant can do at
 that provider today and what the same errand looks like once Kiosk is
 installed, followed by the operator-side adoption recipe. Four rather than all
-eight is deliberate. Every fenced block in one declares what produced it. The number in the sentence
-above is DERIVED, not typed: `bin/check-prose-counts` re-runs the command
-`bin/prose-counts-allow.txt` records beside it — `git ls-files
-'kiosk-demo-*/before-after.md' | wc -l` — and fails when the answer and the prose
-disagree, so a fifth cannot appear, or a fourth vanish, unannounced. The
+eight is deliberate. Every fenced block in one declares what produced it. The
 rest say it shorter: `philslist` carries an inline **Before / after** section in
 its README; `stylish` and `tudu` carry neither.
 

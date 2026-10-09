@@ -1,27 +1,7 @@
 # frozen_string_literal: true
 
-# `server.rb` IS THE GEM'S FRONT DOOR, AND BOTH OF ITS CONTROLLER LISTS WERE
-# HAND-KEPT (K-1651).
-#
-# The file `require "kiosk/server"` loads opens by saying what the gem is and
-# closes with a «Pieces shipped in this gem» manifest. Between them sits the
-# require block that actually loads the controllers. All three are prose, and
-# two of them had fallen behind the directory: the opening sentence counted
-# «the nine wire/auth/discovery controllers» against eleven tracked files, and
-# neither the require-block comment nor the manifest named `OpenApiController`
-# at all — although the same file requires it, the engine draws `openapi.json`
-# to it, and it serves one of the two public documents under the mount.
-#
-# Nothing could have caught that. `bin/check-prose-counts` gates Markdown,
-# environment templates, rake descriptions and gemspec strings and REPORTS Ruby
-# comments without reddening, so a cardinal in a `.rb` comment is outside it by
-# design. This example is the join that was missing, and it is deliberately
-# narrow: it says nothing about WHAT a controller is for — that sentence is the
-# human's — only that the SET the two lists carry is the set on disk.
-#
-# The opening sentence now carries no cardinal at all, which is why no example
-# here counts one: a sentence with no number in it cannot go stale, and that is
-# a better repair than a guarded number.
+# The controller lists in `kiosk/server.rb` (the require block and the
+# «Pieces shipped in this gem» manifest) name exactly the controllers on disk.
 RSpec.describe "kiosk/server.rb's controller manifest" do
   SERVER_ENTRY_PATH   = File.expand_path("../../../lib/kiosk/server.rb", __dir__)
   CONTROLLER_LIB_GLOB = File.expand_path("../../../lib/kiosk/server/*_controller.rb", __dir__)

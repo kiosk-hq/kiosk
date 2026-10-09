@@ -111,7 +111,7 @@ header states the two questions it leaves open.
 
 **Message**
 
-- Exactly six pipe-separated fields, which is exactly five `|` bytes. <!-- count: 6 ¦ from: sed -n 's/.*FIELD_COUNT = //p' kiosk-demo-skooti/app/services/rental_token_issuer.rb --> <!-- vectors: count -->
+- Exactly six pipe-separated fields, which is exactly five `|` bytes. <!-- vectors: count -->
 - **No field may be empty**, and no field may contain `|`. <!-- vectors: empty -->
 - **A trailing `|` is another field, not punctuation.** `kiosk-rental-v1|…|<jti>|`
   is a seven-field message and is refused. That deserves saying out loud

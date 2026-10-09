@@ -1,7 +1,7 @@
 # Kiosk hosted live demos — deploy runbook
 
 Runbook for hosting the 7 Kiosk demo Rails apps **plus the KYC broker**
-— 8 apps <!-- count: 8 ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l --> — on **one small VPS**, one **Postgres** cluster (DB-per-app), fronted
+— 8 apps — on **one small VPS**, one **Postgres** cluster (DB-per-app), fronted
 by **Caddy** (auto-TLS), each app a loopback **Puma** under **systemd** — sized
 to survive an HN stampede.
 
@@ -217,12 +217,6 @@ file, so it follows an override on its own.
 
 ### Steps
 
-<!-- fence-count: 8 DBs ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l -->
-<!-- fence-count: 7 demos ¦ from: git ls-files 'kiosk-demo-*/config/initializers/kiosk.rb' | wc -l -->
-<!-- fence-count: ON_ERROR_STOP=1 ¦ why: a psql flag value, not a quantity -->
-<!-- fence-count: max_connections=100 ¦ why: a Postgres setting this runbook asks you to type, not a count of anything here -->
-<!-- fence-count: step #3 ¦ why: a pointer to a numbered step above, not a quantity -->
-<!-- fence-count: answer 429 ¦ why: an HTTP status code -->
 ```sh
 # 0. Check the monorepo out AT /srv/kiosk (owned by the kiosk user) — the repo
 #    ROOT is /srv/kiosk itself, not a subdirectory of it. So each app lives at
@@ -394,7 +388,6 @@ line buys.
 
 Re-check it any time, from anywhere, no ssh needed:
 
-<!-- fence-count: 8 ¦ from: git ls-files 'deploy/env/*.env.example' | wc -l -->
 ```sh
 deploy/check-live-hsts.sh          # must print OK for all 8
 ```

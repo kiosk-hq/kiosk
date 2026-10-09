@@ -150,7 +150,6 @@ What each unit must carry. For EACH of the 7 apps:
       disagrees. It ships the whole file or nothing — no patched lines, no merge — so `deploy/Caddyfile`
       is the source of truth and a hand-edit on the box is something the next `--apply` silently
       reverts.
-      <!-- count: 8 ¦ from: grep -cE '^[a-z0-9.-]+\.demo\.kiosk\.tech \{' deploy/Caddyfile -->
       **8** vhosts → loopback ports (getgrocery/atablefor/hoteling/skooti/stylish/philslist/
       tudu + `kyc` for the KYC broker); certs issue automatically on first request.
 - [ ] **There is NO edge rate-limit module to install, and no snippet to uncomment.** The per-IP

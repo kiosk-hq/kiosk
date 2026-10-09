@@ -21,6 +21,7 @@ module Kiosk
     #   - db/migrate/<ts+4>_create_kiosk_mandates.rb
     #   - db/migrate/<ts+5>_create_kiosk_kyc_attributes.rb
     #   - db/migrate/<ts+6>_create_kiosk_events.rb
+    #   - db/migrate/<ts+7>_create_kiosk_pow_spent.rb
     #
     # Every migration is a `create`: each table is created in its final shape,
     # so a fresh adopter installs the schema outright.
@@ -110,6 +111,11 @@ module Kiosk
       def create_events_migration
         migration_template "create_kiosk_events.rb.tt",
                            "db/migrate/create_kiosk_events.rb"
+      end
+
+      def create_pow_spent_migration
+        migration_template "create_kiosk_pow_spent.rb.tt",
+                           "db/migrate/create_kiosk_pow_spent.rb"
       end
     end
   end

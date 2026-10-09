@@ -45,8 +45,8 @@ module Kiosk
     # replacement token needs to survive, is the caller's knowledge, not this
     # class's.
     #
-    # Mirrors {PowSpentStore}: Mutex-guarded, pruned opportunistically, and NOT
-    # shared across web workers. Multi-process providers MUST override
+    # Mutex-guarded, pruned opportunistically, and NOT shared across web
+    # workers. Multi-process providers MUST override
     # `Kiosk.configure { |c| c.revocation_store = MyRedisRevocationStore.new }`;
     # the durable production home is the (already-provisioned) `agent_tokens`
     # table. The interface contract is:

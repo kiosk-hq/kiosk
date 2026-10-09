@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1910 anchors.
+# 1909 anchors.
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -1738,7 +1738,6 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	renders the documented forbidden
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	scales the challenge TTL by `count`, so a sequential solver does not lose the first
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	verifies for the identical method + verb + args (the control)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	with a policy that always challenges
-kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	does NOT hold single-use across independent instances
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	is idempotent and visible to a second instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	keys the table on the challenge id, so the PK is the single-use gate
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	leaves exactly one row for N racing claims of one id

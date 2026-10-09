@@ -20,10 +20,9 @@ class LicenceCheckStory < StoryTest
     assert refused.refused?(:kyc_required), refused
     assert_includes refused.hint, "request_kyc"
 
-    check = rider.requests_verification
-    assert check["verification_url"], check
-    the_verification_service_confirms(check, age_over_18: true, licence_a: true)
-    assert rider.hears_verification_passed(check)
+    assert rider.requests_verification["verification_url"]
+    the_verification_service_confirms(rider, age_over_18: true, licence_a: true)
+    assert rider.hears_verification_passed
 
     rental = rider.rides_motorcycle(motorcycle)
     assert rental.ok?, rental
@@ -33,7 +32,8 @@ class LicenceCheckStory < StoryTest
   test "a rider confirmed as an adult but without a motorcycle licence gets no motorcycle" do
     rider, motorcycle = a_rider_with_a_paid("MC-001")
 
-    the_verification_service_confirms(rider.requests_verification, age_over_18: true)
+    rider.requests_verification
+    the_verification_service_confirms(rider, age_over_18: true)
 
     assert rider.rides_motorcycle(motorcycle).refused?(:kyc_required)
   end

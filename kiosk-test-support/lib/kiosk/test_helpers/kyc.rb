@@ -14,8 +14,8 @@ module Kiosk
     #
     #   include Kiosk::TestHelpers::Kyc
     #
-    #   check = rider.requests_verification
-    #   the_verification_service_confirms(check, age_over_18: true)
+    #   rider.requests_verification
+    #   the_verification_service_confirms(rider, age_over_18: true)
     module Kyc
       ISSUER   = "https://kyc.test.invalid"
       SETTINGS = %i[kyc_provider kyc_issuer kyc_public_key].freeze
@@ -37,7 +37,12 @@ module Kiosk
           { request_id:, nonce: @checks[request_id].nonce, verification_url: "#{ISSUER}/verify?request=#{request_id}" }
         end
 
-        def check(request_id) = @checks.fetch(request_id) { raise ArgumentError, "no check #{request_id.inspect} was opened" }
+        def latest_check_for(subject)
+          @checks.select { |_, check| check.subject == subject.to_s }.keys.last or
+            raise ArgumentError, "no check was opened for #{subject.inspect}"
+        end
+
+        def check(request_id) = @checks.fetch(request_id)
 
         def attest(subject, audience, attributes)
           now = Time.now.to_i
@@ -52,10 +57,10 @@ module Kiosk
         base.public_send(after) { restore_kyc_provider }
       end
 
-      # The person behind `check` (the answer to request_kyc) passed it with these
-      # attributes; the provider reports so through the callback the engine gave it.
-      def the_verification_service_confirms(check, **attributes)
-        request_id = check["request_id"]
+      # The person behind `customer` passed the check they asked for last, with
+      # these attributes; the provider reports so through the callback the engine gave it.
+      def the_verification_service_confirms(customer, **attributes)
+        request_id = @kyc_provider.latest_check_for(customer.principal.user_id)
         check  = @kyc_provider.check(request_id)
         jws    = @kyc_provider.attest(check.subject, check.audience, attributes)
         answer = Wire.new(base_url: URI.join(check.callback_url, "/").to_s)

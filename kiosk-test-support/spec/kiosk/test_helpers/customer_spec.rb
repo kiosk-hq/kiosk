@@ -126,12 +126,12 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     end
 
     it "is heard to pass when the origin reports that check approved, and not otherwise" do
-      check = customer.requests_verification
+      customer.requests_verification
 
       outcome("approved")
-      expect(customer.hears_verification_passed(check)).to be(true)
+      expect(customer.hears_verification_passed).to be(true)
       outcome("rejected")
-      expect(customer.hears_verification_passed(check)).to be(false)
+      expect(customer.hears_verification_passed).to be(false)
     end
   end
 

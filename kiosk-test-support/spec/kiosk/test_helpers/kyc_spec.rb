@@ -13,6 +13,8 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
   include described_class
 
   let(:rider) { Kiosk::TestHelpers::Assistant::Principal.new(agent_id: "a1", user_id: "u1", token: "tok", rsa_key: nil) }
+  let(:customer) { Struct.new(:principal).new(rider) }
+  let(:stranger) { Struct.new(:principal).new(rider.with(user_id: "u2")) }
 
   def verified(jws)
     JWT.decode(jws, Kiosk.configuration.kyc_public_key, true, algorithm: "RS256", iss: Kiosk.configuration.kyc_issuer,
@@ -34,7 +36,7 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
                                                           callback_url: "http://127.0.0.1:3001/kiosk/kyc/callback")
     callback = stub_request(:post, "http://127.0.0.1:3001/kiosk/kyc/callback").to_return(json_return(200, "ok" => true))
 
-    jws = the_verification_service_confirms({ "request_id" => opened[:request_id] }, licence_a: true)
+    jws = the_verification_service_confirms(customer, licence_a: true)
 
     expect(callback.with { JSON.parse(_1.body) == { "request_id" => opened[:request_id], "nonce" => opened[:nonce], "kyc_jws" => jws } })
       .to have_been_requested
@@ -42,14 +44,14 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
   end
 
   it "says so when the engine refuses the callback" do
-    opened = configuration.kyc_provider.open_verification(subject: "u1", claims: [], audience: "skooti",
-                                                          callback_url: "http://127.0.0.1:3001/kiosk/kyc/callback")
+    configuration.kyc_provider.open_verification(subject: "u1", claims: [], audience: "skooti",
+                                                 callback_url: "http://127.0.0.1:3001/kiosk/kyc/callback")
     stub_request(:post, "http://127.0.0.1:3001/kiosk/kyc/callback").to_return(problem_return("forbidden", status: 403))
 
-    expect { the_verification_service_confirms({ "request_id" => opened[:request_id] }) }.to raise_error(/refused the KYC callback: 403/)
+    expect { the_verification_service_confirms(customer) }.to raise_error(/refused the KYC callback: 403/)
   end
 
-  it "refuses a check it never opened" do
-    expect { the_verification_service_confirms({ "request_id" => "nope" }) }.to raise_error(ArgumentError, /"nope"/)
+  it "refuses a customer who opened no check" do
+    expect { the_verification_service_confirms(stranger) }.to raise_error(ArgumentError, /"u2"/)
   end
 end

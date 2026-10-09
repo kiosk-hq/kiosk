@@ -67,11 +67,11 @@ module Kiosk
       # the assistant hands to its person.
       def requests_verification
         listens_for(:kyc_verification)
-        does(:request_kyc)
+        does(:request_kyc).tap { @verification = _1["request_id"] if _1.ok? }
       end
 
-      # Whether the origin reports `check` (a #requests_verification answer) passed.
-      def hears_verification_passed(check) = hears(:kyc_verification, about: check["request_id"])["status"] == "approved"
+      # Whether the origin reports the verification this customer asked for last passed.
+      def hears_verification_passed = hears(:kyc_verification, about: @verification)["status"] == "approved"
 
       # Hands the origin an identity attestation the person obtained elsewhere.
       def presents(attestation) = Answer.new(@assistant.kyc(principal, attestation_jws: attestation))

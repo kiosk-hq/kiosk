@@ -63,7 +63,7 @@ assistant does.
 
 ## What the demo shows
 
-### Collaboration (`test/wire/collab_test.rb`)
+### Collaboration (`test/stories/household_test.rb`)
 
 Two PoP-registered AI assistants share a list with no spec change: Alice's AI assistant
 creates "Hike" and mints an invite; Bob's AI assistant accepts it and joins as a
@@ -93,7 +93,7 @@ arrives on reconnecting with `since`, Bob ticking off Alice's todo arrives live 
 own subscription to the list is withdrawn (`unsubscribed`, `reach_revoked`).
 Every delivered `data` is checked against the `payload_schema` the origin serves.
 
-### W5 rebind + list transfer (`test/wire/link_test.rb`)
+### W5 rebind + list transfer (`test/stories/link_test.rb`)
 
 An assistant registers **headless** and creates the "Hike" list; Alice signs in
 through the real Devise form, mints a link code, and the assistant's key redeems
@@ -103,7 +103,7 @@ the assistant re-logs in and sees the list under Alice; Alice's browser sees it
 too; a second linked AI assistant leaves the first one bound. Re-linking an
 assistant already bound to Alice moves nothing and destroys nothing.
 
-### Membership isolation (`test/wire/isolation_test.rb`)
+### Membership isolation (`test/stories/privacy_test.rb`)
 
 Mallory (a non-member) is walled out: her `my_lists` is empty; `list_todos` /
 `list_members` on a private list → 403; a forged `account_id` on her
@@ -135,7 +135,7 @@ list page names them by it). Plus `DeviceGrantRoleSelfSelection`, the shared
 unauthenticated opening request refuses `role`/`scope` at a DECLARED value
 as well as an invented one, while the role-less request still opens it.
 
-### Not-only-commerce proof (`test/wire/discovery_test.rb`)
+### Not-only-commerce proof (`test/stories/discovery_test.rb`)
 
 Asserts the schema catalog (queries/actions + non-empty descriptions, including
 `invite`/`accept_invite`) **and** that the advertised `capabilities` do **not**
@@ -171,7 +171,7 @@ refusal is an RFC 9457 problem document — branch on its top-level `code`.
 
 Human↔assistant linking is **not** one of the verbs in the table above — it's
 the W5 ceremony (`POST /kiosk/auth/link` mint → `POST /kiosk/auth/claim`
-redeem), driven by `test/wire/link_test.rb`.
+redeem), driven by `test/stories/link_test.rb`.
 
 ### Watch it work
 
@@ -198,7 +198,7 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `app/models/membership.rb`, `app/operations/list_access.rb` | Who may reach a list: `Membership.own` is the principal's memberships, `ListAccess` the 403 a stranger gets |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, calling the same Operations as the wire; a refusal becomes a flash |
 | `script/redteam_suite.rb` | The adversarial battery, runnable against any tudu origin |
-| `test/` | `bin/rails test`; `test/wire/` drives a live origin over HTTP |
+| `test/` | `bin/rails test`; `test/stories/` tells each household story against a live origin over HTTP |
 
 ## Make it real
 

@@ -4,7 +4,7 @@ ENV["RAILS_ENV"] ||= "test"
 
 require_relative "../config/environment"
 require "rails/test_help"
-require "kiosk/test_helpers/live_server"
+require "kiosk/story_test"
 
 module ActiveSupport
   class TestCase
@@ -24,31 +24,47 @@ module ActiveSupport
   end
 end
 
-# Drives this origin over HTTP as an assistant does.
-class WireTest < ActiveSupport::TestCase
-  include Kiosk::TestHelpers::LiveServer
+# A household member's AI assistant: starts lists, invites housemates, adds and
+# ticks off todos, and is told what changes on the lists it shares.
+class Member < Kiosk::TestHelpers::Customer
+  def account_id = principal.user_id
 
-  ALICE_ID = "00000000-0000-0000-0000-000000000001"
+  def starts_a_list(title = "Hike") = does(:create_list, title:)["list_id"]
+  def invites_to(list) = does(:invite, list_id: list)["code"]
+  def joins(code) = does(:accept_invite, code:)
+  def removes(member, from:) = does(:remove_member, list_id: from, account_id: member.account_id)
 
-  def wire = @wire ||= Kiosk::TestHelpers::Wire.new(base_url: live_url)
+  def lists = asks(:my_lists).rows
+  def list_ids = lists.pluck("list_id")
+  def role_on(list) = lists.find { _1["list_id"] == list }&.fetch("role")
+  def members_of(list) = asks(:list_members, list_id: list)
 
-  def create_list(owner, title = "Hike")
-    created = assistant.run(owner, name: "create_list", title:)
-    assert_equal 200, created.status, created.body
-    created.body["list_id"]
+  # `clock` is the zone the member's person lives in.
+  def adds(title, to:, clock: nil, **) = does(:add_todo, list_id: to, title:, headers: zone(clock), **)
+  def todos_on(list, clock: nil) = asks(:list_todos, list_id: list, headers: zone(clock))
+  def todo(id, on:, clock: nil) = todos_on(on, clock:).rows.find { _1["todo_id"] == id }
+  def completes(todo) = does(:complete_todo, todo_id: todo)
+
+  # A connection of its own to the origin's news on `list`, or on every list.
+  def follows(list = nil, topics: %w[todo list_membership], since: nil)
+    @assistant.events(principal).tap do |news|
+      topics.each { news.subscribe(_1, **{ subject: list, since: }.compact) }
+      (@connections ||= []) << news
+    end
   end
 
-  def invite(owner, list_id)
-    invited = assistant.run(owner, name: "invite", list_id:)
-    assert_equal 200, invited.status, invited.body
-    invited.body["code"]
+  def leaves
+    super
+    @connections&.each(&:close)
   end
 
-  def join(member, code)
-    accepted = assistant.run(member, name: "accept_invite", code:)
-    assert_equal 200, accepted.status, accepted.body
-    accepted.body
-  end
+  private
 
-  def list_ids(principal) = assistant.query(principal, name: "my_lists").body.map { _1["list_id"] }
+  def zone(clock) = clock ? { "Kiosk-Timezone" => clock } : {}
+end
+
+class StoryTest < Kiosk::StoryTest
+  def a_member = a_customer(as: Member)
+
+  def published_schema = Kiosk::TestHelpers::Wire.new(base_url: live_url).get_json("/kiosk/schema").last
 end

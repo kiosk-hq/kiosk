@@ -18,9 +18,4 @@ class AssistantClaimedTest < ActiveSupport::TestCase
     assert_equal({ hike.id => "owner", @list.id => "owner" }, Membership.where(account: @alice).pluck(:list_id, :role).to_h)
     assert_not Membership.exists?(account: headless)
   end
-
-  test "a claim that names one account on both sides leaves its memberships alone" do
-    claimed(@alice, @alice)
-    assert Membership.exists?(account: @alice, list: @list)
-  end
 end

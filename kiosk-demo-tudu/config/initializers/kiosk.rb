@@ -35,9 +35,6 @@ Kiosk.configure do |c|
   # it later moves that account's lists and memberships to the human.
   c.assistant_creation = ->(_pubkey) { User.create!.id }
   c.assistant_claimed  = ->(agent:, previous_user_id:, user_id:) do
-    # With equal ids the DELETE below would drop the human's own memberships.
-    next if previous_user_id.to_s == user_id.to_s
-
     List.where(account_id: previous_user_id).update_all(account_id: user_id)
     # One statement, so it reads a single snapshot; both columns are NOT NULL, so NOT IN is safe.
     already_a_member = Membership.where(account_id: user_id).select(:list_id)

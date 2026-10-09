@@ -20,7 +20,7 @@ discovery funnel is the product.
 
 ## With atablefor
 
-`rake check:book` runs the errand with no human, no web sign-in and no payment:
+`test/wire/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
 the assistant registers itself, reads `availability`, calls `book_table` for a
 party of two and reads `my_bookings` back. A reservation
 takes no money, so the card step and its PSD2 challenge — the wall that ends
@@ -32,16 +32,17 @@ drive it rather than a script, see "Watch it work" in `README.md`.
 A table operator's fear is not fraud but reservation-scalping: scripts that
 mass-claim prime-time two-tops to resell. Kiosk prices that at the door:
 
-- `rake check:pow` gates the `availability` query behind an Equihash
+- The `availability` query sits behind an Equihash
   proof-of-work. A script probing inventory at scale pays a real per-query
   cost; one diner's assistant pays once. A toll, not a hardware wall.
-- `rake check:reputation` makes that toll fall as a booking history accrues:
+- That toll falls as a booking history accrues:
   two proofs unproven, one after a first confirmed booking, free with a real
   history. A scalper renting identities pays every time, and the factor is a
-  `COUNT(*)` of confirmed bookings rather than a dial.
+  `COUNT(*)` of confirmed bookings rather than a dial. `test/wire/toll_test.rb`
+  holds both.
 
-An assistant sees and cancels only its own bookings: `rake check:isolation` and
-`rake check:redteam` assert that a cross-tenant read, a cross-owner cancel and
+An assistant sees and cancels only its own bookings: `test/wire/isolation_test.rb`
+and `test/wire/redteam_test.rb` assert that a cross-tenant read, a cross-owner cancel and
 a forged `user_id` are each refused.
 
 ## What an operator adds

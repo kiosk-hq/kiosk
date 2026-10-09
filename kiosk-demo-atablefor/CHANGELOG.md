@@ -10,6 +10,10 @@ already written is edited.
 
 ## [Unreleased]
 
+- Every environment charges the reputation-priced Equihash toll at n=168 k=7; `KIOSK_POW_MODE` and its other modes are gone.
+
+- The `check:` rake tasks and `bin/demo` are replaced by `bin/rails test`.
+
 - The PoW mode is chosen by `KIOSK_POW_MODE` alone; the three per-mode alias flags are gone.
 
 - `book_table` takes one spelling of a date. Its `date` argument is

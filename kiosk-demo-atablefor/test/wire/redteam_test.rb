@@ -1,0 +1,12 @@
+# frozen_string_literal: true
+
+require "test_helper"
+
+class RedteamTest < WireTest
+  test "every attack in script/redteam_suite.rb is blocked" do
+    attacker = { "SERVER_URL" => live_url, "KIOSK_ISSUER" => live_url,
+                 "HOLDER_A_EMAIL" => "diego@example.com", "HOLDER_A_PASSWORD" => "atablefor-demo-password",
+                 "HOLDER_B_EMAIL" => "bea@example.com",   "HOLDER_B_PASSWORD" => "atablefor-demo-password" }
+    assert system(attacker, RbConfig.ruby, "script/redteam_suite.rb", chdir: Rails.root), "the battery found a breach"
+  end
+end

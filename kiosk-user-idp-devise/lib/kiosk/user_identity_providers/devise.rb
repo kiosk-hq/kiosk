@@ -8,6 +8,9 @@ module Kiosk
     # reads the request's Warden user, so password, magic-link and OmniAuth
     # sign-ins all resolve, and a locked or unconfirmed user resolves to nil.
     class Devise < Base
+      autoload :SessionsController, "kiosk/user_identity_providers/devise/sessions_controller"
+      autoload :WireSignpost,       "kiosk/user_identity_providers/devise/wire_signpost"
+
       # Raised when neither the user model nor the configuration names a role.
       class ConfigurationError < StandardError; end
 

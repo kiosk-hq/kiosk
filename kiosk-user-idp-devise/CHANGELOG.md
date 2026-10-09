@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- `WireSignpost` and `SessionsController` answer a JSON caller at the Devise sign-in and sign-out pages with a pointer to `/.well-known/kiosk.json`, so an operator need not write them.
+
 ## [0.5.12] — 2026-10-08
 
 - 2026-10-08: Version 0.5.12, the tree cut that matches skill 0.5.12; this gem's surface is unchanged.

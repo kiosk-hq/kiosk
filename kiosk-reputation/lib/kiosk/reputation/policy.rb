@@ -2,29 +2,10 @@
 
 module Kiosk
   module Reputation
-    # Base policy class. Returns nil for every request (never challenge).
-    #
-    # Providers subclass this (or replace it wholesale) to implement their own
-    # challenge logic. See {Policies::RateAndReputation} for a shipped example.
-    #
-    # @abstract
+    # Base policy: never challenges. Providers subclass it.
     class Policy
-      # Decide whether to challenge the given request.
-      #
-      # @param identity [Object] opaque identity value from the host
-      # @param verb     [Symbol] the coarse CALL KIND — one of :query, :run,
-      #   :pay, and nothing else. This is the GATE's vocabulary, not the
-      #   declaration vocabulary: a handler declared `kind :action` arrives
-      #   here as :run. Branching on :action would match nothing and decline
-      #   to toll every write in silence, so kiosk-server refuses such a
-      #   policy at configuration time rather than running it.
-      # @param factors  [Factors] reputation factors gathered by the host
-      # @return [Hash{alg: String, params: Hash, count: Integer}] challenge spec
-      #   to issue, or nil to serve without challenge. `count` (the N×PoW
-      #   escalation lever — how many independent proofs to demand) is optional;
-      #   the gate defaults it to 1 when omitted. Subclasses that escalate
-      #   (see {Policies::RateAndReputation}) return `count`; the gate turns it
-      #   into that many independent challenges.
+      # `verb` is the coarse CALL KIND: :query, :run or :pay (a `kind :action` handler arrives as :run).
+      # @return [Hash{alg: String, params: Hash, count: Integer}, nil] nil serves without challenge; `count` defaults to 1
       def challenge_for(identity:, verb:, factors:)
         nil
       end

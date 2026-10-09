@@ -1,5 +1,16 @@
 require "active_support/core_ext/integer/time"
 
+require "openssl"
+
+# The KYC broker as the local operator demos expect it: their issuer, their intake
+# secrets, callbacks on loopback, and the development signing key.
+ENV["KIOSK_PROVE_ISSUER"]                   ||= "https://kyc.test.local"
+ENV["KIOSK_PROVE_SKOOTI_SECRET"]            ||= "prove-skooti-demo-shared-secret"
+ENV["KIOSK_PROVE_GETGROCERY_SECRET"]        ||= "prove-getgrocery-demo-shared-secret"
+ENV["KIOSK_PROVE_SKOOTI_CALLBACK_HOST"]     ||= "127.0.0.1"
+ENV["KIOSK_PROVE_GETGROCERY_CALLBACK_HOST"] ||= "127.0.0.1"
+ENV["PROVE_KEY_PEM"]                        ||= File.read(File.expand_path("../dev_prove_key.pem", __dir__))
+
 Rails.application.configure do
   config.enable_reloading = true
   config.eager_load = false
@@ -23,55 +34,4 @@ Rails.application.configure do
   # Rails 8 HostAuthorization otherwise 403s any Host that isn't
   # localhost/127.0.0.1.
   config.hosts << "kyc.demo.kiosk.tech"
-
-  # ── Prove env inputs ────────────────────────────────────────────────────
-  # ENV is read HERE, per environment, and published as Rails custom config
-  # (Rails.configuration.x.prove.*); lib code and controllers read the
-  # config, never ENV — the same shape as the operator demos' env blocks.
-  # prove is the API-only broker and the declared exception to their env-file
-  # lockstep, so this block carries broker config, not operator config.
-
-  # Operator intake allow-list — ENV-only, the SAME fail-closed posture as
-  # production: an operator whose secret is unset is simply NOT registered.
-  # There is deliberately no shipped dev default, because the operator side
-  # reads its own KIOSK_PROVE_*_SECRET with NO fallback, so a default here
-  # would pair with nothing — the two-server harnesses
-  # (ProveBrokerBoot) pin the secret explicitly on both sides, and a bare
-  # `rails s` broker still serves its human /verify page and /prove_key.pem
-  # with no operator registered (intake then answers 401, as it should).
-  config.x.prove.skooti_secret     = ENV["KIOSK_PROVE_SKOOTI_SECRET"]
-  config.x.prove.getgrocery_secret = ENV["KIOSK_PROVE_GETGROCERY_SECRET"]
-
-  # The ONLY host the broker will POST each operator's callback to (the
-  # SSRF / open-relay guard). Non-secret: the harnesses pin the
-  # operator's real host; loopback serves any hand-driven local intake.
-  config.x.prove.skooti_callback_host     = ENV.fetch("KIOSK_PROVE_SKOOTI_CALLBACK_HOST", "127.0.0.1")
-  config.x.prove.getgrocery_callback_host = ENV.fetch("KIOSK_PROVE_GETGROCERY_CALLBACK_HOST", "127.0.0.1")
-
-  # The operator-binding `aud` minted into each operator's attestations —
-  # defaults to the operator_id handle (what the demo operators set as
-  # c.kyc_audience); overridable for a distinct origin-URL audience, kept in
-  # lockstep with the operator's own kyc_audience.
-  config.x.prove.skooti_audience     = ENV.fetch("KIOSK_PROVE_SKOOTI_AUDIENCE", "skooti")
-  config.x.prove.getgrocery_audience = ENV.fetch("KIOSK_PROVE_GETGROCERY_AUDIENCE", "getgrocery")
-
-  # The `iss` stamped into every claim; operators pin the SAME value as
-  # c.kyc_issuer (their ProveTrust.issuer defaults to the same deploy
-  # origin), and the two-server harnesses pin it explicitly on both sides.
-  config.x.prove.issuer = ENV.fetch("KIOSK_PROVE_ISSUER", "https://kyc.demo.kiosk.tech")
-
-  # The public origin stamped into the verification_url handed back at
-  # intake (the link the human opens). Unset → the controller falls back to
-  # the intake request's own base_url, which is right for local runs.
-  config.x.prove.public_url = ENV["PROVE_PUBLIC_URL"]
-
-  # The broker's RSA signing key (the "ProveKey" — operators trust its
-  # public half). Development uses the FIXED baked keypair in
-  # config/dev_prove_key.pem: fixed (not per-boot ephemeral) so a broker
-  # restart keeps the key a hand-wired local operator has pinned; the
-  # two-server harnesses fetch the public half from the running broker
-  # (GET /prove_key.pem) and so work with ANY key here. Its private half ships
-  # in this public repo, which is why production refuses to boot without an
-  # explicit PROVE_KEY_PEM.
-  config.x.prove.key_pem = ENV.fetch("PROVE_KEY_PEM", File.read(Rails.root.join("config/dev_prove_key.pem")))
 end

@@ -4,20 +4,12 @@ require "net/http"
 require "uri"
 require "json"
 
-# CallbackPoster — the broker → operator leg. On the human's
-# approve, the broker mints the signed anonymized claim and POSTs it to the
-# request's callback_url as `{ request_id, kyc_jws, nonce }` — a compact JWS and
-# an echo of the request's nonce.
-#
-# callback_url was already validated at intake against the operator's
-# allow-listed host (OperatorRegistry.callback_allowed? — the SSRF guard), so
-# this never posts to an arbitrary host.
+# Posts an approved claim to the operator's callback, a host the intake
+# already checked against the operator's registration.
 module CallbackPoster
   module_function
 
-  # POST the signed claim to the operator's callback. Returns the HTTP status
-  # (Integer), or nil on a transport error — delivery is best-effort here (the
-  # broker still records the local decision, and the agent polls anyway).
+  # The callback's HTTP status, or nil when it could not be reached.
   def deliver(callback_url:, request_id:, kyc_jws:, nonce:)
     uri = URI.parse(callback_url.to_s)
     body = JSON.generate(request_id: request_id, kyc_jws: kyc_jws, nonce: nonce)

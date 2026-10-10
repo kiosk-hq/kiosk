@@ -1,0 +1,22 @@
+# Validation messages name an attribute as the wire spells it.
+en:
+  activemodel:
+    attributes:
+      room_search:
+        check_in: check_in
+        check_out: check_out
+  activerecord:
+    attributes:
+      booking:
+        check_in: check_in
+        check_out: check_out
+        property: property_id
+        room_type: room_type_id
+    errors:
+      models:
+        booking:
+          attributes:
+            property:
+              required: "is not a hotel here — call search_hotels for one"
+            room_type:
+              required: "is not a room type of this property — call availability for the ones it has"

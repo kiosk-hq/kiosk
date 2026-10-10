@@ -29,17 +29,17 @@ RSpec.describe "a property's clock is the property's" do
   end
 
   it "reads each property's zone off the property" do
-    expect(WireArguments.zone_for(istanbul.id).name).to eq("Europe/Istanbul")
-    expect(WireArguments.zone_for(auckland.id).name).to eq("Pacific/Auckland")
+    expect(istanbul.zone.name).to eq("Europe/Istanbul")
     expect(auckland.zone.tzinfo.identifier).to eq("Pacific/Auckland")
   end
 
   it "sells the 15th at one property and refuses it as past at the other, at the same instant" do
     travel_to(instant) do
-      expect(WireArguments.bookable!(the_15th, zone: WireArguments.zone_for(istanbul.id))).to be_nil
+      stay = { check_in: the_15th, check_out: the_15th + 1 }
 
-      expect { WireArguments.bookable!(the_15th, zone: WireArguments.zone_for(auckland.id)) }
-        .to raise_error(Kiosk::Server::Errors::BadRequest, /is in the past.*Pacific\/Auckland/)
+      expect(RoomSearch.new(property: istanbul, **stay)).to be_valid
+      expect(RoomSearch.new(property: auckland, **stay).tap(&:validate).errors.full_messages.sole)
+        .to match(/is in the past.*Pacific\/Auckland/)
     end
   end
 

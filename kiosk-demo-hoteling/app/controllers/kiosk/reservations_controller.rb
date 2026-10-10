@@ -67,7 +67,8 @@ class Kiosk::ReservationsController < ActionController::API
                  check_out:    { type: "string", format: "date",
                                  description: "Checkout day (YYYY-MM-DD, exclusive) — a checkout day " \
                                               "is the next guest's check-in day, so it may equal " \
-                                              "another booking's check_in." },
+                                              "another booking's check_in. A reservation holds at " \
+                                              "most #{Booking::MAX_NIGHTS} nights." },
                },
                required: ["property_id", "room_type_id", "check_in", "check_out"]
   output_schema type: "object",

@@ -6,6 +6,8 @@
 class Booking < ApplicationRecord
   include Kiosk::Owned
 
+  MAX_NIGHTS = 30
+
   enum :status, {
     reserved:  "reserved",
     confirmed: "confirmed",
@@ -22,6 +24,9 @@ class Booking < ApplicationRecord
   belongs_to :user
   belongs_to :property
   belongs_to :room_type
+
+  validates_with StayValidator, on: :create
+  validate :stay_length, :room_type_at_property, on: :create
 
   # The bookings that hold their nights; `bookings_no_overlapping_room_nights`
   # is scoped the same way.
@@ -63,6 +68,8 @@ class Booking < ApplicationRecord
     PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)
   end
 
+  def nights = (check_out - check_in).to_i
+
   # What `my_bookings` publishes about the money. `pending` means a capture is
   # in flight: the caller must reconcile, not sign a new mandate.
   def payment_state
@@ -71,5 +78,20 @@ class Booking < ApplicationRecord
     return "pending"  if paying?
 
     "unpaid"
+  end
+
+  private
+
+  def stay_length
+    return if check_in.nil? || check_out.nil? || nights <= MAX_NIGHTS
+
+    errors.add(:check_out, "is #{nights} nights after check_in; one reservation holds at most #{MAX_NIGHTS}")
+  end
+
+  def room_type_at_property
+    return if room_type.nil? || room_type.property_id == property_id
+
+    errors.add(:room_type, "#{room_type_id} is not a room type of property #{property_id} — call availability " \
+                           "for the ones it has")
   end
 end

@@ -3,8 +3,12 @@
 # A bookable room category at one property, priced per night in EUR cents. One
 # live booking on a room type holds it for those nights.
 class RoomType < ApplicationRecord
+  MAX_NIGHTLY_PRICE_CENTS = 1_000_000
+
   belongs_to :property
   has_many :bookings, dependent: :destroy
+
+  validates :nightly_price_cents, numericality: { only_integer: true, in: 1..MAX_NIGHTLY_PRICE_CENTS }
 
   # The room types of a property with no live booking on these nights.
   scope :free_for, lambda { |property_id, check_in, check_out|

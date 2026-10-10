@@ -70,19 +70,12 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[room_type_id name nightly_price_cents currency],
                 }
   def availability
-    property_id = params[:property_id].to_i
-    check_in    = Date.iso8601(params[:check_in])
-    check_out   = Date.iso8601(params[:check_out])
-    WireArguments.bookable!(check_in, zone: WireArguments.zone_for(property_id))
-    WireArguments.existing_property!(property_id)
+    search = RoomSearch.new(property: Property.find(params[:property_id]),
+                            check_in: params[:check_in], check_out: params[:check_out])
+    search.validate!
 
-    render json: RoomType.where(property_id: property_id)
-                         .free_for(property_id, check_in, check_out)
-                         .order(:nightly_price_cents)
-                         .pluck(:id, :name, :nightly_price_cents)
-                         .map { |id, name, cents|
-                           { room_type_id: id, name: name, nightly_price_cents: cents, currency: "eur" }
-                         }
+    render json: search.room_types.order(:nightly_price_cents).pluck(:id, :name, :nightly_price_cents)
+                       .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents, currency: "eur" } }
   end
 
   kind :query
@@ -147,7 +140,7 @@ class Kiosk::HotelsController < ActionController::API
                    description: "Exact Istanbul area name.",
                  },
                  max_price_cents: {
-                   type: "integer", minimum: 0, maximum: WireArguments::MAX_INT4,
+                   type: "integer", minimum: 0, maximum: RoomType::MAX_NIGHTLY_PRICE_CENTS,
                    description: "Cheapest room ≤ this, EUR cents.",
                  },
                  min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Star-rating floor." },
@@ -277,39 +270,28 @@ class Kiosk::HotelsController < ActionController::API
                                room_types_scope check_in check_out timezone room_types],
                 }
   example_params({ property_id: 4,
-                   check_in:  -> { WireArguments.default_zone.tomorrow.iso8601 },
-                   check_out: -> { (WireArguments.default_zone.tomorrow + 3).iso8601 } })
+                   check_in:  -> { Time.find_zone!("Europe/Istanbul").tomorrow.iso8601 },
+                   check_out: -> { (Time.find_zone!("Europe/Istanbul").tomorrow + 3).iso8601 } })
   example_row({
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
     address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
     currency: "eur",
     room_types_scope: -> {
-      "free #{WireArguments.default_zone.tomorrow.iso8601}..#{(WireArguments.default_zone.tomorrow + 3).iso8601}"
+      "free #{Time.find_zone!("Europe/Istanbul").tomorrow.iso8601}..#{(Time.find_zone!("Europe/Istanbul").tomorrow + 3).iso8601}"
     },
-    check_in:  -> { WireArguments.default_zone.tomorrow.iso8601 },
-    check_out: -> { (WireArguments.default_zone.tomorrow + 3).iso8601 },
-    timezone:  WireArguments::DEFAULT_ZONE_NAME,
+    check_in:  -> { Time.find_zone!("Europe/Istanbul").tomorrow.iso8601 },
+    check_out: -> { (Time.find_zone!("Europe/Istanbul").tomorrow + 3).iso8601 },
+    timezone:  "Europe/Istanbul",
     room_types: [
       { room_type_id: 7, name: "Classic",   nightly_price_cents: 15000 },
       { room_type_id: 8, name: "Bosphorus", nightly_price_cents: 25000 },
     ],
   })
   def hotel_detail
-    property_id = params[:property_id].to_i
-    dated = params[:check_in].present? || params[:check_out].present?
-    if dated
-      if params[:check_in].blank? || params[:check_out].blank?
-        WireArguments.refuse "check_in and check_out go together — pass both (YYYY-MM-DD) for a free-rooms " \
-                             "list, or neither for the property's full catalogue"
-      end
-      check_in, check_out = WireArguments.stay(params[:check_in], params[:check_out])
-      WireArguments.bookable!(check_in, zone: WireArguments.zone_for(property_id))
-    end
-
-    property = Property.find_by(id: property_id) or WireArguments.property_not_found!(property_id)
-    rooms = property.room_types
-    rooms = rooms.free_for(property_id, check_in, check_out) if dated
+    property = Property.find(params[:property_id])
+    search   = RoomSearch.new(property:, check_in: params[:check_in], check_out: params[:check_out])
+    search.validate!
 
     render json: [{
       property_id:      property.id,
@@ -319,13 +301,13 @@ class Kiosk::HotelsController < ActionController::API
       address:          property.address,
       amenities:        property.amenities,
       currency:         "eur",
-      room_types_scope: dated ? "free #{check_in}..#{check_out}" : "catalogue (no dates given — not an availability statement)",
-      check_in:         check_in&.iso8601,
-      check_out:        check_out&.iso8601,
+      room_types_scope: search.dated? ? "free #{search.check_in}..#{search.check_out}" : "catalogue (no dates given — not an availability statement)",
+      check_in:         search.check_in&.iso8601,
+      check_out:        search.check_out&.iso8601,
       timezone:         property.timezone,
-      room_types:       rooms.order(:nightly_price_cents)
-                             .pluck(:id, :name, :nightly_price_cents)
-                             .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents } },
+      room_types:       search.room_types.order(:nightly_price_cents)
+                              .pluck(:id, :name, :nightly_price_cents)
+                              .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents } },
     }]
   end
 end

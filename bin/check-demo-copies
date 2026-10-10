@@ -132,7 +132,8 @@ if ARGV.include?("--self-test")
       ops:  [[:edit, "kiosk-demo-atablefor/app/models/booking.rb", "enum ", "enum_x "],
              [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "belongs_to ", "belongs_to_x "],
              [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "scope ", "scope_x "],
-             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "include ", "include_x "]],
+             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "include ", "include_x "],
+             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "validate ", "validate_x "]],
       expect: /app\/models\/booking\.rb: named in FRAGMENT_PATHS, and the extractor finds NO unit shared/ },
     { id: "per-demo-path-in-neither-list", rule: "fragments",
       what: "a `:per_demo` path drops out of FRAGMENT_EXCLUDED without joining FRAGMENT_PATHS",
@@ -1140,6 +1141,11 @@ FRAGMENTS = {
     ships: %w[atablefor hoteling],
     why:   "Each booking's own lifecycle.",
   },
+  "app/models/booking.rb#validate" => {
+    rule:  :per_demo,
+    ships: %w[atablefor hoteling],
+    why:   "Each booking's own rules.",
+  },
   "app/models/booking.rb#scope" => {
     rule:  :per_demo,
     ships: %w[atablefor hoteling],
@@ -1373,6 +1379,8 @@ DEMO_SPEC_SUBDIRS = %w[spec test].freeze
 
 # :code — copies agree modulo comments; :per_file — same name, each file's own body.
 SPEC_UNITS = {
+  "ADDRESS" => { rule: :code, why: "The served delivery address the getgrocery tests order to." },
+  "SHOP" => { rule: :code, why: "The shop's zone in the getgrocery clock tests." },
   "errors" => { rule: :per_file, why: "Each model test's shorthand for the full messages a model answers." },
   "include" => { rule: :per_file, why: "Each file's own mixins." },
   "place" => { rule: :per_file, why: "Each getgrocery test places the order its own assertions need." },

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-10: **hoteling checks stays in its models**: a reservation holds at most 30 nights and a rate is at most €10,000, so the oversized-total refusal is gone.
+
 - 2026-10-10: **getgrocery checks orders in its models**: a cart is at most 50 lines of at most 99 each, so the oversized-total refusal is gone.
 
 - 2026-10-10: **atablefor drops the table deposit and checks bookings in its models**: `availability` rows lose `deposit_eur`, and a party is at most 20.

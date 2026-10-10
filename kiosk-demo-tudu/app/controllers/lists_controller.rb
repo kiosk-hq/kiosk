@@ -11,7 +11,7 @@ class ListsController < ApplicationController
 
   before_action :authenticate_user!, except: %i[index shared]
 
-  rescue_from Kiosk::Server::Errors::BadRequest, Kiosk::Server::Errors::Forbidden do |refusal|
+  rescue_from ActiveRecord::RecordInvalid, Kiosk::Server::Errors::Forbidden do |refusal|
     redirect_to lists_path, alert: refusal.message
   end
 

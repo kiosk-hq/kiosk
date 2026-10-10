@@ -6,7 +6,7 @@ class TodosController < ApplicationController
 
   before_action :authenticate_user!
 
-  rescue_from Kiosk::Server::Errors::BadRequest, Kiosk::Server::Errors::Forbidden do |refusal|
+  rescue_from ActiveRecord::RecordInvalid, Kiosk::Server::Errors::Forbidden do |refusal|
     redirect_to list_path(params[:list_id]), alert: refusal.message
   end
 

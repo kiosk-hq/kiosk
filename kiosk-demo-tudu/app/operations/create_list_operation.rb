@@ -3,8 +3,6 @@
 # A new list, owned by the principal that creates it.
 class CreateListOperation
   def self.call(principal_id:, title:)
-    raise Kiosk::Server::Errors::BadRequest, "title required" if title.to_s.strip.empty?
-
     list = List.create!(account_id: principal_id, title: title,
                         memberships: [Membership.new(account_id: principal_id, role: :owner)])
     { list_id: list.id }

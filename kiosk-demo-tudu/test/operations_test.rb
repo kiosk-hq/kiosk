@@ -15,7 +15,7 @@ class OperationsTest < ActiveSupport::TestCase
 
   test "a todo needs a title, and a list its principal is on" do
     as(@bob) do
-      assert_raises(Kiosk::Server::Errors::BadRequest) do
+      assert_raises(ActiveRecord::RecordInvalid) do
         AddTodoOperation.call(agent_id: nil, list_id: @list.id, title: "  ")
       end
     end

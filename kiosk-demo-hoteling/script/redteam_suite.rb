@@ -480,7 +480,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     end
 
     # CONTROL: well-formed filters still answer 200 with an array.
-    filtered = client.query(a, name: "search_hotels", min_stars: 1, max_price_cents: 10_000_000)
+    filtered = client.query(a, name: "search_hotels", min_stars: 1, max_price_cents: 50_000)
     unless filtered.status == 200 && filtered.body.is_a?(Array)
       @failures << "CONTROL well-formed search_hotels filters → HTTP #{filtered.status} " \
                    "#{filtered.body.inspect[0, 80]} (want 200 + an array)"

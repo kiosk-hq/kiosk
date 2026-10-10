@@ -9,7 +9,16 @@ class Reservation < ApplicationRecord
   enum :payment_status, { unpaid: "unpaid", paying: "paying", paid: "paid" }
 
   belongs_to :user
-  belongs_to :scooter
+  belongs_to :scooter, optional: true
+
+  # The handle a reservation is asked for by; it names the vehicle to hold.
+  attribute :scooter_code, :string
+  before_validation { self.scooter ||= Scooter.find_by(code: scooter_code) if scooter_code }
+
+  validate :scooter_in_fleet, on: :create
+  # Which rental verb activates it depends on the vehicle.
+  validate :licence_free,     on: :start_rental
+  validate :licence_required, on: :rent_motorcycle
 
   # A settlement whose cart names this reservation (`line_items @> [{reservation_id}]`).
   SETTLEMENT_FOR_ROW = Arel.sql(
@@ -39,5 +48,29 @@ class Reservation < ApplicationRecord
     return "pending" if paying?
 
     "unpaid"
+  end
+
+  private
+
+  def scooter_in_fleet
+    return if scooter
+
+    errors.add(:scooter_code, "#{scooter_code} is not in this fleet — call scooters_available for the " \
+                              "vehicles you can reserve")
+  end
+
+  def licence_free
+    return if scooter.licence_free?
+
+    errors.add(:base, "#{scooter.code} is a licence-required motorcycle — use rent_motorcycle for " \
+                      "licence-required vehicles; it requires the KYC attributes age_over_18 and " \
+                      "licence_a, so POST <endpoint>/request_kyc first if you do not have them yet")
+  end
+
+  def licence_required
+    return if scooter.licence_required?
+
+    errors.add(:base, "#{scooter.code} is not a licence-required motorcycle — use start_rental for " \
+                      "licence-free vehicles")
   end
 end

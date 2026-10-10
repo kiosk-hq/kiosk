@@ -36,10 +36,9 @@ class LicenceFlagTest < ActiveSupport::TestCase
   end
 
   test "each rental verb gates on its predicate, never on the raw column" do
-    { "start_rental_operation.rb" => "licence_free?", "rent_motorcycle_operation.rb" => "licence_required?" }.each do |file, predicate|
-      code = Rails.root.join("app/operations", file).read.lines.grep_v(/\A\s*#/).join
-      assert_includes code, predicate, file
-      assert_no_match(/\bneeds_licence\b/, code, file)
-    end
+    code = Rails.root.join("app/models/reservation.rb").read.lines.grep_v(/\A\s*#/).join
+    assert_includes code, "scooter.licence_free?"
+    assert_includes code, "scooter.licence_required?"
+    assert_no_match(/\bneeds_licence\b/, code)
   end
 end

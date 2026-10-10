@@ -4,9 +4,8 @@
 # the cart must pay. Whether the principal may ride it is the rental verb's question.
 class ReserveOperation
   def self.call(principal_id:, scooter_code:)
-    scooter = Scooter.find_by(code: scooter_code) or
-      raise Kiosk::Server::Errors::BadRequest, "scooter not found: #{scooter_code}"
-    reservation = Reservation.create!(user_id: principal_id, scooter: scooter)
+    reservation = Reservation.create!(user_id: principal_id, scooter_code: scooter_code)
+    scooter     = reservation.scooter
     price       = scooter.price_per_min_cents
 
     {

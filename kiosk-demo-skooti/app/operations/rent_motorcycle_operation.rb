@@ -6,11 +6,7 @@ class RentMotorcycleOperation
   def self.call(reservation_id:)
     Kiosk::Server::Kyc.require!
     reservation = Rental.own_reservation!(reservation_id)
-    unless reservation.scooter.licence_required?
-      raise Kiosk::Server::Errors::BadRequest,
-            "#{reservation.scooter.code} is not a licence-required motorcycle — use start_rental " \
-            "for licence-free vehicles"
-    end
+    reservation.validate!(:rent_motorcycle)
     Rental.require_paid!(reservation)
     Rental.activate!(reservation)
   end

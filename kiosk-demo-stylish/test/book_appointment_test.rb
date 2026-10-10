@@ -64,7 +64,7 @@ class BookAppointmentTest < ActiveSupport::TestCase
   end
 
   test "an unknown salon or service is refused by name" do
-    assert_includes assert_kiosk_refused { book(salon_id: 999_999) }.message, "unknown salon_id 999999"
+    assert_includes assert_kiosk_refused { book(salon_id: 999_999) }.message, "salon_id 999999 is not a salon here"
     assert_includes assert_kiosk_refused { book(service_id: 999_999) }.message, "#{@colour.id} (Colour)"
     assert_equal 0, Appointment.count
   end

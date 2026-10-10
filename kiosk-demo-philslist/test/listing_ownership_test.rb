@@ -37,7 +37,7 @@ class ListingOwnershipTest < ActiveSupport::TestCase
 
   test "an edit cannot blank the title" do
     as(@alice) do
-      assert_raises(Kiosk::Server::Errors::BadRequest) do
+      assert_raises(ActiveRecord::RecordInvalid) do
         EditListingOperation.call(listing_id: @listing.id, changes: { "title" => "" })
       end
     end

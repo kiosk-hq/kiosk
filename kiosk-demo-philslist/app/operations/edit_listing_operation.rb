@@ -7,9 +7,7 @@ class EditListingOperation
     # One answer for absent and foreign, so ids cannot be probed.
     raise Kiosk::Server::Errors::Forbidden.new("listing not owned by the authenticated principal",
                                                hint: "You may only edit your own listings.") unless listing
-    unless listing.update(changes)
-      raise Kiosk::Server::Errors::BadRequest, listing.errors.full_messages.to_sentence
-    end
+    listing.update!(changes)
 
     { listing_id: listing_id, updated: true }
   end

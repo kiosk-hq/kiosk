@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1900 anchors.
+# 1907 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -318,8 +318,8 @@ kiosk-demo-atablefor/app/controllers/home_controller.rb	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
-kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	rosters = Restaurant.distinct.pluck(:timezone).to_h { [_1, Seatings.upcoming(zone: Time.find_zone!(_1))] }
-kiosk-demo-atablefor/app/controllers/kiosk/dining_room_controller.rb	tables = RestaurantTable.joins(:restaurant).where(capacity: party_size..)
+kiosk-demo-atablefor/app/models/restaurant.rb	def upcoming_seatings(days: 2)
+kiosk-demo-atablefor/app/models/table_search.rb	.where(restaurant_tables: { capacity: party_size.. })
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
 kiosk-demo-atablefor/app/views/home/index.html.erb	      <h1>Point your AI assistant here — it books the table.</h1>
 kiosk-demo-atablefor/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor
@@ -339,8 +339,9 @@ kiosk-demo-atablefor/config/initializers/kiosk.rb	dispute_count:           nil,
 kiosk-demo-atablefor/config/initializers/kiosk.rb	pow_difficulty: "high",
 kiosk-demo-atablefor/config/initializers/kiosk.rb	settled_purchases_count: Booking.confirmed.where(user_id: identity.user_id).count,
 kiosk-demo-atablefor/db/seeds.rb	# A few Lisbon restaurants with named tables, and two diners who sign in with a
-kiosk-demo-atablefor/db/seeds.rb	# clock (app/models/seatings.rb), so nothing here goes stale.
+kiosk-demo-atablefor/db/seeds.rb	# clock (Restaurant#upcoming_seatings), so nothing here goes stale.
 kiosk-demo-atablefor/script/redteam_suite.rb	BATTERY.record("WholeValuedFloatBody",
+kiosk-demo-atablefor/test/restaurant_test.rb	the upcoming seatings roll forward on each restaurant's clock
 kiosk-demo-atablefor/test/stories/booking_test.rb	a diner with no account books a table for two at eight and finds it among their bookings
 kiosk-demo-atablefor/test/stories/booking_test.rb	table = diner.open_tables.find { _1["seating_time"] == "20:00" }
 kiosk-demo-atablefor/test/stories/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk["capabilities"].sort
@@ -368,7 +369,7 @@ kiosk-demo-getgrocery/README.md	minutes before it ends (querying at 11:00 Dublin
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	It ECHOES that row, so it is read on the clock the row was published on — the delivery address's — and NOT in your own calendar; that way
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def create_order
-kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	WireArguments.caller_day(date, zone: zone, caller_zone: Kiosk::Server::CurrentRequest.timezone,
+kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	caller_zone: Kiosk::Server::CurrentRequest.timezone)
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/storefront_controller.rb	def my_orders
@@ -377,15 +378,18 @@ kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	class CourierDispatchJob 
 kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	order.update!(dispatch_at: [rand(DeliverySlots::PICKING).minutes.from_now, order.slot_at].max)
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	  DRIVE   = 5.minutes
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	  PICKING = 20..30 # minutes
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	(slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	def zone_for(district) = Time.find_zone!(DublinZones::ZONES.fetch(district))
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	(slot_at + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	def zone_at(address) = Time.find_zone!(DublinZones::ZONES.fetch(DublinZones.check(address).district, DEFAULT_ZONE_NAME))
 kiosk-demo-getgrocery/app/models/dublin_zones.rb	# The clock of each served district.
-kiosk-demo-getgrocery/app/operations/create_order_operation.rb	Kiosk::Server::Kyc.require! if items.any? { products[_1[:sku]].age_restricted? }
+kiosk-demo-getgrocery/app/models/order.rb	def window_bookable
+kiosk-demo-getgrocery/app/models/slot_search.rb	# The shop's day the caller's day starts on, never before the soonest it delivers.
+kiosk-demo-getgrocery/app/models/slot_search.rb	def calendar = caller_zone || zone
+kiosk-demo-getgrocery/app/operations/create_order_operation.rb	Kiosk::Server::Kyc.require! if order.order_items.any? { _1.product.age_restricted? }
+kiosk-demo-getgrocery/app/operations/create_order_operation.rb	zone     = DeliverySlots.zone_at(delivery_address)
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	this order is not paid yet — reschedule_delivery moves an already-paid order
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	unless order.paid?
-kiosk-demo-getgrocery/app/operations/wire_arguments.rb	# A real calendar day that has not passed at the delivery address.
-kiosk-demo-getgrocery/app/operations/wire_arguments.rb	# The day a caller named, read on its own calendar (`Kiosk-Timezone`, else the
 kiosk-demo-getgrocery/app/services/price_checker.rb	unless presented.sort == ordered(order_id)
+kiosk-demo-getgrocery/app/validators/served_address_validator.rb	record.errors.add(attribute, DublinZones.reject_message(result)) unless result.ok?
 kiosk-demo-getgrocery/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-getgrocery/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery
 kiosk-demo-getgrocery/app/views/layouts/home.html.erb	<link rel="kiosk" href="<%= Kiosk.configuration.skill_url %>">
@@ -438,6 +442,11 @@ kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal [2, 3, 4, 5, 6], 
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	test "windows are on the district's clock, across daylight saving" do
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	the label names its zone
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	windows are on the district's clock, across daylight saving
+kiosk-demo-getgrocery/test/order_test.rb	closes too soon
+kiosk-demo-getgrocery/test/order_test.rb	its window has not passed and still reaches the door
+kiosk-demo-getgrocery/test/slot_search_test.rb	a caller's zone is only what it declares
+kiosk-demo-getgrocery/test/slot_search_test.rb	test "an address outside the served districts is refused with the reason" do
+kiosk-demo-getgrocery/test/slot_search_test.rb	the day a caller names is read on its declared calendar
 kiosk-demo-getgrocery/test/stories/age_check_test.rb	a shopper buys wine once a verification service confirms they are over 18
 kiosk-demo-getgrocery/test/stories/claim_test.rb	an assistant that started on its own is linked to Hana and pays with her saved card
 kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal "ready", hanas.sets_up_payment["status"]
@@ -455,12 +464,6 @@ kiosk-demo-getgrocery/test/stuck_paying_test.rb	the sweep acts on each answer th
 kiosk-demo-getgrocery/test/test_helper.rb	  setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
 kiosk-demo-getgrocery/test/test_helper.rb	ENV["KIOSK_TEST_AUTOCARD"] = "1"
 kiosk-demo-getgrocery/test/test_helper.rb	setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
-kiosk-demo-getgrocery/test/wire_arguments_test.rb	a caller's zone is only what it declares
-kiosk-demo-getgrocery/test/wire_arguments_test.rb	a delivery date is a real day that has not passed at the address
-kiosk-demo-getgrocery/test/wire_arguments_test.rb	a window too close to its end cannot be booked
-kiosk-demo-getgrocery/test/wire_arguments_test.rb	closes too soon
-kiosk-demo-getgrocery/test/wire_arguments_test.rb	test "an address outside the served districts is refused with the reason" do
-kiosk-demo-getgrocery/test/wire_arguments_test.rb	the day a caller names is read on its declared calendar
 kiosk-demo-hoteling/README.md	  stamped with a 15-minute pay-by deadline — recorded for an operator to act
 kiosk-demo-hoteling/README.md	- `POST /kiosk/payment_setup` — check whether the principal has a saved payment method
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
@@ -471,14 +474,14 @@ kiosk-demo-hoteling/README.md	bundle exec rspec      # the tests; CI runs exactl
 kiosk-demo-hoteling/README.md	this origin serves, never the registered verb names. That is a MODELLING rule,
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def hotel_detail
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def search_hotels
+kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	property = Property.find(params[:property_id])
+kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	search = RoomSearch.new(property: Property.find(params[:property_id]),
 kiosk-demo-hoteling/app/models/property.rb	# One hotel, sold on its own clock (`timezone`).
 kiosk-demo-hoteling/app/models/room_hold.rb	  PAY_BY = 15.minutes
 kiosk-demo-hoteling/app/models/room_hold.rb	# guest is expected to have paid by. Nothing here enforces that deadline.
 kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	no settlement for this booking
 kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	refuse "no settlement for this booking" unless booking.paid?
 kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	expires_at: RoomHold::PAY_BY.from_now)
-kiosk-demo-hoteling/app/operations/wire_arguments.rb	def existing_property
-kiosk-demo-hoteling/app/operations/wire_arguments.rb	def property_not_found
 kiosk-demo-hoteling/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-hoteling/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
 kiosk-demo-hoteling/before-after.md	`spec/stories/booking_spec.rb` runs the errand with no human present:
@@ -588,13 +591,14 @@ kiosk-demo-skooti/README.md	attestation proves the assistant is *eligible* — t
 kiosk-demo-skooti/README.md	bin/rails test         # the tests; CI runs exactly this
 kiosk-demo-skooti/app/models/reservation.rb	enum :status, { reserved: "reserved", active: "active" }
 kiosk-demo-skooti/app/models/reservation.rb	return "pending" if paying?
+kiosk-demo-skooti/app/models/reservation.rb	return if scooter.licence_free?
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	# attested `age_over_18` and `licence_a`.
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	Kiosk::Server::Kyc.require!
 kiosk-demo-skooti/app/operations/rental.rb	Reservation.own.reserved.find_by(id: reservation_id) or refuse
 kiosk-demo-skooti/app/operations/rental.rb	def require_paid!(reservation)
 kiosk-demo-skooti/app/operations/rental.rb	return if reservation.paid?
-kiosk-demo-skooti/app/operations/reserve_operation.rb	reservation = Reservation.create!(user_id: principal_id, scooter: scooter)
-kiosk-demo-skooti/app/operations/start_rental_operation.rb	unless reservation.scooter.licence_free?
+kiosk-demo-skooti/app/operations/reserve_operation.rb	reservation = Reservation.create!(user_id: principal_id, scooter_code: scooter_code)
+kiosk-demo-skooti/app/operations/start_rental_operation.rb	reservation.validate!(:start_rental)
 kiosk-demo-skooti/app/services/rental_token_issuer.rb	# Signs the offline rental token a scooter lock verifies with no round trip,
 kiosk-demo-skooti/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
@@ -1121,6 +1125,8 @@ kiosk-server/lib/kiosk/server/handler_dispatch.rb	def wire_error(status, parsed)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
+kiosk-server/lib/kiosk/server/handler_mixin.rb	status = ::ActionDispatch::ExceptionWrapper.rescue_responses[exception.class.name]
+kiosk-server/lib/kiosk/server/handler_mixin.rb	when ::ActiveModel::ValidationError then exception.model
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
 kiosk-server/lib/kiosk/server/kyc.rb	unless secure_equal?(row.fetch("nonce"), body["nonce"].to_s)
@@ -1498,6 +1504,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	still answers 409 conflict when 
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	404s a request that did not come through the Kiosk wire
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	answers bad_request whose detail is the errors' full messages
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	carries a 403 code a bare status cannot name (rls_denied)
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one

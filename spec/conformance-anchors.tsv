@@ -377,8 +377,8 @@ kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	class CourierDispatchJob 
 kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	order.update!(dispatch_at: [rand(DeliverySlots::PICKING).minutes.from_now, order.slot_at].max)
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	  DRIVE   = 5.minutes
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	  PICKING = 20..30 # minutes
+kiosk-demo-getgrocery/app/models/delivery_slots.rb	(slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	def zone_for(district) = Time.find_zone!(DublinZones::ZONES.fetch(district))
-kiosk-demo-getgrocery/app/models/delivery_slots.rb	slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE < at
 kiosk-demo-getgrocery/app/models/dublin_zones.rb	# The clock of each served district.
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	Kiosk::Server::Kyc.require! if items.any? { products[_1[:sku]].age_restricted? }
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	this order is not paid yet — reschedule_delivery moves an already-paid order
@@ -434,7 +434,7 @@ kiosk-demo-getgrocery/script/redteam_suite.rb	the two clocks are 90000s apart
 kiosk-demo-getgrocery/test/courier_states_test.rb	for an open window the courier leaves 20–30 minutes after payment and arrives five minutes later
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	a window takes orders until picking and the drive no longer fit before it ends
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal 0, DeliverySlots.slot_at(Date.new(2026, 1, 15), 1).utc_offset
-kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal [2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH)
+kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal [2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN)
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	test "windows are on the district's clock, across daylight saving" do
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	the label names its zone
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	windows are on the district's clock, across daylight saving

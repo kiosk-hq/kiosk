@@ -24,8 +24,8 @@ RSpec.describe Booking do
 
   it "sells tonight and refuses yesterday on the property's clock, naming the floor and the zone" do
     expect(errors(check_in: "2026-08-31").sole)
-      .to start_with("check_in 2026-08-31 is in the past — this hotel sells room-nights from 2026-09-01 " \
-                     "onwards (Europe/Istanbul)")
+      .to start_with("check_in 2026-08-31 is in the past — the earliest night this hotel sells is " \
+                     "2026-09-01 (Europe/Istanbul)")
   end
 
   it "holds at most MAX_NIGHTS nights, so a total always fits" do

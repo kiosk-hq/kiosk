@@ -18,9 +18,8 @@ module DeliverySlots
 
   def default_zone = Time.find_zone!(DEFAULT_ZONE_NAME)
 
-  def zone_for(district) = Time.find_zone!(DublinZones::ZONES.fetch(district))
-
-
+  # The clock of the address's district; the origin's for an address it does not serve.
+  def zone_at(address) = Time.find_zone!(DublinZones::ZONES.fetch(DublinZones.check(address).district, DEFAULT_ZONE_NAME))
 
   # Today, or tomorrow once today's last window has closed.
   def soonest_date(zone)
@@ -39,12 +38,12 @@ module DeliverySlots
   end
 
   # A window takes orders while a basket paid now still reaches the door inside it.
-  def closed?(date, slot_id, zone)
-    (slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
+  def closed?(slot_at)
+    (slot_at + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
   end
 
   def bookable_ids(date, zone)
-    (1..COUNT).reject { |slot_id| closed?(date, slot_id, zone) }
+    (1..COUNT).reject { |slot_id| closed?(slot_at(date, slot_id, zone)) }
   end
 
   # "14:35 (Europe/Dublin)".

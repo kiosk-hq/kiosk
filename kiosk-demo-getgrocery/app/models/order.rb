@@ -5,6 +5,8 @@
 class Order < ApplicationRecord
   include Kiosk::Owned
 
+  MAX_ITEMS = 50
+
   enum :status, {
     created:          "created",
     paying:           "paying",
@@ -15,7 +17,13 @@ class Order < ApplicationRecord
   }
 
   belongs_to :user
-  has_many :order_items, dependent: :destroy
+  has_many :order_items, dependent: :destroy, autosave: true
+
+  # What a caller placing or moving an order is held to.
+  validates :order_items, length: { in: 1..MAX_ITEMS, too_short: "must name a product",
+                                    too_long: "are at most %{count} lines" }, on: :place
+  validates :address, served_address: true, on: %i[place reschedule]
+  validate :window_bookable, on: %i[place reschedule]
 
   # Paid and not yet with the courier.
   scope :awaiting_courier, -> { where(status: %i[paid rescheduled]) }
@@ -50,4 +58,18 @@ class Order < ApplicationRecord
   def zone = Time.find_zone!(timezone)
 
   def items_by_product = order_items.sort_by { _1.product.name }
+
+  private
+
+  # A window takes orders while a basket paid now still reaches the door inside it.
+  def window_bookable
+    day = slot_at.in_time_zone(zone).to_date
+    if day < zone.today
+      errors.add(:slot_at, "is on #{day.iso8601}, which is in the past at the delivery address")
+    elsif DeliverySlots.closed?(slot_at)
+      errors.add(:slot_at, "#{DeliverySlots.label(slot_at, zone)} on #{day.iso8601} closes too soon to deliver " \
+                           "an order placed now — choose a later slot; call delivery_slots again for the " \
+                           "still-bookable windows")
+    end
+  end
 end

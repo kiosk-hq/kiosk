@@ -36,7 +36,7 @@ class DeliverySlotsTest < ActiveSupport::TestCase
 
   test "every served district has a clock" do
     assert_equal DublinZones::SERVED.sort, DublinZones::ZONES.keys.sort
-    assert_equal "Europe/Dublin", DeliverySlots.zone_for("D02").name
+    assert_equal "Europe/Dublin", DeliverySlots.zone_at("42 Camden Street, Dublin 2").name
   end
 
   test "an address is routed to a served district or refused with the served list" do

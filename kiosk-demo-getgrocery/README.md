@@ -136,7 +136,7 @@ re-validate the same rule: a closed window is rejected with a clean **400
 (`bad_request`)**, never silently booked. After payment the courier sets out
 20–30 minutes later, or as a later window opens (`out_for_delivery`), and
 `delivered` follows five minutes on. `test/delivery_slots_test.rb` and
-`test/wire_arguments_test.rb` pin the filter across DST and the caller's
+`test/slot_search_test.rb` pin the filter across DST and the caller's
 declared calendar.
 
 ## Age-restricted purchases (anonymized KYC)

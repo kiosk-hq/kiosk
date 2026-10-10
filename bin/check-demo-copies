@@ -595,11 +595,6 @@ COPIES = {
     rule: :identical,
     why:  "Rails' own base class; the queue adapter is chosen per demo in config/application.rb.",
   },
-  "app/operations/wire_arguments.rb" => {
-    rule: :per_demo,
-    ships: %w[getgrocery hoteling],
-    why:  "Each demo's argument vocabulary; the units the copies share are held in FRAGMENTS.",
-  },
   "db/migrate/20260101000001_create_users.rb" => {
     rule:   :identical,
     why:    "The users table the engine's identity tables reference, with Devise's login columns.",
@@ -1099,7 +1094,6 @@ FRAGMENT_PATHS = %w[
   app/controllers/home_controller.rb
   app/models/booking.rb
   app/models/user.rb
-  app/operations/wire_arguments.rb
 ].freeze
 
 FRAGMENT_EXCLUDED = {
@@ -1114,11 +1108,6 @@ FRAGMENT_EXCLUDED = {
 }.freeze
 
 FRAGMENTS = {
-  "app/operations/wire_arguments.rb#MAX_INT4" => {
-    rule:  :code,
-    ships: %w[getgrocery hoteling],
-    why:   "The PostgreSQL `integer` bound, the same number for the same reason in all three.",
-  },
   "app/models/user.rb#devise" => {
     rule:   :code,
     ships:  %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
@@ -1150,16 +1139,6 @@ FRAGMENTS = {
     rule:  :per_demo,
     ships: %w[atablefor hoteling],
     why:   "Each booking's own lifecycle.",
-  },
-  "app/operations/wire_arguments.rb#refuse" => {
-    rule:  :code,
-    ships: %w[getgrocery hoteling],
-    why:   "Raises the 400 every argument check answers with.",
-  },
-  "app/operations/wire_arguments.rb#priceable_total!" => {
-    rule:  :per_demo,
-    ships: %w[getgrocery hoteling],
-    why:   "Each demo bounds its own total column.",
   },
   "app/models/booking.rb#scope" => {
     rule:  :per_demo,
@@ -1394,7 +1373,7 @@ DEMO_SPEC_SUBDIRS = %w[spec test].freeze
 
 # :code — copies agree modulo comments; :per_file — same name, each file's own body.
 SPEC_UNITS = {
-  "refusal" => { rule: :per_file, why: "Each test file's own assert_raises shorthand." },
+  "errors" => { rule: :per_file, why: "Each model test's shorthand for the full messages a model answers." },
   "include" => { rule: :per_file, why: "Each file's own mixins." },
   "place" => { rule: :per_file, why: "Each getgrocery test places the order its own assertions need." },
   "attr_reader" => { rule: :per_file, why: "Each processor stub records what its own test reads back." },

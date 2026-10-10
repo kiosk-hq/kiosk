@@ -282,18 +282,14 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               supplied: { sku: sku, qty: v }
     end
 
-    # Magnitude: a total past int4 (refused by the handler's sum check) and a qty past int4 (by the schema).
-    price = catalog.first["price_cents"].to_i
-    raise "redteam(getgrocery): catalogue row has no price_cents" unless price.positive?
-
-    max_int4 = 2_147_483_647
-    { "unpriceable cart"     => (max_int4 / price) + 1,
-      "unstorable qty"       => max_int4 + 1 }.each do |why, v|
-      refused "create_order items[0].qty=#{v} (#{why})",
-              client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
-                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
-              supplied: { sku: sku, qty: v }
-    end
+    # Magnitude: a qty no line carries, and more lines than an order carries — both refused by the schema.
+    refused "create_order items[0].qty=1000",
+            client.run(a, name: "create_order", items: [{ sku: sku, qty: 1000 }],
+                          delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
+            supplied: { sku: sku, qty: 1000 }
+    refused "create_order with 1000 lines",
+            client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }] * 1000,
+                          delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS)
 
     # A date is `YYYY-MM-DD` only; an ambiguous `09/01/2026` must not be guessed at.
     ["nope", "2026-13-45", "0000-01-01", "true",

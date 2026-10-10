@@ -1,0 +1,16 @@
+# Validation messages name an attribute as the wire spells it.
+en:
+  activemodel:
+    attributes:
+      slot_search:
+        delivery_address: delivery_address
+        date: date
+  activerecord:
+    attributes:
+      order:
+        address: delivery_address
+        slot_at: delivery window
+        order_items: items
+      order/order_items:
+        product: sku
+        qty: qty

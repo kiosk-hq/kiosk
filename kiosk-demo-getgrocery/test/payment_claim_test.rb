@@ -81,7 +81,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
     assert wait_until { status(order["order_id"]) == "paying" }
     assert_equal "pending", payment_state(order["order_id"])
 
-    dear = place("olive-oil", qty: 100)
+    dear = place("olive-oil", qty: OrderItem::MAX_QTY)
     assert_not_equal order["order_id"], dear["order_id"]
     assert_equal order["total_cents"], Order.find(order["order_id"]).total_cents
 

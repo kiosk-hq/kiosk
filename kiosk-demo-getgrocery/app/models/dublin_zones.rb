@@ -64,25 +64,24 @@ module DublinZones
     format("D%02d", n)
   end
 
+  # Why the address is refused, worded to follow its field name.
   def reject_message(result)
     served = SERVED.join(", ")
     case result.reason
     when :blank
-      "missing delivery_address — getgrocery needs a Dublin delivery address " \
-        "with a postal district (e.g. \"42 Camden Street, Dublin 2\") before it " \
-        "can show delivery slots. Ask your human for their real address."
+      "is missing — getgrocery needs a Dublin delivery address with a postal district " \
+        "(e.g. \"42 Camden Street, Dublin 2\") before it can show delivery slots. Ask your " \
+        "human for their real address."
     when :no_district
-      "delivery_address names Dublin but no postal district — getgrocery routes " \
-        "by district and needs one (e.g. \"Dublin 2\" or an Eircode like \"D02 XY45\"). " \
-        "Served districts: #{served}. Ask your human to confirm their real address."
+      "names Dublin but no postal district — getgrocery routes by district and needs one " \
+        "(e.g. \"Dublin 2\" or an Eircode like \"D02 XY45\"). Served districts: #{served}. " \
+        "Ask your human to confirm their real address."
     when :not_dublin
-      "delivery_address is not a Dublin address — getgrocery delivers only within " \
-        "Dublin (served districts #{served}). Confirm the real delivery address with your human."
+      "is not a Dublin address — getgrocery delivers only within Dublin (served districts " \
+        "#{served}). Confirm the real delivery address with your human."
     when :out_of_zone
-      "delivery_address is in #{result.district}, which getgrocery does not deliver to — " \
-        "served districts are #{served}. Ask your human for an in-zone Dublin address."
-    else
-      "delivery_address is not a served Dublin address (served districts #{served})."
+      "is in #{result.district}, which getgrocery does not deliver to — served districts are " \
+        "#{served}. Ask your human for an in-zone Dublin address."
     end
   end
 end

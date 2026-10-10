@@ -16,17 +16,15 @@ class RescheduleDeliveryOperation
            "and leave this one unpaid" unless order.paid?
 
     address = delivery_address.presence || order.address
-    zone    = delivery_address.present? ? DeliverySlots.zone_for(WireArguments.served_district(address)) : order.zone
-    date    = WireArguments.delivery_date(delivery_date, zone: zone)
-    WireArguments.bookable_slot!(date, delivery_slot_id, zone)
-    slot_at = DeliverySlots.slot_at(date, delivery_slot_id, zone)
-
-    order.update!(status: :rescheduled, slot_at: slot_at, address: address, timezone: zone.name)
+    zone    = DeliverySlots.zone_at(address)
+    order.assign_attributes(status: :rescheduled, address: address, timezone: zone.name,
+                            slot_at: DeliverySlots.slot_at(Date.iso8601(delivery_date), delivery_slot_id, zone))
+    order.save!(context: :reschedule)
     CourierDispatchJob.arm!(order.id)
 
     { order_id:          order.id,
-      rescheduled_at:    slot_at.iso8601,
-      rescheduled_label: DeliverySlots.label(slot_at, zone),
+      rescheduled_at:    order.slot_at.in_time_zone(zone).iso8601,
+      rescheduled_label: DeliverySlots.label(order.slot_at, zone),
       timezone:          zone.name }
   end
 

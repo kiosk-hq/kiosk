@@ -49,23 +49,20 @@ class Kiosk::OrdersController < ActionController::API
               "line against its own catalogue before it charges anything, so a cart that disagrees is " \
               "refused outright rather than partly honoured. Alcohol needs a completed 18+ check " \
               "first (`request_kyc`), and asking for it without one is refused rather than quietly " \
-              "dropped from the basket. A cart whose catalogue total is larger than this " \
-              "operator can put on one order is refused outright, naming the maximum, rather " \
-              "than partly taken."
+              "dropped from the basket. A cart is at most #{Order::MAX_ITEMS} lines of at " \
+              "most #{OrderItem::MAX_QTY} each."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
                  items: {
-                   type: "array", minItems: 1,
+                   type: "array", minItems: 1, maxItems: Order::MAX_ITEMS,
                    description: "The complete cart — products referenced by sku.",
                    items: {
                      type: "object", additionalProperties: false,
                      properties: {
                        sku: { type: "string", description: "Product sku from the catalog query." },
-                       qty: { type: "integer", minimum: 1, maximum: WireArguments::MAX_INT4,
-                              description: "Quantity. The order's total — each line's catalogue " \
-                                           "price times its qty, summed — is bounded too; a cart " \
-                                           "too large to price is refused, not partly taken." },
+                       qty: { type: "integer", minimum: 1, maximum: OrderItem::MAX_QTY,
+                              description: "Quantity." },
                      },
                      required: ["sku", "qty"],
                    },

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-10: **getgrocery checks orders in its models**: a cart is at most 50 lines of at most 99 each, so the oversized-total refusal is gone.
+
 - 2026-10-10: **atablefor drops the table deposit and checks bookings in its models**: `availability` rows lose `deposit_eur`, and a party is at most 20.
 
 - 2026-10-10: **A failed model validation answers 400 `bad_request` naming what is wrong**: `RecordInvalid` and `ActiveModel::ValidationError` carry their full messages to the wire.

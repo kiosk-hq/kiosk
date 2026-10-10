@@ -101,19 +101,19 @@ class Kiosk::StorefrontController < ActionController::API
                 label: "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: "D02" })
   def delivery_slots
-    district = WireArguments.served_district(params[:delivery_address])
-    zone     = DeliverySlots.zone_for(district)
-    soonest  = DeliverySlots.soonest_date(zone)
-    date     = params.key?(:date) ? requested_day(zone, soonest) : soonest
+    search = SlotSearch.new(delivery_address: params[:delivery_address], date: params[:date],
+                            caller_zone: Kiosk::Server::CurrentRequest.timezone)
+    search.validate!
 
-    render json: DeliverySlots.bookable_ids(date, zone).map { |slot_id|
-      slot_at = DeliverySlots.slot_at(date, slot_id, zone)
+    zone = search.zone
+    render json: DeliverySlots.bookable_ids(search.day, zone).map { |slot_id|
+      slot_at = DeliverySlots.slot_at(search.day, slot_id, zone)
       { "delivery_slot_id" => slot_id,
-        "date"             => date.iso8601,
+        "date"             => search.day.iso8601,
         "slot_at"          => slot_at.iso8601,
         "label"            => DeliverySlots.label(slot_at, zone),
         "timezone"         => zone.name,
-        "district"         => district }
+        "district"         => search.district }
     }
   end
 
@@ -160,12 +160,4 @@ class Kiosk::StorefrontController < ActionController::API
     }
   end
 
-  private
-
-  def requested_day(zone, soonest)
-    date = WireArguments.calendar_day(params[:date]) ||
-           WireArguments.refuse("invalid date: #{params[:date]} — use YYYY-MM-DD")
-    WireArguments.caller_day(date, zone: zone, caller_zone: Kiosk::Server::CurrentRequest.timezone,
-                                   soonest: soonest)
-  end
 end

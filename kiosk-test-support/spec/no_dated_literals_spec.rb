@@ -25,7 +25,7 @@
 # exactly the mechanism a dated example needs, and why this guard can demand a
 # proc rather than merely warn:
 #
-#     example_params({ date: -> { DeliverySlots.example_date.iso8601 } })
+#     example_params({ date: -> { DeliverySlots.default_zone.tomorrow.iso8601 } })
 #
 # Prose that is not a slot — a refusal's «e.g. …» — interpolates the same helper.
 #
@@ -150,7 +150,7 @@ RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
     expect(report).to be_empty,
                       "a demo states a calendar date in runtime code (K-972). A written-down day " \
                       "ages into a 400 with nothing in the tree changing. In a descriptor use a " \
-                      "RESOLVABLE SLOT — `example_params({ date: -> { Model.example_date.iso8601 } })`, " \
+                      "RESOLVABLE SLOT — `example_params({ date: -> { Time.find_zone!(\"Europe/Dublin\").tomorrow.iso8601 } })`, " \
                       "see Kiosk::Server::SchemaSlots — and in prose interpolate the same helper.\n" +
                       report.join("\n")
   end
@@ -182,7 +182,7 @@ RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
     end
 
     it "ALLOWS the resolvable-slot form the engine resolves per read" do
-      src = %(  example_params({ date: -> { DeliverySlots.example_date.iso8601 } })\n)
+      src = %(  example_params({ date: -> { DeliverySlots.default_zone.tomorrow.iso8601 } })\n)
       expect(dated_violations(src)).to be_empty
     end
 

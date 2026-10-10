@@ -20,6 +20,4 @@ module ReaderClock
     "#{time.in_time_zone(in_zone).strftime("%a %-d %b, %H:%M")} (#{in_zone.name})"
   end
 
-  # Tomorrow at 14:00 on the household's clock: the deadline `add_todo` offers as an example.
-  def example_due_at = default_zone.now.advance(days: 1).change(hour: 14).iso8601
 end

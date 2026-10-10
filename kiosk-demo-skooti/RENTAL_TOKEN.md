@@ -217,7 +217,7 @@ Assistant (agent token → Kiosk API)
        │
        All gates pass →
          scooter_code derived server-side from reservation FK (not from client)
-         RentalTokenIssuer.issue(scooter_code, reservation_id, now, ttl: 900)
+         RentalTokenIssuer.issue(scooter_code, reservation_id, now)
          reservation status → 'active'
        │
        Returns: { scooter_code:, rental_token:, unlock_url:, exp: }

@@ -15,13 +15,13 @@ class DeliverySlotsTest < ActiveSupport::TestCase
 
   test "a window takes orders until picking and the drive no longer fit before it ends" do
     travel_to DUBLIN.local(2026, 8, 7, 11) do
-      assert_equal [2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH)
-      assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH + 1)
+      assert_equal [2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN)
+      assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH + 1, DUBLIN)
       assert_equal [6], DeliverySlots.bookable_ids(AUGUST_7TH, TOKYO)
     end
-    travel_to(DUBLIN.local(2026, 8, 7, 11, 25)) { assert_includes DeliverySlots.bookable_ids(AUGUST_7TH), 2 }
-    travel_to(DUBLIN.local(2026, 8, 7, 11, 26)) { assert_equal [3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH) }
-    travel_to(DUBLIN.local(2026, 8, 7, 6)) { assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH) }
+    travel_to(DUBLIN.local(2026, 8, 7, 11, 25)) { assert_includes DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN), 2 }
+    travel_to(DUBLIN.local(2026, 8, 7, 11, 26)) { assert_equal [3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN) }
+    travel_to(DUBLIN.local(2026, 8, 7, 6)) { assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN) }
   end
 
   test "the soonest day steps over a day whose windows have all closed" do

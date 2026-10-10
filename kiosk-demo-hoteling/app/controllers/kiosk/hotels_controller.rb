@@ -277,18 +277,18 @@ class Kiosk::HotelsController < ActionController::API
                                room_types_scope check_in check_out timezone room_types],
                 }
   example_params({ property_id: 4,
-                   check_in:  -> { WireArguments.example_check_in.iso8601 },
-                   check_out: -> { WireArguments.example_check_out.iso8601 } })
+                   check_in:  -> { WireArguments.default_zone.tomorrow.iso8601 },
+                   check_out: -> { (WireArguments.default_zone.tomorrow + 3).iso8601 } })
   example_row({
     property_id: 4, name: "Bosphorus Palace", neighbourhood: "Beşiktaş", stars: 5,
     address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
     currency: "eur",
     room_types_scope: -> {
-      "free #{WireArguments.example_check_in.iso8601}..#{WireArguments.example_check_out.iso8601}"
+      "free #{WireArguments.default_zone.tomorrow.iso8601}..#{(WireArguments.default_zone.tomorrow + 3).iso8601}"
     },
-    check_in:  -> { WireArguments.example_check_in.iso8601 },
-    check_out: -> { WireArguments.example_check_out.iso8601 },
+    check_in:  -> { WireArguments.default_zone.tomorrow.iso8601 },
+    check_out: -> { (WireArguments.default_zone.tomorrow + 3).iso8601 },
     timezone:  WireArguments::DEFAULT_ZONE_NAME,
     room_types: [
       { room_type_id: 7, name: "Classic",   nightly_price_cents: 15000 },

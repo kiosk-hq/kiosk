@@ -33,6 +33,7 @@ module RentalTokenIssuer
   TIMESTAMP_MAX    = (1 << 64) - 1
 
   JTI_FORMAT = /\A[0-9a-f]{32}\z/
+  TTL        = 900
 
   # scooter_code and reservation_id: RFC 3986 unreserved characters, small
   # enough that every byte value is tested against all three readers.
@@ -40,7 +41,7 @@ module RentalTokenIssuer
 
   class << self
     # Refuses a field outside FIELD_CHARSET rather than sign a token every reader rejects.
-    def issue(scooter_code:, reservation_id:, now:, ttl: 900)
+    def issue(scooter_code:, reservation_id:, now:)
       key = signing_key
       raise ArgumentError, "unlock_signing_key is not configured" if key.nil?
 
@@ -52,7 +53,7 @@ module RentalTokenIssuer
       end
 
       iat     = now
-      exp     = iat + ttl
+      exp     = iat + TTL
       jti     = SecureRandom.hex(16)
       message = "#{CONTEXT_TAG}|#{scooter_code}|#{reservation_id}|#{iat}|#{exp}|#{jti}"
       sig     = key.sign(nil, message)

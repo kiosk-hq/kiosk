@@ -19,10 +19,6 @@ module WireArguments
     Property.where(id: property_id).pick(:timezone)&.then { Time.find_zone!(_1) } || default_zone
   end
 
-  def today(zone = default_zone) = zone.now.to_date
-
-  def example_check_in  = today + 1
-  def example_check_out = example_check_in + 3
 
   # @return [Array(Date, Date)] the first night and the checkout day
   def stay(check_in, check_out)
@@ -34,7 +30,7 @@ module WireArguments
 
   # A room-night before today on the property's clock. Today is bookable.
   def bookable!(check_in, zone:)
-    floor = today(zone)
+    floor = zone.today
     return if check_in >= floor
 
     refuse "check_in #{check_in.iso8601} is in the past — this hotel sells room-nights from " \

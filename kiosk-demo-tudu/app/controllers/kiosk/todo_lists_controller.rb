@@ -85,7 +85,7 @@ class Kiosk::TodoListsController < ApplicationController
                 },
                 required: ["todo_id"]
   example_params({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Book campsite",
-                   due_at: -> { ReaderClock.example_due_at } })
+                   due_at: -> { ReaderClock.default_zone.now.tomorrow.change(hour: 14).iso8601 } })
   example_row({ todo_id: "7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d" })
   def add_todo
     render json: AddTodoOperation.call(

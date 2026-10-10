@@ -63,9 +63,9 @@ class Kiosk::DiningRoomController < ApplicationController
     restaurant: "Tasca do Tejo", neighborhood: "Alfama",
     cuisine: "Portuguese tavern", restaurant_id: 1,
     restaurant_table_id: 1, table_label: "Window 6", capacity: 2,
-    seating_date: -> { Seatings.example_date.iso8601 }, seating_time: Seatings::TIMES[1],
+    seating_date: -> { Seatings.default_zone.tomorrow.iso8601 }, seating_time: Seatings::TIMES[1],
     seating_label: "#{Seatings::TIMES[1]} (#{Seatings::DEFAULT_ZONE_NAME})",
-    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
+    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.default_zone.tomorrow, Seatings::TIMES[1])) },
     timezone: Seatings::DEFAULT_ZONE_NAME,
     deposit_eur: 10,
   })

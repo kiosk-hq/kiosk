@@ -30,7 +30,7 @@ module WireArguments
   # A real calendar day that has not passed at the delivery address.
   def delivery_date(raw, zone:)
     date = calendar_day(raw) || refuse("invalid delivery_date: #{raw} — use YYYY-MM-DD from the delivery_slots row you chose")
-    refuse "delivery_date is in the past: #{date}" if date < DeliverySlots.now(zone).to_date
+    refuse "delivery_date is in the past: #{date}" if date < zone.today
 
     date
   end
@@ -50,9 +50,9 @@ module WireArguments
   # @return [Date] on the shop's calendar, never before `soonest`
   def caller_day(date, zone:, caller_zone:, soonest:)
     from  = caller_zone || zone
-    start = from.local(date.year, date.month, date.day)
-    if start.advance(days: 1) <= DeliverySlots.now(zone)
-      floor = DeliverySlots.now(from).to_date
+    start = date.in_time_zone(from)
+    if start.tomorrow.past?
+      floor = from.today
       refuse "date #{date.iso8601} is in the past on the calendar it is read in (#{from.name}); " \
              "the earliest day you can ask for is #{floor.iso8601}",
              hint: "pass #{floor.iso8601} or later. The day is read in YOUR calendar when you " \

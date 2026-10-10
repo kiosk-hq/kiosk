@@ -30,7 +30,6 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
 
   test "a token carries its scooter, reservation, lifetime and a fresh jti" do
     assert_equal ["kiosk-rental-v1", "SK-007", "resv-99", NOW.to_s, (NOW + 900).to_s], fields(issue(scooter_code: "SK-007", reservation_id: "resv-99")).first(5)
-    assert_equal (NOW + 300).to_s, fields(issue(ttl: 300))[4]
     assert_match(/\A\h{32}\z/, fields(issue).last)
     assert_not_equal issue, issue
   end

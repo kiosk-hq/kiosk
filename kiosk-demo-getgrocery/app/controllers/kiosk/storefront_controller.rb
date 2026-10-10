@@ -93,11 +93,11 @@ class Kiosk::StorefrontController < ActionController::API
                   },
                   required: %w[delivery_slot_id date slot_at label timezone district],
                 }
-  example_params({ date:             -> { DeliverySlots.example_date.iso8601 },
+  example_params({ date:             -> { DeliverySlots.default_zone.tomorrow.iso8601 },
                    delivery_address: "42 Camden Street, Dublin 2" })
   example_row({ delivery_slot_id: 1,
-                date:    -> { DeliverySlots.example_date.iso8601 },
-                slot_at: -> { DeliverySlots.slot_at(DeliverySlots.example_date, 1).iso8601 },
+                date:    -> { DeliverySlots.default_zone.tomorrow.iso8601 },
+                slot_at: -> { DeliverySlots.slot_at(DeliverySlots.default_zone.tomorrow, 1).iso8601 },
                 label: "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: "D02" })
   def delivery_slots

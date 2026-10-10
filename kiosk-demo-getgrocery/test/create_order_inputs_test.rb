@@ -83,7 +83,7 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
 
   private
 
-  def place(order_id: nil, qty: 1, delivery_date: DeliverySlots.example_date.iso8601)
+  def place(order_id: nil, qty: 1, delivery_date: DeliverySlots.default_zone.tomorrow.iso8601)
     params = { items: [{ sku: "sourdough-bread", qty: qty }],
                delivery_slot_id: 3,
                delivery_date:    delivery_date,

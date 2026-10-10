@@ -20,19 +20,16 @@ module DeliverySlots
 
   def zone_for(district) = Time.find_zone!(DublinZones::ZONES.fetch(district))
 
-  def now(zone = default_zone) = zone.now
 
-  # Tomorrow on the origin's clock: every window of it is still bookable.
-  def example_date = now.to_date + 1
 
   # Today, or tomorrow once today's last window has closed.
   def soonest_date(zone)
-    today = now(zone).to_date
+    today = zone.today
     bookable_ids(today, zone).empty? ? today + 1 : today
   end
 
   def slot_at(date, slot_id, zone = default_zone)
-    zone.local(date.year, date.month, date.day, FIRST_HOUR + (slot_id - 1) * WINDOW_HOURS)
+    date.in_time_zone(zone).change(hour: FIRST_HOUR + (slot_id - 1) * WINDOW_HOURS)
   end
 
   # "08:00–10:00 (Europe/Dublin)".
@@ -42,12 +39,12 @@ module DeliverySlots
   end
 
   # A window takes orders while a basket paid now still reaches the door inside it.
-  def closed?(date, slot_id, zone = default_zone, at: Time.current)
-    slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE < at
+  def closed?(date, slot_id, zone)
+    (slot_at(date, slot_id, zone) + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
   end
 
-  def bookable_ids(date, zone = default_zone, at: Time.current)
-    (1..COUNT).reject { |slot_id| closed?(date, slot_id, zone, at:) }
+  def bookable_ids(date, zone)
+    (1..COUNT).reject { |slot_id| closed?(date, slot_id, zone) }
   end
 
   # "14:35 (Europe/Dublin)".

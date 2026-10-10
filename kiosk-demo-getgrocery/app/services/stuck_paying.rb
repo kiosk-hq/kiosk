@@ -6,10 +6,11 @@ module StuckPaying
   # nothing releases them, and no answer leaves the claim in place.
   #
   # @param lookup [#outcome] answers :paid, :not_charged or :unknown for a cart mandate
-  def self.reconcile!(lookup:, older_than_seconds: 900, claim: Kiosk.configuration.payment_provider)
+  def self.reconcile!(lookup:, older_than_seconds: 900)
+    claim  = Kiosk.configuration.payment_provider
     orders = Order.arel_table
     stuck  = Order.paying
-                  .where(orders[:updated_at].lt(Time.now.utc - older_than_seconds))
+                  .where(orders[:updated_at].lt(older_than_seconds.seconds.ago))
                   .order(:updated_at)
                   .pluck(:id, :updated_at)
 

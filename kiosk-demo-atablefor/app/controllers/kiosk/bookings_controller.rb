@@ -55,14 +55,14 @@ class Kiosk::BookingsController < ApplicationController
                              date time seating_label seating_at timezone status]
   example_params({
     restaurant_id: 1, restaurant_table_id: 1,
-    date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1], party_size: 2,
+    date: -> { Seatings.default_zone.tomorrow.iso8601 }, time: Seatings::TIMES[1], party_size: 2,
   })
   example_row({
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
-    date: -> { Seatings.example_date.iso8601 }, time: Seatings::TIMES[1],
+    date: -> { Seatings.default_zone.tomorrow.iso8601 }, time: Seatings::TIMES[1],
     seating_label: "#{Seatings::TIMES[1]} (#{Seatings::DEFAULT_ZONE_NAME})",
-    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.example_date, Seatings.example_time)) },
+    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.default_zone.tomorrow, Seatings::TIMES[1])) },
     timezone: Seatings::DEFAULT_ZONE_NAME,
     status: "confirmed",
   })

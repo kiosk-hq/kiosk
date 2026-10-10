@@ -33,14 +33,6 @@ RSpec.describe WireArguments do
     end
   end
 
-  it "publishes an example stay that is bookable: three nights from tomorrow" do
-    travel_to istanbul.local(2026, 3, 15, 23, 30) do
-      expect(described_class.example_check_in).to eq(Date.new(2026, 3, 16))
-      expect(described_class.example_check_out).to eq(Date.new(2026, 3, 19))
-      expect(described_class.bookable!(described_class.example_check_in, zone: istanbul)).to be_nil
-    end
-  end
-
   it "refuses a stay whose total does not fit bookings.total_cents" do
     expect(described_class.priceable_total!(WireArguments::MAX_INT4, 3)).to be_nil
 

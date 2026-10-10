@@ -25,10 +25,4 @@ class ReaderClockTest < ActiveSupport::TestCase
     assert_equal "2026-01-14T12:00:00+00:00", ReaderClock.publish(Time.utc(2026, 1, 14, 12), ReaderClock.default_zone)
     assert_equal "2026-07-14T13:00:00+01:00", ReaderClock.publish(Time.utc(2026, 7, 14, 12), ReaderClock.default_zone)
   end
-
-  test "the example deadline is tomorrow at 14:00 on the household clock, with its offset" do
-    travel_to Time.utc(2026, 7, 14, 12) do
-      assert_equal "2026-07-15T14:00:00+01:00", ReaderClock.example_due_at
-    end
-  end
 end

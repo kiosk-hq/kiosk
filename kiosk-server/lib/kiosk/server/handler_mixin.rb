@@ -343,10 +343,14 @@ module Kiosk
           render json: { rows: rows, next_cursor: next_cursor, total: total }
         end
 
-        # Maps a raise Rails knows a status for to its lone wire code; anything else is re-raised.
-        # The exception's own message goes to the operator's log, never onto the wire.
+        # A validation failure answers 400 with the errors' full messages. Any other raise Rails knows
+        # a status for maps to its lone wire code, its own message going to the operator's log and
+        # never onto the wire; anything else is re-raised.
         def kiosk_rescue_to_wire(exception)
           raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
+
+          invalid = kiosk_invalid_model(exception)
+          raise Kiosk::Server::Errors::BadRequest, invalid.errors.full_messages.join("; ") if invalid
 
           status = ::ActionDispatch::ExceptionWrapper.rescue_responses[exception.class.name]
           code   = Kiosk::Server::Errors::STATUS_CODES[::Rack::Utils.status_code(status)]
@@ -363,6 +367,14 @@ module Kiosk
             ok:    false,
             error: Kiosk::Server::Errors.rescued_wire(code, verb: kiosk_wire_name),
           }, status: Kiosk::Server::Errors::CODES.fetch(code)
+        end
+
+        # A failed model validation is an argument outside its domain: 400, in the model's own words.
+        def kiosk_invalid_model(exception)
+          case exception
+          when ::ActiveModel::ValidationError then exception.model
+          when ::ActiveRecord::RecordInvalid  then exception.record
+          end
         end
 
         # A route drawn straight at a handler controller answers 404 `verb_not_found`.

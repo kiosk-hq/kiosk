@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-10: **A failed model validation answers 400 `bad_request` naming what is wrong**: `RecordInvalid` and `ActiveModel::ValidationError` carry their full messages to the wire.
+
 - 2026-10-09: **kiosk-server depends on `solid_cable`**, the event stream's pubsub across workers; an operator no longer adds it.
 
 - 2026-10-09: **`assistant_claimed` receives `from:` and `to:` accounts, and `assistant_unlinked` an `account:`**, as `user_model` records instead of ids.

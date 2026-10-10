@@ -378,6 +378,53 @@ RSpec.describe "Kiosk::Handler (the operator mixin)" do
   end
 
   describe "Rails-native raises (the T-054 rescue_from seam)" do
+    describe "a failed model validation" do
+      let(:party) do
+        Class.new do
+          include ActiveModel::Model
+          attr_accessor :size, :date
+          validates :size, numericality: { less_than_or_equal_to: 20 }
+          validate { errors.add(:date, "is not among the upcoming seatings — currently 2026-09-01") }
+          def self.name = "Party"
+        end
+      end
+
+      def validating(name, &body)
+        stub_const("Party", party)
+        klass = Class.new(ApplicationController) do
+          include Kiosk::Handler
+          kind :action
+          description "Validates its arguments in a model."
+          input_schema type: "object", additionalProperties: false, properties: {}, required: []
+          output_schema true
+          define_method(name, &body)
+        end
+        stub_const("SpecValidatingController", klass)
+      end
+
+      it "answers bad_request whose detail is the errors' full messages" do
+        validating(:seat) { Party.new(size: 21).validate! }
+
+        expect { execute(:run, { name: "seat" }) }
+          .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
+            expect(e.http_status).to eq(400)
+            expect(e.message).to eq("Size must be less than or equal to 20; " \
+                                    "Date is not among the upcoming seatings — currently 2026-09-01")
+            expect(e.hint).to be_nil
+          }
+      end
+
+      it "answers the same for ActiveRecord::RecordInvalid" do
+        validating(:save) do
+          party = Party.new(size: 21).tap(&:validate)
+          raise ActiveRecord::RecordInvalid, party
+        end
+
+        expect { execute(:run, { name: "save" }) }
+          .to raise_error(Kiosk::Server::Errors::BadRequest, /\ASize must be less than or equal to 20; Date/)
+      end
+    end
+
     # `expect(e.message).to include("sku")` was the old assertion, and what it
     # was asserting — MEASURED at head on 2026-09-06, before the fix — was
     # `detail: "param is missing or the value is empty or invalid: sku"`:

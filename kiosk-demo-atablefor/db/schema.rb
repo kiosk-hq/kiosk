@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_10_000001) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -36,7 +36,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
     t.bigint "restaurant_id", null: false
     t.string "label", null: false
     t.integer "capacity", null: false
-    t.integer "deposit_eur", default: 0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["restaurant_id", "label"], name: "index_restaurant_tables_on_restaurant_id_and_label", unique: true

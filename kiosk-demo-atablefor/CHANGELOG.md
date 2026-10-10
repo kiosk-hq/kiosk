@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- `availability` rows no longer carry `deposit_eur`: a reservation takes no money. `book_table`'s `time` is one of the seating times, and `party_size` is at most 20.
+
 - Every environment charges the reputation-priced Equihash toll at n=168 k=7; `KIOSK_POW_MODE` and its other modes are gone.
 
 - The `check:` rake tasks and `bin/demo` are replaced by `bin/rails test`.

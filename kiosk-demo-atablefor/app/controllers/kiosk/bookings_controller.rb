@@ -8,8 +8,7 @@ class Kiosk::BookingsController < ApplicationController
   description "Book a specific restaurant table for a chosen upcoming " \
               "seating, for the authenticated principal. Confirms the " \
               "reservation outright: there is no hold to release and nothing " \
-              "is charged here — any deposit an availability row shows is " \
-              "settled at the restaurant. Contention is real and finite, so a " \
+              "is charged. Contention is real and finite, so a " \
               "table already held for that seating is refused as a clean " \
               "conflict rather than double-booked, and so is a seating that " \
               "has already passed. Every value it needs is on the " \
@@ -23,10 +22,10 @@ class Kiosk::BookingsController < ApplicationController
                                         description: "The restaurant_table_id from an availability row." },
                  date:                { type: "string", format: "date",
                                         description: "The seating_date (YYYY-MM-DD) from the availability row." },
-                 time:                { type: "string", pattern: "^[0-2][0-9]:[0-5][0-9]$",
+                 time:                { type: "string", enum: Restaurant.seating_times,
                                         description: "The seating_time HH:MM (24-hour), e.g. \"20:00\"." },
                  party_size:          { type: "integer", minimum: 1,
-                                        maximum: WireArguments::MAX_INT4,
+                                        maximum: Booking::MAX_PARTY_SIZE,
                                         description: "Number of guests." },
                },
                required: ["restaurant_id", "restaurant_table_id", "date", "time", "party_size"]
@@ -45,7 +44,7 @@ class Kiosk::BookingsController < ApplicationController
                                                                       "offset; `seating_label` is this time with the zone written " \
                                                                       "beside it." },
                   seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
-                                                                      "e.g. \"20:00 (#{Seatings::DEFAULT_ZONE_NAME})\". This is the line " \
+                                                                      "e.g. \"20:00 (Europe/Lisbon)\". This is the line " \
                                                                       "to read back to the human: `time` alone is a bare wall clock." },
                   seating_at:          { type: "string", description: "The seating instant, ISO 8601 carrying THIS RESTAURANT's offset — every verb of this demo publishes this field on the clock of the restaurant the row is about." },
                   timezone:            { type: "string", description: "The IANA zone this row is rendered in — a property of the RESTAURANT, not of this aggregator." },
@@ -55,15 +54,15 @@ class Kiosk::BookingsController < ApplicationController
                              date time seating_label seating_at timezone status]
   example_params({
     restaurant_id: 1, restaurant_table_id: 1,
-    date: -> { Seatings.default_zone.tomorrow.iso8601 }, time: Seatings::TIMES[1], party_size: 2,
+    date: -> { Time.find_zone!("Europe/Lisbon").tomorrow.iso8601 }, time: "20:00", party_size: 2,
   })
   example_row({
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
     restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
-    date: -> { Seatings.default_zone.tomorrow.iso8601 }, time: Seatings::TIMES[1],
-    seating_label: "#{Seatings::TIMES[1]} (#{Seatings::DEFAULT_ZONE_NAME})",
-    seating_at: -> { Booking.publish_instant(Seatings.seating_at(Seatings.default_zone.tomorrow, Seatings::TIMES[1])) },
-    timezone: Seatings::DEFAULT_ZONE_NAME,
+    date: -> { Time.find_zone!("Europe/Lisbon").tomorrow.iso8601 }, time: "20:00",
+    seating_label: "20:00 (Europe/Lisbon)",
+    seating_at: -> { Time.find_zone!("Europe/Lisbon").now.tomorrow.change(hour: 20).iso8601 },
+    timezone: "Europe/Lisbon",
     status: "confirmed",
   })
   def book_table

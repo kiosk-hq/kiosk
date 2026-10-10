@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-10: **atablefor drops the table deposit and checks bookings in its models**: `availability` rows lose `deposit_eur`, and a party is at most 20.
+
 - 2026-10-10: **A failed model validation answers 400 `bad_request` naming what is wrong**: `RecordInvalid` and `ActiveModel::ValidationError` carry their full messages to the wire.
 
 - 2026-10-09: **Every gem requires Ruby 4.0**, the version CI runs; the Ruby 3.2 CI leg is gone.

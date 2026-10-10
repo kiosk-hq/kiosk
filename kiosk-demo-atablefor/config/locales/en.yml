@@ -1,0 +1,13 @@
+# Validation messages name an attribute as the wire spells it.
+en:
+  activemodel:
+    attributes:
+      table_search:
+        neighborhood: neighborhood
+        date: date
+  activerecord:
+    attributes:
+      booking:
+        party_size: party_size
+        restaurant_table: table
+        seating_at: seating

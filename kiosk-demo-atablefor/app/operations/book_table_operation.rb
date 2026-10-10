@@ -3,29 +3,26 @@
 # Holds one table for one upcoming seating. A reservation takes no money.
 class BookTableOperation
   def self.call(principal_id:, restaurant_id:, restaurant_table_id:, date:, time:, party_size:)
-    zone       = Restaurant.find_by(id: restaurant_id)&.zone || Seatings.default_zone
-    seating_at = WireArguments.seating!(date, time, zone)
-
-    table = RestaurantTable.where(restaurant_id: restaurant_id, capacity: party_size..).find_by(id: restaurant_table_id)
-    unless table
-      WireArguments.refuse "no such table #{restaurant_table_id} at restaurant #{restaurant_id} seating #{party_size}"
-    end
+    restaurant = Restaurant.find(restaurant_id)
+    seating_at = restaurant.seating(Date.iso8601(date), time.to_i)
 
     booked = "table #{restaurant_table_id} is already booked for #{date} #{time}"
-    raise Kiosk::Server::Errors::Conflict, booked if Booking.confirmed.exists?(restaurant_table: table, seating_at: seating_at)
+    if Booking.confirmed.exists?(restaurant_table_id:, seating_at:)
+      raise Kiosk::Server::Errors::Conflict, booked
+    end
 
-    booking = Booking.create!(user_id: principal_id, restaurant_id: restaurant_id, restaurant_table: table,
-                              party_size: party_size, seating_at: seating_at, status: :confirmed)
+    booking = Booking.create!(user_id: principal_id, restaurant:, restaurant_table_id:,
+                              party_size:, seating_at:, status: :confirmed)
 
     { booking_id:          booking.id,
-      restaurant_id:       restaurant_id,
+      restaurant_id:       restaurant.id,
       restaurant_table_id: restaurant_table_id,
       party_size:          booking.party_size,
       date:                date,
       time:                time,
-      seating_label:       Seatings.label(time, zone),
-      seating_at:          Booking.publish_instant(seating_at, zone),
-      timezone:            zone.name,
+      seating_label:       Restaurant.seating_label(seating_at),
+      seating_at:          seating_at.iso8601,
+      timezone:            restaurant.timezone,
       status:              booking.status }
   rescue ActiveRecord::RecordNotUnique
     raise Kiosk::Server::Errors::Conflict, booked

@@ -8,8 +8,7 @@ coined Lisbon restaurants across a few neighbourhoods (Alfama, Graça, Bairro
 Alto, Belém, Príncipe Real), each with a few finite named tables — that takes
 table reservations over the Kiosk wire. The "book a table for two tonight at 8"
 story, completed by an AI assistant with **no human present, no web sign-in, and
-no payment** (a reservation takes no money; any € figure shown is a no-show hold
-settled at the restaurant, never on the wire).
+no payment** (a reservation takes no money).
 
 Seatings are **rolling-current**: `availability` computes the upcoming evening
 seatings relative to *now* on **each restaurant's own clock** (`restaurants.timezone`;
@@ -40,7 +39,7 @@ the result (no envelope).
   answers a bare array whose rows carry `restaurant_id`, `restaurant_table_id`,
   `seating_date`, `seating_time`, `seating_label` (the seating with the zone it
   is written in — `20:00 (Europe/Lisbon)`, because a bare `20:00` is a wall
-  clock with no clock named), `seating_at`, and any EUR no-show hold
+  clock with no clock named) and `seating_at`
 - `GET /kiosk/my_bookings` — this principal's bookings (owner-scoped), with table + restaurant
 - `POST /kiosk/book_table {restaurant_id, restaurant_table_id, date, time, party_size}` —
   reserve a specific table at a chosen restaurant for a chosen seating; a table
@@ -109,8 +108,7 @@ It discovers the wire, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `bea@example.com` / `atablefor-demo-password` and approve it there.
 
-Each restaurant offers its named tables (varying capacities, some with an EUR
-no-show hold) for three evening seatings (19:00 · 20:00 · 21:00), computed
+Each restaurant offers its named tables (varying capacities) for three evening seatings (19:00 · 20:00 · 21:00), computed
 rollingly on the restaurant's own clock; "tonight at 8" lands on an open 2-top at 20:00.
 
 See `before-after.md` for why AI assistants stall at restaurant booking today and

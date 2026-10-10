@@ -4,7 +4,4 @@
   <span class="res-table"><%= restaurant.name %><% if restaurant.neighborhood.present? %> <span class="res-hood">(<%= restaurant.neighborhood %>)</span><% end %> · <%= table.label %></span>
   <span class="res-when"><%= seating_label(booking) %></span>
   <span class="res-name"><%= booking.user.public_name %></span>
-  <% if table.deposit_eur.positive? %>
-    <span class="res-dep" title="no-show hold, settled at the restaurant">€<%= table.deposit_eur %> hold</span>
-  <% end %>
 </li>

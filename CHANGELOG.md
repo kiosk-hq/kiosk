@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-11
+
+- 2026-10-11: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.13, matching skill 0.5.13.**
+
+- 2026-10-11: **Every demo and the engine default pin `skill-v0.5.13.md`**, whose assistant asks the human how much it may spend without asking.
+
 - 2026-10-11: **Operators route with a `kiosk do … end` block in `config/routes.rb`**: it mounts the engine, then draws `queries` as GET and `actions` as POST; `config/routes/kiosk.rb` is gone.
 
 - 2026-10-10: **hoteling checks stays in its models**: a reservation holds at most 30 nights and a rate is at most €10,000, so the oversized-total refusal is gone.

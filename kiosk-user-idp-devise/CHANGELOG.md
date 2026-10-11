@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-11
+
+- 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13.
+
 - `WireSignpost` and `SessionsController` answer a JSON caller at the Devise sign-in and sign-out pages with a pointer to `/.well-known/kiosk.json`, so an operator need not write them.
 
 ## [0.5.12] — 2026-10-08

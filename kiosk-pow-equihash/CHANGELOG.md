@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-11
+
+- 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13.
+
 - 2026-10-09: **`Kiosk::Pow::Equihash::Difficulty` and its `KIOSK_POW_DIFFICULTY` variable are removed**; an operator passes `(n, k)` explicitly.
 
 ## [0.5.12] — 2026-10-08

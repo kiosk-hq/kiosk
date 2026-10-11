@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-11
+
+- 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13; the engine's default `skill_url` pins `skill-v0.5.13.md`.
+
 - 2026-10-11: **Operators route with a `kiosk do … end` block in `config/routes.rb`**: it mounts the engine, then draws `queries` as GET and `actions` as POST; `config/routes/kiosk.rb` is gone.
 
 - 2026-10-10: **A failed model validation answers 400 `bad_request` naming what is wrong**: `RecordInvalid` and `ActiveModel::ValidationError` carry their full messages to the wire.

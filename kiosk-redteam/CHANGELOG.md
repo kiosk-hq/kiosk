@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-11
+
+- 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13.
+
 - 2026-10-09: **The assistant client, wire, event stream and stripe-mock front move to kiosk-test-support**, which this gem now attacks through.
 
 ## [0.5.12] — 2026-10-08

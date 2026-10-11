@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-11
+
+- 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13.
+
 - 2026-10-09: **A story's `Person` links, approves and unlinks assistants**, and a `Customer` pays a quote, signs back in, follows news checked against its schema; `kiosk/story_spec` is RSpec's form.
 
 - 2026-10-09: **`Kiosk::StoryTest` and `Kiosk::TestHelpers::Story`** let a test tell an operator's business story through a `Customer` who asks, does, pays and hears.

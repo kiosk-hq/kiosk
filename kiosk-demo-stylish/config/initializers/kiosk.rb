@@ -21,8 +21,8 @@ Kiosk.configure do |c|
   c.roles             = %i[customer owner]
   c.registration_role = :customer
   c.owner             = { name: "Stylish (Kiosk demo)", support: "demo@kiosk.tech" }
-  c.skill_url         = "https://kiosk.tech/skill-v0.5.12.md"
-  c.skill_sha256      = "cf83b63682cd12ca042a18cae871bef0c2f531b98e068c5b15b38f6973e45756"
+  c.skill_url         = "https://kiosk.tech/skill-v0.5.13.md"
+  c.skill_sha256      = "786041de6e738cb55311eb852162509f23115227be9ab1c6837b9741840e990b"
 
   c.validate_requests  = true
   c.validate_responses = true

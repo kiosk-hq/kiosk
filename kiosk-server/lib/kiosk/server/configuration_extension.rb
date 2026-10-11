@@ -49,7 +49,7 @@ module Kiosk
       # block only when `skill_sha256` is set.
       attr_writer :skill_url
       def skill_url
-        @skill_url ||= "https://kiosk.tech/skill-v0.5.12.md"
+        @skill_url ||= "https://kiosk.tech/skill-v0.5.13.md"
       end
       attr_accessor :skill_sha256
 

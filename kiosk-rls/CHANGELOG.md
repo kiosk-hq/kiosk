@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.13] — 2026-10-11
+
+- 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13.
+
 - 2026-10-09: The README says an app using RLS policies needs `schema_format = :sql`, since `schema.rb` cannot carry them.
 
 ## [0.5.12] — 2026-10-08

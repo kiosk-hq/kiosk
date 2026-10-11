@@ -651,8 +651,7 @@ SKELETON_NOT_COMPARED = {
   "config/boot.rb" => "Rails generator output.",
   "config/environment.rb" => "Rails generator output.",
   "config/database.yml" => "Per-demo: each resolves its own database name and user.",
-  "config/routes.rb" => "Per-demo: each demo's own pages.",
-  "config/routes/kiosk.rb" => "Per-demo: the verb routes are that storefront's own.",
+  "config/routes.rb" => "Per-demo: each demo's own pages and verbs.",
   "config/initializers/kiosk.rb" => "Per-demo: capabilities, verbs, PoW policy and adapters.",
   "config/initializers/devise.rb" => "Per-demo Devise settings.",
   "config/initializers/cors.rb" => "Rails generator output, every line commented out.",
@@ -686,7 +685,6 @@ NON_OPERATOR_DEMOS = %w[kiosk-demo-prove].freeze
 
 GENERATOR_TEMPLATES = {
   "initializer.rb.tt" => { not_compared: "emits config/initializers/kiosk.rb, per-demo by design." },
-  "routes_kiosk.rb.tt" => { not_compared: "emits config/routes/kiosk.rb, whose verb routes are per-demo." },
   "create_kiosk_schema.rb.tt"                => { emits: "create_kiosk_schema.rb" },
   "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
   "create_kiosk_reservations.rb.tt"          => { emits: "create_kiosk_reservations.rb" },
@@ -1683,11 +1681,7 @@ E2E_FIXTURES = {
   },
   "routes.rb" => {
     rule: :per_demo,
-    why:  "The generated app's own pages.",
-  },
-  "routes_kiosk.rb" => {
-    rule: :per_demo,
-    why:  "The harness's own verb routes.",
+    why:  "The generated app's own pages and verbs.",
   },
   "seeds.rb" => {
     rule: :per_demo,

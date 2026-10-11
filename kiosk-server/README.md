@@ -20,9 +20,9 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`IssuerMiddleware`** — answers `Kiosk.current_issuer` for each request: its origin when that is `c.issuer` or one of `c.additional_origins`, else `c.issuer`. Every origin served is its own operator.
 - **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. Kiosk stores nothing itself: default is no sink and no emission. See [The audit sink](#the-audit-sink).
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, reservations, device authorizations, mandates).
-- **`Kiosk::Server::Engine`** — the Rails engine: one `mount` line draws the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding) and nothing else — your own verbs are yours to draw, one explicit route each — installs the root discovery routes when mounted, and auto-injects the headers and issuer middleware (see [Draw the routes](#draw-the-routes)).
+- **`Kiosk::Server::Engine`** — the Rails engine: `kiosk` in `config/routes.rb` mounts it, drawing the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding), then one route per verb its block names — installs the root discovery routes when mounted, and auto-injects the headers and issuer middleware (see [Draw the routes](#draw-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
-- **`bin/rails g kiosk:install`** — the install generator lays down the initializer, the migrations and the wire routes file with the engine mounted in it.
+- **`bin/rails g kiosk:install`** — the install generator lays down the initializer, the migrations and the `kiosk` block in `config/routes.rb` that mounts the engine.
 
 kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
 
@@ -301,29 +301,23 @@ a boot failure rather than an audit trail that silently was never there.
 
 ## Draw the routes
 
-The wire has TWO HALVES and the split is by whose surface it is. Both live in a
-routes file of their own, reached with Rails' own `draw` — and
-`bin/rails g kiosk:install` writes that file and the `draw(:kiosk)` line into
-`config/routes.rb` for you, because bundling the gem draws no route at all and
-an origin with no mount answers nothing:
+Bundling the gem draws no route at all, and an origin with no mount answers
+nothing. `bin/rails g kiosk:install` writes the `kiosk` block into
+`config/routes.rb`; you name your verbs in it:
 
 ```ruby
 # config/routes.rb
-draw(:kiosk)
+Rails.application.routes.draw do
+  kiosk do
+    queries :catalog
+    actions :place_order
+  end
+end
 ```
 
-```ruby
-# config/routes/kiosk.rb
-mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-```
-
-The generator stops there: it knows no verb of yours. You add one line per verb
-under the mount, which is the second half:
-
-```ruby
-get  "/kiosk/catalog",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
-post "/kiosk/place_order", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "place_order" }
-```
+`kiosk` mounts the engine at `Kiosk.configuration.mount_path`, then draws
+`GET <mount_path>/<name>` for each query and `POST <mount_path>/<name>` for each
+action. A block-less `kiosk` only mounts.
 
 **The mount draws the PROTOCOL PLANE** — the paths whose shape is the spec's and
 not yours. Under the mount: the reserved `schema`, `openapi.json` and `pay`,
@@ -341,29 +335,27 @@ via `routes.append`, because the agents.txt standard and RFC 8615 place them at
 the origin root, outside any mount prefix. That install happens ONLY when the
 engine is mounted: merely bundling the gem adds no routes.
 
-**You draw your OWN VERBS, one explicit route each, and the METHOD FOLLOWS THE
-KIND** — GET for a `kind :query`, POST for a `kind :action`. That is what the
-protocol says a verb IS, so the routes state it instead of hiding it, and
-`bin/rails routes` prints your actual wire. `defaults: { kiosk_verb: … }` hands
-the name to the shipped controller; nothing is inferred from the path.
+**You name your OWN VERBS, and the METHOD FOLLOWS THE KIND** — GET for a
+`kind :query`, POST for a `kind :action`. That is what the protocol says a verb
+IS, so the routes state it instead of hiding it, and `bin/rails routes` prints
+your actual wire.
 
-**The mount comes FIRST, and your lines go below it.** Rails dispatches the
-first matching route, so everything the engine draws wins over anything written
-under it and no verb of yours can shadow `schema`, `pay` or the auth plane. (You
-could not declare such a verb anyway — `Kiosk::Handler` refuses a reserved name
-at boot.)
+**The mount comes FIRST.** Rails dispatches the first matching route, so
+everything the engine draws wins over every verb route and no verb of yours can
+shadow `schema`, `pay` or the auth plane. (You could not declare such a verb
+anyway — `Kiosk::Handler` refuses a reserved name at boot.)
 
 A path under the mount that names no route — including a verb called with the
 other method — matches nothing, so it is the ordinary 404 Rails answers at any
 unrouted path: no `code`, no `hint`. The mount-path middleware still stamps the
 version headers on it. If you want the wire's own `404 verb_not_found` there,
-draw a catch-all action of your own at the end of your file; the engine does not
+draw a catch-all action of your own at the end of your routes; the engine does not
 draw one, because an assistant reads `GET <mount>/schema` before it dials.
 Declared-but-unrouted is the bug class this trade opens: every verb you declare
-needs its route.
+needs its name in the block.
 
 **The protocol plane comes from the mount and from nowhere else.** Copying those
-paths into your routes file by hand is not a supported second way to draw them:
+paths into your routes by hand is not a supported second way to draw them:
 the mount above the copy already answers, so the line is dead, and a protocol
 this gem keeps in step with the spec becomes a table you now own. Write your own
 verbs; mount the rest.
@@ -375,7 +367,7 @@ An assistant reaches a provider at ONE ENDPOINT PER VERB: a query is
 `GET <mount>/<query-name>` with its arguments in the query string, an action is
 `POST <mount>/<action-name>` with its arguments in a JSON body. The operator
 decides what those names are and what they mean. `Kiosk::Handler` is the module
-that lets a controller answer them, and you draw one route per name — see
+that lets a controller answer them, and you name each one in the `kiosk` block — see
 [Draw the routes](#draw-the-routes).
 
 Kiosk ships a **mixin, not a base class**. Which superclass a handler controller

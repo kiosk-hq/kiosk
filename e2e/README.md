@@ -128,7 +128,6 @@ e2e/
     ├── salon_desk_controller.rb            # the salon's back office — an operator-side page OUTSIDE the mount and not a Kiosk handler that marks an appointment confirmed and pushes the topic; the one transition on this origin nobody asked for, which is the whole case for a stream
     ├── devise_initializer.rb               # Devise setup (database_authenticatable) — the HUMAN channel the binding pages authenticate
     ├── initializer_kiosk.rb                # Kiosk.configure
-    ├── routes.rb                           # the generated app's OWN pages: Devise, the two exception probes, and the one `draw(:kiosk)` that reaches the wire file below
-    └── routes_kiosk.rb                     # copied to config/routes/kiosk.rb — THE WIRE, split the way every demo splits it: `mount Kiosk::Server::Engine` draws the protocol plane (schema, pay, openapi.json, jwks, auth/*, the RFC 8628 device pair, agents/kyc, the binding pages and the root discovery documents), then ONE EXPLICIT ROUTE PER REGISTERED VERB with the method following the kind — GET salons, GET my_appointments, POST book_appointment
+    └── routes.rb                           # the generated app's routes: Devise, the two exception probes, and THE WIRE — the `kiosk` block mounts the engine (schema, pay, openapi.json, jwks, auth/*, the RFC 8628 device pair, agents/kyc, the binding pages and the root discovery documents), then draws one route per verb with the method following the kind — GET salons, GET my_appointments, POST book_appointment
 ```
 

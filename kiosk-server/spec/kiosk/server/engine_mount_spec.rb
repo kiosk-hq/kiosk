@@ -240,15 +240,15 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
     end
   end
 
-  # ── THE OPERATOR'S OWN VERBS, drawn by hand below the mount (T-183) ─────
+  # ── THE OPERATOR'S OWN VERBS, drawn below the mount ─────────────────────
   #
-  # NO ROUTE MAGIC: a verb reaches the wire because a line in `routes.rb` says
-  # so, one per verb, written by hand. The engine draws the PROTOCOL
-  # PLANE and the operator draws one explicit route per verb underneath it. This
+  # A verb reaches the wire because the `kiosk` block in `routes.rb` names it.
+  # The engine draws the PROTOCOL PLANE and the block draws one route per verb
+  # underneath it. This
   # scenario is that arrangement, through a booted app and the whole Rack stack,
   # answering four questions the routing layer cannot be asked any other way.
-  context "when the host mounts the engine and hand-draws its own verb routes" do
-    it "an explicit line reaches the VERB wire" do
+  context "when the host draws its own verbs with the `kiosk` block" do
+    it "a declared query reaches the VERB wire" do
       # `?zzz=1` against a CLOSED empty input_schema is `400 bad_request` from
       # RequestValidation — a gate only VerbController runs, and only after a
       # route has dispatched into it, so a 400 can have come from nowhere else.
@@ -259,7 +259,7 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
     end
 
     it "answers the OTHER method on that same verb an ordinary routing 404" do
-      # The route the operator drew is the GET; nothing draws POST /kiosk/ping,
+      # `ping` is declared a query, so its route is the GET; nothing draws POST /kiosk/ping,
       # so Rails matches nothing. The engine draws no route of its own under the
       # mount beyond the protocol plane, so there is no Kiosk document here: an
       # assistant reads the catalogue, which says `ping` is a query, and dials
@@ -287,24 +287,17 @@ RSpec.describe "mount Kiosk::Server::Engine (the one-line surface)" do
 
     # ── THE SHADOWING QUESTION, ANSWERED BY MEASUREMENT ──────────────────
     #
-    # "What happens if an operator routes a verb at a reserved path?" Until
-    # T-183 the answer was a property of ONE table: the engine drew the reserved
-    # lines first and its own catch-all last, so `schema` could not be shadowed.
-    # With explicit routes the property moves into a file somebody WRITES, so it
-    # has to be re-established deliberately — and it is, three times over:
+    # "What happens if an operator routes a verb at a reserved path?"
     #
     #   1. {HandlerMixin::RESERVED_NAMES} raises an ArgumentError as the class
     #      body loads, so the verb cannot be DECLARED (handler_mixin_spec).
-    #   2. And if that were bypassed, the mount is drawn FIRST and Rails
+    #   2. And if that were bypassed, `kiosk` draws the mount FIRST and Rails
     #      dispatches the first matching route — which is what this example
-    #      measures. The scenario draws `get "/kiosk/schema"` into the verb wire
-    #      BELOW the mount; the engine's `schema` answers and that line is dead.
+    #      measures. The scenario names `schema` in the block; the engine's
+    #      `schema` answers and that route is dead.
     #
-    # Note what the failure now IS, because it is not what it was: a collision is
-    # a DEAD ROUTE (Rails permits duplicate paths and silently prefers the first)
-    # rather than a shadowed dispatch inside one table. That is a better failure
-    # only because 1 and 2 above make it unreachable; on its own it is just as
-    # silent, which is why neither of them is optional.
+    # A collision is a DEAD ROUTE, silent on its own, which is why neither of
+    # the two is optional.
     it "cannot be shadowed by an operator verb route drawn below the mount" do
       res = probe("operator_verbs", "GET /kiosk/schema")
 

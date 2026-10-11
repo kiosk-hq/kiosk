@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-11: **Operators route with a `kiosk do … end` block in `config/routes.rb`**: it mounts the engine, then draws `queries` as GET and `actions` as POST; `config/routes/kiosk.rb` is gone.
+
 - 2026-10-10: **A failed model validation answers 400 `bad_request` naming what is wrong**: `RecordInvalid` and `ActiveModel::ValidationError` carry their full messages to the wire.
 
 - 2026-10-09: **kiosk-server depends on `solid_cable`**, the event stream's pubsub across workers; an operator no longer adds it.

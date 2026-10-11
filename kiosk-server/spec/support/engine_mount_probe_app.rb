@@ -216,24 +216,24 @@ ensure
   Kiosk.configure { |c| c.agent_idp = previous_idp }
 end
 
-# Scenario 5 — THE OPERATOR'S OWN VERBS: the mount FIRST, then one explicit
+# Scenario 5 — THE OPERATOR'S OWN VERBS: `kiosk` mounts FIRST, then draws one
 # route per registered verb with the method following the kind. Four questions,
 # and the fourth is the one that had to be measured rather than argued.
 #
-#   * does an explicit line actually reach the wire, and serve?
+#   * does a declared query actually reach the wire, and serve?
 #   * is the OTHER method on that same name an ordinary routing 404?
 #   * is a name nobody registered an ordinary routing 404 too?
-#   * WHAT HAPPENS IF AN OPERATOR ROUTES A VERB AT A RESERVED PATH? The line
+#   * WHAT HAPPENS IF AN OPERATOR ROUTES A VERB AT A RESERVED PATH? The block
 #     below deliberately draws `/kiosk/schema` into the verb wire, BELOW the
 #     mount. Rails dispatches the first matching route, so the engine's own
-#     `schema` answers and this line is dead — the ordering property is given by
-#     the mount being drawn first.
+#     `schema` answers and that route is dead — the ordering property is given
+#     by `kiosk` drawing the mount first.
 #     (An operator cannot get this far in practice: {HandlerMixin::RESERVED_NAMES}
 #     raises at declaration. This is the routing layer's own answer, measured rather than assumed.)
 Rails.application.routes.draw do
-  mount Kiosk::Server::Engine => "/kiosk"
-  get "/kiosk/ping",   to: "kiosk/server/verb#show", defaults: { kiosk_verb: "ping" }
-  get "/kiosk/schema", to: "kiosk/server/verb#show", defaults: { kiosk_verb: "schema" }
+  kiosk do
+    queries :ping, :schema
+  end
 end
 #
 # `?zzz=1` on the first probe is deliberate and it is what makes the answer

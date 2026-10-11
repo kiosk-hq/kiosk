@@ -751,8 +751,8 @@ printf "\n\033[1m=== problem documents ===\033[0m\n"
 
 # ─── a name nobody registered: no route, so the ordinary 404 ────────────
 #
-# Every verb this origin serves has an explicit line in config/routes/kiosk.rb.
-# A name that has no line matches no route, so the answer is the one the web
+# Every verb this origin serves is named in the `kiosk` block of config/routes.rb.
+# A name that is not there matches no route, so the answer is the one the web
 # framework composes for any unrouted path: no Kiosk problem document, no
 # `code`, no hint. An assistant reads `GET /kiosk/schema` and dials a name that
 # is in it -- it has no business at a path the catalogue never named.

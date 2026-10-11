@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# The Rails engine. `mount Kiosk::Server::Engine => Kiosk.configuration.mount_path`
-# draws the protocol plane under the mount and the discovery documents at the root.
+# The Rails engine. `kiosk` in config/routes.rb mounts it at the configured mount_path,
+# drawing the protocol plane under the mount and the discovery documents at the root.
 # `rails` first: rails/engine needs its core_ext.
 require "rails"
 require "rails/engine"
@@ -220,7 +220,7 @@ module Kiosk
         post "auth/assistants/update", to: "assistants#update"
         post "auth/assistants/unlink", to: "assistants#unlink"
 
-        # The operator routes its own verbs in config/routes/kiosk.rb.
+        # The operator routes its own verbs with `kiosk do … end` in config/routes.rb.
       end
     end
   end

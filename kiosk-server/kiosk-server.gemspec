@@ -29,12 +29,12 @@ Gem::Specification.new do |spec|
         canonical schema migrations, and a `kiosk:install` generator that
         lays down the initializer and the migrations.
 
-    The Rails engine serves that whole surface from one line — `mount
-    Kiosk::Server::Engine => Kiosk.configuration.mount_path` — drawing the
-    wire/auth/JWKS/KYC/binding routes under the mount and installing the
-    root-relative discovery routes (agents.txt, .well-known) into the host
-    when mounted; it also auto-injects the headers middleware. The operator
-    draws only their own verbs, one explicit route each.
+    The Rails engine serves that whole surface from one `kiosk` block in
+    config/routes.rb, which mounts it at Kiosk.configuration.mount_path —
+    drawing the wire/auth/JWKS/KYC/binding routes under the mount and
+    installing the root-relative discovery routes (agents.txt, .well-known)
+    into the host — then one route per query and action the block names. It
+    also auto-injects the headers middleware.
   DESC
   spec.homepage      = "https://kiosk.tech"
   spec.license       = "Apache-2.0"

@@ -41,12 +41,12 @@ class KioskConformanceTest < ActiveSupport::TestCase
 
   # ── 1. THE ROUTES RESOLVE ───────────────────────────────────────────────
   #
-  # Every verb needs a line in `config/routes/kiosk.rb`, and a verb declared
-  # without one is a 404 to every caller — something this app's own flow tasks
+  # Every verb needs its name in the `kiosk` block of `config/routes.rb`, and a
+  # verb declared without it is a 404 to every caller — something this app's own flow tasks
   # would notice only if one of them happened to call it. This asks the router
   # about all seven at once.
   #
-  # Watched fail: delete the `get "/kiosk/delivery_slots"` line and this goes
+  # Watched fail: drop `:delivery_slots` from `queries` and this goes
   # red naming the verb, the method and the path — where a wire test would keep
   # passing until it reached that one call.
   test "every declared verb is routed, with the method its kind requires" do

@@ -7,10 +7,10 @@ Rails.application.routes.draw do
   devise_for :users
 
   # ── The Kiosk wire surface ────────────────────────────────────────────────
-  # Mounted protocol plane + one explicit route per registered verb, drawn in
-  # config/routes/kiosk.rb so the wire reads as one file and this one stays
-  # this app's own pages. `draw` is Rails' own — config/routes/<name>.rb.
-  draw(:kiosk)
+  kiosk do
+    queries :my_appointments, :salons
+    actions :book_appointment
+  end
 
   # ── the salon's own back office ──────────────────────────────────────────
   # One operator-side page, OUTSIDE the mount and outside `c.handlers`,

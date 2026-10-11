@@ -139,8 +139,9 @@ ActionCable::Server::Connections.const_set(:BEAT_INTERVAL, PROBE_BEAT_INTERVAL)
 
 ProbeApp.initialize!
 ProbeApp.routes.draw do
-  mount Kiosk::Server::Engine => "/kiosk"
-  get "/kiosk/list_nothing", to: "kiosk/server/verb#show", defaults: { kiosk_verb: "list_nothing" }
+  kiosk do
+    queries :list_nothing
+  end
 end
 
 # ── the client ───────────────────────────────────────────────────────────────

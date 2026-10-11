@@ -46,12 +46,14 @@ module Kiosk
         application %(config.active_record.dump_schemas = "public,#{options[:schema]}")
       end
 
-      def create_wire_routes
-        template "routes_kiosk.rb.tt", "config/routes/kiosk.rb"
-      end
-
+      # The engine mount, and a place for the operator's verbs under it.
       def draw_wire_routes
-        route "draw(:kiosk)"
+        route <<~RUBY
+          kiosk do
+            # queries :catalog
+            # actions :place_order
+          end
+        RUBY
       end
 
       def create_schema_migration

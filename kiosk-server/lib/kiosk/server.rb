@@ -67,6 +67,7 @@ require "kiosk/server/kyc_verifier"
 require "kiosk/server/mandate_verifier"
 
 require "kiosk/server/engine"
+require "kiosk/server/routing"
 
 require "kiosk/server/wire_controller"
 require "kiosk/server/verb_controller"
@@ -143,6 +144,7 @@ module Kiosk
     #   - {Kiosk::Server::HeadersMiddleware}— Rack middleware that injects them
     #   - {Kiosk::Server::SchemaDefinitions}— SQL for the canonical migrations
     #   - {Kiosk::Server::Engine}           — Rails engine
+    #   - {Kiosk::Server::Routing}          — `kiosk do … end` in config/routes.rb
     #
     #   Account-binding ceremony (RFC 8628 claim/link):
     #   - {Kiosk::Server::DeviceAuthorization}        — ceremony state machine (kind: claim/link)

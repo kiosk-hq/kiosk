@@ -1,9 +1,0 @@
-# frozen_string_literal: true
-
-# The protocol plane is mounted first, so no verb below can shadow it. Each
-# verb this origin declares gets one route: GET for a query, POST for an action.
-
-mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-
-# get  "/kiosk/catalog",     to: "kiosk/server/verb#show",   defaults: { kiosk_verb: "catalog" }
-# post "/kiosk/place_order", to: "kiosk/server/verb#create", defaults: { kiosk_verb: "place_order" }

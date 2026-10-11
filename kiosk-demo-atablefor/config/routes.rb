@@ -18,8 +18,8 @@ Rails.application.routes.draw do
   get "/reservations", to: "home#reservations"
 
   # ── The Kiosk wire surface ────────────────────────────────────────────────
-  # Mounted protocol plane + one explicit route per registered verb, drawn in
-  # config/routes/kiosk.rb so the wire reads as one file and this one stays
-  # this app's own pages. `draw` is Rails' own — config/routes/<name>.rb.
-  draw(:kiosk)
+  kiosk do
+    queries :availability, :my_bookings
+    actions :book_table, :cancel_booking
+  end
 end

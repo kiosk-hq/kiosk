@@ -114,12 +114,9 @@ RSpec.describe "Kiosk::Server::Engine routes" do
 
   describe "the per-verb wire, which this table deliberately does NOT draw" do
     it "draws no dynamic segment at all — every path in it is a literal" do
-      # The whole of T-183 at the routing layer. Until 0.4.12 this table ended
-      # with `get "/:kiosk_verb"` / `post "/:kiosk_verb"`, and that pair SERVED
-      # every registered verb. It is gone: the operator writes one explicit
-      # route per verb in their own config/routes/kiosk.rb, GET for a query and
-      # POST for an action, and this table is the PROTOCOL PLANE and nothing
-      # else.
+      # The operator's `kiosk` block in config/routes.rb draws one route per
+      # verb, GET for a query and POST for an action; this table is the
+      # PROTOCOL PLANE and nothing else.
       routes = Kiosk::Server::Engine.routes
       routes.finalize!
       paths = routes.routes.map { |route| route.path.spec.to_s }
@@ -140,10 +137,8 @@ RSpec.describe "Kiosk::Server::Engine routes" do
     end
 
     it "still owns every reserved path, and the mount being drawn FIRST is why" do
-      # This IS spec §8.3's reserved-name rule. It used to be enforced by this
-      # table's own ordering (the per-verb pair drawn last); it is now enforced
-      # by the OPERATOR's file drawing `mount Kiosk::Server::Engine` above their
-      # verbs, so every path here still wins by Rails' first-match.
+      # This IS spec §8.3's reserved-name rule: `kiosk` draws the mount above
+      # the operator's verbs, so every path here wins by Rails' first-match.
       # {HandlerMixin::RESERVED_NAMES} refuses the declaration at boot so
       # the collision cannot be written in the first place.
       expect(recognize(:get,  "/schema")).to include(controller: "kiosk/server/wire")

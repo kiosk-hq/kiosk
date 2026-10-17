@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: The wire and the event stream accept only a bearer token, never the operator's session cookie; `auth/link` and `auth/unlink` refuse a request that is not `application/json`.
+
 - 2026-10-17: Demo lockfiles take the patched crass, loofah, mail, nokogiri, rails-html-sanitizer and websocket-driver releases.
 
 - 2026-10-17: `bin/lint` and CI run RuboCop with the default cops over the whole tree, bundler-audit over every lockfile and Brakeman over every demo.

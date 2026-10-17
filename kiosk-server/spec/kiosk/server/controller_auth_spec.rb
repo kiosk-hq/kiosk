@@ -452,7 +452,7 @@ RSpec.describe 'wire-surface controller auth', 'KycAttestationController malform
   end
 end
 
-# ─── zero-config default idp + user_idp fallback on the wire ──
+# ─── zero-config default idp; no session identity on the wire ──
 RSpec.shared_context 'controller auth spec: zero-config install' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecDefaultsHelpers
@@ -486,13 +486,13 @@ RSpec.describe 'wire-surface controller auth', 'WireController identity resoluti
     expect_problem(status, body, http: 401, code: 'unauthenticated')
   end
 
-  it 'falls through to user_idp when the agent idp resolves nothing (no Authorization header)' do
+  it 'answers 401 to a signed-in session with no bearer token: the wire takes no cookie' do
     declare_query('probe')
     fixed = build_identity(actor: 'human', agent_id: nil, user_id: 'u-web')
     Kiosk.configure { |c| c.user_idp = Class.new { define_method(:verify) { |_r| fixed } }.new }
 
-    status, = dispatch(Kiosk::Server::VerbController, :show, probe_env)
-    expect(status).to eq(200)
+    status, body = dispatch(Kiosk::Server::VerbController, :show, probe_env)
+    expect_problem(status, body, http: 401, code: 'unauthenticated')
   end
 end
 

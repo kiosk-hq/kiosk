@@ -20,8 +20,8 @@ module AuthControllerBindingSpecHelpers
     Kiosk.configure { |c| c.user_idp = idp.new(identity) }
   end
 
-  def dispatch(action, body: nil)
-    env = binding_env(action, body)
+  def dispatch(action, body: nil, content_type: 'application/json')
+    env = binding_env(action, body, content_type)
     status, headers, raw_body = Kiosk::Server::AuthController.action(action).call(env)
     raw = +''
     raw_body.each { |chunk| raw << chunk }
@@ -29,12 +29,9 @@ module AuthControllerBindingSpecHelpers
     [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
   end
 
-  def binding_env(action, body)
-    opts = { method: 'POST' }
-    if body
-      opts[:input] = JSON.generate(body)
-      opts['CONTENT_TYPE'] = 'application/json'
-    end
+  def binding_env(action, body, content_type)
+    opts = { method: 'POST', 'CONTENT_TYPE' => content_type }
+    opts[:input] = JSON.generate(body) if body
     Rack::MockRequest.env_for("https://provider.example/kiosk/auth/#{action}", **opts)
   end
 
@@ -224,6 +221,25 @@ RSpec.describe 'AuthController binding endpoints', 'POST /auth/unlink' do
     wire_user_idp(nil)
     status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
     expect_problem(status, body, http: 401, code: 'unauthenticated')
+  end
+end
+
+RSpec.describe 'AuthController binding endpoints', 'a session request that is not JSON' do
+  include_context 'auth controller binding spec: signed-in holder'
+
+  # A page on a sibling subdomain is same-site: its `text/plain` form carries
+  # the holder's cookie and needs no CORS preflight.
+  it 'refuses an unlink posted as a form, and unlinks nothing' do
+    allow(Kiosk::Server::AccountBinding).to receive(:unlink!)
+
+    status, body = dispatch(:unlink, body: { agent_id: 'a-1' }, content_type: 'text/plain')
+    expect_problem(status, body, http: 400, code: 'bad_request', detail: %r{application/json})
+    expect(Kiosk::Server::AccountBinding).not_to have_received(:unlink!)
+  end
+
+  it 'refuses a link posted as a form' do
+    status, body = dispatch(:link, content_type: 'application/x-www-form-urlencoded')
+    expect_problem(status, body, http: 400, code: 'bad_request', detail: %r{application/json})
   end
 end
 

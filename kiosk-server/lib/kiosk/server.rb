@@ -118,7 +118,7 @@ module Kiosk
     #   - {Kiosk::Server::AgentLogin}        — challenge/response login → access token
     #   - {Kiosk::Server::PopVerifier}       — verifies the proof-of-possession signature
     #   - {Kiosk::Server::AuthController}    — Rails controller for the kiosk-pop surface
-    #   - {Kiosk::Server::IdentityResolution} — resolves agent_idp then user_idp → Identity
+    #   - {Kiosk::Server::IdentityResolution} — resolves the bearer token → Identity
     #   - {Kiosk::Server::PowGate}           — gates verbs behind a proof-of-work toll
     #   - {Kiosk::Server::PowToll}           — collects and verifies the proofs one toll demands
     #   - {Kiosk::Server::RegistrationPow}   — proof-of-work check for registration

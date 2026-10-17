@@ -45,7 +45,7 @@ RSpec.describe Kiosk::Server::IdentityResolution, '.resolve' do
   let(:agent_identity) { build_identity(actor: 'agent') }
   let(:human_identity) { build_identity(actor: 'human', agent_id: nil) }
 
-  it "returns the agent idp's identity first" do
+  it "returns the agent idp's identity" do
     Kiosk.configure do |c|
       c.agent_idp = fixed_idp(agent_identity)
       c.user_idp  = fixed_idp(human_identity)
@@ -53,12 +53,12 @@ RSpec.describe Kiosk::Server::IdentityResolution, '.resolve' do
     expect(described_class.resolve(double)).to be(agent_identity)
   end
 
-  it 'falls through to user_idp when the agent idp resolves nothing' do
+  it 'ignores a signed-in session: the operator user_idp never resolves a wire caller' do
     Kiosk.configure do |c|
       c.agent_idp = nil_idp
       c.user_idp  = fixed_idp(human_identity)
     end
-    expect(described_class.resolve(double)).to be(human_identity)
+    expect(described_class.resolve(double)).to be_nil
   end
 
   it 'returns nil when nothing resolves (caller raises 401 — fail closed)' do

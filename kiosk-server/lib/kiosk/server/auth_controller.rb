@@ -107,7 +107,7 @@ module Kiosk
       # Mints a link code for the signed-in holder; the holder's `user_idp` role becomes the bound assistant's.
       def link
         identity = authenticated_account_holder!
-        result   = LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
+        result = LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
         respond({ link_code: result[:link_code], expires_in: result[:expires_in] }, :created)
       rescue Errors::Base => e
         render_error(e)
@@ -129,7 +129,7 @@ module Kiosk
       # Deactivates one of the signed-in holder's assistant accounts; answers 204 with no body (§6.2).
       def unlink
         identity = authenticated_account_holder!
-        body     = parse_body!('POST <endpoint>/auth/unlink')
+        body = parse_body!('POST <endpoint>/auth/unlink')
         AccountBinding.unlink!(agent_id: body.fetch(:agent_id), user_id: identity.user_id)
         Kiosk::Server::Headers.add_to(response.headers)
         head :no_content
@@ -151,14 +151,14 @@ module Kiosk
       end
 
       # The human's side of binding authenticates by the provider's session, never by an agent token.
+      # A page on another origin can post a form with that cookie, but cannot send JSON without a CORS preflight.
       def authenticated_account_holder!
         identity = Kiosk.configuration.user_idp&.verify(request)
-        return identity if identity
+        hint = "sign in to the provider first — this endpoint authenticates via the provider's own session"
+        raise Errors::Unauthenticated.new('account session required', hint:) unless identity
+        raise Errors::BadRequest, 'Content-Type must be application/json' unless request.media_type == 'application/json'
 
-        raise Errors::Unauthenticated.new(
-          'account session required',
-          hint: "sign in to the provider first — this endpoint authenticates via the provider's own session"
-        )
+        identity
       end
 
       # nil for a missing, invalid or revoked bearer token.

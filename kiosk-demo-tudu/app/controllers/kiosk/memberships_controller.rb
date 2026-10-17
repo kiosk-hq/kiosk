@@ -65,8 +65,8 @@ module Kiosk
 
     kind :action
     reach :consented
-    description 'Owner only: remove a member from a list; their access ends at once. A list keeps at ' \
-                'least one owner.'
+    description 'Owner only: remove a member from a list; their access ends at once. The owner ' \
+                'cannot remove themselves.'
     input_schema type: 'object',
                  additionalProperties: false,
                  properties: {

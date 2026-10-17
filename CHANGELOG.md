@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: tudu's `remove_member` refuses only an owner removing themselves; the last-owner count is gone.
+
 - 2026-10-17: The engine no longer creates `kiosk.reservations`, which nothing used; every demo drops it with a new migration.
 
 - 2026-10-17: skooti holds a vehicle for one rider at a time, for 15 minutes or until the rental token expires; a second `reserve` answers 409 `conflict`.

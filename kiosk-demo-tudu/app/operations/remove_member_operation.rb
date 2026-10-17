@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Removes a member from one of the caller's own lists. A list keeps at least one owner.
+# Removes a member from one of the caller's own lists. The owner cannot remove themselves.
 class RemoveMemberOperation
   def self.call(list_id:, account_id:)
     ListAccess.owner!(list_id)
-    keep_last_owner!(list_id, account_id)
+    refuse_self!(account_id)
 
     if Membership.where(list_id: list_id, account_id: account_id).delete_all.zero?
       raise Kiosk::Server::Errors::Forbidden.new('no such membership on this list',
@@ -14,12 +14,11 @@ class RemoveMemberOperation
     announce_removal(list_id, account_id)
   end
 
-  def self.keep_last_owner!(list_id, account_id)
-    owners = Membership.where(list_id: list_id).owner.pluck(:account_id)
-    return unless owners.one? && owners.first.casecmp?(account_id)
+  def self.refuse_self!(account_id)
+    return unless Kiosk.current_user_id.to_s.casecmp?(account_id.to_s)
 
-    raise Kiosk::Server::Errors::Forbidden.new("cannot remove the list's last owner",
-                                               hint: 'A list must keep at least one owner.')
+    raise Kiosk::Server::Errors::Forbidden.new('the owner cannot remove themselves',
+                                               hint: 'Pass the account_id of another member from list_members.')
   end
 
   def self.announce_removal(list_id, account_id)

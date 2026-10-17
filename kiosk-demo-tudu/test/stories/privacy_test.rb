@@ -28,6 +28,12 @@ class PrivacyStory < StoryTest
     assert @housemate.todos_on(@list).refused?(:forbidden)
   end
 
+  test 'the owner cannot remove themselves, so the list keeps its owner' do
+    refused = @owner.removes(@owner, from: @list)
+    assert refused.refused?(:forbidden), refused
+    assert_equal 'owner', @owner.role_on(@list)
+  end
+
   test 'a list belongs to whoever started it, whoever the arguments name' do
     forged = @stranger.does(:create_list, title: 'Forged', account_id: @owner.account)
     assert forged.refused?(:bad_request), forged

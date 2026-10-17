@@ -146,7 +146,7 @@ no `Protocols: ap2` / `Payments:` directives.
 
 The rest of `test/` runs against the test database without a server: the reader clock a
 deadline is published on, the list-access refusals, and the write Operations —
-an invite is single-use, the last owner cannot be removed, a deadline is stored
+an invite is single-use, the owner cannot remove themselves, a deadline is stored
 as one instant.
 
 ## AI-assistant surface

@@ -56,7 +56,7 @@ class OperationsTest < ActiveSupport::TestCase
     assert @list.memberships.owner.exists?(account: @alice)
   end
 
-  test 'an owner removes a member, but never the last owner' do
+  test 'an owner removes a member, but never themselves' do
     as(@bob) do
       assert_raises(Kiosk::Server::Errors::Forbidden) { RemoveMemberOperation.call(list_id: @list.id, account_id: @alice.id) }
     end
@@ -64,7 +64,7 @@ class OperationsTest < ActiveSupport::TestCase
       error = assert_raises(Kiosk::Server::Errors::Forbidden) do
         RemoveMemberOperation.call(list_id: @list.id, account_id: @alice.id.upcase)
       end
-      assert_equal "cannot remove the list's last owner", error.message
+      assert_equal 'the owner cannot remove themselves', error.message
       RemoveMemberOperation.call(list_id: @list.id, account_id: @bob.id)
     end
     assert_not @list.memberships.exists?(account: @bob)

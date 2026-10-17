@@ -6,7 +6,9 @@ RSpec.describe 'Kiosk.current_issuer' do
       expect(Kiosk::Configuration.new.additional_origins).to eq([])
     end
   end
+end
 
+RSpec.describe 'Kiosk.current_issuer' do
   describe 'Configuration#origins' do
     subject(:config) { Kiosk::Configuration.new }
 
@@ -31,7 +33,9 @@ RSpec.describe 'Kiosk.current_issuer' do
       expect(config.origins).to eq(['https://a.example'])
     end
   end
+end
 
+RSpec.describe 'Kiosk.current_issuer' do
   describe 'Configuration#issuer_for' do
     subject(:config) { Kiosk::Configuration.new }
 
@@ -52,7 +56,9 @@ RSpec.describe 'Kiosk.current_issuer' do
       expect(config.issuer_for('not a url')).to eq('https://a.example')
     end
   end
+end
 
+RSpec.describe 'Kiosk.current_issuer' do
   describe 'Kiosk.with_issuer' do
     before { Kiosk.configure { |c| c.issuer = 'https://a.example' } }
 

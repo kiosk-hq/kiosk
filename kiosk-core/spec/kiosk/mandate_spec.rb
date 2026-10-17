@@ -24,7 +24,9 @@ RSpec.describe Kiosk::Mandate do
       expect(described_class.new(**args)).to eq(described_class.new(**args))
     end
   end
+end
 
+RSpec.describe Kiosk::Mandate do
   describe Kiosk::Mandate::CartMandate do
     it 'constructs with all fields' do
       m = described_class.new(
@@ -38,7 +40,9 @@ RSpec.describe Kiosk::Mandate do
       expect(m.total_amount_cents).to  eq(350)
     end
   end
+end
 
+RSpec.describe Kiosk::Mandate do
   describe Kiosk::Mandate::PaymentMandate do
     it 'constructs with all fields' do
       now = Time.now

@@ -1,50 +1,54 @@
 # frozen_string_literal: true
 
-RSpec.describe Kiosk::Configuration do
-  describe 'defaults' do
-    subject(:config) { described_class.new }
+RSpec.describe Kiosk::Configuration, 'defaults' do
+  subject(:config) { described_class.new }
 
-    it 'defaults user_id_type to :uuid' do
-      expect(config.user_id_type).to eq(:uuid)
-    end
-
-    it 'defaults user_id_column to :id' do
-      expect(config.user_id_column).to eq(:id)
-    end
-
-    it "defaults guc_namespace to 'app'" do
-      expect(config.guc_namespace).to eq('app')
-    end
-
-    it 'defaults roles to empty array' do
-      expect(config.roles).to eq([])
-    end
-
-    it 'leaves user_model nil (resolved at runtime by kiosk-server)' do
-      expect(config.user_model).to be_nil
-    end
-
-    it 'leaves issuer nil (provider must set)' do
-      expect(config.issuer).to be_nil
-    end
-
-    it 'leaves user_idp nil (satellite mode; kiosk:install writes a commented-out Devise line to uncomment)' do
-      expect(config.user_idp).to be_nil
-    end
-
-    it 'leaves agent_idp nil (kiosk-server falls back to the bundled DefaultAgentIdp)' do
-      expect(config.agent_idp).to be_nil
-    end
-
-    it "defaults schema to 'kiosk'" do
-      expect(config.schema).to eq('kiosk')
-    end
-
-    it "defaults app_role to 'app_role'" do
-      expect(config.app_role).to eq('app_role')
-    end
+  it 'defaults user_id_type to :uuid' do
+    expect(config.user_id_type).to eq(:uuid)
   end
 
+  it 'defaults user_id_column to :id' do
+    expect(config.user_id_column).to eq(:id)
+  end
+
+  it "defaults guc_namespace to 'app'" do
+    expect(config.guc_namespace).to eq('app')
+  end
+
+  it 'defaults roles to empty array' do
+    expect(config.roles).to eq([])
+  end
+
+  it "defaults schema to 'kiosk'" do
+    expect(config.schema).to eq('kiosk')
+  end
+
+  it "defaults app_role to 'app_role'" do
+    expect(config.app_role).to eq('app_role')
+  end
+end
+
+RSpec.describe Kiosk::Configuration, 'defaults' do
+  subject(:config) { described_class.new }
+
+  it 'leaves user_model nil (resolved at runtime by kiosk-server)' do
+    expect(config.user_model).to be_nil
+  end
+
+  it 'leaves issuer nil (provider must set)' do
+    expect(config.issuer).to be_nil
+  end
+
+  it 'leaves user_idp nil (satellite mode; kiosk:install writes a commented-out Devise line to uncomment)' do
+    expect(config.user_idp).to be_nil
+  end
+
+  it 'leaves agent_idp nil (kiosk-server falls back to the bundled DefaultAgentIdp)' do
+    expect(config.agent_idp).to be_nil
+  end
+end
+
+RSpec.describe Kiosk::Configuration do
   describe '#schema' do
     it 'is settable via Kiosk.configure' do
       Kiosk.configure { |c| c.schema = 'agent_surface' }
@@ -72,52 +76,42 @@ RSpec.describe Kiosk::Configuration do
   end
 end
 
+RSpec.describe Kiosk, '.configure' do
+  it 'yields the configuration to the block' do
+    yielded = nil
+    described_class.configure { |c| yielded = c }
+    expect(yielded).to be_a(Kiosk::Configuration)
+  end
+
+  it 'persists configuration changes' do
+    described_class.configure do |c|
+      c.issuer = 'https://acme.example'
+      c.roles  = %i[customer support]
+    end
+
+    expect(described_class.configuration.issuer).to eq('https://acme.example')
+    expect(described_class.configuration.roles).to  eq(%i[customer support])
+  end
+
+  it 'returns the same configuration instance on repeated reads' do
+    a = described_class.configuration
+    b = described_class.configuration
+    expect(a).to equal(b)
+  end
+end
+
+RSpec.describe Kiosk, '.reset!' do
+  it 'replaces configuration with a fresh default instance' do
+    described_class.configure { |c| c.issuer = 'https://acme.example' }
+    described_class.reset!
+    expect(described_class.configuration.issuer).to be_nil
+  end
+end
+
+# The configuration memo is built exactly once, even when many threads touch
+# it first at the same time. `with_slow_configuration_allocation` slows the
+# allocation, which releases the GVL inside the window and forces the race.
 RSpec.describe Kiosk do
-  describe '.configure' do
-    it 'yields the configuration to the block' do
-      yielded = nil
-      described_class.configure { |c| yielded = c }
-      expect(yielded).to be_a(Kiosk::Configuration)
-    end
-
-    it 'persists configuration changes' do
-      described_class.configure do |c|
-        c.issuer = 'https://acme.example'
-        c.roles  = %i[customer support]
-      end
-
-      expect(described_class.configuration.issuer).to eq('https://acme.example')
-      expect(described_class.configuration.roles).to  eq(%i[customer support])
-    end
-
-    it 'returns the same configuration instance on repeated reads' do
-      a = described_class.configuration
-      b = described_class.configuration
-      expect(a).to equal(b)
-    end
-  end
-
-  describe '.reset!' do
-    it 'replaces configuration with a fresh default instance' do
-      described_class.configure { |c| c.issuer = 'https://acme.example' }
-      described_class.reset!
-      expect(described_class.configuration.issuer).to be_nil
-    end
-  end
-
-  # ─── K-1619: the configuration memo is built exactly once ──────────────────
-  #
-  # `@configuration ||= Configuration.new` was a read, an allocation and a
-  # write with no lock between them, so N threads racing the FIRST read each
-  # built a Configuration of their own and the last write discarded the rest —
-  # the same seam K-1610 closed one level down on kiosk-server's four lazy
-  # store slots, and strictly worse, because every setting diverges at once
-  # rather than one spent-id set.
-  #
-  # These examples FORCE the interleaving rather than hoping for it: the window
-  # is sub-microsecond and K-1610 measured 0 failures in 2000 trials of the
-  # identical shape. `with_slow_configuration_allocation` slows the allocation
-  # itself, which releases the GVL exactly inside it.
   describe 'the lazy configuration memo under a concurrent first touch (K-1619)' do
     before { described_class.instance_variable_set(:@configuration, nil) }
 
@@ -129,9 +123,8 @@ RSpec.describe Kiosk do
       expect(configs.first).to be_a(Kiosk::Configuration)
     end
 
-    # The harm, not just the duplicate: what a losing copy was configured with
-    # is thrown away when the last write lands. Pre-fix each thread appends to
-    # a `roles` array of its own and the survivor carries ONE entry.
+    # A losing copy would lose what was written to it. Each thread appends to
+    # `roles`, so the survivor must carry every entry.
     it 'does not discard what a racing first-toucher wrote' do
       appends = Mutex.new
       _, built = with_slow_configuration_allocation do
@@ -144,19 +137,20 @@ RSpec.describe Kiosk do
       expect(built).to eq(1)
       expect(described_class.configuration.roles.length).to eq(20)
     end
+  end
+end
 
-    # The census, not a list: every module-level lazy memo in the shipped file
-    # must take the lock. One added later without it reddens here.
+# Every module-level lazy memo in the shipped file must take the lock.
+RSpec.describe Kiosk do
+  describe 'the lazy configuration memo under a concurrent first touch (K-1619)' do
     describe 'the guarded set is derived from the shipped source' do
       source_path = Kiosk.method(:configuration).source_location.first
-      source      = File.read(source_path)
       # `def self.<name>` with no arguments, through its matching `end` at the
-      # same indent — the shape every module-level default in this file uses.
-      methods     = source.scan(/^  def self\.([a-z_0-9]+)\n(.*?)^  end$/m).to_h
+      # same indent: the shape every module-level default in this file uses.
+      methods     = File.read(source_path).scan(/^  def self\.([a-z_0-9]+)\n(.*?)^  end$/m).to_h
       memoising   = methods.select { |_, body| body.match?(/@[a-z_0-9]+ \|\|=/) }
 
-      # Vacuity arm: if the scan above stops matching (a reindent, a rewrite)
-      # the census below passes on an empty set and says nothing. Fail instead.
+      # If the scan stops matching, the census below passes on an empty set.
       it 'finds the memoising module-level defaults at all' do
         expect(memoising.keys).to include('configuration')
       end

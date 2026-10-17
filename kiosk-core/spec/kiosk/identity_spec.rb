@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-RSpec.describe Kiosk::Identity do
-  let(:valid_args) do
+module IdentitySpecArgs
+  def valid_args
     {
       user_id: 'u-123',
       role: 'customer',
@@ -10,6 +10,10 @@ RSpec.describe Kiosk::Identity do
       claims: { 'iss' => 'https://acme.example' }
     }
   end
+end
+
+RSpec.describe Kiosk::Identity do
+  include IdentitySpecArgs
 
   describe '.new' do
     it 'constructs with all valid fields' do
@@ -34,7 +38,13 @@ RSpec.describe Kiosk::Identity do
       expect { described_class.new(**valid_args, user_id: nil) }
         .to raise_error(ArgumentError, /user_id/)
     end
+  end
+end
 
+RSpec.describe Kiosk::Identity do
+  include IdentitySpecArgs
+
+  describe '.new' do
     it 'allows a missing role (hook-or-absent)' do
       identity = described_class.new(**valid_args, role: nil)
       expect(identity.role).to be_nil
@@ -44,7 +54,13 @@ RSpec.describe Kiosk::Identity do
       identity = described_class.new(**valid_args, role: '')
       expect(identity.role).to be_nil
     end
+  end
+end
 
+RSpec.describe Kiosk::Identity do
+  include IdentitySpecArgs
+
+  describe '.new' do
     it 'rejects unknown actor' do
       expect { described_class.new(**valid_args, actor: 'robot') }
         .to raise_error(ArgumentError, /actor/)
@@ -65,7 +81,13 @@ RSpec.describe Kiosk::Identity do
       expect { described_class.new(**args) }
         .to raise_error(ArgumentError, /agent_id must be nil/)
     end
+  end
+end
 
+RSpec.describe Kiosk::Identity do
+  include IdentitySpecArgs
+
+  describe '.new' do
     it 'allows human actor with no agent_id' do
       identity = described_class.new(**valid_args, actor: 'human', agent_id: nil)
       expect(identity).to be_human
@@ -87,6 +109,10 @@ RSpec.describe Kiosk::Identity do
       expect(identity.claims).to eq({})
     end
   end
+end
+
+RSpec.describe Kiosk::Identity do
+  include IdentitySpecArgs
 
   describe 'predicates' do
     it '#agent? returns true only for agent' do
@@ -102,6 +128,10 @@ RSpec.describe Kiosk::Identity do
       expect(described_class.new(**valid_args, actor: 'service', agent_id: nil)).to be_service
     end
   end
+end
+
+RSpec.describe Kiosk::Identity do
+  include IdentitySpecArgs
 
   describe 'value equality' do
     it 'two identities with same fields are equal' do
@@ -116,6 +146,10 @@ RSpec.describe Kiosk::Identity do
       expect(a).not_to eq(b)
     end
   end
+end
+
+RSpec.describe Kiosk::Identity do
+  include IdentitySpecArgs
 
   describe 'immutability' do
     it 'Data class instances are frozen' do

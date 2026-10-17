@@ -47,18 +47,12 @@ module Kiosk
     attr_accessor :additional_origins
 
     def initialize
-      @user_model       = nil
-      @user_id_type     = :uuid
-      @user_id_column   = :id
-      @user_idp         = nil
-      @agent_idp        = nil
-      @payment_provider = nil
-      @kyc_provider     = nil
-      @guc_namespace    = GUC::DEFAULT_NAMESPACE
-      @schema           = 'kiosk'
-      @app_role         = 'app_role'
-      @roles            = []
-      @issuer           = nil
+      @user_id_type       = :uuid
+      @user_id_column     = :id
+      @guc_namespace      = GUC::DEFAULT_NAMESPACE
+      @schema             = 'kiosk'
+      @app_role           = 'app_role'
+      @roles              = []
       @additional_origins = []
     end
 

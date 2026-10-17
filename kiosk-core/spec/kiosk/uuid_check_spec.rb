@@ -36,7 +36,9 @@ RSpec.describe Kiosk::UuidCheck do
       expect(described_class.valid?("urn:uuid:#{id}")).to be(false)
     end
   end
+end
 
+RSpec.describe Kiosk::UuidCheck do
   describe 'JSON_SCHEMA_PATTERN' do
     # The declared contract and the runtime guard are two spellings of one
     # shape, so they must accept and reject the same strings. A drift here is

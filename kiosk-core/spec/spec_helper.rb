@@ -20,30 +20,27 @@ RSpec.configure do |config|
   config.before(:each) { Kiosk.reset! }
 end
 
-# ── K-1619: force the interleaving at the lazy `Kiosk.configuration` slot ────
-#
-# Hoping for the race does not work — the pre-fix window between the ivar read
-# and the ivar write is sub-microsecond, and K-1610 measured 0 failures in 2000
-# trials of 20 racing threads on the identical shape one level down. So the
-# allocation itself is slowed, which releases the GVL exactly inside the
-# window; the shipped code is otherwise untouched.
+# Slows Configuration allocation so that racing threads meet inside the lazy
+# `Kiosk.configuration` slot. The sleep releases the GVL inside that window.
+# The prepend is permanent, so the delay is zero outside the helper below.
 module SlowConfigurationAllocation
-  # Mutable because the prepend below is permanent (a module cannot be
-  # un-prepended) while the delay must be off for every other example.
-  DELAY = { seconds: 0.0 }
-
-  # Counts every Configuration actually built, which is the property under
-  # test: pre-fix a racing first touch builds N of them and keeps the last.
-  BUILT = { count: 0 }
   COUNTER = Mutex.new
 
+  class << self
+    # Seconds each allocation sleeps.
+    attr_accessor :delay
+    # Number of Configuration objects built.
+    attr_accessor :built
+  end
+  self.delay = 0.0
+  self.built = 0
+
+  # Prepended to Configuration's singleton class.
   module SlowNew
-    def new(*args, **kwargs, &)
-      seconds = SlowConfigurationAllocation::DELAY[:seconds]
-      sleep(seconds) if seconds.positive?
-      SlowConfigurationAllocation::COUNTER.synchronize do
-        SlowConfigurationAllocation::BUILT[:count] += 1
-      end
+    def new(...)
+      delay = SlowConfigurationAllocation.delay
+      sleep(delay) if delay.positive?
+      SlowConfigurationAllocation::COUNTER.synchronize { SlowConfigurationAllocation.built += 1 }
       super
     end
   end
@@ -57,24 +54,24 @@ SlowConfigurationAllocation.install!
 # Run +block+ with Configuration allocation slowed to +seconds+, counting the
 # allocations it makes, then restore. Yields nothing; returns [value, built].
 def with_slow_configuration_allocation(seconds = 0.02)
-  SlowConfigurationAllocation::DELAY[:seconds]  = seconds
-  SlowConfigurationAllocation::BUILT[:count]    = 0
+  SlowConfigurationAllocation.delay = seconds
+  SlowConfigurationAllocation.built = 0
   value = yield
-  [value, SlowConfigurationAllocation::BUILT[:count]]
+  [value, SlowConfigurationAllocation.built]
 ensure
-  SlowConfigurationAllocation::DELAY[:seconds] = 0.0
+  SlowConfigurationAllocation.delay = 0.0
 end
 
-# Release +n+ threads at once and collect their values. The latch is what makes
-# them race: without it the first thread finishes before the last is spawned.
-def race(n, &block)
+# Release +count+ threads at once and collect their values. The latch makes
+# them race: without it the first thread finishes before the last starts.
+def race(count, &block)
   latch   = Queue.new
-  threads = Array.new(n) do
+  threads = Array.new(count) do
     Thread.new do
       latch.pop
       block.call
     end
   end
-  n.times { latch.push(:go) }
+  count.times { latch.push(:go) }
   threads.map(&:value)
 end

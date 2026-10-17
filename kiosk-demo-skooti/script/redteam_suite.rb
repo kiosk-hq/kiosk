@@ -218,12 +218,8 @@ module SkootiScenarios
       MALFORMED.each { |junk| probe(client, a, junk) }
       check_control(client, a)
 
-      Kiosk::Redteam::Verdict.new(
-        blocked: @failures.empty?,
-        skipped: false,
-        status: @statuses.find { |s| s != 400 } || 400,
-        detail: @failures.join(' | ')
-      )
+      Kiosk::Redteam::Verdict.new(blocked: @failures.empty?, skipped: false,
+                                  status: @statuses.find { |s| s != 400 } || 400, detail: @failures.join(' | '))
     end
 
     private
@@ -294,20 +290,22 @@ module SkootiScenarios
       a         = client.register!
       @failures = []
       SHAPES.each { |v| probe_shape(client, a, v) }
-      # The one that reaches Reservation.create!: a well-typed but unknown handle.
-      refused 'reserve scooter_code="NO-SUCH-VEHICLE"',
-              client.run(a, name: 'reserve', scooter_code: 'NO-SUCH-VEHICLE'),
-              supplied: 'NO-SUCH-VEHICLE'
+      probe_unknown_vehicle(client, a)
       check_echo_control(client, a)
       check_reserve_control(client, a)
 
-      Kiosk::Redteam::Verdict.new(
-        blocked: @failures.empty?, skipped: false, status: 400,
-        detail: @failures.join(' | ')
-      )
+      Kiosk::Redteam::Verdict.new(blocked: @failures.empty?, skipped: false, status: 400,
+                                  detail: @failures.join(' | '))
     end
 
     private
+
+    # The one that reaches Reservation.create!: a well-typed but unknown handle.
+    def probe_unknown_vehicle(client, customer)
+      refused 'reserve scooter_code="NO-SUCH-VEHICLE"',
+              client.run(customer, name: 'reserve', scooter_code: 'NO-SUCH-VEHICLE'),
+              supplied: 'NO-SUCH-VEHICLE'
+    end
 
     def probe_shape(client, customer, value)
       refused "reserve scooter_code=#{value.inspect}",
@@ -486,11 +484,16 @@ end
 # Why the attack got through, or nil. A typed refusal must also name rent_motorcycle.
 def verb_swap_breach(attack)
   token = body_field(attack, 'rental_token')
-  err   = body_field(attack, 'code')
-  if token && !token.to_s.empty?
-    'start_rental issued an unlock token for the KYC-GATED MC-001 to an agent with no attestation ' \
-      "(HTTP #{attack.status}, token #{token.to_s[0, 32]}…) — the licence gate was walked around by verb"
-  elsif !([400, 403].include?(attack.status) && %w[bad_request forbidden kyc_required].include?(err))
+  return refusal_breach(attack) if token.to_s.empty?
+
+  'start_rental issued an unlock token for the KYC-GATED MC-001 to an agent with no attestation ' \
+    "(HTTP #{attack.status}, token #{token.to_s[0, 32]}…) — the licence gate was walked around by verb"
+end
+
+# Why a refusal with no token is still wrong, or nil.
+def refusal_breach(attack)
+  err = body_field(attack, 'code')
+  if !([400, 403].include?(attack.status) && %w[bad_request forbidden kyc_required].include?(err))
     "start_rental on MC-001 answered HTTP #{attack.status} code=#{err.inspect} — no token, but not a typed client-error refusal either"
   elsif !JSON.generate(attack.body).include?('rent_motorcycle')
     "start_rental on MC-001 refused (HTTP #{attack.status} #{err.inspect}) but never names rent_motorcycle — " \
@@ -584,8 +587,10 @@ def forged_callback_no_sig
   cb_wrong = post_kyc_callback(request_id:, kyc_jws: wrong_key_jws, nonce: 'any')
   # Also a callback with NO jws at all.
   cb_missing = post_kyc_callback(request_id:, nonce: 'any')
-  events = kyc_events_for(a)
+  forged_callback_verdict(cb_wrong, cb_missing, kyc_events_for(a))
+end
 
+def forged_callback_verdict(cb_wrong, cb_missing, events)
   if cb_wrong != 200 && cb_missing != 200 && events.empty?
     { blocked: true, detail: "wrong-key callback (#{cb_wrong}) and no-jws callback (#{cb_missing}) both rejected; no kyc_verification event sent" }
   else
@@ -622,12 +627,8 @@ end
 # POST /kiosk/query and /kiosk/run route nowhere: a plain 404, bearer or not, with no problem document.
 def unregistered_verb(customer)
   probes = %w[query run].product([[true, ''], [false, ' (anon)']]).map do |name, (bearer, tag)|
-    res, body = raw_wire(customer, :post, "/kiosk/#{name}", { name: 'scooters_available' }, bearer: bearer)
-    [res.code.to_i == 404 && body['code'].nil?,
-     "POST /kiosk/#{name}#{tag} → #{res.code}/#{body['code'].inspect} " \
-     '(want 404 with no problem-document code)']
+    unregistered_verb_probe(customer, name, bearer, tag)
   end
-
   probes_verdict(probes,
                  "unregistered verb names #{probes.map(&:last).join(', ')} " \
                  '(the ordinary 404 any undrawn path gets, bearer or not, ' \
@@ -636,22 +637,29 @@ def unregistered_verb(customer)
                  "#{probes.reject { |ok, _| ok }.map(&:last).join(', ')}")
 end
 
+def unregistered_verb_probe(customer, name, bearer, tag)
+  res, body = raw_wire(customer, :post, "/kiosk/#{name}", { name: 'scooters_available' }, bearer: bearer)
+  [res.code.to_i == 404 && body['code'].nil?,
+   "POST /kiosk/#{name}#{tag} → #{res.code}/#{body['code'].inspect} (want 404 with no problem-document code)"]
+end
+
 # MethodMismatch: the wrong method at a verb's path is a plain 404 with no Allow, both directions.
 def method_mismatch(customer)
   probes = [
     [:get,  '/kiosk/reserve',         nil],
     [:post, '/kiosk/my_reservations', {}]
-  ].map do |method, path, body|
-    res, doc = raw_wire(customer, method, path, body)
-    ok = res.code.to_i == 404 && res['allow'].nil? && doc['code'].nil?
-    [ok, "#{method.to_s.upcase} #{path} → #{res.code}/#{doc['code'].inspect} " \
-         "Allow=#{res['allow'].inspect} (want a plain 404, no Allow, no code)"]
-  end
-
+  ].map { |method, path, body| method_mismatch_probe(customer, method, path, body) }
   lines = probes.map(&:last).join('; ')
   probes_verdict(probes,
                  "the wrong method on a real verb draws no route and never runs it: #{lines}",
                  "a method mismatch is not answered as a plain 404: #{lines}")
+end
+
+def method_mismatch_probe(customer, method, path, body)
+  res, doc = raw_wire(customer, method, path, body)
+  ok = res.code.to_i == 404 && res['allow'].nil? && doc['code'].nil?
+  [ok, "#{method.to_s.upcase} #{path} → #{res.code}/#{doc['code'].inspect} " \
+       "Allow=#{res['allow'].inspect} (want a plain 404, no Allow, no code)"]
 end
 
 def bearer_status(token)
@@ -663,12 +671,7 @@ end
 # SelfAssertedTokenForgery: a self-asserted agent bearer, even naming a real account as owner,
 # resolves to no identity; the real token is the control.
 def self_asserted_token_forgery(customer)
-  forgeries = [
-    ['real account + real agent, role escalated to owner',
-     "agent:u-#{customer.user_id}:a-#{customer.agent_id}:r-owner"],
-    ['wholly invented ids',
-     "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"]
-  ].map do |label, token|
+  forgeries = forged_agent_bearers(customer).map do |label, token|
     code = bearer_status(token)
     [code == 401, "#{label} → #{code}"]
   end
@@ -679,22 +682,27 @@ rescue StandardError => e
   { blocked: false, detail: "beat error: #{e.class}: #{e.message}" }
 end
 
+def forged_agent_bearers(customer)
+  [['real account + real agent, role escalated to owner',
+    "agent:u-#{customer.user_id}:a-#{customer.agent_id}:r-owner"],
+   ['wholly invented ids', "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"]]
+end
+
 def token_forgery_verdict(forgeries, control_res)
   lines = forgeries.map(&:last).join('; ')
-  if control_res.code.to_i != 200
-    { blocked: false,
-      detail: 'unexpected: the REAL registered token was refused too ' \
-              "(HTTP #{control_res.code}) — the 401s above prove nothing" }
-  elsif forgeries.all? { |ok, _| ok }
-    { blocked: true,
-      detail: "self-asserted `agent:u-…:r-owner` bearer resolves to NO identity — #{lines} — in the " \
-              'SAME (development) env the drivers run in, with no environment condition in the ' \
-              "assertion; the real registered token answers the same verb #{control_res.code}, so " \
-              'the refusal is not vacuous' }
-  else
-    { blocked: false,
-      detail: "REGRESSION: a self-asserted bearer was accepted over the wire — #{lines} (want 401 for each)" }
-  end
+  return { blocked: false, detail: vacuous_control_detail('registered token', control_res.code) } if control_res.code.to_i != 200
+  return { blocked: false, detail: "REGRESSION: a self-asserted bearer was accepted over the wire — #{lines} (want 401 for each)" } unless forgeries.all? { |ok, _| ok }
+
+  { blocked: true,
+    detail: "self-asserted `agent:u-…:r-owner` bearer resolves to NO identity — #{lines} — in the " \
+            'SAME (development) env the drivers run in, with no environment condition in the ' \
+            "assertion; the real registered token answers the same verb #{control_res.code}, so " \
+            'the refusal is not vacuous' }
+end
+
+# The verdict detail when the honest control was refused too.
+def vacuous_control_detail(control, status)
+  "unexpected: the REAL #{control} was refused too (HTTP #{status}) — the refusals above prove nothing"
 end
 
 # SelfAssertedUserBearerForgery: a self-asserted `user:u-<uuid>` bearer gets 401 at /kiosk/auth/link;
@@ -715,20 +723,13 @@ rescue StandardError => e
 end
 
 def user_bearer_verdict(rc_forged, rc_real)
-  if rc_forged == 401 && [200, 201].include?(rc_real)
-    { blocked: true,
-      detail: 'forged self-asserted `user:u-…` human bearer → 401 at /kiosk/auth/link in the ' \
-              'SAME env the drivers run in (no stub arm left); the real Devise session mints ' \
-              "a link code (#{rc_real}), so the refusal is not vacuous" }
-  elsif rc_forged != 401
-    { blocked: false,
-      detail: 'REGRESSION: forged self-asserted human bearer was accepted at ' \
-              "/kiosk/auth/link (HTTP #{rc_forged})" }
-  else
-    { blocked: false,
-      detail: "unexpected: the REAL Devise session was refused too (HTTP #{rc_real}) — the " \
-              '401 above proves nothing' }
-  end
+  return { blocked: false, detail: "REGRESSION: forged self-asserted human bearer was accepted at /kiosk/auth/link (HTTP #{rc_forged})" } if rc_forged != 401
+  return { blocked: false, detail: vacuous_control_detail('Devise session', rc_real) } unless [200, 201].include?(rc_real)
+
+  { blocked: true,
+    detail: 'forged self-asserted `user:u-…` human bearer → 401 at /kiosk/auth/link in the ' \
+            'SAME env the drivers run in (no stub arm left); the real Devise session mints ' \
+            "a link code (#{rc_real}), so the refusal is not vacuous" }
 end
 
 beats = {

@@ -12,7 +12,7 @@ class PaymentWindowTest < ActiveSupport::TestCase
     def release! = @gate << :go
     def setup_required?(*) = false
 
-    def capture(cart_mandate, payment_method: nil)
+    def capture(cart_mandate, **)
       @gate.pop
       { psp_reference: 'pi_blocking', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
     end
@@ -24,7 +24,7 @@ class PaymentWindowTest < ActiveSupport::TestCase
     def initialize = @captures = Concurrent::AtomicFixnum.new
     def setup_required?(*) = false
 
-    def capture(cart_mandate, payment_method: nil)
+    def capture(cart_mandate, **)
       @captures.increment
       sleep 0.05
       { psp_reference: 'pi_counting', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
@@ -57,7 +57,7 @@ class PaymentWindowTest < ActiveSupport::TestCase
     ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart) }
   end
 
-  def wait_until
+  def eventually?
     50.times do
       return true if yield
 
@@ -78,7 +78,7 @@ class PaymentWindowTest < ActiveSupport::TestCase
     psp = BlockingPsp.new
     paying = Thread.new { capture(psp, id) }
 
-    assert(wait_until { payment_status(id) == 'paying' })
+    assert(eventually? { payment_status(id) == 'paying' })
     assert_equal 'pending', payment_state(id)
     error = assert_raises(Kiosk::Server::Errors::Forbidden) { start_rental(id) }
     assert_includes error.message, 'in progress'

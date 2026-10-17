@@ -59,68 +59,62 @@ module RentalTokenIssuer
     # The claims, or nil for anything the lock would refuse. It reads bytes,
     # as the lock does, so the caller's encoding tag cannot change the answer.
     def verify(token:, now:)
-      return nil if token.nil?
+      message, sig = signed_parts(token.to_s.b)
+      return nil unless message && authentic?(message, sig)
 
-      token = token.to_s.b
-      return nil if token.empty?
-      return nil if token.bytesize > TOKEN_MAX_BYTES
-      return nil if token.b.include?(NUL_BYTE)
-
-      dot_idx = token.rindex('.')
-      return nil if dot_idx.nil?
-
-      message = token[0...dot_idx]
-      sig_b64 = token[(dot_idx + 1)..]
-
-      return nil if message.empty? || sig_b64.empty?
-      return nil if sig_b64.bytesize > SIG_B64_MAX
-      return nil unless sig_b64.match?(SIG_B64_FORMAT)
-
-      sig = Base64.urlsafe_decode64(sig_b64)
-      return nil unless sig.bytesize == 64
-
-      pub = public_key
-      return nil if pub.nil?
-
-      return nil unless pub.verify(nil, sig, message)
-
-      # -1 keeps a trailing empty field, which the lock counts.
-      fields = message.split(DELIMITER, -1)
-      return nil unless fields.length == FIELD_COUNT
-      return nil if fields.any?(&:empty?)
-      return nil unless fields[0] == CONTEXT_TAG.b
-
-      _tag, scooter_code, reservation_id, iat_s, exp_s, jti = fields
-
-      return nil unless scooter_code.match?(FIELD_CHARSET)
-      return nil unless reservation_id.match?(FIELD_CHARSET)
-
-      return nil unless timestamp?(iat_s)
-      return nil unless timestamp?(exp_s)
-      return nil unless jti.match?(JTI_FORMAT)
-
-      iat = Integer(iat_s, 10)
-      exp = Integer(exp_s, 10)
-
-      return nil unless exp > now
-
-      {
-        scooter_code: scooter_code.force_encoding(Encoding::UTF_8),
-        reservation_id: reservation_id.force_encoding(Encoding::UTF_8),
-        iat: iat,
-        exp: exp,
-        jti: jti.force_encoding(Encoding::UTF_8)
-      }
+      claims = claims_in(message)
+      claims if claims && claims[:exp] > now
     rescue ArgumentError, OpenSSL::PKey::PKeyError
       nil
     end
 
     private
 
-    def timestamp?(s)
-      return false unless s.match?(TIMESTAMP_FORMAT)
+    # The message and the decoded signature, or nil when the envelope is malformed.
+    def signed_parts(token)
+      return nil unless envelope?(token)
 
-      Integer(s, 10) <= TIMESTAMP_MAX
+      message, _dot, sig_b64 = token.rpartition('.')
+      return nil if message.empty? || !signature_text?(sig_b64)
+
+      sig = Base64.urlsafe_decode64(sig_b64)
+      [message, sig] if sig.bytesize == 64
+    end
+
+    def envelope?(token) = !token.empty? && token.bytesize <= TOKEN_MAX_BYTES && !token.include?(NUL_BYTE)
+
+    def signature_text?(sig_b64) = sig_b64.bytesize <= SIG_B64_MAX && sig_b64.match?(SIG_B64_FORMAT)
+
+    def authentic?(message, sig)
+      pub = public_key
+      !pub.nil? && pub.verify(nil, sig, message)
+    end
+
+    # The claims of a well-formed message, or nil.
+    def claims_in(message)
+      # -1 keeps a trailing empty field, which the lock counts.
+      fields = message.split(DELIMITER, -1)
+      return nil unless fields_valid?(fields)
+
+      _tag, scooter_code, reservation_id, iat, exp, jti = fields
+      { scooter_code: utf8(scooter_code), reservation_id: utf8(reservation_id),
+        iat: Integer(iat, 10), exp: Integer(exp, 10), jti: utf8(jti) }
+    end
+
+    def fields_valid?(fields)
+      return false unless fields.length == FIELD_COUNT && fields[0] == CONTEXT_TAG.b
+
+      _tag, scooter_code, reservation_id, iat, exp, jti = fields
+      [scooter_code, reservation_id].all? { it.match?(FIELD_CHARSET) } &&
+        [iat, exp].all? { timestamp?(it) } && jti.match?(JTI_FORMAT)
+    end
+
+    def utf8(bytes) = bytes.force_encoding(Encoding::UTF_8)
+
+    def timestamp?(text)
+      return false unless text.match?(TIMESTAMP_FORMAT)
+
+      Integer(text, 10) <= TIMESTAMP_MAX
     end
 
     def signing_key

@@ -7,7 +7,7 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
   NOW         = 1_750_000_000
   PUBLIC_KEY  = 'b39f3a0333c662d3937684f21c91f7722161f8b0b4f4a79b336b463eb8f570f4'
   JTI         = 'aabbccddeeff00112233445566778899'
-  MESSAGE     = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|#{JTI}"
+  MESSAGE     = "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|#{JTI}".freeze
   SIGNATURE   = 'SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg'
 
   def issue(scooter_code: 'SK-001', reservation_id: 'resv-1', **) = RentalTokenIssuer.issue(scooter_code:, reservation_id:, now: NOW, **)

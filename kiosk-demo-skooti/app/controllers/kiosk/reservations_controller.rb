@@ -6,12 +6,14 @@ module Kiosk
     include Kiosk::Handler
 
     topic :booking_payment do
-      description 'A reservation of yours is paid; start its rental.'
+      description 'The money on a reservation of yours moved. `paid`: start its rental. `refunded`: its ride did ' \
+                  'not start within the hold, so the vehicle is released and the payment returned to the card.'
       payload_schema type: 'object', additionalProperties: false,
                      properties: { reservation_id: { type: 'string', format: 'uuid' },
-                                   payment_state: { enum: %w[paid] } },
+                                   payment_state: { enum: %w[paid refunded] } },
                      required: %w[reservation_id payment_state]
       example reservation_id: 'a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f', payment_state: 'paid'
+      example reservation_id: 'a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f', payment_state: 'refunded'
       subject_reachable ->(reservation_id, identity) { Reservation.readable_by?(reservation_id, identity.user_id) }
     end
 
@@ -26,10 +28,11 @@ module Kiosk
                       reservation_id: { type: 'string', description: 'Pass it to `start_rental` or `rent_motorcycle`.' },
                       scooter_code: { type: 'string', description: 'The vehicle reserved.' },
                       status: { type: 'string', description: '`reserved` until the rental starts, then `active`.' },
-                      payment_state: { type: 'string', enum: %w[unpaid pending paid],
+                      payment_state: { type: 'string', enum: %w[unpaid pending paid refunded],
                                        description: '`paid`: nothing left to pay. `pending`: a charge is under way and ' \
                                                     'may already have taken the money; re-read, do not pay again. ' \
-                                                    '`unpaid`: pay for it.' }
+                                                    '`unpaid`: pay for it. `refunded`: the ride did not start in time ' \
+                                                    'and the payment went back to the card.' }
                     },
                     required: %w[reservation_id scooter_code status payment_state]
                   }
@@ -38,8 +41,9 @@ module Kiosk
     end
 
     kind :action
-    description 'Hold one vehicle for 15 minutes and get the price of its first minute, which is what you pay ' \
-                'now. Pay as `pay_hint` says, then start the rental. A vehicle another rider holds is refused ' \
+    description "Hold one vehicle for #{Reservation::HOLD.inspect} and get the price of its first minute, which is " \
+                'what you pay now. Pay as `pay_hint` says, then start the rental within the hold: a paid hold whose ' \
+                'ride has not started by then is released and refunded. A vehicle another rider holds is refused ' \
                 'as a conflict.'
     input_schema type: 'object',
                  additionalProperties: false,

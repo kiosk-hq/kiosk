@@ -38,16 +38,21 @@ module Rental
                exp:)
   end
 
-  # The vehicle stays held while its rental token can open the lock.
+  # The vehicle stays held while its rental token can open the lock. The row
+  # lock orders this against RefundUnstartedJob at the end of the hold.
   def hold_until!(reservation, held_until)
-    reservation.update!(status: :active, held_until:)
+    reservation.with_lock do
+      lapsed!(reservation) unless reservation.paid? && reservation.held_until.future?
+      reservation.update!(status: :active, held_until:)
+    end
   rescue ActiveRecord::ExclusionViolation
     lapsed!(reservation)
   end
 
   def lapsed!(reservation)
+    refund = reservation.unpaid? ? '' : '; its payment is refunded to the card'
     raise Kiosk::Server::Errors::Conflict,
-          "this reservation's hold on #{reservation.scooter.code} lapsed — reserve a vehicle again"
+          "this reservation's hold on #{reservation.scooter.code} lapsed — reserve a vehicle again#{refund}"
   end
 
   def refuse(message)

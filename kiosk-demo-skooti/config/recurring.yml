@@ -1,0 +1,4 @@
+# Solid Queue's recurring tasks, in every environment.
+refund_unstarted:
+  class: RefundUnstartedJob
+  schedule: every 15 seconds

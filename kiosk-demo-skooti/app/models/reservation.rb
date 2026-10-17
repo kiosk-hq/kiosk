@@ -7,10 +7,11 @@ class Reservation < ApplicationRecord
   include Kiosk::Owned
 
   # Time to pay and start the rental; starting it holds the vehicle until the rental token expires.
-  HOLD = 15.minutes
+  # A paid hold whose ride has not started by then is refunded (RefundUnstartedJob).
+  HOLD = 3.minutes
 
   enum :status, { reserved: 'reserved', active: 'active' }
-  enum :payment_status, { unpaid: 'unpaid', paying: 'paying', paid: 'paid' }
+  enum :payment_status, { unpaid: 'unpaid', paying: 'paying', paid: 'paid', refunded: 'refunded' }
 
   belongs_to :user
   belongs_to :scooter, optional: true
@@ -21,6 +22,8 @@ class Reservation < ApplicationRecord
   before_create { self.held_until = HOLD.from_now }
 
   scope :live, -> { where(arel_table[:held_until].gt(Time.current)) }
+  # Paid holds whose ride never started.
+  scope :unstarted, -> { reserved.paid.where(arel_table[:held_until].lteq(Time.current)) }
 
   validate :scooter_in_fleet, on: :create
   # Which rental verb activates it depends on the vehicle.
@@ -41,18 +44,35 @@ class Reservation < ApplicationRecord
 
   def self.readable_by?(reservation_id, user_id) = where(id: reservation_id, user_id: user_id).exists?
 
-  def self.announce_payment(reservation_id)
+  def self.announce_payment(reservation_id, payment_state = 'paid')
     Kiosk::Server::Events.emit(
       topic: :booking_payment, subject: reservation_id, identity_scope: [find(reservation_id).user_id],
-      data: { 'reservation_id' => reservation_id, 'payment_state' => 'paid' }
+      data: { 'reservation_id' => reservation_id, 'payment_state' => payment_state }
     )
+  end
+
+  # Returns the payment of an unstarted hold to the card, once: the row stays
+  # locked until it reads `refunded`.
+  def self.refund_unstarted!(reservation_id)
+    transaction do
+      reservation = unstarted.lock.find_by(id: reservation_id)
+      charge = reservation && Kiosk::Settlement.joins(:cart_mandate)
+                                               .merge(Kiosk::CartMandate.referencing(reservation_id:)).take
+      next unless charge
+
+      Kiosk.configuration.payment_provider.refund(psp_reference: charge.psp_reference,
+                                                  amount_cents: charge.settled_amount_cents)
+      reservation.refunded!
+      announce_payment(reservation.id, 'refunded')
+    end
   end
 
   # What `my_reservations` publishes about the money. `pending` means a capture
   # is in flight: the caller must reconcile, not sign a new mandate.
   def payment_state
-    return 'paid'    if paid? || settled
-    return 'pending' if paying?
+    return 'refunded' if refunded?
+    return 'paid'     if paid? || settled
+    return 'pending'  if paying?
 
     'unpaid'
   end

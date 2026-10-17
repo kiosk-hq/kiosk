@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1907 anchors.
+# 1901 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -474,8 +474,6 @@ kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def hotel_detai
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	@property = Property.find(params[:property_id])
 kiosk-demo-hoteling/app/controllers/kiosk/room_types_controller.rb	@search = RoomSearch.new(property: Property.find(params[:property_id]),
 kiosk-demo-hoteling/app/models/property.rb	# One hotel, sold on its own clock (`timezone`).
-kiosk-demo-hoteling/app/models/room_hold.rb	  PAY_BY = 15.minutes
-kiosk-demo-hoteling/app/models/room_hold.rb	# guest is expected to have paid by. Nothing here enforces that deadline.
 kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	refuse 'this booking is not paid yet', hint:
 kiosk-demo-hoteling/app/operations/confirm_booking_operation.rb	this booking is not paid yet
 kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	expires_at: RoomHold::PAY_BY.from_now)
@@ -1748,10 +1746,6 @@ kiosk-server/spec/kiosk/server/response_validation_spec.rb	passes a query whose 
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	refuses a query whose rows do NOT, naming the verb and the pointer
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	refuses an ACTION whose object does not satisfy its declared schema
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	refuses an object schema on a paginating verb
-kiosk-server/spec/kiosk/server/revocation_store_spec.rb	keeps tokens issued at or after the watermark (fresh login / replacement token)
-kiosk-server/spec/kiosk/server/revocation_store_spec.rb	only moves the watermark forward — a later revoke never un-revokes
-kiosk-server/spec/kiosk/server/revocation_store_spec.rb	prunes watermarks older than the retention window
-kiosk-server/spec/kiosk/server/revocation_store_spec.rb	revokes tokens issued strictly before the watermark
 kiosk-server/spec/kiosk/server/routing_spec.rb	draws GET <mount_path>/<name> for each query
 kiosk-server/spec/kiosk/server/routing_spec.rb	draws POST <mount_path>/<name> for each action
 kiosk-server/spec/kiosk/server/routing_spec.rb	draws no other method on a verb's path

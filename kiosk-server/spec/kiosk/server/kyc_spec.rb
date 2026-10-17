@@ -3,92 +3,52 @@
 # The KYC module against a real Postgres: `request_kyc`, the provider's
 # callback, the `kyc_verification` event and the grants, keyed on the person.
 
-require 'active_record'
 require 'json'
 require 'jwt'
 require 'openssl'
 require 'rack/mock'
 require 'securerandom'
+require_relative '../../support/postgres'
 
-RSpec.describe Kiosk::Server::Kyc do
-  KYC_SPEC_SCHEMA = 'kiosk_kyc_spec'
+module KycSpec
+  SCHEMA = 'kiosk_kyc_spec'
 
-  def self.postgres_error
-    @postgres_error ||= begin
-      ActiveRecord::Base.establish_connection(
-        adapter: 'postgresql', host: ENV.fetch('PGHOST', nil), username: ENV.fetch('PGUSER', nil),
-        password: ENV.fetch('PGPASSWORD', nil), database: ENV.fetch('PGDATABASE', 'postgres')
-      )
-      ActiveRecord::Base.connection.execute('SELECT 1')
-      [false]
-    rescue StandardError => e
-      ["#{e.class}: #{e.message}"]
-    end
-    @postgres_error.first
-  end
-
-  before(:context) do
-    skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error
-
+  def self.create_schema
+    SpecPostgres.recreate_schema(SCHEMA)
     conn = ActiveRecord::Base.connection
-    conn.execute(%(DROP SCHEMA IF EXISTS "#{KYC_SPEC_SCHEMA}" CASCADE))
-    conn.execute(%(CREATE SCHEMA "#{KYC_SPEC_SCHEMA}"))
-    conn.execute(%(CREATE TABLE "#{KYC_SPEC_SCHEMA}".people (id text PRIMARY KEY)))
-    conn.execute(%(INSERT INTO "#{KYC_SPEC_SCHEMA}".people VALUES ('u-1'), ('u-2')))
-    conn.execute(%(SET search_path TO "#{KYC_SPEC_SCHEMA}", public))
-    conn.execute(Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(schema: KYC_SPEC_SCHEMA, user_id_type: :text,
+    conn.execute(%(CREATE TABLE "#{SCHEMA}".people (id text PRIMARY KEY)))
+    conn.execute(%(INSERT INTO "#{SCHEMA}".people VALUES ('u-1'), ('u-2')))
+    conn.execute(%(SET search_path TO "#{SCHEMA}", public))
+    conn.execute(Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(schema: SCHEMA, user_id_type: :text,
                                                                      user_table: 'people'))
   end
 
-  after(:context) do
-    next if self.class.postgres_error
-
-    ActiveRecord::Base.connection.execute(%(RESET search_path; DROP SCHEMA IF EXISTS "#{KYC_SPEC_SCHEMA}" CASCADE))
-  end
-
-  let(:store)    { Kiosk::Server::EventStore.new }
-  let(:kyc_key)  { OpenSSL::PKey::RSA.generate(2048) }
-  let(:provider) { provider_class.new }
-
-  # Answers the port and nothing else, so an engine that reached past it fails.
-  let(:provider_class) do
-    Class.new(Kiosk::KycProviders::Base) do
-      attr_accessor :opened, :failing
-
-      def open_verification(**args)
-        raise Kiosk::KycProviders::Unavailable, 'down' if failing
-
-        self.opened = args
-        id = "req-#{SecureRandom.hex(4)}"
-        { request_id: id, verification_url: "https://kyc.example/verify/#{id}", nonce: "nonce-#{id}" }
-      end
-
-      def accepts?(payload) = payload['operator'] == 'shop'
-    end
+  def self.drop_schema
+    ActiveRecord::Base.connection.execute('RESET search_path') unless SpecPostgres.error
+    SpecPostgres.drop_schema(SCHEMA)
   end
 
   def configure(kyc_provider)
     Kiosk.configure do |c|
-      c.schema         = KYC_SPEC_SCHEMA
-      c.signing_key    = Kiosk::Server::SigningKey.generate
-      c.issuer         = 'https://shop.example'
-      c.roles          = %i[customer]
-      c.agent_idp      = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-      c.event_store    = store
+      c.schema      = SCHEMA
+      c.signing_key = Kiosk::Server::SigningKey.generate
+      c.issuer      = 'https://shop.example'
+      c.roles       = %i[customer]
+      c.agent_idp   = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
+      c.event_store = store
+    end
+    configure_kyc(kyc_provider)
+    Kiosk::Server::Kyc.register! if kyc_provider
+  end
+
+  def configure_kyc(kyc_provider)
+    Kiosk.configure do |c|
       c.kyc_provider   = kyc_provider
       c.kyc_claims     = %w[age_over_18 licence_a]
       c.kyc_issuer     = 'https://kyc.example'
       c.kyc_audience   = 'shop'
       c.kyc_public_key = kyc_key.public_key
     end
-    Kiosk::Server::Kyc.register! if kyc_provider
-  end
-
-  before do
-    connection = ActiveRecord::Base.connection
-    connection.execute(%(TRUNCATE "#{KYC_SPEC_SCHEMA}".kyc_attributes, "#{KYC_SPEC_SCHEMA}".kyc_requests))
-    allow_any_instance_of(Kiosk::Server::VerbController)
-      .to receive(:connection_for).and_return(FakeConnection.new)
   end
 
   def token(user_id: 'u-1', agent_id: 'a-1')
@@ -122,7 +82,7 @@ RSpec.describe Kiosk::Server::Kyc do
     dispatch(Kiosk::Server::KycCallbackController, env)
   end
 
-  def attestation(sub: 'u-1', operator: 'shop', attributes: { age_over_18: true, licence_a: true })
+  def attestation(sub: 'u-1', operator: 'shop', attributes: { 'age_over_18' => true, 'licence_a' => true })
     now = Time.now.to_i
     JWT.encode({ sub: sub, level: 'verified', iss: 'https://kyc.example', aud: 'shop', operator: operator,
                  iat: now, exp: now + 600, attributes: attributes }, kyc_key, 'RS256')
@@ -131,7 +91,7 @@ RSpec.describe Kiosk::Server::Kyc do
   def open_request(age: 0, user_id: 'u-1')
     id = "old-#{SecureRandom.hex(4)}"
     ActiveRecord::Base.connection.exec_query(
-      "INSERT INTO \"#{KYC_SPEC_SCHEMA}\".kyc_requests (id, user_id, nonce, created_at) VALUES ($1, $2, 'n', now() - make_interval(secs => $3))",
+      "INSERT INTO \"#{SCHEMA}\".kyc_requests (id, user_id, nonce, created_at) VALUES ($1, $2, 'n', now() - make_interval(secs => $3))",
       'spec', [id, user_id, age]
     )
     id
@@ -143,9 +103,61 @@ RSpec.describe Kiosk::Server::Kyc do
 
   def granted(user_id = 'u-1')
     ActiveRecord::Base.connection.exec_query(
-      %(SELECT name FROM "#{KYC_SPEC_SCHEMA}".kyc_attributes WHERE user_id = $1 ORDER BY name), 'spec', [user_id]
+      %(SELECT name FROM "#{SCHEMA}".kyc_attributes WHERE user_id = $1 ORDER BY name), 'spec', [user_id]
     ).to_a.map { |row| row.fetch('name') }
   end
+end
+
+# Answers the port and nothing else, so an engine that reached past it fails.
+class KycSpecProvider < Kiosk::KycProviders::Base
+  attr_accessor :opened, :failing
+
+  def open_verification(**args)
+    raise Kiosk::KycProviders::Unavailable, 'down' if failing
+
+    self.opened = args
+    id = "req-#{SecureRandom.hex(4)}"
+    { request_id: id, verification_url: "https://kyc.example/verify/#{id}", nonce: "nonce-#{id}" }
+  end
+
+  def accepts?(payload) = payload['operator'] == 'shop'
+end
+
+RSpec.shared_context 'kyc spec: postgres' do
+  include KycSpec
+
+  before(:context) do
+    skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
+    KycSpec.create_schema
+  end
+
+  after(:context) { KycSpec.drop_schema }
+
+  let(:store)    { Kiosk::Server::EventStore.new }
+  let(:kyc_key)  { OpenSSL::PKey::RSA.generate(2048) }
+  let(:provider) { KycSpecProvider.new }
+
+  before do
+    ActiveRecord::Base.connection.execute(
+      %(TRUNCATE "#{KycSpec::SCHEMA}".kyc_attributes, "#{KycSpec::SCHEMA}".kyc_requests)
+    )
+    allow_any_instance_of(Kiosk::Server::VerbController)
+      .to receive(:connection_for).and_return(FakeConnection.new)
+  end
+end
+
+RSpec.shared_context "kyc spec: the provider's callback" do
+  include_context 'kyc spec: postgres'
+
+  before { configure(provider) }
+
+  let!(:opened) { request_kyc.last }
+  let(:request_id) { opened.fetch('request_id') }
+  let(:nonce) { "nonce-#{request_id}" }
+end
+
+RSpec.describe Kiosk::Server::Kyc do
+  include_context 'kyc spec: postgres'
 
   describe 'an origin with no KYC provider' do
     before { configure(nil) }
@@ -160,6 +172,14 @@ RSpec.describe Kiosk::Server::Kyc do
       status, problem = callback(request_id: 'r', nonce: 'n', kyc_jws: 'x')
       expect([status, problem['code']]).to eq([501, 'module_not_served'])
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::Kyc do
+  include_context 'kyc spec: postgres'
+
+  describe 'an origin with no KYC provider' do
+    before { configure(nil) }
 
     it 'gates naming agents/kyc and not request_kyc' do
       expect { as('u-1', 'a-1') { described_class.require! } }
@@ -179,6 +199,10 @@ RSpec.describe Kiosk::Server::Kyc do
         }
     end
   end
+end
+
+RSpec.describe Kiosk::Server::Kyc do
+  include_context 'kyc spec: postgres'
 
   describe 'request_kyc' do
     before { configure(provider) }
@@ -197,6 +221,20 @@ RSpec.describe Kiosk::Server::Kyc do
       expect(Kiosk::Server::Events.known).to include('kyc_verification')
     end
 
+    it 'answers 500 action_failed when the provider does not open one' do
+      provider.failing = true
+      status, problem = request_kyc
+      expect([status, problem['code']]).to eq([500, 'action_failed'])
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::Kyc do
+  include_context 'kyc spec: postgres'
+
+  describe 'request_kyc' do
+    before { configure(provider) }
+
     it 'refuses a fourth open verification with 429 quota_exceeded' do
       3.times { open_request }
       status, problem = request_kyc
@@ -207,7 +245,7 @@ RSpec.describe Kiosk::Server::Kyc do
     it "stops counting a verification after the window, or once approved, or another person's" do
       2.times { open_request(age: described_class::OPEN_WINDOW + 60) }
       ActiveRecord::Base.connection.execute(
-        %(UPDATE "#{KYC_SPEC_SCHEMA}".kyc_requests SET approved_at = now() WHERE id = '#{open_request}')
+        %(UPDATE "#{KycSpec::SCHEMA}".kyc_requests SET approved_at = now() WHERE id = '#{open_request}')
       )
       open_request(user_id: 'u-2')
       open_request
@@ -215,21 +253,13 @@ RSpec.describe Kiosk::Server::Kyc do
 
       expect(request_kyc.first).to eq(200)
     end
-
-    it 'answers 500 action_failed when the provider does not open one' do
-      provider.failing = true
-      status, problem = request_kyc
-      expect([status, problem['code']]).to eq([500, 'action_failed'])
-    end
   end
+end
+
+RSpec.describe Kiosk::Server::Kyc do
+  include_context "kyc spec: the provider's callback"
 
   describe "the provider's callback" do
-    before { configure(provider) }
-
-    let!(:opened) { request_kyc.last }
-    let(:request_id) { opened.fetch('request_id') }
-    let(:nonce) { "nonce-#{request_id}" }
-
     it 'records the grant on the person and pushes the attestation to them' do
       jws = attestation
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: jws)).to eq([200, { 'ok' => true }])
@@ -256,7 +286,13 @@ RSpec.describe Kiosk::Server::Kyc do
       callback(request_id: request_id, nonce: nonce, kyc_jws: attestation)
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: attestation).first).to eq(404)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::Kyc do
+  include_context "kyc spec: the provider's callback"
+
+  describe "the provider's callback" do
     it 'refuses a wrong nonce, another subject, and an attestation the provider does not accept' do
       expect(callback(request_id: request_id, nonce: 'wrong', kyc_jws: attestation).first).to eq(403)
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: attestation(sub: 'u-2')).first).to eq(403)
@@ -282,6 +318,10 @@ RSpec.describe Kiosk::Server::Kyc do
       expect(store.head).to eq(0)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::Kyc do
+  include_context 'kyc spec: postgres'
 
   describe '.grant! and .require!' do
     before { configure(provider) }

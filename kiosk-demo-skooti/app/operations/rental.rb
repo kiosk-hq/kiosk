@@ -3,6 +3,9 @@
 # What both rental verbs share: the customer's own reservation, its payment,
 # and the activation that signs the rental token the lock verifies offline.
 module Rental
+  # A started rental: the signed token for the vehicle and the page that hands it to the lock.
+  Unlock = Data.define(:scooter_code, :rental_token, :unlock_url, :exp)
+
   module_function
 
   def own_reservation!(reservation_id)
@@ -26,10 +29,10 @@ module Rental
     token   = RentalTokenIssuer.issue(scooter_code: scooter.code, reservation_id: reservation.id, now: now)
     reservation.active!
 
-    { scooter_code: scooter.code,
-      rental_token: token,
-      unlock_url:   UnlockLink.url(origin: Kiosk.current_issuer, scooter_code: scooter.code, rental_token: token),
-      exp:          RentalTokenIssuer.verify(token: token, now: now).fetch(:exp) }
+    Unlock.new(scooter_code: scooter.code,
+               rental_token: token,
+               unlock_url:   UnlockLink.url(origin: Kiosk.current_issuer, scooter_code: scooter.code, rental_token: token),
+               exp:          RentalTokenIssuer.verify(token: token, now: now).fetch(:exp))
   end
 
   def refuse(message)

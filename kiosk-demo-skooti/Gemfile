@@ -13,6 +13,9 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 # Reduces boot times through caching; required in config/boot.rb
 gem "bootsnap", require: false
 
+# The answers to the Kiosk queries and actions are app/views/kiosk/**/*.json.jbuilder.
+gem "jbuilder"
+
 # Human riders sign in with real Devise sessions; the Kiosk account-binding
 # surfaces (device verify page, link mint, unlink) authenticate that Warden
 # session through the kiosk-user-idp-devise adapter below.

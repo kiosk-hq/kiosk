@@ -33,13 +33,7 @@ class Kiosk::ReservationsController < ActionController::API
                   required: %w[reservation_id scooter_code status payment_state],
                 }
   def my_reservations
-    reservations = Reservation.own.with_settlement(Kiosk::Settlement.own).includes(:scooter).order(created_at: :desc)
-    render json: reservations.map { |reservation|
-      { reservation_id: reservation.id,
-        scooter_code:   reservation.scooter.code,
-        status:         reservation.status,
-        payment_state:  reservation.payment_state }
-    }
+    @reservations = Reservation.own.with_settlement(Kiosk::Settlement.own).includes(:scooter).order(created_at: :desc)
   end
 
   kind :action
@@ -66,6 +60,6 @@ class Kiosk::ReservationsController < ActionController::API
     pay_hint: "sign a cart in eur with total_amount_cents 15 and one line item …",
   })
   def reserve
-    render json: ReserveOperation.call(customer_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])
+    @reservation = Reservation.create!(user_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])
   end
 end

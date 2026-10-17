@@ -28,7 +28,8 @@ class Kiosk::RentalsController < ActionController::API
                properties: { reservation_id: RESERVATION_ID }, required: ["reservation_id"]
   output_schema(**RENTAL)
   def start_rental
-    render json: StartRentalOperation.call(reservation_id: params[:reservation_id])
+    @rental = StartRentalOperation.call(reservation_id: params[:reservation_id])
+    render :rental
   end
 
   kind :action
@@ -38,6 +39,7 @@ class Kiosk::RentalsController < ActionController::API
                properties: { reservation_id: RESERVATION_ID }, required: ["reservation_id"]
   output_schema(**RENTAL)
   def rent_motorcycle
-    render json: RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
+    @rental = RentMotorcycleOperation.call(reservation_id: params[:reservation_id])
+    render :rental
   end
 end

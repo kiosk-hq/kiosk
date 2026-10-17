@@ -30,16 +30,6 @@ class Kiosk::FleetController < ActionController::API
     lat: "52.3739", lng: "4.8809", price_per_min_cents: 15, currency: "eur",
   })
   def scooters_available
-    render json: Scooter.available.order(:id).map { |scooter|
-      { code:                scooter.code,
-        name:                scooter.name,
-        dock:                scooter.dock,
-        kind:                scooter.kind,
-        needs_licence:       scooter.needs_licence,
-        lat:                 scooter.lat,
-        lng:                 scooter.lng,
-        price_per_min_cents: scooter.price_per_min_cents,
-        currency:            "eur" }
-    }
+    @scooters = Scooter.available.order(:id)
   end
 end

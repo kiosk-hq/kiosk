@@ -284,7 +284,7 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   end
 end
 
-# Non-string JSON shapes on every skooti argument are a typed 400; an unknown scooter_code reaches ReserveOperation.
+# Non-string JSON shapes on every skooti argument are a typed 400; an unknown scooter_code reaches Reservation.create!.
 class HostileArgShapes < Kiosk::Redteam::Scenario
   LEAKS = ["::uuid", "PG::", "22P02", "invalid input syntax", "NoMethodError",
            "TypeError", "undefined method", "ActiveRecord::"].freeze
@@ -313,12 +313,12 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
               client.run(a, name: "rent_motorcycle", reservation_id: v), supplied: v
     end
 
-    # The one that reaches ReserveOperation: a well-typed but unknown handle.
+    # The one that reaches Reservation.create!: a well-typed but unknown handle.
     refused "reserve scooter_code=\"NO-SUCH-VEHICLE\"",
             client.run(a, name: "reserve", scooter_code: "NO-SUCH-VEHICLE"),
             supplied: "NO-SUCH-VEHICLE"
 
-    # Control for the leak scan: a needle ReserveOperation echoes back from the probe is not a leak.
+    # Control for the leak scan: a needle `reserve` echoes back from the probe is not a leak.
     echo_control = "PG:: 22P02 invalid input syntax"
     echo_resp    = client.run(a, name: "reserve", scooter_code: echo_control)
     refused "reserve scooter_code=<a value spelling three LEAKS> (leak-scan control)",

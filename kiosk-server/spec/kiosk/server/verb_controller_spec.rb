@@ -1,15 +1,14 @@
 # frozen_string_literal: true
 
-# THE 0.4 PER-VERB WIRE at the wire level (T-068 slices 1 and 2, T-074 = A).
+# The per-verb wire at the wire level.
 #
 # `GET <endpoint>/<query-name>` and `POST <endpoint>/<action-name>`, resolved
 # against the same registry `GET <endpoint>/schema` renders its descriptors
 # from. The argument ENCODING is unit-tested next door in
 # `argument_decoder_spec.rb`; what is proved here is that a real request
 # reaches it, that the answer is the handler's payload VERBATIM, that a
-# refusal comes back as an RFC 9457 problem document (T-072 = C), and — in the
-# last block — that this is now the ONLY way to reach an operator verb,
-# because the cutover DELETED `POST /kiosk/{query,run}` outright.
+# refusal comes back as an RFC 9457 problem document, and, in the last
+# groups, that this is the ONLY way to reach an operator verb.
 #
 # Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
 # app — no Rails host, so `path_parameters` is set by hand exactly as the
@@ -20,21 +19,7 @@ require 'json'
 require 'kiosk/pow'
 require 'kiosk/reputation'
 
-RSpec.describe Kiosk::Server::VerbController do
-  let(:connection) { FakeConnection.new }
-
-  before do
-    Kiosk.configure do |c|
-      c.signing_key = Kiosk::Server::SigningKey.generate
-      c.issuer      = 'https://demo.example'
-      c.roles       = %i[customer]
-      c.agent_idp   = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-    end
-    # No database in the gem's own env; SessionContext only needs a connection
-    # that answers #transaction and #exec_query.
-    allow_any_instance_of(described_class).to receive(:connection_for).and_return(connection)
-  end
-
+module VerbControllerSpec
   def token
     Kiosk::Server::JwtIssuer.issue(
       claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
@@ -42,32 +27,36 @@ RSpec.describe Kiosk::Server::VerbController do
     )
   end
 
-  # One per-verb request. `action` is :show for a GET, :create for a POST;
+  # One per-verb request. The action is :show for a GET, :create for a POST;
   # `kiosk_verb` is the path segment the router would have captured.
-  def call_verb(method, name, query: nil, body: nil, auth: true, accept: nil, timezone: nil)
-    path   = "/kiosk/#{name}#{"?#{query}" if query}"
+  # `headers` takes `auth:` (default true), `accept:` and `timezone:`.
+  def call_verb(method, name, query: nil, body: nil, **headers)
     action = method == :get ? :show : :create
-    opts   = { method: method.to_s.upcase }
-    if body
-      opts[:input] = body
-      opts['CONTENT_TYPE'] = 'application/json'
-    end
-    opts['HTTP_AUTHORIZATION'] = "Bearer #{token}" if auth
-    # Rack::MockRequest sends no `Accept` by default; a real assistant does,
-    # and it is the input Rails' `_set_vary_header` keys off (K-823).
-    opts['HTTP_ACCEPT'] = accept if accept
-    opts['HTTP_KIOSK_TIMEZONE'] = timezone if timezone
-
-    env = Rack::MockRequest.env_for(path, **opts)
+    opts = { method: method.to_s.upcase }.merge(body_env(body), header_env(**headers))
+    env = Rack::MockRequest.env_for("/kiosk/#{name}#{"?#{query}" if query}", opts)
     env['action_dispatch.request.path_parameters'] =
       { controller: 'kiosk/server/verb', action: action.to_s, kiosk_verb: name }
 
     dispatch(described_class, action, env)
   end
 
-  # Returns [status, parsed body, headers] — the headers matter now: the media
-  # type is half of what makes a problem document one, and the cache policy is
-  # response shape (spec §3.7).
+  def body_env(body)
+    body ? { input: body, 'CONTENT_TYPE' => 'application/json' } : {}
+  end
+
+  # Rack::MockRequest sends no `Accept` by default; a real assistant does, and
+  # it is the input Rails' `_set_vary_header` keys off.
+  def header_env(auth: true, accept: nil, timezone: nil)
+    {
+      'HTTP_AUTHORIZATION' => ("Bearer #{token}" if auth),
+      'HTTP_ACCEPT' => accept,
+      'HTTP_KIOSK_TIMEZONE' => timezone
+    }.compact
+  end
+
+  # Returns [status, parsed body, headers]. The media type is half of what
+  # makes a problem document one, and the cache policy is response shape
+  # (spec §3.7).
   def dispatch(controller, action, env)
     status, headers, body = controller.action(action).call(env)
     raw = +''
@@ -92,6 +81,47 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
+  # A policy that tolls every verb.
+  def tolling_policy
+    Class.new(Kiosk::Reputation::Policy) do
+      def challenge_for(**)
+        { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+      end
+    end.new
+  end
+
+  # All three directives §3.7.3 names, checked one at a time. `must-revalidate`
+  # is RFC 9111 §3.5's third door: a shared cache MAY reuse a response to an
+  # `Authorization`-bearing request that carries it, and every verb request
+  # bears an `Authorization`.
+  def expect_no_shared_caching(cache_control)
+    expect(cache_control.to_s).not_to match(/\bpublic\b/)
+    expect(cache_control.to_s).not_to match(/\bs-maxage\b/)
+    expect(cache_control.to_s).not_to match(/\bmust-revalidate\b/)
+  end
+end
+
+RSpec.shared_context 'verb controller spec: authenticated origin' do
+  include VerbControllerSpec
+
+  let(:connection) { FakeConnection.new }
+
+  before do
+    Kiosk.configure do |c|
+      c.signing_key = Kiosk::Server::SigningKey.generate
+      c.issuer      = 'https://demo.example'
+      c.roles       = %i[customer]
+      c.agent_idp   = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
+    end
+    # No database in the gem's own env; SessionContext only needs a connection
+    # that answers #transaction and #exec_query.
+    allow_any_instance_of(described_class).to receive(:connection_for).and_return(connection)
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
   describe 'a query is a GET at its own path' do
     before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
 
@@ -106,6 +136,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
       expect(last_headers['Cache-Control']).to eq('private, no-store')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a query is a GET at its own path' do
+    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
 
     # ── THE CALLER'S DECLARED CLOCK REACHES THE HANDLER ──────────────────
     #
@@ -127,6 +165,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(status).to eq(200)
       expect(body).to eq([{ zone: nil }])
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a query is a GET at its own path' do
+    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
 
     # §9.1's first branch: a value outside its declared domain is refused BY
     # NAME. A silent fallback would answer in a clock nobody chose and tell
@@ -140,19 +186,22 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:detail]).to  include('Kiosk-Timezone')
       expect(body[:hint]).to    include('Area/Location')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a query is a GET at its own path' do
+    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
 
     # The header is input, so it is refused at the argument gate, before the
     # toll: a caller does not pay for a proof to learn its header is unreadable.
     context 'when the verb is tolled' do
       before do
         Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
-        policy = Class.new(Kiosk::Reputation::Policy) do
-          def challenge_for(identity:, verb:, factors:)
-            { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
-          end
-        end.new
         Kiosk.configure do |c|
-          c.reputation_policy = policy
+          c.reputation_policy = tolling_policy
           c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
         end
       end
@@ -167,6 +216,14 @@ RSpec.describe Kiosk::Server::VerbController do
         expect(body[:detail]).to include('Kiosk-Timezone')
       end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a query is a GET at its own path' do
+    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
 
     it 'refuses a zone name nobody has, and never falls back' do
       declare_query('clock') { render json: [{ reached: true }] }
@@ -187,6 +244,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(call_verb(:get, 'salons',     auth: false).first).to eq(401)
       expect(call_verb(:get, 'frobnicate', auth: false).first).to eq(401)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a query is a GET at its own path' do
+    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
 
     it 'answers an unknown name a problem document, naming what IS registered' do
       status, body = call_verb(:get, 'frobnicate')
@@ -199,6 +264,10 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:hint]).to   include('salons')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
 
   describe 'an action is a POST at its own path' do
     before do
@@ -213,8 +282,12 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body).to eq(appointment_id: 7, salon_id: 3)
     end
   end
+end
 
-  # RFC 8288 (T-092). A paginating query stopped being a shape: the body is the
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  # RFC 8288. A paginating query stopped being a shape: the body is the
   # bare array every query answers and the two page facts are response headers.
   describe 'a paginating query answers a bare array with Link + X-Total-Count' do
     let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
@@ -229,6 +302,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Link'])
         .to eq(%(<http://example.org/kiosk/listings?limit=1&cursor=#{cursor}>; rel="next"))
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
+    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     # §8.4 (matrix SPEC-088). RFC 8288 PERMITS a relative target resolved
     # against the request URI; the spec's SHOULD is that an operator send an
@@ -252,6 +333,14 @@ RSpec.describe Kiosk::Server::VerbController do
       # An absolute reference is its own resolution against any base.
       expect(URI.join('http://elsewhere.invalid/deep/path', target).to_s).to eq(target)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
+    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     it 'replaces an incoming cursor rather than appending a second one' do
       declare_query('listings') do
@@ -269,6 +358,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body).to eq([{ id: 1 }])
       expect(last_headers['Link']).to be_nil
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
+    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     # The total is the handler's to state on a truncated page, and the wire's
     # to derive on a complete one. It is never guessed from the page.
@@ -294,6 +391,14 @@ RSpec.describe Kiosk::Server::VerbController do
       call_verb(:get, 'salons')
       expect(last_headers['X-Total-Count']).to eq('2')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
+    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     it 'sends neither header for an action' do
       declare_action('book_appointment') { render json: { ok: 1 } }
@@ -313,6 +418,10 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
 
   # §3.7.3 (matrix SPEC-013), a MUST-NOT: `public` or `s-maxage` on a verb
   # response hands an identity-scoped answer to a SHARED cache, which is one
@@ -337,17 +446,6 @@ RSpec.describe Kiosk::Server::VerbController do
     # emitted at all, once, naming the value, is asserted in headers_spec.
     before { allow(Kiosk::Server::Headers).to receive(:warn) }
 
-    # All THREE directives §3.7.3 names since K-826, checked one at a time.
-    # `must-revalidate` is RFC 9111 §3.5's third door: a shared cache MAY reuse
-    # a response to an `Authorization`-bearing request that carries it, and
-    # every verb request bears an `Authorization`. A helper that matched only
-    # the first two would pass on a build where the third leaked.
-    def expect_no_shared_caching(cache_control)
-      expect(cache_control.to_s).not_to match(/\bpublic\b/)
-      expect(cache_control.to_s).not_to match(/\bs-maxage\b/)
-      expect(cache_control.to_s).not_to match(/\bmust-revalidate\b/)
-    end
-
     it 'not on a 200' do
       declare_query('salons') { render json: [{ id: 1 }] }
       expect(call_verb(:get, 'salons').first).to eq(200)
@@ -355,12 +453,10 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     it 'not even when the handler tried to set a policy of its own' do
-      # Since K-823 a handler's `Cache-Control` DOES reach the wire (see the
-      # block below), so this is no longer true by accident — the value is
-      # carried out of the sub-dispatch and then REFUSED by
-      # {Headers.add_cache_policy}, which is the only place a wire cache
-      # policy is decided. Refused, not edited: `public, s-maxage=600` does
-      # not become `private, max-age=600`, because nobody wrote that.
+      # A handler's `Cache-Control` reaches the wire and is then REFUSED by
+      # {Headers.add_cache_policy}, the only place a wire cache policy is
+      # decided. Refused, not edited: `public, s-maxage=600` does not become
+      # `private, max-age=600`, because nobody wrote that.
       declare_query('salons') do
         response.headers['Cache-Control'] = 'public, s-maxage=600'
         render json: [{ id: 1 }]
@@ -369,6 +465,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect_no_shared_caching(last_headers['Cache-Control'])
       expect(last_headers['Cache-Control']).to eq('private, no-store')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'no verb response is shared-cacheable (§3.7.3)' do
+    before { allow(Kiosk::Server::Headers).to receive(:warn) }
 
     it 'not when only `public` is named, nor only `s-maxage`, nor only `must-revalidate`' do
       # Each of §3.7.3's three directives on its own — a regex that only
@@ -385,6 +489,14 @@ RSpec.describe Kiosk::Server::VerbController do
           expect(last_headers['Cache-Control']).to eq('private, no-store'), policy
         end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'no verb response is shared-cacheable (§3.7.3)' do
+    before { allow(Kiosk::Server::Headers).to receive(:warn) }
 
     it 'not on a refusal' do
       declare_query('salons', input_schema: { type: 'object', additionalProperties: false,
@@ -401,15 +513,16 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(headers['Cache-Control']).to match(/\bpublic\b/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
 
   # §3.7.4 (matrix SPEC-016), the neighbouring MAY: "the default for a `200`
   # is `private, no-store`; an operator MAY relax it to `private, max-age=N`
-  # for a genuinely identity-independent payload". K-823: that permission was
-  # UNREACHABLE — {HandlerDispatch} read `status, _headers, body` and dropped
-  # the sub-response's headers, so the only code an operator writes on this
-  # wire could not exercise the only cache permission the spec grants them.
-  # {Headers.add_cache_policy}'s "an operator who has already set one keeps
-  # it" branch was unit-tested and could not be reached through a request.
+  # for a genuinely identity-independent payload". {HandlerDispatch} carries
+  # the sub-response's `Cache-Control` out, so a handler can use that
+  # permission through a real request.
   describe "an operator MAY relax a 200's cache policy from a handler (§3.7.4)" do
     it 'keeps `private, max-age=N` the handler set' do
       declare_query('salons') do
@@ -440,7 +553,13 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(call_verb(:post, 'book_appointment', body: '{}').first).to eq(200)
       expect(last_headers['Cache-Control']).to eq('max-age=30, private')
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe "an operator MAY relax a 200's cache policy from a handler (§3.7.4)" do
     it "NOT on a refusal: a 4xx keeps the wire's own policy" do
       # §3.7.4 speaks about a `200`, and {HandlerDispatch} only publishes the
       # sub-response's headers on a 2xx. A handler that renders 403 with a
@@ -472,6 +591,10 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
 
   describe 'the HTTP method carries the read/write semantics' do
     before do
@@ -479,10 +602,8 @@ RSpec.describe Kiosk::Server::VerbController do
       declare_action('book_appointment') { render json: {} }
     end
 
-    # Slice 1 answered these 404 because 405 was not in the closed vocabulary
-    # and adding a code is spec-first. Slice 2 is that spec change: the
-    # resource EXISTS and refuses the method, which is what 405 means, and
-    # RFC 9110 §15.5.6 makes `Allow` mandatory on one.
+    # The resource EXISTS and refuses the method, which is what 405 means,
+    # and RFC 9110 §15.5.6 makes `Allow` mandatory on one.
     it "answers a GET at an ACTION's name 405, with Allow: POST" do
       status, body = call_verb(:get, 'book_appointment')
       expect(status).to eq(405)
@@ -502,6 +623,10 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:hint]).to   include('GET /kiosk/salons')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
 
   describe 'arguments reach the handler with their declared types' do
     before do
@@ -521,6 +646,18 @@ RSpec.describe Kiosk::Server::VerbController do
       _s2, raw     = call_verb(:get, 'echo', query: 'amenity[]=pool&amenity[]=spa')
       expect(percent.first[:amenity]).to eq(%w[pool spa])
       expect(raw).to eq(percent)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'arguments reach the handler with their declared types' do
+    before do
+      declare_echo(type: 'object', additionalProperties: false,
+                   properties: { min_stars: { type: 'integer' },
+                                 amenity: { type: 'array', items: { type: 'string' } } })
     end
 
     it 'refuses a value that will not coerce with a 400 naming the parameter' do
@@ -543,15 +680,15 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:seen]).not_to include('sneaky')
     end
   end
+end
 
-  # T-068 SLICE 3. `validate_requests` is deliberately turned OFF in the example
-  # below — the flag is now default-TRUE (K-1399), so turning it off is what
-  # makes the point the block is about: every example here still gets its 400.
-  # That is the slice-3 change: `input_schema` is REQUIRED on every verb
-  # (T-073 = A) and §8.1 item 5 makes the operator coerce-then-validate before
-  # the handler sees an argument, so a per-verb endpoint that validated only
-  # behind a flag would be non-conformant with the flag off — and K-717's typed
-  # 400 would fall out of the schema layer on some origins and not others.
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  # `input_schema` is REQUIRED on every verb, and §8.1 item 5 makes the
+  # operator coerce-then-validate before the handler sees an argument. So the
+  # per-verb wire validates whatever `validate_requests` says; the first
+  # example turns the flag OFF to show it.
   describe 'input_schema is executable UNCONDITIONALLY on the per-verb wire' do
     it 'validates with validate_requests OFF — the flag no longer gates arguments' do
       Kiosk.configure { |c| c.validate_requests = false }
@@ -566,16 +703,21 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     it 'accepts limit and cursor on a verb that declares neither, with a CLOSED schema' do
-      # T-070 rule (7). getgrocery's `catalog` is exactly this schema, and
-      # without the reserved rule the `?limit=` the pagination contract
-      # invites would 400 as a disallowed additional property.
+      # `limit` and `cursor` are reserved, so the `?limit=` the pagination
+      # contract invites is not a disallowed additional property.
       declare_query('catalog', input_schema: { type: 'object', additionalProperties: false,
                                                properties: {}, required: [] }) do
         render json: []
       end
       expect(call_verb(:get, 'catalog', query: 'limit=20&cursor=eyJvIjoyMH0').first).to eq(200)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'input_schema is executable UNCONDITIONALLY on the per-verb wire' do
     it "refuses a value outside a declared enum — K-717's schema half" do
       declare_query('availability', input_schema: {
                       type: 'object', additionalProperties: false,
@@ -597,7 +739,13 @@ RSpec.describe Kiosk::Server::VerbController do
       # simply echoed the request would satisfy the line above by accident.
       expect(body[:detail]).not_to include('19:00')
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'input_schema is executable UNCONDITIONALLY on the per-verb wire' do
     it 'names YYYY-MM-DD when an action body carries a malformed date' do
       declare_action('book', input_schema: {
                        type: 'object',
@@ -619,15 +767,11 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:detail]).to include('nope')
     end
   end
+end
 
-  # THE HARD CUT (T-074 = A). While the per-verb wire was being built this
-  # block proved the OPPOSITE of what it proves now: that `POST
-  # <endpoint>/query` still answered, that both wires agreed on the payload,
-  # that the old one still spoke the 0.3 error envelope, and that one PoW
-  # proof was spendable on either. All four were true on purpose — cutting the
-  # multiplexed pair mid-build would have broken the eight demos — and all
-  # four are false on purpose now. What replaces them is the deletion itself:
-  # no action, no route, and nothing privileged left at the path.
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
   # A body that is not JSON at all never reaches Kiosk's own parse guard on
   # this wire: `serve` reads `params[:kiosk_verb]` first, and touching `params`
   # makes Rails parse the body — so the raise comes out of the PARAMETER layer.
@@ -650,6 +794,10 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(problem[:hint]).to   include('query string')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
 
   describe 'the 0.3 wire is GONE — one wire, one conformance surface' do
     before { declare_query('salons') { render json: [{ id: 1 }] } }
@@ -676,6 +824,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(paths.grep(%r{\A/(query|run)\b})).to be_empty
       expect(paths.grep(/kiosk_verb/)).to be_empty
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'the 0.3 wire is GONE — one wire, one conformance surface' do
+    before { declare_query('salons') { render json: [{ id: 1 }] } }
 
     it 'answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one' do
       # The sharpest statement of the cut, at the CONTROLLER rather than at the
@@ -706,6 +862,14 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:code]).to eq('verb_not_found')
       expect(body).not_to have_key(:ok)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
+  describe 'the 0.3 wire is GONE — one wire, one conformance surface' do
+    before { declare_query('salons') { render json: [{ id: 1 }] } }
 
     it 'leaves both names REGISTRABLE — they stopped being reserved with the routes that named them' do
       # `RESERVED_NAMES` is the engine's drawn first segments, and `query`/`run`
@@ -721,11 +885,8 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     it 'fingerprints a call from the METHOD and the PATH SEGMENT, not from a body field' do
-      # 0.3 could not say this: every read was multiplexed through one POST,
-      # so the method was a constant and the verb name had to be smuggled back
-      # INTO the arguments to reach the digest. Reproducing that digest byte
-      # for byte was the only reason one proof was spendable on either wire,
-      # and only one is served now.
+      # The method and the verb name come from the request line, never from
+      # the arguments.
       seen = []
       allow(Kiosk::Server::PowGate).to receive(:gate) { |**kwargs| seen << kwargs.slice(:method, :verb, :body) }
 

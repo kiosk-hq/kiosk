@@ -2,28 +2,82 @@
 
 require 'kiosk/reputation'
 
-# THE GUARD THAT MAKES THE WRONG VERB SPELLING LOUD (K-1395).
+# The check that makes the wrong verb spelling loud.
 #
 # The seam hands a policy one of {Kiosk::Server::Executor::VERBS} — `:query`,
 # `:run`, `:pay` — and a handler declared `kind :action` arrives as `:run`.
 # A policy branching on `:action` matches nothing, returns nil, and nil is the
-# ordinary "do not toll this one" answer: no error, no log line, no failing
-# test, and the toll never applies to a single write.
+# ordinary "do not toll this one" answer: no error, no log line, and the toll
+# never applies to a single write.
 #
-# These examples are the arm. The two that matter most are not the raises —
-# they are the ones that prove the guard is READING something:
+# Two kinds of example prove the check READS the source:
 #
-#   * "returns :clean" (and the shipped-policy example) fail if the parser ever
-#     stops finding the hook, which is the only way this guard could rot into a
-#     no-op that greens forever. That is the VACUITY arm.
-#   * "does not flag :action outside a comparison" fails if the guard degrades
-#     into a bare grep for the word, which would refuse correct policies.
+#   * "returns :clean" (and the shipped-policy example) fail if the parser
+#     stops finding the hook, which would make the check a silent no-op.
+#   * "does not flag :action outside a comparison" fails if the check
+#     degrades into a bare search for the word, which would refuse correct
+#     policies.
 #
-# And "the seam's premise" pins the fact the whole guard rests on: the gate
-# vocabulary really is `%i[query run pay]`. If a later wave renames the write
-# kind, that example goes red here rather than the guard quietly policing a
-# word nothing uses.
+# "the seam's premise" pins the fact the check rests on: the gate vocabulary
+# is `%i[query run pay]`.
+module VerbVocabularySpec
+  def correctly_spelled_policy
+    Class.new(Kiosk::Reputation::Policy) do
+      def challenge_for(verb:, **)
+        return nil unless verb == :run
+
+        { alg: 'argon2id', params: { d: 4, m: 8 } }
+      end
+    end.new
+  end
+
+  def policy_comparing_to_action
+    Class.new(Kiosk::Reputation::Policy) do
+      def challenge_for(verb:, **)
+        return nil unless verb == :action
+
+        { alg: 'argon2id', params: { d: 4, m: 8 } }
+      end
+    end.new
+  end
+
+  def policy_casing_on_action
+    Class.new(Kiosk::Reputation::Policy) do
+      def challenge_for(verb:, **)
+        case verb
+        when :action then { alg: 'argon2id', params: { d: 4, m: 8 } }
+        end
+      end
+    end.new
+  end
+
+  def policy_including_action
+    Class.new(Kiosk::Reputation::Policy) do
+      def challenge_for(verb:, **)
+        return nil unless %i[action pay].include?(verb)
+
+        { alg: 'argon2id', params: { d: 4, m: 8 } }
+      end
+    end.new
+  end
+
+  def policy_naming_action_outside_a_comparison
+    Class.new(Kiosk::Reputation::Policy) do
+      def challenge_for(verb:, **)
+        # A hash key, a string, and a comment mentioning :action are not
+        # branches. Only a comparison against the verb is.
+        table = { action: 2, query: 1 }
+        return nil unless verb == :run
+
+        { alg: 'argon2id', params: { d: 4, m: 8 }, count: table[:action] }
+      end
+    end.new
+  end
+end
+
 RSpec.describe Kiosk::Server::VerbVocabulary do
+  include VerbVocabularySpec
+
   # ── the premise ────────────────────────────────────────────────────────────
 
   describe "the seam's premise" do
@@ -35,18 +89,10 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
     end
   end
 
-  # ── the vacuity arm: the guard reads real source ───────────────────────────
+  # ── the check reads real source ────────────────────────────────────────────
 
   describe 'a correctly spelled policy' do
-    let(:policy) do
-      Class.new(Kiosk::Reputation::Policy) do
-        def challenge_for(identity:, verb:, factors:)
-          return nil unless verb == :run
-
-          { alg: 'argon2id', params: { d: 4, m: 8 } }
-        end
-      end.new
-    end
+    let(:policy) { correctly_spelled_policy }
 
     it "returns :clean — proving the hook's source was found and parsed" do
       expect(described_class.assert!(policy, :challenge_for, 'policy')).to eq(:clean)
@@ -64,40 +110,13 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
       described_class.assert!(Kiosk::Reputation::Policies::RateAndReputation.new, :challenge_for, 'rate')
     ).to eq(:clean)
   end
+end
 
-  # ── the refusals ───────────────────────────────────────────────────────────
+# ── the refusals ─────────────────────────────────────────────────────────────
+RSpec.describe Kiosk::Server::VerbVocabulary do
+  include VerbVocabularySpec
 
   describe 'a policy branching on the declaration spelling' do
-    def policy_comparing_to_action
-      Class.new(Kiosk::Reputation::Policy) do
-        def challenge_for(identity:, verb:, factors:)
-          return nil unless verb == :action
-
-          { alg: 'argon2id', params: { d: 4, m: 8 } }
-        end
-      end.new
-    end
-
-    def policy_casing_on_action
-      Class.new(Kiosk::Reputation::Policy) do
-        def challenge_for(identity:, verb:, factors:)
-          case verb
-          when :action then { alg: 'argon2id', params: { d: 4, m: 8 } }
-          end
-        end
-      end.new
-    end
-
-    def policy_including_action
-      Class.new(Kiosk::Reputation::Policy) do
-        def challenge_for(identity:, verb:, factors:)
-          return nil unless %i[action pay].include?(verb)
-
-          { alg: 'argon2id', params: { d: 4, m: 8 } }
-        end
-      end.new
-    end
-
     it 'is refused with a message naming :run' do
       expect { described_class.assert!(policy_comparing_to_action, :challenge_for, 'policy') }
         .to raise_error(Kiosk::Server::Errors::ConfigurationError, /branches on :action/)
@@ -120,27 +139,24 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
         .to raise_error(Kiosk::Server::Errors::ConfigurationError)
     end
   end
+end
 
+RSpec.describe Kiosk::Server::VerbVocabulary do
   it 'refuses a reputation_factors callable that branches on :action' do
-    factors = ->(identity:, verb:) { verb == :action ? Kiosk::Reputation::Factors.empty : Kiosk::Reputation::Factors.empty }
+    factors = ->(verb:, **) { Kiosk::Reputation::Factors.empty if verb == :action }
 
     expect { Kiosk.configure { |c| c.reputation_factors = factors } }
       .to raise_error(Kiosk::Server::Errors::ConfigurationError, /reputation_factors/)
   end
+end
+
+RSpec.describe Kiosk::Server::VerbVocabulary do
+  include VerbVocabularySpec
 
   # ── the false-positive control ─────────────────────────────────────────────
 
   it 'does not flag :action outside a comparison' do
-    policy = Class.new(Kiosk::Reputation::Policy) do
-      def challenge_for(identity:, verb:, factors:)
-        # A hash key, a string, and a comment mentioning :action are not
-        # branches. Only a comparison against the verb is.
-        table = { action: 2, query: 1 }
-        return nil unless verb == :run
-
-        { alg: 'argon2id', params: { d: 4, m: 8 }, count: table[:action] }
-      end
-    end.new
+    policy = policy_naming_action_outside_a_comparison
 
     expect(described_class.assert!(policy, :challenge_for, 'policy')).to eq(:clean)
   end
@@ -154,7 +170,7 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
 
   it 'is silent about a hook with no readable source' do
     policy = Class.new(Kiosk::Reputation::Policy) do
-      define_method(:challenge_for) { |identity:, verb:, factors:| nil }
+      define_method(:challenge_for) { |**| nil }
     end.new
     allow(File).to receive(:readable?).and_return(false)
 

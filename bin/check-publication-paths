@@ -7,132 +7,132 @@
 # developer-machine path or an invented demo domain; no undeclared private key.
 # Usage: bin/check-publication-paths [--self-test | --record-sections]
 
-require "digest"
-require "open3"
-require "openssl"
-require "fileutils"
-require "rbconfig"
-require "tmpdir"
+require 'digest'
+require 'open3'
+require 'openssl'
+require 'fileutils'
+require 'rbconfig'
+require 'tmpdir'
 
 # Realpath, because the self-test runs a copy out of a symlinked temporary directory.
 SELF_PATH    = File.realpath(__FILE__)
-REPO         = File.dirname(File.dirname(SELF_PATH))
+REPO         = File.dirname(SELF_PATH, 2)
 SELF_REL     = SELF_PATH.delete_prefix("#{REPO}/")
-SITE_REPO    = "kiosk.tech"
-SPEC_REL     = "spec/protocol.md"
-SECTIONS_TSV = File.join(REPO, "spec", "public-spec-sections.tsv")
+SITE_REPO    = 'kiosk.tech'
+SPEC_REL     = 'spec/protocol.md'
+SECTIONS_TSV = File.join(REPO, 'spec', 'public-spec-sections.tsv')
 
 # >>> PATTERN TABLE -- BEGIN
 # Forbidden tokens are spelled only here; `example` is the plant the self-test injects
 # (two elements = a violation wrapped over two lines).
 PATTERNS = [
   {
-    id: "PM-1",
-    what: "a path under a private workspace directory",
+    id: 'PM-1',
+    what: 'a path under a private workspace directory',
     re: %r{(^|[^A-Za-z0-9._/-])(meta|audit)/},
-    repair: "state the requirement inline, or cite a document that ships with this repository",
-    example: ["# the full procedure is written up under audit/ rather than here"],
+    repair: 'state the requirement inline, or cite a document that ships with this repository',
+    example: ['# the full procedure is written up under audit/ rather than here']
   },
   {
-    id: "PM-2",
-    what: "a private workspace file named where a reader cannot resolve it",
+    id: 'PM-2',
+    what: 'a private workspace file named where a reader cannot resolve it',
     re: /DECISIONS-(LOG|PENDING)|t011-scrub|check-(conformance-refs|file-inventories|ledger-format)|convergence-iteration|run-convergence|findings(-archive)?\.md|TODO\.md|claims\.md|conformance\.md|LOOP\.md|RESUME\.md/,
-    repair: "restate the reason in full here; the cited file does not ship",
-    example: ["# adjudicated in DECISIONS-LOG, see the entry for this class"],
+    repair: 'restate the reason in full here; the cited file does not ship',
+    example: ['# adjudicated in DECISIONS-LOG, see the entry for this class']
   },
   {
-    id: "PM-3",
-    what: "a path under a private notes tree",
+    id: 'PM-3',
+    what: 'a path under a private notes tree',
     re: %r{docs/research/20[0-9]{2}|docs/architecture/payment-model},
-    repair: "restate the reason inline, or cite the published specification instead",
-    example: ["# rationale: docs/architecture/payment-model.md"],
+    repair: 'restate the reason inline, or cite the published specification instead',
+    example: ['# rationale: docs/architecture/payment-model.md']
   },
   {
-    id: "PM-4",
-    what: "a citation of a superseded internal specification draft",
-    re: /[Dd]esign[- ][Ss]pec|[Dd]esign §|[Dd]esign doc|superpowers\/specs\/|[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]*-design/,
-    repair: "cite the published specification section that carries the same rule, or state the rule inline",
-    example: ["# The verb-name rules are the ones stated in the design",
-              "# doc, which is where the whole list lives."],
+    id: 'PM-4',
+    what: 'a citation of a superseded internal specification draft',
+    re: %r{[Dd]esign[- ][Ss]pec|[Dd]esign §|[Dd]esign doc|superpowers/specs/|[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9-]*-design},
+    repair: 'cite the published specification section that carries the same rule, or state the rule inline',
+    example: ['# The verb-name rules are the ones stated in the design',
+              '# doc, which is where the whole list lives.']
   },
   {
-    id: "RN-1",
-    what: "a demo operator named at a domain this project does not own",
+    id: 'RN-1',
+    what: 'a demo operator named at a domain this project does not own',
     re: /(getgrocery|atablefor|hoteling|skooti|stylish|philslist|tudu|prove)\.(my|us|com|io|app|net|org|co)\b/,
-    repair: "name the hosted subdomain the demo serves on, or say what it is (\"the KYC broker\")",
-    example: ["# a budget hole the day a paid issuer sits behind prove.my"],
+    repair: 'name the hosted subdomain the demo serves on, or say what it is ("the KYC broker")',
+    example: ['# a budget hole the day a paid issuer sits behind prove.my']
   },
   {
-    id: "ABS-1",
-    what: "a developer-machine absolute path",
+    id: 'ABS-1',
+    what: 'a developer-machine absolute path',
     re: %r{/Users/[A-Za-z0-9_.-]+/},
-    repair: "make the path relative to the repository root, or take it from the environment",
-    example: ["  root = \"/Users/someone/source/kiosk\""],
-  },
+    repair: 'make the path relative to the repository root, or take it from the environment',
+    example: ['  root = "/Users/someone/source/kiosk"']
+  }
 ].freeze
 # <<< PATTERN TABLE -- END
 
 # A private-key block with real key material under the armor (a commented placeholder is not one).
-KEY_BLOCK_RE = /^-{5}BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-{5}[ \t]*\r?\n(?:[A-Za-z0-9+\/=]{16,}[ \t]*\r?\n)+-{5}END (?:[A-Z0-9 ]+ )?PRIVATE KEY-{5}/.freeze
+KEY_BLOCK_RE = %r{^-{5}BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-{5}[ \t]*\r?\n(?:[A-Za-z0-9+/=]{16,}[ \t]*\r?\n)+-{5}END (?:[A-Z0-9 ]+ )?PRIVATE KEY-{5}}
 
 # The only tracked private keys, each a fixed test vector; each file must keep KEY_BANNER.
-KEY_BANNER = "DO NOT use in production"
+KEY_BANNER = 'DO NOT use in production'
 DECLARED_DEV_KEYS = {
-  "kiosk-demo-skooti/config/dev_unlock_key.pem" =>
-    "the Ed25519 rental-token vector reproduced in the lock firmware and its tests",
-  "kiosk-demo-prove/config/dev_prove_key.pem" =>
-    "the RSA broker key development and test sign attestations with",
+  'kiosk-demo-skooti/config/dev_unlock_key.pem' =>
+    'the Ed25519 rental-token vector reproduced in the lock firmware and its tests',
+  'kiosk-demo-prove/config/dev_prove_key.pem' =>
+    'the RSA broker key development and test sign attestations with'
 }.freeze
 
 # The detector must match a freshly minted key and must not match an armor-only placeholder.
 def key_detector_faults
-  probe  = OpenSSL::PKey.generate_key("ED25519").private_to_pem
+  probe  = OpenSSL::PKey.generate_key('ED25519').private_to_pem
   lines  = probe.lines
   placeholder = "#   SOME_VAR=\"#{lines.first.chomp}\n#   ...\n#   #{lines.last.chomp}\"\n"
 
   faults = []
-  faults << "a freshly generated private key is not recognised" unless probe =~ KEY_BLOCK_RE
-  faults << "an armor-only placeholder is recognised as a key" if placeholder =~ KEY_BLOCK_RE
+  faults << 'a freshly generated private key is not recognised' unless probe =~ KEY_BLOCK_RE
+  faults << 'an armor-only placeholder is recognised as a key' if placeholder =~ KEY_BLOCK_RE
   faults
 end
 
 # Each exemption prints how many findings it suppressed on every run.
 ALLOW = [
   {
-    id: "AL-2",
-    scope: "CHANGELOG.md, at any depth",
+    id: 'AL-2',
+    scope: 'CHANGELOG.md, at any depth',
     arms: :all,
-    why: "a changelog is append-only history of the tree as it was.",
-    match: ->(path, _line) { File.basename(path) == "CHANGELOG.md" },
+    why: 'a changelog is append-only history of the tree as it was.',
+    match: ->(path, _line) { File.basename(path) == 'CHANGELOG.md' }
   },
   {
-    id: "AL-3",
-    scope: "a section citation whose sentence names an external standard first",
+    id: 'AL-3',
+    scope: 'a section citation whose sentence names an external standard first',
     arms: :sec,
     why: "it cites another standard's numbering (also across a two-line wrap).",
-    match: nil,
+    match: nil
   },
   {
-    id: "AL-4",
-    scope: "a section marker that is part of an identifier (`ADR-0023 §Decision 4`)",
+    id: 'AL-4',
+    scope: 'a section marker that is part of an identifier (`ADR-0023 §Decision 4`)',
     arms: :sec,
-    why: "it names a section of that document; an id glued into a word (`pre-X-1`) does not count.",
-    match: nil,
+    why: 'it names a section of that document; an id glued into a word (`pre-X-1`) does not count.',
+    match: nil
   },
   {
-    id: "AL-6",
+    id: 'AL-6',
     scope: "this script's own PATTERN TABLE and SELF-TEST FIXTURES blocks",
     arms: :all,
-    why: "the forbidden tokens must be spelled somewhere; the rest of this file is scanned.",
-    match: nil,
+    why: 'the forbidden tokens must be spelled somewhere; the rest of this file is scanned.',
+    match: nil
   },
   {
-    id: "AL-7",
-    scope: "the declared development keypairs (DECLARED_DEV_KEYS)",
+    id: 'AL-7',
+    scope: 'the declared development keypairs (DECLARED_DEV_KEYS)',
     arms: :key,
-    why: "declared test vectors, exempt only while the file carries its do-not-use banner.",
-    match: nil,
-  },
+    why: 'declared test vectors, exempt only while the file carries its do-not-use banner.',
+    match: nil
+  }
 ].freeze
 
 # ── the published section index ───────────────────────────────────────────────
@@ -144,16 +144,16 @@ def sections_from(path)
   stack  = []
   fenced = false
   File.readlines(path, chomp: true).each_with_index do |line, i|
-    fenced = !fenced if line.start_with?("```")
+    fenced = !fenced if line.start_with?('```')
     next if fenced
 
     if (m = line.match(/\A\#{2,4}\s+(\d+(?:\.\d+)*)\.?\s+\S/))
-      head  = m[1].split(".")
+      head  = m[1].split('.')
       stack = []
-      found[head.join(".")] = i + 1
+      found[head.join('.')] = i + 1
       next
     end
-    next if line.start_with?("#") || head.nil?
+    next if line.start_with?('#') || head.nil?
 
     next unless (m = line.match(/\A(\s*)(\d+)\.\s+\S/))
 
@@ -161,7 +161,7 @@ def sections_from(path)
     stack.pop while !stack.empty? && stack.last[0] >= indent
     base = stack.empty? ? head : stack.last[1]
     item = base + [m[2]]
-    found[item.join(".")] = i + 1
+    found[item.join('.')] = i + 1
     stack.push([indent, item])
   end
   found
@@ -175,7 +175,7 @@ end
 def read_sections_tsv
   index = {}
   File.readlines(SECTIONS_TSV, chomp: true).each do |line|
-    next if line.empty? || line.start_with?("#")
+    next if line.empty? || line.start_with?('#')
 
     num, where = line.split("\t", 2)
     index[num] = where.to_i
@@ -183,7 +183,7 @@ def read_sections_tsv
   index
 end
 
-SOURCE_DIGEST_LINE = /\A#\s*source sha256:\s*([0-9a-f]{64})\s*\z/.freeze
+SOURCE_DIGEST_LINE = /\A#\s*source sha256:\s*([0-9a-f]{64})\s*\z/
 
 # The source digest --record-sections wrote into the index header, or nil.
 def read_sections_tsv_source_digest
@@ -195,20 +195,20 @@ def read_sections_tsv_source_digest
 end
 
 def render_sections_tsv(index, source)
-  out = +""
+  out = +''
   out << "# GENERATED by bin/check-publication-paths --record-sections. Do not edit by hand.\n"
   out << "# One `section<TAB>line` row per numbered section (headings and list items) of\n"
   out << "# kiosk.tech/spec/protocol.md, for resolving section citations offline.\n"
   out << "# source sha256: #{Digest::SHA256.file(source).hexdigest}\n"
   out << "# sections: #{index.size}\n"
-  index.keys.sort_by { |k| k.split(".").map(&:to_i) }.each { |k| out << "#{k}\t#{index[k]}\n" }
+  index.keys.sort_by { |k| k.split('.').map(&:to_i) }.each { |k| out << "#{k}\t#{index[k]}\n" }
   out
 end
 
 # ── scanning ─────────────────────────────────────────────────────────────────
 
 def tracked_files(root)
-  out, err, status = Open3.capture3("git", "-C", root, "ls-files", "-z")
+  out, err, status = Open3.capture3('git', '-C', root, 'ls-files', '-z')
   raise "git ls-files failed in #{root}: #{err}" unless status.success?
 
   out.split("\0").reject(&:empty?)
@@ -224,14 +224,14 @@ rescue SystemCallError
   nil
 end
 
-CONTINUATION = /\A\s*(?:\#+|\/\/+|\*+|--|<%\#)?\s*/.freeze
-CITE         = /§(\d+(?:\.\d+)*)/.freeze
+CONTINUATION = %r{\A\s*(?:\#+|//+|\*+|--|<%\#)?\s*}
+CITE         = /§(\d+(?:\.\d+)*)/
 
 def joins_with_previous(prev_line, line)
   return [] if prev_line.nil?
 
-  cont = line.sub(CONTINUATION, "")
-  head = prev_line.sub(/\s+\z/, "")
+  cont = line.sub(CONTINUATION, '')
+  head = prev_line.sub(/\s+\z/, '')
   ["#{head} #{cont}", "#{head}#{cont}"]
 end
 
@@ -244,8 +244,8 @@ def self_exempt_ranges
     m = line.match(/\A#\s+(>>>|<<<)\s+.*--\s+(BEGIN|END)\s*\z/)
     next if m.nil?
 
-    open = i + 1 if m[2] == "BEGIN"
-    if m[2] == "END" && open
+    open = i + 1 if m[2] == 'BEGIN'
+    if m[2] == 'END' && open
       ranges << (open..(i + 1))
       open = nil
     end
@@ -277,18 +277,23 @@ def scan_repo(index)
       keys += 1
       declared = DECLARED_DEV_KEYS.key?(rel)
       if declared && text.include?(KEY_BANNER)
-        suppressed["AL-7"] += 1
+        suppressed['AL-7'] += 1
       else
         findings << {
-          path: rel, line: text[0...key_hit.begin(0)].count("\n") + 1, id: "KEY-1",
-          what: declared ? "a declared development keypair that has lost its do-not-use banner" :
-                           "a private key committed to a published repository",
-          repair: declared ?
-                    "restore the \"#{KEY_BANNER}\" banner" :
-                    "read it from the environment or generate it at setup; a genuine test vector goes " \
-                    "in DECLARED_DEV_KEYS and carries the banner",
+          path: rel, line: text[0...key_hit.begin(0)].count("\n") + 1, id: 'KEY-1',
+          what: if declared
+                  'a declared development keypair that has lost its do-not-use banner'
+                else
+                  'a private key committed to a published repository'
+                end,
+          repair: if declared
+                    "restore the \"#{KEY_BANNER}\" banner"
+                  else
+                    'read it from the environment or generate it at setup; a genuine test vector goes ' \
+                      'in DECLARED_DEV_KEYS and carries the banner'
+                  end,
           text: "#{rel}: a private-key block with key material under it starts here",
-          wrapped: false,
+          wrapped: false
         }
       end
     end
@@ -296,7 +301,7 @@ def scan_repo(index)
     lines.each_with_index do |line, i|
       lineno = i + 1
       if rel == SELF_REL && self_ranges.any? { |r| r.cover?(lineno) }
-        suppressed["AL-6"] += 1 if PATTERNS.any? { |p| line =~ p[:re] } || line.include?("§")
+        suppressed['AL-6'] += 1 if PATTERNS.any? { |p| line =~ p[:re] } || line.include?('§')
         next
       end
 
@@ -316,7 +321,7 @@ def scan_repo(index)
         findings << {
           path: rel, line: lineno, id: pat[:id], what: pat[:what], repair: pat[:repair],
           text: (hit_pair ? "#{prev.strip} / #{line.strip}" : line.strip),
-          wrapped: !hit_line,
+          wrapped: !hit_line
         }
       end
 
@@ -325,7 +330,7 @@ def scan_repo(index)
         pos = m.end(0)
         num = m[1]
 
-        skipped = path_allow.find { |a| a[:arms] == :all || a[:arms] == :sec }
+        skipped = path_allow.find { |a| %i[all sec].include?(a[:arms]) }
         if skipped
           suppressed[skipped[:id]] += 1
           next
@@ -342,21 +347,21 @@ def scan_repo(index)
         # A citation attributed to our spec is never exempt (AL-3, AL-4).
         ours = befores.any? { |b| b =~ /\b(?:specs?|specification|protocol)\b[^§]{0,24}\z/i }
         if !ours && befores.any? { |b| b =~ /\b(?:RFC|OAS|OpenAPI)\b/ }
-          suppressed["AL-3"] += 1
+          suppressed['AL-3'] += 1
           next
         end
         if !ours && befores.any? { |b| b =~ /(?<![A-Za-z0-9-])(?:ADR|K|T)-\d+\s*\z/ }
-          suppressed["AL-4"] += 1
+          suppressed['AL-4'] += 1
           next
         end
         next if index.key?(num)
 
         findings << {
-          path: rel, line: lineno, id: "SEC-1",
+          path: rel, line: lineno, id: 'SEC-1',
           what: "the citation of section #{num} resolves to nothing in the published specification",
-          repair: "cite the section that carries the rule, name the external standard the number " \
-                  "belongs to, or state the rule inline",
-          text: line.strip, wrapped: false,
+          repair: 'cite the section that carries the rule, name the external standard the number ' \
+                  'belongs to, or state the rule inline',
+          text: line.strip, wrapped: false
         }
       end
     end
@@ -383,7 +388,7 @@ def resolve_index
   actual   = Digest::SHA256.file(live).hexdigest
   if derived.keys.sort != vendored.keys.sort || recorded != actual
     warn "check-publication-paths: FAIL -- #{rel} does not match #{live}. " \
-         "Re-record it with `bin/check-publication-paths --record-sections`."
+         'Re-record it with `bin/check-publication-paths --record-sections`.'
     only_live = (derived.keys - vendored.keys).sort
     only_tsv  = (vendored.keys - derived.keys).sort
     warn "  published but not vendored: #{only_live.join(', ')}" unless only_live.empty?
@@ -400,10 +405,10 @@ def run_check(quiet: false)
 
   key_faults = key_detector_faults
   key_faults.each do |fault|
-    findings << { path: SELF_REL, line: 0, id: "KEY-0",
+    findings << { path: SELF_REL, line: 0, id: 'KEY-0',
                   what: "the tracked-key detector is broken: #{fault}",
-                  repair: "repair KEY_BLOCK_RE",
-                  text: "KEY_BLOCK_RE failed its own two-sided probe", wrapped: false }
+                  repair: 'repair KEY_BLOCK_RE',
+                  text: 'KEY_BLOCK_RE failed its own two-sided probe', wrapped: false }
   end
 
   unless quiet
@@ -414,25 +419,25 @@ def run_check(quiet: false)
     puts "  section index: #{note}"
     ALLOW.each do |a|
       n = suppressed[a[:id]]
-      puts format("  %-5s %-62s suppressed %d", a[:id], a[:scope], n)
+      puts format('  %-5s %-62s suppressed %d', a[:id], a[:scope], n)
     end
   end
 
   if findings.empty?
     unless quiet
       puts
-      puts "check-publication-paths: OK -- nothing shipped here points at material that does not " \
-           "ship with it."
+      puts 'check-publication-paths: OK -- nothing shipped here points at material that does not ' \
+           'ship with it.'
     end
     return 0
   end
 
   $stdout.flush
-  warn ""
+  warn ''
   warn "check-publication-paths: FAIL -- #{findings.length} line(s) point at material a reader of " \
-       "this repository will not have."
+       'this repository will not have.'
   findings.sort_by { |f| [f[:path], f[:line]] }.each do |f|
-    warn "  #{f[:path]}:#{f[:line]}: [#{f[:id]}] #{f[:what]}#{f[:wrapped] ? ' (wrapped over two lines)' : ''}"
+    warn "  #{f[:path]}:#{f[:line]}: [#{f[:id]}] #{f[:what]}#{' (wrapped over two lines)' if f[:wrapped]}"
     warn "      #{f[:text]}"
     warn "      repair: #{f[:repair]}"
   end
@@ -456,55 +461,55 @@ end
 # >>> SELF-TEST FIXTURES -- BEGIN
 # Shapes that must NOT fire.
 GREEN_FIXTURES = {
-  "lib/rfc_same_line.rb" => [
-    "# RFC 9110 §15.5.6 makes `Allow` mandatory on a 405.",
+  'lib/rfc_same_line.rb' => [
+    '# RFC 9110 §15.5.6 makes `Allow` mandatory on a 405.'
   ],
-  "lib/rfc_wrapped.rb" => [
-    "# way round is a 405: the resource EXISTS and refuses this method. RFC 9110",
-    "# §15.5.6 makes `Allow` mandatory on one, and the hint names the call to make.",
+  'lib/rfc_wrapped.rb' => [
+    '# way round is a 405: the resource EXISTS and refuses this method. RFC 9110',
+    '# §15.5.6 makes `Allow` mandatory on one, and the hint names the call to make.'
   ],
-  "lib/oas_wrapped.rb" => [
-    "# The Header Object is a Parameter Object MINUS `name` and `in` (OAS 3.1",
-    "# §4.8.21.1): the map key names the header.",
+  'lib/oas_wrapped.rb' => [
+    '# The Header Object is a Parameter Object MINUS `name` and `in` (OAS 3.1',
+    '# §4.8.21.1): the map key names the header.'
   ],
-  "lib/identifier_wrapped.rb" => [
-    "  # {RescheduleDeliveryOperation}. No call signature in the prose: ADR-0023",
-    "  # §12.9 puts the arguments, and which are optional, in `input_schema`.",
+  'lib/identifier_wrapped.rb' => [
+    '  # {RescheduleDeliveryOperation}. No call signature in the prose: ADR-0023',
+    '  # §12.9 puts the arguments, and which are optional, in `input_schema`.'
   ],
   # Exempt fixtures cite a number that resolves nowhere, so each is green only through its exemption.
-  "lib/identifier_same_line.rb" => [
-    "# The declared reach is ADR-0023 §99.9 and nothing in this tree restates it.",
+  'lib/identifier_same_line.rb' => [
+    '# The declared reach is ADR-0023 §99.9 and nothing in this tree restates it.'
   ],
-  "lib/public_cites.rb" => [
-    "# §3.6 binds the whole mount; §3.7.4 relaxes a 200; §5.5, §6.3, §8.1, §8.3,",
-    "# §10, §15.2 and §15.4 all resolve and are correct.",
+  'lib/public_cites.rb' => [
+    '# §3.6 binds the whole mount; §3.7.4 relaxes a 200; §5.5, §6.3, §8.1, §8.3,',
+    '# §10, §15.2 and §15.4 all resolve and are correct.'
   ],
-  "lib/sibling_repo.rb" => [
-    "# The normative text is kiosk.tech/specification.html and kiosk.tech/spec/protocol.md §8.3;",
-    "# the harness lives at reference/e2e/run.sh.",
+  'lib/sibling_repo.rb' => [
+    '# The normative text is kiosk.tech/specification.html and kiosk.tech/spec/protocol.md §8.3;',
+    '# the harness lives at reference/e2e/run.sh.'
   ],
   # The blanket-exempt file carries every pattern's own example.
-  "CHANGELOG.md" => ["- an entry recording, in §99.9 of a vintage since renumbered, that:"] +
-                    PATTERNS.flat_map { |pat| pat[:example] },
+  'CHANGELOG.md' => ['- an entry recording, in §99.9 of a vintage since renumbered, that:'] +
+                    PATTERNS.flat_map { |pat| pat[:example] }
 }.freeze
 
 # Shapes that MUST fire, beyond each pattern's own example.
 RED_EXTRA = [
-  ["SEC-1", "lib/dangling.rb", ["# per §99.9 the wire is additive"]],
+  ['SEC-1', 'lib/dangling.rb', ['# per §99.9 the wire is additive']],
   # CLAUDE.md is shipped content and is never exempt.
-  ["PM-1", "CLAUDE.md", PATTERNS.find { |pat| pat[:id] == "PM-1" }[:example]],
+  ['PM-1', 'CLAUDE.md', PATTERNS.find { |pat| pat[:id] == 'PM-1' }[:example]],
   # An id glued into a word dates a citation of ours; it is checked, same-line and wrapped.
-  ["SEC-1", "lib/id_adjective.rb",
-   ["# the pre-K-851 §99.9 read that as \"confirmed unpaid\" and re-signed."]],
-  ["SEC-1", "lib/id_adjective_wrapped.rb",
-   ["# reconciles: are there settlements for this cart? NO -- the pre-K-851",
-    "# §99.9 read that as \"confirmed unpaid\" and blessed a fresh chain."]],
+  ['SEC-1', 'lib/id_adjective.rb',
+   ['# the pre-K-851 §99.9 read that as "confirmed unpaid" and re-signed.']],
+  ['SEC-1', 'lib/id_adjective_wrapped.rb',
+   ['# reconciles: are there settlements for this cart? NO -- the pre-K-851',
+    '# §99.9 read that as "confirmed unpaid" and blessed a fresh chain.']]
 ].freeze
 # <<< SELF-TEST FIXTURES -- END
 
 # A key file shaped like the declared ones, minted per run.
 def fixture_key_file(banner:)
-  pem = OpenSSL::PKey.generate_key("ED25519").private_to_pem
+  pem = OpenSSL::PKey.generate_key('ED25519').private_to_pem
   head = +"Throwaway keypair minted by --self-test. Never used for anything.\n"
   head << "#{KEY_BANNER}: it exists for the length of one temporary directory.\n" if banner
   "#{head}\n#{pem}"
@@ -517,59 +522,60 @@ def plant(dir, rel, lines)
 end
 
 def build_fixture_repo(dir)
-  Dir.mkdir(File.join(dir, "bin"))
-  FileUtils.mkdir_p(File.join(dir, "spec"))
-  File.write(File.join(dir, "bin", File.basename(SELF_PATH)), File.binread(SELF_PATH))
-  File.chmod(0o755, File.join(dir, "bin", File.basename(SELF_PATH)))
-  File.write(File.join(dir, "spec", "public-spec-sections.tsv"), File.binread(SECTIONS_TSV))
+  Dir.mkdir(File.join(dir, 'bin'))
+  FileUtils.mkdir_p(File.join(dir, 'spec'))
+  File.write(File.join(dir, 'bin', File.basename(SELF_PATH)), File.binread(SELF_PATH))
+  File.chmod(0o755, File.join(dir, 'bin', File.basename(SELF_PATH)))
+  File.write(File.join(dir, 'spec', 'public-spec-sections.tsv'), File.binread(SECTIONS_TSV))
   GREEN_FIXTURES.each { |rel, lines| plant(dir, rel, lines) }
   DECLARED_DEV_KEYS.each_key do |rel|
     abs = File.join(dir, rel)
     FileUtils.mkdir_p(File.dirname(abs))
     File.write(abs, fixture_key_file(banner: true))
   end
-  _, err, st = Open3.capture3("git", "-C", dir, "init", "-q")
+  _, err, st = Open3.capture3('git', '-C', dir, 'init', '-q')
   raise "git init failed: #{err}" unless st.success?
 end
 
 def stage(dir)
-  _, err, st = Open3.capture3("git", "-C", dir, "add", "-A")
+  _, err, st = Open3.capture3('git', '-C', dir, 'add', '-A')
   raise "git add failed: #{err}" unless st.success?
 end
 
 def run_guard_in(dir)
-  Open3.capture3(RbConfig.ruby, File.join(dir, "bin", File.basename(SELF_PATH)))
+  Open3.capture3(RbConfig.ruby, File.join(dir, 'bin', File.basename(SELF_PATH)))
 end
 
 # A vendored index beside a stand-in kiosk.tech spec with the same sections: green, red when
 # only the recorded source digest is stale, green again when restored.
 def run_index_self_test(index)
   failures = []
-  Dir.mktmpdir("check-publication-paths-index") do |root|
-    repo = File.join(root, "reference")
+  Dir.mktmpdir('check-publication-paths-index') do |root|
+    repo = File.join(root, 'reference')
     live = File.join(root, SITE_REPO, SPEC_REL)
     FileUtils.mkdir_p(File.dirname(live))
-    FileUtils.mkdir_p(File.join(repo, "bin"))
-    FileUtils.mkdir_p(File.join(repo, "spec"))
-    File.write(live, index.keys.sort_by { |k| k.split(".").map(&:to_i) }
+    FileUtils.mkdir_p(File.join(repo, 'bin'))
+    FileUtils.mkdir_p(File.join(repo, 'spec'))
+    File.write(live, index.keys.sort_by { |k| k.split('.').map(&:to_i) }
                           .map { |k| "## #{k}. Section #{k}\n\nProse.\n\n" }.join)
 
-    script = File.join(repo, "bin", File.basename(SELF_PATH))
+    script = File.join(repo, 'bin', File.basename(SELF_PATH))
     File.write(script, File.binread(SELF_PATH))
     File.chmod(0o755, script)
 
-    tsv_path = File.join(repo, "spec", "public-spec-sections.tsv")
+    tsv_path = File.join(repo, 'spec', 'public-spec-sections.tsv')
     tsv      = render_sections_tsv(sections_from(live), live)
     File.write(tsv_path, tsv)
-    plant(repo, "lib/cites.rb", ["# The scope is §1.1 and the notation §1.3."])
+    plant(repo, 'lib/cites.rb', ['# The scope is §1.1 and the notation §1.3.'])
 
-    _, err, st = Open3.capture3("git", "-C", repo, "init", "-q")
+    _, err, st = Open3.capture3('git', '-C', repo, 'init', '-q')
     raise "git init failed: #{err}" unless st.success?
+
     stage(repo)
 
     out1, err1, st1 = run_guard_in(repo)
     if st1.exitstatus.zero?
-      puts "  vendored index: keys agree and the recorded source digest matches -- exit 0 -- OK"
+      puts '  vendored index: keys agree and the recorded source digest matches -- exit 0 -- OK'
     else
       failures << "the vendored-index fixture exited #{st1.exitstatus} with a matching digest\n#{out1}#{err1}"
     end
@@ -579,43 +585,39 @@ def run_index_self_test(index)
     out2, err2, st2 = run_guard_in(repo)
     combined = "#{out2}#{err2}"
     if st2.exitstatus.zero?
-      failures << "a stale source digest with every section number unchanged stayed green"
-    elsif !combined.include?("--record-sections")
+      failures << 'a stale source digest with every section number unchanged stayed green'
+    elsif !combined.include?('--record-sections')
       failures << "the stale-digest failure did not name --record-sections as the repair:\n#{combined}"
     else
       puts "  vendored index: source digest staled, keys UNTOUCHED -- exit #{st2.exitstatus}, repair " \
-           "named -- OK"
+           'named -- OK'
     end
 
     File.write(tsv_path, tsv)
     stage(repo)
     _, _, st3 = run_guard_in(repo)
-    unless st3.exitstatus.zero?
-      failures << "the vendored-index fixture did not return to exit 0 after the digest was restored"
-    end
+    failures << 'the vendored-index fixture did not return to exit 0 after the digest was restored' unless st3.exitstatus.zero?
   end
   failures
 end
 
 def run_self_test
   failures = []
-  Dir.mktmpdir("check-publication-paths") do |dir|
+  Dir.mktmpdir('check-publication-paths') do |dir|
     build_fixture_repo(dir)
     stage(dir)
 
     out, err, st = run_guard_in(dir)
     if st.exitstatus.zero?
-      puts "  green tree: exit 0 with every exempt shape present -- OK"
+      puts '  green tree: exit 0 with every exempt shape present -- OK'
     else
       failures << "the green fixture tree should exit 0; it exited #{st.exitstatus}\n#{out}#{err}"
     end
-    unless out.include?("section citation(s)")
-      failures << "the guard printed no citation count, so non-vacuity cannot be read off it"
-    end
+    failures << 'the guard printed no citation count, so non-vacuity cannot be read off it' unless out.include?('section citation(s)')
 
     # Each exemption must have done the work, read back off the suppression counts.
     counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
-    { "AL-2" => 1, "AL-3" => 3, "AL-4" => 2, "AL-7" => DECLARED_DEV_KEYS.size }.each do |id, want|
+    { 'AL-2' => 1, 'AL-3' => 3, 'AL-4' => 2, 'AL-7' => DECLARED_DEV_KEYS.size }.each do |id, want|
       got = counted[id].to_i
       if got < want
         failures << "#{id} suppressed #{got} on the fixture tree, expected at least #{want}"
@@ -626,8 +628,8 @@ def run_self_test
 
     cases = PATTERNS.map { |p| [p[:id], "lib/plant_#{p[:id].downcase.tr('-', '_')}.rb", p[:example]] }
     cases += RED_EXTRA.map { |id, rel, lines| [id, rel, lines] }
-    cases << ["KEY-1", "config/some_service_key.pem", fixture_key_file(banner: true).lines.map(&:chomp)]
-    cases << ["KEY-1", DECLARED_DEV_KEYS.keys.first, fixture_key_file(banner: false).lines.map(&:chomp)]
+    cases << ['KEY-1', 'config/some_service_key.pem', fixture_key_file(banner: true).lines.map(&:chomp)]
+    cases << ['KEY-1', DECLARED_DEV_KEYS.keys.first, fixture_key_file(banner: false).lines.map(&:chomp)]
 
     cases.each do |id, rel, lines|
       plant(dir, rel, lines)
@@ -641,7 +643,7 @@ def run_self_test
       elsif !combined.include?("[#{id}]")
         failures << "#{id} fired on #{rel} but was not reported under its own id:\n#{combined}"
       else
-        wrapped = lines.length > 1 ? " (wrapped over two lines)" : ""
+        wrapped = lines.length > 1 ? ' (wrapped over two lines)' : ''
         puts "  plant #{id} in #{rel}#{wrapped}: exit #{st2.exitstatus}, reported by id -- OK"
       end
       File.delete(File.join(dir, rel))
@@ -649,7 +651,7 @@ def run_self_test
     end
 
     _, _, st3 = run_guard_in(dir)
-    failures << "the fixture tree did not return to exit 0 after the plants were removed" unless st3.exitstatus.zero?
+    failures << 'the fixture tree did not return to exit 0 after the plants were removed' unless st3.exitstatus.zero?
   end
 
   index, = resolve_index
@@ -666,13 +668,13 @@ def run_self_test
 
   if failures.empty?
     puts
-    puts "check-publication-paths --self-test: OK"
+    puts 'check-publication-paths --self-test: OK'
     return 0
   end
 
   $stdout.flush
-  warn ""
-  warn "check-publication-paths --self-test: FAIL"
+  warn ''
+  warn 'check-publication-paths --self-test: FAIL'
   failures.each { |f| warn "  #{f}" }
   1
 end
@@ -683,10 +685,10 @@ mode = ARGV[0]
 code =
   case mode
   when nil            then run_check
-  when "--self-test"  then run_self_test
-  when "--record-sections" then run_record_sections
+  when '--self-test'  then run_self_test
+  when '--record-sections' then run_record_sections
   else
-    warn "usage: check-publication-paths [--self-test|--record-sections]"
+    warn 'usage: check-publication-paths [--self-test|--record-sections]'
     2
   end
 exit code

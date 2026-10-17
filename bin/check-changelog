@@ -7,18 +7,18 @@
 # byte-identical to kiosk.tech/bin/check-changelog.
 # Usage: bin/check-changelog [--baseline REV] [--self-test]
 
-require "open3"
-require "fileutils"
-require "rbconfig"
-require "tmpdir"
+require 'open3'
+require 'fileutils'
+require 'rbconfig'
+require 'tmpdir'
 
 SELF_PATH = File.realpath(__FILE__)
-REPO      = File.dirname(File.dirname(SELF_PATH))
+REPO      = File.dirname(SELF_PATH, 2)
 
 KINDS = %w[Added Changed Deprecated Removed Fixed Security].freeze
 
 # Entries present at this commit are the append-only backlog: counted, never failed.
-BASELINE_REV = "4afc6cf1400583a4fa3e8a33fe06e64115c60605"
+BASELINE_REV = '4afc6cf1400583a4fa3e8a33fe06e64115c60605'
 
 # >>> SHARED NEW-ENTRY RULE -- BEGIN
 # Byte-identical to the block of the same name in the SIBLING repository's
@@ -57,7 +57,7 @@ def full_entries(source)
       cur[:body] << line if cur
       next
     end
-    if line.start_with?("- ")
+    if line.start_with?('- ')
       out << cur if cur
       cur = { line: i + 1, body: [line] }
     elsif line.match?(/\A\#{1,6}[ \t]/)
@@ -72,7 +72,7 @@ def full_entries(source)
 end
 
 def normalise_entry(body)
-  body.join(" ").sub(/\A-[ \t]+/, "").gsub(/\s+/, " ").strip
+  body.join(' ').sub(/\A-[ \t]+/, '').gsub(/\s+/, ' ').strip
 end
 
 # A scan, not a parser, and the header says so. Code spans, emphasis markers
@@ -82,10 +82,10 @@ end
 # abbreviation or a single-letter initial. An entry with no terminator at all
 # is one sentence, not zero.
 def sentence_count(text)
-  t = text.gsub(/`[^`]*`/, " CODE ")
-  t = t.gsub(/[*_]{1,3}/, "")
-  t = t.gsub(/\d+(?:\.\d+)+/, "NUM")
-  t = t.gsub("...", "…")
+  t = text.gsub(/`[^`]*`/, ' CODE ')
+  t = t.gsub(/[*_]{1,3}/, '')
+  t = t.gsub(/\d+(?:\.\d+)+/, 'NUM')
+  t = t.gsub('...', '…')
   n = 0
   t.scan(/[.!?]+["'»”)\]]*(?=\s|\z)/) do
     pre = Regexp.last_match.pre_match
@@ -123,8 +123,8 @@ end
 # to be a release of; `kiosk.tech` publishes the skill cut and the pinned event
 # listener on independent numbers, so a bare 0.5.0 there names two different
 # files. Each repository's own CHANGELOG-RULE.md says which lines it has.
-UNRELEASED_HEADING   = "[Unreleased]"
-PRE_GROUPING_HEADING = "Before release sections"
+UNRELEASED_HEADING   = '[Unreleased]'
+PRE_GROUPING_HEADING = 'Before release sections'
 # Either dash is accepted and the em dash is what to write: a writer copying the
 # shape off an existing heading must not be refused over the hyphen that Keep a
 # Changelog itself uses.
@@ -135,11 +135,11 @@ RELEASE_HEADING = /\A\[(?:\d+\.\d+\.\d+|#{LABELLED_CUT}(?:[ \t]+·[ \t]+#{LABELL
 
 ARMS = [
   {
-    id: "CL-1",
-    what: "a repeated Keep-a-Changelog subsection kind inside one release section",
-    repair: "merge the two blocks under the first heading of that kind, keeping every entry",
+    id: 'CL-1',
+    what: 'a repeated Keep-a-Changelog subsection kind inside one release section',
+    repair: 'merge the two blocks under the first heading of that kind, keeping every entry',
     plant: lambda { |dir|
-      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+      write(dir, 'kiosk-widget/CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [Unreleased]
@@ -156,14 +156,14 @@ ARMS = [
 
         - the second thing.
       MD
-    },
+    }
   },
   {
-    id: "CL-2",
-    what: "a repeated subsection heading inside one release section",
-    repair: "merge the two blocks under the first heading with that name, keeping every entry",
+    id: 'CL-2',
+    what: 'a repeated subsection heading inside one release section',
+    repair: 'merge the two blocks under the first heading with that name, keeping every entry',
     plant: lambda { |dir|
-      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+      write(dir, 'kiosk-widget/CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [Unreleased]
@@ -176,14 +176,14 @@ ARMS = [
 
         - another thing deferred.
       MD
-    },
+    }
   },
   {
-    id: "CL-3",
-    what: "a repeated release section in one file",
-    repair: "merge the two sections, keeping every subsection and every entry",
+    id: 'CL-3',
+    what: 'a repeated release section in one file',
+    repair: 'merge the two sections, keeping every subsection and every entry',
     plant: lambda { |dir|
-      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+      write(dir, 'kiosk-widget/CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [Unreleased]
@@ -198,14 +198,14 @@ ARMS = [
 
         - a thing filed in a second copy of the same release.
       MD
-    },
+    }
   },
   {
-    id: "CL-4",
-    what: "a subsection heading that no release section contains",
-    repair: "put the subsection under the release section it belongs to",
+    id: 'CL-4',
+    what: 'a subsection heading that no release section contains',
+    repair: 'put the subsection under the release section it belongs to',
     plant: lambda { |dir|
-      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+      write(dir, 'kiosk-widget/CHANGELOG.md', <<~MD)
         # Changelog
 
         ### Added
@@ -216,31 +216,31 @@ ARMS = [
 
         - a release with nothing under it.
       MD
-    },
+    }
   },
   {
-    id: "CL-5",
-    what: "a tracked changelog that is neither the repository record, nor a gem package " \
-          "record, nor a declared courtesy record",
-    repair: "put the line in the repository record instead, or declare this file in COURTESY with its reason",
+    id: 'CL-5',
+    what: 'a tracked changelog that is neither the repository record, nor a gem package ' \
+          'record, nor a declared courtesy record',
+    repair: 'put the line in the repository record instead, or declare this file in COURTESY with its reason',
     plant: lambda { |dir|
-      write(dir, "deploy/CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n- a record nobody declared.\n")
-    },
+      write(dir, 'deploy/CHANGELOG.md', "# Changelog\n\n## [Unreleased]\n\n- a record nobody declared.\n")
+    }
   },
   {
-    id: "CL-6",
-    what: "a gem directory with no changelog, although its gemspec publishes one",
-    repair: "add <gem>/CHANGELOG.md; it ships inside the package",
+    id: 'CL-6',
+    what: 'a gem directory with no changelog, although its gemspec publishes one',
+    repair: 'add <gem>/CHANGELOG.md; it ships inside the package',
     plant: lambda { |dir|
-      write(dir, "kiosk-gadget/kiosk-gadget.gemspec", "Gem::Specification.new { |s| s.name = \"kiosk-gadget\" }\n")
-    },
+      write(dir, 'kiosk-gadget/kiosk-gadget.gemspec', "Gem::Specification.new { |s| s.name = \"kiosk-gadget\" }\n")
+    }
   },
   {
-    id: "CL-7",
-    what: "a top-level entry in the repository record that does not open with its ISO date",
-    repair: "prefix the entry with `- YYYY-MM-DD: `, the date of the commit that introduced it",
+    id: 'CL-7',
+    what: 'a top-level entry in the repository record that does not open with its ISO date',
+    repair: 'prefix the entry with `- YYYY-MM-DD: `, the date of the commit that introduced it',
     plant: lambda { |dir|
-      write(dir, "CHANGELOG.md", <<~MD)
+      write(dir, 'CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [Unreleased]
@@ -249,29 +249,29 @@ ARMS = [
         - an entry that never says when it happened.
         - 2026-01-02: **something changed.** Intent: it says why.
       MD
-    },
+    }
   },
   {
-    id: "CL-8",
+    id: 'CL-8',
     what: "a new entry at or over #{LENGTH_CAP} characters",
     repair: "cut it to the essence, under #{LENGTH_CAP} characters; details go in the commit message",
     plant: lambda { |dir|
-      write(dir, "CHANGELOG.md", <<~MD)
+      write(dir, 'CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [Unreleased]
 
-        - 2026-01-04: #{"a very long single sentence about one small change " * 6}.
+        - 2026-01-04: #{'a very long single sentence about one small change ' * 6}.
         #{BACKLOG_ENTRY}
       MD
-    },
+    }
   },
   {
-    id: "CL-9",
+    id: 'CL-9',
     what: "a new entry running past #{SENTENCE_CAP} sentences",
-    repair: "say it in one or two sentences; details go in the commit message",
+    repair: 'say it in one or two sentences; details go in the commit message',
     plant: lambda { |dir|
-      write(dir, "CHANGELOG.md", <<~MD)
+      write(dir, 'CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [Unreleased]
@@ -279,15 +279,15 @@ ARMS = [
         - 2026-01-05: One thing changed. A second sentence explains it. A third one runs on.
         #{BACKLOG_ENTRY}
       MD
-    },
+    }
   },
   {
-    id: "CL-11",
-    what: "a level-2 heading that is neither `[Unreleased]`, nor a version section " \
+    id: 'CL-11',
+    what: 'a level-2 heading that is neither `[Unreleased]`, nor a version section ' \
           "`[MAJOR.MINOR.PATCH] — YYYY-MM-DD`, nor `#{PRE_GROUPING_HEADING}`",
-    repair: "name the section for the cut that carries it, version and date: `## [0.4.1] — 2026-09-24`",
+    repair: 'name the section for the cut that carries it, version and date: `## [0.4.1] — 2026-09-24`',
     plant: lambda { |dir|
-      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+      write(dir, 'kiosk-widget/CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [Unreleased]
@@ -302,14 +302,14 @@ ARMS = [
 
         - a release named for a series instead of a cut.
       MD
-    },
+    }
   },
   {
-    id: "CL-12",
-    what: "a record whose first section is not `[Unreleased]`",
-    repair: "open a `## [Unreleased]` section above every other section",
+    id: 'CL-12',
+    what: 'a record whose first section is not `[Unreleased]`',
+    repair: 'open a `## [Unreleased]` section above every other section',
     plant: lambda { |dir|
-      write(dir, "kiosk-widget/CHANGELOG.md", <<~MD)
+      write(dir, 'kiosk-widget/CHANGELOG.md', <<~MD)
         # Changelog
 
         ## [0.1.0] — 2026-01-01
@@ -318,14 +318,14 @@ ARMS = [
 
         - a record that never opened the next release.
       MD
-    },
+    }
   },
   {
-    id: "CL-13",
-    what: "a top-level entry above the first section, which no release groups",
-    repair: "move the entry inside `## [Unreleased]`, or inside the section that carries it",
+    id: 'CL-13',
+    what: 'a top-level entry above the first section, which no release groups',
+    repair: 'move the entry inside `## [Unreleased]`, or inside the section that carries it',
     plant: lambda { |dir|
-      write(dir, "CHANGELOG.md", <<~MD)
+      write(dir, 'CHANGELOG.md', <<~MD)
         # Changelog
 
         - 2026-01-06: **an entry filed above every section.**
@@ -338,16 +338,16 @@ ARMS = [
 
         #{BACKLOG_ENTRY}
       MD
-    },
-  },
+    }
+  }
 ].freeze
 
 # Per-demo changelogs allowed beside the repository record, each with its reason.
 COURTESY = [
-  { path: "kiosk-demo-atablefor/CHANGELOG.md",
+  { path: 'kiosk-demo-atablefor/CHANGELOG.md',
     why: "kept as append-only history of the demo's reshape; new lines go to the repository record" },
-  { path: "kiosk-demo-prove/CHANGELOG.md",
-    why: "kept as append-only history of the broker's security model; new lines go to the repository record" },
+  { path: 'kiosk-demo-prove/CHANGELOG.md',
+    why: "kept as append-only history of the broker's security model; new lines go to the repository record" }
 ].freeze
 
 def write(dir, rel, body)
@@ -386,18 +386,18 @@ end
 
 def top_level_entries(path)
   out = []
-  unfenced_lines(path) { |line, i| out << Entry.new(i + 1, line) if line.start_with?("- ") }
+  unfenced_lines(path) { |line, i| out << Entry.new(i + 1, line) if line.start_with?('- ') }
   out
 end
 
 DATED = /\A- \d{4}-\d{2}-\d{2}: /
 
 def normalise_heading(text)
-  text.downcase.gsub(/\s+/, " ").strip
+  text.downcase.gsub(/\s+/, ' ').strip
 end
 
 def tracked(root, *pathspec)
-  out, err, status = Open3.capture3("git", "-C", root, "ls-files", "-z", *pathspec)
+  out, err, status = Open3.capture3('git', '-C', root, 'ls-files', '-z', *pathspec)
   raise "git ls-files failed in #{root}: #{err}" unless status.success?
 
   out.split("\0").reject(&:empty?)
@@ -407,22 +407,22 @@ end
 # between files does not make it new.
 def baseline_of(root, rev)
   rev ||= BASELINE_REV
-  _o, _e, st = Open3.capture3("git", "-C", root, "cat-file", "-e", "#{rev}^{commit}")
+  _o, _e, st = Open3.capture3('git', '-C', root, 'cat-file', '-e', "#{rev}^{commit}")
   return { rev: rev, missing: true } unless st.success?
 
-  out, err, s = Open3.capture3("git", "-C", root, "ls-tree", "-r", "-z", "--name-only", rev)
+  out, err, s = Open3.capture3('git', '-C', root, 'ls-tree', '-r', '-z', '--name-only', rev)
   raise "git ls-tree failed in #{root}: #{err}" unless s.success?
 
   set = {}
-  out.split("\0").select { |p| File.basename(p) == "CHANGELOG.md" }.each do |p|
-    blob, _e2, s2 = Open3.capture3("git", "-C", root, "show", "#{rev}:#{p}")
+  out.split("\0").select { |p| File.basename(p) == 'CHANGELOG.md' }.each do |p|
+    blob, _e2, s2 = Open3.capture3('git', '-C', root, 'show', "#{rev}:#{p}")
     full_entries(blob).each { |e| set[e.text] = true } if s2.success?
   end
   { rev: rev, missing: false, set: set }
 end
 
 def role_of(rel, gem_dirs)
-  return :repository if rel == "CHANGELOG.md"
+  return :repository if rel == 'CHANGELOG.md'
   return :gem        if gem_dirs.include?(File.dirname(rel))
 
   :courtesy if COURTESY.any? { |c| c[:path] == rel }
@@ -430,18 +430,18 @@ end
 
 def scan(root, baseline)
   findings = []
-  add      = ->(rel, line, id, what = nil) {
+  add      = lambda { |rel, line, id, what = nil|
     arm = ARMS.find { |a| a[:id] == id }
     findings << { path: rel, line: line, id: id, what: what || arm[:what], repair: arm[:repair] }
   }
   stats = Hash.new(0)
 
-  changelogs = tracked(root, "*CHANGELOG.md")
-  gem_dirs   = tracked(root, "*.gemspec").map { |p| File.dirname(p) }.uniq
+  changelogs = tracked(root, '*CHANGELOG.md')
+  gem_dirs   = tracked(root, '*.gemspec').map { |p| File.dirname(p) }.uniq
 
   changelogs.each do |rel|
     role = role_of(rel, gem_dirs)
-    next add.(rel, 1, "CL-5") unless role
+    next add.call(rel, 1, 'CL-5') unless role
 
     stats[role] += 1
     abs = File.join(root, rel)
@@ -455,11 +455,9 @@ def scan(root, baseline)
 
       stats[:fresh] += 1
       gist = e.text.length > 64 ? "#{e.text[0, 64]}…" : e.text
-      if e.text.length >= LENGTH_CAP
-        add.(rel, e.line, "CL-8", "new entry is #{e.text.length} characters, cap #{LENGTH_CAP}: `#{gist}`")
-      end
+      add.call(rel, e.line, 'CL-8', "new entry is #{e.text.length} characters, cap #{LENGTH_CAP}: `#{gist}`") if e.text.length >= LENGTH_CAP
       n = sentence_count(e.text)
-      add.(rel, e.line, "CL-9", "new entry runs to #{n} sentences, cap #{SENTENCE_CAP}: `#{gist}`") if n > SENTENCE_CAP
+      add.call(rel, e.line, 'CL-9', "new entry runs to #{n} sentences, cap #{SENTENCE_CAP}: `#{gist}`") if n > SENTENCE_CAP
     end
 
     entries = top_level_entries(abs)
@@ -469,7 +467,7 @@ def scan(root, baseline)
         stats[:entries] += 1
         next stats[:dated] += 1 if e.text.match?(DATED)
 
-        add.(rel, e.line, "CL-7", "entry opens `#{e.text[0, 60].strip}` with no `YYYY-MM-DD:` date")
+        add.call(rel, e.line, 'CL-7', "entry opens `#{e.text[0, 60].strip}` with no `YYYY-MM-DD:` date")
       end
     end
 
@@ -477,16 +475,16 @@ def scan(root, baseline)
     first_h2 = hs.find { |h| h.level == 2 }
     # CL-12: the first section is `[Unreleased]`.
     if first_h2.nil?
-      add.(rel, 1, "CL-12", "no section at all, so there is nowhere for the next entry to go")
+      add.call(rel, 1, 'CL-12', 'no section at all, so there is nowhere for the next entry to go')
     elsif first_h2.text != UNRELEASED_HEADING
-      add.(rel, first_h2.line, "CL-12", "the first section is `#{first_h2.text}`, not `#{UNRELEASED_HEADING}`")
+      add.call(rel, first_h2.line, 'CL-12', "the first section is `#{first_h2.text}`, not `#{UNRELEASED_HEADING}`")
     end
     # CL-13: no entry above the first section.
     if first_h2
       entries.each do |e|
         next if e.line > first_h2.line
 
-        add.(rel, e.line, "CL-13", "entry `#{e.text[0, 58].strip}` sits above the first section")
+        add.call(rel, e.line, 'CL-13', "entry `#{e.text[0, 58].strip}` sits above the first section")
       end
     end
 
@@ -502,11 +500,11 @@ def scan(root, baseline)
         if h.text.match?(RELEASE_HEADING)
           stats[:versioned] += 1
         elsif ![UNRELEASED_HEADING, PRE_GROUPING_HEADING].include?(h.text)
-          add.(rel, h.line, "CL-11", "section `#{h.text}` is none of the shapes a heading may take")
+          add.call(rel, h.line, 'CL-11', "section `#{h.text}` is none of the shapes a heading may take")
         end
         # CL-3: one release section per name.
         if seen_release.key?(key)
-          add.(rel, h.line, "CL-3", "release section `#{h.text}` reopened; already open at line #{seen_release[key]}")
+          add.call(rel, h.line, 'CL-3', "release section `#{h.text}` reopened; already open at line #{seen_release[key]}")
         else
           seen_release[key] = h.line
         end
@@ -515,12 +513,12 @@ def scan(root, baseline)
       when 3
         stats[:subsections] += 1
         # CL-4: every subsection sits under a release.
-        next add.(rel, h.line, "CL-4", "subsection `#{h.text}` sits above every release section") if release.nil?
+        next add.call(rel, h.line, 'CL-4', "subsection `#{h.text}` sits above every release section") if release.nil?
 
         # CL-1 / CL-2: one subsection per name per release.
         if seen_sub.key?(key)
-          id = KINDS.any? { |k| key == k.downcase } ? "CL-1" : "CL-2"
-          add.(rel, h.line, id, "`### #{h.text}` appears twice under `## #{release}` (already at line #{seen_sub[key]})")
+          id = KINDS.any? { |k| key == k.downcase } ? 'CL-1' : 'CL-2'
+          add.call(rel, h.line, id, "`### #{h.text}` appears twice under `## #{release}` (already at line #{seen_sub[key]})")
         else
           seen_sub[key] = h.line
         end
@@ -530,16 +528,16 @@ def scan(root, baseline)
 
   # CL-6: every gem ships a changelog.
   gem_dirs.each do |dir|
-    path = File.join(dir, "CHANGELOG.md")
-    add.(path, 0, "CL-6") unless changelogs.include?(path)
+    path = File.join(dir, 'CHANGELOG.md')
+    add.call(path, 0, 'CL-6') unless changelogs.include?(path)
   end
 
   # CL-5: every COURTESY entry is tracked.
   COURTESY.each do |c|
     next if changelogs.include?(c[:path])
 
-    findings << { path: c[:path], line: 0, id: "CL-5", what: "declared in COURTESY, but git does not track it",
-                  repair: "drop the COURTESY entry, or restore the file" }
+    findings << { path: c[:path], line: 0, id: 'CL-5', what: 'declared in COURTESY, but git does not track it',
+                  repair: 'drop the COURTESY entry, or restore the file' }
   end
 
   stats.merge(findings: findings, files: changelogs.length)
@@ -555,7 +553,7 @@ def report(result, quiet:)
   end
 
   if result[:findings].empty?
-    puts "check-changelog: OK" unless quiet
+    puts 'check-changelog: OK' unless quiet
     return 0
   end
 
@@ -573,9 +571,9 @@ def run_check(baseline: nil)
   base = baseline_of(REPO, baseline)
   if base[:missing]
     warn "check-changelog: FAIL -- baseline commit #{base[:rev]} is not in this clone, so new " \
-         "entries cannot be told from the backlog."
-    warn "      repair: fetch full history (`git fetch --unshallow`, or `fetch-depth: 0`), " \
-         "or pass `--baseline <rev>`"
+         'entries cannot be told from the backlog.'
+    warn '      repair: fetch full history (`git fetch --unshallow`, or `fetch-depth: 0`), ' \
+         'or pass `--baseline <rev>`'
     return 1
   end
 
@@ -585,14 +583,14 @@ end
 # ── self-test ────────────────────────────────────────────────────────────────
 
 # A committed entry over both caps: counted as backlog, never failed.
-BACKLOG_ENTRY = "- 2026-01-01: **a long entry from before the rule, kept exactly as written.** " \
-                "It runs to several sentences and well past two hundred characters, which is " \
-                "what the whole standing corpus looks like. It is history, so it is never " \
-                "edited. No arm fails on it."
+BACKLOG_ENTRY = '- 2026-01-01: **a long entry from before the rule, kept exactly as written.** ' \
+                'It runs to several sentences and well past two hundred characters, which is ' \
+                'what the whole standing corpus looks like. It is history, so it is never ' \
+                'edited. No arm fails on it.'
 
 # Shapes that must stay green, including headings inside a fence.
 GREEN = {
-  "CHANGELOG.md" => <<~MD,
+  'CHANGELOG.md' => <<~MD,
     # Changelog
 
     ## [Unreleased]
@@ -607,8 +605,8 @@ GREEN = {
 
     #{BACKLOG_ENTRY}
   MD
-  "kiosk-widget/kiosk-widget.gemspec" => "Gem::Specification.new { |s| s.name = \"kiosk-widget\" }\n",
-  "kiosk-widget/CHANGELOG.md" => <<~MD,
+  'kiosk-widget/kiosk-widget.gemspec' => "Gem::Specification.new { |s| s.name = \"kiosk-widget\" }\n",
+  'kiosk-widget/CHANGELOG.md' => <<~MD,
     # Changelog
 
     ## [Unreleased]
@@ -653,19 +651,19 @@ GREEN = {
 
     - the same kind again, in a different release.
   MD
-  "kiosk-demo-atablefor/CHANGELOG.md" => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n",
-  "kiosk-demo-prove/CHANGELOG.md" => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n",
+  'kiosk-demo-atablefor/CHANGELOG.md' => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n",
+  'kiosk-demo-prove/CHANGELOG.md' => "# Changelog\n\n## [Unreleased]\n\n- a courtesy record.\n"
 }.freeze
 
 def git!(dir, *args)
-  out, err, st = Open3.capture3("git", "-C", dir, *args)
+  out, err, st = Open3.capture3('git', '-C', dir, *args)
   raise "git #{args.first} failed: #{err}" unless st.success?
 
   out
 end
 
 def run_guard_in(dir, baseline)
-  Open3.capture3(RbConfig.ruby, File.join(dir, "bin", File.basename(SELF_PATH)), "--baseline", baseline)
+  Open3.capture3(RbConfig.ruby, File.join(dir, 'bin', File.basename(SELF_PATH)), '--baseline', baseline)
 end
 
 def expect_red(failures, dir, base, id, label, needle = "[#{id}]")
@@ -680,25 +678,25 @@ def expect_red(failures, dir, base, id, label, needle = "[#{id}]")
 end
 
 def self_test_fixture(failures)
-  Dir.mktmpdir("check-changelog") do |dir|
+  Dir.mktmpdir('check-changelog') do |dir|
     write(dir, "bin/#{File.basename(SELF_PATH)}", File.binread(SELF_PATH))
     GREEN.each { |rel, body| write(dir, rel, body) }
-    git!(dir, "init", "-q")
-    git!(dir, "add", "-A")
-    git!(dir, "-c", "user.email=fixture@example.invalid", "-c", "user.name=fixture",
-         "commit", "-q", "--no-gpg-sign", "-m", "baseline")
-    base = git!(dir, "rev-parse", "HEAD").strip
+    git!(dir, 'init', '-q')
+    git!(dir, 'add', '-A')
+    git!(dir, '-c', 'user.email=fixture@example.invalid', '-c', 'user.name=fixture',
+         'commit', '-q', '--no-gpg-sign', '-m', 'baseline')
+    base = git!(dir, 'rev-parse', 'HEAD').strip
 
     out, err, st = run_guard_in(dir, base)
     if st.exitstatus.zero? && out[/(\d+) versioned/, 1].to_i.positive?
-      puts "  green tree (version sections, an over-cap backlog entry): exit 0 -- OK"
+      puts '  green tree (version sections, an over-cap backlog entry): exit 0 -- OK'
     else
-      failures << "the green fixture should exit 0 and count its version sections; " \
+      failures << 'the green fixture should exit 0 and count its version sections; ' \
                   "it exited #{st.exitstatus}\n#{out}#{err}"
     end
 
-    _, err0, st0 = run_guard_in(dir, "0" * 40)
-    if st0.exitstatus.zero? || !err0.include?("not in this clone")
+    _, err0, st0 = run_guard_in(dir, '0' * 40)
+    if st0.exitstatus.zero? || !err0.include?('not in this clone')
       failures << "an unresolvable baseline must fail naming the remedy; it exited #{st0.exitstatus}"
     else
       puts "  unresolvable baseline: exit #{st0.exitstatus} -- OK"
@@ -706,27 +704,27 @@ def self_test_fixture(failures)
 
     keep    = GREEN.to_h { |rel, _| [rel, File.binread(File.join(dir, rel))] }
     restore = lambda {
-      git!(dir, "ls-files").split("\n").each do |rel|
-        File.delete(File.join(dir, rel)) unless keep.key?(rel) || rel.start_with?("bin/")
+      git!(dir, 'ls-files').split("\n").each do |rel|
+        File.delete(File.join(dir, rel)) unless keep.key?(rel) || rel.start_with?('bin/')
       end
       keep.each { |rel, body| write(dir, rel, body) }
-      git!(dir, "add", "-A")
+      git!(dir, 'add', '-A')
     }
 
     ARMS.each do |arm|
       arm[:plant].call(dir)
-      git!(dir, "add", "-A")
+      git!(dir, 'add', '-A')
       expect_red(failures, dir, base, arm[:id], "plant #{arm[:id]}")
       restore.call
     end
 
-    File.delete(File.join(dir, "kiosk-demo-prove/CHANGELOG.md"))
-    git!(dir, "add", "-A")
-    expect_red(failures, dir, base, "CL-5", "plant CL-5 (declared record deleted)", "kiosk-demo-prove/CHANGELOG.md")
+    File.delete(File.join(dir, 'kiosk-demo-prove/CHANGELOG.md'))
+    git!(dir, 'add', '-A')
+    expect_red(failures, dir, base, 'CL-5', 'plant CL-5 (declared record deleted)', 'kiosk-demo-prove/CHANGELOG.md')
     restore.call
 
     _, _, st4 = run_guard_in(dir, base)
-    failures << "the fixture tree did not return to exit 0 after the plants" unless st4.exitstatus.zero?
+    failures << 'the fixture tree did not return to exit 0 after the plants' unless st4.exitstatus.zero?
   end
 end
 
@@ -740,7 +738,7 @@ def run_self_test
   else
     result = scan(REPO, base)
     {
-      files: 10, releases: 10, subsections: 20, entries: 100, backlog: 100,
+      files: 10, releases: 10, subsections: 20, entries: 100, backlog: 100
     }.each do |key, floor|
       failures << "the real tree found only #{result[key]} #{key} (floor #{floor}) -- the arms are vacuous here" if result[key] < floor
     end
@@ -751,28 +749,28 @@ def run_self_test
   end
 
   if failures.empty?
-    puts "check-changelog --self-test: OK"
+    puts 'check-changelog --self-test: OK'
     return 0
   end
 
   $stdout.flush
-  warn "check-changelog --self-test: FAIL"
+  warn 'check-changelog --self-test: FAIL'
   failures.each { |f| warn "  #{f}" }
   1
 end
 
-USAGE = "usage: check-changelog [--baseline REV] [--self-test]"
+USAGE = 'usage: check-changelog [--baseline REV] [--self-test]'
 
 args     = ARGV.dup
 baseline = nil
-if (i = args.index("--baseline"))
+if (i = args.index('--baseline'))
   baseline = args.slice!(i, 2)[1]
   abort USAGE if baseline.nil? || baseline.empty?
 end
 
 exit(case args
      when []              then run_check(baseline: baseline)
-     when ["--self-test"] then run_self_test
+     when ['--self-test'] then run_self_test
      else
        warn USAGE
        2

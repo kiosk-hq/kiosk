@@ -6,18 +6,18 @@
 # is their digest. Reads ../kiosk.tech; without it prints SKIP and exits 0, unless
 # KIOSK_REQUIRE_SITE_SIBLING=1.
 
-require "digest"
+require 'digest'
 
-ROOT   = File.expand_path("..", __dir__)
-SOLVER = File.join(ROOT, "kiosk-pow-equihash", "solve.py")
-SITE   = File.expand_path("../kiosk.tech", ROOT)
+ROOT   = File.expand_path('..', __dir__)
+SOLVER = File.join(ROOT, 'kiosk-pow-equihash', 'solve.py')
+SITE   = File.expand_path('../kiosk.tech', ROOT)
 PIN    = %r{https://kiosk\.tech/pow/(solve-(\h{12})\.py)\b.*?\b(\h{64})\b}m
 
 failures = []
-flag = ->(msg) { failures << msg && puts("  FAIL: #{msg}") }
+flag = ->(msg) { (failures << msg) && puts("  FAIL: #{msg}") }
 
 unless File.directory?(SITE)
-  if ENV["KIOSK_REQUIRE_SITE_SIBLING"] == "1"
+  if ENV['KIOSK_REQUIRE_SITE_SIBLING'] == '1'
     warn "x solver pin: KIOSK_REQUIRE_SITE_SIBLING=1 but no kiosk.tech checkout at #{SITE}"
     exit 1
   end
@@ -27,29 +27,29 @@ end
 
 bytes  = File.binread(SOLVER)
 digest = Digest::SHA256.hexdigest(bytes)
-cut    = Dir[File.join(SITE, "skill-v*.md")].max_by { Gem::Version.new(_1[/skill-v(.+)\.md\z/, 1]) }
+cut    = Dir[File.join(SITE, 'skill-v*.md')].max_by { Gem::Version.new(it[/skill-v(.+)\.md\z/, 1]) }
 abort "x solver pin: no skill-v*.md in #{SITE}" unless cut
 
 match = File.read(cut).match(PIN)
 if match.nil?
-  flag.("#{File.basename(cut)} pins no https://kiosk.tech/pow/solve-<digest>.py with a sha256")
+  flag.call("#{File.basename(cut)} pins no https://kiosk.tech/pow/solve-<digest>.py with a sha256")
 else
   pinned_file, prefix, pinned_sha = match.captures
-  flag.("#{File.basename(cut)} pins #{pinned_sha}, but solve.py hashes to #{digest}") unless pinned_sha == digest
-  flag.("#{pinned_file} is not named by its own digest #{pinned_sha[0, 12]}") unless pinned_sha.start_with?(prefix)
-  ["solve.py", pinned_file].each do |name|
-    copy = File.join(SITE, "pow", name)
+  flag.call("#{File.basename(cut)} pins #{pinned_sha}, but solve.py hashes to #{digest}") unless pinned_sha == digest
+  flag.call("#{pinned_file} is not named by its own digest #{pinned_sha[0, 12]}") unless pinned_sha.start_with?(prefix)
+  ['solve.py', pinned_file].each do |name|
+    copy = File.join(SITE, 'pow', name)
     if !File.exist?(copy)
-      flag.("kiosk.tech/pow/#{name} is missing")
+      flag.call("kiosk.tech/pow/#{name} is missing")
     elsif File.binread(copy) != bytes
-      flag.("kiosk.tech/pow/#{name} (#{Digest::SHA256.file(copy).hexdigest}) differs from " \
-            "kiosk-pow-equihash/solve.py (#{digest})")
+      flag.call("kiosk.tech/pow/#{name} (#{Digest::SHA256.file(copy).hexdigest}) differs from " \
+                "kiosk-pow-equihash/solve.py (#{digest})")
     end
   end
 end
 
 if failures.empty?
-  puts "OK solver pin: kiosk-pow-equihash/solve.py, kiosk.tech/pow/solve.py and the file " \
+  puts 'OK solver pin: kiosk-pow-equihash/solve.py, kiosk.tech/pow/solve.py and the file ' \
        "#{File.basename(cut)} pins are byte-identical (#{digest[0, 12]}…)"
   exit 0
 end

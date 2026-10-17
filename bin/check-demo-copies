@@ -7,313 +7,313 @@
 # Also holds a few cross-demo properties no copy rule reaches: see each `# ──` banner.
 # Usage: bin/check-demo-copies [--self-test]
 
-require "digest"
-require "erb"
-require "open3"
-require "ripper"
+require 'digest'
+require 'erb'
+require 'open3'
+require 'ripper'
 
-ROOT = File.expand_path("..", __dir__)
+ROOT = File.expand_path('..', __dir__)
 
 # ── --self-test: plant one break per rule in a throwaway copy; each must go red ──
-if ARGV.include?("--self-test")
-  require "fileutils"
-  require "rbconfig"
-  require "tmpdir"
+if ARGV.include?('--self-test')
+  require 'fileutils'
+  require 'rbconfig'
+  require 'tmpdir'
 
   SELF_TEST_PROBE_RB =
     "# frozen_string_literal: true\n\n# A shared helper two demos grew in the same wave.\n" \
     "class SelfTestProbe\n  def self.call = :ok\nend\n"
   SELF_TEST_DISCOVERY_SHIPS =
-    "    ships: %w[atablefor getgrocery philslist skooti stylish tudu],\n" \
-    "    why:  \"Each origin's own capabilities, verbs and pages, read without a credential.\",\n"
-  SELF_TEST_EXCLUSION_RE = /^  "script\/redteam_suite\.rb" => ".*",\n/
-  SELF_TEST_DSL_LINE     = "    dsl_names.each { |name| fragment_dsl_ids[\"\#{rel}\#\#{name}\"] = true }\n"
+    "    ships: %w[atablefor getgrocery philslist skooti stylish tudu],\n    " \
+    "why:  \"Each origin's own capabilities, verbs and pages, read without a credential.\",\n"
+  SELF_TEST_EXCLUSION_RE = %r{^  "script/redteam_suite\.rb" => ".*",\n}
+  SELF_TEST_DSL_LINE     = "    dsl_names.each { |name| fragment_dsl_ids[\"\#{rel}#\#{name}\"] = true }\n"
 
   # `ops:` are applied to one fixture tree; the run must exit 1 and print `expect:`.
   SELF_TEST_PLANTS = [
-    { id: "code-copy-diverges", rule: "copy comparison",
-      what: "a rename reaches one of the `:code` copies",
-      ops:  [[:edit, "kiosk-demo-philslist/app/controllers/application_controller.rb", "WireSignpost", "Signpost"]],
-      expect: /app\/controllers\/application_controller\.rb: declared :code — the copies must agree.+\[philslist\]/ },
-    { id: "magic-comment-lost", rule: "copy comparison",
-      what: "one copy loses `# frozen_string_literal: true`",
-      ops:  [[:edit, "kiosk-demo-stylish/app/controllers/application_controller.rb",
-              "# frozen_string_literal: true\n", ""]],
+    { id: 'code-copy-diverges', rule: 'copy comparison',
+      what: 'a rename reaches one of the `:code` copies',
+      ops: [[:edit, 'kiosk-demo-philslist/app/controllers/application_controller.rb', 'WireSignpost', 'Signpost']],
+      expect: %r{app/controllers/application_controller\.rb: declared :code — the copies must agree.+\[philslist\]} },
+    { id: 'magic-comment-lost', rule: 'copy comparison',
+      what: 'one copy loses `# frozen_string_literal: true`',
+      ops: [[:edit, 'kiosk-demo-stylish/app/controllers/application_controller.rb',
+             "# frozen_string_literal: true\n", '']],
       expect: /application_controller\.rb: declared :code — prose may differ per demo, MAGIC comments may not/ },
-    { id: "ships-stray-copy", rule: "copy comparison",
+    { id: 'ships-stray-copy', rule: 'copy comparison',
       what: "a copy appears in a demo outside the entry's `ships:` set",
-      ops:  [[:copy, "kiosk-demo-hoteling/app/services/price_checker.rb",
-              "kiosk-demo-tudu/app/services/price_checker.rb"]],
-      expect: /app\/services\/price_checker\.rb: tudu ships this file but is not in its declared `ships:` set/ },
-    { id: "ships-copy-gone", rule: "copy comparison",
-      what: "a demo named in `ships:` stops shipping the file",
-      ops:  [[:delete, "kiosk-demo-skooti/app/services/price_checker.rb"]],
-      expect: /app\/services\/price_checker\.rb: `ships:` names skooti, which no longer ships/ },
-    { id: "except-has-converged", rule: "copy comparison",
-      what: "the excepted copy converges on its siblings",
-      ops:  [[:copy, "kiosk-demo-tudu/config/puma.rb", "kiosk-demo-prove/config/puma.rb"]],
-      expect: /config\/puma\.rb: `except:` for prove is stale/ },
-    { id: "new-copy-undeclared", rule: "undeclared and stale entries",
-      what: "a helper lands in two demos with no manifest entry",
-      ops:  [[:write, "kiosk-demo-tudu/app/services/self_test_probe.rb", SELF_TEST_PROBE_RB],
-             [:write, "kiosk-demo-philslist/app/services/self_test_probe.rb", SELF_TEST_PROBE_RB]],
-      expect: /app\/services\/self_test_probe\.rb: exists in 2 demos \(philslist, tudu\) but is not declared/ },
-    { id: "entry-no-longer-duplicated", rule: "undeclared and stale entries",
-      what: "a copy is deleted, leaving an entry that compares one file",
-      ops:  [[:delete, "kiosk-demo-tudu/test/stories/household_test.rb"]],
-      expect: /test\/stories\/household_test\.rb: declared in COPIES but only philslist ships it/ },
-    { id: "exclusion-no-longer-true", rule: "skeleton exclusions",
-      what: "an excluded skeleton file is deleted from all but one demo",
-      ops:  [[:delete, "kiosk-demo-atablefor/config/locales/en.yml"],
-             [:delete, "kiosk-demo-getgrocery/config/locales/en.yml"],
-             [:delete, "kiosk-demo-hoteling/config/locales/en.yml"]],
-      expect: /config\/locales\/en\.yml: recorded in SKELETON_NOT_COMPARED but only 1 demo ships it/ },
-    { id: "template-regenerated-alone", rule: "generator templates",
-      what: "an install template is edited and the demos are not regenerated",
-      ops:  [[:edit, "kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_schema.rb.tt",
-              "  def up\n", "  def up\n    # engine-side change that never reached the demos\n"]],
+      ops: [[:copy, 'kiosk-demo-hoteling/app/services/price_checker.rb',
+             'kiosk-demo-tudu/app/services/price_checker.rb']],
+      expect: %r{app/services/price_checker\.rb: tudu ships this file but is not in its declared `ships:` set} },
+    { id: 'ships-copy-gone', rule: 'copy comparison',
+      what: 'a demo named in `ships:` stops shipping the file',
+      ops: [[:delete, 'kiosk-demo-skooti/app/services/price_checker.rb']],
+      expect: %r{app/services/price_checker\.rb: `ships:` names skooti, which no longer ships} },
+    { id: 'except-has-converged', rule: 'copy comparison',
+      what: 'the excepted copy converges on its siblings',
+      ops: [[:copy, 'kiosk-demo-tudu/config/puma.rb', 'kiosk-demo-prove/config/puma.rb']],
+      expect: %r{config/puma\.rb: `except:` for prove is stale} },
+    { id: 'new-copy-undeclared', rule: 'undeclared and stale entries',
+      what: 'a helper lands in two demos with no manifest entry',
+      ops: [[:write, 'kiosk-demo-tudu/app/services/self_test_probe.rb', SELF_TEST_PROBE_RB],
+            [:write, 'kiosk-demo-philslist/app/services/self_test_probe.rb', SELF_TEST_PROBE_RB]],
+      expect: %r{app/services/self_test_probe\.rb: exists in 2 demos \(philslist, tudu\) but is not declared} },
+    { id: 'entry-no-longer-duplicated', rule: 'undeclared and stale entries',
+      what: 'a copy is deleted, leaving an entry that compares one file',
+      ops: [[:delete, 'kiosk-demo-tudu/test/stories/household_test.rb']],
+      expect: %r{test/stories/household_test\.rb: declared in COPIES but only philslist ships it} },
+    { id: 'exclusion-no-longer-true', rule: 'skeleton exclusions',
+      what: 'an excluded skeleton file is deleted from all but one demo',
+      ops: [[:delete, 'kiosk-demo-atablefor/config/locales/en.yml'],
+            [:delete, 'kiosk-demo-getgrocery/config/locales/en.yml'],
+            [:delete, 'kiosk-demo-hoteling/config/locales/en.yml']],
+      expect: %r{config/locales/en\.yml: recorded in SKELETON_NOT_COMPARED but only 1 demo ships it} },
+    { id: 'template-regenerated-alone', rule: 'generator templates',
+      what: 'an install template is edited and the demos are not regenerated',
+      ops: [[:edit, 'kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_schema.rb.tt',
+             "  def up\n", "  def up\n    # engine-side change that never reached the demos\n"]],
       expect: /create_kiosk_schema\.rb\.tt: rendered with the generator's default options/ },
-    { id: "template-undeclared", rule: "generator templates",
-      what: "a new install template appears with no GENERATOR_TEMPLATES entry",
-      ops:  [[:write, "kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_audit_log.rb.tt",
-              "class CreateKioskAuditLog < ActiveRecord::Migration[8.0]\n  def change; end\nend\n"]],
+    { id: 'template-undeclared', rule: 'generator templates',
+      what: 'a new install template appears with no GENERATOR_TEMPLATES entry',
+      ops: [[:write, 'kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_audit_log.rb.tt',
+             "class CreateKioskAuditLog < ActiveRecord::Migration[8.0]\n  def change; end\nend\n"]],
       expect: /create_kiosk_audit_log\.rb\.tt: new install-generator template not declared/ },
-    { id: "spec-harness-unit-drifts", rule: "spec units",
+    { id: 'spec-harness-unit-drifts', rule: 'spec units',
       what: "one demo's copy of a `:code` test constant moves alone",
-      ops:  [[:edit, "kiosk-demo-tudu/test/reader_clock_test.rb",
-              "NOON_UTC = Time.utc(2026, 9, 14, 12)", "NOON_UTC = Time.utc(2026, 9, 14, 13)"]],
+      ops: [[:edit, 'kiosk-demo-tudu/test/reader_clock_test.rb',
+             'NOON_UTC = Time.utc(2026, 9, 14, 12)', 'NOON_UTC = Time.utc(2026, 9, 14, 13)']],
       expect: /NOON_UTC: the demo spec copies must agree once comments and whitespace are normalised/ },
-    { id: "spec-harness-undeclared-unit", rule: "spec units",
+    { id: 'spec-harness-undeclared-unit', rule: 'spec units',
       what: "a helper is copied into a second demo's test",
-      ops:  [[:edit, "kiosk-demo-stylish/test/book_appointment_test.rb",
-              "require \"test_helper\"\n", "require \"test_helper\"\n\ndef probe_shared_helper = :ok\n"],
-             [:edit, "kiosk-demo-skooti/test/licence_flag_test.rb",
-              "require \"test_helper\"\n", "require \"test_helper\"\n\ndef probe_shared_helper = :ok\n"]],
-      expect: /probe_shared_helper: defined in 2 demo spec\/test file\(s\).*declared NOWHERE/ },
-    { id: "vacuity-spec-harness-corpus", rule: "spec units",
-      what: "the corpus glob stops matching",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "DEMO_SPEC_SUBDIRS = %w[spec test].freeze", "DEMO_SPEC_SUBDIRS = %w[spec_gone].freeze"]],
+      ops: [[:edit, 'kiosk-demo-stylish/test/book_appointment_test.rb',
+             "require \"test_helper\"\n", "require \"test_helper\"\n\ndef probe_shared_helper = :ok\n"],
+            [:edit, 'kiosk-demo-skooti/test/licence_flag_test.rb',
+             "require \"test_helper\"\n", "require \"test_helper\"\n\ndef probe_shared_helper = :ok\n"]],
+      expect: %r{probe_shared_helper: defined in 2 demo spec/test file\(s\).*declared NOWHERE} },
+    { id: 'vacuity-spec-harness-corpus', rule: 'spec units',
+      what: 'the corpus glob stops matching',
+      ops: [[:edit, 'bin/check-demo-copies',
+             'DEMO_SPEC_SUBDIRS = %w[spec test].freeze', 'DEMO_SPEC_SUBDIRS = %w[spec_gone].freeze']],
       expect: /the demo-spec rule read 0 Ruby file\(s\)/ },
-    { id: "vacuity-spec-harness-stale-entry", rule: "spec units",
-      what: "a declared unit name the corpus no longer shares",
-      ops:  [[:edit, "bin/check-demo-copies", "  \"TOKYO\" => {", "  \"TOKYO_RENAMED\" => {"]],
+    { id: 'vacuity-spec-harness-stale-entry', rule: 'spec units',
+      what: 'a declared unit name the corpus no longer shares',
+      ops: [[:edit, 'bin/check-demo-copies', '  "TOKYO" => {', '  "TOKYO_RENAMED" => {']],
       expect: /SPEC_UNITS\["TOKYO_RENAMED"\]: declared, but it is defined in 0 file\(s\)/ },
-    { id: "spec-whole-file-copied-at-one-path", rule: "shared spec paths",
-      what: "a whole test file copied into a second demo at the same relative path",
-      ops:  [[:copy, "kiosk-demo-philslist/test/board_clock_test.rb", "kiosk-demo-tudu/test/board_clock_test.rb"]],
+    { id: 'spec-whole-file-copied-at-one-path', rule: 'shared spec paths',
+      what: 'a whole test file copied into a second demo at the same relative path',
+      ops: [[:copy, 'kiosk-demo-philslist/test/board_clock_test.rb', 'kiosk-demo-tudu/test/board_clock_test.rb']],
       expect: %r{test/board_clock_test\.rb: 2 demos ship a file at this SAME relative path} },
-    { id: "vacuity-spec-shared-path-key", rule: "shared spec paths",
-      what: "the group key keeps its demo directory, so no duplicate can be found",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "spec_by_relpath   = spec_corpus.group_by { |rel| rel.split(\"/\", 2).last }",
-              "spec_by_relpath   = spec_corpus.group_by { |rel| rel }"]],
+    { id: 'vacuity-spec-shared-path-key', rule: 'shared spec paths',
+      what: 'the group key keeps its demo directory, so no duplicate can be found',
+      ops: [[:edit, 'bin/check-demo-copies',
+             'spec_by_relpath   = spec_corpus.group_by { |rel| rel.split("/", 2).last }',
+             'spec_by_relpath   = spec_corpus.group_by { |rel| rel }']],
       expect: /the shared-spec-path rule grouped \d+ key\(s\) and \d+ of them are not a path/ },
-    { id: "migration-pair-undeclared", rule: "migration pairs",
+    { id: 'migration-pair-undeclared', rule: 'migration pairs',
       what: "a demo's own migration is copied into a second demo at another timestamp",
-      ops:  [[:copy, "kiosk-demo-philslist/db/migrate/20260101000010_create_categories_and_listings.rb",
-              "kiosk-demo-tudu/db/migrate/20260101000011_create_categories_and_listings.rb"]],
-      expect: /db\/migrate\/\*_create_categories_and_listings\.rb: ships in 2 demos at demo-specific timestamps/ },
-    { id: "autoload-once-line-gone", rule: "autoload-once",
-      what: "the autoload_once_paths line is dropped from one demo",
-      ops:  [[:edit, "kiosk-demo-skooti/config/application.rb", /^.*autoload_once_paths.*\n/, ""]],
-      expect: /skooti: config\/initializers\/kiosk\.rb names .* from app\/services but config\/application\.rb does not put app\/services/ },
-    { id: "unit-one-sided-edit", rule: "fragments",
-      what: "one of the held `devise` lines gains a module",
-      ops:  [[:edit, "kiosk-demo-getgrocery/app/models/user.rb", "devise :database_authenticatable",
-              "devise :database_authenticatable, :rememberable"]],
-      expect: /app\/models\/user\.rb#devise: the copies must agree once comments and whitespace are normalised away/ },
-    { id: "unit-except-has-converged", rule: "fragments",
-      what: "the excepted copy converges on the others",
-      ops:  [[:edit, "kiosk-demo-tudu/app/models/user.rb", "devise :database_authenticatable, :registerable",
-              "devise :database_authenticatable"]],
-      expect: /app\/models\/user\.rb#devise: `except:` for tudu is stale/ },
-    { id: "fragment-path-shares-nothing", rule: "fragments",
-      what: "a rename leaves a FRAGMENT_PATHS entry contributing nothing",
-      ops:  [[:edit, "kiosk-demo-atablefor/app/models/booking.rb", "enum ", "enum_x "],
-             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "belongs_to ", "belongs_to_x "],
-             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "scope ", "scope_x "],
-             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "include ", "include_x "],
-             [:edit, "kiosk-demo-atablefor/app/models/booking.rb", "validate ", "validate_x "]],
-      expect: /app\/models\/booking\.rb: named in FRAGMENT_PATHS, and the extractor finds NO unit shared/ },
-    { id: "per-demo-path-in-neither-list", rule: "fragments",
-      what: "a `:per_demo` path drops out of FRAGMENT_EXCLUDED without joining FRAGMENT_PATHS",
-      ops:  [[:edit, "bin/check-demo-copies", SELF_TEST_EXCLUSION_RE, ""]],
-      expect: /script\/redteam_suite\.rb: declared `:per_demo` in COPIES but named neither/ },
-    { id: "vacuity-fragment-comparisons", rule: "fragments",
-      what: "the fragment rule stops comparing anything",
-      ops:  [[:edit, "bin/check-demo-copies", "  fragment_comparisons += held.size\n", ""]],
+      ops: [[:copy, 'kiosk-demo-philslist/db/migrate/20260101000010_create_categories_and_listings.rb',
+             'kiosk-demo-tudu/db/migrate/20260101000011_create_categories_and_listings.rb']],
+      expect: %r{db/migrate/\*_create_categories_and_listings\.rb: ships in 2 demos at demo-specific timestamps} },
+    { id: 'autoload-once-line-gone', rule: 'autoload-once',
+      what: 'the autoload_once_paths line is dropped from one demo',
+      ops: [[:edit, 'kiosk-demo-skooti/config/application.rb', /^.*autoload_once_paths.*\n/, '']],
+      expect: %r{skooti: config/initializers/kiosk\.rb names .* from app/services but config/application\.rb does not put app/services} },
+    { id: 'unit-one-sided-edit', rule: 'fragments',
+      what: 'one of the held `devise` lines gains a module',
+      ops: [[:edit, 'kiosk-demo-getgrocery/app/models/user.rb', 'devise :database_authenticatable',
+             'devise :database_authenticatable, :rememberable']],
+      expect: %r{app/models/user\.rb#devise: the copies must agree once comments and whitespace are normalised away} },
+    { id: 'unit-except-has-converged', rule: 'fragments',
+      what: 'the excepted copy converges on the others',
+      ops: [[:edit, 'kiosk-demo-tudu/app/models/user.rb', 'devise :database_authenticatable, :registerable',
+             'devise :database_authenticatable']],
+      expect: %r{app/models/user\.rb#devise: `except:` for tudu is stale} },
+    { id: 'fragment-path-shares-nothing', rule: 'fragments',
+      what: 'a rename leaves a FRAGMENT_PATHS entry contributing nothing',
+      ops: [[:edit, 'kiosk-demo-atablefor/app/models/booking.rb', 'enum ', 'enum_x '],
+            [:edit, 'kiosk-demo-atablefor/app/models/booking.rb', 'belongs_to ', 'belongs_to_x '],
+            [:edit, 'kiosk-demo-atablefor/app/models/booking.rb', 'scope ', 'scope_x '],
+            [:edit, 'kiosk-demo-atablefor/app/models/booking.rb', 'include ', 'include_x '],
+            [:edit, 'kiosk-demo-atablefor/app/models/booking.rb', 'validate ', 'validate_x ']],
+      expect: %r{app/models/booking\.rb: named in FRAGMENT_PATHS, and the extractor finds NO unit shared} },
+    { id: 'per-demo-path-in-neither-list', rule: 'fragments',
+      what: 'a `:per_demo` path drops out of FRAGMENT_EXCLUDED without joining FRAGMENT_PATHS',
+      ops: [[:edit, 'bin/check-demo-copies', SELF_TEST_EXCLUSION_RE, '']],
+      expect: %r{script/redteam_suite\.rb: declared `:per_demo` in COPIES but named neither} },
+    { id: 'vacuity-fragment-comparisons', rule: 'fragments',
+      what: 'the fragment rule stops comparing anything',
+      ops: [[:edit, 'bin/check-demo-copies', "  fragment_comparisons += held.size\n", '']],
       expect: /the fragment rule declares \d+ unit\(s\) and compared NONE of them/ },
-    { id: "vacuity-fragment-except", rule: "fragments",
-      what: "the `:code` arm stops partitioning, so a declared exception excuses nothing",
-      ops:  [[:edit, "bin/check-demo-copies", "    fragment_exceptions_live += excused.size\n", ""]],
+    { id: 'vacuity-fragment-except', rule: 'fragments',
+      what: 'the `:code` arm stops partitioning, so a declared exception excuses nothing',
+      ops: [[:edit, 'bin/check-demo-copies', "    fragment_exceptions_live += excused.size\n", '']],
       expect: /FRAGMENTS declares \d+ `except:` entr(?:y|ies) and NONE of them was reached/ },
-    { id: "vacuity-class-macro-handle", rule: "fragments",
-      what: "the class-macro handle stops seeing a class body",
-      ops:  [[:edit, "bin/check-demo-copies", SELF_TEST_DSL_LINE, ""]],
+    { id: 'vacuity-class-macro-handle', rule: 'fragments',
+      what: 'the class-macro handle stops seeing a class body',
+      ops: [[:edit, 'bin/check-demo-copies', SELF_TEST_DSL_LINE, '']],
       expect: /the class-macro handle found NO class-body macro/ },
-    { id: "two-of-three-converge", rule: "partial convergence",
-      what: "two `:per_demo` copies quietly become one unit",
-      ops:  [[:edit, "kiosk-demo-skooti/app/models/user.rb", "has_many :reservations,", "has_many :appointments,"]],
-      expect: /app\/models\/user\.rb#has_many: \[skooti,stylish\] — 2 of 6 copies — agree/ },
-    { id: "lockstep-group-shrinks", rule: "partial convergence",
-      what: "a one-sided edit inside a `:lockstep` group",
-      ops:  [[:copy, "kiosk-demo-getgrocery/test/stories/discovery_test.rb", "kiosk-demo-skooti/test/stories/discovery_test.rb"],
-             [:edit, "bin/check-demo-copies", SELF_TEST_DISCOVERY_SHIPS,
-              SELF_TEST_DISCOVERY_SHIPS + "    agree: { %w[getgrocery skooti] => { rule: :lockstep, why: \"probe\" } },\n"],
-             [:edit, "kiosk-demo-skooti/test/stories/discovery_test.rb", "assert_operator examples.size, :>=, 8", "assert_operator examples.size, :>=, 7"]],
-      expect: /test\/stories\/discovery_test\.rb: `agree:` holds \[getgrocery,skooti\] in lockstep/ },
-    { id: "fourth-demo-joins-group", rule: "partial convergence",
-      what: "a third copy joins a group that already agrees",
-      ops:  [[:copy, "kiosk-demo-getgrocery/test/stories/discovery_test.rb", "kiosk-demo-skooti/test/stories/discovery_test.rb"],
-             [:copy, "kiosk-demo-getgrocery/test/stories/discovery_test.rb", "kiosk-demo-stylish/test/stories/discovery_test.rb"],
-             [:edit, "bin/check-demo-copies", SELF_TEST_DISCOVERY_SHIPS,
-              SELF_TEST_DISCOVERY_SHIPS + "    agree: { %w[getgrocery skooti] => { rule: :lockstep, why: \"probe\" } },\n"]],
-      expect: /test\/stories\/discovery_test\.rb: `agree:` declares \[getgrocery,skooti\] and stylish has since joined/ },
-    { id: "coincidence-has-ended", rule: "partial convergence",
-      what: "a legitimate divergence inside a `:coincidence`",
-      ops:  [[:edit, "kiosk-demo-hoteling/app/models/user.rb",
-              "has_many :bookings, dependent: :destroy", "has_many :bookings, dependent: :restrict_with_error"]],
-      expect: /app\/models\/user\.rb#has_many: `agree:` records \[atablefor,hoteling\] as a `:coincidence` and the coincidence has ended/ },
-    { id: "coincidence-over-the-cap", rule: "partial convergence",
-      what: "a whole copied file labelled `:coincidence`",
-      ops:  [[:copy, "kiosk-demo-getgrocery/test/stories/discovery_test.rb", "kiosk-demo-skooti/test/stories/discovery_test.rb"],
-             [:edit, "bin/check-demo-copies", SELF_TEST_DISCOVERY_SHIPS,
-              SELF_TEST_DISCOVERY_SHIPS + "    agree: { %w[getgrocery skooti] => { rule: :coincidence, why: \"probe\" } },\n"]],
+    { id: 'two-of-three-converge', rule: 'partial convergence',
+      what: 'two `:per_demo` copies quietly become one unit',
+      ops: [[:edit, 'kiosk-demo-skooti/app/models/user.rb', 'has_many :reservations,', 'has_many :appointments,']],
+      expect: %r{app/models/user\.rb#has_many: \[skooti,stylish\] — 2 of 6 copies — agree} },
+    { id: 'lockstep-group-shrinks', rule: 'partial convergence',
+      what: 'a one-sided edit inside a `:lockstep` group',
+      ops: [[:copy, 'kiosk-demo-getgrocery/test/stories/discovery_test.rb', 'kiosk-demo-skooti/test/stories/discovery_test.rb'],
+            [:edit, 'bin/check-demo-copies', SELF_TEST_DISCOVERY_SHIPS,
+             SELF_TEST_DISCOVERY_SHIPS + "    agree: { %w[getgrocery skooti] => { rule: :lockstep, why: \"probe\" } },\n"],
+            [:edit, 'kiosk-demo-skooti/test/stories/discovery_test.rb', 'assert_operator examples.size, :>=, 8', 'assert_operator examples.size, :>=, 7']],
+      expect: %r{test/stories/discovery_test\.rb: `agree:` holds \[getgrocery,skooti\] in lockstep} },
+    { id: 'fourth-demo-joins-group', rule: 'partial convergence',
+      what: 'a third copy joins a group that already agrees',
+      ops: [[:copy, 'kiosk-demo-getgrocery/test/stories/discovery_test.rb', 'kiosk-demo-skooti/test/stories/discovery_test.rb'],
+            [:copy, 'kiosk-demo-getgrocery/test/stories/discovery_test.rb', 'kiosk-demo-stylish/test/stories/discovery_test.rb'],
+            [:edit, 'bin/check-demo-copies', SELF_TEST_DISCOVERY_SHIPS,
+             SELF_TEST_DISCOVERY_SHIPS + "    agree: { %w[getgrocery skooti] => { rule: :lockstep, why: \"probe\" } },\n"]],
+      expect: %r{test/stories/discovery_test\.rb: `agree:` declares \[getgrocery,skooti\] and stylish has since joined} },
+    { id: 'coincidence-has-ended', rule: 'partial convergence',
+      what: 'a legitimate divergence inside a `:coincidence`',
+      ops: [[:edit, 'kiosk-demo-hoteling/app/models/user.rb',
+             'has_many :bookings, dependent: :destroy', 'has_many :bookings, dependent: :restrict_with_error']],
+      expect: %r{app/models/user\.rb#has_many: `agree:` records \[atablefor,hoteling\] as a `:coincidence` and the coincidence has ended} },
+    { id: 'coincidence-over-the-cap', rule: 'partial convergence',
+      what: 'a whole copied file labelled `:coincidence`',
+      ops: [[:copy, 'kiosk-demo-getgrocery/test/stories/discovery_test.rb', 'kiosk-demo-skooti/test/stories/discovery_test.rb'],
+            [:edit, 'bin/check-demo-copies', SELF_TEST_DISCOVERY_SHIPS,
+             SELF_TEST_DISCOVERY_SHIPS + "    agree: { %w[getgrocery skooti] => { rule: :coincidence, why: \"probe\" } },\n"]],
       expect: /`agree:` calls \[getgrocery,skooti\] a `:coincidence`, but what they agree on is \d+ normalised lines and the cap is 12/ },
-    { id: "vacuity-agree-confirmation", rule: "partial convergence",
-      what: "the grouping pass stops running",
-      ops:  [[:edit, "bin/check-demo-copies", "def agree_check(label, what, bodies, declared, errors)\n",
-              "def agree_check(label, what, bodies, declared, errors)\n  return 0\n"]],
+    { id: 'vacuity-agree-confirmation', rule: 'partial convergence',
+      what: 'the grouping pass stops running',
+      ops: [[:edit, 'bin/check-demo-copies', "def agree_check(label, what, bodies, declared, errors)\n",
+             "def agree_check(label, what, bodies, declared, errors)\n  return 0\n"]],
       expect: /declares \d+ `agree:` group\(s\) of converged `:per_demo` copies and this run CONFIRMED none/ },
-    { id: "vacuity-convergence-census", rule: "partial convergence",
-      what: "the convergence census records nothing",
-      ops:  [[:edit, "bin/check-demo-copies", "  AGREE_CENSUS << label\n", ""]],
+    { id: 'vacuity-convergence-census', rule: 'partial convergence',
+      what: 'the convergence census records nothing',
+      ops: [[:edit, 'bin/check-demo-copies', "  AGREE_CENSUS << label\n", '']],
       expect: /the convergence census recorded NO compared subject/ },
-    { id: "initializer-patches-framework", rule: "framework patch",
-      what: "an initializer includes a module into a Rails class",
-      ops:  [[:prepend, "kiosk-demo-hoteling/config/initializers/kiosk.rb",
-              "ActiveRecord::Migration.include(Kiosk::RLS::DSL)\n"]],
-      expect: /hoteling: config\/initializers\/kiosk\.rb:1 calls ActiveRecord::Migration\.include/ },
-    { id: "vacuity-initializer-corpus", rule: "framework patch",
-      what: "the per-demo initializer walk comes back empty",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "  paths = Dir[File.join(ROOT, demo, \"config/initializers\", \"*.rb\")].sort\n",
-              "  paths = []\n"]],
+    { id: 'initializer-patches-framework', rule: 'framework patch',
+      what: 'an initializer includes a module into a Rails class',
+      ops: [[:prepend, 'kiosk-demo-hoteling/config/initializers/kiosk.rb',
+             "ActiveRecord::Migration.include(Kiosk::RLS::DSL)\n"]],
+      expect: %r{hoteling: config/initializers/kiosk\.rb:1 calls ActiveRecord::Migration\.include} },
+    { id: 'vacuity-initializer-corpus', rule: 'framework patch',
+      what: 'the per-demo initializer walk comes back empty',
+      ops: [[:edit, 'bin/check-demo-copies',
+             "  paths = Dir[File.join(ROOT, demo, \"config/initializers\", \"*.rb\")].sort\n",
+             "  paths = []\n"]],
       expect: /the framework-patch rule scanned NO initializers/ },
-    { id: "driver-env-defaulted-server-url", rule: "driver env",
-      what: "a red-team suite regrows a hard-coded SERVER_URL default",
-      ops:  [[:edit, "kiosk-demo-hoteling/script/redteam_suite.rb",
-              "BASE_URL = ENV.fetch(\"SERVER_URL\")",
-              "BASE_URL = ENV.fetch(\"SERVER_URL\", \"http://127.0.0.1:3003\")"]],
-      expect: /hoteling: script\/redteam_suite\.rb:\d+ fetches SERVER_URL WITH a default/ },
-    { id: "driver-env-single-demo", rule: "driver env",
-      what: "a single-demo driver regrows it",
-      ops:  [[:edit, "kiosk-demo-skooti/script/rental_flow.rb",
-              "base_url: ENV.fetch(\"SERVER_URL\")",
-              "base_url: ENV.fetch(\"SERVER_URL\", \"http://127.0.0.1:3004\")"]],
-      expect: /skooti: script\/rental_flow\.rb:\d+ fetches SERVER_URL WITH a default/ },
-    { id: "vacuity-driver-env-server-url", rule: "driver env",
+    { id: 'driver-env-defaulted-server-url', rule: 'driver env',
+      what: 'a red-team suite regrows a hard-coded SERVER_URL default',
+      ops: [[:edit, 'kiosk-demo-hoteling/script/redteam_suite.rb',
+             'BASE_URL = ENV.fetch("SERVER_URL")',
+             'BASE_URL = ENV.fetch("SERVER_URL", "http://127.0.0.1:3003")']],
+      expect: %r{hoteling: script/redteam_suite\.rb:\d+ fetches SERVER_URL WITH a default} },
+    { id: 'driver-env-single-demo', rule: 'driver env',
+      what: 'a single-demo driver regrows it',
+      ops: [[:edit, 'kiosk-demo-skooti/script/rental_flow.rb',
+             'base_url: ENV.fetch("SERVER_URL")',
+             'base_url: ENV.fetch("SERVER_URL", "http://127.0.0.1:3004")']],
+      expect: %r{skooti: script/rental_flow\.rb:\d+ fetches SERVER_URL WITH a default} },
+    { id: 'vacuity-driver-env-server-url', rule: 'driver env',
       what: "the rule stops matching any driver's SERVER_URL fetch",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "  \"SERVER_URL\" => \"the origin every request in the file is sent to",
-              "  \"SERVER_URL_RENAMED\" => \"the origin every request in the file is sent to"]],
+      ops: [[:edit, 'bin/check-demo-copies',
+             '  "SERVER_URL" => "the origin every request in the file is sent to',
+             '  "SERVER_URL_RENAMED" => "the origin every request in the file is sent to']],
       expect: /driver-env rule found NO no-default fetch of SERVER_URL_RENAMED/ },
-    { id: "e2e-fixture-undeclared", rule: "e2e fixtures",
-      what: "a new harness fixture arrives with no E2E_FIXTURES entry",
-      ops:  [[:write, "e2e/fixtures/probe_helper.rb",
-              "# frozen_string_literal: true\n\n# A helper the harness grew.\nmodule ProbeHelper\nend\n"]],
-      expect: /e2e\/fixtures\/probe_helper\.rb: exists but is not declared in E2E_FIXTURES/ },
-    { id: "e2e-fixture-diverges", rule: "e2e fixtures",
-      what: "the harness copy and the demo copy of one file stop agreeing",
-      ops:  [[:edit, "e2e/fixtures/create_kiosk_pay_stripe_customers.rb", /\nend\n\z/, "\n  # probe\nend\n"]],
-      expect: /e2e\/fixtures\/create_kiosk_pay_stripe_customers\.rb: declared `:identical`/ },
-    { id: "lockfile-platforms-drift", rule: "lockfile platforms",
-      what: "one lockfile loses a platform",
-      ops:  [[:edit, "kiosk-demo-philslist/Gemfile.lock", "\n  x86_64-linux\n", "\n"]],
+    { id: 'e2e-fixture-undeclared', rule: 'e2e fixtures',
+      what: 'a new harness fixture arrives with no E2E_FIXTURES entry',
+      ops: [[:write, 'e2e/fixtures/probe_helper.rb',
+             "# frozen_string_literal: true\n\n# A helper the harness grew.\nmodule ProbeHelper\nend\n"]],
+      expect: %r{e2e/fixtures/probe_helper\.rb: exists but is not declared in E2E_FIXTURES} },
+    { id: 'e2e-fixture-diverges', rule: 'e2e fixtures',
+      what: 'the harness copy and the demo copy of one file stop agreeing',
+      ops: [[:edit, 'e2e/fixtures/create_kiosk_pay_stripe_customers.rb', /\nend\n\z/, "\n  # probe\nend\n"]],
+      expect: %r{e2e/fixtures/create_kiosk_pay_stripe_customers\.rb: declared `:identical`} },
+    { id: 'lockfile-platforms-drift', rule: 'lockfile platforms',
+      what: 'one lockfile loses a platform',
+      ops: [[:edit, 'kiosk-demo-philslist/Gemfile.lock', "\n  x86_64-linux\n", "\n"]],
       expect: /philslist: Gemfile\.lock PLATFORMS differs from the other demos/ },
-    { id: "exec-target-missing", rule: "bin scripts",
-      what: "a demo stops shipping the bin/dev its bin/setup execs",
-      ops:  [[:delete, "kiosk-demo-hoteling/bin/dev"]],
-      expect: /hoteling: kiosk-demo-hoteling\/bin\/setup names `bin\/dev`, which exists neither in hoteling's own bin\/ nor at the repo root/ },
-    { id: "exec-target-not-executable", rule: "bin scripts",
-      what: "a shipped bin/ script loses its executable bit",
-      ops:  [[:chmod, "kiosk-demo-tudu/bin/dev", 0o644]],
-      expect: /tudu: kiosk-demo-tudu\/bin\/dev is not executable \(mode 644\)/ },
-    { id: "readme-names-absent-script", rule: "bin scripts",
-      what: "a README names a script the demo does not ship",
-      ops:  [[:edit, "kiosk-demo-skooti/README.md", "bin/rails db:reset     # DROPS", "bin/reset-fleet     # DROPS"]],
-      expect: /skooti: kiosk-demo-skooti\/README\.md names `bin\/reset-fleet`, which exists neither/ },
-    { id: "vacuity-bin-ref-pattern", rule: "bin scripts",
-      what: "BIN_REF_RE stops matching",
-      ops:  [[:edit, "bin/check-demo-copies", "(?:\\./)?bin/([a-z0-9_][a-z0-9_-]*)", "(?:\\./)?bin-gone/([a-z0-9_][a-z0-9_-]*)"]],
-      expect: /resolved NO reference to a demo's own bin\/ script/ },
-    { id: "demo-without-container-path", rule: "containers",
-      what: "a demo ships no compose file",
-      ops:  [[:delete, "kiosk-demo-tudu/compose.yaml"]],
+    { id: 'exec-target-missing', rule: 'bin scripts',
+      what: 'a demo stops shipping the bin/dev its bin/setup execs',
+      ops: [[:delete, 'kiosk-demo-hoteling/bin/dev']],
+      expect: %r{hoteling: kiosk-demo-hoteling/bin/setup names `bin/dev`, which exists neither in hoteling's own bin/ nor at the repo root} },
+    { id: 'exec-target-not-executable', rule: 'bin scripts',
+      what: 'a shipped bin/ script loses its executable bit',
+      ops: [[:chmod, 'kiosk-demo-tudu/bin/dev', 0o644]],
+      expect: %r{tudu: kiosk-demo-tudu/bin/dev is not executable \(mode 644\)} },
+    { id: 'readme-names-absent-script', rule: 'bin scripts',
+      what: 'a README names a script the demo does not ship',
+      ops: [[:edit, 'kiosk-demo-skooti/README.md', 'bin/rails db:reset     # DROPS', 'bin/reset-fleet     # DROPS']],
+      expect: %r{skooti: kiosk-demo-skooti/README\.md names `bin/reset-fleet`, which exists neither} },
+    { id: 'vacuity-bin-ref-pattern', rule: 'bin scripts',
+      what: 'BIN_REF_RE stops matching',
+      ops: [[:edit, 'bin/check-demo-copies', '(?:\\./)?bin/([a-z0-9_][a-z0-9_-]*)', '(?:\\./)?bin-gone/([a-z0-9_][a-z0-9_-]*)']],
+      expect: %r{resolved NO reference to a demo's own bin/ script} },
+    { id: 'demo-without-container-path', rule: 'containers',
+      what: 'a demo ships no compose file',
+      ops: [[:delete, 'kiosk-demo-tudu/compose.yaml']],
       expect: /kiosk-demo-tudu ships no compose file/ },
-    { id: "compose-runs-another-demo", rule: "containers",
-      what: "a half-edited compose file brings up a different demo",
-      ops:  [[:edit, "kiosk-demo-tudu/compose.yaml",
-              "working_dir: /kiosk/kiosk-demo-tudu", "working_dir: /kiosk/kiosk-demo-skooti"]],
+    { id: 'compose-runs-another-demo', rule: 'containers',
+      what: 'a half-edited compose file brings up a different demo',
+      ops: [[:edit, 'kiosk-demo-tudu/compose.yaml',
+             'working_dir: /kiosk/kiosk-demo-tudu', 'working_dir: /kiosk/kiosk-demo-skooti']],
       expect: %r{kiosk-demo-tudu/compose\.yaml: its `working_dir` is not} },
-    { id: "compose-port-not-published", rule: "containers",
-      what: "a demo moves its port and the compose file publishes the old one",
-      ops:  [[:edit, "kiosk-demo-stylish/compose.yaml", 'PORT: "3005"', 'PORT: "3105"']],
+    { id: 'compose-port-not-published', rule: 'containers',
+      what: 'a demo moves its port and the compose file publishes the old one',
+      ops: [[:edit, 'kiosk-demo-stylish/compose.yaml', 'PORT: "3005"', 'PORT: "3105"']],
       expect: %r{kiosk-demo-stylish/compose\.yaml: it does not publish the port it serves on, 3105} },
-    { id: "compose-shared-half-drifts", rule: "containers",
+    { id: 'compose-shared-half-drifts', rule: 'containers',
       what: "one compose file's database service is edited alone",
-      ops:  [[:edit, "kiosk-demo-philslist/compose.yaml",
-              "pg_isready -U postgres", "pg_isready -U postgres -d postgres"]],
-      expect: %r{compose\.yaml: the compose file differs from the \d+ other\(s\)} },
-    { id: "compose-port-collision", rule: "containers",
-      what: "two demos publish the same host port",
-      ops:  [[:edit, "kiosk-demo-tudu/compose.yaml",
-              '      - "3007:3007"', "      - \"3007:3007\"\n      - \"3003:3007\""]],
+      ops: [[:edit, 'kiosk-demo-philslist/compose.yaml',
+             'pg_isready -U postgres', 'pg_isready -U postgres -d postgres']],
+      expect: /compose\.yaml: the compose file differs from the \d+ other\(s\)/ },
+    { id: 'compose-port-collision', rule: 'containers',
+      what: 'two demos publish the same host port',
+      ops: [[:edit, 'kiosk-demo-tudu/compose.yaml',
+             '      - "3007:3007"', "      - \"3007:3007\"\n      - \"3003:3007\""]],
       expect: /all publish host port 3003/ },
-    { id: "second-image-recipe", rule: "containers",
-      what: "a demo grows its own Dockerfile",
-      ops:  [[:write, "kiosk-demo-skooti/Dockerfile", "FROM ruby:4.0.1-slim\nRUN echo hi\n"]],
+    { id: 'second-image-recipe', rule: 'containers',
+      what: 'a demo grows its own Dockerfile',
+      ops: [[:write, 'kiosk-demo-skooti/Dockerfile', "FROM ruby:4.0.1-slim\nRUN echo hi\n"]],
       expect: %r{kiosk-demo-skooti/Dockerfile is a SECOND container image recipe} },
-    { id: "image-ruby-drifts-from-ci", rule: "containers",
+    { id: 'image-ruby-drifts-from-ci', rule: 'containers',
       what: "the image's Ruby stops being one CI runs",
-      ops:  [[:edit, "Dockerfile", /^ARG RUBY_VERSION=[0-9][0-9.]*$/, "ARG RUBY_VERSION=3.2.9"]],
-      expect: /`ARG RUBY_VERSION=3\.2\.9` names a Ruby \.github\/workflows\/ci\.yml never runs/ },
-    { id: "orphan-container-ignore", rule: "containers",
-      what: "a demo grows back a `.dockerignore` no build reads",
-      ops:  [[:write, "kiosk-demo-hoteling/.dockerignore",
-              "# See https://docs.docker.com/engine/reference/builder/#dockerignore-file\n/.git/\n/tmp/*\n"]],
-      expect: /kiosk-demo-hoteling\/\.dockerignore is an ORPHAN/ },
-    { id: "vacuity-container-detector", rule: "containers",
-      what: "the ignore-file pattern stops matching its own subject",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "CONTAINER_IGNORE_RE = /\\A\\.(?:docker|container|podman)ignore\\z/",
-              "CONTAINER_IGNORE_RE = /\\A\\.nothing-matches-this\\z/"]],
+      ops: [[:edit, 'Dockerfile', /^ARG RUBY_VERSION=[0-9][0-9.]*$/, 'ARG RUBY_VERSION=3.2.9']],
+      expect: %r{`ARG RUBY_VERSION=3\.2\.9` names a Ruby \.github/workflows/ci\.yml never runs} },
+    { id: 'orphan-container-ignore', rule: 'containers',
+      what: 'a demo grows back a `.dockerignore` no build reads',
+      ops: [[:write, 'kiosk-demo-hoteling/.dockerignore',
+             "# See https://docs.docker.com/engine/reference/builder/#dockerignore-file\n/.git/\n/tmp/*\n"]],
+      expect: %r{kiosk-demo-hoteling/\.dockerignore is an ORPHAN} },
+    { id: 'vacuity-container-detector', rule: 'containers',
+      what: 'the ignore-file pattern stops matching its own subject',
+      ops: [[:edit, 'bin/check-demo-copies',
+             'CONTAINER_IGNORE_RE = /\\A\\.(?:docker|container|podman)ignore\\z/',
+             'CONTAINER_IGNORE_RE = /\\A\\.nothing-matches-this\\z/']],
       expect: /the container-tooling detector reads "\.dockerignore" as neither/ },
-    { id: "vacuity-container-corpus", rule: "containers",
-      what: "the file walk comes back empty",
-      ops:  [[:edit, "bin/check-demo-copies",
-              "container_tracked = container_git.success? ? container_ls.split(\"\\0\").reject(&:empty?) : container_walk(ROOT)",
-              "container_tracked = []"]],
+    { id: 'vacuity-container-corpus', rule: 'containers',
+      what: 'the file walk comes back empty',
+      ops: [[:edit, 'bin/check-demo-copies',
+             'container_tracked = container_git.success? ? container_ls.split("\\0").reject(&:empty?) : container_walk(ROOT)',
+             'container_tracked = []']],
       expect: /the container-tooling rule walked 0 (?:tracked|working-tree) path\(s\)/ },
-    { id: "vacuity-no-port-anywhere", rule: "containers",
-      what: "no compose file sets a PORT any more",
-      ops:  [[:each, "kiosk-demo-*/compose.yaml", /PORT: "\d+"/, 'PORT_UNSET: "0"']],
+    { id: 'vacuity-no-port-anywhere', rule: 'containers',
+      what: 'no compose file sets a PORT any more',
+      ops: [[:each, 'kiosk-demo-*/compose.yaml', /PORT: "\d+"/, 'PORT_UNSET: "0"']],
       expect: /not ONE compose file sets a `PORT`/ },
-    { id: "vacuity-ci-postgres-unreadable", rule: "containers",
-      what: "ci.yml stops declaring a Postgres service",
-      ops:  [[:edit, ".github/workflows/ci.yml", "image: postgres:17", "image: pg-service:17"]],
-      expect: /no `image: postgres:<major>` in \.github\/workflows\/ci\.yml/ },
+    { id: 'vacuity-ci-postgres-unreadable', rule: 'containers',
+      what: 'ci.yml stops declaring a Postgres service',
+      ops: [[:edit, '.github/workflows/ci.yml', 'image: postgres:17', 'image: pg-service:17']],
+      expect: %r{no `image: postgres:<major>` in \.github/workflows/ci\.yml} }
   ].freeze
 
   st_bad = []
-  st_ls, st_git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+  st_ls, st_git = Open3.capture2('git', '-C', ROOT, 'ls-files', '-z', '--cached', '--others', '--exclude-standard')
   abort "check-demo-copies --self-test: `git ls-files` failed in #{ROOT}." unless st_git.success?
   st_rels = st_ls.split("\0").select { |r| File.file?(File.join(ROOT, r)) }
   st_jobs = [4, SELF_TEST_PLANTS.length].min
   st_results = Array.new(SELF_TEST_PLANTS.length)
 
-  Dir.mktmpdir("check-demo-copies-self-test") do |tmp|
+  Dir.mktmpdir('check-demo-copies-self-test') do |tmp|
     st_trees = (0...st_jobs).map do |i|
       tree = File.join(tmp, "tree#{i}")
       FileUtils.mkdir_p(st_rels.map { |r| File.dirname(File.join(tree, r)) }.uniq)
@@ -321,14 +321,14 @@ if ARGV.include?("--self-test")
       tree
     end
     st_run = lambda do |tree|
-      out, status = Open3.capture2e(RbConfig.ruby, File.join(tree, "bin", "check-demo-copies"))
+      out, status = Open3.capture2e(RbConfig.ruby, File.join(tree, 'bin', 'check-demo-copies'))
       [out, status.exitstatus]
     end
 
     base_out, base_code = st_run.call(st_trees[0])
     unless base_code.zero?
-      st_bad << "the untouched copy is not green (exit #{base_code.inspect}); run bin/check-demo-copies bare first:\n" +
-                base_out.lines.grep(/✗/).first(4).map { |l| "      #{l.rstrip[0, 160]}" }.join("\n")
+      st_bad << ("the untouched copy is not green (exit #{base_code.inspect}); run bin/check-demo-copies bare first:\n" +
+                base_out.lines.grep(/✗/).first(4).map { |l| "      #{l.rstrip[0, 160]}" }.join("\n"))
     end
 
     if st_bad.empty?
@@ -430,7 +430,7 @@ if ARGV.include?("--self-test")
     if failure
       st_bad << "#{plant[:id]} (#{plant[:rule]}): #{failure}"
     else
-      puts format("  RED  %-36s %s", plant[:id], plant[:what])
+      puts format('  RED  %-36s %s', plant[:id], plant[:what])
     end
   end
 
@@ -444,249 +444,249 @@ if ARGV.include?("--self-test")
 end
 
 # Where hand-written demo code lives; the Rails skeleton is recorded in SKELETON_NOT_COMPARED.
-SCAN_ROOTS = ["lib", "app", "script", "db/migrate"].freeze
+SCAN_ROOTS = ['lib', 'app', 'script', 'db/migrate'].freeze
 
 # Paths outside SCAN_ROOTS that are compared anyway.
 EXTRA_SCANNED = [
-  ".gitignore",
-  "spec/spec_helper.rb",
-  "test/test_helper.rb",
-  "test/stories/discovery_test.rb",
-  "test/stories/household_test.rb",
-  "test/stories/link_test.rb",
-  "test/stories/privacy_test.rb",
-  "public/robots.txt",
-  "public/favicon.ico",
-  "public/404.html",
-  "public/422.html",
-  "public/500.html",
-  "config/puma.rb",
-  "config/cable.yml",
-  "config/initializers/filter_parameter_logging.rb",
-  "bin/setup",
-  "bin/dev",
+  '.gitignore',
+  'spec/spec_helper.rb',
+  'test/test_helper.rb',
+  'test/stories/discovery_test.rb',
+  'test/stories/household_test.rb',
+  'test/stories/link_test.rb',
+  'test/stories/privacy_test.rb',
+  'public/robots.txt',
+  'public/favicon.ico',
+  'public/404.html',
+  'public/422.html',
+  'public/500.html',
+  'config/puma.rb',
+  'config/cable.yml',
+  'config/initializers/filter_parameter_logging.rb',
+  'bin/setup',
+  'bin/dev'
 ].freeze
 
 OPERATOR_SEVEN = %w[atablefor getgrocery hoteling philslist skooti stylish tudu].freeze
 
-PROVE_SKELETON = "prove is a smaller API-only Rails app generated on its own"
+PROVE_SKELETON = 'prove is a smaller API-only Rails app generated on its own'
 
 # ── The manifest ─────────────────────────────────────────────────────────────
 # rule: :identical | :code | :per_demo. `ships:` pins which demos carry the file;
 # `except:` excuses one copy with a reason; `agree:` declares :per_demo subsets that agree.
 COPIES = {
-  "spec/spec_helper.rb" => {
+  'spec/spec_helper.rb' => {
     rule: :per_demo,
     ships: %w[hoteling prove],
-    why:  "Each demo's own RSpec setup.",
+    why: "Each demo's own RSpec setup."
   },
-  "test/test_helper.rb" => {
+  'test/test_helper.rb' => {
     rule: :per_demo,
     ships: %w[atablefor getgrocery philslist skooti stylish tudu],
-    why:  "Each demo's own Minitest setup.",
+    why: "Each demo's own Minitest setup."
   },
-  "test/stories/discovery_test.rb" => {
+  'test/stories/discovery_test.rb' => {
     rule: :per_demo,
     ships: %w[atablefor getgrocery philslist skooti stylish tudu],
-    why:  "Each origin's own capabilities, verbs and pages, read without a credential.",
+    why: "Each origin's own capabilities, verbs and pages, read without a credential."
   },
-  "test/stories/household_test.rb" => {
+  'test/stories/household_test.rb' => {
     rule: :per_demo,
     ships: %w[philslist tudu],
-    why:  "Each demo's own household: a couple on one board account, housemates on one list.",
+    why: "Each demo's own household: a couple on one board account, housemates on one list."
   },
-  "test/stories/link_test.rb" => {
+  'test/stories/link_test.rb' => {
     rule: :per_demo,
     ships: %w[atablefor tudu],
-    why:  "Each demo's own story of a person linking an assistant to their account.",
+    why: "Each demo's own story of a person linking an assistant to their account."
   },
-  "test/stories/privacy_test.rb" => {
+  'test/stories/privacy_test.rb' => {
     rule: :per_demo,
     ships: %w[atablefor getgrocery philslist skooti stylish tudu],
-    why:  "Each demo's customers kept apart over its own rows.",
+    why: "Each demo's customers kept apart over its own rows."
   },
-  ".gitignore" => {
+  '.gitignore' => {
     rule: :identical,
-    why:  "Nothing in a .gitignore is per-demo; machine-local entries belong in the root .gitignore.",
+    why: 'Nothing in a .gitignore is per-demo; machine-local entries belong in the root .gitignore.'
   },
-  "public/robots.txt" => {
-    rule:   :identical,
-    except: { "prove" => "#{PROVE_SKELETON}, and it serves no discovery document for the agent block to point at." },
-    why:  "One crawling policy for the operator seven, pointing agents at the agent surface.",
-  },
-  "public/favicon.ico" => {
+  'public/robots.txt' => {
     rule: :identical,
-    why:  "One shared Kiosk mark for the eight apps.",
+    except: { 'prove' => "#{PROVE_SKELETON}, and it serves no discovery document for the agent block to point at." },
+    why: 'One crawling policy for the operator seven, pointing agents at the agent surface.'
   },
-  "config/cable.yml" => {
+  'public/favicon.ico' => {
     rule: :identical,
-    why:  "One pubsub posture: solid_cable on the primary database, never `async`, which loses events across workers.",
+    why: 'One shared Kiosk mark for the eight apps.'
   },
-  "config/puma.rb" => {
-    rule:   :identical,
-    except: { "prove" => PROVE_SKELETON },
-    why:  "Port and concurrency come from the environment, so nothing in it is per-demo.",
+  'config/cable.yml' => {
+    rule: :identical,
+    why: 'One pubsub posture: solid_cable on the primary database, never `async`, which loses events across workers.'
   },
-  "config/initializers/filter_parameter_logging.rb" => {
-    rule:   :identical,
-    except: { "getgrocery" => "adds `delivery_address`, a customer's postal address.",
-              "philslist"  => "adds `body`, which carries the seller's contact details.",
-              "skooti"     => "adds `rt`, the rental token that opens a vehicle." },
-    why:  "The Rails generator's filter list; the engine appends the wire's own credential fields itself.",
+  'config/puma.rb' => {
+    rule: :identical,
+    except: { 'prove' => PROVE_SKELETON },
+    why: 'Port and concurrency come from the environment, so nothing in it is per-demo.'
   },
-  "public/404.html" => {
-    rule:   :identical,
-    except: { "prove" => PROVE_SKELETON },
-    why:  "The page behind every unhandled 404; without it the error is served with no body.",
+  'config/initializers/filter_parameter_logging.rb' => {
+    rule: :identical,
+    except: { 'getgrocery' => "adds `delivery_address`, a customer's postal address.",
+              'philslist' => "adds `body`, which carries the seller's contact details.",
+              'skooti' => 'adds `rt`, the rental token that opens a vehicle.' },
+    why: "The Rails generator's filter list; the engine appends the wire's own credential fields itself."
   },
-  "public/422.html" => {
-    rule:   :identical,
-    except: { "prove" => PROVE_SKELETON },
-    why:  "The page a misconfigured CSRF setup renders.",
+  'public/404.html' => {
+    rule: :identical,
+    except: { 'prove' => PROVE_SKELETON },
+    why: 'The page behind every unhandled 404; without it the error is served with no body.'
   },
-  "public/500.html" => {
-    rule:   :identical,
-    except: { "prove" => PROVE_SKELETON },
-    why:  "The page behind every production 500.",
+  'public/422.html' => {
+    rule: :identical,
+    except: { 'prove' => PROVE_SKELETON },
+    why: 'The page a misconfigured CSRF setup renders.'
   },
-  "bin/setup" => {
-    rule:  :identical,
+  'public/500.html' => {
+    rule: :identical,
+    except: { 'prove' => PROVE_SKELETON },
+    why: 'The page behind every production 500.'
+  },
+  'bin/setup' => {
+    rule: :identical,
     ships: OPERATOR_SEVEN,
-    why:  "Installs the bundle, resets the database and execs bin/dev; nothing in it is per-demo.",
+    why: 'Installs the bundle, resets the database and execs bin/dev; nothing in it is per-demo.'
   },
-  "bin/dev" => {
-    rule:  :identical,
+  'bin/dev' => {
+    rule: :identical,
     ships: OPERATOR_SEVEN,
-    why:  "The exec target of bin/setup's last line.",
+    why: "The exec target of bin/setup's last line."
   },
-  "app/services/price_checker.rb" => {
-    rule:  :per_demo,
+  'app/services/price_checker.rb' => {
+    rule: :per_demo,
     ships: %w[getgrocery hoteling skooti],
-    why:   "Each operator's `c.cart_price_checker`, reading its own catalog.",
+    why: "Each operator's `c.cart_price_checker`, reading its own catalog."
   },
-  "app/controllers/application_controller.rb" => {
+  'app/controllers/application_controller.rb' => {
     rule: :code,
-    why:  "Standard Rails ApplicationController plus the Devise adapter's wire signpost.",
+    why: "Standard Rails ApplicationController plus the Devise adapter's wire signpost."
   },
-  "app/controllers/home_controller.rb" => {
+  'app/controllers/home_controller.rb' => {
     rule: :per_demo,
-    why:  "Each demo's own landing page.",
+    why: "Each demo's own landing page."
   },
-  "app/controllers/kiosk/bookings_controller.rb" => {
-    rule:  :per_demo,
+  'app/controllers/kiosk/bookings_controller.rb' => {
+    rule: :per_demo,
     ships: %w[atablefor hoteling],
-    why:   "Each demo's own booking verbs: a restaurant table in atablefor, a room type in hoteling.",
+    why: "Each demo's own booking verbs: a restaurant table in atablefor, a room type in hoteling."
   },
-  "app/models/application_record.rb" => {
+  'app/models/application_record.rb' => {
     rule: :identical,
-    why:  "Rails skeleton.",
+    why: 'Rails skeleton.'
   },
-  "app/models/user.rb" => {
+  'app/models/user.rb' => {
     rule: :per_demo,
-    why:  "Each demo's own account model.",
+    why: "Each demo's own account model."
   },
-  "app/models/booking.rb" => {
+  'app/models/booking.rb' => {
     rule: :per_demo,
-    why:  "Same word, different domain: a restaurant table in atablefor, a room type in hoteling.",
+    why: 'Same word, different domain: a restaurant table in atablefor, a room type in hoteling.'
   },
-  "app/jobs/application_job.rb" => {
+  'app/jobs/application_job.rb' => {
     rule: :identical,
-    why:  "Rails' own base class; the queue adapter is chosen per demo in config/application.rb.",
+    why: "Rails' own base class; the queue adapter is chosen per demo in config/application.rb."
   },
-  "db/migrate/20260101000001_create_users.rb" => {
-    rule:   :identical,
-    why:    "The users table the engine's identity tables reference, with Devise's login columns.",
+  'db/migrate/20260101000001_create_users.rb' => {
+    rule: :identical,
+    why: "The users table the engine's identity tables reference, with Devise's login columns.",
     except: {
-      "atablefor" => "adds display_name, the diner's name on the reservations board.",
-      "stylish"   => "adds staff_role, which the owner's session carries.",
-      "tudu"      => "adds display_name, the name a shared list's roster shows.",
-    },
+      'atablefor' => "adds display_name, the diner's name on the reservations board.",
+      'stylish' => "adds staff_role, which the owner's session carries.",
+      'tudu' => "adds display_name, the name a shared list's roster shows."
+    }
   },
-  "db/migrate/20260101000002_create_kiosk_schema.rb" => {
-    rule: :identical, why: "kiosk:install — the schema and the four current_*() helpers.",
+  'db/migrate/20260101000002_create_kiosk_schema.rb' => {
+    rule: :identical, why: 'kiosk:install — the schema and the four current_*() helpers.'
   },
-  "db/migrate/20260101000003_create_kiosk_identity_tables.rb" => {
-    rule: :identical, why: "kiosk:install — agents, agent_tokens, agent_mappings.",
+  'db/migrate/20260101000003_create_kiosk_identity_tables.rb' => {
+    rule: :identical, why: 'kiosk:install — agents, agent_tokens, agent_mappings.'
   },
-  "db/migrate/20260101000004_create_kiosk_reservations.rb" => {
-    rule: :identical, why: "kiosk:install — reservations.",
+  'db/migrate/20260101000004_create_kiosk_reservations.rb' => {
+    rule: :identical, why: 'kiosk:install — reservations.'
   },
-  "db/migrate/20260101000005_create_kiosk_device_authorizations.rb" => {
-    rule: :identical, why: "kiosk:install — device_authorizations, the account-binding state.",
+  'db/migrate/20260101000005_create_kiosk_device_authorizations.rb' => {
+    rule: :identical, why: 'kiosk:install — device_authorizations, the account-binding state.'
   },
-  "db/migrate/20260101000006_create_kiosk_mandates.rb" => {
-    rule: :identical, why: "kiosk:install — the AP2 mandate trail.",
+  'db/migrate/20260101000006_create_kiosk_mandates.rb' => {
+    rule: :identical, why: 'kiosk:install — the AP2 mandate trail.'
   },
-  "db/migrate/20260101000007_create_kiosk_kyc_attributes.rb" => {
-    rule: :identical, why: "kiosk:install — kiosk.kyc_attributes and kiosk.kyc_requests.",
+  'db/migrate/20260101000007_create_kiosk_kyc_attributes.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk.kyc_attributes and kiosk.kyc_requests.'
   },
-  "db/migrate/20260101000008_create_kiosk_events.rb" => {
-    rule: :identical, why: "kiosk:install — kiosk.events, the per-identity event tail.",
+  'db/migrate/20260101000008_create_kiosk_events.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk.events, the per-identity event tail.'
   },
-  "db/migrate/20260101000009_create_solid_cable_messages.rb" => {
-    rule: :identical, why: "Action Cable's pubsub queue, on the primary database.",
+  'db/migrate/20260101000009_create_solid_cable_messages.rb' => {
+    rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },
-  "db/migrate/20261009000002_create_kiosk_pow_spent.rb" => {
-    rule: :identical, why: "kiosk:install — kiosk.pow_spent, the spent proof-of-work ids.",
+  'db/migrate/20261009000002_create_kiosk_pow_spent.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk.pow_spent, the spent proof-of-work ids.'
   },
-  "db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb" => {
-    rule:  :identical,
+  'db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb' => {
+    rule: :identical,
     ships: %w[getgrocery hoteling skooti],
-    why:   "kiosk-pay-stripe's stripe_customers table, in the three demos that take money.",
+    why: "kiosk-pay-stripe's stripe_customers table, in the three demos that take money."
   },
-  "script/redteam_suite.rb" => {
-    rule: :per_demo, why: "That demo's attack battery, against its own verbs.",
-  },
+  'script/redteam_suite.rb' => {
+    rule: :per_demo, why: "That demo's attack battery, against its own verbs."
+  }
 }.freeze
 
 # ── Skeleton paths in two or more demos that nothing compares, with the reason ──
 SKELETON_NOT_COMPARED = {
-  "config/environments/development.rb" => "Per-demo: each demo permits its own host and publishes the env keys it reads.",
-  "config/environments/test.rb" => "Per-demo: each demo publishes the env keys it reads.",
-  "config/environments/production.rb" => "Per-demo: each demo publishes the env keys it reads.",
-  "config/application.rb" => "Per-demo: the module name is the demo name.",
-  "config/boot.rb" => "Rails generator output.",
-  "config/environment.rb" => "Rails generator output.",
-  "config/database.yml" => "Per-demo: each resolves its own database name and user.",
-  "config/routes.rb" => "Per-demo: each demo's own pages and verbs.",
-  "config/initializers/kiosk.rb" => "Per-demo: capabilities, verbs, PoW policy and adapters.",
-  "config/initializers/devise.rb" => "Per-demo Devise settings.",
-  "config/locales/en.yml" => "Per-demo attribute names and messages.",
-  "config.ru" => "Rails generator output.",
-  "Rakefile" => "Rails generator output.",
-  "Gemfile" => "Per-demo: each pulls only the gems it uses.",
-  "Gemfile.lock" => "Resolver output; its PLATFORMS section is held below.",
-  "README.md" => "Per-demo prose.",
-  "CHANGELOG.md" => "Per-demo history.",
-  "before-after.md" => "Per-demo narrative.",
-  "db/seeds.rb" => "Per-demo catalog.",
-  "db/schema.rb" => "Generated from the migrations, which are compared.",
-  "bin/rails" => "Rails generator output.",
-  "bin/rake" => "Rails generator output.",
-  "log/.keep" => "Empty placeholder.",
-  "tmp/.keep" => "Empty placeholder.",
-  "tmp/pids/.keep" => "Empty placeholder.",
-  "storage/.keep" => "Empty placeholder.",
-  "vendor/.keep" => "Empty placeholder.",
+  'config/environments/development.rb' => 'Per-demo: each demo permits its own host and publishes the env keys it reads.',
+  'config/environments/test.rb' => 'Per-demo: each demo publishes the env keys it reads.',
+  'config/environments/production.rb' => 'Per-demo: each demo publishes the env keys it reads.',
+  'config/application.rb' => 'Per-demo: the module name is the demo name.',
+  'config/boot.rb' => 'Rails generator output.',
+  'config/environment.rb' => 'Rails generator output.',
+  'config/database.yml' => 'Per-demo: each resolves its own database name and user.',
+  'config/routes.rb' => "Per-demo: each demo's own pages and verbs.",
+  'config/initializers/kiosk.rb' => 'Per-demo: capabilities, verbs, PoW policy and adapters.',
+  'config/initializers/devise.rb' => 'Per-demo Devise settings.',
+  'config/locales/en.yml' => 'Per-demo attribute names and messages.',
+  'config.ru' => 'Rails generator output.',
+  'Rakefile' => 'Rails generator output.',
+  'Gemfile' => 'Per-demo: each pulls only the gems it uses.',
+  'Gemfile.lock' => 'Resolver output; its PLATFORMS section is held below.',
+  'README.md' => 'Per-demo prose.',
+  'CHANGELOG.md' => 'Per-demo history.',
+  'before-after.md' => 'Per-demo narrative.',
+  'db/seeds.rb' => 'Per-demo catalog.',
+  'db/schema.rb' => 'Generated from the migrations, which are compared.',
+  'bin/rails' => 'Rails generator output.',
+  'bin/rake' => 'Rails generator output.',
+  'log/.keep' => 'Empty placeholder.',
+  'tmp/.keep' => 'Empty placeholder.',
+  'tmp/pids/.keep' => 'Empty placeholder.',
+  'storage/.keep' => 'Empty placeholder.',
+  'vendor/.keep' => 'Empty placeholder.'
 }.freeze
 
 # Install-generator templates: `emits:` (byte-match in every operator demo) or `not_compared:`.
-GENERATOR_TEMPLATES_DIR = "kiosk-server/lib/generators/kiosk/install/templates"
+GENERATOR_TEMPLATES_DIR = 'kiosk-server/lib/generators/kiosk/install/templates'
 GENERATOR_DEFAULTS = {
-  schema: "kiosk", user_id_type: "uuid", user_table: "users", guc_namespace: "app",
+  schema: 'kiosk', user_id_type: 'uuid', user_table: 'users', guc_namespace: 'app'
 }.freeze
 NON_OPERATOR_DEMOS = %w[kiosk-demo-prove].freeze
 
 GENERATOR_TEMPLATES = {
-  "initializer.rb.tt" => { not_compared: "emits config/initializers/kiosk.rb, per-demo by design." },
-  "create_kiosk_schema.rb.tt"                => { emits: "create_kiosk_schema.rb" },
-  "create_kiosk_identity_tables.rb.tt"       => { emits: "create_kiosk_identity_tables.rb" },
-  "create_kiosk_reservations.rb.tt"          => { emits: "create_kiosk_reservations.rb" },
-  "create_kiosk_device_authorizations.rb.tt" => { emits: "create_kiosk_device_authorizations.rb" },
-  "create_kiosk_mandates.rb.tt"              => { emits: "create_kiosk_mandates.rb" },
-  "create_kiosk_kyc_attributes.rb.tt"        => { emits: "create_kiosk_kyc_attributes.rb" },
-  "create_kiosk_events.rb.tt"                => { emits: "create_kiosk_events.rb" },
-  "create_kiosk_pow_spent.rb.tt"             => { emits: "create_kiosk_pow_spent.rb" },
+  'initializer.rb.tt' => { not_compared: 'emits config/initializers/kiosk.rb, per-demo by design.' },
+  'create_kiosk_schema.rb.tt' => { emits: 'create_kiosk_schema.rb' },
+  'create_kiosk_identity_tables.rb.tt' => { emits: 'create_kiosk_identity_tables.rb' },
+  'create_kiosk_reservations.rb.tt' => { emits: 'create_kiosk_reservations.rb' },
+  'create_kiosk_device_authorizations.rb.tt' => { emits: 'create_kiosk_device_authorizations.rb' },
+  'create_kiosk_mandates.rb.tt' => { emits: 'create_kiosk_mandates.rb' },
+  'create_kiosk_kyc_attributes.rb.tt' => { emits: 'create_kiosk_kyc_attributes.rb' },
+  'create_kiosk_events.rb.tt' => { emits: 'create_kiosk_events.rb' },
+  'create_kiosk_pow_spent.rb.tt' => { emits: 'create_kiosk_pow_spent.rb' }
 }.freeze
 
 # Hand-written migrations shipped by several demos at their own timestamps, by
@@ -700,7 +700,7 @@ def code_norm(src)
   body = Ripper.lex(src).filter_map do |(_pos, type, tok)|
     next if COMMENT_TOKENS.include?(type)
 
-    type == :on_sp ? " " : tok
+    type == :on_sp ? ' ' : tok
   end.join
   body.lines.map(&:strip).reject(&:empty?).join("\n")
 end
@@ -734,7 +734,7 @@ def agree_check(label, what, bodies, declared, errors)
     next if AGREE_RULES.include?(spec[:rule])
 
     errors << "#{label}: `agree:` entry [#{demos.join(',')}] has unknown `rule: #{spec[:rule].inspect}`; " \
-              "use :lockstep or :coincidence."
+              'use :lockstep or :coincidence.'
   end
 
   widened = {}
@@ -749,7 +749,7 @@ def agree_check(label, what, bodies, declared, errors)
   groups.each do |demos, norm|
     if demos.size == bodies.size
       errors << "#{label}: declared `:per_demo` but ALL #{bodies.size} copies now agree once comments and " \
-                "whitespace are normalised away. Declare it `:code`, or restore what made one differ."
+                'whitespace are normalised away. Declare it `:code`, or restore what made one differ.'
       next
     end
     if (declared_key = widened.key(demos))
@@ -764,7 +764,7 @@ def agree_check(label, what, bodies, declared, errors)
 
       errors << "#{label}: [#{demos.join(',')}] — #{demos.size} of #{bodies.size} copies — agree once comments " \
                 "and whitespace are normalised away (#{norm.lines.size} line(s)), and nothing declares it. " \
-                "Declare it in `agree:` as :lockstep or :coincidence."
+                'Declare it in `agree:` as :lockstep or :coincidence.'
       next
     end
 
@@ -781,10 +781,10 @@ def agree_check(label, what, bodies, declared, errors)
 
     actual = bodies.select { |d, _| demos.include?(d) }
                    .group_by { |_d, norm| norm }
-                   .values.map { |g| "[#{g.map(&:first).sort.join(',')}]" }.sort.join(" ")
+                   .values.map { |g| "[#{g.map(&:first).sort.join(',')}]" }.sort.join(' ')
     errors << if spec[:rule] == :lockstep
                 "#{label}: `agree:` holds [#{demos.join(',')}] in lockstep and they no longer agree: #{actual}. " \
-                  "Propagate the edit, or drop the group."
+                  'Propagate the edit, or drop the group.'
               else
                 "#{label}: `agree:` records [#{demos.join(',')}] as a `:coincidence` and the coincidence has " \
                   "ended: #{actual}. Drop the group."
@@ -819,16 +819,16 @@ def magic_comments(path)
 end
 
 # ── Discovery ────────────────────────────────────────────────────────────────
-demos = Dir[File.join(ROOT, "kiosk-demo-*")].select { |d| File.directory?(d) }.sort
+demos = Dir[File.join(ROOT, 'kiosk-demo-*')].select { |d| File.directory?(d) }.sort
 abort "check-demo-copies: no kiosk-demo-* directories under #{ROOT}" if demos.empty?
 
 found = Hash.new { |h, k| h[k] = {} } # relative path => demo => absolute path
 demos.each do |dir|
   demo = File.basename(dir)
   SCAN_ROOTS.each do |sub|
-    Dir[File.join(dir, sub, "**", "*.rb")].sort.each do |path|
+    Dir[File.join(dir, sub, '**', '*.rb')].sort.each do |path|
       rel = path.delete_prefix("#{dir}/")
-      next if rel.start_with?("lib/tasks/")
+      next if rel.start_with?('lib/tasks/')
 
       found[rel][demo] = path
     end
@@ -843,23 +843,23 @@ dups = found.select { |_rel, copies| copies.size >= 2 }
 # db/migrate by timestamp-stripped basename, since each demo stamps its own copy.
 migrations = Hash.new { |h, k| h[k] = {} }
 demos.each do |dir|
-  Dir[File.join(dir, "db/migrate", "*.rb")].sort.each do |path|
-    migrations[File.basename(path).sub(/\A\d+_/, "")][File.basename(dir)] = path
+  Dir[File.join(dir, 'db/migrate', '*.rb')].sort.each do |path|
+    migrations[File.basename(path).sub(/\A\d+_/, '')][File.basename(dir)] = path
   end
 end
 migrations.default_proc = nil
 
 errors = []
-short = ->(demo) { demo.delete_prefix("kiosk-demo-") }
+short = ->(demo) { demo.delete_prefix('kiosk-demo-') }
 agree_groups = 0
 
 # ── Undeclared and stale manifest entries ────────────────────────────────────
 (dups.keys - COPIES.keys).sort.each do |rel|
   copies = dups[rel]
   groups = copies.group_by { |_demo, path| code_digest(path) }
-                 .values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }
+                 .values.map { |g| "[#{g.map { |d, _| short.call(d) }.sort.join(',')}]" }
   errors << "#{rel}: exists in #{copies.size} demos (#{copies.keys.map(&short).sort.join(', ')}) but is not " \
-            "declared. Add a COPIES entry with a rule and a reason; modulo comments the copies group as " \
+            'declared. Add a COPIES entry with a rule and a reason; modulo comments the copies group as ' \
             "#{groups.join(' ')}."
 end
 
@@ -877,8 +877,8 @@ errors << "#{overlap.join(', ')}: declared in both COPIES and SKELETON_NOT_COMPA
 
 (COPIES.keys - dups.keys).sort.each do |rel|
   where = found[rel]&.keys&.map(&short) || []
-  errors << "#{rel}: declared in COPIES but " +
-            (where.empty? ? "no demo ships it — drop the entry." : "only #{where.join(', ')} ships it — drop the entry.")
+  errors << ("#{rel}: declared in COPIES but " +
+            (where.empty? ? 'no demo ships it — drop the entry.' : "only #{where.join(', ')} ships it — drop the entry."))
 end
 
 # ── Copy comparison ──────────────────────────────────────────────────────────
@@ -901,8 +901,8 @@ COPIES.each do |rel, entry|
                 "(#{entry[:ships].sort.join(', ')}). Add it with the reason, or delete the copy."
     end
     unless gone.empty?
-      errors << "#{rel}: `ships:` names #{gone.sort.join(', ')}, which no longer ship#{gone.size == 1 ? 's' : ''} " \
-                "this file — update the set."
+      errors << "#{rel}: `ships:` names #{gone.sort.join(', ')}, which no longer ship#{'s' if gone.size == 1} " \
+                'this file — update the set.'
     end
   end
 
@@ -911,19 +911,17 @@ COPIES.each do |rel, entry|
     errors << "#{rel}: `except:` reason for #{demo} is blank" if reason.to_s.strip.empty?
     errors << "#{rel}: stale `except:` for #{demo}, which does not ship this file" unless present.include?(demo)
   end
-  if entry[:agree] && entry[:rule] != :per_demo
-    errors << "#{rel}: `agree:` only applies to `:per_demo` entries; drop it."
-  end
+  errors << "#{rel}: `agree:` only applies to `:per_demo` entries; drop it." if entry[:agree] && entry[:rule] != :per_demo
 
   if entry[:rule] == :per_demo
     errors << "#{rel}: :per_demo entries are not compared, so `except:` means nothing here" if excepted.any?
-    agree_groups += agree_check(rel, "file", copies.to_h { |demo, path| [short.(demo), code_norm(File.read(path))] },
+    agree_groups += agree_check(rel, 'file', copies.to_h { |demo, path| [short.call(demo), code_norm(File.read(path))] },
                                 entry[:agree], errors)
     next
   end
 
   digest = entry[:rule] == :identical ? method(:byte_digest) : method(:code_digest)
-  compared, skipped = copies.partition { |demo, _| !excepted.key?(short.(demo)) }.map(&:to_h)
+  compared, skipped = copies.partition { |demo, _| !excepted.key?(short.call(demo)) }.map(&:to_h)
   if compared.size < 2
     errors << "#{rel}: every copy but one is excepted. Drop an exception or make the rule :per_demo."
     next
@@ -931,8 +929,8 @@ COPIES.each do |rel, entry|
 
   groups = compared.group_by { |_demo, path| digest.call(path) }
   if groups.size > 1
-    how = entry[:rule] == :identical ? "byte-for-byte" : "once comments and whitespace are ignored"
-    listed = groups.values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }.join(" ")
+    how = entry[:rule] == :identical ? 'byte-for-byte' : 'once comments and whitespace are ignored'
+    listed = groups.values.map { |g| "[#{g.map { |d, _| short.call(d) }.sort.join(',')}]" }.join(' ')
     errors << "#{rel}: declared :#{entry[:rule]} — the copies must agree #{how}, and they do not: " \
               "#{listed}. Propagate the edit, or record the divergence in `except:` with the reason."
   end
@@ -941,8 +939,8 @@ COPIES.each do |rel, entry|
     magic_groups = compared.group_by { |_demo, path| magic_comments(path) }
     if magic_groups.size > 1
       listed = magic_groups.map do |comments, g|
-        "[#{g.map { |d, _| short.(d) }.sort.join(',')}] #{comments.empty? ? '(none)' : comments.join(', ')}"
-      end.join(" vs ")
+        "[#{g.map { |d, _| short.call(d) }.sort.join(',')}] #{comments.empty? ? '(none)' : comments.join(', ')}"
+      end.join(' vs ')
       errors << "#{rel}: declared :code — prose may differ per demo, MAGIC comments may not: #{listed}."
     end
   end
@@ -955,16 +953,16 @@ COPIES.each do |rel, entry|
     next unless digest.call(path) == canonical
     next if canonical_magic && magic_comments(path) != canonical_magic
 
-    errors << "#{rel}: `except:` for #{short.(demo)} is stale — its copy now agrees with the others. Drop it."
+    errors << "#{rel}: `except:` for #{short.call(demo)} is stale — its copy now agrees with the others. Drop it."
   end
 end
 
 # ── Generator templates: each render must byte-match every operator demo's migration ──
-tpl_files = Dir[File.join(ROOT, GENERATOR_TEMPLATES_DIR, "*.tt")].map { |p| File.basename(p) }
+tpl_files = Dir[File.join(ROOT, GENERATOR_TEMPLATES_DIR, '*.tt')].map { |p| File.basename(p) }
 
 (tpl_files - GENERATOR_TEMPLATES.keys).sort.each do |name|
   errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: new install-generator template not declared in " \
-            "GENERATOR_TEMPLATES. Say what it emits, or why it is not compared."
+            'GENERATOR_TEMPLATES. Say what it emits, or why it is not compared.'
 end
 (GENERATOR_TEMPLATES.keys - tpl_files).sort.each do |name|
   errors << "#{name}: declared in GENERATOR_TEMPLATES but no such template exists — drop the entry."
@@ -997,9 +995,7 @@ GENERATOR_TEMPLATES.each do |name, entry|
               "no copy of #{emits}; every operator demo ships every canonical migration. Re-run the generator there."
   end
   extra = copies.keys & NON_OPERATOR_DEMOS
-  unless extra.empty?
-    errors << "#{name}: #{extra.map(&short).sort.join(', ')} ships #{emits}, but is declared a non-operator demo."
-  end
+  errors << "#{name}: #{extra.map(&short).sort.join(', ')} ships #{emits}, but is declared a non-operator demo." unless extra.empty?
 
   rendered = render_template(File.join(ROOT, GENERATOR_TEMPLATES_DIR, name))
   mismatched = copies.reject { |_demo, path| File.read(path) == rendered }
@@ -1012,7 +1008,7 @@ GENERATOR_TEMPLATES.each do |name, entry|
   errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: rendered with the generator's default options it must " \
             "byte-match every demo copy of #{emits}, and #{mismatched.keys.map(&short).sort.join(', ')} " \
             "#{mismatched.size == 1 ? 'disagrees' : 'disagree'} (line #{i + 1}: template renders " \
-            "#{(a[i] || '<nothing>').chomp.strip.inspect}, #{short.(demo)} has " \
+            "#{(a[i] || '<nothing>').chomp.strip.inspect}, #{short.call(demo)} has " \
             "#{(b[i] || '<nothing>').chomp.strip.inspect}). Regenerate the copies or lift the edit into the template."
 end
 
@@ -1025,7 +1021,7 @@ migrations.each do |base, copies|
   next if copies.values.map { |p| File.basename(p) }.uniq.size == 1
   next if MIGRATION_PAIRS.key?(base)
 
-  spread = copies.map { |d, p| "#{short.(d)}@#{File.basename(p)[/\A\d+/]}" }.sort
+  spread = copies.map { |d, p| "#{short.call(d)}@#{File.basename(p)[/\A\d+/]}" }.sort
   errors << "db/migrate/*_#{base}: ships in #{copies.size} demos at demo-specific timestamps " \
             "(#{spread.join(', ')}). Declare it in MIGRATION_PAIRS with a rule and a reason."
 end
@@ -1046,41 +1042,39 @@ MIGRATION_PAIRS.each do |base, entry|
   digest = entry[:rule] == :identical ? method(:byte_digest) : method(:code_digest)
   groups = copies.group_by { |_demo, path| digest.call(path) }
   if groups.size > 1
-    listed = groups.values.map { |g| "[#{g.map { |d, _| short.(d) }.sort.join(',')}]" }.join(" ")
+    listed = groups.values.map { |g| "[#{g.map { |d, _| short.call(d) }.sort.join(',')}]" }.join(' ')
     errors << "#{label}: declared :#{entry[:rule]} and the copies do not agree: #{listed}."
   end
-  if entry[:rule] == :code && copies.values.map { |p| magic_comments(p) }.uniq.size > 1
-    errors << "#{label}: declared :code — MAGIC comments must agree."
-  end
+  errors << "#{label}: declared :code — MAGIC comments must agree." if entry[:rule] == :code && copies.values.map { |p| magic_comments(p) }.uniq.size > 1
 end
 
 # ── Autoload-once: app/services is a once-path exactly when the initializer names a constant from it ──
-AUTOLOAD_ONCE_PATTERN = /autoload_once_paths\s*<<\s*Rails\.root\.join\("app\/services"\)/
+AUTOLOAD_ONCE_PATTERN = %r{autoload_once_paths\s*<<\s*Rails\.root\.join\(['"]app/services['"]\)}
 
 autoload_once_checked = 0
 demos.each do |dir|
   demo     = File.basename(dir)
-  app_path = File.join(dir, "config/application.rb")
-  init     = File.join(dir, "config/initializers/kiosk.rb")
+  app_path = File.join(dir, 'config/application.rb')
+  init     = File.join(dir, 'config/initializers/kiosk.rb')
   next unless File.exist?(app_path) && File.exist?(init)
 
-  service_constants = Dir[File.join(dir, "app/services/*.rb")]
-                      .map { |f| File.basename(f, ".rb").split("_").map(&:capitalize).join }
+  service_constants = Dir[File.join(dir, 'app/services/*.rb')]
+                      .map { |f| File.basename(f, '.rb').split('_').map(&:capitalize).join }
   initializer = File.read(init)
   named = service_constants.select { |c| initializer.match?(/(?<![A-Za-z0-9_:])#{Regexp.escape(c)}\b/) }
   declared = File.read(app_path).match?(AUTOLOAD_ONCE_PATTERN)
   autoload_once_checked += 1
 
   if named.any? && !declared
-    errors << "#{short.(demo)}: config/initializers/kiosk.rb names #{named.sort.join(', ')} from " \
-              "app/services but config/application.rb does not put app/services in " \
-              "config.autoload_once_paths, so the boot fails with NameError."
+    errors << "#{short.call(demo)}: config/initializers/kiosk.rb names #{named.sort.join(', ')} from " \
+              'app/services but config/application.rb does not put app/services in ' \
+              'config.autoload_once_paths, so the boot fails with NameError.'
   elsif named.empty? && declared
-    errors << "#{short.(demo)}: config/application.rb puts app/services in config.autoload_once_paths, " \
-              "but config/initializers/kiosk.rb names no constant from it. Drop the line."
+    errors << "#{short.call(demo)}: config/application.rb puts app/services in config.autoload_once_paths, " \
+              'but config/initializers/kiosk.rb names no constant from it. Drop the line.'
   end
 end
-errors << "check-demo-copies: the autoload-once rule read no demo." if autoload_once_checked.zero?
+errors << 'check-demo-copies: the autoload-once rule read no demo.' if autoload_once_checked.zero?
 
 # ── Fragments: units shared inside :per_demo files are declared in FRAGMENTS and compared as :code ──
 FRAGMENT_PATHS = %w[
@@ -1090,70 +1084,70 @@ FRAGMENT_PATHS = %w[
 ].freeze
 
 FRAGMENT_EXCLUDED = {
-  "spec/spec_helper.rb"         => "Each demo's own test setup.",
-  "test/test_helper.rb"         => "Each demo's own test setup.",
-  "test/stories/discovery_test.rb" => "Their shared helpers are held by name in SPEC_UNITS.",
-  "test/stories/household_test.rb" => "Their shared helpers are held by name in SPEC_UNITS.",
-  "test/stories/link_test.rb"      => "Their shared helpers are held by name in SPEC_UNITS.",
-  "test/stories/privacy_test.rb"   => "Their shared helpers are held by name in SPEC_UNITS.",
-  "script/redteam_suite.rb" => "The shared harness is kiosk-redteam's; the scenario bodies differ by design.",
-  "app/services/price_checker.rb" => "The one shared unit is `self.call`, whose body is each operator's own catalog.",
-  "app/controllers/kiosk/bookings_controller.rb" => "Two domains' booking verbs, sharing only their wire names.",
+  'spec/spec_helper.rb' => "Each demo's own test setup.",
+  'test/test_helper.rb' => "Each demo's own test setup.",
+  'test/stories/discovery_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
+  'test/stories/household_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
+  'test/stories/link_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
+  'test/stories/privacy_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
+  'script/redteam_suite.rb' => "The shared harness is kiosk-redteam's; the scenario bodies differ by design.",
+  'app/services/price_checker.rb' => "The one shared unit is `self.call`, whose body is each operator's own catalog.",
+  'app/controllers/kiosk/bookings_controller.rb' => "Two domains' booking verbs, sharing only their wire names."
 }.freeze
 
 FRAGMENTS = {
-  "app/models/user.rb#devise" => {
-    rule:   :code,
-    ships:  %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
-    except: { "tudu" => "tudu's humans sign themselves up, so it adds `:registerable`." },
-    why:    "Which Devise modules the operator's human login loads.",
+  'app/models/user.rb#devise' => {
+    rule: :code,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish tudu],
+    except: { 'tudu' => "tudu's humans sign themselves up, so it adds `:registerable`." },
+    why: "Which Devise modules the operator's human login loads."
   },
-  "app/models/user.rb#has_many" => {
-    rule:  :per_demo,
+  'app/models/user.rb#has_many' => {
+    rule: :per_demo,
     ships: %w[atablefor hoteling philslist skooti stylish tudu],
     agree: {
       %w[atablefor hoteling] => {
         rule: :coincidence,
-        why:  "Both products book things, so both spell `has_many :bookings, dependent: :destroy`.",
-      },
+        why: 'Both products book things, so both spell `has_many :bookings, dependent: :destroy`.'
+      }
     },
-    why:   "Each demo's own rows.",
+    why: "Each demo's own rows."
   },
-  "app/models/booking.rb#belongs_to" => {
-    rule:  :per_demo,
+  'app/models/booking.rb#belongs_to' => {
+    rule: :per_demo,
     ships: %w[atablefor hoteling],
-    why:   "Each demo's own parents.",
+    why: "Each demo's own parents."
   },
-  "app/models/booking.rb#include" => {
-    rule:  :code,
+  'app/models/booking.rb#include' => {
+    rule: :code,
     ships: %w[atablefor hoteling],
-    why:   "`include Kiosk::Owned`, the framework's owner scope.",
+    why: "`include Kiosk::Owned`, the framework's owner scope."
   },
-  "app/models/booking.rb#enum" => {
-    rule:  :per_demo,
+  'app/models/booking.rb#enum' => {
+    rule: :per_demo,
     ships: %w[atablefor hoteling],
-    why:   "Each booking's own lifecycle.",
+    why: "Each booking's own lifecycle."
   },
-  "app/models/booking.rb#validate" => {
-    rule:  :per_demo,
+  'app/models/booking.rb#validate' => {
+    rule: :per_demo,
     ships: %w[atablefor hoteling],
-    why:   "Each booking's own rules.",
+    why: "Each booking's own rules."
   },
-  "app/models/booking.rb#scope" => {
-    rule:  :per_demo,
+  'app/models/booking.rb#scope' => {
+    rule: :per_demo,
     ships: %w[atablefor hoteling],
-    why:   "Each demo's own scopes.",
+    why: "Each demo's own scopes."
   },
-  "app/models/user.rb#public_name" => {
-    rule:  :per_demo,
+  'app/models/user.rb#public_name' => {
+    rule: :per_demo,
     ships: %w[atablefor tudu],
-    why:   "The fallback handle uses each demo's own noun.",
+    why: "The fallback handle uses each demo's own noun."
   },
-  "app/controllers/home_controller.rb#index" => {
-    rule:  :per_demo,
+  'app/controllers/home_controller.rb#index' => {
+    rule: :per_demo,
     ships: %w[atablefor getgrocery hoteling philslist prove skooti stylish],
-    why:   "Each storefront's own landing page.",
-  },
+    why: "Each storefront's own landing page."
+  }
 }.freeze
 
 # A unit is every `def` of a name or assignment to a constant, grown line by line until Ripper parses it.
@@ -1170,7 +1164,7 @@ def class_macro_starts(node, out = [])
   end
 
   body = node.last
-  stmts = (body.is_a?(Array) && body[0] == :bodystmt) ? (body[1] || []) : []
+  stmts = body.is_a?(Array) && body[0] == :bodystmt ? (body[1] || []) : []
   stmts.each do |stmt|
     next unless stmt.is_a?(Array)
 
@@ -1183,7 +1177,7 @@ def class_macro_starts(node, out = [])
     out << [head[2][0] - 1, head[1]] if head.is_a?(Array) && head[0] == :@ident
 
     if stmt[0] == :assign && (t = stmt[1]).is_a?(Array) && t[0] == :field &&
-       t[1].is_a?(Array) && t[1][0] == :var_ref && t[1][1].is_a?(Array) && t[1][1][1] == "self" &&
+       t[1].is_a?(Array) && t[1][0] == :var_ref && t[1][1].is_a?(Array) && t[1][1][1] == 'self' &&
        t.last.is_a?(Array) && t.last[0] == :@ident
       out << [t.last[2][0] - 1, "self.#{t.last[1]}"]
     end
@@ -1211,10 +1205,10 @@ end
 def fragment_units(path)
   src = File.read(path)
   lines = src.lines
-  units = Hash.new { |h, k| h[k] = +"" }
+  units = Hash.new { |h, k| h[k] = +'' }
   unreadable = []
   starts, dsl_names, whole_file_unparsable = fragment_starts(src)
-  unreadable << "the file itself" if whole_file_unparsable
+  unreadable << 'the file itself' if whole_file_unparsable
   starts.keys.sort.each do |i|
     name = starts[i]
     unit = (i...[i + FRAGMENT_MAX_LINES, lines.size].min).lazy
@@ -1250,7 +1244,7 @@ FRAGMENT_PATHS.each do |rel|
   end
 
   demos.each do |dir|
-    demo = short.(File.basename(dir))
+    demo = short.call(File.basename(dir))
     path = File.join(dir, rel)
     next unless File.exist?(path)
 
@@ -1268,13 +1262,13 @@ fragment_sources.each do |id, per_demo|
   next if per_demo.size < 2 || FRAGMENTS.key?(id)
 
   errors << "#{id}: shared by #{per_demo.keys.sort.join(', ')} inside a `:per_demo` file and undeclared. " \
-            "Declare it in FRAGMENTS with its `ships:` set and reason."
+            'Declare it in FRAGMENTS with its `ships:` set and reason.'
 end
 
 fragment_comparisons     = 0
 fragment_exceptions_live = 0
 FRAGMENTS.each do |id, entry|
-  rel, unit_name = id.split("#", 2)
+  rel, unit_name = id.split('#', 2)
   unless FRAGMENT_PATHS.include?(rel)
     errors << "#{id}: declared in FRAGMENTS, but #{rel} is not in FRAGMENT_PATHS."
     next
@@ -1296,7 +1290,7 @@ FRAGMENTS.each do |id, entry|
   end
   unless gone.empty?
     errors << "#{gone.join(', ')}: named in #{id}'s `ships:`, but #{rel} there defines no `#{unit_name}`. " \
-              "Update the set, or restore the name."
+              'Update the set, or restore the name.'
   end
 
   excepted = entry[:except] || {}
@@ -1305,9 +1299,7 @@ FRAGMENTS.each do |id, entry|
     errors << "#{id}: `except:` names #{demo}, which is not in `ships:`." unless entry[:ships].include?(demo)
     errors << "#{id}: stale `except:` for #{demo}, which defines no `#{unit_name}`." unless per_demo.key?(demo)
   end
-  if excepted.any? && entry[:rule] != :code
-    errors << "#{id}: `except:` only means something on a `:code` entry."
-  end
+  errors << "#{id}: `except:` only means something on a `:code` entry." if excepted.any? && entry[:rule] != :code
 
   held = per_demo.select { |demo, _| entry[:ships].include?(demo) }
   next if held.size < 2
@@ -1323,7 +1315,7 @@ FRAGMENTS.each do |id, entry|
     fragment_exceptions_live += excused.size
     groups = compared.group_by { |_demo, src| src }
     unless groups.size == 1
-      listed = groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(" ")
+      listed = groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(' ')
       errors << "#{id}: the copies must agree once comments and whitespace are normalised away, and they " \
                 "do not: #{listed}. Propagate the edit, declare the difference in `except:`, or rename the copy."
       next
@@ -1335,7 +1327,7 @@ FRAGMENTS.each do |id, entry|
       errors << "#{id}: `except:` for #{demo} is stale — its copy now agrees with the others. Drop it."
     end
   when :per_demo
-    agree_groups += agree_check(id, "unit", held, entry[:agree], errors)
+    agree_groups += agree_check(id, 'unit', held, entry[:agree], errors)
   else
     errors << "#{id}: unknown `rule: #{entry[:rule].inspect}`; FRAGMENTS takes :code or :per_demo."
   end
@@ -1346,72 +1338,68 @@ if declared_exceptions.positive? && fragment_exceptions_live.zero?
   errors << "check-demo-copies: FRAGMENTS declares #{declared_exceptions} `except:` " \
             "entr#{declared_exceptions == 1 ? 'y' : 'ies'} and NONE of them was reached."
 end
-if FRAGMENTS.any? && fragment_comparisons.zero?
-  errors << "check-demo-copies: the fragment rule declares #{FRAGMENTS.size} unit(s) and compared NONE of them."
-end
+errors << "check-demo-copies: the fragment rule declares #{FRAGMENTS.size} unit(s) and compared NONE of them." if FRAGMENTS.any? && fragment_comparisons.zero?
 
 declared_agree_groups = COPIES.sum { |_, e| (e[:agree] || {}).size } + FRAGMENTS.sum { |_, e| (e[:agree] || {}).size }
 if declared_agree_groups.positive? && agree_groups.zero?
   errors << "check-demo-copies: the manifest declares #{declared_agree_groups} `agree:` group(s) of " \
-            "converged `:per_demo` copies and this run CONFIRMED none of them; the grouping pass stopped running."
+            'converged `:per_demo` copies and this run CONFIRMED none of them; the grouping pass stopped running.'
 end
 
 FRAGMENT_PATHS.each do |rel|
   next if fragment_sources.any? { |id, per_demo| id.start_with?("#{rel}#") && per_demo.size >= 2 }
 
   errors << "#{rel}: named in FRAGMENT_PATHS, and the extractor finds NO unit shared by two or more copies. " \
-            "Move it to FRAGMENT_EXCLUDED, or fix the extractor."
+            'Move it to FRAGMENT_EXCLUDED, or fix the extractor.'
 end
 
-if fragment_dsl_ids.empty?
-  errors << "check-demo-copies: the class-macro handle found NO class-body macro in any FRAGMENT_PATHS copy."
-end
+errors << 'check-demo-copies: the class-macro handle found NO class-body macro in any FRAGMENT_PATHS copy.' if fragment_dsl_ids.empty?
 
 # ── Spec units: helpers in demo spec/ and test/ files are held by NAME across the whole corpus ──
 DEMO_SPEC_SUBDIRS = %w[spec test].freeze
 
 # :code — copies agree modulo comments; :per_file — same name, each file's own body.
 SPEC_UNITS = {
-  "ADDRESS" => { rule: :code, why: "The served delivery address the getgrocery tests order to." },
-  "SHOP" => { rule: :code, why: "The shop's zone in the getgrocery clock tests." },
-  "errors" => { rule: :per_file, why: "Each model test's shorthand for the full messages a model answers." },
-  "include" => { rule: :per_file, why: "Each file's own mixins." },
-  "place" => { rule: :per_file, why: "Each getgrocery test places the order its own assertions need." },
-  "attr_reader" => { rule: :per_file, why: "Each processor stub records what its own test reads back." },
-  "initialize" => { rule: :code, why: "The processor stubs' constructors." },
-  "release!" => { rule: :code, why: "The payment-window stub's latch." },
-  "setup_required?" => { rule: :code, why: "The payment-window stubs answer that a card is on file." },
-  "wait_until" => { rule: :code, why: "The payment-window tests' bounded poll for a racing thread." },
-  "capture" => { rule: :per_file, why: "Each stub's charge, and each test's capture of its own product." },
-  "payment_state" => { rule: :per_file, why: "The wire's payment state, read through each demo's own query." },
-  "payment_status" => { rule: :per_file, why: "The stored payment status of each demo's own model." },
-  "confirm" => { rule: :per_file, why: "hoteling's `confirm_booking`, called as each spec needs it." },
-  "reserve" => { rule: :per_file, why: "Each demo's own reserve verb and arguments." },
-  "reserves" => { rule: :per_file, why: "Each demo's customer reserves its own kind of thing." },
-  "books" => { rule: :per_file, why: "Each demo's customer books through its own verb and arguments." },
-  "bookings" => { rule: :per_file, why: "Each demo's customer reads its own bookings back." },
-  "browses" => { rule: :per_file, why: "Each demo's customer browses its own public listing." },
-  "pays_for" => { rule: :per_file, why: "Each demo's quote: its own scope, total and line items." },
-  "guesses" => { rule: :per_file, why: "Each toll story forges a wrong solution to its own challenges." },
-  "kiosk_origin" => { rule: :code, why: "The conformance origin where a demo's tests drive its handlers." },
-  "assert_kiosk_refused" => { rule: :per_file, why: "Each helper's refusal assertion." },
-  "NOON_UTC" => { rule: :code, why: "The instant two clock tests pin." },
-  "as" => { rule: :per_file, why: "Each helper opens a session as a principal." },
-  "test" => { rule: :per_file, why: "Minitest's own declaration macro; each body is its own example." },
-  "TOKYO" => { rule: :code, why: "The far-side zone three clock specs use to prove rendering in the caller's zone." },
-  "MONTREAL" => { rule: :code, why: "The other zone the same three clock specs pair with TOKYO." },
+  'ADDRESS' => { rule: :code, why: 'The served delivery address the getgrocery tests order to.' },
+  'SHOP' => { rule: :code, why: "The shop's zone in the getgrocery clock tests." },
+  'errors' => { rule: :per_file, why: "Each model test's shorthand for the full messages a model answers." },
+  'include' => { rule: :per_file, why: "Each file's own mixins." },
+  'place' => { rule: :per_file, why: 'Each getgrocery test places the order its own assertions need.' },
+  'attr_reader' => { rule: :per_file, why: 'Each processor stub records what its own test reads back.' },
+  'initialize' => { rule: :code, why: "The processor stubs' constructors." },
+  'release!' => { rule: :code, why: "The payment-window stub's latch." },
+  'setup_required?' => { rule: :code, why: 'The payment-window stubs answer that a card is on file.' },
+  'wait_until' => { rule: :code, why: "The payment-window tests' bounded poll for a racing thread." },
+  'capture' => { rule: :per_file, why: "Each stub's charge, and each test's capture of its own product." },
+  'payment_state' => { rule: :per_file, why: "The wire's payment state, read through each demo's own query." },
+  'payment_status' => { rule: :per_file, why: "The stored payment status of each demo's own model." },
+  'confirm' => { rule: :per_file, why: "hoteling's `confirm_booking`, called as each spec needs it." },
+  'reserve' => { rule: :per_file, why: "Each demo's own reserve verb and arguments." },
+  'reserves' => { rule: :per_file, why: "Each demo's customer reserves its own kind of thing." },
+  'books' => { rule: :per_file, why: "Each demo's customer books through its own verb and arguments." },
+  'bookings' => { rule: :per_file, why: "Each demo's customer reads its own bookings back." },
+  'browses' => { rule: :per_file, why: "Each demo's customer browses its own public listing." },
+  'pays_for' => { rule: :per_file, why: "Each demo's quote: its own scope, total and line items." },
+  'guesses' => { rule: :per_file, why: 'Each toll story forges a wrong solution to its own challenges.' },
+  'kiosk_origin' => { rule: :code, why: "The conformance origin where a demo's tests drive its handlers." },
+  'assert_kiosk_refused' => { rule: :per_file, why: "Each helper's refusal assertion." },
+  'NOON_UTC' => { rule: :code, why: 'The instant two clock tests pin.' },
+  'as' => { rule: :per_file, why: 'Each helper opens a session as a principal.' },
+  'test' => { rule: :per_file, why: "Minitest's own declaration macro; each body is its own example." },
+  'TOKYO' => { rule: :code, why: "The far-side zone three clock specs use to prove rendering in the caller's zone." },
+  'MONTREAL' => { rule: :code, why: 'The other zone the same three clock specs pair with TOKYO.' }
 }.freeze
 
 # `git ls-files`, falling back to a walk in the self-test's non-git copy.
 spec_pathspecs = DEMO_SPEC_SUBDIRS.map { |sub| "kiosk-demo-*/#{sub}/*" }
-spec_ls, spec_git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z", *spec_pathspecs)
+spec_ls, spec_git = Open3.capture2('git', '-C', ROOT, 'ls-files', '-z', *spec_pathspecs)
 spec_corpus =
   if spec_git.success? && !spec_ls.strip.empty?
     spec_ls.split("\0").reject(&:empty?)
   else
-    DEMO_SPEC_SUBDIRS.flat_map { |sub| Dir[File.join(ROOT, "kiosk-demo-*", sub, "**", "*.rb")] }
+    DEMO_SPEC_SUBDIRS.flat_map { |sub| Dir[File.join(ROOT, 'kiosk-demo-*', sub, '**', '*.rb')] }
                      .map { |abs| abs.delete_prefix("#{ROOT}/") }
-  end.select { |rel| rel.end_with?(".rb") }.sort
+  end.select { |rel| rel.end_with?('.rb') }.sort
 
 spec_unit_sources = Hash.new { |h, k| h[k] = {} } # unit name => "demo/rel" => normalised body
 spec_corpus.each do |rel|
@@ -1425,7 +1413,7 @@ end
 
 # A name whose every copy FRAGMENTS already holds is delegated there.
 spec_held_by_fragments = lambda do |name, rel|
-  sub = rel.split("/", 2).last
+  sub = rel.split('/', 2).last
   FRAGMENT_PATHS.include?(sub) && FRAGMENTS.key?("#{sub}##{name}")
 end
 spec_shared = spec_unit_sources.select { |_name, byfile| byfile.size >= 2 }
@@ -1437,7 +1425,7 @@ spec_owned.each do |name, byfile|
   next if SPEC_UNITS.key?(name)
 
   errors << "#{name}: defined in #{byfile.size} demo spec/test file(s) (#{byfile.keys.join(', ')}) and " \
-            "declared NOWHERE. Declare it in SPEC_UNITS, or give the second copy its own name."
+            'declared NOWHERE. Declare it in SPEC_UNITS, or give the second copy its own name.'
 end
 
 SPEC_UNITS.each do |name, entry|
@@ -1446,7 +1434,7 @@ SPEC_UNITS.each do |name, entry|
   byfile = spec_owned[name]
   if byfile.nil?
     reason = if spec_delegated_names.include?(name)
-               "FRAGMENTS already holds every copy"
+               'FRAGMENTS already holds every copy'
              else
                "it is defined in #{spec_unit_sources[name].size} file(s)"
              end
@@ -1460,7 +1448,7 @@ SPEC_UNITS.each do |name, entry|
   when :code
     next if groups.size == 1
 
-    listed = groups.values.map { |g| "[#{g.map { |rel, _| rel }.sort.join(',')}]" }.sort.join(" ")
+    listed = groups.values.map { |g| "[#{g.map { |rel, _| rel }.sort.join(',')}]" }.sort.join(' ')
     errors << "#{name}: the demo spec copies must agree once comments and whitespace are normalised away, " \
               "and they do not: #{listed}. Propagate the edit, or rename the copy that differs."
   when :per_file
@@ -1472,20 +1460,16 @@ SPEC_UNITS.each do |name, entry|
   end
 end
 
-spec_demo_count = spec_corpus.map { |rel| rel.split("/").first }.uniq.size
+spec_demo_count = spec_corpus.map { |rel| rel.split('/').first }.uniq.size
 if spec_corpus.size < 2 || spec_demo_count < 2
   errors << "check-demo-copies: the demo-spec rule read #{spec_corpus.size} Ruby file(s) across " \
             "#{spec_demo_count} demo(s) under kiosk-demo-*/{#{DEMO_SPEC_SUBDIRS.join(',')}}."
 end
-if spec_unit_sources.empty?
-  errors << "check-demo-copies: the demo-spec rule extracted NO unit from #{spec_corpus.size} file(s)."
-end
-if SPEC_UNITS.any? && spec_compared.zero?
-  errors << "check-demo-copies: SPEC_UNITS declares #{SPEC_UNITS.size} unit(s) and this run compared NONE of them."
-end
+errors << "check-demo-copies: the demo-spec rule extracted NO unit from #{spec_corpus.size} file(s)." if spec_unit_sources.empty?
+errors << "check-demo-copies: SPEC_UNITS declares #{SPEC_UNITS.size} unit(s) and this run compared NONE of them." if SPEC_UNITS.any? && spec_compared.zero?
 
 # ── Shared spec paths: a spec path two demos share must be in EXTRA_SCANNED ──
-spec_by_relpath   = spec_corpus.group_by { |rel| rel.split("/", 2).last }
+spec_by_relpath   = spec_corpus.group_by { |rel| rel.split('/', 2).last }
 spec_shared_paths = spec_by_relpath.select { |_sub, group| group.size >= 2 }
 spec_shared_paths.keys.sort.each do |sub|
   next if EXTRA_SCANNED.include?(sub) || SCAN_ROOTS.any? { |root| sub.start_with?("#{root}/") }
@@ -1502,7 +1486,7 @@ end
 
 # ── Lockfile platforms: every demo's Gemfile.lock lists the same PLATFORMS ──
 lockfile_platforms = demos.filter_map do |dir|
-  path = File.join(dir, "Gemfile.lock")
+  path = File.join(dir, 'Gemfile.lock')
   next unless File.exist?(path)
 
   section = File.read(path)[/^PLATFORMS\n(.*?)(?:\n\n|\z)/m, 1]
@@ -1521,7 +1505,7 @@ else
     detail  = []
     detail << "missing #{missing.join(', ')}" unless missing.empty?
     detail << "declares #{extra.join(', ')}, which no sibling does" unless extra.empty?
-    errors << "#{short.(demo)}: Gemfile.lock PLATFORMS differs from the other demos — #{detail.join('; ')}. " \
+    errors << "#{short.call(demo)}: Gemfile.lock PLATFORMS differs from the other demos — #{detail.join('; ')}. " \
               "Fix with `bundle lock --add-platform #{missing.join(' ')}` in #{demo}."
   end
 end
@@ -1535,7 +1519,7 @@ RAILS_FRAMEWORK_NAMESPACES = %w[
 
 FRAMEWORK_PATCH = /
   ^[ \t]*
-  (?<constant>(?:#{RAILS_FRAMEWORK_NAMESPACES.join("|")})(?:::[A-Za-z0-9_]+)*)
+  (?<constant>(?:#{RAILS_FRAMEWORK_NAMESPACES.join('|')})(?:::[A-Za-z0-9_]+)*)
   \s*\.\s*
   (?<verb>include|prepend|extend|class_eval|module_eval|define_method|alias_method|remove_method)
   \b
@@ -1543,27 +1527,27 @@ FRAMEWORK_PATCH = /
 
 scan_initializer = lambda do |label:, rel:, path:|
   File.read(path).each_line.with_index(1) do |line, lineno|
-    next if line.lstrip.start_with?("#")
+    next if line.lstrip.start_with?('#')
 
     m = FRAMEWORK_PATCH.match(line) or next
     errors << "#{label}: #{rel}:#{lineno} calls #{m[:constant]}.#{m[:verb]}. An application must not patch a " \
-              "Rails class from its configuration; use a railtie in the owning gem, or a concern under app/."
+              'Rails class from its configuration; use a railtie in the owning gem, or a concern under app/.'
   end
 end
 
 initializer_demos = 0
 operator_demos.each do |demo|
-  paths = Dir[File.join(ROOT, demo, "config/initializers", "*.rb")].sort
+  paths = Dir[File.join(ROOT, demo, 'config/initializers', '*.rb')].sort
   if paths.empty?
-    errors << "#{short.(demo)}: ships no config/initializers/*.rb at all."
+    errors << "#{short.call(demo)}: ships no config/initializers/*.rb at all."
     next
   end
   initializer_demos += 1
-  paths.each { |path| scan_initializer.call(label: short.(demo), rel: path.delete_prefix("#{File.join(ROOT, demo)}/"), path: path) }
+  paths.each { |path| scan_initializer.call(label: short.call(demo), rel: path.delete_prefix("#{File.join(ROOT, demo)}/"), path: path) }
 end
-errors << "check-demo-copies: the framework-patch rule scanned NO initializers." if initializer_demos.zero?
+errors << 'check-demo-copies: the framework-patch rule scanned NO initializers.' if initializer_demos.zero?
 
-E2E_RUN_SH           = "e2e/run.sh"
+E2E_RUN_SH           = 'e2e/run.sh'
 E2E_INITIALIZER_COPY = %r{^\s*cp\s+"\$FIXTURES/(?<fixture>[^"]+)"\s+config/initializers/}
 run_sh               = File.join(ROOT, E2E_RUN_SH)
 
@@ -1573,7 +1557,7 @@ if File.exist?(run_sh)
   fixtures.each do |fixture|
     rel = "e2e/fixtures/#{fixture}"
     if File.exist?(File.join(ROOT, rel))
-      scan_initializer.call(label: "e2e", rel: rel, path: File.join(ROOT, rel))
+      scan_initializer.call(label: 'e2e', rel: rel, path: File.join(ROOT, rel))
     else
       errors << "check-demo-copies: #{E2E_RUN_SH} copies #{rel}, which does not exist."
     end
@@ -1584,18 +1568,18 @@ end
 
 # ── Driver env: demo scripts fetch these names with NO default ──
 DRIVER_NO_DEFAULT_VARS = {
-  "SERVER_URL" => "the origin every request in the file is sent to",
+  'SERVER_URL' => 'the origin every request in the file is sent to'
 }.freeze
-DRIVER_ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*"(?<var>[A-Z0-9_]+)"(?<comma>\s*,)?/
+DRIVER_ENV_FETCH = /\A[^#]*\bENV\.fetch\(\s*['"](?<var>[A-Z0-9_]+)['"](?<comma>\s*,)?/
 driver_env_held    = DRIVER_NO_DEFAULT_VARS.keys.to_h { |var| [var, 0] }
 driver_env_scripts = 0
 
 operator_demos.each do |demo|
-  Dir[File.join(ROOT, demo, "script", "*.rb")].sort.each do |path|
+  Dir[File.join(ROOT, demo, 'script', '*.rb')].sort.each do |path|
     rel = path.delete_prefix("#{File.join(ROOT, demo)}/")
     driver_env_scripts += 1
     File.read(path).each_line.with_index(1) do |line, lineno|
-      next if line.lstrip.start_with?("#")
+      next if line.lstrip.start_with?('#')
 
       m = DRIVER_ENV_FETCH.match(line)
       next if m.nil? || !DRIVER_NO_DEFAULT_VARS.key?(m[:var])
@@ -1603,9 +1587,9 @@ operator_demos.each do |demo|
       if m[:comma].nil?
         driver_env_held[m[:var]] += 1
       else
-        errors << "#{short.(demo)}: #{rel}:#{lineno} fetches #{m[:var]} WITH a default. It is " \
+        errors << "#{short.call(demo)}: #{rel}:#{lineno} fetches #{m[:var]} WITH a default. It is " \
                   "#{DRIVER_NO_DEFAULT_VARS.fetch(m[:var])}, so a default drives whatever listens there; " \
-                  "spell it `ENV.fetch(\"#{m[:var]}\")`."
+                  "spell it `ENV.fetch('#{m[:var]}')`."
       end
     end
   end
@@ -1619,105 +1603,105 @@ driver_env_held.each do |var, held|
 end
 
 # ── E2E fixtures: each is paired with the demo path run.sh installs it at, and compared ──
-E2E_FIXTURES_DIR = "e2e/fixtures"
-E2E_FIXTURE_CP   = /^\s*cp\s+"\$FIXTURES\/(?<fixture>[^"]+)"\s+(?:"(?<quoted>[^"]+)"|(?<bare>\S+))/
+E2E_FIXTURES_DIR = 'e2e/fixtures'
+E2E_FIXTURE_CP   = %r{^\s*cp\s+"\$FIXTURES/(?<fixture>[^"]+)"\s+(?:"(?<quoted>[^"]+)"|(?<bare>\S+))}
 
 # { fixture basename => demo-relative destination }, a `${ts}` timestamp becoming `*`.
 def e2e_installed_paths(run_sh_src)
-  run_sh_src.gsub(/\\\n\s*/, " ").each_line.with_object({}) do |line, out|
+  run_sh_src.gsub(/\\\n\s*/, ' ').each_line.with_object({}) do |line, out|
     m = E2E_FIXTURE_CP.match(line) or next
 
-    out[m[:fixture]] = (m[:quoted] || m[:bare]).gsub(/\$\{[^}]+\}/, "*")
+    out[m[:fixture]] = (m[:quoted] || m[:bare]).gsub(/\$\{[^}]+\}/, '*')
   end
 end
 
 # `pairs:` overrides the run.sh destination; `pairs: nil` declares no demo counterpart.
 E2E_FIXTURES = {
-  "salon.rb" => {
+  'salon.rb' => {
     rule: :per_demo,
-    why:  "stylish's salon reads its own clock; the harness's salons have no timezone column.",
+    why: "stylish's salon reads its own clock; the harness's salons have no timezone column."
   },
-  "devise_initializer.rb" => {
+  'devise_initializer.rb' => {
     rule: :code,
-    why:  "The human login configuration every demo ships.",
+    why: 'The human login configuration every demo ships.'
   },
-  "create_users.rb" => {
+  'create_users.rb' => {
     rule: :per_demo,
-    why:  "Three demos add a column of their own to the users table.",
+    why: 'Three demos add a column of their own to the users table.'
   },
-  "create_kiosk_pay_stripe_customers.rb" => {
+  'create_kiosk_pay_stripe_customers.rb' => {
     rule: :identical,
-    why:  "The harness pays through the same kiosk-pay-stripe table the demos do.",
+    why: 'The harness pays through the same kiosk-pay-stripe table the demos do.'
   },
-  "create_salons_and_appointments.rb" => {
+  'create_salons_and_appointments.rb' => {
     rule: :per_demo,
-    why:  "stylish's migration plus `appointments.confirmed_at`, which the event-stream leg needs.",
+    why: "stylish's migration plus `appointments.confirmed_at`, which the event-stream leg needs."
   },
-  "salon_desk_controller.rb" => {
-    rule:  :per_demo,
-    pairs: nil,
-    why:   "The salon back office that confirms an appointment and pushes an event; no demo has one.",
-  },
-  "application_controller.rb" => {
+  'salon_desk_controller.rb' => {
     rule: :per_demo,
-    why:  "Moves the `rails new --api` app onto ActionController::Base for Devise.",
+    pairs: nil,
+    why: 'The salon back office that confirms an appointment and pushes an event; no demo has one.'
   },
-  "user.rb" => {
+  'application_controller.rb' => {
     rule: :per_demo,
-    why:  "The harness's User carries only the association its two verbs need.",
+    why: 'Moves the `rails new --api` app onto ActionController::Base for Devise.'
   },
-  "appointment.rb" => {
+  'user.rb' => {
     rule: :per_demo,
-    why:  "The harness needs the table and the belongs_to, not stylish's booking rules.",
+    why: "The harness's User carries only the association its two verbs need."
   },
-  "bookings_controller.rb" => {
+  'appointment.rb' => {
     rule: :per_demo,
-    why:  "A two-verb fixture wire, not atablefor's booking verbs.",
+    why: "The harness needs the table and the belongs_to, not stylish's booking rules."
   },
-  "routes.rb" => {
+  'bookings_controller.rb' => {
     rule: :per_demo,
-    why:  "The generated app's own pages and verbs.",
+    why: "A two-verb fixture wire, not atablefor's booking verbs."
   },
-  "seeds.rb" => {
+  'routes.rb' => {
     rule: :per_demo,
-    why:  "The harness's fixture rows.",
+    why: "The generated app's own pages and verbs."
   },
-  "initializer_kiosk.rb" => {
+  'seeds.rb' => {
     rule: :per_demo,
-    why:  "The harness's own handlers, issuer and toll.",
+    why: "The harness's fixture rows."
   },
-  "catalog_controller.rb" => {
+  'initializer_kiosk.rb' => {
+    rule: :per_demo,
+    why: "The harness's own handlers, issuer and toll."
+  },
+  'catalog_controller.rb' => {
     pairs: nil,
-    why:   "The fixture wire's read verb; no demo ships one.",
+    why: "The fixture wire's read verb; no demo ships one."
   },
-  "demo_audit_sink.rb" => {
+  'demo_audit_sink.rb' => {
     pairs: nil,
-    why:   "The audit-sink seam is exercised by the harness alone.",
+    why: 'The audit-sink seam is exercised by the harness alone.'
   },
-  "equihash_register.rb" => {
+  'equihash_register.rb' => {
     pairs: nil,
-    why:   "Run in place; it hands the proofs it paid to the schema checks.",
+    why: 'Run in place; it hands the proofs it paid to the schema checks.'
   },
-  "claim_flow.rb" => {
+  'claim_flow.rb' => {
     pairs: nil,
-    why:   "Run in place; the demos' claim ceremonies are Minitest tests.",
+    why: "Run in place; the demos' claim ceremonies are Minitest tests."
   },
-  "pay_flow.rb" => {
+  'pay_flow.rb' => {
     pairs: nil,
-    why:   "Run in place; the demos' payment beats are their own tests.",
+    why: "Run in place; the demos' payment beats are their own tests."
   },
-  "register_pow_flow.rb" => {
+  'register_pow_flow.rb' => {
     pairs: nil,
-    why:   "Run in place; the demos' toll beats are their own tests.",
+    why: "Run in place; the demos' toll beats are their own tests."
   },
-  "bind_assistants.rb" => {
+  'bind_assistants.rb' => {
     pairs: nil,
-    why:   "Run in place to mint the suite's two principals.",
+    why: "Run in place to mint the suite's two principals."
   },
-  "auth_wire_capture.rb" => {
+  'auth_wire_capture.rb' => {
     pairs: nil,
-    why:   "Run in place; the harness's own recorder for the auth wire.",
-  },
+    why: "Run in place; the harness's own recorder for the auth wire."
+  }
 }.freeze
 
 e2e_fixture_comparisons = 0
@@ -1728,10 +1712,10 @@ else
   installed = e2e_installed_paths(File.read(run_sh))
   errors << "check-demo-copies: #{E2E_RUN_SH} has no `cp \"$FIXTURES/…\"` lines." if installed.empty?
 
-  on_disk = Dir[File.join(e2e_fixture_dir, "*.rb")].map { |p| File.basename(p) }.sort
+  on_disk = Dir[File.join(e2e_fixture_dir, '*.rb')].map { |p| File.basename(p) }.sort
   (on_disk - E2E_FIXTURES.keys).each do |name|
     errors << "#{E2E_FIXTURES_DIR}/#{name}: exists but is not declared in E2E_FIXTURES. Pair it with a rule, " \
-              "or declare `pairs: nil` with the reason."
+              'or declare `pairs: nil` with the reason.'
   end
   (E2E_FIXTURES.keys - on_disk).each do |name|
     errors << "#{E2E_FIXTURES_DIR}/#{name}: declared in E2E_FIXTURES but not on disk. Drop the entry."
@@ -1747,8 +1731,8 @@ else
     spec = entry.key?(:pairs) ? entry[:pairs] : installed[name]
 
     if declared_nil
-      twins = demos.flat_map { |dir| Dir[File.join(dir, "**", name)] }
-                   .reject { |f| f.include?("/.gems/") }
+      twins = demos.flat_map { |dir| Dir[File.join(dir, '**', name)] }
+                   .reject { |f| f.include?('/.gems/') }
                    .select { |f| code_digest(f) == code_digest(fixture) }
       unless twins.empty?
         errors << "#{label}: declared `pairs: nil`, but #{twins.map { |f| f.delete_prefix("#{ROOT}/") }.sort.join(', ')} " \
@@ -1768,8 +1752,8 @@ else
     end
 
     copies = demos.each_with_object({}) do |dir, acc|
-      match = spec.include?("*") ? Dir[File.join(dir, spec)].sort.first : File.join(dir, spec)
-      acc[short.(File.basename(dir))] = match if match && File.file?(match)
+      match = spec.include?('*') ? Dir[File.join(dir, spec)].sort.first : File.join(dir, spec)
+      acc[short.call(File.basename(dir))] = match if match && File.file?(match)
     end
     if copies.empty?
       errors << "#{label}: paired with `#{spec}`, and no demo ships that path. Re-pair it, or declare `pairs: nil`."
@@ -1789,14 +1773,12 @@ else
       next unless copies.all? { |_demo, path| code_digest(path) == code_digest(fixture) }
 
       errors << "#{label}: declared `:per_demo` against #{spec}, but it is now comment-identical to every " \
-                "demo copy. Declare it `:code`."
+                'demo copy. Declare it `:code`.'
     end
   end
 end
 
-if e2e_fixture_comparisons.zero? && E2E_FIXTURES.any?
-  errors << "check-demo-copies: the e2e fixture rule declares #{E2E_FIXTURES.size} fixture(s) and compared NONE."
-end
+errors << "check-demo-copies: the e2e fixture rule declares #{E2E_FIXTURES.size} fixture(s) and compared NONE." if e2e_fixture_comparisons.zero? && E2E_FIXTURES.any?
 
 # ── Bin scripts: every `bin/<name>` a demo's bin/ scripts or README name exists and is executable ──
 BIN_REF_RE = %r{(?<=[`"'\s(])(?:\./)?bin/([a-z0-9_][a-z0-9_-]*)}
@@ -1805,8 +1787,8 @@ bin_ref_files = 0
 bin_local     = 0
 expected_ref_files = 0
 demos.each do |dir|
-  label   = short.(File.basename(dir))
-  sources = Dir[File.join(dir, "bin", "*")].select { |f| File.file?(f) }.sort
+  label   = short.call(File.basename(dir))
+  sources = Dir[File.join(dir, 'bin', '*')].select { |f| File.file?(f) }.sort
   sources.each do |script|
     next if File.executable?(script)
 
@@ -1814,7 +1796,7 @@ demos.each do |dir|
               "(mode #{format('%o', File.stat(script).mode & 0o7777)})."
   end
 
-  readme     = File.join(dir, "README.md")
+  readme     = File.join(dir, 'README.md')
   bin_corpus = sources.map { |f| [f, File.readlines(f).reject { |l| l =~ /\A\s*#/ }.join] }
   bin_corpus << [readme, File.read(readme)] if File.file?(readme)
   expected_ref_files += bin_corpus.size
@@ -1822,9 +1804,13 @@ demos.each do |dir|
   bin_corpus.each do |path, body|
     bin_ref_files += 1
     body.scan(BIN_REF_RE).flatten.uniq.each do |name|
-      in_demo = File.join(dir, "bin", name)
-      at_root = File.join(ROOT, "bin", name)
-      where   = File.file?(in_demo) ? in_demo : (File.file?(at_root) ? at_root : nil)
+      in_demo = File.join(dir, 'bin', name)
+      at_root = File.join(ROOT, 'bin', name)
+      where   = if File.file?(in_demo)
+                  in_demo
+                else
+                  (File.file?(at_root) ? at_root : nil)
+                end
       bin_local += 1 if where == in_demo
 
       if where.nil?
@@ -1837,9 +1823,7 @@ demos.each do |dir|
     end
   end
 end
-if bin_ref_files != expected_ref_files
-  errors << "check-demo-copies: the bin/-reference scan read #{bin_ref_files} file(s) of #{expected_ref_files}."
-end
+errors << "check-demo-copies: the bin/-reference scan read #{bin_ref_files} file(s) of #{expected_ref_files}." if bin_ref_files != expected_ref_files
 errors << "check-demo-copies: the bin/-reference scan resolved NO reference to a demo's own bin/ script." if bin_local.zero?
 
 # ── Containers: one root Dockerfile, one compose file per demo, identical modulo demo name and port ──
@@ -1848,9 +1832,9 @@ CONTAINER_RECIPE_RE = /\A(?:Dockerfile|Containerfile)(?:\..+)?\z|\A.+\.(?:docker
 CONTAINER_COMPOSE_RE = /\A(?:docker-)?compose(?:\..+)?\.ya?ml\z/
 CONTAINER_IMAGE_RE   = /\A(?:Dockerfile|Containerfile)(?:\..+)?\z|\A.+\.(?:dockerfile|containerfile)\z/
 
-[[".dockerignore", :ignore], [".containerignore", :ignore], ["Dockerfile", :recipe], ["compose.yaml", :recipe],
- ["docker-compose.yml", :recipe], ["Dockerfile.prod", :recipe], ["dockerignore", :neither],
- ["README.md", :neither]].each do |name, want|
+[['.dockerignore', :ignore], ['.containerignore', :ignore], ['Dockerfile', :recipe], ['compose.yaml', :recipe],
+ ['docker-compose.yml', :recipe], ['Dockerfile.prod', :recipe], ['dockerignore', :neither],
+ ['README.md', :neither]].each do |name, want|
   got = if name =~ CONTAINER_IGNORE_RE then :ignore
         elsif name =~ CONTAINER_RECIPE_RE then :recipe
         else :neither
@@ -1880,8 +1864,8 @@ def container_walk(root)
   out
 end
 
-container_ls, container_git = Open3.capture2("git", "-C", ROOT, "ls-files", "-z")
-container_source  = container_git.success? ? "tracked" : "working-tree"
+container_ls, container_git = Open3.capture2('git', '-C', ROOT, 'ls-files', '-z')
+container_source  = container_git.success? ? 'tracked' : 'working-tree'
 container_tracked = container_git.success? ? container_ls.split("\0").reject(&:empty?) : container_walk(ROOT)
 if container_tracked.length < 500
   errors << "check-demo-copies: the container-tooling rule walked #{container_tracked.length} " \
@@ -1897,41 +1881,39 @@ container_demo_names = demos.map { |d| File.basename(d) }
   errors << "#{demo} ships no compose file. Add `#{demo}/compose.yaml` beside its siblings."
 end
 
-container_images.reject { |rel| File.dirname(rel) == "." }.each do |rel|
+container_images.reject { |rel| File.dirname(rel) == '.' }.each do |rel|
   errors << "#{rel} is a SECOND container image recipe. The build context is the repository, so the one " \
-            "root `Dockerfile` carries every demo; delete this one."
+            'root `Dockerfile` carries every demo; delete this one.'
 end
 if container_images.empty?
   errors << "check-demo-copies: there is no container image recipe, but #{container_composes.length} compose " \
-            "file(s) build one."
+            'file(s) build one.'
 end
 
 # The image's Ruby is one CI runs and at least the gemspec floor; compose Postgres is CI's.
-container_ci_yml   = File.join(ROOT, ".github", "workflows", "ci.yml")
-container_ci_body  = File.file?(container_ci_yml) ? File.read(container_ci_yml) : ""
+container_ci_yml   = File.join(ROOT, '.github', 'workflows', 'ci.yml')
+container_ci_body  = File.file?(container_ci_yml) ? File.read(container_ci_yml) : ''
 container_ci_pg    = container_ci_body.scan(/^\s+image:\s*(postgres:[0-9]+(?:\.[0-9]+)*)\s*$/)
                                       .flatten.tally.max_by { |_, n| n }&.first
 container_ci_ruby  = container_ci_body.scan(/^\s+ruby-version:\s*"([0-9][0-9.]*)"\s*$/).flatten.uniq
-container_gemspec  = File.join(ROOT, "kiosk-core", "kiosk-core.gemspec")
+container_gemspec  = File.join(ROOT, 'kiosk-core', 'kiosk-core.gemspec')
 container_floor    = File.file?(container_gemspec) &&
                      File.read(container_gemspec)[/required_ruby_version\s*=\s*"\s*>=\s*([0-9][0-9.]*)"/, 1]
 
-errors << "check-demo-copies: no `image: postgres:<major>` in .github/workflows/ci.yml." if container_ci_pg.nil?
-errors << "check-demo-copies: no `ruby-version:` in .github/workflows/ci.yml." if container_ci_ruby.empty?
+errors << 'check-demo-copies: no `image: postgres:<major>` in .github/workflows/ci.yml.' if container_ci_pg.nil?
+errors << 'check-demo-copies: no `ruby-version:` in .github/workflows/ci.yml.' if container_ci_ruby.empty?
 
-container_dockerfile = File.join(ROOT, "Dockerfile")
+container_dockerfile = File.join(ROOT, 'Dockerfile')
 if File.file?(container_dockerfile)
   container_arg = File.read(container_dockerfile)[/^ARG\s+RUBY_VERSION=([0-9][0-9.]*)\s*$/, 1]
   if container_arg.nil?
-    errors << "Dockerfile: no `ARG RUBY_VERSION=<version>` line."
+    errors << 'Dockerfile: no `ARG RUBY_VERSION=<version>` line.'
   else
     if container_ci_ruby.any? && !container_ci_ruby.include?(container_arg)
       errors << "Dockerfile: `ARG RUBY_VERSION=#{container_arg}` names a Ruby .github/workflows/ci.yml never " \
                 "runs (it runs #{container_ci_ruby.sort.join(', ')})."
     end
-    if container_floor && Gem::Version.new(container_arg) < Gem::Version.new(container_floor)
-      errors << "Dockerfile: `ARG RUBY_VERSION=#{container_arg}` is below kiosk-core's floor, #{container_floor}."
-    end
+    errors << "Dockerfile: `ARG RUBY_VERSION=#{container_arg}` is below kiosk-core's floor, #{container_floor}." if container_floor && Gem::Version.new(container_arg) < Gem::Version.new(container_floor)
   end
 end
 
@@ -1944,30 +1926,22 @@ container_composes.each do |rel|
 
   body = File.read(File.join(ROOT, rel))
   errors << "#{rel}: its compose project is not named `#{demo}`." unless body.match?(/^name:\s*#{Regexp.escape(demo)}\s*$/)
-  unless body.match?(%r{^\s+working_dir:\s*/kiosk/#{Regexp.escape(demo)}\s*$})
-    errors << "#{rel}: its `working_dir` is not `/kiosk/#{demo}`, so it brings up another demo."
-  end
-  unless body.match?(/^\s+context:\s*\.\.\s*$/) && body.match?(/^\s+dockerfile:\s*Dockerfile\s*$/)
-    errors << "#{rel}: it does not build the shared `Dockerfile` with `context: ..`."
-  end
-  if container_ci_pg && !body.match?(/^\s+image:\s*#{Regexp.escape(container_ci_pg)}\s*$/)
-    errors << "#{rel}: its database service is not `#{container_ci_pg}`, the Postgres CI runs."
-  end
+  errors << "#{rel}: its `working_dir` is not `/kiosk/#{demo}`, so it brings up another demo." unless body.match?(%r{^\s+working_dir:\s*/kiosk/#{Regexp.escape(demo)}\s*$})
+  errors << "#{rel}: it does not build the shared `Dockerfile` with `context: ..`." unless body.match?(/^\s+context:\s*\.\.\s*$/) && body.match?(/^\s+dockerfile:\s*Dockerfile\s*$/)
+  errors << "#{rel}: its database service is not `#{container_ci_pg}`, the Postgres CI runs." if container_ci_pg && !body.match?(/^\s+image:\s*#{Regexp.escape(container_ci_pg)}\s*$/)
   body.scan(/^\s+- "(\d+):\d+"\s*$/).flatten.each { |p| container_by_port[p] << rel }
 
   port = body[/^\s+PORT:\s*"(\d+)"\s*$/, 1]
-  form = body.gsub(demo.delete_prefix("kiosk-demo-"), "<DEMO>")
-  form = form.gsub(port, "<PORT>") if port
+  form = body.gsub(demo.delete_prefix('kiosk-demo-'), '<DEMO>')
+  form = form.gsub(port, '<PORT>') if port
   (container_forms[form] ||= []) << rel
   next if port.nil?
 
   container_ports_derived += 1
-  unless body.match?(/^\s+- "#{port}:#{port}"\s*$/)
-    errors << "#{rel}: it does not publish the port it serves on, #{port}."
-  end
+  errors << "#{rel}: it does not publish the port it serves on, #{port}." unless body.match?(/^\s+- "#{port}:#{port}"\s*$/)
 end
-errors << "check-demo-copies: not ONE compose file sets a `PORT`." if container_ports_derived.zero?
-errors << "check-demo-copies: no compose file was read." if container_forms.empty?
+errors << 'check-demo-copies: not ONE compose file sets a `PORT`.' if container_ports_derived.zero?
+errors << 'check-demo-copies: no compose file was read.' if container_forms.empty?
 
 if container_forms.length > 1
   majority = container_forms.max_by { |_, rels| rels.length }
@@ -1987,11 +1961,11 @@ container_images.each { |rel| container_contexts[File.dirname(rel)] = true }
 container_composes.each do |rel|
   dir = File.dirname(rel)
   File.read(File.join(ROOT, rel)).scan(/^\s+context:\s*(\S+)\s*$/).flatten.each do |ctx|
-    resolved = File.expand_path(ctx, dir == "." ? "/" : "/#{dir}").delete_prefix("/")
-    container_contexts[resolved.empty? ? "." : resolved] = true
+    resolved = File.expand_path(ctx, dir == '.' ? '/' : "/#{dir}").delete_prefix('/')
+    container_contexts[resolved.empty? ? '.' : resolved] = true
   end
 end
-errors << "check-demo-copies: no build-context directory could be derived." if container_contexts.empty?
+errors << 'check-demo-copies: no build-context directory could be derived.' if container_contexts.empty?
 
 container_ignores.each do |rel|
   next if container_contexts.key?(File.dirname(rel))
@@ -1999,9 +1973,7 @@ container_ignores.each do |rel|
   errors << "#{rel} is an ORPHAN: no build in this repository reads it. Delete it."
 end
 
-if AGREE_CENSUS.empty? && errors.empty?
-  errors << "check-demo-copies: the convergence census recorded NO compared subject."
-end
+errors << 'check-demo-copies: the convergence census recorded NO compared subject.' if AGREE_CENSUS.empty? && errors.empty?
 
 if errors.empty?
   puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, " \

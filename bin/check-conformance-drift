@@ -11,12 +11,12 @@
 #   bin/check-conformance-drift --record [--only P]... [--label T] re-record all rows, or a scope
 #   bin/check-conformance-drift --check | --reheader | --self-test
 
-require "digest"
-require "English"
+require 'digest'
+require 'English'
 
-ROOT     = File.expand_path("..", __dir__)
-MANIFEST = File.join(ROOT, "spec", "conformance-anchors.tsv")
-BASELINE = File.join(ROOT, "spec", "conformance-drift-baseline.tsv")
+ROOT     = File.expand_path('..', __dir__)
+MANIFEST = File.join(ROOT, 'spec', 'conformance-anchors.tsv')
+BASELINE = File.join(ROOT, 'spec', 'conformance-drift-baseline.tsv')
 
 USAGE = <<~TEXT
   usage: bin/check-conformance-drift [--matrix PATH]
@@ -35,13 +35,13 @@ only      = []
 argv = ARGV.dup
 until argv.empty?
   case (arg = argv.shift)
-  when "--record"    then record    = true
-  when "--check"     then check     = true
-  when "--reheader"  then reheader  = true
-  when "--self-test" then self_test = true
-  when "--matrix"    then matrix    = argv.shift
-  when "--label"     then label     = argv.shift
-  when "--only"      then only     << argv.shift
+  when '--record'    then record    = true
+  when '--check'     then check     = true
+  when '--reheader'  then reheader  = true
+  when '--self-test' then self_test = true
+  when '--matrix'    then matrix    = argv.shift
+  when '--label'     then label     = argv.shift
+  when '--only'      then only     << argv.shift
   else
     warn "check-conformance-drift: unknown argument #{arg.inspect}"
     warn USAGE
@@ -50,14 +50,14 @@ until argv.empty?
 end
 
 if [record, check, reheader, self_test].count(true) > 1
-  warn "check-conformance-drift: pass only one of --record, --check, --reheader, --self-test"
+  warn 'check-conformance-drift: pass only one of --record, --check, --reheader, --self-test'
   warn USAGE
   exit 1
 end
 
 only = only.compact.reject(&:empty?)
 if !only.empty? && !record
-  warn "check-conformance-drift: --only means nothing on its own; it scopes a --record"
+  warn 'check-conformance-drift: --only means nothing on its own; it scopes a --record'
   warn USAGE
   exit 1
 end
@@ -102,10 +102,10 @@ end
 # [fingerprint, detail], or [nil, why] when the region cannot be taken.
 def measure(rel, anchor)
   body = body_of(rel)
-  return [nil, "file is gone"] if body.nil?
+  return [nil, 'file is gone'] if body.nil?
 
   hits = body.each_index.select { |i| body[i].include?(anchor) }
-  return [nil, "anchor no longer occurs in the file"] if hits.empty?
+  return [nil, 'anchor no longer occurs in the file'] if hits.empty?
   return [nil, "anchor is ambiguous (#{hits.length} matches)"] if hits.length > 1
 
   region = region_at(body, hits.first)
@@ -113,13 +113,13 @@ def measure(rel, anchor)
 end
 
 def git(*args)
-  out = IO.popen(["git", "-C", ROOT, *args], &:read)
+  out = IO.popen(['git', '-C', ROOT, *args], &:read)
   [out, $CHILD_STATUS.success?]
 end
 
 def blob_lines(text)
   lines = text.split("\n", -1)
-  lines.pop if lines.last == ""
+  lines.pop if lines.last == ''
   lines
 end
 
@@ -136,8 +136,8 @@ REF_RE         = /\A(?:unknown|dirty|[0-9a-f]{7,40})\z/
 UNVERIFIABLE   = %w[unknown dirty].freeze
 
 def recorded_line(stamp, head, dirty, label)
-  dirty_clause = dirty.to_i.positive? ? " (working tree: #{dirty} cited file(s) modified)" : ""
-  "# recorded: #{stamp} at #{head}#{dirty_clause}#{label ? " -- #{label}" : ""}"
+  dirty_clause = dirty.to_i.positive? ? " (working tree: #{dirty} cited file(s) modified)" : ''
+  "# recorded: #{stamp} at #{head}#{dirty_clause}#{" -- #{label}" if label}"
 end
 
 def baseline_header(count, stamp, head, dirty, label)
@@ -158,7 +158,7 @@ end
 # Rows of the baseline file as [path, fingerprint, ref, anchor].
 def baseline_rows(path)
   File.readlines(path, chomp: true).filter_map do |line|
-    next if line.start_with?("#") || line.strip.empty?
+    next if line.start_with?('#') || line.strip.empty?
 
     fields = line.split("\t", -1)
     fields if fields.length == 4
@@ -169,11 +169,11 @@ end
 def dirty_cited(rels)
   return [] if rels.empty?
 
-  out, ok = git("status", "--porcelain", "--", *rels)
+  out, ok = git('status', '--porcelain', '--', *rels)
   return [] unless ok
 
   out.lines.filter_map do |line|
-    path = line[3..].to_s.strip.split(" -> ").last.to_s
+    path = line[3..].to_s.strip.split(' -> ').last.to_s
     path = path[1..-2].to_s if path.start_with?('"') && path.end_with?('"')
     path unless path.empty?
   end.uniq
@@ -188,25 +188,25 @@ end
 
 # ── --self-test: each arm runs this script inside a throwaway git repository ───
 if self_test
-  require "tmpdir"
-  require "fileutils"
+  require 'tmpdir'
+  require 'fileutils'
 
   SCRIPT = File.expand_path(__FILE__)
-  GIT_ENV = { "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_CONFIG_SYSTEM" => "/dev/null",
-              "GIT_AUTHOR_NAME" => "t", "GIT_AUTHOR_EMAIL" => "t@t",
-              "GIT_COMMITTER_NAME" => "t", "GIT_COMMITTER_EMAIL" => "t@t" }.freeze
+  GIT_ENV = { 'GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_SYSTEM' => '/dev/null',
+              'GIT_AUTHOR_NAME' => 't', 'GIT_AUTHOR_EMAIL' => 't@t',
+              'GIT_COMMITTER_NAME' => 't', 'GIT_COMMITTER_EMAIL' => 't@t' }.freeze
 
   failures = []
   arms     = 0
 
   def st_run(root, *args)
-    out = IO.popen(GIT_ENV, [File.join(root, "bin", "check-conformance-drift"), *args],
-                   err: [:child, :out], &:read)
+    out = IO.popen(GIT_ENV, [File.join(root, 'bin', 'check-conformance-drift'), *args],
+                   err: %i[child out], &:read)
     [out, $CHILD_STATUS.exitstatus]
   end
 
   def st_git(root, *args)
-    IO.popen(GIT_ENV, ["git", "-C", root, *args], err: [:child, :out], &:read)
+    IO.popen(GIT_ENV, ['git', '-C', root, *args], err: %i[child out], &:read)
   end
 
   def st_edit(root, rel, from, to)
@@ -215,33 +215,33 @@ if self_test
   end
 
   def st_fixture(root, marker)
-    FileUtils.mkdir_p(File.join(root, "bin"))
-    FileUtils.mkdir_p(File.join(root, "spec"))
-    FileUtils.cp(SCRIPT, File.join(root, "bin", "check-conformance-drift"))
-    File.chmod(0o755, File.join(root, "bin", "check-conformance-drift"))
-    File.write(File.join(root, "spec", "conformance-anchors.tsv"), <<~TSV)
+    FileUtils.mkdir_p(File.join(root, 'bin'))
+    FileUtils.mkdir_p(File.join(root, 'spec'))
+    FileUtils.cp(SCRIPT, File.join(root, 'bin', 'check-conformance-drift'))
+    File.chmod(0o755, File.join(root, 'bin', 'check-conformance-drift'))
+    File.write(File.join(root, 'spec', 'conformance-anchors.tsv'), <<~TSV)
       # a fixture manifest
       spec/alpha_spec.rb\tthe ALPHA example
       spec/beta_spec.rb\tthe BETA example
     TSV
-    File.write(File.join(root, "spec", "alpha_spec.rb"), <<~RB)
+    File.write(File.join(root, 'spec', 'alpha_spec.rb'), <<~RB)
       it "the ALPHA example" do
         expect(1).to eq(1) # #{marker}
       end
     RB
-    File.write(File.join(root, "spec", "beta_spec.rb"), <<~RB)
+    File.write(File.join(root, 'spec', 'beta_spec.rb'), <<~RB)
       it "the BETA example" do
         expect(2).to eq(2)
       end
     RB
-    st_git(root, "init", "--quiet", "--initial-branch=main")
-    st_git(root, "add", "-A")
-    st_git(root, "commit", "--quiet", "-m", "fixture")
-    st_git(root, "rev-parse", "--short", "HEAD").strip
+    st_git(root, 'init', '--quiet', '--initial-branch=main')
+    st_git(root, 'add', '-A')
+    st_git(root, 'commit', '--quiet', '-m', 'fixture')
+    st_git(root, 'rev-parse', '--short', 'HEAD').strip
   end
 
   def st_rows(root)
-    rows = baseline_rows(File.join(root, "spec", "conformance-drift-baseline.tsv"))
+    rows = baseline_rows(File.join(root, 'spec', 'conformance-drift-baseline.tsv'))
     Hash.new([nil, nil]).merge(rows.to_h { |f| [f[0], [f[1], f[2]]] })
   end
 
@@ -250,90 +250,90 @@ if self_test
     failures << "#{name}: #{detail}" unless ok
   end
 
-  Dir.mktmpdir("drift-selftest") do |tmp|
-    root = File.join(tmp, "mixed")
-    c1   = st_fixture(root, "v1")
+  Dir.mktmpdir('drift-selftest') do |tmp|
+    root = File.join(tmp, 'mixed')
+    c1   = st_fixture(root, 'v1')
 
-    out, rc = st_run(root, "--record")
-    arm.call("A1 --record writes a baseline", rc.zero?, "exit #{rc}: #{out}")
+    out, rc = st_run(root, '--record')
+    arm.call('A1 --record writes a baseline', rc.zero?, "exit #{rc}: #{out}")
     rows = st_rows(root)
-    arm.call("A2 every row carries its own ref", rows.values.map(&:last).uniq == [c1],
+    arm.call('A2 every row carries its own ref', rows.values.map(&:last).uniq == [c1],
              "refs are #{rows.values.map(&:last).inspect}, want all #{c1}")
 
-    st_edit(root, "spec/alpha_spec.rb", "v1", "v2")
-    st_git(root, "commit", "--quiet", "-am", "move alpha")
-    c2 = st_git(root, "rev-parse", "--short", "HEAD").strip
+    st_edit(root, 'spec/alpha_spec.rb', 'v1', 'v2')
+    st_git(root, 'commit', '--quiet', '-am', 'move alpha')
+    c2 = st_git(root, 'rev-parse', '--short', 'HEAD').strip
 
-    out, rc = st_run(root, "--record", "--only", "spec/alpha_spec.rb")
-    arm.call("A3 --record --only re-records the scope", rc.zero? && out.include?("PARTIAL"), "exit #{rc}: #{out}")
+    out, rc = st_run(root, '--record', '--only', 'spec/alpha_spec.rb')
+    arm.call('A3 --record --only re-records the scope', rc.zero? && out.include?('PARTIAL'), "exit #{rc}: #{out}")
     rows = st_rows(root)
-    arm.call("A4 the baseline mixes a re-judged row with a pending one",
-             rows["spec/alpha_spec.rb"].last == c2 && rows["spec/beta_spec.rb"].last == c1,
+    arm.call('A4 the baseline mixes a re-judged row with a pending one',
+             rows['spec/alpha_spec.rb'].last == c2 && rows['spec/beta_spec.rb'].last == c1,
              "alpha at #{rows['spec/alpha_spec.rb'].inspect}, beta at #{rows['spec/beta_spec.rb'].inspect}")
 
-    out, rc = st_run(root, "--check")
-    arm.call("A5 --check accepts a mixed baseline", rc.zero?, "exit #{rc}: #{out}")
-    arm.call("A6 --check says how many commits the rows were judged at", out.include?("across 2 commit(s)"), out)
+    out, rc = st_run(root, '--check')
+    arm.call('A5 --check accepts a mixed baseline', rc.zero?, "exit #{rc}: #{out}")
+    arm.call('A6 --check says how many commits the rows were judged at', out.include?('across 2 commit(s)'), out)
 
-    st_run(root, "--record", "--only", "spec/alpha_spec.rb")
-    arm.call("A7 an out-of-scope row is carried through byte-identical",
-             st_rows(root)["spec/beta_spec.rb"].last == c1, "beta moved to #{st_rows(root)['spec/beta_spec.rb'].inspect}")
+    st_run(root, '--record', '--only', 'spec/alpha_spec.rb')
+    arm.call('A7 an out-of-scope row is carried through byte-identical',
+             st_rows(root)['spec/beta_spec.rb'].last == c1, "beta moved to #{st_rows(root)['spec/beta_spec.rb'].inspect}")
 
-    st_edit(root, "spec/beta_spec.rb", "eq(2)", "eq(3)")
+    st_edit(root, 'spec/beta_spec.rb', 'eq(2)', 'eq(3)')
     out, rc = st_run(root)
-    arm.call("A8 the unjudged row is still reported as moved",
-             rc.zero? && out.include?("moved 1") && out.include?("beta_spec.rb"), "exit #{rc}: #{out}")
-    arm.call("A9 the report names the ref each moved row was last judged at", out.include?("last judged at #{c1}"), out)
-    st_edit(root, "spec/beta_spec.rb", "eq(3)", "eq(2)")
+    arm.call('A8 the unjudged row is still reported as moved',
+             rc.zero? && out.include?('moved 1') && out.include?('beta_spec.rb'), "exit #{rc}: #{out}")
+    arm.call('A9 the report names the ref each moved row was last judged at', out.include?("last judged at #{c1}"), out)
+    st_edit(root, 'spec/beta_spec.rb', 'eq(3)', 'eq(2)')
 
-    bl  = File.join(root, "spec", "conformance-drift-baseline.tsv")
+    bl  = File.join(root, 'spec', 'conformance-drift-baseline.tsv')
     raw = File.read(bl)
 
     File.write(bl, raw.sub(%r{^spec/beta_spec\.rb\t[0-9a-f]{16}}) { "spec/beta_spec.rb\t#{'0' * 16}" })
-    out, rc = st_run(root, "--check")
-    arm.call("A10 a hand-edited fingerprint is refused", rc == 1 && out.include?("re-measures"), "exit #{rc}: #{out}")
+    out, rc = st_run(root, '--check')
+    arm.call('A10 a hand-edited fingerprint is refused', rc == 1 && out.include?('re-measures'), "exit #{rc}: #{out}")
 
-    File.write(bl, raw.sub(%r{^(spec/alpha_spec\.rb\t[0-9a-f]{16}\t)#{Regexp.escape(c2)}\t}) {
+    File.write(bl, raw.sub(%r{^(spec/alpha_spec\.rb\t[0-9a-f]{16}\t)#{Regexp.escape(c2)}\t}) do
       "#{Regexp.last_match(1)}#{c1}\t"
-    })
-    out, rc = st_run(root, "--check")
-    arm.call("A11 a row stamped at the wrong commit is refused", rc == 1 && out.include?("re-measures"),
+    end)
+    out, rc = st_run(root, '--check')
+    arm.call('A11 a row stamped at the wrong commit is refused', rc == 1 && out.include?('re-measures'),
              "exit #{rc}: #{out}")
 
-    File.write(bl, raw.sub("# Do not edit by hand", "# Please do not edit by hand"))
-    out, rc = st_run(root, "--check")
-    arm.call("A12 a hand-edited header is refused, naming --reheader", rc == 1 && out.include?("Repair with --reheader"),
+    File.write(bl, raw.sub('# Do not edit by hand', '# Please do not edit by hand'))
+    out, rc = st_run(root, '--check')
+    arm.call('A12 a hand-edited header is refused, naming --reheader', rc == 1 && out.include?('Repair with --reheader'),
              "exit #{rc}: #{out}")
-    out, rc = st_run(root, "--reheader")
-    arm.call("A13 --reheader re-renders the header", rc.zero? && out.include?("re-rendered"), "exit #{rc}: #{out}")
-    arm.call("A14 ...and moves no row", File.read(bl) == raw, "the rows changed under --reheader")
-    out, rc = st_run(root, "--check")
-    arm.call("A15 ...and the repaired file passes", rc.zero?, "exit #{rc}: #{out}")
+    out, rc = st_run(root, '--reheader')
+    arm.call('A13 --reheader re-renders the header', rc.zero? && out.include?('re-rendered'), "exit #{rc}: #{out}")
+    arm.call('A14 ...and moves no row', File.read(bl) == raw, 'the rows changed under --reheader')
+    out, rc = st_run(root, '--check')
+    arm.call('A15 ...and the repaired file passes', rc.zero?, "exit #{rc}: #{out}")
 
-    out, rc = st_run(root, "--record", "--only", "spec/nothing_here.rb")
-    arm.call("A16 a scope matching nothing is refused", rc == 1 && out.include?("matches no path"), "exit #{rc}: #{out}")
+    out, rc = st_run(root, '--record', '--only', 'spec/nothing_here.rb')
+    arm.call('A16 a scope matching nothing is refused', rc == 1 && out.include?('matches no path'), "exit #{rc}: #{out}")
 
-    out, rc = st_run(root, "--only", "spec/alpha_spec.rb")
-    arm.call("A17 --only without --record is refused", rc == 1 && out.include?("means nothing on its own"),
-             "exit #{rc}: #{out}")
-
-    root2 = File.join(tmp, "nobaseline")
-    st_fixture(root2, "v1")
-    out, rc = st_run(root2, "--record", "--only", "spec/alpha_spec.rb")
-    arm.call("A18 a partial record with no baseline is refused", rc == 1 && out.include?("nothing to update"),
+    out, rc = st_run(root, '--only', 'spec/alpha_spec.rb')
+    arm.call('A17 --only without --record is refused', rc == 1 && out.include?('means nothing on its own'),
              "exit #{rc}: #{out}")
 
-    root3 = File.join(tmp, "dirty")
-    st_fixture(root3, "v1")
-    st_edit(root3, "spec/alpha_spec.rb", "v1", "uncommitted")
-    out, rc = st_run(root3, "--record")
+    root2 = File.join(tmp, 'nobaseline')
+    st_fixture(root2, 'v1')
+    out, rc = st_run(root2, '--record', '--only', 'spec/alpha_spec.rb')
+    arm.call('A18 a partial record with no baseline is refused', rc == 1 && out.include?('nothing to update'),
+             "exit #{rc}: #{out}")
+
+    root3 = File.join(tmp, 'dirty')
+    st_fixture(root3, 'v1')
+    st_edit(root3, 'spec/alpha_spec.rb', 'v1', 'uncommitted')
+    _, rc = st_run(root3, '--record')
     arm.call("A19 --record stamps only the modified file's row `dirty`",
-             rc.zero? && st_rows(root3)["spec/alpha_spec.rb"].last == "dirty" &&
-               st_rows(root3)["spec/beta_spec.rb"].last != "dirty",
+             rc.zero? && st_rows(root3)['spec/alpha_spec.rb'].last == 'dirty' &&
+               st_rows(root3)['spec/beta_spec.rb'].last != 'dirty',
              "exit #{rc}: #{st_rows(root3).inspect}")
-    out, rc = st_run(root3, "--check")
-    arm.call("A20 --check verifies the clean row and notices the dirty one",
-             rc.zero? && out.include?("NOTICE") && out.include?("1 of 2"), "exit #{rc}: #{out}")
+    out, rc = st_run(root3, '--check')
+    arm.call('A20 --check verifies the clean row and notices the dirty one',
+             rc.zero? && out.include?('NOTICE') && out.include?('1 of 2'), "exit #{rc}: #{out}")
   end
 
   if failures.empty?
@@ -355,7 +355,7 @@ if check || reheader
 
   raw   = File.read(BASELINE)
   lines = raw.split("\n", -1)
-  lines.pop if lines.last == ""
+  lines.pop if lines.last == ''
 
   # `parse` defects make the file unreadable, so --reheader refuses on them.
   parse = []
@@ -363,19 +363,22 @@ if check || reheader
   prov  = []
   notes = []
 
-  parse << "the file does not end in a newline" unless raw.end_with?("\n")
+  parse << 'the file does not end in a newline' unless raw.end_with?("\n")
 
-  header = lines.take_while { |l| l.start_with?("#") }
+  header = lines.take_while { |l| l.start_with?('#') }
   body   = lines.drop(header.length)
 
   stamp = head = label = count = nil
   dirty = 0
 
   if header.length < 2
-    parse << "the header must end in `# recorded: <date> at <ref>` and `# N anchors.`"
+    parse << 'the header must end in `# recorded: <date> at <ref>` and `# N anchors.`'
   else
     if (m = RECORDED_RE.match(header[-2]))
-      stamp, head, label, dirty = m[:stamp], m[:head], m[:label], m[:dirty].to_i
+      stamp = m[:stamp]
+      head = m[:head]
+      label = m[:label]
+      dirty = m[:dirty].to_i
     else
       parse << "the second-to-last header line is not a recorded stamp: #{header[-2].inspect}"
     end
@@ -390,7 +393,7 @@ if check || reheader
   seen = {}
   body.each_with_index do |line, i|
     n = header.length + i + 1
-    if line.strip.empty? || line.start_with?("#")
+    if line.strip.empty? || line.start_with?('#')
       parse << "line #{n}: a blank or comment line below the header; --record writes none"
       next
     end
@@ -423,14 +426,14 @@ if check || reheader
 
   if count && count != rows.length
     parse << "the header says #{count} anchors and #{rows.length} row(s) follow; an anchor did not " \
-             "resolve when it was recorded. Fix it and re-record."
+             'resolve when it was recorded. Fix it and re-record.'
   end
 
   if reheader
     unless parse.empty?
-      warn "check-conformance-drift --reheader: refusing, the rows cannot be read back:"
+      warn 'check-conformance-drift --reheader: refusing, the rows cannot be read back:'
       parse.each { |p| warn "  x #{p}" }
-      warn "--reheader only re-renders the header. Fix the rows, or re-record."
+      warn '--reheader only re-renders the header. Fix the rows, or re-record.'
       exit 1
     end
 
@@ -447,17 +450,17 @@ if check || reheader
       wl = want.split("\n", -1)
       gl = got.split("\n", -1)
       i  = (0...[wl.length, gl.length].max).find { |k| wl[k] != gl[k] }
-      form << "the header differs from what --record writes at header line #{i + 1}:\n" \
-              "      file:      #{gl[i].inspect}\n" \
-              "      generator: #{wl[i].inspect}\n" \
-              "      Repair with --reheader, which touches no row."
+      form << "the header differs from what --record writes at header line #{i + 1}:\n      " \
+              "file:      #{gl[i].inspect}\n      " \
+              "generator: #{wl[i].inspect}\n      " \
+              'Repair with --reheader, which touches no row.'
     end
   end
 
   # Every fingerprint must re-measure to its recorded value at its own row's ref.
   verified_rows = 0
   if head.nil?
-    notes << "provenance not checked: the recorded stamp did not parse."
+    notes << 'provenance not checked: the recorded stamp did not parse.'
   else
     at_ref       = {}
     mismatched   = []
@@ -468,13 +471,13 @@ if check || reheader
     rows.each do |rel, fp, ref, anchor|
       next unverifiable[ref] += 1 if UNVERIFIABLE.include?(ref)
 
-      if absent_refs.fetch(ref) { absent_refs[ref] = !git("rev-parse", "--verify", "--quiet", "#{ref}^{commit}").last }
+      if absent_refs.fetch(ref) { absent_refs[ref] = !git('rev-parse', '--verify', '--quiet', "#{ref}^{commit}").last }
         unmeasured << "#{rel}  #{anchor.inspect}: #{ref} is not a commit in this repository"
         next
       end
 
       lines_at = at_ref.fetch([ref, rel]) do
-        text, ok = git("show", "#{ref}:#{rel}")
+        text, ok = git('show', "#{ref}:#{rel}")
         at_ref[[ref, rel]] = ok ? blob_lines(text) : nil
       end
       if lines_at.nil?
@@ -498,36 +501,36 @@ if check || reheader
 
     unverifiable.each do |sentinel, n|
       notes << "#{n} row(s) name #{sentinel.inspect} rather than a commit and cannot be re-measured; " \
-               "re-record those paths from a clean checkout to make them verifiable."
+               're-record those paths from a clean checkout to make them verifiable.'
     end
 
-    { "do NOT re-measure to their recorded value at their own ref" => mismatched,
-      "name an anchor that does not resolve uniquely at their own ref" => unmeasured }.each do |what, list|
+    { 'do NOT re-measure to their recorded value at their own ref' => mismatched,
+      'name an anchor that does not resolve uniquely at their own ref' => unmeasured }.each do |what, list|
       next if list.empty?
 
-      prov << "#{list.length} of #{rows.length} row(s) #{what}:\n" +
+      prov << ("#{list.length} of #{rows.length} row(s) #{what}:\n" +
               list.first(12).map { |m| "      #{m}" }.join("\n") +
-              (list.length > 12 ? "\n      … and #{list.length - 12} more" : "")
+              (list.length > 12 ? "\n      … and #{list.length - 12} more" : ''))
     end
   end
 
   problems = parse + form + prov
 
   unless notes.empty?
-    puts "check-conformance-drift --check: NOTICE"
+    puts 'check-conformance-drift --check: NOTICE'
     notes.each { |n| puts "  - #{n}" }
   end
 
   unless problems.empty?
     warn "check-conformance-drift --check: FAIL — #{problems.length} defect(s) in spec/#{File.basename(BASELINE)}."
     problems.each { |p| warn "  x #{p}" }
-    warn "Repair the header with --reheader; repair rows with --record (only for rows a sweep has re-judged)."
+    warn 'Repair the header with --reheader; repair rows with --record (only for rows a sweep has re-judged).'
     exit 1
   end
 
   by_ref = rows.map { |r| r[2] }.tally.reject { |r, _| UNVERIFIABLE.include?(r) }
   puts "check-conformance-drift --check: OK — #{rows.length} row(s), last recorded #{stamp} at #{head}" \
-       "#{label ? " -- #{label}" : ''}"
+       "#{" -- #{label}" if label}"
   puts "  #{verified_rows} of #{rows.length} fingerprint(s) re-measure at their own ref, across #{by_ref.size} commit(s)"
   exit 0
 end
@@ -538,7 +541,7 @@ unless File.file?(MANIFEST)
 end
 
 pairs = File.readlines(MANIFEST, chomp: true).filter_map do |line|
-  next if line.start_with?("#") || line.strip.empty?
+  next if line.start_with?('#') || line.strip.empty?
 
   rel, anchor = line.split("\t", 2)
   [rel, anchor] unless rel.nil? || anchor.nil? || anchor.empty?
@@ -551,15 +554,15 @@ end
 
 # ── --record ─────────────────────────────────────────────────────────────────
 if record
-  out, ok = git("rev-parse", "--short", "HEAD")
-  head  = ok ? out.strip : "unknown"
-  stamp = Time.now.strftime("%Y-%m-%d")
+  out, ok = git('rev-parse', '--short', 'HEAD')
+  head  = ok ? out.strip : 'unknown'
+  stamp = Time.now.strftime('%Y-%m-%d')
 
   preserved = []
   if only.any?
     unless File.file?(BASELINE)
       warn "check-conformance-drift --record --only: no baseline at #{BASELINE}, so nothing to update; " \
-           "record a whole one first."
+           'record a whole one first.'
       exit 1
     end
     preserved = baseline_rows(BASELINE).reject { |rel, *| in_scope?(rel, only) }
@@ -572,7 +575,7 @@ if record
     exit 1
   end
 
-  dirty_paths = head == "unknown" ? [] : dirty_cited(scoped.map(&:first).uniq.sort)
+  dirty_paths = head == 'unknown' ? [] : dirty_cited(scoped.map(&:first).uniq.sort)
 
   measured = []
   missing  = []
@@ -580,7 +583,11 @@ if record
     fp, why = measure(rel, anchor)
     next missing << "#{rel}: #{why} -- #{anchor.inspect}" if fp.nil?
 
-    ref = head == "unknown" ? "unknown" : (dirty_paths.include?(rel) ? "dirty" : head)
+    ref = if head == 'unknown'
+            'unknown'
+          else
+            (dirty_paths.include?(rel) ? 'dirty' : head)
+          end
     measured << [rel, fp, ref, anchor]
   end
 
@@ -598,12 +605,12 @@ if record
 
   if dirty_paths.any?
     warn "check-conformance-drift: NOTICE — #{dirty_paths.length} cited file(s) differ from #{head}; their " \
-         "rows are stamped `dirty` and --check cannot verify them. Commit and re-record to fix."
+         'rows are stamped `dirty` and --check cannot verify them. Commit and re-record to fix.'
   end
 
   unless missing.empty?
     warn "check-conformance-drift: #{missing.length} anchor(s) could not be measured and are NOT in the baseline."
-    warn "Each cited text must occur exactly once in its file: fix the file or re-anchor the matrix row."
+    warn 'Each cited text must occur exactly once in its file: fix the file or re-anchor the matrix row.'
     missing.each { |m| warn "  x #{m}" }
     exit 1
   end
@@ -643,11 +650,11 @@ if matrix
 
     line.scan(CITATION) do
       m = Regexp.last_match
-      next if m[:path].start_with?("kiosk.tech/")
+      next if m[:path].start_with?('kiosk.tech/')
 
-      rel = m[:path] == "e2e" ? "e2e/assistant.sh" : m[:path].sub(%r{\Aks/}, "kiosk-server/spec/kiosk/server/")
+      rel = m[:path] == 'e2e' ? 'e2e/assistant.sh' : m[:path].sub(%r{\Aks/}, 'kiosk-server/spec/kiosk/server/')
       m[:anchors].scan(ANCHOR_RE) do
-        anchor = Regexp.last_match(1).gsub('\\"', '"').gsub("\\\\", "\\")
+        anchor = Regexp.last_match(1).gsub('\\"', '"').gsub('\\\\', '\\')
         list = rows_for[[rel, anchor]]
         list << row unless list.include?(row)
       end
@@ -685,7 +692,7 @@ def section(title, entries, rows_for)
     puts "  #{rel}"
     group.each do |_rel, anchor, *rest|
       rows = rows_for[[rel, anchor]]
-      puts "    #{rows.empty? ? '' : "#{rows.join(', ')}  "}#{anchor.inspect}"
+      puts "    #{"#{rows.join(', ')}  " unless rows.empty?}#{anchor.inspect}"
       puts "      #{rest.compact.join('  ')}"
     end
   end
@@ -693,31 +700,31 @@ end
 
 puts "check-conformance-drift: #{pairs.length} anchors, baseline last recorded #{recorded || '(unstamped)'}"
 puts "  unchanged #{same}   moved #{moved.length}   new #{fresh.length}   unmeasurable #{broken.length}" \
-     "#{retired.empty? ? '' : "   retired #{retired.length}"}"
-puts matrix ? "  matrix rows named from #{matrix}" : "  (no --matrix given: anchors only, no SPEC row ids)"
+     "#{"   retired #{retired.length}" unless retired.empty?}"
+puts matrix ? "  matrix rows named from #{matrix}" : '  (no --matrix given: anchors only, no SPEC row ids)'
 
 judged = pairs.filter_map { |k| baseline_ref[k] }.tally
 unless judged.empty?
-  puts "  judged at: " + judged.sort_by { |ref, n| [-n, ref] }.first(6).map { |ref, n| "#{ref} #{n}" }.join("   ") +
-       (judged.size > 6 ? "   … #{judged.size - 6} more commit(s)" : "")
+  puts '  judged at: ' + judged.sort_by { |ref, n| [-n, ref] }.first(6).map { |ref, n| "#{ref} #{n}" }.join('   ') +
+       (judged.size > 6 ? "   … #{judged.size - 6} more commit(s)" : '')
 end
 
-section("MOVED — the anchored region changed since the baseline; re-judge these rows:", moved, rows_for)
-section("NEW — cited since the baseline was recorded, never judged against it:", fresh, rows_for)
-section("UNMEASURABLE — the cited text does not occur exactly once in its file; fix the file or re-anchor the row:",
+section('MOVED — the anchored region changed since the baseline; re-judge these rows:', moved, rows_for)
+section('NEW — cited since the baseline was recorded, never judged against it:', fresh, rows_for)
+section('UNMEASURABLE — the cited text does not occur exactly once in its file; fix the file or re-anchor the row:',
         broken, rows_for)
 
 unless retired.empty?
   puts
-  puts "RETIRED — in the baseline, no longer cited by the matrix:"
+  puts 'RETIRED — in the baseline, no longer cited by the matrix:'
   retired.sort.each { |rel, anchor| puts "  #{rel}  #{anchor.inspect}" }
 end
 
 puts
 if moved.empty? && fresh.empty? && broken.empty?
-  puts "No anchored region has moved."
+  puts 'No anchored region has moved.'
 else
   puts "#{moved.length + fresh.length + broken.length} anchor(s) need re-judging. Walk them, then " \
-       "`--record` (or `--record --only <path-or-glob>` for the part you judged)."
+       '`--record` (or `--record --only <path-or-glob>` for the part you judged).'
 end
 exit 0

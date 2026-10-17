@@ -7,22 +7,22 @@
 # Beats whose label is not a literal are counted, not read.
 # Usage: bin/check-refusal-assertions [--self-test]
 
-require "fileutils"
-require "tmpdir"
+require 'fileutils'
+require 'tmpdir'
 
-ROOT = File.expand_path("..", __dir__)
+ROOT = File.expand_path('..', __dir__)
 
 # The call form whose label and predicate are arguments of one call.
-RECEIVER = ".record"
+RECEIVER = '.record'
 
 # A claim the engine's argument validation could have produced; a 403 cannot come from it.
-REFUSAL_CLAIM = /\b400\b|bad_request/.freeze
+REFUSAL_CLAIM = /\b400\b|bad_request/
 
 # Reading the refusal's own words.
-EVIDENCE = /detail|message|hint|include\?|match\?|=~|start_with\?|end_with\?/.freeze
+EVIDENCE = /detail|message|hint|include\?|match\?|=~|start_with\?|end_with\?/
 
 # A JSON Schema keyword the engine can refuse an argument on.
-CONSTRAINT = /\b(format|enum|pattern|minLength|maxLength|minimum|maximum|const):/.freeze
+CONSTRAINT = /\b(format|enum|pattern|minLength|maxLength|minimum|maximum|const):/
 
 Report = Struct.new(:failures, :notes, :stats, keyword_init: true)
 
@@ -33,10 +33,10 @@ def call_sites(src, receiver)
   out = []
   idx = 0
   while (m = src.index(receiver, idx))
-    open_paren = src.index("(", m + receiver.length - 1)
+    open_paren = src.index('(', m + receiver.length - 1)
     break unless open_paren
 
-    i = scan_to_close(src, open_paren, "(", ")")
+    i = scan_to_close(src, open_paren, '(', ')')
     out << [src[0...m].count("\n") + 1, src[(open_paren + 1)...i].to_s]
     idx = i > m ? i : m + 1
   end
@@ -56,20 +56,20 @@ def each_code_char(text, from = 0)
       in_comment = false if c == "\n"
     elsif in_str
       if esc then esc = false
-      elsif c == "\\" then esc = true
-      elsif in_str == '"' && c == "#" && text[i + 1] == "{"
+      elsif c == '\\' then esc = true
+      elsif in_str == '"' && c == '#' && text[i + 1] == '{'
         interp.push(0)
         in_str = nil
         i += 1
       elsif c == in_str then in_str = nil
       end
-    elsif c == '"' || c == "'" then in_str = c
+    elsif ['"', "'"].include?(c) then in_str = c
     elsif interp.any?
-      if c == "{" then interp[-1] += 1
-      elsif c == "}" && interp[-1].zero? then interp.pop && in_str = '"'
-      elsif c == "}" then interp[-1] -= 1
+      if c == '{' then interp[-1] += 1
+      elsif c == '}' && interp[-1].zero? then interp.pop && in_str = '"'
+      elsif c == '}' then interp[-1] -= 1
       end
-    elsif c == "#" then in_comment = true
+    elsif c == '#' then in_comment = true
     else yield c, i
     end
     i += 1
@@ -96,9 +96,9 @@ def top_level_args(body)
   start = 0
   each_code_char(body) do |c, i|
     case c
-    when "(", "[", "{" then depth += 1
-    when ")", "]", "}" then depth -= 1
-    when ","
+    when '(', '[', '{' then depth += 1
+    when ')', ']', '}' then depth -= 1
+    when ','
       if depth.zero?
         args << body[start...i]
         start = i + 1
@@ -114,20 +114,20 @@ def prose_and_predicate(body)
   prose = []
   code  = []
   top_level_args(body).each { |a| (a.strip.start_with?('"', "'") ? prose : code) << a }
-  [prose.join(" "), code.join(" ")]
+  [prose.join(' '), code.join(' ')]
 end
 
 # Every input-schema property name this demo constrains with a keyword the engine validates.
 def constrained_input_fields(demo_dir)
   names = []
-  Dir.glob(File.join(demo_dir, "app/**/*.rb")).sort.each do |f|
+  Dir.glob(File.join(demo_dir, 'app/**/*.rb')).sort.each do |f|
     src = input_schema_regions(File.read(f))
     idx = 0
     while (m = src.match(/^[ \t]*([a-z_][a-z0-9_]*):\s*\{/, idx))
       open_i = m.end(0) - 1
-      close_i = scan_to_close(src, open_i, "{", "}")
+      close_i = scan_to_close(src, open_i, '{', '}')
       inner = src[(open_i + 1)...close_i].to_s
-      names << m[1] if m[1] != "properties" && inner.match?(CONSTRAINT)
+      names << m[1] if m[1] != 'properties' && inner.match?(CONSTRAINT)
       idx = m.end(0)
     end
   end
@@ -135,7 +135,7 @@ def constrained_input_fields(demo_dir)
 end
 
 def input_schema_regions(src)
-  out = +""
+  out = +''
   idx = 0
   while (m = src.match(/^[ \t]*input_schema\b/, idx))
     nxt = src.index(/^[ \t]*(output_schema|example_params|example_row|def |kind |description )/, m.end(0)) ||
@@ -160,14 +160,14 @@ def nearest_assignment(src, name, before_line)
 
     found = i
   end
-  return "" unless found
+  return '' unless found
 
   expression_at(lines, found)
 end
 
 # From `lines[i]`, as many lines as it takes to balance brackets and close a trailing `do`.
 def expression_at(lines, i, cap: 60)
-  text = +""
+  text = +''
   depth = 0
   blocks = 0
   (i...[lines.length, i + cap].min).each do |j|
@@ -175,7 +175,7 @@ def expression_at(lines, i, cap: 60)
     text << line
     # Strip a comment, never an interpolation.
     stripped = line.sub(/(\A|\s)#(?!\{).*$/) { Regexp.last_match(1).to_s }
-    depth += stripped.count("([{") - stripped.count(")]}")
+    depth += stripped.count('([{') - stripped.count(')]}')
     blocks += 1 if stripped.match?(/\bdo\b\s*(\|[^|]*\|)?\s*$/)
     blocks -= 1 if stripped.match?(/^\s*end\b/)
     break if depth <= 0 && blocks <= 0 && j > i
@@ -188,10 +188,10 @@ end
 def method_definition(src, name)
   lines = src.lines
   start = lines.index { |l| l.match?(/^(\s*)def\s+(self\.)?#{Regexp.escape(name)}\b/) }
-  return "" unless start
+  return '' unless start
 
   indent = lines[start][/^\s*/]
-  stop = ((start + 1)...lines.length).find { |j| lines[j].match?(/^#{indent}end\b/) } || lines.length - 1
+  stop = ((start + 1)...lines.length).find { |j| lines[j].match?(/^#{indent}end\b/) } || (lines.length - 1)
   lines[start..stop].join
 end
 
@@ -200,10 +200,10 @@ end
 def predicate_reading(predicate, src, line)
   text = predicate.dup
   predicate.scan(/\b([a-z_][a-z0-9_]*)\b/).flatten.uniq.each do |v|
-    text << " " << nearest_assignment(src, v, line)
+    text << ' ' << nearest_assignment(src, v, line)
   end
   text.scan(/\b([a-z_][a-z0-9_]*)\b/).flatten.uniq.each do |v|
-    text << " " << method_definition(src, v)
+    text << ' ' << method_definition(src, v)
   end
   text
 end
@@ -215,11 +215,11 @@ def check(root)
   notes    = []
   stats    = Hash.new(0)
 
-  Dir.glob(File.join(root, "kiosk-demo-*")).sort.each do |demo_dir|
+  Dir.glob(File.join(root, 'kiosk-demo-*')).sort.each do |demo_dir|
     demo   = File.basename(demo_dir)
     fields = constrained_input_fields(demo_dir)
     stats[:fields] += fields.length
-    Dir.glob(File.join(demo_dir, "script/*.rb")).sort.each do |f|
+    Dir.glob(File.join(demo_dir, 'script/*.rb')).sort.each do |f|
       src = File.read(f)
       rel = f.delete_prefix("#{root}/")
       call_sites(src, RECEIVER).each do |line, body|
@@ -242,7 +242,7 @@ def check(root)
           next
         end
 
-        label = prose.strip.gsub(/\s+/, " ")[0, 120]
+        label = prose.strip.gsub(/\s+/, ' ')[0, 120]
         failures << "[RA-1] #{rel}:#{line} — the beat claims a 400 refusal of " \
                     "`#{named.join('`/`')}`, which #{demo}'s descriptor constrains, but reads only " \
                     "status and code. Assert the refusal's own words (a `detail`/`message`/`hint`, " \
@@ -252,18 +252,10 @@ def check(root)
   end
 
   # ── vacuity ────────────────────────────────────────────────────────────────
-  if stats[:assertions].zero?
-    failures << "[RA-V1] no readable beat was found in any demo's `script/*.rb`; fix the beat extractor"
-  end
-  if stats[:fields].zero?
-    failures << "[RA-V2] no constrained input property was found in any demo; fix the field extractor"
-  end
-  if stats[:refusal_claims].zero?
-    failures << "[RA-V3] no beat claims a `400`/`bad_request` refusal; fix REFUSAL_CLAIM"
-  end
-  if stats[:evidenced].zero? && stats[:named].positive?
-    failures << "[RA-V4] no beat in scope reads a refusal's words; fix EVIDENCE"
-  end
+  failures << "[RA-V1] no readable beat was found in any demo's `script/*.rb`; fix the beat extractor" if stats[:assertions].zero?
+  failures << '[RA-V2] no constrained input property was found in any demo; fix the field extractor' if stats[:fields].zero?
+  failures << '[RA-V3] no beat claims a `400`/`bad_request` refusal; fix REFUSAL_CLAIM' if stats[:refusal_claims].zero?
+  failures << "[RA-V4] no beat in scope reads a refusal's words; fix EVIDENCE" if stats[:evidenced].zero? && stats[:named].positive?
 
   notes << "beats read: #{stats[:assertions]} (#{stats[:unreadable]} whose label is not a " \
            "literal, not read); claiming a 400 refusal: #{stats[:refusal_claims]}; " \
@@ -276,8 +268,8 @@ end
 # ── --self-test: plants in a throwaway copy of the real demos, each answered by its own tag ──
 
 CORPUS_GLOBS = [
-  "kiosk-demo-*/script/*.rb",
-  "kiosk-demo-*/app/**/*.rb",
+  'kiosk-demo-*/script/*.rb',
+  'kiosk-demo-*/app/**/*.rb'
 ].freeze
 
 def fixture_root(dir)
@@ -303,7 +295,7 @@ def self_test
   failures = []
 
   run = lambda do |name, tag, &setup|
-    Dir.mktmpdir("refusal-assertions-selftest") do |dir|
+    Dir.mktmpdir('refusal-assertions-selftest') do |dir|
       root = fixture_root(dir)
       setup.call(root)
       rep = check(root)
@@ -312,73 +304,73 @@ def self_test
         failures << "#{name}: expected GREEN, got: #{rep.failures.first}" unless rep.failures.empty?
       elsif rep.failures.empty?
         failures << "#{name}: expected RED [#{tag}], stayed GREEN"
-      elsif rep.failures.none? { _1.include?("[#{tag}]") }
+      elsif rep.failures.none? { it.include?("[#{tag}]") }
         failures << "#{name}: went red, but no failure carries [#{tag}] — first was: #{rep.failures.first}"
       end
     end
   end
 
-  run.call("GREEN — the tree as it stands", nil) { nil }
+  run.call('GREEN — the tree as it stands', nil) { nil }
 
   # RA-1, hop 0: the predicate is right there.
-  run.call("RA-1 — philslist's out-of-enum filter beat back to status-and-code", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-philslist/script/redteam_suite.rb"),
-         "detail_bad.include?(\"bikes\") && detail_bad.include?(\"housing\") &&\n", "")
+  run.call("RA-1 — philslist's out-of-enum filter beat back to status-and-code", 'RA-1') do |root|
+    edit(File.join(root, 'kiosk-demo-philslist/script/redteam_suite.rb'),
+         "detail_bad.include?(\"bikes\") && detail_bad.include?(\"housing\") &&\n", '')
   end
 
   # The same plant behind a comment carrying an unbalanced `(`.
-  run.call("RA-1 — a comment carrying a stray `(` does not move where the beat ends", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-philslist/script/redteam_suite.rb"),
+  run.call('RA-1 — a comment carrying a stray `(` does not move where the beat ends', 'RA-1') do |root|
+    edit(File.join(root, 'kiosk-demo-philslist/script/redteam_suite.rb'),
          "detail_bad.include?(\"bikes\") && detail_bad.include?(\"housing\") &&\n",
          "# the app's own check ( defeated\n")
   end
 
   # RA-1, hop 1: the beat delegates to a local computed above it.
-  run.call("RA-1 — philslist's MalformedUuidArg stops reading the detail", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-philslist/script/redteam_suite.rb"),
-         "         body[\"detail\"].to_s.include?(\"listing_id\") && !scan.leak?",
-         "         !scan.leak?")
+  run.call("RA-1 — philslist's MalformedUuidArg stops reading the detail", 'RA-1') do |root|
+    edit(File.join(root, 'kiosk-demo-philslist/script/redteam_suite.rb'),
+         '         body["detail"].to_s.include?("listing_id") && !scan.leak?',
+         '         !scan.leak?')
   end
 
   # A 403 claim is out of scope.
-  run.call("GREEN — a status-only beat claiming a 403 stays out of scope", nil) do |root|
-    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+  run.call('GREEN — a status-only beat claiming a 403 stays out of scope', nil) do |root|
+    edit(File.join(root, 'kiosk-demo-tudu/script/redteam_suite.rb'),
          "\"replay of used invite code → \#{rc} (want 403)\"",
          "\"replay of used invite code → \#{rc} (want 403, code refused)\"")
   end
 
   # The same beat re-labelled as a 400 claim is in scope.
-  run.call("RA-1 — the same beat re-labelled as a 400 claim is in scope", "RA-1") do |root|
-    edit(File.join(root, "kiosk-demo-tudu/script/redteam_suite.rb"),
+  run.call('RA-1 — the same beat re-labelled as a 400 claim is in scope', 'RA-1') do |root|
+    edit(File.join(root, 'kiosk-demo-tudu/script/redteam_suite.rb'),
          "\"replay of used invite code → \#{rc} (want 403)\"",
          "\"replay of used invite code → \#{rc} (want 400)\"")
   end
 
-  run.call("RA-V1 — no beat is readable anywhere", "RA-V1") do |root|
-    Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb")).each do |p|
-      File.write(p, File.read(p).gsub(/\.record\(/, ".noop("))
+  run.call('RA-V1 — no beat is readable anywhere', 'RA-V1') do |root|
+    Dir.glob(File.join(root, 'kiosk-demo-*/script/*.rb')).each do |p|
+      File.write(p, File.read(p).gsub('.record(', '.noop('))
     end
   end
 
-  run.call("RA-V2 — no descriptor constrains an input any more", "RA-V2") do |root|
-    Dir.glob(File.join(root, "kiosk-demo-*/app/**/*.rb")).each do |p|
+  run.call('RA-V2 — no descriptor constrains an input any more', 'RA-V2') do |root|
+    Dir.glob(File.join(root, 'kiosk-demo-*/app/**/*.rb')).each do |p|
       s = File.read(p)
       next unless s.match?(CONSTRAINT)
 
-      File.write(p, s.gsub(/\b(format|enum|pattern|minLength|maxLength|minimum|maximum|const):/) { "x#{_1}" })
+      File.write(p, s.gsub(/\b(format|enum|pattern|minLength|maxLength|minimum|maximum|const):/) { "x#{it}" })
     end
   end
 
-  run.call("RA-V3 — no beat claims a 400 refusal any more", "RA-V3") do |root|
-    Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb")).each do |p|
-      File.write(p, File.read(p).gsub("400", "4oo").gsub("bad_request", "bad_req"))
+  run.call('RA-V3 — no beat claims a 400 refusal any more', 'RA-V3') do |root|
+    Dir.glob(File.join(root, 'kiosk-demo-*/script/*.rb')).each do |p|
+      File.write(p, File.read(p).gsub('400', '4oo').gsub('bad_request', 'bad_req'))
     end
   end
 
   # Every EVIDENCE token split apart; RA-1 reddens too, the arm demands RA-V4.
-  run.call("RA-V4 — no predicate reads a refusal's words any more", "RA-V4") do |root|
-    Dir.glob(File.join(root, "kiosk-demo-*/script/*.rb")).each do |p|
-      File.write(p, File.read(p).gsub(EVIDENCE) { |m| m.chars.join("-") })
+  run.call("RA-V4 — no predicate reads a refusal's words any more", 'RA-V4') do |root|
+    Dir.glob(File.join(root, 'kiosk-demo-*/script/*.rb')).each do |p|
+      File.write(p, File.read(p).gsub(EVIDENCE) { |m| m.chars.join('-') })
     end
   end
 
@@ -392,12 +384,12 @@ def self_test
   exit 1
 end
 
-self_test if ARGV.include?("--self-test")
+self_test if ARGV.include?('--self-test')
 
 report = check(ROOT)
 report.notes.each { |n| puts "  #{n}" }
 if report.failures.empty?
-  puts "check-refusal-assertions: OK — every beat that claims a 400 refusal of a constrained " \
+  puts 'check-refusal-assertions: OK — every beat that claims a 400 refusal of a constrained ' \
        "argument reads the refusal's own words."
   exit 0
 end

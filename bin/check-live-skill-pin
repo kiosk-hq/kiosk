@@ -7,15 +7,15 @@
 # --network is a manual deploy-time check, never CI: the fleet lags the tree until the next deploy.
 # Usage: bin/check-live-skill-pin [--offline (default) | --network]
 
-require "digest"
-require "json"
-require "net/http"
-require "uri"
+require 'digest'
+require 'json'
+require 'net/http'
+require 'uri'
 
-ROOT           = File.expand_path("..", __dir__)
-DEPLOY_README  = File.join(ROOT, "deploy", "README.md")
-SERVER_DEFAULT = File.join(ROOT, "kiosk-server", "lib", "kiosk", "server", "configuration_extension.rb")
-SITE_ROOT      = File.expand_path("../kiosk.tech", ROOT)
+ROOT           = File.expand_path('..', __dir__)
+DEPLOY_README  = File.join(ROOT, 'deploy', 'README.md')
+SERVER_DEFAULT = File.join(ROOT, 'kiosk-server', 'lib', 'kiosk', 'server', 'configuration_extension.rb')
+SITE_ROOT      = File.expand_path('../kiosk.tech', ROOT)
 HOST_RE        = /\A[a-z0-9-]+\.demo\.kiosk\.tech\z/
 
 FAILURES = []
@@ -32,13 +32,13 @@ def hosts_from_readme
   return {} unless File.file?(DEPLOY_README)
 
   File.readlines(DEPLOY_README, chomp: true).each_with_object({}) do |line, acc|
-    next unless line.start_with?("|")
+    next unless line.start_with?('|')
 
-    cells = line.split("|").map(&:strip)
+    cells = line.split('|').map(&:strip)
     next if cells.length < 3
 
     name = cells[1][/\A[a-z0-9_]+/]
-    host = cells[2].delete("`").strip
+    host = cells[2].delete('`').strip
     next if name.nil? || !host.match?(HOST_RE)
 
     acc[name] = host
@@ -47,7 +47,7 @@ end
 
 # A demo is a Kiosk operator iff it configures the engine.
 def operator_dirs
-  Dir.glob(File.join(ROOT, "kiosk-demo-*", "config", "initializers", "kiosk.rb")).sort
+  Dir.glob(File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb')).sort
 end
 
 def demo_pin(initializer)
@@ -61,11 +61,11 @@ def engine_default_url
   File.read(SERVER_DEFAULT)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]
 end
 
-def cut_version(url) = url.to_s[%r{skill-v(\d+(?:\.\d+)*)\.md}, 1]
+def cut_version(url) = url.to_s[/skill-v(\d+(?:\.\d+)*)\.md/, 1]
 
 # Every cut on disk, oldest first. Empty outside the umbrella layout.
 def cuts_on_disk
-  Dir.glob(File.join(SITE_ROOT, "skill-v*.md"))
+  Dir.glob(File.join(SITE_ROOT, 'skill-v*.md'))
      .filter_map { |p| (v = cut_version(File.basename(p))) && [Gem::Version.new(v), p] }
      .sort_by(&:first)
 end
@@ -78,7 +78,7 @@ def fetch_json(url, attempts: 3)
     begin
       uri  = URI(url)
       http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl      = uri.scheme == "https"
+      http.use_ssl      = uri.scheme == 'https'
       http.open_timeout = 10
       http.read_timeout = 15
       res = http.request(Net::HTTP::Get.new(uri))
@@ -99,33 +99,35 @@ end
 
 # {demo => {host:, url:, sha256:}} — the pin a deploy of HEAD would serve; {} when unresolved.
 def resolve_expectation
-  puts "── Tree: the origins, and the pin a deploy of HEAD would serve ──"
+  puts '── Tree: the origins, and the pin a deploy of HEAD would serve ──'
 
   hosts = hosts_from_readme
-  fail! "deploy/README.md: no `*.demo.kiosk.tech` rows found — the per-demo map is the " \
-        "origin list and it did not parse" if hosts.empty?
+  if hosts.empty?
+    fail! 'deploy/README.md: no `*.demo.kiosk.tech` rows found — the per-demo map is the ' \
+          'origin list and it did not parse'
+  end
 
   expected = {}
   operator_dirs.each do |initializer|
-    demo = File.basename(File.expand_path("../../..", initializer)).sub("kiosk-demo-", "")
+    demo = File.basename(File.expand_path('../../..', initializer)).sub('kiosk-demo-', '')
     host = hosts[demo]
     if host.nil?
       fail! "kiosk-demo-#{demo} configures the engine but deploy/README.md maps no " \
-            "`*.demo.kiosk.tech` host to it; add its row to the per-demo map"
+            '`*.demo.kiosk.tech` host to it; add its row to the per-demo map'
       next
     end
 
     url, sha = demo_pin(initializer)
     if url.nil? || sha.nil?
       fail! "kiosk-demo-#{demo}/config/initializers/kiosk.rb: no `c.skill_url`/`c.skill_sha256` " \
-            "pair — cannot say what that box is meant to serve"
+            'pair — cannot say what that box is meant to serve'
       next
     end
     expected[demo] = { host: host, url: url, sha256: sha }
   end
 
   if expected.empty?
-    fail! "no probeable operator origin resolved"
+    fail! 'no probeable operator origin resolved'
     return {}
   end
 
@@ -140,8 +142,8 @@ def resolve_expectation
 
   default = engine_default_url
   if default.nil?
-    fail! "kiosk-server/lib/kiosk/server/configuration_extension.rb: no `@skill_url ||= \"…\"` — " \
-          "the default a demo inherits when it pins nothing cannot be read"
+    fail! 'kiosk-server/lib/kiosk/server/configuration_extension.rb: no `@skill_url ||= "…"` — ' \
+          'the default a demo inherits when it pins nothing cannot be read'
   elsif pins.length == 1 && default != pins[0][0]
     pass "kiosk-server default is #{File.basename(default)}; the demos override it with " \
          "#{File.basename(pins[0][0])} (an override is normal)"
@@ -151,8 +153,8 @@ def resolve_expectation
 
   cuts = cuts_on_disk
   if cuts.empty?
-    skip! "no ../kiosk.tech checkout beside this repo — the pins above are not cross-checked " \
-          "against the newest cut on disk (normal in a public CI clone)"
+    skip! 'no ../kiosk.tech checkout beside this repo — the pins above are not cross-checked ' \
+          'against the newest cut on disk (normal in a public CI clone)'
   else
     newest_path = cuts.last[1]
     newest_sha  = Digest::SHA256.hexdigest(File.binread(newest_path))
@@ -163,7 +165,7 @@ def resolve_expectation
       else
         fail! "the demos pin #{File.basename(url)} (#{short(sha)}…) but the newest cut on disk " \
               "is #{File.basename(newest_path)} (#{short(newest_sha)}…); relink every demo and the " \
-              "engine default to the newest cut"
+              'engine default to the newest cut'
       end
     end
   end
@@ -174,10 +176,10 @@ end
 # ── Network: what the fleet actually serves ──────────────────────────────────
 def check_live(expected)
   puts
-  puts "── Live: /.well-known/kiosk.json on each origin ──"
+  puts '── Live: /.well-known/kiosk.json on each origin ──'
 
   if expected.empty?
-    fail! "nothing probed — the expectation did not resolve (see above)"
+    fail! 'nothing probed — the expectation did not resolve (see above)'
     return
   end
 
@@ -193,15 +195,15 @@ def check_live(expected)
       next
     end
 
-    skill = doc.dig("kiosk", "skill")
+    skill = doc.dig('kiosk', 'skill')
     if skill.nil?
       fail! "#{demo} (#{e[:host]}): serves a discovery document with NO `kiosk.skill` block — " \
-            "an assistant is told nothing about which wire to speak"
+            'an assistant is told nothing about which wire to speak'
       next
     end
 
-    served_url = skill["url"].to_s
-    served_sha = skill["sha256"].to_s
+    served_url = skill['url'].to_s
+    served_sha = skill['sha256'].to_s
     if served_url == e[:url] && served_sha == e[:sha256]
       pass "#{demo} (#{e[:host]}): #{File.basename(served_url)} (#{short(served_sha)}…) — current"
       next
@@ -212,43 +214,41 @@ def check_live(expected)
       local_sha = Digest::SHA256.hexdigest(File.binread(local))
       detail << if local_sha == served_sha
                   "the served pin is INTERNALLY CONSISTENT (that sha really is that cut's) — " \
-                  "old, not corrupt, so an assistant's dual-check passes and nothing warns it"
+                    "old, not corrupt, so an assistant's dual-check passes and nothing warns it"
                 else
                   "and the served sha256 is NOT that cut's sha256 (#{short(local_sha)}… on disk) " \
-                  "— an assistant following this pin REFUSES the file"
+                    '— an assistant following this pin REFUSES the file'
                 end
       served_v = Gem::Version.new(cut_version(served_url).to_s)
       behind   = cuts.count { |v, _p| v > served_v }
       detail << "#{behind} cut(s) newer exist in ../kiosk.tech" if behind.positive?
     elsif !cuts.empty?
-      detail << "no such cut in ../kiosk.tech — the fleet points at a file this tree does not have"
+      detail << 'no such cut in ../kiosk.tech — the fleet points at a file this tree does not have'
     end
 
     fail! "#{demo} (#{e[:host]}): serves #{File.basename(served_url)} (#{short(served_sha)}…), " \
           "this tree ships #{File.basename(e[:url])} (#{short(e[:sha256])}…)" \
-          "#{detail.empty? ? '' : "; #{detail.join('; ')}"}"
+          "#{"; #{detail.join('; ')}" unless detail.empty?}"
   end
 end
 
-mode = ARGV[0] || "--offline"
-unless ["--offline", "--network"].include?(mode)
+mode = ARGV[0] || '--offline'
+unless ['--offline', '--network'].include?(mode)
   warn "usage: #{$PROGRAM_NAME} [--offline | --network]"
   exit 2
 end
 
 expectation = resolve_expectation
-check_live(expectation) if mode == "--network"
+check_live(expectation) if mode == '--network'
 
 puts
-if mode == "--offline"
-  puts "(no origin probed — this mode reads the tree only; pass --network)"
-end
-SKIPS.each { puts "skipped: #{_1}" }
+puts '(no origin probed — this mode reads the tree only; pass --network)' if mode == '--offline'
+SKIPS.each { puts "skipped: #{it}" }
 if FAILURES.empty?
   puts "check-live-skill-pin: OK (#{mode}) — no drift"
   exit 0
 else
-  fix = mode == "--offline" ? "fix the pins in this tree" : "deploy this tree; do not edit it to chase the fleet"
+  fix = mode == '--offline' ? 'fix the pins in this tree' : 'deploy this tree; do not edit it to chase the fleet'
   puts "x check-live-skill-pin (#{mode}): #{FAILURES.size} finding(s) — #{fix}."
   exit 1
 end

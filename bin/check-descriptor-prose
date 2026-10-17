@@ -7,11 +7,11 @@
 #
 # Usage: bin/check-descriptor-prose [--self-test]
 
-require "prism"
+require 'prism'
 
-ROOT = File.expand_path("..", __dir__)
+ROOT = File.expand_path('..', __dir__)
 
-unless (unknown = ARGV - ["--self-test"]).empty?
+unless (unknown = ARGV - ['--self-test']).empty?
   warn "check-descriptor-prose: unknown argument(s) #{unknown.join(' ')}; known: --self-test"
   exit 2
 end
@@ -22,9 +22,9 @@ EDGE_BEFORE = /(?<![-_\p{L}\p{N}])/
 EDGE_AFTER  = /(?![-_\p{L}\p{N}])/
 MARKER_RE   = /#{EDGE_BEFORE}(?:#{LABEL_WORDS.join('|')})#{EDGE_AFTER}/i
 # Not a label: the complement of a copula («the offset is required»).
-COPULA_RE   = /\b(?:is|are|am|be|been|being|was|were|isn't|aren't|wasn't|weren't|not)[ ]+\z/i
+COPULA_RE   = /\b(?:is|are|am|be|been|being|was|were|isn't|aren't|wasn't|weren't|not) +\z/i
 # Not a label: an infinitive complement («never required to be declared»).
-INFINITIVE_AFTER_RE = /\A[ ]+to[ ]+\p{L}/
+INFINITIVE_AFTER_RE = /\A +to +\p{L}/
 # Not a label: a slash compound naming the axis («required/optional»).
 SLASH_BEFORE_RE = %r{/\z}
 SLASH_AFTER_RE  = %r{\A/}
@@ -49,7 +49,7 @@ def literal_string(node)
   case node
   when Prism::StringNode then node.unescaped
   when Prism::InterpolatedStringNode
-    node.parts.map { |p| p.is_a?(Prism::StringNode) ? p.unescaped : " " }.join
+    node.parts.map { |p| p.is_a?(Prism::StringNode) ? p.unescaped : ' ' }.join
   end
 end
 
@@ -72,11 +72,11 @@ end
 # A schema object: `properties:` with a sibling `required:` array.
 def descriptions_in_schema(rel, hash_node, out)
   pairs = assoc_pairs(hash_node)
-  return unless pairs.key?("properties")
+  return unless pairs.key?('properties')
 
-  required = string_array(pairs["required"])
-  assoc_pairs(pairs["properties"]).each do |name, schema|
-    node = assoc_pairs(schema)["description"]
+  required = string_array(pairs['required'])
+  assoc_pairs(pairs['properties']).each do |name, schema|
+    node = assoc_pairs(schema)['description']
     text = node && literal_string(node)
     next unless text
 
@@ -88,15 +88,15 @@ end
 # An OpenAPI parameter object: `in:`, `description:` and a boolean `required:`.
 def descriptions_in_parameter(rel, hash_node, out)
   pairs = assoc_pairs(hash_node)
-  return if pairs.key?("properties") || !pairs.key?("in") || !pairs.key?("description")
+  return if pairs.key?('properties') || !pairs.key?('in') || !pairs.key?('description')
 
-  membership = { Prism::TrueNode => true, Prism::FalseNode => false }[pairs["required"].class]
-  text = literal_string(pairs["description"])
+  membership = { Prism::TrueNode => true, Prism::FalseNode => false }[pairs['required'].class]
+  text = literal_string(pairs['description'])
   return if membership.nil? || text.nil?
 
-  name = pairs["name"] && literal_string(pairs["name"])
-  out << Desc.new(kind: :parameter, file: rel, line: pairs["description"].location.start_line,
-                  prop: name || "(unnamed parameter)", required: membership, text: text)
+  name = pairs['name'] && literal_string(pairs['name'])
+  out << Desc.new(kind: :parameter, file: rel, line: pairs['description'].location.start_line,
+                  prop: name || '(unnamed parameter)', required: membership, text: text)
 end
 
 def descriptions_in(rel, source)
@@ -120,13 +120,13 @@ end
 
 def build_corpus(root)
   errors = []
-  descriptions = IO.popen(["git", "-C", root, "ls-files", "--", "*.rb", "*.rake"], &:read)
+  descriptions = IO.popen(['git', '-C', root, 'ls-files', '--', '*.rb', '*.rake'], &:read)
                    .split("\n").flat_map do |rel|
     path = File.join(root, rel)
     next [] unless File.file?(path)
 
-    source = File.read(path, encoding: "UTF-8")
-    next [] unless source.include?("description")
+    source = File.read(path, encoding: 'UTF-8')
+    next [] unless source.include?('description')
 
     found, error = descriptions_in(rel, source)
     errors << error if error
@@ -137,14 +137,14 @@ end
 
 def label_hits(descriptions) = descriptions.select { |d| label_marker(d.text) }
 
-ARGUMENT_DECODER = "kiosk-server/lib/kiosk/server/argument_decoder.rb"
+ARGUMENT_DECODER = 'kiosk-server/lib/kiosk/server/argument_decoder.rb'
 
 # The keys of the engine's `RESERVED = { "limit" => …, … }`.
 def reserved_argument_names(root)
   path = File.join(root, ARGUMENT_DECODER)
   return [] unless File.file?(path)
 
-  queue = [Prism.parse(File.read(path, encoding: "UTF-8")).value]
+  queue = [Prism.parse(File.read(path, encoding: 'UTF-8')).value]
   until queue.empty?
     node = queue.shift
     next unless node
@@ -164,51 +164,49 @@ end
 # The reader still reaches what it must: every demo handler controller, the engine,
 # and every reserved query parameter the engine declares.
 def structural_faults(root, descriptions)
-  return ["the corpus is empty: nothing parsed as a property or parameter description"] if descriptions.empty?
+  return ['the corpus is empty: nothing parsed as a property or parameter description'] if descriptions.empty?
 
   faults = []
-  Dir[File.join(root, "kiosk-demo-*/app/controllers/kiosk/**/*.rb")].each do |path|
+  Dir[File.join(root, 'kiosk-demo-*/app/controllers/kiosk/**/*.rb')].each do |path|
     rel = path.delete_prefix("#{root}/")
     next if descriptions.any? { |d| d.file == rel && d.kind == :property }
 
     faults << "#{rel} yields no property description; the schema reader has stopped reading it."
   end
-  if descriptions.select { |d| d.kind == :property }.all? { |d| d.file.start_with?("kiosk-demo-") }
-    faults << "every property description is inside a demo; the scope no longer reaches the engine."
-  end
+  faults << 'every property description is inside a demo; the scope no longer reaches the engine.' if descriptions.select { |d| d.kind == :property }.all? { |d| d.file.start_with?('kiosk-demo-') }
   reserved = reserved_argument_names(root)
   missing  = reserved - descriptions.select { |d| d.kind == :parameter }.map(&:prop)
   if reserved.empty?
     faults << "#{ARGUMENT_DECODER} yields no RESERVED names to compare the parameter corpus against."
   elsif !missing.empty?
     faults << "reserved query argument(s) #{missing.join(', ')} have no OpenAPI parameter description; " \
-              "describe them, or teach this reader the new parameter shape."
+              'describe them, or teach this reader the new parameter shape.'
   end
   faults
 end
 
 LABEL_PROBES = [
-  "Optional. The delivery date.",
-  "Optionally names a second guest.",
-  "Required: the sku from the catalog.",
-  "Mandatory for a licence-bearing vehicle.",
-  "Compulsory when the salon charges a deposit.",
-  "The date of the chosen row. Optional; omitting it books tomorrow.",
-  "OPTIONAL example inputs.",
-  "The room to hold (optional).",
-  "The `date` of the chosen delivery_slots row, echoing the row you saw — optional.",
-  "Required cursor for the next page.",
+  'Optional. The delivery date.',
+  'Optionally names a second guest.',
+  'Required: the sku from the catalog.',
+  'Mandatory for a licence-bearing vehicle.',
+  'Compulsory when the salon charges a deposit.',
+  'The date of the chosen row. Optional; omitting it books tomorrow.',
+  'OPTIONAL example inputs.',
+  'The room to hold (optional).',
+  'The `date` of the chosen delivery_slots row, echoing the row you saw — optional.',
+  'Required cursor for the next page.'
 ].freeze
 
 LABEL_FOILS = [
-  "Appointment time, RFC 3339 timestamp, and the OFFSET IS REQUIRED (\"…Z\", \"…+02:00\").",
-  "A window and an address are required to place one.",
-  "Reserving is open to EVERY vehicle, licence-free and licence-required alike.",
-  "New in-zone Dublin delivery address; unchanged if omitted.",
+  'Appointment time, RFC 3339 timestamp, and the OFFSET IS REQUIRED ("…Z", "…+02:00").',
+  'A window and an address are required to place one.',
+  'Reserving is open to EVERY vehicle, licence-free and licence-required alike.',
+  'New in-zone Dublin delivery address; unchanged if omitted.',
   "Cancel one of the principal's own bookings (requires the booking to belong to them).",
-  "Maximum rows in one page. Reserved: always accepted, never required to be declared.",
+  'Maximum rows in one page. Reserved: always accepted, never required to be declared.',
   "JSON Schema for this verb's inputs: names, required/optional, types, enums, ranges.",
-  "It declares optional/required per field.",
+  'It declares optional/required per field.'
 ].freeze
 
 def detector_faults
@@ -220,7 +218,7 @@ def report(hit)
   decided = if hit.kind == :parameter
               "the parameter declares `required: #{hit.required}`"
             else
-              "`#{hit.prop}` is #{hit.required ? '' : 'not '}in its schema's `required:` array"
+              "`#{hit.prop}` is #{'not ' unless hit.required}in its schema's `required:` array"
             end
   "#{hit.file}:#{hit.line}: «#{label_marker(hit.text)}» in `#{hit.prop}`'s description; " \
     "#{decided}. Delete the label and keep what the value means."
@@ -228,38 +226,38 @@ end
 
 # Each plant is a real descriptor mutated in memory; a planted label must redden.
 PLANTS = [
-  ["kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
+  ['kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb',
    /description: "Hotel name\."/, 'description: "Optional. Hotel name."'],
-  ["kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
+  ['kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb',
    /description: "The `slot_at` of a delivery_slots row\."/, 'description: "Optional. The `slot_at` of a delivery_slots row."'],
-  ["kiosk-demo-tudu/app/controllers/kiosk/todos_controller.rb",
+  ['kiosk-demo-tudu/app/controllers/kiosk/todos_controller.rb',
    /description: "The todo text/, 'description: "REQUIRED. The todo text'],
-  ["kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb",
+  ['kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb',
    /description: "Appointment time; must be in the future\."/, 'description: "Appointment time (optional); must be in the future."'],
-  ["kiosk-server/lib/kiosk/server/open_api.rb",
+  ['kiosk-server/lib/kiosk/server/open_api.rb',
    /description: "The verb's SEMANTICS, in prose\. Authoritative\."/,
    'description: "The verb\'s SEMANTICS, in prose. Mandatory."'],
-  ["kiosk-server/lib/kiosk/server/open_api.rb",
+  ['kiosk-server/lib/kiosk/server/open_api.rb',
    /description: "Maximum rows in one page\./, 'description: "OPTIONAL. Maximum rows in one page.'],
-  ["kiosk-server/lib/kiosk/server/payment_setup.rb",
+  ['kiosk-server/lib/kiosk/server/payment_setup.rb',
    /description: "The page to hand to your human\."/,
-   "description: \"The page to hand to your human. \" \\\n                            \"Optional.\""],
+   "description: \"The page to hand to your human. \" \\\n                            \"Optional.\""]
 ].freeze
 
 # Correct sentences planted into real descriptors; they must stay green.
 FOIL_PLANTS = [
-  ["kiosk-server/lib/kiosk/server/open_api.rb",
+  ['kiosk-server/lib/kiosk/server/open_api.rb',
    /description: "Maximum rows in one page\./, 'description: "Never required to be declared. Maximum rows in one page.'],
-  ["kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
+  ['kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb',
    /description: "Hotel name\."/, 'description: "The offset is required. Hotel name."'],
-  ["kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
+  ['kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb',
    /description: "Hotel name\."/, 'description: "Licence-required rooms included. Hotel name."'],
-  ["kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
-   /description: "The `slot_at` of a delivery_slots row\."/, 'description: "The `slot_at` of a delivery_slots row. Unchanged if omitted."'],
+  ['kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb',
+   /description: "The `slot_at` of a delivery_slots row\."/, 'description: "The `slot_at` of a delivery_slots row. Unchanged if omitted."']
 ].freeze
 
 def plant_hits(root, (rel, find, with))
-  source = File.read(File.join(root, rel), encoding: "UTF-8")
+  source = File.read(File.join(root, rel), encoding: 'UTF-8')
   return [nil, "#{rel}: the plant pattern #{find.inspect} no longer matches"] unless source.match?(find)
 
   found, error = descriptions_in(rel, source.sub(find) { with })
@@ -280,21 +278,21 @@ def self_test(root)
     failures << (error || "#{plant[0]}: a correct sentence reddens: #{plant[2]}") if error || hits.any?
   end
 
-  { "an empty corpus" => [],
-    "a corpus with no engine property" => descriptions.reject { |d| d.kind == :property && !d.file.start_with?("kiosk-demo-") },
-    "a corpus with no parameter" => descriptions.reject { |d| d.kind == :parameter },
-    "a corpus missing one demo controller" =>
-      descriptions.reject { |d| d.file == Dir.glob("kiosk-demo-*/app/controllers/kiosk/*.rb", base: root).min } }
+  { 'an empty corpus' => [],
+    'a corpus with no engine property' => descriptions.reject { |d| d.kind == :property && !d.file.start_with?('kiosk-demo-') },
+    'a corpus with no parameter' => descriptions.reject { |d| d.kind == :parameter },
+    'a corpus missing one demo controller' =>
+      descriptions.reject { |d| d.file == Dir.glob('kiosk-demo-*/app/controllers/kiosk/*.rb', base: root).min } }
     .each do |what, corpus|
       failures << "#{what} raises no structural fault" if structural_faults(root, corpus).empty?
     end
   failures
 end
 
-if ARGV.include?("--self-test")
+if ARGV.include?('--self-test')
   failures = self_test(ROOT)
   if failures.empty?
-    puts "check-descriptor-prose --self-test: OK"
+    puts 'check-descriptor-prose --self-test: OK'
     exit 0
   end
   failures.each { |f| warn "  x #{f}" }

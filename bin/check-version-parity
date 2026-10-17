@@ -6,44 +6,44 @@
 # MAJOR.MINOR). Also: inter-gem deps are `~> MAJOR.MINOR.0`, each gem's version comes from
 # one version.rb, and each demo emits rel="kiosk" from Kiosk.configuration.skill_url.
 
-require "rubygems"
+require 'rubygems'
 
 unless ARGV.empty?
-  warn "check-version-parity: takes no arguments"
+  warn 'check-version-parity: takes no arguments'
   exit 2
 end
 
-ROOT     = File.expand_path("..", __dir__)
-PROTOCOL = File.join(ROOT, "kiosk-core/lib/kiosk/protocol.rb")
-DEFAULTS = File.join(ROOT, "kiosk-server/lib/kiosk/server/configuration_extension.rb")
+ROOT     = File.expand_path('..', __dir__)
+PROTOCOL = File.join(ROOT, 'kiosk-core/lib/kiosk/protocol.rb')
+DEFAULTS = File.join(ROOT, 'kiosk-server/lib/kiosk/server/configuration_extension.rb')
 
 def rel(path) = path.delete_prefix("#{ROOT}/")
-def series(version) = version.to_s.split(".").first(2).join(".")
+def series(version) = version.to_s.split('.').first(2).join('.')
 
 def read_constant(name)
   File.read(PROTOCOL)[/^\s*#{name}\s*=\s*"(\d+\.\d+\.\d+)"/, 1] or
     abort "check-version-parity: no `#{name} = \"X.Y.Z\"` in #{rel(PROTOCOL)}"
 end
 
-api        = read_constant("API_VERSION")
-min_client = read_constant("MIN_CLIENT")
-pre_one    = api.split(".").first.to_i.zero?
+api        = read_constant('API_VERSION')
+min_client = read_constant('MIN_CLIENT')
+pre_one    = api.split('.').first.to_i.zero?
 rule       = pre_one ? "#{api} exactly (pre-1.0: full parity)" : "series #{series(api)} (from 1.0: MINOR compatibility)"
 errors     = []
 
 agrees = ->(version) { pre_one ? version == api : series(version) == series(api) }
 check  = lambda do |where, version|
-  errors << "#{where} is #{version}; must be #{rule}" unless agrees.(version)
+  errors << "#{where} is #{version}; must be #{rule}" unless agrees.call(version)
 end
 
 if pre_one
-  check.("Kiosk::Protocol::MIN_CLIENT", min_client)
+  check.call('Kiosk::Protocol::MIN_CLIENT', min_client)
 elsif series(min_client) != series(api) || Gem::Version.new(min_client) > Gem::Version.new(api)
   errors << "MIN_CLIENT #{min_client} must be in series #{series(api)} and not newer than API_VERSION #{api}"
 end
 
 # ── Gems ─────────────────────────────────────────────────────────────────────
-specs = Dir[File.join(ROOT, "*", "*.gemspec")].sort.to_h do |path|
+specs = Dir[File.join(ROOT, '*', '*.gemspec')].sort.to_h do |path|
   spec = Gem::Specification.load(path) or abort "check-version-parity: #{rel(path)} does not evaluate"
   [spec, File.dirname(path)]
 end
@@ -51,16 +51,16 @@ abort "check-version-parity: no */*.gemspec under #{ROOT}" if specs.empty?
 own = specs.keys.map(&:name)
 
 specs.each do |spec, dir|
-  check.(spec.name, spec.version.to_s)
+  check.call(spec.name, spec.version.to_s)
 
-  files    = Dir[File.join(dir, "lib", "**", "version.rb")]
-  literals = files.flat_map { File.read(_1).scan(/^\s*VERSION\s*=\s*"([^"]*)"/).flatten }
+  files    = Dir[File.join(dir, 'lib', '**', 'version.rb')]
+  literals = files.flat_map { File.read(it).scan(/^\s*VERSION\s*=\s*"([^"]*)"/).flatten }
   unless files.size == 1 && literals == [spec.version.to_s]
     errors << "#{spec.name}: the gemspec version must come from exactly one lib/**/version.rb " \
               "declaring one VERSION (found #{files.size} file(s), #{literals.inspect})"
   end
 
-  spec.dependencies.select { _1.name.start_with?("kiosk-") }.each do |dep|
+  spec.dependencies.select { it.name.start_with?('kiosk-') }.each do |dep|
     want = Gem::Requirement.new("~> #{series(api)}.0")
     next if own.include?(dep.name) && dep.requirement == want
 
@@ -70,17 +70,17 @@ specs.each do |spec, dir|
 end
 
 # ── Lockfiles ────────────────────────────────────────────────────────────────
-IO.popen(["git", "-C", ROOT, "ls-files", "*Gemfile.lock"], &:readlines).map(&:chomp).each do |lock|
+IO.popen(['git', '-C', ROOT, 'ls-files', '*Gemfile.lock'], &:readlines).map(&:chomp).each do |lock|
   File.read(File.join(ROOT, lock)).scan(/^ {4}(kiosk-[a-z-]+) \((\d+\.\d+\.\d+)\)$/).each do |name, version|
-    check.("#{lock}: #{name}", version) if own.include?(name)
+    check.call("#{lock}: #{name}", version) if own.include?(name)
   end
 end
 
 # ── Skill pins ───────────────────────────────────────────────────────────────
-initializers = Dir[File.join(ROOT, "kiosk-demo-*", "config", "initializers", "kiosk.rb")].sort
-errors << "no kiosk-demo-*/config/initializers/kiosk.rb found" if initializers.empty?
+initializers = Dir[File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb')].sort
+errors << 'no kiosk-demo-*/config/initializers/kiosk.rb found' if initializers.empty?
 
-pins = [["kiosk-server (default)", File.read(DEFAULTS)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]]]
+pins = [['kiosk-server (default)', File.read(DEFAULTS)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]]]
 pins += initializers.filter_map do |path|
   url = File.read(path)[/skill_url\s*=\s*"([^"]+)"/, 1]
   [rel(path)[%r{\Akiosk-demo-[^/]+}], url] if url
@@ -88,26 +88,26 @@ end
 
 pins.each do |where, url|
   version = url && File.basename(url)[/\Askill-v(\d+\.\d+\.\d+)\.md\z/, 1]
-  version ? check.("#{where} skill pin", version) : errors << "#{where}: skill_url #{url.inspect} names no skill-vX.Y.Z.md cut"
+  version ? check.call("#{where} skill pin", version) : errors << "#{where}: skill_url #{url.inspect} names no skill-vX.Y.Z.md cut"
 end
 
 # ── Discovery signal (§4.5) ──────────────────────────────────────────────────
-ACCESSOR = "Kiosk.configuration.skill_url"
+ACCESSOR = 'Kiosk.configuration.skill_url'
 LITERAL  = %r{https://kiosk\.tech/skill[-.][^"'\s)>]*}
 SIGNAL   = /rel=("|&quot;)kiosk\1/
 EMITS    = /href\s*=|set_header/
 
-initializers.map { File.expand_path("../../..", _1) }.each do |dir|
+initializers.map { File.expand_path('../../..', it) }.each do |dir|
   demo  = File.basename(dir)
   forms = { view: 0, controller: 0 }
 
-  Dir[File.join(dir, "app", "**", "*.{rb,erb}")].sort.each do |path|
+  Dir[File.join(dir, 'app', '**', '*.{rb,erb}')].sort.each do |path|
     File.readlines(path).each.with_index(1) do |line, n|
       errors << "#{rel(path)}:#{n}: hardcodes #{line[LITERAL]}; read #{ACCESSOR}" if line.match?(LITERAL)
       next unless line.match?(SIGNAL) && line.match?(EMITS)
 
       if line.include?(ACCESSOR)
-        forms[path.include?("/app/views/") ? :view : :controller] += 1
+        forms[path.include?('/app/views/') ? :view : :controller] += 1
       else
         errors << "#{rel(path)}:#{n}: emits rel=\"kiosk\" without reading #{ACCESSOR}"
       end
@@ -122,6 +122,6 @@ if errors.empty?
   exit 0
 end
 
-warn "check-version-parity FAILED (protocol.md §14.1):"
-errors.each { warn "  ✗ #{_1}" }
+warn 'check-version-parity FAILED (protocol.md §14.1):'
+errors.each { warn "  ✗ #{it}" }
 exit 1

@@ -52,25 +52,30 @@ module Kiosk
       end
 
       def guc_statements
-        ns    = Kiosk.configuration.guc_namespace
-        stmts = [
-          guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::USER_ID),  identity.user_id),
-          (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ROLE),    identity.role) if identity.role),
-          guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ACTOR),    identity.actor),
-          (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::AGENT_ID), identity.agent_id) if identity.agent_id)
-        ].compact
+        stmts = principal_gucs
+        return stmts unless Kiosk.configuration.enforce_db_role
 
-        if Kiosk.configuration.enforce_db_role
-          stmts + [["SET LOCAL ROLE #{quote_ident(Kiosk.configuration.app_role)}", []]]
-        else
-          stmts
-        end
+        stmts + [["SET LOCAL ROLE #{quote_ident(Kiosk.configuration.app_role)}", []]]
       end
 
       private
 
       def apply_gucs
         guc_statements.each { |sql, binds| connection.exec_query(sql, 'Kiosk GUC', binds) }
+      end
+
+      # One `set_config` per principal field; role and agent_id only when present.
+      def principal_gucs
+        {
+          Kiosk::GUC::USER_ID => identity.user_id,
+          Kiosk::GUC::ROLE => identity.role,
+          Kiosk::GUC::ACTOR => identity.actor,
+          Kiosk::GUC::AGENT_ID => identity.agent_id
+        }.filter_map do |field, value|
+          next if !value && [Kiosk::GUC::ROLE, Kiosk::GUC::AGENT_ID].include?(field)
+
+          guc_sql(Kiosk::GUC.for(Kiosk.configuration.guc_namespace, field), value)
+        end
       end
 
       def guc_sql(name, value)

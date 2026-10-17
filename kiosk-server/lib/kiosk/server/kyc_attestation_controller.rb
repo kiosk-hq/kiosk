@@ -19,16 +19,24 @@ module Kiosk
         body     = parse_body!('POST <endpoint>/agents/kyc')
         raw_jws  = body[:kyc_jws] or raise Errors.missing_field('kyc_jws')
 
-        claims = KycVerifier.verify(raw_jws: raw_jws, subject: identity.user_id)
-        Kyc.grant!(identity.user_id, claims[:attributes])
-
-        Kiosk::Server::Headers.add_to(response.headers)
-        render json: { kyc_verified: true, attributes: claims[:attributes] || {} }, status: :ok
+        render_granted(grant!(identity, raw_jws))
       rescue Errors::Base => e
         render_error(e)
       end
 
       private
+
+      # Verifies the attestation for this principal and stores its grants.
+      def grant!(identity, raw_jws)
+        attributes = KycVerifier.verify(raw_jws: raw_jws, subject: identity.user_id)[:attributes]
+        Kyc.grant!(identity.user_id, attributes)
+        attributes
+      end
+
+      def render_granted(attributes)
+        Kiosk::Server::Headers.add_to(response.headers)
+        render json: { kyc_verified: true, attributes: attributes || {} }, status: :ok
+      end
 
       # A JSON object held to the shape §17 publishes for `exchange`, else 400.
       def parse_body!(exchange)

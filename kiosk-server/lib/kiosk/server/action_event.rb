@@ -11,22 +11,20 @@ module Kiosk
       OK    = 'ok'
       ERROR = 'error'
 
-      def self.build(identity:, name:, args:, status:, error: nil, invoked_at: Time.now)
+      def self.build(identity:, name:, args:, status:, error: nil, invoked_at: Time.now) # rubocop:disable Metrics/ParameterLists -- the public keyword API that the executor and audit sinks call
+        new(action: name.to_s, **principal(identity), args: args.is_a?(Hash) ? args : {},
+            status: status.to_s, **failure(error), invoked_at: invoked_at)
+      end
+
+      def self.principal(identity)
+        { user_id: identity.user_id, agent_id: identity.agent_id, role: identity.role, actor: identity.actor }
+      end
+
+      # The error and its cause as class names and messages; all nil without an error.
+      def self.failure(error)
         cause = cause_of(error)
-        new(
-          action: name.to_s,
-          user_id: identity.user_id,
-          agent_id: identity.agent_id,
-          role: identity.role,
-          actor: identity.actor,
-          args: args.is_a?(Hash) ? args : {},
-          status: status.to_s,
-          error_class: error&.class&.name,
-          error_message: error && error.message.to_s,
-          cause_class: cause&.class&.name,
-          cause_message: cause && cause.message.to_s,
-          invoked_at: invoked_at
-        )
+        { error_class: error&.class&.name, error_message: error && error.message.to_s,
+          cause_class: cause&.class&.name, cause_message: cause && cause.message.to_s }
       end
 
       # An exception re-raised inside its own `rescue` can be its own cause.

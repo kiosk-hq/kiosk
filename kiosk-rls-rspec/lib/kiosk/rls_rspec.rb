@@ -2,11 +2,11 @@
 
 # kiosk-rls-rspec — RSpec wiring for the Kiosk journey-test DSL.
 
-require "rspec/core"
-require "kiosk/test_helpers"
+require 'rspec/core'
+require 'kiosk/test_helpers'
 
-require "kiosk/rls_rspec/version"
-require "kiosk/rls_rspec/matchers"
+require 'kiosk/rls_rspec/version'
+require 'kiosk/rls_rspec/matchers'
 
 module Kiosk
   module RLSRSpec

@@ -28,9 +28,8 @@ RFC 9457 problem document.
 - `GET /kiosk/hotel_detail?property_id=` — ONE property in full, as a one-row
   array (a `property_id` no property has is 404 `not_found`)
 - `POST /kiosk/reserve_room` — hold a room type for a stay, for the signed-in
-  customer (writes the booking plus the engine's reserve-then-pay row in
-  `kiosk.reservations`, stamped with a 15-minute pay-by deadline that nothing
-  enforces)
+  customer, for 15 minutes; a hold left unpaid past that time is cancelled and
+  its room is free for other guests
 - `POST /kiosk/payment_setup` — check whether the customer has a saved payment method
   (served by kiosk-server)
 - `POST /kiosk/confirm_booking` — collect the hotel's answer to a paid booking:

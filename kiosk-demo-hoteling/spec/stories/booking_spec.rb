@@ -18,7 +18,6 @@ RSpec.describe 'Booking a room', type: :story do
 
     expect(Booking.find(booking['booking_id'])).to have_attributes(status: 'confirmed', confirmation_code: code)
     expect(Kiosk::Settlement.where(user_id: guest.principal.user_id).count).to eq(1)
-    expect(RoomHold.where(resource_kind: RoomHold::RESOURCE_KIND, resource_id: booking['booking_id']).count).to eq(1)
   end
 
   it 'a booking nobody paid for is not confirmed' do

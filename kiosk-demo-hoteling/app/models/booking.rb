@@ -7,6 +7,8 @@ class Booking < ApplicationRecord
   include Kiosk::Owned
 
   MAX_NIGHTS = 30
+  # An unpaid hold lapses this long after `reserve_room`, and its nights are free again.
+  PAY_WINDOW = 15.minutes
 
   enum :status, {
     reserved: 'reserved',
@@ -29,9 +31,11 @@ class Booking < ApplicationRecord
   validates_with StayValidator, on: :create
   validate :stay_length, on: :create
 
-  # The bookings that hold their nights; `bookings_no_overlapping_room_nights`
-  # is scoped the same way.
-  scope :live, -> { where(status: %i[reserved confirmed]) }
+  scope :lapsed, -> { unpaid.where(created_at: ..PAY_WINDOW.ago) }
+
+  # The bookings that hold their nights. `bookings_no_overlapping_room_nights`
+  # still counts a lapsed hold until `reserve_room` cancels it.
+  scope :live, -> { where(status: %i[reserved confirmed]).where.not(id: lapsed.select(:id)) }
 
   # Half-open nights: a checkout day is the next guest's check-in day.
   scope :overlapping, lambda { |check_in, check_out|
@@ -74,6 +78,13 @@ class Booking < ApplicationRecord
   end
 
   def nights = (check_out - check_in).to_i
+
+  def pay_by = created_at + PAY_WINDOW
+
+  def lapsed? = unpaid? && pay_by.past?
+
+  # What `my_bookings` publishes about the stay: a lapsed hold reads cancelled.
+  def stay_status = lapsed? ? 'cancelled' : status
 
   # What `my_bookings` publishes about the money. `pending` means a capture is
   # in flight: the caller must reconcile, not sign a new mandate.

@@ -6,6 +6,7 @@ class ConfirmBookingOperation
   def self.call(booking_id:)
     booking = Booking.own.find_by(id: booking_id)
     refuse 'booking not found or not yours' unless booking
+    refuse 'this hold lapsed unpaid and the room was released', hint: 'Search again for a room.' if booking.lapsed?
     refuse 'the hotel declined this booking and cancelled it', hint: cancellation_hint(booking) if booking.cancelled?
     refuse_until_answered(booking)
 

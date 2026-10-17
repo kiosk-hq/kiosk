@@ -33,7 +33,8 @@ module Kiosk
                       check_out: { type: 'string', description: 'Checkout day.' },
                       total_cents: { type: 'integer', description: 'Price of the whole stay, in cents.' },
                       status: { type: 'string', enum: %w[reserved confirmed cancelled],
-                                description: 'The stay: held, confirmed by the hotel, or cancelled.' },
+                                description: 'The stay: held, confirmed by the hotel, or cancelled (declined by ' \
+                                             'the hotel, or held unpaid past its pay-by time).' },
                       payment_state: { type: 'string', enum: %w[unpaid pending paid refunded],
                                        description: '`paid`: charged. `pending`: a charge is in progress; wait and ' \
                                                     're-read, do not pay again. `unpaid`: nothing charged. ' \
@@ -49,8 +50,9 @@ module Kiosk
     end
 
     kind :action
-    description 'Hold a room type for a stay. Nothing is charged: pay the quoted total with a cart naming ' \
-                'the booking, then call `confirm_booking`.'
+    description "Hold a room type for a stay for #{Booking::PAY_WINDOW.inspect}. Nothing is charged: pay the " \
+                'quoted total with a cart naming the booking, then call `confirm_booking`. A hold left unpaid ' \
+                'past that time is cancelled and its room is free for other guests.'
     input_schema type: 'object',
                  additionalProperties: false,
                  properties: {
@@ -77,7 +79,6 @@ module Kiosk
     def reserve_room
       @booking = ReserveRoomOperation.call(
         customer_id: kiosk_identity.user_id,
-        agent_id: kiosk_identity.agent_id,
         room_type_id: params[:room_type_id].to_i,
         check_in: params[:check_in],
         check_out: params[:check_out]

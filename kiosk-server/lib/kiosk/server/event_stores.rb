@@ -26,16 +26,9 @@ module Kiosk
         def append(identity_key, event)
           prune_if_due!
 
-          sql = <<~SQL
-            INSERT INTO #{table} (identity_key, topic, subject, occurred_at, data)
-            VALUES ($1, $2, $3, $4, $5)
-            RETURNING id
-          SQL
-          rows = connection.exec_query(
-            sql, 'Kiosk events append',
-            [identity_key.to_s, event['topic'], event['subject'],
-             event['occurred_at'], JSON.generate(event['data'])]
-          ).to_a
+          binds = [identity_key.to_s, event['topic'], event['subject'],
+                   event['occurred_at'], JSON.generate(event['data'])]
+          rows = connection.exec_query(insert_sql, 'Kiosk events append', binds).to_a
           rows.first['id'].to_i
         end
 
@@ -82,6 +75,14 @@ module Kiosk
         end
 
         private
+
+        def insert_sql
+          <<~SQL
+            INSERT INTO #{table} (identity_key, topic, subject, occurred_at, data)
+            VALUES ($1, $2, $3, $4, $5)
+            RETURNING id
+          SQL
+        end
 
         # The wire's five event members, string-keyed, as {EventStore} gives them.
         def to_event(row)

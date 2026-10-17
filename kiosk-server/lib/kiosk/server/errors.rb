@@ -70,22 +70,29 @@ module Kiosk
         422 => 'bad_request',
         429 => 'quota_exceeded'
       }.freeze
-      MAX_HINT_NAMES = 20
-      HINT_PLURALS = { 'query' => 'queries', 'action' => 'actions' }.freeze
+
+      # The hint for a verb name nothing registered: the names that are.
+      module UnknownName
+        MAX_NAMES = 20
+        PLURALS = { 'query' => 'queries', 'action' => 'actions' }.freeze
+
+        def self.hint(name, verb, names)
+          "unknown #{verb} '#{name}'. #{available(verb, names)} Call GET .../schema for the full catalog."
+        end
+
+        def self.available(verb, names)
+          return "No #{PLURALS.fetch(verb, "#{verb}s")} are registered." if names.empty?
+
+          listed = names.first(MAX_NAMES).join(', ')
+          listed += ', …' if names.size > MAX_NAMES
+          "Available: #{listed}."
+        end
+      end
 
       #   Errors.unknown_name_hint("listings", "query", %w[browse_listings listing_detail])
       #   # => "unknown query 'listings'. Available: browse_listings, listing_detail. " \
       #   #    "Call GET .../schema for the full catalog."
-      def self.unknown_name_hint(name, verb, names)
-        listed  = names.first(MAX_HINT_NAMES).join(', ')
-        listed += ', …' if names.size > MAX_HINT_NAMES
-        available = if names.empty?
-                      "No #{HINT_PLURALS.fetch(verb, "#{verb}s")} are registered."
-                    else
-                      "Available: #{listed}."
-                    end
-        "unknown #{verb} '#{name}'. #{available} Call GET .../schema for the full catalog."
-      end
+      def self.unknown_name_hint(name, verb, names) = UnknownName.hint(name, verb, names)
 
       # The two malformed-request sentences are built here and nowhere else;
       # an exception's or a parser's own message never reaches `detail`.
@@ -114,39 +121,43 @@ module Kiosk
       # What a Rails-native raise answers with: our sentence for the decided code.
       # The exception's own text goes to the operator's log, never to the wire.
       # One entry per {STATUS_CODES} value.
+      module Rescued
+        DETAILS = {
+          'bad_request' => 'rejected the request as malformed',
+          'unauthenticated' => 'requires a credential this request did not carry',
+          'forbidden' => 'refused the request',
+          'not_found' => 'found no such record',
+          'method_not_allowed' => 'does not accept the request as sent',
+          'conflict' => 'refused the request as conflicting with current state',
+          'quota_exceeded' => 'refused the request because a quota is exhausted'
+        }.freeze
 
-      RESCUED_DETAILS = {
-        'bad_request' => 'rejected the request as malformed',
-        'unauthenticated' => 'requires a credential this request did not carry',
-        'forbidden' => 'refused the request',
-        'not_found' => 'found no such record',
-        'method_not_allowed' => 'does not accept the request as sent',
-        'conflict' => 'refused the request as conflicting with current state',
-        'quota_exceeded' => 'refused the request because a quota is exhausted'
-      }.freeze
+        HINTS = {
+          'bad_request' => "check the arguments against this verb's input_schema — " \
+                           'GET .../schema publishes it.',
+          'unauthenticated' => 'present a valid access token for this origin and retry.',
+          'forbidden' => 'this principal may not make this call; retrying it unchanged ' \
+                         'will be refused again.',
+          'not_found' => 'an argument names something this origin does not have; ' \
+                         're-read it from a query before retrying.',
+          'method_not_allowed' => 'a query is GET .../<query-name> and an action is ' \
+                                  'POST .../<action-name>; GET .../schema says which each verb is.',
+          'conflict' => 'the state moved under you; re-read it with a query and retry ' \
+                        'with what it says.',
+          'quota_exceeded' => 'the operator sets this quota; wait before retrying.'
+        }.freeze
 
-      RESCUED_HINTS = {
-        'bad_request' => "check the arguments against this verb's input_schema — " \
-                         'GET .../schema publishes it.',
-        'unauthenticated' => 'present a valid access token for this origin and retry.',
-        'forbidden' => 'this principal may not make this call; retrying it unchanged ' \
-                       'will be refused again.',
-        'not_found' => 'an argument names something this origin does not have; ' \
-                       're-read it from a query before retrying.',
-        'method_not_allowed' => 'a query is GET .../<query-name> and an action is ' \
-                                'POST .../<action-name>; GET .../schema says which each verb is.',
-        'conflict' => 'the state moved under you; re-read it with a query and retry ' \
-                      'with what it says.',
-        'quota_exceeded' => 'the operator sets this quota; wait before retrying.'
-      }.freeze
+        def self.wire(code, verb)
+          subject = verb.nil? || verb.to_s.empty? ? 'this verb' : "verb #{verb.to_s.inspect}"
+          { code: code, message: "#{subject} #{DETAILS.fetch(code)}", hint: HINTS.fetch(code) }
+        end
+      end
+
+      RESCUED_DETAILS = Rescued::DETAILS
+      RESCUED_HINTS = Rescued::HINTS
 
       # @return [Hash] `{code:, message:, hint:}` for the handler sub-dispatch envelope
-      def self.rescued_wire(code, verb: nil)
-        subject = verb.nil? || verb.to_s.empty? ? 'this verb' : "verb #{verb.to_s.inspect}"
-        { code: code,
-          message: "#{subject} #{RESCUED_DETAILS.fetch(code)}",
-          hint: RESCUED_HINTS.fetch(code) }
-      end
+      def self.rescued_wire(code, verb: nil) = Rescued.wire(code, verb)
 
       class Base < StandardError
         CODE        = 'internal_error'

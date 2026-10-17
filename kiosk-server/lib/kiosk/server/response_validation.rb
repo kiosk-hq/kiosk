@@ -22,11 +22,15 @@ module Kiosk
         raise Errors::ActionFailed.new(
           "#{kind} #{verb.inspect} rendered a payload its own output_schema rejects: " \
           "#{summarise(errors)}",
-          hint: "the descriptor and the handler disagree — `#{verb}` publishes an " \
-                'output_schema that its rendered answer does not satisfy. Fix whichever ' \
-                'is wrong; a published schema an assistant cannot rely on is worse than ' \
-                'none. (Kiosk.configuration.validate_responses is on.)'
+          hint: mismatch_hint(verb)
         )
+      end
+
+      def mismatch_hint(verb)
+        "the descriptor and the handler disagree — `#{verb}` publishes an " \
+          'output_schema that its rendered answer does not satisfy. Fix whichever ' \
+          'is wrong; a published schema an assistant cannot rely on is worse than ' \
+          'none. (Kiosk.configuration.validate_responses is on.)'
       end
 
       MAX_REPORTED = 5

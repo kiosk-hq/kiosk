@@ -48,19 +48,20 @@ module Kiosk
       def descriptor_for!(command, name)
         registry, other = command == :query ? [Queries, Actions] : [Actions, Queries]
         return registry.describe(name) if registry.known.include?(name)
-
-        if other.known.include?(name)
-          wanted = command == :query ? 'POST' : 'GET'
-          raise Errors::MethodNotAllowed.new(
-            command == :query ? "#{name.inspect} is an action, not a query" : "#{name.inspect} is a query, not an action",
-            allow: wanted,
-            hint: "call #{wanted} #{Kiosk.configuration.mount_path}/#{name} instead — " \
-                  'queries are GET, actions are POST.'
-          )
-        end
+        raise wrong_method(command, name) if other.known.include?(name)
 
         # Neither: the registry's own 404 names what is registered.
         registry.describe(name)
+      end
+
+      def wrong_method(command, name)
+        wanted = command == :query ? 'POST' : 'GET'
+        Errors::MethodNotAllowed.new(
+          command == :query ? "#{name.inspect} is an action, not a query" : "#{name.inspect} is a query, not an action",
+          allow: wanted,
+          hint: "call #{wanted} #{Kiosk.configuration.mount_path}/#{name} instead — " \
+                'queries are GET, actions are POST.'
+        )
       end
 
       # Query string for a query, JSON body for an action; never both.

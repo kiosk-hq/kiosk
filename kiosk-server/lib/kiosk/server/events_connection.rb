@@ -26,6 +26,41 @@ module Kiosk
       # §8.5.6: the credential is re-checked at least every 60 seconds, on every socket.
       class_attribute :reauthorise_every, default: 30
 
+      # The `subscribe` identifiers that the upgrade URL's `topic` and `since` declare.
+      module UrlSubscriptions
+        module_function
+
+        def identifiers(query_string)
+          query = ::Rack::Utils.parse_query(query_string)
+          since = since(query['since'])
+          topics(query['topic']).map do |topic, subject|
+            identifier = { 'channel' => CHANNEL, 'topic' => topic }
+            identifier['subject'] = subject if subject
+            identifier['since'] = since if since
+            ::JSON.generate(identifier)
+          end
+        end
+
+        # `?topic=todo&topic=delivery` or `?topic=todo,delivery`, a subject after
+        # a colon (a topic name cannot hold one). `Rack::Utils.parse_query`
+        # because Rails keeps only the last of a repeated key.
+        def topics(raw)
+          Array(raw).flat_map { |value| value.to_s.split(',') }
+                    .map(&:strip).reject(&:empty?)
+                    .map { |value| value.split(':', 2) }
+                    .map { |topic, subject| [topic, (subject unless subject.to_s.empty?)] }
+        end
+
+        # Digits become an Integer; anything else passes through for
+        # {KioskEvents} to refuse.
+        def since(value)
+          value = value.last if value.is_a?(Array)
+          return nil if value.nil? || value.empty?
+
+          value.match?(/\A\d+\z/) ? value.to_i : value
+        end
+      end
+
       def connect
         identity = resolve_identity || reject_unauthorized_connection
         @kiosk_identity = identity
@@ -57,10 +92,7 @@ module Kiosk
         command = frame['command']
         identifier = frame['identifier']
 
-        unless COMMANDS.include?(command) && identifier.is_a?(::String)
-          return close(reason: ::ActionCable::INTERNAL[:disconnect_reasons][:invalid_request],
-                       reconnect: false)
-        end
+        return close_invalid_request unless COMMANDS.include?(command) && identifier.is_a?(::String)
 
         live = subscriptions.identifiers.include?(identifier)
         return transmit_about(identifier, :confirmation) if command == 'subscribe' && live
@@ -102,6 +134,10 @@ module Kiosk
         nil
       end
 
+      def close_invalid_request
+        close(reason: ::ActionCable::INTERNAL[:disconnect_reasons][:invalid_request], reconnect: false)
+      end
+
       def transmit_about(identifier, type)
         transmit(identifier: identifier, type: ::ActionCable::INTERNAL[:message_types][type])
       end
@@ -115,36 +151,9 @@ module Kiosk
       end
 
       def auto_subscribe!
-        since = requested_since
-        requested_topics.each do |topic, subject|
-          identifier = { 'channel' => CHANNEL, 'topic' => topic }
-          identifier['subject'] = subject if subject
-          identifier['since'] = since if since
-          subscriptions.execute_command(
-            'command' => 'subscribe', 'identifier' => ::JSON.generate(identifier)
-          )
+        UrlSubscriptions.identifiers(request.query_string).each do |identifier|
+          subscriptions.execute_command('command' => 'subscribe', 'identifier' => identifier)
         end
-      end
-
-      # `?topic=todo&topic=delivery` or `?topic=todo,delivery`, a subject after
-      # a colon (a topic name cannot hold one). `Rack::Utils.parse_query`
-      # because Rails keeps only the last of a repeated key.
-      def requested_topics
-        raw = ::Rack::Utils.parse_query(request.query_string)['topic']
-        Array(raw).flat_map { |value| value.to_s.split(',') }
-                  .map(&:strip).reject(&:empty?)
-                  .map { |value| value.split(':', 2) }
-                  .map { |topic, subject| [topic, (subject unless subject.to_s.empty?)] }
-      end
-
-      # Digits become an Integer; anything else passes through for
-      # {KioskEvents} to refuse.
-      def requested_since
-        value = ::Rack::Utils.parse_query(request.query_string)['since']
-        value = value.last if value.is_a?(Array)
-        return nil if value.nil? || value.empty?
-
-        value.match?(/\A\d+\z/) ? value.to_i : value
       end
 
       # Under the upgrade's own issuer: this runs outside {IssuerMiddleware}.

@@ -143,22 +143,74 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
         }
     end
 
-    it "rejects a page marker with no rows" do
+    it "rejects a page whose rows are not an array" do
       klass = Class.new(ApplicationController) do
         include Kiosk::Handler
         kind :query
-        description "Sets the pagination marker by hand and renders the wrong shape."
+        description "Pages an object instead of rows."
         input_schema type: "object", additionalProperties: false, properties: {}, required: []
         output_schema true
-        def bad_page
-          request.env[Kiosk::Server::HandlerDispatch::PAGE_KEY] = true
-          render json: { items: [] }
-        end
+        def bad_page = render_kiosk_page({ items: [] })
       end
       stub_const("SpecBadPageController", klass)
 
       expect { execute(:query, { name: "bad_page" }) }
-        .to raise_error(Kiosk::Server::Errors::ActionFailed, /rendered no rows/)
+        .to raise_error(Kiosk::Server::Errors::ActionFailed, /not an array of rows/)
+    end
+  end
+
+  describe "a handler answering through its template" do
+    around do |example|
+      Dir.mktmpdir do |views|
+        FileUtils.mkdir_p(File.join(views, "spec_templated"))
+        File.write(File.join(views, "spec_templated", "shelf.json.erb"),
+                   '[{"sku": "<%= @sku %>"}]')
+        File.write(File.join(views, "spec_templated", "shelf.html.erb"), "<p>not the wire</p>")
+        File.write(File.join(views, "spec_templated", "shelf_page.json.erb"),
+                   '[{"sku": "<%= @sku %>"}]')
+        @views = views
+        example.run
+      end
+    end
+
+    before do
+      views = @views
+      klass = Class.new(ApplicationController) do
+        include Kiosk::Handler
+        prepend_view_path views
+
+        kind :query
+        description "Lists the shop's stock."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
+        def shelf = @sku = "MILK-1L"
+
+        kind :query
+        description "Lists the shop's stock one page at a time."
+        input_schema type: "object", additionalProperties: false, properties: {}, required: []
+        output_schema true
+        def shelf_page
+          @sku = "OATS-500G"
+          render_kiosk_page(next_cursor: "1", total: 2)
+        end
+      end
+      stub_const("SpecTemplatedController", klass)
+      klass.kiosk_register!
+    end
+
+    it "renders the JSON template whatever the caller's Accept header asks for" do
+      result = Kiosk::Server::CurrentRequest.with(identity: identity,
+                                                  env: { "HTTP_ACCEPT" => "text/html" }) do
+        Kiosk::Server::Executor.call(kind: :query, args: {}, identity: identity,
+                                     connection: connection, name: "shelf")
+      end
+      expect(result.payload).to eq([{ "sku" => "MILK-1L" }])
+    end
+
+    it "pages the rows the template renders" do
+      result = execute(:query, { name: "shelf_page" })
+      expect([result.payload, result.next_cursor, result.total])
+        .to eq([[{ "sku" => "OATS-500G" }], "1", 2])
     end
   end
 

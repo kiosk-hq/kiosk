@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: A handler may answer through its JSON template, whatever the caller's `Accept`, and `render_kiosk_page` pages what that template renders.
+
 - 2026-10-17: Demo controllers are grouped by resource with short descriptions; getgrocery and atablefor verbs take the slot's or seating's instant in place of an id and a date.
 
 - 2026-10-17: Topics publish `examples` in the schema document, as verbs publish `example_params` and `example_row`.

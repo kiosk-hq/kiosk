@@ -488,13 +488,14 @@ gate and the transaction live; a direct request answers 404.
 
 It is an ordinary Rails action. `before_action` filters run, `rescue_from`
 applies, `params` is `ActionController::Parameters`, and the answer is whatever
-you `render`. On top of that:
+you `render` — or the action's JSON template (a Jbuilder view, say), which is
+the one rendered whatever `Accept` the caller sent. On top of that:
 
 - `kiosk_identity` — the `Kiosk::Identity` the wire resolved (`user_id`,
   `agent_id`, `role`, `actor`). The four transaction-local GUCs are already applied to
   the connection, so SQL-side and RLS scoping work whether or not you read it.
 - `render_kiosk_page(rows, next_cursor:, total:)` — answer one page of a large
-  query. The body stays the bare array every query answers: the cursor leaves as
+  query; leave out `rows` and the action's template renders them. The body stays the bare array every query answers: the cursor leaves as
   an RFC 8288 `Link: <…?cursor=…>; rel="next"` response header and the
   matching-row count as `X-Total-Count`. `Kiosk::Server::Cursor` has an offset
   helper; pass `total:` only when you know it.

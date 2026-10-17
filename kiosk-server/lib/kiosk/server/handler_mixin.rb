@@ -363,9 +363,10 @@ module Kiosk
 
         # One page of rows; a nil `next_cursor` is the last page. `total` counts every matching row and
         # nil omits `X-Total-Count`. The body stays the bare rows; the page facts leave as headers.
-        def render_kiosk_page(rows, next_cursor: nil, total: nil)
-          request.env[HandlerDispatch::PAGE_KEY] = true
-          render json: { rows: rows, next_cursor: next_cursor, total: total }
+        # Without `rows` the action's own template renders them.
+        def render_kiosk_page(rows = nil, next_cursor: nil, total: nil)
+          request.env[HandlerDispatch::PAGE_KEY] = { next_cursor: next_cursor, total: total }
+          rows.nil? ? render : render(json: rows)
         end
 
         # A validation failure answers 400 with the errors' full messages. Any other raise Rails knows

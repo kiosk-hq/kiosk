@@ -52,7 +52,7 @@ module Kiosk
         publish_headers(status, headers)
         payload = decode(status, read_body(body), rescued: env[RESCUED_KEY])
 
-        env[PAGE_KEY] ? paginate(payload) : payload
+        env[PAGE_KEY] ? paginate(payload, **env[PAGE_KEY]) : payload
       end
 
       # Handy in `p`/logs and in the specs that assert what got registered.
@@ -116,6 +116,8 @@ module Kiosk
         }
         env[IDENTITY_KEY] = CurrentRequest.identity
         env[DISPATCH_KEY] = @wire_name
+        # The wire answers JSON whatever the caller's `Accept`, so a handler's template is its `.json` one.
+        env["action_dispatch.request.formats"] = [Mime[:json]]
         env
       end
 
@@ -204,18 +206,17 @@ module Kiosk
         hint&.to_s
       end
 
-      # Rebuilds the {Page} from `render_kiosk_page`'s `{rows:, next_cursor:, total:}`.
-      def paginate(payload)
-        unless payload.is_a?(Hash) && payload.key?("rows")
+      # The {Page} of `render_kiosk_page`: the rendered rows plus the page facts it recorded.
+      def paginate(payload, next_cursor:, total:)
+        unless payload.is_a?(Array)
           raise Errors::ActionFailed.new(
-            "query #{@wire_name.inspect} marked its response paginated but rendered no rows",
-            hint: "use render_kiosk_page(rows, next_cursor:) — do not set the marker by hand",
+            "query #{@wire_name.inspect} answered a page that is not an array of rows",
+            hint: "render_kiosk_page renders the rows it is given, or the action's template; " \
+                  "either must be a JSON array",
           )
         end
 
-        Page.new(rows:        payload["rows"],
-                 next_cursor: payload["next_cursor"],
-                 total:       payload["total"])
+        Page.new(rows: payload, next_cursor: next_cursor, total: total)
       end
     end
   end

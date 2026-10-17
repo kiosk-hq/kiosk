@@ -19,10 +19,14 @@
 # The condition lives on the engine class so it is unit-testable without a
 # boot; that the `after_initialize` block RAISES on it is proven against a real
 # boot in default_role_boot_spec.rb.
-RSpec.describe Kiosk::Server::Engine, '.default_role_configuration_error' do
+module DefaultRoleConfigurationSpecHelpers
   def error(config: Kiosk.configuration)
     described_class.default_role_configuration_error(config: config)
   end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.default_role_configuration_error' do
+  include DefaultRoleConfigurationSpecHelpers
 
   context 'when the origin declares a role vocabulary' do
     before { Kiosk.configure { |c| c.roles = %i[customer owner] } }
@@ -42,6 +46,14 @@ RSpec.describe Kiosk::Server::Engine, '.default_role_configuration_error' do
     it 'says what the misconfigured origin would DO, not merely that it is wrong' do
       expect(error).to include('role claim')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.default_role_configuration_error' do
+  include DefaultRoleConfigurationSpecHelpers
+
+  context 'when the origin declares a role vocabulary' do
+    before { Kiosk.configure { |c| c.roles = %i[customer owner] } }
 
     it 'is silent once a default role is configured' do
       Kiosk.configure { |c| c.registration_role = :customer }
@@ -62,6 +74,10 @@ RSpec.describe Kiosk::Server::Engine, '.default_role_configuration_error' do
       expect(error).to be_nil
     end
   end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.default_role_configuration_error' do
+  include DefaultRoleConfigurationSpecHelpers
 
   # ADR-0011's protected operator: roles are hook-or-absent, and «registration
   # MUST NOT fail when [registration_role] is unset». This is the arm that keeps

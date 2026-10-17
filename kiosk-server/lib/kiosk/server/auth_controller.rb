@@ -25,7 +25,7 @@ module Kiosk
       # Unauthenticated: the nonce is worthless without the matching private key.
       def challenge
         public_key = request.query_parameters['public_key']
-        raise Errors::BadRequest.new('missing public_key query parameter') if public_key.nil? || public_key.empty?
+        raise Errors::BadRequest, 'missing public_key query parameter' if public_key.nil? || public_key.empty?
 
         respond(AuthChallenge.issue(public_key_pem: public_key), :ok)
       rescue Errors::Base => e

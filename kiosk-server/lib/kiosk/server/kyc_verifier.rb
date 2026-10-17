@@ -58,13 +58,13 @@ module Kiosk
           )
         end
 
-        raise Errors::Forbidden.new('kyc level not verified') unless payload[:level] == 'verified'
+        raise Errors::Forbidden, 'kyc level not verified' unless payload[:level] == 'verified'
 
         payload[:attributes] = verified_attributes(payload[:attributes])
 
         payload
       rescue ::JWT::ExpiredSignature
-        raise Errors::Forbidden.new('KYC attestation expired')
+        raise Errors::Forbidden, 'KYC attestation expired'
       rescue ::JWT::MissingRequiredClaim
         raise Errors::Forbidden.new(
           'KYC attestation missing a required claim',
@@ -84,9 +84,7 @@ module Kiosk
         return {} if raw.nil?
 
         unless raw.is_a?(Hash)
-          raise Errors::Forbidden.new(
-            'KYC attestation attributes must be an object of {name: true} booleans'
-          )
+          raise Errors::Forbidden, 'KYC attestation attributes must be an object of {name: true} booleans'
         end
 
         raw.each_with_object({}) do |(name, value), acc|

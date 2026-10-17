@@ -40,7 +40,7 @@ module Kiosk
       # @raise [Errors::NotFound] when no live agent row matches the pair.
       def unlink!(agent_id:, user_id:)
         config = Kiosk.configuration
-        raise Errors::BadRequest.new('agent_id required') if agent_id.nil? || agent_id.to_s.empty?
+        raise Errors::BadRequest, 'agent_id required' if agent_id.nil? || agent_id.to_s.empty?
 
         # The ownership predicate is the security boundary: both values are binds.
         conn = ::ActiveRecord::Base.lease_connection

@@ -44,7 +44,7 @@ module Kiosk
           raise Errors::Unauthenticated.new('proof audience mismatch', hint: AUDIENCE_HINT)
         end
 
-        raise Errors::Unauthenticated.new('proof key thumbprint mismatch') if payload.key?(:pub) && payload[:pub] != SigningKey.from_pem(pem).kid
+        raise Errors::Unauthenticated, 'proof key thumbprint mismatch' if payload.key?(:pub) && payload[:pub] != SigningKey.from_pem(pem).kid
 
         payload
       rescue ::JWT::MissingRequiredClaim
@@ -68,9 +68,7 @@ module Kiosk
       def load_public_key(pem)
         rsa = OpenSSL::PKey::RSA.new(pem)
         if rsa.n.num_bits < SigningKey::MIN_KEY_BITS
-          raise Errors::BadRequest.new(
-            "public key too small (#{rsa.n.num_bits} bits; minimum #{SigningKey::MIN_KEY_BITS})"
-          )
+          raise Errors::BadRequest, "public key too small (#{rsa.n.num_bits} bits; minimum #{SigningKey::MIN_KEY_BITS})"
         end
         rsa
       rescue OpenSSL::PKey::PKeyError

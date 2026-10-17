@@ -34,10 +34,10 @@ module Kiosk
         require_amount!(payload, :amount_cents)
         currency = require_currency!(payload)
 
-        raise Errors::Forbidden.new('payment not bound to the cart') unless payload[:cart_mandate_id] == cart.id
+        raise Errors::Forbidden, 'payment not bound to the cart' unless payload[:cart_mandate_id] == cart.id
         unless payload[:amount_cents].to_i == cart.total_amount_cents.to_i &&
                currency == cart.currency
-          raise Errors::Forbidden.new('payment amount/currency does not match cart')
+          raise Errors::Forbidden, 'payment amount/currency does not match cart'
         end
 
         Kiosk::Mandate::PaymentMandate.new(
@@ -216,7 +216,7 @@ module Kiosk
 
         payload
       rescue ::JWT::ExpiredSignature
-        raise Errors::Forbidden.new('mandate expired')
+        raise Errors::Forbidden, 'mandate expired'
       rescue ::JWT::MissingRequiredClaim
         raise Errors::Forbidden.new(
           'mandate missing a required claim',

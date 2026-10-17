@@ -33,7 +33,7 @@ module Kiosk
       def redeem(code:, public_key_pem:, signed:,
                  store: Kiosk.configuration.device_authorization_store,
                  now: Time.now)
-        raise Errors::BadRequest.new('code required') if code.nil? || code.to_s.empty?
+        raise Errors::BadRequest, 'code required' if code.nil? || code.to_s.empty?
 
         pem = public_key_pem.to_s.strip
         PopVerifier.load_public_key(pem)
@@ -45,13 +45,13 @@ module Kiosk
             hint: 'the account holder mints one at POST /auth/link (link codes are single-use and short-lived)'
           )
         end
-        raise Errors::Conflict.new('link code already used') if da.consumed?
+        raise Errors::Conflict, 'link code already used' if da.consumed?
 
         if da.expired_at_time?(now) && da.approved?
           store.update(da.expire)
-          raise Errors::NotFound.new('link code expired')
+          raise Errors::NotFound, 'link code expired'
         end
-        raise Errors::NotFound.new('link code expired') if da.expired?
+        raise Errors::NotFound, 'link code expired' if da.expired?
 
         # The proof comes before the consume, so a failed one leaves the code live.
         payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)
@@ -59,7 +59,7 @@ module Kiosk
 
         # The atomic consume, not `consumed?` above, decides single use under a race.
         claimed = store.claim_consume(da, now: now)
-        raise Errors::Conflict.new('link code already used') if claimed.nil?
+        raise Errors::Conflict, 'link code already used' if claimed.nil?
 
         result = AccountBinding.bind!(
           public_key_pem: pem,

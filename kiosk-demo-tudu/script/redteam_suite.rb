@@ -35,24 +35,20 @@ def pop_proof(key, pem)
   JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
 end
 
-require_relative "equihash_register"
+ASSISTANT = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 
-# equihash_register calls full URLs; tudu's helpers take a path.
-GET_URL  = ->(url)                 { get_json(url.delete_prefix(SERVER)) }
-POST_URL = ->(url, body, hdrs = {}) { post_json(url.delete_prefix(SERVER), body, hdrs) }
-
-def register_agent(_label)
-  key, reg = equihash_register(server: SERVER, issuer: ISSUER, get_json: GET_URL, post_json: POST_URL)
-  { key: key, pem: key.public_key.to_pem,
-    token: reg.fetch("access_token"), agent_id: reg.fetch("agent_id"), user_id: reg.fetch("user_id") }
+def register_agent
+  principal = ASSISTANT.register!
+  { key: principal.rsa_key, pem: principal.rsa_key.public_key.to_pem,
+    token: principal.token, agent_id: principal.agent_id, user_id: principal.user_id }
 end
 
 BATTERY = Kiosk::Redteam::Battery.new
 
 # Fixtures: an owner with a private list, a member, an outsider.
-owner    = register_agent("owner")
-member   = register_agent("member")
-outsider = register_agent("outsider")
+owner    = register_agent
+member   = register_agent
+outsider = register_agent
 
 rc, created = post_json("/kiosk/create_list", { title: "Redteam target" }, WIRE.bearer(owner[:token]))
 abort "owner create_list failed (#{rc}) — run bin/rails db:reset" unless rc == 200
@@ -166,7 +162,7 @@ BATTERY.record("RevokedAgentKey",
                "post-revoke login=#{rc} (want 404)")
 
 # A rebind watermark-revokes the key's pre-link tokens.
-pl = register_agent("prelink")
+pl = register_agent
 rc, plc = post_json("/kiosk/create_list", { title: "Pre-link list" }, WIRE.bearer(pl[:token]))
 pl_list = plc["list_id"]
 rc, link2 = post_json("/kiosk/auth/link", {}, { session: true })

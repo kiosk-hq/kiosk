@@ -115,7 +115,7 @@ e2e/
     ├── application_controller.rb           # ActionController::Base (not ::API) — Devise's controllers inherit it and need `flash`
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
-    ├── bind_assistants.rb                  # mints the suite's two agent principals by ceremony: register → the human's link code → claim (no agent IdP is staged — the engine's own DefaultAgentIdp verifies the tokens it mints)
+    ├── bind_assistants.rb                  # mints the suite's two agent principals by ceremony: the human's link code → claim (no agent IdP is staged — the engine's own DefaultAgentIdp verifies the tokens it mints)
     ├── create_kiosk_pay_stripe_customers.rb # the principal → Stripe Customer table kiosk-pay-stripe keeps
     ├── demo_audit_sink.rb                  # the OPERATOR's `c.audit_sink` callable — Kiosk stores no audit trail, so the harness writes the one an adopter would
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header

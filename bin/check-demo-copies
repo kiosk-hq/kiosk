@@ -33,8 +33,8 @@ if ARGV.include?("--self-test")
   SELF_TEST_PLANTS = [
     { id: "code-copy-diverges", rule: "copy comparison",
       what: "a rename reaches one of the `:code` copies",
-      ops:  [[:edit, "kiosk-demo-philslist/script/equihash_register.rb", "equihash_solve", "solve_equihash"]],
-      expect: /script\/equihash_register\.rb: declared :code — the copies must agree.+\[philslist\]/ },
+      ops:  [[:edit, "kiosk-demo-philslist/app/controllers/application_controller.rb", "WireSignpost", "Signpost"]],
+      expect: /app\/controllers\/application_controller\.rb: declared :code — the copies must agree.+\[philslist\]/ },
     { id: "magic-comment-lost", rule: "copy comparison",
       what: "one copy loses `# frozen_string_literal: true`",
       ops:  [[:edit, "kiosk-demo-stylish/app/controllers/application_controller.rb",
@@ -42,13 +42,13 @@ if ARGV.include?("--self-test")
       expect: /application_controller\.rb: declared :code — prose may differ per demo, MAGIC comments may not/ },
     { id: "ships-stray-copy", rule: "copy comparison",
       what: "a copy appears in a demo outside the entry's `ships:` set",
-      ops:  [[:copy, "kiosk-demo-atablefor/script/bound_assistant.rb",
-              "kiosk-demo-hoteling/script/bound_assistant.rb"]],
-      expect: /script\/bound_assistant\.rb: hoteling ships this file but is not in its declared `ships:` set/ },
+      ops:  [[:copy, "kiosk-demo-hoteling/app/services/price_checker.rb",
+              "kiosk-demo-tudu/app/services/price_checker.rb"]],
+      expect: /app\/services\/price_checker\.rb: tudu ships this file but is not in its declared `ships:` set/ },
     { id: "ships-copy-gone", rule: "copy comparison",
       what: "a demo named in `ships:` stops shipping the file",
-      ops:  [[:delete, "kiosk-demo-stylish/script/bound_assistant.rb"]],
-      expect: /script\/bound_assistant\.rb: `ships:` names stylish, which no longer ships/ },
+      ops:  [[:delete, "kiosk-demo-skooti/app/services/price_checker.rb"]],
+      expect: /app\/services\/price_checker\.rb: `ships:` names skooti, which no longer ships/ },
     { id: "except-has-converged", rule: "copy comparison",
       what: "the excepted copy converges on its siblings",
       ops:  [[:copy, "kiosk-demo-tudu/config/puma.rb", "kiosk-demo-prove/config/puma.rb"]],
@@ -557,15 +557,6 @@ COPIES = {
     rule:  :identical,
     ships: OPERATOR_SEVEN,
     why:  "The exec target of bin/setup's last line.",
-  },
-  "script/bound_assistant.rb" => {
-    rule:  :identical,
-    ships: %w[atablefor philslist stylish],
-    why:  "The one way a driver obtains an agent principal bound to a seeded human, run over the shipped ceremony.",
-  },
-  "script/equihash_register.rb" => {
-    rule: :code,
-    why:  "The register handshake with the Equihash toll; each header names its own demo.",
   },
   "app/services/price_checker.rb" => {
     rule:  :per_demo,
@@ -1699,9 +1690,8 @@ E2E_FIXTURES = {
     why:   "The audit-sink seam is exercised by the harness alone.",
   },
   "equihash_register.rb" => {
-    pairs: "script/equihash_register.rb",
-    rule:  :per_demo,
-    why:   "Run in place; it solves the toll against the generated app, unlike the demos' copy.",
+    pairs: nil,
+    why:   "Run in place; it hands the proofs it paid to the schema checks.",
   },
   "claim_flow.rb" => {
     pairs: nil,
@@ -1717,7 +1707,7 @@ E2E_FIXTURES = {
   },
   "bind_assistants.rb" => {
     pairs: nil,
-    why:   "Run in place in the fixture host's console to mint bindings; a demo binds through its wire.",
+    why:   "Run in place to mint the suite's two principals.",
   },
   "auth_wire_capture.rb" => {
     pairs: nil,

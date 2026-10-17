@@ -9,17 +9,15 @@ require "securerandom"
 require "uri"
 
 require "kiosk/redteam"
-
-require_relative "bound_assistant"
+require "kiosk/test_helpers/person"
 
 SERVER = ENV.fetch("SERVER_URL")
-ISSUER = SERVER
 
 # Two separate seeded diners: my_bookings and cancel_booking scope by account, not by assistant.
-DIEGO = bind_assistant(server: SERVER, issuer: ISSUER,
-                       email: "diego@example.com", password: "atablefor-demo-password")
-BEA   = bind_assistant(server: SERVER, issuer: ISSUER,
-                       email: "bea@example.com", password: "atablefor-demo-password")
+DIEGO = Kiosk::TestHelpers::Person.new(SERVER, email: "diego@example.com", password: "atablefor-demo-password")
+                                  .links_a_newcomer.principal
+BEA   = Kiosk::TestHelpers::Person.new(SERVER, email: "bea@example.com", password: "atablefor-demo-password")
+                                  .links_a_newcomer.principal
 
 DIEGO_UUID = DIEGO.user_id
 BEA_UUID   = BEA.user_id

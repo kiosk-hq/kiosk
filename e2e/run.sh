@@ -459,13 +459,11 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 # ─── mint the two agent principals, by ceremony ─────────────────────────────
 #
 # THE SUITE EARNS ITS PRINCIPALS the way a real assistant does, because there is
-# no parser anywhere that would believe a self-asserted one: an Equihash-tolled
-# `/auth/register` (a HEADLESS account), the
-# human's link code minted on a real Devise session, and `/auth/claim` — which
-# rebinds the key to that human and returns the token every assertion below
-# rides. Two of them, one for alice and one for bob, because the isolation
+# no parser anywhere that would believe a self-asserted one: the human's link
+# code minted on a real Devise session, and `/auth/claim` — which binds a new
+# key to that human and returns the token every assertion below rides. Two of them, one for alice and one for bob, because the isolation
 # assertions need two principals that are genuinely different people.
-log "bind two assistants to the seeded humans (register -> link -> claim)"
+log "bind two assistants to the seeded humans (link -> claim)"
 bind_json=$( cd "$PWD" && SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                KIOSK_ISSUER="$KIOSK_ISSUER" \
                bundle exec ruby "$FIXTURES/bind_assistants.rb" ) \

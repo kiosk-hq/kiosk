@@ -27,12 +27,6 @@
 # So the guard reads require statements and nothing else, and the synthetic
 # examples at the bottom pin that it stays that way.
 #
-# THE ONE SANCTIONED CROSSING is `e2e/fixtures/*` requiring a demo's
-# `script/*` — the harness deliberately runs a shipped demo driver rather than
-# maintaining a ninth copy of the binding ceremony. Those drivers are bare
-# `ruby` processes with no Rails in them, which is exactly why it is safe; a
-# reach into a demo's `app/`, `config/` or `lib/` is not, and fails here.
-#
 # It reads the TRACKED tree (`git ls-files`), so a vendored `.gems/` bundle —
 # which is full of legitimate `require_relative "../../lib/foo"` — is out of
 # scope by construction rather than by an exclusion list.
@@ -87,9 +81,6 @@ def xapp_violations(files)
 
       into, into_rel = target
       next if into == from                       # inside its own app: fine
-      # The one sanctioned crossing: the e2e harness runs a demo's Rails-free
-      # driver rather than keeping a ninth copy of it.
-      next if from.nil? && rel.start_with?("e2e/") && into_rel.start_with?("#{into}/script/")
 
       "#{rel}:#{lineno} requires #{into_rel} (#{from || "e2e"} → #{into})"
     end
@@ -150,12 +141,6 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
       rel = source("kiosk-demo-skooti/script/rental_flow.rb",
                    %(BROKER_APP = File.expand_path("../../kiosk-demo-prove", __dir__)\n) +
                    %(spawn({}, "bin/rails s", chdir: BROKER_APP)\n))
-      expect(xapp_violations([rel])).to be_empty
-    end
-
-    it "ALLOWS the e2e harness to run a demo's Rails-free driver" do
-      rel = source("e2e/fixtures/bind_assistants.rb",
-                   %(require_relative "../../kiosk-demo-stylish/script/bound_assistant"\n))
       expect(xapp_violations([rel])).to be_empty
     end
 

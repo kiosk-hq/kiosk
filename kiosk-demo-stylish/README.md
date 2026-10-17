@@ -104,7 +104,6 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. A refusal is a raised `Kiosk::Server::Errors::BadRequest`, which the wire renders as an RFC 9457 problem document |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine ships as its fallback. Nothing here parses a self-asserted bearer, in any environment |
-| `script/bound_assistant.rb` | The ONE way a driver obtains an AGENT principal bound to a seeded human. It runs the shipped ceremony over real HTTP, and is hand-copied across the demos and held byte-identical by `bin/check-demo-copies`. Its HUMAN counterpart is `Kiosk::UserIdentityProviders::DeviseSession`, shipped by `kiosk-user-idp-devise` |
 | `app/models/salon_clock.rb` | The origin's default IANA zone and the one writer every verb publishes an instant with |
 | `test/` | `bin/rails test`: `test/stories/` tells each client's and the owner's story over HTTP, as their assistants live it; `book_appointment_test.rb` holds the salon's clock |
 

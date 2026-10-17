@@ -5,7 +5,7 @@
 # human's through Devise, the agent's through the shipped ceremony. The
 # assistant suite names no principal in a bearer header of its own: run.sh
 # binds one assistant to each of these two humans through the shipped ceremony
-# (register -> link -> claim) and hands the suite the tokens the origin issued. claim_flow.rb signs Alice in at
+# (link -> claim) and hands the suite the tokens the origin issued. claim_flow.rb signs Alice in at
 # /users/sign_in and approves an assistant there. One salon.
 
 ALICE_ID = "00000000-0000-0000-0000-000000000001"

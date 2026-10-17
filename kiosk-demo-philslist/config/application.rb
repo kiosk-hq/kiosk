@@ -1,12 +1,12 @@
-require_relative "boot"
+require_relative 'boot'
 
-require "rails"
-require "active_model/railtie"
-require "active_job/railtie"
-require "active_record/railtie"
-require "action_controller/railtie"
-require "action_view/railtie"
-require "action_cable/engine"
+require 'rails'
+require 'active_model/railtie'
+require 'active_job/railtie'
+require 'active_record/railtie'
+require 'action_controller/railtie'
+require 'action_view/railtie'
+require 'action_cable/engine'
 
 Bundler.require(*Rails.groups)
 
@@ -17,6 +17,6 @@ module KioskDemoPhilslist
 
     config.api_only = false
     # public first: the kiosk tables reference public.users.
-    config.active_record.dump_schemas = "public,kiosk"
+    config.active_record.dump_schemas = 'public,kiosk'
   end
 end

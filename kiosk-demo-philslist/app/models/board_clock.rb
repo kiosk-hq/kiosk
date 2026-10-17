@@ -3,7 +3,7 @@
 # The clock a listing's publication time is read on: the reader's declared
 # `Kiosk-Timezone`, else the board's own.
 module BoardClock
-  DEFAULT_ZONE_NAME = "Europe/Lisbon"
+  DEFAULT_ZONE_NAME = 'Europe/Lisbon'
 
   module_function
 

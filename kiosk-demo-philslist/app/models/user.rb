@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "digest"
+require 'digest'
 
 # A seller's account. Human account holders sign in with email and
 # password; assistant accounts have no credentials and authenticate by key.

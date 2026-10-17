@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
-require "test_helper"
+require 'test_helper'
 
 class SellingStory < StoryTest
-  test "a seller who retitles a listing keeps its price, and clears the price only by saying so" do
+  test 'a seller who retitles a listing keeps its price, and clears the price only by saying so' do
     seller  = a_seller
-    listing = seller.posts(price_text: "€80")
+    listing = seller.posts(price_text: '€80')
 
-    assert seller.edits(listing, title: "Pine bookshelf").ok?
-    assert_equal "€80", seller.price_of(listing)
+    assert seller.edits(listing, title: 'Pine bookshelf').ok?
+    assert_equal '€80', seller.price_of(listing)
 
     assert seller.edits(listing, price_text: nil).ok?
     assert_nil seller.price_of(listing)

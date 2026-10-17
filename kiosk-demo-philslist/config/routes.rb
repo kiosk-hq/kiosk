@@ -8,7 +8,7 @@ Rails.application.routes.draw do
   end
 
   # Human sign-in (Devise): the web session that approves assistant links.
-  devise_for :users, controllers: { sessions: "kiosk/user_identity_providers/devise/sessions" }
+  devise_for :users, controllers: { sessions: 'kiosk/user_identity_providers/devise/sessions' }
 
   # Public root page: what this demo is + live DOMAIN activity (listing counts
   # read from philslist's own tables) + the PUBLIC classifieds board (open
@@ -16,9 +16,9 @@ Rails.application.routes.draw do
   # SEES a wire-posted listing appear). Writes still happen over the wire
   # (post_listing / edit_listing / close_listing); this page is read-only.
   # Devise needs this as its post-sign-in destination too.
-  root "home#index"
+  root 'home#index'
 
   # Standalone, read-only classifieds board — the same open listings on their
   # own bookmarkable URL, a viewer can watch listings land under each owner.
-  get "/listings", to: "home#listings"
+  get '/listings', to: 'home#listings'
 end

@@ -2,7 +2,7 @@
 
 # The public root page and the read-only board.
 class HomeController < ApplicationController
-  before_action { response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
+  before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 
   def index
     @listings_posted = Listing.count

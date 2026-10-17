@@ -59,6 +59,26 @@ class Order < ApplicationRecord
 
   def items_by_product = order_items.sort_by { it.product.name }
 
+  # What the shelf cannot fill, e.g. ["milk-1l (2 ordered, 0 in stock)"]; empty when it can.
+  def shortfall
+    order_items.group_by(&:product).filter_map do |product, items|
+      qty = items.sum(&:qty)
+      "#{product.sku} (#{qty} ordered, #{product.stock} in stock)" if qty > product.stock
+    end
+  end
+
+  # Once per paid order, whoever reports the payment first: the basket leaves
+  # the shelf and the courier is booked. `dispatch_at` is NULL until then.
+  def self.fulfil!(order_id)
+    transaction do
+      order = paid.where(dispatch_at: nil).lock.find_by(id: order_id)
+      next unless order
+
+      order.order_items.sort_by(&:product_id).each { Product.take!(it.product_id, it.qty) }
+      CourierDispatchJob.arm!(order)
+    end
+  end
+
   private
 
   # A window takes orders while a basket paid now still reaches the door inside it.

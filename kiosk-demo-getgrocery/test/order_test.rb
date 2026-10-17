@@ -13,7 +13,7 @@ class OrderTest < ActiveSupport::TestCase
   def order(date: Date.new(2026, 9, 8), slot: 3, address: ADDRESS, items: [['sourdough-bread', 1]])
     Order.new(user: User.create!, address:, timezone: SHOP.name, total_cents: 0,
               slot_at: DeliverySlots.starts(date, SHOP)[slot - 1],
-              order_items: items.map { |sku, qty| OrderItem.new(sku:, product: Product.find_by(sku:), qty:) })
+              order_items: items.map { |sku, qty| OrderItem.new(sku:, product: Product.find_by(sku:), qty:, price_cents: 449) })
   end
 
   def errors(order, context = :place) = order.tap { it.validate(context) }.errors.full_messages
@@ -56,5 +56,17 @@ class OrderTest < ActiveSupport::TestCase
       placed.slot_at = DeliverySlots.starts(Date.new(2026, 9, 8), SHOP)[2]
       assert_match(/no longer bookable/, errors(placed, :reschedule).sole)
     end
+  end
+
+  test 'a payment reported twice takes the basket off the shelf and books the courier once' do
+    placed = order(date: Date.tomorrow, items: [['sourdough-bread', 3]])
+    placed.update!(status: :paid)
+
+    Order.fulfil!(placed.id)
+    dispatch_at = placed.reload.dispatch_at
+    Order.fulfil!(placed.id)
+
+    assert_equal 17, @bread.reload.stock
+    assert_equal dispatch_at, placed.reload.dispatch_at
   end
 end

@@ -7,10 +7,7 @@ class CourierDispatchJob < ApplicationJob
 
   # Called when an order is paid and again when its window moves; a run left
   # over from the old schedule finds the order not yet due and re-enqueues.
-  def self.arm!(order_id)
-    order = Order.awaiting_courier.find_by(id: order_id)
-    return unless order
-
+  def self.arm!(order)
     order.update!(dispatch_at: [rand(DeliverySlots::PICKING).minutes.from_now, order.slot_at].max)
     enqueue_for(order)
   end

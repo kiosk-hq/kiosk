@@ -32,7 +32,7 @@ class AdminOrdersTest < ActionDispatch::IntegrationTest
     order = order_in('created')
     { 'Pears' => 349, 'Apples' => 199 }.each do |name, price_cents|
       product = Product.create!(sku: "admin-#{name}", name: name, price_cents: price_cents)
-      order.order_items.create!(product: product, qty: 2)
+      order.order_items.create!(product: product, qty: 2, price_cents: price_cents)
     end
 
     get admin_orders_path

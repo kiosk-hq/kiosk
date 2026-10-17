@@ -8,7 +8,7 @@ Single implicit store (getgrocery IS the store): `catalog` / `delivery_slots` /
 `create_order`; `request_kyc` starts the 18+ anonymized check the alcohol gate
 needs, and the `kyc_verification` event carries its signed outcome), real Stripe SetupIntent
 card-on-file payments (stripe-mock when no key is set) behind a cashier check
-(the cart must be EUR, mirror the order at catalog prices, and sum correctly),
+(the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
 and the claim-rebind half of the account-binding ceremony.
 
 ### Prerequisites
@@ -134,6 +134,14 @@ re-validate the same rule: a closed window is rejected with a clean **400
 `delivered` follows five minutes on. `test/delivery_slots_test.rb` and
 `test/slot_search_test.rb` pin the filter across DST and the caller's
 declared calendar.
+
+## Prices and stock
+
+`create_order` keeps each line at the catalogue price of that moment, and `pay`
+charges that price even if the catalogue changes before payment. An order for
+more than the shelf holds is refused with **409 (`conflict`)**, and `pay` is
+refused when an item has sold out since the order was placed. A paid order takes
+its items off the shelf. `test/stories/shelf_test.rb` drives all four.
 
 ## Age-restricted purchases (anonymized KYC)
 

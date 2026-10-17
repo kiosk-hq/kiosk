@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# One line of an order, at the price it was ordered at.
 class OrderItem < ApplicationRecord
   MAX_QTY = 99
 

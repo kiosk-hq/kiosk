@@ -47,7 +47,7 @@ Kiosk.configure do |c|
     status_column: 'status', unpaid: 'created'
   )
   c.cart_price_checker = PriceChecker
-  c.after_payment      = ->(order_id) { CourierDispatchJob.arm!(order_id) }
+  c.after_payment      = ->(order_id) { Order.fulfil!(order_id) }
 end
 
 # KYC: the broker that checks the customer, and the claims this origin asks for.

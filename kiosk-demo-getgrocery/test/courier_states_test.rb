@@ -18,7 +18,7 @@ class CourierStatesTest < ActiveSupport::TestCase
   test 'for an open window the courier leaves 20–30 minutes after payment and arrives five minutes later' do
     freeze_time
     order = paid_order(1.hour.ago)
-    CourierDispatchJob.arm!(order.id)
+    CourierDispatchJob.arm!(order)
     assert order.reload.dispatch_at.between?(20.minutes.from_now, 30.minutes.from_now)
 
     head = @events.head
@@ -48,7 +48,7 @@ class CourierStatesTest < ActiveSupport::TestCase
   test 'for a later window the courier leaves as it opens, and not before' do
     window = 2.days.from_now.change(usec: 0)
     order  = paid_order(window)
-    CourierDispatchJob.arm!(order.id)
+    CourierDispatchJob.arm!(order)
     assert_equal window, order.reload.dispatch_at
 
     head = @events.head

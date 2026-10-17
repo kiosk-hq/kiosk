@@ -14,7 +14,7 @@ class RescheduleDeliveryOperation
     zone    = DeliverySlots.zone_at(address)
     order.assign_attributes(status: :rescheduled, address: address, timezone: zone.name, slot_at: slot_at)
     order.save!(context: :reschedule)
-    CourierDispatchJob.arm!(order.id)
+    CourierDispatchJob.arm!(order)
     order
   end
 

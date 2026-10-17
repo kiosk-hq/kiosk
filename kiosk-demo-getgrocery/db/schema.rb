@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_000002) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -23,6 +23,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
     t.integer "qty", default: 1, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "price_cents", null: false
     t.index ["order_id"], name: "index_order_items_on_order_id"
     t.index ["product_id"], name: "index_order_items_on_product_id"
   end

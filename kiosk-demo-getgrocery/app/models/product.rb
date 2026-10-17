@@ -16,4 +16,8 @@ class Product < ApplicationRecord
   end
 
   def low_stock? = stock <= LOW_STOCK_THRESHOLD
+
+  # One statement, so concurrent payments never lose a decrement. A shelf
+  # oversold by a payment race reads 0.
+  def self.take!(id, qty) = where(id:).update_all(['stock = GREATEST(stock - ?, 0)', qty])
 end

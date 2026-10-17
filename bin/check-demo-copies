@@ -580,7 +580,9 @@ COPIES = {
   },
   'config/puma.rb' => {
     rule: :identical,
-    except: { 'prove' => PROVE_SKELETON },
+    except: { 'prove' => PROVE_SKELETON,
+              'getgrocery' => 'adds `plugin :solid_queue`, which runs its job queue.',
+              'skooti' => 'adds `plugin :solid_queue`, which runs its job queue.' },
     why: 'Port and concurrency come from the environment, so nothing in it is per-demo.'
   },
   'config/initializers/filter_parameter_logging.rb' => {
@@ -698,6 +700,11 @@ COPIES = {
     rule: :identical,
     ships: %w[getgrocery hoteling skooti],
     why: "kiosk-pay-stripe's stripe_customers table, in the three demos that take money."
+  },
+  'db/migrate/20261018000001_create_solid_queue_tables.rb' => {
+    rule: :identical,
+    ships: %w[getgrocery skooti],
+    why: "Solid Queue's tables, in the two demos whose jobs run on it."
   },
   'script/redteam_suite.rb' => {
     rule: :per_demo, why: "That demo's attack battery, against its own verbs."

@@ -12,6 +12,9 @@ gem 'tzinfo-data', platforms: %i[windows jruby]
 # The answers to the Kiosk queries and actions are app/views/kiosk/**/*.json.jbuilder.
 gem 'jbuilder'
 
+# The job queue, on the primary database: the courier's departures and the daily restock (config/recurring.yml).
+gem 'solid_queue'
+
 # The human shopper signs in with a real Devise session; the Kiosk
 # account-binding surfaces (device verify page, link mint, unlink) authenticate
 # that Warden session through the kiosk-user-idp-devise adapter below.

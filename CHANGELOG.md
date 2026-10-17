@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: getgrocery and skooti run their jobs on Solid Queue inside Puma, so a scheduled job survives a restart.
+
 - 2026-10-17: stylish drops the `availability` query; `service_menu` already lists every bookable service.
 
 - 2026-10-17: `kiosk:install` writes each migration's DDL into the file, so a generated migration no longer depends on the installed kiosk-server version.

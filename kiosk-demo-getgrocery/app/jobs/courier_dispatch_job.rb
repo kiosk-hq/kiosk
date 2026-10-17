@@ -24,6 +24,13 @@ class CourierDispatchJob < ApplicationJob
 
     order.out_for_delivery!
     arrival = DeliverySlots::DRIVE.from_now
+    announce_departure(order, arrival)
+    OrderDeliveredJob.set(wait_until: arrival).perform_later(order.id)
+  end
+
+  private
+
+  def announce_departure(order, arrival)
     Kiosk::Server::Events.emit(
       topic: :order_delivery, subject: order.id, identity_scope: [order.user_id],
       data: { 'order_id' => order.id,
@@ -32,6 +39,5 @@ class CourierDispatchJob < ApplicationJob
               'eta_label' => DeliverySlots.clock_label(arrival, order.zone),
               'timezone' => order.timezone }
     )
-    OrderDeliveredJob.set(wait_until: arrival).perform_later(order.id)
   end
 end

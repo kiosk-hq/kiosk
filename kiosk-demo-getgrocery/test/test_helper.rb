@@ -38,7 +38,7 @@ class Shopper < Kiosk::TestHelpers::Customer
   def delivery_windows(address: HOME, **) = asks(:delivery_slots, delivery_address: address, **)
   def orders_placed = asks(:my_orders).rows
 
-  def orders(*skus, window: 1, on: Date.current + 1, address: HOME, slot_at: window_start(window, on, address), **extra)
+  def orders(*skus, address: HOME, slot_at: window_start(1, Date.current + 1, address), **extra)
     does(:create_order, items: skus.map { { sku: it, qty: 1 } }, slot_at:, delivery_address: address, **extra)
       .tap { (@baskets ||= {})[it['order_id']] = skus }
   end

@@ -13,7 +13,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
     def release! = @gate << :go
     def setup_required?(*) = false
 
-    def capture(cart_mandate, payment_method: nil)
+    def capture(cart_mandate, **)
       @charged_cents = cart_mandate.total_amount_cents
       @gate.pop
       { psp_reference: 'pi_blocking', settled_amount_cents: @charged_cents, settled_at: Time.now.utc }
@@ -26,7 +26,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
     def initialize = @captures = Concurrent::AtomicFixnum.new
     def setup_required?(*) = false
 
-    def capture(cart_mandate, payment_method: nil)
+    def capture(cart_mandate, **)
       @captures.increment
       sleep 0.05
       { psp_reference: 'pi_counting', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
@@ -66,7 +66,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
     ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart) }
   end
 
-  def wait_until
+  def eventually?
     50.times do
       return true if yield
 
@@ -79,7 +79,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
     order = place('banana')
     psp   = BlockingPsp.new
     paying = Thread.new { capture(psp, order) }
-    assert(wait_until { status(order['order_id']) == 'paying' })
+    assert(eventually? { status(order['order_id']) == 'paying' })
     assert_equal 'pending', payment_state(order['order_id'])
 
     dear = place('olive-oil', qty: OrderItem::MAX_QTY)

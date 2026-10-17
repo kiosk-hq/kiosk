@@ -11,10 +11,14 @@
 # The condition is a class method rather than inline in the engine's
 # `after_initialize` block so it can be asserted without booting an app; the
 # block is three lines that call it.
-RSpec.describe Kiosk::Server::Engine, '.issuer_warning' do
+module IssuerWarningSpecHelpers
   def warning(local: false)
     described_class.issuer_warning(config: Kiosk.configuration, local: local)
   end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.issuer_warning' do
+  include IssuerWarningSpecHelpers
 
   context 'when `issuer` is unset' do
     it 'warns even in development, where the loopback half stays quiet' do
@@ -32,6 +36,10 @@ RSpec.describe Kiosk::Server::Engine, '.issuer_warning' do
       expect(warning).to include('`c.issuer` is not set')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.issuer_warning' do
+  include IssuerWarningSpecHelpers
 
   context 'when `issuer` is a loopback origin' do
     before { Kiosk.configure { |c| c.issuer = 'http://localhost:3000' } }
@@ -55,6 +63,10 @@ RSpec.describe Kiosk::Server::Engine, '.issuer_warning' do
       end
     end
   end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.issuer_warning' do
+  include IssuerWarningSpecHelpers
 
   context 'when one of `additional_origins` is a loopback origin' do
     before do

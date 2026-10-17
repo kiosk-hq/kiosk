@@ -3,7 +3,7 @@
 # Proof-of-possession itself is covered in pop_verifier_spec.rb; here it is
 # stubbed so the login DB branch (known key → token, unknown key → 404) can be
 # exercised in isolation with the FakeConnection.
-RSpec.describe Kiosk::Server::AgentLogin do
+RSpec.shared_context 'agent login spec: stubbed proof and connection' do
   let(:pem) { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
   let(:con) { FakeConnection.new }
 
@@ -20,6 +20,10 @@ RSpec.describe Kiosk::Server::AgentLogin do
     allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })
     allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
   end
+end
+
+RSpec.describe Kiosk::Server::AgentLogin do
+  include_context 'agent login spec: stubbed proof and connection'
 
   it 'mints a fresh token for a known key and provisions nothing' do
     route_exec_query(con) { [{ 'id' => 'agent-1', 'user_id' => 42, 'allowed_roles' => '{customer}' }] }
@@ -44,6 +48,10 @@ RSpec.describe Kiosk::Server::AgentLogin do
     end
     expect(subs).to eq([42, 42])
   end
+end
+
+RSpec.describe Kiosk::Server::AgentLogin do
+  include_context 'agent login spec: stubbed proof and connection'
 
   # K-782: the presented key is the request body. It reaches the lookup as `$1`,
   # so it is never read as SQL — and the statement text cannot contain it.
@@ -68,6 +76,10 @@ RSpec.describe Kiosk::Server::AgentLogin do
       public_key_pem: pem, nonce: 'n'
     )
   end
+end
+
+RSpec.describe Kiosk::Server::AgentLogin do
+  include_context 'agent login spec: stubbed proof and connection'
 
   it 'raises NotFound for an unregistered key (no silent new account)' do
     route_exec_query(con) { [] }

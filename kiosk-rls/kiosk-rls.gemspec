@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/rls/version"
+require_relative 'lib/kiosk/rls/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-rls"
+  spec.name          = 'kiosk-rls'
   spec.version       = Kiosk::RLS::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "RLS DSL and PostgreSQL DDL emitter for the Kiosk framework"
+  spec.summary       = 'RLS DSL and PostgreSQL DDL emitter for the Kiosk framework'
   spec.description   = <<~DESC
     kiosk-rls provides the row-level-security DSL Kiosk providers use inside
     their ActiveRecord migrations: `enable_rls_on`, `policy`, plus the
@@ -25,20 +25,21 @@ Gem::Specification.new do |spec|
     No PostgreSQL runtime dependency — pure SQL generation. The host
     provides the connection.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]     = spec.homepage
-  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-rls/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']     = spec.homepage
+  spec.metadata['source_code_uri']  = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']    = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-rls/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri']  = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
 
-  spec.add_dependency "kiosk-core", "~> 0.5.0"
+  spec.add_dependency 'kiosk-core', '~> 0.5.0'
 
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rake",  "~> 13.2"
+  spec.add_development_dependency 'rake',  '~> 13.2'
+  spec.add_development_dependency 'rspec', '~> 3.13'
 end

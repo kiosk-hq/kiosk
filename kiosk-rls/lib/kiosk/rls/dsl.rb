@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "kiosk/rls/policy"
-require "kiosk/rls/table"
-require "kiosk/rls/emitter"
+require 'kiosk/rls/policy'
+require 'kiosk/rls/table'
+require 'kiosk/rls/emitter'
 
 module Kiosk
   module RLS
@@ -24,10 +24,10 @@ module Kiosk
 
       def add_kiosk_policy_to(table_name, action, name: nil, using: nil, check: nil)
         policy = Policy.new(
-          name:   name || default_policy_name(table_name, action),
+          name: name || default_policy_name(table_name, action),
           action: action,
-          using:  using,
-          check:  check,
+          using: using,
+          check: check
         )
         emit_rls([Emitter.create_policy_sql(table_name.to_s, policy)])
       end
@@ -36,12 +36,12 @@ module Kiosk
       def change_kiosk_policy_on(table_name, action, name: nil, using: nil, check: nil)
         policy_name = name || default_policy_name(table_name, action)
         emit_rls([
-          Emitter.drop_policy_sql(table_name.to_s, policy_name),
-          Emitter.create_policy_sql(
-            table_name.to_s,
-            Policy.new(name: policy_name, action: action, using: using, check: check),
-          ),
-        ])
+                   Emitter.drop_policy_sql(table_name.to_s, policy_name),
+                   Emitter.create_policy_sql(
+                     table_name.to_s,
+                     Policy.new(name: policy_name, action: action, using: using, check: check)
+                   )
+                 ])
       end
 
       def remove_kiosk_policy_from(table_name, action, name: nil)

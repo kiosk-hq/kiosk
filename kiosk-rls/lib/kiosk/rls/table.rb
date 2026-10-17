@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/rls/policy"
+require 'kiosk/rls/policy'
 
 module Kiosk
   module RLS
@@ -18,10 +18,10 @@ module Kiosk
 
       def policy(action, name: nil, using: nil, check: nil)
         @policies << Policy.new(
-          name:   name || default_policy_name(action),
+          name: name || default_policy_name(action),
           action: action,
-          using:  using,
-          check:  check,
+          using: using,
+          check: check
         )
       end
 
@@ -34,7 +34,7 @@ module Kiosk
         if @comment_text.nil? || @comment_text.empty?
           raise ArgumentError,
                 "enable_rls_on(:#{@name}) requires a `comment \"...\"` " \
-                "inside the block"
+                'inside the block'
         end
         self
       end

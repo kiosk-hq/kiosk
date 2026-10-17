@@ -13,15 +13,13 @@ module Kiosk
                 "action must be one of #{ACTIONS.inspect}, got #{action.inspect}"
         end
 
-        if using.nil? && check.nil?
-          raise ArgumentError, "at least one of using:/check: required"
-        end
+        raise ArgumentError, 'at least one of using:/check: required' if using.nil? && check.nil?
 
         super(
-          name:   name.to_s,
+          name: name.to_s,
           action: action,
-          using:  using && using.to_s,
-          check:  check && check.to_s,
+          using: using && using.to_s,
+          check: check && check.to_s,
         )
       end
     end

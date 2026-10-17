@@ -40,11 +40,11 @@ module Kiosk
           parts = [
             "CREATE POLICY #{quote_ident(policy.name)}",
             "ON #{quote_ident(table_name)}",
-            "FOR #{policy.action.to_s.upcase}",
+            "FOR #{policy.action.to_s.upcase}"
           ]
           parts << "USING (#{policy.using})"           if policy.using
           parts << "WITH CHECK (#{policy.check})"      if policy.check
-          parts.join(" ")
+          parts.join(' ')
         end
 
         def drop_policy_sql(table_name, policy_name)
@@ -63,9 +63,9 @@ module Kiosk
         private
 
         def quote_ident(name)
-          name.to_s.split(".").map { |part|
+          name.to_s.split('.').map do |part|
             %("#{part.gsub('"', '""')}")
-          }.join(".")
+          end.join('.')
         end
 
         def quote_literal(text)

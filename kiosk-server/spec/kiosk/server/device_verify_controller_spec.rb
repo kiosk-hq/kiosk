@@ -11,12 +11,8 @@
 require 'rack/mock'
 require 'openssl'
 
-RSpec.describe 'DeviceVerifyController' do
-  let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:rsa)     { OpenSSL::PKey::RSA.generate(2048) }
-  let(:pem)     { rsa.public_key.to_pem }
-  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
-  let(:session) { {} }
+module DeviceVerifyControllerSpecHelpers
+  VERIFY_URL = 'https://provider.example/kiosk/oauth/device/verify'
 
   # A user_idp whose #verify returns the given identity (or nil).
   def wire_user_idp(identity)
@@ -26,6 +22,40 @@ RSpec.describe 'DeviceVerifyController' do
     end
     Kiosk.configure { |c| c.user_idp = idp.new(identity) }
   end
+
+  def dispatch(action, method:, params: {}, headers: {})
+    env = Rack::MockRequest.env_for(VERIFY_URL, method: method, params: params)
+    headers.each { |k, v| env[k] = v }
+    call_action(Kiosk::Server::DeviceVerifyController, action, env)
+  end
+
+  def dispatch_guarded(env_overrides)
+    env = Rack::MockRequest.env_for(VERIFY_URL, method: 'POST')
+    env_overrides.each { |k, v| env[k] = v }
+    call_action(guarded, :create, env)
+  end
+
+  def call_action(controller, action, env)
+    env['rack.session'] = session
+    status, response_headers, body = controller.action(action).call(env)
+    raw = +''
+    body.each { |chunk| raw << chunk }
+    [status, raw, response_headers]
+  end
+
+  def start_claim
+    Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
+  end
+end
+
+RSpec.shared_context 'device verify controller spec: signed-in holder' do
+  include DeviceVerifyControllerSpecHelpers
+
+  let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
+  let(:rsa)     { OpenSSL::PKey::RSA.generate(2048) }
+  let(:pem)     { rsa.public_key.to_pem }
+  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
+  let(:session) { {} }
 
   let(:human) { build_identity(actor: 'human', agent_id: nil, user_id: user_id) }
 
@@ -37,23 +67,10 @@ RSpec.describe 'DeviceVerifyController' do
     end
     wire_user_idp(human)
   end
+end
 
-  def dispatch(action, method:, params: {}, headers: {})
-    env = Rack::MockRequest.env_for(
-      'https://provider.example/kiosk/oauth/device/verify',
-      method: method, params: params
-    )
-    headers.each { |k, v| env[k] = v }
-    env['rack.session'] = session
-    status, response_headers, body = Kiosk::Server::DeviceVerifyController.action(action).call(env)
-    raw = +''
-    body.each { |chunk| raw << chunk }
-    [status, raw, response_headers]
-  end
-
-  def start_claim
-    Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
-  end
+RSpec.describe 'DeviceVerifyController', 'show' do
+  include_context 'device verify controller spec: signed-in holder'
 
   it 'renders the code-entry form for a signed-in account holder' do
     status, html = dispatch(:show, method: 'GET')
@@ -73,50 +90,52 @@ RSpec.describe 'DeviceVerifyController' do
     status, = dispatch(:show, method: 'GET')
     expect(status).to eq(401)
   end
+end
 
-  # VERIFY-PAGE-UNAUTH-UX (K-1779): this page is the DEFAULT human step of the
-  # claim ceremony — the `verification_uri` an assistant hands its human — so a
-  # signed-out browser landing on it needs the same way forward its sibling
-  # manage-assistants page has had. Both read `config.sign_in_path` through
-  # {Kiosk::Server::AccountHolderGate}.
-  context 'with config.sign_in_path set (browser UX)' do
-    before do
-      wire_user_idp(nil)
-      Kiosk.configure { |c| c.sign_in_path = '/users/sign_in' }
-    end
+# VERIFY-PAGE-UNAUTH-UX (K-1779): this page is the DEFAULT human step of the
+# claim ceremony — the `verification_uri` an assistant hands its human — so a
+# signed-out browser landing on it needs the same way forward its sibling
+# manage-assistants page has had. Both read `config.sign_in_path` through
+# {Kiosk::Server::AccountHolderGate}.
+RSpec.describe 'DeviceVerifyController', 'with config.sign_in_path set (browser UX)' do
+  include_context 'device verify controller spec: signed-in holder'
 
-    it 'redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to' do
-      status, _body, headers = dispatch(
-        :show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' }
-      )
-      expect(status).to eq(302)
-      expect(headers['Location']).to end_with('/users/sign_in')
-      expect(session['user_return_to']).to eq('/kiosk/oauth/device/verify')
-    end
-
-    # The flash mixin needs the flash MIDDLEWARE (present in a real Rails app;
-    # absent in this bare Metal dispatch), so assert the controller ATTEMPTS to
-    # set the alert rather than reading it back out of a serialised session.
-    it 'sets a flash alert telling the visitor to sign in' do
-      flash_double = {}
-      allow_any_instance_of(Kiosk::Server::DeviceVerifyController)
-        .to receive(:flash).and_return(flash_double)
-      dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' })
-      expect(flash_double[:alert]).to eq('Please sign in to approve the assistant link.')
-    end
-
-    # A non-HTML caller gets the 401, and the body names the sign-in page and
-    # that a browser opening this page is sent there and back.
-    it '401s a non-HTML request with a body naming the sign-in URL' do
-      status, body = dispatch(
-        :show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'application/json' }
-      )
-      expect(status).to eq(401)
-      expect(body).to include('Sign in')
-      expect(body).to include('https://provider.example/users/sign_in')
-      expect(body).to include('https://provider.example/kiosk/oauth/device/verify')
-    end
+  before do
+    wire_user_idp(nil)
+    Kiosk.configure { |c| c.sign_in_path = '/users/sign_in' }
   end
+
+  it 'redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to' do
+    status, _body, headers = dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' })
+    expect(status).to eq(302)
+    expect(headers['Location']).to end_with('/users/sign_in')
+    expect(session['user_return_to']).to eq('/kiosk/oauth/device/verify')
+  end
+
+  # The flash mixin needs the flash MIDDLEWARE (present in a real Rails app;
+  # absent in this bare Metal dispatch), so assert the controller ATTEMPTS to
+  # set the alert rather than reading it back out of a serialised session.
+  it 'sets a flash alert telling the visitor to sign in' do
+    flash_double = {}
+    allow_any_instance_of(Kiosk::Server::DeviceVerifyController)
+      .to receive(:flash).and_return(flash_double)
+    dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' })
+    expect(flash_double[:alert]).to eq('Please sign in to approve the assistant link.')
+  end
+
+  # A non-HTML caller gets the 401, and the body names the sign-in page and
+  # that a browser opening this page is sent there and back.
+  it '401s a non-HTML request with a body naming the sign-in URL' do
+    status, body = dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'application/json' })
+    expect(status).to eq(401)
+    expect(body).to include('Sign in')
+    expect(body).to include('https://provider.example/users/sign_in')
+    expect(body).to include('https://provider.example/kiosk/oauth/device/verify')
+  end
+end
+
+RSpec.describe 'DeviceVerifyController', 'consent panel' do
+  include_context 'device verify controller spec: signed-in holder'
 
   it 'shows the consent panel with key fingerprint and requested-at for a live code' do
     start = start_claim
@@ -146,6 +165,10 @@ RSpec.describe 'DeviceVerifyController' do
     expect(html).to include('Access you are handing it')
     expect(html).to include('owner')
   end
+end
+
+RSpec.describe 'DeviceVerifyController', 'consent panel without a role' do
+  include_context 'device verify controller spec: signed-in holder'
 
   it 'says so plainly when the provider gives the approver no role' do
     wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: nil))
@@ -163,6 +186,10 @@ RSpec.describe 'DeviceVerifyController' do
     expect(status).to eq(200)
     expect(html).to include('not recognised')
   end
+end
+
+RSpec.describe 'DeviceVerifyController', 'approve' do
+  include_context 'device verify controller spec: signed-in holder'
 
   it "approve stamps the SESSION holder's user_id on the row" do
     start = start_claim
@@ -195,6 +222,10 @@ RSpec.describe 'DeviceVerifyController' do
     expect(store.find_by_device_code_hash(start[:da].device_code_hash).requested_role)
       .to eq('owner')
   end
+end
+
+RSpec.describe 'DeviceVerifyController', 'approve without a role, and deny' do
+  include_context 'device verify controller spec: signed-in holder'
 
   it 'approve leaves the row role-less when the session holder has no role' do
     wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: nil))
@@ -219,6 +250,10 @@ RSpec.describe 'DeviceVerifyController' do
     expect(html).to include('Denied')
     expect(store.find_by_device_code_hash(start[:da].device_code_hash)).to be_denied
   end
+end
+
+RSpec.describe 'DeviceVerifyController', 'decision errors and attempt cap' do
+  include_context 'device verify controller spec: signed-in holder'
 
   it 'rejects an unknown decision' do
     status, = dispatch(
@@ -246,52 +281,42 @@ RSpec.describe 'DeviceVerifyController' do
     expect(status).to eq(429)
     expect(body).to include('Too many')
   end
+end
 
-  # ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────
-  # Same story as AssistantsController (its spec carries the long version): an
-  # assistant POSTing JSON to this human consent page has no CSRF token, and in
-  # production the resulting InvalidAuthenticityToken yields the host's generic
-  # error material (a static public/422.html, a status echo, or a bodyless 422),
-  # never a pointer to the wire. The harness has no Rails app, so the subclass
-  # opts into `protect_from_forgery` to reproduce that condition.
-  describe 'forgery protection on a JSON POST' do
-    let(:guarded) do
-      stub_const(
-        'ForgeryGuardedDeviceVerifyController',
-        Class.new(Kiosk::Server::DeviceVerifyController) { protect_from_forgery with: :exception }
-      )
-    end
+# ── AGENT-SIGNPOST, the forgery-protection path (K-459) ───────────────────
+# Same story as AssistantsController (its spec carries the long version): an
+# assistant POSTing JSON to this human consent page has no CSRF token, and in
+# production the resulting InvalidAuthenticityToken yields the host's generic
+# error material (a static public/422.html, a status echo, or a bodyless 422),
+# never a pointer to the wire. The harness has no Rails app, so the subclass
+# opts into `protect_from_forgery` to reproduce that condition.
+RSpec.describe 'DeviceVerifyController', 'forgery protection on a JSON POST' do
+  include_context 'device verify controller spec: signed-in holder'
 
-    def dispatch_guarded(env_overrides)
-      env = Rack::MockRequest.env_for(
-        'https://provider.example/kiosk/oauth/device/verify', method: 'POST'
-      )
-      env_overrides.each { |k, v| env[k] = v }
-      env['rack.session'] = session
-      status, headers, body = guarded.action(:create).call(env)
-      raw = +''
-      body.each { |chunk| raw << chunk }
-      [status, raw, headers]
-    end
+  let(:guarded) do
+    stub_const(
+      'ForgeryGuardedDeviceVerifyController',
+      Class.new(Kiosk::Server::DeviceVerifyController) { protect_from_forgery with: :exception }
+    )
+  end
 
-    it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the wire' do
-      status, body, headers = dispatch_guarded(
-        'CONTENT_TYPE' => 'application/json', 'rack.input' => StringIO.new('{}')
-      )
+  it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the wire' do
+    status, body, headers = dispatch_guarded(
+      'CONTENT_TYPE' => 'application/json', 'rack.input' => StringIO.new('{}')
+    )
 
-      expect(status).to eq(422)
-      expect(headers['Content-Type']).to include('application/json')
-      expect(body).not_to be_empty
-      envelope = JSON.parse(body)
-      expect(envelope['ok']).to be(false)
-      expect(envelope.dig('error', 'code')).to eq('invalid_authenticity_token')
-      expect(envelope.dig('error', 'hint'))
-        .to include('https://provider.example/.well-known/kiosk.json')
-    end
+    expect(status).to eq(422)
+    expect(headers['Content-Type']).to include('application/json')
+    expect(body).not_to be_empty
+    envelope = JSON.parse(body)
+    expect(envelope['ok']).to be(false)
+    expect(envelope.dig('error', 'code')).to eq('invalid_authenticity_token')
+    expect(envelope.dig('error', 'hint'))
+      .to include('https://provider.example/.well-known/kiosk.json')
+  end
 
-    it 'still raises for a browser form POST — the CSRF gate is unchanged' do
-      expect { dispatch_guarded('HTTP_ACCEPT' => 'text/html') }
-        .to raise_error(ActionController::InvalidAuthenticityToken)
-    end
+  it 'still raises for a browser form POST — the CSRF gate is unchanged' do
+    expect { dispatch_guarded('HTTP_ACCEPT' => 'text/html') }
+      .to raise_error(ActionController::InvalidAuthenticityToken)
   end
 end

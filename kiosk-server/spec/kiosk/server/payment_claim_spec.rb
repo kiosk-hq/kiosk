@@ -2,46 +2,59 @@
 
 require 'active_record'
 require 'securerandom'
+require_relative '../../support/postgres'
 
-# §11.6's operator half against a real Postgres: one capture per payable row,
-# and a paid state that rests on the capture. No reachable server skips, as the
-# other persistence specs do.
-RSpec.describe Kiosk::Server::PaymentClaim do
+# The operator's half: a catalog that prices every row at 500 cents, a record of
+# every row it was told is paid, and one payable row per example.
+module PaymentClaimSpecHelpers
   # The receipt models fix their table when first loaded, so this shares the
   # schema settlement_spec.rb loads them with.
-  CLAIM_SPEC_SCHEMA = 'kiosk_settlement_spec'
+  SCHEMA = 'kiosk_settlement_spec'
 
-  def self.postgres_error
-    @postgres_error ||= begin
-      ActiveRecord::Base.establish_connection(
-        adapter: 'postgresql',
-        host: ENV.fetch('PGHOST', nil),
-        username: ENV.fetch('PGUSER', nil),
-        password: ENV.fetch('PGPASSWORD', nil),
-        database: ENV.fetch('PGDATABASE', 'postgres')
-      )
-      ActiveRecord::Base.connection.execute('SELECT 1')
-      [false]
-    rescue StandardError => e
-      ["#{e.class}: #{e.message}"]
+  # Every capture it was asked for, and what it was told to do on the next.
+  class ClaimSpecPsp < Kiosk::PaymentProviders::Base
+    attr_reader :captures
+    attr_accessor :during
+
+    def initialize
+      super
+      @captures = []
     end
-    @postgres_error.first
+
+    def capture(cart, **)
+      @captures << cart.id
+      during&.call(cart)
+      { psp_reference: "pi_#{cart.id}", settled_amount_cents: cart.total_amount_cents, settled_at: Time.now.utc }
+    end
   end
 
-  before(:context) do
-    skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error
+  ClaimSpecCart = Struct.new(:id, :user_id, :currency, :total_amount_cents, :line_items, keyword_init: true)
 
-    Kiosk.configure { |c| c.schema = CLAIM_SPEC_SCHEMA }
+  def self.included(group)
+    group.before(:context) do
+      skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
+
+      PaymentClaimSpecHelpers.create_schema
+    end
+    group.after(:context) { SpecPostgres.drop_schema(SCHEMA) }
+    group.before { configure_operator }
+  end
+
+  def self.create_schema
+    Kiosk.configure { |c| c.schema = SCHEMA }
     require_relative '../../../app/models/kiosk/cart_mandate'
     require_relative '../../../app/models/kiosk/settlement'
     defs = Kiosk::Server::SchemaDefinitions
-    s = CLAIM_SPEC_SCHEMA
     conn = ActiveRecord::Base.connection
-    conn.execute(%(DROP SCHEMA IF EXISTS "#{s}" CASCADE))
-    conn.execute(defs.helper_functions_sql(schema: s, user_id_type: :uuid))
-    conn.execute(defs.mandates_sql(schema: s, user_id_type: :uuid))
+    conn.execute(%(DROP SCHEMA IF EXISTS "#{SCHEMA}" CASCADE))
+    conn.execute(defs.helper_functions_sql(schema: SCHEMA, user_id_type: :uuid))
+    conn.execute(defs.mandates_sql(schema: SCHEMA, user_id_type: :uuid))
+    create_payables(conn)
+  end
+
+  def self.create_payables(conn)
     conn.execute(<<~SQL)
-      CREATE TABLE "#{s}".payables (
+      CREATE TABLE "#{SCHEMA}".payables (
         id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id uuid NOT NULL,
         payment_status varchar NOT NULL DEFAULT 'unpaid',
@@ -50,48 +63,30 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     SQL
   end
 
-  after(:context) do
-    ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{CLAIM_SPEC_SCHEMA}" CASCADE)) unless self.class.postgres_error
-  end
-
-  # The operator's half: a catalog that prices every row at 500 cents, and a
-  # record of every row it was told is paid.
-  let(:paid)  { [] }
-  let(:price) { 500 }
-  let(:seen)  { [] }
-  before do
+  def configure_operator
     Kiosk.configure do |c|
       c.cart_price_checker = ->(id, lines) { (seen << [id, lines]) && price }
       c.after_payment      = ->(id) { paid << id }
     end
   end
 
-  let(:conn)   { ActiveRecord::Base.connection }
-  let(:schema) { CLAIM_SPEC_SCHEMA }
-  let(:owner)  { SecureRandom.uuid }
-  let(:payer)  { owner }
-  let(:row)    { conn.select_value(%(INSERT INTO "#{schema}".payables (user_id) VALUES ('#{owner}') RETURNING id)) }
-  let(:psp)    { ClaimSpecPsp.new }
-  subject(:claim) do
-    described_class.new(psp, currency: 'eur', table: "#{schema}.payables", reference: 'booking_id',
-                             query: 'my_bookings')
+  def paid = @paid ||= []
+  def seen = @seen ||= []
+  def price = 500
+  def conn = ActiveRecord::Base.connection
+  def schema = SCHEMA
+  def owner = @owner ||= SecureRandom.uuid
+  def payer = owner
+  def psp = @psp ||= ClaimSpecPsp.new
+
+  def row
+    @row ||= conn.select_value(%(INSERT INTO "#{schema}".payables (user_id) VALUES ('#{owner}') RETURNING id))
   end
 
-  # Every capture it was asked for, and what it was told to do on the next.
-  class ClaimSpecPsp < Kiosk::PaymentProviders::Base
-    attr_reader :captures
-    attr_accessor :during
-
-    def initialize = @captures = []
-
-    def capture(cart, payment_method:)
-      @captures << cart.id
-      during&.call(cart)
-      { psp_reference: "pi_#{cart.id}", settled_amount_cents: cart.total_amount_cents, settled_at: Time.now.utc }
-    end
+  def claim
+    @claim ||= Kiosk::Server::PaymentClaim.new(psp, currency: 'eur', table: "#{schema}.payables",
+                                                    reference: 'booking_id', query: 'my_bookings')
   end
-
-  ClaimSpecCart = Struct.new(:id, :user_id, :currency, :total_amount_cents, :line_items, keyword_init: true)
 
   def cart_for(id, total: 500, user_id: payer, currency: 'EUR', items: [])
     ClaimSpecCart.new(id: SecureRandom.uuid, user_id: user_id, currency: currency, total_amount_cents: total,
@@ -102,25 +97,40 @@ RSpec.describe Kiosk::Server::PaymentClaim do
 
   def settle(id)
     agent = SecureRandom.uuid
-    intent = conn.select_value(<<~SQL)
-      INSERT INTO "#{schema}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
-        currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{payer}', '#{agent}', 'i', 's', 1000, 'EUR', now() + interval '1 day', 'j')
-      RETURNING id
-    SQL
-    cart = conn.select_value(<<~SQL)
-      INSERT INTO "#{schema}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
-        total_amount_cents, currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{intent}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',
-        500, 'EUR', now() + interval '1 day', 'j')
-      RETURNING id
-    SQL
+    intent = insert_intent(agent)
+    cart = insert_cart(agent, intent, id)
     conn.execute(<<~SQL)
       INSERT INTO "#{schema}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
       VALUES ('#{cart}', '#{payer}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
     SQL
   end
+
+  def insert_intent(agent)
+    conn.select_value(<<~SQL)
+      INSERT INTO "#{schema}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
+        currency, expires_at, raw_jws)
+      VALUES ('#{SecureRandom.uuid}', '#{payer}', '#{agent}', 'i', 's', 1000, 'EUR', now() + interval '1 day', 'j')
+      RETURNING id
+    SQL
+  end
+
+  def insert_cart(agent, intent, id)
+    conn.select_value(<<~SQL)
+      INSERT INTO "#{schema}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
+        total_amount_cents, currency, expires_at, raw_jws)
+      VALUES ('#{SecureRandom.uuid}', '#{intent}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',
+        500, 'EUR', now() + interval '1 day', 'j')
+      RETURNING id
+    SQL
+  end
+end
+
+# §11.6's operator half against a real Postgres: one capture per payable row,
+# and a paid state that rests on the capture. No reachable server skips, as the
+# other persistence specs do.
+RSpec.describe Kiosk::Server::PaymentClaim do
+  include PaymentClaimSpecHelpers
 
   it 'captures once and flips the row to paid when the capture returns' do
     claim.capture(cart_for(row))
@@ -150,6 +160,10 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect(refusal&.message).to include('payment in progress', 'my_bookings')
     expect(psp.captures.size).to eq(1)
   end
+end
+
+RSpec.describe Kiosk::Server::PaymentClaim do
+  include PaymentClaimSpecHelpers
 
   it 'refuses a fresh chain for a row already paid, before the PSP' do
     claim.capture(cart_for(row))
@@ -174,6 +188,10 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect(seen).to eq([[row, [item]]])
     expect(psp.captures.size).to eq(1)
   end
+end
+
+RSpec.describe Kiosk::Server::PaymentClaim do
+  include PaymentClaimSpecHelpers
 
   it "releases the claim when the cart total is not the operator's price, and charges nothing" do
     expect { claim.capture(cart_for(row, total: 1)) }
@@ -197,6 +215,10 @@ RSpec.describe Kiosk::Server::PaymentClaim do
       .to raise_error(Kiosk::Server::Errors::Forbidden, /positive qty and price_cents/)
     expect([seen, psp.captures]).to eq([[], []])
   end
+end
+
+RSpec.describe Kiosk::Server::PaymentClaim do
+  include PaymentClaimSpecHelpers
 
   it 'releases on a definitive decline and keeps the claim on an unknown outcome' do
     psp.during = ->(_) { raise Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true) }
@@ -219,6 +241,10 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   it 'answers a reference that is not a uuid with a 400, not a database error' do
     expect { claim.capture(cart_for('1; DROP TABLE x')) }.to raise_error(Kiosk::Server::Errors::BadRequest, /not a uuid/)
   end
+end
+
+RSpec.describe Kiosk::Server::PaymentClaim do
+  include PaymentClaimSpecHelpers
 
   it "refuses a principal paying for another principal's row" do
     expect { claim.capture(cart_for(row, user_id: SecureRandom.uuid)) }
@@ -237,7 +263,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   end
 
   it 'builds the same claim over another PSP' do
-    other = ClaimSpecPsp.new
+    other = PaymentClaimSpecHelpers::ClaimSpecPsp.new
     claim.over(other).capture(cart_for(row))
 
     expect([other.captures.size, psp.captures.size]).to eq([1, 0])

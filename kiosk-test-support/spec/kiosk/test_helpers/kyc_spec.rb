@@ -34,8 +34,7 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
   end
 
   it 'signs an attestation for the principal, addressed to this operator' do
-    claims = { 'age_over_18' => true }
-    expect(verified(kyc_attestation(rider, **claims)))
+    expect(verified(kyc_attestation(rider, age_over_18: true))) # rubocop:disable Naming/VariableNumber -- age_over_18 is the published KYC claim name.
       .to include('sub' => 'u1', 'aud' => 'skooti', 'level' => 'verified', 'attributes' => { 'age_over_18' => true })
   end
 

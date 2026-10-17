@@ -84,16 +84,21 @@ SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
 
 # The refusal echoes the value it got, so `supplied:` keeps the probe's own bytes from reading as a leak.
 def uuid_guard_verdict(path, body_for)
-  MALFORMED_IDS.map { |junk| uuid_guard_probe(path, junk, body_for.call(junk)) }
+  MALFORMED_IDS.map do |junk|
+    args = body_for.call(junk)
+    rc, body, scan = uuid_guard_probe(path, args)
+    code = body['code']
+    # Every typed refusal is 400/bad_request; only the detail ties it to this argument.
+    ok = rc == 400 && code == 'bad_request' &&
+         body['detail'].to_s.include?(args.key(junk).to_s) && !scan.leak?
+    [ok, "#{junk.inspect}→#{rc}/#{code.inspect}#{leak_note(scan)}"]
+  end
 end
 
-def uuid_guard_probe(path, junk, args)
+# The status, body and leak scan of one malformed-id probe.
+def uuid_guard_probe(path, args)
   rc, body = WIRE.post_json(path, args, WIRE.bearer(TOKEN_A))
-  scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
-  # Every typed refusal is 400/bad_request; only the detail ties it to this argument.
-  ok = rc == 400 && body['code'] == 'bad_request' &&
-       body['detail'].to_s.include?(args.key(junk).to_s) && !scan.leak?
-  [ok, "#{junk.inspect}→#{rc}/#{body['code'].inspect}#{leak_note(scan)}"]
+  [rc, body, Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)]
 end
 
 # What a probe report adds when the leak scan found something, or has a note.

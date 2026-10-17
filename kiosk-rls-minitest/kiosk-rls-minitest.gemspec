@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/rls_minitest/version"
+require_relative 'lib/kiosk/rls_minitest/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-rls-minitest"
+  spec.name          = 'kiosk-rls-minitest'
   spec.version       = Kiosk::RLSMinitest::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Minitest integration for the Kiosk journey-test DSL"
+  spec.summary       = 'Minitest integration for the Kiosk journey-test DSL'
   spec.description   = <<~DESC
     kiosk-rls-minitest wires the framework-agnostic Kiosk journey-test DSL
     (kiosk-test-support) into Minitest.
@@ -20,21 +20,22 @@ Gem::Specification.new do |spec|
     for asserting the structured error classes — both also exposed as
     the Minitest `must_raise_*` / `wont_raise_*` spec-DSL forms.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]     = spec.homepage
-  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-rls-minitest/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']     = spec.homepage
+  spec.metadata['source_code_uri']  = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']    = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-rls-minitest/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri']  = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
 
-  spec.add_dependency "kiosk-core",         "~> 0.5.0"
-  spec.add_dependency "kiosk-test-support", "~> 0.5.0"
-  spec.add_dependency "minitest",           ">= 5", "< 7"
+  spec.add_dependency 'kiosk-core',         '~> 0.5.0'
+  spec.add_dependency 'kiosk-test-support', '~> 0.5.0'
+  spec.add_dependency 'minitest',           '>= 5', '< 7'
 
-  spec.add_development_dependency "rake", "~> 13.2"
+  spec.add_development_dependency 'rake', '~> 13.2'
 end

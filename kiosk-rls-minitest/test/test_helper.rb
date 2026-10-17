@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "minitest/autorun"
-require "kiosk/rls_minitest"
+require 'minitest/autorun'
+require 'kiosk/rls_minitest'
 
 # Minimal stand-in for an ActiveRecord user row.
 FakeUser = Struct.new(:id, :role)

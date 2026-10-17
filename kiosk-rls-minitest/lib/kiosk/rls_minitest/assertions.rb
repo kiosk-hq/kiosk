@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require "minitest/assertions"
+require 'minitest/assertions'
 
 module Kiosk
   module RLSMinitest
     # Minitest assertions for the Kiosk error classes; {Kiosk::TestHelpers} mixes them in.
     module Assertions
-      def assert_rls_denied(msg = nil, &block)
-        assert_raises_kiosk(Kiosk::TestHelpers::Errors::RLSDenied, msg, &block)
+      def assert_rls_denied(msg = nil, &)
+        assert_raises_kiosk(Kiosk::TestHelpers::Errors::RLSDenied, msg, &)
       end
 
       # Errors of other classes propagate unchanged.
@@ -18,8 +18,8 @@ module Kiosk
         flunk(message)
       end
 
-      def assert_quota_exceeded(msg = nil, &block)
-        assert_raises_kiosk(Kiosk::TestHelpers::Errors::QuotaExceeded, msg, &block)
+      def assert_quota_exceeded(msg = nil, &)
+        assert_raises_kiosk(Kiosk::TestHelpers::Errors::QuotaExceeded, msg, &)
       end
 
       def refute_quota_exceeded(msg = nil)

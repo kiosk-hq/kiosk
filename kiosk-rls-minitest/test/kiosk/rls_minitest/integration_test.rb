@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "test_helper"
+require 'test_helper'
 
 # Exercise the canonical entry point: a Minitest test class
 # that does `include Kiosk::TestHelpers` should get both the journey DSL
@@ -11,7 +11,7 @@ class IntegrationJourneyTest < Minitest::Test
   def setup
     super
     Kiosk.configure { |c| c.roles = %i[customer master] }
-    @alice = FakeUser.new("u-alice", "customer")
+    @alice = FakeUser.new('u-alice', 'customer')
   end
 
   def test_journey_helpers_are_available
@@ -38,28 +38,28 @@ class IntegrationJourneyTest < Minitest::Test
   def test_as_agent_of_scopes_identity
     observed = nil
     as_agent_of(@alice) { observed = Kiosk::TestHelpers.executor.current_identity }
-    assert_equal "agent",   observed.actor
-    assert_equal "u-alice", observed.user_id
+    assert_equal 'agent',   observed.actor
+    assert_equal 'u-alice', observed.user_id
   end
 
   def test_as_user_scopes_identity_without_agent_id
     as_user(@alice) do
       ident = Kiosk::TestHelpers.executor.current_identity
-      assert_equal "human", ident.actor
+      assert_equal 'human', ident.actor
       assert_nil   ident.agent_id
     end
   end
 
   def test_query_delegates_to_executor
-    Kiosk::TestHelpers.executor.enqueue_query([{ "n" => 1 }])
-    result = as_user(@alice) { query("select 1") }
-    assert_equal [{ "n" => 1 }], result
+    Kiosk::TestHelpers.executor.enqueue_query([{ 'n' => 1 }])
+    result = as_user(@alice) { query('select 1') }
+    assert_equal [{ 'n' => 1 }], result
   end
 
   def test_kiosk_seed_expands_owner_to_user_id
     kiosk_seed(:rentals, owner: @alice)
     call = Kiosk::TestHelpers.executor.calls_of(:seed).first
-    assert_equal({ user_id: "u-alice" }, call.args[:attrs])
+    assert_equal({ user_id: 'u-alice' }, call.args[:attrs])
   end
 
   def test_executor_not_configured_raises

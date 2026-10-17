@@ -380,11 +380,11 @@ if ARGV.include?('--self-test')
                   FileUtils.mkdir_p(File.dirname(path))
                   FileUtils.copy_file(src, path, true) if File.exist?(src)
                 when :each
-                  hits = Dir[File.join(tree, op[1])].select do |f|
+                  hits = Dir[File.join(tree, op[1])].reject do |f|
                     before = File.read(f)
                     after  = before.gsub(op[2]) { op[3] }
                     File.write(f, after) unless after == before
-                    after != before
+                    after == before
                   end
                   trouble ||= "the needle #{op[2].inspect} occurs in no file #{op[1].inspect} matches" if hits.empty?
                 end

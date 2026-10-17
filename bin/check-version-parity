@@ -21,7 +21,7 @@ def rel(path) = path.delete_prefix("#{ROOT}/")
 def series(version) = version.to_s.split('.').first(2).join('.')
 
 def read_constant(name)
-  File.read(PROTOCOL)[/^\s*#{name}\s*=\s*"(\d+\.\d+\.\d+)"/, 1] or
+  File.read(PROTOCOL)[/^\s*#{name}\s*=\s*['"](\d+\.\d+\.\d+)['"]/, 1] or
     abort "check-version-parity: no `#{name} = \"X.Y.Z\"` in #{rel(PROTOCOL)}"
 end
 
@@ -54,7 +54,7 @@ specs.each do |spec, dir|
   check.call(spec.name, spec.version.to_s)
 
   files    = Dir[File.join(dir, 'lib', '**', 'version.rb')]
-  literals = files.flat_map { File.read(it).scan(/^\s*VERSION\s*=\s*"([^"]*)"/).flatten }
+  literals = files.flat_map { File.read(it).scan(/^\s*VERSION\s*=\s*['"]([^'"]*)['"]/).flatten }
   unless files.size == 1 && literals == [spec.version.to_s]
     errors << "#{spec.name}: the gemspec version must come from exactly one lib/**/version.rb " \
               "declaring one VERSION (found #{files.size} file(s), #{literals.inspect})"
@@ -80,9 +80,9 @@ end
 initializers = Dir[File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb')].sort
 errors << 'no kiosk-demo-*/config/initializers/kiosk.rb found' if initializers.empty?
 
-pins = [['kiosk-server (default)', File.read(DEFAULTS)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]]]
+pins = [['kiosk-server (default)', File.read(DEFAULTS)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]]]
 pins += initializers.filter_map do |path|
-  url = File.read(path)[/skill_url\s*=\s*"([^"]+)"/, 1]
+  url = File.read(path)[/skill_url\s*=\s*['"]([^'"]+)['"]/, 1]
   [rel(path)[%r{\Akiosk-demo-[^/]+}], url] if url
 end
 

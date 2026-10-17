@@ -227,33 +227,33 @@ end
 # Each plant is a real descriptor mutated in memory; a planted label must redden.
 PLANTS = [
   ['kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb',
-   /description: "Hotel name\."/, 'description: "Optional. Hotel name."'],
+   /description: 'Hotel name\.'/, 'description: "Optional. Hotel name."'],
   ['kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb',
-   /description: "The `slot_at` of a delivery_slots row\."/, 'description: "Optional. The `slot_at` of a delivery_slots row."'],
+   /description: 'The `slot_at` of a delivery_slots row\.'/, 'description: "Optional. The `slot_at` of a delivery_slots row."'],
   ['kiosk-demo-tudu/app/controllers/kiosk/todos_controller.rb',
-   /description: "The todo text/, 'description: "REQUIRED. The todo text'],
+   /description: 'The todo text/, "description: 'REQUIRED. The todo text"],
   ['kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb',
-   /description: "Appointment time; must be in the future\."/, 'description: "Appointment time (optional); must be in the future."'],
+   /description: 'Appointment time; must be in the future\.'/, 'description: "Appointment time (optional); must be in the future."'],
   ['kiosk-server/lib/kiosk/server/open_api.rb',
    /description: "The verb's SEMANTICS, in prose\. Authoritative\."/,
    'description: "The verb\'s SEMANTICS, in prose. Mandatory."'],
   ['kiosk-server/lib/kiosk/server/open_api.rb',
-   /description: "Maximum rows in one page\./, 'description: "OPTIONAL. Maximum rows in one page.'],
+   /description: 'Maximum rows in one page\./, "description: 'OPTIONAL. Maximum rows in one page."],
   ['kiosk-server/lib/kiosk/server/payment_setup.rb',
-   /description: "The page to hand to your human\."/,
+   /description: 'The page to hand to your human\.'/,
    "description: \"The page to hand to your human. \" \\\n                            \"Optional.\""]
 ].freeze
 
 # Correct sentences planted into real descriptors; they must stay green.
 FOIL_PLANTS = [
   ['kiosk-server/lib/kiosk/server/open_api.rb',
-   /description: "Maximum rows in one page\./, 'description: "Never required to be declared. Maximum rows in one page.'],
+   /description: 'Maximum rows in one page\./, "description: 'Never required to be declared. Maximum rows in one page."],
   ['kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb',
-   /description: "Hotel name\."/, 'description: "The offset is required. Hotel name."'],
+   /description: 'Hotel name\.'/, 'description: "The offset is required. Hotel name."'],
   ['kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb',
-   /description: "Hotel name\."/, 'description: "Licence-required rooms included. Hotel name."'],
+   /description: 'Hotel name\.'/, 'description: "Licence-required rooms included. Hotel name."'],
   ['kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb',
-   /description: "The `slot_at` of a delivery_slots row\."/, 'description: "The `slot_at` of a delivery_slots row. Unchanged if omitted."']
+   /description: 'The `slot_at` of a delivery_slots row\.'/, 'description: "The `slot_at` of a delivery_slots row. Unchanged if omitted."']
 ].freeze
 
 def plant_hits(root, (rel, find, with))

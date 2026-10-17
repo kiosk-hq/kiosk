@@ -75,7 +75,7 @@ RSpec.describe 'the engine error vocabulary this suite stubs from' do
     # be the third hand-kept copy of the same vocabulary.
     stubbed = Dir.glob(File.join(__dir__, '**', '*.rb')).sort.flat_map do |file|
       File.read(file)
-          .scan(/\bproblem(?:_return)?\(\s*(?::([a-z_]+)|"([a-z_]+)")/)
+          .scan(/\bproblem(?:_return)?\(\s*(?::([a-z_]+)|['"]([a-z_]+)['"])/)
           .map { |symbol, string| symbol || string }
     end.uniq.sort
 
@@ -116,8 +116,8 @@ RSpec.describe 'the engine error vocabulary this suite stubs from' do
     it 'raises on a line it cannot read rather than skipping it' do
       source = <<~SOURCE
         CODES = {
-          "bad_request" => 400,
-          "computed"    => SOME_CONSTANT,
+          'bad_request' => 400,
+          'computed' => SOME_CONSTANT
         }.freeze
       SOURCE
       parsing(source) do |path|
@@ -129,8 +129,8 @@ RSpec.describe 'the engine error vocabulary this suite stubs from' do
     it 'reads a well-formed table of both key shapes' do
       source = <<~SOURCE
         CODES = {
-          "bad_request" => 400,
-          404 => "not_found",
+          'bad_request' => 400,
+          404 => 'not_found'
         }.freeze
       SOURCE
       parsing(source) do |path|

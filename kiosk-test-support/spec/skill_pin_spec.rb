@@ -60,7 +60,7 @@ RSpec.describe 'the skill pin' do
   )
   default_url =
     File.exist?(default_url_source) &&
-    File.read(default_url_source)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]
+    File.read(default_url_source)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]
   default_url = nil unless default_url.is_a?(String)
 
   initializers = Dir[
@@ -74,8 +74,8 @@ RSpec.describe 'the skill pin' do
     src = File.read(path)
     [
       path[%r{(kiosk-demo-[^/]+)}, 1],
-      { url: src[/skill_url\s*=\s*"([^"]+)"/, 1] || default_url,
-        sha: src[/skill_sha256\s*=\s*"([0-9a-f]{64})"/, 1],
+      { url: src[/skill_url\s*=\s*['"]([^'"]+)['"]/, 1] || default_url,
+        sha: src[/skill_sha256\s*=\s*['"]([0-9a-f]{64})['"]/, 1],
         path: path }
     ]
   end

@@ -52,13 +52,13 @@ end
 
 def demo_pin(initializer)
   src = File.read(initializer)
-  [src[/^\s*c\.skill_url\s*=\s*"([^"]+)"/, 1], src[/^\s*c\.skill_sha256\s*=\s*"([^"]+)"/, 1]]
+  [src[/^\s*c\.skill_url\s*=\s*['"]([^'"]+)['"]/, 1], src[/^\s*c\.skill_sha256\s*=\s*['"]([^'"]+)['"]/, 1]]
 end
 
 def engine_default_url
   return nil unless File.file?(SERVER_DEFAULT)
 
-  File.read(SERVER_DEFAULT)[/@skill_url\s*\|\|=\s*"([^"]+)"/, 1]
+  File.read(SERVER_DEFAULT)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]
 end
 
 def cut_version(url) = url.to_s[/skill-v(\d+(?:\.\d+)*)\.md/, 1]

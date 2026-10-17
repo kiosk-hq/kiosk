@@ -38,11 +38,11 @@ RSpec.describe "kiosk/server.rb's controller manifest" do
   it 'autoloads every one of them' do
     missing = names.reject do |name|
       require_path = name.gsub(/([a-z])([A-Z])/, '\1_\2').downcase
-      entry.match?(%r{autoload :#{name},\s+"kiosk/server/#{require_path}"})
+      entry.match?(%r{autoload :#{name},\s+'kiosk/server/#{require_path}'})
     end
     expect(missing).to be_empty,
                        "server.rb does not autoload #{missing.join(', ')}, so " \
-                       '`require "kiosk/server"` leaves it undefined.'
+                       "`require 'kiosk/server'` leaves it undefined."
   end
 
   it 'names every one of them in the «Pieces shipped in this gem» manifest' do

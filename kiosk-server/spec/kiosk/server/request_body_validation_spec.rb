@@ -128,7 +128,7 @@ RSpec.describe 'Reserved-plane request-body validation' do
   it 'carries every exchange the engine dials' do
     lib    = File.expand_path('../../../lib', __dir__)
     dialed = Dir[File.join(lib, '**', '*.rb')].flat_map do |path|
-      File.read(path).scan(/exchange:\s*"([^"]+)"|parse_body!\("([^"]+)"\)/).flatten.compact
+      File.read(path).scan(/exchange:\s*'([^']+)'|parse_body!\('([^']+)'\)/).flatten.compact
     end.uniq
 
     expect(dialed).not_to be_empty

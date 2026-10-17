@@ -315,20 +315,20 @@ def self_test
   # RA-1, hop 0: the predicate is right there.
   run.call("RA-1 — philslist's out-of-enum filter beat back to status-and-code", 'RA-1') do |root|
     edit(File.join(root, 'kiosk-demo-philslist/script/redteam_suite.rb'),
-         "detail_bad.include?(\"bikes\") && detail_bad.include?(\"housing\") &&\n", '')
+         "detail_bad.include?('bikes') && detail_bad.include?('housing') &&\n", '')
   end
 
   # The same plant behind a comment carrying an unbalanced `(`.
   run.call('RA-1 — a comment carrying a stray `(` does not move where the beat ends', 'RA-1') do |root|
     edit(File.join(root, 'kiosk-demo-philslist/script/redteam_suite.rb'),
-         "detail_bad.include?(\"bikes\") && detail_bad.include?(\"housing\") &&\n",
+         "detail_bad.include?('bikes') && detail_bad.include?('housing') &&\n",
          "# the app's own check ( defeated\n")
   end
 
   # RA-1, hop 1: the beat delegates to a local computed above it.
   run.call("RA-1 — philslist's MalformedUuidArg stops reading the detail", 'RA-1') do |root|
     edit(File.join(root, 'kiosk-demo-philslist/script/redteam_suite.rb'),
-         '         body["detail"].to_s.include?("listing_id") && !scan.leak?',
+         "         body['detail'].to_s.include?('listing_id') && !scan.leak?",
          '         !scan.leak?')
   end
 

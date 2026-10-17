@@ -92,8 +92,7 @@ RSpec.describe 'demo descriptor cross-references' do
     # the `def` that claims the run) — `kind`, `description`, `input_schema`,
     # `output_schema`, `example_*`, and the comments between them. It knows
     # double- and single-quoted literals and their backslash escapes, which
-    # covers every literal the fleet's handler controllers contain: measured at
-    # this commit, no macro run holds a single-quoted literal at all, and `#{…}`
+    # covers every literal the fleet's handler controllers contain; `#{…}`
     # interpolation occurs only inside double-quoted ones, where it is string
     # content and correctly left alone. It does NOT know heredocs, percent
     # literals or the `?#` character literal; none occurs in a macro run, and a
@@ -125,39 +124,49 @@ RSpec.describe 'demo descriptor cross-references' do
       out
     end
 
-    # Same, for the MACRO spelling a handler controller uses: `description "…"`
+    # Same, for the MACRO spelling a handler controller uses: `description '…'`
     # on its own line, no colon. Anchored to the start of a line so a
     # `description:` INSIDE an input_schema property, and the word in a comment,
     # are both ignored.
     def macro_string_value(header, key)
-      m = header.match(/^[ \t]*#{key}[ \t]+(?=")/)
+      m = header.match(/^[ \t]*#{key}[ \t]+(?=['"])/)
       return nil unless m
 
       adjacent_strings(header, m.end(0))
     end
 
-    # One or more adjacent double-quoted literals starting at `i`, joined.
+    # One or more adjacent quoted literals starting at `i`, joined.
     def adjacent_strings(text, i)
       parts = []
       loop do
         i += 1 while i < text.length && (text[i].match?(/\s/) || text[i] == '\\')
-        break unless text[i] == '"'
+        quote = text[i]
+        break unless ['"', "'"].include?(quote)
 
-        i += 1
-        buf = +''
-        while i < text.length
-          case text[i]
-          when '\\' then buf << text[i + 1]
-                         i += 2
-          when '"' then i += 1
-                        break
-          else buf << text[i]
-               i += 1
-          end
-        end
+        buf, i = quoted_literal(text, i + 1, quote)
         parts << buf
       end
       parts.empty? ? nil : parts.join
+    end
+
+    # The content of one literal whose opening `quote` sits just before `i`, and
+    # the offset past its closing quote. A single-quoted literal unescapes only
+    # `\\` and `\'`.
+    def quoted_literal(text, i, quote)
+      buf = +''
+      while i < text.length
+        ch = text[i]
+        return [buf, i + 1] if ch == quote
+
+        if ch == '\\' && (quote == '"' || ['\\', "'"].include?(text[i + 1]))
+          buf << text[i + 1]
+          i += 2
+        else
+          buf << ch
+          i += 1
+        end
+      end
+      [buf, i]
     end
 
     # The body of the first `key: { … }` at or after `from`, brace-balanced and

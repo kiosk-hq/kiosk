@@ -50,7 +50,7 @@ def kiosk_engine_table(constant, path = KIOSK_ENGINE_ERRORS_RB)
 
   lines = body.lines.map(&:strip).reject { |line| line.empty? || line.start_with?('#') }
   pairs = lines.filter_map do |line|
-    line.match(/\A(?:"([^"]+)"|(\d+))[ \t]*=>[ \t]*(?:"([^"]+)"|(\d+)),\z/)
+    line.match(/\A(?:'([^']+)'|(\d+))[ \t]*=>[ \t]*(?:'([^']+)'|(\d+)),?\z/)
   end
   raise "#{constant} parsed to nothing in #{path}" if pairs.empty?
   raise "#{constant} has #{lines.size - pairs.size} line(s) this parser cannot read" if pairs.size != lines.size

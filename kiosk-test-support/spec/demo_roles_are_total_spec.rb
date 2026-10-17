@@ -66,7 +66,7 @@ ROLES_TOTAL_NO_ENGINE = %w[kiosk-demo-prove].freeze
 # above a method does not flap this, and changing one line of its logic does.
 ROLES_TOTAL_DECLARED = {
   'kiosk-demo-stylish/app/models/user.rb' => [
-    '38337e4b616c47f9',
+    'a936ee8b5ec51b49',
     'TOTAL by construction: `staff_role` is an enum validated on write to be ' \
     "'owner' or nil, and nil falls to the literal 'customer'."
   ]

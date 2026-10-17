@@ -23,4 +23,12 @@ class SalonBookStory < StoryTest
 
     assert_equal [alices], alice.the_book.rows.pluck('id')
   end
+
+  test "a client's assistant reads its appointments oldest booking first" do
+    alice  = assistant_of(:alice)
+    booked = Array.new(3) { alice.books['appointment_id'] }
+    booked.sort.reverse.each_with_index { |id, age| Appointment.where(id:).update_all(created_at: (10 - age).minutes.ago) }
+
+    assert_equal booked.sort.reverse, alice.appointments
+  end
 end

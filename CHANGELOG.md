@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: stylish's `my_appointments` lists the oldest booking first, as it says, instead of in random id order.
+
 - 2026-10-17: stylish's `salon_calendar` answers booking rows only, without the owner's forecast row; stylish spells its currency `eur`, as every other demo does.
 
 - 2026-10-17: hoteling drops `confirm_booking`, which wrote nothing: `my_bookings` carries the hotel's answer and its confirmation code.

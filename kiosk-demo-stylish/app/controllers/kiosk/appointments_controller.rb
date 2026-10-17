@@ -64,7 +64,7 @@ module Kiosk
     description "The signed-in customer's appointments."
     input_schema type: 'object', additionalProperties: false, properties: {}, required: []
     output_schema type: 'array',
-                  description: 'Oldest first.',
+                  description: 'Oldest booking first.',
                   items: {
                     type: 'object', additionalProperties: false,
                     properties: {
@@ -76,7 +76,7 @@ module Kiosk
                     required: %w[id salon_id slot timezone]
                   }
     def my_appointments
-      @appointments = Appointment.own.includes(:salon).order(:id)
+      @appointments = Appointment.own.includes(:salon).order(:created_at, :id)
     end
   end
 end

@@ -20,9 +20,7 @@ module Kiosk
         submitted = PowGate.extract_proofs(pow)
         raise pow_required if submitted.empty?
 
-        # `count` distinct, unspent, valid proofs; one wrong proof is a 403.
-        accepted = {}
-        submitted.each { |proof| accept(proof, accepted) }
+        accepted = accept_all(submitted)
         return :proceed if accepted.size >= count
 
         # Released, so the retry with fresh challenges is not blocked by our own claim.
@@ -32,17 +30,35 @@ module Kiosk
 
       private
 
+      # `count` distinct, unspent, valid proofs; one wrong proof is a 403.
+      # Proofs past `count` are not looked at, so a header cannot buy extra work.
+      def accept_all(submitted)
+        submitted.first(count).each_with_object({}) { |proof, accepted| accept(proof, accepted) }
+      end
+
       def accept(proof, accepted)
         challenge = symbolize_keys(proof[:challenge] || proof['challenge'] || {})
-        id        = challenge[:id]
-        return if id.nil? || accepted.key?(id)
-
-        check_challenge_params!(challenge)
-        # Atomically claim the id as spent BEFORE the expensive verify.
-        # A lost claim is a replay: skipped, not penalised.
-        return unless spent_store.claim(id, challenge[:exp].to_i)
+        return unless claimed?(challenge, accepted)
 
         settle(verify(challenge, proof[:nonce] || proof['nonce']), challenge, accepted)
+      end
+
+      # The cheap checks first, so only a live challenge this origin signed
+      # claims its id, at the `exp` it was signed with; the claim comes before
+      # the expensive verify. A lost claim is a replay: skipped, not penalised.
+      def claimed?(challenge, accepted)
+        id = challenge[:id]
+        return false if id.nil? || accepted.key?(id)
+
+        check_challenge_params!(challenge)
+        cheap_failure(challenge).nil? && spent_store.claim(id, challenge[:exp])
+      end
+
+      def cheap_failure(challenge)
+        ::Kiosk::Reputation::Challenge.check(
+          challenge: challenge, request_fingerprint: @fingerprint, secret: @secret,
+          now: Time.now.to_i, expect: { alg: alg, params: params }
+        )
       end
 
       def check_challenge_params!(challenge)
@@ -77,7 +93,16 @@ module Kiosk
         end
       end
 
+      def validate_backend!
+        return if ::Kiosk::Reputation::Backends.known.include?(alg.to_s)
+
+        raise Errors::ConfigurationError,
+              "Kiosk::Server: no proof-of-work backend is registered for #{alg.to_s.inspect}. " \
+              "Register one: Kiosk::Reputation::Backends.register(#{alg.to_s.inspect}, backend)."
+      end
+
       def validate_spec_params!
+        validate_backend!
         return if ::Kiosk::Reputation::Backends.valid_params?(alg, params)
 
         raise Errors::ConfigurationError,

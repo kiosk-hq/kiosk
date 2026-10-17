@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `Challenge.check` runs the signature, expiry and parameter checks alone, without the proof evaluation.
 ## [0.5.13] — 2026-10-11
 
 - 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13; this gem's surface is unchanged.

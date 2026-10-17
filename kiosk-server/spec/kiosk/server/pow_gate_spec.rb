@@ -740,6 +740,65 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   end
 end
 
+# The spent-id store is written only for a live challenge this origin signed,
+# at the exp it signed, and for no more proofs than the toll asks.
+RSpec.shared_context 'pow gate spec: recorded claims' do
+  include PowGateSpecHelpers
+
+  let(:claims) { [] }
+
+  before do
+    store  = MemoryPowSpentStore.new
+    record = claims
+    store.define_singleton_method(:claim) { |id, exp| (record << [id, exp]) && super(id, exp) }
+    configure_with_policy(always_challenge_policy, pow_spent_store: store)
+  end
+
+  def gate_with(pow)
+    described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
+  rescue Kiosk::Server::Errors::PowRequired
+    :pow_required
+  end
+end
+
+RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} what reaches the spent-id store" do
+  include_context 'pow gate spec: recorded claims'
+
+  it 'claims nothing for a challenge whose exp the caller moved' do
+    challenge = issue_challenge_via_gate
+    moved = challenge.merge(exp: challenge[:exp] + 86_400)
+
+    expect(gate_with({ challenge: moved, nonce: solve_nonce(challenge) })).to eq(:pow_required)
+    expect(claims).to be_empty
+  end
+
+  it 'claims the id at the exp the challenge was signed with' do
+    challenge = issue_challenge_via_gate
+
+    expect(gate_with({ challenge: challenge, nonce: solve_nonce(challenge) })).to eq(:proceed)
+    expect(claims).to eq([[challenge[:id], challenge[:exp]]])
+  end
+end
+
+RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} what reaches the spent-id store" do
+  include_context 'pow gate spec: recorded claims'
+
+  it 'looks at no more proofs than the toll asks for' do
+    first, second = Array.new(2) { issue_challenge_via_gate }
+
+    expect(gate_with([{ challenge: first, nonce: solve_nonce(first) },
+                      { challenge: second, nonce: solve_nonce(second) }])).to eq(:proceed)
+    expect(claims.map(&:first)).to eq([first[:id]])
+  end
+
+  it 'refuses a policy that names a backend nobody registered, before any challenge is issued' do
+    unregistered = Class.new(Kiosk::Reputation::Policy) { def challenge_for(**) = { alg: 'no-such-backend', params: { n: 1 } } }
+    configure_with_policy(unregistered.new)
+
+    expect { gate_with(nil) }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /no-such-backend/)
+  end
+end
+
 RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} policy that returns nil for some verbs (free pass)" do
   include PowGateSpecHelpers
 

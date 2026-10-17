@@ -86,6 +86,28 @@ RSpec.describe Kiosk::Reputation::Challenge, '.verify outcomes' do
   end
 end
 
+RSpec.describe Kiosk::Reputation::Challenge, '.check' do
+  include_context 'with a challenge fixture'
+
+  before { register_spy_backend }
+
+  def check_challenge(**overrides)
+    described_class.check(challenge:, request_fingerprint: fingerprint, secret:, now: now + 1, **overrides)
+  end
+
+  it 'answers nil for a live challenge this secret signed, without running the backend' do
+    expect(check_challenge).to be_nil
+  end
+
+  it 'answers :bad_sig for a challenge whose exp the caller moved' do
+    expect(check_challenge(challenge: challenge.merge(exp: challenge[:exp] + 86_400))).to eq(:bad_sig)
+  end
+
+  it 'answers :expired for a challenge past its exp' do
+    expect(check_challenge(now: now + ttl + 1)).to eq(:expired)
+  end
+end
+
 RSpec.describe Kiosk::Reputation::Challenge, '.verify answers :bad_sig' do
   include_context 'with a challenge fixture'
 

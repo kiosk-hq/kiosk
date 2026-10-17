@@ -39,15 +39,24 @@ module Kiosk
         # `expect:` is the `{alg:, params:}` the caller re-derived from its live config.
         # @return [Symbol] :ok | :bad_sig | :expired | :bad_params | :bad_proof
         def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil) # rubocop:disable Metrics/ParameterLists -- public keyword signature; every keyword is part of it.
-          fields = Fields.new(id: challenge[:id], alg: challenge[:alg], params: challenge[:params],
-                              salt: challenge[:salt], exp: challenge[:exp], request_fingerprint:)
-          failure = cheap_failure(fields, challenge[:sig].to_s, secret, now, expect)
+          failure = check(challenge:, request_fingerprint:, secret:, now:, expect:)
           return failure if failure
 
-          proof_valid?(fields, nonce) ? :ok : :bad_proof
+          proof_valid?(fields_of(challenge, request_fingerprint), nonce) ? :ok : :bad_proof
+        end
+
+        # The cheap checks alone, so a caller can trust `id` and `exp` before it stores them.
+        # @return [Symbol, nil] :bad_sig | :expired | :bad_params, or nil when the challenge is ours and live
+        def check(challenge:, request_fingerprint:, secret:, now:, expect: nil)
+          cheap_failure(fields_of(challenge, request_fingerprint), challenge[:sig].to_s, secret, now, expect)
         end
 
         private
+
+        def fields_of(challenge, request_fingerprint)
+          Fields.new(id: challenge[:id], alg: challenge[:alg], params: challenge[:params],
+                     salt: challenge[:salt], exp: challenge[:exp], request_fingerprint:)
+        end
 
         # The checks that cost no proof evaluation, in order. Nil when all pass.
         def cheap_failure(fields, sig, secret, now, expect)

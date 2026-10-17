@@ -2,15 +2,19 @@
 
 # The property's answer to a paid booking: it accepts and mints the
 # confirmation code, or declines, cancels the booking and refunds the charge.
-# The wait and the decline rate are configuration (`config.x.hoteling`).
+# The wait and the decline rate are configuration (`config.x.hoteling`). The
+# booking row stays locked until the answer is saved, so a second run answers
+# nothing.
 class PropertyDecisionJob < ApplicationJob
   queue_as :default
 
   def perform(booking_id)
-    booking = Booking.reserved.paid.find_by(id: booking_id)
-    return unless booking
+    Booking.transaction do
+      booking = Booking.lock.reserved.paid.find_by(id: booking_id)
+      next unless booking
 
-    declines? ? decline!(booking) : accept!(booking)
+      declines? ? decline!(booking) : accept!(booking)
+    end
   end
 
   private

@@ -72,3 +72,28 @@ RSpec.describe 'A hotel that declines a booking', 'with no charge on record', ty
     expect(news).to eq('booking_id' => booking['booking_id'], 'status' => 'cancelled', 'reason' => 'property_declined')
   end
 end
+
+RSpec.describe 'A hotel that declines a booking', 'twice at once', type: :story do
+  include_context 'a hotel that answers on demand'
+
+  it 'a hotel whose answer runs twice at once refunds the guest once' do
+    guest = a_guest
+    booking = guest.reserves
+    expect(guest.pays_for(booking)).to be_ok
+    Rails.configuration.x.hoteling.decline_rate = 1
+
+    refunds = Concurrent::AtomicFixnum.new
+    allow(Kiosk.configuration.payment_provider).to receive(:refund).and_wrap_original do |refund, **args|
+      refunds.increment
+      sleep 0.2
+      refund.call(**args)
+    end
+    answers = Array.new(2) do
+      Thread.new { ActiveRecord::Base.connection_pool.with_connection { PropertyDecisionJob.perform_now(booking['booking_id']) } }
+    end
+    ActiveSupport::Dependencies.interlock.permit_concurrent_loads { answers.each(&:join) }
+
+    expect(refunds.value).to eq(1)
+    expect(Booking.find(booking['booking_id'])).to have_attributes(status: 'cancelled', payment_status: 'refunded')
+  end
+end

@@ -485,7 +485,7 @@ RSpec.describe Kiosk::Pow::Cuckoo do
         hash_int     = described_class.blake2b256(cycle_packed)
                                       .unpack('C*').reduce(0) { |acc, b| (acc << 8) | b }
         target       = hash_int + 1 # hash_int < target → passes the check
-        expect(target).to be > 0
+        expect(target).to be.positive?
         expect(target).to be < (1 << 256)
 
         p = described_class.params(edgebits: KAT_EDGEBITS, target: target)

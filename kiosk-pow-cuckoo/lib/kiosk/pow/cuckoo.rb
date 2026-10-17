@@ -85,7 +85,7 @@ module Kiosk
         data     = input.b
         data_len = data.bytesize
 
-        if data_len == 0
+        if data_len.zero?
           b2b_compress(h, [0] * 16, 0, true)
         else
           offset = 0
@@ -161,7 +161,7 @@ module Kiosk
         cycle.each_with_index do |edge, n|
           return false unless edge.is_a?(Integer)
           return false if edge >= n_nodes
-          return false if n > 0 && edge <= cycle[n - 1]
+          return false if n.positive? && edge <= cycle[n - 1]
 
           uvs[2 * n] = siphash(k0, k1, k2, k3, 2 * edge) & mask
           uvs[(2 * n) + 1] = siphash(k0, k1, k2, k3, (2 * edge) + 1) & mask
@@ -191,7 +191,7 @@ module Kiosk
 
           i = j ^ 1
           n += 1
-          break if i == 0
+          break if i.zero?
         end
 
         n == ps

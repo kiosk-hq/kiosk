@@ -96,7 +96,7 @@ module Kiosk
         data     = input.b
         data_len = data.bytesize
 
-        if data_len == 0
+        if data_len.zero?
           b2b_compress(h, [0] * 16, 0, true)
         else
           offset = 0

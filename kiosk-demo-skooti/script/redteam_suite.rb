@@ -118,7 +118,7 @@ profile = Kiosk::Redteam::Profile.new(
     cart_id   = SecureRandom.uuid
 
     price_min        = owned_ref[:price_per_min_cents].to_i
-    total_cents      = price_min > 0 ? price_min : 100
+    total_cents      = price_min.positive? ? price_min : 100
     cap_amount_cents = total_cents + 100
 
     intent = {
@@ -389,7 +389,7 @@ puts "\n── skooti redteam battery ──"
 puts "  base_url:              #{BASE_URL}"
 puts '  register gate:         Equihash n=96 k=5 ' \
      "(profile pow_difficulty: #{profile.pow_difficulty} → RegistrationWithoutPow " \
-     "#{profile.pow_difficulty > 0 ? %(applicable) : %(SKIPPED)})"
+     "#{profile.pow_difficulty.positive? ? %(applicable) : %(SKIPPED)})"
 puts "  requires_kyc:          #{profile.requires_kyc}"
 # The registry only; the local beats below are counted in the summary.
 puts "  registered scenarios:  #{scenarios.size} (skooti-local beats run after them; the summary counts both)"

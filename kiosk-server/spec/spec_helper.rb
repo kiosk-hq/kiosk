@@ -185,7 +185,7 @@ class FakeConnection
 
   def quote_table_name(name) = name.split('.').map { |part| %("#{part}") }.join('.')
 
-  def in_transaction? = @transaction_depth > 0
+  def in_transaction? = @transaction_depth.positive?
 
   # Every statement that carried a bind, as `[sql, binds]`, filtered by shape.
   # A spec asserts on BOTH halves: the text to prove no value was spliced into
@@ -258,7 +258,7 @@ module SlowStoreAllocation
   module SlowNew
     def new(*args, **kwargs, &)
       seconds = SlowStoreAllocation::DELAY[:seconds]
-      sleep(seconds) if seconds > 0
+      sleep(seconds) if seconds.positive?
       super
     end
   end

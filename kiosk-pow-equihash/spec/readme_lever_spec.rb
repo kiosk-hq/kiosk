@@ -87,7 +87,7 @@ RSpec.describe "the README's solve/verify lever" do
     default_lever = readme[%r{^\| Lever \(solve/verify\).*$}][/~?([\d,]+)×\*?\*?\s*\(/, 1].to_s.delete(',').to_i
     light_lever   = readme[/~([\d.]+)× at \*\*n=96, k=5\*\*/, 1].to_f
 
-    expect(light_lever).to be > 0
+    expect(light_lever).to be.positive?
     expect(default_lever / light_lever).to be > 5,
                                            "the default lever (#{default_lever}×) and the light one " \
                                            "(#{light_lever}×) are now within a factor of five. Either a " \

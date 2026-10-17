@@ -15,7 +15,7 @@ module Kiosk
         end
 
         def call(client, profile)
-          return skip_verdict('pow_difficulty is 0 (no PoW gate)') unless profile.pow_difficulty > 0
+          return skip_verdict('pow_difficulty is 0 (no PoW gate)') unless profile.pow_difficulty.positive?
 
           resp_skip = client.register_raw(pow: :skip)
 

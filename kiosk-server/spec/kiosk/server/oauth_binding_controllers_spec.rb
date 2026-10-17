@@ -52,8 +52,8 @@ RSpec.describe 'OAuth binding controllers' do
       expect(body[:user_code]).to match(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
       expect(body[:verification_uri]).to eq('https://provider.example/kiosk/oauth/device/verify')
       expect(body[:verification_uri_complete]).to include(body[:user_code])
-      expect(body[:expires_in]).to be > 0
-      expect(body[:interval]).to be > 0
+      expect(body[:expires_in]).to be.positive?
+      expect(body[:interval]).to be.positive?
     end
 
     it 'requires public_key — the ceremony is key-bound (invalid_request)' do

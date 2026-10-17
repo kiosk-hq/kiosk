@@ -40,7 +40,7 @@ module SlowConfigurationAllocation
   module SlowNew
     def new(*args, **kwargs, &)
       seconds = SlowConfigurationAllocation::DELAY[:seconds]
-      sleep(seconds) if seconds > 0
+      sleep(seconds) if seconds.positive?
       SlowConfigurationAllocation::COUNTER.synchronize do
         SlowConfigurationAllocation::BUILT[:count] += 1
       end

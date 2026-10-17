@@ -708,7 +708,7 @@ EXPECTED_SKIP_NAMES = %w[
 
 puts "\n── getgrocery redteam battery ──"
 puts "  base_url:       #{BASE_URL}"
-puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW #{profile.pow_difficulty.to_i > 0 ? 'ON' : 'OFF'})"
+puts "  pow_difficulty: #{profile.pow_difficulty} (register PoW #{profile.pow_difficulty.to_i.positive? ? 'ON' : 'OFF'})"
 puts "  requires_kyc:   #{profile.requires_kyc}"
 puts ''
 

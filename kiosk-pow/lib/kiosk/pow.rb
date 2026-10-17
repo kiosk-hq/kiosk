@@ -48,7 +48,7 @@ module Kiosk
 
       count = 0
       bytes.each_byte do |b|
-        if b == 0
+        if b.zero?
           count += 8
         else
           count += 8 - b.bit_length

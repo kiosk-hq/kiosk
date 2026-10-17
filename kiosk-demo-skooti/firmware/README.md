@@ -10,6 +10,7 @@ This directory contains:
 | `host_test.c` | Host-side crypto proof (runs on Mac/Linux, no board required) |
 | `crosscheck_main.c` | Ruby-signed token → C verify helper, taking the token as an argument or as a file's bytes (invoked by `make crosscheck`) |
 | `token_vectors.rb` | The rental-token conformance vectors — the grammar, and what the vectors do not cover, stated in its header |
+| `named_vectors.rb` | The named vectors, one or a few per rule on `../RENTAL_TOKEN.md`; loaded by `token_vectors.rb` |
 | `crosscheck_grammar.rb` | Runs every vector through all three readers of the token — this C verifier, the shipped `RentalTokenIssuer.verify` and `script/lock_sim.rb` (invoked by `make crosscheck`) |
 | `check_grammar_coverage.rb` | Holds `../RENTAL_TOKEN.md` and `token_vectors.rb` to each other: a stated rule with no axis, or an axis no rule names, fails the build (invoked by `make crosscheck`) |
 | `Makefile` | `make test` = C assertions + Ruby↔C crosscheck; `make portability` = the same sources through every compiler on the machine |

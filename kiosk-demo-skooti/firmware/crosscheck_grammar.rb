@@ -190,11 +190,11 @@ end
 
 # How one reader's answer prints: accept, reject, or the exception class it
 # raised instead of answering.
-def verdict(a)
-  case a
+def verdict(answer)
+  case answer
   when true  then 'accept'
   when false then 'reject'
-  else a.to_s.split('::').last
+  else answer.to_s.split('::').last
   end
 end
 

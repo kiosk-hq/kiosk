@@ -6,18 +6,15 @@ module Kiosk
     module Emitter
       class << self
         def statements_for(table)
-          stmts = []
-          stmts << enable_rls_sql(table.name)
-          stmts << force_rls_sql(table.name) # without FORCE the table owner bypasses RLS
-          stmts << grant_table_sql(table.name, table.app_role)
-          table.sequences.each do |seq|
-            stmts << grant_sequence_sql(seq, table.app_role)
-          end
-          table.policies.each do |policy|
-            stmts << create_policy_sql(table.name, policy)
-          end
-          stmts << comment_sql(table.name, table.comment_text) if table.comment_text
-          stmts
+          name = table.name
+          [
+            enable_rls_sql(name),
+            force_rls_sql(name), # without FORCE the table owner bypasses RLS
+            grant_table_sql(name, table.app_role),
+            *table.sequences.map { |seq| grant_sequence_sql(seq, table.app_role) },
+            *table.policies.map { |policy| create_policy_sql(name, policy) },
+            *(comment_sql(name, table.comment_text) if table.comment_text)
+          ]
         end
 
         def enable_rls_sql(table_name)

@@ -3,24 +3,17 @@
 module Kiosk
   module RLS
     # One PostgreSQL row-level-security policy: `using` filters reads, `check` writes.
-    Policy = Data.define(:name, :action, :using, :check) do
+    Policy = Data.define(:name, :action, :using, :check)
+
+    class Policy
       ACTIONS = %i[select insert update delete all].freeze
 
       def initialize(name:, action:, using: nil, check: nil)
         action = action.to_sym
-        unless ACTIONS.include?(action)
-          raise ArgumentError,
-                "action must be one of #{ACTIONS.inspect}, got #{action.inspect}"
-        end
-
+        raise ArgumentError, "action must be one of #{ACTIONS.inspect}, got #{action.inspect}" unless ACTIONS.include?(action)
         raise ArgumentError, 'at least one of using:/check: required' if using.nil? && check.nil?
 
-        super(
-          name: name.to_s,
-          action: action,
-          using: using&.to_s,
-          check: check&.to_s,
-        )
+        super(name: name.to_s, action: action, using: using&.to_s, check: check&.to_s)
       end
     end
   end

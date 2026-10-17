@@ -30,7 +30,7 @@
 # these examples are skipped. The mocked suite (stripe_spec.rb) runs without
 # a key and covers the adapter's public methods with plain RSpec doubles
 # (no WebMock — the SDK classes are stubbed directly).
-RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
+RSpec.shared_context 'with a live Stripe test key' do
   before do |example|
     next if example.metadata[:no_key_needed]
 
@@ -58,65 +58,73 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
       currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'jws'
     )
   end
+end
 
-  # The ONE example in this file that does not skip, and the only reason the
-  # rest can be trusted to fail for Stripe's reasons rather than for ours: a
-  # subject that raises before any network call is indistinguishable from a
-  # skip, and a skip is the same colour as a pass. It touches no network.
-  describe 'the subject itself' do
-    it 'builds without reaching Stripe', :no_key_needed do
-      expect(adapter).to be_a(described_class)
-    end
+# The ONE example in this file that does not skip, and the only reason the
+# rest can be trusted to fail for Stripe's reasons rather than for ours: a
+# subject that raises before any network call is indistinguishable from a
+# skip, and a skip is the same colour as a pass. It touches no network.
+RSpec.describe Kiosk::PaymentProviders::Stripe, 'the subject itself', :integration do
+  include_context 'with a live Stripe test key'
+
+  it 'builds without reaching Stripe', :no_key_needed do
+    expect(adapter).to be_a(described_class)
+  end
+end
+
+RSpec.describe Kiosk::PaymentProviders::Stripe, '#attach_test_card + #capture (full off_session round-trip)', :integration do
+  include_context 'with a live Stripe test key'
+
+  it 'attaches a test card then captures a real test payment' do
+    # Simulate a completed SetupIntent programmatically (no human at hosted page).
+    cus_id = adapter.attach_test_card(user_id: user_id)
+    expect(cus_id).to start_with('cus_')
+    expect(customer_store[user_id]).to eq(cus_id)
+
+    # saved_method? should now return true.
+    expect(adapter.saved_method?(user_id: user_id)).to be true
+
+    # off_session capture against the saved card → real pi_…
+    captured = adapter.capture(cart_mandate, payment_method: nil)
+    expect(captured[:settled_amount_cents]).to eq(1599)
+    expect(captured[:psp_reference]).to start_with('pi_')
+  end
+end
+
+RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url', :integration do
+  include_context 'with a live Stripe test key'
+
+  it 'returns a hosted Stripe Checkout URL for the setup flow' do
+    url = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+    expect(url).to start_with('https://checkout.stripe.com/')
   end
 
-  describe '#attach_test_card + #capture (full off_session round-trip)' do
-    it 'attaches a test card then captures a real test payment' do
-      # Simulate a completed SetupIntent programmatically (no human at hosted page).
-      cus_id = adapter.attach_test_card(user_id: user_id)
-      expect(cus_id).to start_with('cus_')
-      expect(customer_store[user_id]).to eq(cus_id)
+  # K-492 against the real API. This is the ONLY example anywhere that can
+  # answer the question the reuse rests on: does a just-created `mode:setup`
+  # Checkout Session actually come back from `list(status: "open")`? The
+  # double-based specs and the local stateful fake in
+  # `stripe_setup_reuse_spec.rb` both ASSUME it — they exercise our side of
+  # the contract, not Stripe's. Needs STRIPE_SECRET_KEY; CI deliberately has
+  # none, so in CI this is skipped, not passed.
+  it 'returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)' do
+    first  = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+    second = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
 
-      # saved_method? should now return true.
-      expect(adapter.saved_method?(user_id: user_id)).to be true
+    expect(second).to eq(first)
 
-      # off_session capture against the saved card → real pi_…
-      captured = adapter.capture(cart_mandate, payment_method: nil)
-      expect(captured[:settled_amount_cents]).to eq(1599)
-      expect(captured[:psp_reference]).to start_with('pi_')
-    end
+    cus_id     = customer_store[user_id]
+    open_setup = Stripe::Checkout::Session
+                 .list(customer: cus_id, status: 'open', limit: 10)
+                 .data.select { |s| s.mode == 'setup' }
+    expect(open_setup.map(&:url)).to eq([first])
   end
+end
 
-  describe '#setup_url' do
-    it 'returns a hosted Stripe Checkout URL for the setup flow' do
-      url = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
-      expect(url).to start_with('https://checkout.stripe.com/')
-    end
+RSpec.describe Kiosk::PaymentProviders::Stripe, '#saved_method? before card setup', :integration do
+  include_context 'with a live Stripe test key'
 
-    # K-492 against the real API. This is the ONLY example anywhere that can
-    # answer the question the reuse rests on: does a just-created `mode:setup`
-    # Checkout Session actually come back from `list(status: "open")`? The
-    # double-based specs and the local stateful fake in
-    # `stripe_setup_reuse_spec.rb` both ASSUME it — they exercise our side of
-    # the contract, not Stripe's. Needs STRIPE_SECRET_KEY; CI deliberately has
-    # none, so in CI this is skipped, not passed.
-    it 'returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)' do
-      first  = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
-      second = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
-
-      expect(second).to eq(first)
-
-      cus_id     = customer_store[user_id]
-      open_setup = Stripe::Checkout::Session
-                   .list(customer: cus_id, status: 'open', limit: 10)
-                   .data.select { |s| s.mode == 'setup' }
-      expect(open_setup.map(&:url)).to eq([first])
-    end
-  end
-
-  describe '#saved_method? before card setup' do
-    it 'returns false for a new user with no card on file' do
-      fresh_user = "no-card-user-#{Process.pid}"
-      expect(adapter.saved_method?(user_id: fresh_user)).to be false
-    end
+  it 'returns false for a new user with no card on file' do
+    fresh_user = "no-card-user-#{Process.pid}"
+    expect(adapter.saved_method?(user_id: fresh_user)).to be false
   end
 end

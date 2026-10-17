@@ -4,6 +4,53 @@ require 'socket'
 require 'json'
 require 'uri'
 
+# The HTTP/1.1 subset FakeStripeApi needs: one request per connection, a form
+# body or query string in, a JSON body out.
+module FakeHttp
+  Request = Struct.new(:http_method, :path, :query, :params, keyword_init: true)
+
+  private
+
+  # Nil when the client closed the connection without a request.
+  def read_request(socket)
+    request_line = socket.gets
+    return nil if request_line.nil?
+
+    method, target, = request_line.split
+    path, query = target.split('?', 2)
+    headers = read_headers(socket)
+    body    = headers['content-length'] ? socket.read(headers['content-length'].to_i).to_s : ''
+    Request.new(http_method: method, path: path, query: query.to_s,
+                params: form_params(query.to_s.empty? ? body : query))
+  end
+
+  def read_headers(socket)
+    headers = {}
+    while (line = socket.gets) && line != "\r\n"
+      key, value = line.split(':', 2)
+      headers[key.to_s.downcase] = value.to_s.strip
+    end
+    headers
+  end
+
+  def form_params(encoded)
+    URI.decode_www_form(encoded.to_s).to_h
+  rescue ArgumentError
+    {}
+  end
+
+  def respond(socket, payload)
+    status, payload = payload.is_a?(Array) ? payload : [200, payload]
+    json = JSON.generate(payload)
+    socket.print(
+      "HTTP/1.1 #{status} #{status == 200 ? 'OK' : 'Not Found'}\r\n" \
+      "Content-Type: application/json\r\n" \
+      "Content-Length: #{json.bytesize}\r\n" \
+      "Connection: close\r\n\r\n#{json}"
+    )
+  end
+end
+
 # A tiny STATEFUL Stripe API served over real HTTP, for the K-492 setup-session
 # reuse examples.
 #
@@ -29,7 +76,7 @@ require 'uri'
 # (real key) can make those. See that file, and the stripe-mock group in
 # `stripe_setup_reuse_spec.rb`, for what each layer does and does not prove.
 class FakeStripeApi
-  Request = Struct.new(:method, :path, :query, :params, keyword_init: true)
+  include FakeHttp
 
   def initialize
     @server    = TCPServer.new('127.0.0.1', 0)
@@ -59,7 +106,7 @@ class FakeStripeApi
   end
 
   def requests_to(method, path)
-    requests.select { |r| r.method == method && r.path == path }
+    requests.select { |r| r.http_method == method && r.path == path }
   end
 
   # Flip every stored session out of `open`, as Stripe does once the human
@@ -80,41 +127,17 @@ class FakeStripeApi
   end
 
   def handle(socket)
-    request_line = socket.gets
-    return socket.close if request_line.nil?
+    request = read_request(socket)
+    return if request.nil?
 
-    method, target, = request_line.split
-    path, query = target.split('?', 2)
-    headers = read_headers(socket)
-    body    = headers['content-length'] ? socket.read(headers['content-length'].to_i).to_s : ''
-
-    params = form_params(query.to_s.empty? ? body : query)
-    @mutex.synchronize do
-      @requests << Request.new(method: method, path: path, query: query.to_s, params: params)
-    end
-
-    respond(socket, route(method, path, params))
+    @mutex.synchronize { @requests << request }
+    respond(socket, route(request.http_method, request.path, request.params))
   ensure
     begin
       socket.close
     rescue StandardError
       nil
     end
-  end
-
-  def read_headers(socket)
-    headers = {}
-    while (line = socket.gets) && line != "\r\n"
-      key, value = line.split(':', 2)
-      headers[key.to_s.downcase] = value.to_s.strip
-    end
-    headers
-  end
-
-  def form_params(encoded)
-    URI.decode_www_form(encoded.to_s).to_h
-  rescue ArgumentError
-    {}
   end
 
   def route(method, path, params)
@@ -143,13 +166,8 @@ class FakeStripeApi
   def create_session(params)
     id      = "cs_test_fake#{next_id}"
     session = {
-      id: id,
-      object: 'checkout.session',
-      mode: params['mode'],
-      customer: params['customer'],
-      success_url: params['success_url'],
-      status: 'open',
-      url: "https://checkout.stripe.com/c/pay/#{id}"
+      id: id, object: 'checkout.session', status: 'open', url: "https://checkout.stripe.com/c/pay/#{id}",
+      mode: params['mode'], customer: params['customer'], success_url: params['success_url']
     }
     @mutex.synchronize { @sessions << session }
     session
@@ -172,16 +190,5 @@ class FakeStripeApi
 
   def next_id
     @counter += 1
-  end
-
-  def respond(socket, payload)
-    status, payload = payload.is_a?(Array) ? payload : [200, payload]
-    json = JSON.generate(payload)
-    socket.print(
-      "HTTP/1.1 #{status} #{status == 200 ? 'OK' : 'Not Found'}\r\n" \
-      "Content-Type: application/json\r\n" \
-      "Content-Length: #{json.bytesize}\r\n" \
-      "Connection: close\r\n\r\n#{json}"
-    )
   end
 end

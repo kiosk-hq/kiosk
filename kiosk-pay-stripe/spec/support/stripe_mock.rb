@@ -10,7 +10,7 @@ require 'socket'
 module StripeMock
   # Not 12111: kiosk-redteam's settling front listens there.
   PORT = 12_113
-  URL  = "http://127.0.0.1:#{PORT}"
+  URL  = "http://127.0.0.1:#{PORT}".freeze
 
   module_function
 
@@ -35,6 +35,17 @@ module StripeMock
     return URL if reachable?
     return nil unless installed?
 
+    spawn_server
+    30.times do
+      return URL if reachable?
+
+      sleep 0.2
+    end
+    nil
+  end
+
+  # Starts stripe-mock and stops it when the process exits.
+  def spawn_server
     pid = spawn('stripe-mock', '-http-port', PORT.to_s, out: File::NULL, err: File::NULL)
     at_exit do
       Process.kill('TERM', pid)
@@ -42,11 +53,5 @@ module StripeMock
     rescue Errno::ESRCH, Errno::ECHILD
       nil
     end
-    30.times do
-      return URL if reachable?
-
-      sleep 0.2
-    end
-    nil
   end
 end

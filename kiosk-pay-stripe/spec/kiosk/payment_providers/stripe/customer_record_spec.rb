@@ -3,13 +3,13 @@
 require 'active_record'
 require 'kiosk/payment_providers/stripe/customer_record'
 
-RSpec.describe Kiosk::PaymentProviders::Stripe::CustomerRecord do
+RSpec.shared_context 'with a stripe_customers table' do
   def migrate(direction)
     migration = Class.new(ActiveRecord::Migration[8.1]) do
       def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
     end
     ActiveRecord::Migration.suppress_messages { migration.migrate(direction) }
-    described_class.reset_column_information
+    Kiosk::PaymentProviders::Stripe::CustomerRecord.reset_column_information
   end
 
   before(:all) do
@@ -18,6 +18,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe::CustomerRecord do
   end
 
   after(:all) { ActiveRecord::Base.remove_connection }
+end
+
+RSpec.describe Kiosk::PaymentProviders::Stripe::CustomerRecord, 'table' do
+  include_context 'with a stripe_customers table'
 
   it 'types user_id as the configured user id type' do
     expect(described_class.columns_hash['user_id'].sql_type).to eq('uuid')
@@ -31,6 +35,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe::CustomerRecord do
     allow(Kiosk.configuration).to receive(:user_id_type).and_call_original
     migrate(:up)
   end
+end
+
+RSpec.describe Kiosk::PaymentProviders::Stripe::CustomerRecord do
+  include_context 'with a stripe_customers table'
 
   it 'resolves nothing for a principal it has never seen' do
     expect(described_class.resolve('user-unknown')).to be_nil

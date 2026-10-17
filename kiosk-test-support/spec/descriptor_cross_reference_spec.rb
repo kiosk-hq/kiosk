@@ -303,11 +303,8 @@ RSpec.describe 'demo descriptor cross-references' do
     # with no macros above it is not a verb — the mixin's own rule, which is
     # what keeps the private `render_*` refusal helpers out of the catalog.
     #
-    # The macro run is isolated by cutting at the previous method's `  end`
-    # (two-space `end` at method depth, the convention every handler controller
-    # in this repo follows). If that convention ever breaks, the header grows to
-    # include the previous method's body — harmless for extraction, and the
-    # non-vacuity example below is what would notice a real regression.
+    # The macro run is isolated by cutting after the last indented `end` before
+    # the `def`, which closes the previous method.
     def controller_verbs(src)
       out = []
       offset = 0
@@ -318,7 +315,7 @@ RSpec.describe 'demo descriptor cross-references' do
         # Everything after the previous method's terminator — the macro run,
         # with its comments stripped before any extractor below reads it
         # (K-1772; {without_comments} says why that is the layer).
-        macro_run    = region[/(?:\A|^  end\n)((?:(?!^  end\n).)*)\z/m, 1] || region
+        macro_run    = region[/(?:\A|^[ \t]+end\n)((?:(?!^[ \t]+end\n).)*)\z/m, 1] || region
         header       = without_comments(macro_run)
         offset       = m.end(0)
         previous_end = offset

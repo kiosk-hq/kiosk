@@ -198,7 +198,7 @@ if ARGV.include?('--self-test')
     { id: 'vacuity-initializer-corpus', rule: 'framework patch',
       what: 'the per-demo initializer walk comes back empty',
       ops: [[:edit, 'bin/check-demo-copies',
-             "  paths = Dir[File.join(ROOT, demo, 'config/initializers', '*.rb')].sort\n",
+             "  paths = Dir[File.join(ROOT, demo, 'config/initializers', '*.rb')]\n",
              "  paths = []\n"]],
       expect: /the framework-patch rule scanned NO initializers/ },
     { id: 'driver-env-defaulted-server-url', rule: 'driver env',

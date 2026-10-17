@@ -31,14 +31,14 @@ RSpec.describe 'descriptor required fields' do
     while (m = source.match(/^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/, offset))
       method_name  = m[1]
       region       = source[previous_end...m.begin(0)].to_s
-      header       = region[/(?:\A|^  end\n)((?:(?!^  end\n).)*)\z/m, 1] || region
+      header       = region[/(?:\A|^[ \t]+end\n)((?:(?!^[ \t]+end\n).)*)\z/m, 1] || region
       offset       = m.end(0)
       previous_end = offset
 
       declared = REQUIRED_MACROS.select { |macro| header.match?(/^[ \t]*#{macro}[ \t(]/) }
       next if declared.empty? && !header.match?(/^[ \t]*wire_name[ \t]/)
 
-      name = header[/^[ \t]*wire_name[ \t]+"([^"]*)"/, 1] || method_name
+      name = header[/^[ \t]*wire_name[ \t]+['"]([^'"]*)['"]/, 1] || method_name
       out << { name: name, declared: declared }
     end
     out

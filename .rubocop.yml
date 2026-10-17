@@ -1,0 +1,22 @@
+AllCops:
+  TargetRubyVersion: 4.0
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - "**/db/schema.rb"
+    - "**/db/migrate/**/*"
+    - "**/vendor/**/*"
+    - "**/node_modules/**/*"
+    - "**/tmp/**/*"
+    - "**/log/**/*"
+    - "kiosk-demo-*/bin/rails"
+    - "kiosk-demo-*/bin/rake"
+    - "kiosk-demo-*/bin/setup"
+    - "kiosk-demo-*/bin/dev"
+    - "kiosk-demo-skooti/firmware/**/*.c"
+
+Layout/LineLength:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false

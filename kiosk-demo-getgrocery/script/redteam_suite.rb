@@ -131,7 +131,7 @@ profile = Kiosk::Redteam::Profile.new(
   gated_action: 'reschedule_delivery',
   gated_args: ->(owned_ref) { { order_id: owned_ref[:id], slot_at: SLOT_AT_2 } },
 
-  # No card-setup step: KIOSK_TEST_AUTOCARD=1 against stripe-mock provisions a test card at capture.
+  # On payment_setup_required the client calls payment_setup and pays again.
   pay_for: ->(_client, customer, owned_ref) { grocery_mandates(customer, owned_ref) },
 
   kyc_valid: nil,

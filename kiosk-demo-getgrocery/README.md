@@ -163,8 +163,9 @@ high-liability actions where the operator needs to know *who* is on the hook.
 
 Payments need `STRIPE_SECRET_KEY` (sk_test_…, real test-mode charge) or a
 local stripe-mock; export `STRIPE_MOCK_URL=http://localhost:12111` to boot the
-app secret-free, and the seeds then map the shopper's saved card to the mock's
-card fixture. The tests always run against stripe-mock.
+app secret-free in development. stripe-mock lists a saved card for every
+Customer, so `payment_setup` answers `ready` once it has mapped one. The tests
+always run against stripe-mock.
 
 A test-mode key, where an operator has one, belongs in this demo's own
 gitignored `mise.toml` (copy `mise.toml.example`) and is for hand-driven demo

@@ -33,9 +33,7 @@ Kiosk.configure do |c|
 
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
-  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(
-    api_key: 'sk_test_mock', test_autocard: ENV['KIOSK_TEST_AUTOCARD'] == '1'
-  )
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: 'sk_test_mock')
 
   c.event_store        = Kiosk::Server::EventStores::ActiveRecord.new
   c.validate_requests  = true

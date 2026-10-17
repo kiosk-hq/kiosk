@@ -6,14 +6,8 @@ class ClaimStory < StoryTest
   HANA = '00000000-0000-0000-0000-000000000042'
   HANAS_CARD = 'cus_getgrocery_saved_card'
 
-  setup do
-    @provider = Kiosk.configuration.payment_provider
-    without_test_card = Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY'))
-    Kiosk.configuration.payment_provider = @provider.over(without_test_card)
-    Kiosk::PaymentProviders::Stripe::CustomerRecord.create!(user_id: HANA, customer_id: HANAS_CARD)
-  end
-
-  teardown { Kiosk.configuration.payment_provider = @provider }
+  # Hana saved a card on an earlier visit.
+  setup { Kiosk::PaymentProviders::Stripe::CustomerRecord.create!(user_id: HANA, customer_id: HANAS_CARD) }
 
   test 'an assistant that started on its own is linked to Hana and pays with her saved card' do
     standalone = a_shopper

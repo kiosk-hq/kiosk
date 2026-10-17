@@ -19,6 +19,10 @@ class RideStory < StoryTest
 
     scooter = rider.reserves('SK-001')
     assert scooter.ok?, scooter
+    setup = rider.sets_up_payment
+    assert_equal 'setup_required', setup['status']
+    assert_predicate setup['setup_url'], :present?
+    # The rider saves a card on that page; stripe-mock lists one for the Customer.
     assert_equal 'ready', rider.sets_up_payment['status']
     assert rider.pays_for(scooter).ok?
 
@@ -54,6 +58,7 @@ class RideStory < StoryTest
   test 'a scooter does not start before it is paid for, and the rider is told to pay first' do
     rider = a_rider
     scooter = rider.reserves('SK-001')
+    assert_equal 'setup_required', rider.sets_up_payment['status']
     assert_equal 'ready', rider.sets_up_payment['status']
 
     refused = rider.rides(scooter)

@@ -355,7 +355,6 @@ SIGNING_KEY_PEM=$(openssl genrsa 2048 2>/dev/null)
 export KIOSK_SIGNING_KEY_B64=$(echo "$SIGNING_KEY_PEM" | base64)
 export KIOSK_POW_SECRET=$(openssl rand -hex 32)
 export STRIPE_MOCK_URL="http://127.0.0.1:12111"
-export KIOSK_TEST_AUTOCARD=1
 export KIOSK_ISSUER="http://127.0.0.1:$SERVER_PORT"
 export KIOSK_ADDITIONAL_ORIGINS="http://localhost:$SERVER_PORT"
 

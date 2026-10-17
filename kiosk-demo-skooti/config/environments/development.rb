@@ -16,6 +16,12 @@ ENV['KIOSK_PROVE_PUBLIC_KEY_PEM']   ||=
 # The fixed dev keypair the KAT vector, the firmware fixtures and the lock simulator are pinned to.
 ENV['KIOSK_UNLOCK_SIGNING_KEY_PEM'] ||= File.read(File.expand_path('../dev_unlock_key.pem', __dir__))
 
+# A local stripe-mock stands in for Stripe when STRIPE_MOCK_URL names one.
+if (stripe_mock = ENV.fetch('STRIPE_MOCK_URL', nil))
+  require 'stripe'
+  Stripe.api_base = stripe_mock
+end
+
 Rails.application.configure do
   config.enable_reloading = true
   config.eager_load = false

@@ -36,11 +36,4 @@ shopper  = User.find_or_initialize_by(id: '00000000-0000-0000-0000-000000000042'
   hana.save!
 end
 
-# The saved card is a stripe-mock fixture, so it is mapped only against the mock;
-# against real Stripe the shopper saves one on the hosted setup page.
-if ENV['STRIPE_MOCK_URL']
-  Kiosk::PaymentProviders::Stripe::CustomerRecord.create_with(customer_id: 'cus_getgrocery_saved_card')
-                                                 .find_or_create_by!(user_id: shopper.id)
-end
-
 Rails.logger.info "Seeded: #{Product.count} products, #{Product.where(stock: 0).count} out of stock, and #{shopper.email}"

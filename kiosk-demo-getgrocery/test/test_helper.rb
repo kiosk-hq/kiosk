@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 ENV['RAILS_ENV'] ||= 'test'
-ENV['KIOSK_TEST_AUTOCARD'] = '1'
 
 require_relative '../config/environment'
 require 'rails/test_help'

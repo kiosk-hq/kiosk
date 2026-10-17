@@ -14,8 +14,6 @@ Kiosk::Configuration.include(SkootiUnlockSigningKey)
 
 EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
 
-Stripe.api_base = ENV['STRIPE_MOCK_URL'] if ENV['STRIPE_MOCK_URL']
-
 Kiosk.configure do |c|
   c.user_model     = 'User'
   c.user_id_type   = :uuid
@@ -41,10 +39,7 @@ end
 # Payments: the card setup, the capture, and what follows it.
 Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
-    Kiosk::PaymentProviders::Stripe.new(
-      api_key: ENV.fetch('STRIPE_SECRET_KEY'),
-      test_autocard: ENV['KIOSK_TEST_AUTOCARD'] == '1'
-    ),
+    Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY')),
     currency: 'eur', table: 'reservations', reference: 'reservation_id',
     query: 'my_reservations'
   )

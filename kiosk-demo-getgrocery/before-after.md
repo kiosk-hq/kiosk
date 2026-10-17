@@ -38,8 +38,8 @@ answer.
 
 **The human is needed once.** A card has to reach the operator: `payment_setup`
 returns a URL the assistant relays for its human to open. After that, repeat
-orders settle off-session with no taps. The scripted run skips that step with
-`KIOSK_TEST_AUTOCARD=1` so it runs unattended; a production flow cannot.
+orders settle off-session with no taps. In the scripted run, stripe-mock stands
+in for the human and the card they save.
 
 To watch an assistant drive it rather than a script, see "Watch it work" in
 `README.md`.

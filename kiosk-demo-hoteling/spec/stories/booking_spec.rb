@@ -7,6 +7,7 @@ RSpec.describe 'Booking a room', type: :story do
     guest = a_guest
     booking = guest.reserves(check_in: Date.current + 30, check_out: Date.current + 33)
     expect(booking).to be_ok, booking.to_s
+    expect(guest.sets_up_payment.rows).to include('status' => 'setup_required', 'setup_url' => be_present)
     expect(guest.sets_up_payment['status']).to eq('ready')
     expect(guest.pays_for(booking)).to be_ok
 
@@ -22,6 +23,7 @@ RSpec.describe 'Booking a room', type: :story do
   it 'a booking nobody paid for is not confirmed' do
     guest = a_guest
     booking = guest.reserves
+    expect(guest.sets_up_payment['status']).to eq('setup_required')
     expect(guest.sets_up_payment['status']).to eq('ready')
 
     expect(guest.bookings.find { it['booking_id'] == booking['booking_id'] })

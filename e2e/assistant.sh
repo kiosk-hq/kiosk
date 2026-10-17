@@ -1098,14 +1098,19 @@ assert "two origins: second's token on first → 401" "$(echo "$reg_out" | jq -r
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 
 # `payment_setup` is the engine's, served against the provider port: this
-# origin writes no handler for it, and the adapter's test card makes it ready.
-assert "payment_setup: served by the engine → ready" \
+# origin writes no handler for it. The first call maps a Stripe Customer and
+# hands over the setup page; stripe-mock lists a card for it, so the next is ready.
+alice_setup=$(action_call "$ALICE_AGENT_TOKEN" "payment_setup" '{}')
+assert "payment_setup: served by the engine → setup_required" "$(echo "$alice_setup" | jq -r '.status')" "setup_required"
+assert "…with the page for the human" "$(echo "$alice_setup" | jq -r '.setup_url | startswith("https://")')" "true"
+assert "payment_setup: once the card is saved → ready" \
   "$(action_call "$ALICE_AGENT_TOKEN" "payment_setup" '{}' | jq -r '.status')" "ready"
 
 pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
              PAY_CAPTURE="${PAY_CAPTURE:-}" \
              bundle exec ruby "$FIXTURES/pay_flow.rb" )
 
+assert "pay: setup, then ready"       "$(echo "$pay_out" | jq -r '[.setup[].status] | join(",")')"   "setup_required,ready"
 assert "pay: http 200"                "$(echo "$pay_out" | jq -r '.http_code')"                       "200"
 # `pay` answers the settlement object VERBATIM — no `ok`/`kind`/`value`
 # wrapper to unwrap.

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 # No-human payment proof. The agent generates its own keypair, SELF-REGISTERS
-# a synthetic principal (no human, no device-grant), signs the full AP2 mandate
-# trail (intent → cart → payment) bound to that principal, and pays. Prints a
-# JSON line on stdout.
+# a synthetic principal (no human, no device-grant), sets up payment, signs the
+# full AP2 mandate trail (intent → cart → payment) bound to that principal, and
+# pays. Prints a JSON line on stdout.
 require 'jwt'
 require 'json'
 require 'net/http'
@@ -50,6 +50,11 @@ key, reg = equihash_register(
 agent_id = reg.fetch('agent_id')
 user_id = reg.fetch('user_id')
 token = reg.fetch('access_token')
+auth = { 'Authorization' => "Bearer #{token}" }
+
+# payment_setup maps a Stripe Customer and hands over the setup page. stripe-mock
+# lists a saved card for that Customer, so the second answer is ready.
+setup = Array.new(2) { post_json("#{SERVER}/kiosk/payment_setup", {}, auth).last }
 
 now = Time.now.to_i
 intent_id = SecureRandom.uuid
@@ -70,8 +75,7 @@ pay_request = { intent_mandate_jws: JWT.encode(intent, key, 'RS256'),
                 cart_mandate_jws: JWT.encode(cart, key, 'RS256'),
                 payment_mandate_jws: JWT.encode(payment, key, 'RS256') }
 
-rc, pay = post_json("#{SERVER}/kiosk/pay", pay_request,
-                    { 'Authorization' => "Bearer #{token}" })
+rc, pay = post_json("#{SERVER}/kiosk/pay", pay_request, auth)
 
 # THE BYTES, KEPT. `PAY_CAPTURE` names a file to write the request this
 # origin ACCEPTED, the mandate claims inside it, and the settlement it answered
@@ -86,4 +90,4 @@ if (capture = ENV.fetch('PAY_CAPTURE', nil))
                       ))
 end
 
-puts JSON.generate(http_code: rc, user_id: user_id, agent_id: agent_id, response: pay)
+puts JSON.generate(http_code: rc, user_id: user_id, agent_id: agent_id, setup: setup, response: pay)

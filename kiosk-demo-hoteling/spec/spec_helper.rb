@@ -5,7 +5,6 @@
 # other. kiosk-demo-getgrocery is the Minitest spelling of the same.
 
 ENV['RAILS_ENV'] ||= 'test'
-ENV['KIOSK_TEST_AUTOCARD'] = '1'
 
 require_relative '../config/environment'
 require 'rspec/rails'

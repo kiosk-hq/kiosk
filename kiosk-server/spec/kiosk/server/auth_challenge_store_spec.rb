@@ -1,10 +1,22 @@
 # frozen_string_literal: true
 
-RSpec.describe Kiosk::Server::AuthChallengeStore do
+module AuthChallengeStoreSpecHelpers
+  # Reach the private @store hash for a size assertion without adding a public
+  # accessor to the shipped surface.
+  def store_size(store)
+    store.instance_variable_get(:@store).size
+  end
+end
+
+RSpec.shared_context 'auth challenge store spec: store and key' do
   subject(:store) { described_class.new }
 
   let(:pem) { "-----BEGIN PUBLIC KEY-----\nAAA\n-----END PUBLIC KEY-----" }
   let(:far) { Time.now.to_i + 300 }
+end
+
+RSpec.describe Kiosk::Server::AuthChallengeStore, '#take' do
+  include_context 'auth challenge store spec: store and key'
 
   it 'consumes a live, matching challenge exactly once (single-use)' do
     store.put(pem, 'nonce-1', far)
@@ -35,6 +47,11 @@ RSpec.describe Kiosk::Server::AuthChallengeStore do
   it 'returns false for a key that never had a challenge' do
     expect(store.take(pem, 'whatever')).to be(false)
   end
+end
+
+RSpec.describe Kiosk::Server::AuthChallengeStore, 'expiry pruning' do
+  include_context 'auth challenge store spec: store and key'
+  include AuthChallengeStoreSpecHelpers
 
   it 'prunes expired entries' do
     store.put(pem, 'nonce-1', Time.now.to_i - 1)
@@ -60,48 +77,43 @@ RSpec.describe Kiosk::Server::AuthChallengeStore do
     expect(store_size(store)).to eq(1)
     expect(store.take('live-key', 'live-nonce')).to be(true)
   end
+end
 
-  # K-548: prune! only drops EXPIRED entries. GET /auth/challenge is
-  # unauthenticated and un-rate-limited, so a distinct-key flood of LIVE
-  # (unexpired) challenges would still accumulate rate×TTL entries before any
-  # expiry. A hard size cap bounds the store even within the TTL window: at
-  # capacity, the oldest live entry is evicted.
-  describe 'size cap (bounded even within the TTL window)' do
-    let(:live) { Time.now.to_i + 300 }
+# K-548: prune! only drops EXPIRED entries. GET /auth/challenge is
+# unauthenticated and un-rate-limited, so a distinct-key flood of LIVE
+# (unexpired) challenges would still accumulate rate×TTL entries before any
+# expiry. A hard size cap bounds the store even within the TTL window: at
+# capacity, the oldest live entry is evicted.
+RSpec.describe Kiosk::Server::AuthChallengeStore, 'size cap (bounded even within the TTL window)' do
+  include AuthChallengeStoreSpecHelpers
 
-    it 'never grows past max_entries when flooded with live distinct keys' do
-      capped = described_class.new(max_entries: 10)
-      100.times { |i| capped.put("key-#{i}", "nonce-#{i}", live) }
-      expect(store_size(capped)).to eq(10)
-    end
+  let(:live) { Time.now.to_i + 300 }
+  let(:capped) { described_class.new(max_entries: 3) }
 
-    it 'evicts the OLDEST live entry, keeping the newest' do
-      capped = described_class.new(max_entries: 3)
-      capped.put('k1', 'n1', live)
-      capped.put('k2', 'n2', live)
-      capped.put('k3', 'n3', live)
-      capped.put('k4', 'n4', live) # at capacity → evicts k1 (oldest)
-
-      expect(capped.take('k1', 'n1')).to be(false) # evicted
-      expect(capped.take('k4', 'n4')).to be(true)  # newest survives
-    end
-
-    it 're-issuing a key refreshes its position (not evicted as stale-oldest)' do
-      capped = described_class.new(max_entries: 3)
-      capped.put('k1', 'n1', live)
-      capped.put('k2', 'n2', live)
-      capped.put('k1', 'n1b', live) # re-issue k1 → moves to newest
-      capped.put('k3', 'n3', live)
-      capped.put('k4', 'n4', live)  # evicts the now-oldest (k2), NOT k1
-
-      expect(capped.take('k2', 'n2')).to be(false) # evicted
-      expect(capped.take('k1', 'n1b')).to be(true) # refreshed, survives
-    end
+  it 'never grows past max_entries when flooded with live distinct keys' do
+    flooded = described_class.new(max_entries: 10)
+    100.times { |i| flooded.put("key-#{i}", "nonce-#{i}", live) }
+    expect(store_size(flooded)).to eq(10)
   end
 
-  # Reach the private @store hash for a size assertion without adding a public
-  # accessor to the shipped surface.
-  def store_size(store)
-    store.instance_variable_get(:@store).size
+  it 'evicts the OLDEST live entry, keeping the newest' do
+    capped.put('k1', 'n1', live)
+    capped.put('k2', 'n2', live)
+    capped.put('k3', 'n3', live)
+    capped.put('k4', 'n4', live) # at capacity → evicts k1 (oldest)
+
+    expect(capped.take('k1', 'n1')).to be(false) # evicted
+    expect(capped.take('k4', 'n4')).to be(true)  # newest survives
+  end
+
+  it 're-issuing a key refreshes its position (not evicted as stale-oldest)' do
+    capped.put('k1', 'n1', live)
+    capped.put('k2', 'n2', live)
+    capped.put('k1', 'n1b', live) # re-issue k1 → moves to newest
+    capped.put('k3', 'n3', live)
+    capped.put('k4', 'n4', live)  # evicts the now-oldest (k2), NOT k1
+
+    expect(capped.take('k2', 'n2')).to be(false) # evicted
+    expect(capped.take('k1', 'n1b')).to be(true) # refreshed, survives
   end
 end

@@ -21,7 +21,7 @@ require 'kiosk/reputation'
 
 module VerbControllerSpec
   def token
-    Kiosk::Server::JwtIssuer.issue(
+    @token ||= Kiosk::Server::JwtIssuer.issue(
       claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
       audience: 'https://demo.example'
     )
@@ -29,7 +29,7 @@ module VerbControllerSpec
 
   # One per-verb request. The action is :show for a GET, :create for a POST;
   # `kiosk_verb` is the path segment the router would have captured.
-  # `headers` takes `auth:` (default true), `accept:` and `timezone:`.
+  # `headers` takes `auth:` (default true), `accept:`, `timezone:` and `pow:`.
   def call_verb(method, name, query: nil, body: nil, **headers)
     action = method == :get ? :show : :create
     opts = { method: method.to_s.upcase }.merge(body_env(body), header_env(**headers))
@@ -46,11 +46,12 @@ module VerbControllerSpec
 
   # Rack::MockRequest sends no `Accept` by default; a real assistant does, and
   # it is the input Rails' `_set_vary_header` keys off.
-  def header_env(auth: true, accept: nil, timezone: nil)
+  def header_env(auth: true, accept: nil, timezone: nil, pow: nil)
     {
       'HTTP_AUTHORIZATION' => ("Bearer #{token}" if auth),
       'HTTP_ACCEPT' => accept,
-      'HTTP_KIOSK_TIMEZONE' => timezone
+      'HTTP_KIOSK_TIMEZONE' => timezone,
+      'HTTP_KIOSK_POW' => pow
     }.compact
   end
 
@@ -79,6 +80,13 @@ module VerbControllerSpec
         seen: params.to_unsafe_h.keys.sort
       }]
     end
+  end
+
+  # A solved argon2id proof for `challenge`, as the `Kiosk-PoW` header carries it.
+  def proof_for(challenge)
+    salt  = Base64.strict_decode64(challenge[:salt])
+    nonce = (0..).find { Kiosk::Pow.verify(salt: salt, params: challenge[:params], nonce: it.to_s) }
+    JSON.generate(challenge: challenge, nonce: nonce.to_s)
   end
 
   # A policy that tolls every verb.
@@ -894,5 +902,39 @@ RSpec.describe Kiosk::Server::VerbController do
 
       expect(seen).to eq([{ method: 'GET', verb: 'salons', body: { city: 'Lisbon' } }])
     end
+  end
+end
+
+# The toll is paid once per access token: one proof, then every call with that token.
+RSpec.describe Kiosk::Server::VerbController, 'the session toll' do
+  include_context 'verb controller spec: authenticated origin'
+
+  before do
+    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+    Kiosk.configure do |c|
+      c.reputation_policy = tolling_policy
+      c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
+    end
+    declare_query('salons') { render json: [] }
+    declare_action('book') { render json: {} }
+  end
+
+  after { Kiosk::Reputation::Backends.reset! }
+
+  it 'asks the first call for a proof and serves every later call of the token without one' do
+    status, body = call_verb(:get, 'salons')
+    expect(status).to eq(402)
+
+    expect(call_verb(:get, 'salons', pow: proof_for(body[:challenges].first)).first).to eq(200)
+    expect(call_verb(:get, 'salons').first).to eq(200)
+    expect(call_verb(:post, 'book', body: '{}').first).to eq(200)
+  end
+
+  it 'asks a new token again' do
+    _, body = call_verb(:get, 'salons')
+    call_verb(:get, 'salons', pow: proof_for(body[:challenges].first))
+    @token = nil
+
+    expect(call_verb(:get, 'salons').first).to eq(402)
   end
 end

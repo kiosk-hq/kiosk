@@ -1,4 +1,4 @@
-<% content_for :title, "atablefor — a Kiosk restaurant-booking endpoint (demo)" %>
+<% content_for :title, "atablefor — book a Lisbon table through your AI assistant (demo)" %>
 
   <div class="agentbar">
     <span class="tag">🤖 For agents</span>
@@ -10,11 +10,11 @@
   <!-- ── 0. PROTOCOL-PRIMARY banner: this is a machine endpoint ── -->
   <section class="proto">
     <div class="wrap">
-      <span class="proto-badge">🔌 This endpoint speaks Kiosk</span>
+      <span class="proto-badge">🔌 This site works with Kiosk</span>
       <h1>Point your AI assistant here — it books the table.</h1>
-      <p>This is <strong>atablefor</strong> — a restaurant booking aggregator across a handful of Lisbon neighbourhoods (Alfama, Graça, Bairro Alto, Belém, Príncipe Real) — exposed as a <strong>Kiosk</strong> booking endpoint. There is <strong>no web booking form and no human sign-in to reserve</strong> — an assistant discovers the surface, registers itself, and books a table over the protocol.</p>
+      <p>This is <strong>atablefor</strong> — a restaurant booking aggregator across a handful of Lisbon neighbourhoods (Alfama, Graça, Bairro Alto, Belém, Príncipe Real). AI assistants book here through <strong>Kiosk</strong>. There is <strong>no web booking form and no sign-in to reserve</strong>. An assistant finds this site, makes its own account, and books a table.</p>
       <p class="say">“Book a table for two in Alfama tonight at 8.”</p>
-      <p class="no-signin">Say that to your assistant. It reads <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>, self-registers, and reserves — no login, no app, no card. (Staff sign-in, top right, is only for restaurant staff to manage linked diners.)</p>
+      <p class="no-signin">Say that to your assistant. It reads <a href="/.well-known/kiosk.json">/.well-known/kiosk.json</a>, makes its own account, and books — no login, no app, no card. (Staff sign-in, top right, is only for restaurant staff to manage linked diners.)</p>
     </div>
   </section>
 
@@ -22,18 +22,18 @@
 
     <!-- ── 1. How an assistant books here ────────────────────────────── -->
     <section class="sec">
-      <div class="sec-k">🤖 How an assistant books here — over the protocol</div>
+      <div class="sec-k">🤖 How an assistant books here</div>
       <div class="tryit">
         <h2>Book a table — no human at the keyboard</h2>
         <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
         <ol class="steps">
-          <li>Discovers this endpoint via <code>/.well-known/kiosk.json</code> — no <code>/bookings</code> web page, no browser login.</li>
-          <li>Registers itself with a proof-of-possession handshake (creates its own account).</li>
+          <li>Finds this site through <code>/.well-known/kiosk.json</code> — no web page, no browser login.</li>
+          <li>Makes its own account, signed with a key only it holds.</li>
           <li>Calls <code>availability</code>, then <code>book_table</code> — the reservation is confirmed.</li>
         </ol>
-        <p class="note">⚠ This demo runs <strong>production-grade proof-of-work</strong> (~9–10&nbsp;s per register on an M-series laptop core) on purpose — so you can feel the real anti-scalping toll first-hand. The other Kiosk demos are tuned light (sub-second) for quick poking.</p>
+        <p class="note">⚠ This demo makes every new assistant account solve a <strong>full-strength proof-of-work puzzle</strong> (~9–10&nbsp;s on one M-series laptop core) on purpose. You feel first-hand the cost that keeps scalpers out. The other Kiosk demos use a light puzzle (under a second).</p>
         <div class="linkbox">
-          <strong>Link a booking to a real diner account.</strong> A diner signs in at <a href="/users/sign_in">Staff login</a> (demo login below), opens <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and mints a one-time link code. Hand that code to the assistant — it redeems the code over the wire, and its bookings then appear on the <a href="/reservations">reservations board</a> under that diner's name.
+          <strong>Link a booking to a real diner account.</strong> A diner signs in at <a href="/users/sign_in">Staff login</a> (demo login below), opens <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and makes a one-time link code. Hand that code to the assistant. It uses the code, and its bookings then appear on the <a href="/reservations">reservations board</a> under that diner's name.
           <div class="cred">Demo login: <code>diego@example.com</code> &nbsp;/&nbsp; <code>atablefor-demo-password</code></div>
         </div>
       </div>
@@ -49,12 +49,12 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>atablefor</strong> is a restaurant-booking aggregator (a handful of coined Lisbon restaurants, each with a few finite tables) and the <strong>human↔assistant account-linking</strong> reference: a diner signs in, mints a link code, their assistant redeems it, and the assistant's bookings tie to the diner's account — visible on the board above — all with <strong>no money on the wire</strong> (a reservation takes no card). Tables are finite: a fully-booked seating is honestly sold out.</p>
+        <p><strong>atablefor</strong> is a restaurant-booking aggregator (a handful of coined Lisbon restaurants, each with a few finite tables) and the example of <strong>linking an assistant to a diner's account</strong>: a diner signs in and makes a link code, their assistant uses it, and the assistant's bookings show under the diner's name on the board above. <strong>No money changes hands</strong>: a reservation takes no card. Tables are finite: a fully-booked seating is honestly sold out.</p>
         <div class="chips">
-          <span class="chip">🔗 Human↔assistant linking</span>
+          <span class="chip">🔗 Diner↔assistant linking</span>
           <span class="chip">Viewable reservations board</span>
-          <span class="chip">No payment (EUR holds only)</span>
-          <span class="chip">Production-grade PoW (~10&nbsp;s, M-series core)</span>
+          <span class="chip">No payment</span>
+          <span class="chip">Full-strength proof-of-work (~10&nbsp;s, M-series core)</span>
         </div>
         <div class="links">
           <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-atablefor">▶ Source on GitHub</a>

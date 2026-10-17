@@ -2,22 +2,22 @@
     reservation as "party size · restaurant (neighbourhood) · table · time
     (zone) · <diner name>". Spans ALL restaurants in the aggregator. Shared by the home
     page and the standalone /reservations page. Read-only — no forms, no
-    actions; it only mirrors what the wire booked. %>
+    actions; it only mirrors what assistants booked. %>
 <div class="board">
   <div class="board-head">
     <div>
       <div class="board-title">Reservations board</div>
-      <div class="board-sub">Upcoming bookings across the atablefor restaurants — updates as assistants book over the wire.</div>
+      <div class="board-sub">Upcoming bookings across the atablefor restaurants — updates as assistants book.</div>
     </div>
     <span class="board-count"><%= @reservations.length %> upcoming</span>
   </div>
 
   <% if @reservations.empty? %>
-    <p class="board-empty">No upcoming reservations yet. Point an assistant at this endpoint and book one.</p>
+    <p class="board-empty">No upcoming reservations yet. Point an assistant at this site and book one.</p>
   <% else %>
     <ul class="res-list">
       <%= render @reservations %>
     </ul>
-    <p class="board-note">Names are the diners the bookings are linked to — an assistant's booking shows under its diner's account. No payment crosses the wire; any € figure is a no-show hold settled at the restaurant.</p>
+    <p class="board-note">Names are the diners the bookings are linked to — an assistant's booking shows under its diner's account. Booking a table costs nothing.</p>
   <% end %>
 </div>

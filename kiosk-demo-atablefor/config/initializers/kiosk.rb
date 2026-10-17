@@ -24,11 +24,11 @@ Kiosk.configure do |c|
     name:           "atablefor",
     support:        "demo@kiosk.tech",
     pow_difficulty: "high",
-    pow_notice:     "beware: memory- and CPU-intensive proof-of-work — this provider prices " \
-                    "registration/browsing with Equihash n=168 k=7 (~1.3 GiB per proof; ~10 s on " \
-                    "a reference numpy solver, measured on one M-series laptop core). This is " \
-                    "deliberate: the toll is the DoS shield, and it costs the client, not the " \
-                    "provider. Solve it with the solver the Kiosk skill pins.",
+    pow_notice:     "beware: heavy proof-of-work. Signing up and calling here asks for Equihash " \
+                    "n=168 k=7 proofs (~1.3 GiB of memory per proof; ~10 s on a reference numpy " \
+                    "solver, measured on one M-series laptop core). This is on purpose: the cost " \
+                    "falls on the caller, not on the restaurant site, and keeps floods out. " \
+                    "Solve it with the solver the Kiosk skill pins.",
   }
   c.skill_url    = "https://kiosk.tech/skill-v0.5.13.md"
   c.skill_sha256 = "786041de6e738cb55311eb852162509f23115227be9ab1c6837b9741840e990b"

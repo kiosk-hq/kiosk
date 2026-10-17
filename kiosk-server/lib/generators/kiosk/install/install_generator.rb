@@ -95,6 +95,11 @@ module Kiosk
         migration_template 'create_kiosk_pow_spent.rb.tt',
                            'db/migrate/create_kiosk_pow_spent.rb'
       end
+
+      def create_revocations_migration
+        migration_template 'create_kiosk_revocations.rb.tt',
+                           'db/migrate/create_kiosk_revocations.rb'
+      end
     end
   end
 end

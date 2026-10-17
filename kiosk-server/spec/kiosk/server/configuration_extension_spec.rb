@@ -286,7 +286,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     {
       pow_spent_store: Kiosk::Server::PowSpentStores::ActiveRecord,
       auth_challenge_store: Kiosk::Server::AuthChallengeStore,
-      revocation_store: Kiosk::Server::RevocationStore,
+      revocation_store: Kiosk::Server::RevocationStores::ActiveRecord,
       device_authorization_store: Kiosk::Server::DeviceAuthorizationStores::ActiveRecord
     }.each do |slot, klass|
       it "hands #{slot} to 20 racing threads as ONE #{klass.name.split('::').last} object" do
@@ -296,13 +296,6 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
         expect(stores.uniq.length).to eq(1)
         expect(stores.first).to be_a(klass)
       end
-    end
-
-    it 'does not re-default revocation_store when an operator set it to nil' do
-      Kiosk.configure { |c| c.revocation_store = nil }
-      stores = with_slow_store_allocation { race(20) { Kiosk.configuration.revocation_store } }
-
-      expect(stores.uniq).to eq([nil])
     end
   end
 end

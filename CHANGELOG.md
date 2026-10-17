@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Token revocation is stored in the new `kiosk.revocations` table by default, so a revoke or an unlink holds in every process and after a restart; run `kiosk:install`'s new migration.
+
 - 2026-10-17: The wire and the event stream accept only a bearer token, never the operator's session cookie; `auth/link` and `auth/unlink` refuse a request that is not `application/json`.
 
 - 2026-10-17: Demo lockfiles take the patched crass, loofah, mail, nokogiri, rails-html-sanitizer and websocket-driver releases.

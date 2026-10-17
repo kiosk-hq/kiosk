@@ -97,7 +97,7 @@ module Kiosk
         identity = authenticated_agent
         raise Errors::Unauthenticated, 'agent authentication required' if identity.nil? || identity.agent_id.nil?
 
-        Kiosk.configuration.revocation_store&.revoke_all(identity.agent_id, at: Time.now.to_i)
+        Kiosk.configuration.revocation_store.revoke_all(identity.agent_id, at: Time.now.to_i)
         token = fresh_token(identity)
         respond({ access_token: token }, :ok)
       rescue Errors::Base => e

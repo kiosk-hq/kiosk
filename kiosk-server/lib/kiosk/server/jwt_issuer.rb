@@ -25,7 +25,7 @@ module Kiosk
 
       module_function
 
-      # rubocop:disable Metrics/ParameterLists -- a keyword-only public API; callers pass each option by name
+      # rubocop:disable-next Metrics/ParameterLists -- a keyword-only public API; callers pass each option by name
       def issue(claims:, audience:, signing_key: nil, issuer: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.now)
         signing_key ||= Kiosk.configuration.signing_key
         issuer      ||= Kiosk.current_issuer
@@ -36,16 +36,13 @@ module Kiosk
         ::JWT.encode(payload, signing_key.rsa, ALGORITHM, { kid: signing_key.kid, typ: 'JWT' })
       end
 
-      # `revocation_store: nil` skips the revocation check.
-      def verify(token:, jwks:, audience: nil, issuer: nil, leeway: DEFAULT_LEEWAY,
-                 revocation_store: :from_config)
+      def verify(token:, jwks:, audience: nil, issuer: nil, leeway: DEFAULT_LEEWAY)
         claims = decode(token, normalize_jwks(jwks), audience: audience, issuer: issuer, leeway: leeway)
-        store = revocation_store == :from_config ? configured_revocation_store : revocation_store
-        raise RevokedError, 'access token revoked' if store&.revoked?(agent_id: claims[:agent_id], iat: claims[:iat])
+        revoked = Kiosk.configuration.revocation_store.revoked?(agent_id: claims[:agent_id], iat: claims[:iat])
+        raise RevokedError, 'access token revoked' if revoked
 
         claims
       end
-      # rubocop:enable Metrics/ParameterLists
 
       def registered_claims(claims, issuer:, audience:, issued_at:, expires_in:)
         payload = claims.dup
@@ -95,12 +92,6 @@ module Kiosk
         hash.each_with_object({}) { |(k, v), out| out[k.to_sym] = v }
       end
 
-      def configured_revocation_store
-        cfg = Kiosk.configuration
-        cfg.respond_to?(:revocation_store) ? cfg.revocation_store : nil
-      rescue StandardError
-        nil
-      end
       private_class_method :registered_claims, :decode, :error_class_for
     end
   end

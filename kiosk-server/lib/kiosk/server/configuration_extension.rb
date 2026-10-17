@@ -330,19 +330,13 @@ module Kiosk
         @auth_challenge_ttl ||= (pow_ttl * [registration_pow_count.to_i, 1].max) + 60
       end
 
-      # Revocation watermarks, checked on every access token. nil disables
-      # revocation. Implement `watermark_for` too, or same-second rebinds leak (§6.3).
+      # Revocation watermarks, checked on every access token. Default: the
+      # shared database table, so a revoke or an unlink holds in every process.
       attr_writer :revocation_store
 
       def revocation_store
-        # nil is a meaningful value here, so `defined?` rather than truthiness.
-        return @revocation_store if defined?(@revocation_store)
-
-        LAZY_STORE_MUTEX.synchronize do
-          return @revocation_store if defined?(@revocation_store)
-
-          @revocation_store = Kiosk::Server::RevocationStore.new
-        end
+        @revocation_store ||
+          LAZY_STORE_MUTEX.synchronize { @revocation_store ||= Kiosk::Server::RevocationStores::ActiveRecord.new }
       end
     end
   end

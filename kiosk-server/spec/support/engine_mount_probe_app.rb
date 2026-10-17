@@ -19,6 +19,7 @@ require 'bundler/setup'
 require 'json'
 require 'kiosk/server'
 require 'rack/mock'
+require_relative 'memory_revocation_store'
 
 class ProbeApp < Rails::Application
   config.eager_load = false
@@ -33,6 +34,7 @@ Kiosk.configure do |c|
   c.issuer      = 'http://localhost'
   c.user_model  = 'User'
   c.signing_key = Kiosk::Server::SigningKey.generate
+  c.revocation_store = MemoryRevocationStore.new
 end
 # One verb, so this origin has a live capability set for the discovery
 # documents to advertise. Declared the shipped way — a controller with the

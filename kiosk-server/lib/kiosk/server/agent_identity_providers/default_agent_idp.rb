@@ -50,11 +50,8 @@ module Kiosk
         # Never earlier than the revocation watermark, so a token minted in the
         # second a rebind revoked (§6.3) still survives `iat < watermark`.
         def mint_instant(agent_id)
-          now   = Time.now
-          store = Kiosk.configuration.revocation_store
-          return now unless store.respond_to?(:watermark_for)
-
-          watermark = store.watermark_for(agent_id)
+          now       = Time.now
+          watermark = Kiosk.configuration.revocation_store.watermark_for(agent_id)
           return now if watermark.nil? || watermark <= now.to_i
 
           Time.at(watermark)

@@ -691,6 +691,9 @@ COPIES = {
   'db/migrate/20261009000002_create_kiosk_pow_spent.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk.pow_spent, the spent proof-of-work ids.'
   },
+  'db/migrate/20261017000001_create_kiosk_revocations.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk.revocations, the token revocation watermarks.'
+  },
   'db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb' => {
     rule: :identical,
     ships: %w[getgrocery hoteling skooti],
@@ -748,7 +751,8 @@ GENERATOR_TEMPLATES = {
   'create_kiosk_mandates.rb.tt' => { emits: 'create_kiosk_mandates.rb' },
   'create_kiosk_kyc_attributes.rb.tt' => { emits: 'create_kiosk_kyc_attributes.rb' },
   'create_kiosk_events.rb.tt' => { emits: 'create_kiosk_events.rb' },
-  'create_kiosk_pow_spent.rb.tt' => { emits: 'create_kiosk_pow_spent.rb' }
+  'create_kiosk_pow_spent.rb.tt' => { emits: 'create_kiosk_pow_spent.rb' },
+  'create_kiosk_revocations.rb.tt' => { emits: 'create_kiosk_revocations.rb' }
 }.freeze
 
 # Hand-written migrations shipped by several demos at their own timestamps, by

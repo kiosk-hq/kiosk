@@ -37,6 +37,7 @@ RSpec.shared_context 'default agent idp spec: configured origin' do
       c.signing_key = Kiosk::Server::SigningKey.generate
       c.issuer      = 'https://demo.example'
       c.roles       = %i[customer]
+      c.revocation_store = MemoryRevocationStore.new
     end
   end
 end

@@ -45,6 +45,15 @@ class LinkStory < StoryTest
     assert_equal ['Flat 3B', 'Hike'], List.joins(:memberships).where(memberships: { account_id: ALICE }).pluck(:title).sort
   end
 
+  test 'an assistant Alice unlinks stays locked out, on every worker and after a restart' do
+    linked = alice.links(@on_its_own)
+    alice.unlinks(linked)
+    assert linked.asks(:my_lists).refused?(:unauthenticated)
+
+    Kiosk.configuration.revocation_store = Kiosk.configuration.revocation_store.class.new
+    assert linked.asks(:my_lists).refused?(:unauthenticated), 'a fresh store still knows the unlink'
+  end
+
   test 'the list page shows Alice who is on her list, and turns her away from a list she is not on' do
     alice.links(@on_its_own)
     page = alice.visits("/lists/#{@hike}")

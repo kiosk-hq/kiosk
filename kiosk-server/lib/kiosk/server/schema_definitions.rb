@@ -296,6 +296,18 @@ module Kiosk
         SQL
       end
 
+      # 009: each agent's revocation watermark: a token issued before it stops verifying.
+      def revocations_sql(schema: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~SQL.strip
+          CREATE TABLE IF NOT EXISTS "#{schema}".revocations (
+            agent_id       uuid        PRIMARY KEY REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
+            revoked_before timestamptz NOT NULL
+          );
+        SQL
+      end
+
       # Not in the canonical set: the shared auth-challenge table a multi-process
       # operator adds. At most one outstanding challenge per key.
       def auth_challenge_sql(schema: nil)

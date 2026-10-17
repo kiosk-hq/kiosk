@@ -79,7 +79,7 @@ module Kiosk
 
         # Next second: JWT `iat` is whole seconds and the check is `iat < watermark` (§6.3).
         def revoke_tokens(config, agent_id)
-          config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
+          config.revocation_store.revoke_all(agent_id, at: Time.now.to_i + 1)
         end
 
         def claimed(config, agent_id, previous, user_id)

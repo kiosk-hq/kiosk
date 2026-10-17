@@ -195,13 +195,13 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       let(:agent_token) do
         described_class.issue(claims: { sub: 'u', agent_id: 'a-1' }, audience: audience)
       end
-      let(:store) { Kiosk::Server::RevocationStore.new }
+      let(:store) { Kiosk.configuration.revocation_store }
 
       it 'rejects a token whose agent has been revoked as of now' do
         agent_token # issue first (iat = now)
         store.revoke_all('a-1', at: Time.now.to_i + 120) # watermark ahead of iat
         expect do
-          described_class.verify(token: agent_token, jwks: jwks, audience: audience, revocation_store: store)
+          described_class.verify(token: agent_token, jwks: jwks, audience: audience)
         end.to raise_error(described_class::RevokedError)
       end
 
@@ -209,23 +209,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
         store.revoke_all('a-1', at: Time.now.to_i - 120) # watermark in the past
         fresh = described_class.issue(claims: { sub: 'u', agent_id: 'a-1' }, audience: audience)
         expect do
-          described_class.verify(token: fresh, jwks: jwks, audience: audience, revocation_store: store)
-        end.not_to raise_error
-      end
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: issued token'
-
-  describe '.verify' do
-    describe 'revocation' do
-      it 'skips the check when revocation_store is nil' do
-        agent_token = described_class.issue(claims: { sub: 'u', agent_id: 'a-1' }, audience: audience)
-        Kiosk::Server::RevocationStore.new.revoke_all('a-1', at: Time.now.to_i + 120)
-        expect do
-          described_class.verify(token: agent_token, jwks: jwks, audience: audience, revocation_store: nil)
+          described_class.verify(token: fresh, jwks: jwks, audience: audience)
         end.not_to raise_error
       end
     end

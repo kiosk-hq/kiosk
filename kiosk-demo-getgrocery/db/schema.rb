@@ -224,6 +224,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_000002) do
     t.unique_constraint ["resource_kind", "resource_id", "released_at"], deferrable: :deferred, name: "reservations_unique_active"
   end
 
+  create_table "kiosk.revocations", primary_key: "agent_id", id: :uuid, default: nil, force: :cascade do |t|
+    t.timestamptz "revoked_before", null: false
+  end
+
   create_table "kiosk.settlements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "cart_mandate_id", null: false
     t.uuid "user_id", null: false
@@ -245,5 +249,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_000002) do
   add_foreign_key "kiosk.kyc_attributes", "public.users", name: "kyc_attributes_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
+  add_foreign_key "kiosk.revocations", "kiosk.agents", name: "revocations_agent_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
 end

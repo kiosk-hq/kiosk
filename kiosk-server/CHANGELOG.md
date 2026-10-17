@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Token revocation is stored in the new `kiosk.revocations` table by default, so a revoke or an unlink holds in every process and after a restart; run `kiosk:install`'s new migration.
 - 2026-10-17: The wire and the event stream accept only a bearer token, never the operator's session cookie; `auth/link` and `auth/unlink` refuse a request that is not `application/json`.
 - 2026-10-17: `Kiosk::Server.listener_path`, `Page#truncated?` and `EventStore#prune_before` are removed; the in-process event store never reports a truncated cursor.
 - 2026-10-17: A handler may answer through its JSON template (Jbuilder, say), rendered whatever the caller's `Accept`; `render_kiosk_page` without rows pages what the template renders.

@@ -186,6 +186,14 @@ Any other backend works: the contract is `claim(id, exp) → Boolean`,
 atomic operation (Redis `SET … NX EX`, or SQL `INSERT … ON CONFLICT`). A
 read-then-write reintroduces exactly the replay race the gate closes.
 
+Token revocation lives in `c.revocation_store`, by default
+`Kiosk::Server::RevocationStores::ActiveRecord`: the `kiosk.revocations` table,
+which `bin/rails g kiosk:install` lays down too. A revoke, a rebind or an unlink
+stops the agent's older tokens in every process and after a restart, and a
+token of an unlinked agent stops at once. The contract is
+`revoke_all(agent_id, at:)`, `watermark_for(agent_id)` and
+`revoked?(agent_id:, iat:)`.
+
 `c.auth_challenge_store` is in-process, and an operator running more than one
 process **MUST** share it: a challenge issued by one worker is invisible to the worker
 that gets the `register`/`login`, so the handshake fails **closed** — a

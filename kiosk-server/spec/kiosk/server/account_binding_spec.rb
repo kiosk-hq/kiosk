@@ -560,6 +560,7 @@ RSpec.shared_context 'account binding spec: known key rebind watermark ordering 
       c.issuer      = 'https://demo.example'
       c.roles       = %i[customer]
       c.schema      = 'kiosk'
+      c.revocation_store = MemoryRevocationStore.new
     end
     # Un-stub issue (the outer before stubs it to a fixed string) so bind!
     # mints a REAL JWT; lookup_user_id (called inside issue) resolves the
@@ -717,8 +718,8 @@ RSpec.describe Kiosk::Server::AccountBinding, '.unlink! watermark' do
   # Unlink mints no replacement token, so it can and must cover the whole
   # second. The claim rebind passes the next second too since K-836 — it
   # returns a replacement, so it dates that token AT the watermark rather than
-  # leaning on the strict `<`. `/auth/revoke` alone keeps `Time.now.to_i`, and
-  # the reason is on RevocationStore: the caller holds the private key there.
+  # leaning on the strict `<`. `/auth/revoke` alone keeps `Time.now.to_i`,
+  # because its caller holds the private key and gets a replacement token.
   it 'stamps the watermark at the NEXT second, so a same-second token is covered too' do
     route_exec_query(con) { [{ 'id' => 'agent-1' }] }
     now = Time.now.to_i
@@ -734,7 +735,7 @@ RSpec.describe Kiosk::Server::AccountBinding, '.unlink! watermark' do
 
   it 'revokes a token minted in the same wall-clock second as the unlink' do
     route_exec_query(con) { [{ 'id' => 'agent-1' }] }
-    store = Kiosk::Server::RevocationStore.new
+    store = MemoryRevocationStore.new
     Kiosk.configure { |c| c.revocation_store = store }
     now = Time.now.to_i
 

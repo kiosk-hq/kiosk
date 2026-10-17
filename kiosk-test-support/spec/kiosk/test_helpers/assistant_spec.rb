@@ -121,6 +121,35 @@ RSpec.describe Kiosk::TestHelpers::Assistant, '#pay' do
   end
 end
 
+RSpec.describe Kiosk::TestHelpers::Assistant, '#pay when payment setup is required' do
+  include_context 'with an assistant and an origin'
+
+  let(:now)    { Time.now.to_i }
+  let(:intent) { { id: 'i1', user_id: 'u1', exp: now + 600, iat: now } }
+  let(:cart)   { { id: 'c1', intent_mandate_id: 'i1', total_amount_cents: 100, currency: 'eur', iss: origin, exp: now + 600, iat: now } }
+
+  it 'calls payment_setup on payment_setup_required and sends the same mandates once more' do
+    stub, sent = requests_to(:post, '/kiosk/pay')
+    stub.to_return(problem_return('payment_setup_required', status: 402), json_return(200, 'settlement_id' => 's1'))
+    setup = stub_request(:post, "#{origin}/kiosk/payment_setup").to_return(json_return(200, 'status' => 'ready'))
+
+    expect(assistant.pay(principal, intent:, cart:)).to have_attributes(status: 200)
+    expect(setup).to have_been_requested.once
+    expect(sent.map(&:body).uniq.size).to eq(1)
+    expect(sent.size).to eq(2)
+  end
+
+  it 'answers the second refusal when payment setup is still not done' do
+    stub, sent = requests_to(:post, '/kiosk/pay')
+    stub.to_return(problem_return('payment_setup_required', status: 402))
+    stub_request(:post, "#{origin}/kiosk/payment_setup")
+      .to_return(json_return(200, 'status' => 'setup_required', 'setup_url' => 'https://pay.example/setup'))
+
+    expect(assistant.pay(principal, intent:, cart:)).to have_attributes(status: 402)
+    expect(sent.size).to eq(2)
+  end
+end
+
 RSpec.describe Kiosk::TestHelpers::Assistant, 'queries and actions' do
   include_context 'with an assistant and an origin'
 

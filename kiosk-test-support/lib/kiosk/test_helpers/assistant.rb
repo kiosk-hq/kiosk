@@ -77,8 +77,15 @@ module Kiosk
                            payment_jws: sign_mandate(principal, payment))
       end
 
+      # On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
+      # asks, and sends the same mandates once more. Against stripe-mock the
+      # Customer that `payment_setup` maps already lists a card, so that answer settles.
       def pay_raw(principal, intent_jws:, cart_jws:, payment_jws:)
-        body = { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws, payment_mandate_jws: payment_jws }
+        body   = { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws, payment_mandate_jws: payment_jws }
+        answer = wire.post('/kiosk/pay', body, wire.bearer(principal.token))
+        return answer unless setup_required?(answer)
+
+        run(principal, name: 'payment_setup')
         wire.post('/kiosk/pay', body, wire.bearer(principal.token))
       end
 
@@ -135,6 +142,10 @@ module Kiosk
       def possession(key) = { public_key: key.public_key.to_pem, signed: proof_of_possession(key) }
 
       def unpaid = Wire.new(base_url:)
+
+      def setup_required?(answer)
+        answer.status == 402 && answer.body.is_a?(Hash) && answer.body['code'] == 'payment_setup_required'
+      end
     end
   end
 end

@@ -63,6 +63,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc, '#call — the staged paym
   it 'reports SETUP FAILED when pay is refused 402 and the gated action then 402s' do
     stub_registers('a')
     stub_pay(status: 402, code: 'payment_setup_required')
+    stub_action('payment_setup', body: { 'status' => 'setup_required', 'setup_url' => 'https://pay.example/setup' })
     stub_action('start_rental', status: 402, code: 'payment_setup_required')
 
     verdict = scenario.call(client, profile)

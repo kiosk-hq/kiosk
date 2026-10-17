@@ -14,12 +14,17 @@ require 'rbconfig'
 # It is asserted in a FRESH PROCESS because this one has already loaded the
 # whole gem: inside the suite the constant is defined no matter what the
 # boundary says, so an in-process check would pass while the boundary was gone.
-RSpec.describe 'the solver/verifier load boundary' do
+module FreshRuby
   LIB = File.expand_path('../../../../lib', __dir__)
 
+  # Runs `code` in a new Ruby process with this gem's lib on the load path.
   def ruby(code)
     Open3.capture2e(RbConfig.ruby, '-I', LIB, '-e', code)
   end
+end
+
+RSpec.describe 'the solver/verifier load boundary, verifier side' do
+  include FreshRuby
 
   it 'does not give the verifier a `solve` method' do
     out, status = ruby(<<~RUBY)
@@ -40,6 +45,10 @@ RSpec.describe 'the solver/verifier load boundary' do
 
     expect(status).to be_success, "requiring the verifier loaded open3:\n#{out}"
   end
+end
+
+RSpec.describe 'the solver/verifier load boundary, solver side' do
+  include FreshRuby
 
   it 'defines `solve` when the solver is required' do
     out, status = ruby(<<~RUBY)

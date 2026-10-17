@@ -3,11 +3,15 @@
 require 'jwt'
 require 'stringio'
 
-RSpec.describe Kiosk::Server::PopVerifier do
-  # PopVerifier writes its operator-side audience-mismatch diagnostic to
-  # Rails.logger when one exists and to $stderr otherwise — and this suite is
-  # plain Ruby, no Rails. Capture it so the assertions can read it and the
-  # unrelated examples don't spray the test output.
+module PopVerifierSpec
+  # RSA generation is expensive, so the file shares one set of keys.
+  def self.rsa   = @rsa ||= OpenSSL::PKey::RSA.generate(2048)
+  def self.other = @other ||= OpenSSL::PKey::RSA.generate(2048)
+  def self.small = @small ||= OpenSSL::PKey::RSA.generate(1024)
+
+  # PopVerifier writes its audience-mismatch diagnostic to Rails.logger when
+  # one exists and to $stderr otherwise. This suite has no Rails, so capture
+  # $stderr: the assertions read it and the other examples stay quiet.
   def capture_operator_log
     original = $stderr
     $stderr  = StringIO.new
@@ -16,23 +20,10 @@ RSpec.describe Kiosk::Server::PopVerifier do
   ensure
     $stderr = original
   end
-  alias_method :silencing_operator_log, :capture_operator_log
+  alias silencing_operator_log capture_operator_log
 
-  # RSA generation is expensive — cache keypairs for the whole file.
-  before(:all) do
-    @rsa   = OpenSSL::PKey::RSA.generate(2048)
-    @other = OpenSSL::PKey::RSA.generate(2048)
-    @small = OpenSSL::PKey::RSA.generate(1024)
-  end
-
-  let(:pem)        { @rsa.public_key.to_pem }
-  let(:issuer)     { 'https://getgroceries.example' }
-  let(:thumbprint) { Kiosk::Server::SigningKey.from_pem(pem).kid }
-
-  before { Kiosk.configure { |c| c.issuer = issuer } }
-
-  # Sign a PoP JWS with @rsa's private key unless another key is given.
-  def sign(key: @rsa, aud: issuer, nonce: 'nonce-1', jti: 'jti-1', include_pub: :correct)
+  # Sign a PoP JWS with the shared key unless another key is given.
+  def sign(key: PopVerifierSpec.rsa, aud: issuer, nonce: 'nonce-1', jti: 'jti-1', include_pub: :correct)
     payload = { aud: aud, nonce: nonce, jti: jti }
     case include_pub
     when :correct then payload[:pub] = thumbprint
@@ -41,6 +32,29 @@ RSpec.describe Kiosk::Server::PopVerifier do
     end
     JWT.encode(payload, key, 'RS256')
   end
+
+  # The error a proof signed for another origin raises.
+  def audience_rejection
+    silencing_operator_log do
+      described_class.verify!(public_key_pem: pem, signed: sign(aud: 'https://evil.example'))
+    rescue Kiosk::Server::Errors::Unauthenticated => e
+      return e
+    end
+  end
+end
+
+RSpec.shared_context 'pop verifier spec: issuer' do
+  include PopVerifierSpec
+
+  let(:pem)        { PopVerifierSpec.rsa.public_key.to_pem }
+  let(:issuer)     { 'https://getgroceries.example' }
+  let(:thumbprint) { Kiosk::Server::SigningKey.from_pem(pem).kid }
+
+  before { Kiosk.configure { |c| c.issuer = issuer } }
+end
+
+RSpec.describe Kiosk::Server::PopVerifier do
+  include_context 'pop verifier spec: issuer'
 
   it 'returns the payload for a valid, origin-bound, key-bound proof' do
     payload = described_class.verify!(public_key_pem: pem, signed: sign)
@@ -54,38 +68,26 @@ RSpec.describe Kiosk::Server::PopVerifier do
     end.not_to raise_error
   end
 
-  # ─── Relay defense (the whole point) ──────────────────────────────────────
+  # Relay defense: a proof is bound to the origin it was signed for.
   it 'rejects a proof whose `aud` is a different origin (relay/takeover)' do
     relayed = sign(aud: 'https://evil.example')
     expect do
       silencing_operator_log { described_class.verify!(public_key_pem: pem, signed: relayed) }
     end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /audience/)
   end
+end
 
-  # ─── K-511: the rejection must not become the relay it defends against ────
-  #
-  # The old hint appended "(this provider is <issuer>)". That handed the caller
-  # a concrete `aud` value read out of a RESPONSE — and an improvising agent
-  # uses values the server just gave it, because every other step of the flow
-  # rewards exactly that. A hostile origin could then answer any handshake with
-  # "(this provider is <bank>)", collect the freshly signed PoP for <bank>, and
-  # replay it at <bank>/auth/login for full account takeover.
+# The rejection must not name an origin. An agent uses values the server gives
+# it, so a hostile origin that echoed "<bank>" in its answer could collect a
+# proof signed for <bank> and replay it there.
+RSpec.describe Kiosk::Server::PopVerifier do
+  include_context 'pop verifier spec: issuer'
+
   describe 'audience-mismatch rejection (K-511)' do
-    # The wire half: nothing that could be mistaken for an `aud` to sign.
-    #
-    # The 0.4 problem document carries ONE URL of its own — `type`, the
-    # per-code constant minted from {Errors::PROBLEM_TYPE_BASE}. It is the
-    # name of the code, never anything the caller sent, and it is the same
-    # string on every occurrence, so it cannot carry an origin back. Take it
-    # out and NO origin may remain anywhere in the document.
+    # The problem `type` is a constant per code and carries no origin. Without
+    # it, no origin may remain anywhere in the document.
     it 'names NO origin on the wire — not the configured issuer, not any other' do
-      error = nil
-      silencing_operator_log do
-        described_class.verify!(public_key_pem: pem, signed: sign(aud: 'https://evil.example'))
-      rescue Kiosk::Server::Errors::Unauthenticated => e
-        error = e
-      end
-
+      error = audience_rejection
       problem = error.to_problem
       expect(problem[:type]).to eq('https://kiosk.tech/problems/unauthenticated')
       wire = problem.except(:type).to_s
@@ -98,29 +100,23 @@ RSpec.describe Kiosk::Server::PopVerifier do
     end
 
     it 'still renders the documented 401 problem document' do
-      error = nil
-      silencing_operator_log do
-        described_class.verify!(public_key_pem: pem, signed: sign(aud: 'https://evil.example'))
-      rescue Kiosk::Server::Errors::Unauthenticated => e
-        error = e
-      end
-
-      # RFC 9457 (T-072 = C): the old envelope's `message` is `detail`, the
-      # closed-vocabulary token stays verbatim as the TOP-LEVEL `code`, and
-      # `hint` — the whole subject of K-511 — is untouched.
+      error = audience_rejection
       expect(error.to_problem).to eq(
-        type: 'https://kiosk.tech/problems/unauthenticated',
-        title: 'Not authenticated',
-        status: 401,
-        detail: 'proof audience mismatch',
-        code: 'unauthenticated',
+        type: 'https://kiosk.tech/problems/unauthenticated', title: 'Not authenticated', status: 401,
+        detail: 'proof audience mismatch', code: 'unauthenticated',
         hint: Kiosk::Server::PopVerifier::AUDIENCE_HINT
       )
       expect(error.http_status).to eq(401)
     end
+  end
+end
 
-    # The operator half: the diagnostic the wire no longer carries still has to
-    # reach SOMEONE, or a misconfigured `c.issuer` (K-510) is undebuggable.
+# The diagnostic the wire does not carry goes to the operator, so a wrong
+# `c.issuer` can be debugged.
+RSpec.describe Kiosk::Server::PopVerifier do
+  include_context 'pop verifier spec: issuer'
+
+  describe 'audience-mismatch rejection (K-511)' do
     it "routes the issuer-vs-signed-aud diagnostic to the operator's log" do
       output = capture_operator_log do
         described_class.verify!(public_key_pem: pem, signed: sign(aud: 'https://real-host.example'))
@@ -128,9 +124,8 @@ RSpec.describe Kiosk::Server::PopVerifier do
         nil
       end
 
-      expect(output).to include(issuer)                      # what we are configured as
-      expect(output).to include('https://real-host.example') # what the caller signed
-      expect(output).to include('`c.additional_origins`')
+      # The configured issuer, the signed `aud`, and the setting that fixes it.
+      expect(output).to include(issuer, 'https://real-host.example', '`c.additional_origins`')
     end
 
     it 'prefers Rails.logger for the diagnostic when a Rails logger is present' do
@@ -149,16 +144,20 @@ RSpec.describe Kiosk::Server::PopVerifier do
       expect(logged.first).to include('PoP audience mismatch')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::PopVerifier do
+  include_context 'pop verifier spec: issuer'
 
   it 'rejects a proof signed by a different key than the one presented' do
-    forged = sign(key: @other) # signed by @other, verified against @rsa's public key
+    forged = sign(key: PopVerifierSpec.other)
     expect do
       described_class.verify!(public_key_pem: pem, signed: forged)
     end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /signature/)
   end
 
   it 'rejects a proof missing the challenge nonce' do
-    no_nonce = JWT.encode({ aud: issuer, jti: 'j' }, @rsa, 'RS256')
+    no_nonce = JWT.encode({ aud: issuer, jti: 'j' }, PopVerifierSpec.rsa, 'RS256')
     expect do
       described_class.verify!(public_key_pem: pem, signed: no_nonce)
     end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /nonce|claim/)
@@ -169,10 +168,14 @@ RSpec.describe Kiosk::Server::PopVerifier do
       described_class.verify!(public_key_pem: pem, signed: sign(include_pub: 'not-the-thumbprint'))
     end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /thumbprint/)
   end
+end
+
+RSpec.describe Kiosk::Server::PopVerifier do
+  include_context 'pop verifier spec: issuer'
 
   it 'rejects a public key below the RSA-2048 floor' do
     expect do
-      described_class.verify!(public_key_pem: @small.public_key.to_pem, signed: 'x.y.z')
+      described_class.verify!(public_key_pem: PopVerifierSpec.small.public_key.to_pem, signed: 'x.y.z')
     end.to raise_error(Kiosk::Server::Errors::BadRequest, /too small|bits/)
   end
 

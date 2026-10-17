@@ -17,9 +17,9 @@
 # states the whole shape of the origin it is describing. That the engine's
 # `after_initialize` block turns the condition into a refused boot is proven
 # separately, against a real boot, in ephemeral_event_store_boot_spec.rb.
-RSpec.describe Kiosk::Server::Engine, '.ephemeral_event_store_error' do
+module EphemeralEventStoreErrorSpecHelpers
   def error(production: true, topics: %w[delivery])
-    described_class.ephemeral_event_store_error(
+    Kiosk::Server::Engine.ephemeral_event_store_error(
       config: Kiosk.configuration, production: production, topics: topics
     )
   end
@@ -28,7 +28,7 @@ RSpec.describe Kiosk::Server::Engine, '.ephemeral_event_store_error' do
   # EventStores::ActiveRecord needs a database connection to do anything; the
   # condition only asks whether the store IS the in-process default, so any
   # object that is not one answers the question.
-  let(:durable_store) do
+  def durable_store
     Class.new do
       def append(_key, _event) = 1
       def since(_key, _id) = []
@@ -36,6 +36,10 @@ RSpec.describe Kiosk::Server::Engine, '.ephemeral_event_store_error' do
       def truncated?(_key, _id) = false
     end.new
   end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.ephemeral_event_store_error' do
+  include EphemeralEventStoreErrorSpecHelpers
 
   context 'when a topic is declared and the store is the in-process default' do
     it 'refuses in production' do
@@ -69,6 +73,10 @@ RSpec.describe Kiosk::Server::Engine, '.ephemeral_event_store_error' do
       expect(error).to be_nil
     end
   end
+end
+
+RSpec.describe Kiosk::Server::Engine, '.ephemeral_event_store_error without topics' do
+  include EphemeralEventStoreErrorSpecHelpers
 
   # An origin that declares no topic never emits, never serves `events` in its
   # catalogue and never advertises an `events_url`. Its store is an object

@@ -10,7 +10,7 @@ class DiscoveryStory < StoryTest
 
     assert_empty %w[schema queries actions pay events] - kiosk["capabilities"]
     assert_match %r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z}, kiosk["events_url"]
-    assert_equal %w[kyc_verification order_delivery order_payment payment_setup], schema["events"].map { _1["name"] }.sort
+    assert_equal %w[kyc_verification order_delivery payment_setup], schema["events"].map { _1["name"] }.sort
 
     queries = schema["queries"].index_by { _1["name"] }
     actions = schema["actions"].index_by { _1["name"] }

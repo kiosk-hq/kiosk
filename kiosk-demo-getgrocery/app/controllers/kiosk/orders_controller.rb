@@ -7,16 +7,6 @@ class Kiosk::OrdersController < ActionController::API
   ORDER_ID = "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e"
   ETA      = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow).first + 40.minutes
 
-  topic :order_payment do
-    description "An order of yours is paid; its delivery is scheduled."
-    payload_schema type: "object", additionalProperties: false,
-                   properties: { order_id:      { type: "string", format: "uuid" },
-                                 payment_state: { enum: %w[paid] } },
-                   required: %w[order_id payment_state]
-    example order_id: ORDER_ID, payment_state: "paid"
-    subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
-  end
-
   topic :order_delivery do
     description "The order is on its way (`out_for_delivery`, with the courier's ETA) or at the " \
                 "door (`delivered`)."

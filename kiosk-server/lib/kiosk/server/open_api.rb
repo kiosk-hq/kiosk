@@ -256,8 +256,8 @@ module Kiosk
         defs = ArgumentDecoder.fetch(schema, :$defs)
         return {} unless defs.is_a?(::Hash)
 
-        defs.keys.each_with_object({}) do |name, out|
-          out["#/$defs/#{name}"] = "#/components/schemas/#{base}.#{name}"
+        defs.keys.to_h do |name|
+          ["#/$defs/#{name}", "#/components/schemas/#{base}.#{name}"]
         end
       end
       private_class_method :ref_map
@@ -435,8 +435,8 @@ module Kiosk
       private_class_method :pay_components
 
       def self.problem_refs
-        problem_statuses.each_with_object({}) do |status, out|
-          out[status.to_s] = { '$ref': "#/components/responses/problem#{status}" }
+        problem_statuses.to_h do |status|
+          [status.to_s, { '$ref': "#/components/responses/problem#{status}" }]
         end
       end
       private_class_method :problem_refs

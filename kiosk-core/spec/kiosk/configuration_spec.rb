@@ -7,20 +7,8 @@ RSpec.describe Kiosk::Configuration, 'defaults' do
     expect(config.user_id_type).to eq(:uuid)
   end
 
-  it 'defaults user_id_column to :id' do
-    expect(config.user_id_column).to eq(:id)
-  end
-
-  it "defaults guc_namespace to 'app'" do
-    expect(config.guc_namespace).to eq('app')
-  end
-
   it 'defaults roles to empty array' do
     expect(config.roles).to eq([])
-  end
-
-  it "defaults schema to 'kiosk'" do
-    expect(config.schema).to eq('kiosk')
   end
 
   it "defaults app_role to 'app_role'" do
@@ -49,13 +37,6 @@ RSpec.describe Kiosk::Configuration, 'defaults' do
 end
 
 RSpec.describe Kiosk::Configuration do
-  describe '#schema' do
-    it 'is settable via Kiosk.configure' do
-      Kiosk.configure { |c| c.schema = 'agent_surface' }
-      expect(Kiosk.configuration.schema).to eq('agent_surface')
-    end
-  end
-
   describe '#app_role' do
     it 'is settable via Kiosk.configure' do
       Kiosk.configure { |c| c.app_role = 'agent_role' }

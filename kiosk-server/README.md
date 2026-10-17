@@ -151,13 +151,11 @@ upgrade edits it.
   itself** — `c.pow_secret` with the toll enabled is the worked example. You get
   a `Kiosk::Server::Errors::ConfigurationError` that says which setting is
   missing, at boot, not a wrong answer later.
-- **A setting that is removed or renamed keeps a setter that raises**, naming
-  what to use instead, so an initializer carrying the old name stops the boot
-  instead of being silently ignored.
-- **An unknown setting is a `NoMethodError` on `Kiosk::Configuration`**, which
-  names the key you typed.
+- **An unknown, removed or renamed setting is a `NoMethodError` on
+  `Kiosk::Configuration`**, which names the key you typed, so an initializer
+  carrying an old name stops the boot instead of being silently ignored.
 
-The principle behind all four: generate as little as possible, derive at boot
+The principle behind all three: generate as little as possible, derive at boot
 whatever can be derived, default whatever can be defaulted, and fail closed on
 what can be neither.
 

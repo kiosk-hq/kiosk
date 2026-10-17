@@ -177,10 +177,11 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
   end
 
-  describe 'stacking on kiosk-core configuration' do
-    it "exposes kiosk-core's schema/app_role attrs (no kiosk-rls needed)" do
-      expect(Kiosk.configuration.schema).to   eq('kiosk')
-      expect(Kiosk.configuration.app_role).to eq('app_role')
+  describe 'database settings' do
+    it "defaults schema to 'kiosk' and guc_namespace to 'app', beside kiosk-core's app_role" do
+      expect(Kiosk.configuration.schema).to        eq('kiosk')
+      expect(Kiosk.configuration.guc_namespace).to eq('app')
+      expect(Kiosk.configuration.app_role).to      eq('app_role')
     end
   end
 end

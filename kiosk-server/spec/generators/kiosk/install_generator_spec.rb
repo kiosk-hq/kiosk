@@ -111,18 +111,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'initializer options' do
   end
 end
 
-# A generated app checks request shapes, and its own responses outside production.
+# A generated app checks its own responses outside production.
 RSpec.describe Kiosk::Generators::InstallGenerator, 'initializer validation flags' do
   include_context 'install generator spec: host app'
-
-  # Line-anchored, not `include`: the same bytes appear in the explanatory
-  # comment above the setting, so a substring match would pass on a
-  # commented-out line — which is exactly the shape the arm below refuses.
-  it 'turns the PoW-shape check on, so a malformed proof is a 400 and not a silent 402 loop' do
-    invoke!
-    expect(read('config/initializers/kiosk.rb'))
-      .to match(/^\s*c\.validate_requests\s*=\s*true\s*$/)
-  end
 
   it "gates response validation off production — the engine's own hazard, in a fresh app" do
     invoke!
@@ -131,19 +122,14 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'initializer validation flag
     expect(body).not_to match(/^\s*c\.validate_responses\s*=\s*true\s*$/)
   end
 
-  it 'writes both as ACTIVE lines — a commented posture is not a posture' do
+  it 'writes it as an ACTIVE line — a commented posture is not a posture' do
     invoke!
-    body = read('config/initializers/kiosk.rb')
-    expect(body).not_to match(/^\s*#\s*c\.validate_requests\s*=/)
-    expect(body).not_to match(/^\s*#\s*c\.validate_responses\s*=/)
+    expect(read('config/initializers/kiosk.rb')).not_to match(/^\s*#\s*c\.validate_responses\s*=/)
   end
 
-  # The gemspec calls coerce-then-validate unconditional. It IS — enforced
-  # in VerbController behind no flag — and a reader who met the two flags
-  # above with no explanation could reasonably conclude the obligation was
-  # one of them. K-1336 is that conflation, made by a reader of the
-  # gemspec; the generated file is where the next one would make it.
-  it 'says outright that per-verb input validation is NOT one of these flags' do
+  # Input validation is enforced in VerbController behind no flag; the
+  # generated file says so beside the one flag it writes.
+  it 'says outright that per-verb input validation is NOT this flag' do
     invoke!
     body = read('config/initializers/kiosk.rb')
     expect(body).to include('coerce-then-validate on the per-verb wire is UNCONDITIONAL')

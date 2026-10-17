@@ -21,9 +21,6 @@ Gem::Specification.new do |spec|
     exempts the table owner, and the typical Rails app connects as the owner,
     so RLS would be a no-op.
 
-    Adds the RLS-only `system_role` field to `Kiosk::Configuration`
-    (`app_role` and `schema` live in kiosk-core).
-
     No PostgreSQL runtime dependency — pure SQL generation. The host
     provides the connection.
   DESC

@@ -192,7 +192,7 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 |---|---|
 | `db/migrate/` | The canonical kiosk migrations: the full `kiosk:install` set — every demo ships that output unmodified, so reservations/mandates/settlements are installed here and never written — plus `users`, Action Cable's table and `create_tudu_domain` (lists/memberships/todos/invites) |
 | `app/models/{user,list,membership,todo,invite}.rb` | `User` is a member's account (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks — configuration only; the handler controllers live in `app/controllers/kiosk/` |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_claimed` hook — configuration only; the handler controllers live in `app/controllers/kiosk/` |
 | `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list` — an ordinary Rails controller with `include Kiosk::Handler`, each verb marked `kind :query` or `kind :action`. Handlers are reached only through the wire |
 | `app/controllers/kiosk/todos_controller.rb` | `list_todos`, `add_todo`, `complete_todo` and the `todo` topic |
 | `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `invite`, `accept_invite`, `remove_member` and the `list_membership` topic. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the wire renders as a problem document |

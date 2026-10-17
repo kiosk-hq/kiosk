@@ -13,8 +13,6 @@ module Kiosk
     # :uuid (default), :bigint, :integer or :text.
     attr_accessor :user_id_type
 
-    attr_accessor :user_id_column, :guc_namespace
-
     # Nil in satellite mode: the provider's own frontend drives the wire endpoints.
     attr_accessor :user_idp
 
@@ -26,9 +24,6 @@ module Kiosk
 
     # A {Kiosk::KycProviders::Base}; nil makes `request_kyc` answer `module_not_served`.
     attr_accessor :kyc_provider
-
-    # Postgres schema for Kiosk's own tables and functions.
-    attr_accessor :schema
 
     # Runtime DB role named in kiosk-rls GRANTs and `SET LOCAL ROLE`; the DBA creates it.
     attr_accessor :app_role
@@ -48,9 +43,6 @@ module Kiosk
 
     def initialize
       @user_id_type       = :uuid
-      @user_id_column     = :id
-      @guc_namespace      = GUC::DEFAULT_NAMESPACE
-      @schema             = 'kiosk'
       @app_role           = 'app_role'
       @roles              = []
       @additional_origins = []

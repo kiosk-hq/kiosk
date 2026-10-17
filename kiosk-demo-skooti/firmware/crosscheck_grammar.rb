@@ -72,15 +72,10 @@ HELPER = ARGV[0]
 abort 'usage: ruby crosscheck_grammar.rb <path to host_test_crosscheck>' if HELPER.nil? || HELPER.empty?
 
 # Minimal config carrier so the issuer loads without booting Rails.
-unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
-  module Kiosk
-    # Exposes only the accessor RentalTokenIssuer reads.
-    class CrosscheckConfig
-      attr_accessor :unlock_signing_key
-    end
-
+unless defined?(Rails) && Rails.respond_to?(:configuration)
+  module Rails
     def self.configuration
-      @configuration ||= CrosscheckConfig.new
+      @configuration ||= Struct.new(:x).new(Struct.new(:unlock_signing_key).new)
     end
   end
 end
@@ -90,7 +85,7 @@ require File.expand_path('../app/services/rental_token_issuer', __dir__)
 require File.expand_path('../script/lock_sim', __dir__)
 
 KEY = OpenSSL::PKey.read(File.read(File.expand_path('../config/dev_unlock_key.pem', __dir__)))
-Kiosk.configuration.unlock_signing_key = KEY
+Rails.configuration.x.unlock_signing_key = KEY
 PUBLIC_KEY = OpenSSL::PKey.read(KEY.public_to_pem)
 
 NOW  = SkootiTokenVectors::NOW

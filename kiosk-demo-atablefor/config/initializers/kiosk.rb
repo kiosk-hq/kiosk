@@ -10,18 +10,13 @@ Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equ
 EQUIHASH_PARAMS = Rails.configuration.x.equihash
 
 Kiosk.configure do |c|
-  c.user_model     = 'User'
-  c.user_id_type   = :uuid
-  c.user_id_column = :id
-  c.guc_namespace  = 'app'
-  c.schema         = 'kiosk'
+  c.user_model = 'User'
 
   c.issuer            = ENV.fetch('KIOSK_ISSUER')
   c.signing_key       = Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64'))
   c.roles             = %i[customer]
   c.registration_role = :customer
 
-  c.validate_requests  = true
   c.validate_responses = true
 
   c.user_idp     = Kiosk::UserIdentityProviders::Devise.new

@@ -71,6 +71,7 @@ module Kiosk
 end
 
 require 'kiosk/user_identity_providers/devise/version'
+require 'kiosk/user_identity_providers/devise/configuration_extension'
 
 Kiosk::UserIdentityProviders::Devise::VERSION =
   Kiosk::UserIdentityProviders::DeviseVersion::VERSION

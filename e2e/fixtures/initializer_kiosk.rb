@@ -14,11 +14,7 @@ E2E_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
 Stripe.api_base = ENV.fetch('STRIPE_MOCK_URL')
 
 Kiosk.configure do |c|
-  c.user_model     = 'User'
-  c.user_id_type   = :uuid
-  c.user_id_column = :id
-  c.guc_namespace  = 'app'
-  c.schema         = 'kiosk'
+  c.user_model = 'User'
 
   c.issuer             = ENV.fetch('KIOSK_ISSUER')
   c.additional_origins = ENV.fetch('KIOSK_ADDITIONAL_ORIGINS', '').split(',')
@@ -35,7 +31,6 @@ Kiosk.configure do |c|
 
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: 'sk_test_mock')
 
-  c.validate_requests  = true
   c.validate_responses = true
 
   # run.sh's second boot leaves KIOSK_AUDIT_SINK_FILE unset to prove the default is no sink.

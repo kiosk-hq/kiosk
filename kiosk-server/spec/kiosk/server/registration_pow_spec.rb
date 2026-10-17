@@ -296,10 +296,4 @@ RSpec.describe Kiosk::Server::RegistrationPow do
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end
-
-  it 'rejects the removed SHA256 registration_difficulty knob' do
-    expect do
-      Kiosk.configure { |c| c.registration_difficulty = 20 }
-    end.to raise_error(ArgumentError, /Equihash/)
-  end
 end

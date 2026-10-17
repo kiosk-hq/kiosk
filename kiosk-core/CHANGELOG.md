@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `schema` and `guc_namespace` move to kiosk-server and `user_id_column` to kiosk-user-idp-devise, the gems that read them; `Kiosk.configure` sets them as before.
+
 - 2026-10-17: `Configuration#guc` and `UserIdentityProviders::Base#user_active?` are removed; nothing called them.
 
 ## [0.5.13] — 2026-10-11

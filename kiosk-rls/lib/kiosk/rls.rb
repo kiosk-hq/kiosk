@@ -5,7 +5,6 @@
 require 'kiosk'
 
 require 'kiosk/rls/version'
-require 'kiosk/rls/configuration_extension'
 require 'kiosk/rls/policy'
 require 'kiosk/rls/table'
 require 'kiosk/rls/emitter'

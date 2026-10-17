@@ -118,7 +118,7 @@ module RentalTokenIssuer
     end
 
     def signing_key
-      Kiosk.configuration.unlock_signing_key
+      Rails.configuration.x.unlock_signing_key
     end
 
     def public_key

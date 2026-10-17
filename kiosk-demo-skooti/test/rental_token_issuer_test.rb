@@ -24,7 +24,7 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
 
   test 'the known answer' do
     with_known_jti { assert_equal "#{MESSAGE}.#{SIGNATURE}", issue }
-    assert_equal PUBLIC_KEY, Kiosk.configuration.unlock_signing_key.public_to_der[-32..].unpack1('H*')
+    assert_equal PUBLIC_KEY, Rails.configuration.x.unlock_signing_key.public_to_der[-32..].unpack1('H*')
     assert_equal 'SK-001', verify("#{MESSAGE}.#{SIGNATURE}")[:scooter_code]
   end
 
@@ -48,7 +48,7 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
 
   test 'the public key verifies the signature' do
     message, _, signature = issue.rpartition('.')
-    public_key = OpenSSL::PKey.read(Kiosk.configuration.unlock_signing_key.public_to_pem)
+    public_key = OpenSSL::PKey.read(Rails.configuration.x.unlock_signing_key.public_to_pem)
     assert public_key.verify(nil, Base64.urlsafe_decode64(signature), message)
   end
 
@@ -61,11 +61,11 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
   end
 
   test 'without a signing key nothing is issued or verified' do
-    key = Kiosk.configuration.unlock_signing_key
-    Kiosk.configuration.unlock_signing_key = nil
+    key = Rails.configuration.x.unlock_signing_key
+    Rails.configuration.x.unlock_signing_key = nil
     assert_raises(ArgumentError) { issue }
     assert_nil verify('anything.sig')
   ensure
-    Kiosk.configuration.unlock_signing_key = key
+    Rails.configuration.x.unlock_signing_key = key
   end
 end

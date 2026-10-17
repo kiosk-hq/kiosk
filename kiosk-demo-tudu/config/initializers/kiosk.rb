@@ -11,11 +11,7 @@ EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
 
 # No payment_provider: tudu takes no money, so discovery advertises no `pay`.
 Kiosk.configure do |c|
-  c.user_model     = 'User'
-  c.user_id_type   = :uuid
-  c.user_id_column = :id
-  c.guc_namespace  = 'app'
-  c.schema         = 'kiosk'
+  c.user_model = 'User'
 
   c.issuer            = ENV.fetch('KIOSK_ISSUER')
   c.signing_key       = Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64'))
@@ -25,17 +21,14 @@ Kiosk.configure do |c|
   c.skill_url         = 'https://kiosk.tech/skill-v0.5.13.md'
   c.skill_sha256      = '786041de6e738cb55311eb852162509f23115227be9ab1c6837b9741840e990b'
 
-  c.validate_requests  = true
   c.validate_responses = true
 
   c.user_idp     = Kiosk::UserIdentityProviders::Devise.new
   c.sign_in_path = '/users/sign_in'
 end
 
-# An assistant registering with no human behind it gets a bare account; linking
-# it later moves that account's lists and memberships to the human.
+# Linking an assistant's bare account to a human moves its lists and memberships to the human.
 Kiosk.configure do |c|
-  c.assistant_creation = ->(_pubkey) { User.create!.id }
   c.assistant_claimed = lambda { |from:, to:, **|
     from.lists.update_all(account_id: to.id)
     from.memberships.where.not(list: to.joined_lists).update_all(account_id: to.id)

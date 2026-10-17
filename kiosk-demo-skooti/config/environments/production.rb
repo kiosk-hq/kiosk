@@ -19,6 +19,6 @@ Rails.application.configure do
   # config/dev_unlock_key.pem ships in a public repo: anyone could mint a token every lock accepts.
   config.after_initialize do
     dev_key = OpenSSL::PKey.read(Rails.root.join('config/dev_unlock_key.pem').read)
-    raise 'KIOSK_UNLOCK_SIGNING_KEY_PEM is the public dev key; generate one with `openssl genpkey -algorithm ed25519`' if Kiosk.configuration.unlock_signing_key.public_to_der == dev_key.public_to_der
+    raise 'KIOSK_UNLOCK_SIGNING_KEY_PEM is the public dev key; generate one with `openssl genpkey -algorithm ed25519`' if config.x.unlock_signing_key.public_to_der == dev_key.public_to_der
   end
 end

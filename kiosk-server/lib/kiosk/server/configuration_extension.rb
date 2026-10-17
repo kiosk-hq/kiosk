@@ -79,13 +79,6 @@ module Kiosk
         # Equihash (n, k) for registration. Default nil: the gem's own params.
         attr_accessor :registration_pow_params
 
-        def registration_difficulty=(_)
-          raise ArgumentError,
-                'registration_difficulty (SHA256 hashcash) was removed — spec amended, ' \
-                'one PoW = Equihash. Use `c.registration_pow_count = 1` (Equihash) and set ' \
-                '`c.pow_secret`.'
-        end
-
         # Decides when and how hard to challenge. Default nil: never.
         # `#challenge_for(identity:, verb:, factors:) → {alg:, params:, count:} | nil`;
         # the verb it receives is `:run`, never `:action`.
@@ -176,17 +169,35 @@ module Kiosk
         end
       end
 
+      # The database settings: where Kiosk's tables live and how a request reaches them.
+      module Database
+        # Postgres schema for Kiosk's own tables and functions. Default 'kiosk'.
+        attr_writer :schema
+
+        def schema
+          @schema ||= 'kiosk'
+        end
+
+        # Prefix of the session GUCs a request sets, e.g. `app.user_id`. Default 'app'.
+        attr_writer :guc_namespace
+
+        def guc_namespace
+          @guc_namespace ||= Kiosk::GUC::DEFAULT_NAMESPACE
+        end
+
+        # When true, every request transaction runs `SET LOCAL ROLE <app_role>`;
+        # that role then needs grants on every table the verbs touch. Default false.
+        attr_writer :enforce_db_role
+
+        def enforce_db_role
+          @enforce_db_role ||= false
+        end
+      end
+
       include Discovery
       include ProofOfWork
       include Kyc
-
-      # When true, every request transaction runs `SET LOCAL ROLE <app_role>`;
-      # that role then needs grants on every table the verbs touch. Default false.
-      attr_writer :enforce_db_role
-
-      def enforce_db_role
-        @enforce_db_role ||= false
-      end
+      include Database
 
       # Required. A SigningKey or a PEM string.
       def signing_key

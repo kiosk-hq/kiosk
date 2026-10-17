@@ -16,10 +16,7 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.warnings = false
 
-  # Reset Kiosk.configuration between examples to keep tests independent —
-  # this also resets the RLS-specific extension field (`system_role`; the
-  # only field this gem adds — `app_role`/`schema` come from kiosk-core)
-  # since it lives as an ivar on Configuration.
+  # Reset Kiosk.configuration between examples to keep tests independent.
   config.before(:each) { Kiosk.reset! }
 end
 

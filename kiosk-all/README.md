@@ -31,8 +31,8 @@ gem "kiosk-rls", github: "kiosk-hq/kiosk"   # opt-in: DB-level RLS defense-in-de
 
 That line is the whole installation: kiosk-rls's railtie puts `enable_rls_on`
 and its siblings on `ActiveRecord::Migration` itself. See the kiosk-rls README
-for the DSL and for the role posture (`app_role`, `system_role`,
-`enforce_db_role`), which is the part you do configure.
+for the DSL and for the role posture (`app_role`, `enforce_db_role`), which is
+the part you do configure.
 
 ### Test harness — pick one
 

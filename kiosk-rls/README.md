@@ -86,7 +86,6 @@ What *is* yours to configure is the role posture, in
 ```ruby
 Kiosk.configure do |c|
   c.app_role        = "app_role"      # lives in kiosk-core config
-  c.system_role     = "system_role"   # added by this gem
   c.enforce_db_role = true            # kiosk-server: SET LOCAL ROLE per request
 end
 ```

@@ -10,11 +10,7 @@ Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equ
 EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
 
 Kiosk.configure do |c|
-  c.user_model     = 'User'
-  c.user_id_type   = :uuid
-  c.user_id_column = :id
-  c.guc_namespace  = 'app'
-  c.schema         = 'kiosk'
+  c.user_model = 'User'
 
   c.issuer            = ENV.fetch('KIOSK_ISSUER')
   c.signing_key       = Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64'))
@@ -24,7 +20,6 @@ Kiosk.configure do |c|
   c.skill_url         = 'https://kiosk.tech/skill-v0.5.13.md'
   c.skill_sha256      = '786041de6e738cb55311eb852162509f23115227be9ab1c6837b9741840e990b'
 
-  c.validate_requests  = true
   c.validate_responses = true
 
   # Staff get the owner role from User#kiosk_role at link time.

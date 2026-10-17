@@ -11,19 +11,7 @@ require 'stringio'
 require 'kiosk/pow/equihash'
 require 'kiosk/reputation'
 
-RSpec.describe 'two origins on one deployment' do
-  let(:a) { 'https://getgrocery.example' }
-  let(:b) { 'https://buymilk.example' }
-
-  before do
-    Kiosk.configure do |c|
-      c.issuer             = a
-      c.additional_origins = [b]
-      c.signing_key        = Kiosk::Server::SigningKey.generate
-      c.roles              = %i[customer]
-    end
-  end
-
+module TwoOriginsSpec
   def through_middleware(app, url, **)
     status, headers, body = Kiosk::Server::IssuerMiddleware.new(app).call(Rack::MockRequest.env_for(url, **))
     raw = +''
@@ -35,6 +23,41 @@ RSpec.describe 'two origins on one deployment' do
     _, _, raw = through_middleware(Kiosk::Server::DiscoveryController.action(action), "#{origin}#{path}")
     JSON.parse(raw)
   end
+
+  def proof(aud) = JWT.encode({ aud: aud, nonce: 'n', jti: 'j' }, rsa, 'RS256')
+
+  def verify_proof(aud)
+    Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(aud))
+  end
+
+  # Run the block with $stderr captured, so the refusal log stays out of the output.
+  def quietly
+    original = $stderr
+    $stderr = StringIO.new
+    yield
+  ensure
+    $stderr = original
+  end
+end
+
+RSpec.shared_context 'two origins spec: deployment' do
+  include TwoOriginsSpec
+
+  let(:a) { 'https://getgrocery.example' }
+  let(:b) { 'https://buymilk.example' }
+
+  before do
+    Kiosk.configure do |c|
+      c.issuer             = a
+      c.additional_origins = [b]
+      c.signing_key        = Kiosk::Server::SigningKey.generate
+      c.roles              = %i[customer]
+    end
+  end
+end
+
+RSpec.describe 'two origins on one deployment' do
+  include_context 'two origins spec: deployment'
 
   describe 'discovery' do
     it 'advertises each origin as its own issuer' do
@@ -53,45 +76,40 @@ RSpec.describe 'two origins on one deployment' do
         .to eq(a)
     end
   end
+end
+
+RSpec.describe 'two origins on one deployment' do
+  include_context 'two origins spec: deployment'
 
   describe 'the possession proof' do
     let(:rsa) { OpenSSL::PKey::RSA.generate(2048) }
 
-    def proof(aud) = JWT.encode({ aud: aud, nonce: 'n', jti: 'j' }, rsa, 'RS256')
-
     it 'accepts a proof for the origin being served' do
-      payload = Kiosk.with_issuer(b) do
-        Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(b))
-      end
-      expect(payload[:aud]).to eq(b)
+      expect(Kiosk.with_issuer(b) { verify_proof(b) }[:aud]).to eq(b)
     end
 
     it 'answers a host it does not serve as the default origin, and rejects a proof carrying that host' do
       unserved = 'https://www.example.com'
-      original = $stderr
-      $stderr = StringIO.new
-      Kiosk.with_issuer(Kiosk.configuration.issuer_for(unserved)) do
-        payload = Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(a))
-        expect(payload[:aud]).to eq(a)
-        expect { Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(unserved)) }
-          .to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof audience mismatch')
+      quietly do
+        Kiosk.with_issuer(Kiosk.configuration.issuer_for(unserved)) do
+          expect(verify_proof(a)[:aud]).to eq(a)
+          expect { verify_proof(unserved) }
+            .to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof audience mismatch')
+        end
       end
-    ensure
-      $stderr = original
     end
 
     it 'rejects a proof for A presented on B' do
-      original = $stderr
-      $stderr = StringIO.new
-      expect do
-        Kiosk.with_issuer(b) do
-          Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(a))
-        end
-      end.to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof audience mismatch')
-    ensure
-      $stderr = original
+      quietly do
+        expect { Kiosk.with_issuer(b) { verify_proof(a) } }
+          .to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof audience mismatch')
+      end
     end
   end
+end
+
+RSpec.describe 'two origins on one deployment' do
+  include_context 'two origins spec: deployment'
 
   describe 'access tokens' do
     let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
@@ -117,6 +135,10 @@ RSpec.describe 'two origins on one deployment' do
       expect(verify_on(a, token_on(b))).to be_nil
     end
   end
+end
+
+RSpec.describe 'two origins on one deployment' do
+  include_context 'two origins spec: deployment'
 
   describe 'mandates' do
     let(:agent_key) { OpenSSL::PKey::RSA.generate(2048) }
@@ -143,6 +165,10 @@ RSpec.describe 'two origins on one deployment' do
       end.to raise_error(Kiosk::Server::Errors::Forbidden, /issuer mismatch/)
     end
   end
+end
+
+RSpec.describe 'two origins on one deployment' do
+  include_context 'two origins spec: deployment'
 
   describe 'the WWW-Authenticate realm' do
     before do
@@ -165,6 +191,10 @@ RSpec.describe 'two origins on one deployment' do
       expect(headers['WWW-Authenticate']).to eq(%(Kiosk-PoW realm="#{b}"))
     end
   end
+end
+
+RSpec.describe 'two origins on one deployment' do
+  include_context 'two origins spec: deployment'
 
   it 'defaults the KYC attestation audience to the origin being served' do
     expect(Kiosk.with_issuer(b) { Kiosk.configuration.kyc_audience }).to eq(b)

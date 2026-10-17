@@ -23,6 +23,8 @@ class CreateSalonsAndAppointments < ActiveRecord::Migration[ActiveRecord::Migrat
       t.references  :service, foreign_key: true
       t.timestamptz :slot,    null: false
       t.integer     :price_cents # EUR cents, captured at booking
+      # Set once the slot has passed and the visit is recorded (Kiosk::Visit).
+      t.timestamptz :visit_recorded_at
       t.timestamps
     end
   end

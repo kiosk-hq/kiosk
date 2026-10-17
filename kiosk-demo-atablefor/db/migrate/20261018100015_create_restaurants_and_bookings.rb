@@ -12,6 +12,8 @@ class CreateRestaurantsAndBookings < ActiveRecord::Migration[ActiveRecord::Migra
       t.string :cuisine
       # The zone the restaurant serves in; an aggregator lists places in many.
       t.string :timezone, null: false, default: "Europe/Lisbon"
+      # What a guest spends on average; an honoured booking is recorded as a visit worth that per guest.
+      t.integer :average_spend_cents, null: false
       t.timestamps
     end
 
@@ -19,8 +21,6 @@ class CreateRestaurantsAndBookings < ActiveRecord::Migration[ActiveRecord::Migra
       t.references :restaurant, null: false, foreign_key: true
       t.string  :label,       null: false
       t.integer :capacity,    null: false
-      # A no-show hold shown in EUR and settled at the restaurant, never on the wire.
-      t.integer :deposit_eur, null: false, default: 0
       t.timestamps
       t.index %i[restaurant_id label], unique: true
     end
@@ -32,6 +32,8 @@ class CreateRestaurantsAndBookings < ActiveRecord::Migration[ActiveRecord::Migra
       t.timestamptz :seating_at,       null: false
       t.integer    :party_size, null: false
       t.string     :status,     null: false, default: "confirmed" # confirmed | cancelled
+      # Set once the seating has passed and the visit is recorded (Kiosk::Visit).
+      t.timestamptz :visit_recorded_at
       t.timestamps
       t.index %i[restaurant_table_id seating_at], unique: true, where: "status = 'confirmed'",
                                                    name: "idx_bookings_confirmed_table_seating"

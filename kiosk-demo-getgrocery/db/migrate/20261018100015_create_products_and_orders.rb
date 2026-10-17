@@ -18,6 +18,8 @@ class CreateProductsAndOrders < ActiveRecord::Migration[ActiveRecord::Migration.
       t.references  :user, null: false, foreign_key: true, type: :uuid
       t.string      :status,      null: false, default: "created"
       t.integer     :total_cents, null: false, default: 0
+      # What went back to the card for lines a concurrent payment emptied the shelf of.
+      t.integer     :refunded_cents, null: false, default: 0
       t.timestamptz :slot_at, null: false
       t.text        :address, null: false
       # The zone of the district the address routes to, recorded by the verb
@@ -32,6 +34,8 @@ class CreateProductsAndOrders < ActiveRecord::Migration[ActiveRecord::Migration.
       t.references :order,   null: false, foreign_key: true, type: :uuid
       t.references :product, null: false, foreign_key: true
       t.integer    :qty,     null: false, default: 1
+      # The price the line was ordered at, so a catalogue change never reprices an order.
+      t.integer    :price_cents, null: false
       t.timestamps
     end
   end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_18_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_18_100015) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -21,9 +21,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_000002) do
     t.uuid "order_id", null: false
     t.bigint "product_id", null: false
     t.integer "qty", default: 1, null: false
+    t.integer "price_cents", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "price_cents", null: false
     t.index ["order_id"], name: "index_order_items_on_order_id"
     t.index ["product_id"], name: "index_order_items_on_product_id"
   end
@@ -32,13 +32,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_000002) do
     t.uuid "user_id", null: false
     t.string "status", default: "created", null: false
     t.integer "total_cents", default: 0, null: false
+    t.integer "refunded_cents", default: 0, null: false
     t.timestamptz "slot_at", null: false
     t.text "address", null: false
     t.string "timezone", null: false
     t.timestamptz "dispatch_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "refunded_cents", default: 0, null: false
     t.index ["user_id"], name: "index_orders_on_user_id"
   end
 
@@ -288,6 +288,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_000002) do
     t.timestamptz "expires_at", null: false
     t.timestamptz "created_at", default: -> { "now()" }, null: false
     t.text "raw_jws", null: false
+    t.timestamptz "declined_at"
     t.index ["intent_mandate_id"], name: "idx_cart_mandates_intent"
     t.index ["user_id"], name: "idx_cart_mandates_user_id"
     t.unique_constraint ["user_id", "mandate_id"], name: "cart_mandates_user_id_mandate_id_key"
@@ -391,6 +392,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_000002) do
     t.index ["cart_mandate_id"], name: "idx_settlements_cart"
     t.index ["user_id"], name: "idx_settlements_user_id"
     t.unique_constraint ["cart_mandate_id"], name: "settlements_cart_mandate_id_key"
+  end
+
+  create_table "kiosk.visits", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "user_id", null: false
+    t.bigint "value_cents", null: false
+    t.timestamptz "visited_at", default: -> { "now()" }, null: false
+    t.index ["user_id", "visited_at"], name: "idx_visits_user_id"
+    t.check_constraint "value_cents >= 0", name: "visits_value_cents_check"
   end
 
   add_foreign_key "kiosk.agent_mappings", "kiosk.agents", name: "agent_mappings_agent_id_fkey", on_delete: :cascade

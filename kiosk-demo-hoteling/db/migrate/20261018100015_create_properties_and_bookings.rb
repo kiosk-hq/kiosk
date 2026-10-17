@@ -35,10 +35,8 @@ class CreatePropertiesAndBookings < ActiveRecord::Migration[ActiveRecord::Migrat
       t.string  :status,      null: false, default: "reserved" # reserved | confirmed | cancelled
       t.string  :confirmation_code, index: { unique: true }
       # unpaid → paying → paid. `paying` is claimed atomically before the
-      # capture, so a booking is never captured twice; the payer is recorded
-      # with it because anyone may pay for a booking.
+      # capture, so a booking is never captured twice.
       t.string  :payment_status,  null: false, default: "unpaid"
-      t.uuid    :paid_by_user_id
       # The property answers minutes after the money arrives; a decline is
       # refunded, and the refund's PSP reference is the receipt.
       t.datetime :decision_due_at

@@ -121,9 +121,10 @@ universal agent skill is `skill.md` on the same site.
   and everything else in the copy is compared against nothing (K-1550).
   Every install-generator `.rb.tt` template is declared in `GENERATOR_TEMPLATES`
   either `emits:` (every operator demo ships that migration) or `not_compared:`
-  with its reason. The generator writes the DDL into each migration it emits;
-  the demos' shipped migrations still call `SchemaDefinitions`, and a shipped
-  migration is never edited, so the template text is not compared with them.
+  with its reason. The generator writes the DDL into each migration it emits,
+  and each demo ships that output as it was generated; a later template change
+  reaches a demo as a new migration, so the template text is not compared with
+  the demos' copies.
   Most of the Rails skeleton (`bin/`, `config/`, `public/`, `Rakefile`,
   `config.ru`, `db/seeds.rb`) is deliberately NOT compared — each demo edits it
   for its own port and host — and that exclusion is recorded, path by path with

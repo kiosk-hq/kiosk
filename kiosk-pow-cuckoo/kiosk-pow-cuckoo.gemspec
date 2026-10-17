@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/pow/cuckoo/version"
+require_relative 'lib/kiosk/pow/cuckoo/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-pow-cuckoo"
+  spec.name          = 'kiosk-pow-cuckoo'
   spec.version       = Kiosk::Pow::Cuckoo::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Cuckatoo-Cycle proof-of-work backend for Kiosk"
+  spec.summary       = 'Cuckatoo-Cycle proof-of-work backend for Kiosk'
   spec.description   = <<~DESC
     kiosk-pow-cuckoo is an optional Cuckatoo-Cycle (Cuckoo Cycle variant)
     proof-of-work backend for the Kiosk framework.
@@ -26,14 +26,15 @@ Gem::Specification.new do |spec|
 
     Does not depend on kiosk-core or Rails — pure Ruby, no native extensions.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]    = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]   = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-pow-cuckoo/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']    = spec.homepage
+  spec.metadata['source_code_uri'] = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']   = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-pow-cuckoo/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
   # Ship the reference Python solver alongside the Ruby verifier (README calls
   # it "included"; the repo's parity check runs it). Listed UNGUARDED on
@@ -41,13 +42,13 @@ Gem::Specification.new do |spec|
   # so renaming or losing the solver would have produced a green build and a gem
   # whose README points at a file that is not in it. A missing solver must break
   # the build.
-  spec.files         = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md] +
+  spec.files         = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md] +
                        %w[solve_cuckoo.py requirements.txt]
-  spec.require_paths = ["lib"]
+  spec.require_paths = ['lib']
 
   # No runtime dependencies — pure Ruby, no native extensions.
 
-  spec.add_development_dependency "rspec",  "~> 3.13"
-  spec.add_development_dependency "rake",   "~> 13.2"
-  spec.add_development_dependency "base64", "~> 0.2"
+  spec.add_development_dependency 'base64', '~> 0.2'
+  spec.add_development_dependency 'rake',   '~> 13.2'
+  spec.add_development_dependency 'rspec',  '~> 3.13'
 end

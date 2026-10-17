@@ -21,12 +21,31 @@ module Kiosk
 
       # `command` is the policy verb ({Executor::VERBS}); `verb` is the wire name
       # the fingerprint binds.
-      def gate(identity:, command:, body:, pow:, method: 'POST', verb: nil)
+      def gate(identity:, command:, body:, pow:, method: 'POST', verb: nil) # rubocop:disable Metrics/ParameterLists -- the wire controller and the specs pass these six by name
         config = Kiosk.configuration
         policy = config.reputation_policy
-
         return :proceed if policy.nil?
 
+        secret = pow_secret!(config)
+        spec   = toll_for(policy, config, identity, command.to_sym)
+        return :proceed if spec.nil?
+
+        fp   = request_fingerprint(method: method, verb: verb || command, body: body)
+        toll = PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config,
+                           on_bad_proof: bad_proof_hook(config, identity))
+        # Optional policy hook, reached only after a real solve.
+        toll.collect!(pow).tap { policy.on_proof_verified(identity: identity) if policy.respond_to?(:on_proof_verified) }
+      end
+
+      def bad_proof_hook(config, identity) = -> { config.on_bad_proof.call(identity: identity) }
+
+      # The policy's toll for this caller and verb, or nil for none.
+      def toll_for(policy, config, identity, verb)
+        factors = config.reputation_factors.call(identity: identity, verb: verb)
+        policy.challenge_for(identity: identity, verb: verb, factors: factors)
+      end
+
+      def pow_secret!(config)
         unless defined?(::Kiosk::Reputation)
           raise Errors::ConfigurationError,
                 'Kiosk::Server: reputation_policy is set but kiosk-reputation is not loaded. ' \
@@ -34,100 +53,11 @@ module Kiosk
         end
 
         secret = config.pow_secret
-        if secret.nil? || secret.to_s.strip.empty?
-          raise Errors::ConfigurationError,
-                'Kiosk::Server: reputation_policy is set but pow_secret is nil or empty. ' \
-                "Set: Kiosk.configure { |c| c.pow_secret = ENV.fetch('KIOSK_POW_SECRET') }"
-        end
+        return secret unless secret.nil? || secret.to_s.strip.empty?
 
-        fp      = request_fingerprint(method: method, verb: verb || command, body: body)
-        factors = config.reputation_factors.call(identity: identity, verb: command.to_sym)
-        spec    = policy.challenge_for(identity: identity, verb: command.to_sym, factors: factors)
-
-        return :proceed if spec.nil?
-
-        result = enforce(
-          spec: spec,
-          fingerprint: fp,
-          pow: pow,
-          secret: secret,
-          config: config,
-          on_bad_proof: -> { config.on_bad_proof.call(identity: identity) }
-        )
-
-        # Optional policy hook, reached only after a real solve.
-        policy.on_proof_verified(identity: identity) if policy.respond_to?(:on_proof_verified)
-
-        result
-      end
-
-      # Shared by {.gate} and {RegistrationPow}.
-      def enforce(spec:, fingerprint:, pow:, secret:, config:, on_bad_proof:)
-        validate_spec_params!(spec)
-
-        # Equihash has no difficulty dial: escalation is by proof count.
-        count     = pow_count(spec)
-        submitted = extract_proofs(pow)
-
-        if submitted.empty?
-          raise Errors::PowRequired.new(
-            challenges: issue_challenges(count, spec, fingerprint, secret, config)
-          )
-        end
-
-        # `count` distinct, unspent, valid proofs; one wrong proof is a 403.
-        accepted = {}
-        submitted.each do |proof|
-          challenge = symbolize_keys(proof[:challenge] || proof['challenge'] || {})
-          nonce     = proof[:nonce] || proof['nonce']
-          id        = challenge[:id]
-
-          next if id.nil? || accepted.key?(id)
-
-          unless challenge[:params].is_a?(Hash)
-            raise Errors::BadRequest.new(
-              'malformed PoW proof: challenge.params is missing or not an object',
-              hint: POW_HEADER_HINT
-            )
-          end
-
-          # Atomically claim the id as spent BEFORE the expensive verify.
-          # A lost claim is a replay: skipped, not penalised.
-          next unless config.pow_spent_store.claim(id, challenge[:exp].to_i)
-
-          # `expect`: honoured only at the difficulty live config demands now.
-          outcome = ::Kiosk::Reputation::Challenge.verify(
-            challenge: challenge,
-            nonce: nonce,
-            request_fingerprint: fingerprint,
-            secret: secret,
-            now: Time.now.to_i,
-            expect: { alg: spec[:alg] || spec['alg'], params: spec[:params] || spec['params'] }
-          )
-
-          case outcome
-          when :ok
-            accepted[id] = challenge[:exp].to_i
-          when :bad_proof
-            on_bad_proof.call
-            # The id stays consumed, so one challenge drives at most one verify.
-            raise Errors::Forbidden.new('invalid proof of work', hint: POW_INVALID_HINT)
-          when :expired, :bad_sig, :bad_params
-            # Not bad faith (clock skew, a difficulty change): release the claim
-            # and re-challenge below.
-            config.pow_spent_store.release(id)
-          end
-        end
-
-        if accepted.size >= count
-          :proceed
-        else
-          # Released, so the retry with fresh challenges is not blocked by our own claim.
-          accepted.each_key { |id| config.pow_spent_store.release(id) }
-          raise Errors::PowRequired.new(
-            challenges: issue_challenges(count, spec, fingerprint, secret, config)
-          )
-        end
+        raise Errors::ConfigurationError,
+              'Kiosk::Server: reputation_policy is set but pow_secret is nil or empty. ' \
+              "Set: Kiosk.configure { |c| c.pow_secret = ENV.fetch('KIOSK_POW_SECRET') }"
       end
 
       # One proof, a JSON array, repeated header lines (Rack joins them with
@@ -135,22 +65,14 @@ module Kiosk
       def proofs_from_header(raw)
         return nil if raw.nil?
 
-        proofs = []
-        raw.split("\n").each do |line|
-          value = line.strip
-          next if value.empty?
-
-          wrapped = value.start_with?('[') ? value : "[#{value}]"
-          parsed  = JSON.parse(wrapped, symbolize_names: true)
-          proofs.concat(Array(parsed))
-        end
-
+        proofs = raw.split("\n").map(&:strip).reject(&:empty?).flat_map { |value| proofs_in(value) }
         proofs.empty? ? nil : proofs
       rescue JSON::ParserError
-        raise Errors::BadRequest.new(
-          'malformed Kiosk-PoW header',
-          hint: POW_HEADER_HINT
-        )
+        raise Errors::BadRequest.new('malformed Kiosk-PoW header', hint: POW_HEADER_HINT)
+      end
+
+      def proofs_in(value)
+        Array(JSON.parse(value.start_with?('[') ? value : "[#{value}]", symbolize_names: true))
       end
 
       POW_HEADER_HINT =
@@ -166,45 +88,10 @@ module Kiosk
 
       POW_INVALID_HINT =
         "solve with the reference solver at #{POW_SOLVER_URL} — " \
-        'a hand-written Equihash solver will not match this verifier'
+        'a hand-written Equihash solver will not match this verifier'.freeze
 
       def blank?(obj)
         obj.nil? || (obj.respond_to?(:empty?) && obj.empty?)
-      end
-
-      def issue_challenge(spec, fp, secret, ttl)
-        ::Kiosk::Reputation::Challenge.issue(
-          alg: spec[:alg],
-          params: spec[:params],
-          request_fingerprint: fp,
-          secret: secret,
-          ttl: ttl,
-          now: Time.now.to_i
-        )
-      end
-
-      def validate_spec_params!(spec)
-        alg    = spec[:alg]    || spec['alg']
-        params = spec[:params] || spec['params']
-        return if ::Kiosk::Reputation::Backends.valid_params?(alg, params)
-
-        raise Errors::ConfigurationError,
-              "Kiosk::Server: the #{alg.to_s.inspect} proof-of-work backend refuses the configured " \
-              "parameters #{params.inspect} — no proof solved at them could ever verify, so every " \
-              'honest client would be told its correct proof was invalid. Fix the source of the ' \
-              'parameters: `c.registration_pow_params` for POST /auth/register, or the `params:` ' \
-              'your reputation_policy returns from #challenge_for.'
-      end
-
-      def pow_count(spec)
-        n = (spec[:count] || spec['count'] || 1).to_i
-        [n, 1].max
-      end
-
-      # TTL scales with `count`, so the first expires no sooner than the last is solved.
-      def issue_challenges(count, spec, fp, secret, config)
-        ttl = config.pow_ttl * [count, 1].max
-        Array.new(count) { issue_challenge(spec, fp, secret, ttl) }
       end
 
       def extract_proofs(pow)
@@ -212,11 +99,14 @@ module Kiosk
         return pow if pow.is_a?(Array)
         return [] unless pow.is_a?(Hash)
 
-        list = pow[:proofs] || pow['proofs']
-        return Array(list) if list
-        return [pow] if pow[:challenge] || pow['challenge']
+        proofs_of(pow)
+      end
 
-        []
+      def proofs_of(hash)
+        list = hash[:proofs] || hash['proofs']
+        return Array(list) if list
+
+        hash[:challenge] || hash['challenge'] ? [hash] : []
       end
 
       def canonical_json(obj)
@@ -230,12 +120,6 @@ module Kiosk
         else
           JSON.generate(obj)
         end
-      end
-
-      def symbolize_keys(hash)
-        return {} unless hash.is_a?(Hash)
-
-        hash.transform_keys(&:to_sym)
       end
     end
   end

@@ -53,6 +53,7 @@ require 'kiosk/server/agent_identity_providers/default_agent_idp'
 require 'kiosk/server/identity_resolution'
 require 'kiosk/server/pow_spent_stores'
 require 'kiosk/server/pow_gate'
+require 'kiosk/server/pow_toll'
 require 'kiosk/server/argument_decoder'
 require 'kiosk/server/request_validation'
 require 'kiosk/server/registration_pow'
@@ -119,6 +120,7 @@ module Kiosk
     #   - {Kiosk::Server::AuthController}    — Rails controller for the kiosk-pop surface
     #   - {Kiosk::Server::IdentityResolution} — resolves agent_idp then user_idp → Identity
     #   - {Kiosk::Server::PowGate}           — gates verbs behind a proof-of-work toll
+    #   - {Kiosk::Server::PowToll}           — collects and verifies the proofs one toll demands
     #   - {Kiosk::Server::RegistrationPow}   — proof-of-work check for registration
     #
     #   Payment / KYC plane:

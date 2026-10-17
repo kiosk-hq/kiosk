@@ -198,7 +198,7 @@ module Kiosk
 
       def pow_count(spec)
         n = (spec[:count] || spec['count'] || 1).to_i
-        n < 1 ? 1 : n
+        [n, 1].max
       end
 
       # TTL scales with `count`, so the first expires no sooner than the last is solved.

@@ -34,9 +34,10 @@ Gem::Specification.new do |spec|
     mandates and listens on the event stream. `Kyc` stands in for the
     operator's KYC provider, and `StripeMock` fronts a local stripe-mock.
 
-    No Postgres, no Rails, no test-framework dependency. The actual
-    Executor (which runs SQL with the right GUCs) is provided by
-    `kiosk-server` at runtime via `Kiosk::TestHelpers.executor=`.
+    No Postgres, no Rails, no test-framework dependency.
+    `InProcessExecutor` and `Conformance::InProcessOrigin` run against
+    the host's kiosk-server and are required explicitly; this gem does
+    not depend on kiosk-server.
   DESC
   spec.homepage      = 'https://kiosk.tech'
   spec.license       = 'Apache-2.0'

@@ -24,13 +24,13 @@ end
 
 ## Wire an executor
 
-The DSL is inert until an executor is configured. Wire `kiosk-server`'s test executor in `test/test_helper.rb`:
+The DSL is inert until an executor is configured. Wire the in-process executor, which runs against `kiosk-server` in your Rails app, in `test/test_helper.rb`:
 
 ```ruby
 require "kiosk/rls_minitest"
-require "kiosk/server/test_executor"
+require "kiosk/test_helpers/in_process_executor"
 
-Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
+Kiosk::TestHelpers.executor = Kiosk::TestHelpers::InProcessExecutor.new
 ```
 
 For unit-shaped tests that need no live database, use the bundled `NullExecutor` instead:

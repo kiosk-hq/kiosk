@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/conformance_origin'
+require_relative '../../../support/kiosk_server'
+require 'kiosk/test_helpers/conformance/in_process_origin'
 
 # The engine-backed ORIGIN, and the four conformance checks running against a
 # REAL registry rather than a hand-built one.
@@ -103,7 +104,7 @@ RSpec.shared_context 'conformance origin spec: the four checks' do
   let(:routes) { wired_routes(%w[catalog query], %w[my_orders query], %w[place_order action]) }
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#verbs' do
@@ -134,7 +135,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
   end
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#recognize' do
@@ -151,7 +152,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
   end
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#call' do
@@ -181,7 +182,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
   end
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#call' do
@@ -211,7 +212,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
   end
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#schema_errors' do
@@ -244,7 +245,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
   end
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#schema_errors' do
@@ -266,7 +267,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
   end
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: the four checks'
 
   describe 'the four checks, against a real registry' do
@@ -292,7 +293,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
   end
 end
 
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: the four checks'
 
   describe 'the four checks, against a real registry' do

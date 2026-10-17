@@ -1,21 +1,20 @@
 # frozen_string_literal: true
 
-# Test-time only; required explicitly:
-#   Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
+# Needs kiosk-server, which only a Rails host carries; this gem does not depend
+# on it, so a test helper requires this file explicitly:
+#   require "kiosk/test_helpers/in_process_executor"
+#   Kiosk::TestHelpers.executor = Kiosk::TestHelpers::InProcessExecutor.new
 
 require 'date'
-require 'active_record'
-require 'kiosk/server/current_request'
-require 'kiosk/server/queries'
-require 'kiosk/server/result'
+require 'kiosk/server'
 require 'kiosk/test_helpers/errors'
 
 module Kiosk
-  module Server
+  module TestHelpers
     # Runs the kiosk-test-support journey DSL against a real connection: each
     # identity scope sets the GUCs and always rolls back, and an RLS denial
     # surfaces as {Kiosk::TestHelpers::Errors::RLSDenied}.
-    class TestExecutor
+    class InProcessExecutor
       class NoScopeError < StandardError; end
 
       # Aborts the transaction, also on a connection double that ignores `ActiveRecord::Rollback`.
@@ -129,9 +128,9 @@ module Kiosk
       end
 
       def apply_gucs(identity)
-        SessionContext.new(connection: connection, identity: identity)
-                      .guc_statements
-                      .each { |sql, binds| connection.exec_query(sql, 'Kiosk GUC', binds) }
+        Kiosk::Server::SessionContext.new(connection: connection, identity: identity)
+                                     .guc_statements
+                                     .each { |sql, binds| connection.exec_query(sql, 'Kiosk GUC', binds) }
       end
 
       def rescue_rls_denials

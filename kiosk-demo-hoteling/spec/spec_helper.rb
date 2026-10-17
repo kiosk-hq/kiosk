@@ -9,10 +9,10 @@ ENV['RAILS_ENV'] ||= 'test'
 require_relative '../config/environment'
 require 'rspec/rails'
 
-require 'kiosk/server/conformance_origin'
+require 'kiosk/test_helpers/conformance/in_process_origin'
 require 'kiosk/test_helpers/conformance/rspec'
 
-Kiosk::TestHelpers::Conformance.origin = Kiosk::Server::ConformanceOrigin.new
+Kiosk::TestHelpers::Conformance.origin = Kiosk::TestHelpers::Conformance::InProcessOrigin.new
 
 RSpec.configure do |config|
   config.expect_with(:rspec) { |c| c.syntax = :expect }

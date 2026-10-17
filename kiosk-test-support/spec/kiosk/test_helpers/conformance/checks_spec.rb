@@ -372,7 +372,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks, 'the origin seam' do
 
   it 'raises a wiring hint when no origin is configured' do
     expect { conformance.routes }
-      .to raise_error(Kiosk::TestHelpers::Errors::OriginNotConfigured, /ConformanceOrigin/)
+      .to raise_error(Kiosk::TestHelpers::Errors::OriginNotConfigured, /InProcessOrigin/)
   end
 
   it 'runs the checks against the configured origin' do

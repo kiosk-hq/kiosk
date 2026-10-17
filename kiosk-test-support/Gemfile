@@ -16,3 +16,7 @@ gem 'webmock', '~> 3.0'
 
 # `Person` signs in through its DeviseSession, which every operator demo already carries.
 gem 'kiosk-user-idp-devise', path: '../kiosk-user-idp-devise'
+
+# The in-process executor and origin run against kiosk-server, which a host
+# application brings; only their specs load it here.
+gem 'kiosk-server', path: '../kiosk-server'

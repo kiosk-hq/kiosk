@@ -16,8 +16,8 @@ module Kiosk
           Wire one in your test helper:
 
             # spec/spec_helper.rb or test/test_helper.rb
-            require "kiosk/server/test_executor"
-            Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
+            require "kiosk/test_helpers/in_process_executor"
+            Kiosk::TestHelpers.executor = Kiosk::TestHelpers::InProcessExecutor.new
 
           For unit-shaped tests, use the bundled NullExecutor:
 
@@ -36,8 +36,8 @@ module Kiosk
           Wire one in your test helper:
 
             # spec/spec_helper.rb or test/test_helper.rb
-            require "kiosk/server/conformance_origin"
-            Kiosk::TestHelpers::Conformance.origin = Kiosk::Server::ConformanceOrigin.new
+            require "kiosk/test_helpers/conformance/in_process_origin"
+            Kiosk::TestHelpers::Conformance.origin = Kiosk::TestHelpers::Conformance::InProcessOrigin.new
 
           For unit-shaped tests with no Rails and no database, use the bundled
           NullOrigin:

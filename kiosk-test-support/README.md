@@ -49,12 +49,12 @@ Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `
 
 ## Wiring an executor
 
-The DSL is inert until you wire an executor. In production-shaped tests you wire `Kiosk::Server::TestExecutor` (ships with `kiosk-server`):
+The DSL is inert until you wire an executor. In production-shaped tests you wire `Kiosk::TestHelpers::InProcessExecutor`, which runs against `kiosk-server` in your Rails app:
 
 ```ruby
 # spec/spec_helper.rb (RSpec) or test/test_helper.rb (Minitest)
-require "kiosk/server/test_executor"
-Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
+require "kiosk/test_helpers/in_process_executor"
+Kiosk::TestHelpers.executor = Kiosk::TestHelpers::InProcessExecutor.new
 ```
 
 For unit-shaped tests where you only care about call ordering, use the bundled `NullExecutor`:
@@ -65,7 +65,7 @@ Kiosk::TestHelpers.executor = Kiosk::TestHelpers::NullExecutor.new.tap do |e|
 end
 ```
 
-The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::Server::TestExecutor` from the shipped `kiosk-server` gem (above).
+The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::TestHelpers::InProcessExecutor` (above).
 
 ## Driving the wire as an assistant
 
@@ -133,7 +133,7 @@ end
 
 ## Status
 
-Pre-v1.0 alpha. The Journey DSL surface is stable across pre-v1.0 minor bumps; the executor contract may still evolve pre-v1.0 (`kiosk-server` ships `Kiosk::Server::TestExecutor` against it today).
+Pre-v1.0 alpha. The Journey DSL surface is stable across pre-v1.0 minor bumps; the executor contract may still evolve pre-v1.0 (`Kiosk::TestHelpers::InProcessExecutor` implements it today).
 
 ## License
 

@@ -24,15 +24,15 @@ end
 
 ## Wire an executor
 
-The DSL is inert until an executor is configured. Wire `kiosk-server`'s test executor in `spec/spec_helper.rb`:
+The DSL is inert until an executor is configured. Wire the in-process executor, which runs against `kiosk-server` in your Rails app, in `spec/spec_helper.rb`:
 
 ```ruby
 require "kiosk/rls_rspec"
-require "kiosk/server/test_executor"
+require "kiosk/test_helpers/in_process_executor"
 
 RSpec.configure do |config|
   config.before(:suite) do
-    Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
+    Kiosk::TestHelpers.executor = Kiosk::TestHelpers::InProcessExecutor.new
   end
 end
 ```

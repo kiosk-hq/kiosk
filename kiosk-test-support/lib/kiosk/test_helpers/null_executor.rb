@@ -3,7 +3,7 @@
 module Kiosk
   module TestHelpers
     # In-memory executor that records every call without touching Postgres; the
-    # contract `Kiosk::Server::TestExecutor` implements. Queue results with
+    # contract `Kiosk::TestHelpers::InProcessExecutor` implements. Queue results with
     # `enqueue_<kind>` and errors with `enqueue_error`.
     class NullExecutor
       Call = Data.define(:kind, :args, :identity)

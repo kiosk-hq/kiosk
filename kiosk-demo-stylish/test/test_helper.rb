@@ -5,11 +5,11 @@ ENV['RAILS_ENV'] ||= 'test'
 require_relative '../config/environment'
 require 'rails/test_help'
 
-require 'kiosk/server/conformance_origin'
+require 'kiosk/test_helpers/conformance/in_process_origin'
 require 'kiosk/test_helpers/conformance/minitest'
 require 'kiosk/story_test'
 
-Kiosk::TestHelpers::Conformance.origin = Kiosk::Server::ConformanceOrigin.new
+Kiosk::TestHelpers::Conformance.origin = Kiosk::TestHelpers::Conformance::InProcessOrigin.new
 
 module ActiveSupport
   class TestCase

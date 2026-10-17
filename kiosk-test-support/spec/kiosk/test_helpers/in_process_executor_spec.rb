@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/test_executor'
+require_relative '../../support/kiosk_server'
+require 'kiosk/test_helpers/in_process_executor'
 
 # A connection that stages queued results and queued errors, so a spec can
 # stand in for a real connection or for a Postgres that denies by RLS.
@@ -46,7 +47,7 @@ RSpec.shared_context 'test executor spec: executor' do
   let(:identity)          { build_identity(actor: 'agent') }
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#with_identity' do
@@ -71,7 +72,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#with_identity' do
@@ -99,7 +100,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#with_identity' do
@@ -114,7 +115,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#with_identity' do
@@ -134,7 +135,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#with_identity' do
@@ -160,7 +161,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#query (default-deny enforcement)' do
@@ -184,7 +185,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#query (default-deny enforcement)' do
@@ -211,7 +212,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#run_action' do
@@ -234,7 +235,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#run_query' do
@@ -257,7 +258,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#run_query' do
@@ -282,7 +283,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#pay_action' do
@@ -294,7 +295,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#seed' do
@@ -317,7 +318,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#seed' do
@@ -344,7 +345,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#seed' do
@@ -366,7 +367,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   end
 end
 
-RSpec.describe Kiosk::Server::TestExecutor do
+RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
   include_context 'test executor spec: executor'
 
   describe '#seed' do

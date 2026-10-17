@@ -121,7 +121,7 @@ RSpec.describe 'the conformance adapters', 'Minitest assertions, all checks' do
 
     expect(passed).to be(false)
     expect(message).to include('has no origin configured')
-    expect(message).to include('ConformanceOrigin')
+    expect(message).to include('InProcessOrigin')
   end
 end
 

@@ -56,7 +56,7 @@ module Kiosk
         TestHelpers.require_executor!.run_action(name, args)
       end
 
-      # `Kiosk::Server::TestExecutor` raises `NotImplementedError` here.
+      # `Kiosk::TestHelpers::InProcessExecutor` raises `NotImplementedError` here.
       def pay_action(name, **args)
         TestHelpers.require_executor!.pay_action(name, args)
       end

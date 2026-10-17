@@ -132,8 +132,6 @@ module Kiosk
         event["data"]
       end
 
-      def leaves = [@news, *@followed].compact.each(&:close)
-
       private
 
       def holding(answer)

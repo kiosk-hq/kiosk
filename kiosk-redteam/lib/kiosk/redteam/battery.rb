@@ -16,14 +16,8 @@ module Kiosk
         @entries = []
       end
 
-      attr_reader :entries
-
       def record(name, blocked, detail = "")
         file(Entry.new(name: name.to_s, state: blocked ? :blocked : :breach, detail: detail.to_s))
-      end
-
-      def skip(name, reason)
-        file(Entry.new(name: name.to_s, state: :skipped, detail: reason.to_s))
       end
 
       # on_skip: :breach when this origin has the surface, so a skip is a harness defect.
@@ -33,9 +27,9 @@ module Kiosk
       end
 
       # Runner#run has already printed each line, hence echo: false.
-      def absorb(results, on_skip: :skip, echo: false)
+      def absorb(results, on_skip: :skip)
         Array(results).map do |r|
-          absorb_verdict(r[:scenario].name, r[:verdict], on_skip: on_skip, echo: echo)
+          absorb_verdict(r[:scenario].name, r[:verdict], on_skip: on_skip, echo: false)
         end
       end
 

@@ -27,11 +27,14 @@ class TableSearch
     taken = Booking.confirmed.where(restaurant: found, seating_at: Time.current..)
                    .pluck(:restaurant_table_id, :seating_at).to_set
 
-    found.flat_map do |restaurant|
-      restaurant.restaurant_tables.to_a.product(seatings(restaurant))
-                .reject { |table, seating| taken.include?([table.id, seating]) }
-                .map { |table, seating| [restaurant, table, seating] }
-    end
+    found.flat_map { |restaurant| open_at(restaurant, taken) }
+  end
+
+  # `[restaurant, table, seating]` for each of the restaurant's tables not in `taken` at a seating.
+  def open_at(restaurant, taken)
+    restaurant.restaurant_tables.to_a.product(seatings(restaurant))
+              .reject { |table, seating| taken.include?([table.id, seating]) }
+              .map { |table, seating| [restaurant, table, seating] }
   end
 
   # The restaurant's upcoming seatings on the requested date and time.

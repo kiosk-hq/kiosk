@@ -84,16 +84,21 @@ SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
 
 # The refusal echoes the value it got, so `supplied:` keeps the probe's own bytes from reading as a leak.
 def uuid_guard_verdict(path, body_for)
-  MALFORMED_IDS.map do |junk|
-    args     = body_for.call(junk)
-    rc, body = WIRE.post_json(path, args, WIRE.bearer(TOKEN_A))
-    scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
-    # Every typed refusal is 400/bad_request; only the detail ties it to this argument.
-    ok = rc == 400 && body['code'] == 'bad_request' &&
-         body['detail'].to_s.include?(args.key(junk).to_s) && !scan.leak?
-    [ok, "#{junk.inspect}→#{rc}/#{body['code'].inspect}" \
-         "#{" LEAK #{scan.leak}" if scan.leak}#{scan.note}"]
-  end
+  MALFORMED_IDS.map { |junk| uuid_guard_probe(path, junk, body_for.call(junk)) }
+end
+
+def uuid_guard_probe(path, junk, args)
+  rc, body = WIRE.post_json(path, args, WIRE.bearer(TOKEN_A))
+  scan = Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)
+  # Every typed refusal is 400/bad_request; only the detail ties it to this argument.
+  ok = rc == 400 && body['code'] == 'bad_request' &&
+       body['detail'].to_s.include?(args.key(junk).to_s) && !scan.leak?
+  [ok, "#{junk.inspect}→#{rc}/#{body['code'].inspect}#{leak_note(scan)}"]
+end
+
+# What a probe report adds when the leak scan found something, or has a note.
+def leak_note(scan)
+  "#{" LEAK #{scan.leak}" if scan.leak}#{scan.note}"
 end
 
 cancel_probes = uuid_guard_verdict('/kiosk/cancel_booking', ->(junk) { { booking_id: junk } })
@@ -217,11 +222,11 @@ NONSTRING  = [true, false, [], {}, [1], { 'a' => 1 }, nil, 20_260_826].freeze
 # A query parameter declared integer takes only an integer literal, so "2.0" is refused here (§8.1 item 8).
 QUERY_JUNK = ['abc', 'true', '1.5', '0x10', '', '2.0'].freeze
 
-def shape_verdict(label, rc, body, supplied: nil)
+def shape_verdict(label, status, body, supplied: nil)
   scan = Kiosk::Redteam::LeakScan.scan(body, SHAPE_LEAKS, supplied: supplied)
   code = body.is_a?(Hash) ? body['code'] : nil
-  ok   = rc == 400 && code == 'bad_request' && !scan.leak?
-  [ok, "#{label}→#{rc}/#{code.inspect}#{" LEAK #{scan.leak}" if scan.leak}#{scan.note}"]
+  ok   = status == 400 && code == 'bad_request' && !scan.leak?
+  [ok, "#{label}→#{status}/#{code.inspect}#{leak_note(scan)}"]
 end
 
 shape_slot   = open_slot

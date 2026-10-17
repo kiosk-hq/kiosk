@@ -25,10 +25,10 @@ class ConfirmBookingOperation
     end
     refuse 'this booking is not paid yet', hint: 'Pay the total reserve_room quoted, then call again.' \
       unless booking.paid?
-    unless booking.confirmed?
-      refuse 'the hotel has not answered this booking yet',
-             hint: 'Wait for the `booking_confirmation` event.'
-    end
+    return if booking.confirmed?
+
+    refuse 'the hotel has not answered this booking yet',
+           hint: 'Wait for the `booking_confirmation` event.'
   end
 
   def self.refuse(message, hint: nil)

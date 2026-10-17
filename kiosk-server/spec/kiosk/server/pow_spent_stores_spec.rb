@@ -1,60 +1,58 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require_relative '../../support/postgres'
 
-RSpec.describe Kiosk::Server::PowSpentStores do
+# Runs against a real Postgres: a throwaway schema built from the shipped
+# `pow_spent_sql`, dropped afterwards. No reachable server → skip, so a
+# machine without Postgres stays green.
+module PowSpentStoresSpec
+  SCHEMA = 'kiosk_pow_spent_store_spec'
+
+  def self.create_schema
+    SpecPostgres.recreate_schema(SCHEMA)
+    ActiveRecord::Base.connection.execute(Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: SCHEMA))
+  end
+
+  def expiry_row(id)
+    ActiveRecord::Base.connection.exec_query(<<~SQL, 'spec types', [id]).to_a.first
+      SELECT pg_typeof(expires_at)::text AS at_type,
+             extract(epoch FROM expires_at)::bigint AS at_epoch
+      FROM "#{SCHEMA}".pow_spent
+      WHERE id = $1
+    SQL
+  end
+
+  def row_count(id)
+    ActiveRecord::Base.connection.exec_query(
+      %(SELECT count(*)::int AS n FROM "#{SCHEMA}".pow_spent WHERE id = $1), 'spec', [id]
+    ).first.fetch('n')
+  end
+end
+
+RSpec.shared_context 'pow spent stores spec: postgres' do
+  include PowSpentStoresSpec
+
+  before(:context) do
+    skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
+    PowSpentStoresSpec.create_schema
+  end
+
+  after(:context) { SpecPostgres.drop_schema(PowSpentStoresSpec::SCHEMA) }
+
+  subject(:store) { described_class.new }
+
   let(:live) { Time.now.to_i + 300 }
 
+  before do
+    Kiosk.configure { |c| c.schema = PowSpentStoresSpec::SCHEMA }
+    ActiveRecord::Base.connection.execute(%(DELETE FROM "#{PowSpentStoresSpec::SCHEMA}".pow_spent))
+  end
+end
+
+RSpec.describe Kiosk::Server::PowSpentStores do
   describe Kiosk::Server::PowSpentStores::ActiveRecord do
-    # Run against a real Postgres: a throwaway schema built from the shipped
-    # `pow_spent_sql`, dropped afterwards. Connection comes from PG* env vars
-    # (CI's service) or the local default socket; no reachable server → skip
-    # (never fail) so DB-less machines stay green. Same shape as
-    # device_authorization_stores_spec.
-    POW_SPENT_SPEC_SCHEMA = 'kiosk_pow_spent_store_spec'
-
-    def self.postgres_error
-      @postgres_error ||= begin
-        ActiveRecord::Base.establish_connection(
-          adapter: 'postgresql',
-          host: ENV.fetch('PGHOST', nil),
-          username: ENV.fetch('PGUSER', nil),
-          password: ENV.fetch('PGPASSWORD', nil),
-          database: ENV.fetch('PGDATABASE', 'postgres')
-        )
-        ActiveRecord::Base.connection.execute('SELECT 1')
-        [false]
-      rescue StandardError => e
-        ["#{e.class}: #{e.message}"]
-      end
-      @postgres_error.first
-    end
-
-    before(:context) do
-      skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error
-
-      conn = ActiveRecord::Base.connection
-      conn.execute(%(DROP SCHEMA IF EXISTS "#{POW_SPENT_SPEC_SCHEMA}" CASCADE))
-      conn.execute(%(CREATE SCHEMA "#{POW_SPENT_SPEC_SCHEMA}"))
-      conn.execute(Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: POW_SPENT_SPEC_SCHEMA))
-    end
-
-    after(:context) do
-      unless self.class.postgres_error
-        ActiveRecord::Base.connection.execute(
-          %(DROP SCHEMA IF EXISTS "#{POW_SPENT_SPEC_SCHEMA}" CASCADE)
-        )
-      end
-    end
-
-    subject(:store) { described_class.new }
-
-    before do
-      Kiosk.configure { |c| c.schema = POW_SPENT_SPEC_SCHEMA }
-      ActiveRecord::Base.connection.execute(%(DELETE FROM "#{POW_SPENT_SPEC_SCHEMA}".pow_spent))
-    end
-
-    # ── the property the whole row is about ────────────────────────────────
+    include_context 'pow spent stores spec: postgres'
 
     describe 'single-use ACROSS store instances (K-738)' do
       it 'rejects a replay claimed through a second, independent store instance' do
@@ -67,9 +65,8 @@ RSpec.describe Kiosk::Server::PowSpentStores do
 
       it 'rejects a replay claimed on a DIFFERENT database connection' do
         # A separate thread checks out its own connection from the AR pool, so
-        # the exclusion here is decided by the table's PRIMARY KEY and not by
-        # any object or connection state the first claim left behind — which is
-        # what makes the guarantee survive a process boundary.
+        # the table's PRIMARY KEY decides the exclusion, not any object or
+        # connection state the first claim left behind.
         expect(store.claim('k738-cross-conn', live)).to be(true)
 
         replay = Thread.new { described_class.new.claim('k738-cross-conn', live) }.value
@@ -83,8 +80,12 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect(results.count(false)).to eq(3)
       end
     end
+  end
+end
 
-    # ── the spent-store contract ───────────────────────────────────────
+RSpec.describe Kiosk::Server::PowSpentStores do
+  describe Kiosk::Server::PowSpentStores::ActiveRecord do
+    include_context 'pow spent stores spec: postgres'
 
     describe '#claim' do
       it 'returns true the first time and false after' do
@@ -92,35 +93,29 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect(store.claim('a', live)).to be(false)
       end
 
-      # ── TYPES, which only a real Postgres can answer (K-782) ─────────────
-      #
-      # The id and the expiry now travel as BIND PARAMETERS, and a bind carries
-      # its value out-of-band — so the one thing that can go wrong SILENTLY is
-      # the type. `to_timestamp($2)` is load-bearing and was proven so by
-      # deliberately deleting it: with a bare `$2` the epoch INTEGER is offered
-      # to a timestamptz column and Postgres answers `PG::DatetimeFieldOverflow:
-      # date/time field value out of range: "1800000071"`. (A `.to_s` on the
-      # bind, by contrast, is harmless — the single-argument `to_timestamp` has
-      # only the numeric overload, so the string parses. Recorded because it is
-      # the break that did NOT work.) A challenge id carrying a quote character
-      # is stored verbatim rather than ending a literal.
+      # The id and the expiry travel as bind parameters, so the type is what
+      # can go wrong silently: without `to_timestamp($2)` Postgres refuses the
+      # epoch integer for a timestamptz column. A hostile id is stored verbatim.
       it 'writes the expiry to the exact epoch and stores a hostile id verbatim' do
         hostile = "jti-' OR 1=1 --"
         moment  = 1_800_000_071
         expect(store.claim(hostile, moment)).to be(true)
 
-        row = ActiveRecord::Base.connection.exec_query(<<~SQL, 'spec types', [hostile]).to_a.first
-          SELECT pg_typeof(expires_at)::text AS at_type,
-                 extract(epoch FROM expires_at)::bigint AS at_epoch
-          FROM "#{POW_SPENT_SPEC_SCHEMA}".pow_spent
-          WHERE id = $1
-        SQL
+        row = expiry_row(hostile)
         expect(row.fetch('at_type')).to eq('timestamp with time zone')
         expect(row.fetch('at_epoch')).to eq(moment)
-        # The whole point of the table: the same hostile id cannot be spent twice.
+        # The same hostile id cannot be spent twice.
         expect(store.claim(hostile, live)).to be(false)
       end
+    end
+  end
+end
 
+RSpec.describe Kiosk::Server::PowSpentStores do
+  describe Kiosk::Server::PowSpentStores::ActiveRecord do
+    include_context 'pow spent stores spec: postgres'
+
+    describe '#claim' do
       it 'returns false for a nil id without touching the database' do
         expect(store.claim(nil, live)).to be(false)
       end
@@ -143,6 +138,12 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect { store.release(nil) }.not_to raise_error
       end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::PowSpentStores do
+  describe Kiosk::Server::PowSpentStores::ActiveRecord do
+    include_context 'pow spent stores spec: postgres'
 
     describe '#spent?' do
       it 'is false before a claim and true after' do
@@ -160,6 +161,12 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect(store.spent?(nil)).to be(false)
       end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::PowSpentStores do
+  describe Kiosk::Server::PowSpentStores::ActiveRecord do
+    include_context 'pow spent stores spec: postgres'
 
     describe '#mark_spent' do
       it 'is idempotent and visible to a second instance' do
@@ -172,6 +179,21 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect { store.mark_spent(nil, live) }.not_to raise_error
       end
     end
+
+    it 'is accepted by Kiosk.configuration.pow_spent_store' do
+      Kiosk.configure { |c| c.pow_spent_store = store }
+      expect(Kiosk.configuration.pow_spent_store).to equal(store)
+    end
+
+    it 'answers the whole spent-store interface' do
+      expect(store).to respond_to(:claim, :release, :spent?, :mark_spent)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::PowSpentStores do
+  describe Kiosk::Server::PowSpentStores::ActiveRecord do
+    include_context 'pow spent stores spec: postgres'
 
     describe '#prune!' do
       it 'deletes expired entries and keeps live ones' do
@@ -191,27 +213,13 @@ RSpec.describe Kiosk::Server::PowSpentStores do
 
         throttled.claim('another', live)
 
-        expect(
-          ActiveRecord::Base.connection.execute(
-            %(SELECT count(*) AS n FROM "#{POW_SPENT_SPEC_SCHEMA}".pow_spent
-              WHERE id = 'expired-after-sweep')
-          ).first.fetch('n')
-        ).to eq(1)
+        expect(row_count('expired-after-sweep')).to eq(1)
       end
     end
-
-    # ── it is a drop-in for the configured slot ────────────────────────────
-
-    it 'is accepted by Kiosk.configuration.pow_spent_store' do
-      Kiosk.configure { |c| c.pow_spent_store = store }
-      expect(Kiosk.configuration.pow_spent_store).to equal(store)
-    end
-
-    it 'answers the whole spent-store interface' do
-      expect(store).to respond_to(:claim, :release, :spent?, :mark_spent)
-    end
   end
+end
 
+RSpec.describe Kiosk::Server::PowSpentStores do
   describe 'Kiosk::Server::SchemaDefinitions.pow_spent_sql' do
     it 'keys the table on the challenge id, so the PK is the single-use gate' do
       sql = Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: 'kiosk')

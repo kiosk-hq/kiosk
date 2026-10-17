@@ -40,6 +40,8 @@ class MemoryPowSpentStore
 end
 
 require_relative 'support/memory_revocation_store'
+require_relative 'support/memory_event_store'
+require_relative 'support/memory_auth_challenge_store'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -58,8 +60,10 @@ RSpec.configure do |config|
   config.before(:each) do
     Kiosk.reset!
     Kiosk.configure do |c|
-      c.pow_spent_store  = MemoryPowSpentStore.new
-      c.revocation_store = MemoryRevocationStore.new
+      c.pow_spent_store      = MemoryPowSpentStore.new
+      c.revocation_store     = MemoryRevocationStore.new
+      c.event_store          = MemoryEventStore.new
+      c.auth_challenge_store = MemoryAuthChallengeStore.new
     end
     Kiosk::Server::Actions.reset!
     Kiosk::Server::Queries.reset!
@@ -259,7 +263,8 @@ module SlowStoreAllocation
   # Classes whose `.new` is the allocation inside a lazy configuration default.
   STORE_CLASSES = [
     Kiosk::Server::PowSpentStores::ActiveRecord,
-    Kiosk::Server::AuthChallengeStore,
+    Kiosk::Server::AuthChallengeStores::ActiveRecord,
+    Kiosk::Server::EventStores::ActiveRecord,
     Kiosk::Server::RevocationStores::ActiveRecord,
     Kiosk::Server::DeviceAuthorizationStores::ActiveRecord
   ].freeze

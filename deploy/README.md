@@ -414,16 +414,6 @@ directory can fix it, and `check-live-hsts.sh` only reports it if you pass the
 hostname explicitly.
 
 
-## Scaling past one worker — a shared auth-challenge store REQUIRED
-
-Everything above assumes the shipped `WEB_CONCURRENCY=1`. The PoW spent-id set
-is already in the database (`kiosk.pow_spent`), shared by every worker. The
-auth-challenge store is in-process, so raising the number (or putting a second
-app host behind the balancer) breaks the register/login handshake (challenge on
-worker A, redeem on worker B). Before you raise it, give `c.auth_challenge_store`
-a shared implementation — see kiosk-server's README, "Multi-process
-deployments".
-
 ## Payments — Stripe TEST mode
 
 getgrocery, hoteling and skooti (SetupIntent card-on-file) run Stripe in **test

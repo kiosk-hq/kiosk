@@ -222,14 +222,12 @@ module Kiosk
           end
       end
 
-      # Per-identity event tail. The default is in-process and lost on restart;
-      # a production origin with event topics must set
-      #   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
+      # Per-identity event tail. Default: the shared database table.
       attr_writer :event_store
 
       def event_store
         @event_store ||
-          LAZY_STORE_MUTEX.synchronize { @event_store ||= Kiosk::Server::EventStore.new }
+          LAZY_STORE_MUTEX.synchronize { @event_store ||= Kiosk::Server::EventStores::ActiveRecord.new }
       end
 
       # Optional sign-in path a browser is redirected to from the assistants and
@@ -310,13 +308,14 @@ module Kiosk
           LAZY_STORE_MUTEX.synchronize { @pow_spent_store ||= Kiosk::Server::PowSpentStores::ActiveRecord.new }
       end
 
-      # Outstanding auth nonces. The default is in-process; a multi-process
-      # deployment needs {AuthChallengeStores::ActiveRecord} (§15.2).
+      # Outstanding auth nonces. Default: the shared database table.
       attr_writer :auth_challenge_store
 
       def auth_challenge_store
         @auth_challenge_store ||
-          LAZY_STORE_MUTEX.synchronize { @auth_challenge_store ||= Kiosk::Server::AuthChallengeStore.new }
+          LAZY_STORE_MUTEX.synchronize do
+            @auth_challenge_store ||= Kiosk::Server::AuthChallengeStores::ActiveRecord.new
+          end
       end
 
       # Seconds between `GET /auth/challenge` and the signed POST. Default covers

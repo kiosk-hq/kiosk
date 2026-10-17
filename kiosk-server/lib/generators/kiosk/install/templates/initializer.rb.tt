@@ -55,13 +55,6 @@ Kiosk.configure do |c|
   # Optional: a user IdP binding your signed-in humans, e.g. `gem "kiosk-user-idp-devise"`.
   # c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
-  # With more than one process, the auth challenge store must be shared.
-  # c.auth_challenge_store = Kiosk::Server::AuthChallengeStores::ActiveRecord.new
-
-  # Events are kept 24 hours for reconnecting subscribers. Production refuses
-  # to boot with the in-process default while any handler declares a `topic`.
-  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
-
   # Optional audit sink: one ActionEvent per action, arguments in full and unredacted.
   # c.audit_sink = ->(e) { Rails.logger.info(e.with_arg_types.to_h.to_json) }
 end

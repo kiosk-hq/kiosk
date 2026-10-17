@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: A production origin that serves events and has no Action Cable adapter in `config/cable.yml` does not boot; outside production it falls back to `async`.
+
+- 2026-10-17: Auth challenges and events are stored in the database by default; run `kiosk:install`'s new `kiosk.auth_challenges` migration. The in-process stores are gone.
+
 - 2026-10-17: `PaymentClaim` takes the payable model by name (`model: "Order"`) instead of a table, so ids, owner and timestamps follow the model. `Kiosk::Owned` adds `owned_by`.
 
 - 2026-10-17: Loads through Zeitwerk; controllers, the KioskEvents channel and views live under app/. TestExecutor and ConformanceOrigin moved to kiosk-test-support.

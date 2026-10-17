@@ -95,6 +95,11 @@ module Kiosk
         migration_template 'create_kiosk_revocations.rb.tt',
                            'db/migrate/create_kiosk_revocations.rb'
       end
+
+      def create_auth_challenges_migration
+        migration_template 'create_kiosk_auth_challenges.rb.tt',
+                           'db/migrate/create_kiosk_auth_challenges.rb'
+      end
     end
   end
 end

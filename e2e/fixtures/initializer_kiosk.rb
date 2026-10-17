@@ -35,7 +35,6 @@ Kiosk.configure do |c|
 
   c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: 'sk_test_mock')
 
-  c.event_store        = Kiosk::Server::EventStores::ActiveRecord.new
   c.validate_requests  = true
   c.validate_responses = true
 

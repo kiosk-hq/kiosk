@@ -343,7 +343,7 @@ end
 # different question, answered at the socket.
 RSpec.shared_context 'events spec: a declared delivery topic' do
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
-  let(:store) { Kiosk::Server::EventStore.new }
+  let(:store) { MemoryEventStore.new }
 
   before do
     Kiosk.configure { |c| c.event_store = store }
@@ -417,10 +417,10 @@ RSpec.describe 'Kiosk::Server::Events.emit' do
     expect(store.head).to eq(0)
   end
 
-  it 'defaults the store to the in-process one' do
+  it 'defaults the store to the database table' do
     Kiosk.reset!
 
-    expect(Kiosk.configuration.event_store).to be_a(Kiosk::Server::EventStore)
+    expect(Kiosk.configuration.event_store).to be_a(Kiosk::Server::EventStores::ActiveRecord)
   end
 end
 

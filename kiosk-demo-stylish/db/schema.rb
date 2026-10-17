@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_17_000004) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_100000) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -94,6 +94,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_000004) do
     t.text "issuer", null: false
     t.index ["issuer", "public_key"], name: "idx_agents_issuer_public_key_live", unique: true, where: "(revoked_at IS NULL)"
     t.index ["user_id"], name: "idx_agents_user_id", where: "(revoked_at IS NULL)"
+  end
+
+  create_table "kiosk.auth_challenges", primary_key: "public_key", id: :text, force: :cascade do |t|
+    t.text "nonce", null: false
+    t.timestamptz "expires_at", null: false
+    t.index ["expires_at"], name: "idx_auth_challenges_expires_at"
   end
 
   create_table "kiosk.cart_mandates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

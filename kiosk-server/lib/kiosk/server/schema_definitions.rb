@@ -280,8 +280,7 @@ module Kiosk
         SQL
       end
 
-      # Not in the canonical set: the shared auth-challenge table a multi-process
-      # operator adds. At most one outstanding challenge per key.
+      # 010: each public key's outstanding auth challenge; the primary key keeps it single.
       def auth_challenge_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
@@ -291,8 +290,7 @@ module Kiosk
             nonce      text        NOT NULL,
             expires_at timestamptz NOT NULL
           );
-          -- Supports the TTL sweep only; the PK above is what makes a key's
-          -- outstanding challenge single.
+          -- Supports the TTL sweep only.
           CREATE INDEX IF NOT EXISTS idx_auth_challenges_expires_at
             ON "#{schema}".auth_challenges (expires_at);
         SQL

@@ -31,10 +31,9 @@
 # WHAT IT DOES LEAVE BEHIND, stated rather than claimed away, because «nothing
 # at all» would be false. `Client#register_raw` opens the possession handshake
 # with `GET /auth/challenge`, and an origin answers that by recording a
-# single-use nonce in its `auth_challenge_store` — the shipped default is an
-# in-process, TTL-bounded, capped Hash, which every demo in this fleet uses, so
-# the residue is ONE memory entry per origin per run that expires on its own and
-# reaches no database. Nothing else is touched: the `pow_spent_store` records
+# single-use nonce in its `auth_challenge_store`, the `kiosk.auth_challenges`
+# table, so the residue is ONE row per origin per run that expires on its own.
+# Nothing else is touched: the `pow_spent_store` records
 # only ACCEPTED proofs and this script never sends one, and a refused request
 # writes no domain row.
 #
@@ -372,8 +371,8 @@ puts "  #{hosts.size} origin(s) · #{runs.sum(&:passes)} passed · " \
      "#{breaches.size} breach(es) · #{errors.size} error(s) · " \
      "#{runs.sum { it.skips.size }} skipped"
 puts '  NO DOMAIN ROW WAS WRITTEN: every probe above is a read or a refusal. The one'
-puts "  residue is a single-use auth-challenge nonce per origin, in the origin's own"
-puts '  in-process TTL store, which expires unaided.'
+puts '  residue is a single-use auth-challenge nonce per origin, in kiosk.auth_challenges,'
+puts '  which expires unaided.'
 (breaches + errors).each { |f| puts "  #{f.origin}  #{f.beat} — #{f.detail}" }
 
 exit((breaches + errors).empty? ? 0 : 1)

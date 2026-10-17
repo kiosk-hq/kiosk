@@ -19,6 +19,12 @@ module Kiosk
       UNSERVED_HINT   = "`events` is absent from this origin's capabilities and it publishes no " \
                         'events_url; there is nothing to subscribe to here'
 
+      CABLE_YML_MISSING = '[kiosk-server] this origin serves events and has no config/cable.yml. ' \
+                          'Add one with a production adapter that every process shares, ' \
+                          'for example `adapter: solid_cable`.'
+      CABLE_ADAPTER_MISSING = '[kiosk-server] config/cable.yml names no adapter for %<env>s. ' \
+                              'Set one that every process shares, for example `adapter: solid_cable`.'
+
       class << self
         # An origin that declares no topic answers `501 module_not_served`
         # (spec Sections 8.5.3, 16.1 item 9), before any credential is read.
@@ -39,6 +45,15 @@ module Kiosk
         # Called by {Events.emit} after the append, so the event carries its id.
         def broadcast(identity_key, event)
           server.broadcast(stream_name(identity_key, event['topic']), event)
+        end
+
+        # The host's `config/cable.yml`. Outside production a host without one gets
+        # `async`, which serves one process only. In production this raises.
+        def cable_config
+          return host_cable_config if rails_app_with_cable_yml?
+          raise Errors::ConfigurationError, CABLE_YML_MISSING if production?
+
+          { 'adapter' => 'async' }
         end
 
         def configuration
@@ -62,20 +77,19 @@ module Kiosk
           [error.http_status, headers, [::JSON.generate(error.to_problem)]]
         end
 
-        # The host's `config/cable.yml`, else `async` (one process only):
-        # Action Cable's own fallback is Redis, which no host here bundles.
-        def cable_config
-          return { 'adapter' => 'async' } unless rails_app_with_cable_yml?
-
-          ::Rails.application.config_for(:cable).to_h.transform_keys(&:to_s)
-        rescue StandardError
-          { 'adapter' => 'async' }
-        end
-
         def rails_app_with_cable_yml?
           defined?(::Rails) && ::Rails.respond_to?(:application) && ::Rails.application &&
             ::Rails.root && ::File.exist?(::Rails.root.join('config', 'cable.yml'))
         end
+
+        def host_cable_config
+          config = ::Rails.application.config_for(:cable).to_h.transform_keys(&:to_s)
+          return config if config['adapter']
+
+          raise Errors::ConfigurationError, format(CABLE_ADAPTER_MISSING, env: ::Rails.env)
+        end
+
+        def production? = defined?(::Rails) && ::Rails.respond_to?(:env) && ::Rails.env.production?
 
         def resolved_logger
           return ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger) && ::Rails.logger

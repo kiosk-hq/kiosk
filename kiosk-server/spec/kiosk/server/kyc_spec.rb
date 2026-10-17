@@ -133,7 +133,7 @@ RSpec.shared_context 'kyc spec: postgres' do
 
   after(:context) { KycSpec.drop_schema }
 
-  let(:store)    { Kiosk::Server::EventStore.new }
+  let(:store)    { MemoryEventStore.new }
   let(:kyc_key)  { OpenSSL::PKey::RSA.generate(2048) }
   let(:provider) { KycSpecProvider.new }
 

@@ -29,6 +29,7 @@ require 'puma/launcher'
 require 'websocket/driver'
 require 'openssl'
 require 'stringio'
+require_relative 'memory_event_store'
 
 report = {}
 # The engine's own log, so a scenario can assert a line the wire cannot carry.
@@ -133,6 +134,7 @@ Kiosk.configure do |c|
   # the stream is not (spec Section 8.5.3).
   c.reputation_policy = TOLL_EVERY_VERB
   c.pow_secret = 'probe-pow-secret-of-at-least-32-bytes'
+  c.event_store = MemoryEventStore.new
 end
 
 Kiosk::Server::EventsConnection.reauthorise_every = 1

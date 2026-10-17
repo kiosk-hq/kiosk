@@ -66,6 +66,4 @@ Kiosk.configure do |c|
   c.reputation_factors      = ->(**) { Kiosk::Reputation::Factors.empty }
   c.registration_pow_count  = 1
   c.registration_pow_params = EQUIHASH_PARAMS
-
-  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
 end

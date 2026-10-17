@@ -90,17 +90,6 @@ module Kiosk
           'role and no token has one. Both are total; the mixture is what is refused ' \
           '(kiosk.tech protocol.md Section 6.3).'
 
-        EPHEMERAL_EVENT_STORE =
-          '[kiosk-server] this origin declares event topic(s) (%<topics>s) and its ' \
-          '`event_store` is the IN-PROCESS default. The operator keeps every event for 24 hours, ' \
-          'so a subscriber that reconnects with `since` misses nothing; this store is a Hash in ' \
-          'one process, not shared between Puma workers, dynos or pods, and a restart or deploy ' \
-          'loses every event inside that window, so the subscriber is told `truncated: true`. ' \
-          'Nothing reports it: a lost tail produces no error, no metric and no log line. Set the ' \
-          'durable store: c.event_store = Kiosk::Server::EventStores::ActiveRecord.new — which ' \
-          '`rails generate kiosk:install` writes into the initializer, beside the ' \
-          '`%<schema>s.events` migration it writes for it.'
-
         def issuer_warning(config:, local:)
           issuer = config.issuer.to_s.strip
           return ISSUER_UNSET if issuer.empty?
@@ -121,18 +110,6 @@ module Kiosk
           return nil if declared.include?(configured)
 
           "#{default_role_head(config, declared, configured)} #{format(DEFAULT_ROLE, first: declared.first)}"
-        end
-
-        # A production origin with event topics must keep 24 hours of events,
-        # which the in-process {EventStore} cannot.
-        def ephemeral_event_store_error(config:, production:, topics:)
-          return nil unless production
-
-          declared = Array(topics).map { |topic| topic.to_s.strip }.reject(&:empty?)
-          return nil if declared.empty?
-          return nil unless config.event_store.is_a?(Kiosk::Server::EventStore)
-
-          format(EPHEMERAL_EVENT_STORE, topics: declared.sort.join(', '), schema: Kiosk.configuration.schema)
         end
 
         private
@@ -161,13 +138,9 @@ module Kiosk
         raise Kiosk::Server::Errors::ConfigurationError, message if message
       end
 
+      # A production origin that serves events needs a shared cable adapter; this raises without one.
       config.after_initialize do
-        message = Kiosk::Server::Engine.ephemeral_event_store_error(
-          config: Kiosk.configuration,
-          production: ::Rails.env.production?,
-          topics: Kiosk::Server::Events.known
-        )
-        raise Kiosk::Server::Errors::ConfigurationError, message if message
+        Kiosk::Server::EventsCable.cable_config if ::Rails.env.production? && Kiosk::Server::Events.known.any?
       end
 
       # `routes.append` runs after config/routes.rb is drawn, so the mount is visible here.

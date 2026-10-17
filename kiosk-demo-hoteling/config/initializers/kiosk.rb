@@ -63,8 +63,6 @@ Kiosk.configure do |c|
   }
   c.registration_pow_count  = 1
   c.registration_pow_params = EQUIHASH_PARAMS
-
-  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
 end
 
 # The closed vocabularies behind the search_hotels enums and the seeds. A

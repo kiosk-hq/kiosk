@@ -3,24 +3,6 @@
 require 'spec_helper'
 require_relative '../../support/postgres'
 
-# The gap K-751 is about, made executable. This is NOT a defect of
-# AuthChallengeStore — it is its documented scope — but it is the exact reason
-# §15.2 names the auth nonces and the reference needs a shared store: two
-# instances stand in for two Puma workers, and the challenge issued by one is
-# INVISIBLE to the other, so a correctly-signed handshake is rejected.
-RSpec.describe Kiosk::Server::AuthChallengeStores, 'the in-process default (Kiosk::Server::AuthChallengeStore)' do
-  let(:live) { Time.now.to_i + 300 }
-
-  it 'does NOT carry a challenge across independent instances' do
-    worker_a = Kiosk::Server::AuthChallengeStore.new
-    worker_b = Kiosk::Server::AuthChallengeStore.new
-
-    worker_a.put('PEM-A', 'nonce-1', live)
-    expect(worker_b.take('PEM-A', 'nonce-1')).to be(false) # fail-CLOSED, unlike pow_spent
-    expect(worker_a.take('PEM-A', 'nonce-1')).to be(true)
-  end
-end
-
 # Run against a real Postgres: a throwaway schema built from the shipped
 # `auth_challenge_sql`, dropped afterwards. Connection comes from PG* env
 # vars (CI's service) or the local default socket; no reachable server →

@@ -285,7 +285,8 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     # spent-id set that makes a proof of work single-use.
     {
       pow_spent_store: Kiosk::Server::PowSpentStores::ActiveRecord,
-      auth_challenge_store: Kiosk::Server::AuthChallengeStore,
+      auth_challenge_store: Kiosk::Server::AuthChallengeStores::ActiveRecord,
+      event_store: Kiosk::Server::EventStores::ActiveRecord,
       revocation_store: Kiosk::Server::RevocationStores::ActiveRecord,
       device_authorization_store: Kiosk::Server::DeviceAuthorizationStores::ActiveRecord
     }.each do |slot, klass|
@@ -311,7 +312,8 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       # passes on an empty set and says nothing. Fail instead.
       it 'finds the store-allocating lazy defaults at all' do
         expect(allocating.keys).to include(
-          'pow_spent_store', 'auth_challenge_store', 'revocation_store', 'device_authorization_store'
+          'pow_spent_store', 'auth_challenge_store', 'revocation_store', 'device_authorization_store',
+          'event_store'
         )
       end
 

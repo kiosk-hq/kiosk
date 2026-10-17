@@ -24,7 +24,7 @@ module PaymentSetupSpecHelpers
   end
 
   def store
-    @store ||= Kiosk::Server::EventStore.new
+    @store ||= MemoryEventStore.new
   end
 
   def configure(provider)

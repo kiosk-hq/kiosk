@@ -63,7 +63,5 @@ Kiosk.configure do |c|
   c.registration_pow_count  = 1
   c.registration_pow_params = EQUIHASH_PARAMS
 
-  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
-
   c.unlock_signing_key = OpenSSL::PKey.read(ENV.fetch('KIOSK_UNLOCK_SIGNING_KEY_PEM'))
 end

@@ -2,14 +2,9 @@
 
 module Kiosk
   module Server
-    # Shared challenge store for a multi-process origin (§15.2):
-    #
-    #   Kiosk.configure do |c|
-    #     c.auth_challenge_store = Kiosk::Server::AuthChallengeStores::ActiveRecord.new
-    #   end
+    # The challenge store, shared by every process on the database (§15.2).
     module AuthChallengeStores
-      # Backed by `<schema>.auth_challenges` ({SchemaDefinitions.auth_challenge_sql}),
-      # which the operator adds when scaling past one process.
+      # The default: the `<schema>.auth_challenges` table ({SchemaDefinitions.auth_challenge_sql}).
       class ActiveRecord
         # Seconds between expired-row sweeps; a sweep bounds growth, not correctness.
         DEFAULT_PRUNE_INTERVAL = 60

@@ -694,6 +694,9 @@ COPIES = {
   'db/migrate/20261017000001_create_kiosk_revocations.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk.revocations, the token revocation watermarks.'
   },
+  'db/migrate/20261017100000_create_kiosk_auth_challenges.rb' => {
+    rule: :identical, why: "kiosk:install — kiosk.auth_challenges, each public key's outstanding challenge."
+  },
   'db/migrate/20261017000004_drop_kiosk_reservations.rb' => {
     rule: :identical, why: 'Drops kiosk.reservations, which the engine no longer creates.'
   },
@@ -754,7 +757,8 @@ GENERATOR_TEMPLATES = {
   'create_kiosk_kyc_attributes.rb.tt' => { emits: 'create_kiosk_kyc_attributes.rb' },
   'create_kiosk_events.rb.tt' => { emits: 'create_kiosk_events.rb' },
   'create_kiosk_pow_spent.rb.tt' => { emits: 'create_kiosk_pow_spent.rb' },
-  'create_kiosk_revocations.rb.tt' => { emits: 'create_kiosk_revocations.rb' }
+  'create_kiosk_revocations.rb.tt' => { emits: 'create_kiosk_revocations.rb' },
+  'create_kiosk_auth_challenges.rb.tt' => { emits: 'create_kiosk_auth_challenges.rb' }
 }.freeze
 
 # Hand-written migrations shipped by several demos at their own timestamps, by

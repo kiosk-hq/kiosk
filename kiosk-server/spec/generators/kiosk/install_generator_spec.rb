@@ -197,9 +197,9 @@ end
 RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations' do
   include_context 'install generator spec: host app'
 
-  it 'creates exactly the eight canonical migrations' do
+  it 'creates exactly the nine canonical migrations' do
     invoke!
-    expect(migrations.size).to eq(8)
+    expect(migrations.size).to eq(9)
     basenames = migrations.map { |p| File.basename(p) }
     expect(basenames).to include(
       a_string_ending_with('_create_kiosk_schema.rb'),
@@ -209,7 +209,8 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations' do
       a_string_ending_with('_create_kiosk_kyc_attributes.rb'),
       a_string_ending_with('_create_kiosk_events.rb'),
       a_string_ending_with('_create_kiosk_pow_spent.rb'),
-      a_string_ending_with('_create_kiosk_revocations.rb')
+      a_string_ending_with('_create_kiosk_revocations.rb'),
+      a_string_ending_with('_create_kiosk_auth_challenges.rb')
     )
   end
 end
@@ -230,11 +231,28 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations shape and order'
     expect(basenames).not_to include(a_string_starting_with('rebuild_'), a_string_starting_with('add_'))
   end
 
-  it 'orders the migration timestamps in 001 → 009 sequence' do
+  it 'orders the migration timestamps in 001 → 010 sequence' do
     invoke!
     timestamps = migrations.map { |p| File.basename(p).split('_').first.to_i }
     expect(timestamps).to eq(timestamps.sort)
-    expect(timestamps.uniq.size).to eq(8) # strictly ascending, no collisions
+    expect(timestamps.uniq.size).to eq(9) # strictly ascending, no collisions
+  end
+end
+
+RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 010 create_kiosk_auth_challenges' do
+  include_context 'install generator spec: host app'
+
+  let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_auth_challenges.rb') } }
+
+  it 'calls SchemaDefinitions.auth_challenge_sql with the configured schema' do
+    invoke!(%w[--schema=ksk])
+    expect(File.read(file)).to include('Kiosk::Server::SchemaDefinitions.auth_challenge_sql')
+    expect(File.read(file)).to include(%(schema: "ksk"))
+  end
+
+  it 'drops the table on down' do
+    invoke!(%w[--schema=ksk])
+    expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".auth_challenges))
   end
 end
 

@@ -45,6 +45,4 @@ Kiosk.configure do |c|
   c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
   c.registration_pow_count  = 1
   c.registration_pow_params = EQUIHASH_PARAMS
-
-  c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
 end

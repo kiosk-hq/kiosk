@@ -3,8 +3,7 @@
 module Kiosk
   module Server
     module EventStores
-      # The deployed event store: the `<schema>.events` table, shared by every process on the database.
-      #   c.event_store = Kiosk::Server::EventStores::ActiveRecord.new
+      # The default event store: the `<schema>.events` table, shared by every process on the database.
       class ActiveRecord
         # The published retention floor: at least this much history per identity.
         DEFAULT_RETENTION_HOURS = 24

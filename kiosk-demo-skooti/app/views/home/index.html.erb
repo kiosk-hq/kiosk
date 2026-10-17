@@ -7,7 +7,7 @@
   </div>
   <header>
     <div class="logo">sko<span>oti</span></div>
-    <nav class="tagline">micromobility · Amsterdam</nav>
+    <nav class="tagline">scooters &amp; motorcycles · Amsterdam</nav>
   </header>
 
   <div class="wrap">
@@ -19,10 +19,10 @@
         <h2>Rent a scooter — your assistant pays, you just walk up and tap</h2>
         <p>Tell your AI assistant:</p>
         <p class="say">“Rent a scooter from skooti.demo.kiosk.tech and give me the unlock link.”</p>
-        <p>It discovers the fleet, registers itself, reserves a licence-free scooter and pays — no account of yours, no sign-in, no app to install. What it hands back is a link to a page showing a short-lived signed token that opens that scooter and nothing else, with its QR. The last step is yours, because it is physical: tap the scooter's NFC tag or scan its QR, and the App Clip writes the token to the lock over Bluetooth. A combustion motorcycle is available too — but it's <strong>KYC-gated</strong>, so the assistant must clear identity checks first.</p>
+        <p>It discovers the fleet, registers itself, reserves a licence-free scooter and pays — no account of yours, no sign-in, no app to install. What it hands back is a link to a page showing a short-lived signed token that opens that scooter and nothing else, with its QR. The last step is yours, because it is physical: tap the scooter's NFC tag or scan its QR, and the App Clip writes the token to the lock over Bluetooth. A petrol motorcycle is available too — but it needs <strong>a licence check</strong>: you prove you are over 18 and hold a motorcycle licence before the assistant can rent it.</p>
         <p>When it hands you the Stripe checkout link, save the test card:</p>
         <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
-        <p class="note">Payment is <strong>Stripe in test mode</strong> — no real charge, no real card touched. The lock verifies the <strong>offline Ed25519 rental token</strong> by itself — <strong>no server round-trip</strong>; here it is a software simulation of the shipped firmware.</p>
+        <p class="note">Payment is <strong>Stripe in test mode</strong> — no real charge, no real card touched. The lock checks the <strong>signed unlock token</strong> by itself, <strong>with no internet connection</strong>. Here the lock is a software copy of the real firmware.</p>
       </div>
     </section>
 
@@ -30,10 +30,10 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>skooti</strong> is a micromobility rental demo operator. It is the <strong>KYC + offline-capability</strong> reference: a licence-free scooter anyone can take, versus a KYC-gated motorcycle that requires identity clearance; and an <strong>offline Ed25519 rental token</strong> the simulated lock verifies with no server round-trip. Payment is Stripe in test mode.</p>
+        <p><strong>skooti</strong> is a demo scooter and motorcycle rental shop. It shows two things. First, a <strong>licence check</strong>: anyone can take a scooter, but a motorcycle needs proof of age and licence. Second, an <strong>unlock token the lock checks offline</strong>: the simulated lock needs no connection to the server. Payment is Stripe in test mode.</p>
         <div class="chips">
-          <span class="chip">🛵 KYC-gated rental</span>
-          <span class="chip">Offline Ed25519 unlock token</span>
+          <span class="chip">🛵 Licence-checked rental</span>
+          <span class="chip">Offline unlock token</span>
           <span class="chip">💳 Stripe test mode</span>
         </div>
         <div class="links">
@@ -48,7 +48,7 @@
       <div class="sec-k">Live activity</div>
       <div class="stats">
         <div class="stat"><div class="n"><%= @scooters_in_fleet %></div><div class="l">Scooters in fleet</div></div>
-        <div class="stat"><div class="n"><%= @motorcycles_in_fleet %></div><div class="l">Motorcycles<span class="kyc">KYC-gated</span></div></div>
+        <div class="stat"><div class="n"><%= @motorcycles_in_fleet %></div><div class="l">Motorcycles<span class="kyc">licence check</span></div></div>
         <div class="stat"><div class="n"><%= @vehicles_reserved %></div><div class="l">Vehicles reserved</div></div>
         <div class="stat"><div class="n"><%= @rides_started %></div><div class="l">Rides started</div></div>
       </div>
@@ -63,7 +63,7 @@
       <div class="store-body">
         <div class="hero">
           <h1>Scooters &amp; motorcycles, unlocked on demand.</h1>
-          <p>Licence-free scooters across Amsterdam — plus KYC-gated motorcycles for longer hauls.</p>
+          <p>Licence-free scooters across Amsterdam — plus motorcycles for longer trips, for licensed riders.</p>
         </div>
       </div>
     </div>

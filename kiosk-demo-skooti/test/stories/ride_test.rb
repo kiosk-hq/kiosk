@@ -56,7 +56,7 @@ class RideStory < StoryTest
     refused = rider.rides(scooter)
     assert refused.refused?(:forbidden), refused
     assert_includes refused["detail"], "pay for it first"
-    assert_includes refused["detail"], "/pay"
+    assert_includes refused["detail"], "call `pay`"
   end
 
   test "a rider's reservations list shows what they reserved" do

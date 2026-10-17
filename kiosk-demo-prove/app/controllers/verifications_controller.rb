@@ -8,6 +8,8 @@ require 'securerandom'
 # callback. No CSRF token: the intake authenticates with the secret, the page
 # with the unguessable request_id.
 class VerificationsController < ActionController::Base
+  include OperatorIntake
+
   protect_from_forgery with: :null_session
 
   REQUEST_TTL = 15 * 60
@@ -16,50 +18,49 @@ class VerificationsController < ActionController::Base
     operator = authenticate_operator!
     return if performed?
 
-    body = intake_body
-    requested_claims = Array(body['requested_claims']).map(&:to_s)
-    callback_url     = body['callback_url'].to_s
-    subject_handle   = body['subject_handle'].to_s
-    # The audience is the registered operator's, never the body's.
-    audience = operator[:audience].to_s
-    audience = operator_id_param if audience.empty?
+    error, status = intake_refusal(operator)
+    return render_json({ error: error }, status) if error
 
-    return render_json({ error: 'missing field: subject_handle' }, :bad_request) if subject_handle.empty?
-    unless ClaimCatalog.all_known?(requested_claims)
-      return render_json(
-        { error: "unknown or empty requested_claims; broker can answer: #{ClaimCatalog::ENTRIES.keys.inspect}" },
-        :bad_request
-      )
-    end
-    # The broker posts only to the operator's registered host.
-    unless OperatorRegistry.callback_allowed?(operator, callback_url)
-      return render_json(
-        { error: 'callback_url host is not allow-listed for this operator' },
-        :forbidden
-      )
-    end
-    declared_audience = body['audience'].to_s
-    unless declared_audience.empty? || declared_audience == audience
-      return render_json(
-        { error: "audience does not match this operator's registration" },
-        :forbidden
-      )
-    end
+    open_request!(operator)
+  end
 
+  def show
+    @request = find_request
+    @entries = request_entries
+    render :show
+  end
+
+  def decide
+    @request = find_request
+    return render_unconfirmable unless @request&.confirmable?
+
+    case params[:decision].to_s
+    when 'approve' then claim!(@request, 'confirmed') ? approve!(@request) : lost_race_response
+    when 'decline' then claim!(@request, 'declined') ? decline! : lost_race_response
+    else render plain: 'decision must be approve or decline', status: :bad_request
+    end
+  end
+
+  # The public key operators verify claims with.
+  def public_key
+    render plain: ProveKey.public_key, content_type: 'application/x-pem-file'
+  end
+
+  private
+
+  def open_request!(operator)
     request_id = SecureRandom.urlsafe_base64(32) # 256 bits
     nonce      = SecureRandom.urlsafe_base64(32)
 
     ProveRequest.create!(
-      request_id: request_id,
-      operator_id: operator_id_param,
-      callback_url: callback_url,
-      requested_claims: requested_claims,
-      subject_handle: subject_handle,
-      nonce: nonce,
-      audience: (audience.empty? ? nil : audience),
-      expires_at: Time.current + REQUEST_TTL
+      request_id: request_id, operator_id: operator_id_param, callback_url: callback_url,
+      requested_claims: requested_claims, subject_handle: subject_handle, nonce: nonce,
+      audience: audience_for(operator).presence, expires_at: Time.current + REQUEST_TTL
     )
+    render_intake_answer(request_id, nonce)
+  end
 
+  def render_intake_answer(request_id, nonce)
     render_json(
       {
         request_id: request_id,
@@ -73,68 +74,29 @@ class VerificationsController < ActionController::Base
     )
   end
 
-  def show
-    @request  = find_request
-    @entries  = @request ? ClaimCatalog.entries_for(@request.requested_claims) : []
-    render :show
+  def audience_for(operator)
+    # The audience is the registered operator's, never the body's.
+    audience = operator[:audience].to_s
+    audience.empty? ? operator_id_param : audience
   end
-
-  def decide
-    @request = find_request
-
-    if @request.nil? || !@request.confirmable?
-      @entries = @request ? ClaimCatalog.entries_for(@request.requested_claims) : []
-      return render(:show, status: :unprocessable_entity)
-    end
-
-    case params[:decision].to_s
-    when 'approve'
-      if claim!(@request, 'confirmed')
-        approve!(@request)
-      else
-        lost_race_response
-      end
-    when 'decline'
-      if claim!(@request, 'declined')
-        @decision = :declined
-        render :decided
-      else
-        lost_race_response
-      end
-    else
-      render plain: 'decision must be approve or decline', status: :bad_request
-    end
-  end
-
-  # The public key operators verify claims with.
-  def public_key
-    render plain: ProveKey.public_key, content_type: 'application/x-pem-file'
-  end
-
-  private
 
   def approve!(prove_request)
     attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
-
-    kyc_jws = ProveKey.mint(
-      subject: prove_request.subject_handle,
-      operator: prove_request.operator_id,
-      audience: prove_request.audience,
-      attributes: attributes,
-      request_id: prove_request.request_id,
-      nonce: prove_request.nonce
-    )
-
-    delivery_status = CallbackPoster.deliver(
-      callback_url: prove_request.callback_url,
-      request_id: prove_request.request_id,
-      kyc_jws: kyc_jws,
-      nonce: prove_request.nonce
-    )
+    delivery_status = deliver_claim(prove_request, ProveKey.mint(prove_request, attributes))
 
     @decision   = :approved
     @delivered  = delivery_status.is_a?(Integer) && (200..299).cover?(delivery_status)
     @attributes = attributes
+    render :decided
+  end
+
+  def deliver_claim(prove_request, kyc_jws)
+    CallbackPoster.deliver(callback_url: prove_request.callback_url, request_id: prove_request.request_id,
+                           kyc_jws: kyc_jws, nonce: prove_request.nonce)
+  end
+
+  def decline!
+    @decision = :declined
     render :decided
   end
 
@@ -149,49 +111,21 @@ class VerificationsController < ActionController::Base
 
   def lost_race_response
     @request.reload
-    @entries = ClaimCatalog.entries_for(@request.requested_claims)
+    render_unconfirmable
+  end
+
+  def render_unconfirmable
+    @entries = request_entries
     render(:show, status: :unprocessable_entity)
   end
+
+  def request_entries = @request ? ClaimCatalog.entries_for(@request.requested_claims) : []
 
   def find_request
     token = params[:request].to_s
     return nil if token.empty?
 
     ProveRequest.find_by(request_id: token)
-  end
-
-  def authenticate_operator!
-    operator = OperatorRegistry.authenticate(operator_id: operator_id_param, secret: bearer_token)
-    if operator.nil?
-      render_json({ error: 'unknown operator or bad credential' }, :unauthorized)
-      return nil
-    end
-    operator
-  end
-
-  def operator_id_param
-    intake_body['operator_id'].to_s
-  end
-
-  def bearer_token
-    auth = request.headers['Authorization'].to_s
-    auth.start_with?('Bearer ') ? auth.delete_prefix('Bearer ') : ''
-  end
-
-  def intake_body
-    @intake_body ||= begin
-      raw = request.raw_post
-      if raw.nil? || raw.empty?
-        {}
-      else
-        begin
-          JSON.parse(raw)
-        rescue StandardError
-          {}
-        end
-      end
-    end
-    @intake_body.is_a?(Hash) ? @intake_body : {}
   end
 
   def verification_url_for(request_id)

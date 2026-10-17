@@ -8,6 +8,7 @@
 
 require 'rack/mock'
 require 'json'
+require_relative '../../support/b1_handler_classes'
 
 # A NAMED handler class — the reload test needs one, because a named class is
 # held in the registry by name and re-resolved on every call, while an anonymous
@@ -22,10 +23,7 @@ class SpecReloadableController < ApplicationController
   def reloadable = render(json: [{ 'sku' => 'ORIGINAL' }])
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  let(:identity)   { build_identity(user_id: 'u-1', agent_id: 'a-1') }
-  let(:connection) { FakeConnection.new }
-
+module HandlerDispatchSpec
   # The wire NAME is its own argument — a path segment on the wire, never
   # a body field — so it is lifted out of `args` here exactly as
   # {Kiosk::Server::VerbController} lifts it out of `params[:kiosk_verb]`.
@@ -38,6 +36,51 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
     end
   end
 
+  def write_shelf_views(views)
+    FileUtils.mkdir_p(File.join(views, 'spec_templated'))
+    File.write(File.join(views, 'spec_templated', 'shelf.json.erb'),
+               '[{"sku": "<%= @sku %>"}]')
+    File.write(File.join(views, 'spec_templated', 'shelf.html.erb'), '<p>not the wire</p>')
+    File.write(File.join(views, 'spec_templated', 'shelf_page.json.erb'),
+               '[{"sku": "<%= @sku %>"}]')
+  end
+end
+
+RSpec.shared_context 'handler dispatch spec: executor' do
+  include B1HandlerClasses
+  include HandlerDispatchSpec
+
+  let(:identity)   { build_identity(user_id: 'u-1', agent_id: 'a-1') }
+  let(:connection) { FakeConnection.new }
+end
+
+RSpec.shared_context 'handler dispatch spec: templated handler' do
+  around do |example|
+    Dir.mktmpdir do |views|
+      write_shelf_views(views)
+      @views = views
+      example.run
+    end
+  end
+
+  before do
+    views = @views
+    klass = stub_handler('SpecTemplatedController', :query, "Lists the shop's stock.") do
+      prepend_view_path views
+      def shelf = @sku = 'MILK-1L'
+    end
+    declare_verb(klass, :query, "Lists the shop's stock one page at a time.")
+    klass.define_method(:shelf_page) do
+      @sku = 'OATS-500G'
+      render_kiosk_page(next_cursor: '1', total: 2)
+    end
+    klass.kiosk_register!
+  end
+end
+
+RSpec.describe Kiosk::Server::HandlerDispatch do
+  include_context 'handler dispatch spec: executor'
+
   describe 'reload safety' do
     before { SpecReloadableController.kiosk_register! }
 
@@ -47,16 +90,9 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       expect(execute(:query, { name: 'reloadable' }).payload).to eq([{ 'sku' => 'ORIGINAL' }])
 
       # What Zeitwerk does on a code reload: same constant, new class object.
-      reloaded = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :query
-        description 'The edited handler.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecReloadableController', :query, 'The edited handler.') do
         def reloadable = render(json: [{ 'sku' => 'EDITED' }])
       end
-      stub_const('SpecReloadableController', reloaded)
 
       expect(execute(:query, { name: 'reloadable' }).payload).to eq([{ 'sku' => 'EDITED' }])
     end
@@ -68,19 +104,16 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
         .to raise_error(Kiosk::Server::Errors::VerbNotFound, /is not loaded/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::HandlerDispatch do
+  include_context 'handler dispatch spec: executor'
 
   describe 'a handler that does not answer with JSON' do
     it 'fails loudly rather than putting HTML on the wire' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :query
-        description 'Renders HTML, which the wire cannot carry.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecHtmlController', :query, 'Renders HTML, which the wire cannot carry.') do
         def html_query = render(html: '<p>nope</p>'.html_safe)
       end
-      stub_const('SpecHtmlController', klass)
 
       expect { execute(:query, { name: 'html_query' }) }
         .to raise_error(Kiosk::Server::Errors::ActionFailed, /non-JSON body/)
@@ -90,56 +123,26 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       # 402 is three different wire codes (pow_required, payment_setup_required,
       # payment_failed); the seam refuses to pick one. A handler that means a
       # specific 402 raises the Errors class.
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description 'Renders a bare 402.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
-        def bare_402 = render(json: { error: 'pay up' }, status: :payment_required)
+      stub_handler('SpecBare402Controller', :action, 'Renders a bare 402.') do
+        def bare_payment_required = render(json: { error: 'pay up' }, status: :payment_required)
       end
-      stub_const('SpecBare402Controller', klass)
 
-      expect { execute(:run, { name: 'bare_402' }) }
+      expect { execute(:run, { name: 'bare_payment_required' }) }
         .to raise_error(Kiosk::Server::Errors::ActionFailed, /pay up/)
     end
+  end
+end
 
-    it 'falls back to the status when a rendered code does not belong to it' do
-      # pow_required is a 402 code; rendered on a 403 it is a handler bug, and
-      # the seam answers with what the status alone says rather than putting a
-      # mislabelled code on the wire.
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
+RSpec.describe Kiosk::Server::HandlerDispatch do
+  include_context 'handler dispatch spec: executor'
 
-        kind :query
-        description 'Renders a 402 code on a 403 status.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
-        def mislabelled
-          render json: { ok: false, error: { code: 'pow_required', message: 'nope' } },
-                 status: :forbidden
-        end
-      end
-      stub_const('SpecMislabelledController', klass)
-
-      expect { execute(:query, { name: 'mislabelled' }) }
-        .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('forbidden') }
-    end
-
+  describe 'a handler that does not answer with JSON' do
     it "never mistakes an operator's own code field for the wire vocabulary" do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description "Answers a domain refusal with the app's own error code."
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecSoldOutController', :action, "Answers a domain refusal with the app's own error code.") do
         def sold_out
           render json: { error: { code: 'out_of_stock', message: 'sold out' } }, status: :conflict
         end
       end
-      stub_const('SpecSoldOutController', klass)
 
       expect { execute(:run, { name: 'sold_out' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
@@ -147,63 +150,44 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
           expect(e.message).to eq('sold out')
         }
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::HandlerDispatch do
+  include_context 'handler dispatch spec: executor'
+
+  describe 'a handler that does not answer with JSON' do
+    it 'falls back to the status when a rendered code does not belong to it' do
+      # pow_required is a 402 code; rendered on a 403 it is a handler bug, and
+      # the seam answers with what the status alone says rather than putting a
+      # mislabelled code on the wire.
+      stub_handler('SpecMislabelledController', :query, 'Renders a 402 code on a 403 status.') do
+        def mislabelled
+          render json: { ok: false, error: { code: 'pow_required', message: 'nope' } },
+                 status: :forbidden
+        end
+      end
+
+      expect { execute(:query, { name: 'mislabelled' }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('forbidden') }
+    end
 
     it 'rejects a page whose rows are not an array' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :query
-        description 'Pages an object instead of rows.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecBadPageController', :query, 'Pages an object instead of rows.') do
         def bad_page = render_kiosk_page({ items: [] })
       end
-      stub_const('SpecBadPageController', klass)
 
       expect { execute(:query, { name: 'bad_page' }) }
         .to raise_error(Kiosk::Server::Errors::ActionFailed, /not an array of rows/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::HandlerDispatch do
+  include_context 'handler dispatch spec: executor'
 
   describe 'a handler answering through its template' do
-    around do |example|
-      Dir.mktmpdir do |views|
-        FileUtils.mkdir_p(File.join(views, 'spec_templated'))
-        File.write(File.join(views, 'spec_templated', 'shelf.json.erb'),
-                   '[{"sku": "<%= @sku %>"}]')
-        File.write(File.join(views, 'spec_templated', 'shelf.html.erb'), '<p>not the wire</p>')
-        File.write(File.join(views, 'spec_templated', 'shelf_page.json.erb'),
-                   '[{"sku": "<%= @sku %>"}]')
-        @views = views
-        example.run
-      end
-    end
-
-    before do
-      views = @views
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        prepend_view_path views
-
-        kind :query
-        description "Lists the shop's stock."
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
-        def shelf = @sku = 'MILK-1L'
-
-        kind :query
-        description "Lists the shop's stock one page at a time."
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
-        def shelf_page
-          @sku = 'OATS-500G'
-          render_kiosk_page(next_cursor: '1', total: 2)
-        end
-      end
-      stub_const('SpecTemplatedController', klass)
-      klass.kiosk_register!
-    end
+    include_context 'handler dispatch spec: templated handler'
 
     it 'leaves ActionController loading to the host, so a view library can set it up first' do
       script = 'require "kiosk/server"; exit(ActionController.autoload?(:API) && ActionController.autoload?(:Base) ? 0 : 1)'
@@ -225,19 +209,16 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
         .to eq([[{ 'sku' => 'OATS-500G' }], '1', 2])
     end
   end
+end
+
+RSpec.describe Kiosk::Server::HandlerDispatch do
+  include_context 'handler dispatch spec: executor'
 
   describe 'outside a wire request' do
     it 'runs with no identity and no caller headers (the RLS journey case)' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :query
-        description 'Reports what it can see.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecBareController', :query, 'Reports what it can see.') do
         def bare = render(json: { identity: kiosk_identity, ua: request.headers['User-Agent'] })
       end
-      stub_const('SpecBareController', klass)
 
       result = Kiosk::Server::Queries.fetch('bare').call({})
 
@@ -247,16 +228,9 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
 
   describe 'an empty answer' do
     it 'carries a bodiless 200 through as a nil value' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description 'Acknowledges and returns nothing.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecAckController', :action, 'Acknowledges and returns nothing.') do
         def ack = head(:ok)
       end
-      stub_const('SpecAckController', klass)
 
       expect(execute(:run, { name: 'ack' }).payload).to be_nil
     end

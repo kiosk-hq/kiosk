@@ -9,7 +9,7 @@ module Rental
   module_function
 
   def own_reservation!(reservation_id)
-    Reservation.own.reserved.find_by(id: reservation_id) or refuse "reservation not found or not yours"
+    Reservation.own.reserved.find_by(id: reservation_id) or refuse 'reservation not found or not yours'
   end
 
   def require_paid!(reservation)
@@ -17,9 +17,9 @@ module Rental
 
     if reservation.paying?
       refuse "this reservation's payment is in progress — re-read my_reservations and start the " \
-             "rental once it reads `paid`; do not pay again"
+             'rental once it reads `paid`; do not pay again'
     end
-    refuse "this reservation is not paid — pay for it first (call `pay` with the cart " \
+    refuse 'this reservation is not paid — pay for it first (call `pay` with the cart ' \
            "reserve's pay_hint describes), then call this again"
   end
 
@@ -31,8 +31,8 @@ module Rental
 
     Unlock.new(scooter_code: scooter.code,
                rental_token: token,
-               unlock_url:   UnlockLink.url(origin: Kiosk.current_issuer, scooter_code: scooter.code, rental_token: token),
-               exp:          RentalTokenIssuer.verify(token: token, now: now).fetch(:exp))
+               unlock_url: UnlockLink.url(origin: Kiosk.current_issuer, scooter_code: scooter.code, rental_token: token),
+               exp: RentalTokenIssuer.verify(token: token, now: now).fetch(:exp))
   end
 
   def refuse(message)

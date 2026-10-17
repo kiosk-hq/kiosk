@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require "openssl"
-require "base64"
+require 'openssl'
+require 'base64'
 
 # Software simulator of the ESP32 BLE scooter lock firmware: offline Ed25519 verify of
 # the rental token, byte for byte the grammar of RENTAL_TOKEN.md and firmware/verify.c,
 # with an in-memory jti store that, like the lock, is empty again after a restart.
 
-LOCK_SIM_CONTEXT_TAG = "kiosk-rental-v1"
+LOCK_SIM_CONTEXT_TAG = 'kiosk-rental-v1'
 
 # Limits are the firmware's own (firmware/verify.c).
 LOCK_SIM_TOKEN_MAX_BYTES  = 512
@@ -17,7 +17,7 @@ LOCK_SIM_SIG_B64_FORMAT   = /\A[A-Za-z0-9\-_]+\z/
 # The lock reads a NUL-terminated C string, so a NUL ends the token it sees.
 LOCK_SIM_NUL_BYTE         = "\u0000".b
 LOCK_SIM_FIELD_COUNT      = 6
-LOCK_SIM_DELIMITER        = "|"
+LOCK_SIM_DELIMITER        = '|'
 LOCK_SIM_TIMESTAMP_FORMAT = /\A[0-9]{1,20}\z/
 LOCK_SIM_TIMESTAMP_MAX    = (1 << 64) - 1
 LOCK_SIM_JTI_FORMAT       = /\A[0-9a-f]{32}\z/
@@ -33,13 +33,13 @@ class LockSim
                when OpenSSL::PKey::PKey
                  skooti_public_key
                when String
-                 raw = skooti_public_key.length == 32 ? skooti_public_key : [skooti_public_key].pack("H*")
+                 raw = skooti_public_key.length == 32 ? skooti_public_key : [skooti_public_key].pack('H*')
                  # Ed25519 SubjectPublicKeyInfo DER header.
                  header = "\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00"
                  der    = header + raw
                  OpenSSL::PKey.read(der)
                else
-                 raise ArgumentError, "skooti_public_key must be an OpenSSL::PKey::PKey or a 32-byte String"
+                 raise ArgumentError, 'skooti_public_key must be an OpenSSL::PKey::PKey or a 32-byte String'
                end
 
     # jti => exp
@@ -58,7 +58,7 @@ class LockSim
 
     return false if token.b.include?(LOCK_SIM_NUL_BYTE)
 
-    dot_idx = token.rindex(".")
+    dot_idx = token.rindex('.')
     return false if dot_idx.nil?
 
     message = token[0...dot_idx]
@@ -97,9 +97,7 @@ class LockSim
 
     @consumed_jtis.delete_if { |_j, stored_exp| stored_exp < now }
 
-    if @consumed_jtis.key?(jti) && @consumed_jtis[jti] >= now
-      return false
-    end
+    return false if @consumed_jtis.key?(jti) && @consumed_jtis[jti] >= now
 
     @consumed_jtis[jti] = exp
     true

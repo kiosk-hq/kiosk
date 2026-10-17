@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "openssl"
-require "base64"
-require "securerandom"
+require 'openssl'
+require 'base64'
+require 'securerandom'
 
 # Signs the offline rental token a scooter lock verifies with no round trip,
 # and verifies it the way the lock does. The grammar is RENTAL_TOKEN.md;
@@ -12,7 +12,7 @@ require "securerandom"
 #   kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url Ed25519 signature>
 module RentalTokenIssuer
   # Field 0: the lock accepts nothing else, so the key signs nothing else.
-  CONTEXT_TAG = "kiosk-rental-v1"
+  CONTEXT_TAG = 'kiosk-rental-v1'
 
   # The lock's limits (firmware/verify.h).
   TOKEN_MAX_BYTES = 512
@@ -26,7 +26,7 @@ module RentalTokenIssuer
   NUL_BYTE = "\u0000".b
 
   FIELD_COUNT = 6
-  DELIMITER   = "|"
+  DELIMITER   = '|'
 
   # What the lock's parse_uint64 accepts; Integer() would also take signs and underscores.
   TIMESTAMP_FORMAT = /\A[0-9]{1,20}\z/
@@ -43,14 +43,10 @@ module RentalTokenIssuer
     # Refuses a field outside FIELD_CHARSET rather than sign a token every reader rejects.
     def issue(scooter_code:, reservation_id:, now:)
       key = signing_key
-      raise ArgumentError, "unlock_signing_key is not configured" if key.nil?
+      raise ArgumentError, 'unlock_signing_key is not configured' if key.nil?
 
-      unless scooter_code.to_s.b.match?(FIELD_CHARSET)
-        raise ArgumentError, "scooter_code must be 1+ characters of A-Za-z0-9._~-"
-      end
-      unless reservation_id.to_s.b.match?(FIELD_CHARSET)
-        raise ArgumentError, "reservation_id must be 1+ characters of A-Za-z0-9._~-"
-      end
+      raise ArgumentError, 'scooter_code must be 1+ characters of A-Za-z0-9._~-' unless scooter_code.to_s.b.match?(FIELD_CHARSET)
+      raise ArgumentError, 'reservation_id must be 1+ characters of A-Za-z0-9._~-' unless reservation_id.to_s.b.match?(FIELD_CHARSET)
 
       iat     = now
       exp     = iat + TTL
@@ -70,7 +66,7 @@ module RentalTokenIssuer
       return nil if token.bytesize > TOKEN_MAX_BYTES
       return nil if token.b.include?(NUL_BYTE)
 
-      dot_idx = token.rindex(".")
+      dot_idx = token.rindex('.')
       return nil if dot_idx.nil?
 
       message = token[0...dot_idx]
@@ -109,11 +105,11 @@ module RentalTokenIssuer
       return nil unless exp > now
 
       {
-        scooter_code:   scooter_code.force_encoding(Encoding::UTF_8),
+        scooter_code: scooter_code.force_encoding(Encoding::UTF_8),
         reservation_id: reservation_id.force_encoding(Encoding::UTF_8),
-        iat:            iat,
-        exp:            exp,
-        jti:            jti.force_encoding(Encoding::UTF_8),
+        iat: iat,
+        exp: exp,
+        jti: jti.force_encoding(Encoding::UTF_8)
       }
     rescue ArgumentError, OpenSSL::PKey::PKeyError
       nil

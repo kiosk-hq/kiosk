@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "base64"
+require 'base64'
 
 # token_vectors.rb — the rental-token conformance vectors, shared by every
 # reader of the token.
@@ -114,27 +114,27 @@ module SkootiTokenVectors
 
   # The code the C helper is provisioned with. It is field 1 of every vector
   # except the three the header names, which put something else there on purpose.
-  SCOOTER_CODE = "SK-001"
+  SCOOTER_CODE = 'SK-001'
 
   # A well-formed jti: 32 lowercase hex, exactly what SecureRandom.hex(16) mints.
-  JTI = "deadbeef00112233445566778899aabb"
+  JTI = 'deadbeef00112233445566778899aabb'
 
   # Inside the window (NOW < EXP) and behind it.
-  EXP      = "1750001900"
-  EXP_PAST = "1750001700"
-  IAT      = "1750001000"
+  EXP      = '1750001900'
+  EXP_PAST = '1750001700'
+  IAT      = '1750001000'
 
   # The largest value parse_uint64 and TIMESTAMP_MAX both admit, and it is far
   # in the future, so it is an ACCEPT: 20 digits is the boundary of the field's
   # width, not of the window.
-  UINT64_MAX_S = "18446744073709551615"
+  UINT64_MAX_S = '18446744073709551615'
 
   # One NUL byte, spelled as an escape so it is visible in a diff.
   NUL = "\u0000"
 
   # The base64url alphabet, in value order — RFC 4648 §5. Used to respell the
   # final character of a signature.
-  B64URL = [*"A".."Z", *"a".."z", *"0".."9", "-", "_"].freeze
+  B64URL = [*'A'..'Z', *'a'..'z', *'0'..'9', '-', '_'].freeze
 
   # L, the order of Ed25519's prime-order subgroup. RFC 8032 5.1.7 decodes the
   # signature's second half as a scalar S in 0 <= S < L and calls a signature
@@ -142,7 +142,7 @@ module SkootiTokenVectors
   # same verification equation S does — a SECOND 64-byte signature over the
   # same message under the same key, which is the property the two respellings
   # below exercise.
-  ORDER = 2**252 + 27_742_317_777_372_353_535_851_937_790_883_648_493
+  ORDER = (2**252) + 27_742_317_777_372_353_535_851_937_790_883_648_493
 
   # Rebuild a wire signature with its scalar half replaced by whatever the
   # block returns. The R half is carried through untouched, so what changes is
@@ -158,21 +158,17 @@ module SkootiTokenVectors
   # nothing.
   def self.respell_scalar(signature_b64)
     bytes = Base64.urlsafe_decode64(signature_b64)
-    if bytes.bytesize != 64
-      abort "  VECTOR BROKEN — a wire signature decoded to #{bytes.bytesize} bytes, not 64"
-    end
+    abort "  VECTOR BROKEN — a wire signature decoded to #{bytes.bytesize} bytes, not 64" if bytes.bytesize != 64
 
     scalar = bytes[32, 32].bytes.each_with_index.sum { |b, i| b << (8 * i) }
     respelt = yield(scalar)
-    if respelt.negative? || respelt >= 2**256
-      abort "  VECTOR BROKEN — a respelt scalar does not fit in 32 bytes"
-    end
+    abort '  VECTOR BROKEN — a respelt scalar does not fit in 32 bytes' if respelt.negative? || respelt >= 2**256
 
-    tail = (0...32).map { |i| (respelt >> (8 * i)) & 0xff }.pack("C*")
+    tail = (0...32).map { |i| (respelt >> (8 * i)) & 0xff }.pack('C*')
     if (tail.bytes[31] & 224) != 0
-      abort "  VECTOR BROKEN — a respelt scalar has bits above 2^252 set, so the " \
+      abort '  VECTOR BROKEN — a respelt scalar has bits above 2^252 set, so the ' \
             "vendored verifier's own `signature[63] & 224` bound answers it and " \
-            "the canonical-scalar check is never reached"
+            'the canonical-scalar check is never reached'
     end
 
     Base64.urlsafe_encode64(bytes[0, 32] + tail, padding: false)
@@ -185,14 +181,14 @@ module SkootiTokenVectors
   # the identity measures nothing, and a rotated dev key can silently make one
   # so (`:standard_sig` needs a signature that actually contains a `-` or a `_`).
   WIRE = {
-    canonical:        ->(m, s) { "#{m}.#{s}" },
+    canonical: ->(m, s) { "#{m}.#{s}" },
 
     # 64 bytes encode to 86 unpadded characters; padding takes it to 88, which
     # is exactly the readers' cap, so the cap is not what answers this.
-    padded_sig:       ->(m, s) { "#{m}.#{s}#{'=' * ((4 - (s.length % 4)) % 4)}" },
+    padded_sig: ->(m, s) { "#{m}.#{s}#{'=' * ((4 - (s.length % 4)) % 4)}" },
 
     # The STANDARD base64 alphabet: the same 64 bytes, spelled with `+` and `/`.
-    standard_sig:     ->(m, s) { "#{m}.#{s.tr('-_', '+/')}" },
+    standard_sig: ->(m, s) { "#{m}.#{s.tr('-_', '+/')}" },
 
     # The final character of an 86-character encoding carries four bits that are
     # not part of the 64 decoded bytes. Setting them gives a different string
@@ -200,11 +196,11 @@ module SkootiTokenVectors
     # canonical.
     noncanonical_sig: ->(m, s) { "#{m}.#{s[0..-2]}#{B64URL[B64URL.index(s[-1]) | 0x0f]}" },
 
-    short_sig:        ->(m, s) { "#{m}.#{s[0..-2]}" },
+    short_sig: ->(m, s) { "#{m}.#{s[0..-2]}" },
     # The same R, the scalar moved up by one group order. RFC 8032 requires
     # this refused; the vendored C verifier used to take it, where OpenSSL —
     # which is what both Ruby readers verify through — never did.
-    malleated_sig:    ->(m, s) {
+    malleated_sig: lambda { |m, s|
       "#{m}.#{SkootiTokenVectors.respell_scalar(s) { |scalar| scalar + ORDER }}"
     },
 
@@ -212,17 +208,17 @@ module SkootiTokenVectors
     # the verification equation fails for it as well, which is why this vector
     # pins WHICH side of the boundary the readers hold rather than merely that
     # they hold one.
-    order_sig:        ->(m, s) {
+    order_sig: lambda { |m, s|
       "#{m}.#{SkootiTokenVectors.respell_scalar(s) { ORDER }}"
     },
 
-    long_sig:         ->(m, s) { "#{m}.#{s}A" },
+    long_sig: ->(m, s) { "#{m}.#{s}A" },
 
     # The wire shapes that never reach the field parse.
-    no_dot:           ->(m, s) { "#{m}#{s}" },
-    empty_sig:        ->(m, _s) { "#{m}." },
-    empty_message:    ->(_m, s) { ".#{s}" },
-    trailing_nul:     ->(m, s) { "#{m}.#{s}#{NUL}" },
+    no_dot: ->(m, s) { "#{m}#{s}" },
+    empty_sig: ->(m, _s) { "#{m}." },
+    empty_message: ->(_m, s) { ".#{s}" },
+    trailing_nul: ->(m, s) { "#{m}.#{s}#{NUL}" }
   }.freeze
 
   # The WIRE spellings that respell the SIGNATURE'S SCALAR rather than its
@@ -235,17 +231,15 @@ module SkootiTokenVectors
   SCALAR_WIRES = %i[malleated_sig order_sig].freeze
 
   missing = SCALAR_WIRES - WIRE.keys
-  unless missing.empty?
-    raise "SCALAR_WIRES names #{missing.join(', ')}, which WIRE does not have"
-  end
+  raise "SCALAR_WIRES names #{missing.join(', ')}, which WIRE does not have" unless missing.empty?
 
   # The RFC 3986 unreserved set: the whole of what fields 1 and 2 may hold.
   # Written as an array of byte VALUES because that is the form {SWEEP} needs —
   # the question it asks is about bytes, not about characters. The firmware
   # spells the same set in is_unreserved(), the two Ruby readers in
   # FIELD_CHARSET and LOCK_SIM_FIELD_CHARSET.
-  UNRESERVED = ([*"A".."Z", *"a".."z", *"0".."9", "-", ".", "_", "~"]
-                .map(&:ord).sort.freeze)
+  UNRESERVED = [*'A'..'Z', *'a'..'z', *'0'..'9', '-', '.', '_', '~']
+               .map(&:ord).sort.freeze
 
   # axis    — the property the vector attacks; printed so a failure names it
   # label   — one line, human, no trailing punctuation
@@ -260,15 +254,15 @@ module SkootiTokenVectors
 
   # Build a message, overriding one field at a time. `suffix` is appended after
   # the jti, which is how the delimiter-count vectors are spelled.
-  def self.msg(tag: "kiosk-rental-v1", code: SCOOTER_CODE, resv: "resv-live",
-               iat: IAT, exp: EXP, jti: JTI, suffix: "")
+  def self.msg(tag: 'kiosk-rental-v1', code: SCOOTER_CODE, resv: 'resv-live',
+               iat: IAT, exp: EXP, jti: JTI, suffix: '')
     "#{tag}|#{code}|#{resv}|#{iat}|#{exp}|#{jti}#{suffix}"
   end
 
   # The encoding a wire token carries unless a vector says otherwise. UTF-8 is
   # what a token arriving from a request parameter or a File.read is tagged
   # with here, so it is the default case rather than a neutral one.
-  DEFAULT_TAG = "UTF-8"
+  DEFAULT_TAG = 'UTF-8'
 
   def self.v(axis, label, accept, message, wire = :canonical, tag = DEFAULT_TAG)
     Vector.new(axis, label, accept, message, wire, tag)
@@ -279,7 +273,7 @@ module SkootiTokenVectors
   # the message but the reservation id, plus the "." and the 86 unpadded
   # base64url characters a 64-byte Ed25519 signature encodes to.
   SIG_WIRE_LEN = 1 + 86
-  RESV_AT_CAP  = "r" * (512 - SIG_WIRE_LEN - msg(resv: "").bytesize)
+  RESV_AT_CAP  = 'r' * (512 - SIG_WIRE_LEN - msg(resv: '').bytesize)
   RESV_OVER    = "#{RESV_AT_CAP}r"
 
   # A reservation id whose live-key signature contains BOTH a `-` and a `_`, so
@@ -287,7 +281,7 @@ module SkootiTokenVectors
   # in one vector. Chosen by search over the dev key, and held by the runner's
   # identity check rather than by this comment: if the key is ever rotated and
   # this signature stops carrying either character, the run fails by name.
-  RESV_ALPHABET = "resv-alt0"
+  RESV_ALPHABET = 'resv-alt0'
 
   # The Ruby encodings a wire token is handed over under. UTF-8 is what
   # Encoding.default_external gives a request parameter or a File.read here;
@@ -298,120 +292,120 @@ module SkootiTokenVectors
 
   VECTORS = [
     # ── count: how many pipe-delimited fields the message carries ────────────
-    v("count",  "six fields, well-formed",                  true,  msg),
-    v("count",  "five fields, jti absent",                  false,
+    v('count',  'six fields, well-formed',                  true, msg),
+    v('count',  'five fields, jti absent',                  false,
       "kiosk-rental-v1|#{SCOOTER_CODE}|resv-live|#{IAT}|#{EXP}"),
-    v("count",  "seven fields, one appended after the jti", false, msg(suffix: "|EXTRA")),
-    v("count",  "eight fields, pipe-input shift, exp faked", false,
+    v('count',  'seven fields, one appended after the jti', false, msg(suffix: '|EXTRA')),
+    v('count',  'eight fields, pipe-input shift, exp faked', false,
       "kiosk-rental-v1|#{SCOOTER_CODE}|r|#{IAT}|9999999999|#{IAT}|#{EXP}|#{JTI}"),
-    v("count",  "seven segments, one trailing delimiter",   false, msg(suffix: "|")),
-    v("count",  "eight segments, two trailing delimiters",  false, msg(suffix: "||")),
-    v("count",  "seven segments, one leading delimiter",    false, "|#{msg}"),
+    v('count',  'seven segments, one trailing delimiter',   false, msg(suffix: '|')),
+    v('count',  'eight segments, two trailing delimiters',  false, msg(suffix: '||')),
+    v('count',  'seven segments, one leading delimiter',    false, "|#{msg}"),
 
     # ── empty: a field that is present but has no bytes ──────────────────────
-    v("empty",  "empty scooter_code",                       false, msg(code: "")),
-    v("empty",  "empty reservation_id",                     false, msg(resv: "")),
-    v("empty",  "empty iat",                                false, msg(iat: "")),
-    v("empty",  "empty exp",                                false, msg(exp: "")),
-    v("empty",  "empty jti",                                false, msg(jti: "")),
+    v('empty',  'empty scooter_code',                       false, msg(code: '')),
+    v('empty',  'empty reservation_id',                     false, msg(resv: '')),
+    v('empty',  'empty iat',                                false, msg(iat: '')),
+    v('empty',  'empty exp',                                false, msg(exp: '')),
+    v('empty',  'empty jti',                                false, msg(jti: '')),
 
     # ── tag: the domain-separation tag in field 0 ────────────────────────────
-    v("tag",    "wrong tag, validly signed",                false, msg(tag: "kiosk-rental-v0")),
-    v("tag",    "right tag with a trailing space",          false, msg(tag: "kiosk-rental-v1 ")),
-    v("tag",    "right tag with a leading space",           false, msg(tag: " kiosk-rental-v1")),
-    v("tag",    "right tag in uppercase",                   false, msg(tag: "KIOSK-RENTAL-V1")),
+    v('tag',    'wrong tag, validly signed',                false, msg(tag: 'kiosk-rental-v0')),
+    v('tag',    'right tag with a trailing space',          false, msg(tag: 'kiosk-rental-v1 ')),
+    v('tag',    'right tag with a leading space',           false, msg(tag: ' kiosk-rental-v1')),
+    v('tag',    'right tag in uppercase',                   false, msg(tag: 'KIOSK-RENTAL-V1')),
 
     # ── integer: what an iat or an exp may be spelled as ─────────────────────
-    v("int",    "exp with a leading plus",                  false, msg(exp: "+#{EXP}")),
-    v("int",    "exp with underscore separators",           false, msg(exp: "1_750_001_900")),
-    v("int",    "exp with a leading space",                 false, msg(exp: " #{EXP}")),
-    v("int",    "exp with a trailing space",                false, msg(exp: "#{EXP} ")),
-    v("int",    "exp in hexadecimal",                       false, msg(exp: "0x684d84ec")),
-    v("int",    "exp negative",                             false, msg(exp: "-1")),
-    v("int",    "exp of 21 digits",                         false, msg(exp: "9" * 21)),
-    v("int",    "exp of 21 digits, leading zeros, in window", false, msg(exp: "#{'0' * 11}#{EXP}")),
-    v("int",    "exp of 20 digits, past UINT64_MAX",        false, msg(exp: "9" * 20)),
-    v("int",    "exp of exactly UINT64_MAX",                true,  msg(exp: UINT64_MAX_S)),
-    v("int",    "exp with leading zeros, in window",        true,  msg(exp: "00000000#{EXP}")),
-    v("int",    "iat not a number",                         false, msg(iat: "abc")),
-    v("int",    "iat with a leading plus",                  false, msg(iat: "+#{IAT}")),
-    v("int",    "iat of 21 digits",                         false, msg(iat: "9" * 21)),
-    v("int",    "iat negative",                             false, msg(iat: "-5")),
-    v("int",    "iat in non-ASCII digits",                  false, msg(iat: "١٧٥٠٠٠١٠٠٠")),
-    v("int",    "iat of one digit",                         true,  msg(iat: "7")),
-    v("int",    "iat equal to exp",                         true,  msg(iat: EXP)),
-    v("int",    "iat far past exp",                         true,  msg(iat: "9999999999")),
+    v('int',    'exp with a leading plus',                  false, msg(exp: "+#{EXP}")),
+    v('int',    'exp with underscore separators',           false, msg(exp: '1_750_001_900')),
+    v('int',    'exp with a leading space',                 false, msg(exp: " #{EXP}")),
+    v('int',    'exp with a trailing space',                false, msg(exp: "#{EXP} ")),
+    v('int',    'exp in hexadecimal',                       false, msg(exp: '0x684d84ec')),
+    v('int',    'exp negative',                             false, msg(exp: '-1')),
+    v('int',    'exp of 21 digits',                         false, msg(exp: '9' * 21)),
+    v('int',    'exp of 21 digits, leading zeros, in window', false, msg(exp: "#{'0' * 11}#{EXP}")),
+    v('int',    'exp of 20 digits, past UINT64_MAX',        false, msg(exp: '9' * 20)),
+    v('int',    'exp of exactly UINT64_MAX',                true,  msg(exp: UINT64_MAX_S)),
+    v('int',    'exp with leading zeros, in window',        true,  msg(exp: "00000000#{EXP}")),
+    v('int',    'iat not a number',                         false, msg(iat: 'abc')),
+    v('int',    'iat with a leading plus',                  false, msg(iat: "+#{IAT}")),
+    v('int',    'iat of 21 digits',                         false, msg(iat: '9' * 21)),
+    v('int',    'iat negative',                             false, msg(iat: '-5')),
+    v('int',    'iat in non-ASCII digits',                  false, msg(iat: '١٧٥٠٠٠١٠٠٠')),
+    v('int',    'iat of one digit',                         true,  msg(iat: '7')),
+    v('int',    'iat equal to exp',                         true,  msg(iat: EXP)),
+    v('int',    'iat far past exp',                         true,  msg(iat: '9999999999')),
 
     # ── jti: the replay key, and the only field with a fixed width ───────────
-    v("jti",    "jti of 31 hex characters",                 false, msg(jti: JTI[0..-2])),
-    v("jti",    "jti of 33 hex characters",                 false, msg(jti: "#{JTI}c")),
-    v("jti",    "jti in uppercase hex",                     false, msg(jti: JTI.upcase)),
-    v("jti",    "jti of 32 non-hex characters",             false, msg(jti: "z" * 32)),
-    v("jti",    "jti of 64 hex characters",                 false, msg(jti: JTI * 2)),
+    v('jti',    'jti of 31 hex characters',                 false, msg(jti: JTI[0..-2])),
+    v('jti',    'jti of 33 hex characters',                 false, msg(jti: "#{JTI}c")),
+    v('jti',    'jti in uppercase hex',                     false, msg(jti: JTI.upcase)),
+    v('jti',    'jti of 32 non-hex characters',             false, msg(jti: 'z' * 32)),
+    v('jti',    'jti of 64 hex characters',                 false, msg(jti: JTI * 2)),
 
     # ── length: the wire cap the lock enforces before it touches the parse ───
-    v("length", "wire token at exactly 512 bytes",          true,  msg(resv: RESV_AT_CAP)),
-    v("length", "wire token one byte over 512",             false, msg(resv: RESV_OVER)),
+    v('length', 'wire token at exactly 512 bytes',          true,  msg(resv: RESV_AT_CAP)),
+    v('length', 'wire token one byte over 512',             false, msg(resv: RESV_OVER)),
 
     # ── freshness: exp against the injected clock, boundary included ─────────
-    v("fresh",  "exp one second past now",                  true,  msg(exp: (NOW + 1).to_s)),
-    v("fresh",  "exp exactly now",                          false, msg(exp: NOW.to_s)),
-    v("fresh",  "exp one second before now",                false, msg(exp: (NOW - 1).to_s)),
-    v("fresh",  "exp strictly in the past",                 false, msg(exp: EXP_PAST)),
-    v("fresh",  "iat exactly now",                          true,  msg(iat: NOW.to_s)),
+    v('fresh',  'exp one second past now',                  true,  msg(exp: (NOW + 1).to_s)),
+    v('fresh',  'exp exactly now',                          false, msg(exp: NOW.to_s)),
+    v('fresh',  'exp one second before now',                false, msg(exp: (NOW - 1).to_s)),
+    v('fresh',  'exp strictly in the past',                 false, msg(exp: EXP_PAST)),
+    v('fresh',  'iat exactly now',                          true,  msg(iat: NOW.to_s)),
 
     # ── sig: how the 64 signature bytes are spelled on the wire ──────────────
-    v("sig",    "signature padded to 88 with equals signs", false, msg, :padded_sig),
-    v("sig",    "signature in the standard base64 alphabet", false,
+    v('sig',    'signature padded to 88 with equals signs', false, msg, :padded_sig),
+    v('sig',    'signature in the standard base64 alphabet', false,
       msg(resv: RESV_ALPHABET), :standard_sig),
-    v("sig",    "signature with a non-canonical last character", false, msg, :noncanonical_sig),
-    v("sig",    "signature one character short",            false, msg, :short_sig),
-    v("sig",    "signature one character long",             false, msg, :long_sig),
-    v("sig",    "signature scalar moved up by the group order", false, msg, :malleated_sig),
-    v("sig",    "signature scalar equal to the group order",  false, msg, :order_sig),
+    v('sig',    'signature with a non-canonical last character', false, msg, :noncanonical_sig),
+    v('sig',    'signature one character short',            false, msg, :short_sig),
+    v('sig',    'signature one character long',             false, msg, :long_sig),
+    v('sig',    'signature scalar moved up by the group order', false, msg, :malleated_sig),
+    v('sig',    'signature scalar equal to the group order', false, msg, :order_sig),
 
     # ── wire: the shape of the token around the signature ────────────────────
-    v("wire",   "no dot between message and signature",     false, msg, :no_dot),
-    v("wire",   "empty signature half",                     false, msg, :empty_sig),
-    v("wire",   "empty message half",                       false, msg, :empty_message),
+    v('wire',   'no dot between message and signature',     false, msg, :no_dot),
+    v('wire',   'empty signature half',                     false, msg, :empty_sig),
+    v('wire',   'empty message half',                       false, msg, :empty_message),
 
     # ── bytes: what an opaque field may hold, byte for byte ──────────────────
-    v("bytes",  "NUL inside reservation_id",                false, msg(resv: "resv#{NUL}live")),
-    v("bytes",  "NUL inside scooter_code",                  false, msg(code: "#{SCOOTER_CODE}#{NUL}X")),
-    v("bytes",  "NUL appended to the wire token",           false, msg, :trailing_nul),
-    v("bytes",  "newline inside reservation_id",            false, msg(resv: "resv\nlive")),
-    v("bytes",  "tab inside reservation_id",                false, msg(resv: "resv\tlive")),
-    v("bytes",  "0x01 inside reservation_id",               false, msg(resv: "resv\u0001live")),
-    v("bytes",  "DEL inside reservation_id",                false, msg(resv: "resv\u007Flive")),
-    v("bytes",  "multibyte UTF-8 inside reservation_id",    false, msg(resv: "resv-Ω-live")),
+    v('bytes',  'NUL inside reservation_id',                false, msg(resv: "resv#{NUL}live")),
+    v('bytes',  'NUL inside scooter_code',                  false, msg(code: "#{SCOOTER_CODE}#{NUL}X")),
+    v('bytes',  'NUL appended to the wire token',           false, msg, :trailing_nul),
+    v('bytes',  'newline inside reservation_id',            false, msg(resv: "resv\nlive")),
+    v('bytes',  'tab inside reservation_id',                false, msg(resv: "resv\tlive")),
+    v('bytes',  '0x01 inside reservation_id',               false, msg(resv: "resv\u0001live")),
+    v('bytes',  'DEL inside reservation_id',                false, msg(resv: "resv\u007Flive")),
+    v('bytes',  'multibyte UTF-8 inside reservation_id',    false, msg(resv: 'resv-Ω-live')),
 
     # ── charset: the 66 characters fields 1 and 2 may hold ───────────────────
     # Named cases, readable beside the exhaustive SWEEP below. The alphabet
     # vector is the one that proves the set is admitted WHOLE rather than
     # approximately: every one of the 66 in a single reservation id.
-    v("charset", "reservation_id of the whole unreserved alphabet", true,
+    v('charset', 'reservation_id of the whole unreserved alphabet', true,
       msg(resv: UNRESERVED.map(&:chr).join)),
-    v("charset", "reservation_id of a canonical uuid",     true,
-      msg(resv: "ae01a0ae-336f-494f-b226-a006baee0947")),
-    v("charset", "space inside reservation_id",            false, msg(resv: "resv live")),
-    v("charset", "percent sign inside reservation_id",     false, msg(resv: "resv%live")),
-    v("charset", "plus sign inside reservation_id",        false, msg(resv: "resv+live")),
-    v("charset", "slash inside reservation_id",            false, msg(resv: "resv/live")),
-    v("charset", "space inside scooter_code",              false, msg(code: "SK 001")),
-    v("charset", "0xFF inside scooter_code",               false,
+    v('charset', 'reservation_id of a canonical uuid',     true,
+      msg(resv: 'ae01a0ae-336f-494f-b226-a006baee0947')),
+    v('charset', 'space inside reservation_id',            false, msg(resv: 'resv live')),
+    v('charset', 'percent sign inside reservation_id',     false, msg(resv: 'resv%live')),
+    v('charset', 'plus sign inside reservation_id',        false, msg(resv: 'resv+live')),
+    v('charset', 'slash inside reservation_id',            false, msg(resv: 'resv/live')),
+    v('charset', 'space inside scooter_code',              false, msg(code: 'SK 001')),
+    v('charset', '0xFF inside scooter_code',               false,
       msg(code: "SK#{255.chr(Encoding::BINARY)}-001")),
 
     # ── encoding: the Ruby tag the token is handed over under ────────────────
     # C sees bytes and answers the same six times; the two Ruby readers must
     # too. This axis is the reason Vector carries a `tag` at all, and it exists
     # because the answer to the canonical token USED to depend on it.
-    *ENCODING_TAGS.map { |tag|
-      v("encoding", "the canonical token tagged #{tag}", true, msg, :canonical, tag)
-    },
-    *ENCODING_TAGS.map { |tag|
-      v("encoding", "0xFF in reservation_id tagged #{tag}", false,
+    *ENCODING_TAGS.map do |tag|
+      v('encoding', "the canonical token tagged #{tag}", true, msg, :canonical, tag)
+    end,
+    *ENCODING_TAGS.map do |tag|
+      v('encoding', "0xFF in reservation_id tagged #{tag}", false,
         msg(resv: "re#{255.chr(Encoding::BINARY)}sv"), :canonical, tag)
-    },
+    end
   ].freeze
 
   # ── SWEEP: the charset axis, exhaustively ──────────────────────────────────
@@ -428,17 +422,17 @@ module SkootiTokenVectors
   #
   # They are reported as a census rather than row by row: 446 lines of MATCH
   # hide the seventy the reader came for. A disagreement is named individually.
-  SWEEP_RESV = (0..255).map { |b|
+  SWEEP_RESV = (0..255).map do |b|
     byte = b.chr(Encoding::BINARY)
-    v("charset", format("byte 0x%02X inside reservation_id", b),
+    v('charset', format('byte 0x%02X inside reservation_id', b),
       UNRESERVED.include?(b), msg(resv: "re#{byte}sv"))
-  }.freeze
+  end.freeze
 
-  SWEEP_CODE = (0..255).reject { |b| UNRESERVED.include?(b) }.map { |b|
+  SWEEP_CODE = (0..255).reject { |b| UNRESERVED.include?(b) }.map do |b|
     byte = b.chr(Encoding::BINARY)
-    v("charset", format("byte 0x%02X inside scooter_code", b),
+    v('charset', format('byte 0x%02X inside scooter_code', b),
       false, msg(code: "SK#{byte}-001"))
-  }.freeze
+  end.freeze
 
   SWEEP = (SWEEP_RESV + SWEEP_CODE).freeze
 
@@ -447,8 +441,8 @@ module SkootiTokenVectors
   # ranges that built the arms, so an arm trimmed to a sample stops reporting
   # itself as the whole domain.
   SWEEP_ARMS = [
-    ["charset", "reservation_id", SWEEP_RESV, msg(resv: "resv")],
-    ["charset", "scooter_code",   SWEEP_CODE, msg(code: "SK-001")],
+    ['charset', 'reservation_id', SWEEP_RESV, msg(resv: 'resv')],
+    ['charset', 'scooter_code',   SWEEP_CODE, msg(code: 'SK-001')]
   ].freeze
 
   # The axes covered, in the order they first appear. Derived from the vectors
@@ -466,9 +460,9 @@ module SkootiTokenVectors
   #
   # @return [Hash{String => Array<Integer>}] field name => sorted byte values
   def self.sweep_coverage
-    SWEEP_ARMS.to_h { |_axis, field, vectors, control|
+    SWEEP_ARMS.to_h do |_axis, field, vectors, control|
       [field, sweep_bytes(vectors, control)]
-    }
+    end
   end
 
   # The axes whose sweep reaches EVERY one of the 256 byte values in some
@@ -480,9 +474,9 @@ module SkootiTokenVectors
   #
   # @return [Array<String>] axis names
   def self.exhaustive_axes
-    SWEEP_ARMS.select { |_axis, _field, vectors, control|
+    SWEEP_ARMS.select do |_axis, _field, vectors, control|
       sweep_bytes(vectors, control) == (0..255).to_a
-    }.map(&:first).uniq
+    end.map(&:first).uniq
   end
 
   # The axes carrying at least one vector that respells the signature's SCALAR.
@@ -500,8 +494,8 @@ module SkootiTokenVectors
   # recover because inserting it makes the message seven fields.
   def self.sweep_bytes(vectors, control)
     control_tally = control.b.bytes.tally.to_a
-    vectors.flat_map { |vector|
+    vectors.flat_map do |vector|
       (vector.message.b.bytes.tally.to_a - control_tally).map(&:first)
-    }.uniq.sort
+    end.uniq.sort
   end
 end

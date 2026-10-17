@@ -64,14 +64,12 @@
 # a run whose reservation_id arm does not reach all 256 byte values is a run
 # whose census means nothing, and it aborts.
 
-require "openssl"
-require "base64"
-require "tempfile"
+require 'openssl'
+require 'base64'
+require 'tempfile'
 
 HELPER = ARGV[0]
-if HELPER.nil? || HELPER.empty?
-  abort "usage: ruby crosscheck_grammar.rb <path to host_test_crosscheck>"
-end
+abort 'usage: ruby crosscheck_grammar.rb <path to host_test_crosscheck>' if HELPER.nil? || HELPER.empty?
 
 # Minimal config carrier so the issuer loads without booting Rails.
 unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
@@ -87,11 +85,11 @@ unless defined?(Kiosk) && Kiosk.respond_to?(:configuration)
   end
 end
 
-require_relative "token_vectors"
-require File.expand_path("../app/services/rental_token_issuer", __dir__)
-require File.expand_path("../script/lock_sim", __dir__)
+require_relative 'token_vectors'
+require File.expand_path('../app/services/rental_token_issuer', __dir__)
+require File.expand_path('../script/lock_sim', __dir__)
 
-KEY = OpenSSL::PKey.read(File.read(File.expand_path("../config/dev_unlock_key.pem", __dir__)))
+KEY = OpenSSL::PKey.read(File.read(File.expand_path('../config/dev_unlock_key.pem', __dir__)))
 Kiosk.configuration.unlock_signing_key = KEY
 PUBLIC_KEY = OpenSSL::PKey.read(KEY.public_to_pem)
 
@@ -116,7 +114,7 @@ def wire_token(vector)
   if vector.wire != :canonical &&
      token == WIRE.fetch(:canonical).call(vector.message, signature).b
     abort "  VECTOR BROKEN — #{vector.axis}/#{vector.label}: the :#{vector.wire} " \
-          "spelling produced the canonical token, so this vector measures nothing"
+          'spelling produced the canonical token, so this vector measures nothing'
   end
 
   token
@@ -126,12 +124,12 @@ end
 # --file so a token holding a NUL reaches it exactly as a BLE write would. Its
 # exit status is the verdict: 0 accepted, 1 refused.
 def c_accepts?(token)
-  file = Tempfile.new(["skooti-vector", ".tok"])
+  file = Tempfile.new(['skooti-vector', '.tok'])
   begin
     file.binmode
     file.write(token)
     file.close
-    system(HELPER, "--file", file.path, out: File::NULL)
+    system(HELPER, '--file', file.path, out: File::NULL)
   ensure
     file.unlink
   end
@@ -160,33 +158,33 @@ end
 
 # [column heading, full name for the failure report, probe]
 READERS = [
-  ["C",      "C skooti_verify_token",    method(:c_accepts?)],
-  ["issuer", "RentalTokenIssuer.verify", method(:issuer_accepts?)],
-  ["lock",   "LockSim#unlock",           method(:lock_sim_accepts?)],
+  ['C',      'C skooti_verify_token',    method(:c_accepts?)],
+  ['issuer', 'RentalTokenIssuer.verify', method(:issuer_accepts?)],
+  ['lock',   'LockSim#unlock',           method(:lock_sim_accepts?)]
 ].freeze
 
 VECTORS  = SkootiTokenVectors::VECTORS
 SWEEP    = SkootiTokenVectors::SWEEP
 RESPELT  = VECTORS.count { |vector| vector.wire != :canonical }
 TAGGED   = VECTORS.count { |vector| vector.tag != SkootiTokenVectors::DEFAULT_TAG }
-ROW      = "    %-8s %-46s %-7s %-7s %-7s %-7s %s"
+ROW      = '    %-8s %-46s %-7s %-7s %-7s %-7s %s'
 
 # The sweep only means something if it reaches every byte value it claims to.
 # Re-derived from the vectors' own messages, not from the range that built
 # them, and a short arm is a hard stop: a census over a sample would read
 # exactly like a census over the domain.
 COVERAGE = SkootiTokenVectors.sweep_coverage
-unless COVERAGE.fetch("reservation_id") == (0..255).to_a
-  abort "  SWEEP BROKEN — the reservation_id arm reaches " \
+unless COVERAGE.fetch('reservation_id') == (0..255).to_a
+  abort '  SWEEP BROKEN — the reservation_id arm reaches ' \
         "#{COVERAGE.fetch('reservation_id').length} byte values, not all 256, " \
-        "so nothing here can say what the other bytes do"
+        'so nothing here can say what the other bytes do'
 end
 
 # Run one vector through all three readers. Returns [answers, agreed].
 def ask(vector)
   bytes   = wire_token(vector)
   tagged  = bytes.dup.force_encoding(vector.tag)
-  answers = READERS.map { |head, _name, probe| answer(probe, head == "C" ? bytes : tagged) }
+  answers = READERS.map { |head, _name, probe| answer(probe, head == 'C' ? bytes : tagged) }
   [answers, answers.all? { |a| a == vector.accept }]
 end
 
@@ -194,9 +192,9 @@ end
 # raised instead of answering.
 def verdict(a)
   case a
-  when true  then "accept"
-  when false then "reject"
-  else a.to_s.split("::").last
+  when true  then 'accept'
+  when false then 'reject'
+  else a.to_s.split('::').last
   end
 end
 
@@ -213,7 +211,7 @@ puts "  Rental-token grammar — #{VECTORS.length} live-signed vectors through "
      "all #{READERS.length} readers of this token " \
      "(#{RESPELT} respell the wire around the signature, " \
      "#{TAGGED} vary the Ruby encoding tag):"
-puts format(ROW, "axis", "vector", "expect", *READERS.map(&:first), "")
+puts format(ROW, 'axis', 'vector', 'expect', *READERS.map(&:first), '')
 
 failures = []
 
@@ -222,9 +220,9 @@ VECTORS.each do |vector|
   failures << [vector, answers] unless agreed
 
   puts format(ROW, vector.axis, vector.label,
-              vector.accept ? "accept" : "reject",
+              vector.accept ? 'accept' : 'reject',
               *answers.map { |a| verdict(a) },
-              agreed ? "MATCH ✓" : "MISMATCH ✗")
+              agreed ? 'MATCH ✓' : 'MISMATCH ✗')
 end
 
 # ── the exhaustive charset sweep, reported as a census ──────────────────────
@@ -234,7 +232,7 @@ SWEEP.each do |vector|
   sweep_failures << [vector, answers] unless agreed
 end
 
-puts "    charset sweep — every byte value 0x00-0xFF in each opaque field: " \
+puts '    charset sweep — every byte value 0x00-0xFF in each opaque field: ' \
      "#{COVERAGE.fetch('reservation_id').length} in reservation_id " \
      "(#{SkootiTokenVectors::UNRESERVED.length} accepted, " \
      "#{256 - SkootiTokenVectors::UNRESERVED.length} refused) and " \

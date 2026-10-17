@@ -30,65 +30,60 @@
 #   - Renders a scannable ANSI QR in the terminal.
 #   - Saves tmp/skooti-unlock.svg (gitignored) for full-screen display.
 
-require "bundler/setup"
-require "json"
-require "optparse"
-require_relative "../app/services/unlock_link"
+require 'bundler/setup'
+require 'json'
+require 'optparse'
+require_relative '../app/services/unlock_link'
 
-DEMO_ROOT = File.expand_path("..", __dir__)
-ORIGIN    = "https://skooti.demo.kiosk.tech"
+DEMO_ROOT = File.expand_path('..', __dir__)
+ORIGIN    = 'https://skooti.demo.kiosk.tech'
 
 # ── Parse CLI args ─────────────────────────────────────────────────────────────
 
-options = { scooter: "SK-001" }
+options = { scooter: 'SK-001' }
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: bin/make-qr [--token TOKEN | --from-server] [--scooter CODE]"
+  opts.banner = 'Usage: bin/make-qr [--token TOKEN | --from-server] [--scooter CODE]'
 
-  opts.on("--token TOKEN", "Wire rental token (explicit)") { |t| options[:token] = t }
-  opts.on("--from-server", "Run script/rental_flow.rb to obtain a fresh token") { options[:from_server] = true }
-  opts.on("--scooter CODE", "Scooter code (default: SK-001)") { |c| options[:scooter] = c }
-  opts.on("-h", "--help", "Print this help") { puts opts; exit }
+  opts.on('--token TOKEN', 'Wire rental token (explicit)') { |t| options[:token] = t }
+  opts.on('--from-server', 'Run script/rental_flow.rb to obtain a fresh token') { options[:from_server] = true }
+  opts.on('--scooter CODE', 'Scooter code (default: SK-001)') { |c| options[:scooter] = c }
+  opts.on('-h', '--help', 'Print this help') do
+    puts opts
+    exit
+  end
 end.parse!
 
-unless options[:token] || options[:from_server]
-  abort "Error: supply --token TOKEN or --from-server.\n\nRun `bin/make-qr --help` for usage."
-end
+abort "Error: supply --token TOKEN or --from-server.\n\nRun `bin/make-qr --help` for usage." unless options[:token] || options[:from_server]
 
-if options[:token] && options[:from_server]
-  abort "Error: --token and --from-server are mutually exclusive."
-end
+abort 'Error: --token and --from-server are mutually exclusive.' if options[:token] && options[:from_server]
 
 # ── Obtain the rental token ────────────────────────────────────────────────────
 
-rental_token    = nil
-reservation_id  = nil
+rental_token = nil
+nil
 
 if options[:from_server]
-  STDERR.puts "  Running script/rental_flow.rb (SERVER_URL=#{ENV["SERVER_URL"]})..."
-  flow_rb = File.join(DEMO_ROOT, "script/rental_flow.rb")
+  warn "  Running script/rental_flow.rb (SERVER_URL=#{ENV.fetch('SERVER_URL', nil)})..."
+  flow_rb = File.join(DEMO_ROOT, 'script/rental_flow.rb')
   env_passthrough = {}
-  env_passthrough["SERVER_URL"]    = ENV["SERVER_URL"]    if ENV["SERVER_URL"]
-  env_passthrough["KIOSK_ISSUER"]  = ENV["KIOSK_ISSUER"] if ENV["KIOSK_ISSUER"]
+  env_passthrough['SERVER_URL']    = ENV['SERVER_URL'] if ENV['SERVER_URL']
+  env_passthrough['KIOSK_ISSUER']  = ENV['KIOSK_ISSUER'] if ENV['KIOSK_ISSUER']
 
   cmd = [env_passthrough, RbConfig.ruby, flow_rb, { err: :err }]
   stdout_str = IO.popen(cmd) { |io| io.read }
-  unless $?.success?
-    abort "script/rental_flow.rb exited with status #{$?.exitstatus}."
-  end
+  abort "script/rental_flow.rb exited with status #{$?.exitstatus}." unless $?.success?
 
   # rental_flow prints exactly ONE JSON line on stdout.
   json_line = stdout_str.strip
-  abort "script/rental_flow.rb produced no output." if json_line.empty?
+  abort 'script/rental_flow.rb produced no output.' if json_line.empty?
 
   result = JSON.parse(json_line)
-  rental_token   = result.fetch("rental_token") { abort "script/rental_flow.rb output missing `rental_token`." }
-  reservation_id = result["reservation_id"]
+  rental_token   = result.fetch('rental_token') { abort 'script/rental_flow.rb output missing `rental_token`.' }
+  reservation_id = result['reservation_id']
 
-  if rental_token.nil?
-    abort "script/rental_flow.rb returned null rental_token (start_rental may have returned 403 — check gates)."
-  end
-  STDERR.puts "  Got token for reservation #{reservation_id}."
+  abort 'script/rental_flow.rb returned null rental_token (start_rental may have returned 403 — check gates).' if rental_token.nil?
+  warn "  Got token for reservation #{reservation_id}."
 else
   rental_token = options[:token]
 end
@@ -97,10 +92,10 @@ end
 
 launch_url = UnlockLink.url(origin: ORIGIN, scooter_code: options[:scooter], rental_token: rental_token)
 
-puts ""
-puts "Launch URL:"
+puts ''
+puts 'Launch URL:'
 puts launch_url
-puts ""
+puts ''
 
 # ── Render QR ─────────────────────────────────────────────────────────────────
 
@@ -108,17 +103,17 @@ qr = UnlockLink.qr(launch_url)
 
 # Terminal ANSI render
 puts qr.as_ansi(
-  light: "\033[47m",   # white background for "light" modules
-  dark:  "\033[40m",   # black background for "dark" modules
-  fill_character: "  ",
+  light: "\033[47m", # white background for "light" modules
+  dark: "\033[40m", # black background for "dark" modules
+  fill_character: '  ',
   quiet_zone_size: 2
 )
 
 # SVG file (gitignored in tmp/)
-tmp_dir  = File.join(DEMO_ROOT, "tmp")
-svg_path = File.join(tmp_dir, "skooti-unlock.svg")
+tmp_dir  = File.join(DEMO_ROOT, 'tmp')
+svg_path = File.join(tmp_dir, 'skooti-unlock.svg')
 File.write(svg_path, UnlockLink.svg(launch_url))
 
 puts "SVG saved to: #{svg_path}"
-puts "Open it full-screen for easy scanning."
-puts ""
+puts 'Open it full-screen for easy scanning.'
+puts ''

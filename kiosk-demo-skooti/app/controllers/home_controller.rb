@@ -8,6 +8,6 @@ class HomeController < ApplicationController
     @vehicles_reserved    = Reservation.count
     @rides_started        = Reservation.active.count
 
-    response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+    response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 end

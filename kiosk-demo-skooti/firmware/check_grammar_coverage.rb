@@ -78,30 +78,30 @@
 #     place: the page had the rule, so the page was not the half that was
 #     missing. Attacking the parse is still the only thing that finds those.
 
-require_relative "token_vectors"
+require_relative 'token_vectors'
 
-PAGE = File.expand_path("../RENTAL_TOKEN.md", __dir__)
+PAGE = File.expand_path('../RENTAL_TOKEN.md', __dir__)
 
 # The section this gate reads. Named by its heading so a renamed heading is a
 # loud failure rather than a silent empty scan.
-SECTION_HEADING = "## Rental token: the exact grammar"
+SECTION_HEADING = '## Rental token: the exact grammar'
 
 # The bold lines that open a RULE subsection inside it. Each has to yield a rule.
-SUBSECTIONS = ["**Wire token**", "**Message**", "**Fields**"].freeze
+SUBSECTIONS = ['**Wire token**', '**Message**', '**Fields**'].freeze
 
 # The bold line that opens the LIMITS subsection. Its bullets are limits, not
 # rules: R1 does not ask them for an axis and R6 does not read them, because a
 # limit's whole job is to say what the set does NOT reach. A marker inside one
 # is a category error and fails.
-LIMITS_SUBSECTION = "**What this section does not claim**"
+LIMITS_SUBSECTION = '**What this section does not claim**'
 
 # Normative vocabulary. A paragraph using any of these is stating a rule, and a
 # rule belongs in a bullet or a table row where R1 can see it. Matched
 # case-insensitively.
 NORMATIVE = [
-  "must", "may not", "at most", "at least", "exactly",
-  "and nothing else", "is refused", "are refused",
-  "is rejected", "are rejected", "is a refusal"
+  'must', 'may not', 'at most', 'at least', 'exactly',
+  'and nothing else', 'is refused', 'are refused',
+  'is rejected', 'are rejected', 'is a refusal'
 ].freeze
 
 # Vocabulary that states a rule about the signature's SCALAR — the second 32
@@ -109,7 +109,7 @@ NORMATIVE = [
 # any of these is claiming the range is held, so R8 asks it to name an axis the
 # set actually respells the scalar on. Matched case-insensitively, after code
 # spans are dropped, exactly as BYTE_UNIVERSAL is.
-SCALAR_RANGE = ["scalar", "group order"].freeze
+SCALAR_RANGE = ['scalar', 'group order'].freeze
 
 # Vocabulary that quantifies over the BYTE DOMAIN, or denies that anything
 # further constrains a field. A rule using any of these is making a claim about
@@ -118,22 +118,22 @@ SCALAR_RANGE = ["scalar", "group order"].freeze
 # code spans are dropped — the original defect spelled its delimiter in
 # backticks and would otherwise have read as "any bytes but \| and NUL".
 BYTE_UNIVERSAL = [
-  "any byte", "any bytes", "every byte", "all bytes", "byte value",
-  "no reader constrains", "none gates on it", "nothing further"
+  'any byte', 'any bytes', 'every byte', 'all bytes', 'byte value',
+  'no reader constrains', 'none gates on it', 'nothing further'
 ].freeze
 
-MARKER = /<!--\s*vectors:\s*([^>]*?)\s*-->/.freeze
+MARKER = /<!--\s*vectors:\s*([^>]*?)\s*-->/
 
 # An inline code span. A marker written INSIDE one is the page quoting the
 # syntax to a reader, not applying it — the paragraph that explains this gate
 # spells a marker out, and without this it would read as claiming an axis. Code
 # spans are dropped before both the marker scan and the vocabulary scan.
-CODE_SPAN = /`[^`]*`/.freeze
+CODE_SPAN = /`[^`]*`/
 
 Rule = Struct.new(:kind, :subsection, :line_no, :text, :axes)
 
 def uncoded(text)
-  text.gsub(CODE_SPAN, " ")
+  text.gsub(CODE_SPAN, ' ')
 end
 
 # Pull the grammar section out of a page. Returns its lines, or nil when the
@@ -144,7 +144,7 @@ def grammar_section(markdown)
   return nil if start.nil?
 
   rest = lines[(start + 1)..] || []
-  stop = rest.index { |line| line.start_with?("## ") }
+  stop = rest.index { |line| line.start_with?('## ') }
   body = stop.nil? ? rest : rest[0...stop]
   [body, start + 2] # 1-based line number of the first body line
 end
@@ -154,7 +154,7 @@ end
 # accumulates into prose blocks. Returns [kind, subsection, line_no, text].
 def blocks(body, first_line_no)
   out     = []
-  section = "(before any subsection)"
+  section = '(before any subsection)'
   prose   = nil
   bullet  = nil
 
@@ -179,22 +179,22 @@ def blocks(body, first_line_no)
       next
     end
 
-    if line.start_with?("- ")
+    if line.start_with?('- ')
       flush.call
       bullet = [:bullet, section, line_no, line]
       next
     end
 
-    if bullet && line.start_with?("  ")
+    if bullet && line.start_with?('  ')
       bullet[3] = "#{bullet[3]}\n#{line}"
       next
     end
 
-    if line.start_with?("|")
+    if line.start_with?('|')
       flush.call
       # Skip the header row and the --- separator row of a table.
       next if line.match?(/\A\|[\s|:-]*\|\s*\z/)
-      next if line.include?("| What is accepted |")
+      next if line.include?('| What is accepted |')
 
       out << [:table, section, line_no, line]
       next
@@ -218,9 +218,7 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
   limits   = []
   found    = grammar_section(markdown)
 
-  if found.nil?
-    return [["R5 the grammar section is not in the page: no line reads #{SECTION_HEADING.inspect}"], []]
-  end
+  return [["R5 the grammar section is not in the page: no line reads #{SECTION_HEADING.inspect}"], []] if found.nil?
 
   body, first_line_no = found
   rules = []
@@ -237,7 +235,7 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
         limits << text
         unless markers.empty?
           problems << "R7 #{where}: a limit names a vector axis, which is a category " \
-                      "error — a limit is what the set does NOT reach: " \
+                      'error — a limit is what the set does NOT reach: ' \
                       "#{text.lines.first.strip.inspect}"
         end
       end
@@ -248,7 +246,7 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
       hits = NORMATIVE.select { |word| plain.downcase.include?(word) }
       unless hits.empty?
         problems << "R4 #{where}: prose states a rule (#{hits.join(', ')}) but is not a " \
-                    "bullet or a table row, so no marker is required of it — move it into " \
+                    'bullet or a table row, so no marker is required of it — move it into ' \
                     "a rule, or give it its own marker: #{text.lines.first.strip.inspect}"
       end
       next
@@ -264,7 +262,7 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
       next
     end
 
-    named = markers.first.split(",").map(&:strip).reject(&:empty?)
+    named = markers.first.split(',').map(&:strip).reject(&:empty?)
     if named.empty?
       problems << "R1 #{where}: the marker names no axis"
       next
@@ -281,9 +279,9 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
     if !scalars.empty? && (named & scalar).empty?
       problems << "R8 #{where}: states a rule about the signature scalar " \
                   "(#{scalars.join(', ')}) but names #{named.join(', ')}, and the vector " \
-                  "set respells the scalar only on " \
+                  'set respells the scalar only on ' \
                   "#{scalar.empty? ? '(no axis at all)' : scalar.join(', ')} — a claim " \
-                  "about which 64 bytes are a signature that no vector can reach: " \
+                  'about which 64 bytes are a signature that no vector can reach: ' \
                   "#{text.lines.first.strip.inspect}"
     end
 
@@ -291,9 +289,9 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
     if !universals.empty? && (named & exhaustive).empty?
       problems << "R6 #{where}: quantifies over the byte domain " \
                   "(#{universals.join(', ')}) but names #{named.join(', ')}, and the " \
-                  "vector set runs all 256 byte values only on " \
+                  'vector set runs all 256 byte values only on ' \
                   "#{exhaustive.empty? ? '(no axis at all)' : exhaustive.join(', ')} — " \
-                  "a universal over a domain the set samples is the shape this gate " \
+                  'a universal over a domain the set samples is the shape this gate ' \
                   "exists for: #{text.lines.first.strip.inspect}"
     end
 
@@ -303,7 +301,7 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
   named_axes = rules.flat_map(&:axes).uniq
   (axes - named_axes).each do |axis|
     problems << "R3 axis #{axis.inspect} has vectors but no rule on the page names it — " \
-                "either the page is missing the rule those vectors pin, or the axis is"
+                'either the page is missing the rule those vectors pin, or the axis is'
   end
 
   SUBSECTIONS.each do |section|
@@ -314,23 +312,23 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
 
   if limits.empty?
     problems << "R7 subsection #{LIMITS_SUBSECTION} yielded no limit, so the page states " \
-                "only what is true of the token and nothing about what it does not claim"
+                'only what is true of the token and nothing about what it does not claim'
   end
 
   if rules.none? { |rule| NORMATIVE.any? { |word| uncoded(rule.text).downcase.include?(word) } }
-    problems << "R5 not one rule uses the normative vocabulary R4 scans prose for, so that " \
-                "scan has no live subject and cannot fail"
+    problems << 'R5 not one rule uses the normative vocabulary R4 scans prose for, so that ' \
+                'scan has no live subject and cannot fail'
   end
 
   if rules.none? { |rule| BYTE_UNIVERSAL.any? { |word| uncoded(rule.text).downcase.include?(word) } }
-    problems << "R5 not one rule uses the byte-domain vocabulary R6 scans for, so that arm " \
-                "has no live subject and cannot fail — the page has stopped saying what " \
-                "happens to the bytes it does not admit"
+    problems << 'R5 not one rule uses the byte-domain vocabulary R6 scans for, so that arm ' \
+                'has no live subject and cannot fail — the page has stopped saying what ' \
+                'happens to the bytes it does not admit'
   end
 
   if rules.none? { |rule| SCALAR_RANGE.any? { |word| uncoded(rule.text).downcase.include?(word) } }
-    problems << "R8 not one rule uses the scalar vocabulary R8 scans for, so that arm has " \
-                "no live subject and cannot fail — the page has stopped stating the range " \
+    problems << 'R8 not one rule uses the scalar vocabulary R8 scans for, so that arm has ' \
+                'no live subject and cannot fail — the page has stopped stating the range ' \
                 "the signature's second half is decoded in"
   end
 
@@ -342,7 +340,7 @@ def report(problems, rules, limits, axes, exhaustive, scalar)
     puts "  Grammar coverage — #{rules.length} rules and #{limits.length} stated limits " \
          "on #{File.basename(PAGE)} across #{rules.map(&:subsection).uniq.length} " \
          "subsections, naming all #{axes.length} vector axes (#{axes.join(', ')}); " \
-         "exhaustive over the byte domain: " \
+         'exhaustive over the byte domain: ' \
          "#{exhaustive.empty? ? 'NO AXIS' : exhaustive.join(', ')}; " \
          "scalar respelt on: #{scalar.empty? ? 'NO AXIS' : scalar.join(', ')} ✓"
     return 0
@@ -396,128 +394,128 @@ GOOD_SCALAR     = %w[sig].freeze
 def self_test
   arms = []
 
-  arms << ["S1 a well-formed page is clean", lambda {
+  arms << ['S1 a well-formed page is clean', lambda {
     problems, rules, _limits = analyse(GOOD_PAGE, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
     problems.empty? && rules.length == 6
   }]
 
-  arms << ["S2 R1: a bullet with no marker fails", lambda {
-    page = GOOD_PAGE.sub(" <!-- vectors: length -->", "")
+  arms << ['S2 R1: a bullet with no marker fails', lambda {
+    page = GOOD_PAGE.sub(' <!-- vectors: length -->', '')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R1") }
+    problems.any? { |problem| problem.start_with?('R1') }
   }]
 
-  arms << ["S3 R1: two markers on one rule fails", lambda {
-    page = GOOD_PAGE.sub("<!-- vectors: length -->", "<!-- vectors: length --> <!-- vectors: sig -->")
+  arms << ['S3 R1: two markers on one rule fails', lambda {
+    page = GOOD_PAGE.sub('<!-- vectors: length -->', '<!-- vectors: length --> <!-- vectors: sig -->')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.include?("2 markers on one rule") }
+    problems.any? { |problem| problem.include?('2 markers on one rule') }
   }]
 
-  arms << ["S4 R1: a table data row with no marker fails", lambda {
-    page = GOOD_PAGE.sub(" <!-- vectors: tag -->", "")
+  arms << ['S4 R1: a table data row with no marker fails', lambda {
+    page = GOOD_PAGE.sub(' <!-- vectors: tag -->', '')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R1") }
+    problems.any? { |problem| problem.start_with?('R1') }
   }]
 
-  arms << ["S5 R2: a marker naming an unknown axis fails", lambda {
-    page = GOOD_PAGE.sub("<!-- vectors: sig -->", "<!-- vectors: signature -->")
+  arms << ['S5 R2: a marker naming an unknown axis fails', lambda {
+    page = GOOD_PAGE.sub('<!-- vectors: sig -->', '<!-- vectors: signature -->')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R2") }
+    problems.any? { |problem| problem.start_with?('R2') }
   }]
 
-  arms << ["S6 R3: an axis no rule names fails", lambda {
-    problems, = analyse(GOOD_PAGE, GOOD_AXES + ["bytes"], GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R3") && problem.include?("bytes") }
+  arms << ['S6 R3: an axis no rule names fails', lambda {
+    problems, = analyse(GOOD_PAGE, GOOD_AXES + ['bytes'], GOOD_EXHAUSTIVE, GOOD_SCALAR)
+    problems.any? { |problem| problem.start_with?('R3') && problem.include?('bytes') }
   }]
 
-  arms << ["S7 R4: a rule smuggled into a paragraph fails", lambda {
-    page = GOOD_PAGE.sub("this section is where the grammar is decided.",
-                         "a token must carry the tag.")
+  arms << ['S7 R4: a rule smuggled into a paragraph fails', lambda {
+    page = GOOD_PAGE.sub('this section is where the grammar is decided.',
+                         'a token must carry the tag.')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R4") }
+    problems.any? { |problem| problem.start_with?('R4') }
   }]
 
-  arms << ["S8 R4: a paragraph with a marker is read as a rule", lambda {
-    page = GOOD_PAGE.sub("this section is where the grammar is decided.",
-                         "a token must carry the tag. <!-- vectors: tag -->")
+  arms << ['S8 R4: a paragraph with a marker is read as a rule', lambda {
+    page = GOOD_PAGE.sub('this section is where the grammar is decided.',
+                         'a token must carry the tag. <!-- vectors: tag -->')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.none? { |problem| problem.start_with?("R4") }
+    problems.none? { |problem| problem.start_with?('R4') }
   }]
 
-  arms << ["S9 R5: a missing section fails", lambda {
-    page = GOOD_PAGE.sub(SECTION_HEADING, "## Something quite different")
+  arms << ['S9 R5: a missing section fails', lambda {
+    page = GOOD_PAGE.sub(SECTION_HEADING, '## Something quite different')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.include?("the grammar section is not in the page") }
+    problems.any? { |problem| problem.include?('the grammar section is not in the page') }
   }]
 
-  arms << ["S10 R5: a subsection with no rule fails", lambda {
-    page = GOOD_PAGE.sub("- Exactly six pipe-separated fields. <!-- vectors: count -->\n", "")
+  arms << ['S10 R5: a subsection with no rule fails', lambda {
+    page = GOOD_PAGE.sub("- Exactly six pipe-separated fields. <!-- vectors: count -->\n", '')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.include?("**Message** yielded no rule") }
+    problems.any? { |problem| problem.include?('**Message** yielded no rule') }
   }]
 
-  arms << ["S11 R5: rules with no normative vocabulary fail", lambda {
+  arms << ['S11 R5: rules with no normative vocabulary fail', lambda {
     page = GOOD_PAGE
-           .sub("At most 512 bytes.", "The size is 512 bytes.")
-           .sub("Exactly six pipe-separated fields.", "Six pipe-separated fields.")
-           .sub("the bytes and nothing else", "the bytes")
-           .sub("every other byte value is refused", "every other byte value is dropped")
+           .sub('At most 512 bytes.', 'The size is 512 bytes.')
+           .sub('Exactly six pipe-separated fields.', 'Six pipe-separated fields.')
+           .sub('the bytes and nothing else', 'the bytes')
+           .sub('every other byte value is refused', 'every other byte value is dropped')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.include?("no live subject") }
+    problems.any? { |problem| problem.include?('no live subject') }
   }]
 
-  arms << ["S13 a marker quoted inside a code span is prose, not a marker", lambda {
-    page = GOOD_PAGE.sub("this section is where the grammar is decided.",
-                         "each rule carries a `<!-- vectors: nosuchaxis -->` marker.")
+  arms << ['S13 a marker quoted inside a code span is prose, not a marker', lambda {
+    page = GOOD_PAGE.sub('this section is where the grammar is decided.',
+                         'each rule carries a `<!-- vectors: nosuchaxis -->` marker.')
     problems, rules, _limits = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
     problems.empty? && rules.length == 6
   }]
 
-  arms << ["S14 R6: a byte-domain universal on a sampled axis fails", lambda {
-    page = GOOD_PAGE.sub("<!-- vectors: charset -->", "<!-- vectors: tag -->")
+  arms << ['S14 R6: a byte-domain universal on a sampled axis fails', lambda {
+    page = GOOD_PAGE.sub('<!-- vectors: charset -->', '<!-- vectors: tag -->')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R6") }
+    problems.any? { |problem| problem.start_with?('R6') }
   }]
 
-  arms << ["S15 R6: the same rule on an axis nothing exhausts fails", lambda {
+  arms << ['S15 R6: the same rule on an axis nothing exhausts fails', lambda {
     problems, = analyse(GOOD_PAGE, GOOD_AXES, [], GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R6") && problem.include?("no axis at all") }
+    problems.any? { |problem| problem.start_with?('R6') && problem.include?('no axis at all') }
   }]
 
-  arms << ["S16 R5: rules with no byte-domain vocabulary fail", lambda {
-    page = GOOD_PAGE.sub("every other byte value is refused", "everything else is refused")
+  arms << ['S16 R5: rules with no byte-domain vocabulary fail', lambda {
+    page = GOOD_PAGE.sub('every other byte value is refused', 'everything else is refused')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.include?("byte-domain vocabulary") }
+    problems.any? { |problem| problem.include?('byte-domain vocabulary') }
   }]
 
-  arms << ["S17 R7: a section with no stated limits fails", lambda {
-    page = GOOD_PAGE.sub("- Nothing here says the three readers are the same program.\n", "")
+  arms << ['S17 R7: a section with no stated limits fails', lambda {
+    page = GOOD_PAGE.sub("- Nothing here says the three readers are the same program.\n", '')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.include?("yielded no limit") }
+    problems.any? { |problem| problem.include?('yielded no limit') }
   }]
 
-  arms << ["S18 R7: a limit that names a vector axis fails", lambda {
-    page = GOOD_PAGE.sub("same program.", "same program. <!-- vectors: tag -->")
+  arms << ['S18 R7: a limit that names a vector axis fails', lambda {
+    page = GOOD_PAGE.sub('same program.', 'same program. <!-- vectors: tag -->')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.start_with?("R7") && problem.include?("category error") }
+    problems.any? { |problem| problem.start_with?('R7') && problem.include?('category error') }
   }]
 
   # R6's motivating defect: an earlier `reservation_id` cell, planted into the
   # live page. It passes R1-R5 while the three readers disagree on 128 of the
   # 256 single-byte cases; R6 must redden on it.
-  arms << ["S19 the original defect: the shipped reservation_id cell, live page", lambda {
-    original = "| 2 | `reservation_id` | opaque, non-empty, any bytes but `\\|` and NUL — " \
-               "a newline, a tab, a control character or multibyte UTF-8 all pass. No " \
-               "reader constrains it further and none gates on it. " \
+  arms << ['S19 the original defect: the shipped reservation_id cell, live page', lambda {
+    original = '| 2 | `reservation_id` | opaque, non-empty, any bytes but `\\|` and NUL — ' \
+               'a newline, a tab, a control character or multibyte UTF-8 all pass. No ' \
+               'reader constrains it further and none gates on it. ' \
                "<!-- vectors: empty, bytes --> |\n"
     page = File.read(PAGE)
-    marker = page.lines.find { |line| line.start_with?("| 3 | `iat`") }
+    marker = page.lines.find { |line| line.start_with?('| 3 | `iat`') }
     return false if marker.nil?
 
     planted = page.sub(marker, original + marker)
     problems, = analyse(planted, SkootiTokenVectors.axes, SkootiTokenVectors.exhaustive_axes,
                         SkootiTokenVectors.scalar_axes)
-    problems.any? { |problem| problem.start_with?("R6") && problem.include?("any bytes") }
+    problems.any? { |problem| problem.start_with?('R6') && problem.include?('any bytes') }
   }]
 
   # R2's motivating defect: the live page's signature rule against a vector set
@@ -525,18 +523,18 @@ def self_test
   arms << ["S12 the original defect: the live page's signature rule against the pre-sig axes", lambda {
     pre_sig_axes = %w[count empty tag int jti length fresh]
     problems, = analyse(File.read(PAGE), pre_sig_axes)
-    problems.any? { |problem| problem.start_with?("R2") && problem.include?("\"sig\"") }
+    problems.any? { |problem| problem.start_with?('R2') && problem.include?('"sig"') }
   }]
 
-  arms << ["S20 R8: a scalar rule on an axis nothing respells the scalar on fails", lambda {
-    problems, = analyse(GOOD_PAGE, GOOD_AXES, GOOD_EXHAUSTIVE, ["count"])
-    problems.any? { |problem| problem.start_with?("R8") && problem.include?("scalar") }
+  arms << ['S20 R8: a scalar rule on an axis nothing respells the scalar on fails', lambda {
+    problems, = analyse(GOOD_PAGE, GOOD_AXES, GOOD_EXHAUSTIVE, ['count'])
+    problems.any? { |problem| problem.start_with?('R8') && problem.include?('scalar') }
   }]
 
-  arms << ["S21 R8: a page that states no scalar rule fails the vacuity arm", lambda {
-    page = GOOD_PAGE.sub("- Its second half is a scalar below the group order. <!-- vectors: sig -->\n", "")
+  arms << ['S21 R8: a page that states no scalar rule fails the vacuity arm', lambda {
+    page = GOOD_PAGE.sub("- Its second half is a scalar below the group order. <!-- vectors: sig -->\n", '')
     problems, = analyse(page, GOOD_AXES, GOOD_EXHAUSTIVE, GOOD_SCALAR)
-    problems.any? { |problem| problem.include?("no live subject and cannot fail — the page has stopped stating the range") }
+    problems.any? { |problem| problem.include?('no live subject and cannot fail — the page has stopped stating the range') }
   }]
 
   # R8's motivating defect: the live page's scalar rule against a vector set
@@ -545,7 +543,7 @@ def self_test
   arms << ["S22 the original defect: the live page's scalar rule against a set that respells no scalar", lambda {
     problems, = analyse(File.read(PAGE), SkootiTokenVectors.axes,
                         SkootiTokenVectors.exhaustive_axes, [])
-    problems.any? { |problem| problem.start_with?("R8") && problem.include?("no axis at all") }
+    problems.any? { |problem| problem.start_with?('R8') && problem.include?('no axis at all') }
   }]
 
   failed = 0
@@ -559,7 +557,7 @@ def self_test
   failed.zero? ? 0 : 1
 end
 
-if ARGV.include?("--self-test")
+if ARGV.include?('--self-test')
   exit self_test
 else
   axes       = SkootiTokenVectors.axes

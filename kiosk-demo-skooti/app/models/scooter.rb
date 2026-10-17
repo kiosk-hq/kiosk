@@ -4,8 +4,8 @@
 # which requires the rider's `age_over_18` and `licence_a`; any other with
 # `start_rental`.
 class Scooter < ApplicationRecord
-  enum :status, { available: "available" }
-  enum :kind, { scooter: "scooter", motorcycle: "motorcycle" }
+  enum :status, { available: 'available' }
+  enum :kind, { scooter: 'scooter', motorcycle: 'motorcycle' }
 
   has_many :reservations, dependent: :destroy
 

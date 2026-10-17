@@ -11,7 +11,7 @@ require 'kiosk/server/conformance_origin'
 # server answers them from: the verb registry the mixin populated, the route
 # table Rails dispatches on, the registered handler under a GUC-scoped session,
 # and the engine's own schema validator.
-RSpec.describe Kiosk::Server::ConformanceOrigin do
+module ConformanceOriginSpec
   # A route table with `recognize_path`'s contract: it RAISES for a path with
   # no route, which is what makes "nothing answers" different from "answers
   # something else".
@@ -46,10 +46,6 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
     end
   end
 
-  let(:connection) { RecordingConnection.new }
-  let(:alice)      { Struct.new(:id, :role).new('u-alice', 'customer') }
-  let(:bob)        { Struct.new(:id, :role).new('u-bob', 'customer') }
-
   def origin(routes: nil)
     described_class.new(connection: connection, routes: routes)
   end
@@ -64,6 +60,51 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
     end
     FakeRouteSet.new(table)
   end
+
+  def declare_the_fleet
+    declare_catalog
+    declare_query('my_orders',
+                  input_schema: { type: 'object', properties: {} },
+                  output_schema: { type: 'array' }) do
+      render json: [{ order_id: "o-#{kiosk_identity.user_id}" }]
+    end
+    declare_action('place_order',
+                   input_schema: { type: 'object', properties: {} },
+                   output_schema: { type: 'object' }) { render json: { ok: true } }
+  end
+
+  def declare_catalog
+    declare_query('catalog',
+                  input_schema: { type: 'object', properties: {} },
+                  output_schema: { type: 'array',
+                                   items: { type: 'object',
+                                            properties: { sku: { type: 'string' } },
+                                            required: %w[sku] } }) do
+      render json: [{ sku: 'sourdough' }]
+    end
+  end
+end
+
+RSpec.shared_context 'conformance origin spec: origin' do
+  include ConformanceOriginSpec
+
+  let(:connection) { ConformanceOriginSpec::RecordingConnection.new }
+  let(:alice)      { Struct.new(:id, :role).new('u-alice', 'customer') }
+  let(:bob)        { Struct.new(:id, :role).new('u-bob', 'customer') }
+end
+
+RSpec.shared_context 'conformance origin spec: the four checks' do
+  include_context 'conformance origin spec: origin'
+
+  before { Kiosk::TestHelpers::Conformance.origin = origin(routes: routes) }
+
+  after { Kiosk::TestHelpers::Conformance.reset! }
+
+  let(:routes) { wired_routes(%w[catalog query], %w[my_orders query], %w[place_order action]) }
+end
+
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: origin'
 
   describe '#verbs' do
     it "reads BOTH registries, with each verb's kind, reach and schemas" do
@@ -91,6 +132,10 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
       expect(subject_origin.verbs).to be_empty
     end
   end
+end
+
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: origin'
 
   describe '#recognize' do
     it 'reports what the router says' do
@@ -104,6 +149,10 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
       expect(origin(routes: wired_routes).recognize('/kiosk/menu', method: 'GET')).to be_nil
     end
   end
+end
+
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: origin'
 
   describe '#call' do
     it 'runs the handler inside a GUC-scoped transaction as the named principal' do
@@ -129,7 +178,13 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
       expect(origin.call('mine', kind: :query, params: {}, as: 'synthetic:carol'))
         .to eq([{ 'user' => 'synthetic:carol' }])
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: origin'
+
+  describe '#call' do
     it 'validates arguments against input_schema first, as the wire does' do
       declare_query('search',
                     input_schema: { type: 'object', properties: { limit: { type: 'integer' } },
@@ -154,6 +209,10 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
         .to raise_error(ArgumentError, /needs a principal/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: origin'
 
   describe '#schema_errors' do
     it "is the ENGINE's own validator, so a test and a running server agree" do
@@ -174,8 +233,7 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
       # `limit` and `cursor` are wire-reserved and always accepted, so a verb
       # whose closed input_schema does not declare `limit` still takes one — and
       # a conformance check that validated against the bare schema would reject
-      # an example the wire accepts. Measured on a real demo whose
-      # `example_params` publishes exactly that.
+      # an example the wire accepts.
       closed = { type: 'object', additionalProperties: false,
                  properties: { neighbourhood: { type: 'string' } }, required: [] }
 
@@ -183,7 +241,13 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
                                   schema: closed, verb: 'search_hotels', kind: :query,
                                   slot: 'input_schema')).to eq([])
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: origin'
+
+  describe '#schema_errors' do
     it 'still reports an argument the input_schema really rejects' do
       closed = { type: 'object', additionalProperties: false,
                  properties: { neighbourhood: { type: 'string' } }, required: [] }
@@ -200,33 +264,12 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
                                       kind: :query, slot: 'output_schema')).to eq([])
     end
   end
+end
+
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: the four checks'
 
   describe 'the four checks, against a real registry' do
-    before { Kiosk::TestHelpers::Conformance.origin = origin(routes: routes) }
-
-    after { Kiosk::TestHelpers::Conformance.reset! }
-
-    let(:routes) { wired_routes(%w[catalog query], %w[my_orders query], %w[place_order action]) }
-
-    def declare_the_fleet
-      declare_query('catalog',
-                    input_schema: { type: 'object', properties: {} },
-                    output_schema: { type: 'array',
-                                     items: { type: 'object',
-                                              properties: { sku: { type: 'string' } },
-                                              required: %w[sku] } }) do
-        render json: [{ sku: 'sourdough' }]
-      end
-      declare_query('my_orders',
-                    input_schema: { type: 'object', properties: {} },
-                    output_schema: { type: 'array' }) do
-        render json: [{ order_id: "o-#{kiosk_identity.user_id}" }]
-      end
-      declare_action('place_order',
-                     input_schema: { type: 'object', properties: {} },
-                     output_schema: { type: 'object' }) { render json: { ok: true } }
-    end
-
     it 'passes all four on a conforming origin' do
       declare_the_fleet
 
@@ -246,7 +289,13 @@ RSpec.describe Kiosk::Server::ConformanceOrigin do
       expect(outcome).to be_failed
       expect(outcome.message).to include('nothing answers GET /kiosk/forgotten')
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::ConformanceOrigin do
+  include_context 'conformance origin spec: the four checks'
+
+  describe 'the four checks, against a real registry' do
     it 'reddens on a handler whose answer its own output_schema rejects' do
       declare_query('catalog',
                     input_schema: { type: 'object', properties: {} },

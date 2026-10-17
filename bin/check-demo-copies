@@ -1908,6 +1908,82 @@ E2E_FIXTURES = {
   }
 }.freeze
 
+# Checks one declared harness fixture against the demo copies it pairs with; returns how many it compared.
+def check_e2e_fixture(name, installed, demos, errors)
+  entry = E2E_FIXTURES[name]
+  label = "#{E2E_FIXTURES_DIR}/#{name}"
+  errors << "#{label}: E2E_FIXTURES entry carries no `why:` reason" if entry[:why].to_s.strip.empty?
+  return check_unpaired_fixture(label, demos, errors) if entry.fetch(:pairs, false).nil?
+
+  spec = entry.fetch(:pairs) { installed[name] }
+  return uncompared(errors, "#{label}: #{E2E_RUN_SH} no longer installs it. Declare `pairs:` explicitly, or `pairs: nil`.") if spec.nil?
+
+  check_paired_fixture(label, entry[:rule], spec, demos, errors)
+end
+
+def uncompared(errors, message)
+  errors << message
+  0
+end
+
+# A fixture declared `pairs: nil` must have no comment-identical twin in any demo.
+def check_unpaired_fixture(label, demos, errors)
+  twins = fixture_twins(label, demos)
+  unless twins.empty?
+    errors << "#{label}: declared `pairs: nil`, but #{twins.map { |f| f.delete_prefix("#{ROOT}/") }.sort.join(', ')} " \
+              "#{twins.size == 1 ? 'is' : 'are'} comment-identical to it. Pair it and give it a rule."
+  end
+  0
+end
+
+# Demo files of the fixture's name that are comment-identical to it.
+def fixture_twins(label, demos)
+  want = code_digest(File.join(ROOT, label))
+  demos.flat_map { |dir| Dir[File.join(dir, '**', File.basename(label))] }
+       .reject { |f| f.include?('/.gems/') }
+       .select { |f| code_digest(f) == want }
+end
+
+def check_paired_fixture(label, rule, spec, demos, errors)
+  return uncompared(errors, "#{label}: unknown `rule: #{rule.inspect}`; use :identical, :code or :per_demo.") unless %i[identical code per_demo].include?(rule)
+
+  copies = fixture_copies(spec, demos)
+  return uncompared(errors, "#{label}: paired with `#{spec}`, and no demo ships that path. Re-pair it, or declare `pairs: nil`.") if copies.empty?
+
+  if rule == :per_demo
+    check_per_demo_fixture(label, spec, copies, errors)
+  else
+    check_held_fixture(label, rule, spec, copies, errors)
+  end
+  copies.size
+end
+
+# Short demo name => the demo's copy at `spec` (a path, or a glob whose first match counts).
+def fixture_copies(spec, demos)
+  demos.each_with_object({}) do |dir, acc|
+    match = spec.include?('*') ? Dir[File.join(dir, spec)].first : File.join(dir, spec)
+    acc[short_name(File.basename(dir))] = match if match && File.file?(match)
+  end
+end
+
+def check_held_fixture(label, rule, spec, copies, errors)
+  digest = copy_digest(rule)
+  want   = digest.call(File.join(ROOT, label))
+  off    = copies.reject { |_demo, path| digest.call(path) == want }
+  return if off.empty?
+
+  errors << "#{label}: declared `:#{rule}` to #{spec}, and #{off.keys.sort.join(', ')} " \
+            "#{off.size == 1 ? 'does' : 'do'} not match it. Propagate the edit, or change the rule."
+end
+
+def check_per_demo_fixture(label, spec, copies, errors)
+  want = code_digest(File.join(ROOT, label))
+  return unless copies.all? { |_demo, path| code_digest(path) == want }
+
+  errors << "#{label}: declared `:per_demo` against #{spec}, but it is now comment-identical to every " \
+            'demo copy. Declare it `:code`.'
+end
+
 e2e_fixture_comparisons = 0
 e2e_fixture_dir = File.join(ROOT, E2E_FIXTURES_DIR)
 if !File.directory?(e2e_fixture_dir) || !File.exist?(run_sh)
@@ -1926,59 +2002,7 @@ else
   end
 
   (E2E_FIXTURES.keys & on_disk).each do |name|
-    entry = E2E_FIXTURES[name]
-    fixture = File.join(e2e_fixture_dir, name)
-    label = "#{E2E_FIXTURES_DIR}/#{name}"
-    errors << "#{label}: E2E_FIXTURES entry carries no `why:` reason" if entry[:why].to_s.strip.empty?
-
-    declared_nil = entry.key?(:pairs) && entry[:pairs].nil?
-    spec = entry.key?(:pairs) ? entry[:pairs] : installed[name]
-
-    if declared_nil
-      twins = demos.flat_map { |dir| Dir[File.join(dir, '**', name)] }
-                   .reject { |f| f.include?('/.gems/') }
-                   .select { |f| code_digest(f) == code_digest(fixture) }
-      unless twins.empty?
-        errors << "#{label}: declared `pairs: nil`, but #{twins.map { |f| f.delete_prefix("#{ROOT}/") }.sort.join(', ')} " \
-                  "#{twins.size == 1 ? 'is' : 'are'} comment-identical to it. Pair it and give it a rule."
-      end
-      next
-    end
-    if spec.nil?
-      errors << "#{label}: #{E2E_RUN_SH} no longer installs it. Declare `pairs:` explicitly, or `pairs: nil`."
-      next
-    end
-
-    rule = entry[:rule]
-    unless %i[identical code per_demo].include?(rule)
-      errors << "#{label}: unknown `rule: #{rule.inspect}`; use :identical, :code or :per_demo."
-      next
-    end
-
-    copies = demos.each_with_object({}) do |dir, acc|
-      match = spec.include?('*') ? Dir[File.join(dir, spec)].first : File.join(dir, spec)
-      acc[short.call(File.basename(dir))] = match if match && File.file?(match)
-    end
-    if copies.empty?
-      errors << "#{label}: paired with `#{spec}`, and no demo ships that path. Re-pair it, or declare `pairs: nil`."
-      next
-    end
-
-    e2e_fixture_comparisons += copies.size
-    case rule
-    when :identical, :code
-      digest = rule == :identical ? method(:byte_digest) : method(:code_digest)
-      off = copies.reject { |_demo, path| digest.call(path) == digest.call(fixture) }
-      next if off.empty?
-
-      errors << "#{label}: declared `:#{rule}` to #{spec}, and #{off.keys.sort.join(', ')} " \
-                "#{off.size == 1 ? 'does' : 'do'} not match it. Propagate the edit, or change the rule."
-    when :per_demo
-      next unless copies.all? { |_demo, path| code_digest(path) == code_digest(fixture) }
-
-      errors << "#{label}: declared `:per_demo` against #{spec}, but it is now comment-identical to every " \
-                'demo copy. Declare it `:code`.'
-    end
+    e2e_fixture_comparisons += check_e2e_fixture(name, installed, demos, errors)
   end
 end
 
@@ -1987,46 +2011,62 @@ errors << "check-demo-copies: the e2e fixture rule declares #{E2E_FIXTURES.size}
 # ── Bin scripts: every `bin/<name>` a demo's bin/ scripts or README name exists and is executable ──
 BIN_REF_RE = %r{(?<=[`"'\s(])(?:\./)?bin/([a-z0-9_][a-z0-9_-]*)}
 
-bin_ref_files = 0
-bin_local     = 0
-expected_ref_files = 0
-demos.each do |dir|
-  label   = short.call(File.basename(dir))
-  sources = Dir[File.join(dir, 'bin', '*')].select { |f| File.file?(f) }.sort
-  sources.each do |script|
-    next if File.executable?(script)
+# Checks one demo's bin/ scripts and every `bin/<name>` they or its README name.
+def check_demo_bin(dir, counts, errors)
+  label   = short_name(File.basename(dir))
+  sources = bin_scripts(dir)
+  sources.each { |script| errors << not_executable(label, script) unless File.executable?(script) }
+  corpus = bin_corpus(dir, sources)
+  counts[:expected] += corpus.size
+  corpus.each { |path, body| check_bin_refs(dir, path, body, counts, errors) }
+end
 
-    errors << "#{label}: #{script.delete_prefix("#{ROOT}/")} is not executable " \
-              "(mode #{format('%o', File.stat(script).mode & 0o7777)})."
-  end
+def bin_scripts(dir) = Dir[File.join(dir, 'bin', '*')].select { |f| File.file?(f) }.sort
 
-  readme     = File.join(dir, 'README.md')
-  bin_corpus = sources.map { |f| [f, File.readlines(f).grep_v(/\A\s*#/).join] }
-  bin_corpus << [readme, File.read(readme)] if File.file?(readme)
-  expected_ref_files += bin_corpus.size
+def not_executable(label, script)
+  "#{label}: #{script.delete_prefix("#{ROOT}/")} is not executable " \
+    "(mode #{format('%o', File.stat(script).mode & 0o7777)})."
+end
 
-  bin_corpus.each do |path, body|
-    bin_ref_files += 1
-    body.scan(BIN_REF_RE).flatten.uniq.each do |name|
-      in_demo = File.join(dir, 'bin', name)
-      at_root = File.join(ROOT, 'bin', name)
-      where   = if File.file?(in_demo)
-                  in_demo
-                else
-                  (File.file?(at_root) ? at_root : nil)
-                end
-      bin_local += 1 if where == in_demo
+# [path, text] for each bin/ script (comment lines dropped) and the README.
+def bin_corpus(dir, sources)
+  readme = File.join(dir, 'README.md')
+  corpus = sources.map { |f| [f, File.readlines(f).grep_v(/\A\s*#/).join] }
+  corpus << [readme, File.read(readme)] if File.file?(readme)
+  corpus
+end
 
-      if where.nil?
-        errors << "#{label}: #{path.delete_prefix("#{ROOT}/")} names `bin/#{name}`, which exists neither in " \
-                  "#{label}'s own bin/ nor at the repo root. Ship the file or stop naming it."
-      elsif !File.executable?(where)
-        errors << "#{label}: #{path.delete_prefix("#{ROOT}/")} names `bin/#{name}` and " \
-                  "#{where.delete_prefix("#{ROOT}/")} is not executable."
-      end
-    end
+def check_bin_refs(dir, path, body, counts, errors)
+  counts[:files] += 1
+  body.scan(BIN_REF_RE).flatten.uniq.each do |name|
+    in_demo = File.join(dir, 'bin', name)
+    where   = File.file?(in_demo) ? in_demo : root_bin(name)
+    counts[:local] += 1 if where == in_demo
+    errors << bin_ref_fault(dir, path, name, where) if where.nil? || !File.executable?(where)
   end
 end
+
+def root_bin(name)
+  at_root = File.join(ROOT, 'bin', name)
+  File.file?(at_root) ? at_root : nil
+end
+
+def bin_ref_fault(dir, path, name, where)
+  label = short_name(File.basename(dir))
+  if where.nil?
+    "#{label}: #{path.delete_prefix("#{ROOT}/")} names `bin/#{name}`, which exists neither in " \
+      "#{label}'s own bin/ nor at the repo root. Ship the file or stop naming it."
+  else
+    "#{label}: #{path.delete_prefix("#{ROOT}/")} names `bin/#{name}` and " \
+      "#{where.delete_prefix("#{ROOT}/")} is not executable."
+  end
+end
+
+bin_counts = Hash.new(0)
+demos.each { |dir| check_demo_bin(dir, bin_counts, errors) }
+bin_ref_files      = bin_counts[:files]
+bin_local          = bin_counts[:local]
+expected_ref_files = bin_counts[:expected]
 errors << "check-demo-copies: the bin/-reference scan read #{bin_ref_files} file(s) of #{expected_ref_files}." if bin_ref_files != expected_ref_files
 errors << "check-demo-copies: the bin/-reference scan resolved NO reference to a demo's own bin/ script." if bin_local.zero?
 
@@ -2055,17 +2095,18 @@ def container_walk(root)
   out   = []
   stack = [root]
   until stack.empty?
-    dir = stack.pop
-    Dir.children(dir).each do |name|
-      abs = File.join(dir, name)
-      if File.directory?(abs)
-        stack << abs unless CONTAINER_PRUNE.include?(name)
-      elsif File.file?(abs)
-        out << abs.delete_prefix("#{root}/")
-      end
-    end
+    dirs, files = container_children(stack.pop)
+    stack.concat(dirs)
+    out.concat(files.map { |abs| abs.delete_prefix("#{root}/") })
   end
   out
+end
+
+# [subdirectories to walk, files] directly under `dir`.
+def container_children(dir)
+  paths = Dir.children(dir).map { |name| File.join(dir, name) }
+  dirs  = paths.select { |abs| File.directory?(abs) && !CONTAINER_PRUNE.include?(File.basename(abs)) }
+  [dirs, paths.select { |abs| File.file?(abs) }]
 end
 
 container_ls, container_git = Open3.capture2('git', '-C', ROOT, 'ls-files', '-z')

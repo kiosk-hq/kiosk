@@ -660,15 +660,15 @@ def bearer_status(token)
 end
 
 # SelfAssertedTokenForgery: a self-asserted agent bearer, even naming a real account as owner,
-# resolves to no identity; the real token is the control.
+# resolves to no identity; the real token, paying its toll, is the control.
 def self_asserted_token_forgery(customer)
   forgeries = forged_agent_bearers(customer).map do |label, token|
     code = bearer_status(token)
     [code == 401, "#{label} → #{code}"]
   end
 
-  control_res, = raw_wire(customer, :get, '/kiosk/my_reservations')
-  token_forgery_verdict(forgeries, control_res)
+  control = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL).query(customer, name: 'my_reservations')
+  token_forgery_verdict(forgeries, control.status)
 rescue StandardError => e
   { blocked: false, detail: "beat error: #{e.class}: #{e.message}" }
 end
@@ -679,15 +679,15 @@ def forged_agent_bearers(customer)
    ['wholly invented ids', "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"]]
 end
 
-def token_forgery_verdict(forgeries, control_res)
+def token_forgery_verdict(forgeries, control_status)
   lines = forgeries.map(&:last).join('; ')
-  return { blocked: false, detail: vacuous_control_detail('registered token', control_res.code) } if control_res.code.to_i != 200
+  return { blocked: false, detail: vacuous_control_detail('registered token', control_status) } if control_status != 200
   return { blocked: false, detail: "REGRESSION: a self-asserted bearer was accepted over the wire — #{lines} (want 401 for each)" } unless forgeries.all? { |ok, _| ok }
 
   { blocked: true,
     detail: "self-asserted `agent:u-…:r-owner` bearer resolves to NO identity — #{lines} — in the " \
             'SAME (development) env the drivers run in, with no environment condition in the ' \
-            "assertion; the real registered token answers the same verb #{control_res.code}, so " \
+            "assertion; the real registered token answers the same verb #{control_status}, so " \
             'the refusal is not vacuous' }
 end
 

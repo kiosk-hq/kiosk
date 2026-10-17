@@ -10,18 +10,18 @@ module Kiosk
 
         def initialize
           super(
-            name:        "WrongCurrencyCart",
-            category:    "payment",
-            description: "A chain-consistent cart denominated in a currency the operator does not " \
-                         "price in must be rejected at capture",
+            name: 'WrongCurrencyCart',
+            category: 'payment',
+            description: 'A chain-consistent cart denominated in a currency the operator does not ' \
+                         'price in must be rejected at capture',
           )
         end
 
         def call(client, profile)
           native = profile.currency.to_s.downcase
-          return skip_verdict("no currency") if native.empty?
-          return skip_verdict("no create_owned") unless profile.create_owned
-          return skip_verdict("no pay_for") unless profile.pay_for
+          return skip_verdict('no currency') if native.empty?
+          return skip_verdict('no create_owned') unless profile.create_owned
+          return skip_verdict('no pay_for') unless profile.pay_for
 
           foreign = ALTERNATIVES.find { |c| c != native }
 

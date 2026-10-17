@@ -47,7 +47,7 @@ module Kiosk
         currency: nil,
         requires_kyc: false,
         per_user_query: nil,
-        row_id_key: "id",
+        row_id_key: 'id',
         result_id_key: nil,
         create_owned: nil,
         forge_action: nil,

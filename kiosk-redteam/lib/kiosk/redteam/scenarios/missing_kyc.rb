@@ -7,17 +7,17 @@ module Kiosk
       class MissingKyc < Scenario
         def initialize
           super(
-            name:        "MissingKyc",
-            category:    "kyc",
-            description: "Gated action without KYC (but after payment) must be denied",
+            name: 'MissingKyc',
+            category: 'kyc',
+            description: 'Gated action without KYC (but after payment) must be denied',
           )
         end
 
         def call(client, profile)
-          return skip_verdict("requires_kyc is false")   unless profile.requires_kyc
-          return skip_verdict("no gated_action")         unless profile.gated_action
-          return skip_verdict("no create_owned")         unless profile.create_owned
-          return skip_verdict("no pay_for")              unless profile.pay_for
+          return skip_verdict('requires_kyc is false')   unless profile.requires_kyc
+          return skip_verdict('no gated_action')         unless profile.gated_action
+          return skip_verdict('no create_owned')         unless profile.create_owned
+          return skip_verdict('no pay_for')              unless profile.pay_for
 
           a = client.register!
           # No KYC call here — that is the attack.
@@ -28,9 +28,9 @@ module Kiosk
 
           failure = setup_failure(
             pay_resp,
-            step:    "the payment this scenario stages before the gated action",
-            because: "The gated action would then be refused by the payment gate, and this " \
-                     "scenario would credit that refusal to the KYC gate it is meant to prove.",
+            step: 'the payment this scenario stages before the gated action',
+            because: 'The gated action would then be refused by the payment gate, and this ' \
+                     'scenario would credit that refusal to the KYC gate it is meant to prove.'
           )
           return failure if failure
 

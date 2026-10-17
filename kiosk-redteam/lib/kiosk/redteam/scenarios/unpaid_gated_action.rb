@@ -7,15 +7,15 @@ module Kiosk
       class UnpaidGatedAction < Scenario
         def initialize
           super(
-            name:        "UnpaidGatedAction",
-            category:    "payment",
-            description: "Gated action without prior payment must be denied",
+            name: 'UnpaidGatedAction',
+            category: 'payment',
+            description: 'Gated action without prior payment must be denied',
           )
         end
 
         def call(client, profile)
-          return skip_verdict("no gated_action") unless profile.gated_action
-          return skip_verdict("no create_owned") unless profile.create_owned
+          return skip_verdict('no gated_action') unless profile.gated_action
+          return skip_verdict('no create_owned') unless profile.create_owned
 
           a = client.register!
 
@@ -23,9 +23,9 @@ module Kiosk
           kyc_resp = (submit_valid_kyc(client, a, profile) if profile.requires_kyc)
           failure  = setup_failure(
             kyc_resp,
-            step:    "the valid KYC attestation this scenario stages",
-            because: "Without it the principal is also un-attested, so the refusal below " \
-                     "would be the KYC gate rather than the payment gate under test.",
+            step: 'the valid KYC attestation this scenario stages',
+            because: 'Without it the principal is also un-attested, so the refusal below ' \
+                     'would be the KYC gate rather than the payment gate under test.'
           )
           return failure if failure
 

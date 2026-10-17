@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "json"
-require "base64"
+require 'json'
+require 'base64'
 
 module Kiosk
   module Redteam
@@ -9,9 +9,7 @@ module Kiosk
     # return a Verdict: blocked when the origin refused the attack, skipped
     # when the profile lacks the surface the scenario needs.
     class Scenario
-      attr_reader :name
-      attr_reader :category
-      attr_reader :description
+      attr_reader :name, :category, :description
 
       def initialize(name:, category:, description:)
         @name        = name
@@ -19,7 +17,7 @@ module Kiosk
         @description = description
       end
 
-      def call(client, profile) # rubocop:disable Lint/UnusedMethodArgument
+      def call(client, profile)
         raise NotImplementedError, "#{self.class}#call is not implemented"
       end
 
@@ -40,28 +38,33 @@ module Kiosk
           return Verdict.new(
             blocked: blocked,
             skipped: false,
-            status:  response.status,
-            detail:  blocked ? "" : (detail || "HTTP #{response.status}: #{response.body.inspect}"),
+            status: response.status,
+            detail: blocked ? '' : (detail || "HTTP #{response.status}: #{response.body.inspect}")
           )
         end
 
         code   = error_code(response)
         misses = []
-        misses << "want status #{Array(expect).join("/")}" if expect && !Array(expect).include?(response.status)
-        misses << "want error.code #{Array(expect_code).map(&:inspect).join("/")}" \
+        misses << "want status #{Array(expect).join('/')}" if expect && !Array(expect).include?(response.status)
+        misses << "want error.code #{Array(expect_code).map(&:inspect).join('/')}" \
           if expect_code && !Array(expect_code).include?(code)
-        misses << "5xx is never a block" if response.status >= 500
-        misses << "HTTP 402 is conclusive only with an explicit expect_code — " \
-                  "#{Kiosk::Redteam::PAYMENT_REQUIRED_CODES.keys.join("/")} all ride that status" \
-          if response.status == 402 && expect_code.nil?
+        misses << '5xx is never a block' if response.status >= 500
+        if response.status == 402 && expect_code.nil?
+          misses << 'HTTP 402 is conclusive only with an explicit expect_code — ' \
+                    "#{Kiosk::Redteam::PAYMENT_REQUIRED_CODES.keys.join('/')} all ride that status"
+        end
 
         Verdict.new(
           blocked: misses.empty?,
           skipped: false,
-          status:  response.status,
-          detail:  misses.empty? ? "" : "#{detail || "attack was not refused by the named gate"} " \
-                                        "[#{misses.join("; ")}; got HTTP #{response.status} " \
-                                        "code=#{code.inspect}, body=#{response.body.inspect}]",
+          status: response.status,
+          detail: if misses.empty?
+                    ''
+                  else
+                    "#{detail || 'attack was not refused by the named gate'} " \
+                      "[#{misses.join('; ')}; got HTTP #{response.status} " \
+                      "code=#{code.inspect}, body=#{response.body.inspect}]"
+                  end
         )
       end
 
@@ -73,11 +76,11 @@ module Kiosk
         Verdict.new(
           blocked: false,
           skipped: false,
-          status:  response.status,
-          detail:  "COULD NOT TEST: #{step || "the attack under test"} was answered #{reason}. " \
-                   "That is neither a refusal of this attack nor a breach — nothing was proved " \
-                   "either way. A provider that means a payment gate HERE must have the scenario " \
-                   "name the code it accepts (verdict_from expect_code:).",
+          status: response.status,
+          detail: "COULD NOT TEST: #{step || 'the attack under test'} was answered #{reason}. " \
+                  'That is neither a refusal of this attack nor a breach — nothing was proved ' \
+                  'either way. A provider that means a payment gate HERE must have the scenario ' \
+                  'name the code it accepts (verdict_from expect_code:).'
         )
       end
 
@@ -88,9 +91,9 @@ module Kiosk
         Verdict.new(
           blocked: false,
           skipped: false,
-          status:  response.status,
-          detail:  "SETUP FAILED: #{step} returned HTTP #{response.status} " \
-                   "#{response.body.inspect}. #{because}",
+          status: response.status,
+          detail: "SETUP FAILED: #{step} returned HTTP #{response.status} " \
+                  "#{response.body.inspect}. #{because}"
         )
       end
 
@@ -106,24 +109,24 @@ module Kiosk
 
       # Changes a payload claim and keeps the original signature.
       def tamper_token(token)
-        header, payload_b64, sig = token.split(".", 3)
+        header, payload_b64, sig = token.split('.', 3)
         return token if payload_b64.nil?
 
-        padded  = payload_b64 + ("=" * ((4 - payload_b64.length % 4) % 4))
+        padded  = payload_b64 + ('=' * ((4 - (payload_b64.length % 4)) % 4))
         claims  = JSON.parse(Base64.urlsafe_decode64(padded))
 
-        if claims.key?("role")
-          claims["role"] = claims["role"] == "admin" ? "superadmin" : "admin"
-        elsif claims.key?("sub")
-          claims["sub"] = "#{claims["sub"]}-tampered"
-        elsif claims.key?("exp")
-          claims["exp"] = (claims["exp"].to_i + 999_999)
+        if claims.key?('role')
+          claims['role'] = claims['role'] == 'admin' ? 'superadmin' : 'admin'
+        elsif claims.key?('sub')
+          claims['sub'] = "#{claims['sub']}-tampered"
+        elsif claims.key?('exp')
+          claims['exp'] = (claims['exp'].to_i + 999_999)
         else
-          claims["__tamper__"] = true
+          claims['__tamper__'] = true
         end
 
         new_payload = Base64.urlsafe_encode64(JSON.generate(claims), padding: false)
-        [header, new_payload, sig].join(".")
+        [header, new_payload, sig].join('.')
       end
 
       # A query answers a bare Array (§8.2); the `rows` envelope is read too so an
@@ -133,7 +136,7 @@ module Kiosk
         return body if body.is_a?(Array)
         return [] unless body.is_a?(Hash)
 
-        rows = body["rows"]
+        rows = body['rows']
         rows.is_a?(Array) ? rows : []
       end
     end

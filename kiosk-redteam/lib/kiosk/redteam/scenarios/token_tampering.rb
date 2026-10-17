@@ -8,9 +8,9 @@ module Kiosk
       class TokenTampering < Scenario
         def initialize
           super(
-            name:        "TokenTampering",
-            category:    "authentication",
-            description: "Altered JWT (claim flipped, signature unchanged) must be rejected 401",
+            name: 'TokenTampering',
+            category: 'authentication',
+            description: 'Altered JWT (claim flipped, signature unchanged) must be rejected 401',
           )
         end
 
@@ -19,10 +19,10 @@ module Kiosk
           if verb.nil?
             return Verdict.new(
               blocked: false, skipped: true, status: 0,
-              detail:  "this profile declares no `per_user_query`, so there is no verb this " \
-                       "origin is known to route — and a name it does not route answers a " \
-                       "routing 404 before the credential is read, which would score a block " \
-                       "the token check never made. Declare `per_user_query:` to run this beat.",
+              detail: 'this profile declares no `per_user_query`, so there is no verb this ' \
+                      'origin is known to route — and a name it does not route answers a ' \
+                      'routing 404 before the credential is read, which would score a block ' \
+                      'the token check never made. Declare `per_user_query:` to run this beat.'
             )
           end
 
@@ -32,9 +32,9 @@ module Kiosk
 
           tampered_principal = Kiosk::TestHelpers::Assistant::Principal.new(
             agent_id: b.agent_id,
-            user_id:  b.user_id,
-            token:    tampered,
-            rsa_key:  b.rsa_key,
+            user_id: b.user_id,
+            token: tampered,
+            rsa_key: b.rsa_key
           )
 
           resp = client.query(tampered_principal, name: verb)

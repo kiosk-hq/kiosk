@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "json"
+require 'json'
 
 module Kiosk
   module Redteam
@@ -16,7 +16,7 @@ module Kiosk
         @entries = []
       end
 
-      def record(name, blocked, detail = "")
+      def record(name, blocked, detail = '')
         file(Entry.new(name: name.to_s, state: blocked ? :blocked : :breach, detail: detail.to_s))
       end
 
@@ -48,7 +48,7 @@ module Kiosk
         blocked.each  { |e| @io.puts "  BLOCKED ✓ #{e.name}" }
         skipped.each  { |e| @io.puts "  SKIP    — #{e.name} (#{e.detail})" }
         breaches.each { |e| @io.puts "  BREACH  ✗ #{e.name} — #{e.detail}" }
-        @io.puts ""
+        @io.puts ''
 
         status = 0
         if blocked.empty?
@@ -58,25 +58,25 @@ module Kiosk
           @io.puts "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked."
         else
           @io.puts "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, #{breaches.size} BREACH — FIX REQUIRED"
-          @io.puts "  BREACH means a real hole in the provider — fix the app, not the scenario."
+          @io.puts '  BREACH means a real hole in the provider — fix the app, not the scenario.'
           status = 1
         end
 
         if actual != expected
-          @io.puts ""
-          @io.puts "  EXPECTED-APPLICABLE ASSERTION FAILED:"
+          @io.puts ''
+          @io.puts '  EXPECTED-APPLICABLE ASSERTION FAILED:'
           @io.puts "    Expected skips: #{expected.inspect}"
           @io.puts "    Actual skips:   #{actual.inspect}"
-          @io.puts "  A profile key may have been set to nil, disabling a gate scenario."
+          @io.puts '  A profile key may have been set to nil, disabling a gate scenario.'
           status = 2 if status.zero?
         end
 
         @io.puts JSON.generate(
           scenarios: @entries.size,
-          blocked:   blocked.size,
-          skipped:   actual,
-          breaches:  breaches.map(&:name),
-          exit:      status,
+          blocked: blocked.size,
+          skipped: actual,
+          breaches: breaches.map(&:name),
+          exit: status
         )
         status
       end
@@ -86,7 +86,7 @@ module Kiosk
       def absorb_verdict(name, verdict, on_skip:, echo: true)
         entry =
           if verdict.skipped
-            reason = verdict.detail.to_s.delete_prefix("SKIP — ")
+            reason = verdict.detail.to_s.delete_prefix('SKIP — ')
             if on_skip == :breach
               Entry.new(name: name, state: :breach,
                         detail: "SKIPPED, which this origin must never do — #{reason}")
@@ -98,7 +98,12 @@ module Kiosk
           else
             Entry.new(name: name, state: :breach, detail: verdict.detail.to_s)
           end
-        echo ? file(entry) : (@entries << entry; entry)
+        if echo
+          file(entry)
+        else
+          (@entries << entry
+           entry)
+        end
       end
 
       def file(entry)

@@ -16,7 +16,7 @@ module Kiosk
           verdict = scenario.call(@client, @profile)
 
           if verdict.skipped
-            reason = verdict.detail.delete_prefix("SKIP — ")
+            reason = verdict.detail.delete_prefix('SKIP — ')
             puts "  SKIP    — #{scenario.name} (#{reason})"
           elsif verdict.blocked
             # The status says which gate answered.

@@ -7,15 +7,15 @@ module Kiosk
       class MandatePrincipalSwap < Scenario
         def initialize
           super(
-            name:        "MandatePrincipalSwap",
-            category:    "mandate",
+            name: 'MandatePrincipalSwap',
+            category: 'mandate',
             description: "B signs a mandate carrying A's identity; provider must reject",
           )
         end
 
         def call(client, profile)
-          return skip_verdict("no pay_for")      unless profile.pay_for
-          return skip_verdict("no create_owned") unless profile.create_owned
+          return skip_verdict('no pay_for')      unless profile.pay_for
+          return skip_verdict('no create_owned') unless profile.create_owned
 
           a = client.register!
           b = client.register!
@@ -29,9 +29,9 @@ module Kiosk
           # Only 403: a 402 or 401 means the swap was never examined.
           verdict_from(
             resp,
-            expect:      403,
+            expect: 403,
             expect_code: %w[forbidden rls_denied],
-            detail:      "principal-swap mandate accepted (HTTP #{resp.status})",
+            detail: "principal-swap mandate accepted (HTTP #{resp.status})"
           )
         end
       end

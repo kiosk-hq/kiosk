@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "spec_helper"
-require_relative "support"
+require 'spec_helper'
+require_relative 'support'
 
 RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   subject(:scenario) { described_class.new }
@@ -21,18 +21,18 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
   end
 
-  def issued(suffix = "ctl")
-    json_return(201, "agent_id" => "a-#{suffix}", "user_id" => "u-#{suffix}",
-                     "access_token" => "tok-#{suffix}")
+  def issued(suffix = 'ctl')
+    json_return(201, 'agent_id' => "a-#{suffix}", 'user_id' => "u-#{suffix}",
+                     'access_token' => "tok-#{suffix}")
   end
 
-  describe "#call — non-vacuity" do
+  describe '#call — non-vacuity' do
     let(:profile) { Kiosk::Redteam::Profile.new(pow_difficulty: 20) }
 
-    context "when the server accepts registration without PoW (broken — BREACH)" do
-      it "returns blocked: false" do
+    context 'when the server accepts registration without PoW (broken — BREACH)' do
+      it 'returns blocked: false' do
         # Both :skip and "0" succeed — server has no PoW gate
-        register_returns(issued("1"), issued("2"))
+        register_returns(issued('1'), issued('2'))
 
         verdict = scenario.call(client, profile)
 
@@ -41,8 +41,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
       end
     end
 
-    context "when the server rejects both no-PoW attempts AND issues on a solved one (correct — BLOCKED)" do
-      it "returns blocked: true on a 422 pow_required + 400 bad_request (no reliance on error code)" do
+    context 'when the server rejects both no-PoW attempts AND issues on a solved one (correct — BLOCKED)' do
+      it 'returns blocked: true on a 422 pow_required + 400 bad_request (no reliance on error code)' do
         # The scenario uses its own rejection check (status != 201, no token, not
         # a crash) so it does NOT rely on Kiosk::Redteam.blocked? or on the
         # bad_request code.
@@ -56,7 +56,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
       # K-730 narrowed this from "only status matters" to "status, plus a
       # control proving the endpoint issues when the proof IS solved".
-      it "returns blocked: true even when no domain error code is present" do
+      it 'returns blocked: true even when no domain error code is present' do
         register_returns(refused(422), refused(400), issued)
 
         verdict = scenario.call(client, profile)
@@ -71,14 +71,14 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
       end
     end
 
-    context "when only one attempt is blocked but not both (partial gate)" do
-      it "returns blocked: false" do
-        register_returns(refused(422), issued("2"))
+    context 'when only one attempt is blocked but not both (partial gate)' do
+      it 'returns blocked: false' do
+        register_returns(refused(422), issued('2'))
 
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(false)
-        expect(verdict.detail).to include("201")
+        expect(verdict.detail).to include('201')
       end
     end
   end
@@ -89,40 +89,40 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   # EVERYTHING. This block overturns the assertion above that a bare status was
   # sufficient: the control leg is what makes the two refusals evidence of a
   # PoW gate rather than evidence of an outage.
-  describe "#call — the refusals must be earned (K-730)" do
+  describe '#call — the refusals must be earned (K-730)' do
     let(:profile) { Kiosk::Redteam::Profile.new(pow_difficulty: 20) }
 
-    context "when the server 404s every path (no register endpoint at all)" do
-      it "returns blocked: false with a CONTROL FAILED detail" do
+    context 'when the server 404s every path (no register endpoint at all)' do
+      it 'returns blocked: false with a CONTROL FAILED detail' do
         register_returns(refused(404))
 
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(false)
-        expect(verdict.detail).to include("CONTROL FAILED")
+        expect(verdict.detail).to include('CONTROL FAILED')
       end
     end
 
-    context "when the solved control registration is refused" do
-      it "returns blocked: false — the endpoint never issues, so nothing was proved" do
+    context 'when the solved control registration is refused' do
+      it 'returns blocked: false — the endpoint never issues, so nothing was proved' do
         register_returns(refused(422), refused(400), refused(503))
 
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(false)
-        expect(verdict.detail).to include("CONTROL FAILED")
+        expect(verdict.detail).to include('CONTROL FAILED')
         expect(verdict.status).to eq(503)
       end
     end
 
-    context "when the control answers 201 but hands back no access_token" do
-      it "returns blocked: false" do
-        register_returns(refused(422), refused(400), json_return(201, "agent_id" => "a1"))
+    context 'when the control answers 201 but hands back no access_token' do
+      it 'returns blocked: false' do
+        register_returns(refused(422), refused(400), json_return(201, 'agent_id' => 'a1'))
 
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(false)
-        expect(verdict.detail).to include("CONTROL FAILED")
+        expect(verdict.detail).to include('CONTROL FAILED')
       end
     end
 
@@ -135,12 +135,12 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
         verdict = scenario.call(client, profile)
 
         expect(verdict.blocked).to be(false)
-        expect(verdict.detail).to include("crashed")
-        expect(verdict.detail).to include("a crash is not a gate")
+        expect(verdict.detail).to include('crashed')
+        expect(verdict.detail).to include('a crash is not a gate')
       end
     end
 
-    it "returns blocked: false when the pow: \"0\" attempt crashes 500" do
+    it 'returns blocked: false when the pow: "0" attempt crashes 500' do
       register_returns(refused(422), refused(500), issued)
 
       verdict = scenario.call(client, profile)
@@ -149,8 +149,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
       expect(verdict.detail).to include('pow: "0" crashed')
     end
 
-    it "does not spend a control solve when an attempt already succeeded" do
-      stub = register_returns(issued("bad"), issued("bad2"))
+    it 'does not spend a control solve when an attempt already succeeded' do
+      stub = register_returns(issued('bad'), issued('bad2'))
 
       verdict = scenario.call(client, profile)
 
@@ -159,13 +159,13 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     end
   end
 
-  describe "#call — skip conditions" do
-    it "skips when pow_difficulty is 0 (skip is not a pass)" do
+  describe '#call — skip conditions' do
+    it 'skips when pow_difficulty is 0 (skip is not a pass)' do
       profile = Kiosk::Redteam::Profile.new(pow_difficulty: 0)
       verdict = scenario.call(client, profile)
       expect(verdict.skipped).to be(true)
       expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include("SKIP")
+      expect(verdict.detail).to include('SKIP')
     end
   end
 end

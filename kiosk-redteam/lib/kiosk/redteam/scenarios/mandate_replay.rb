@@ -7,15 +7,15 @@ module Kiosk
       class MandateReplay < Scenario
         def initialize
           super(
-            name:        "MandateReplay",
-            category:    "mandate",
+            name: 'MandateReplay',
+            category: 'mandate',
             description: "Mandate non-transferability: B re-submits A's signed mandate JWS under B's token; provider must reject",
           )
         end
 
         def call(client, profile)
-          return skip_verdict("no pay_for")      unless profile.pay_for
-          return skip_verdict("no create_owned") unless profile.create_owned
+          return skip_verdict('no pay_for')      unless profile.pay_for
+          return skip_verdict('no create_owned') unless profile.create_owned
 
           a = client.register!
           b = client.register!
@@ -35,9 +35,9 @@ module Kiosk
           # Only 403: a 402 decline would mean the replay was never verified.
           verdict_from(
             resp,
-            expect:      403,
+            expect: 403,
             expect_code: %w[forbidden rls_denied],
-            detail:      "mandate replay accepted under B's token (HTTP #{resp.status})",
+            detail: "mandate replay accepted under B's token (HTTP #{resp.status})"
           )
         end
       end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "json"
+require 'json'
 
 module Kiosk
   module Redteam
@@ -13,9 +13,9 @@ module Kiosk
         def leak? = !leak.nil?
 
         def note
-          return "" if echoed.empty?
+          return '' if echoed.empty?
 
-          " [echoed, not leaked: #{echoed.join(", ")} — these bytes came back " \
+          " [echoed, not leaked: #{echoed.join(', ')} — these bytes came back " \
             "from the probe's own value, so they are not the runtime speaking]"
         end
       end
@@ -60,7 +60,10 @@ module Kiosk
       def spellings(value, acc = [])
         case value
         when Array then value.each { |element| spellings(element, acc) }
-        when Hash  then value.each { |key, element| spellings(key, acc); spellings(element, acc) }
+        when Hash  then value.each do |key, element|
+          spellings(key, acc)
+          spellings(element, acc)
+        end
         end
 
         json = json_fragment(value)

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "spec_helper"
-require_relative "support"
+require 'spec_helper'
+require_relative 'support'
 
 RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
   subject(:scenario) { described_class.new }
@@ -10,9 +10,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
 
   let(:profile) do
     minimal_profile(
-      gated_action: "start_rental",
-      gated_args:   ->(ref) { { reservation_id: ref[:id] } },
-      pay_for:      pay_for_callable,
+      gated_action: 'start_rental',
+      gated_args: ->(ref) { { reservation_id: ref[:id] } },
+      pay_for: pay_for_callable
     )
   end
 
@@ -20,16 +20,16 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
   # `{reservation_id: …}` as the body — so the two uses are one stub answering
   # twice, in order.
   def rental_ok(token)
-    { "scooter_code" => "SK-001", "rental_token" => token, "exp" => 4_102_444_800 }
+    { 'scooter_code' => 'SK-001', 'rental_token' => token, 'exp' => 4_102_444_800 }
   end
 
-  describe "#call — non-vacuity" do
-    context "when the server allows the gated action twice (broken — BREACH, C3)" do
-      it "returns blocked: false" do
-        stub_registers("a")
+  describe '#call — non-vacuity' do
+    context 'when the server allows the gated action twice (broken — BREACH, C3)' do
+      it 'returns blocked: false' do
+        stub_registers('a')
         stub_pay(status: 200)
         # start_rental succeeds TWICE — no spent-resource guard
-        stub_action("start_rental", status: 200, body: rental_ok("rt-1"))
+        stub_action('start_rental', status: 200, body: rental_ok('rt-1'))
 
         verdict = scenario.call(client, profile)
 
@@ -38,13 +38,13 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
       end
     end
 
-    context "when the server blocks the second invocation (correct — BLOCKED)" do
-      it "returns blocked: true" do
-        stub_registers("a")
+    context 'when the server blocks the second invocation (correct — BLOCKED)' do
+      it 'returns blocked: true' do
+        stub_registers('a')
         stub_pay(status: 200)
-        stub_request(:post, verb_url("start_rental")).to_return(
-          json_return(200, rental_ok("rt-1")),        # first use succeeds
-          problem_return("forbidden"),                # second use is blocked
+        stub_request(:post, verb_url('start_rental')).to_return(
+          json_return(200, rental_ok('rt-1')), # first use succeeds
+          problem_return('forbidden') # second use is blocked
         )
 
         verdict = scenario.call(client, profile)
@@ -54,17 +54,17 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
       end
     end
 
-    context "when the first gated action itself fails" do
-      it "returns breach: false with diagnostic detail" do
-        stub_registers("a")
+    context 'when the first gated action itself fails' do
+      it 'returns breach: false with diagnostic detail' do
+        stub_registers('a')
         stub_pay(status: 200)
-        stub_action("start_rental", status: 403, code: "forbidden")
+        stub_action('start_rental', status: 403, code: 'forbidden')
 
         verdict = scenario.call(client, profile)
 
         # First call failed — surface as a different kind of failure
         expect(verdict.blocked).to be(false)
-        expect(verdict.detail).to include("first gated_action failed")
+        expect(verdict.detail).to include('first gated_action failed')
       end
     end
 
@@ -73,21 +73,21 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
     # that confirms — answers a second call exactly as it answered the first,
     # and is right to. Without this the beat calls that a breach and the demo
     # goes red for behaving as designed.
-    context "when the profile says the gated action spends nothing" do
-      it "skips instead of scoring the idempotent second answer a breach" do
-        stub_registers("a")
+    context 'when the profile says the gated action spends nothing' do
+      it 'skips instead of scoring the idempotent second answer a breach' do
+        stub_registers('a')
         stub_pay(status: 200)
-        stub_action("start_rental", status: 200, body: rental_ok("rt-1"))
+        stub_action('start_rental', status: 200, body: rental_ok('rt-1'))
 
         verdict = scenario.call(client, minimal_profile(
-          gated_action:          "start_rental",
-          gated_action_consumes: false,
-          gated_args:            ->(ref) { { reservation_id: ref[:id] } },
-          pay_for:               pay_for_callable,
-        ))
+                                          gated_action: 'start_rental',
+                                          gated_action_consumes: false,
+                                          gated_args: ->(ref) { { reservation_id: ref[:id] } },
+                                          pay_for: pay_for_callable
+                                        ))
 
         expect(verdict.skipped).to be(true)
-        expect(verdict.detail).to include("spends nothing")
+        expect(verdict.detail).to include('spends nothing')
       end
     end
   end
@@ -97,48 +97,48 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
   # The gate here is resource STATE: already consumed. A 402 on the second use
   # means the payment gate answered — but A paid, and the first use succeeded —
   # and a 401 means A's token died mid-scenario. Both used to score BLOCKED.
-  describe "#call — only a 403 forbidden/rls_denied proves the state gate (K-728)" do
+  describe '#call — only a 403 forbidden/rls_denied proves the state gate (K-728)' do
     def stub_second_use(status, code)
-      stub_registers("a")
+      stub_registers('a')
       stub_pay(status: 200)
-      stub_request(:post, verb_url("start_rental")).to_return(
-        json_return(200, rental_ok("rt-1")),
-        problem_return(code, status: status),
+      stub_request(:post, verb_url('start_rental')).to_return(
+        json_return(200, rental_ok('rt-1')),
+        problem_return(code, status: status)
       )
     end
 
-    it "blocks on 403 rls_denied" do
-      stub_second_use(403, "rls_denied")
+    it 'blocks on 403 rls_denied' do
+      stub_second_use(403, 'rls_denied')
       expect(scenario.call(client, profile).blocked).to be(true)
     end
 
-    it "does not block when the second use is answered 402" do
-      stub_second_use(402, "payment_setup_required")
+    it 'does not block when the second use is answered 402' do
+      stub_second_use(402, 'payment_setup_required')
       verdict = scenario.call(client, profile)
       expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include("want status 403")
+      expect(verdict.detail).to include('want status 403')
     end
 
-    it "does not block when the second use is answered 401" do
-      stub_second_use(401, "unauthenticated")
+    it 'does not block when the second use is answered 401' do
+      stub_second_use(401, 'unauthenticated')
       expect(scenario.call(client, profile).blocked).to be(false)
     end
 
-    it "does not block when the second use crashes 500" do
-      stub_second_use(500, "forbidden")
+    it 'does not block when the second use crashes 500' do
+      stub_second_use(500, 'forbidden')
       expect(scenario.call(client, profile).blocked).to be(false)
     end
   end
 
-  describe "#call — skip conditions" do
-    it "skips when gated_action is nil" do
+  describe '#call — skip conditions' do
+    it 'skips when gated_action is nil' do
       p = minimal_profile(pay_for: pay_for_callable)
-      expect(scenario.call(client, p).detail).to include("SKIP")
+      expect(scenario.call(client, p).detail).to include('SKIP')
     end
 
-    it "skips when pay_for is nil" do
-      p = minimal_profile(gated_action: "start_rental")
-      expect(scenario.call(client, p).detail).to include("SKIP")
+    it 'skips when pay_for is nil' do
+      p = minimal_profile(gated_action: 'start_rental')
+      expect(scenario.call(client, p).detail).to include('SKIP')
     end
   end
 end

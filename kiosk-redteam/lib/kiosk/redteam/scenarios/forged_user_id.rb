@@ -7,21 +7,21 @@ module Kiosk
       # principal from the token, so A must not see the new resource.
       class ForgedUserId < Scenario
         # The protocol's name for a principal everywhere it appears.
-        FORGED_ARG = "user_id"
+        FORGED_ARG = 'user_id'
 
         def initialize
           super(
-            name:        "ForgedUserId",
-            category:    "authorization",
-            description: "An agent-supplied user_id must never decide ownership: the server " \
-                         "either refuses the argument outright or ignores it and takes the " \
-                         "principal from the access token",
+            name: 'ForgedUserId',
+            category: 'authorization',
+            description: 'An agent-supplied user_id must never decide ownership: the server ' \
+                         'either refuses the argument outright or ignores it and takes the ' \
+                         'principal from the access token',
           )
         end
 
         def call(client, profile)
-          return skip_verdict("no forge_action") unless profile.forge_action
-          return skip_verdict("no forge_args")   unless profile.forge_args
+          return skip_verdict('no forge_action') unless profile.forge_action
+          return skip_verdict('no forge_args')   unless profile.forge_args
 
           a = client.register!
           b = client.register!
@@ -35,28 +35,26 @@ module Kiosk
           return stall if stall
 
           # A 400 naming the injected property is the input schema refusing it (§8.1).
-          if resp.status == 400 && Kiosk::Redteam.error_code(resp) == "bad_request" &&
+          if resp.status == 400 && Kiosk::Redteam.error_code(resp) == 'bad_request' &&
              refusal_names?(resp, FORGED_ARG)
             return Verdict.new(
               blocked: true,
               skipped: false,
-              status:  resp.status,
-              detail:  "forge_action refused by the declared input contract: 400 bad_request naming " \
-                       "#{FORGED_ARG.inspect} — the principal is not an accepted argument",
+              status: resp.status,
+              detail: 'forge_action refused by the declared input contract: 400 bad_request naming ' \
+                      "#{FORGED_ARG.inspect} — the principal is not an accepted argument"
             )
           end
 
-          if Kiosk::Redteam.blocked?(resp)
-            return verdict_from(resp, expect: [401, 403], detail: "forge_action rejected")
-          end
+          return verdict_from(resp, expect: [401, 403], detail: 'forge_action rejected') if Kiosk::Redteam.blocked?(resp)
 
           # Without per_user_query ownership cannot be verified, so this cannot pass.
           unless profile.per_user_query
             return Verdict.new(
               blocked: false,
               skipped: false,
-              status:  resp.status,
-              detail:  "forge_action returned #{resp.status}; cannot verify ownership (no per_user_query)",
+              status: resp.status,
+              detail: "forge_action returned #{resp.status}; cannot verify ownership (no per_user_query)"
             )
           end
 
@@ -66,9 +64,9 @@ module Kiosk
             return Verdict.new(
               blocked: false,
               skipped: false,
-              status:  resp.status,
-              detail:  "forge_action returned #{resp.status} but result_id_key=#{profile.result_id_key.inspect} " \
-                       "not found in response; cannot confirm ownership was enforced",
+              status: resp.status,
+              detail: "forge_action returned #{resp.status} but result_id_key=#{profile.result_id_key.inspect} " \
+                      'not found in response; cannot confirm ownership was enforced'
             )
           end
 
@@ -80,11 +78,11 @@ module Kiosk
             Verdict.new(
               blocked: false,
               skipped: false,
-              status:  resp.status,
-              detail:  "forged user_id=#{a.user_id} was honoured; resource id=#{new_id} visible in A's rows",
+              status: resp.status,
+              detail: "forged user_id=#{a.user_id} was honoured; resource id=#{new_id} visible in A's rows"
             )
           else
-            Verdict.new(blocked: true, skipped: false, status: resp.status, detail: "")
+            Verdict.new(blocked: true, skipped: false, status: resp.status, detail: '')
           end
         end
 
@@ -96,7 +94,7 @@ module Kiosk
           body = response.body
           return false unless body.is_a?(Hash)
 
-          "#{body["detail"]} #{body["hint"]}".include?(key.to_s)
+          "#{body['detail']} #{body['hint']}".include?(key.to_s)
         end
 
         # An action answers its own object (§8.2); a `value` key of the operator's own is read too.
@@ -104,7 +102,7 @@ module Kiosk
           body = response.body
           return nil unless body.is_a?(Hash)
 
-          nested = body["value"]
+          nested = body['value']
           source = nested.is_a?(Hash) && nested.key?(result_id_key) ? nested : body
 
           v = source[result_id_key]

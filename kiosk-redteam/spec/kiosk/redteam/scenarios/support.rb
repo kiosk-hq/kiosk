@@ -26,10 +26,10 @@
 #   - stub_action / stub_query / stub_pay / stub_kyc
 #   - minimal Profile factories
 
-require "openssl"
-require "json"
+require 'openssl'
+require 'json'
 
-BASE_URL = "http://kiosk.test"
+BASE_URL = 'http://kiosk.test'
 
 # The endpoint of one verb — its name IS the path segment.
 def verb_url(name)
@@ -41,9 +41,9 @@ end
 def reg_response(suffix)
   json_return(
     201,
-    "agent_id"     => "agent-#{suffix}",
-    "user_id"      => "user-#{suffix}",
-    "access_token" => "tok-#{suffix}",
+    'agent_id' => "agent-#{suffix}",
+    'user_id' => "user-#{suffix}",
+    'access_token' => "tok-#{suffix}"
   )
 end
 
@@ -58,12 +58,12 @@ end
 def stub_kyc(status: 200, code: nil)
   stub_request(:post, "#{BASE_URL}/kiosk/agents/kyc")
     .to_return(wire_return(status: status, code: code,
-                           body: { "kyc_verified" => true, "attributes" => {} }))
+                           body: { 'kyc_verified' => true, 'attributes' => {} }))
 end
 
 # The default object an action answers with. An action's payload reaches the
 # wire VERBATIM, so this is the whole body — there is no wrapper around it.
-ACTION_OK = { "id" => "res-1" }.freeze
+ACTION_OK = { 'id' => 'res-1' }.freeze
 
 # POST <mount>/<action-name>. `args` are the body, so a stub that wants to
 # assert them matches on the body directly.
@@ -82,10 +82,10 @@ end
 
 # The settlement object `POST <mount>/pay` answers (Executor#pay).
 PAY_OK = {
-  "settlement_id"        => "stl-1",
-  "psp_reference"        => "pi_test_1",
-  "settled_amount_cents" => 100,
-  "currency"             => "eur",
+  'settlement_id' => 'stl-1',
+  'psp_reference' => 'pi_test_1',
+  'settled_amount_cents' => 100,
+  'currency' => 'eur'
 }.freeze
 
 def stub_pay(status: 200, body: nil, code: nil)
@@ -95,12 +95,12 @@ end
 
 # ── Minimal profile factories ───────────────────────────────────────────────
 
-OWNED_REF = { id: "res-1", scooter_code: "SK-001" }.freeze
+OWNED_REF = { id: 'res-1', scooter_code: 'SK-001' }.freeze
 
 def minimal_profile(**overrides)
   Kiosk::Redteam::Profile.new(
     create_owned: ->(_client, _principal) { OWNED_REF.dup },
-    **overrides,
+    **overrides
   )
 end
 
@@ -113,28 +113,36 @@ def pay_for_callable
     t = now_ish
     {
       intent: {
-        "id"               => "intent-#{SecureRandom.uuid rescue "x"}",
-        "user_id"          => principal.user_id,
-        "agent_id"         => principal.agent_id,
-        "iss"              => "http://test.example",
-        "scope"            => "test",
-        "cap_amount_cents" => 1000,
-        "currency"         => "eur",
-        "exp"              => t + 600,
-        "iat"              => t,
+        'id' => "intent-#{begin
+          SecureRandom.uuid
+        rescue StandardError
+          'x'
+        end}",
+        'user_id' => principal.user_id,
+        'agent_id' => principal.agent_id,
+        'iss' => 'http://test.example',
+        'scope' => 'test',
+        'cap_amount_cents' => 1000,
+        'currency' => 'eur',
+        'exp' => t + 600,
+        'iat' => t
       },
       cart: {
-        "id"                 => "cart-#{SecureRandom.uuid rescue "x"}",
-        "intent_mandate_id"  => "intent-x",
-        "user_id"            => principal.user_id,
-        "agent_id"           => principal.agent_id,
-        "iss"                => "http://test.example",
-        "line_items"         => [{ "sku" => (owned_ref[:id] || "res-1"), "qty" => 1 }],
-        "total_amount_cents" => 100,
-        "currency"           => "eur",
-        "exp"                => t + 600,
-        "iat"                => t,
-      },
+        'id' => "cart-#{begin
+          SecureRandom.uuid
+        rescue StandardError
+          'x'
+        end}",
+        'intent_mandate_id' => 'intent-x',
+        'user_id' => principal.user_id,
+        'agent_id' => principal.agent_id,
+        'iss' => 'http://test.example',
+        'line_items' => [{ 'sku' => owned_ref[:id] || 'res-1', 'qty' => 1 }],
+        'total_amount_cents' => 100,
+        'currency' => 'eur',
+        'exp' => t + 600,
+        'iat' => t
+      }
     }
   end
 end

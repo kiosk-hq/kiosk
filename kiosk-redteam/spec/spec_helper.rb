@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "kiosk/redteam"
-require "webmock/rspec"
+require 'kiosk/redteam'
+require 'webmock/rspec'
 
 # ── The 0.4 wire, as the specs speak it ──────────────────────────────────────
 #
@@ -34,7 +34,7 @@ require "webmock/rspec"
 # not shipped in the gemspec, and inside this monorepo the sibling is always
 # there. If it is not, this raises and says which file it wanted.
 KIOSK_ENGINE_ERRORS_RB =
-  File.expand_path("../../kiosk-server/lib/kiosk/server/errors.rb", __dir__)
+  File.expand_path('../../kiosk-server/lib/kiosk/server/errors.rb', __dir__)
 
 # Parse one frozen literal `NAME = { … }.freeze` table out of that file. Keys
 # and values are each a quoted string or an integer, which is the whole of the
@@ -48,7 +48,7 @@ def kiosk_engine_table(constant, path = KIOSK_ENGINE_ERRORS_RB)
   body   = source[/^[ \t]*#{constant} = \{$(.*?)^[ \t]*\}\.freeze$/m, 1]
   raise "#{constant} is not a frozen literal table in #{path}" if body.nil?
 
-  lines = body.lines.map(&:strip).reject { |line| line.empty? || line.start_with?("#") }
+  lines = body.lines.map(&:strip).reject { |line| line.empty? || line.start_with?('#') }
   pairs = lines.filter_map do |line|
     line.match(/\A(?:"([^"]+)"|(\d+))[ \t]*=>[ \t]*(?:"([^"]+)"|(\d+)),\z/)
   end
@@ -60,53 +60,53 @@ end
 
 # `Errors::CODES` — the closed vocabulary and the status each code canonically
 # rides. A stub cannot invent a code/status pair the wire would never emit.
-PROBLEM_STATUS = kiosk_engine_table("CODES")
+PROBLEM_STATUS = kiosk_engine_table('CODES')
 
 # `Errors::STATUS_CODES` — the ONE code a bare status carries by itself. 402 is
 # deliberately absent from it (three codes share 402), so a stub that means a
 # 402 must name which one; 404 carries two codes since T-158 and the engine maps
 # the bare status to `not_found`, because `verb_not_found` comes from the
 # registry lookup rather than from a status.
-ENGINE_STATUS_CODES = kiosk_engine_table("STATUS_CODES")
+ENGINE_STATUS_CODES = kiosk_engine_table('STATUS_CODES')
 
 # What this gem adds to it, and the only thing here that is ours: the statuses a
 # CRASHING origin renders, which the engine's table has no reason to carry
 # because nothing in the engine chooses them.
 CRASHING_ORIGIN_STATUS_CODES = {
-  500 => "internal_error",
-  502 => "internal_error",
-  503 => "internal_error",
+  500 => 'internal_error',
+  502 => 'internal_error',
+  503 => 'internal_error'
 }.freeze
 
 STATUS_DEFAULT_CODE = ENGINE_STATUS_CODES.merge(CRASHING_ORIGIN_STATUS_CODES).freeze
 
-JSON_CONTENT_TYPE    = "application/json"
-PROBLEM_CONTENT_TYPE = "application/problem+json"
+JSON_CONTENT_TYPE    = 'application/json'
+PROBLEM_CONTENT_TYPE = 'application/problem+json'
 
 # An RFC 9457 problem document for +code+. Extra keyword arguments become
 # top-level EXTENSION MEMBERS — that is where `challenges` and `hint` live.
 def problem(code, status: nil, detail: nil, **extensions)
   code = code.to_s
   {
-    "type"   => "https://kiosk.tech/problems/#{code}",
-    "title"  => code.tr("_", " ").capitalize,
-    "status" => status || PROBLEM_STATUS.fetch(code),
-    "detail" => detail || "#{code} (redteam spec stub)",
-    "code"   => code,
+    'type' => "https://kiosk.tech/problems/#{code}",
+    'title' => code.tr('_', ' ').capitalize,
+    'status' => status || PROBLEM_STATUS.fetch(code),
+    'detail' => detail || "#{code} (redteam spec stub)",
+    'code' => code
   }.merge(extensions.transform_keys(&:to_s))
 end
 
 # WebMock `to_return` hash carrying a success payload VERBATIM — no envelope.
 def json_return(status, body)
-  { status: status, body: JSON.generate(body), headers: { "Content-Type" => JSON_CONTENT_TYPE } }
+  { status: status, body: JSON.generate(body), headers: { 'Content-Type' => JSON_CONTENT_TYPE } }
 end
 
 # WebMock `to_return` hash carrying a problem document.
 def problem_return(code, status: nil, **extensions)
   http_status = status || PROBLEM_STATUS.fetch(code.to_s)
-  { status:  http_status,
-    body:    JSON.generate(problem(code, status: http_status, **extensions)),
-    headers: { "Content-Type" => PROBLEM_CONTENT_TYPE } }
+  { status: http_status,
+    body: JSON.generate(problem(code, status: http_status, **extensions)),
+    headers: { 'Content-Type' => PROBLEM_CONTENT_TYPE } }
 end
 
 # One wire answer: a 2xx renders +body+ as-is, anything else renders the problem
@@ -127,7 +127,7 @@ RSpec.configure do |config|
   end
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
-  config.example_status_persistence_file_path = ".rspec_status"
+  config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false
 
@@ -140,9 +140,9 @@ RSpec.configure do |config|
   # have to stub the register POST; a specific example may still override this.
   config.before(:each) do
     stub_request(:get, %r{/kiosk/auth/challenge}).to_return(
-      status:  200,
-      body:    JSON.generate("challenge" => "test-nonce", "exp" => Time.now.to_i + 120),
-      headers: { "Content-Type" => JSON_CONTENT_TYPE },
+      status: 200,
+      body: JSON.generate('challenge' => 'test-nonce', 'exp' => Time.now.to_i + 120),
+      headers: { 'Content-Type' => JSON_CONTENT_TYPE }
     )
   end
 end

@@ -39,36 +39,51 @@ Entry = Struct.new(:line, :text)
 # umbrella constitution names. Same fence tracker as `headings`, and the same
 # honest limit: an unbalanced fence hides what follows it.
 def full_entries(source)
-  out   = []
-  fence = nil
-  cur   = nil
-  source.each_line.map(&:chomp).each_with_index do |line, i|
-    if (m = line.match(/\A {0,3}(`{3,}|~{3,})/))
-      marker = m[1][0]
-      if fence.nil?
-        fence = marker
-      elsif fence == marker
-        fence = nil
-      end
-      cur[:body] << line if cur
-      next
-    end
-    if fence
-      cur[:body] << line if cur
-      next
-    end
-    if line.start_with?('- ')
-      out << cur if cur
-      cur = { line: i + 1, body: [line] }
-    elsif line.match?(/\A\#{1,6}[ \t]/)
-      out << cur if cur
-      cur = nil
-    elsif cur
-      cur[:body] << line
-    end
+  out = []
+  cur = nil
+  fence_marked(source.each_line.map(&:chomp)).each_with_index do |(line, code), i|
+    cur = code ? add_to_entry(cur, line) : entry_step(out, cur, line, i + 1)
   end
   out << cur if cur
   out.map { |e| Entry.new(e[:line], normalise_entry(e[:body])) }
+end
+
+# Returns the entry that is open after `line`; a closed entry goes to `out`.
+def entry_step(out, cur, line, number)
+  if line.start_with?('- ')
+    out << cur if cur
+    { line: number, body: [line] }
+  elsif line.match?(/\A\#{1,6}[ \t]/)
+    out << cur if cur
+    nil
+  else
+    add_to_entry(cur, line)
+  end
+end
+
+def add_to_entry(cur, line)
+  cur[:body] << line if cur
+  cur
+end
+
+FENCE = /\A {0,3}(`{3,}|~{3,})/
+
+# Pairs every line with true when it opens, closes or sits inside a fence.
+def fence_marked(lines)
+  fence = nil
+  lines.map do |line|
+    code  = !fence.nil? || line.match?(FENCE)
+    fence = next_fence(fence, line)
+    [line, code]
+  end
+end
+
+def next_fence(fence, line)
+  m = line.match(FENCE)
+  return fence unless m
+  return m[1][0] if fence.nil?
+
+  fence == m[1][0] ? nil : fence
 end
 
 def normalise_entry(body)
@@ -82,19 +97,23 @@ end
 # abbreviation or a single-letter initial. An entry with no terminator at all
 # is one sentence, not zero.
 def sentence_count(text)
+  n = 0
+  sentence_scan_text(text).scan(/[.!?]+["'»”)\]]*(?=\s|\z)/) do
+    n += 1 unless abbreviation_end?(Regexp.last_match.pre_match)
+  end
+  n.zero? ? 1 : n
+end
+
+def sentence_scan_text(text)
   t = text.gsub(/`[^`]*`/, ' CODE ')
   t = t.gsub(/[*_]{1,3}/, '')
   t = t.gsub(/\d+(?:\.\d+)+/, 'NUM')
-  t = t.gsub('...', '…')
-  n = 0
-  t.scan(/[.!?]+["'»”)\]]*(?=\s|\z)/) do
-    pre = Regexp.last_match.pre_match
-    next if ABBREVIATIONS.any? { |a| pre.match?(/(?:\A|[^A-Za-z])#{Regexp.escape(a)}\z/i) }
-    next if pre.match?(/(?:\A|\s)[A-Za-z]\z/)
+  t.gsub('...', '…')
+end
 
-    n += 1
-  end
-  n.zero? ? 1 : n
+def abbreviation_end?(pre)
+  ABBREVIATIONS.any? { |a| pre.match?(/(?:\A|[^A-Za-z])#{Regexp.escape(a)}\z/i) } ||
+    pre.match?(/(?:\A|\s)[A-Za-z]\z/)
 end
 # <<< SHARED NEW-ENTRY RULE -- END
 
@@ -360,18 +379,8 @@ Heading = Struct.new(:level, :text, :line)
 
 # Yields [line, index] for every line outside fenced code.
 def unfenced_lines(path)
-  fence = nil
-  File.readlines(path, chomp: true).each_with_index do |line, i|
-    if (m = line.match(/\A {0,3}(`{3,}|~{3,})/))
-      marker = m[1][0]
-      if fence.nil?
-        fence = marker
-      elsif fence == marker
-        fence = nil
-      end
-      next
-    end
-    yield line, i unless fence
+  fence_marked(File.readlines(path, chomp: true)).each_with_index do |(line, code), i|
+    yield line, i unless code
   end
 end
 
@@ -410,15 +419,23 @@ def baseline_of(root, rev)
   _o, _e, st = Open3.capture3('git', '-C', root, 'cat-file', '-e', "#{rev}^{commit}")
   return { rev: rev, missing: true } unless st.success?
 
-  out, err, s = Open3.capture3('git', '-C', root, 'ls-tree', '-r', '-z', '--name-only', rev)
-  raise "git ls-tree failed in #{root}: #{err}" unless s.success?
+  { rev: rev, missing: false, set: baseline_set(root, rev) }
+end
 
+def baseline_set(root, rev)
   set = {}
-  out.split("\0").select { |p| File.basename(p) == 'CHANGELOG.md' }.each do |p|
-    blob, _e2, s2 = Open3.capture3('git', '-C', root, 'show', "#{rev}:#{p}")
-    full_entries(blob).each { |e| set[e.text] = true } if s2.success?
+  changelogs_at(root, rev).each do |p|
+    blob, _e, st = Open3.capture3('git', '-C', root, 'show', "#{rev}:#{p}")
+    full_entries(blob).each { |e| set[e.text] = true } if st.success?
   end
-  { rev: rev, missing: false, set: set }
+  set
+end
+
+def changelogs_at(root, rev)
+  out, err, st = Open3.capture3('git', '-C', root, 'ls-tree', '-r', '-z', '--name-only', rev)
+  raise "git ls-tree failed in #{root}: #{err}" unless st.success?
+
+  out.split("\0").select { |p| File.basename(p) == 'CHANGELOG.md' }
 end
 
 def role_of(rel, gem_dirs)
@@ -428,143 +445,209 @@ def role_of(rel, gem_dirs)
   :courtesy if COURTESY.any? { |c| c[:path] == rel }
 end
 
-def scan(root, baseline)
-  findings = []
-  add      = lambda { |rel, line, id, what = nil|
+# Runs every CL-* arm over the tracked changelogs of one tree.
+class ChangelogScan
+  # CL-1, CL-2, CL-3, CL-4 and CL-11 over the headings of one changelog.
+  class SectionScan
+    def initialize(stats, &add)
+      @stats        = stats
+      @add          = add
+      @release      = nil
+      @seen_release = {}
+      @seen_sub     = {}
+    end
+
+    def run(heads)
+      heads.each do |h|
+        case h.level
+        when 2 then check_release(h)
+        when 3 then check_subsection(h)
+        end
+      end
+    end
+
+    private
+
+    # CL-3: one release section per name.
+    def check_release(head)
+      @stats[:releases] += 1
+      check_release_shape(head)
+      key = normalise_heading(head.text)
+      if @seen_release.key?(key)
+        @add.call(head.line, 'CL-3', "release section `#{head.text}` reopened; already open at line #{@seen_release[key]}")
+      else
+        @seen_release[key] = head.line
+      end
+      @release  = head.text
+      @seen_sub = {}
+    end
+
+    # CL-11: heading shape.
+    def check_release_shape(head)
+      if head.text.match?(RELEASE_HEADING)
+        @stats[:versioned] += 1
+      elsif ![UNRELEASED_HEADING, PRE_GROUPING_HEADING].include?(head.text)
+        @add.call(head.line, 'CL-11', "section `#{head.text}` is none of the shapes a heading may take")
+      end
+    end
+
+    # CL-4: every subsection sits under a release.
+    def check_subsection(head)
+      @stats[:subsections] += 1
+      return @add.call(head.line, 'CL-4', "subsection `#{head.text}` sits above every release section") if @release.nil?
+
+      key = normalise_heading(head.text)
+      return check_repeated_subsection(head, key) if @seen_sub.key?(key)
+
+      @seen_sub[key] = head.line
+    end
+
+    # CL-1 / CL-2: one subsection per name per release.
+    def check_repeated_subsection(head, key)
+      id = KINDS.any? { |k| key == k.downcase } ? 'CL-1' : 'CL-2'
+      @add.call(head.line, id, "`### #{head.text}` appears twice under `## #{@release}` (already at line #{@seen_sub[key]})")
+    end
+  end
+
+  def initialize(root, baseline)
+    @root       = root
+    @baseline   = baseline
+    @findings   = []
+    @stats      = Hash.new(0)
+    @changelogs = tracked(root, '*CHANGELOG.md')
+    @gem_dirs   = tracked(root, '*.gemspec').map { |p| File.dirname(p) }.uniq
+  end
+
+  def result
+    @changelogs.each { |rel| check_file(rel) }
+    check_gem_records
+    check_courtesy
+    @stats.merge(findings: @findings, files: @changelogs.length)
+  end
+
+  private
+
+  def add(rel, line, id, what = nil)
     arm = ARMS.find { |a| a[:id] == id }
-    findings << { path: rel, line: line, id: id, what: what || arm[:what], repair: arm[:repair] }
-  }
-  stats = Hash.new(0)
+    @findings << { path: rel, line: line, id: id, what: what || arm[:what], repair: arm[:repair] }
+  end
 
-  changelogs = tracked(root, '*CHANGELOG.md')
-  gem_dirs   = tracked(root, '*.gemspec').map { |p| File.dirname(p) }.uniq
+  def check_file(rel)
+    role = role_of(rel, @gem_dirs)
+    return add(rel, 1, 'CL-5') unless role
 
-  changelogs.each do |rel|
-    role = role_of(rel, gem_dirs)
-    next add.call(rel, 1, 'CL-5') unless role
-
-    stats[role] += 1
-    abs = File.join(root, rel)
-
-    # CL-8 / CL-9: new entries only.
-    full_entries(File.read(abs)).each do |e|
-      if baseline[:set].key?(e.text)
-        stats[:backlog] += 1
-        next
-      end
-
-      stats[:fresh] += 1
-      gist = e.text.length > 64 ? "#{e.text[0, 64]}…" : e.text
-      add.call(rel, e.line, 'CL-8', "new entry is #{e.text.length} characters, cap #{LENGTH_CAP}: `#{gist}`") if e.text.length >= LENGTH_CAP
-      n = sentence_count(e.text)
-      add.call(rel, e.line, 'CL-9', "new entry runs to #{n} sentences, cap #{SENTENCE_CAP}: `#{gist}`") if n > SENTENCE_CAP
-    end
-
+    @stats[role] += 1
+    abs = File.join(@root, rel)
+    check_new_entries(rel, File.read(abs))
     entries = top_level_entries(abs)
-    # CL-7: repository-record entries are dated; gem records date the release heading.
-    if role == :repository
-      entries.each do |e|
-        stats[:entries] += 1
-        next stats[:dated] += 1 if e.text.match?(DATED)
+    check_dates(rel, entries) if role == :repository
+    heads = headings(abs)
+    check_first_section(rel, heads, entries)
+    check_sections(rel, heads)
+  end
 
-        add.call(rel, e.line, 'CL-7', "entry opens `#{e.text[0, 60].strip}` with no `YYYY-MM-DD:` date")
+  # CL-8 / CL-9: new entries only.
+  def check_new_entries(rel, source)
+    full_entries(source).each do |e|
+      if @baseline[:set].key?(e.text)
+        @stats[:backlog] += 1
+      else
+        @stats[:fresh] += 1
+        check_caps(rel, e)
       end
     end
+  end
 
-    hs       = headings(abs)
-    first_h2 = hs.find { |h| h.level == 2 }
-    # CL-12: the first section is `[Unreleased]`.
-    if first_h2.nil?
-      add.call(rel, 1, 'CL-12', 'no section at all, so there is nowhere for the next entry to go')
-    elsif first_h2.text != UNRELEASED_HEADING
-      add.call(rel, first_h2.line, 'CL-12', "the first section is `#{first_h2.text}`, not `#{UNRELEASED_HEADING}`")
+  def check_caps(rel, entry)
+    text = entry.text
+    gist = text.length > 64 ? "#{text[0, 64]}…" : text
+    add(rel, entry.line, 'CL-8', "new entry is #{text.length} characters, cap #{LENGTH_CAP}: `#{gist}`") if text.length >= LENGTH_CAP
+    n = sentence_count(text)
+    add(rel, entry.line, 'CL-9', "new entry runs to #{n} sentences, cap #{SENTENCE_CAP}: `#{gist}`") if n > SENTENCE_CAP
+  end
+
+  # CL-7: repository-record entries are dated; gem records date the release heading.
+  def check_dates(rel, entries)
+    entries.each do |e|
+      @stats[:entries] += 1
+      next @stats[:dated] += 1 if e.text.match?(DATED)
+
+      add(rel, e.line, 'CL-7', "entry opens `#{e.text[0, 60].strip}` with no `YYYY-MM-DD:` date")
     end
-    # CL-13: no entry above the first section.
-    if first_h2
-      entries.each do |e|
-        next if e.line > first_h2.line
+  end
 
-        add.call(rel, e.line, 'CL-13', "entry `#{e.text[0, 58].strip}` sits above the first section")
-      end
+  # CL-12: the first section is `[Unreleased]`.
+  def check_first_section(rel, heads, entries)
+    first = heads.find { |h| h.level == 2 }
+    return add(rel, 1, 'CL-12', 'no section at all, so there is nowhere for the next entry to go') if first.nil?
+
+    add(rel, first.line, 'CL-12', "the first section is `#{first.text}`, not `#{UNRELEASED_HEADING}`") unless first.text == UNRELEASED_HEADING
+    check_entries_above(rel, first, entries)
+  end
+
+  # CL-13: no entry above the first section.
+  def check_entries_above(rel, first, entries)
+    entries.each do |e|
+      add(rel, e.line, 'CL-13', "entry `#{e.text[0, 58].strip}` sits above the first section") if e.line <= first.line
     end
+  end
 
-    release      = nil
-    seen_release = {}
-    seen_sub     = {}
-    hs.each do |h|
-      key = normalise_heading(h.text)
-      case h.level
-      when 2
-        stats[:releases] += 1
-        # CL-11: heading shape.
-        if h.text.match?(RELEASE_HEADING)
-          stats[:versioned] += 1
-        elsif ![UNRELEASED_HEADING, PRE_GROUPING_HEADING].include?(h.text)
-          add.call(rel, h.line, 'CL-11', "section `#{h.text}` is none of the shapes a heading may take")
-        end
-        # CL-3: one release section per name.
-        if seen_release.key?(key)
-          add.call(rel, h.line, 'CL-3', "release section `#{h.text}` reopened; already open at line #{seen_release[key]}")
-        else
-          seen_release[key] = h.line
-        end
-        release  = h.text
-        seen_sub = {}
-      when 3
-        stats[:subsections] += 1
-        # CL-4: every subsection sits under a release.
-        next add.call(rel, h.line, 'CL-4', "subsection `#{h.text}` sits above every release section") if release.nil?
-
-        # CL-1 / CL-2: one subsection per name per release.
-        if seen_sub.key?(key)
-          id = KINDS.any? { |k| key == k.downcase } ? 'CL-1' : 'CL-2'
-          add.call(rel, h.line, id, "`### #{h.text}` appears twice under `## #{release}` (already at line #{seen_sub[key]})")
-        else
-          seen_sub[key] = h.line
-        end
-      end
-    end
+  def check_sections(rel, heads)
+    SectionScan.new(@stats) { |line, id, what| add(rel, line, id, what) }.run(heads)
   end
 
   # CL-6: every gem ships a changelog.
-  gem_dirs.each do |dir|
-    path = File.join(dir, 'CHANGELOG.md')
-    add.call(path, 0, 'CL-6') unless changelogs.include?(path)
+  def check_gem_records
+    @gem_dirs.each do |dir|
+      path = File.join(dir, 'CHANGELOG.md')
+      add(path, 0, 'CL-6') unless @changelogs.include?(path)
+    end
   end
 
   # CL-5: every COURTESY entry is tracked.
-  COURTESY.each do |c|
-    next if changelogs.include?(c[:path])
+  def check_courtesy
+    COURTESY.each do |c|
+      next if @changelogs.include?(c[:path])
 
-    findings << { path: c[:path], line: 0, id: 'CL-5', what: 'declared in COURTESY, but git does not track it',
-                  repair: 'drop the COURTESY entry, or restore the file' }
+      @findings << { path: c[:path], line: 0, id: 'CL-5', what: 'declared in COURTESY, but git does not track it',
+                     repair: 'drop the COURTESY entry, or restore the file' }
+    end
   end
+end
 
-  stats.merge(findings: findings, files: changelogs.length)
+def scan(root, baseline)
+  ChangelogScan.new(root, baseline).result
 end
 
 def report(result, quiet:)
-  unless quiet
-    puts "check-changelog: #{result[:files]} changelog(s) -- #{result[:repository]} repository, " \
-         "#{result[:gem]} gem, #{result[:courtesy]} courtesy; #{result[:releases]} release section(s), " \
-         "#{result[:versioned]} versioned, #{result[:subsections]} subsection heading(s)"
-    puts "  #{result[:dated]} of #{result[:entries]} repository-record entries dated; " \
-         "#{result[:fresh]} new entries held to the caps, #{result[:backlog]} backlog entries not"
-  end
-
+  print_summary(result) unless quiet
   if result[:findings].empty?
     puts 'check-changelog: OK' unless quiet
     return 0
   end
 
-  $stdout.flush
-  warn "check-changelog: FAIL -- #{result[:findings].length} defect(s)."
-  result[:findings].sort_by { |f| [f[:path], f[:line]] }.each do |f|
-    where = f[:line].positive? ? "#{f[:path]}:#{f[:line]}" : f[:path]
-    warn "  #{where}: [#{f[:id]}] #{f[:what]}"
-    warn "      repair: #{f[:repair]}"
-  end
+  print_findings(result[:findings])
   1
+end
+
+def print_summary(result)
+  puts "check-changelog: #{result[:files]} changelog(s) -- #{result[:repository]} repository, " \
+       "#{result[:gem]} gem, #{result[:courtesy]} courtesy; #{result[:releases]} release section(s), " \
+       "#{result[:versioned]} versioned, #{result[:subsections]} subsection heading(s)"
+  puts "  #{result[:dated]} of #{result[:entries]} repository-record entries dated; " \
+       "#{result[:fresh]} new entries held to the caps, #{result[:backlog]} backlog entries not"
+end
+
+def print_findings(findings)
+  $stdout.flush
+  warn "check-changelog: FAIL -- #{findings.length} defect(s)."
+  findings.sort_by { |f| [f[:path], f[:line]] }.each { |f| print_finding(f) }
+end
+
+def print_finding(finding)
+  where = finding[:line].positive? ? "#{finding[:path]}:#{finding[:line]}" : finding[:path]
+  warn "  #{where}: [#{finding[:id]}] #{finding[:what]}"
+  warn "      repair: #{finding[:repair]}"
 end
 
 def run_check(baseline: nil)
@@ -666,7 +749,9 @@ def run_guard_in(dir, baseline)
   Open3.capture3(RbConfig.ruby, File.join(dir, 'bin', File.basename(SELF_PATH)), '--baseline', baseline)
 end
 
-def expect_red(failures, dir, base, id, label, needle = "[#{id}]")
+# Stages the planted tree, runs the check, and restores the green tree.
+def expect_red(failures, dir, base, label, needle)
+  git!(dir, 'add', '-A')
   out, err, st = run_guard_in(dir, base)
   if st.exitstatus.zero?
     failures << "#{label} did not turn the check red"
@@ -675,88 +760,102 @@ def expect_red(failures, dir, base, id, label, needle = "[#{id}]")
   else
     puts "  #{label}: exit #{st.exitstatus} -- OK"
   end
+  restore_fixture(dir)
+end
+
+def restore_fixture(dir)
+  git!(dir, 'ls-files').split("\n").each do |rel|
+    File.delete(File.join(dir, rel)) unless GREEN.key?(rel) || rel.start_with?('bin/')
+  end
+  GREEN.each { |rel, body| write(dir, rel, body) }
+  git!(dir, 'add', '-A')
+end
+
+def build_fixture(dir)
+  write(dir, "bin/#{File.basename(SELF_PATH)}", File.binread(SELF_PATH))
+  GREEN.each { |rel, body| write(dir, rel, body) }
+  git!(dir, 'init', '-q')
+  git!(dir, 'add', '-A')
+  git!(dir, '-c', 'user.email=fixture@example.invalid', '-c', 'user.name=fixture',
+       'commit', '-q', '--no-gpg-sign', '-m', 'baseline')
+  git!(dir, 'rev-parse', 'HEAD').strip
+end
+
+def expect_green_fixture(failures, dir, base)
+  out, err, st = run_guard_in(dir, base)
+  if st.exitstatus.zero? && out[/(\d+) versioned/, 1].to_i.positive?
+    puts '  green tree (version sections, an over-cap backlog entry): exit 0 -- OK'
+  else
+    failures << 'the green fixture should exit 0 and count its version sections; ' \
+                "it exited #{st.exitstatus}\n#{out}#{err}"
+  end
+end
+
+def expect_missing_baseline(failures, dir)
+  _, err, st = run_guard_in(dir, '0' * 40)
+  if st.exitstatus.zero? || !err.include?('not in this clone')
+    failures << "an unresolvable baseline must fail naming the remedy; it exited #{st.exitstatus}"
+  else
+    puts "  unresolvable baseline: exit #{st.exitstatus} -- OK"
+  end
+end
+
+def plant_each_arm(failures, dir, base)
+  ARMS.each do |arm|
+    arm[:plant].call(dir)
+    expect_red(failures, dir, base, "plant #{arm[:id]}", "[#{arm[:id]}]")
+  end
+  File.delete(File.join(dir, 'kiosk-demo-prove/CHANGELOG.md'))
+  expect_red(failures, dir, base, 'plant CL-5 (declared record deleted)', 'kiosk-demo-prove/CHANGELOG.md')
 end
 
 def self_test_fixture(failures)
   Dir.mktmpdir('check-changelog') do |dir|
-    write(dir, "bin/#{File.basename(SELF_PATH)}", File.binread(SELF_PATH))
-    GREEN.each { |rel, body| write(dir, rel, body) }
-    git!(dir, 'init', '-q')
-    git!(dir, 'add', '-A')
-    git!(dir, '-c', 'user.email=fixture@example.invalid', '-c', 'user.name=fixture',
-         'commit', '-q', '--no-gpg-sign', '-m', 'baseline')
-    base = git!(dir, 'rev-parse', 'HEAD').strip
-
-    out, err, st = run_guard_in(dir, base)
-    if st.exitstatus.zero? && out[/(\d+) versioned/, 1].to_i.positive?
-      puts '  green tree (version sections, an over-cap backlog entry): exit 0 -- OK'
-    else
-      failures << 'the green fixture should exit 0 and count its version sections; ' \
-                  "it exited #{st.exitstatus}\n#{out}#{err}"
-    end
-
-    _, err0, st0 = run_guard_in(dir, '0' * 40)
-    if st0.exitstatus.zero? || !err0.include?('not in this clone')
-      failures << "an unresolvable baseline must fail naming the remedy; it exited #{st0.exitstatus}"
-    else
-      puts "  unresolvable baseline: exit #{st0.exitstatus} -- OK"
-    end
-
-    keep    = GREEN.to_h { |rel, _| [rel, File.binread(File.join(dir, rel))] }
-    restore = lambda {
-      git!(dir, 'ls-files').split("\n").each do |rel|
-        File.delete(File.join(dir, rel)) unless keep.key?(rel) || rel.start_with?('bin/')
-      end
-      keep.each { |rel, body| write(dir, rel, body) }
-      git!(dir, 'add', '-A')
-    }
-
-    ARMS.each do |arm|
-      arm[:plant].call(dir)
-      git!(dir, 'add', '-A')
-      expect_red(failures, dir, base, arm[:id], "plant #{arm[:id]}")
-      restore.call
-    end
-
-    File.delete(File.join(dir, 'kiosk-demo-prove/CHANGELOG.md'))
-    git!(dir, 'add', '-A')
-    expect_red(failures, dir, base, 'CL-5', 'plant CL-5 (declared record deleted)', 'kiosk-demo-prove/CHANGELOG.md')
-    restore.call
-
-    _, _, st4 = run_guard_in(dir, base)
-    failures << 'the fixture tree did not return to exit 0 after the plants' unless st4.exitstatus.zero?
+    base = build_fixture(dir)
+    expect_green_fixture(failures, dir, base)
+    expect_missing_baseline(failures, dir)
+    plant_each_arm(failures, dir, base)
+    _, _, st = run_guard_in(dir, base)
+    failures << 'the fixture tree did not return to exit 0 after the plants' unless st.exitstatus.zero?
   end
+end
+
+# Minimum counts over this repository; below one, the arms have nothing to read.
+REAL_TREE_FLOORS = { files: 10, releases: 10, subsections: 20, entries: 100, backlog: 100 }.freeze
+
+def check_floors(failures, result)
+  REAL_TREE_FLOORS.each do |key, floor|
+    failures << "the real tree found only #{result[key]} #{key} (floor #{floor}) -- the arms are vacuous here" if result[key] < floor
+  end
+end
+
+def check_real_tree(failures)
+  base = baseline_of(REPO, nil)
+  return failures << "the declared baseline #{base[:rev]} is not in this clone" if base[:missing]
+
+  result = scan(REPO, base)
+  check_floors(failures, result)
+  status = report(result, quiet: true)
+  failures << "the check is not green over this repository (exit #{status})" unless status.zero?
+  puts "  real tree: #{result[:files]} changelogs, #{result[:releases]} release sections, " \
+       "#{result[:entries]} repository entries, #{result[:backlog]} backlog; check exits #{status}"
 end
 
 def run_self_test
   failures = []
   self_test_fixture(failures)
-
-  base = baseline_of(REPO, nil)
-  if base[:missing]
-    failures << "the declared baseline #{base[:rev]} is not in this clone"
-  else
-    result = scan(REPO, base)
-    {
-      files: 10, releases: 10, subsections: 20, entries: 100, backlog: 100
-    }.each do |key, floor|
-      failures << "the real tree found only #{result[key]} #{key} (floor #{floor}) -- the arms are vacuous here" if result[key] < floor
-    end
-    status = report(result, quiet: true)
-    failures << "the check is not green over this repository (exit #{status})" unless status.zero?
-    puts "  real tree: #{result[:files]} changelogs, #{result[:releases]} release sections, " \
-         "#{result[:entries]} repository entries, #{result[:backlog]} backlog; check exits #{status}"
-  end
-
-  if failures.empty?
-    puts 'check-changelog --self-test: OK'
-    return 0
-  end
+  check_real_tree(failures)
+  return self_test_ok if failures.empty?
 
   $stdout.flush
   warn 'check-changelog --self-test: FAIL'
   failures.each { |f| warn "  #{f}" }
   1
+end
+
+def self_test_ok
+  puts 'check-changelog --self-test: OK'
+  0
 end
 
 USAGE = 'usage: check-changelog [--baseline REV] [--self-test]'

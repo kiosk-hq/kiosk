@@ -4,6 +4,8 @@ source 'https://rubygems.org'
 
 gemspec
 
+gem 'rake', '~> 13.2'
+
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
 gem 'kiosk-core',         path: '../kiosk-core'
 gem 'kiosk-pow-equihash', path: '../kiosk-pow-equihash'

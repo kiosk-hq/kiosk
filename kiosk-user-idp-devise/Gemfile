@@ -4,5 +4,10 @@ source 'https://rubygems.org'
 
 gemspec
 
+gem 'activemodel', '>= 7.0'
+gem 'devise', '~> 5.0'
+gem 'rake', '~> 13.2'
+gem 'rspec', '~> 3.13'
+
 # Local-development override — kiosk-core hasn't shipped to RubyGems yet.
 gem 'kiosk-core', path: '../kiosk-core'

@@ -60,7 +60,7 @@ module Kiosk
 
         # Double-checked under {MUTEX}, so a proc runs once per key per epoch.
         # The cache is replaced, never mutated, so the unlocked read is safe.
-        def descriptor(scope, name, entry)
+        def descriptor(scope, name, entry, &)
           return yield unless dynamic_declarations?
 
           key       = [scope, name.to_s].freeze
@@ -68,25 +68,15 @@ module Kiosk
           hit       = cache[key]
           return hit[:value] if fresh?(hit, entry, now_epoch)
 
-          MUTEX.synchronize do
-            hit = cache[key]
-            return hit[:value] if fresh?(hit, entry, now_epoch)
-
-            value = resolve(yield).freeze
-            @cache = cache.merge(
-              key => { value: value, entry: entry, epoch: now_epoch }.freeze
-            ).freeze
-            value
-          end
+          MUTEX.synchronize { cached_or_resolved(key, entry, now_epoch, &) }
         end
 
         def resolve(value, depth = 0)
           raise ArgumentError, "kiosk: descriptor slot nests procs more than #{MAX_DEPTH} deep" if depth > MAX_DEPTH
 
           case value
-          when Proc  then resolve(value.call, depth + 1)
-          when Hash  then dynamic?(value) ? value.transform_values { |m| resolve(m, depth + 1) } : value
-          when Array then dynamic?(value) ? value.map { |m| resolve(m, depth + 1) } : value
+          when Proc then resolve(value.call, depth + 1)
+          when Hash, Array then dynamic?(value) ? resolve_members(value, depth + 1) : value
           else value
           end
         end
@@ -101,6 +91,20 @@ module Kiosk
         end
 
         private
+
+        # Runs under {MUTEX}: re-reads the cache, else resolves and stores.
+        def cached_or_resolved(key, entry, now_epoch)
+          hit = cache[key]
+          return hit[:value] if fresh?(hit, entry, now_epoch)
+
+          value = resolve(yield).freeze
+          @cache = cache.merge(key => { value: value, entry: entry, epoch: now_epoch }.freeze).freeze
+          value
+        end
+
+        def resolve_members(value, depth)
+          value.is_a?(Hash) ? value.transform_values { |m| resolve(m, depth) } : value.map { |m| resolve(m, depth) }
+        end
 
         def fresh?(hit, entry, now_epoch)
           !hit.nil? && hit[:epoch] == now_epoch && hit[:entry].equal?(entry)

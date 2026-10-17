@@ -101,16 +101,18 @@ module Kiosk
 
         # Every input of `/schema` and `/openapi.json`, and nothing else.
         def digest_inputs(config, document)
+          { gem_version: Kiosk::Server::VERSION, protocol_version: Kiosk::Protocol::API_VERSION,
+            **config_digest_inputs(config), document: document }
+        end
+
+        def config_digest_inputs(config)
           {
-            gem_version: Kiosk::Server::VERSION,
-            protocol_version: Kiosk::Protocol::API_VERSION,
             origins: config.origins,
             mount_path: config.mount_path.to_s,
             capabilities: Array(config.capabilities),
             min_client: config.min_client.to_s,
             owner: config.owner,
-            skill: [config.skill_url.to_s, config.skill_sha256.to_s],
-            document: document
+            skill: [config.skill_url.to_s, config.skill_sha256.to_s]
           }
         end
       end

@@ -12,36 +12,35 @@ module Kiosk
       Entry = Data.define(:handler, :reach, :description, :input_schema, :output_schema,
                           :example_params, :example_row)
 
+      class << self
+        # Undeclared optional keys are omitted rather than null.
+        def add_declared_slots(descriptor, found)
+          descriptor[:input_schema]   = found.input_schema   unless found.input_schema.nil?
+          descriptor[:output_schema]  = found.output_schema  unless found.output_schema.nil?
+          descriptor[:example_params] = found.example_params unless found.example_params.nil?
+          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
+          descriptor
+        end
+      end
+
       # @api private — the {HandlerMixin} is the only caller.
-      def declare(name, handler, reach: HandlerMixin::DEFAULT_REACH, description: nil,
-                  input_schema: nil, output_schema: nil, example_params: nil,
-                  example_row: nil)
-        SchemaSlots.note_declaration(
-          input_schema: input_schema, output_schema: output_schema,
-          example_params: example_params, example_row: example_row
-        )
-        registry[name.to_s] = Entry.new(
-          handler: handler, reach: reach, description: description,
-          input_schema: input_schema, output_schema: output_schema,
-          example_params: example_params, example_row: example_row
-        )
+      # `slots`: any of {SchemaSlots::RESOLVABLE_SLOTS}; an undeclared one is nil.
+      def declare(name, handler, reach: HandlerMixin::DEFAULT_REACH, description: nil, **slots)
+        slots = SchemaSlots::RESOLVABLE_SLOTS.to_h { |slot| [slot, nil] }.merge(slots)
+        entry = Entry.new(handler: handler, reach: reach, description: description, **slots)
+        SchemaSlots.note_declaration(slots)
+        registry[name.to_s] = entry
       end
 
       def fetch(name)
         entry(name).handler
       end
 
-      # Undeclared optional keys are omitted rather than null.
       def describe(name)
         found = entry(name)
         SchemaSlots.descriptor(self::SCOPE, name, found) do
-          descriptor = { name: name.to_s, description: found.description,
-                         reach: found.reach.to_s }
-          descriptor[:input_schema]   = found.input_schema   unless found.input_schema.nil?
-          descriptor[:output_schema]  = found.output_schema  unless found.output_schema.nil?
-          descriptor[:example_params] = found.example_params unless found.example_params.nil?
-          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
-          descriptor
+          descriptor = { name: name.to_s, description: found.description, reach: found.reach.to_s }
+          VerbRegistry.add_declared_slots(descriptor, found)
         end
       end
 

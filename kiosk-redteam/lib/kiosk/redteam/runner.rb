@@ -14,17 +14,7 @@ module Kiosk
       def run(scenarios)
         @results = scenarios.map do |scenario|
           verdict = scenario.call(@client, @profile)
-
-          if verdict.skipped
-            reason = verdict.detail.delete_prefix('SKIP — ')
-            puts "  SKIP    — #{scenario.name} (#{reason})"
-          elsif verdict.blocked
-            # The status says which gate answered.
-            puts "  BLOCKED ✓ #{scenario.name} (HTTP #{verdict.status})"
-          else
-            puts "  BREACH  ✗ #{scenario.name} — #{verdict.detail}"
-          end
-
+          print_line(scenario, verdict)
           { scenario:, verdict: }
         end
       end
@@ -46,6 +36,19 @@ module Kiosk
         return false if @results.nil? || @results.empty?
 
         breaches.empty? && blocked.any?
+      end
+
+      private
+
+      def print_line(scenario, verdict)
+        if verdict.skipped
+          puts "  SKIP    — #{scenario.name} (#{verdict.detail.delete_prefix('SKIP — ')})"
+        elsif verdict.blocked
+          # The status says which gate answered.
+          puts "  BLOCKED ✓ #{scenario.name} (HTTP #{verdict.status})"
+        else
+          puts "  BREACH  ✗ #{scenario.name} — #{verdict.detail}"
+        end
       end
     end
   end

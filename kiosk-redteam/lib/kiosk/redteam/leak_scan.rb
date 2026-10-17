@@ -24,25 +24,19 @@ module Kiosk
 
       # +supplied+ is what the probe put on the wire; nil discounts nothing.
       def scan(body, needles, supplied: nil)
-        raw    = body.is_a?(String) ? body : JSON.generate(body)
-        spans  = echo_spans(raw, supplied)
-        leak   = nil
-        echoed = []
+        raw = body.is_a?(String) ? body : JSON.generate(body)
+        echoed, leaked = sightings(raw, needles, echo_spans(raw, supplied)).partition(&:last)
+        Result.new(leak: leaked.first&.first, echoed: echoed.map(&:first).freeze)
+      end
 
-        needles.each do |needle|
+      # [needle, echoed?] for each needle found in +raw+, in needle order.
+      def sightings(raw, needles, spans)
+        needles.filter_map do |needle|
           next if needle.nil? || needle.empty?
 
           hits = occurrences(raw, needle)
-          next if hits.empty?
-
-          if hits.all? { |at| inside_one_span?(at, needle.length, spans) }
-            echoed << needle
-          else
-            leak ||= needle
-          end
+          [needle, hits.all? { |at| inside_one_span?(at, needle.length, spans) }] unless hits.empty?
         end
-
-        Result.new(leak: leak, echoed: echoed.freeze)
       end
 
       def leak(body, needles, supplied: nil)
@@ -58,24 +52,30 @@ module Kiosk
       # Every form a supplied value can take in a serialized body: JSON, the bare
       # JSON string content, Ruby `inspect`, and that `inspect` JSON-escaped.
       def spellings(value, acc = [])
-        case value
-        when Array then value.each { |element| spellings(element, acc) }
-        when Hash  then value.each do |key, element|
-          spellings(key, acc)
-          spellings(element, acc)
-        end
-        end
-
-        json = json_fragment(value)
-        acc << json if json
-        acc << json[1..-2] if json && value.is_a?(String) && json.length > 2
-        inspected = value.inspect
-        acc << inspected
-        acc << json_fragment(inspected)&.slice(1..-2)
-
+        nested_values(value).each { |element| spellings(element, acc) }
+        acc.concat(own_spellings(value))
         acc.reject! { |spelling| spelling.nil? || spelling.empty? }
         acc.uniq!
         acc
+      end
+
+      def nested_values(value)
+        case value
+        when Array then value
+        when Hash  then value.flat_map { |key, element| [key, element] }
+        else []
+        end
+      end
+
+      def own_spellings(value)
+        json      = json_fragment(value)
+        inspected = value.inspect
+        [json, bare_string(json, value), inspected, json_fragment(inspected)&.slice(1..-2)]
+      end
+
+      # The JSON string content without its quotes, or nil when +value+ is not a String.
+      def bare_string(json, value)
+        json[1..-2] if json && value.is_a?(String) && json.length > 2
       end
 
       def json_fragment(value)

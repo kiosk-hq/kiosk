@@ -23,25 +23,7 @@ module Kiosk
     #   kyc_expired           (user_id) -> an expired attestation JWS
     #   kyc_forged            (user_id) -> an attestation with a wrong issuer or signature
     class Profile
-      attr_reader :pow_difficulty,
-                  :currency,
-                  :declared_roles,
-                  :requires_kyc,
-                  :per_user_query,
-                  :row_id_key,
-                  :result_id_key,
-                  :create_owned,
-                  :forge_action,
-                  :forge_args,
-                  :gated_action,
-                  :gated_action_consumes,
-                  :gated_args,
-                  :pay_for,
-                  :kyc_valid,
-                  :kyc_expired,
-                  :kyc_forged
-
-      def initialize(
+      DEFAULTS = {
         pow_difficulty: 0,
         declared_roles: [],
         currency: nil,
@@ -59,24 +41,17 @@ module Kiosk
         kyc_valid: nil,
         kyc_expired: nil,
         kyc_forged: nil
-      )
-        @pow_difficulty = pow_difficulty
+      }.freeze
+
+      attr_reader(*DEFAULTS.keys)
+
+      def initialize(**fields)
+        unknown = fields.keys - DEFAULTS.keys
+        raise ArgumentError, "unknown keywords: #{unknown.join(', ')}" unless unknown.empty?
+
+        DEFAULTS.merge(fields).each { |field, value| instance_variable_set(:"@#{field}", value) }
         @declared_roles = Array(declared_roles).map(&:to_s).reject(&:empty?).uniq
-        @currency       = currency
-        @requires_kyc   = requires_kyc
-        @per_user_query = per_user_query
-        @row_id_key     = row_id_key
-        @result_id_key  = result_id_key || row_id_key
-        @create_owned   = create_owned
-        @forge_action   = forge_action
-        @forge_args     = forge_args
-        @gated_action   = gated_action
-        @gated_action_consumes = gated_action_consumes
-        @gated_args     = gated_args
-        @pay_for        = pay_for
-        @kyc_valid      = kyc_valid
-        @kyc_expired    = kyc_expired
-        @kyc_forged     = kyc_forged
+        @result_id_key ||= row_id_key
       end
     end
   end

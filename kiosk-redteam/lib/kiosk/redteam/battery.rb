@@ -44,33 +44,54 @@ module Kiosk
         actual   = skipped.map(&:name).sort
         expected = Array(expected_skips).map(&:to_s).sort
 
+        print_summary
+        status = outcome_status
+        status = 2 if skips_differ?(actual, expected) && status.zero?
+        print_json(actual, status)
+        status
+      end
+
+      private
+
+      def print_summary
         @io.puts "\n── Summary ──"
         blocked.each  { |e| @io.puts "  BLOCKED ✓ #{e.name}" }
         skipped.each  { |e| @io.puts "  SKIP    — #{e.name} (#{e.detail})" }
         breaches.each { |e| @io.puts "  BREACH  ✗ #{e.name} — #{e.detail}" }
         @io.puts ''
+      end
 
-        status = 0
-        if blocked.empty?
-          @io.puts "  #{@entries.size} scenarios, 0 BLOCKED — this run proved NOTHING, which is not a pass."
-          status = 1
-        elsif breaches.empty?
-          @io.puts "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked."
-        else
-          @io.puts "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, #{breaches.size} BREACH — FIX REQUIRED"
-          @io.puts '  BREACH means a real hole in the provider — fix the app, not the scenario.'
-          status = 1
-        end
+      # Prints the tally line and answers 0 when every attack was blocked, else 1.
+      def outcome_status
+        return tally(1, "  #{@entries.size} scenarios, 0 BLOCKED — this run proved NOTHING, which is not a pass.") if blocked.empty?
+        return tally(0, all_blocked_line) if breaches.empty?
 
-        if actual != expected
-          @io.puts ''
-          @io.puts '  EXPECTED-APPLICABLE ASSERTION FAILED:'
-          @io.puts "    Expected skips: #{expected.inspect}"
-          @io.puts "    Actual skips:   #{actual.inspect}"
-          @io.puts '  A profile key may have been set to nil, disabling a gate scenario.'
-          status = 2 if status.zero?
-        end
+        tally(1, "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, #{breaches.size} BREACH — FIX REQUIRED",
+              '  BREACH means a real hole in the provider — fix the app, not the scenario.')
+      end
 
+      def all_blocked_line
+        "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked."
+      end
+
+      def tally(status, *lines)
+        @io.puts(*lines)
+        status
+      end
+
+      # Prints the mismatch and answers true when the skip set is not the expected one.
+      def skips_differ?(actual, expected)
+        return false if actual == expected
+
+        @io.puts ''
+        @io.puts '  EXPECTED-APPLICABLE ASSERTION FAILED:'
+        @io.puts "    Expected skips: #{expected.inspect}"
+        @io.puts "    Actual skips:   #{actual.inspect}"
+        @io.puts '  A profile key may have been set to nil, disabling a gate scenario.'
+        true
+      end
+
+      def print_json(actual, status)
         @io.puts JSON.generate(
           scenarios: @entries.size,
           blocked: blocked.size,
@@ -78,32 +99,28 @@ module Kiosk
           breaches: breaches.map(&:name),
           exit: status
         )
-        status
       end
 
-      private
-
       def absorb_verdict(name, verdict, on_skip:, echo: true)
-        entry =
-          if verdict.skipped
-            reason = verdict.detail.to_s.delete_prefix('SKIP — ')
-            if on_skip == :breach
-              Entry.new(name: name, state: :breach,
-                        detail: "SKIPPED, which this origin must never do — #{reason}")
-            else
-              Entry.new(name: name, state: :skipped, detail: reason)
-            end
-          elsif verdict.blocked
-            Entry.new(name: name, state: :blocked, detail: "HTTP #{verdict.status}")
-          else
-            Entry.new(name: name, state: :breach, detail: verdict.detail.to_s)
-          end
-        if echo
-          file(entry)
-        else
-          (@entries << entry
-           entry)
-        end
+        entry = entry_for(name, verdict, on_skip)
+        return file(entry) if echo
+
+        @entries << entry
+        entry
+      end
+
+      def entry_for(name, verdict, on_skip)
+        return skip_entry(name, verdict, on_skip) if verdict.skipped
+        return Entry.new(name: name, state: :blocked, detail: "HTTP #{verdict.status}") if verdict.blocked
+
+        Entry.new(name: name, state: :breach, detail: verdict.detail.to_s)
+      end
+
+      def skip_entry(name, verdict, on_skip)
+        reason = verdict.detail.to_s.delete_prefix('SKIP — ')
+        return Entry.new(name: name, state: :skipped, detail: reason) unless on_skip == :breach
+
+        Entry.new(name: name, state: :breach, detail: "SKIPPED, which this origin must never do — #{reason}")
       end
 
       def file(entry)

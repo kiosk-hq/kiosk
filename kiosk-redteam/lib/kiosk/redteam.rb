@@ -66,13 +66,13 @@ module Kiosk
       why = PAYMENT_REQUIRED_CODES[code] ||
             "kiosk-server maps three codes onto 402 — #{PAYMENT_REQUIRED_CODES.keys.join(', ')} — " \
             'and this answer named none of them, so which gate fired (if any did) is unknowable'
-      paid = if response.pow_retried
-               ' [the harness already solved every issued ' \
-                 'challenge and re-sent the identical request once]'
-             else
-               ''
-             end
-      "HTTP #{response.status} code=#{code.inspect}:#{paid} #{why}"
+      "HTTP #{response.status} code=#{code.inspect}:#{paid_retry_note(response)} #{why}"
+    end
+
+    def self.paid_retry_note(response)
+      return '' unless response.pow_retried?
+
+      ' [the harness already solved every issued challenge and re-sent the identical request once]'
     end
 
     def self.blocked?(response)

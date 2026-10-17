@@ -10,10 +10,11 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_000003) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
+  enable_extension "btree_gist"
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
 
@@ -25,8 +26,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
     t.string "payment_status", default: "unpaid", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.datetime "held_until", null: false
     t.index ["scooter_id"], name: "index_reservations_on_scooter_id"
     t.index ["user_id"], name: "index_reservations_on_user_id"
+    t.exclusion_constraint "scooter_id WITH =, tsrange(created_at, held_until) WITH &&", using: :gist, name: "reservations_one_hold_per_scooter"
   end
 
   create_table "public.scooters", force: :cascade do |t|
@@ -35,7 +38,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_000002) do
     t.string "kind", default: "scooter", null: false
     t.boolean "needs_licence", default: false, null: false
     t.string "dock", null: false
-    t.string "status", default: "available", null: false
     t.decimal "lat", precision: 10, scale: 6, null: false
     t.decimal "lng", precision: 10, scale: 6, null: false
     t.integer "price_per_min_cents", null: false

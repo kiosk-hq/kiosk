@@ -12,7 +12,7 @@ class PrivacyStory < StoryTest
     assert alice.pays_for(alices).ok?
     assert bob.rides(alices).refused?(:forbidden)
 
-    bobs = bob.reserves('SK-001')
+    bobs = bob.reserves('SK-002')
     assert_equal [bobs['reservation_id']], bob.reservations.pluck('reservation_id')
     assert_equal bob.principal.user_id, Reservation.find(bobs['reservation_id']).user_id
   end

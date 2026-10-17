@@ -1,9 +1,13 @@
 # frozen_string_literal: true
 
-# A hold on one fleet vehicle for one customer. `status` is the ride,
+# A hold on one fleet vehicle for one customer, until `held_until`; the
+# database lets one live hold per vehicle. `status` is the ride,
 # `payment_status` the money.
 class Reservation < ApplicationRecord
   include Kiosk::Owned
+
+  # Time to pay and start the rental; starting it holds the vehicle until the rental token expires.
+  HOLD = 15.minutes
 
   enum :status, { reserved: 'reserved', active: 'active' }
   enum :payment_status, { unpaid: 'unpaid', paying: 'paying', paid: 'paid' }
@@ -14,6 +18,9 @@ class Reservation < ApplicationRecord
   # The handle a reservation is asked for by; it names the vehicle to hold.
   attribute :scooter_code, :string
   before_validation { self.scooter ||= Scooter.find_by(code: scooter_code) if scooter_code }
+  before_create { self.held_until = HOLD.from_now }
+
+  scope :live, -> { where(arel_table[:held_until].gt(Time.current)) }
 
   validate :scooter_in_fleet, on: :create
   # Which rental verb activates it depends on the vehicle.

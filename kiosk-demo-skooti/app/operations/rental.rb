@@ -9,7 +9,9 @@ module Rental
   module_function
 
   def own_reservation!(reservation_id)
-    Reservation.own.reserved.find_by(id: reservation_id) or refuse 'reservation not found or not yours'
+    reservation = Reservation.own.reserved.find_by(id: reservation_id) or refuse 'reservation not found or not yours'
+    lapsed!(reservation) unless reservation.held_until.future?
+    reservation
   end
 
   def require_paid!(reservation)
@@ -27,12 +29,25 @@ module Rental
     scooter = reservation.scooter
     now     = Time.now.to_i
     token   = RentalTokenIssuer.issue(scooter_code: scooter.code, reservation_id: reservation.id, now: now)
-    reservation.active!
+    exp     = RentalTokenIssuer.verify(token: token, now: now).fetch(:exp)
+    hold_until!(reservation, Time.zone.at(exp))
 
     Unlock.new(scooter_code: scooter.code,
                rental_token: token,
                unlock_url: UnlockLink.url(origin: Kiosk.current_issuer, scooter_code: scooter.code, rental_token: token),
-               exp: RentalTokenIssuer.verify(token: token, now: now).fetch(:exp))
+               exp:)
+  end
+
+  # The vehicle stays held while its rental token can open the lock.
+  def hold_until!(reservation, held_until)
+    reservation.update!(status: :active, held_until:)
+  rescue ActiveRecord::ExclusionViolation
+    lapsed!(reservation)
+  end
+
+  def lapsed!(reservation)
+    raise Kiosk::Server::Errors::Conflict,
+          "this reservation's hold on #{reservation.scooter.code} lapsed — reserve a vehicle again"
   end
 
   def refuse(message)

@@ -209,7 +209,8 @@ Assistant (agent token → Kiosk API)
   │
   └─ start_rental(reservation_id)
        │
-       Gate 1:  reservation exists, belongs to this customer, status = 'reserved'
+       Gate 1:  reservation exists, belongs to this customer, status = 'reserved',
+                and its hold has not lapsed (else 409 conflict)
        Gate 1b: the reserved vehicle is licence-FREE — a motorcycle
                 is refused here and goes through rent_motorcycle, whose Gate 0
                 is the KYC one. start_rental has NO KYC gate.
@@ -218,7 +219,7 @@ Assistant (agent token → Kiosk API)
        All gates pass →
          scooter_code derived server-side from reservation FK (not from client)
          RentalTokenIssuer.issue(scooter_code, reservation_id, now)
-         reservation status → 'active'
+         reservation status → 'active', the vehicle held until the token's exp
        │
        Returns: { scooter_code:, rental_token:, unlock_url:, exp: }
                 The assistant hands unlock_url to its human — a page this

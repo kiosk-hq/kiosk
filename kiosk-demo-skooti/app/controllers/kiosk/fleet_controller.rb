@@ -6,7 +6,7 @@ module Kiosk
     include Kiosk::Handler
 
     kind :query
-    description 'The fleet you can reserve. A `needs_licence` vehicle is rented with `rent_motorcycle`, ' \
+    description 'The vehicles you can reserve now: one another rider holds is left out. A `needs_licence` vehicle is rented with `rent_motorcycle`, ' \
                 'any other with `start_rental`.'
     input_schema type: 'object', additionalProperties: false, properties: {}, required: []
     output_schema type: 'array',

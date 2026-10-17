@@ -25,6 +25,7 @@ class RideStory < StoryTest
     rental = rider.rides(scooter)
     assert rental.ok?, rental
     assert_predicate Reservation.find(scooter['reservation_id']), :active?
+    assert_equal rental['exp'], Reservation.find(scooter['reservation_id']).held_until.to_i
     assert_equal 1, Kiosk::Settlement.where(user_id: rider.principal.user_id).count
     assert_equal rental['rental_token'].rpartition('.').first.split('|')[4].to_i, rental['exp']
 
@@ -59,6 +60,29 @@ class RideStory < StoryTest
     assert refused.refused?(:forbidden), refused
     assert_includes refused['detail'], 'pay for it first'
     assert_includes refused['detail'], 'call `pay`'
+  end
+
+  test 'a scooter another rider holds is refused as a conflict and leaves the list of vehicles nearby' do
+    first = a_rider
+    assert first.reserves('SK-001').ok?
+
+    second = a_rider
+    assert_not_includes second.vehicles_nearby.pluck('code'), 'SK-001'
+    refused = second.reserves('SK-001')
+    assert refused.refused?(:conflict), refused
+    assert_includes refused['detail'], 'SK-001 is held by another rider'
+  end
+
+  test 'a hold that lapsed does not start, and the rider is told to reserve again' do
+    rider = a_rider
+    scooter = rider.reserves('SK-001')
+    assert rider.pays_for(scooter).ok?
+    held = Reservation.find(scooter['reservation_id'])
+    held.update!(held_until: held.created_at)
+
+    refused = rider.rides(scooter)
+    assert refused.refused?(:conflict), refused
+    assert_includes refused['detail'], 'lapsed — reserve a vehicle again'
   end
 
   test "a rider's reservations list shows what they reserved" do

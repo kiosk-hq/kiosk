@@ -38,8 +38,9 @@ module Kiosk
     end
 
     kind :action
-    description 'Hold one vehicle and get the price of its first minute, which is what you pay now. ' \
-                'Pay as `pay_hint` says, then start the rental.'
+    description 'Hold one vehicle for 15 minutes and get the price of its first minute, which is what you pay ' \
+                'now. Pay as `pay_hint` says, then start the rental. A vehicle another rider holds is refused ' \
+                'as a conflict.'
     input_schema type: 'object',
                  additionalProperties: false,
                  properties: {
@@ -62,6 +63,9 @@ module Kiosk
                 })
     def reserve
       @reservation = Reservation.create!(user_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])
+    rescue ActiveRecord::ExclusionViolation
+      raise Kiosk::Server::Errors::Conflict,
+            "#{params[:scooter_code]} is held by another rider — pick another vehicle from scooters_available"
     end
   end
 end

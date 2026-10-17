@@ -26,9 +26,9 @@ is decided before any credential is read.
 
 | Endpoint | Verb | What it does |
 |---|---|---|
-| `GET /kiosk/scooters_available` | `scooters_available` | The fleet (scooters and motorcycles); `needs_licence` marks the KYC-gated motorcycle |
+| `GET /kiosk/scooters_available` | `scooters_available` | The vehicles no other rider holds (scooters and motorcycles); `needs_licence` marks the KYC-gated motorcycle |
 | `GET /kiosk/my_reservations` | `my_reservations` | The signed-in customer's reservations and where each one's payment stands |
-| `POST /kiosk/reserve` | `reserve(scooter_code)` | Hold a vehicle until its rental starts, and quote the first minute to pay |
+| `POST /kiosk/reserve` | `reserve(scooter_code)` | Hold a vehicle for 15 minutes and quote the first minute to pay; a vehicle another rider holds is a `conflict` |
 | `POST /kiosk/payment_setup` | `payment_setup` | Whether the customer has a saved payment method (served by kiosk-server) |
 | `POST /kiosk/start_rental` | `start_rental(reservation_id)` | Start the rental of a paid, licence-free vehicle and issue its offline Ed25519 unlock token |
 | `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The same for the motorcycle, once the customer is attested `age_over_18` and `licence_a` |

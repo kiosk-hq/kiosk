@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: stylish drops the `availability` query; `service_menu` already lists every bookable service.
+
 - 2026-10-17: `kiosk:install` writes each migration's DDL into the file, so a generated migration no longer depends on the installed kiosk-server version.
 
 - 2026-10-17: Every demo tolls registration only, at n=168 k=7: the per-demo query, browse and hold tolls are removed, and tests require `small_equihash`.

@@ -14,7 +14,7 @@ class DiscoveryStory < StoryTest
 
     queries = schema['queries'].index_by { it['name'] }
     actions = schema['actions'].index_by { it['name'] }
-    assert_equal %w[availability my_appointments salon_calendar salons service_menu], queries.keys.sort
+    assert_equal %w[my_appointments salon_calendar salons service_menu], queries.keys.sort
     assert_equal %w[book_appointment], actions.keys
     queries.merge(actions).each_value { assert_predicate it['description'], :present?, it['name'] }
     [queries['service_menu'], actions['book_appointment']].each do |descriptor|
@@ -22,7 +22,7 @@ class DiscoveryStory < StoryTest
     end
 
     examples = Kiosk::TestHelpers::DescriptorExamples.of(schema)
-    assert_operator examples.size, :>=, 6
+    assert_operator examples.size, :>=, 4
     assert_empty examples.filter_map(&:violation)
   end
 

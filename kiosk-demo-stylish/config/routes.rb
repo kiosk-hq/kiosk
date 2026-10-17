@@ -2,7 +2,7 @@
 
 Rails.application.routes.draw do
   kiosk do
-    queries :availability, :my_appointments, :salon_calendar, :salons, :service_menu
+    queries :my_appointments, :salon_calendar, :salons, :service_menu
     actions :book_appointment
   end
 

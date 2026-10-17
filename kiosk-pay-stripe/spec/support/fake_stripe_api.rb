@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "socket"
-require "json"
-require "uri"
+require 'socket'
+require 'json'
+require 'uri'
 
 # A tiny STATEFUL Stripe API served over real HTTP, for the K-492 setup-session
 # reuse examples.
@@ -32,7 +32,7 @@ class FakeStripeApi
   Request = Struct.new(:method, :path, :query, :params, keyword_init: true)
 
   def initialize
-    @server    = TCPServer.new("127.0.0.1", 0)
+    @server    = TCPServer.new('127.0.0.1', 0)
     @requests  = []
     @sessions  = []
     @customers = []
@@ -65,7 +65,7 @@ class FakeStripeApi
   # Flip every stored session out of `open`, as Stripe does once the human
   # completes (or lets expire) the hosted page.
   def close_all_sessions!
-    @mutex.synchronize { @sessions.each { |s| s[:status] = "complete" } }
+    @mutex.synchronize { @sessions.each { |s| s[:status] = 'complete' } }
   end
 
   private
@@ -83,10 +83,10 @@ class FakeStripeApi
     request_line = socket.gets
     return socket.close if request_line.nil?
 
-    method, target, = request_line.split(" ")
-    path, query = target.split("?", 2)
+    method, target, = request_line.split(' ')
+    path, query = target.split('?', 2)
     headers = read_headers(socket)
-    body    = headers["content-length"] ? socket.read(headers["content-length"].to_i).to_s : ""
+    body    = headers['content-length'] ? socket.read(headers['content-length'].to_i).to_s : ''
 
     params = form_params(query.to_s.empty? ? body : query)
     @mutex.synchronize do
@@ -105,7 +105,7 @@ class FakeStripeApi
   def read_headers(socket)
     headers = {}
     while (line = socket.gets) && line != "\r\n"
-      key, value = line.split(":", 2)
+      key, value = line.split(':', 2)
       headers[key.to_s.downcase] = value.to_s.strip
     end
     headers
@@ -118,38 +118,38 @@ class FakeStripeApi
   end
 
   def route(method, path, params)
-    return retrieve_customer(path.delete_prefix("/v1/customers/")) if method == "GET" && path.start_with?("/v1/customers/")
+    return retrieve_customer(path.delete_prefix('/v1/customers/')) if method == 'GET' && path.start_with?('/v1/customers/')
 
     case [method, path]
-    when %w[POST /v1/customers]        then create_customer
+    when %w[POST /v1/customers] then create_customer
     when %w[POST /v1/checkout/sessions] then create_session(params)
     when %w[GET /v1/checkout/sessions]  then list_sessions(params)
-    else { object: "error", error: { message: "fake: unrouted #{method} #{path}" } }
+    else { object: 'error', error: { message: "fake: unrouted #{method} #{path}" } }
     end
   end
 
   def create_customer
     id = "cus_fake_#{next_id}"
     @mutex.synchronize { @customers << id }
-    { id: id, object: "customer" }
+    { id: id, object: 'customer' }
   end
 
   def retrieve_customer(id)
-    return { id: id, object: "customer", invoice_settings: { default_payment_method: nil } } if @mutex.synchronize { @customers.include?(id) }
+    return { id: id, object: 'customer', invoice_settings: { default_payment_method: nil } } if @mutex.synchronize { @customers.include?(id) }
 
-    [404, { error: { type: "invalid_request_error", code: "resource_missing", message: "No such customer: '#{id}'" } }]
+    [404, { error: { type: 'invalid_request_error', code: 'resource_missing', message: "No such customer: '#{id}'" } }]
   end
 
   def create_session(params)
     id      = "cs_test_fake#{next_id}"
     session = {
-      id:          id,
-      object:      "checkout.session",
-      mode:        params["mode"],
-      customer:    params["customer"],
-      success_url: params["success_url"],
-      status:      "open",
-      url:         "https://checkout.stripe.com/c/pay/#{id}",
+      id: id,
+      object: 'checkout.session',
+      mode: params['mode'],
+      customer: params['customer'],
+      success_url: params['success_url'],
+      status: 'open',
+      url: "https://checkout.stripe.com/c/pay/#{id}"
     }
     @mutex.synchronize { @sessions << session }
     session
@@ -161,13 +161,13 @@ class FakeStripeApi
   def list_sessions(params)
     matched = @mutex.synchronize do
       @sessions.select do |s|
-        (params["customer"].nil? || s[:customer] == params["customer"]) &&
-          (params["status"].nil? || s[:status] == params["status"])
+        (params['customer'].nil? || s[:customer] == params['customer']) &&
+          (params['status'].nil? || s[:status] == params['status'])
       end
     end
-    limit = params["limit"].to_i
+    limit = params['limit'].to_i
     matched = matched.first(limit) if limit.positive?
-    { object: "list", url: "/v1/checkout/sessions", has_more: false, data: matched }
+    { object: 'list', url: '/v1/checkout/sessions', has_more: false, data: matched }
   end
 
   def next_id
@@ -178,10 +178,10 @@ class FakeStripeApi
     status, payload = payload.is_a?(Array) ? payload : [200, payload]
     json = JSON.generate(payload)
     socket.print(
-      "HTTP/1.1 #{status} #{status == 200 ? "OK" : "Not Found"}\r\n" \
+      "HTTP/1.1 #{status} #{status == 200 ? 'OK' : 'Not Found'}\r\n" \
       "Content-Type: application/json\r\n" \
       "Content-Length: #{json.bytesize}\r\n" \
-      "Connection: close\r\n\r\n#{json}",
+      "Connection: close\r\n\r\n#{json}"
     )
   end
 end

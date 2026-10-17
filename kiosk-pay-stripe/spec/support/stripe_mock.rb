@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "socket"
+require 'socket'
 
 # Start (or reuse) a local `stripe-mock` — Stripe's own fixture server.
 #
@@ -9,13 +9,13 @@ require "socket"
 # group in `stripe_setup_reuse_spec.rb`.
 module StripeMock
   # Not 12111: kiosk-redteam's settling front listens there.
-  PORT = 12113
+  PORT = 12_113
   URL  = "http://127.0.0.1:#{PORT}"
 
   module_function
 
   def reachable?
-    socket = TCPSocket.new("127.0.0.1", PORT)
+    socket = TCPSocket.new('127.0.0.1', PORT)
     socket.close
     true
   rescue StandardError
@@ -23,7 +23,7 @@ module StripeMock
   end
 
   def installed?
-    system("command -v stripe-mock >/dev/null 2>&1")
+    system('command -v stripe-mock >/dev/null 2>&1')
   end
 
   # The base URL, or nil when stripe-mock is neither running nor installed —
@@ -35,9 +35,9 @@ module StripeMock
     return URL if reachable?
     return nil unless installed?
 
-    pid = spawn("stripe-mock", "-http-port", PORT.to_s, out: File::NULL, err: File::NULL)
+    pid = spawn('stripe-mock', '-http-port', PORT.to_s, out: File::NULL, err: File::NULL)
     at_exit do
-      Process.kill("TERM", pid)
+      Process.kill('TERM', pid)
       Process.wait(pid)
     rescue Errno::ESRCH, Errno::ECHILD
       nil

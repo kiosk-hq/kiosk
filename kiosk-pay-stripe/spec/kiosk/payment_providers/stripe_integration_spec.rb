@@ -34,7 +34,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
   before do |example|
     next if example.metadata[:no_key_needed]
 
-    skip "set STRIPE_SECRET_KEY (sk_test_…) to run" unless ENV["STRIPE_SECRET_KEY"]
+    skip 'set STRIPE_SECRET_KEY (sk_test_…) to run' unless ENV['STRIPE_SECRET_KEY']
   end
 
   # In-memory principal→customer store (replaces the app's stripe_customers table).
@@ -42,9 +42,9 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
 
   subject(:adapter) do
     described_class.new(
-      api_key:           ENV["STRIPE_SECRET_KEY"],
+      api_key: ENV.fetch('STRIPE_SECRET_KEY', nil),
       customer_resolver: ->(uid) { customer_store[uid] },
-      customer_saver:    ->(uid, cid) { customer_store[uid] = cid },
+      customer_saver: ->(uid, cid) { customer_store[uid] = cid }
     )
   end
 
@@ -52,10 +52,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
 
   let(:cart_mandate) do
     Kiosk::Mandate::CartMandate.new(
-      id: "cart-int-#{Process.pid}", intent_mandate_id: "i", user_id: user_id,
-      agent_id: "a", issuer: "https://demo.example",
-      line_items: [{ sku: "pizza", qty: 1 }], total_amount_cents: 1599,
-      currency: "eur", expires_at: nil, created_at: nil, raw_jws: "jws",
+      id: "cart-int-#{Process.pid}", intent_mandate_id: 'i', user_id: user_id,
+      agent_id: 'a', issuer: 'https://demo.example',
+      line_items: [{ sku: 'pizza', qty: 1 }], total_amount_cents: 1599,
+      currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'jws'
     )
   end
 
@@ -63,17 +63,17 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
   # rest can be trusted to fail for Stripe's reasons rather than for ours: a
   # subject that raises before any network call is indistinguishable from a
   # skip, and a skip is the same colour as a pass. It touches no network.
-  describe "the subject itself" do
-    it "builds without reaching Stripe", :no_key_needed do
+  describe 'the subject itself' do
+    it 'builds without reaching Stripe', :no_key_needed do
       expect(adapter).to be_a(described_class)
     end
   end
 
-  describe "#attach_test_card + #capture (full off_session round-trip)" do
-    it "attaches a test card then captures a real test payment" do
+  describe '#attach_test_card + #capture (full off_session round-trip)' do
+    it 'attaches a test card then captures a real test payment' do
       # Simulate a completed SetupIntent programmatically (no human at hosted page).
       cus_id = adapter.attach_test_card(user_id: user_id)
-      expect(cus_id).to start_with("cus_")
+      expect(cus_id).to start_with('cus_')
       expect(customer_store[user_id]).to eq(cus_id)
 
       # saved_method? should now return true.
@@ -82,14 +82,14 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
       # off_session capture against the saved card → real pi_…
       captured = adapter.capture(cart_mandate, payment_method: nil)
       expect(captured[:settled_amount_cents]).to eq(1599)
-      expect(captured[:psp_reference]).to start_with("pi_")
+      expect(captured[:psp_reference]).to start_with('pi_')
     end
   end
 
-  describe "#setup_url" do
-    it "returns a hosted Stripe Checkout URL for the setup flow" do
-      url = adapter.setup_url(user_id: user_id, return_url: "https://shop.example/kiosk/payment_setup/return")
-      expect(url).to start_with("https://checkout.stripe.com/")
+  describe '#setup_url' do
+    it 'returns a hosted Stripe Checkout URL for the setup flow' do
+      url = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+      expect(url).to start_with('https://checkout.stripe.com/')
     end
 
     # K-492 against the real API. This is the ONLY example anywhere that can
@@ -99,22 +99,22 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
     # `stripe_setup_reuse_spec.rb` both ASSUME it — they exercise our side of
     # the contract, not Stripe's. Needs STRIPE_SECRET_KEY; CI deliberately has
     # none, so in CI this is skipped, not passed.
-    it "returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)" do
-      first  = adapter.setup_url(user_id: user_id, return_url: "https://shop.example/kiosk/payment_setup/return")
-      second = adapter.setup_url(user_id: user_id, return_url: "https://shop.example/kiosk/payment_setup/return")
+    it 'returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)' do
+      first  = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+      second = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
 
       expect(second).to eq(first)
 
       cus_id     = customer_store[user_id]
-      open_setup = ::Stripe::Checkout::Session
-                   .list(customer: cus_id, status: "open", limit: 10)
-                   .data.select { |s| s.mode == "setup" }
+      open_setup = Stripe::Checkout::Session
+                   .list(customer: cus_id, status: 'open', limit: 10)
+                   .data.select { |s| s.mode == 'setup' }
       expect(open_setup.map(&:url)).to eq([first])
     end
   end
 
-  describe "#saved_method? before card setup" do
-    it "returns false for a new user with no card on file" do
+  describe '#saved_method? before card setup' do
+    it 'returns false for a new user with no card on file' do
       fresh_user = "no-card-user-#{Process.pid}"
       expect(adapter.saved_method?(user_id: fresh_user)).to be false
     end

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "active_record"
+require 'active_record'
 
 module Kiosk
   module PaymentProviders
@@ -8,7 +8,7 @@ module Kiosk
       # The principal → Stripe Customer mapping, one row per principal, in the
       # host's `stripe_customers` table. The adapter's default resolver and saver.
       class CustomerRecord < ::ActiveRecord::Base
-        self.table_name = "stripe_customers"
+        self.table_name = 'stripe_customers'
 
         # From a host migration:
         #   def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)

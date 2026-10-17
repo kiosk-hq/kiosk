@@ -50,11 +50,12 @@ class BookAppointmentTest < ActiveSupport::TestCase
     assert_equal 9000, Appointment.sole.price_cents
   end
 
-  test "the published example is 14:00 on the origin's clock, a week ahead" do
-    example = Time.iso8601(BookAppointmentOperation.example_slot)
-    assert_equal 14, example.in_time_zone(PARIS).hour
-    assert_equal PARIS.now.advance(days: 7).utc_offset, example.utc_offset
-    assert_operator example, :>, Time.current
+  test "the published example is 14:00 on the origin's clock, a week ahead, across a change of clocks" do
+    travel_to Time.utc(2026, 10, 18, 9) do
+      example = Time.iso8601(BookAppointmentOperation.example_slot)
+      assert_equal '2026-10-25T14:00:00+01:00', example.iso8601
+      assert_equal 14, example.in_time_zone(PARIS).hour
+    end
   end
 
   test "a slot that has passed is refused on the salon's clock" do

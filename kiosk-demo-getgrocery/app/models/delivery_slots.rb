@@ -12,7 +12,7 @@ module DeliverySlots
   DRIVE   = 5.minutes
 
   # The origin's zone, used where no address is involved: published examples.
-  DEFAULT_ZONE_NAME = "Europe/Dublin"
+  DEFAULT_ZONE_NAME = 'Europe/Dublin'
 
   module_function
 
@@ -29,7 +29,7 @@ module DeliverySlots
 
   # Each window's start on `date`, on the clock of `zone`.
   def starts(date, zone = default_zone)
-    Array.new(COUNT) { date.in_time_zone(zone).change(hour: FIRST_HOUR + _1 * WINDOW_HOURS) }
+    Array.new(COUNT) { date.in_time_zone(zone).change(hour: FIRST_HOUR + (it * WINDOW_HOURS)) }
   end
 
   def start?(time, zone) = starts(time.in_time_zone(zone).to_date, zone).include?(time)
@@ -37,7 +37,7 @@ module DeliverySlots
   # "08:00–10:00 (Europe/Dublin)".
   def label(time, zone = default_zone)
     hour = time.in_time_zone(zone).hour
-    format("%02d:00–%02d:00 (%s)", hour, hour + WINDOW_HOURS, zone.name)
+    format('%02d:00–%02d:00 (%s)', hour, hour + WINDOW_HOURS, zone.name)
   end
 
   # A window takes orders while a basket paid now still reaches the door inside it.
@@ -45,8 +45,8 @@ module DeliverySlots
     (slot_at + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
   end
 
-  def bookable(date, zone) = starts(date, zone).reject { closed?(_1) }
+  def bookable(date, zone) = starts(date, zone).reject { closed?(it) }
 
   # "14:35 (Europe/Dublin)".
-  def clock_label(time, zone) = "#{time.in_time_zone(zone).strftime("%H:%M")} (#{zone.name})"
+  def clock_label(time, zone) = "#{time.in_time_zone(zone).strftime('%H:%M')} (#{zone.name})"
 end

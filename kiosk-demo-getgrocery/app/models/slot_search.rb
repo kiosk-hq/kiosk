@@ -34,6 +34,6 @@ class SlotSearch
     errors.add(:date, "#{date.iso8601} is in the past on the calendar it is read in (#{calendar.name}); " \
                       "the earliest day you can ask for is #{calendar.today.iso8601}. The day is read in " \
                       "YOUR calendar when you declare Kiosk-Timezone, and in the delivery address's when " \
-                      "you do not.")
+                      'you do not.')
   end
 end

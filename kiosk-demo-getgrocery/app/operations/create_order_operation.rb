@@ -7,17 +7,17 @@ class CreateOrderOperation
     zone     = DeliverySlots.zone_at(delivery_address)
     products = Product.where(sku: items.pluck(:sku)).index_by(&:sku)
     order    = Order.new(
-      user_id:     customer_id,
-      slot_at:     slot_at,
-      address:     delivery_address,
-      timezone:    zone.name,
-      order_items: items.map { OrderItem.new(sku: _1[:sku], product: products[_1[:sku]], qty: _1[:qty]) },
+      user_id: customer_id,
+      slot_at: slot_at,
+      address: delivery_address,
+      timezone: zone.name,
+      order_items: items.map { OrderItem.new(sku: it[:sku], product: products[it[:sku]], qty: it[:qty]) }
     )
     order.validate!(:place)
 
-    Kiosk::Server::Kyc.require! if order.order_items.any? { _1.product.age_restricted? }
+    Kiosk::Server::Kyc.require! if order.order_items.any? { it.product.age_restricted? }
 
-    order.update!(total_cents: order.order_items.sum { _1.product.price_cents * _1.qty })
+    order.update!(total_cents: order.order_items.sum { it.product.price_cents * it.qty })
     order
   end
 end

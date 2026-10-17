@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "test_helper"
+require 'test_helper'
 
 # THE FOUR PROPERTIES THE PROTOCOL MAKES NORMATIVE OF THIS ORIGIN, asserted the
 # way an adopting operator asserts them about their own.
@@ -21,21 +21,21 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # calling, so a scoping assertion needs both sides seeded: one to see rows and
   # one to be refused them.
   setup do
-    @alice = User.create!(email: "alice@example.test", password: "conformance-fixture-password")
-    @bob   = User.create!(email: "bob@example.test",   password: "conformance-fixture-password")
+    @alice = User.create!(email: 'alice@example.test', password: 'conformance-fixture-password')
+    @bob   = User.create!(email: 'bob@example.test',   password: 'conformance-fixture-password')
 
-    @bread = Product.create!(sku: "sourdough-bread", name: "Sourdough Bread",
+    @bread = Product.create!(sku: 'sourdough-bread', name: 'Sourdough Bread',
                              price_cents: 449, stock: 20)
 
     # `timezone` is spelled out rather than defaulted: `orders.timezone` carries
     # no column default on purpose, so anything that writes an order has to say
     # which clock it was quoted on. A fixture is no exception — a row that could
     # not name its clock is a row the wire could not have produced.
-    @alice_order = Order.create!(user: @alice, status: "created", total_cents: 449,
-                                 slot_at: Time.current + 3600, address: "1 Dame Street, Dublin 2",
+    @alice_order = Order.create!(user: @alice, status: 'created', total_cents: 449,
+                                 slot_at: Time.current + 3600, address: '1 Dame Street, Dublin 2',
                                  timezone: DeliverySlots::DEFAULT_ZONE_NAME)
-    @bob_order   = Order.create!(user: @bob,   status: "created", total_cents: 449,
-                                 slot_at: Time.current + 3600, address: "9 Grafton Street, Dublin 2",
+    @bob_order   = Order.create!(user: @bob,   status: 'created', total_cents: 449,
+                                 slot_at: Time.current + 3600, address: '9 Grafton Street, Dublin 2',
                                  timezone: DeliverySlots::DEFAULT_ZONE_NAME)
   end
 
@@ -49,7 +49,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # Watched fail: drop `:delivery_slots` from `queries` and this goes
   # red naming the verb, the method and the path — where a wire test would keep
   # passing until it reached that one call.
-  test "every declared verb is routed, with the method its kind requires" do
+  test 'every declared verb is routed, with the method its kind requires' do
     assert_kiosk_verbs_routed
   end
 
@@ -58,7 +58,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # With no arguments given, each check runs the verb's OWN `example_params` —
   # the object the descriptor tells an assistant to copy — so this executes the
   # published example as well as the handler.
-  test "the read surface executes as a signed-in customer" do
+  test 'the read surface executes as a signed-in customer' do
     assert_kiosk_verb_executes :catalog,        as: @alice
     assert_kiosk_verb_executes :delivery_slots, as: @alice
     assert_kiosk_verb_executes :my_orders,      as: @alice
@@ -75,15 +75,15 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # Watched fail: publish `price_cents` as `Product.format_eur(...)` in the
   # catalog handler and this names the pointer `/0/price_cents` and the type it
   # expected.
-  test "catalog answers the shape it publishes" do
+  test 'catalog answers the shape it publishes' do
     assert_kiosk_answer_matches_declared_schema :catalog, as: @alice
   end
 
-  test "my_orders answers the shape it publishes" do
+  test 'my_orders answers the shape it publishes' do
     assert_kiosk_answer_matches_declared_schema :my_orders, as: @alice
   end
 
-  test "delivery_slots answers the shape it publishes" do
+  test 'delivery_slots answers the shape it publishes' do
     assert_kiosk_answer_matches_declared_schema :delivery_slots, as: @alice
   end
 
@@ -97,7 +97,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   #
   # Watched fail: change `Order.own` to `Order.all` and
   # this names the leaked rows.
-  test "my_orders hands one shopper nothing belonging to another" do
+  test 'my_orders hands one shopper nothing belonging to another' do
     assert_kiosk_scoped_to_principal :my_orders, as: @alice, and_not: @bob
   end
 end

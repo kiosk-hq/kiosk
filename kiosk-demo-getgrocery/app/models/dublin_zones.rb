@@ -11,7 +11,7 @@ module DublinZones
   # The clock of each served district.
   ZONES = %w[
     D01 D02 D03 D04 D05 D06 D07 D08 D09 D10 D11 D12 D13 D14 D15 D16 D17 D20
-  ].to_h { |district| [district, "Europe/Dublin"] }.freeze
+  ].to_h { |district| [district, 'Europe/Dublin'] }.freeze
 
   Result = Struct.new(:ok, :district, :reason, keyword_init: true) do
     def ok? = ok
@@ -37,9 +37,7 @@ module DublinZones
       return Result.new(ok: false, district: nil, reason: reason)
     end
 
-    unless SERVED.include?(district)
-      return Result.new(ok: false, district: district, reason: :out_of_zone)
-    end
+    return Result.new(ok: false, district: district, reason: :out_of_zone) unless SERVED.include?(district)
 
     Result.new(ok: true, district: district, reason: nil)
   end
@@ -61,27 +59,27 @@ module DublinZones
   def normalise(n)
     return nil if n < 1 || n > 24
 
-    format("D%02d", n)
+    format('D%02d', n)
   end
 
   # Why the address is refused, worded to follow its field name.
   def reject_message(result)
-    served = SERVED.join(", ")
+    served = SERVED.join(', ')
     case result.reason
     when :blank
-      "is missing — getgrocery needs a Dublin delivery address with a postal district " \
-        "(e.g. \"42 Camden Street, Dublin 2\") before it can show delivery slots. Ask the " \
-        "customer for their real address."
+      'is missing — getgrocery needs a Dublin delivery address with a postal district ' \
+      '(e.g. "42 Camden Street, Dublin 2") before it can show delivery slots. Ask the ' \
+      'customer for their real address.'
     when :no_district
-      "names Dublin but no postal district — getgrocery delivers by district and needs one " \
-        "(e.g. \"Dublin 2\" or an Eircode like \"D02 XY45\"). Served districts: #{served}. " \
-        "Ask the customer to confirm their real address."
+      'names Dublin but no postal district — getgrocery delivers by district and needs one ' \
+      "(e.g. \"Dublin 2\" or an Eircode like \"D02 XY45\"). Served districts: #{served}. " \
+      'Ask the customer to confirm their real address.'
     when :not_dublin
-      "is not a Dublin address — getgrocery delivers only within Dublin (served districts " \
-        "#{served}). Confirm the real delivery address with the customer."
+      'is not a Dublin address — getgrocery delivers only within Dublin (served districts ' \
+      "#{served}). Confirm the real delivery address with the customer."
     when :out_of_zone
       "is in #{result.district}, which getgrocery does not deliver to — served districts are " \
-        "#{served}. Ask the customer for an address in a served district."
+      "#{served}. Ask the customer for an address in a served district."
     end
   end
 end

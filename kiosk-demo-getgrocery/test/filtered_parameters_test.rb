@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "test_helper"
+require 'test_helper'
 
 # WHAT THIS SHOP KEEPS OUT OF ITS REQUEST LOG.
 #
@@ -19,13 +19,13 @@ class FilteredParametersTest < ActiveSupport::TestCase
     ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(params)
   end
 
-  test "delivery_address is masked" do
-    assert_equal "[FILTERED]", filtered("delivery_address" => "99 Sentinel Street, Dublin 2")["delivery_address"]
+  test 'delivery_address is masked' do
+    assert_equal '[FILTERED]', filtered('delivery_address' => '99 Sentinel Street, Dublin 2')['delivery_address']
   end
 
   # The control: without it the assertion above would also pass on a filter
   # that masks everything.
   test "sku is left in the clear — a catalogue reference is nobody's personal data" do
-    assert_equal "sourdough-bread", filtered("sku" => "sourdough-bread")["sku"]
+    assert_equal 'sourdough-bread', filtered('sku' => 'sourdough-bread')['sku']
   end
 end

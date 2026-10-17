@@ -2,20 +2,20 @@
 
 module Admin
   module OrdersHelper
-    CURRENCY_GLYPHS = { "usd" => "$", "gbp" => "£", "eur" => "€" }.freeze
+    CURRENCY_GLYPHS = { 'usd' => '$', 'gbp' => '£', 'eur' => '€' }.freeze
 
     # The shop's own states outrank the settlement: a delivered basket is also paid.
-    STATUS_BADGES = { "delivered" => "delivered", "out_for_delivery" => "out-for-delivery",
-                      "rescheduled" => "scheduled" }.freeze
+    STATUS_BADGES = { 'delivered' => 'delivered', 'out_for_delivery' => 'out-for-delivery',
+                      'rescheduled' => 'scheduled' }.freeze
 
     def order_badge(order)
-      badge = STATUS_BADGES.fetch(order.status) { order.settled_currency ? "paid" : "created" }
-      tag.span(badge.tr("-", " ").upcase, class: "badge badge-#{badge}")
+      badge = STATUS_BADGES.fetch(order.status) { order.settled_currency ? 'paid' : 'created' }
+      tag.span(badge.tr('-', ' ').upcase, class: "badge badge-#{badge}")
     end
 
     # An amount in the currency the order settled in; € until it has settled.
     def order_money(order, cents)
-      format("%s%.2f", CURRENCY_GLYPHS.fetch(order.settled_currency.to_s.downcase, "€"), cents / 100.0)
+      format('%s%.2f', CURRENCY_GLYPHS.fetch(order.settled_currency.to_s.downcase, '€'), cents / 100.0)
     end
 
     # The delivery window on the order's own clock, worded as the wire words it.

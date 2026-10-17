@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "test_helper"
+require 'test_helper'
 
 # `create_order` PLACES AN ORDER. IT TAKES NO EXISTING ORDER TO AMEND.
 #
@@ -22,65 +22,65 @@ require "test_helper"
 # session the wire opens, with the verb's own `input_schema` validated first —
 # so a case that could not be sent over the wire cannot pass here either.
 class CreateOrderInputsTest < ActiveSupport::TestCase
-  ADDRESS = "42 Camden Street, Dublin 2"
+  ADDRESS = '42 Camden Street, Dublin 2'
 
   setup do
-    @shopper = User.create!(email: "inputs@example.test", password: "conformance-fixture-password")
-    Product.create!(sku: "sourdough-bread", name: "Sourdough Bread", price_cents: 449, stock: 20)
+    @shopper = User.create!(email: 'inputs@example.test', password: 'conformance-fixture-password')
+    Product.create!(sku: 'sourdough-bread', name: 'Sourdough Bread', price_cents: 449, stock: 20)
   end
 
-  test "an order_id argument is REFUSED by the published contract, and writes nothing" do
+  test 'an order_id argument is REFUSED by the published contract, and writes nothing' do
     placed = place
 
-    refusal = assert_kiosk_refused { place(order_id: placed["order_id"]) }
-    assert_equal "bad_request", refusal.code
+    refusal = assert_kiosk_refused { place(order_id: placed['order_id']) }
+    assert_equal 'bad_request', refusal.code
     assert_equal 400, refusal.http_status
-    assert_includes refusal.message, "order_id",
-                    "the refusal must name the argument, so an assistant can correct itself"
+    assert_includes refusal.message, 'order_id',
+                    'the refusal must name the argument, so an assistant can correct itself'
     assert_equal 1, Order.where(user_id: @shopper.id).count,
-                 "a refused call writes nothing"
+                 'a refused call writes nothing'
   end
 
-  test "a well-formed uuid naming nothing is refused in the same words" do
-    refusal = assert_kiosk_refused { place(order_id: "99999999-9999-4999-8999-999999999999") }
-    assert_equal "bad_request", refusal.code
+  test 'a well-formed uuid naming nothing is refused in the same words' do
+    refusal = assert_kiosk_refused { place(order_id: '99999999-9999-4999-8999-999999999999') }
+    assert_equal 'bad_request', refusal.code
     assert_equal 0, Order.where(user_id: @shopper.id).count
   end
 
-  test "changing your mind is a NEW order — two calls, two ids, neither amended" do
+  test 'changing your mind is a NEW order — two calls, two ids, neither amended' do
     first  = place
     second = place(qty: 3)
 
-    refute_equal first["order_id"], second["order_id"], "nothing is replaced in place"
+    refute_equal first['order_id'], second['order_id'], 'nothing is replaced in place'
     assert_equal 2, Order.where(user_id: @shopper.id).count
-    assert_equal 449,  first["total_cents"]
-    assert_equal 1347, second["total_cents"]
+    assert_equal 449,  first['total_cents']
+    assert_equal 1347, second['total_cents']
   end
 
-  test "slot_at must be the start of a delivery window" do
+  test 'slot_at must be the start of a delivery window' do
     off_grid = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2] + 30.minutes
     refusal = assert_kiosk_refused { place(slot_at: off_grid.iso8601) }
-    assert_equal "bad_request", refusal.code
-    assert_includes refusal.message, "slot_at of a delivery_slots row"
+    assert_equal 'bad_request', refusal.code
+    assert_includes refusal.message, 'slot_at of a delivery_slots row'
     assert_equal 0, Order.where(user_id: @shopper.id).count
   end
 
   test "an abandoned order stays unpaid on the customer's own reconciliation surface" do
     place
-    rows = kiosk_origin.call("my_orders", kind: :query, params: {}, as: @shopper)
+    rows = kiosk_origin.call('my_orders', kind: :query, params: {}, as: @shopper)
 
     assert_equal 1, rows.length
-    assert_equal "unpaid", rows.first["payment_state"],
-                 "nothing is charged for an order nobody paid for"
+    assert_equal 'unpaid', rows.first['payment_state'],
+                 'nothing is charged for an order nobody paid for'
   end
 
   private
 
   def place(order_id: nil, qty: 1, slot_at: DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601)
-    params = { items: [{ sku: "sourdough-bread", qty: qty }],
-               slot_at:          slot_at,
+    params = { items: [{ sku: 'sourdough-bread', qty: qty }],
+               slot_at: slot_at,
                delivery_address: ADDRESS }
     params[:order_id] = order_id if order_id
-    kiosk_origin.call("create_order", kind: :action, params: params, as: @shopper)
+    kiosk_origin.call('create_order', kind: :action, params: params, as: @shopper)
   end
 end

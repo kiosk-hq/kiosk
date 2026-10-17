@@ -3,7 +3,7 @@
 module Admin
   # The operator's recent orders. Public on this demo, so addresses are masked.
   class OrdersController < ActionController::Base
-    layout "admin"
+    layout 'admin'
 
     def index
       @orders = Order.with_settlement(Kiosk::Settlement.all)

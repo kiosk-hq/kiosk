@@ -8,20 +8,20 @@ class Order < ApplicationRecord
   MAX_ITEMS = 50
 
   enum :status, {
-    created:          "created",
-    paying:           "paying",
-    paid:             "paid",
-    rescheduled:      "rescheduled",
-    out_for_delivery: "out_for_delivery",
-    delivered:        "delivered",
+    created: 'created',
+    paying: 'paying',
+    paid: 'paid',
+    rescheduled: 'rescheduled',
+    out_for_delivery: 'out_for_delivery',
+    delivered: 'delivered'
   }
 
   belongs_to :user
   has_many :order_items, dependent: :destroy, autosave: true
 
   # What a caller placing or moving an order is held to.
-  validates :order_items, length: { in: 1..MAX_ITEMS, too_short: "must name a product",
-                                    too_long: "are at most %{count} lines" }, on: :place
+  validates :order_items, length: { in: 1..MAX_ITEMS, too_short: 'must name a product',
+                                    too_long: 'are at most %{count} lines' }, on: :place
   validates :address, served_address: true, on: %i[place reschedule]
   validate :window_bookable, on: %i[place reschedule]
 
@@ -32,7 +32,7 @@ class Order < ApplicationRecord
 
   # A settlement whose cart names this order (`line_items @> [{order_id}]`).
   SETTLEMENT_FOR_ROW = Arel.sql(
-    "kiosk.cart_mandates.line_items @> json_build_array(json_build_object('order_id', orders.id::text))::jsonb",
+    "kiosk.cart_mandates.line_items @> json_build_array(json_build_object('order_id', orders.id::text))::jsonb"
   ).freeze
 
   # Adds `settled` and `settled_currency`, read from the given settlements: the
@@ -40,8 +40,8 @@ class Order < ApplicationRecord
   scope :with_settlement, lambda { |settlements|
     settlement = settlements.joins(:cart_mandate).where(SETTLEMENT_FOR_ROW)
     select(arel_table[Arel.star],
-           Arel::Nodes::Exists.new(settlement.select(Arel.sql("1")).arel).as("settled"),
-           Arel::Nodes::Grouping.new(settlement.select(:currency).limit(1).arel).as("settled_currency"))
+           Arel::Nodes::Exists.new(settlement.select(Arel.sql('1')).arel).as('settled'),
+           Arel::Nodes::Grouping.new(settlement.select(:currency).limit(1).arel).as('settled_currency'))
   }
 
   def self.readable_by?(order_id, user_id) = where(id: order_id, user_id: user_id).exists?
@@ -49,25 +49,25 @@ class Order < ApplicationRecord
   # What `my_orders` publishes about the money. `pending` means a capture is in
   # flight: the caller must reconcile, not sign a new mandate.
   def payment_state
-    return "paid"    if paid? || settled
-    return "pending" if paying?
+    return 'paid'    if paid? || settled
+    return 'pending' if paying?
 
-    "unpaid"
+    'unpaid'
   end
 
   def zone = Time.find_zone!(timezone)
 
-  def items_by_product = order_items.sort_by { _1.product.name }
+  def items_by_product = order_items.sort_by { it.product.name }
 
   private
 
   # A window takes orders while a basket paid now still reaches the door inside it.
   def window_bookable
     if slot_at.nil? || !DeliverySlots.start?(slot_at, zone)
-      errors.add(:slot_at, "must be the slot_at of a delivery_slots row")
+      errors.add(:slot_at, 'must be the slot_at of a delivery_slots row')
     elsif DeliverySlots.closed?(slot_at)
       errors.add(:slot_at, "#{DeliverySlots.label(slot_at, zone)} on #{slot_at.in_time_zone(zone).to_date.iso8601} " \
-                           "is no longer bookable; call delivery_slots for the open windows")
+                           'is no longer bookable; call delivery_slots for the open windows')
     end
   end
 end

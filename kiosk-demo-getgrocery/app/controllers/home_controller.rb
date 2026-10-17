@@ -8,6 +8,6 @@ class HomeController < ApplicationController
     @items_ordered        = OrderItem.sum(:qty)
     @deliveries_scheduled = Order.rescheduled.count
 
-    response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+    response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 end

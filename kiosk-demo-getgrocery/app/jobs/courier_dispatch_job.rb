@@ -26,11 +26,11 @@ class CourierDispatchJob < ApplicationJob
     arrival = DeliverySlots::DRIVE.from_now
     Kiosk::Server::Events.emit(
       topic: :order_delivery, subject: order.id, identity_scope: [order.user_id],
-      data: { "order_id"  => order.id,
-              "status"    => "out_for_delivery",
-              "eta"       => arrival.utc.iso8601,
-              "eta_label" => DeliverySlots.clock_label(arrival, order.zone),
-              "timezone"  => order.timezone },
+      data: { 'order_id' => order.id,
+              'status' => 'out_for_delivery',
+              'eta' => arrival.utc.iso8601,
+              'eta_label' => DeliverySlots.clock_label(arrival, order.zone),
+              'timezone' => order.timezone }
     )
     OrderDeliveredJob.set(wait_until: arrival).perform_later(order.id)
   end

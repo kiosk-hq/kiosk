@@ -6,10 +6,10 @@
 module PriceChecker
   def self.call(order_id, lines)
     presented = lines.map do |li|
-      sku   = li["sku"].to_s
-      qty   = li["qty"].to_i
-      price = li["price_cents"].to_i
-      return "each item line needs sku, qty, and price_cents (catalog price)" if sku.empty? || qty <= 0 || price <= 0
+      sku   = li['sku'].to_s
+      qty   = li['qty'].to_i
+      price = li['price_cents'].to_i
+      return 'each item line needs sku, qty, and price_cents (catalog price)' if sku.empty? || qty <= 0 || price <= 0
 
       [sku, qty, price]
     end

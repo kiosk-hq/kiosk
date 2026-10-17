@@ -11,7 +11,7 @@ class OrderDeliveredJob < ApplicationJob
     order.delivered!
     Kiosk::Server::Events.emit(
       topic: :order_delivery, subject: order.id, identity_scope: [order.user_id],
-      data: { "order_id" => order.id, "status" => "delivered" },
+      data: { 'order_id' => order.id, 'status' => 'delivered' }
     )
   end
 end

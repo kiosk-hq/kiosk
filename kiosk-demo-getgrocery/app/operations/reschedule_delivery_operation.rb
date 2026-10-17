@@ -6,9 +6,9 @@ class RescheduleDeliveryOperation
   def self.call(order_id:, slot_at:, delivery_address:)
     order = Order.own.reschedulable.find_by(id: order_id)
     # One answer for absent, foreign and already moved, so ids cannot be probed.
-    refuse "no order of yours with this id can be moved: it was moved once already or is with the courier" unless order
+    refuse 'no order of yours with this id can be moved: it was moved once already or is with the courier' unless order
     refuse "this order's payment is still in progress; reschedule once my_orders reads `paid`" if order.paying?
-    refuse "this order is not paid; only a paid order can be moved" unless order.paid?
+    refuse 'this order is not paid; only a paid order can be moved' unless order.paid?
 
     address = delivery_address.presence || order.address
     zone    = DeliverySlots.zone_at(address)

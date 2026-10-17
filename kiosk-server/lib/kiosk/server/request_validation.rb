@@ -28,7 +28,7 @@ module Kiosk
 
       def validate_proofs!(proofs)
         Array(proofs).each do |proof|
-          errors = proof_schema.validate(normalize(proof)).to_a
+          errors = Schemas.proof.validate(normalize(proof)).to_a
           next if errors.empty?
 
           raise Errors::BadRequest.new(
@@ -43,16 +43,13 @@ module Kiosk
         return unless Kiosk.configuration.validate_requests
 
         pointer = BODY_SCHEMAS.fetch(exchange)
-        errors  = wire_schema(pointer).validate(normalize(body)).to_a
+        errors  = Schemas.wire(pointer).validate(normalize(body)).to_a
         return if errors.empty?
 
         absent = missing_member(errors, body)
         raise Errors.missing_field(absent, hint: body_hint(pointer)) if absent
 
-        raise Errors::BadRequest.new(
-          "#{exchange}: #{errors.map { |error| error['error'] }.compact.join('; ')}",
-          hint: body_hint(pointer)
-        )
+        raise Errors::BadRequest.new("#{exchange}: #{summary(errors)}", hint: body_hint(pointer))
       end
 
       def missing_member(errors, body)
@@ -75,24 +72,29 @@ module Kiosk
         return if input_schema.nil?
 
         require_schemer!
-        payload = normalize(arguments)
         exempt  = ArgumentDecoder::RESERVED.keys - declared_property_names(input_schema)
-        payload = payload.except(*exempt)
-
-        errors = JSONSchemer.schema(normalize(input_schema)).validate(payload).to_a
+        payload = normalize(arguments).except(*exempt)
+        errors  = JSONSchemer.schema(normalize(input_schema)).validate(payload).to_a
         return if errors.empty?
 
-        spellings = errors.filter_map do |error|
+        raise Errors::BadRequest.new("#{verb}: #{summary(errors)}", hint: arguments_hint(errors))
+      end
+
+      def arguments_hint(errors)
+        "#{format_spellings(errors)}GET <endpoint>/schema publishes this verb's input_schema; the " \
+          'arguments must satisfy it. `limit` and `cursor` are always accepted.'
+      end
+
+      def summary(errors) = errors.map { |error| error['error'] }.compact.join('; ')
+
+      # What to send for each argument that failed its declared `format`.
+      def format_spellings(errors)
+        errors.filter_map do |error|
           next unless error['type'] == 'format'
 
           spelling = ArgumentDecoder::FORMAT_SPELLINGS[error.dig('schema', 'format')]
           "#{error['data_pointer'].delete_prefix('/')}: send #{spelling}. " if spelling
-        end
-        raise Errors::BadRequest.new(
-          "#{verb}: #{errors.map { |error| error['error'] }.compact.join('; ')}",
-          hint: "#{spellings.uniq.join}GET <endpoint>/schema publishes this verb's input_schema; the " \
-                'arguments must satisfy it. `limit` and `cursor` are always accepted.'
-        )
+        end.uniq.join
       end
 
       def declared_property_names(input_schema)
@@ -109,32 +111,39 @@ module Kiosk
         'raw JSON or a JSON array of proofs. ' \
         'Solve each challenge issued in the pow_required 402 and echo it back verbatim.'
 
-      def proof_schema
-        @proof_schema ||= build_proof_schema
-      end
+      def reset! = Schemas.reset!
 
-      # Rooted at one `$def`, with the file's other `$defs` in scope.
-      def wire_schema(pointer)
-        @wire_schemas ||= {}
-        @wire_schemas[pointer] ||= begin
-          require_schemer!
-          file, fragment = pointer.split('#', 2)
-          doc = JSON.parse(File.read(File.join(SCHEMA_DIR, file)))
-          JSONSchemer.schema(doc.merge('$ref' => "##{fragment}"))
+      # The vendored schemas, parsed once.
+      module Schemas
+        module_function
+
+        def proof
+          @proof ||= build_proof
         end
-      end
 
-      def reset!
-        @proof_schema = nil
-        @wire_schemas = nil
-      end
+        # Rooted at one `$def`, with the file's other `$defs` in scope.
+        def wire(pointer)
+          @wire ||= {}
+          @wire[pointer] ||= begin
+            RequestValidation.require_schemer!
+            file, fragment = pointer.split('#', 2)
+            doc = JSON.parse(File.read(File.join(SCHEMA_DIR, file)))
+            JSONSchemer.schema(doc.merge('$ref' => "##{fragment}"))
+          end
+        end
 
-      def build_proof_schema
-        require_schemer!
-        doc = JSON.parse(File.read(POW_SCHEMA_PATH))
-        root = doc.merge('$ref' => '#/$defs/proof')
-        root.delete('oneOf')
-        JSONSchemer.schema(root)
+        def reset!
+          @proof = nil
+          @wire = nil
+        end
+
+        def build_proof
+          RequestValidation.require_schemer!
+          doc = JSON.parse(File.read(POW_SCHEMA_PATH))
+          root = doc.merge('$ref' => '#/$defs/proof')
+          root.delete('oneOf')
+          JSONSchemer.schema(root)
+        end
       end
 
       def require_schemer!

@@ -22,28 +22,13 @@ class KioskEvents < ActionCable::Channel::Base
   def subscribed
     return reject unless connection.kiosk_credential_holds?
 
-    topic = params[:topic].to_s
-    declaration = Kiosk::Server::Events.fetch(topic)
+    declaration = Kiosk::Server::Events.fetch(params[:topic].to_s)
+    return reject unless declaration && well_formed?
 
-    return reject unless declaration
-    return reject unless since.nil? || cursor?(since)
-    return reject unless params[:subject].nil? || params[:subject].is_a?(String)
-
-    @topic = topic
-    @subject = params[:subject]
-    @declaration = declaration
-
+    assign(declaration)
     return reject unless reachable?(declaration)
 
-    # Before the stream opens, so no event falls between head and stream.
-    @head = store.head
-
-    # Without `coder:` the block receives the raw broadcast String.
-    stream_from Kiosk::Server::EventsCable.stream_name(identity_key, topic),
-                coder: ActiveSupport::JSON do |event|
-      transmit(event) if for_this_subscription?(event)
-    end
-
+    open_stream!
     transmit(subscribed_frame)
   end
 
@@ -85,6 +70,27 @@ class KioskEvents < ActionCable::Channel::Base
 
   def since = params[:since]
 
+  def assign(declaration)
+    @topic = params[:topic].to_s
+    @subject = params[:subject]
+    @declaration = declaration
+  end
+
+  def well_formed?
+    (since.nil? || cursor?(since)) && (params[:subject].nil? || params[:subject].is_a?(String))
+  end
+
+  def open_stream!
+    # Before the stream opens, so no event falls between head and stream.
+    @head = store.head
+
+    # Without `coder:` the block receives the raw broadcast String.
+    stream_from Kiosk::Server::EventsCable.stream_name(identity_key, @topic),
+                coder: ActiveSupport::JSON do |event|
+      transmit(event) if for_this_subscription?(event)
+    end
+  end
+
   def cursor?(value) = value.is_a?(Integer) && value.between?(0, MAX_CURSOR)
 
   # Its own topic (the replayed tail holds every topic) and, when named, its
@@ -107,10 +113,14 @@ class KioskEvents < ActionCable::Channel::Base
 
     !!callable.call(@subject, identity)
   rescue StandardError => e
-    # Logged, because the refusal alone cannot tell a broken rule from a no.
-    logger&.error("[kiosk] events subject rule raised for topic #{@topic.inspect}: " \
-                  "#{e.class}: #{e.message} at #{e.backtrace&.first}")
+    log_rule_failure(e)
     false
+  end
+
+  # Logged, because the refusal alone cannot tell a broken rule from a no.
+  def log_rule_failure(error)
+    logger&.error("[kiosk] events subject rule raised for topic #{@topic.inspect}: " \
+                  "#{error.class}: #{error.message} at #{error.backtrace&.first}")
   end
 
   # Runs every REAUTHORISE_EVERY_SECONDS. A withdrawn reach is final for this

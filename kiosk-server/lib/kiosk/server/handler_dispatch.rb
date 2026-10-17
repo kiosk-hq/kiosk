@@ -50,9 +50,10 @@ module Kiosk
         env = build_env(controller, args)
         status, headers, body = controller.action(@method_name).call(env)
         publish_headers(status, headers)
-        payload = decode(status, read_body(body), rescued: env[RESCUED_KEY])
+        answer  = Answer.new(@kind, @wire_name)
+        payload = answer.decode(status, read_body(body), rescued: env[RESCUED_KEY])
 
-        env[PAGE_KEY] ? paginate(payload, **env[PAGE_KEY]) : payload
+        env[PAGE_KEY] ? answer.paginate(payload, **env[PAGE_KEY]) : payload
       end
 
       # Handy in `p`/logs and in the specs that assert what got registered.
@@ -66,12 +67,11 @@ module Kiosk
       # No sink means no wire request is being served. Rack 3 down-cases header names; a plain Hash does not.
       def publish_headers(status, headers)
         sink = CurrentRequest.handler_headers
-        return if sink.nil? || headers.nil?
-        return unless status >= 200 && status < 300
+        return if sink.nil? || headers.nil? || !(200...300).cover?(status)
 
         PROPAGATED_HEADERS.each do |name|
-          value = headers[name] || headers[name.downcase]
-          sink[name] = value.to_s unless value.nil? || value.to_s.empty?
+          value = (headers[name] || headers[name.downcase]).to_s
+          sink[name] = value unless value.empty?
         end
       end
 
@@ -98,44 +98,17 @@ module Kiosk
         )
       end
 
-      # A fresh Rack env per dispatch; the parsed args are injected as request parameters, not re-serialised.
       def build_env(controller, args)
-        outer = CurrentRequest.env
-        env   = base_env
-        if outer
-          SEEDED_KEYS.each { |key| env[key] = outer[key] if outer.key?(key) }
-          outer.each { |key, value| env[key] = value if key.is_a?(String) && key.start_with?('HTTP_') }
-        end
-
-        # `dup` so the handler cannot mutate the Executor's args.
-        env['action_dispatch.request.request_parameters'] = args.is_a?(Hash) ? args.dup : {}
-        env['action_dispatch.request.query_parameters']   = {}
-        env['action_dispatch.request.path_parameters']    = {
-          controller: controller.respond_to?(:controller_path) ? controller.controller_path : nil,
-          action: @method_name
-        }
+        env = SubRequest.env(
+          path_info: "/#{@kind}/#{@wire_name}", args: args,
+          path_parameters: {
+            controller: controller.respond_to?(:controller_path) ? controller.controller_path : nil,
+            action: @method_name
+          }
+        )
         env[IDENTITY_KEY] = CurrentRequest.identity
         env[DISPATCH_KEY] = @wire_name
-        # The wire answers JSON whatever the caller's `Accept`, so a handler's template is its `.json` one.
-        env['action_dispatch.request.formats'] = [Mime[:json]]
         env
-      end
-
-      def base_env
-        {
-          'REQUEST_METHOD' => 'POST',
-          'SCRIPT_NAME' => '',
-          'PATH_INFO' => "/#{@kind}/#{@wire_name}",
-          'QUERY_STRING' => '',
-          'SERVER_NAME' => 'localhost',
-          'SERVER_PORT' => '80',
-          'SERVER_PROTOCOL' => 'HTTP/1.1',
-          'CONTENT_TYPE' => 'application/json',
-          'CONTENT_LENGTH' => '0',
-          'rack.url_scheme' => 'http',
-          'rack.input' => StringIO.new(+''),
-          'rack.errors' => $stderr
-        }
       end
 
       def read_body(body)
@@ -146,75 +119,126 @@ module Kiosk
         body.close if body.respond_to?(:close)
       end
 
-      # 2xx → the rendered JSON; otherwise the wire error, with `rescued` as its `cause`.
-      def decode(status, raw, rescued: nil)
-        return parse_json(raw) if status >= 200 && status < 300
+      # The Rack env of one dispatch.
+      module SubRequest
+        module_function
 
-        parsed = begin
-          parse_json(raw)
-        rescue Errors::Base
-          nil
+        # A fresh Rack env per dispatch; the parsed args are injected as request parameters, not re-serialised.
+        def env(path_info:, path_parameters:, args:)
+          env = base(path_info)
+          seed!(env, CurrentRequest.env)
+          # `dup` so the handler cannot mutate the Executor's args.
+          env['action_dispatch.request.request_parameters'] = args.is_a?(Hash) ? args.dup : {}
+          env['action_dispatch.request.query_parameters']   = {}
+          env['action_dispatch.request.path_parameters']    = path_parameters
+          # The wire answers JSON whatever the caller's `Accept`, so a handler's template is its `.json` one.
+          env['action_dispatch.request.formats'] = [Mime[:json]]
+          env
         end
-        error = wire_error(status, parsed)
-        rescued.is_a?(::Exception) ? raise(error, cause: rescued) : raise(error)
+
+        def seed!(env, outer)
+          return if outer.nil?
+
+          SEEDED_KEYS.each { |key| env[key] = outer[key] if outer.key?(key) }
+          outer.each { |key, value| env[key] = value if key.is_a?(String) && key.start_with?('HTTP_') }
+        end
+
+        BASE = {
+          'REQUEST_METHOD' => 'POST',
+          'SCRIPT_NAME' => '',
+          'QUERY_STRING' => '',
+          'SERVER_NAME' => 'localhost',
+          'SERVER_PORT' => '80',
+          'SERVER_PROTOCOL' => 'HTTP/1.1',
+          'CONTENT_TYPE' => 'application/json',
+          'CONTENT_LENGTH' => '0',
+          'rack.url_scheme' => 'http'
+        }.freeze
+
+        def base(path_info)
+          BASE.merge('PATH_INFO' => path_info, 'rack.input' => StringIO.new(+''), 'rack.errors' => $stderr)
+        end
       end
 
-      # A body code travels only when it is in the vocabulary and matches the status; otherwise
-      # the status's lone code decides, and with none it is `action_failed`.
-      def wire_error(status, parsed)
-        error_obj = parsed.is_a?(Hash) && parsed['error'].is_a?(Hash) ? parsed['error'] : nil
-        rendered  = error_obj && error_obj['code'].to_s
-        code      = if rendered && Errors::CODES[rendered] == status
-                      rendered
-                    else
-                      Errors::STATUS_CODES[status]
-                    end
-        return Errors::ActionFailed.new(error_message(parsed, status), hint: error_hint(parsed)) if code.nil?
+      # A handler's render as the verb's answer: its payload, or the wire error it means.
+      class Answer
+        def initialize(kind, wire_name)
+          @kind      = kind
+          @wire_name = wire_name
+        end
 
-        extra = error_obj&.except('code', 'message', 'hint')&.transform_keys(&:to_sym)
-        Errors::WireError.new(error_message(parsed, status),
-                              code: code, hint: error_hint(parsed), extra: extra)
-      end
+        # 2xx → the rendered JSON; otherwise the wire error, with `rescued` as its `cause`.
+        def decode(status, raw, rescued: nil)
+          return parse_json(raw) if status >= 200 && status < 300
 
-      def parse_json(raw)
-        return nil if raw.nil? || raw.strip.empty?
+          parsed = begin
+            parse_json(raw)
+          rescue Errors::Base
+            nil
+          end
+          error = wire_error(status, parsed)
+          rescued.is_a?(::Exception) ? raise(error, cause: rescued) : raise(error)
+        end
 
-        JSON.parse(raw)
-      rescue JSON::ParserError
-        raise Errors::ActionFailed.new(
-          "#{@kind} #{@wire_name.inspect} rendered a non-JSON body",
-          hint: 'a Kiosk handler answers with `render json:` — HTML, redirects and ' \
-                '`send_file` have no place on the wire'
-        )
-      end
+        # The {Page} of `render_kiosk_page`: the rendered rows plus the page facts it recorded.
+        def paginate(payload, next_cursor:, total:)
+          unless payload.is_a?(Array)
+            raise Errors::ActionFailed.new(
+              "query #{@wire_name.inspect} answered a page that is not an array of rows",
+              hint: "render_kiosk_page renders the rows it is given, or the action's template; " \
+                    'either must be a JSON array'
+            )
+          end
 
-      # The operator's own message reaches the agent when the body carries one.
-      def error_message(parsed, status)
-        from_body = parsed.is_a?(Hash) ? (parsed['error'] || parsed['message']) : nil
-        from_body = from_body['message'] if from_body.is_a?(Hash)
-        return from_body.to_s unless from_body.nil? || from_body.to_s.empty?
+          Page.new(rows: payload, next_cursor: next_cursor, total: total)
+        end
 
-        "#{@kind} #{@wire_name.inspect} answered #{status}"
-      end
+        private
 
-      def error_hint(parsed)
-        return nil unless parsed.is_a?(Hash)
+        # A body code travels only when it is in the vocabulary and matches the status; otherwise
+        # the status's lone code decides, and with none it is `action_failed`.
+        def wire_error(status, parsed)
+          error_obj = parsed.is_a?(Hash) && parsed['error'].is_a?(Hash) ? parsed['error'] : nil
+          code = code_for(error_obj, status)
+          return Errors::ActionFailed.new(error_message(parsed, status), hint: error_hint(parsed)) if code.nil?
 
-        hint = parsed['hint'] || (parsed['error'].is_a?(Hash) ? parsed['error']['hint'] : nil)
-        hint&.to_s
-      end
+          extra = error_obj&.except('code', 'message', 'hint')&.transform_keys(&:to_sym)
+          Errors::WireError.new(error_message(parsed, status),
+                                code: code, hint: error_hint(parsed), extra: extra)
+        end
 
-      # The {Page} of `render_kiosk_page`: the rendered rows plus the page facts it recorded.
-      def paginate(payload, next_cursor:, total:)
-        unless payload.is_a?(Array)
+        def code_for(error_obj, status)
+          rendered = error_obj && error_obj['code'].to_s
+          rendered && Errors::CODES[rendered] == status ? rendered : Errors::STATUS_CODES[status]
+        end
+
+        def parse_json(raw)
+          return nil if raw.nil? || raw.strip.empty?
+
+          JSON.parse(raw)
+        rescue JSON::ParserError
           raise Errors::ActionFailed.new(
-            "query #{@wire_name.inspect} answered a page that is not an array of rows",
-            hint: "render_kiosk_page renders the rows it is given, or the action's template; " \
-                  'either must be a JSON array'
+            "#{@kind} #{@wire_name.inspect} rendered a non-JSON body",
+            hint: 'a Kiosk handler answers with `render json:` — HTML, redirects and ' \
+                  '`send_file` have no place on the wire'
           )
         end
 
-        Page.new(rows: payload, next_cursor: next_cursor, total: total)
+        # The operator's own message reaches the agent when the body carries one.
+        def error_message(parsed, status)
+          from_body = parsed.is_a?(Hash) ? (parsed['error'] || parsed['message']) : nil
+          from_body = from_body['message'] if from_body.is_a?(Hash)
+          return from_body.to_s unless from_body.nil? || from_body.to_s.empty?
+
+          "#{@kind} #{@wire_name.inspect} answered #{status}"
+        end
+
+        def error_hint(parsed)
+          return nil unless parsed.is_a?(Hash)
+
+          hint = parsed['hint'] || (parsed['error'].is_a?(Hash) ? parsed['error']['hint'] : nil)
+          hint&.to_s
+        end
       end
     end
   end

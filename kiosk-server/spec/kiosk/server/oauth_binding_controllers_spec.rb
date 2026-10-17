@@ -9,7 +9,48 @@ require 'rack/mock'
 require 'json'
 require 'openssl'
 
-RSpec.describe 'OAuth binding controllers' do
+module OauthBindingControllersSpecHelpers
+  def dispatch(controller, action, path, params)
+    env = Rack::MockRequest.env_for(
+      "https://provider.example#{path}",
+      method: 'POST',
+      params: params # form-encoded body
+    )
+    status, _headers, body = controller.action(action).call(env)
+    raw = +''
+    body.each { |chunk| raw << chunk }
+    [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
+  end
+
+  def start!(params)
+    dispatch(
+      Kiosk::Server::OauthDeviceAuthorizationController, :create,
+      '/kiosk/oauth/device_authorization', params
+    )
+  end
+
+  def token!(params)
+    dispatch(Kiosk::Server::OauthTokenController, :create, '/kiosk/oauth/token', params)
+  end
+
+  def signed_proof
+    challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem.strip)
+    JWT.encode(
+      { aud: 'https://provider.example', nonce: challenge[:challenge], jti: SecureRandom.uuid },
+      rsa, 'RS256'
+    )
+  end
+
+  def stub_binding
+    allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_return(
+      { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
+    )
+  end
+end
+
+RSpec.shared_context 'oauth binding controllers spec: provider origin' do
+  include OauthBindingControllersSpecHelpers
+
   let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
   let(:rsa)   { OpenSSL::PKey::RSA.generate(2048) }
   let(:pem)   { rsa.public_key.to_pem }
@@ -24,26 +65,13 @@ RSpec.describe 'OAuth binding controllers' do
     Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
   end
 
-  def dispatch(controller, action, path, params)
-    env = Rack::MockRequest.env_for(
-      "https://provider.example#{path}",
-      method: 'POST',
-      params: params # form-encoded body
-    )
-    status, _headers, body = controller.action(action).call(env)
-    raw = +''
-    body.each { |chunk| raw << chunk }
-    [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
-  end
+  let(:grant) { Kiosk::Server::DeviceCodeGrant::GRANT_TYPE }
+end
+
+RSpec.describe 'OAuth binding controllers' do
+  include_context 'oauth binding controllers spec: provider origin'
 
   describe 'POST /oauth/device_authorization' do
-    def start!(params)
-      dispatch(
-        Kiosk::Server::OauthDeviceAuthorizationController, :create,
-        '/kiosk/oauth/device_authorization', params
-      )
-    end
-
     it 'opens a claim ceremony for a well-formed key (form-encoded)' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem)
 
@@ -133,12 +161,6 @@ RSpec.describe 'OAuth binding controllers' do
   end
 
   describe 'POST /oauth/token' do
-    def token!(params)
-      dispatch(Kiosk::Server::OauthTokenController, :create, '/kiosk/oauth/token', params)
-    end
-
-    let(:grant) { Kiosk::Server::DeviceCodeGrant::GRANT_TYPE }
-
     it 'requires a grant_type' do
       status, body = token!({})
       expect(status).to eq(400)
@@ -173,14 +195,8 @@ RSpec.describe 'OAuth binding controllers' do
       store.update(start[:da].approve(user_id: user_id))
       Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
 
-      challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem.strip)
-      signed = JWT.encode(
-        { aud: 'https://provider.example', nonce: challenge[:challenge], jti: SecureRandom.uuid },
-        rsa, 'RS256'
-      )
-      allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_return(
-        { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
-      )
+      signed = signed_proof
+      stub_binding
 
       status, body = token!(
         'grant_type' => grant, 'device_code' => start[:device_code], 'signed' => signed
@@ -205,14 +221,8 @@ RSpec.describe 'OAuth binding controllers' do
       )
       Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
 
-      challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem.strip)
-      signed = JWT.encode(
-        { aud: 'https://provider.example', nonce: challenge[:challenge], jti: SecureRandom.uuid },
-        rsa, 'RS256'
-      )
-      allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_return(
-        { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
-      )
+      signed = signed_proof
+      stub_binding
 
       status, body = token!(
         'grant_type' => grant, 'device_code' => start[:device_code], 'signed' => signed

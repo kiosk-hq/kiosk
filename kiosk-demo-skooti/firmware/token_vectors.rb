@@ -165,7 +165,7 @@ module SkootiTokenVectors
     abort '  VECTOR BROKEN — a respelt scalar does not fit in 32 bytes' if respelt.negative? || respelt >= 2**256
 
     tail = (0...32).map { |i| (respelt >> (8 * i)) & 0xff }.pack('C*')
-    if (tail.bytes[31] & 224) != 0
+    if tail.bytes[31].anybits?(224)
       abort '  VECTOR BROKEN — a respelt scalar has bits above 2^252 set, so the ' \
             "vendored verifier's own `signature[63] & 224` bound answers it and " \
             'the canonical-scalar check is never reached'

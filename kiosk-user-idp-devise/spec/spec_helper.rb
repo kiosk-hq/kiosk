@@ -38,7 +38,7 @@ class FakeUser
   attr_reader :kiosk_role
 
   # Hide `#kiosk_role` from `respond_to?` unless the test opted in.
-  def respond_to?(name, include_private = false)
+  def respond_to?(name, *)
     return false if name == :kiosk_role && @kiosk_role == :__unset__
 
     super

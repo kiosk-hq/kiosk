@@ -14,6 +14,14 @@ module Kiosk
       # Raised when neither the user model nor the configuration names a role.
       class ConfigurationError < StandardError; end
 
+      NO_ROLE = <<~MSG.strip
+        Cannot resolve a role for the Devise principal: \
+        `Kiosk.configuration.roles` is empty and the user model does not \
+        define `#kiosk_role`. Configure at least one role — e.g. \
+        `Kiosk.configure { |c| c.roles = %i[customer] }` — or add \
+        `def kiosk_role; :customer; end` to your user model.
+      MSG
+
       # @param request [#env, #current_user, Hash] an ActionDispatch::Request,
       #   a controller exposing `#current_user`, or a Rack env Hash
       # @return [Kiosk::Identity, nil] nil when no user is signed in
@@ -54,15 +62,7 @@ module Kiosk
         return user.kiosk_role if user.respond_to?(:kiosk_role)
 
         roles = Kiosk.configuration.roles
-        if roles.nil? || roles.empty?
-          raise ConfigurationError, <<~MSG.strip
-            Cannot resolve a role for the Devise principal: \
-            `Kiosk.configuration.roles` is empty and the user model does not \
-            define `#kiosk_role`. Configure at least one role — e.g. \
-            `Kiosk.configure { |c| c.roles = %i[customer] }` — or add \
-            `def kiosk_role; :customer; end` to your user model.
-          MSG
-        end
+        raise ConfigurationError, NO_ROLE if roles.nil? || roles.empty?
 
         roles.first
       end

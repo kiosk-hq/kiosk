@@ -8,108 +8,80 @@ require 'securerandom'
 
 # The AUTH/BINDING plane's statements against a REAL Postgres.
 #
-# WHY THIS FILE EXISTS (K-782, the same argument `executor_persistence_spec.rb`
-# makes for the pay path). Everywhere else this plane is driven through
-# `FakeConnection`, which records SQL as a string and asserts nothing about
-# what a database would do with it. That was tolerable while every value was
-# spliced into the statement through `connection.quote` — the text WAS the
-# behaviour, and you could read it. It is not tolerable now that the values
-# travel as BIND PARAMETERS: a bind carries its value out-of-band, so the one
-# thing that can go wrong silently is the TYPE. A `text[]` role list that
-# arrives as a scalar string, a uuid that arrives as text, a jsonb attribute
-# set stored as a json *string*, a `Time` that loses its zone — none of those
-# change the SQL text by one byte and none can be caught by a fake.
-#
-# Every assertion here was run GREEN against the INTERPOLATED implementation
-# first and then re-run against the bind-parameter one, so the conversion is
-# provably behaviour-preserving rather than merely green.
+# Everywhere else this plane is driven through `FakeConnection`, which records
+# SQL as a string and asserts nothing about what a database would do with it.
+# The values travel as BIND PARAMETERS, and a bind carries its value
+# out-of-band, so the one thing that can go wrong silently is the TYPE. A
+# `text[]` role list that arrives as a scalar string, a uuid that arrives as
+# text, a jsonb attribute set stored as a json *string*, a `Time` that loses
+# its zone — none of those change the SQL text by one byte and none can be
+# caught by a fake.
 #
 # Connection from PG* env vars (CI's service) or the local default socket; no
 # reachable server → skip, never fail, so DB-less machines stay green (the same
 # contract as `device_authorization_stores_spec.rb` and
 # `executor_persistence_spec.rb`).
-RSpec.describe 'auth plane persistence (real Postgres)' do
-  AUTH_PLANE_SPEC_SCHEMA = 'kiosk_auth_plane_spec'
+module AuthPlanePersistenceSpec
+  SCHEMA = 'kiosk_auth_plane_spec'
   # `identity_tables_sql` emits an UNQUALIFIED `REFERENCES "<user_table>"(id)`,
   # so the principals table has to be reachable on the search path. A uniquely
   # named table in `public`, dropped with the schema, keeps that honest without
   # a second search_path to reason about.
-  AUTH_PLANE_SPEC_USERS = 'kiosk_auth_plane_spec_users'
+  USERS = 'kiosk_auth_plane_spec_users'
 
+  # A user IdP that resolves every request to one fixed identity.
+  class StaticUserIdp
+    def initialize(identity) = @identity = identity
+    def verify(_request) = @identity
+  end
+
+  # The connection error, or nil when a local Postgres answers. Probed once
+  # per process.
   def self.postgres_error
     @postgres_error ||= begin
-      ActiveRecord::Base.establish_connection(
-        adapter: 'postgresql',
-        host: ENV.fetch('PGHOST', nil),
-        username: ENV.fetch('PGUSER', nil),
-        password: ENV.fetch('PGPASSWORD', nil),
-        database: ENV.fetch('PGDATABASE', 'postgres')
-      )
-      ActiveRecord::Base.connection.execute('SELECT 1')
-      [false]
+      connect_postgres
+      [nil]
     rescue StandardError => e
       ["#{e.class}: #{e.message}"]
     end
     @postgres_error.first
   end
 
-  before(:context) do
-    skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error
+  def self.connect_postgres
+    ActiveRecord::Base.establish_connection(
+      adapter: 'postgresql',
+      host: ENV.fetch('PGHOST', nil),
+      username: ENV.fetch('PGUSER', nil),
+      password: ENV.fetch('PGPASSWORD', nil),
+      database: ENV.fetch('PGDATABASE', 'postgres')
+    )
+    ActiveRecord::Base.connection.execute('SELECT 1')
+  end
 
-    conn = ActiveRecord::Base.connection
-    conn.execute(%(DROP SCHEMA IF EXISTS "#{AUTH_PLANE_SPEC_SCHEMA}" CASCADE))
-    conn.execute(%(DROP TABLE IF EXISTS "#{AUTH_PLANE_SPEC_USERS}" CASCADE))
-    conn.execute(%(CREATE SCHEMA "#{AUTH_PLANE_SPEC_SCHEMA}"))
-    conn.execute(%(CREATE TABLE "#{AUTH_PLANE_SPEC_USERS}" (id uuid PRIMARY KEY DEFAULT gen_random_uuid())))
-    # The SHIPPED migration SQL, not hand-written tables: the point of the type
-    # assertions below is that the auth plane agrees with the schema operators
-    # actually install.
+  # The SHIPPED migration SQL, not hand-written tables: the type assertions
+  # hold the auth plane to the schema operators actually install.
+  def self.create_schema(conn)
+    drop_schema(conn)
+    conn.execute(%(CREATE SCHEMA "#{SCHEMA}"))
+    conn.execute(%(CREATE TABLE "#{USERS}" (id uuid PRIMARY KEY DEFAULT gen_random_uuid())))
     defs = Kiosk::Server::SchemaDefinitions
-    conn.execute(defs.identity_tables_sql(
-                   schema: AUTH_PLANE_SPEC_SCHEMA, user_id_type: :uuid,
-                   user_table: AUTH_PLANE_SPEC_USERS
-                 ))
-    conn.execute(defs.mandates_sql(schema: AUTH_PLANE_SPEC_SCHEMA, user_id_type: :uuid))
+    conn.execute(defs.identity_tables_sql(schema: SCHEMA, user_id_type: :uuid, user_table: USERS))
+    conn.execute(defs.mandates_sql(schema: SCHEMA, user_id_type: :uuid))
   end
 
-  after(:context) do
-    unless self.class.postgres_error
-      conn = ActiveRecord::Base.connection
-      conn.execute(%(DROP SCHEMA IF EXISTS "#{AUTH_PLANE_SPEC_SCHEMA}" CASCADE))
-      conn.execute(%(DROP TABLE IF EXISTS "#{AUTH_PLANE_SPEC_USERS}" CASCADE))
-    end
+  def self.drop_schema(conn)
+    conn.execute(%(DROP SCHEMA IF EXISTS "#{SCHEMA}" CASCADE))
+    conn.execute(%(DROP TABLE IF EXISTS "#{USERS}" CASCADE))
   end
 
-  let(:connection) { ActiveRecord::Base.connection }
-  let(:holder)     { SecureRandom.uuid }
-  let(:other)      { SecureRandom.uuid }
-  let(:pem)        { "-----BEGIN PUBLIC KEY-----\n#{SecureRandom.hex(20)}\n-----END PUBLIC KEY-----" }
+  def table(name) = %("#{SCHEMA}".#{name})
 
-  before do
-    Kiosk.configure do |c|
-      c.schema = AUTH_PLANE_SPEC_SCHEMA
-      c.issuer = 'https://provider.example'
-      c.roles  = %i[customer owner]
-      # A role is configured throughout; the two examples that turn it OFF say
-      # so themselves — clearing the role VOCABULARY in the same breath, because
-      # since T-225 the two go together — and assert the empty-`text[]` shape
-      # the role-less path writes (K-788 — it used to write a literal `NULL`
-      # into a `NOT NULL` column and 500 the register door for every role-less
-      # provider).
-      c.registration_role = :customer
-    end
+  # Empty the agents and principals tables, then insert the given principals.
+  def seed_principals(*ids)
     connection.execute(%(TRUNCATE #{table('agents')} CASCADE))
-    connection.execute(%(TRUNCATE "#{AUTH_PLANE_SPEC_USERS}" CASCADE))
-    [holder, other].each do |id|
-      connection.exec_query(%(INSERT INTO "#{AUTH_PLANE_SPEC_USERS}" (id) VALUES ($1)), 'spec seed', [id])
-    end
-    # Tokens are not what this file is about; DefaultAgentIdp#issue is covered
-    # in default_agent_idp_spec.rb.
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_return('kiosk-pop-jwt')
+    connection.execute(%(TRUNCATE "#{USERS}" CASCADE))
+    ids.each { |id| connection.exec_query(%(INSERT INTO "#{USERS}" (id) VALUES ($1)), 'spec seed', [id]) }
   end
-
-  def table(name) = %("#{AUTH_PLANE_SPEC_SCHEMA}".#{name})
 
   # Bind-parameterised read helpers, so the spec's own queries can never be the
   # thing that proves a type.
@@ -120,35 +92,194 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
     one(%(SELECT * FROM #{table('agents')} WHERE id = $1), [agent_id])
   end
 
-  # ── AccountBinding: the uuid principal and the text[] role list ───────────
+  # The value of `expr` over the agents row `agent_id`.
+  def agent_value(expr, agent_id)
+    value(%(SELECT #{expr} FROM #{table('agents')} WHERE id = $1), [agent_id])
+  end
+
+  # An operator that assigns roles to nobody: no vocabulary and no default.
+  def configure_no_roles
+    Kiosk.configure do |c|
+      c.roles = []
+      c.registration_role = nil
+    end
+  end
+
+  def bind!(user_id, **) = Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: user_id, **)
+  def register! = Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: 'sig')
+
+  # PoW, PoP and the challenge are covered in their own specs; this file is
+  # about the row.
+  def stub_register_door
+    allow(Kiosk::Server::RegistrationPow).to receive(:gate)
+    allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return(nonce: 'n')
+    allow(Kiosk::Server::AuthChallenge).to receive(:consume!)
+  end
+
+  def dispatch(action, method:, params: {})
+    path = action == :show ? '' : "/#{action}"
+    env  = Rack::MockRequest.env_for(
+      "https://provider.example/kiosk/auth/assistants#{path}", method: method, params: params
+    )
+    env['rack.session'] = {}
+    status, _headers, body = Kiosk::Server::AssistantsController.action(action).call(env)
+    raw = +''
+    body.each { |chunk| raw << chunk }
+    [status, raw]
+  end
+
+  # A settled receipt for this agent, `days_ago` old. The chain is what the
+  # shipped schema requires: a settlement hangs off a cart mandate, which hangs
+  # off an intent. Every value travels as a bind, including the timestamp.
+  def settle!(cents:, days_ago:)
+    cart = insert_cart(insert_intent, cents)
+    connection.exec_query(%(
+      INSERT INTO #{table('settlements')}
+        (cart_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
+      VALUES ($1, $2, $3, 'https://provider.example', $4, $5, 'eur', $6)
+    ), 'spec seed', [cart, holder, agent_id, SecureRandom.hex(8), cents, Time.now.utc - (days_ago * 86_400)])
+  end
+
+  def insert_intent
+    value(%(
+      INSERT INTO #{table('intent_mandates')}
+        (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents, currency, expires_at, raw_jws)
+      VALUES ($1, $2, $3, 'https://provider.example', 'shop', 1000000, 'eur', now() + interval '1 day', 'jws')
+      RETURNING id
+    ), [SecureRandom.uuid, holder, agent_id])
+  end
+
+  def insert_cart(intent, cents)
+    value(%(
+      INSERT INTO #{table('cart_mandates')}
+        (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items, total_amount_cents,
+         currency, expires_at, raw_jws)
+      VALUES ($1, $2, $3, $4, 'https://provider.example', '[]'::jsonb, $5, 'eur',
+              now() + interval '1 day', 'jws')
+      RETURNING id
+    ), [SecureRandom.uuid, intent, holder, agent_id, cents])
+  end
+end
+
+RSpec.shared_context 'auth plane persistence spec: database' do
+  include AuthPlanePersistenceSpec
+
+  before(:context) do
+    skip "no local Postgres reachable (#{AuthPlanePersistenceSpec.postgres_error})" if AuthPlanePersistenceSpec.postgres_error
+
+    AuthPlanePersistenceSpec.create_schema(ActiveRecord::Base.connection)
+  end
+
+  after(:context) do
+    AuthPlanePersistenceSpec.drop_schema(ActiveRecord::Base.connection) unless AuthPlanePersistenceSpec.postgres_error
+  end
+
+  let(:connection) { ActiveRecord::Base.connection }
+  let(:holder)     { SecureRandom.uuid }
+  let(:other)      { SecureRandom.uuid }
+  let(:pem)        { "-----BEGIN PUBLIC KEY-----\n#{SecureRandom.hex(20)}\n-----END PUBLIC KEY-----" }
+
+  before do
+    Kiosk.configure do |c|
+      c.schema = AuthPlanePersistenceSpec::SCHEMA
+      c.issuer = 'https://provider.example'
+      c.roles  = %i[customer owner]
+      # A role is configured throughout; the examples that turn it off clear
+      # the role vocabulary too, and assert the empty-`text[]` shape the
+      # role-less path writes.
+      c.registration_role = :customer
+    end
+    seed_principals(holder, other)
+    # Tokens are not what this file is about; DefaultAgentIdp#issue is covered
+    # in default_agent_idp_spec.rb.
+    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
+      .to receive(:issue).and_return('kiosk-pop-jwt')
+  end
+end
+
+RSpec.shared_context 'auth plane persistence spec: rebind' do
+  include_context 'auth plane persistence spec: database'
+
+  let!(:fresh) { bind!(other, requested_role: 'customer') }
+end
+
+RSpec.shared_context 'auth plane persistence spec: register door' do
+  include_context 'auth plane persistence spec: database'
+
+  before do
+    stub_register_door
+    Kiosk.configure do |c|
+      c.registration_role  = :customer
+      c.assistant_creation = ->(_pubkey) { holder }
+    end
+  end
+end
+
+RSpec.shared_context 'auth plane persistence spec: two origins' do
+  include_context 'auth plane persistence spec: database'
+
+  let(:a) { 'https://provider.example' }
+  let(:b) { 'https://second.example' }
+
+  before do
+    stub_register_door
+    Kiosk.configure do |c|
+      c.additional_origins = [b]
+      c.assistant_creation = ->(_pubkey) { holder }
+    end
+  end
+
+  def register_on(origin) = Kiosk.with_issuer(origin) { register! }
+end
+
+RSpec.shared_context 'auth plane persistence spec: manage page' do
+  include_context 'auth plane persistence spec: database'
+
+  let(:human)     { build_identity(actor: 'human', agent_id: nil, user_id: holder) }
+  let!(:agent_id) { bind!(holder)[:agent_id] }
+
+  before do
+    Kiosk.configure do |c|
+      c.user_idp                   = AuthPlanePersistenceSpec::StaticUserIdp.new(human)
+      c.device_authorization_store = Kiosk::Server::DeviceAuthorizationStores::InMemory.new
+    end
+    # The controller pulls its own connection; point it at the real one.
+    allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
+  end
+end
+
+# ── AccountBinding: the uuid principal and the text[] role list ───────────
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: database'
 
   describe 'AccountBinding.bind! — fresh key' do
     it 'stores user_id as a real uuid and allowed_roles as a real text[] (not a string)' do
-      result = Kiosk::Server::AccountBinding.bind!(
-        public_key_pem: pem, user_id: holder, requested_role: 'customer'
-      )
+      result = bind!(holder, requested_role: 'customer')
 
       expect(result[:fresh]).to be(true)
       agent_id = result.fetch(:agent_id)
       # `pg_typeof` reads the COLUMN's type, which the INSERT had to satisfy —
       # a text-typed bind would have raised before this line ran.
-      expect(value(%(SELECT pg_typeof(user_id)::text FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq('uuid')
-      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq('text[]')
+      expect(agent_value('pg_typeof(user_id)::text', agent_id)).to eq('uuid')
+      expect(agent_value('pg_typeof(allowed_roles)::text', agent_id)).to eq('text[]')
       # A one-element ARRAY, not the string "{customer}" and not a one-char
       # array — the distinction `ARRAY[$3]::text[]` exists to make.
-      expect(value(%(SELECT array_length(allowed_roles, 1) FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq(1)
-      expect(value(%(SELECT allowed_roles[1] FROM #{table('agents')} WHERE id = $1), [agent_id]))
-        .to eq('customer')
+      expect(agent_value('array_length(allowed_roles, 1)', agent_id)).to eq(1)
+      expect(agent_value('allowed_roles[1]', agent_id)).to eq('customer')
       expect(agent_row(agent_id).fetch('public_key')).to eq(pem)
       expect(agent_row(agent_id).fetch('user_id')).to eq(holder)
     end
+  end
+end
 
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: database'
+
+  describe 'AccountBinding.bind! — fresh key' do
     # The lookup that decides fresh-vs-rebind takes the CALLER'S key. A PEM
-    # carrying a quote character is the shape that would have ended a spliced
-    # literal early; through a bind it is simply a key that does not exist.
+    # carrying a quote character is the shape that would end a spliced literal
+    # early; through a bind it is simply a key that does not exist.
     it 'looks a key up by value, quote characters and all' do
       hostile = "-----BEGIN PUBLIC KEY-----\n' OR '1'='1\n-----END PUBLIC KEY-----"
       first   = Kiosk::Server::AccountBinding.bind!(public_key_pem: hostile, user_id: holder)
@@ -160,102 +291,87 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(value(%(SELECT count(*) FROM #{table('agents')}))).to eq(1)
     end
 
-    # The other half of K-788: the claim ceremony's fresh-key branch runs the
-    # SAME INSERT, so a provider with no `registration_role` could not complete
-    # an account binding either.
+    # The claim ceremony's fresh-key branch runs the same INSERT as the
+    # register door. «No role at all» is the operator that assigns roles to
+    # NOBODY, the only one that may leave `registration_role` unset; a declared
+    # vocabulary with no default is refused at boot.
     it 'binds a fresh key with no role at all — an empty text[], not NULL (K-788)' do
-      # The role vocabulary goes with the default (T-225): «no role at all» is
-      # the operator that assigns roles to NOBODY, which is the only one that
-      # may leave `registration_role` unset since ADR-0036. A declared
-      # vocabulary with no default is refused at boot.
-      Kiosk.configure do |c|
-        c.roles = []
-        c.registration_role = nil
-      end
+      configure_no_roles
 
-      result = Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+      result = bind!(holder)
 
       expect(result[:fresh]).to be(true)
-      agent_id = result.fetch(:agent_id)
-      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1),
-                   [agent_id])).to eq('text[]')
-      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
-                   [agent_id])).to eq(0)
+      expect(agent_value('pg_typeof(allowed_roles)::text', result.fetch(:agent_id))).to eq('text[]')
+      expect(agent_value('cardinality(allowed_roles)', result.fetch(:agent_id))).to eq(0)
     end
   end
+end
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: rebind'
 
   describe 'AccountBinding.bind! — known key (rebind)' do
-    let!(:fresh) do
-      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: other, requested_role: 'customer')
-    end
-
     it 'remaps the uuid principal and re-writes allowed_roles as a text[]' do
-      result = Kiosk::Server::AccountBinding.bind!(
-        public_key_pem: pem, user_id: holder, requested_role: 'owner'
-      )
+      result = bind!(holder, requested_role: 'owner')
 
       expect(result[:fresh]).to be(false)
       expect(result[:agent_id]).to eq(fresh[:agent_id])
-      row = agent_row(fresh[:agent_id])
-      expect(row.fetch('user_id')).to eq(holder)
-      expect(value(%(SELECT allowed_roles[1] FROM #{table('agents')} WHERE id = $1), [fresh[:agent_id]]))
-        .to eq('owner')
-      expect(value(%(SELECT array_length(allowed_roles, 1) FROM #{table('agents')} WHERE id = $1), [fresh[:agent_id]]))
-        .to eq(1)
+      expect(agent_row(fresh[:agent_id]).fetch('user_id')).to eq(holder)
+      expect(agent_value('allowed_roles[1]', fresh[:agent_id])).to eq('owner')
+      expect(agent_value('array_length(allowed_roles, 1)', fresh[:agent_id])).to eq(1)
     end
 
-    # K-1791 against a real database: a role-less rebind resolves the role from
-    # the OPERATOR's default, never from the row. The privileged role the key
-    # arrived with belonged to the principal it is leaving, so it does not
-    # survive the move — and the column is a one-element `text[]` afterwards,
-    # not a widened set.
+    # A role-less rebind resolves the role from the OPERATOR's default, never
+    # from the row. The privileged role the key arrived with belonged to the
+    # principal it is leaving, so it does not survive the move, and the column
+    # is a one-element `text[]` afterwards, not a widened set.
     it 'resets allowed_roles to registration_role on a role-less rebind' do
-      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: other, requested_role: 'owner')
-      expect(value(%(SELECT allowed_roles[1] FROM #{table('agents')} WHERE id = $1), [fresh[:agent_id]]))
-        .to eq('owner')
+      bind!(other, requested_role: 'owner')
+      expect(agent_value('allowed_roles[1]', fresh[:agent_id])).to eq('owner')
 
-      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+      bind!(holder)
 
-      expect(value(%(SELECT allowed_roles[1] FROM #{table('agents')} WHERE id = $1), [fresh[:agent_id]]))
-        .to eq('customer')
-      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
-                   [fresh[:agent_id]])).to eq(1)
+      expect(agent_value('allowed_roles[1]', fresh[:agent_id])).to eq('customer')
+      expect(agent_value('cardinality(allowed_roles)', fresh[:agent_id])).to eq(1)
     end
+  end
+end
 
-    # The other shape, and the one that cannot be faked: an operator that
-    # assigns roles to nobody. The rebind writes the EMPTY `text[]` — the same
-    # statement shape the fresh-key branch writes — and not a literal NULL into
-    # a `NOT NULL` column (K-788).
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: rebind'
+
+  describe 'AccountBinding.bind! — known key (rebind)' do
+    # An operator that assigns roles to nobody: the rebind writes the EMPTY
+    # `text[]`, the same statement shape the fresh-key branch writes, and not a
+    # literal NULL into a `NOT NULL` column.
     it 'writes an empty text[] on a role-less rebind when no role is configured' do
-      Kiosk.configure do |c|
-        c.roles = []
-        c.registration_role = nil
-      end
+      configure_no_roles
 
-      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+      bind!(holder)
 
-      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1),
-                   [fresh[:agent_id]])).to eq('text[]')
-      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
-                   [fresh[:agent_id]])).to eq(0)
+      expect(agent_value('pg_typeof(allowed_roles)::text', fresh[:agent_id])).to eq('text[]')
+      expect(agent_value('cardinality(allowed_roles)', fresh[:agent_id])).to eq(0)
     end
 
-    # K-783 against a real database rather than a fake: the destructive case is
-    # a re-link to the SAME principal, and what makes it destructive is the
-    # hook firing at all.
+    # The destructive case is a re-link to the SAME principal, and what makes
+    # it destructive is the hook firing at all.
     it 'fires no assistant_claimed when the key is already bound to this human' do
-      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+      bind!(holder)
       fired = []
       Kiosk.configure { |c| c.assistant_claimed = ->(**kw) { fired << kw } }
 
-      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)
+      bind!(holder)
       expect(fired).to be_empty
       expect(agent_row(fresh[:agent_id]).fetch('user_id')).to eq(holder)
     end
   end
+end
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: database'
 
   describe 'AccountBinding.unlink!' do
-    let!(:bound) { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder) }
+    let!(:bound) { bind!(holder) }
 
     it "revokes the holder's own row" do
       Kiosk::Server::AccountBinding.unlink!(agent_id: bound[:agent_id], user_id: holder)
@@ -271,58 +387,43 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(agent_row(bound[:agent_id]).fetch('revoked_at')).to be_nil
     end
   end
+end
 
-  # ── AgentRegistration: the same INSERT from the register door ─────────────
+# ── AgentRegistration: the same INSERT from the register door ─────────────
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: register door'
 
   describe 'AgentRegistration.call' do
-    before do
-      # PoW/PoP are covered in their own specs; this file is about the row.
-      allow(Kiosk::Server::RegistrationPow).to receive(:gate)
-      allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return(nonce: 'n')
-      allow(Kiosk::Server::AuthChallenge).to receive(:consume!)
-      Kiosk.configure do |c|
-        c.registration_role  = :customer
-        c.assistant_creation = ->(_pubkey) { holder }
-      end
-    end
-
     it 'writes a uuid principal and a text[] role from the register door too' do
-      result = Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: 'sig')
+      result = register!
 
-      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1),
-                   [result.fetch(:agent_id)])).to eq('text[]')
-      expect(value(%(SELECT allowed_roles[1] FROM #{table('agents')} WHERE id = $1),
-                   [result.fetch(:agent_id)])).to eq('customer')
+      expect(agent_value('pg_typeof(allowed_roles)::text', result.fetch(:agent_id))).to eq('text[]')
+      expect(agent_value('allowed_roles[1]', result.fetch(:agent_id))).to eq('customer')
       expect(result.fetch(:user_id)).to eq(holder)
     end
 
     it 'answers Conflict for a key it already knows (the lookup is by value)' do
-      Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: 'sig')
-      expect { Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: 'sig') }
-        .to raise_error(Kiosk::Server::Errors::Conflict)
+      register!
+      expect { register! }.to raise_error(Kiosk::Server::Errors::Conflict)
     end
+  end
+end
 
-    # ── THE ROLE-LESS PROVIDER, END TO END (K-788) ──────────────────────────
-    #
-    # Roles are "hook-or-absent" in this series and ADR-0011 is explicit that
-    # «registration MUST NOT fail when [registration_role] is unset» — narrowed
-    # by ADR-0036 to the operator that declares NO role vocabulary, which is the
-    # one it was written for and the one configured here. The code used to write
-    # a literal `NULL` into `allowed_roles`, which the SHIPPED migration
-    # declares `text[] NOT NULL DEFAULT '{}'`, so every register and every
-    # fresh-key bind 500'd for exactly the operator the ADR protects. No demo
-    # could reach it (all seven configure a role) and `agent_registration_spec`
-    # asserted the OPPOSITE through a fake that accepts any statement — which
-    # is why these two examples live HERE, against a database that can say no.
-    #
-    # "No role" is now the EMPTY SET, written explicitly, the same way
-    # `executor.rb` writes its `"on_file"` sentinel rather than a NULL into a
-    # NOT NULL column.
+# ── THE ROLE-LESS PROVIDER, END TO END ──────────────────────────────────────
+#
+# ADR-0011: «registration MUST NOT fail when [registration_role] is unset»,
+# narrowed by ADR-0036 to the operator that declares NO role vocabulary. The
+# shipped migration declares `allowed_roles` as `text[] NOT NULL DEFAULT '{}'`,
+# so "no role" is the EMPTY SET, written explicitly. A fake accepts any
+# statement, which is why this example runs against a database that can say
+# no.
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: register door'
+
+  describe 'AgentRegistration.call' do
     it 'registers with no registration_role at all, and the row LOGS IN (K-788)' do
-      Kiosk.configure do |c|
-        c.roles = []
-        c.registration_role = nil
-      end
+      configure_no_roles
       issued = []
       allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
         .to receive(:issue) { |_instance, **kw|
@@ -330,19 +431,13 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
               'kiosk-pop-jwt'
             }
 
-      result = Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: 'sig')
-
-      agent_id = result.fetch(:agent_id)
-      # A real `text[]`, not NULL and not the string "{}" — the column type is
-      # the whole point, and `array_length` of an empty array is NULL in
-      # Postgres, so `cardinality` is what says "zero elements".
-      expect(value(%(SELECT pg_typeof(allowed_roles)::text FROM #{table('agents')} WHERE id = $1),
-                   [agent_id])).to eq('text[]')
-      expect(value(%(SELECT cardinality(allowed_roles) FROM #{table('agents')} WHERE id = $1),
-                   [agent_id])).to eq(0)
-      expect(value(%(SELECT allowed_roles IS NULL FROM #{table('agents')} WHERE id = $1),
-                   [agent_id])).to be(false)
-      # The token carries NO role, exactly as before the fix intended to.
+      agent_id = register!.fetch(:agent_id)
+      # A real `text[]`, not NULL and not the string "{}". `array_length` of an
+      # empty array is NULL in Postgres, so `cardinality` says "zero elements".
+      expect(agent_value('pg_typeof(allowed_roles)::text', agent_id)).to eq('text[]')
+      expect(agent_value('cardinality(allowed_roles)', agent_id)).to eq(0)
+      expect(agent_value('allowed_roles IS NULL', agent_id)).to be(false)
+      # The token carries NO role.
       expect(issued.last).to eq(agent_id: agent_id, role: nil)
 
       # And the row is usable: `/auth/login` reads `allowed_roles` back and
@@ -352,25 +447,14 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(issued.last).to eq(agent_id: agent_id, role: nil)
     end
   end
+end
 
-  # ── Two origins: the account namespace is per origin (ADR-0040) ───────────
+# ── Two origins: the account namespace is per origin (ADR-0040) ───────────
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: two origins'
 
   describe 'two origins on one deployment' do
-    let(:a) { 'https://provider.example' }
-    let(:b) { 'https://second.example' }
-
-    before do
-      allow(Kiosk::Server::RegistrationPow).to receive(:gate)
-      allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return(nonce: 'n')
-      allow(Kiosk::Server::AuthChallenge).to receive(:consume!)
-      Kiosk.configure do |c|
-        c.additional_origins = [b]
-        c.assistant_creation = ->(_pubkey) { holder }
-      end
-    end
-
-    def register_on(origin) = Kiosk.with_issuer(origin) { Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: 'sig') }
-
     it 'registers one key on each origin as two assistant accounts' do
       on_a = register_on(a)
       on_b = register_on(b)
@@ -385,10 +469,16 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect { Kiosk.with_issuer(b) { Kiosk::Server::AgentLogin.call(public_key_pem: pem, signed: 'sig') } }
         .to raise_error(Kiosk::Server::Errors::NotFound)
     end
+  end
+end
 
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: two origins'
+
+  describe 'two origins on one deployment' do
     it 'binds a key known on A as a fresh account on B' do
       on_a = register_on(a)
-      bound = Kiosk.with_issuer(b) { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: other) }
+      bound = Kiosk.with_issuer(b) { bind!(other) }
 
       expect(bound[:fresh]).to be(true)
       expect(agent_row(on_a[:agent_id]).fetch('user_id')).to eq(holder)
@@ -401,12 +491,16 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(agent_row(on_a[:agent_id]).fetch('revoked_at')).to be_nil
     end
   end
+end
 
-  # ── DefaultAgentIdp: one lookup, four columns, a uuid bind ────────────────
+# ── DefaultAgentIdp: one lookup, four columns, a uuid bind ────────────────
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: database'
 
   describe 'DefaultAgentIdp lookups' do
     let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
-    let!(:agent_id) { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)[:agent_id] }
+    let!(:agent_id) { bind!(holder)[:agent_id] }
 
     it 'resolves the principal of a live agent and refuses a revoked one' do
       expect(idp.send(:lookup_user_id, agent_id)).to eq(holder)
@@ -422,11 +516,15 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(idp.agent_payment_key(bound[:agent_id]).to_pem).to eq(real.public_key.to_pem)
     end
   end
+end
 
-  # ── ColumnSpendingCap: uuid bind, bigint column ──────────────────────────
+# ── ColumnSpendingCap: uuid bind, bigint column ──────────────────────────
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: database'
 
   describe 'ColumnSpendingCap' do
-    let!(:agent_id) { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)[:agent_id] }
+    let!(:agent_id) { bind!(holder)[:agent_id] }
 
     it 'reads the cap of a live agent and nothing for a revoked one' do
       connection.exec_query(
@@ -439,38 +537,14 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(cap.call(agent_id: agent_id)).to be_nil
     end
   end
+end
 
-  # ── AssistantsController: the two-branch statement and its window bind ────
+# ── AssistantsController: the two-branch statement and its window bind ────
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: manage page'
 
   describe 'AssistantsController (manage page)' do
-    let(:human)     { build_identity(actor: 'human', agent_id: nil, user_id: holder) }
-    let!(:agent_id) { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: holder)[:agent_id] }
-
-    before do
-      idp = Class.new do
-        def initialize(identity) = @identity = identity
-        def verify(_request) = @identity
-      end
-      Kiosk.configure do |c|
-        c.user_idp                   = idp.new(human)
-        c.device_authorization_store = Kiosk::Server::DeviceAuthorizationStores::InMemory.new
-      end
-      # The controller pulls its own connection; point it at the real one.
-      allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
-    end
-
-    def dispatch(action, method:, params: {})
-      path = action == :show ? '' : "/#{action}"
-      env  = Rack::MockRequest.env_for(
-        "https://provider.example/kiosk/auth/assistants#{path}", method: method, params: params
-      )
-      env['rack.session'] = {}
-      status, _headers, body = Kiosk::Server::AssistantsController.action(action).call(env)
-      raw = +''
-      body.each { |chunk| raw << chunk }
-      [status, raw]
-    end
-
     it 'writes a free-text label and an integer cap through binds' do
       hostile = "Alice's ' OR 1=1 -- assistant"
       status, = dispatch(:update, method: 'POST',
@@ -483,6 +557,19 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(row.fetch('spending_cap_cents')).to eq(2500)
     end
 
+    it 'will not write across holders (the ownership predicate is a bind pair)' do
+      foreign = Kiosk::Server::AccountBinding.bind!(public_key_pem: "#{pem}-other", user_id: other)[:agent_id]
+
+      dispatch(:update, method: 'POST', params: { agent_id: foreign, human_label: 'mine now' })
+      expect(agent_row(foreign).fetch('human_label')).to be_nil
+    end
+  end
+end
+
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: manage page'
+
+  describe 'AssistantsController (manage page)' do
     it 'lists and writes only the assistants of the origin being served' do
       Kiosk.configure { |c| c.additional_origins = ['https://second.example'] }
       elsewhere = Kiosk.with_issuer('https://second.example') do
@@ -498,73 +585,49 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       end
       expect(agent_row(elsewhere).fetch('human_label')).to be_nil
     end
+  end
+end
 
-    it 'will not write across holders (the ownership predicate is a bind pair)' do
-      foreign = Kiosk::Server::AccountBinding.bind!(
-        public_key_pem: "#{pem}-other", user_id: other
-      )[:agent_id]
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: manage page'
 
-      dispatch(:update, method: 'POST', params: { agent_id: foreign, human_label: 'mine now' })
-      expect(agent_row(foreign).fetch('human_label')).to be_nil
-    end
-
-    # A settled receipt for this agent, `days_ago` old. The chain is what the
-    # shipped schema requires: a settlement hangs off a cart mandate, which hangs
-    # off an intent. Every value travels as a bind, including the timestamp —
-    # which is the point of the two examples below.
-    def settle!(cents:, days_ago:)
-      at     = Time.now.utc - (days_ago * 86_400)
-      intent = value(%(
-        INSERT INTO #{table('intent_mandates')}
-          (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents, currency, expires_at, raw_jws)
-        VALUES ($1, $2, $3, 'https://provider.example', 'shop', 1000000, 'eur', now() + interval '1 day', 'jws')
-        RETURNING id
-      ), [SecureRandom.uuid, holder, agent_id])
-      cart = value(%(
-        INSERT INTO #{table('cart_mandates')}
-          (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items, total_amount_cents,
-           currency, expires_at, raw_jws)
-        VALUES ($1, $2, $3, $4, 'https://provider.example', '[]'::jsonb, $5, 'eur',
-                now() + interval '1 day', 'jws')
-        RETURNING id
-      ), [SecureRandom.uuid, intent, holder, agent_id, cents])
-      connection.exec_query(%(
-        INSERT INTO #{table('settlements')}
-          (cart_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
-        VALUES ($1, $2, $3, 'https://provider.example', $4, $5, 'eur', $6)
-      ), 'spec seed', [cart, holder, agent_id, SecureRandom.hex(8), cents, at])
+  describe 'AssistantsController (manage page)' do
+    before do
+      settle!(cents: 2500, days_ago: 1)
+      settle!(cents: 9900, days_ago: 60)
     end
 
     it "lists the holder's assistants with settled spend, windowed through make_interval" do
-      settle!(cents: 2500, days_ago: 1)
-      settle!(cents: 9900, days_ago: 60)
       Kiosk.configure { |c| c.spending_cap_window_days = 30 }
       status, body = dispatch(:show, method: 'GET')
 
       expect(status).to eq(200)
       expect(body).to include(agent_id[0, 8])
-      # The window is the assertion: the 60-day-old receipt is outside it, so the
-      # bind reached `make_interval` as a day count and not as something Postgres
-      # read differently.
+      # The 60-day-old receipt is outside the window, so the bind reached
+      # `make_interval` as a day count.
       expect(body).to include('spent: 2500 cents')
     end
 
     it 'lists them with no window configured (the statement drops the bind)' do
-      settle!(cents: 2500, days_ago: 1)
-      settle!(cents: 9900, days_ago: 60)
       Kiosk.configure { |c| c.spending_cap_window_days = nil }
       status, body = dispatch(:show, method: 'GET')
 
       expect(status).to eq(200)
       expect(body).to include(agent_id[0, 8])
-      # No window, so both receipts count — the same statement with one bind
+      # No window, so both receipts count: the same statement with one bind
       # fewer, which is the branch a mismatched bind list breaks first.
       expect(body).to include('spent: 12400 cents')
     end
+  end
+end
 
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: manage page'
+
+  describe 'AssistantsController (manage page)' do
     # The fallback, against the failure it is FOR: an origin that never ran the
     # mandates migration. It is the only StatementInvalid the listing swallows,
-    # so this is also what says the narrow predicate matches the real error.
+    # so this also shows the narrow predicate matches the real error.
     it 'still lists, spend-free, when the settlements table is not there' do
       Kiosk.configure { |c| c.spending_cap_window_days = 30 }
       connection.execute(%(DROP TABLE #{table('settlements')} CASCADE))
@@ -575,7 +638,7 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(body).to include('spent: 0 cents')
     ensure
       connection.execute(Kiosk::Server::SchemaDefinitions.mandates_sql(
-                           schema: AUTH_PLANE_SPEC_SCHEMA, user_id_type: :uuid
+                           schema: AuthPlanePersistenceSpec::SCHEMA, user_id_type: :uuid
                          ))
     end
   end

@@ -1,505 +1,114 @@
 # frozen_string_literal: true
 
-# Descriptor prose lint — the ADR-0023 prohibition, plus the K-494
-# cross-reference check for the prose that has not been rewritten yet.
+# Descriptor prose lint. A `description` states semantics only (ADR-0023):
+# every param name, type and constraint lives in `input_schema`. This spec reads
+# each demo's handler controllers as text (no Rails, no database) and fails when
+# a description:
 #
-# A verb description routinely tells the assistant where a row's fields go
-# next — "Pass restaurant_id + restaurant_table_id + date + time to
-# book_table", "pass it to cancel_booking as `booking_id`". That sentence IS
-# the contract the assistant reads first, and when it names a param the target
-# verb does not accept, the assistant sends exactly what we told it to and gets
-# a 400 (K-494, observed on the live wire: atablefor's `availability` said
-# "seating_date", which is the ROW field name, while book_table's input is
-# `date`).
+# * carries a prose parameter list (`params: …`);
+# * names a param that some verb of the same demo declares;
+# * routes a param-like token to a verb that does not declare it
+#   ("pass X to <verb> as `y`", or "<verb>(x, y)"). This finds a row field
+#   that no verb declares, which the second check cannot see.
 #
-# ── WHAT ADR-0023 DID TO THIS FILE (K-846) ────────────────────────────────
-# ADR-0023 retired the premise. `description` is semantics only; every name,
-# type and constraint lives in `input_schema`/`output_schema`, and its
-# §Consequences says outright that "the per-description lint K-494 asked for is
-# superseded by a structural property … prose stops naming params at all".
-# Checking that a param named in prose EXISTS is checking the correctness of a
-# construct the ADR forbids — green on a violation, by construction.
-#
-# So this file grows the PROHIBITION and keeps the cross-reference resolution
-# only for as long as the prose it reads survives:
-#
-#   * the `params:` prohibition (below) fails any description carrying a prose
-#     parameter list — the field ADR-0023 §Decision 4 retired, restated in prose.
-#   * the WIDER prohibition beside it (K-852) fails any description that utters a
-#     name some verb's `input_schema` declares, with or without the word
-#     "params". That is §Decision 1 itself, and it is what the fleet violated 31
-#     times while the narrow check read green.
-#   * the cross-reference examples still resolve whatever "pass X to <verb> as
-#     `y`" clauses remain, so the K-494 class cannot regress while they do.
-#     They are green-and-EMPTY on a rewritten demo, which is correct: an
-#     ADR-0023 description has nothing to resolve. They are NOT superseded by
-#     the wider prohibition — that one sees only DECLARED names, and K-494's
-#     live-wire bug was an UNDECLARED one (`seating_date`, a row field routed as
-#     a param). Disjoint halves, both kept.
-#
-# Note what is NOT asserted any more: that a demo still HAS cross-references.
-# That floor (one per demo, twelve across the fleet) made ADR-0023 conformance
-# a test failure — rewriting a demo's prose correctly turned this suite red.
-# The property it was really guarding is that the lint can still SEE the
-# descriptors, and that is now asserted directly, on the verbs it extracts.
-#
-# It reads the sources as TEXT (no Rails boot, no DB), the same technique as
-# skill_pin_spec.rb. A demo declares its verbs in ONE place — the class-level
-# macros of the handler controllers under `app/controllers/kiosk/` (T-053 /
-# T-057, and since T-081 the only way in). A cross-reference points across the
-# query/action controller split, so a demo's controllers are read as ONE list.
-#
-# Two cross-reference shapes are recognised:
-#
-#   A. prose  — "<pass|send|…> <span> to <verb>[ / <verb>]…[ as <tail>]"
-#   B. call   — "<verb>(arg, arg, …)"
-#
-# From the span/tail/arglist it collects PARAM-LIKE tokens (a token containing
-# an underscore, or one that is a declared param of some verb in the same
-# demo) and requires each to be declared by the target verb. Tokens that are
-# plainly prose ("it", "both", "the id") are not param-like and are ignored —
-# the lint is about names that LOOK like params and do not resolve.
-require 'fileutils'
+# The first group proves that the extractor still sees every demo's
+# descriptors, so an empty result is not a blind one.
+require_relative 'support/descriptor_source'
+require_relative 'support/descriptor_cross_references'
 
-RSpec.describe 'demo descriptor cross-references' do
-  # ── Source-text extraction ────────────────────────────────────────────────
-  module DescriptorSource
-    module_function
+module DescriptorProseLint
+  PARAMS_LIST = /(\(\s*)?\bparams?\s*:/i
 
-    # Ruby line comments removed; everything else byte-identical, newlines
-    # included, so every line-anchored regex below still sees the same lines.
-    #
-    # WHY THIS EXISTS AT ALL (K-1772). Every extractor in this module reads
-    # SOURCE TEXT with a regex, and a comment is not source. {top_level_keys}
-    # looked for `word:` at brace depth 0 of a `properties:` body and found two
-    # of them inside a comment philslist writes BETWEEN two properties — "the
-    # only one of the three that is:" and "a title or a body cannot be
-    # cleared:" — so `is` and `cleared` (and, from the sibling controller,
-    # `has`) entered the demo's union of declared params. The ADR-0023
-    # prohibition then fired on every philslist description carrying the
-    # ordinary English word "is", and CI was red on `main` for nine commits.
-    #
-    # THE COMMENTS ARE NOT THE DEFECT, so rewording them is not the fix: a lint
-    # that cannot tell code from comment is one comment away from the same
-    # failure in any of the seven demos, and it reports the failure as an
-    # ADR-0023 violation rather than as a parser bug. {brace_body_at} has the
-    # same blindness with a worse consequence — an unbalanced `{` or an odd
-    # number of `"` inside a comment moves the end of the body it hands back,
-    # silently, to somewhere in the middle of the next macro.
-    #
-    # WHAT IT UNDERSTANDS, stated rather than assumed. It is applied to a
-    # descriptor's MACRO RUN (the text between the previous method's `end` and
-    # the `def` that claims the run) — `kind`, `description`, `input_schema`,
-    # `output_schema`, `example_*`, and the comments between them. It knows
-    # double- and single-quoted literals and their backslash escapes, which
-    # covers every literal the fleet's handler controllers contain; `#{…}`
-    # interpolation occurs only inside double-quoted ones, where it is string
-    # content and correctly left alone. It does NOT know heredocs, percent
-    # literals or the `?#` character literal; none occurs in a macro run, and a
-    # method BODY — the one place in these files where heredocs and regexp
-    # literals do occur — is read by nothing here.
-    def without_comments(text)
-      out = +''
-      i = 0
-      quote = nil
-      while i < text.length
-        ch = text[i]
-        if quote
-          if ch == '\\'
-            out << ch << text[i + 1].to_s
-            i += 2
-            next
-          end
-          quote = nil if ch == quote
-          out << ch
-        elsif ch == '#'
-          i += 1 while i < text.length && text[i] != "\n" # the newline itself is kept
-          next
-        else
-          quote = ch if ['"', "'"].include?(ch)
-          out << ch
-        end
-        i += 1
-      end
-      out
+  # A handler controller whose comments and string literals hold text that
+  # looks like code.
+  PHANTOM_CONTROLLER = <<~RB
+    class Kiosk::PhantomController < ApplicationController
+      kind :action
+      description "Edit one listing."
+      input_schema type: "object",
+                   properties: {
+                     listing_id: { type: "string" },
+                     # NULLABLE, and the only one of the three that is: an
+                     # explicit null clears it. A title cannot be cleared:
+                     # a listing with neither is not a listing. An unbalanced
+                     # brace { and a lone quote " belong to this prose too.
+                     price_text: { type: %w[string null] },
+                   },
+                   required: ["listing_id"]
+      def edit_listing = nil
+
+      kind :query
+      description "Ranking is by recency; a # in prose is not a comment."
+      input_schema type: "object", properties: { keyword: { type: "string" } }
+      def browse_listings = nil
     end
+  RB
 
-    # Same, for the MACRO spelling a handler controller uses: `description '…'`
-    # on its own line, no colon. Anchored to the start of a line so a
-    # `description:` INSIDE an input_schema property, and the word in a comment,
-    # are both ignored.
-    def macro_string_value(header, key)
-      m = header.match(/^[ \t]*#{key}[ \t]+(?=['"])/)
-      return nil unless m
+  module_function
 
-      adjacent_strings(header, m.end(0))
-    end
+  def census(dir)
+    verbs = DescriptorSource.demo_verbs(dir)
+    {
+      verbs: verbs.size,
+      described: verbs.count { |verb| !verb[:description].empty? },
+      schemas: verbs.count { |verb| verb[:params].any? }
+    }
+  end
 
-    # One or more adjacent quoted literals starting at `i`, joined.
-    def adjacent_strings(text, i)
-      parts = []
-      loop do
-        i += 1 while i < text.length && (text[i].match?(/\s/) || text[i] == '\\')
-        quote = text[i]
-        break unless ['"', "'"].include?(quote)
+  def parameter_list_offenders(dir)
+    DescriptorSource.demo_verbs(dir).filter_map do |verb|
+      match = verb[:description].match(PARAMS_LIST)
+      next if match.nil?
 
-        buf, i = quoted_literal(text, i + 1, quote)
-        parts << buf
-      end
-      parts.empty? ? nil : parts.join
-    end
-
-    # The content of one literal whose opening `quote` sits just before `i`, and
-    # the offset past its closing quote. A single-quoted literal unescapes only
-    # `\\` and `\'`.
-    def quoted_literal(text, i, quote)
-      buf = +''
-      while i < text.length
-        ch = text[i]
-        return [buf, i + 1] if ch == quote
-
-        if ch == '\\' && (quote == '"' || ['\\', "'"].include?(text[i + 1]))
-          buf << text[i + 1]
-          i += 2
-        else
-          buf << ch
-          i += 1
-        end
-      end
-      [buf, i]
-    end
-
-    # The body of the first `key: { … }` at or after `from`, brace-balanced and
-    # string-aware. Returns [body, offset just past the closing brace] so a
-    # caller can keep scanning — an empty body ("properties: {}") must still
-    # advance.
-    def brace_body_at(text, key, from = 0)
-      m = text.match(/(?<![a-z_])#{key}:\s*\{/, from)
-      return nil unless m
-
-      start = m.end(0)
-      i = start
-      depth = 1
-      quote = nil
-      while i < text.length && depth.positive?
-        ch = text[i]
-        if quote
-          if ch == '\\' then i += 1
-          elsif ch == quote then quote = nil
-          end
-        else
-          case ch
-          when '"', "'" then quote = ch
-          when '{', '[' then depth += 1
-          when '}', ']' then depth -= 1
-          end
-        end
-        i += 1
-      end
-      [text[start...(i - 1)], i]
-    end
-
-    # `key:` symbol keys at brace/bracket depth 0 of a hash body.
-    #
-    # It reads CODE, and the two things that are not code are excluded at
-    # opposite ends: a quoted literal is skipped here, in either quote, and the
-    # body it is handed has already had its comments removed by
-    # {without_comments} — without which a `word:` in a sentence between two
-    # properties becomes a property (K-1772).
-    def top_level_keys(body)
-      return [] if body.nil?
-
-      keys = []
-      depth = 0
-      i = 0
-      quote = nil
-      while i < body.length
-        ch = body[i]
-        if quote
-          if ch == '\\' then i += 1
-          elsif ch == quote then quote = nil
-          end
-        else
-          case ch
-          when '"', "'" then quote = ch
-          when '{', '[' then depth += 1
-          when '}', ']' then depth -= 1
-          else
-            if depth.zero? && (m = body[i..].match(/\A([a-z_][a-z0-9_]*):(?!:)/)) &&
-               (i.zero? || !body[i - 1].match?(/[A-Za-z0-9_:]/))
-              keys << m[1]
-              i += m[0].length - 1
-            end
-          end
-        end
-        i += 1
-      end
-      keys
-    end
-
-    # Property names anywhere in an input_schema (top level AND nested, e.g.
-    # `items[].sku`), so a cross-reference naming a nested field still
-    # resolves.
-    def schema_property_names(schema_body)
-      return [] if schema_body.nil?
-
-      names = []
-      pos = 0
-      while (m = schema_body.match(/(?<![a-z_])properties:\s*\{/, pos))
-        body, = brace_body_at(schema_body, 'properties', m.begin(0))
-        names.concat(top_level_keys(body)) if body
-        # Keep scanning INSIDE the block just read, not past it (K-852). Jumping
-        # to the closing brace is what made this method's own doc-comment false:
-        # a `properties:` NESTED in the one it had just consumed — `items[].sku`,
-        # the example the comment names — was skipped every time, so a nested
-        # argument name was neither resolvable as a cross-reference target nor
-        # visible to the ADR-0023 prohibition.
-        pos = m.end(0)
-      end
-      names
-    end
-
-    # The text of ONE macro's argument list — everything from `<macro>` up to
-    # the next class-level macro or the `def` that claims the run.
-    #
-    # THE LINT IS ABOUT INPUTS, and since T-068 slice 3 every verb also
-    # declares an `output_schema` with `properties:` of its own. Scanning the
-    # whole macro run for `properties:` would take a verb's RESULT fields for
-    # its accepted params, which breaks the lint in both directions: a
-    # cross-reference naming a result field would wrongly resolve, and a prose
-    # word that happens to be a result field name ("pass the id to
-    # book_appointment") would wrongly become param-like and fail. So the
-    # params are read out of the `input_schema` macro and nowhere else.
-    MACRO_NAMES = %w[kind description input_schema output_schema example_params example_row wire_name].freeze
-
-    def macro_region(header, macro)
-      start = header.index(/^[ \t]*#{macro}[ \t]/)
-      return nil if start.nil?
-
-      rest = header[start..]
-      # Where the NEXT macro (or the `def`) starts, looked for after this
-      # macro's first line so the macro's own name cannot match itself.
-      #
-      # There is no one-line/multi-line fork to take here, and a `body` local
-      # that looked like one used to stand where this comment does: when
-      # nothing follows, the region is the whole remainder whether the macro
-      # occupied one line or twenty, so the only question the method answers is
-      # WHERE TO CUT.
-      first_line_end = rest.index("\n") || rest.length
-      following = rest[first_line_end..].to_s
-      stop = following.index(/^[ \t]*(?:#{MACRO_NAMES.join('|')})[ \t]|^[ \t]*def[ \t]/)
-      stop.nil? ? rest : rest[0, first_line_end + stop]
-    end
-
-    # {name:, description:, params: [declared param names]} per verb, read out
-    # of a HANDLER CONTROLLER (T-053 mixin / T-057). The descriptor is a run of
-    # class-level macros that the NEXT `def` claims:
-    #
-    #   description "…"
-    #   input_schema type: "object", …, properties: { … }
-    #   def availability
-    #
-    # So a "header" is the macro run immediately above a `def`, and a method
-    # with no macros above it is not a verb — the mixin's own rule, which is
-    # what keeps the private `render_*` refusal helpers out of the catalog.
-    #
-    # The macro run is isolated by cutting after the last indented `end` before
-    # the `def`, which closes the previous method.
-    def controller_verbs(src)
-      out = []
-      offset = 0
-      previous_end = 0
-      while (m = src.match(/^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/, offset))
-        method_name = m[1]
-        region      = src[previous_end...m.begin(0)].to_s
-        # Everything after the previous method's terminator — the macro run,
-        # with its comments stripped before any extractor below reads it
-        # (K-1772; {without_comments} says why that is the layer).
-        macro_run    = region[/(?:\A|^[ \t]+end\n)((?:(?!^[ \t]+end\n).)*)\z/m, 1] || region
-        header       = without_comments(macro_run)
-        offset       = m.end(0)
-        previous_end = offset
-
-        description  = macro_string_value(header, 'description')
-        schema_props = schema_property_names(macro_region(header, 'input_schema'))
-        next if description.nil? && schema_props.empty?
-
-        name = macro_string_value(header, 'wire_name') || method_name
-        out << { name: name, description: description.to_s, params: schema_props.uniq }
-      end
-      out
-    end
-
-    HANDLERS_DIR = 'app/controllers/kiosk'
-
-    # Pre-filter for {controller_verbs}, which is priced for a handful of files.
-    DESCRIPTOR_MACRO = /^[ \t]*(?:description|input_schema)[ \t(]/
-
-    def handler_files(demo_dir)
-      Dir[File.join(demo_dir, HANDLERS_DIR, '**/*.rb')]
-    end
-
-    # Files under app/ that declare verbs outside the directory the engine loads.
-    def stray_handlers(demo_dir)
-      Dir[File.join(demo_dir, 'app/**/*.rb')]
-        .select { |path| File.read(path).match?(DESCRIPTOR_MACRO) } - handler_files(demo_dir)
-    end
-
-    # Every verb a demo publishes. ONE list per demo, because a cross-reference routinely points across the
-    # query/action split — atablefor's `availability` (a query controller)
-    # names `book_table` (an action controller), which is exactly the K-494
-    # drift this lint exists for.
-    def demo_verbs(demo_dir)
-      handler_files(demo_dir).flat_map { |path| controller_verbs(File.read(path)) }
+      "#{File.basename(dir)} #{verb[:name]}: description writes a parameter list — " \
+        "#{verb[:description][[match.begin(0) - 40, 0].max, 120].inspect}"
     end
   end
 
-  # ── Cross-reference detection ─────────────────────────────────────────────
-
-  # Verbs that introduce a "route this value onward" clause.
-  TRIGGER = /\b(?:pass|passing|send|supply|provide|give|echo)\b/i
-
-  # Identifiers that read like params but never are: Postgres/GUC helpers the
-  # descriptions cite by name.
-  NON_PARAM_TOKENS = %w[current_user_id current_agent_id].freeze
-
-  # Pull identifier tokens out of a prose span, dropping method-call shapes
-  # (`kiosk.current_user_id`) and anything that is not param-like.
-  def self.param_like(span, known_params, verb_names)
-    tokens = []
-    span.scan(/(?<![.\w])([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\b/) { tokens << Regexp.last_match(1) }
-    tokens.uniq.select do |t|
-      (t.include?('_') || known_params.include?(t)) &&
-        !NON_PARAM_TOKENS.include?(t) && !verb_names.include?(t)
+  def declared_param_offenders(dir)
+    verbs    = DescriptorSource.demo_verbs(dir)
+    declared = verbs.flat_map { |verb| verb[:params] }.uniq
+    names    = verbs.map { |verb| verb[:name] }
+    verbs.filter_map do |verb|
+      named = DescriptorCrossReferences.declared_params_named(verb[:description], declared, names)
+      "#{File.basename(dir)} #{verb[:name]}: description names declared param(s) #{named.inspect}" unless named.empty?
     end
   end
 
-  # Every DECLARED param name a description utters, in the order it utters them
-  # (K-852). `declared` is every name any verb of the SAME DEMO declares in an
-  # `input_schema` — the union is the right set because prose names params both
-  # of its own verb ("delivery_slot_id and delivery_address are REQUIRED") and
-  # of the verb it points at ("pass it to cancel_booking as `booking_id`"), and
-  # ADR-0023 §Decision 1 forbids both with one sentence.
-  #
-  # A verb NAME is never an offence — naming the follow-on verb is the sanctioned
-  # form (descriptor-house-style.md §1) — so a token that is also a verb name is
-  # dropped even when some verb declares a param spelled the same way.
-  def self.declared_params_named(description, declared, verb_names)
-    tokens = []
-    description.scan(/(?<![.\w])([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\b/) { tokens << Regexp.last_match(1) }
-    tokens.uniq.select do |t|
-      declared.include?(t) && !NON_PARAM_TOKENS.include?(t) && !verb_names.include?(t)
-    end
-  end
-
-  # Further verb names chained onto the target with "/" or "," —
-  # "pass it to edit_listing / close_listing as `listing_id`" routes to BOTH.
-  # Takes the text following the first target, returns [names, remaining text].
-  def self.chained_targets(rest, names)
-    found = []
-    loop do
-      m = rest.match(%r{\A\s*[/,]\s*`?})
-      break unless m
-
-      after = rest[m.end(0)..].to_s
-      hit   = names.find { |n| after.start_with?(n) }
-      break unless hit
-
-      found << hit
-      rest = after[hit.length..].to_s
-      rest = rest[1..].to_s if rest.start_with?('`')
-    end
-    [found, rest]
-  end
-
-  # Every cross-reference in `verb`'s description, as
-  # {target:, tokens:, phrase:}.
-  #
-  # Scanned one verb name at a time with literal matches (never one big
-  # alternation over a lazy span — that backtracks catastrophically on the
-  # long descriptions these files carry).
-  def self.cross_references(verb, by_name, known_params)
-    names = by_name.keys
-    desc  = verb[:description]
-    found = []
-
-    names.each do |target|
-      lit = Regexp.escape(target)
-
-      # ── Form A: "<trigger> <span> to <verb>[ / <verb>]… [as <tail>]" ──
-      pos = 0
-      while (m = desc.match(/\bto\s+`?#{lit}`?/, pos))
-        pos = m.end(0)
-        # The span is what stands between the last trigger word and "to <verb>",
-        # within the same sentence.
-        sentence = desc[0...m.begin(0)][/[^.;]*\z/].to_s
-        trigger  = sentence.rindex(TRIGGER)
-        next if trigger.nil?
-
-        span = sentence[trigger..]
-        chained, after = chained_targets(desc[pos..].to_s, names)
-        # "… as `booking_id`" — the naming half of the clause. Bounded by the
-        # sentence end AND by a closing paren, so a parenthetical aside
-        # ("(pass it to edit_listing as `listing_id`), title, body, …") does not
-        # swallow the row-field list that follows it.
-        tail   = after[/\A\s*(?:\([^)]*\)\s*)?as\s+([^.;)]{0,160})/, 1].to_s
-        tokens = param_like("#{span} #{tail}", known_params, names)
-        next if tokens.empty?
-
-        phrase = "…#{span.strip} to #{([target] + chained).join(' / ')}" \
-                 "#{" as #{tail.strip}" unless tail.empty?}"
-        ([target] + chained).uniq.each { |t| found << { target: t, tokens: tokens, phrase: phrase } }
-      end
-
-      # ── Form B: a literal call signature, "reschedule_delivery(order_id, …)" ──
-      desc.scan(/\b#{lit}\(([^)]*)\)/) do
-        args   = Regexp.last_match(1)
-        tokens = param_like(args, known_params, names)
-        next if tokens.empty?
-
-        found << { target: target, tokens: tokens, phrase: "#{target}(#{args})" }
+  def cross_reference_failures(dir)
+    verbs   = DescriptorSource.demo_verbs(dir)
+    by_name = verbs.to_h { |verb| [verb[:name], verb] }
+    known   = verbs.flat_map { |verb| verb[:params] }.uniq
+    verbs.flat_map do |verb|
+      DescriptorCrossReferences.cross_references(verb, by_name, known).flat_map do |ref|
+        unresolved(File.basename(dir), verb, by_name.fetch(ref[:target]), ref)
       end
     end
-
-    found
   end
 
-  monorepo_root = File.expand_path('../..', __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
-  # …/kiosk-demo-X/config/initializers/kiosk.rb → …/kiosk-demo-X
-  demo_dirs = Dir[File.join(monorepo_root, 'kiosk-demo-*/config/initializers/kiosk.rb')].map { |path| File.expand_path('../../..', path) }
+  def unresolved(demo, verb, target, ref)
+    (ref[:tokens] - target[:params]).map do |bad|
+      "#{demo} #{verb[:name]}: description routes `#{bad}` to #{target[:name]}, " \
+        "which declares #{target[:params].inspect} — #{ref[:phrase].inspect}"
+    end
+  end
+end
+
+RSpec.describe 'demo descriptor sources' do
+  let(:demo_dirs) { DescriptorSource.demo_dirs }
 
   it 'finds the demo descriptor sources' do
     expect(demo_dirs).not_to be_empty
   end
 
-  # Non-vacuity guard. The lint is a text matcher; if the descriptors MOVE to a
-  # file it does not read, every per-demo example goes green while checking
-  # NOTHING. That is not hypothetical: T-057 walked the verbs out of the
-  # initializers into handler controllers one demo at a time, and while this
-  # lint read only initializers each migrated demo silently dropped to zero.
-  #
-  # K-846 restates the guard on the right property. It used to demand that each
-  # demo still resolve at least one CROSS-REFERENCE, which is a demand that the
-  # prose keep naming params — ADR-0023 forbids that, so writing a description
-  # correctly turned this suite red. What actually has to hold is that the
-  # extractor still SEES each demo's descriptors: verbs, with prose, with
-  # declared inputs. A demo whose descriptions are fully ADR-0023-clean passes
-  # this and resolves zero cross-references, and both are correct.
   it "actually reads every demo's descriptors (the lint is not vacuous)" do
-    seen = demo_dirs.to_h do |dir|
-      verbs = DescriptorSource.demo_verbs(dir)
-      [File.basename(dir), {
-        verbs: verbs.size,
-        described: verbs.count { |v| !v[:description].empty? },
-        schemas: verbs.count { |v| v[:params].any? }
-      }]
-    end
+    seen  = demo_dirs.to_h { |dir| [File.basename(dir), DescriptorProseLint.census(dir)] }
+    total = seen.values.sum { |counts| counts[:verbs] }
 
-    expect(seen.values.sum { |c| c[:verbs] }).to be >= 40,
-                                                 "the extractor found only #{seen.values.sum { |c| c[:verbs] }} " \
-                                                 "verb(s) across the fleet #{seen.inspect} — the descriptors have " \
-                                                 'moved somewhere this lint does not read'
-    dark = seen.reject { |_demo, c| c[:verbs].positive? && c[:described].positive? && c[:schemas].positive? }
+    expect(total).to be >= 40,
+                     "the extractor found only #{total} verb(s) across the fleet #{seen.inspect} — " \
+                     'the descriptors have moved somewhere this lint does not read'
+    dark = seen.reject { |_demo, counts| counts.values.all?(&:positive?) }
     expect(dark.keys).to be_empty,
                          "these demos yielded no readable descriptors: #{dark.inspect} — verbs, prose or " \
                          'input_schema moved somewhere this lint does not read'
@@ -513,116 +122,50 @@ RSpec.describe 'demo descriptor cross-references' do
                         "these files declare verbs outside #{DescriptorSource::HANDLERS_DIR}, so the " \
                         "engine never loads them in development: #{problems.inspect}"
   end
+end
 
-  # K-1704. `macro_region` is the extractor the params half of this lint stands
-  # on, and it carried a conditional whose two branches were the same
-  # expression — reading as though it distinguished a one-line macro from a
-  # multi-line one, which is precisely the question it exists to answer, and
-  # deciding nothing. The distinction is not real, and the four inputs below
-  # are what say so to the next reader who is tempted to "restore" a branch:
-  # the cut is decided by what FOLLOWS, never by the macro's own shape.
-  it 'cuts a macro region at what follows it, not at its own line count' do
-    one_line = <<~RB
-      kind :query
-      input_schema type: "object"
-      def ring_up = nil
-    RB
-    multi_line = <<~RB
+RSpec.describe 'DescriptorSource.macro_region' do
+  let(:multi_line) do
+    <<~RB
       input_schema type: "object",
                    properties: { basket_id: { type: "string" } }
       output_schema type: "array"
     RB
-    trailing = 'input_schema type: "object"'
+  end
 
-    # Followed by a `def`: cut there, and the one-line macro keeps its own line.
-    expect(DescriptorSource.macro_region(one_line, 'input_schema'))
-      .to eq(%(input_schema type: "object"\n))
-    # Followed by another macro, over several lines: every line of THIS macro
-    # and none of the next.
+  # The cut is decided by what follows the macro, never by the macro's own shape.
+  it 'cuts a macro region at what follows it, not at its own line count' do
+    one_line = %(kind :query\ninput_schema type: "object"\ndef ring_up = nil\n)
+    trailing = 'input_schema type: "object"'
+    last     = multi_line[0, multi_line.index('output_schema')]
+
+    expect(DescriptorSource.macro_region(one_line, 'input_schema')).to eq(%(input_schema type: "object"\n))
     expect(DescriptorSource.macro_region(multi_line, 'input_schema'))
       .to eq(%(input_schema type: "object",\n             properties: { basket_id: { type: "string" } }\n))
-    # Followed by nothing at all, no trailing newline: the whole remainder.
     expect(DescriptorSource.macro_region(trailing, 'input_schema')).to eq(trailing)
-    # THE CASE THE DELETED BRANCH PRETENDED TO DECIDE, and the only one where a
-    # "one-line macros yield their own line" rule would differ: several lines,
-    # with nothing after them. The answer is still the whole remainder.
-    last = multi_line[0, multi_line.index('output_schema')]
     expect(DescriptorSource.macro_region(last, 'input_schema')).to eq(last)
   end
+end
 
-  # K-1772, and it is the reason {without_comments} exists. Every extractor
-  # above reads source TEXT with a regex, so a comment inside a descriptor is
-  # read as descriptor. philslist wrote two sentences ending in a colon inside
-  # an `input_schema`'s `properties:` block — "the only one of the three that
-  # is:" and "a title or a body cannot be cleared:" — and `top_level_keys`
-  # returned `is` and `cleared` as declared params. `is` then made every
-  # philslist description carrying the ordinary English word an ADR-0023
-  # offence, and `main` was red for nine commits over a lint bug reported as a
-  # descriptor violation. Two more phantoms sat unnoticed in getgrocery
-  # (`format`, `strict`, out of one comment line) and one more in philslist
-  # (`has`) — five across the fleet, waiting for a description to utter one.
-  #
-  # The fixture is SYNTHETIC on purpose. Asserting against the fleet's own
-  # comments would let this example go quietly green the day somebody rewords
-  # one, which is precisely the cheap repair this fix was chosen over.
+RSpec.describe 'DescriptorSource.controller_verbs' do
+  # A comment contributes no params, and its stray `{` and `"` do not move the
+  # end of the body: `price_text`, which follows the comment, still reads. A `#`
+  # inside a string literal is content, not the start of a comment.
   it 'reads code out of a descriptor, never comments or string literals (K-1772)' do
-    src = <<~RB
-      class Kiosk::PhantomController < ApplicationController
-        kind :action
-        description "Edit one listing."
-        input_schema type: "object",
-                     properties: {
-                       listing_id: { type: "string" },
-                       # NULLABLE, and the only one of the three that is: an
-                       # explicit null clears it. A title cannot be cleared:
-                       # a listing with neither is not a listing. An unbalanced
-                       # brace { and a lone quote " belong to this prose too.
-                       price_text: { type: %w[string null] },
-                     },
-                     required: ["listing_id"]
-        def edit_listing = nil
+    verbs = DescriptorSource.controller_verbs(DescriptorProseLint::PHANTOM_CONTROLLER)
 
-        kind :query
-        description "Ranking is by recency; a # in prose is not a comment."
-        input_schema type: "object", properties: { keyword: { type: "string" } }
-        def browse_listings = nil
-      end
-    RB
-
-    verbs = DescriptorSource.controller_verbs(src)
-
-    # The comment contributes no params, and its stray `{` and `"` do not move
-    # the end of the body — `price_text`, which FOLLOWS the comment, still reads.
-    expect(verbs.map { |v| v[:name] }).to eq(%w[edit_listing browse_listings])
+    expect(verbs.map { |verb| verb[:name] }).to eq(%w[edit_listing browse_listings])
     expect(verbs.first[:params]).to eq(%w[listing_id price_text])
     expect(verbs.last[:params]).to eq(%w[keyword])
-    # …and a `#` inside a string literal is content, not the start of a comment.
     expect(verbs.last[:description]).to eq('Ranking is by recency; a # in prose is not a comment.')
   end
+end
 
-  # ── ADR-0023: a description may not carry a parameter list (K-846) ────────
-  #
-  # `params:` was a first-class descriptor field until ADR-0023 §Decision 4
-  # retired it. Deleting the field did not delete the habit: atablefor kept
-  # writing the same list one layer over, in prose — "(params: restaurant_id,
-  # restaurant_table_id, date, time, party_size)" on `book_table`, "(params:
-  # party_size; optional neighborhood, time, date filters)" on `availability` —
-  # in the very demo the ADR was written about, duplicating an `input_schema`
-  # that already declared all five. `spec/descriptor-house-style.md` §1
-  # prohibits "a field or parameter list, or any param name that input_schema
-  # declares"; this is the mechanical half of that, and the half that catches
-  # the retired field coming back through the prose door.
+RSpec.describe 'demo descriptions (ADR-0023)' do
+  let(:demo_dirs) { DescriptorSource.demo_dirs }
+
   it 'no demo description carries a prose parameter list (ADR-0023 §Decision 1/4)' do
-    offenders = demo_dirs.flat_map do |dir|
-      demo = File.basename(dir)
-      DescriptorSource.demo_verbs(dir).filter_map do |verb|
-        m = verb[:description].match(/(\(\s*)?\bparams?\s*:/i)
-        next if m.nil?
-
-        "#{demo} #{verb[:name]}: description writes a parameter list — " \
-          "#{verb[:description][[m.begin(0) - 40, 0].max, 120].inspect}"
-      end
-    end
+    offenders = demo_dirs.flat_map { |dir| DescriptorProseLint.parameter_list_offenders(dir) }
 
     expect(offenders).to be_empty, <<~MSG
       #{offenders.size} description(s) carry a prose parameter list:
@@ -636,56 +179,10 @@ RSpec.describe 'demo descriptor cross-references' do
     MSG
   end
 
-  # ── ADR-0023: a description may not name a DECLARED PARAM at all (K-852) ──
-  #
-  # The example above catches the retired `params:` field coming back through
-  # the prose door. It is the narrow half: `params:` is a SHAPE, and the habit
-  # ADR-0023 actually forbids is stating a NAME the schema already states — with
-  # or without the word "params". Six of the seven demos wrote it both ways at
-  # `46487fc`: "pass it to cancel_booking as `booking_id`" routes a name across
-  # verbs, "delivery_slot_id and delivery_address are REQUIRED" restates the
-  # verb's own — 16 of the first shape and ~15 of the second, and the lint was
-  # blind to every one.
-  #
-  # So the prohibition is stated on the property §Decision 1 states: a
-  # description may not utter a name that some verb's `input_schema` declares.
-  # The mapping those sentences carried is not lost — it belongs in the two
-  # schemas' per-property descriptions, which is where the atablefor rewrite put
-  # it and where an assistant reads it as a contract rather than as prose.
-  #
-  # WHAT IS NOT AN OFFENCE, and why the set is the union over the demo rather
-  # than each verb's own params:
-  #   * a VERB name — "once the human picks one, `hotel_detail` returns
-  #     everything this row leaves out" is the sanctioned follow-on form;
-  #   * `limit` / `cursor` — RESERVED names a verb never declares (spec §8.1
-  #     item 6), so they are not in `declared` and the house-style carve-out
-  #     that puts the page-size default in prose keeps working with no special
-  #     case here;
-  #   * an OUTPUT field name — this reads `input_schema` only, deliberately (see
-  #     MACRO_NAMES): a row field is not a param, and the cross-reference
-  #     example below is what catches a row field being routed as one.
-  #
-  # NON-VACUITY. This example asserts a violation does NOT exist, so on a clean
-  # fleet it passes while checking nothing IF the extractor has gone blind. That
-  # is guarded once, above, on the right property — the extractor must still SEE
-  # every demo's verbs, prose and input schemas. It is deliberately NOT guarded
-  # by requiring some demo to still carry an offence: that is the trap K-846
-  # removed from this file, where the floor demanded the forbidden construct and
-  # writing a description correctly turned the suite red.
+  # A verb name is not an offence: naming the follow-on verb is the sanctioned
+  # form. `limit` and `cursor` are reserved names that no verb declares.
   it 'no demo description names a param some verb declares (ADR-0023 §Decision 1)' do
-    offenders = demo_dirs.flat_map do |dir|
-      demo     = File.basename(dir)
-      verbs    = DescriptorSource.demo_verbs(dir)
-      declared = verbs.flat_map { |v| v[:params] }.uniq
-      names    = verbs.map { |v| v[:name] }
-
-      verbs.flat_map do |verb|
-        named = self.class.declared_params_named(verb[:description], declared, names)
-        next [] if named.empty?
-
-        ["#{demo} #{verb[:name]}: description names declared param(s) #{named.inspect}"]
-      end
-    end
+    offenders = demo_dirs.flat_map { |dir| DescriptorProseLint.declared_param_offenders(dir) }
 
     expect(offenders).to be_empty, <<~MSG
       #{offenders.size} description(s) name a param the schemas already declare:
@@ -699,32 +196,14 @@ RSpec.describe 'demo descriptor cross-references' do
       descriptions, where both ends are declared.
     MSG
   end
+end
 
-  demo_dirs.each do |dir|
+RSpec.describe 'demo descriptor cross-references' do
+  DescriptorSource.demo_dirs.each do |dir|
     demo = File.basename(dir)
 
-    # Kept alongside the prohibition above rather than retired by it, because the
-    # two catch DISJOINT halves of K-494 (K-852). The prohibition sees only names
-    # some verb DECLARES; the original live-wire bug was the opposite — atablefor
-    # routed `seating_date`, a ROW field no verb declares, into `book_table`'s
-    # `date`. A token like that is invisible to the prohibition and is exactly
-    # what an assistant sends first. On an ADR-0023-clean fleet this example
-    # resolves zero cross-references and passes; that is correct, and the
-    # extractor-sees-the-descriptors guard above is what keeps the zero honest.
     it "#{demo}: every verb description's cross-reference names params the target verb declares" do
-      verbs   = DescriptorSource.demo_verbs(dir)
-      by_name = verbs.to_h { |v| [v[:name], v] }
-      known   = verbs.flat_map { |v| v[:params] }.uniq
-
-      failures = verbs.flat_map do |verb|
-        self.class.cross_references(verb, by_name, known).flat_map do |ref|
-          target = by_name.fetch(ref[:target])
-          (ref[:tokens] - target[:params]).map do |bad|
-            "#{demo} #{verb[:name]}: description routes `#{bad}` to #{target[:name]}, " \
-              "which declares #{target[:params].inspect} — #{ref[:phrase].inspect}"
-          end
-        end
-      end
+      failures = DescriptorProseLint.cross_reference_failures(dir)
 
       expect(failures).to be_empty, <<~MSG
         #{failures.size} unresolvable descriptor cross-reference(s):
@@ -732,8 +211,8 @@ RSpec.describe 'demo descriptor cross-references' do
         #{failures.join("\n")}
 
         A description that names a param the target verb rejects is what the
-        assistant sends first (K-494). Name the target's REAL input, and state
-        the row→input mapping when the row field is spelled differently.
+        assistant sends first. Name the target's REAL input, and state the
+        row→input mapping when the row field is spelled differently.
       MSG
     end
   end

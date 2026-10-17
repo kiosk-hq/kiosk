@@ -1,92 +1,93 @@
 # frozen_string_literal: true
 
-# Every published verb declares a `description`, an `input_schema` AND an
-# `output_schema` (T-073 = A, 2026-08-17: both schemas are REQUIRED on every
-# verb in 0.4).
+# Every published verb declares a `description`, an `input_schema` and an
+# `output_schema`. The engine refuses an incomplete declaration at class load;
+# this lint reads the origins' sources as text, needs no database and no Rails,
+# and names the offending verb. It also covers a verb whose declaration is
+# present but empty, and a controller that `c.handlers` does not name (the
+# class never loads, so the engine never checks it).
 #
-# WHY A TEXT LINT WHEN THE ENGINE ALREADY RAISES. {HandlerMixin} refuses a
-# declaration missing either schema at class-body load, which is the real
-# enforcement — an origin with an incomplete descriptor does not boot. This is
-# the FLOOR under it: it reads the eight origins' sources directly, needs no
-# database and no Rails, runs in a second in the gems matrix, and names the
-# offending verb rather than failing somewhere inside a demo's `bin/rails db:reset`
-# fifteen minutes into the demos matrix. It also covers the case the engine
-# cannot see: a verb whose declaration is present but EMPTY, and an origin
-# nobody remembered to name in `c.handlers` (the class never loads, so the
-# mixin never runs) — the K-761 hole.
-#
-# The extraction is descriptor_cross_reference_spec.rb's, for the same reason it
-# is that spec's: a demo declares its verbs in ONE place, the class-level macro
-# run above each `def` in `app/controllers/kiosk/*.rb`.
-RSpec.describe 'descriptor required fields' do
-  REQUIRED_MACROS = %w[description input_schema output_schema].freeze
+# A demo declares its verbs in one place: the class-level macro run above each
+# `def` in `app/controllers/kiosk/*.rb`.
+module DescriptorRequiredFields
+  MACROS = %w[description input_schema output_schema].freeze
 
-  # The macro run above each `def`, per handler controller. A `def` with no run
-  # above it is not a verb — the mixin's own rule, which is what keeps a
-  # controller's private helpers out of the catalog.
-  def self.verbs_in(source)
-    out = []
+  DEF = /^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/
+
+  # The text after the last indented `end` of a region: the macro run.
+  MACRO_RUN = /(?:\A|^[ \t]+end\n)((?:(?!^[ \t]+end\n).)*)\z/m
+
+  module_function
+
+  # {name:, declared: [required macros present]} per verb of a handler
+  # controller. A `def` with no macro run above it is not a verb.
+  def verbs_in(source)
     previous_end = 0
-    offset = 0
-    while (m = source.match(/^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/, offset))
-      method_name  = m[1]
-      region       = source[previous_end...m.begin(0)].to_s
-      header       = region[/(?:\A|^[ \t]+end\n)((?:(?!^[ \t]+end\n).)*)\z/m, 1] || region
-      offset       = m.end(0)
-      previous_end = offset
-
-      declared = REQUIRED_MACROS.select { |macro| header.match?(/^[ \t]*#{macro}[ \t(]/) }
-      next if declared.empty? && !header.match?(/^[ \t]*wire_name[ \t]/)
-
-      name = header[/^[ \t]*wire_name[ \t]+['"]([^'"]*)['"]/, 1] || method_name
-      out << { name: name, declared: declared }
+    source.to_enum(:scan, DEF).filter_map do
+      match = Regexp.last_match
+      region = source[previous_end...match.begin(0)].to_s
+      previous_end = match.end(0)
+      verb_from(region[MACRO_RUN, 1] || region, match[1])
     end
-    out
   end
 
-  monorepo_root = File.expand_path('../..', __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
-  origins = Dir[File.join(monorepo_root, 'kiosk-demo-*/app/controllers/kiosk/*.rb')]
+  def verb_from(header, method_name)
+    declared = MACROS.select { |macro| header.match?(/^[ \t]*#{macro}[ \t(]/) }
+    return if declared.empty? && !header.match?(/^[ \t]*wire_name[ \t]/)
+
+    { name: header[/^[ \t]*wire_name[ \t]+['"]([^'"]*)['"]/, 1] || method_name, declared: declared }
+  end
+
+  # Handler controller paths per origin: each demo, and the e2e fixtures.
+  def origins
+    root = File.expand_path('../..', __dir__)
+    found = Dir[File.join(root, 'kiosk-demo-*/app/controllers/kiosk/*.rb')]
             .group_by { |path| path[%r{/(kiosk-demo-[^/]+)/}, 1] }
-  origins['e2e'] = Dir[File.join(monorepo_root, 'e2e/fixtures/*_controller.rb')]
+    found.merge('e2e' => Dir[File.join(root, 'e2e/fixtures/*_controller.rb')])
+  end
+
+  def missing(origin, paths)
+    paths.sort.flat_map do |path|
+      verbs_in(File.read(path)).filter_map do |verb|
+        absent = MACROS - verb[:declared]
+        "#{origin} #{verb[:name]} (#{File.basename(path)}): missing #{absent.join(', ')}" unless absent.empty?
+      end
+    end
+  end
+end
+
+RSpec.describe 'descriptor required fields' do
+  let(:origins) { DescriptorRequiredFields.origins }
 
   it 'finds the handler controllers' do
     expect(origins.keys.sort).to include('e2e', 'kiosk-demo-atablefor', 'kiosk-demo-tudu')
   end
 
-  # Non-vacuity floor: the lint is a text matcher, so a reworded or relocated
-  # descriptor would make every example below pass while checking nothing. 45 is
-  # the fleet's verb count; the assertion is `>=` so
-  # adding a verb never fails it, but losing sight of the fleet does.
+  # The lint is a text matcher, so a reworded or relocated descriptor would make
+  # every example below pass while checking nothing. 45 is the fleet's verb
+  # count; `>=` lets a new verb pass.
   it 'sees the whole fleet (the lint is not vacuous)' do
-    total = origins.sum do |_origin, paths|
-      paths.sum { |path| self.class.verbs_in(File.read(path)).length }
-    end
+    total = origins.values.flatten.sum { |path| DescriptorRequiredFields.verbs_in(File.read(path)).length }
     expect(total).to be >= 45,
                      "the lint resolved only #{total} verbs across #{origins.size} origins — " \
                      'the descriptors moved somewhere it does not read'
   end
+end
 
-  origins.sort.each do |origin, paths|
-    it "#{origin}: every verb declares #{REQUIRED_MACROS.join(', ')}" do
-      missing = paths.sort.flat_map do |path|
-        self.class.verbs_in(File.read(path)).filter_map do |verb|
-          absent = REQUIRED_MACROS - verb[:declared]
-          next if absent.empty?
-
-          "#{origin} #{verb[:name]} (#{File.basename(path)}): missing #{absent.join(', ')}"
-        end
-      end
+RSpec.describe 'descriptor required fields per origin' do
+  DescriptorRequiredFields.origins.sort.each do |origin, paths|
+    it "#{origin}: every verb declares #{DescriptorRequiredFields::MACROS.join(', ')}" do
+      missing = DescriptorRequiredFields.missing(origin, paths)
 
       expect(missing).to be_empty, <<~MSG
         #{missing.size} verb(s) publish an incomplete descriptor:
 
         #{missing.join("\n")}
 
-        T-073 = A makes BOTH schemas REQUIRED on every verb: `input_schema` is
-        the contract the wire coerces and validates arguments against, and
-        `output_schema` is the only machine-readable statement of what a call
-        returns now that the response envelope is gone. A verb that takes nothing
-        still declares the closed empty object.
+        Every verb declares BOTH schemas: `input_schema` is the contract the
+        wire coerces and validates arguments against, and `output_schema` is
+        the only machine-readable statement of what a call returns. A verb that
+        takes nothing still declares the closed empty object.
       MSG
     end
   end

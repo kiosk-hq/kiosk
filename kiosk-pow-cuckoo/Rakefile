@@ -1,3 +1,4 @@
+require 'English'
 require 'rspec/core/rake_task'
 require 'base64'
 require 'json'
@@ -56,7 +57,7 @@ task :solve_parity do
   raw = `#{safe_cmd}`
   elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
 
-  abort "Solver exited non-zero (exit #{$?.exitstatus})\nOutput: #{raw}" unless $?.success?
+  abort "Solver exited non-zero (exit #{$CHILD_STATUS.exitstatus})\nOutput: #{raw}" unless $CHILD_STATUS.success?
   proof = JSON.parse(raw.strip)
   puts "  header_nonce=#{proof['header_nonce']}  cycle[0..2]=#{proof['cycle'][0..2].inspect}  (#{elapsed.round(2)}s)"
 

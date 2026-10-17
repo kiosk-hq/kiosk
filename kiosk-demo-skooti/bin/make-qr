@@ -30,6 +30,7 @@
 #   - Renders a scannable ANSI QR in the terminal.
 #   - Saves tmp/skooti-unlock.svg (gitignored) for full-screen display.
 
+require 'English'
 require 'bundler/setup'
 require 'json'
 require 'optparse'
@@ -72,7 +73,7 @@ if options[:from_server]
 
   cmd = [env_passthrough, RbConfig.ruby, flow_rb, { err: :err }]
   stdout_str = IO.popen(cmd, &:read)
-  abort "script/rental_flow.rb exited with status #{$?.exitstatus}." unless $?.success?
+  abort "script/rental_flow.rb exited with status #{$CHILD_STATUS.exitstatus}." unless $CHILD_STATUS.success?
 
   # rental_flow prints exactly ONE JSON line on stdout.
   json_line = stdout_str.strip

@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'English'
 require 'test_helper'
 
 class RideStory < StoryTest
@@ -70,7 +71,7 @@ class RideStory < StoryTest
 
   test "the demo's rental script rents a scooter whose token bin/make-qr and bin/ble-unlock hand to a real lock" do
     output = IO.popen({ 'SERVER_URL' => live_url }, [RbConfig.ruby, 'script/rental_flow.rb'], chdir: Rails.root, &:read)
-    assert_predicate $?, :success?
+    assert_predicate $CHILD_STATUS, :success?
     assert the_lock_on('SK-001').unlock(token: JSON.parse(output).fetch('rental_token'), now: Time.now.to_i)
   end
 end

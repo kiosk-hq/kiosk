@@ -7,6 +7,7 @@ require "kiosk/server/errors"
 require "kiosk/server/failure_log"
 require "kiosk/server/queries"
 require "kiosk/server/handler_dispatch"
+require "kiosk/server/request_validation"
 
 module Kiosk
   module Server
@@ -66,6 +67,8 @@ module Kiosk
         attr_reader :reach_value, :description_value, :payload_schema_value,
                     :subject_reachable_value
 
+        def examples_value = (@examples_value ||= [])
+
         def reach(value)
           unless REACHES.include?(value)
             raise ArgumentError,
@@ -90,24 +93,44 @@ module Kiosk
           @payload_schema_value = schema || kwargs
         end
 
+        # One example `data` per call; each must satisfy `payload_schema`.
+        def example(data) = examples_value << data
+
         # `(subject, identity) -> Boolean`; runs outside any request, so it cannot read {CurrentRequest}.
         def subject_reachable(callable) = @subject_reachable_value = callable
 
         # Each macro must be called; `description nil` is a valid answer (§8.5.1).
         def validate!(owner:, name:)
           missing = Events::REQUIRED - declared
-          return if missing.empty?
+          unless missing.empty?
+            raise ArgumentError,
+              "#{owner} declared `topic #{name.inspect}` without " \
+              "#{missing.join(" and ")}. A topic carries `description` for semantics and " \
+              "`payload_schema` for shape; a subscriber with neither has to receive a " \
+              "message to find out what it is."
+          end
 
-          raise ArgumentError,
-            "#{owner} declared `topic #{name.inspect}` without " \
-            "#{missing.join(" and ")}. A topic carries `description` for semantics and " \
-            "`payload_schema` for shape; a subscriber with neither has to receive a " \
-            "message to find out what it is."
+          validate_examples!(owner: owner, name: name)
         end
 
         private
 
         def declared = (@declared ||= [])
+
+        def validate_examples!(owner:, name:)
+          return if examples_value.empty?
+
+          require "json_schemer"
+          schema = JSONSchemer.schema(RequestValidation.normalize(payload_schema_value))
+          examples_value.each do |data|
+            errors = schema.validate(RequestValidation.normalize(data)).map { _1["error"] }
+            next if errors.empty?
+
+            raise ArgumentError,
+              "#{owner} declared `topic #{name.inspect}` with an example that does not " \
+              "satisfy its payload_schema: #{errors.join("; ")}"
+          end
+        end
       end
 
       module ClassMethods
@@ -163,7 +186,8 @@ module Kiosk
           kiosk_pending[:wire_name] = name.to_s
         end
 
-        # Declares an event topic; the block holds `reach`, `description`, `payload_schema` and `subject_reachable`.
+        # Declares an event topic; the block holds `reach`, `description`, `payload_schema`,
+        # `example` and `subject_reachable`.
         def topic(name, &block)
           name = name.to_s
 
@@ -188,6 +212,7 @@ module Kiosk
             reach: declaration.reach_value || :principal,
             description: declaration.description_value,
             payload_schema: declaration.payload_schema_value,
+            examples: declaration.examples_value,
             subject_reachable: declaration.subject_reachable_value,
           }
         end

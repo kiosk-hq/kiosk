@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: A topic may declare `example` payloads, checked against its `payload_schema` at declaration and published as the topic's `examples`.
+
 ## [0.5.13] — 2026-10-11
 
 - 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13; the engine's default `skill_url` pins `skill-v0.5.13.md`.

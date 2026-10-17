@@ -408,8 +408,8 @@ class Kiosk::OrdersController < ApplicationController
   description "Places an order for the assistant's human and reserves the " \
               "chosen delivery window. Nothing is charged until `pay`."
   input_schema  type: "object",
-                properties: { items: { type: "array" }, delivery_slot_id: { type: "integer" } },
-                required: %w[items delivery_slot_id]
+                properties: { items: { type: "array" }, slot_at: { type: "string", format: "date-time" } },
+                required: %w[items slot_at]
   output_schema type: "object",
                 properties: { order_id:    { type: "string" },
                               total_cents: { type: "integer" } },

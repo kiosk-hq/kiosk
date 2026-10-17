@@ -10,13 +10,14 @@ module Kiosk
       REQUIRED = %i[description payload_schema].freeze
 
       class << self
-        def register(name:, reach:, description:, payload_schema:, subject_reachable:)
+        def register(name:, reach:, description:, payload_schema:, subject_reachable:, examples: [])
           name = name.to_s
           declaration = {
             name: name,
             reach: reach,
             description: description,
             payload_schema: payload_schema,
+            examples: examples,
             subject_reachable: subject_reachable,
           }.freeze
 
@@ -43,12 +44,14 @@ module Kiosk
         def catalog
           known.map do |name|
             declaration = registry[name]
-            {
+            entry = {
               name: declaration[:name],
               description: declaration[:description],
               reach: declaration[:reach].to_s,
               payload_schema: declaration[:payload_schema],
             }
+            entry[:examples] = declaration[:examples] if declaration[:examples].any?
+            entry
           end
         end
 

@@ -245,6 +245,34 @@ RSpec.describe Kiosk::Server::Events do
       .to contain_exactly(:name, :description, :reach, :payload_schema)
   end
 
+  it "publishes each declared example, in the order declared" do
+    controller.class_eval do
+      topic :delivery do
+        description "D."
+        payload_schema type: "object", properties: { status: { enum: %w[out delivered] } },
+                       required: %w[status]
+        example status: "out"
+        example status: "delivered"
+      end
+    end
+    controller.kiosk_register!
+
+    expect(described_class.catalog.first[:examples])
+      .to eq([{ status: "out" }, { status: "delivered" }])
+  end
+
+  it "refuses an example that does not satisfy the payload_schema" do
+    expect {
+      controller.class_eval do
+        topic :delivery do
+          description "D."
+          payload_schema type: "object", properties: { status: { enum: %w[out] } }
+          example status: "lost"
+        end
+      end
+    }.to raise_error(ArgumentError, /example that does not satisfy its payload_schema/)
+  end
+
   # `subject_reachable` is the operator's authorisation rule, not a fact about
   # the wire. Publishing the predicate would tell a caller how to look for a gap
   # in it, and a subscriber cannot act on it either way.

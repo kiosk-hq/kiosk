@@ -129,6 +129,10 @@
         },
         "payload_schema": {
           "description": "JSON Schema for the event's `data`. It is declared for the reason a verb's output_schema is: without it a message cannot be consumed without receiving one and observing what arrived."
+        },
+        "examples": {
+          "type": "array",
+          "description": "Example `data` objects, each satisfying payload_schema. They ILLUSTRATE payload_schema and are not the contract: where the two disagree, the schema is right."
         }
       }
     }

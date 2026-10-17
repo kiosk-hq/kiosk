@@ -4,7 +4,6 @@
 class Kiosk::ListingsController < ApplicationController
   include Kiosk::Handler
 
-  LISTING_ID = { type: "string", format: "uuid", description: "From my_listings or browse_listings." }.freeze
   PRICE_TEXT = { type: %w[string null], description: "Display price, e.g. \"€300\" or \"Free\"; null when none." }.freeze
 
   kind :query
@@ -121,7 +120,7 @@ class Kiosk::ListingsController < ApplicationController
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 listing_id: LISTING_ID,
+                 listing_id: { type: "string", format: "uuid", description: "From my_listings or browse_listings." },
                  title:      { type: "string", description: "New headline." },
                  body:       { type: "string", description: "New listing text." },
                  price_text: { type: %w[string null], description: "New display price, or `null` to clear it." },
@@ -146,7 +145,7 @@ class Kiosk::ListingsController < ApplicationController
   description "Take one of the signed-in seller's listings off the board."
   input_schema type: "object",
                additionalProperties: false,
-               properties: { listing_id: LISTING_ID },
+               properties: { listing_id: { type: "string", format: "uuid", description: "From my_listings or browse_listings." } },
                required: ["listing_id"]
   output_schema type: "object",
                 description: "The closed listing.",

@@ -8,7 +8,7 @@ cadence to invent.
 
     python3 listen.py --url wss://shop.example/kiosk/events \
                       --token-file ~/.kiosk/shop.example/token \
-                      --topic order_delivery --topic order_payment:<order-id>
+                      --topic order_delivery:<order-id>
 
 The bearer token is read from a file, never from the command line, where every
 process listing and shell history would show it.

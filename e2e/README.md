@@ -27,7 +27,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **Live PSP capture.** The pay flow charges stripe-mock, Stripe's fixture server; no real Stripe call is made.
 - **A deployed event stream.** The stream IS verified, over a real WebSocket, by the pinned listener (see below) — but against this harness's own origin on `localhost`, with Action Cable's in-process pubsub. Whether a stream survives a production edge, a second Puma worker, or a `solid_cable` round trip is not exercised here.
 - **Multi-agent revocation** flows.
-- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model; a live-LLM driver would be a future companion gem (`kiosk-agent-test` does not exist yet).
+- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model.
 
 ## Prerequisites
 

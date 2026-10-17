@@ -232,7 +232,7 @@ problems << ["POST /kiosk/auth/register (unpaid toll, #{status})", parse(raw)]
 # list can only probe one origin. Preference goes to a query whose input_schema
 # is CLOSED and EMPTY, because that is the one an undeclared argument turns into
 # the wire's own 400 below.
-PROBE_QUERY = ENV["PROBE_QUERY"] || begin
+PROBE_QUERY = begin
   queries = Array(catalog["queries"])
   closed  = queries.find do |q|
     schema = q["input_schema"]

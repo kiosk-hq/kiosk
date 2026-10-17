@@ -33,8 +33,8 @@
 #   FIXTURES     — path to e2e/fixtures (locates pay_flow.rb)
 #   DB_NAME      — Postgres database for the direct AP2-trail assertions
 #   KIOSK_ISSUER — issuer/audience passed through to pay_flow.rb
-#   ALICE_AGENT / ALICE_AGENT_TOKEN, BOB_AGENT / BOB_AGENT_TOKEN — the two
-#                  agent principals, minted by the binding ceremony
+#   ALICE_AGENT / ALICE_AGENT_TOKEN, BOB_AGENT_TOKEN — the two assistants,
+#                  minted by the binding ceremony
 #   ALICE_EMAIL / HUMAN_PASSWORD — the seeded human claim_flow.rb signs in as
 
 set -euo pipefail
@@ -51,7 +51,6 @@ AGENTS_TXT_BODY="/tmp/kiosk-e2e-agents-txt.$$"
 trap 'rm -f "$AGENTS_TXT_BODY"' EXIT
 
 ALICE="00000000-0000-0000-0000-000000000001"
-BOB="00000000-0000-0000-0000-000000000002"
 
 # The two agent principals this suite runs as. They are REAL kiosk-pop JWTs the
 # booted origin issued: run.sh drives e2e/fixtures/bind_assistants.rb through
@@ -64,7 +63,6 @@ BOB="00000000-0000-0000-0000-000000000002"
 # `uuid` in the canonical schema, so a caller cannot choose a shape the shipped
 # tables cannot store.
 ALICE_AGENT="${ALICE_AGENT:?run.sh must export ALICE_AGENT from the binding ceremony}"
-BOB_AGENT="${BOB_AGENT:?run.sh must export BOB_AGENT from the binding ceremony}"
 ALICE_AGENT_TOKEN="${ALICE_AGENT_TOKEN:?run.sh must export ALICE_AGENT_TOKEN}"
 BOB_AGENT_TOKEN="${BOB_AGENT_TOKEN:?run.sh must export BOB_AGENT_TOKEN}"
 
@@ -111,17 +109,6 @@ action_call() {
   local name="$2"
   local body="$3"
   curl -sS -X POST "$SERVER_URL/kiosk/$name" \
-    -H "Authorization: Bearer $token" \
-    -H "Content-Type: application/json" \
-    -d "$body"
-}
-
-exec_json() {
-  # Generic POST to an arbitrary kiosk path.
-  local token="$1"
-  local path="$2"
-  local body="$3"
-  curl -sS -X POST "$SERVER_URL$path" \
     -H "Authorization: Bearer $token" \
     -H "Content-Type: application/json" \
     -d "$body"

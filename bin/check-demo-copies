@@ -1797,7 +1797,7 @@ demos.each do |dir|
   end
 
   readme     = File.join(dir, 'README.md')
-  bin_corpus = sources.map { |f| [f, File.readlines(f).reject { |l| l =~ /\A\s*#/ }.join] }
+  bin_corpus = sources.map { |f| [f, File.readlines(f).grep_v(/\A\s*#/).join] }
   bin_corpus << [readme, File.read(readme)] if File.file?(readme)
   expected_ref_files += bin_corpus.size
 

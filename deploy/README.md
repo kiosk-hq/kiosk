@@ -93,7 +93,7 @@ migrated or restarted, and the push ends in `DEPLOY FAILED`.
 | Demo | Subdomain | Port | PoW difficulty | Stripe (test) |
 |------|-----------|------|----------------|---------------|
 | getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (sub-second, poke-friendly) | yes |
-| atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s on an M-series laptop core, "beware: intensive PoW") | — (no payment provider) |
+| atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s on an M-series laptop core, "beware: heavy proof-of-work") | — (no payment provider) |
 | hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | yes |
 | skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | yes |
 | stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
@@ -112,7 +112,7 @@ its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
 **PoW difficulty is fixed per demo** in its `config/initializers/kiosk.rb`:
 atablefor, the production-grade showcase, tolls at Equihash n=168 k=7 (~1.3 GiB
 and ~10 s per proof on the reference solver, measured on one M-series laptop
-core) behind a "beware: intensive PoW" notice in `/.well-known/kiosk.json`; the
+core) behind a "beware: heavy proof-of-work" notice in `/.well-known/kiosk.json`; the
 other six toll at n=96 k=5, a sub-second solve. (The toll prices abuse; it is
 not by itself a DoS shield, and there is deliberately no default edge throttle —
 see "Edge rate-limit" below.)
@@ -551,7 +551,7 @@ curl -s -X POST "$BASE/kiosk/create_order" \
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`
 > returns and `solve.py` consumes, and the block above is the copy-paste form of
 > it. It is the only one: no demo landing page carries a curl one-liner.
-> atablefor shows the
-> "beware: memory- and CPU-intensive PoW" banner so pokers expect the ~9–10 s
+> atablefor's `pow_notice` says "beware: heavy proof-of-work", and its landing
+> page warns of the full-strength puzzle, so callers expect the ~9–10 s
 > (measured on an M-series laptop core; other hardware differs).
 

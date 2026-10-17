@@ -277,7 +277,7 @@ getgrocery's real third-party orders included.
 - [ ] Verify as §8; `\d` on any table in `psql` shows the shape `db/schema.rb` states.
 
 ## 8. Verify (per subdomain)
-- [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor shows the "beware" PoW notice).
+- [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor's carries the "beware: heavy proof-of-work" notice).
 - [ ] The demo **root page** loads (what it is + the live activity counters). The copy-paste curl
       flow lives in `deploy/README.md` §"Poke it"; no landing page carries one.
 - [ ] getgrocery, hoteling, skooti: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay.

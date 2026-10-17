@@ -146,7 +146,7 @@ if ARGV.include?('--self-test')
       expect: /the fragment rule declares \d+ unit\(s\) and compared NONE of them/ },
     { id: 'vacuity-fragment-except', rule: 'fragments',
       what: 'the `:code` arm stops partitioning, so a declared exception excuses nothing',
-      ops: [[:edit, 'bin/check-demo-copies', "    fragment_exceptions_live += excused.size\n", '']],
+      ops: [[:edit, 'bin/check-demo-copies', 'fragment_exceptions_live += compare_code_fragment(', 'compare_code_fragment(']],
       expect: /FRAGMENTS declares \d+ `except:` entr(?:y|ies) and NONE of them was reached/ },
     { id: 'vacuity-class-macro-handle', rule: 'fragments',
       what: 'the class-macro handle stops seeing a class body',
@@ -183,12 +183,12 @@ if ARGV.include?('--self-test')
       expect: /`agree:` calls \[getgrocery,skooti\] a `:coincidence`, but what they agree on is \d+ normalised lines and the cap is 12/ },
     { id: 'vacuity-agree-confirmation', rule: 'partial convergence',
       what: 'the grouping pass stops running',
-      ops: [[:edit, 'bin/check-demo-copies', "def agree_check(label, what, bodies, declared, errors)\n",
-             "def agree_check(label, what, bodies, declared, errors)\n  return 0\n"]],
+      ops: [[:edit, 'bin/check-demo-copies', "  def check(label, what, bodies, declared)\n",
+             "  def check(label, what, bodies, declared)\n    return\n"]],
       expect: /declares \d+ `agree:` group\(s\) of converged `:per_demo` copies and this run CONFIRMED none/ },
     { id: 'vacuity-convergence-census', rule: 'partial convergence',
       what: 'the convergence census records nothing',
-      ops: [[:edit, 'bin/check-demo-copies', "  AGREE_CENSUS << label\n", '']],
+      ops: [[:edit, 'bin/check-demo-copies', "    @census << label\n", '']],
       expect: /the convergence census recorded NO compared subject/ },
     { id: 'initializer-patches-framework', rule: 'framework patch',
       what: 'an initializer includes a module into a Rails class',
@@ -775,85 +775,119 @@ def byte_digest(path) = Digest::SHA256.file(path).hexdigest
 # :lockstep holds the group; :coincidence records it, capped at AGREE_COINCIDENCE_MAX_LINES.
 AGREE_RULES = %i[lockstep coincidence].freeze
 AGREE_COINCIDENCE_MAX_LINES = 12
-AGREE_CENSUS = []
+# Checks `agree:` declarations against the copies that agree, and records what it saw.
+class AgreeCheck
+  attr_reader :census, :confirmed
 
-# Returns the number of declared groups confirmed against the tree.
-def agree_check(label, what, bodies, declared, errors)
-  declared = (declared || {}).to_h { |demos, spec| [demos.sort, spec] }
-  groups   = bodies.group_by { |_demo, norm| norm }
-                   .values.select { |g| g.size >= 2 }
-                   .to_h { |g| [g.map(&:first).sort, g.first[1]] }
-  AGREE_CENSUS << label
-
-  declared.each do |demos, spec|
-    if demos.size < 2
-      errors << "#{label}: `agree:` declares #{demos.inspect}; an agreement is two copies or more."
-      next
-    end
-    absent = demos - bodies.keys
-    errors << "#{label}: `agree:` names #{absent.join(', ')}, which no longer has a #{what} here. Update the set." if absent.any?
-    errors << "#{label}: `agree:` entry [#{demos.join(',')}] carries no `why:`." if spec[:why].to_s.strip.empty?
-    next if AGREE_RULES.include?(spec[:rule])
-
-    errors << "#{label}: `agree:` entry [#{demos.join(',')}] has unknown `rule: #{spec[:rule].inspect}`; " \
-              'use :lockstep or :coincidence.'
+  def initialize(errors)
+    @errors    = errors
+    @census    = []
+    @confirmed = 0
   end
 
-  widened = {}
-  declared.each_key do |demos|
-    next if groups.key?(demos)
-
-    bigger = groups.keys.find { |g| (demos - g).empty? }
-    widened[demos] = bigger if bigger
+  # `bodies` maps each demo to its normalised copy; `declared` is the entry's `agree:`.
+  def check(label, what, bodies, declared)
+    start(label, bodies, declared)
+    @declared.each { |demos, spec| check_declaration(what, demos, spec) }
+    @widened = widened_groups
+    @groups.each { |demos, norm| check_group(demos, norm) }
+    @declared.each { |demos, spec| check_dissolved(demos, spec) }
   end
 
-  confirmed = 0
-  groups.each do |demos, norm|
-    if demos.size == bodies.size
-      errors << "#{label}: declared `:per_demo` but ALL #{bodies.size} copies now agree once comments and " \
-                'whitespace are normalised away. Declare it `:code`, or restore what made one differ.'
-      next
-    end
-    if (declared_key = widened.key(demos))
-      joined = demos - declared_key
-      errors << "#{label}: `agree:` declares [#{declared_key.join(',')}] and #{joined.join(', ')} " \
-                "#{joined.size == 1 ? 'has' : 'have'} since joined. Widen the declaration, or make that copy its own again."
-      next
-    end
-    unless declared.key?(demos)
-      # A declared group that shrank reports itself below.
-      next if declared.keys.any? { |d| (demos - d).empty? && !groups.key?(d) }
+  private
 
-      errors << "#{label}: [#{demos.join(',')}] — #{demos.size} of #{bodies.size} copies — agree once comments " \
-                "and whitespace are normalised away (#{norm.lines.size} line(s)), and nothing declares it. " \
-                'Declare it in `agree:` as :lockstep or :coincidence.'
-      next
-    end
-
-    confirmed += 1
-    next unless declared[demos][:rule] == :coincidence && norm.lines.size > AGREE_COINCIDENCE_MAX_LINES
-
-    errors << "#{label}: `agree:` calls [#{demos.join(',')}] a `:coincidence`, but what they agree on is " \
-              "#{norm.lines.size} normalised lines and the cap is #{AGREE_COINCIDENCE_MAX_LINES}. Declare :lockstep."
+  def start(label, bodies, declared)
+    @census << label
+    @label    = label
+    @bodies   = bodies
+    @declared = (declared || {}).to_h { |demos, spec| [demos.sort, spec] }
+    @groups   = bodies.group_by { |_demo, norm| norm }
+                      .values.select { |g| g.size >= 2 }
+                      .to_h { |g| [g.map(&:first).sort, g.first[1]] }
   end
 
-  declared.each do |demos, spec|
-    next if groups.key?(demos) || widened.key?(demos)
-    next if (demos - bodies.keys).any?
+  def check_declaration(what, demos, spec)
+    return @errors << "#{@label}: `agree:` declares #{demos.inspect}; an agreement is two copies or more." if demos.size < 2
 
-    actual = bodies.slice(*demos)
-                   .group_by { |_d, norm| norm }
-                   .values.map { |g| "[#{g.map(&:first).sort.join(',')}]" }.sort.join(' ')
-    errors << if spec[:rule] == :lockstep
-                "#{label}: `agree:` holds [#{demos.join(',')}] in lockstep and they no longer agree: #{actual}. " \
-                  'Propagate the edit, or drop the group.'
-              else
-                "#{label}: `agree:` records [#{demos.join(',')}] as a `:coincidence` and the coincidence has " \
-                  "ended: #{actual}. Drop the group."
-              end
+    absent = demos - @bodies.keys
+    @errors << "#{@label}: `agree:` names #{absent.join(', ')}, which no longer has a #{what} here. Update the set." if absent.any?
+    check_declaration_fields(demos, spec)
   end
 
-  confirmed
+  def check_declaration_fields(demos, spec)
+    @errors << "#{@label}: `agree:` entry [#{demos.join(',')}] carries no `why:`." if spec[:why].to_s.strip.empty?
+    return if AGREE_RULES.include?(spec[:rule])
+
+    @errors << "#{@label}: `agree:` entry [#{demos.join(',')}] has unknown `rule: #{spec[:rule].inspect}`; " \
+               'use :lockstep or :coincidence.'
+  end
+
+  # Each declared group that a larger agreeing group now contains, mapped to that larger group.
+  def widened_groups
+    @declared.each_key.with_object({}) do |demos, widened|
+      next if @groups.key?(demos)
+
+      bigger = @groups.keys.find { |g| (demos - g).empty? }
+      widened[demos] = bigger if bigger
+    end
+  end
+
+  def check_group(demos, norm)
+    return all_agree if demos.size == @bodies.size
+    return group_joined(demos) if @widened.key(demos)
+    return group_undeclared(demos, norm) unless @declared.key?(demos)
+
+    @confirmed += 1
+    check_coincidence_cap(demos, norm)
+  end
+
+  def all_agree
+    @errors << "#{@label}: declared `:per_demo` but ALL #{@bodies.size} copies now agree once comments and " \
+               'whitespace are normalised away. Declare it `:code`, or restore what made one differ.'
+  end
+
+  def group_joined(demos)
+    declared_key = @widened.key(demos)
+    joined = demos - declared_key
+    @errors << "#{@label}: `agree:` declares [#{declared_key.join(',')}] and #{joined.join(', ')} " \
+               "#{joined.size == 1 ? 'has' : 'have'} since joined. Widen the declaration, or make that copy its own again."
+  end
+
+  def group_undeclared(demos, norm)
+    # A declared group that shrank reports itself in check_dissolved.
+    return if @declared.keys.any? { |d| (demos - d).empty? && !@groups.key?(d) }
+
+    @errors << "#{@label}: [#{demos.join(',')}] — #{demos.size} of #{@bodies.size} copies — agree once comments " \
+               "and whitespace are normalised away (#{norm.lines.size} line(s)), and nothing declares it. " \
+               'Declare it in `agree:` as :lockstep or :coincidence.'
+  end
+
+  def check_coincidence_cap(demos, norm)
+    return unless @declared[demos][:rule] == :coincidence && norm.lines.size > AGREE_COINCIDENCE_MAX_LINES
+
+    @errors << "#{@label}: `agree:` calls [#{demos.join(',')}] a `:coincidence`, but what they agree on is " \
+               "#{norm.lines.size} normalised lines and the cap is #{AGREE_COINCIDENCE_MAX_LINES}. Declare :lockstep."
+  end
+
+  def current_groups(demos)
+    @bodies.slice(*demos)
+           .group_by { |_d, norm| norm }
+           .values.map { |g| "[#{g.map(&:first).sort.join(',')}]" }.sort.join(' ')
+  end
+
+  # A declared group whose copies no longer agree.
+  def check_dissolved(demos, spec)
+    return if @groups.key?(demos) || @widened.key?(demos) || (demos - @bodies.keys).any?
+
+    actual = current_groups(demos)
+    @errors << if spec[:rule] == :lockstep
+                 "#{@label}: `agree:` holds [#{demos.join(',')}] in lockstep and they no longer agree: #{actual}. " \
+                   'Propagate the edit, or drop the group.'
+               else
+                 "#{@label}: `agree:` records [#{demos.join(',')}] as a `:coincidence` and the coincidence has " \
+                   "ended: #{actual}. Drop the group."
+               end
+  end
 end
 
 def render_template(path)
@@ -869,13 +903,11 @@ MAGIC_RE = /\A#\s*(?:-\*-\s*)?(#{Regexp.union(MAGIC_COMMENTS)})\s*:\s*([^\s;]+)/
 def magic_comments(path)
   found = []
   Ripper.lex(File.read(path)).each do |(_pos, type, tok)|
-    case type
-    when :on_sp, :on_nl, :on_ignored_nl then next
-    when :on_comment
-      m = tok.strip.match(MAGIC_RE)
-      found << "#{m[1].downcase}: #{m[2].downcase}" if m
-    else break
-    end
+    next if %i[on_sp on_nl on_ignored_nl].include?(type)
+    break unless type == :on_comment
+
+    m = tok.strip.match(MAGIC_RE)
+    found << "#{m[1].downcase}: #{m[2].downcase}" if m
   end
   found.sort
 end
@@ -911,9 +943,11 @@ demos.each do |dir|
 end
 migrations.default_proc = nil
 
+def short_name(demo) = demo.delete_prefix('kiosk-demo-')
+
 errors = []
-short = ->(demo) { demo.delete_prefix('kiosk-demo-') }
-agree_groups = 0
+short = method(:short_name)
+agree = AgreeCheck.new(errors)
 
 # ── Undeclared and stale manifest entries ────────────────────────────────────
 (dups.keys - COPIES.keys).sort.each do |rel|
@@ -944,79 +978,114 @@ errors << "#{overlap.join(', ')}: declared in both COPIES and SKELETON_NOT_COMPA
 end
 
 # ── Copy comparison ──────────────────────────────────────────────────────────
-COPIES.each do |rel, entry|
-  copies = dups[rel] or next
+def copy_digest(rule) = rule == :identical ? method(:byte_digest) : method(:code_digest)
 
+def short_list(demos) = demos.map { |d| short_name(d) }.sort.join(', ')
+
+def demo_groups(groups) = groups.values.map { |g| "[#{g.map { |d, _| short_name(d) }.sort.join(',')}]" }
+
+def check_copy(rel, entry, copies, errors, agree)
+  return unless copy_entry_valid?(rel, entry, errors)
+
+  present = copies.keys.map { |demo| short_name(demo) }
+  check_copy_ships(rel, entry[:ships], present, errors) if entry[:ships]
+  check_copy_except(rel, entry, present, errors)
+  return compare_copies(rel, entry, copies, errors) unless entry[:rule] == :per_demo
+
+  check_per_demo_copy(rel, entry, copies, errors, agree)
+end
+
+def check_per_demo_copy(rel, entry, copies, errors, agree)
+  errors << "#{rel}: :per_demo entries are not compared, so `except:` means nothing here" if (entry[:except] || {}).any?
+  agree.check(rel, 'file', copies.to_h { |demo, path| [short_name(demo), code_norm(File.read(path))] }, entry[:agree])
+end
+
+def copy_entry_valid?(rel, entry, errors)
   errors << "#{rel}: manifest entry carries no `why:` reason" if entry[:why].to_s.strip.empty?
-  unless %i[identical code per_demo].include?(entry[:rule])
-    errors << "#{rel}: unknown rule #{entry[:rule].inspect}"
-    next
-  end
+  return true if %i[identical code per_demo].include?(entry[:rule])
 
-  present = copies.keys.map(&short)
-  if entry[:ships]
-    stray = present - entry[:ships]
-    gone  = entry[:ships] - present
-    unless stray.empty?
-      errors << "#{rel}: #{stray.sort.join(', ')} #{stray.size == 1 ? 'ships' : 'ship'} this file but " \
-                "#{stray.size == 1 ? 'is' : 'are'} not in its declared `ships:` set " \
-                "(#{entry[:ships].sort.join(', ')}). Add it with the reason, or delete the copy."
-    end
-    unless gone.empty?
-      errors << "#{rel}: `ships:` names #{gone.sort.join(', ')}, which no longer ship#{'s' if gone.size == 1} " \
-                'this file — update the set.'
-    end
-  end
+  errors << "#{rel}: unknown rule #{entry[:rule].inspect}"
+  false
+end
 
-  excepted = entry[:except] || {}
-  excepted.each do |demo, reason|
+def stray_copy_message(rel, stray, ships)
+  "#{rel}: #{stray.sort.join(', ')} #{stray.size == 1 ? 'ships' : 'ship'} this file but " \
+    "#{stray.size == 1 ? 'is' : 'are'} not in its declared `ships:` set " \
+    "(#{ships.sort.join(', ')}). Add it with the reason, or delete the copy."
+end
+
+def check_copy_ships(rel, ships, present, errors)
+  stray = present - ships
+  gone  = ships - present
+  errors << stray_copy_message(rel, stray, ships) unless stray.empty?
+  return if gone.empty?
+
+  errors << "#{rel}: `ships:` names #{gone.sort.join(', ')}, which no longer ship#{'s' if gone.size == 1} " \
+            'this file — update the set.'
+end
+
+def check_copy_except(rel, entry, present, errors)
+  (entry[:except] || {}).each do |demo, reason|
     errors << "#{rel}: `except:` reason for #{demo} is blank" if reason.to_s.strip.empty?
     errors << "#{rel}: stale `except:` for #{demo}, which does not ship this file" unless present.include?(demo)
   end
   errors << "#{rel}: `agree:` only applies to `:per_demo` entries; drop it." if entry[:agree] && entry[:rule] != :per_demo
+end
 
-  if entry[:rule] == :per_demo
-    errors << "#{rel}: :per_demo entries are not compared, so `except:` means nothing here" if excepted.any?
-    agree_groups += agree_check(rel, 'file', copies.to_h { |demo, path| [short.call(demo), code_norm(File.read(path))] },
-                                entry[:agree], errors)
-    next
-  end
+def digest_groups(copies, rule)
+  digest = copy_digest(rule)
+  copies.group_by { |_demo, path| digest.call(path) }
+end
 
-  digest = entry[:rule] == :identical ? method(:byte_digest) : method(:code_digest)
-  compared, skipped = copies.partition { |demo, _| !excepted.key?(short.call(demo)) }.map(&:to_h)
-  if compared.size < 2
-    errors << "#{rel}: every copy but one is excepted. Drop an exception or make the rule :per_demo."
-    next
-  end
+# [compared, excepted] copies, each a demo => path hash.
+def split_excepted(copies, excepted)
+  copies.partition { |demo, _| !excepted.key?(short_name(demo)) }.map(&:to_h)
+end
 
-  groups = compared.group_by { |_demo, path| digest.call(path) }
-  if groups.size > 1
-    how = entry[:rule] == :identical ? 'byte-for-byte' : 'once comments and whitespace are ignored'
-    listed = groups.values.map { |g| "[#{g.map { |d, _| short.call(d) }.sort.join(',')}]" }.join(' ')
-    errors << "#{rel}: declared :#{entry[:rule]} — the copies must agree #{how}, and they do not: " \
-              "#{listed}. Propagate the edit, or record the divergence in `except:` with the reason."
-  end
+def compare_copies(rel, entry, copies, errors)
+  rule = entry[:rule]
+  compared, skipped = split_excepted(copies, entry[:except] || {})
+  return errors << "#{rel}: every copy but one is excepted. Drop an exception or make the rule :per_demo." if compared.size < 2
 
-  if entry[:rule] == :code
-    magic_groups = compared.group_by { |_demo, path| magic_comments(path) }
-    if magic_groups.size > 1
-      listed = magic_groups.map do |comments, g|
-        "[#{g.map { |d, _| short.call(d) }.sort.join(',')}] #{comments.empty? ? '(none)' : comments.join(', ')}"
-      end.join(' vs ')
-      errors << "#{rel}: declared :code — prose may differ per demo, MAGIC comments may not: #{listed}."
-    end
-  end
+  groups = digest_groups(compared, rule)
+  report_copy_divergence(rel, rule, groups, errors) if groups.size > 1
+  check_copy_magic(rel, compared, errors) if rule == :code
+  check_stale_copy_except(rel, rule, compared, skipped, errors) if groups.size == 1
+end
 
-  next unless groups.size == 1
+def report_copy_divergence(rel, rule, groups, errors)
+  how = rule == :identical ? 'byte-for-byte' : 'once comments and whitespace are ignored'
+  errors << "#{rel}: declared :#{rule} — the copies must agree #{how}, and they do not: " \
+            "#{demo_groups(groups).join(' ')}. Propagate the edit, or record the divergence in `except:` with the reason."
+end
 
-  canonical = groups.keys.first
-  canonical_magic = entry[:rule] == :code ? magic_comments(compared.values.first) : nil
+def check_copy_magic(rel, compared, errors)
+  magic_groups = compared.group_by { |_demo, path| magic_comments(path) }
+  return if magic_groups.size <= 1
+
+  listed = magic_groups.map do |comments, g|
+    "[#{g.map { |d, _| short_name(d) }.sort.join(',')}] #{comments.empty? ? '(none)' : comments.join(', ')}"
+  end.join(' vs ')
+  errors << "#{rel}: declared :code — prose may differ per demo, MAGIC comments may not: #{listed}."
+end
+
+# An excepted copy that now agrees with the compared ones.
+def check_stale_copy_except(rel, rule, compared, skipped, errors)
+  digest    = copy_digest(rule)
+  canonical = digest.call(compared.values.first)
+  magic     = rule == :code ? magic_comments(compared.values.first) : nil
   skipped.each do |demo, path|
     next unless digest.call(path) == canonical
-    next if canonical_magic && magic_comments(path) != canonical_magic
+    next if magic && magic_comments(path) != magic
 
-    errors << "#{rel}: `except:` for #{short.call(demo)} is stale — its copy now agrees with the others. Drop it."
+    errors << "#{rel}: `except:` for #{short_name(demo)} is stale — its copy now agrees with the others. Drop it."
   end
+end
+
+COPIES.each do |rel, entry|
+  copies = dups[rel] or next
+
+  check_copy(rel, entry, copies, errors, agree)
 end
 
 # ── Generator templates: each render must byte-match every operator demo's migration ──
@@ -1032,46 +1101,58 @@ end
 
 operator_demos = demos.map { |d| File.basename(d) } - NON_OPERATOR_DEMOS
 
-GENERATOR_TEMPLATES.each do |name, entry|
-  next unless tpl_files.include?(name)
-
-  if entry[:not_compared]
-    errors << "#{name}: `not_compared:` carries no reason" if entry[:not_compared].to_s.strip.empty?
-    next
-  end
-  if entry[:emits].to_s.strip.empty?
-    errors << "#{name}: entry declares neither `emits:` nor `not_compared:`."
-    next
-  end
+def check_template(name, entry, migrations, operator_demos, errors)
+  return template_not_compared(name, entry, errors) if entry[:not_compared]
+  return errors << "#{name}: entry declares neither `emits:` nor `not_compared:`." if entry[:emits].to_s.strip.empty?
 
   emits  = entry[:emits]
   copies = migrations[emits] || {}
-  if copies.empty?
-    errors << "#{name}: no demo ships a db/migrate copy of #{emits}. Regenerate the demos, or drop the entry."
-    next
-  end
+  return errors << "#{name}: no demo ships a db/migrate copy of #{emits}. Regenerate the demos, or drop the entry." if copies.empty?
 
-  missing = operator_demos - copies.keys
+  check_template_demos(name, emits, copies.keys, operator_demos, errors)
+  check_template_render(name, emits, copies, errors)
+end
+
+def template_not_compared(name, entry, errors)
+  errors << "#{name}: `not_compared:` carries no reason" if entry[:not_compared].to_s.strip.empty?
+end
+
+def check_template_demos(name, emits, shipping, operator_demos, errors)
+  missing = operator_demos - shipping
   unless missing.empty?
-    errors << "#{name}: #{missing.map(&short).sort.join(', ')} #{missing.size == 1 ? 'ships' : 'ship'} " \
+    errors << "#{name}: #{short_list(missing)} #{missing.size == 1 ? 'ships' : 'ship'} " \
               "no copy of #{emits}; every operator demo ships every canonical migration. Re-run the generator there."
   end
-  extra = copies.keys & NON_OPERATOR_DEMOS
-  errors << "#{name}: #{extra.map(&short).sort.join(', ')} ships #{emits}, but is declared a non-operator demo." unless extra.empty?
+  extra = shipping & NON_OPERATOR_DEMOS
+  errors << "#{name}: #{short_list(extra)} ships #{emits}, but is declared a non-operator demo." unless extra.empty?
+end
 
-  rendered = render_template(File.join(ROOT, GENERATOR_TEMPLATES_DIR, name))
+def check_template_render(name, emits, copies, errors)
+  rendered   = render_template(File.join(ROOT, GENERATOR_TEMPLATES_DIR, name))
   mismatched = copies.reject { |_demo, path| File.read(path) == rendered }
-  next if mismatched.empty?
+  return if mismatched.empty?
 
   demo, path = mismatched.first
-  a = rendered.lines
-  b = File.read(path).lines
-  i = (0...[a.size, b.size].max).find { |j| a[j] != b[j] }
   errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: rendered with the generator's default options it must " \
-            "byte-match every demo copy of #{emits}, and #{mismatched.keys.map(&short).sort.join(', ')} " \
-            "#{mismatched.size == 1 ? 'disagrees' : 'disagree'} (line #{i + 1}: template renders " \
-            "#{(a[i] || '<nothing>').chomp.strip.inspect}, #{short.call(demo)} has " \
-            "#{(b[i] || '<nothing>').chomp.strip.inspect}). Regenerate the copies or lift the edit into the template."
+            "byte-match every demo copy of #{emits}, and #{short_list(mismatched.keys)} " \
+            "#{mismatched.size == 1 ? 'disagrees' : 'disagree'} (#{first_difference(rendered, File.read(path), short_name(demo))}). " \
+            'Regenerate the copies or lift the edit into the template.'
+end
+
+# Names the first line where `copy` differs from the template's render.
+def first_difference(rendered, copy, demo)
+  a = rendered.lines
+  b = copy.lines
+  i = (0...[a.size, b.size].max).find { |j| a[j] != b[j] }
+  "line #{i + 1}: template renders #{shown_line(a[i])}, #{demo} has #{shown_line(b[i])}"
+end
+
+def shown_line(line) = (line || '<nothing>').chomp.strip.inspect
+
+GENERATOR_TEMPLATES.each do |name, entry|
+  next unless tpl_files.include?(name)
+
+  check_template(name, entry, migrations, operator_demos, errors)
 end
 
 # ── Migration pairs: hand-written migrations shipped at demo-specific timestamps ──
@@ -1220,65 +1301,93 @@ FRAGMENT_MAX_LINES = 200
 def class_macro_starts(node, out = [])
   return out unless node.is_a?(Array)
 
-  unless %i[class module].include?(node[0])
+  if %i[class module].include?(node[0])
+    class_body_statements(node).each { |stmt| class_body_macro(stmt, out) }
+  else
     node.each { |child| class_macro_starts(child, out) if child.is_a?(Array) }
-    return out
-  end
-
-  body = node.last
-  stmts = body.is_a?(Array) && body[0] == :bodystmt ? (body[1] || []) : []
-  stmts.each do |stmt|
-    next unless stmt.is_a?(Array)
-
-    head =
-      case stmt[0]
-      when :command          then stmt[1]
-      when :method_add_arg   then stmt[1].is_a?(Array) && stmt[1][0] == :fcall ? stmt[1][1] : nil
-      when :method_add_block then stmt[1].is_a?(Array) && stmt[1][0] == :command ? stmt[1][1] : nil
-      end
-    out << [head[2][0] - 1, head[1]] if head.is_a?(Array) && head[0] == :@ident
-
-    if stmt[0] == :assign && (t = stmt[1]).is_a?(Array) && t[0] == :field &&
-       t[1].is_a?(Array) && t[1][0] == :var_ref && t[1][1].is_a?(Array) && t[1][1][1] == 'self' &&
-       t.last.is_a?(Array) && t.last[0] == :@ident
-      out << [t.last[2][0] - 1, "self.#{t.last[1]}"]
-    end
-
-    class_macro_starts(stmt, out)
   end
   out
 end
 
-def fragment_starts(src)
-  starts = {}
-  macro = {}
-  sexp = Ripper.sexp(src)
-  class_macro_starts(sexp).each { |(i, name)| starts[i] = macro[i] = name } if sexp
-  src.lines.each_with_index do |line, i|
-    m = line.match(FRAGMENT_START) or next
+def class_body_statements(node)
+  body = node.last
+  body.is_a?(Array) && body[0] == :bodystmt ? (body[1] || []) : []
+end
 
-    starts[i] = m[1] || m[2]
-    macro.delete(i)
+# Records the `[line index, name]` a class-body statement starts, then walks into it.
+def class_body_macro(stmt, out)
+  return unless stmt.is_a?(Array)
+
+  head = macro_head(stmt)
+  out << [head[2][0] - 1, head[1]] if head.is_a?(Array) && head[0] == :@ident
+  target = self_assign_target(stmt)
+  out << [target[2][0] - 1, "self.#{target[1]}"] if target
+  class_macro_starts(stmt, out)
+end
+
+def macro_head(stmt)
+  case stmt[0]
+  when :command          then stmt[1]
+  when :method_add_arg   then sexp_child(stmt[1], :fcall)
+  when :method_add_block then sexp_child(stmt[1], :command)
   end
-  [starts, macro.values.uniq, sexp.nil?]
+end
+
+# The first child of `node` when it is a `type` node, or nil.
+def sexp_child(node, type) = node.is_a?(Array) && node[0] == type ? node[1] : nil
+
+# The identifier assigned in a `self.x = …` statement, or nil.
+def self_assign_target(stmt)
+  return unless stmt[0] == :assign
+
+  field = stmt[1]
+  return unless field.is_a?(Array) && field[0] == :field && self_ref?(field[1])
+
+  field.last if field.last.is_a?(Array) && field.last[0] == :@ident
+end
+
+def self_ref?(node)
+  node.is_a?(Array) && node[0] == :var_ref && node[1].is_a?(Array) && node[1][1] == 'self'
+end
+
+# => [line index => unit name, class-macro names, whether the file fails to parse]
+def fragment_starts(src)
+  sexp  = Ripper.sexp(src)
+  macro = sexp ? class_macro_starts(sexp).to_h : {}
+  defs  = definition_starts(src)
+  [macro.merge(defs), macro.except(*defs.keys).values.uniq, sexp.nil?]
+end
+
+def definition_starts(src)
+  src.lines.each_with_index.filter_map do |line, i|
+    m = line.match(FRAGMENT_START)
+    [i, m[1] || m[2]] if m
+  end.to_h
 end
 
 # => [units, unreadable, dsl_names]
 def fragment_units(path)
   src = File.read(path)
-  lines = src.lines
+  starts, dsl_names, unparsable = fragment_starts(src)
+  unreadable = unparsable ? ['the file itself'] : []
+  [collect_units(src.lines, starts, unreadable), unreadable, dsl_names]
+end
+
+# Unit name => its source; a start that never parses goes to `unreadable`.
+def collect_units(lines, starts, unreadable)
   units = Hash.new { |h, k| h[k] = +'' }
-  unreadable = []
-  starts, dsl_names, whole_file_unparsable = fragment_starts(src)
-  unreadable << 'the file itself' if whole_file_unparsable
   starts.keys.sort.each do |i|
-    name = starts[i]
-    unit = (i...[i + FRAGMENT_MAX_LINES, lines.size].min).lazy
-                                                         .map { |j| lines[i..j].join }
-                                                         .find { |cand| !Ripper.sexp(cand).nil? }
-    unit ? units[name] << unit : unreadable << "#{name} (line #{i + 1})"
+    unit = parsable_unit(lines, i)
+    unit ? units[starts[i]] << unit : unreadable << "#{starts[i]} (line #{i + 1})"
   end
-  [units.to_h, unreadable, dsl_names]
+  units.to_h
+end
+
+# The shortest run of lines from index `start` that parses, within FRAGMENT_MAX_LINES.
+def parsable_unit(lines, start)
+  (start...[start + FRAGMENT_MAX_LINES, lines.size].min).lazy
+                                                        .map { |j| lines[start..j].join }
+                                                        .find { |cand| !Ripper.sexp(cand).nil? }
 end
 
 per_demo_paths = COPIES.select { |_rel, e| e[:rule] == :per_demo }.keys
@@ -1327,71 +1436,104 @@ fragment_sources.each do |id, per_demo|
             'Declare it in FRAGMENTS with its `ships:` set and reason.'
 end
 
-fragment_comparisons     = 0
-fragment_exceptions_live = 0
-FRAGMENTS.each do |id, entry|
-  rel, unit_name = id.split('#', 2)
-  unless FRAGMENT_PATHS.include?(rel)
-    errors << "#{id}: declared in FRAGMENTS, but #{rel} is not in FRAGMENT_PATHS."
-    next
-  end
+# Checks one FRAGMENTS entry; returns the copies its `ships:` set holds, or nil.
+def fragment_held(id, entry, sources, errors)
+  return unless fragment_path_listed?(id, errors)
+
   errors << "#{id}: FRAGMENTS `why:` is blank" if entry[:why].to_s.strip.empty?
+  per_demo = sources[id]
+  return rejected(errors, fragment_too_rare(id, per_demo)) if per_demo.size < 2
 
-  per_demo = fragment_sources[id]
-  if per_demo.size < 2
-    errors << "#{id}: declared in FRAGMENTS, but it exists in " \
-              "#{per_demo.empty? ? 'no demo' : "only #{per_demo.keys.first}"}. Drop it."
-    next
-  end
+  check_fragment_ships(id, entry[:ships], per_demo.keys, errors)
+  check_fragment_except(id, entry, per_demo, errors)
+  per_demo.slice(*entry[:ships])
+end
 
-  stray = per_demo.keys.sort - entry[:ships]
-  gone  = entry[:ships] - per_demo.keys
+def fragment_path_listed?(id, errors)
+  rel = id.split('#', 2).first
+  return true if FRAGMENT_PATHS.include?(rel)
+
+  errors << "#{id}: declared in FRAGMENTS, but #{rel} is not in FRAGMENT_PATHS."
+  false
+end
+
+def rejected(errors, message)
+  errors << message
+  nil
+end
+
+def fragment_too_rare(id, per_demo)
+  "#{id}: declared in FRAGMENTS, but it exists in " \
+    "#{per_demo.empty? ? 'no demo' : "only #{per_demo.keys.first}"}. Drop it."
+end
+
+def check_fragment_ships(id, ships, defining, errors)
+  rel, unit_name = id.split('#', 2)
+  stray = defining.sort - ships
+  gone  = ships - defining
   unless stray.empty?
     errors << "#{stray.join(', ')}: defines #{id} but #{stray.size == 1 ? 'is' : 'are'} not in its " \
-              "`ships:` set (#{entry[:ships].join(', ')}). Add the demo, or rename the copy."
+              "`ships:` set (#{ships.join(', ')}). Add the demo, or rename the copy."
   end
-  unless gone.empty?
-    errors << "#{gone.join(', ')}: named in #{id}'s `ships:`, but #{rel} there defines no `#{unit_name}`. " \
-              'Update the set, or restore the name.'
-  end
+  return if gone.empty?
 
+  errors << "#{gone.join(', ')}: named in #{id}'s `ships:`, but #{rel} there defines no `#{unit_name}`. " \
+            'Update the set, or restore the name.'
+end
+
+def check_fragment_except(id, entry, per_demo, errors)
   excepted = entry[:except] || {}
   excepted.each do |demo, reason|
     errors << "#{id}: `except:` reason for #{demo} is blank" if reason.to_s.strip.empty?
-    errors << "#{id}: `except:` names #{demo}, which is not in `ships:`." unless entry[:ships].include?(demo)
-    errors << "#{id}: stale `except:` for #{demo}, which defines no `#{unit_name}`." unless per_demo.key?(demo)
+    errors.concat(except_membership_faults(id, demo, entry[:ships], per_demo))
   end
   errors << "#{id}: `except:` only means something on a `:code` entry." if excepted.any? && entry[:rule] != :code
+end
 
-  held = per_demo.slice(*entry[:ships])
-  next if held.size < 2
+def except_membership_faults(id, demo, ships, per_demo)
+  faults = []
+  faults << "#{id}: `except:` names #{demo}, which is not in `ships:`." unless ships.include?(demo)
+  faults << "#{id}: stale `except:` for #{demo}, which defines no `#{id.split('#', 2).last}`." unless per_demo.key?(demo)
+  faults
+end
+
+# Compares the held copies of a `:code` unit; returns how many excepted copies it reached.
+def compare_code_fragment(id, excepted, held, errors)
+  compared, excused = held.partition { |demo, _| !excepted.key?(demo) }.map(&:to_h)
+  if compared.size < 2
+    errors << "#{id}: every copy but one is excepted. Drop an exception or make the rule `:per_demo`."
+    return 0
+  end
+  check_code_fragment_groups(id, compared, excused, errors)
+  excused.size
+end
+
+def fragment_divergence(id, groups)
+  listed = groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(' ')
+  "#{id}: the copies must agree once comments and whitespace are normalised away, and they " \
+    "do not: #{listed}. Propagate the edit, declare the difference in `except:`, or rename the copy."
+end
+
+def check_code_fragment_groups(id, compared, excused, errors)
+  groups = compared.group_by { |_demo, src| src }
+  return errors << fragment_divergence(id, groups) unless groups.size == 1
+
+  excused.each do |demo, src|
+    errors << "#{id}: `except:` for #{demo} is stale — its copy now agrees with the others. Drop it." if src == groups.keys.first
+  end
+end
+
+fragment_comparisons     = 0
+fragment_exceptions_live = 0
+FRAGMENTS.each do |id, entry|
+  held = fragment_held(id, entry, fragment_sources, errors)
+  next if held.nil? || held.size < 2
 
   fragment_comparisons += held.size
   case entry[:rule]
-  when :code
-    compared, excused = held.partition { |demo, _| !excepted.key?(demo) }.map(&:to_h)
-    if compared.size < 2
-      errors << "#{id}: every copy but one is excepted. Drop an exception or make the rule `:per_demo`."
-      next
-    end
-    fragment_exceptions_live += excused.size
-    groups = compared.group_by { |_demo, src| src }
-    unless groups.size == 1
-      listed = groups.values.map { |g| "[#{g.map { |d, _| d }.sort.join(',')}]" }.sort.join(' ')
-      errors << "#{id}: the copies must agree once comments and whitespace are normalised away, and they " \
-                "do not: #{listed}. Propagate the edit, declare the difference in `except:`, or rename the copy."
-      next
-    end
-    canonical = groups.keys.first
-    excused.each do |demo, src|
-      next unless src == canonical
-
-      errors << "#{id}: `except:` for #{demo} is stale — its copy now agrees with the others. Drop it."
-    end
-  when :per_demo
-    agree_groups += agree_check(id, 'unit', held, entry[:agree], errors)
-  else
-    errors << "#{id}: unknown `rule: #{entry[:rule].inspect}`; FRAGMENTS takes :code or :per_demo."
+  when :code then fragment_exceptions_live += compare_code_fragment(id, entry[:except] || {}, held, errors)
+  when :per_demo then agree.check(id, 'unit', held, entry[:agree])
+  else errors << "#{id}: unknown `rule: #{entry[:rule].inspect}`; FRAGMENTS takes :code or :per_demo."
   end
 end
 
@@ -1403,7 +1545,7 @@ end
 errors << "check-demo-copies: the fragment rule declares #{FRAGMENTS.size} unit(s) and compared NONE of them." if FRAGMENTS.any? && fragment_comparisons.zero?
 
 declared_agree_groups = COPIES.sum { |_, e| (e[:agree] || {}).size } + FRAGMENTS.sum { |_, e| (e[:agree] || {}).size }
-if declared_agree_groups.positive? && agree_groups.zero?
+if declared_agree_groups.positive? && agree.confirmed.zero?
   errors << "check-demo-copies: the manifest declares #{declared_agree_groups} `agree:` group(s) of " \
             'converged `:per_demo` copies and this run CONFIRMED none of them; the grouping pass stopped running.'
 end
@@ -2035,7 +2177,7 @@ container_ignores.each do |rel|
   errors << "#{rel} is an ORPHAN: no build in this repository reads it. Delete it."
 end
 
-errors << 'check-demo-copies: the convergence census recorded NO compared subject.' if AGREE_CENSUS.empty? && errors.empty?
+errors << 'check-demo-copies: the convergence census recorded NO compared subject.' if agree.census.empty? && errors.empty?
 
 if errors.empty?
   puts "check-demo-copies: OK — #{dups.size} duplicated paths declared, " \

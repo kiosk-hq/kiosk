@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Demo tooling that demonstrated nothing is gone: getgrocery's reconcile task, `Stripe::ChargeLookup` and the curl tours; red-team suites bind through kiosk-test-support.
+
 ## [0.5.13] — 2026-10-11
 
 - 2026-10-11: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.13, matching skill 0.5.13.**

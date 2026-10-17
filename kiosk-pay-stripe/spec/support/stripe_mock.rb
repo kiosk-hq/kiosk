@@ -2,8 +2,7 @@
 
 require "socket"
 
-# Start (or reuse) a local `stripe-mock` — Stripe's own fixture server, the same
-# one getgrocery's adversarial rake tasks use (`lib/tasks/demo.rake`).
+# Start (or reuse) a local `stripe-mock` — Stripe's own fixture server.
 #
 # stripe-mock is STATELESS: it answers from the OpenAPI fixtures, it does not
 # remember what you created. That bounds what it can prove — see the stripe-mock

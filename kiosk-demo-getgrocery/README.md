@@ -30,7 +30,6 @@ From this directory:
 bin/rails db:reset         # DROPS and recreates kiosk_getgrocery_development, then seeds the catalog
 bin/dev                    # serves the origin on http://localhost:3000
 bin/rails test             # the tests; CI runs exactly this
-bin/rails demo:reconcile   # settles orders stuck in `paying`; it reports, it does not assert
 ```
 
 `bin/setup` does the first two. The tests drive the origin over HTTP the way an

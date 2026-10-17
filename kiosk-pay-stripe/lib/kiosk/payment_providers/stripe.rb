@@ -18,6 +18,10 @@ module Kiosk
       # Stripe substitutes the session id on the redirect.
       RETURN_QUERY = "session_id={CHECKOUT_SESSION_ID}"
 
+      PAID        = "succeeded"
+      # Terminal PaymentIntent states in which no money moved.
+      NOT_CHARGED = %w[canceled requires_payment_method].freeze
+
       # @param customer_resolver [#call] `(user_id) -> customer_id | nil`; {CustomerRecord.resolve} when omitted
       # @param customer_saver [#call] `(user_id, customer_id)`; {CustomerRecord.save} when omitted
       # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture instead of hosted card entry
@@ -109,9 +113,9 @@ module Kiosk
             )
           end
 
-        unless intent.status == ChargeLookup::PAID
+        unless intent.status == PAID
           raise PaymentFailed.new("the payment method was declined", reason: :card_declined, retryable: true) if
-            ChargeLookup::NOT_CHARGED.include?(intent.status)
+            NOT_CHARGED.include?(intent.status)
 
           raise PaymentFailed.new(
             "the payment processor has not completed the charge; its status is unknown",
@@ -231,5 +235,3 @@ module Kiosk
     end
   end
 end
-
-require "kiosk/payment_providers/stripe/charge_lookup"

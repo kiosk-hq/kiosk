@@ -20,3 +20,18 @@ Layout/LineLength:
 
 Style/Documentation:
   Enabled: false
+
+# The default excludes name `spec/` and `test/` at the config root; here every
+# project keeps them one level down.
+Naming/PredicatePrefix:
+  Exclude:
+    - "**/spec/**/*"
+
+Style/NumericPredicate:
+  Exclude:
+    - "**/spec/**/*"
+
+Style/OneClassPerFile:
+  Exclude:
+    - "**/spec/**/*"
+    - "**/test/**/*"

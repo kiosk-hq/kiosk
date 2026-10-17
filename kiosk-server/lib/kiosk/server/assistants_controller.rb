@@ -89,7 +89,7 @@ module Kiosk
 
         if assignments.any?
           # The ownership predicate is the security boundary: `agent_id` from the caller, `user_id` from the session.
-          binds.concat([params[:agent_id].to_s, @identity.user_id, Kiosk.current_issuer])
+          binds.push(params[:agent_id].to_s, @identity.user_id, Kiosk.current_issuer)
           conn.exec_query(<<~SQL, 'Kiosk assistant update', binds)
             UPDATE #{Kiosk.configuration.schema}.agents
             SET #{assignments.join(', ')}

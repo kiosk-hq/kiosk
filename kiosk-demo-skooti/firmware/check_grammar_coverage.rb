@@ -276,7 +276,7 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
     end
 
     scalars = SCALAR_RANGE.select { |word| plain.downcase.include?(word) }
-    if !scalars.empty? && (named & scalar).empty?
+    if !scalars.empty? && !named.intersect?(scalar)
       problems << "R8 #{where}: states a rule about the signature scalar " \
                   "(#{scalars.join(', ')}) but names #{named.join(', ')}, and the vector " \
                   'set respells the scalar only on ' \
@@ -286,7 +286,7 @@ def analyse(markdown, axes, exhaustive = [], scalar = [])
     end
 
     universals = BYTE_UNIVERSAL.select { |word| plain.downcase.include?(word) }
-    if !universals.empty? && (named & exhaustive).empty?
+    if !universals.empty? && !named.intersect?(exhaustive)
       problems << "R6 #{where}: quantifies over the byte domain " \
                   "(#{universals.join(', ')}) but names #{named.join(', ')}, and the " \
                   'vector set runs all 256 byte values only on ' \

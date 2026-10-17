@@ -7,7 +7,6 @@ class CancelBookingOperation
     # One answer for absent, foreign and already cancelled, so ids cannot be probed.
     raise Kiosk::Server::Errors::Forbidden, "booking not found, not yours, or already cancelled" unless booking
 
-    booking.cancelled!
-    { booking_id: booking_id, status: booking.status }
+    booking.tap(&:cancelled!)
   end
 end

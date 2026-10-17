@@ -46,30 +46,7 @@ class Kiosk::TablesController < ApplicationController
     seating_at:    -> { Restaurant.example_seating.iso8601 },
   })
   def availability
-    search = TableSearch.new(params.permit(:party_size, :neighborhood, :date, :time))
-    search.validate!
-
-    restaurants = search.restaurants.to_a
-    taken = Booking.confirmed.where(restaurant: restaurants, seating_at: Time.current..)
-                   .pluck(:restaurant_table_id, :seating_at).to_set
-
-    render json: restaurants.flat_map { |restaurant|
-      restaurant.restaurant_tables.to_a.product(search.seatings(restaurant))
-                .reject { |table, seating| taken.include?([table.id, seating]) }
-                .map { |table, seating| open_table(restaurant, table, seating) }
-    }
-  end
-
-  private
-
-  def open_table(restaurant, table, seating)
-    { restaurant:          restaurant.name,
-      neighborhood:        restaurant.neighborhood,
-      cuisine:             restaurant.cuisine,
-      restaurant_table_id: table.id,
-      table_label:         table.label,
-      capacity:            table.capacity,
-      seating_label:       Restaurant.seating_label(seating),
-      seating_at:          seating.iso8601 }
+    @search = TableSearch.new(params.permit(:party_size, :neighborhood, :date, :time))
+    @search.validate!
   end
 end

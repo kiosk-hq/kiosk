@@ -21,6 +21,19 @@ class TableSearch
     neighborhood.present? ? scope.where(neighborhood:) : scope
   end
 
+  # `[restaurant, table, seating]` for every table that seats the party and is not booked for the seating.
+  def open_tables
+    found = restaurants.to_a
+    taken = Booking.confirmed.where(restaurant: found, seating_at: Time.current..)
+                   .pluck(:restaurant_table_id, :seating_at).to_set
+
+    found.flat_map do |restaurant|
+      restaurant.restaurant_tables.to_a.product(seatings(restaurant))
+                .reject { |table, seating| taken.include?([table.id, seating]) }
+                .map { |table, seating| [restaurant, table, seating] }
+    end
+  end
+
   # The restaurant's upcoming seatings on the requested date and time.
   def seatings(restaurant)
     restaurant.upcoming_seatings

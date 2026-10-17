@@ -26,7 +26,7 @@ class Kiosk::BookingsController < ApplicationController
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array", description: "Earliest seating first.", items: BOOKING_ROW
   def my_bookings
-    render json: Booking.own.includes(:restaurant, :restaurant_table).order(:seating_at).map { row(_1) }
+    @bookings = Booking.own.includes(:restaurant, :restaurant_table).order(:seating_at)
   end
 
   kind :action
@@ -54,12 +54,12 @@ class Kiosk::BookingsController < ApplicationController
     status: "confirmed",
   })
   def book_table
-    render json: row(BookTableOperation.call(
+    @booking = BookTableOperation.call(
       customer_id:         kiosk_identity.user_id,
       restaurant_table_id: params[:restaurant_table_id].to_i,
       seating_at:          Time.iso8601(params[:seating_at]),
       party_size:          params[:party_size].to_i,
-    ))
+    )
   end
 
   kind :action
@@ -79,20 +79,6 @@ class Kiosk::BookingsController < ApplicationController
                 },
                 required: %w[booking_id status]
   def cancel_booking
-    render json: CancelBookingOperation.call(booking_id: params[:booking_id])
-  end
-
-  private
-
-  def row(booking)
-    seating = booking.local_seating
-    { booking_id:    booking.id,
-      restaurant:    booking.restaurant.name,
-      neighborhood:  booking.restaurant.neighborhood,
-      table_label:   booking.restaurant_table.label,
-      party_size:    booking.party_size,
-      seating_label: Restaurant.seating_label(seating),
-      seating_at:    seating.iso8601,
-      status:        booking.status }
+    @booking = CancelBookingOperation.call(booking_id: params[:booking_id])
   end
 end

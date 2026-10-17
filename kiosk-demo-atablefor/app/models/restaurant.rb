@@ -24,6 +24,6 @@ class Restaurant < ApplicationRecord
 
   # The seatings not yet started: tonight's, then the following days'.
   def upcoming_seatings(days: 2)
-    (zone.today...zone.today + days).flat_map { |date| SEATING_HOURS.map { seating(date, it) } }.select(&:future?)
+    (zone.today...(zone.today + days)).flat_map { |date| SEATING_HOURS.map { seating(date, it) } }.select(&:future?)
   end
 end

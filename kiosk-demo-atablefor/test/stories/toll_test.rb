@@ -15,7 +15,7 @@ class TollStory < StoryTest
   end
 
   def guesses(challenges)
-    challenges.map { { challenge: it, nonce: { 'indices' => (1..2**EQUIHASH_PARAMS[:k]).to_a, 'header_nonce' => 0 } } }
+    challenges.map { { challenge: it, nonce: { 'indices' => (1..(2**EQUIHASH_PARAMS[:k])).to_a, 'header_nonce' => 0 } } }
   end
 
   test "a new diner's search costs two proofs of work, and only solved ones pay it" do

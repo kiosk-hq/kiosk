@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 zone = BoardClock.zone
 json.array! @listings do |listing|
   json.listing_id listing.id

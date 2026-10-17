@@ -342,7 +342,7 @@ RSpec.describe 'demo descriptor cross-references' do
     # Files under app/ that declare verbs outside the directory the engine loads.
     def stray_handlers(demo_dir)
       Dir[File.join(demo_dir, 'app/**/*.rb')]
-                                             .select { |path| File.read(path).match?(DESCRIPTOR_MACRO) } - handler_files(demo_dir)
+        .select { |path| File.read(path).match?(DESCRIPTOR_MACRO) } - handler_files(demo_dir)
     end
 
     # Every verb a demo publishes. ONE list per demo, because a cross-reference routinely points across the

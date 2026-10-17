@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 source 'https://rubygems.org'
 
 # kiosk-demo-prove — the anonymizing KYC broker demo. This is NOT a

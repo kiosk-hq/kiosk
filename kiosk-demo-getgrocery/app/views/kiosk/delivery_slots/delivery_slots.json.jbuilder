@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 zone = @search.zone
 json.array! DeliverySlots.bookable(@search.day, zone) do |slot_at|
   json.slot_at slot_at.iso8601

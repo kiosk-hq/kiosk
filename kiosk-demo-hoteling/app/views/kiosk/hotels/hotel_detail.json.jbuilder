@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 json.array! [@property] do |property|
   json.property_id property.id
   json.extract! property, :name, :neighbourhood, :stars, :address, :amenities

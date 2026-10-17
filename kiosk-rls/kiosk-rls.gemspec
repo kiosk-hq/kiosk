@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require_relative 'lib/kiosk/rls/version'
 
 Gem::Specification.new do |spec|

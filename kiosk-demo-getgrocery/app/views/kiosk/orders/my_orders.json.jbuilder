@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 json.array! @orders do |order|
   json.order_id order.id
   json.extract! order, :status, :total_cents

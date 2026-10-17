@@ -67,9 +67,8 @@ module Kiosk
       # Also the key floor of account binding.
       def load_public_key(pem)
         rsa = OpenSSL::PKey::RSA.new(pem)
-        if rsa.n.num_bits < SigningKey::MIN_KEY_BITS
-          raise Errors::BadRequest, "public key too small (#{rsa.n.num_bits} bits; minimum #{SigningKey::MIN_KEY_BITS})"
-        end
+        raise Errors::BadRequest, "public key too small (#{rsa.n.num_bits} bits; minimum #{SigningKey::MIN_KEY_BITS})" if rsa.n.num_bits < SigningKey::MIN_KEY_BITS
+
         rsa
       rescue OpenSSL::PKey::PKeyError
         raise Errors::BadRequest.new(

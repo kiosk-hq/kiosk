@@ -83,9 +83,7 @@ module Kiosk
       def verified_attributes(raw)
         return {} if raw.nil?
 
-        unless raw.is_a?(Hash)
-          raise Errors::Forbidden, 'KYC attestation attributes must be an object of {name: true} booleans'
-        end
+        raise Errors::Forbidden, 'KYC attestation attributes must be an object of {name: true} booleans' unless raw.is_a?(Hash)
 
         raw.each_with_object({}) do |(name, value), acc|
           acc[name.to_s] = true if value == true

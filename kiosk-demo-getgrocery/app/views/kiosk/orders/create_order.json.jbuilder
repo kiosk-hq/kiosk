@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 json.order_id @order.id
 json.total_cents @order.total_cents
 json.total_eur Product.format_eur(@order.total_cents)

@@ -1,4 +1,5 @@
 # frozen_string_literal: true
+
 require 'English'
 require 'rspec/core/rake_task'
 require 'base64'
@@ -72,7 +73,7 @@ task :solve_parity do
 
   # (b) Reject tampered cycle (mutate first edge ±1)
   tampered_cycle = proof['cycle'].dup
-  tampered_cycle[0] = (tampered_cycle[0]).zero? ? tampered_cycle[0] + 1 : tampered_cycle[0] - 1
+  tampered_cycle[0] = tampered_cycle[0].zero? ? tampered_cycle[0] + 1 : tampered_cycle[0] - 1
   # Re-sort to keep ascending (required by verifier input contract)
   tampered_nonce = { header_nonce: proof['header_nonce'], cycle: tampered_cycle.sort }
   bad = Kiosk::Pow::Cuckoo.verify(salt: PARITY_SALT, params: params, nonce: tampered_nonce)

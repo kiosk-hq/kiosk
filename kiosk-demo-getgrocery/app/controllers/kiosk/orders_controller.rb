@@ -5,6 +5,7 @@ class Kiosk::OrdersController < ActionController::API
   include Kiosk::Handler
 
   ORDER_ID = "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e"
+  ETA      = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow).first + 40.minutes
 
   topic :order_payment do
     description "An order of yours is paid; its delivery is scheduled."
@@ -27,8 +28,9 @@ class Kiosk::OrdersController < ActionController::API
                                  eta_label: { type: "string", description: "The ETA as a human reads it." },
                                  timezone:  { type: "string", description: "The delivery address's IANA zone." } },
                    required: %w[order_id status]
-    example order_id: ORDER_ID, status: "out_for_delivery", eta: "2026-10-18T09:40:00Z",
-            eta_label: "10:40 (Europe/Dublin)", timezone: "Europe/Dublin"
+    example order_id: ORDER_ID, status: "out_for_delivery", eta: ETA.utc.iso8601,
+            eta_label: DeliverySlots.clock_label(ETA, DeliverySlots.default_zone),
+            timezone: DeliverySlots::DEFAULT_ZONE_NAME
     example order_id: ORDER_ID, status: "delivered"
     subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
   end

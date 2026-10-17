@@ -9,7 +9,7 @@ class Kiosk::ListingsController < ApplicationController
 
   kind :query
   reach :published
-  description "Search the open board across all sellers. To reach a seller, use the contact details in the listing's `body`."
+  description "Search the open board across all sellers. To reach a seller, use the contact details in the listing text."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -136,7 +136,7 @@ class Kiosk::ListingsController < ApplicationController
   end
 
   kind :action
-  description "Change the title, body or price of one of the signed-in seller's listings. Omitted fields stay as they are."
+  description "Change one of the signed-in seller's listings. Omitted fields stay as they are."
   input_schema type: "object",
                additionalProperties: false,
                properties: {

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `PaymentClaim` takes the payable model by name (`model: "Order"`) instead of a table, so ids, owner and timestamps follow the model. `Kiosk::Owned` adds `owned_by`.
+
 - 2026-10-17: Loads through Zeitwerk; controllers, the KioskEvents channel and views live under app/. TestExecutor and ConformanceOrigin moved to kiosk-test-support.
 
 - 2026-10-17: `kiosk:install` no longer creates `kiosk.reservations`, and `SchemaDefinitions.reservations_sql` is gone; nothing used the table.

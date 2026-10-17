@@ -11,21 +11,18 @@ module Kiosk
       PAYING = 'paying'
       PAID   = 'paid'
 
-      # @param table [String] the payable table, with `id uuid` and `updated_at`
+      # @param model [String] the payable model's name, e.g. "Order"; it includes Kiosk::Owned
       # @param reference [String] the cart line-item key naming the row, e.g. "order_id"
       # @param query [String] the per-user query that publishes the row's payment state
-      def initialize(psp, currency:, table:, reference:, query:, status_column: 'payment_status', # rubocop:disable Metrics/ParameterLists -- the public constructor the operator initializers call
-                     unpaid: 'unpaid', owner_column: 'user_id')
+      def initialize(psp, currency:, model:, reference:, query:, status_column: :payment_status, unpaid: 'unpaid') # rubocop:disable Metrics/ParameterLists -- the public constructor the operator initializers call
         @psp       = psp
         @currency  = currency.to_s.downcase
         @reference = reference
         @query     = query
         @unpaid    = unpaid
-        @row       = Row.new(table:, status_column:, owner_column:)
-        @options   = { currency:, table:, reference:, query:, status_column:, unpaid:, owner_column: }
-        return unless psp.respond_to?(:setup_return_user_id)
-
-        define_singleton_method(:setup_return_user_id) { |params| @psp.setup_return_user_id(params) }
+        @row       = Row.new(model:, status_column:)
+        @options   = { currency:, model:, reference:, query:, status_column:, unpaid: }
+        extend SetupReturn if psp.respond_to?(:setup_return_user_id)
       end
 
       # The same claim over another PSP adapter.
@@ -79,7 +76,7 @@ module Kiosk
 
       def claim!(cart)
         id = referenced_id(cart)
-        refuse_unclaimable!(id, cart.user_id.to_s) unless @row.take(id, cart.user_id.to_s, from: @unpaid, to: PAYING).any?
+        refuse_unclaimable!(id, cart.user_id.to_s) unless @row.take(id, cart.user_id.to_s, from: @unpaid, to: PAYING).positive?
         begin
           check_price!(cart, id)
         rescue StandardError
@@ -169,48 +166,38 @@ module Kiosk
         end
       end
 
-      # The operator's payable table: its status column moves under a compare-and-set.
+      # The PSP names whose human came back from the setup page; the engine
+      # serves the `payment_setup` topic only for a provider that has this method.
+      module SetupReturn
+        def setup_return_user_id(params) = @psp.setup_return_user_id(params)
+      end
+
+      # The operator's payable rows: the status moves under a compare-and-set.
       class Row
-        def initialize(table:, status_column:, owner_column:)
-          @table         = table
+        def initialize(model:, status_column:)
+          @model         = model
           @status_column = status_column
-          @owner_column  = owner_column
         end
 
-        # The ids moved `from → to` for this payer; empty when the row was not in `from`.
-        def take(id, payer, from:, to:)
-          connection.exec_query(
-            "UPDATE #{table} SET #{status_column} = $1, updated_at = now() " \
-            "WHERE id = $2::uuid AND #{status_column} = $3 AND #{owner_column} = $4::uuid " \
-            'RETURNING id',
-            'Kiosk payment claim', [to, id, from, payer]
-          ).rows
-        end
+        # Moves this payer's row `from → to`; the count of rows moved, 0 or 1.
+        def take(id, payer, from:, to:) = move(model.owned_by(payer).where(id:), from:, to:)
 
-        def status(id, payer)
-          connection.exec_query(
-            "SELECT #{status_column} FROM #{table} WHERE id = $1::uuid AND #{owner_column} = $2::uuid",
-            'Kiosk payment claim', [id, payer]
-          ).rows.first&.first
-        end
+        def status(id, payer) = model.owned_by(payer).where(id:).pick(@status_column)
 
-        def flip(id, from:, to:)
-          connection.exec_update(
-            "UPDATE #{table} SET #{status_column} = $1, updated_at = now() " \
-            "WHERE id = $2::uuid AND #{status_column} = $3",
-            'Kiosk payment claim', [to, id.to_s, from]
-          )
-        end
+        def flip(id, from:, to:) = move(model.where(id:), from:, to:)
 
         private
 
-        def table = connection.quote_table_name(@table)
+        def move(rows, from:, to:)
+          rows.where(@status_column => from).update_all({ @status_column => to }.merge(timestamps))
+        end
 
-        def status_column = connection.quote_column_name(@status_column)
+        def timestamps
+          now = model.current_time_from_proper_timezone
+          model.timestamp_attributes_for_update_in_model.index_with { now }
+        end
 
-        def owner_column = connection.quote_column_name(@owner_column)
-
-        def connection = ::ActiveRecord::Base.lease_connection
+        def model = @model.constantize
       end
     end
   end

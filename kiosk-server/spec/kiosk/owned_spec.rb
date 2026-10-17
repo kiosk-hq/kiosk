@@ -15,6 +15,10 @@ RSpec.describe Kiosk::Owned do
     expect(rows).to eq(user_id: 'u-1')
   end
 
+  it "scopes to one principal's rows outside a session" do
+    expect(model.owned_by('u-2')).to eq(user_id: 'u-2')
+  end
+
   it 'refuses outside a session instead of answering an empty relation' do
     expect { model.own }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
     expect { Kiosk.current_role }.to raise_error(Kiosk::Server::Errors::Unauthenticated)

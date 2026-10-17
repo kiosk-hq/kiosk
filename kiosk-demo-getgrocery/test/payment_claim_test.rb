@@ -111,6 +111,16 @@ class PaymentClaimTest < ActiveSupport::TestCase
     assert_equal 'paid', status(order['order_id'])
   end
 
+  test 'a paid order is refused with its status and never reaches the processor again' do
+    order = place('banana')
+    capture(CountingPsp.new, order)
+    psp = CountingPsp.new
+
+    error = assert_raises(Kiosk::Server::Errors::Forbidden) { capture(psp, order) }
+    assert_equal "order #{order['order_id']} is already paid (paid) — do not pay it again", error.message
+    assert_equal 0, psp.captures.value
+  end
+
   test 'an order id that is not a uuid is a 400 that never reaches the processor' do
     psp = CountingPsp.new
     malformed = place('banana').merge('order_id' => 'not-a-uuid')

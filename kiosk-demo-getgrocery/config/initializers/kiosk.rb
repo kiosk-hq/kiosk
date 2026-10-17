@@ -38,7 +38,7 @@ end
 Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY')),
-    currency: 'eur', table: 'orders', reference: 'order_id', query: 'my_orders',
+    currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders',
     status_column: 'status', unpaid: 'created'
   )
   c.cart_price_checker = PriceChecker

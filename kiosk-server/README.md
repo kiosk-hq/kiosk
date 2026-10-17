@@ -123,15 +123,18 @@ end
 
 Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
-    psp, currency: "eur", table: "orders", reference: "order_id", query: "my_orders",
+    psp, currency: "eur", model: "Order", reference: "order_id", query: "my_orders"
   )
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(order_id) { CourierDispatchJob.arm!(order_id) } # optional
 end
 ```
 
-Your per-user query publishes the row's `payment_status` — `paying` as
-*pending* — so a capture in flight never reads as *not paid*.
+`model` names your payable model; it includes `Kiosk::Owned`, so the claim
+takes only the payer's own row. The status lives in `status_column:`
+(`payment_status` unless you say otherwise), and `unpaid:` names its unpaid value.
+Your per-user query publishes that status — `paying` as *pending* — so a
+capture in flight never reads as *not paid*.
 
 
 ## Upgrading

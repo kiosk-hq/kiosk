@@ -40,7 +40,7 @@ end
 Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY')),
-    currency: 'eur', table: 'reservations', reference: 'reservation_id',
+    currency: 'eur', model: 'Reservation', reference: 'reservation_id',
     query: 'my_reservations'
   )
   c.cart_price_checker = PriceChecker

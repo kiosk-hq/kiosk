@@ -28,6 +28,18 @@ module PaymentClaimSpecHelpers
     end
   end
 
+  # The operator's payable model.
+  class Payable < ActiveRecord::Base
+    self.table_name = "#{SCHEMA}.payables"
+    include Kiosk::Owned
+  end
+
+  # A payable model with no `updated_at`.
+  class Untimed < ActiveRecord::Base
+    self.table_name = "#{SCHEMA}.untimed_payables"
+    include Kiosk::Owned
+  end
+
   ClaimSpecCart = Struct.new(:id, :user_id, :currency, :total_amount_cents, :line_items, keyword_init: true)
 
   def self.included(group)
@@ -51,14 +63,10 @@ module PaymentClaimSpecHelpers
   end
 
   def self.create_payables(conn)
-    conn.execute(<<~SQL)
-      CREATE TABLE "#{SCHEMA}".payables (
-        id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id uuid NOT NULL,
-        payment_status varchar NOT NULL DEFAULT 'unpaid',
-        updated_at timestamp NOT NULL DEFAULT now()
-      )
-    SQL
+    columns = 'id uuid PRIMARY KEY DEFAULT gen_random_uuid(), user_id uuid NOT NULL, ' \
+              "payment_status varchar NOT NULL DEFAULT 'unpaid'"
+    conn.execute(%(CREATE TABLE "#{SCHEMA}".payables (#{columns}, updated_at timestamp NOT NULL DEFAULT now())))
+    conn.execute(%(CREATE TABLE "#{SCHEMA}".untimed_payables (#{columns})))
   end
 
   def configure_operator
@@ -83,7 +91,7 @@ module PaymentClaimSpecHelpers
   end
 
   def claim
-    @claim ||= Kiosk::Server::PaymentClaim.new(psp, currency: 'eur', table: "#{schema}.payables",
+    @claim ||= Kiosk::Server::PaymentClaim.new(psp, currency: 'eur', model: 'PaymentClaimSpecHelpers::Payable',
                                                     reference: 'booking_id', query: 'my_bookings')
   end
 
@@ -268,7 +276,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect(claim).not_to respond_to(:saved_method?)
 
     def psp.setup_return_user_id(params) = params[:uid]
-    expect(described_class.new(psp, currency: 'eur', table: 't', reference: 'r', query: 'q')
+    expect(described_class.new(psp, currency: 'eur', model: 'M', reference: 'r', query: 'q')
                           .setup_return_user_id({ uid: 'u-1' })).to eq('u-1')
   end
 
@@ -277,5 +285,25 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     claim.over(other).capture(cart_for(row))
 
     expect([other.captures.size, psp.captures.size]).to eq([1, 0])
+  end
+end
+
+RSpec.describe Kiosk::Server::PaymentClaim do
+  include PaymentClaimSpecHelpers
+
+  it 'moves updated_at with the status' do
+    conn.execute(%(UPDATE "#{schema}".payables SET updated_at = now() - interval '1 day' WHERE id = '#{row}'))
+    claim.capture(cart_for(row))
+
+    expect(PaymentClaimSpecHelpers::Payable.find(row).updated_at).to be > 1.minute.ago
+  end
+
+  it 'claims and pays a row whose model has no updated_at' do
+    id = conn.select_value(%(INSERT INTO "#{schema}".untimed_payables (user_id) VALUES ('#{owner}') RETURNING id))
+    untimed = described_class.new(psp, currency: 'eur', model: 'PaymentClaimSpecHelpers::Untimed',
+                                       reference: 'booking_id', query: 'my_bookings')
+    untimed.capture(cart_for(id))
+
+    expect(PaymentClaimSpecHelpers::Untimed.find(id).payment_status).to eq('paid')
   end
 end

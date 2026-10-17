@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `PaymentClaim` takes the payable model by name (`model: "Order"`) instead of a table, so ids, owner and timestamps follow the model. `Kiosk::Owned` adds `owned_by`.
+
 - 2026-10-17: kiosk-server loads through Zeitwerk and keeps its controllers, events channel and views under app/. The in-process test executor and conformance origin moved to kiosk-test-support.
 
 - 2026-10-17: Suites and red-team runs reach a saved card through `payment_setup` against stripe-mock; no demo initializer carries a test switch or `Stripe.api_base`.

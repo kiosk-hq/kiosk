@@ -13,13 +13,17 @@
 # implementations answer; the ActiveRecord suite asserts the same properties
 # against a real table.
 
-RSpec.describe Kiosk::Server::EventStore do
-  subject(:store) { described_class.new }
-
+module EventStoreSpecHelpers
   def event(topic: 'todo', subject: 'l1', data: { 'done' => true })
     { 'topic' => topic, 'subject' => subject, 'data' => data,
       'occurred_at' => '2026-09-25T10:00:00Z' }
   end
+end
+
+RSpec.describe Kiosk::Server::EventStore, 'ids' do
+  include EventStoreSpecHelpers
+
+  subject(:store) { described_class.new }
 
   # ONE counter for the whole origin, not one per identity and not one per
   # topic: that is what lets a single cursor resume every subscription on a
@@ -48,6 +52,12 @@ RSpec.describe Kiosk::Server::EventStore do
 
     expect(store.since('u1', 0).first['id']).to eq(id)
   end
+end
+
+RSpec.describe Kiosk::Server::EventStore, 'tail' do
+  include EventStoreSpecHelpers
+
+  subject(:store) { described_class.new }
 
   it 'does not mutate the event the caller passed in' do
     original = event

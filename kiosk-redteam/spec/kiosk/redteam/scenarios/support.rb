@@ -72,22 +72,9 @@ def stub_action(name, status: 200, body: nil, code: nil)
     .to_return(wire_return(status: status, body: body || ACTION_OK, code: code))
 end
 
-# The LEGACY page object `{"rows": …, "next": <opaque cursor>}` — what a
-# TRUNCATED paginating query answered before T-092 moved the cursor into an RFC
-# 8288 `Link` header. A current origin never sends it; it is kept because
-# `Scenario#rows_from` still reads it (a third-party origin on an older cut
-# must not be scored BLOCKED for a shape this battery failed to parse) and this
-# is what proves that branch is live.
-def legacy_page(rows)
-  { "rows" => rows, "next" => "b2Zmc2V0OjE" }
-end
-
 # GET <mount>/<query-name>. Scenario queries carry no arguments, so the URL is
-# exact; a query WITH arguments is matched with `.with(query: …)`.
-# The default body is the BARE ARRAY every 0.4.1 query answers (T-092), not
-# the retired page object — a stub that answered a shape no origin sends would
-# be exercising the compatibility branch of `rows_from` on every scenario and
-# never the shape that ships.
+# exact; a query WITH arguments is matched with `.with(query: …)`. The default
+# body is the bare array a query answers.
 def stub_query(name, status: 200, rows: [], body: nil, code: nil)
   stub_request(:get, verb_url(name))
     .to_return(wire_return(status: status, body: body || rows, code: code))

@@ -20,7 +20,6 @@ BEA   = Kiosk::TestHelpers::Person.new(SERVER, email: "bea@example.com", passwor
                                   .links_a_newcomer.principal
 
 DIEGO_UUID = DIEGO.user_id
-BEA_UUID   = BEA.user_id
 TOKEN_A    = DIEGO.token
 TOKEN_B    = BEA.token
 

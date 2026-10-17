@@ -122,12 +122,6 @@ def wire_token(vector)
   token
 end
 
-# The same bytes under the tag the vector declares. The C reader is handed a
-# file and never sees this; the two Ruby readers see nothing else.
-def tagged_token(vector)
-  wire_token(vector).dup.force_encoding(vector.tag)
-end
-
 # The C verifier, through the helper binary `make crosscheck` builds, asked via
 # --file so a token holding a NUL reaches it exactly as a BLE write would. Its
 # exit status is the verdict: 0 accepted, 1 refused.

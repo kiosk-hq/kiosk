@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# RESERVED-PLANE BODY VALIDATION (T-045).
+# RESERVED-PLANE BODY VALIDATION.
 #
 # Every JSON request body the reserved plane accepts is held to the object
 # Section 17 of the spec publishes for it, from the vendored copy of the
@@ -11,16 +11,14 @@
 # The two `/oauth/*` requests are absent on purpose: Section 17 says they are
 # form-encoded and publishes no schema for them.
 #
-# One accepted body and one refused body per exchange, then the refusal SHAPE
-# over HTTP, then the two arms that keep the table honest — the flag really
-# switches it off, and no endpoint dials an exchange the table does not carry.
+# One accepted body and one refused body per exchange, the two arms that keep
+# the table honest (the flag switches it off, and no endpoint dials an exchange
+# the table does not carry), then the refusal shape over HTTP.
 
 require 'rack/mock'
 require 'json'
 
-RSpec.describe 'Reserved-plane request-body validation' do
-  RV = Kiosk::Server::RequestValidation
-
+module RequestBodyValidationSpec
   # An accepted body per exchange, spelled out rather than derived: these are
   # the bodies the spec's own example payloads carry, and a reader comparing
   # this file with `spec/schemas/examples/` should see the same members.
@@ -50,54 +48,87 @@ RSpec.describe 'Reserved-plane request-body validation' do
     'POST <endpoint>/pay' => :cart_mandate_jws
   }.freeze
 
+  def rv = Kiosk::Server::RequestValidation
+  def accepted_body(exchange) = ACCEPTED.fetch(exchange)
+  def wrong_member(exchange) = WRONG_TYPE.fetch(exchange)
+
+  def dispatch(controller, action, env)
+    status, headers, body = controller.action(action).call(env)
+    raw = +''
+    body.each { |chunk| raw << chunk }
+    [status, headers, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
+  end
+end
+
+RSpec.shared_context 'request body validation spec: validating' do
+  include RequestBodyValidationSpec
+
   before do
-    RV.reset!
+    rv.reset!
     Kiosk.configure { |c| c.validate_requests = true }
   end
+end
 
-  RV::BODY_SCHEMAS.each_key do |exchange|
+RSpec.describe 'Reserved-plane request-body validation' do
+  include_context 'request body validation spec: validating'
+
+  Kiosk::Server::RequestValidation::BODY_SCHEMAS.each_key do |exchange|
     context exchange do
       it 'accepts a body that satisfies the published object' do
-        expect { RV.validate_body!(ACCEPTED.fetch(exchange), exchange: exchange) }
+        expect { rv.validate_body!(accepted_body(exchange), exchange: exchange) }
           .not_to raise_error
       end
 
       it 'refuses a wrong-typed member, naming it' do
-        member = WRONG_TYPE.fetch(exchange)
-        body   = ACCEPTED.fetch(exchange).merge(member => 42)
+        member = wrong_member(exchange)
+        body   = accepted_body(exchange).merge(member => 42)
 
-        expect { RV.validate_body!(body, exchange: exchange) }
+        expect { rv.validate_body!(body, exchange: exchange) }
           .to raise_error(Kiosk::Server::Errors::BadRequest, /#{member}/)
       end
 
       it 'refuses an absent required member, naming it' do
-        member = WRONG_TYPE.fetch(exchange)
-        body   = ACCEPTED.fetch(exchange).reject { |name, _| name == member }
+        member = wrong_member(exchange)
+        body   = accepted_body(exchange).reject { |name, _| name == member }
 
-        expect { RV.validate_body!(body, exchange: exchange) }
+        expect { rv.validate_body!(body, exchange: exchange) }
           .to raise_error(Kiosk::Server::Errors::BadRequest, /#{member}/)
       end
     end
   end
+end
+
+RSpec.describe 'Reserved-plane request-body validation' do
+  include_context 'request body validation spec: validating'
 
   # NON-VACUITY. Section 16.3 anchor 1 makes validating a SHOULD, so an
-  # operator may turn it off — and an example that never exercised the off
-  # position would not know whether the flag reaches this layer at all.
+  # operator may turn it off, and this example exercises the off position.
   it 'does nothing when the operator sets validate_requests = false' do
     Kiosk.configure { |c| c.validate_requests = false }
 
-    expect { RV.validate_body!({ public_key: 42 }, exchange: 'POST <endpoint>/auth/register') }
+    expect { rv.validate_body!({ public_key: 42 }, exchange: 'POST <endpoint>/auth/register') }
       .not_to raise_error
   end
 
-  describe 'the refusal, over HTTP' do
-    def dispatch(controller, action, env)
-      status, headers, body = controller.action(action).call(env)
-      raw = +''
-      body.each { |chunk| raw << chunk }
-      [status, headers, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
-    end
+  # THE TABLE IS THE LIST, so nothing may dial an exchange it does not carry.
+  # Derived from the engine's own source rather than restated here: a seventh
+  # endpoint wired up without a row fails this example instead of raising
+  # KeyError at a caller.
+  it 'carries every exchange the engine dials' do
+    lib    = File.expand_path('../../../lib', __dir__)
+    dialed = Dir[File.join(lib, '**', '*.rb')].flat_map do |path|
+      File.read(path).scan(/exchange:\s*'([^']+)'|parse_body!\('([^']+)'\)/).flatten.compact
+    end.uniq
 
+    expect(dialed).not_to be_empty
+    expect(dialed - Kiosk::Server::RequestValidation::BODY_SCHEMAS.keys).to eq([])
+  end
+end
+
+RSpec.describe 'Reserved-plane request-body validation' do
+  include_context 'request body validation spec: validating'
+
+  describe 'the refusal, over HTTP' do
     before do
       Kiosk.configure do |c|
         c.signing_key = Kiosk::Server::SigningKey.generate
@@ -119,19 +150,5 @@ RSpec.describe 'Reserved-plane request-body validation' do
       expect(body[:detail]).to include('auth/register').and include('public_key')
       expect(body[:hint]).to include('auth.schema.json')
     end
-  end
-
-  # THE TABLE IS THE LIST, so nothing may dial an exchange it does not carry.
-  # Derived from the engine's own source rather than restated here: a seventh
-  # endpoint wired up without a row fails this example instead of raising
-  # KeyError at a caller.
-  it 'carries every exchange the engine dials' do
-    lib    = File.expand_path('../../../lib', __dir__)
-    dialed = Dir[File.join(lib, '**', '*.rb')].flat_map do |path|
-      File.read(path).scan(/exchange:\s*'([^']+)'|parse_body!\('([^']+)'\)/).flatten.compact
-    end.uniq
-
-    expect(dialed).not_to be_empty
-    expect(dialed - RV::BODY_SCHEMAS.keys).to eq([])
   end
 end

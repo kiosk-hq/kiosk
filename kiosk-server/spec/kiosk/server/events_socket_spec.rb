@@ -23,7 +23,7 @@ RSpec.describe 'the Kiosk event stream over a real socket' do
     port = TCPServer.open('127.0.0.1', 0) { |s| s.addr[1] }
     probe = File.expand_path('../../support/events_socket_probe_app.rb', __dir__)
     output = IO.popen({ 'PROBE_PORT' => port.to_s }, ['ruby', probe], err: File::NULL, &:read)
-    line = output.to_s.lines.reverse.find { |l| l.strip.start_with?('{') }
+    line = output.to_s.lines.rfind { |l| l.strip.start_with?('{') }
     @report = line ? JSON.parse(line) : { 'error' => "probe printed no report: #{output.to_s[0, 400]}" }
   end
 
@@ -459,7 +459,7 @@ RSpec.describe 'the Kiosk event stream over a real socket' do
       probe = File.expand_path('../../support/events_socket_probe_app.rb', __dir__)
       output = IO.popen({ 'PROBE_PORT' => port.to_s, 'PROBE_NO_TOPICS' => '1' },
                         ['ruby', probe], err: File::NULL, &:read)
-      line = output.to_s.lines.reverse.find { |l| l.strip.start_with?('{') }
+      line = output.to_s.lines.rfind { |l| l.strip.start_with?('{') }
       @bare = line ? JSON.parse(line) : { 'error' => "probe printed no report: #{output.to_s[0, 400]}" }
     end
 

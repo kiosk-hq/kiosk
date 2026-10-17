@@ -1,3 +1,4 @@
+# rubocop:disable Naming/FileName -- Bundler.require loads a gem by its name, kiosk-all.
 # frozen_string_literal: true
 
 # kiosk-all — meta-gem for the Kiosk production stack: kiosk-core + kiosk-server.
@@ -7,3 +8,4 @@ require 'kiosk/all/version'
 
 require 'kiosk'
 require 'kiosk/server'
+# rubocop:enable Naming/FileName

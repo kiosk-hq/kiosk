@@ -16,15 +16,9 @@ class Membership < ApplicationRecord
   # Outside a request, where `own` has no signed-in member: the event stream asks this.
   def self.readable_by?(list_id, account_id) = where(list_id: list_id, account_id: account_id).exists?
 
-  # Who is on a list, as `list_members` publishes it. Never an email address.
-  def self.rows_on(list_id)
-    where(list_id: list_id).joins(:account)
-      .order(role: :desc, created_at: :asc)
-      .pluck(:account_id, User.arel_table[:display_name], :role)
-      .map { |account_id, display_name, role|
-        { "account_id"   => account_id,
-          "display_name" => User.public_name(display_name, account_id),
-          "role"         => role }
-      }
-  end
+  # Who is on a list, owners first.
+  scope :roster, ->(list_id) { where(list_id: list_id).includes(:account).order(role: :desc, created_at: :asc) }
+
+  # The name other members see; never an email address.
+  def display_name = User.public_name(account.display_name, account_id)
 end

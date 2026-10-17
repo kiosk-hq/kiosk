@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Redeems an invite: the member joins the list as a member, and the code is spent.
+# Redeems an invite: the member joins the list as a member, and the code is spent. Returns the invite.
 class AcceptInviteOperation
   def self.call(member_id:, code:)
     Invite.transaction do
@@ -22,7 +22,7 @@ class AcceptInviteOperation
         data: { "account_id" => member_id, "role" => "member", "action" => "joined" },
       )
 
-      { list_id: invite.list_id, joined: true }
+      invite
     end
   end
 end

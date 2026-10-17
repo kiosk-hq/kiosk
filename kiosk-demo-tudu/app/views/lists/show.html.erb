@@ -7,15 +7,15 @@
   <ul>
     <% @todos.each do |t| %>
       <li>
-        <span class="<%= 'done' if t['done'] %>"><%= t["title"] %></span>
-        <% if t["due_label"] %>
-          <span class="role">due <%= t["due_label"] %></span>
+        <span class="<%= 'done' if t.done %>"><%= t.title %></span>
+        <% if t.due_at %>
+          <span class="role">due <%= ReaderClock.label(t.due_at) %></span>
         <% end %>
-        <% if t["created_by_agent_id"] %>
-          <span class="role">added by assistant <%= t["created_by_agent_id"] %></span>
+        <% if t.created_by_agent_id %>
+          <span class="role">added by assistant <%= t.created_by_agent_id %></span>
         <% end %>
-        <% unless t["done"] %>
-          <%= button_to "Done", complete_list_todo_path(@list_id, t["todo_id"]), method: :post, class: "inline" %>
+        <% unless t.done %>
+          <%= button_to "Done", complete_list_todo_path(@list_id, t), method: :post, class: "inline" %>
         <% end %>
       </li>
     <% end %>
@@ -30,7 +30,7 @@
 <h2>Members</h2>
 <ul>
   <% @members.each do |m| %>
-    <li><%= m["display_name"] %> <span class="role">(<%= m["role"] %>)</span></li>
+    <li><%= m.display_name %> <span class="role">(<%= m.role %>)</span></li>
   <% end %>
 </ul>
 

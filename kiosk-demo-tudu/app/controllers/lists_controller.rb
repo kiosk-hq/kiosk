@@ -16,7 +16,7 @@ class ListsController < ApplicationController
   end
 
   def index
-    @lists = kiosk_as_human { List.reachable_rows } if user_signed_in?
+    @lists = kiosk_as_human { List.reachable.to_a } if user_signed_in?
     @housemate_board = housemate_board unless user_signed_in?
     @activity = { lists: List.count, todos: Todo.count, done: Todo.where(done: true).count,
                   members: Membership.count }
@@ -32,21 +32,21 @@ class ListsController < ApplicationController
     @list_id = params[:id]
     kiosk_as_human do
       ListAccess.member!(@list_id)
-      @todos   = Todo.rows_on(@list_id)
-      @members = Membership.rows_on(@list_id)
+      @todos   = Todo.on(@list_id).to_a
+      @members = Membership.roster(@list_id).to_a
     end
   end
 
   def create
     title = params.require(:title)
     list  = kiosk_as_human { |identity| CreateListOperation.call(member_id: identity.user_id, title: title) }
-    redirect_to list_path(list[:list_id]), notice: "List created."
+    redirect_to list_path(list), notice: "List created."
   end
 
   def invite
-    invite = kiosk_as_human { |identity| InviteOperation.call(member_id: identity.user_id, list_id: params[:id]) }
+    code = kiosk_as_human { |identity| InviteOperation.call(member_id: identity.user_id, list_id: params[:id]) }
     redirect_to list_path(params[:id]),
-                notice: "Invite code (share it, expires in #{invite[:expires_in] / 60} min): #{invite[:code]}"
+                notice: "Invite code (share it, expires in #{InviteOperation::TTL.in_minutes.to_i} min): #{code}"
   end
 
   private

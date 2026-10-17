@@ -18,8 +18,8 @@
     <ul>
       <% @lists.each do |l| %>
         <li>
-          <%= link_to l["title"], list_path(l["list_id"]) %>
-          <span class="role">(<%= l["role"] %>)</span>
+          <%= link_to l.title, list_path(l) %>
+          <span class="role">(<%= l.role %>)</span>
         </li>
       <% end %>
     </ul>

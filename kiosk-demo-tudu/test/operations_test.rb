@@ -8,7 +8,7 @@ class OperationsTest < ActiveSupport::TestCase
   test "a deadline is stored as the instant its offset names" do
     todo_id = as(@bob) do
       AddTodoOperation.call(agent_id: nil, list_id: @list.id, title: "Book campsite",
-                            due_at: "2026-09-15T01:00:00+13:00")[:todo_id]
+                            due_at: "2026-09-15T01:00:00+13:00").id
     end
     assert_equal Time.utc(2026, 9, 14, 12), Todo.find(todo_id).due_at
   end
@@ -38,20 +38,20 @@ class OperationsTest < ActiveSupport::TestCase
   test "an invite is redeemed once, and never after it expires" do
     carol = User.create!
     dave  = User.create!
-    code  = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id)[:code] }
+    code  = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id) }
 
-    assert_equal({ list_id: @list.id, joined: true }, as(carol) { AcceptInviteOperation.call(member_id: carol.id, code: code) })
+    assert_equal @list.id, as(carol) { AcceptInviteOperation.call(member_id: carol.id, code: code) }.list_id
     assert @list.memberships.member.exists?(account: carol)
     assert_raises(Kiosk::Server::Errors::Forbidden) { as(dave) { AcceptInviteOperation.call(member_id: dave.id, code: code) } }
 
-    late = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id)[:code] }
+    late = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id) }
     travel(InviteOperation::TTL + 1.second) do
       assert_raises(Kiosk::Server::Errors::Forbidden) { as(dave) { AcceptInviteOperation.call(member_id: dave.id, code: late) } }
     end
   end
 
   test "an owner redeeming her own invite stays the owner" do
-    code = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id)[:code] }
+    code = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id) }
     as(@alice) { AcceptInviteOperation.call(member_id: @alice.id, code: code) }
     assert @list.memberships.owner.exists?(account: @alice)
   end
@@ -65,7 +65,7 @@ class OperationsTest < ActiveSupport::TestCase
         RemoveMemberOperation.call(list_id: @list.id, account_id: @alice.id.upcase)
       end
       assert_equal "cannot remove the list's last owner", error.message
-      assert_equal({ removed: true }, RemoveMemberOperation.call(list_id: @list.id, account_id: @bob.id))
+      RemoveMemberOperation.call(list_id: @list.id, account_id: @bob.id)
     end
     assert_not @list.memberships.exists?(account: @bob)
   end

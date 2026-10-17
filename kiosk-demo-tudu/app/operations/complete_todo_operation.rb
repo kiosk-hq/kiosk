@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Marks a todo on one of the member's lists done.
+# Marks a todo on one of the member's lists done. Returns the todo.
 class CompleteTodoOperation
   def self.call(todo_id:)
     todo = Todo.own.find_by(id: todo_id)
@@ -17,6 +17,6 @@ class CompleteTodoOperation
       data: { "todo_id" => todo.id, "title" => todo.title, "done" => true, "action" => "completed" },
     )
 
-    { todo_id: todo_id, done: true }
+    todo
   end
 end

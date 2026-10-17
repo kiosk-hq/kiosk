@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # A todo on one of the member's lists, attributed to the assistant that added
-# it (nil for a human).
+# it (nil for a human). Returns the todo.
 class AddTodoOperation
   def self.call(agent_id:, list_id:, title:, due_at: nil)
     ListAccess.member!(list_id)
@@ -14,6 +14,6 @@ class AddTodoOperation
       data: { "todo_id" => todo.id, "title" => todo.title, "done" => false, "action" => "added" },
     )
 
-    { todo_id: todo.id }
+    todo
   end
 end

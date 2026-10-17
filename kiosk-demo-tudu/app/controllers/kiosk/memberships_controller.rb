@@ -34,10 +34,7 @@ class Kiosk::MembershipsController < ApplicationController
                   required: %w[account_id agent_id display_name],
                 }
   def whoami
-    account_id = kiosk_identity.user_id
-    render json: [{ "account_id"   => account_id,
-                    "agent_id"     => kiosk_identity.agent_id,
-                    "display_name" => User.public_name(User.where(id: account_id).pick(:display_name), account_id) }]
+    @identity = kiosk_identity
   end
 
   kind :query
@@ -62,7 +59,7 @@ class Kiosk::MembershipsController < ApplicationController
                 }
   def list_members
     ListAccess.member!(params[:list_id])
-    render json: Membership.rows_on(params[:list_id])
+    @members = Membership.roster(params[:list_id])
   end
 
   kind :action
@@ -83,7 +80,7 @@ class Kiosk::MembershipsController < ApplicationController
                 },
                 required: %w[code expires_in]
   def invite
-    render json: InviteOperation.call(member_id: kiosk_identity.user_id, list_id: params[:list_id])
+    @code = InviteOperation.call(member_id: kiosk_identity.user_id, list_id: params[:list_id])
   end
 
   kind :action
@@ -104,7 +101,7 @@ class Kiosk::MembershipsController < ApplicationController
                 },
                 required: %w[list_id joined]
   def accept_invite
-    render json: AcceptInviteOperation.call(member_id: kiosk_identity.user_id, code: params[:code])
+    @invite = AcceptInviteOperation.call(member_id: kiosk_identity.user_id, code: params[:code])
   end
 
   kind :action
@@ -126,6 +123,6 @@ class Kiosk::MembershipsController < ApplicationController
                 },
                 required: ["removed"]
   def remove_member
-    render json: RemoveMemberOperation.call(list_id: params[:list_id], account_id: params[:account_id])
+    RemoveMemberOperation.call(list_id: params[:list_id], account_id: params[:account_id])
   end
 end

@@ -25,7 +25,7 @@ class Kiosk::ListsController < ApplicationController
     list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70", title: "Flat 3B", role: "owner",
   })
   def my_lists
-    render json: List.reachable_rows
+    @lists = List.reachable
   end
 
   kind :action
@@ -46,6 +46,6 @@ class Kiosk::ListsController < ApplicationController
   example_params({ title: "Hike" })
   example_row({ list_id: "d4e5f6a7-8b9c-4d0e-9f1a-2b3c4d5e6f70" })
   def create_list
-    render json: CreateListOperation.call(member_id: kiosk_identity.user_id, title: params[:title])
+    @list = CreateListOperation.call(member_id: kiosk_identity.user_id, title: params[:title])
   end
 end

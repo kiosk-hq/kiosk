@@ -2,8 +2,8 @@
 
 require "securerandom"
 
-# A single-use code to share one of the member's own lists. The plaintext is
-# returned once; only its digest is kept.
+# A single-use code to share one of the member's own lists, valid for TTL. The
+# plaintext code is returned once; only its digest is kept.
 class InviteOperation
   TTL = 10.minutes
 
@@ -14,6 +14,6 @@ class InviteOperation
     Invite.create!(list_id: list_id, code_digest: Invite.digest(code),
                    created_by_account_id: member_id, expires_at: TTL.from_now)
 
-    { code: code, expires_in: TTL.to_i }
+    code
   end
 end

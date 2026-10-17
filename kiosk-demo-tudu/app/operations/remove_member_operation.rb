@@ -21,7 +21,5 @@ class RemoveMemberOperation
       identity_scope: Membership.account_ids_on(list_id),
       data: { "account_id" => account_id, "action" => "removed" },
     )
-
-    { removed: true }
   end
 end

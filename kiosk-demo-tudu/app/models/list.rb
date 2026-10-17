@@ -10,11 +10,10 @@ class List < ApplicationRecord
 
   validates :title, presence: true
 
-  # The signed-in member's lists, as `my_lists` publishes them and `/lists` shows them.
-  def self.reachable_rows
+  # The signed-in member's lists, newest first, each carrying the member's `role` on it.
+  scope :reachable, lambda {
     joins(:memberships).merge(Membership.own)
+      .select(arel_table[Arel.star], Membership.arel_table[:role])
       .order(created_at: :desc, id: :asc)
-      .pluck(:id, :title, Membership.arel_table[:role])
-      .map { |id, title, role| { "list_id" => id, "title" => title, "role" => role } }
-  end
+  }
 end

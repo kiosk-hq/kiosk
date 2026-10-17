@@ -45,7 +45,7 @@ class Kiosk::TodosController < ApplicationController
                 }
   def list_todos
     ListAccess.member!(params[:list_id])
-    render json: Todo.rows_on(params[:list_id])
+    @todos = Todo.on(params[:list_id])
   end
 
   kind :action
@@ -72,7 +72,7 @@ class Kiosk::TodosController < ApplicationController
                    due_at: -> { ReaderClock.default_zone.now.tomorrow.change(hour: 14).iso8601 } })
   example_row({ todo_id: "7f2a1b3c-4d5e-4a6b-8c9d-0e1f2a3b4c5d" })
   def add_todo
-    render json: AddTodoOperation.call(
+    @todo = AddTodoOperation.call(
       agent_id: kiosk_identity.agent_id, list_id: params[:list_id], title: params[:title],
       due_at: params[:due_at],
     )
@@ -96,6 +96,6 @@ class Kiosk::TodosController < ApplicationController
                 },
                 required: %w[todo_id done]
   def complete_todo
-    render json: CompleteTodoOperation.call(todo_id: params[:todo_id])
+    @todo = CompleteTodoOperation.call(todo_id: params[:todo_id])
   end
 end

@@ -17,30 +17,7 @@ require 'rack/mock'
 require 'json'
 require 'openssl'
 
-RSpec.describe 'the declined account-binding profile' do
-  let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-
-  before do
-    Kiosk.configure do |c|
-      c.issuer                     = 'https://provider.example'
-      c.roles                      = %i[customer]
-      c.device_authorization_store = store
-    end
-  end
-
-  def decline_binding!
-    Kiosk.configure { |c| c.serve_account_binding = false }
-  end
-
-  def dispatch(controller, action, method, path)
-    env = Rack::MockRequest.env_for("https://provider.example#{path}", method: method)
-    env['rack.session'] = {}
-    status, headers, raw = controller.action(action).call(env)
-    body = +''
-    raw.each { |chunk| body << chunk }
-    [status, headers, body]
-  end
-
+module BindingModuleGateSpec
   # Every binding route the engine draws, by the controller action that answers
   # it. The two the spec names by URL — `device_authorization_url` and
   # `claim_url` — head the list; the rest are the same module and decline with
@@ -59,8 +36,51 @@ RSpec.describe 'the declined account-binding profile' do
     ['POST', '/kiosk/auth/assistants/unlink',     'AssistantsController',               :unlink]
   ].freeze
 
+  def decline_binding!
+    Kiosk.configure { |c| c.serve_account_binding = false }
+  end
+
+  def dispatch(controller, action, method, path)
+    env = Rack::MockRequest.env_for("https://provider.example#{path}", method: method)
+    env['rack.session'] = {}
+    status, headers, raw = controller.action(action).call(env)
+    [status, headers, read_body(raw)]
+  end
+
+  def post_device_authorization(params)
+    env = Rack::MockRequest.env_for(
+      'https://provider.example/kiosk/oauth/device_authorization', method: 'POST', params: params
+    )
+    status, headers, raw = Kiosk::Server::OauthDeviceAuthorizationController.action(:create).call(env)
+    [status, headers, read_body(raw)]
+  end
+
+  def read_body(raw)
+    body = +''
+    raw.each { |chunk| body << chunk }
+    body
+  end
+end
+
+RSpec.shared_context 'binding module gate spec: configured origin' do
+  include BindingModuleGateSpec
+
+  let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
+
+  before do
+    Kiosk.configure do |c|
+      c.issuer                     = 'https://provider.example'
+      c.roles                      = %i[customer]
+      c.device_authorization_store = store
+    end
+  end
+end
+
+RSpec.describe 'the declined account-binding profile' do
+  include_context 'binding module gate spec: configured origin'
+
   describe 'with the module declined' do
-    BINDING_ENDPOINTS.each do |method, path, controller_name, action|
+    BindingModuleGateSpec::BINDING_ENDPOINTS.each do |method, path, controller_name, action|
       it "answers #{method} #{path} with 501 module_not_served" do
         decline_binding!
         controller = Kiosk::Server.const_get(controller_name)
@@ -87,7 +107,13 @@ RSpec.describe 'the declined account-binding profile' do
       )
       expect(status).to eq(200)
     end
+  end
+end
 
+RSpec.describe 'the declined account-binding profile' do
+  include_context 'binding module gate spec: configured origin'
+
+  describe 'with the module declined' do
     # §4.3: the auth block is CORE discovery. All six URLs are published by
     # every conformant origin whether or not it serves what the last two reach,
     # and `capabilities` has no binding member — so an assistant cannot read
@@ -111,6 +137,10 @@ RSpec.describe 'the declined account-binding profile' do
       expect(auth[:claim_url]).to eq('https://provider.example/kiosk/auth/claim')
     end
   end
+end
+
+RSpec.describe 'the declined account-binding profile' do
+  include_context 'binding module gate spec: configured origin'
 
   describe 'with the module served (the default)' do
     it 'defaults to true, so no configured origin moves' do
@@ -119,14 +149,7 @@ RSpec.describe 'the declined account-binding profile' do
 
     it 'opens a claim ceremony rather than refusing it' do
       pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
-      env = Rack::MockRequest.env_for(
-        'https://provider.example/kiosk/oauth/device_authorization',
-        method: 'POST', params: { 'client_id' => 'assistant', 'public_key' => pem }
-      )
-      status, _headers, raw = Kiosk::Server::OauthDeviceAuthorizationController
-                              .action(:create).call(env)
-      body = +''
-      raw.each { |chunk| body << chunk }
+      status, _headers, body = post_device_authorization('client_id' => 'assistant', 'public_key' => pem)
 
       expect(status).to eq(200)
       expect(JSON.parse(body, symbolize_names: true)[:device_code]).to be_a(String)
@@ -136,14 +159,7 @@ RSpec.describe 'the declined account-binding profile' do
     # gets the OAuth error object, not a problem document. `module_not_served`
     # is the single carve-out, and this is the control that says so.
     it 'keeps the OAuth error object for an ordinary refusal' do
-      env = Rack::MockRequest.env_for(
-        'https://provider.example/kiosk/oauth/device_authorization',
-        method: 'POST', params: { 'client_id' => 'assistant' }
-      )
-      status, headers, raw = Kiosk::Server::OauthDeviceAuthorizationController
-                             .action(:create).call(env)
-      body = +''
-      raw.each { |chunk| body << chunk }
+      status, headers, body = post_device_authorization('client_id' => 'assistant')
 
       expect(status).to eq(400)
       expect(headers['Content-Type']).not_to include('problem+json')

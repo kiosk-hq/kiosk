@@ -78,7 +78,7 @@ module Kiosk
         def ambiguity_message(offence)
           "challenge field would make the signed canonical string ambiguous: #{offence}. " \
             'Fix the source of the value: the `alg`/`params` your reputation_policy returns ' \
-            'from #challenge_for, or `c.registration_pow_params` for POST /auth/register.'
+            'from #challenge_for.'
         end
 
         # A delimiter inside a value gives the canonical string a second pre-image,

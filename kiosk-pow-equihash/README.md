@@ -22,10 +22,10 @@ gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"
 ```
 
 The verifier is pure Ruby with **no runtime dependencies** — not `kiosk-core`,
-not Rails, no native extension. Requiring it defines the backend; registering
-it is a separate, explicit step, because no PoW gem self-registers on require.
-The registry lives in `kiosk-reputation`, which an origin adds to its Gemfile
-the same way:
+not Rails, no native extension. In a Rails app the gem registers itself as the
+`equihash` backend when the app boots. The registry lives in `kiosk-reputation`,
+which an origin adds to its Gemfile the same way. Outside Rails, register it
+yourself:
 
 ```ruby
 require "kiosk/pow/equihash"
@@ -64,17 +64,6 @@ with a native verifier. It is not millions at any tuning in the tables below
 because the lever IS the economic argument for a metered toll — a price on
 abuse, not a hardware wall. Cuckatoo29's column says `unbenched` for the same
 reason its verify row does: no measurement of it exists here.
-
-**And the lever is a property of the PARAMETERS, so read it beside the level an
-origin actually charges rather than beside the gem's default.** The performance
-and verification numbers above give ~40× at **n=96, k=5** (~0.2 s solve ÷
-~4.6 ms verify) — an order of magnitude below the default's ~530×, because a
-lighter `n` cuts the solve far faster than a smaller `k` cuts the verify. That
-is not trivia here: n=96 k=5 is what all but one of the hosted demos ship and
-what `e2e/` is hardcoded at, so the toll a first-time poker meets buys ~40×,
-not ~530×. Both levers are derived from this README's own
-numbers by `spec/readme_lever_spec.rb`, which fails if either operand moves
-without its lever.
 
 The one property that actually matters for a gateway is **cheap verify**:
 
@@ -201,10 +190,9 @@ Checks performed (in order):
 
 Verification cost: **~18 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
 Ruby, a few KB; measured median at n=168 k=7). A native verifier would be
-sub-millisecond. Verify scales with 2^k, not with n, so the demos' lighter
-`low` level costs **~4.6 ms for a valid proof at n=96 k=5** (32 hashes, same
-machine) — cheaper to verify, but cheaper to solve by far more, which is the
-next paragraph's point.
+sub-millisecond. Verify scales with 2^k, not with n: at n=96 k=5 a valid proof
+costs ~4.6 ms (32 hashes, same machine) — cheaper to verify, but cheaper to
+solve by far more.
 
 **A wrong proof costs far less, deliberately.** The list above is also the
 evaluation ORDER, cheapest first, and the leaf hashes are computed one at a
@@ -280,7 +268,7 @@ the healthy small buckets, and unsolved seeds retry with the next
 
 | params | p50 solve | p95 solve | peak RSS |
 |---|---|---|---|
-| n=96, k=5 (the demos' `low`) | ~0.2 s | ~0.3 s | ~44 MiB |
+| n=96, k=5 | ~0.2 s | ~0.3 s | ~44 MiB |
 | **n=168, k=7 (default)** | ~9.6 s | ~10.3 s | ~1.3 GiB |
 | n=192, k=7 | ~155 s | ~155 s | ~5.4 GiB |
 

@@ -418,11 +418,8 @@ gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"   # default backend
 # gem "kiosk-pow",        github: "kiosk-hq/kiosk"   # legacy Argon2id backend, if you specifically want it
 ```
 
-```ruby
-# config/initializers/kiosk_pow.rb
-require "kiosk/pow/equihash"
-Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-```
+In a Rails app `kiosk-pow-equihash` registers itself as the `equihash`
+backend at boot. Any other backend is registered with `Backends.register`.
 
 ## License
 

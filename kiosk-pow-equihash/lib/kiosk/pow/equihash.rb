@@ -140,3 +140,5 @@ module Kiosk
     end
   end
 end
+
+require_relative 'equihash/railtie' if defined?(Rails::Railtie)

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: The docs say kiosk-pow-equihash registers itself in a Rails app; the ambiguity error no longer names the removed `registration_pow_params`.
+
 - 2026-10-17: `Challenge.check` runs the signature, expiry and parameter checks alone, without the proof evaluation.
 ## [0.5.13] — 2026-10-11
 

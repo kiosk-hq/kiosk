@@ -3,9 +3,8 @@
 module Kiosk
   module Reputation
     # Registry of PoW backends by algorithm name; a backend answers `.verify(salt:, params:, nonce:)`.
-    # The host must register a backend before the first challenge verify — no
-    # PoW gem self-registers on require. The shipped default:
-    #   Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
+    # A backend is registered before the first challenge verify. In a Rails app
+    # kiosk-pow-equihash registers `equihash` itself at boot.
     module Backends
       @registry = {}
 

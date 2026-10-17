@@ -31,26 +31,20 @@ budget (p95 ~10 s on the Apple M-series laptop the grid above names, ~1.3 GiB).
 176/7 keeps the time but breaches the 2 GiB memory
 ceiling; 192/7 is ~155 s and ~5.4 GiB — unusable on a laptop.
 
-## The LIGHT level, which is what the hosted fleet actually charges
+## A lighter level, for comparison
 
 The grid above is a k=7 sweep, because its job was to pick the gem's default.
-It is not the level most deployed origins run: all but one of the hosted demos
-toll at **n=96, k=5**, and `e2e/` is hardcoded there — so 96/5 is
-the toll a first-time poker meets, and until now it appeared in no measured grid
-at all. Same machine, same tool, same 5 samples:
+Same machine, same tool, same 5 samples, against n=96 k=5:
 
-| n | k | n_div | ok/N | p50 s | p95 s | peak MB | note |
-|---|---|-------|------|-------|-------|---------|------|
-| **96** | **5** | **16** | **5/5** | **0.2** | **0.3** | **44** | **`low` — six of seven hosted origins, and e2e** |
-| 168 | 7 | 21 | 5/5 | 9.1 | 18.2 | 1383 | `high` — atablefor only; reproduces the row above |
+| n | k | n_div | ok/N | p50 s | p95 s | peak MB |
+|---|---|-------|------|-------|-------|---------|
+| 96 | 5 | 16 | 5/5 | 0.2 | 0.3 | 44 |
+| **168** | **7** | **21** | **5/5** | **9.1** | **18.2** | **1383** |
 
 Reproduce with `python3 bench/bench.py --grid 96,5 168,7 --samples 5 --markdown`.
-Two orders of magnitude separate the levels, in time and in memory both, and
-that gap is the reason the deploy documents put no seconds figure on
-`low`: it is sub-second on anything, and a number would only pretend to a
-precision the hardware does not have. The 168/7 p95 above is noisier than the
-grid's ~10.3 s (one sample in five ran long on a busy laptop); the p50 is the
-figure the gem README quotes.
+Two orders of magnitude separate the levels, in time and in memory both. The
+168/7 p95 above is noisier than the grid's ~10.3 s (one sample in five ran long
+on a busy laptop); the p50 is the figure the gem README quotes.
 
 ## Caveats (be honest about what this is)
 

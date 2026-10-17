@@ -70,18 +70,18 @@ module DublinZones
     case result.reason
     when :blank
       "is missing — getgrocery needs a Dublin delivery address with a postal district " \
-        "(e.g. \"42 Camden Street, Dublin 2\") before it can show delivery slots. Ask your " \
-        "human for their real address."
+        "(e.g. \"42 Camden Street, Dublin 2\") before it can show delivery slots. Ask the " \
+        "customer for their real address."
     when :no_district
-      "names Dublin but no postal district — getgrocery routes by district and needs one " \
+      "names Dublin but no postal district — getgrocery delivers by district and needs one " \
         "(e.g. \"Dublin 2\" or an Eircode like \"D02 XY45\"). Served districts: #{served}. " \
-        "Ask your human to confirm their real address."
+        "Ask the customer to confirm their real address."
     when :not_dublin
       "is not a Dublin address — getgrocery delivers only within Dublin (served districts " \
-        "#{served}). Confirm the real delivery address with your human."
+        "#{served}). Confirm the real delivery address with the customer."
     when :out_of_zone
       "is in #{result.district}, which getgrocery does not deliver to — served districts are " \
-        "#{served}. Ask your human for an in-zone Dublin address."
+        "#{served}. Ask the customer for an address in a served district."
     end
   end
 end

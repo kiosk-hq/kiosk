@@ -27,10 +27,10 @@ class CreateOrderOperation
       slot_at:     order.slot_at.in_time_zone(zone).iso8601,
       slot_label:  DeliverySlots.label(order.slot_at, zone),
       timezone:    zone.name,
-      pay_hint:    "pay in EUR with a cart mandate whose line_items mirror this order: " \
-                   "one {\"order_id\": \"#{order.id}\"} entry plus one " \
-                   "{\"sku\", \"qty\", \"price_cents\"} entry per item at catalog prices — " \
-                   "the operator verifies currency, prices, and total before charging",
+      pay_hint:    "Call `pay` in EUR with a cart mandate (a signed cart) for exactly this order. " \
+                   "Its line_items: one {\"order_id\": \"#{order.id}\"} entry, then one " \
+                   "{\"sku\", \"qty\", \"price_cents\"} entry per item at catalog prices. " \
+                   "The shop checks the currency, prices and total before it charges.",
     }
   end
 end

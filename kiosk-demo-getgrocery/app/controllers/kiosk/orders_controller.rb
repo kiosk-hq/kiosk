@@ -53,7 +53,7 @@ class Kiosk::OrdersController < ActionController::API
                     address:       { type: "string" },
                     payment_state: { type: "string", enum: %w[unpaid pending paid],
                                      description: "`pending`: a charge is under way, so wait and " \
-                                                  "re-read. Only `unpaid` calls for a new mandate." },
+                                                  "read again. Pay again only on `unpaid`." },
                   },
                   required: %w[order_id status total_cents slot_at slot_label address payment_state],
                 }
@@ -96,14 +96,14 @@ class Kiosk::OrdersController < ActionController::API
                 description: "The order, priced.",
                 additionalProperties: false,
                 properties: {
-                  order_id:    { type: "string", description: "Name it in the cart mandate." },
+                  order_id:    { type: "string", description: "Put it in the cart you sign, as `pay_hint` says." },
                   total_cents: { type: "integer", description: "EUR cents; sign the cart at exactly this total." },
                   total_eur:   { type: "string", description: "The total as a human reads it." },
                   currency:    { type: "string" },
                   slot_at:     { type: "string", description: "The delivery window's start." },
                   slot_label:  { type: "string", description: "The window as a human reads it." },
                   timezone:    { type: "string", description: "The delivery address's IANA zone." },
-                  pay_hint:    { type: "string", description: "The cart mandate this order expects." },
+                  pay_hint:    { type: "string", description: "How to pay for this order." },
                 },
                 required: %w[order_id total_cents total_eur currency slot_at slot_label timezone pay_hint]
   example_params({
@@ -116,7 +116,7 @@ class Kiosk::OrdersController < ActionController::API
     slot_at: -> { DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601 },
     slot_label: "12:00–14:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
     timezone: DeliverySlots::DEFAULT_ZONE_NAME,
-    pay_hint: "pay in EUR with a cart mandate whose line_items mirror this order …",
+    pay_hint: "Call `pay` in EUR with a cart mandate (a signed cart) for exactly this order …",
   })
   def create_order
     render json: CreateOrderOperation.call(

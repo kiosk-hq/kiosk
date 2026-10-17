@@ -21,7 +21,7 @@
         <p class="say">“Order milk, eggs and cheese from getgrocery.demo.kiosk.tech and check out.”</p>
         <p>It discovers this store, registers itself, shops, schedules a delivery slot, and pays. When it hands you the Stripe checkout link, pay with the test card:</p>
         <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
-        <p class="note">Payment is a <strong>real Stripe SetupIntent</strong> in <strong>test mode</strong> (card-on-file, <code>off_session</code>) — no real charge, no real card touched. Proof-of-work here is tuned light (sub-second); the <a href="https://atablefor.demo.kiosk.tech">atablefor demo</a> runs the full toll, ~10&nbsp;s of it on an M-series laptop core.</p>
+        <p class="note">Payment runs on <strong>real Stripe</strong> in <strong>test mode</strong>: no real money moves. Each time the assistant reads from the shop, it first solves a small computing puzzle. Here that takes under a second; the <a href="https://atablefor.demo.kiosk.tech">atablefor demo</a> uses the full-size puzzle, about 10&nbsp;s on an M-series laptop core.</p>
       </div>
     </section>
 
@@ -29,12 +29,12 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>getgrocery</strong> is a grocery-delivery demo operator — the full commerce loop over the Kiosk wire: discover → register → shop → schedule delivery → pay. It is the payments reference: a real Stripe SetupIntent card-on-file, charged <code>off_session</code> by the provider (the assistant never sees a card number).</p>
+        <p><strong>getgrocery</strong> is a demo grocery shop. An assistant does the whole order through Kiosk: find the shop → register → shop → book a delivery → pay. It is the demo to read for payments: the customer saves a card with Stripe once, and the shop charges it later. The assistant never sees a card number.</p>
         <div class="chips">
           <span class="chip">💳 Real Stripe payments</span>
-          <span class="chip">Card-on-file (SetupIntent, off_session)</span>
+          <span class="chip">Card saved once, charged later</span>
           <span class="chip">Catalog + delivery slots</span>
-          <span class="chip">Human↔assistant account-binding</span>
+          <span class="chip">Link an assistant to your account</span>
         </div>
         <div class="links">
           <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-getgrocery">▶ Source on GitHub</a>
@@ -43,9 +43,9 @@
       </div>
     </section>
 
-    <!-- ── Operator's-view link (agent-facing discovery now lives in the header strip) ── -->
+    <!-- ── The shop's back-office link ── -->
     <section class="sec">
-      <p class="disco">🧾 Operator's view: <a href="/admin/orders">the live back-office order list</a> &mdash; public on purpose, addresses masked.</p>
+      <p class="disco">🧾 The shop's view: <a href="/admin/orders">the live back-office order list</a> &mdash; public on purpose, addresses masked.</p>
     </section>
 
     <!-- ── 3. Live activity (compact) ────────────────────────────────── -->

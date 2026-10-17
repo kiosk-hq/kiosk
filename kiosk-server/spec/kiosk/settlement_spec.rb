@@ -2,70 +2,56 @@
 
 require 'active_record'
 require 'securerandom'
+require_relative '../support/postgres'
 
-# The read models over the engine's own payment receipts, against a real
-# Postgres; no reachable server skips, as the other persistence specs do.
-RSpec.describe 'Kiosk::Settlement and Kiosk::CartMandate' do
-  SETTLEMENT_SPEC_SCHEMA = 'kiosk_settlement_spec'
+# Writes payment receipts straight into a throwaway schema.
+module SettlementSpecHelpers
+  SCHEMA = 'kiosk_settlement_spec'
 
-  def self.postgres_error
-    @postgres_error ||= begin
-      ActiveRecord::Base.establish_connection(
-        adapter: 'postgresql',
-        host: ENV.fetch('PGHOST', nil),
-        username: ENV.fetch('PGUSER', nil),
-        password: ENV.fetch('PGPASSWORD', nil),
-        database: ENV.fetch('PGDATABASE', 'postgres')
-      )
-      ActiveRecord::Base.connection.execute('SELECT 1')
-      [false]
-    rescue StandardError => e
-      ["#{e.class}: #{e.message}"]
-    end
-    @postgres_error.first
-  end
-
-  before(:context) do
-    skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error
-
-    Kiosk.configure { |c| c.schema = SETTLEMENT_SPEC_SCHEMA }
-    defs = Kiosk::Server::SchemaDefinitions
-    conn = ActiveRecord::Base.connection
-    conn.execute(%(DROP SCHEMA IF EXISTS "#{SETTLEMENT_SPEC_SCHEMA}" CASCADE))
-    conn.execute(%(CREATE SCHEMA "#{SETTLEMENT_SPEC_SCHEMA}"))
-    conn.execute(defs.mandates_sql(schema: SETTLEMENT_SPEC_SCHEMA, user_id_type: :uuid))
+  def self.create_schema
+    Kiosk.configure { |c| c.schema = SCHEMA }
+    SpecPostgres.recreate_schema(SCHEMA)
+    ActiveRecord::Base.connection.execute(
+      Kiosk::Server::SchemaDefinitions.mandates_sql(schema: SCHEMA, user_id_type: :uuid)
+    )
     require 'kiosk/owned'
     require_relative '../../app/models/kiosk/cart_mandate'
     require_relative '../../app/models/kiosk/settlement'
   end
 
-  after(:context) do
-    ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{SETTLEMENT_SPEC_SCHEMA}" CASCADE)) unless self.class.postgres_error
+  def conn
+    ActiveRecord::Base.connection
   end
 
-  let(:conn)  { ActiveRecord::Base.connection }
-  let(:mine)  { SecureRandom.uuid }
-  let(:other) { SecureRandom.uuid }
-
   def settle(user_id, line_items)
-    row = ->(sql) { conn.select_value(sql) }
-    s = SETTLEMENT_SPEC_SCHEMA
     agent = SecureRandom.uuid
-    intent = row.call(<<~SQL)
-      INSERT INTO "#{s}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
+    intent = insert_intent(user_id, agent)
+    cart = insert_cart(user_id, agent, intent, line_items)
+    insert_settlement(user_id, agent, cart)
+  end
+
+  def insert_intent(user_id, agent)
+    conn.select_value(<<~SQL)
+      INSERT INTO "#{SCHEMA}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
         currency, expires_at, raw_jws)
       VALUES ('#{SecureRandom.uuid}', '#{user_id}', '#{agent}', 'i', 's', 1000, 'EUR', now() + interval '1 day', 'j')
       RETURNING id
     SQL
-    cart = row.call(<<~SQL)
-      INSERT INTO "#{s}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
+  end
+
+  def insert_cart(user_id, agent, intent, line_items)
+    conn.select_value(<<~SQL)
+      INSERT INTO "#{SCHEMA}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
         total_amount_cents, currency, expires_at, raw_jws)
       VALUES ('#{SecureRandom.uuid}', '#{intent}', '#{user_id}', '#{agent}', 'i', '#{line_items.to_json}',
         500, 'EUR', now() + interval '1 day', 'j')
       RETURNING id
     SQL
-    row.call(<<~SQL)
-      INSERT INTO "#{s}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
+  end
+
+  def insert_settlement(user_id, agent, cart)
+    conn.select_value(<<~SQL)
+      INSERT INTO "#{SCHEMA}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
       VALUES ('#{cart}', '#{user_id}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
       RETURNING id
@@ -75,6 +61,23 @@ RSpec.describe 'Kiosk::Settlement and Kiosk::CartMandate' do
   def as(user_id, &)
     Kiosk::Server::SessionContext.open(connection: conn, identity: build_identity(user_id: user_id), &)
   end
+end
+
+# The read models over the engine's own payment receipts, against a real
+# Postgres; no reachable server skips, as the other persistence specs do.
+RSpec.describe 'Kiosk::Settlement and Kiosk::CartMandate' do
+  include SettlementSpecHelpers
+
+  before(:context) do
+    skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
+
+    SettlementSpecHelpers.create_schema
+  end
+
+  after(:context) { SpecPostgres.drop_schema(SettlementSpecHelpers::SCHEMA) }
+
+  let(:mine)  { SecureRandom.uuid }
+  let(:other) { SecureRandom.uuid }
 
   it "reads the settlements of the principal the wire resolved, and no one else's" do
     own = settle(mine, [{ booking_id: 'b-1' }])

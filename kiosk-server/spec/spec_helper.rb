@@ -251,13 +251,16 @@ module SlowStoreAllocation
     Kiosk::Server::DeviceAuthorizationStores::ActiveRecord
   ].freeze
 
-  # Mutable because the prepend below is permanent (a module cannot be
-  # un-prepended) while the delay must be off for every other example.
-  DELAY = { seconds: 0.0 }
+  # The prepend below is permanent (a module cannot be un-prepended), so the
+  # delay must be off for every other example.
+  class << self
+    attr_accessor :delay_seconds
+  end
+  self.delay_seconds = 0.0
 
   module SlowNew
     def new(*args, **kwargs, &)
-      seconds = SlowStoreAllocation::DELAY[:seconds]
+      seconds = SlowStoreAllocation.delay_seconds
       sleep(seconds) if seconds.positive?
       super
     end
@@ -271,22 +274,22 @@ SlowStoreAllocation.install!
 
 # Run +block+ with store allocation slowed to +seconds+, then restore.
 def with_slow_store_allocation(seconds = 0.02)
-  SlowStoreAllocation::DELAY[:seconds] = seconds
+  SlowStoreAllocation.delay_seconds = seconds
   yield
 ensure
-  SlowStoreAllocation::DELAY[:seconds] = 0.0
+  SlowStoreAllocation.delay_seconds = 0.0
 end
 
-# Release +n+ threads at once and collect their values. The latch is what makes
-# them race: without it the first thread finishes before the last is spawned.
-def race(n, &block)
+# Release +count+ threads at once and collect their values. The latch is what
+# makes them race: without it the first thread finishes before the last is spawned.
+def race(count, &block)
   latch   = Queue.new
-  threads = Array.new(n) do
+  threads = Array.new(count) do
     Thread.new do
       latch.pop
       block.call
     end
   end
-  n.times { latch.push(:go) }
+  count.times { latch.push(:go) }
   threads.map(&:value)
 end

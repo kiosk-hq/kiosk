@@ -2,110 +2,110 @@
 
 require 'digest'
 
-# Skill pin guard (immutable versioned skill files).
+# Skill pin check (immutable versioned skill files).
 #
-# NINE CONSUMERS NAME A SKILL, AND ALL NINE ARE COVERED HERE OR NEXT DOOR.
-# Seven demo initializers pin `skill_url` + `skill_sha256`; kiosk-server ships
-# the default `skill_url` every OTHER operator inherits by not setting one; and
-# kiosk-server's own well_known_spec asserts what the discovery document
-# advertises. Until K-750 the middle one was covered by nothing: this spec read
-# the engine default only as the right-hand side of a `||`, and since all seven
-# demos set `skill_url` explicitly that branch never evaluated. The engine
-# default — the value a third-party operator actually ships — was asserted
-# solely by a hand-maintained literal in well_known_spec, which now derives it
-# instead. It is a first-class case here, not a fallback.
+# Nine consumers name a skill. Seven demo initializers pin `skill_url` and
+# `skill_sha256`; kiosk-server ships the default `skill_url` that every other
+# operator inherits by not setting one; and kiosk-server's well_known_spec
+# asserts what the discovery document advertises. The engine default is a
+# consumer in its own right here, not a fallback.
 #
-# WHAT THIS SPEC OWNS, AND WHAT IT DELIBERATELY DOES NOT.
+# This spec owns what needs the published BYTES:
+#   * INTEGRITY: each pinned `skill_sha256` equals the SHA-256 of the pinned
+#     file as kiosk.tech publishes it. A hash-verifying AI assistant refuses the
+#     skill on a mismatch, so a stale pin stops the operator being usable.
+#   * PATCH AGREEMENT: the engine default and the demos name the SAME cut.
+# It does not check that the pinned version matches
+# `Kiosk::Protocol::API_VERSION`: it reads bytes, not version strings.
 #
-#   HERE, because it needs the published BYTES:
-#     * INTEGRITY — each pinned `skill_sha256` equals the SHA-256 of the
-#       pinned file as kiosk.tech actually publishes it. A hash-verifying AI
-#       assistant refuses the skill on a mismatch, so a stale pin does not
-#       degrade, it stops the operator being transactable.
-#     * PATCH AGREEMENT — the engine default and the demos name the SAME cut.
-#
-#   NOT HERE: that every pinned `skill_url`, the engine default included,
-#   names the version parity with `Kiosk::Protocol::API_VERSION` requires.
-#   This file reads published BYTES, not version strings.
-#
-# WHERE THE BYTE GROUP CAN RUN, AND WHY THE SKIP IS NOT ITS OWN AUTHORITY
-# (K-1361). The byte group needs the published cuts, which live in the kiosk.tech
-# repo, so it runs when that repo sits beside this one and SKIPS when it does
-# not. For as long as no CI job put it beside this one, that skip was the whole
-# story: MEASURED 2026-09-07, `12 examples, 0 failures, 9 pending` in a
-# sibling-less worktree against `12 examples, 0 failures` in the umbrella — and
-# the nine are every demo's sha256 byte check plus the device-grant poll below.
-# A UNIFORM half-relink was then planted (all seven demos AND the engine default
-# moved to `skill-v0.4.11.md`, every `skill_sha256` left at v0.4.12's) and,
-# sibling-less, this spec exited 0 with 9 pending while `bin/check-live-skill-pin`
-# exited 0 as well. So did a one-hex-digit
-# corruption of every `skill_sha256` with the URLs untouched. Nothing held the
-# supply-chain property anywhere except a human's workspace.
-#
-# `ci.yml`'s `published-bytes` job now checks kiosk.tech out beside this repo
-# and runs this file there, so the nine RUN. Because a checkout that silently
-# produced nothing would restore exactly the green-with-nine-pending this row is
-# about, that job sets `KIOSK_REQUIRE_SITE_SIBLING=1`: with it, an absent sibling
-# is a FAILURE naming the path it looked in, never a skip. Unset — a developer's
-# `reference`-only clone — the skip stands and says so.
-RSpec.describe 'the skill pin' do
-  monorepo_root = File.expand_path('../..', __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
-  site_root     = File.expand_path('../kiosk.tech', monorepo_root)
+# The byte groups need the published cuts from the kiosk.tech repository, so
+# they run when that repository sits beside this one and skip when it does not.
+# `ci.yml`'s `published-bytes` job checks it out beside this repository and
+# sets `KIOSK_REQUIRE_SITE_SIBLING=1`: then an absent sibling is a failure that
+# names the path, never a skip.
+module SkillPin
+  MONOREPO_ROOT = File.expand_path('../..', __dir__)
+  SITE_ROOT     = File.expand_path('../kiosk.tech', MONOREPO_ROOT)
+  DEFAULT_URL_SOURCE = File.join(MONOREPO_ROOT, 'kiosk-server/lib/kiosk/server/configuration_extension.rb')
+  GRANT_SOURCE = File.join(MONOREPO_ROOT, 'kiosk-server/lib/kiosk/server/device_code_grant.rb')
+  INITIALIZERS = Dir[File.join(MONOREPO_ROOT, 'kiosk-demo-*/config/initializers/kiosk.rb')].freeze
 
-  # The default skill URL kiosk-server ships. Read unconditionally, at load
-  # time, because it is a consumer in its own right — not a fallback consulted
-  # when a demo omits its own.
-  default_url_source = File.join(
-    monorepo_root, 'kiosk-server/lib/kiosk/server/configuration_extension.rb'
-  )
-  default_url =
-    File.exist?(default_url_source) &&
-    File.read(default_url_source)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]
-  default_url = nil unless default_url.is_a?(String)
+  module_function
 
-  initializers = Dir[
-    File.join(monorepo_root, 'kiosk-demo-*/config/initializers/kiosk.rb')
-  ]
+  # The default skill URL kiosk-server ships, or nil when it cannot be read.
+  def default_url
+    return nil unless File.exist?(DEFAULT_URL_SOURCE)
 
-  # A demo that sets no `skill_url` inherits kiosk-server's default — a
-  # legitimate configuration, and the reason `default_url` is a real value
-  # here rather than a `||` tail nothing evaluates.
-  pins = initializers.to_h do |path|
-    src = File.read(path)
-    [
-      path[%r{(kiosk-demo-[^/]+)}, 1],
-      { url: src[/skill_url\s*=\s*['"]([^'"]+)['"]/, 1] || default_url,
-        sha: src[/skill_sha256\s*=\s*['"]([0-9a-f]{64})['"]/, 1],
-        path: path }
-    ]
+    File.read(DEFAULT_URL_SOURCE)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]
   end
 
+  # demo => {url:, sha:, path:}. A demo that sets no `skill_url` inherits
+  # kiosk-server's default, which is a legitimate configuration.
+  def pins
+    INITIALIZERS.to_h do |path|
+      src = File.read(path)
+      [path[%r{(kiosk-demo-[^/]+)}, 1],
+       { url: src[/skill_url\s*=\s*['"]([^'"]+)['"]/, 1] || default_url,
+         sha: src[/skill_sha256\s*=\s*['"]([0-9a-f]{64})['"]/, 1],
+         path: path }]
+    end
+  end
+
+  def published_sha(url) = Digest::SHA256.hexdigest(File.binread(published_file(url)))
+
+  def published_file(url) = File.join(SITE_ROOT, File.basename(url))
+
+  # True when the sibling checkout is present. An environment that promised it
+  # gets a failure instead of a skip: a skipped example reads as a passing one
+  # in every CI summary line.
+  def site_present?
+    return true if File.directory?(SITE_ROOT)
+    return false unless ENV['KIOSK_REQUIRE_SITE_SIBLING'] == '1'
+
+    raise 'KIOSK_REQUIRE_SITE_SIBLING=1 was set, so the caller undertook to put the ' \
+          "published kiosk.tech checkout at #{SITE_ROOT} — and it is not there. Do NOT " \
+          "relax this to a skip: these examples are the only thing that compares a demo's " \
+          '`skill_sha256` against the bytes an AI assistant will actually fetch, and a ' \
+          'skipped example reads as a passing one in every summary line CI prints.'
+  end
+
+  # The OAuth errors `DeviceCodeGrant` can emit during a ceremony, read from
+  # its `failure(:code, …)` calls and `[:code, …]` table rows. invalid_request
+  # is a malformed call (no device_code), not an outcome of a ceremony.
+  def emitted_grant_errors
+    File.read(GRANT_SOURCE).scan(/(?:failure\(|\[):([a-z_]+)/).flatten.uniq - %w[invalid_request]
+  end
+
+  # The claim ceremony's bullet and its sub-bullets in the skill at `url`, up
+  # to the sibling bullet.
+  def ceremony_section(url)
+    File.read(published_file(url))[/^- \*\*No code from the human\*\*.*?(?=^- \*\*The human hands you a code)/m]
+  end
+end
+
+RSpec.shared_context 'with the published kiosk.tech checkout' do
+  before { skip 'sibling kiosk.tech checkout not present (public CI)' unless SkillPin.site_present? }
+end
+
+RSpec.describe 'the skill pin' do
   it 'finds the demo initializers' do
-    expect(initializers).not_to be_empty
+    expect(SkillPin::INITIALIZERS).not_to be_empty
   end
 
   it "reads kiosk-server's default skill_url" do
-    expect(default_url).not_to be_nil,
-                               "no `@skill_url ||= \"…\"` default found in #{default_url_source}. " \
-                               'That default is what every operator who does not set `skill_url` ' \
-                               'advertises in /.well-known/kiosk.json, so this guard must not ' \
-                               'carry on without it — teach it where the default moved.'
+    expect(SkillPin.default_url).not_to be_nil,
+                                        "no `@skill_url ||= \"…\"` default found in #{SkillPin::DEFAULT_URL_SOURCE}. " \
+                                        'That default is what every operator who does not set `skill_url` ' \
+                                        'advertises in /.well-known/kiosk.json, so this guard must not ' \
+                                        'carry on without it — teach it where the default moved.'
   end
 
-  # ── String level: no sibling checkout, so this runs everywhere ─────────────
-  #
-  # The engine default and every demo name the same cut, so a third party
-  # inheriting the default advertises the skill the demos do.
-  #
-  # No version numeral is written into this comment or into the failure message
-  # below, and that is a rule rather than an oversight: the message PRINTS
-  # every URL it is complaining about and derives the series FROM them, so the
-  # one sentence a maintainer meets at the exact moment the pins disagree
-  # cannot argue from a series the fleet has moved past.
+  # Runs without the sibling checkout. The message names no version: it prints
+  # every URL and derives the series from them.
   it "is the same published cut in kiosk-server's default and in every demo" do
-    skip "kiosk-server's default is unreadable (asserted above)" if default_url.nil?
+    skip "kiosk-server's default is unreadable (asserted above)" if SkillPin.default_url.nil?
 
-    named  = pins.transform_values { it[:url] }.merge('kiosk-server (default)' => default_url)
+    named  = SkillPin.pins.transform_values { it[:url] }.merge('kiosk-server (default)' => SkillPin.default_url)
     series = named.values.filter_map { it[/skill-v(\d+\.\d+)\./, 1] }.uniq.sort
     expect(named.values.uniq.size).to eq(1),
                                       "the skill_url consumers disagree on which cut is current:\n" \
@@ -113,132 +113,79 @@ RSpec.describe 'the skill pin' do
                                       'All nine consumers re-pin together when a new skill is cut ' \
                                       "(ADR-0012). Series named: #{series.join(' / ')}."
   end
+end
 
-  # ── Byte level: needs the published files, so umbrella checkouts only ──────
-  describe 'against the published bytes' do
-    before do
-      next if File.directory?(site_root)
+# The engine default carries no sha256 of its own, so the property is that the
+# file it names is published and is the one the demos verify against.
+RSpec.describe "the skill pin: kiosk-server's default against the published bytes" do
+  include_context 'with the published kiosk.tech checkout'
 
-      # Fail-closed for any environment that PROMISED the sibling. Without this
-      # arm a checkout step that resolved to nothing reads as nine pending
-      # examples and a green job — the exact shape of the false gate this arm
-      # was added for.
-      if ENV['KIOSK_REQUIRE_SITE_SIBLING'] == '1'
-        raise 'KIOSK_REQUIRE_SITE_SIBLING=1 was set, so the caller undertook to put the ' \
-              "published kiosk.tech checkout at #{site_root} — and it is not there. Do NOT " \
-              "relax this to a skip: these examples are the only thing that compares a demo's " \
-              '`skill_sha256` against the bytes an AI assistant will actually fetch, and a ' \
-              'skipped example reads as a passing one in every summary line CI prints.'
-      end
+  it "kiosk-server's default names a published file, the same one the demos pin" do
+    url = SkillPin.default_url
+    skip "kiosk-server's default is unreadable (asserted above)" if url.nil?
+    expect(File).to exist(SkillPin.published_file(url)),
+                    "kiosk-server defaults skill_url to #{url}, but #{File.basename(url)} is not published in " \
+                    "#{SkillPin::SITE_ROOT} — every operator who does not override it advertises a URL that 404s, " \
+                    'and an AI assistant that cannot fetch the pinned skill cannot verify it.'
 
-      skip 'sibling kiosk.tech checkout not present (public CI)'
+    actual    = SkillPin.published_sha(url)
+    demo_shas = SkillPin.pins.values.filter_map { it[:sha] }.uniq
+    expect(demo_shas).to eq([actual]),
+                         "the default cut #{File.basename(url)} hashes to #{actual}, " \
+                         "but the demos pin #{demo_shas.inspect} — the default and the demo pins " \
+                         'are supposed to be the same artefact. Re-pin them together, or publish ' \
+                         'a new immutable cut and move all nine consumers to it.'
+  end
+end
+
+RSpec.describe "the skill pin: each demo's sha256 against the published bytes" do
+  include_context 'with the published kiosk.tech checkout'
+
+  SkillPin.pins.each do |demo, pin|
+    it "#{demo} pins the sha256 of the published skill version file" do
+      expect(pin[:sha]).not_to be_nil, "#{demo}: no skill_sha256 pin in #{pin[:path]}"
+      expect(pin[:url]).not_to be_nil,
+                               "could not determine the skill URL (no skill_url in #{pin[:path]} " \
+                               "and no default in #{SkillPin::DEFAULT_URL_SOURCE})"
+      expect(File).to exist(SkillPin.published_file(pin[:url])),
+                      "pinned skill file #{File.basename(pin[:url])} (from #{pin[:url]}) not found in #{SkillPin::SITE_ROOT}"
+
+      actual = SkillPin.published_sha(pin[:url])
+      expect(pin[:sha]).to eq(actual),
+                           "#{demo} pins skill_sha256 #{pin[:sha]} but #{File.basename(pin[:url])} " \
+                           "hashes to #{actual} — re-pin the demos or publish a new immutable skill version"
     end
+  end
+end
 
-    # The engine default carries no sha256 of its own — `skill_sha256` is nil
-    # until an operator sets it, and kiosk-server omits the whole `skill` block
-    # rather than ship a stale hash. So the property to assert is that the file
-    # it names is really published and is byte-identical to what the demos
-    # verify against: the default and the pins must describe one artefact.
-    it "kiosk-server's default names a published file, the same one the demos pin" do
-      skip "kiosk-server's default is unreadable (asserted above)" if default_url.nil?
+# The pinned cut must teach an assistant to END its device-code poll: a
+# ceremony the human denied, or one whose `expires_in` elapsed, must not poll
+# forever. The vocabulary is derived from the engine, so a code added there and
+# not taught to the skill fails here.
+RSpec.describe 'the skill pin: the device-code poll in the pinned cut' do
+  include_context 'with the published kiosk.tech checkout'
 
-      file = File.join(site_root, File.basename(default_url))
-      expect(File).to exist(file),
-                      "kiosk-server defaults skill_url to #{default_url}, but " \
-                      "#{File.basename(default_url)} is not published in #{site_root} — every " \
-                      'operator who does not override it advertises a URL that 404s, and an AI ' \
-                      'assistant that cannot fetch the pinned skill cannot verify it.'
+  it 'the pinned cut names every device-grant error the engine can emit, and a give-up horizon' do
+    expect(File).to exist(SkillPin::GRANT_SOURCE)
+    emitted = SkillPin.emitted_grant_errors
+    expect(emitted.size).to be >= 5,
+                            "parsed only #{emitted.size} failure code(s) out of " \
+                            "#{SkillPin::GRANT_SOURCE}; the call shape changed and this expectation is blind"
 
-      actual    = Digest::SHA256.hexdigest(File.binread(file))
-      demo_shas = pins.values.filter_map { it[:sha] }.uniq
-      expect(demo_shas).to eq([actual]),
-                           "the default cut #{File.basename(default_url)} hashes to #{actual}, " \
-                           "but the demos pin #{demo_shas.inspect} — the default and the demo pins " \
-                           'are supposed to be the same artefact. Re-pin them together, or publish ' \
-                           'a new immutable cut and move all nine consumers to it.'
-    end
+    name    = File.basename(SkillPin.pins.values.filter_map { it[:url] }.uniq.first)
+    section = SkillPin.ceremony_section(name)
+    expect(section).not_to be_nil, "could not locate the claim-ceremony bullet in #{name}"
 
-    initializers.each do |path|
-      demo = path[%r{(kiosk-demo-[^/]+)}, 1]
-
-      it "#{demo} pins the sha256 of the published skill version file" do
-        pin = pins[demo][:sha]
-        expect(pin).not_to be_nil, "#{demo}: no skill_sha256 pin in #{path}"
-
-        url = pins[demo][:url]
-        expect(url).not_to be_nil,
-                           "could not determine the skill URL (no skill_url in #{path} " \
-                           "and no default in #{default_url_source})"
-
-        skill_file = File.join(site_root, File.basename(url))
-        expect(File).to exist(skill_file),
-                        "pinned skill file #{File.basename(url)} (from #{url}) " \
-                        "not found in #{site_root}"
-
-        actual = Digest::SHA256.hexdigest(File.binread(skill_file))
-        expect(pin).to eq(actual),
-                       "#{demo} pins skill_sha256 #{pin} but #{File.basename(url)} " \
-                       "hashes to #{actual} — re-pin the demos or publish a new " \
-                       'immutable skill version'
-      end
-    end
-
-    # ── The cut the demos pin must TERMINATE its device-code poll (K-871) ────
-    #
-    # The account-binding ceremony is the third out-of-band completion poll,
-    # and it was the one nobody bounded: the cut told an assistant to keep
-    # polling on `authorization_pending`, to back off on `slow_down`, and
-    # nothing else — so a ceremony the human DENIED, or one whose `expires_in`
-    # elapsed, polled forever. Its two siblings were bounded deliberately
-    # (K-477/K-595 wrote the cadence + horizon, K-606 gave them a gate that
-    # reads the SERVED descriptor back off the wire). This ceremony has no
-    # descriptor to read — it is not a catalog verb — so the artefact itself
-    # is where the property can be asserted, and this spec is the one place
-    # that already reads the published bytes.
-    #
-    # THE VOCABULARY IS DERIVED, NEVER LISTED. The engine is the authority on
-    # which OAuth errors a poll can meet, so the expectation reads them out of
-    # `DeviceCodeGrant`'s own `failure(:code, …)` calls and `[:code, …]` table rows. A code added there and
-    # not taught to the skill fails here — which is the D3 drift this guards —
-    # and a hand-kept list in a spec file would have been a second place the
-    # vocabulary lives, the divergence K-605 closed by deleting one.
-    it 'the pinned cut names every device-grant error the engine can emit, and a give-up horizon' do
-      grant_source = File.join(
-        monorepo_root, 'kiosk-server/lib/kiosk/server/device_code_grant.rb'
-      )
-      expect(File).to exist(grant_source)
-
-      emitted = File.read(grant_source).scan(/(?:failure\(|\[):([a-z_]+)/).flatten.uniq
-      # invalid_request is a malformed CALL (no device_code parameter), not an
-      # outcome of a ceremony in progress: an assistant that sent no
-      # device_code has a bug, not a poll to terminate.
-      emitted -= %w[invalid_request]
-      expect(emitted.size).to be >= 5,
-                              "parsed only #{emitted.size} failure code(s) out of " \
-                              "#{grant_source}; the call shape changed and this expectation is blind"
-
-      url        = pins.values.filter_map { it[:url] }.uniq.first
-      skill_text = File.read(File.join(site_root, File.basename(url)))
-      # The ceremony's own bullet and its sub-bullets, up to the sibling bullet.
-      section = skill_text[/^- \*\*No code from the human\*\*.*?(?=^- \*\*The human hands you a code)/m]
-      expect(section).not_to be_nil,
-                             "could not locate the claim-ceremony bullet in #{File.basename(url)}"
-
-      missing = emitted.reject { |code| section.include?(code) }
-      expect(missing).to be_empty,
-                         "#{File.basename(url)} teaches the device-code poll without naming " \
-                         "#{missing.join(', ')} — the engine emits #{emitted.sort.join(', ')} " \
-                         "(#{grant_source}), and an error the skill does not name is an error " \
-                         'the assistant loops on'
-
-      expect(section).to match(/GIVE UP/),
-                         "#{File.basename(url)}'s device-code poll states no give-up horizon. " \
-                         'Nothing pushes on approval, so a loop without one runs until the ' \
-                         "assistant's budget dies — the card-setup and KYC polls both say where " \
-                         'to stop, and this is the third such poll.'
-      expect(section).to match(/TERMINAL/),
-                         "#{File.basename(url)}'s device-code poll marks no outcome TERMINAL, " \
-                         'so a denied or expired ceremony has no stated stop condition.'
-    end
+    missing = emitted.reject { |code| section.include?(code) }
+    expect(missing).to be_empty,
+                       "#{name} teaches the device-code poll without naming #{missing.join(', ')} — the engine " \
+                       "emits #{emitted.sort.join(', ')} (#{SkillPin::GRANT_SOURCE}), and an error the skill " \
+                       'does not name is an error the assistant loops on'
+    expect(section).to match(/GIVE UP/),
+                       "#{name}'s device-code poll states no give-up horizon. Nothing pushes on approval, so a " \
+                       "loop without one runs until the assistant's budget dies — the card-setup and KYC polls " \
+                       'both say where to stop, and this is the third such poll.'
+    expect(section).to match(/TERMINAL/),
+                       "#{name}'s device-code poll marks no outcome TERMINAL, so a denied or expired ceremony has no stated stop condition."
   end
 end

@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 json.appointment_id @appointment.id
 json.salon_id @appointment.salon_id
 json.partial! 'clock', appointment: @appointment

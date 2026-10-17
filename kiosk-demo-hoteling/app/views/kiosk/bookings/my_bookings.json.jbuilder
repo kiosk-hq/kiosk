@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 json.array! @bookings do |booking|
   json.booking_id booking.id
   json.extract! booking, :property_id, :room_type_id

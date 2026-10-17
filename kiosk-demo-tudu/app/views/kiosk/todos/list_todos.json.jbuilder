@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 zone = ReaderClock.zone
 json.array! @todos do |todo|
   json.todo_id todo.id

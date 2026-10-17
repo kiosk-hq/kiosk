@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 seating = booking.local_seating
 json.booking_id booking.id
 json.restaurant booking.restaurant.name

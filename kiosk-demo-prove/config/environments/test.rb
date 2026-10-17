@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 require 'openssl'
 
 # The KYC broker as the local operator demos expect it: their issuer, their intake

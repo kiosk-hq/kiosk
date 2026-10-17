@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 json.array! @search.open_tables do |restaurant, table, seating|
   json.restaurant restaurant.name
   json.extract! restaurant, :neighborhood, :cuisine

@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 threads_count = ENV.fetch('RAILS_MAX_THREADS', 3)
 threads threads_count, threads_count
 

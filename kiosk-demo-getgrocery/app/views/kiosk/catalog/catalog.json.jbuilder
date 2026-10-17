@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 json.ignore_nil!
 json.array! @products do |product|
   json.extract! product, :sku, :name, :price_cents

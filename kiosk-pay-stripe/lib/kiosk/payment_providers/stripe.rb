@@ -44,7 +44,8 @@ module Kiosk
 
       # A hosted Checkout page in `mode: "setup"`. An open setup session for the
       # same return target is reused, so an assistant polling `payment_setup`
-      # keeps handing its human the same link.
+      # keeps handing its human the same link. The SetupIntent the page creates
+      # takes Stripe's default `usage`, `off_session`, so `pay` can charge the card.
       def setup_url(user_id:, return_url:)
         success_url = "#{return_url}?#{RETURN_QUERY}"
         cus_id      = ensure_customer(user_id)

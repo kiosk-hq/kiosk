@@ -53,8 +53,7 @@ Gem::Specification.new do |spec|
   # every consumer in this monorepo uses `path:`, which serves the working
   # tree: no test here could have noticed, and only someone installing from
   # RubyGems would have.
-  # `listen.py` is the pinned reference client for the event stream, resolved
-  # inside the installed gem by {Kiosk::Server.listener_path};
+  # `listen.py` is the pinned reference client for the event stream;
   # `requirements.txt` beside it declares its python dependency.
   spec.files = Dir.glob("app/**/*") + Dir.glob("lib/**/*") +
                %w[listen.py requirements.txt README.md LICENSE.txt CHANGELOG.md]

@@ -61,36 +61,11 @@ RSpec.describe Kiosk::Server::EventStore do
     expect(store.since("u1", 0)).to eq([])
   end
 
-  # "I cannot prove you saw everything" — the one condition that makes a client
-  # re-read current state through the ordinary verb, once.
-  it "reports truncated when the cursor predates what it still holds" do
-    store.append("u1", event)
-    second = store.append("u1", event)
-    store.prune_before(second)
-
-    expect(store.truncated?("u1", 0)).to be(true)
-    expect(store.truncated?("u1", second)).to be(false)
-  end
-
   it "is NOT truncated at head, even with nothing stored" do
     expect(store.truncated?("u1", 0)).to be(false)
 
     id = store.append("u1", event)
     expect(store.truncated?("u1", id)).to be(false)
-  end
-
-  # THE BOUNDARY, and the one cursor the two examples above step over. One
-  # below the floor the range the caller asks for is COMPLETE — everything
-  # above the cursor survived the sweep — so there is nothing to re-read.
-  # event_stores_spec.rb asks the durable store the same question.
-  it "is NOT truncated one below the floor, where the range it asks for is complete" do
-    first  = store.append("u1", event)
-    second = store.append("u1", event)
-    third  = store.append("u1", event)
-    store.prune_before(second)
-
-    expect(store.since("u1", first).map { |e| e["id"] }).to eq([second, third])
-    expect(store.truncated?("u1", first)).to be(false)
   end
 
   it "keeps identities apart — one identity's tail is not another's" do

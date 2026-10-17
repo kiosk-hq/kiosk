@@ -162,10 +162,5 @@ module Kiosk
     #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token
     #   - {Kiosk::Server::DeviceVerifyController}      — GET/POST /oauth/device/verify
     #   - {Kiosk::Server::AssistantsController}        — «Link an assistant» page
-
-    # Path to the pinned reference event-stream listener shipped in this gem.
-    def self.listener_path
-      File.expand_path("../../listen.py", __dir__)
-    end
   end
 end

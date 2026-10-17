@@ -9,7 +9,6 @@ module Kiosk
         @mutex  = Mutex.new
         @seq    = 0
         @by_key = Hash.new { |hash, key| hash[key] = [] }
-        @floor  = 0
       end
 
       # One id counter per origin, so one cursor resumes every subscription on a socket.
@@ -32,18 +31,8 @@ module Kiosk
       # The origin's maximum id, 0 when empty.
       def head = @mutex.synchronize { @seq }
 
-      # True when an id above the caller's cursor has been pruned; a cursor one
-      # below the floor missed nothing.
-      def truncated?(_identity_key, id)
-        @mutex.synchronize { @floor > id.to_i + 1 }
-      end
-
-      def prune_before(id)
-        @mutex.synchronize do
-          @floor = id.to_i
-          @by_key.each_value { |tail| tail.reject! { |event| event["id"] < id.to_i } }
-        end
-      end
+      # Never: this store keeps every event it was given.
+      def truncated?(_identity_key, _id) = false
     end
   end
 end

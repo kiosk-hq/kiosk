@@ -9,8 +9,6 @@ module Kiosk
       def initialize(rows:, next_cursor: nil, total: nil)
         super(rows: rows, next_cursor: next_cursor, total: total)
       end
-
-      def truncated? = !next_cursor.nil?
     end
 
     # An offset cursor, published as a decimal integer in clear: a cursor

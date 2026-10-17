@@ -1,5 +1,17 @@
 # frozen_string_literal: true
 
+module ConfigurationExtensionSpec
+  # The lazy defaults in the shipped source that ALLOCATE a store, by name:
+  # `def <name>` with no arguments, through its matching `end` at the same
+  # indent — the shape every lazy default in that file is written in.
+  def self.allocating_defaults
+    source_path = Kiosk::Server::ConfigurationExtension
+                  .instance_method(:pow_spent_store).source_location.first
+    methods = File.read(source_path).scan(/^      def ([a-z_0-9]+)\n(.*?)^      end$/m).to_h
+    methods.select { |_, body| body.match?(/Store[A-Za-z:]*\.new|Stores::[A-Za-z:]+\.new/) }
+  end
+end
+
 RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'defaults' do
     it "defaults mount_path to the Protocol's default mount path" do
@@ -23,14 +35,14 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     it "defaults min_client to the Protocol's MIN_CLIENT" do
       expect(Kiosk.configuration.min_client).to eq(Kiosk::Protocol::MIN_CLIENT)
     end
+  end
+end
 
-    # K-1399. The two validation flags point OPPOSITE ways on purpose, and the
-    # pair is asserted together because the asymmetry is the whole content of
-    # the decision: a request-shape refusal is a 400 to a caller who sent a bad
-    # request; a response-shape refusal is a 500 to a caller who did nothing
-    # wrong. `validate_requests` shipped false while all seven showcases and the
-    # install generator turned it on — a default nobody wanted, whose off-state
-    # failure is SILENT (the K-479 re-challenge loop).
+RSpec.describe Kiosk::Server::ConfigurationExtension do
+  describe 'defaults' do
+    # The two validation flags point OPPOSITE ways on purpose: a request-shape
+    # refusal is a 400 to a caller who sent a bad request; a response-shape
+    # refusal is a 500 to a caller who did nothing wrong.
     describe 'the two validation flags' do
       it 'defaults validate_requests to TRUE and validate_responses to FALSE' do
         expect(Kiosk.configuration.validate_requests).to  be(true)
@@ -39,13 +51,17 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
 
       # The reader must not be an `||=`: with a true default that idiom turns an
       # operator's explicit `false` back into `true` and the opt-out silently
-      # does nothing — the same silence the flip exists to remove.
+      # does nothing.
       it 'lets an operator turn validate_requests OFF and keeps it off' do
         Kiosk.configure { |c| c.validate_requests = false }
         expect(Kiosk.configuration.validate_requests).to be(false)
       end
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::ConfigurationExtension do
+  describe 'defaults' do
     # The auth-challenge nonce must outlive the registration PoW solve,
     # or a slow honest solver's nonce expires mid-solve (and the proofs are
     # already burned). The PoW solve window is pow_ttl * count.
@@ -73,7 +89,9 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       end
     end
   end
+end
 
+RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'overrides' do
     it 'lets mount_path be set via Kiosk.configure' do
       Kiosk.configure { |c| c.mount_path = '/agent-surface' }
@@ -96,12 +114,12 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.min_client).to eq('0.9.0')
     end
   end
+end
 
-  # ─── computed capabilities ──────────────────────────────────
-  # Members are MODULE names actually served, drawn from
-  # schema/queries/actions/pay and emitted in that order (T-075 = A,
-  # ADR-0025). Derived from the live registry so discovery never advertises a
-  # module the provider has not wired.
+# Members are MODULE names actually served, drawn from
+# schema/queries/actions/pay and emitted in that order. Derived from the live
+# registry so discovery never advertises a module the provider has not wired.
+RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe '#capabilities (computed)' do
     it 'includes schema + queries when only a query is registered' do
       declare_query('catalog')
@@ -124,18 +142,20 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       Kiosk.configure { |c| c.payment_provider = Object.new }
       expect(Kiosk.configuration.capabilities).to eq(%w[schema queries actions pay])
     end
+  end
+end
 
+# Members are MODULE names actually served, drawn from
+# schema/queries/actions/pay and emitted in that order. Derived from the live
+# registry so discovery never advertises a module the provider has not wired.
+RSpec.describe Kiosk::Server::ConfigurationExtension do
+  describe '#capabilities (computed)' do
     it 'never encodes HTTP methods' do
       declare_query('catalog')
       expect(Kiosk.configuration.capabilities).not_to include('GET', 'POST')
     end
 
-    # THE PROPERTY THE MODULE-NAME ANSWER BOUGHT (T-075 = A rejected B for
-    # exactly this). The REASON changed on 2026-08-19 and the property did
-    # not: the verb names are public now (`GET <endpoint>/schema` at T-094,
-    # `openapi.json` at K-804, `/.well-known/api-catalog` at T-093), so this
-    # example is no longer about withholding anything. It is about there being
-    # ONE source of truth for the verb list — the catalog — which this
+    # The verb list has ONE source of truth — the catalog — which this
     # document points at rather than copies.
     it 'never leaks a registered verb name' do
       declare_query('secret_pricing_tiers')
@@ -146,7 +166,9 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(caps).not_to include('secret_pricing_tiers', 'cancel_enterprise_contract')
     end
   end
+end
 
+RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'reset' do
     it 'Kiosk.reset! returns server-specific fields to defaults' do
       Kiosk.configure { |c| c.mount_path = '/elsewhere' }
@@ -161,7 +183,9 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.app_role).to eq('app_role')
     end
   end
+end
 
+RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe '#enforce_db_role' do
     it 'defaults to false' do
       expect(Kiosk.configuration.enforce_db_role).to be(false)
@@ -183,7 +207,9 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.sign_in_path).to eq('/users/sign_in')
     end
   end
+end
 
+RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'signing_key' do
     # RSA generation is ~100ms; cache one for the whole context.
     let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
@@ -205,6 +231,14 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       Kiosk.configure { |c| c.signing_key = signing_key }
       expect(Kiosk.configuration.signing_key).to equal(signing_key)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::ConfigurationExtension do
+  describe 'signing_key' do
+    # RSA generation is ~100ms; cache one for the whole context.
+    let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
+    let(:signing_key) { Kiosk::Server::SigningKey.new(rsa) }
 
     it 'accepts a PEM string via the setter' do
       Kiosk.configure { |c| c.signing_key = rsa.to_pem }
@@ -223,7 +257,9 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect { Kiosk.configuration.signing_key }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
     end
   end
+end
 
+RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'pow_secret' do
     it 'refuses a secret shorter than 32 bytes' do
       expect { Kiosk.configure { |c| c.pow_secret = 'short' } }
@@ -235,11 +271,14 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.pow_secret).to eq('x' * 32)
     end
   end
-  # ─── a lazy STORE default is allocated exactly once ────────────────────────
-  #
-  # `@x ||= Store.new` with no lock lets racing first-touchers each build a
-  # store of their own. These examples force that interleaving — see
-  # `with_slow_store_allocation` in spec_helper.
+end
+
+# ─── a lazy STORE default is allocated exactly once ────────────────────────
+#
+# `@x ||= Store.new` with no lock lets racing first-touchers each build a
+# store of their own. These examples force that interleaving — see
+# `with_slow_store_allocation` in spec_helper.
+RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'lazy store defaults under a concurrent first touch' do
     # Every slot here is stateful: what the losers of the race record is lost
     # when the last write lands, and for `pow_spent_store` what is lost is the
@@ -265,22 +304,18 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
 
       expect(stores.uniq).to eq([nil])
     end
+  end
+end
 
-    # The census, not a list: every lazy default in the shipped file that
-    # ALLOCATES a store must take the lock. A new store slot added later
-    # without it reddens here, which is the property a hand-kept list of four
-    # names cannot buy.
+RSpec.describe Kiosk::Server::ConfigurationExtension do
+  describe 'lazy store defaults under a concurrent first touch' do
+    # Every lazy default in the shipped file that ALLOCATES a store must take
+    # the lock, so a new store slot added without it reddens here.
     describe 'the guarded set is derived from the shipped source' do
-      source_path = Kiosk::Server::ConfigurationExtension
-                    .instance_method(:pow_spent_store).source_location.first
-      source      = File.read(source_path)
-      # `def <name>` with no arguments, through its matching `end` at the same
-      # indent — the shape every lazy default in this file is written in.
-      methods     = source.scan(/^      def ([a-z_0-9]+)\n(.*?)^      end$/m).to_h
-      allocating  = methods.select { |_, body| body.match?(/Store[A-Za-z:]*\.new|Stores::[A-Za-z:]+\.new/) }
+      allocating = ConfigurationExtensionSpec.allocating_defaults
 
-      # Vacuity arm: if the scan above stops matching (a reindent, a rewrite)
-      # the census below passes on an empty set and says nothing. Fail instead.
+      # If the scan stops matching (a reindent, a rewrite) the census below
+      # passes on an empty set and says nothing. Fail instead.
       it 'finds the store-allocating lazy defaults at all' do
         expect(allocating.keys).to include(
           'pow_spent_store', 'auth_challenge_store', 'revocation_store', 'device_authorization_store'

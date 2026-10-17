@@ -21,19 +21,6 @@ module SchemaSlotsSpec
   def board_enum
     Kiosk::Server::Queries.describe('board')[:input_schema][:properties][:category][:enum]
   end
-
-  # Releases `count` threads at once into `read` and returns their answers.
-  def race(count, &read)
-    released = Queue.new
-    threads = Array.new(count) do
-      Thread.new do
-        released.pop
-        read.call
-      end
-    end
-    count.times { released << :go }
-    threads.map(&:value)
-  end
 end
 
 RSpec.shared_context 'schema slots spec: issuer' do

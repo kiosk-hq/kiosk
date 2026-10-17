@@ -33,41 +33,55 @@ module Kiosk
       def redeem(code:, public_key_pem:, signed:,
                  store: Kiosk.configuration.device_authorization_store,
                  now: Time.now)
-        raise Errors::BadRequest, 'code required' if code.nil? || code.to_s.empty?
+        raise Errors::BadRequest, 'code required' if code.to_s.empty?
 
         pem = public_key_pem.to_s.strip
         PopVerifier.load_public_key(pem)
-
-        da = store.find_by_device_code_hash(DeviceAuthorization.hash_device_code(code.to_s))
-        if da.nil? || !da.link?
-          raise Errors::NotFound.new(
-            'unknown link code',
-            hint: 'the account holder mints one at POST /auth/link (link codes are single-use and short-lived)'
-          )
-        end
-        raise Errors::Conflict, 'link code already used' if da.consumed?
-
-        if da.expired_at_time?(now) && da.approved?
-          store.update(da.expire)
-          raise Errors::NotFound, 'link code expired'
-        end
-        raise Errors::NotFound, 'link code expired' if da.expired?
+        da = live_link(store, code.to_s, now)
 
         # The proof comes before the consume, so a failed one leaves the code live.
-        payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)
-        AuthChallenge.consume!(public_key_pem: pem, nonce: payload.fetch(:nonce))
+        prove_possession!(pem, signed)
+        # The atomic consume, not `consumed?` below, decides single use under a race.
+        raise Errors::Conflict, 'link code already used' if store.claim_consume(da, now: now).nil?
 
-        # The atomic consume, not `consumed?` above, decides single use under a race.
-        claimed = store.claim_consume(da, now: now)
-        raise Errors::Conflict, 'link code already used' if claimed.nil?
+        bind(pem, da)
+      end
 
-        result = AccountBinding.bind!(
-          public_key_pem: pem,
-          user_id: da.user_id,
-          requested_role: da.requested_role
-        )
+      class << self
+        private
 
-        { agent_id: result[:agent_id], user_id: result[:user_id], access_token: result[:access_token] }
+        def prove_possession!(pem, signed)
+          payload = PopVerifier.verify!(public_key_pem: pem, signed: signed)
+          AuthChallenge.consume!(public_key_pem: pem, nonce: payload.fetch(:nonce))
+        end
+
+        def bind(pem, link)
+          result = AccountBinding.bind!(public_key_pem: pem, user_id: link.user_id, requested_role: link.requested_role)
+          { agent_id: result[:agent_id], user_id: result[:user_id], access_token: result[:access_token] }
+        end
+
+        def live_link(store, code, now)
+          da = store.find_by_device_code_hash(DeviceAuthorization.hash_device_code(code))
+          unless da&.link?
+            raise Errors::NotFound.new(
+              'unknown link code',
+              hint: 'the account holder mints one at POST /auth/link (link codes are single-use and short-lived)'
+            )
+          end
+          raise Errors::Conflict, 'link code already used' if da.consumed?
+
+          expire_if_due(store, da, now)
+        end
+
+        def expire_if_due(store, link, now)
+          if link.expired_at_time?(now) && link.approved?
+            store.update(link.expire)
+            raise Errors::NotFound, 'link code expired'
+          end
+          raise Errors::NotFound, 'link code expired' if link.expired?
+
+          link
+        end
       end
     end
   end

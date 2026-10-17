@@ -18,6 +18,16 @@ module Kiosk
       @poll_registry = {}
       @poll_mutex    = Mutex.new
 
+      PROOF_REQUIRED = 'signed proof-of-possession required ' \
+                       '(GET /auth/challenge?public_key=… then sign {aud, nonce, jti})'
+
+      STATUS_FAILURES = {
+        pending: [:authorization_pending, 'the account holder has not yet approved'],
+        denied: [:access_denied, 'the account holder denied the request'],
+        consumed: [:invalid_grant, 'device_code already used'],
+        expired: [:expired_token, 'the device_code has expired']
+      }.freeze
+
       module_function
 
       # No role parameter on purpose: the row takes the approving human's role.
@@ -27,21 +37,12 @@ module Kiosk
                 expires_in: DeviceAuthorization::DEFAULT_EXPIRES_IN,
                 now: Time.now)
         plain_device_code, plain_user_code, da = DeviceAuthorization.generate(
-          client_id: client_id,
-          kind: :claim,
-          public_key_pem: public_key_pem.to_s.strip,
-          expires_in: expires_in,
-          now: now
+          client_id: client_id, kind: :claim, public_key_pem: public_key_pem.to_s.strip,
+          expires_in: expires_in, now: now
         )
         store.create(da)
-
-        {
-          device_code: plain_device_code,
-          user_code: DeviceAuthorization.display_user_code(plain_user_code),
-          expires_in: expires_in,
-          interval: DEFAULT_POLL_INTERVAL,
-          da: da
-        }
+        { device_code: plain_device_code, user_code: DeviceAuthorization.display_user_code(plain_user_code),
+          expires_in: expires_in, interval: DEFAULT_POLL_INTERVAL, da: da }
       end
 
       # Returns `{ok: true, access_token:, …}` or `{ok: false, error:, description:}`
@@ -51,31 +52,17 @@ module Kiosk
                    store: Kiosk.configuration.device_authorization_store,
                    interval: DEFAULT_POLL_INTERVAL,
                    now: Time.now)
-        return failure(:invalid_request, 'device_code parameter required') if device_code.nil? || device_code.to_s.empty?
+        return failure(:invalid_request, 'device_code parameter required') if device_code.to_s.empty?
 
         hash = DeviceAuthorization.hash_device_code(device_code)
         da   = store.find_by_device_code_hash(hash)
         return failure(:invalid_grant, 'unknown device_code') if da.nil?
-
         return failure(:slow_down, 'polling faster than the advertised interval') if polled_too_fast?(hash, interval, now)
 
-        if da.expired_at_time?(now) && (da.pending? || da.approved?)
-          store.update(da.expire)
-          return failure(:expired_token, 'the device_code has expired')
-        end
+        da = expire_if_due(da, store, now)
+        return bind_and_mint(authorization: da, signed: signed, store: store, now: now) if da.approved?
 
-        case da.status
-        when :pending
-          failure(:authorization_pending, 'the account holder has not yet approved')
-        when :denied
-          failure(:access_denied, 'the account holder denied the request')
-        when :consumed
-          failure(:invalid_grant, 'device_code already used')
-        when :expired
-          failure(:expired_token, 'the device_code has expired')
-        when :approved
-          bind_and_mint(da: da, signed: signed, store: store, now: now)
-        end
+        failure(*STATUS_FAILURES.fetch(da.status))
       end
 
       def reset_poll_registry!
@@ -85,42 +72,43 @@ module Kiosk
       class << self
         private
 
+        def expire_if_due(authorization, store, now)
+          return authorization unless authorization.expired_at_time?(now)
+          return authorization unless authorization.pending? || authorization.approved?
+
+          store.update(authorization.expire)
+        end
+
         # Possession of the row's key is proven before binding; a failed proof
         # is `invalid_client` and leaves the row approved for a retry.
-        def bind_and_mint(da:, signed:, store:, now:)
-          if signed.nil? || signed.to_s.empty?
-            return failure(
-              :invalid_client,
-              'signed proof-of-possession required ' \
-              '(GET /auth/challenge?public_key=… then sign {aud, nonce, jti})'
-            )
-          end
-          return failure(:invalid_client, 'no public key bound to this authorization') if da.public_key_pem.nil? || da.public_key_pem.empty?
-
-          begin
-            payload = PopVerifier.verify!(public_key_pem: da.public_key_pem, signed: signed)
-            AuthChallenge.consume!(public_key_pem: da.public_key_pem, nonce: payload.fetch(:nonce))
-          rescue Errors::Base => e
-            return failure(:invalid_client, e.message)
-          end
-
+        def bind_and_mint(authorization:, signed:, store:, now:)
+          refusal = possession_refusal(authorization.public_key_pem, signed)
+          return refusal if refusal
           # Atomic, so two concurrent polls mint one token.
-          return failure(:invalid_grant, 'device_code already used') if store.claim_consume(da, now: now).nil?
+          return failure(:invalid_grant, 'device_code already used') if store.claim_consume(authorization, now: now).nil?
 
-          result = AccountBinding.bind!(
-            public_key_pem: da.public_key_pem,
-            user_id: da.user_id,
-            requested_role: da.requested_role
-          )
+          token_response(authorization)
+        end
 
-          response = {
-            ok: true,
-            access_token: result[:access_token],
-            token_type: 'Bearer',
-            expires_in: JwtIssuer::DEFAULT_EXPIRES_IN
-          }
+        def possession_refusal(public_key_pem, signed)
+          return failure(:invalid_client, PROOF_REQUIRED) if signed.nil? || signed.to_s.empty?
+          return failure(:invalid_client, 'no public key bound to this authorization') if public_key_pem.nil? || public_key_pem.empty?
+
+          payload = PopVerifier.verify!(public_key_pem: public_key_pem, signed: signed)
+          AuthChallenge.consume!(public_key_pem: public_key_pem, nonce: payload.fetch(:nonce))
+          nil
+        rescue Errors::Base => e
+          failure(:invalid_client, e.message)
+        end
+
+        def token_response(authorization)
+          role = authorization.requested_role
+          result = AccountBinding.bind!(public_key_pem: authorization.public_key_pem,
+                                        user_id: authorization.user_id, requested_role: role)
+          response = { ok: true, access_token: result[:access_token], token_type: 'Bearer',
+                       expires_in: JwtIssuer::DEFAULT_EXPIRES_IN }
           # RFC 6749 §5.1: the granted scope is the approving human's role.
-          response[:scope] = da.requested_role if da.requested_role
+          response[:scope] = role if role
           response
         end
 

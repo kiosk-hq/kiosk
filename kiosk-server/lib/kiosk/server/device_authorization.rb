@@ -43,32 +43,28 @@ module Kiosk
       # A caller bug, not an OAuth error.
       class StateError < StandardError; end
 
-      # The plain codes exist only in this return value.
-      def self.generate(client_id:, kind: :claim, public_key_pem: nil,
-                        requested_role: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.now)
-        raise ArgumentError, 'client_id required' if client_id.nil? || client_id.to_s.empty?
+      # The plain codes exist only in this return value. `binding` takes `kind:`,
+      # `public_key_pem:` and `requested_role:`.
+      def self.generate(client_id:, expires_in: DEFAULT_EXPIRES_IN, now: Time.now, **binding)
         raise ArgumentError, 'expires_in must be > 0' unless expires_in.positive?
 
         plain_device_code = SecureRandom.urlsafe_base64(DEVICE_CODE_BYTES)
         plain_user_code = USER_CODE_LENGTH.times.map { USER_CODE_ALPHABET.sample(random: SecureRandom) }.join
-
         da = new(
-          id: SecureRandom.uuid,
-          device_code_hash: hash_device_code(plain_device_code),
-          user_code_hash: hash_user_code(plain_user_code),
-          public_key_pem: public_key_pem,
-          kind: kind,
-          client_id: client_id.to_s,
-          requested_role: requested_role&.to_s,
-          status: :pending,
-          user_id: nil,
-          expires_at: now + expires_in,
-          consumed_at: nil,
-          created_at: now
+          id: SecureRandom.uuid, device_code_hash: hash_device_code(plain_device_code),
+          user_code_hash: hash_user_code(plain_user_code), **pending_attributes(client_id, **binding),
+          expires_at: now + expires_in, consumed_at: nil, created_at: now
         )
-
         [plain_device_code, plain_user_code, da]
       end
+
+      def self.pending_attributes(client_id, kind: :claim, public_key_pem: nil, requested_role: nil)
+        raise ArgumentError, 'client_id required' if client_id.nil? || client_id.to_s.empty?
+
+        { public_key_pem: public_key_pem, kind: kind, client_id: client_id.to_s,
+          requested_role: requested_role&.to_s, status: :pending, user_id: nil }
+      end
+      private_class_method :pending_attributes
 
       def self.hash_device_code(plain_device_code)
         Digest::SHA256.hexdigest(plain_device_code)
@@ -84,17 +80,7 @@ module Kiosk
       end
 
       def initialize(status:, kind:, **rest)
-        status_sym = status.to_sym
-        unless STATUSES.include?(status_sym)
-          raise ArgumentError,
-                "status must be one of #{STATUSES.inspect}, got #{status.inspect}"
-        end
-        kind_sym = kind.to_sym
-        unless KINDS.include?(kind_sym)
-          raise ArgumentError,
-                "kind must be one of #{KINDS.inspect}, got #{kind.inspect}"
-        end
-        super(status: status_sym, kind: kind_sym, **rest)
+        super(status: member!(STATUSES, status, 'status'), kind: member!(KINDS, kind, 'kind'), **rest)
       end
 
       def pending?  = status == :pending
@@ -135,6 +121,15 @@ module Kiosk
         raise StateError, "cannot expire a #{status} authorization" unless pending? || approved?
 
         with(status: :expired)
+      end
+
+      private
+
+      def member!(allowed, value, name)
+        symbol = value.to_sym
+        return symbol if allowed.include?(symbol)
+
+        raise ArgumentError, "#{name} must be one of #{allowed.inspect}, got #{value.inspect}"
       end
     end
   end

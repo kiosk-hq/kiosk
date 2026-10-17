@@ -65,7 +65,7 @@ class IntegrationJourneyTest < Minitest::Test
   def test_executor_not_configured_raises
     Kiosk::TestHelpers.reset!
     assert_raises(Kiosk::TestHelpers::Errors::ExecutorNotConfigured) do
-      as_agent_of(@alice) {}
+      as_agent_of(@alice) { nil }
     end
   end
 end

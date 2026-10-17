@@ -36,7 +36,7 @@ class SpecRegistrationsDoomedController < ApplicationController
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerRegistrations do
+RSpec.shared_context 'handler registrations spec: isolated registry' do
   let(:queries) { Kiosk::Server::Queries }
   let(:actions) { Kiosk::Server::Actions }
 
@@ -52,6 +52,10 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
     names.each { |name| described_class.handlers << name }
     described_class.reload!
   end
+end
+
+RSpec.describe Kiosk::Server::HandlerRegistrations do
+  include_context 'handler registrations spec: isolated registry'
 
   describe '.add' do
     it 'is called by include Kiosk::Handler' do
@@ -83,7 +87,13 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
 
       expect(queries.known).to eq(['spec_browse'])
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::HandlerRegistrations do
+  include_context 'handler registrations spec: isolated registry'
+
+  describe '.reload!' do
     it 'drops a verb the handler no longer declares' do
       register('SpecRegistrationsDoomedController')
       expect(queries.known).to eq(['spec_doomed'])
@@ -100,6 +110,10 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
       expect(described_class.handlers).to be_empty
     end
   end
+end
+
+RSpec.describe Kiosk::Server::HandlerRegistrations do
+  include_context 'handler registrations spec: isolated registry'
 
   describe 'one name, one kind' do
     it 'refuses a name declared as both a query and an action' do
@@ -126,6 +140,10 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
         .to raise_error(Kiosk::Server::Errors::ConfigurationError, /spec_collide.*BOTH a query and an action/m)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::HandlerRegistrations do
+  include_context 'handler registrations spec: isolated registry'
 
   describe '.clear!' do
     it 'empties both registries' do

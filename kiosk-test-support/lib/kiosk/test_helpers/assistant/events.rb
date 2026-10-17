@@ -108,7 +108,7 @@ module Kiosk
           until Time.now > deadline
             return true if yield
             break if @closed
-            next unless buffered? || IO.select([@io], nil, nil, 0.1)
+            next unless buffered? || @io.wait_readable(0.1)
 
             begin
               @driver.parse(@io.read_nonblock(8192))

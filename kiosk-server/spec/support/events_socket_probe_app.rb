@@ -283,7 +283,7 @@ def raw_get(port, path, headers)
   deadline = Time.now + 15
   until response_complete?(raw)
     remaining = deadline - Time.now
-    break unless remaining.positive? && IO.select([socket], nil, nil, remaining)
+    break unless remaining.positive? && socket.wait_readable(remaining)
 
     begin
       raw << socket.readpartial(4096)

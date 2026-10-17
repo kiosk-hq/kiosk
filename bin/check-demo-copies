@@ -1099,6 +1099,7 @@ FRAGMENT_EXCLUDED = {
   "test/stories/privacy_test.rb"   => "Their shared helpers are held by name in SPEC_UNITS.",
   "script/redteam_suite.rb" => "The shared harness is kiosk-redteam's; the scenario bodies differ by design.",
   "app/services/price_checker.rb" => "The one shared unit is `self.call`, whose body is each operator's own catalog.",
+  "app/controllers/kiosk/bookings_controller.rb" => "Two domains' booking verbs, sharing only their wire names.",
 }.freeze
 
 FRAGMENTS = {

@@ -7,7 +7,7 @@ module Users
 
     private
 
-    DEVISE_ACTION = { "create" => :sign_up, "update" => :account_update }.freeze
+    DEVISE_ACTION = { 'create' => :sign_up, 'update' => :account_update }.freeze
 
     def permit_display_name
       devise_parameter_sanitizer.permit(DEVISE_ACTION.fetch(action_name), keys: [:display_name])

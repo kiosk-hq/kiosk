@@ -11,7 +11,7 @@ class AddTodoOperation
     Kiosk::Server::Events.emit(
       topic: :todo, subject: list_id,
       identity_scope: Membership.account_ids_on(list_id),
-      data: { "todo_id" => todo.id, "title" => todo.title, "done" => false, "action" => "added" },
+      data: { 'todo_id' => todo.id, 'title' => todo.title, 'done' => false, 'action' => 'added' }
     )
 
     todo

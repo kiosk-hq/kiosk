@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "securerandom"
+require 'securerandom'
 
 # A single-use code to share one of the member's own lists, valid for TTL. The
 # plaintext code is returned once; only its digest is kept.

@@ -8,18 +8,18 @@ class RemoveMemberOperation
     owners = Membership.where(list_id: list_id).owner.pluck(:account_id)
     if owners.one? && owners.first.casecmp?(account_id)
       raise Kiosk::Server::Errors::Forbidden.new("cannot remove the list's last owner",
-                                                 hint: "A list must keep at least one owner.")
+                                                 hint: 'A list must keep at least one owner.')
     end
 
     if Membership.where(list_id: list_id, account_id: account_id).delete_all.zero?
-      raise Kiosk::Server::Errors::Forbidden.new("no such membership on this list",
-                                                 hint: "Use an account from list_members.")
+      raise Kiosk::Server::Errors::Forbidden.new('no such membership on this list',
+                                                 hint: 'Use an account from list_members.')
     end
 
     Kiosk::Server::Events.emit(
       topic: :list_membership, subject: list_id,
       identity_scope: Membership.account_ids_on(list_id),
-      data: { "account_id" => account_id, "action" => "removed" },
+      data: { 'account_id' => account_id, 'action' => 'removed' }
     )
   end
 end

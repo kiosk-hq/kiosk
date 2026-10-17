@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "digest"
+require 'digest'
 
 # A single-use collaboration code. Only its SHA-256 digest is stored; the
 # plaintext is handed to the owner once.

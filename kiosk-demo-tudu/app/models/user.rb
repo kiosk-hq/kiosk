@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "digest"
+require 'digest'
 
 # An account: a human who signs in with email and password, or an assistant's
 # headless account with no credentials at all.

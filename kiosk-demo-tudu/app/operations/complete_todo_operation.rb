@@ -5,8 +5,8 @@ class CompleteTodoOperation
   def self.call(todo_id:)
     todo = Todo.own.find_by(id: todo_id)
     unless todo
-      raise Kiosk::Server::Errors::Forbidden.new("todo is not on a list you are a member of",
-                                                 hint: "Use a todo from list_todos.")
+      raise Kiosk::Server::Errors::Forbidden.new('todo is not on a list you are a member of',
+                                                 hint: 'Use a todo from list_todos.')
     end
 
     todo.update!(done: true)
@@ -14,7 +14,7 @@ class CompleteTodoOperation
     Kiosk::Server::Events.emit(
       topic: :todo, subject: todo.list_id,
       identity_scope: Membership.account_ids_on(todo.list_id),
-      data: { "todo_id" => todo.id, "title" => todo.title, "done" => true, "action" => "completed" },
+      data: { 'todo_id' => todo.id, 'title' => todo.title, 'done' => true, 'action' => 'completed' }
     )
 
     todo

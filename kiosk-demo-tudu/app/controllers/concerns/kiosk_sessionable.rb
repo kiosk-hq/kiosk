@@ -9,7 +9,7 @@ module KioskSessionable
 
   def kiosk_as_human
     identity = Kiosk::Identity.new(user_id: current_user.id, role: Kiosk.configuration.roles.first.to_s,
-                                   actor: "human")
+                                   actor: 'human')
     Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
       yield identity
     end

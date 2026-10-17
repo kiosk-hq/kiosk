@@ -2,10 +2,10 @@
 
 # An account's access to a list. An owner may invite and remove members.
 class Membership < ApplicationRecord
-  enum :role, { owner: "owner", member: "member" }, validate: true
+  enum :role, { owner: 'owner', member: 'member' }, validate: true
 
   belongs_to :list
-  belongs_to :account, class_name: "User", foreign_key: :account_id, inverse_of: :memberships
+  belongs_to :account, class_name: 'User', foreign_key: :account_id, inverse_of: :memberships
 
   validates :account_id, uniqueness: { scope: :list_id }
 

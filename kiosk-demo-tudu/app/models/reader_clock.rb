@@ -3,7 +3,7 @@
 # A deadline is stored as an instant and read on the clock of whoever reads it:
 # the zone the caller declares in `Kiosk-Timezone`, else the household's own.
 module ReaderClock
-  DEFAULT_ZONE_NAME = "Europe/Lisbon"
+  DEFAULT_ZONE_NAME = 'Europe/Lisbon'
 
   module_function
 
@@ -17,7 +17,6 @@ module ReaderClock
   def label(time, in_zone = zone)
     return if time.nil?
 
-    "#{time.in_time_zone(in_zone).strftime("%a %-d %b, %H:%M")} (#{in_zone.name})"
+    "#{time.in_time_zone(in_zone).strftime('%a %-d %b, %H:%M')} (#{in_zone.name})"
   end
-
 end

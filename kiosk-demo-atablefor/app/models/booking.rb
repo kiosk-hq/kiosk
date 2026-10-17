@@ -8,7 +8,7 @@ class Booking < ApplicationRecord
 
   MAX_PARTY_SIZE = 20
 
-  enum :status, { confirmed: "confirmed", cancelled: "cancelled" }
+  enum :status, { confirmed: 'confirmed', cancelled: 'cancelled' }
 
   belongs_to :user
   belongs_to :restaurant
@@ -49,9 +49,9 @@ class Booking < ApplicationRecord
       errors.add(:seating_at, "#{wall_clock(local_seating)} has already started; pick an upcoming seating from availability")
     else
       errors.add(:seating_at, "#{wall_clock(local_seating)} is not an upcoming seating; currently " \
-                              "#{upcoming.map { wall_clock(_1) }.join(", ").presence || "none"}")
+                              "#{upcoming.map { wall_clock(it) }.join(', ').presence || 'none'}")
     end
   end
 
-  def wall_clock(seating) = seating.strftime("%Y-%m-%d %H:%M")
+  def wall_clock(seating) = seating.strftime('%Y-%m-%d %H:%M')
 end

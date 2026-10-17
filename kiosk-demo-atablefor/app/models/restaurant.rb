@@ -10,13 +10,13 @@ class Restaurant < ApplicationRecord
   def self.served_neighborhoods = distinct.order(:neighborhood).pluck(:neighborhood).compact
 
   # "20:00", as the wire spells a seating time.
-  def self.seating_times = SEATING_HOURS.map { format("%02d:00", _1) }
+  def self.seating_times = SEATING_HOURS.map { format('%02d:00', it) }
 
   # "Sun 18 Oct, 20:00 (Europe/Lisbon)": the day, the wall clock and the zone it is read on.
-  def self.seating_label(seating) = "#{seating.strftime("%a %d %b, %H:%M")} (#{seating.time_zone.name})"
+  def self.seating_label(seating) = "#{seating.strftime('%a %d %b, %H:%M')} (#{seating.time_zone.name})"
 
   # Tomorrow's 20:00 seating on the default clock, as the published examples show it.
-  def self.example_seating = new.then { _1.seating(_1.zone.tomorrow, 20) }
+  def self.example_seating = new.then { it.seating(it.zone.tomorrow, 20) }
 
   def zone = Time.find_zone!(timezone)
 
@@ -24,6 +24,6 @@ class Restaurant < ApplicationRecord
 
   # The seatings not yet started: tonight's, then the following days'.
   def upcoming_seatings(days: 2)
-    (zone.today...zone.today + days).flat_map { |date| SEATING_HOURS.map { seating(date, _1) } }.select(&:future?)
+    (zone.today...zone.today + days).flat_map { |date| SEATING_HOURS.map { seating(date, it) } }.select(&:future?)
   end
 end

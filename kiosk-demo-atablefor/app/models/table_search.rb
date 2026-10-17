@@ -17,7 +17,7 @@ class TableSearch
   def restaurants
     scope = Restaurant.includes(:restaurant_tables)
                       .where(restaurant_tables: { capacity: party_size.. })
-                      .order(:name, "restaurant_tables.capacity", "restaurant_tables.label")
+                      .order(:name, 'restaurant_tables.capacity', 'restaurant_tables.label')
     neighborhood.present? ? scope.where(neighborhood:) : scope
   end
 
@@ -38,7 +38,7 @@ class TableSearch
   def seatings(restaurant)
     restaurant.upcoming_seatings
               .select { |seating| date.blank? || seating.to_date.iso8601 == date }
-              .select { |seating| time.blank? || seating.strftime("%H:%M") == time }
+              .select { |seating| time.blank? || seating.strftime('%H:%M') == time }
   end
 
   private
@@ -51,11 +51,11 @@ class TableSearch
   end
 
   def date_upcoming
-    dates = Restaurant.select(:timezone).distinct.flat_map(&:upcoming_seatings).map { _1.to_date.iso8601 }.uniq.sort
+    dates = Restaurant.select(:timezone).distinct.flat_map(&:upcoming_seatings).map { it.to_date.iso8601 }.uniq.sort
     return if dates.include?(date)
 
     errors.add(:date, "#{date.inspect} has no upcoming seatings; try one of #{listed(dates)}")
   end
 
-  def listed(values) = values.join(", ").presence || "none"
+  def listed(values) = values.join(', ').presence || 'none'
 end

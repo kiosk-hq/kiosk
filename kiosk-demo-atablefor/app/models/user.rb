@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "digest"
+require 'digest'
 
 # A human diner (email + password) or a headless assistant account (no
 # credentials). Both hold bookings; `kiosk.current_user_id()` is this `id`.

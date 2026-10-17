@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.
+
 - 2026-10-17: In a Rails app the gem registers itself as the `equihash` proof-of-work backend at boot; an app no longer registers it by hand.
 
 ## [0.5.13] — 2026-10-11

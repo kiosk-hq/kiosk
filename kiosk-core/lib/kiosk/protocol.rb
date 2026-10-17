@@ -4,10 +4,10 @@ module Kiosk
   # Wire-protocol version and header names.
   module Protocol
     # Before 1.0 every gem, MIN_CLIENT and every pinned skill cut carry this exact version (spec §14.1).
-    API_VERSION = '0.5.13'
+    API_VERSION = '0.5.14'
 
     # The oldest skill cut that can transact with this engine (spec §14.2). Advisory.
-    MIN_CLIENT = '0.5.13'
+    MIN_CLIENT = '0.5.14'
 
     HEADER_SERVER_VERSION = 'Kiosk-Server-Version'
     HEADER_API_VERSION    = 'Kiosk-API-Version'

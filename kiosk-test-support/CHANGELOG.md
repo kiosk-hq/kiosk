@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.
+
 - 2026-10-17: New `kiosk/test_helpers/small_equihash`: required from test setup, it makes the Equihash default n=96 k=5 so test registrations stay fast.
 
 - 2026-10-17: Adds InProcessExecutor and Conformance::InProcessOrigin, moved from kiosk-server. Require them explicitly; they run against the host's kiosk-server.

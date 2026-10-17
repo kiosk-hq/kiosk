@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.
+
 - 2026-10-18: `PaymentProviders::Base#resume` runs the capture again for a repeated chain. An adapter keys its capture by the cart mandate id, so a repeat cannot charge twice.
 
 - 2026-10-17: `schema` and `guc_namespace` move to kiosk-server and `user_id_column` to kiosk-user-idp-devise, the gems that read them; `Kiosk.configure` sets them as before.

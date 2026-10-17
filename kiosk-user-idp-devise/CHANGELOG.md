@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.
+
 - 2026-10-17: `user_id_column` is a setting of this gem, default `:id`; `Kiosk.configure` sets it as before.
 
 ## [0.5.13] — 2026-10-11

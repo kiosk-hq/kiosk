@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.
+
 - 2026-10-17: The `system_role` setting is removed; nothing read it.
 
 ## [0.5.13] — 2026-10-11

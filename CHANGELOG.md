@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.14, matching skill 0.5.14.**
+
+- 2026-10-18: **Every demo and the engine default pin `skill-v0.5.14.md`**, written in Simplified Technical English, which repeats a lost payment with the same chain.
+
 - 2026-10-18: Every operator demo tolls once per access token with `RecentSpend`: a customer who spent 100 euros there within a week pays no proof.
 
 - 2026-10-18: The proof-of-work toll is paid once per access token (`access_token_ttl`, 3600 s). Settlements and recorded visits count as recent spend; `reputation_factors` is gone.

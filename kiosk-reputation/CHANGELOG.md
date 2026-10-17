@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.
+
 - 2026-10-18: `Policies::RecentSpend` asks one toll per session and lowers it by the customer's recent spend, to none at `trusted_at`.
 
 - 2026-10-17: The docs say kiosk-pow-equihash registers itself in a Rails app; the ambiguity error no longer names the removed `registration_pow_params`.

@@ -10,6 +10,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.14] — 2026-10-18
+
+- 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.
+
 - 2026-10-17: **`test_autocard:` and `attach_test_card` are removed**; a suite saves a card through `payment_setup`, as production does.
 
 - 2026-10-17: `Stripe::ChargeLookup` is removed; nothing an operator runs used it.

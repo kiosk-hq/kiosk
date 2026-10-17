@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/pow/version"
+require_relative 'lib/kiosk/pow/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-pow"
+  spec.name          = 'kiosk-pow'
   spec.version       = Kiosk::Pow::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Argon2id memory-hard proof-of-work backend for Kiosk (legacy)"
+  spec.summary       = 'Argon2id memory-hard proof-of-work backend for Kiosk (legacy)'
   spec.description   = <<~DESC
     kiosk-pow is the legacy/retired PoW backend for the Kiosk framework: an
     Argon2id search-form proof-of-work that providers can demand on any verb to
@@ -30,24 +30,25 @@ Gem::Specification.new do |spec|
     repository registers this one outside kiosk-server's own specs.
     Does not depend on kiosk-core or Rails — pure Ruby + libargon2 FFI.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]    = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]   = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-pow/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']    = spec.homepage
+  spec.metadata['source_code_uri'] = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']   = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-pow/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob("lib/**/*") + %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.files = Dir.glob('lib/**/*') + %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
 
   # Raw Argon2id FFI bindings — provides Argon2::Ext.argon2id_hash_raw.
   # We call the low-level FFI method directly to pass the exact KiB value for
   # m_cost (the high-level Password API uses a power-of-two exponent instead).
-  spec.add_dependency "argon2", "~> 2.3"
-  spec.add_dependency "ffi",    "~> 1.0"
+  spec.add_dependency 'argon2', '~> 2.3'
+  spec.add_dependency 'ffi',    '~> 1.0'
 
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rake",  "~> 13.2"
+  spec.add_development_dependency 'rake',  '~> 13.2'
+  spec.add_development_dependency 'rspec', '~> 3.13'
 end

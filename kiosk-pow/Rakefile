@@ -1,7 +1,7 @@
-require "rspec/core/rake_task"
-require "json"
-require "shellwords"
-require "tempfile"
+require 'rspec/core/rake_task'
+require 'json'
+require 'shellwords'
+require 'tempfile'
 
 RSpec::Core::RakeTask.new(:spec)
 
@@ -18,22 +18,22 @@ task default: :spec
 #   PYTHON=/path/to/python3 bundle exec rake parity
 # ---------------------------------------------------------------------------
 task :parity do
-  require "kiosk/pow"
+  require 'kiosk/pow'
 
   python = find_python_with_argon2
 
   unless python
-    abort "parity: no python3 with argon2-cffi found. " \
-          "Install it (`pip install argon2-cffi`) or set PYTHON=/path/to/python3."
+    abort 'parity: no python3 with argon2-cffi found. ' \
+          'Install it (`pip install argon2-cffi`) or set PYTHON=/path/to/python3.'
   end
 
   # Fixed inputs for the digest parity check (small m so CI is fast).
-  salt      = "testsalt12345678"   # 16 raw bytes
-  nonce_str = "42"
+  salt      = 'testsalt12345678' # 16 raw bytes
+  nonce_str = '42'
   params    = Kiosk::Pow.params(d: 6, m: 8_192, t: 1, p: 1)
 
   # -- Ruby digest ----------------------------------------------------------
-  ruby_hex = Kiosk::Pow.digest(salt:, params:, nonce: nonce_str).unpack1("H*")
+  ruby_hex = Kiosk::Pow.digest(salt:, params:, nonce: nonce_str).unpack1('H*')
   puts "Ruby   digest: #{ruby_hex}"
 
   # -- Python digest (via temp script) -------------------------------------
@@ -48,7 +48,7 @@ task :parity do
     sys.stdout.write(d.hex())
   PY
 
-  python_hex = Tempfile.open(["kiosk_pow_parity", ".py"], binmode: false) do |f|
+  python_hex = Tempfile.open(['kiosk_pow_parity', '.py'], binmode: false) do |f|
     f.write(py_script)
     f.flush
     `#{python} #{f.path.shellescape}`.strip
@@ -63,15 +63,15 @@ task :parity do
 
   # -- End-to-end: solve.py nonce accepted by Ruby verify ------------------
   puts "\nRunning solve.py end-to-end parity (d=8, m=8192, ~256 evals) ..."
-  solve_script = File.join(__dir__, "solve.py")
+  solve_script = File.join(__dir__, 'solve.py')
 
   challenge_json = JSON.generate(
-    "salt"   => [salt].pack("m0"),
-    "params" => { "m" => 8_192, "t" => 1, "p" => 1, "d" => 8 }
+    'salt' => [salt].pack('m0'),
+    'params' => { 'm' => 8_192, 't' => 1, 'p' => 1, 'd' => 8 }
   )
   solve_out   = `#{python} #{solve_script.shellescape} #{challenge_json.shellescape}`.strip
   result      = JSON.parse(solve_out)
-  found_nonce = result.fetch("nonce")
+  found_nonce = result.fetch('nonce')
 
   puts "solve.py found nonce: #{found_nonce}"
 
@@ -79,7 +79,7 @@ task :parity do
   accepted   = Kiosk::Pow.verify(salt:, params: e2e_params, nonce: found_nonce)
 
   if accepted
-    puts "E2E PARITY: OK — Ruby verify accepts the Python-produced nonce."
+    puts 'E2E PARITY: OK — Ruby verify accepts the Python-produced nonce.'
   else
     abort "E2E PARITY: FAIL — Ruby verify rejected nonce #{found_nonce.inspect}."
   end
@@ -91,12 +91,12 @@ end
 
 def find_python_with_argon2
   candidates = [
-    ENV.fetch("PYTHON", nil),
-    "/opt/homebrew/bin/python3",
-    "python3.14",
-    "python3.13",
-    "python3.12",
-    "python3"
+    ENV.fetch('PYTHON', nil),
+    '/opt/homebrew/bin/python3',
+    'python3.14',
+    'python3.13',
+    'python3.12',
+    'python3'
   ].compact
 
   candidates.find do |py|

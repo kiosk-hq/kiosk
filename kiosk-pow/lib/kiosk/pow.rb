@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require "ffi"
-require "argon2"
+require 'ffi'
+require 'argon2'
 
-require "kiosk/pow/version"
+require 'kiosk/pow/version'
 
 module Kiosk
   # Argon2id memory-hard proof-of-work backend, dispatched by kiosk-reputation for "argon2id".
   # A nonce is valid iff leading_zero_bits(Argon2id(nonce.to_s, salt, m, t, p, v=0x13, 32 bytes)) >= d,
   # byte-identical to the Python solver.
   module Pow
-    NAME = "argon2id"
+    NAME = 'argon2id'
 
     # d: required leading zero bits; m: memory in KiB.
     def self.params(d:, m: 65_536, t: 1, p: 1)

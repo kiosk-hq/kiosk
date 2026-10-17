@@ -34,7 +34,8 @@ module Kiosk
         end
 
         # No row `as:` sees reaches `and_not:`, compared whole-row. An empty first
-        # answer fails (no positive control), and so does a `published` verb.
+        # answer fails, because a scoping assertion with no positive control passes
+        # on a verb that answers everybody with nothing. A `published` verb fails too.
         def principal_scope(origin, name, as:, and_not:, params: EXAMPLE)
           PrincipalScope.call(origin, name, as: as, and_not: and_not, params: params)
         end

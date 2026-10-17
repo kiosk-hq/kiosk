@@ -11,6 +11,7 @@ Kiosk.configure do |c|
   c.roles             = %i[customer]
   c.registration_role = :customer
 
+  # Demo only: checks every answer in production too. The generated default checks outside production only.
   c.validate_responses = true
 
   c.user_idp     = Kiosk::UserIdentityProviders::Devise.new

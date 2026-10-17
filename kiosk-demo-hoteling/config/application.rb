@@ -20,6 +20,7 @@ module KioskDemoHoteling
     # Initializers build objects from app/services, before the main autoloader is set up.
     config.autoload_once_paths << Rails.root.join('app/services').to_s
 
+    # Demo only: jobs run inside the web process and are lost on restart. Use a durable queue.
     config.active_job.queue_adapter = :async
     # public first: the kiosk tables reference public.users.
     config.active_record.dump_schemas = 'public,kiosk'

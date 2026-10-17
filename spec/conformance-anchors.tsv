@@ -77,7 +77,7 @@ e2e/README.md	    ├── equihash_register.rb                # shared registe
 e2e/README.md	    ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
 e2e/README.md	## File layout
 e2e/README.md	## Run locally
-e2e/README.md	- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model; a 
+e2e/README.md	- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model.
 e2e/README.md	- **Multi-agent revocation** flows.
 e2e/README.md	- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface.
 e2e/README.md	- The `kiosk:install` Rails generator produces working migrations
@@ -1662,9 +1662,9 @@ kiosk-server/spec/kiosk/server/open_api_spec.rb	publishes the `output_schema` VE
 kiosk-server/spec/kiosk/server/open_api_spec.rb	references the `input_schema` component rather than inlining it
 kiosk-server/spec/kiosk/server/open_api_spec.rb	slot on the descriptor component (T-085)
 kiosk-server/spec/kiosk/server/page_spec.rb	.encode_offset / .decode_offset round-trip
+kiosk-server/spec/kiosk/server/page_spec.rb	carries the next_cursor it is given
 kiosk-server/spec/kiosk/server/page_spec.rb	decodes a nil/empty cursor to the default (first page)
 kiosk-server/spec/kiosk/server/page_spec.rb	defaults total to nil — the header is omitted, never guessed
-kiosk-server/spec/kiosk/server/page_spec.rb	is truncated? when a next_cursor is present
 kiosk-server/spec/kiosk/server/page_spec.rb	publishes the offset as a decimal integer and reads it back
 kiosk-server/spec/kiosk/server/page_spec.rb	refuses a cursor it did not issue with a typed 400, not a silent page one
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	class ClaimSpecPsp < Kiosk::PaymentProviders::Base

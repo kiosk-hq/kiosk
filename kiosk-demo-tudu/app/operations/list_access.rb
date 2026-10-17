@@ -8,14 +8,14 @@ module ListAccess
   def member!(list_id)
     return if Membership.own.exists?(list_id: list_id)
 
-    raise Kiosk::Server::Errors::Forbidden.new("list not accessible by the authenticated principal",
-                                               hint: "You may only reach lists you are a member of.")
+    raise Kiosk::Server::Errors::Forbidden.new("you are not a member of this list",
+                                               hint: "Use a list from my_lists.")
   end
 
   def owner!(list_id)
     return if Membership.own.owner.exists?(list_id: list_id)
 
-    raise Kiosk::Server::Errors::Forbidden.new("list not owned by the authenticated principal",
-                                               hint: "Only the list owner may do this.")
+    raise Kiosk::Server::Errors::Forbidden.new("only the list owner may do this",
+                                               hint: "Ask the list owner.")
   end
 end

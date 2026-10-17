@@ -39,12 +39,12 @@ class ListsController < ApplicationController
 
   def create
     title = params.require(:title)
-    list  = kiosk_as_human { |identity| CreateListOperation.call(principal_id: identity.user_id, title: title) }
+    list  = kiosk_as_human { |identity| CreateListOperation.call(member_id: identity.user_id, title: title) }
     redirect_to list_path(list[:list_id]), notice: "List created."
   end
 
   def invite
-    invite = kiosk_as_human { |identity| InviteOperation.call(principal_id: identity.user_id, list_id: params[:id]) }
+    invite = kiosk_as_human { |identity| InviteOperation.call(member_id: identity.user_id, list_id: params[:id]) }
     redirect_to list_path(params[:id]),
                 notice: "Invite code (share it, expires in #{invite[:expires_in] / 60} min): #{invite[:code]}"
   end

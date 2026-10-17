@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# A todo on one of the principal's lists, attributed to the assistant that added
+# A todo on one of the member's lists, attributed to the assistant that added
 # it (nil for a human).
 class AddTodoOperation
   def self.call(agent_id:, list_id:, title:, due_at: nil)

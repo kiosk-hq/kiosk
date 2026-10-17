@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-# Marks a todo on one of the principal's lists done.
+# Marks a todo on one of the member's lists done.
 class CompleteTodoOperation
   def self.call(todo_id:)
     todo = Todo.own.find_by(id: todo_id)
     unless todo
-      raise Kiosk::Server::Errors::Forbidden.new("todo not on a list the authenticated principal is a member of",
-                                                 hint: "You may only complete todos on lists you are a member of.")
+      raise Kiosk::Server::Errors::Forbidden.new("todo is not on a list you are a member of",
+                                                 hint: "Use a todo from list_todos.")
     end
 
     todo.update!(done: true)

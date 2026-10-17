@@ -108,7 +108,7 @@ assistant already bound to Alice moves nothing and destroys nothing.
 Mallory (a non-member) is walled out: her `my_lists` is empty; `list_todos` /
 `list_members` on a private list → 403; a forged `account_id` on her
 `create_list` is **refused** — `create_list` declares `additionalProperties:
-false` and the principal is not one of its inputs, so the wire answers `400
+false` and the owner is not one of its inputs, so the wire answers `400
 bad_request` naming the parameter, and her legitimate list still belongs to her
 in the DB; used/garbage invite codes → 403. A genuine member is the positive
 control (she DOES see and read the list), and after `remove_member` her next
@@ -158,7 +158,7 @@ refusal is an RFC 9457 problem document — branch on its top-level `code`.
 
 | Endpoint | Name | What it does |
 |---|---|---|
-| `GET /kiosk/whoami` | `whoami` | The GUC principal + acting AI assistant |
+| `GET /kiosk/whoami` | `whoami` | The signed-in member + acting AI assistant |
 | `GET /kiosk/my_lists` | `my_lists` | Lists the caller is a member of (owner or member) |
 | `GET /kiosk/list_todos?list_id=…` | `list_todos(list_id)` | A member-list's todos, with attribution |
 | `GET /kiosk/list_members?list_id=…` | `list_members(list_id)` | A member-list's members (display names, never login addresses) + roles |
@@ -191,11 +191,12 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | Path | What's there |
 |---|---|
 | `db/migrate/` | The canonical kiosk migrations: the full `kiosk:install` set — every demo ships that output unmodified, so reservations/mandates/settlements are installed here and never written — plus `users`, Action Cable's table and `create_tudu_domain` (lists/memberships/todos/invites) |
-| `app/models/{user,list,membership,todo,invite}.rb` | `User` is the account principal (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks — configuration only; it names the two handler controllers, it does not contain them |
-| `app/controllers/kiosk/household_controller.rb` | The `whoami` / `my_lists` / `list_todos` / `list_members` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/todo_lists_controller.rb` | The six actions (`create_list`, `add_todo`, `complete_todo`, `invite`, `accept_invite`, `remove_member`) — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the wire renders as a problem document |
-| `app/models/membership.rb`, `app/operations/list_access.rb` | Who may reach a list: `Membership.own` is the principal's memberships, `ListAccess` the 403 a stranger gets |
+| `app/models/{user,list,membership,todo,invite}.rb` | `User` is a member's account (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_creation`/`assistant_claimed` hooks — configuration only; the handler controllers live in `app/controllers/kiosk/` |
+| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list` — an ordinary Rails controller with `include Kiosk::Handler`, each verb marked `kind :query` or `kind :action`. Handlers are reached only through the wire |
+| `app/controllers/kiosk/todos_controller.rb` | `list_todos`, `add_todo`, `complete_todo` and the `todo` topic |
+| `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `invite`, `accept_invite`, `remove_member` and the `list_membership` topic. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the wire renders as a problem document |
+| `app/models/membership.rb`, `app/operations/list_access.rb` | Who may reach a list: `Membership.own` is the signed-in member's memberships, `ListAccess` the 403 a stranger gets |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, calling the same Operations as the wire; a refusal becomes a flash |
 | `script/redteam_suite.rb` | The adversarial battery, runnable against any tudu origin |
 | `test/` | `bin/rails test`; `test/stories/` tells each household story against a live origin over HTTP |

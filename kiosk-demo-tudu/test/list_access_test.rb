@@ -9,7 +9,7 @@ class ListAccessTest < ActiveSupport::TestCase
     as(@bob) do
       assert_nil ListAccess.member!(@list.id)
       error = assert_raises(Kiosk::Server::Errors::Forbidden) { ListAccess.owner!(@list.id) }
-      assert_equal "list not owned by the authenticated principal", error.message
+      assert_equal "only the list owner may do this", error.message
     end
     as(@alice) { assert_nil ListAccess.owner!(@list.id) }
   end
@@ -19,7 +19,7 @@ class ListAccessTest < ActiveSupport::TestCase
     as(stranger) do
       [@list.id, SecureRandom.uuid, "not-a-uuid"].each do |list_id|
         error = assert_raises(Kiosk::Server::Errors::Forbidden) { ListAccess.member!(list_id) }
-        assert_equal "list not accessible by the authenticated principal", error.message
+        assert_equal "you are not a member of this list", error.message
       end
     end
   end

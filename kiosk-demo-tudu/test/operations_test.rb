@@ -13,7 +13,7 @@ class OperationsTest < ActiveSupport::TestCase
     assert_equal Time.utc(2026, 9, 14, 12), Todo.find(todo_id).due_at
   end
 
-  test "a todo needs a title, and a list its principal is on" do
+  test "a todo needs a title, and a list its member is on" do
     as(@bob) do
       assert_raises(ActiveRecord::RecordInvalid) do
         AddTodoOperation.call(agent_id: nil, list_id: @list.id, title: "  ")
@@ -38,21 +38,21 @@ class OperationsTest < ActiveSupport::TestCase
   test "an invite is redeemed once, and never after it expires" do
     carol = User.create!
     dave  = User.create!
-    code  = as(@alice) { InviteOperation.call(principal_id: @alice.id, list_id: @list.id)[:code] }
+    code  = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id)[:code] }
 
-    assert_equal({ list_id: @list.id, joined: true }, as(carol) { AcceptInviteOperation.call(principal_id: carol.id, code: code) })
+    assert_equal({ list_id: @list.id, joined: true }, as(carol) { AcceptInviteOperation.call(member_id: carol.id, code: code) })
     assert @list.memberships.member.exists?(account: carol)
-    assert_raises(Kiosk::Server::Errors::Forbidden) { as(dave) { AcceptInviteOperation.call(principal_id: dave.id, code: code) } }
+    assert_raises(Kiosk::Server::Errors::Forbidden) { as(dave) { AcceptInviteOperation.call(member_id: dave.id, code: code) } }
 
-    late = as(@alice) { InviteOperation.call(principal_id: @alice.id, list_id: @list.id)[:code] }
+    late = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id)[:code] }
     travel(InviteOperation::TTL + 1.second) do
-      assert_raises(Kiosk::Server::Errors::Forbidden) { as(dave) { AcceptInviteOperation.call(principal_id: dave.id, code: late) } }
+      assert_raises(Kiosk::Server::Errors::Forbidden) { as(dave) { AcceptInviteOperation.call(member_id: dave.id, code: late) } }
     end
   end
 
   test "an owner redeeming her own invite stays the owner" do
-    code = as(@alice) { InviteOperation.call(principal_id: @alice.id, list_id: @list.id)[:code] }
-    as(@alice) { AcceptInviteOperation.call(principal_id: @alice.id, code: code) }
+    code = as(@alice) { InviteOperation.call(member_id: @alice.id, list_id: @list.id)[:code] }
+    as(@alice) { AcceptInviteOperation.call(member_id: @alice.id, code: code) }
     assert @list.memberships.owner.exists?(account: @alice)
   end
 

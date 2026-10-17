@@ -38,9 +38,9 @@ end
 ASSISTANT = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 
 def register_agent
-  principal = ASSISTANT.register!
-  { key: principal.rsa_key, pem: principal.rsa_key.public_key.to_pem,
-    token: principal.token, agent_id: principal.agent_id, user_id: principal.user_id }
+  assistant = ASSISTANT.register!
+  { key: assistant.rsa_key, pem: assistant.rsa_key.public_key.to_pem,
+    token: assistant.token, agent_id: assistant.agent_id, user_id: assistant.user_id }
 end
 
 BATTERY = Kiosk::Redteam::Battery.new
@@ -60,7 +60,7 @@ post_json("/kiosk/accept_invite", { code: invite_code }, WIRE.bearer(member[:tok
 rc, = get_json("/kiosk/list_todos", { list_id: list_id }, WIRE.bearer(outsider[:token]))
 BATTERY.record("CrossTenantRead", rc == 403, "outsider list_todos → #{rc} (want 403)")
 
-# The principal is not an input of create_list, so a forged account_id is refused with a 400.
+# The owner is not an input of create_list, so a forged account_id is refused with a 400.
 rc, forged = post_json("/kiosk/create_list",
                        { title: "Forged", account_id: owner[:user_id] },
                        WIRE.bearer(outsider[:token]))

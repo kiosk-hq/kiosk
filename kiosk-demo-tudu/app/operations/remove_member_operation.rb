@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Removes a member from one of the principal's own lists. A list keeps at least one owner.
+# Removes a member from one of the caller's own lists. A list keeps at least one owner.
 class RemoveMemberOperation
   def self.call(list_id:, account_id:)
     ListAccess.owner!(list_id)
@@ -13,7 +13,7 @@ class RemoveMemberOperation
 
     if Membership.where(list_id: list_id, account_id: account_id).delete_all.zero?
       raise Kiosk::Server::Errors::Forbidden.new("no such membership on this list",
-                                                 hint: "The account is not a member of this list.")
+                                                 hint: "Use an account from list_members.")
     end
 
     Kiosk::Server::Events.emit(

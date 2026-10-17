@@ -25,7 +25,7 @@ class DiscoveryStory < StoryTest
     end
 
     assert_equal %w[list_membership todo], schema["events"].pluck("name").sort
-    assert_equal %w[description name payload_schema reach], schema["events"].find { _1["name"] == "todo" }.keys.sort
+    assert_equal %w[description examples name payload_schema reach], schema["events"].find { _1["name"] == "todo" }.keys.sort
 
     examples = Kiosk::TestHelpers::DescriptorExamples.of(schema)
     assert_operator examples.size, :>=, 4

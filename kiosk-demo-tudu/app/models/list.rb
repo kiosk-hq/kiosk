@@ -10,7 +10,7 @@ class List < ApplicationRecord
 
   validates :title, presence: true
 
-  # The current principal's lists, as `my_lists` publishes them and `/lists` shows them.
+  # The signed-in member's lists, as `my_lists` publishes them and `/lists` shows them.
   def self.reachable_rows
     joins(:memberships).merge(Membership.own)
       .order(created_at: :desc, id: :asc)

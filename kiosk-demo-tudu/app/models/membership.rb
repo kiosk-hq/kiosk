@@ -13,7 +13,7 @@ class Membership < ApplicationRecord
 
   def self.account_ids_on(list_id) = where(list_id: list_id).pluck(:account_id)
 
-  # Outside a request, where `own` has no principal: the event stream asks this.
+  # Outside a request, where `own` has no signed-in member: the event stream asks this.
   def self.readable_by?(list_id, account_id) = where(list_id: list_id, account_id: account_id).exists?
 
   # Who is on a list, as `list_members` publishes it. Never an email address.

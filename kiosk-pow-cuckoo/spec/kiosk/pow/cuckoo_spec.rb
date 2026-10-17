@@ -255,7 +255,7 @@ RSpec.describe Kiosk::Pow::Cuckoo do
 
     context 'REJECT via public API — different keys (wrong header)' do
       it '(a) rejects when salt byte 0 is flipped to 1 (different keys)' do
-        bad_salt = "\x01" + ("\x00" * 75)
+        bad_salt = "\x01#{"\x00" * 75}"
         result = described_class.verify(
           salt: bad_salt,
           params: params,

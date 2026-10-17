@@ -128,7 +128,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
         Kiosk::Reputation::Backends.reset!
         Kiosk::Reputation::Backends.register('equihash', TestHelpers::SpyRaisingBackend)
 
-        tampered = challenge.merge(sig: ('badbad' * 10) + 'ab')
+        tampered = challenge.merge(sig: "#{'badbad' * 10}ab")
         # If the backend were called the SpyRaisingBackend would raise.
         expect do
           described_class.verify(

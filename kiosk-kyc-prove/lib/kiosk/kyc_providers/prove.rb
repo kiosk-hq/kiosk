@@ -27,7 +27,7 @@ module Kiosk
         super()
         @operator_id = operator_id.to_s
         @secret      = intake_secret.to_s
-        @intake      = URI.join(url.to_s.chomp('/') + '/', 'verifications')
+        @intake      = URI.join("#{url.to_s.chomp('/')}/", 'verifications')
       end
 
       def open_verification(subject:, claims:, audience:, callback_url:)

@@ -131,8 +131,7 @@ RSpec.describe Kiosk::Server::Kyc do
   def open_request(age: 0, user_id: 'u-1')
     id = "old-#{SecureRandom.hex(4)}"
     ActiveRecord::Base.connection.exec_query(
-      %(INSERT INTO "#{KYC_SPEC_SCHEMA}".kyc_requests (id, user_id, nonce, created_at) ) +
-        %(VALUES ($1, $2, 'n', now() - make_interval(secs => $3))),
+      "INSERT INTO \"#{KYC_SPEC_SCHEMA}\".kyc_requests (id, user_id, nonce, created_at) VALUES ($1, $2, 'n', now() - make_interval(secs => $3))",
       'spec', [id, user_id, age]
     )
     id

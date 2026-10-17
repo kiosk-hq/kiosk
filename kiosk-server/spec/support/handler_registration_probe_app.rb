@@ -29,9 +29,7 @@ CONTROLLER = File.join(ROOT, 'app/controllers/kiosk/probe_controller.rb')
 FileUtils.mkdir_p(File.dirname(CONTROLLER))
 
 SCHEMAS =
-  %(  kind :query\n) +
-  %(  input_schema type: "object", additionalProperties: false, properties: {}, required: []\n) +
-  %(  output_schema type: "array", items: { type: "object" }\n)
+  "  kind :query\n  input_schema type: \"object\", additionalProperties: false, properties: {}, required: []\n  output_schema type: \"array\", items: { type: \"object\" }\n"
 
 # Generation 1 of the operator's handler controller: two verbs.
 def write_controller(verbs:, browse_description: 'Generation 1 description.')

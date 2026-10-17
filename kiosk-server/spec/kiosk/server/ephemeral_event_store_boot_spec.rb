@@ -29,10 +29,12 @@ module EphemeralEventStoreBoot
       JSON.parse(stdout)
     end
   end
+
+  def boot(scenario) = EphemeralEventStoreBoot.report(scenario)
 end
 
 RSpec.describe 'an ephemeral event store in a booted production app' do
-  def boot(scenario) = EphemeralEventStoreBoot.report(scenario)
+  include EphemeralEventStoreBoot
 
   context 'an origin that declares a topic and configures no event store' do
     it 'does not come up at all' do
@@ -56,6 +58,10 @@ RSpec.describe 'an ephemeral event store in a booted production app' do
         .to include('c.event_store = Kiosk::Server::EventStores::ActiveRecord.new')
     end
   end
+end
+
+RSpec.describe 'an ephemeral event store in a booted production app, correct shapes' do
+  include EphemeralEventStoreBoot
 
   context 'an origin that declares a topic AND a durable store' do
     it 'boots — this is what the four topic-declaring demos and the e2e fixture configure' do

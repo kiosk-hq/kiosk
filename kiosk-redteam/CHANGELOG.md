@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `Battery#skip`, `Battery#entries` and the `echo:` keyword of `Battery#absorb` are removed; nothing used them.
+
 ## [0.5.13] — 2026-10-11
 
 - 2026-10-11: Version 0.5.13, the tree cut that matches skill 0.5.13.

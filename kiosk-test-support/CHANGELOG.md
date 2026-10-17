@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `Customer#leaves` is removed; nothing called it.
 - 2026-10-17: `Person#links_a_newcomer` links a newly keyed assistant to the signed-in person, for scripts that need a bound principal.
 
 ## [0.5.13] — 2026-10-11

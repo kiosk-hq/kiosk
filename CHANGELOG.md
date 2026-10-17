@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Public methods nothing called are removed from kiosk-core, kiosk-server, kiosk-redteam and kiosk-test-support; hoteling drops two environment overrides nothing set.
+
 - 2026-10-17: Every demo renders its query and action answers with Jbuilder views; getgrocery no longer declares `order_payment`, a topic nothing emitted.
 
 - 2026-10-17: A handler may answer through its JSON template, whatever the caller's `Accept`, and `render_kiosk_page` pages what that template renders.

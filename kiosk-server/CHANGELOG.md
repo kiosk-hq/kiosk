@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `Kiosk::Server.listener_path`, `Page#truncated?` and `EventStore#prune_before` are removed; the in-process event store never reports a truncated cursor.
 - 2026-10-17: A handler may answer through its JSON template (Jbuilder, say), rendered whatever the caller's `Accept`; `render_kiosk_page` without rows pages what the template renders.
 - 2026-10-17: A topic may declare `example` payloads, checked against its `payload_schema` at declaration and published as the topic's `examples`.
 

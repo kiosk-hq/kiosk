@@ -11,49 +11,40 @@ module Kiosk
   # byte-identical to the Python solver.
   module Pow
     NAME = 'argon2id'
+    DIGEST_BYTES = 32
 
     # d: required leading zero bits; m: memory in KiB.
-    def self.params(d:, m: 65_536, t: 1, p: 1)
+    def self.params(d:, m: 65_536, t: 1, p: 1) # rubocop:disable Naming/MethodParameterName -- m, t, p and d are the wire params keys.
       { m:, t:, p:, d: }
     end
 
-    # Raw libargon2 call: the Password API would turn m_cost into a power-of-two exponent.
     def self.digest(salt:, params:, nonce:)
-      password = nonce.to_s.b
-      m = Integer(params[:m])
-      t = Integer(params[:t])
-      p = Integer(params[:p])
-
-      result = nil
-      FFI::MemoryPointer.new(:char, 32) do |buffer|
-        ret = Argon2::Ext.argon2id_hash_raw(
-          t, m, p,
-          password, password.bytesize,
-          salt,     salt.bytesize,
-          buffer, 32
-        )
-        raise "Argon2id evaluation failed (code #{ret})" unless ret.zero?
-
-        result = buffer.read_string(32)
-      end
-      result
+      buffer = FFI::MemoryPointer.new(:char, DIGEST_BYTES)
+      argon2id_hash_raw(salt, params, nonce.to_s.b, buffer)
+      buffer.read_string(DIGEST_BYTES)
+    ensure
+      buffer&.free
     end
 
-    def self.verify(salt:, params:, nonce:)
+    # Raw libargon2 call: the Password API would turn m_cost into a power-of-two exponent.
+    def self.argon2id_hash_raw(salt, params, password, buffer)
+      memory, time, lanes = params.values_at(:m, :t, :p).map { Integer(it) }
+      ret = Argon2::Ext.argon2id_hash_raw(time, memory, lanes, password, password.bytesize,
+                                          salt, salt.bytesize, buffer, DIGEST_BYTES)
+      raise "Argon2id evaluation failed (code #{ret})" unless ret.zero?
+    end
+    private_class_method :argon2id_hash_raw
+
+    def self.verify(salt:, params:, nonce:) # rubocop:disable Naming/PredicateMethod -- the PoW backend interface name.
       leading_zero_bits(digest(salt:, params:, nonce:)) >= params[:d]
     end
 
     def self.leading_zero_bits(bytes)
-      return 0 if bytes.empty?
-
       count = 0
-      bytes.each_byte do |b|
-        if b.zero?
-          count += 8
-        else
-          count += 8 - b.bit_length
-          break
-        end
+      bytes.each_byte do |byte|
+        return count + 8 - byte.bit_length unless byte.zero?
+
+        count += 8
       end
       count
     end

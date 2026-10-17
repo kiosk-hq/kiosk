@@ -1,0 +1,39 @@
+{
+  "ignored_warnings": [
+    {
+      "warning_type": "Cross-Site Scripting",
+      "warning_code": 2,
+      "fingerprint": "897765f828c5869905093daad36cef2d5a098aa53963fa3d32b71c147aff5360",
+      "check_name": "CrossSiteScripting",
+      "message": "Unescaped parameter value",
+      "file": "app/views/unlock/show.html.erb",
+      "line": 13,
+      "link": "https://brakemanscanner.org/docs/warning_types/cross_site_scripting",
+      "code": "UnlockLink.svg(UnlockLink.url(:origin => request.base_url, :scooter_code => params.expect(:scooter), :rental_token => params.expect(:rt)))",
+      "render_path": [
+        {
+          "type": "controller",
+          "class": "UnlockController",
+          "method": "show",
+          "line": 17,
+          "file": "app/controllers/unlock_controller.rb",
+          "rendered": {
+            "name": "unlock/show",
+            "file": "app/views/unlock/show.html.erb"
+          }
+        }
+      ],
+      "location": {
+        "type": "template",
+        "template": "unlock/show"
+      },
+      "user_input": "params.expect(:scooter)",
+      "confidence": "Weak",
+      "cwe_id": [
+        79
+      ],
+      "note": "The parameters are encoded into QR modules: the SVG holds only rectangles that rqrcode draws, never the parameter text."
+    }
+  ],
+  "brakeman_version": "8.1.0"
+}

@@ -60,14 +60,16 @@ class ListsController < ApplicationController
     Membership.where(account_id: HOUSEMATE_ID)
               .includes(list: [:todos, { memberships: :account }])
               .sort_by { [-it.list.created_at.to_f, it.list_id] }
-              .map do |membership|
-                list  = membership.list
-                owner = list.memberships.find(&:owner?).account
-                { 'list_id' => list.id,
-                  'title' => list.title,
-                  'my_role' => membership.role,
-                  'owner_name' => User.public_name(owner.display_name, owner.id),
-                  'tasks' => list.todos.sort_by { [it.created_at, it.id] } }
-              end
+              .map { board_row(it) }
+  end
+
+  def board_row(membership)
+    list  = membership.list
+    owner = list.memberships.find(&:owner?).account
+    { 'list_id' => list.id,
+      'title' => list.title,
+      'my_role' => membership.role,
+      'owner_name' => User.public_name(owner.display_name, owner.id),
+      'tasks' => list.todos.sort_by { [it.created_at, it.id] } }
   end
 end

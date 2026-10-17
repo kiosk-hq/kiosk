@@ -10,13 +10,15 @@ class CompleteTodoOperation
     end
 
     todo.update!(done: true)
+    announce(todo)
+    todo
+  end
 
+  def self.announce(todo)
     Kiosk::Server::Events.emit(
       topic: :todo, subject: todo.list_id,
       identity_scope: Membership.account_ids_on(todo.list_id),
       data: { 'todo_id' => todo.id, 'title' => todo.title, 'done' => true, 'action' => 'completed' }
     )
-
-    todo
   end
 end

@@ -1,187 +1,158 @@
 # frozen_string_literal: true
 
-# K-1718: NOTHING IN THIS REPOSITORY EVER RAN RUBY IN WARNING MODE, so a dead
-# binding could sit in shipped code indefinitely and the interpreter would say
-# so on every parse to nobody.
+# Parses every tracked `.rb` and `.rake` file in warning mode. A dead binding
+# (a variable assigned and never read) is a defect that Ruby names at parse
+# time; nothing else in the repository runs Ruby with warnings on.
 #
-# WHAT WENT WRONG, and it is the reason this is a guard and not four edits.
-# `e2e/fixtures/register_pow_flow.rb` destructured a two-element return into
-# `reg_key, reg` and read only `reg`, so a keypair was bound and never used —
-# in a fixture whose whole subject is that the keypair is what registers. Ruby
-# names that defect precisely, for free, at parse time. The census that found
-# it — `ruby -c -w` over every tracked `.rb` — answered eleven warnings across
-# five files, every one of them «assigned but unused variable», and a search
-# for a warning-mode invocation over `bin/`, the workflows, the Rakefiles and
-# the spec helpers answered ONE line, which was a sentence in a header rather
-# than a command anything ran.
+# It parses and does not run: a gem's `lib` file, a demo's `db/seeds.rb` and a
+# spec cannot run alone, as they need a database or a Rails boot. A parse runs
+# no code, so the corpus can be the whole tracked tree. It is a spec, so the
+# gems matrix runs it on every push.
 #
-# WHY A PARSE AND NOT A RUN. The obvious instrument is the one that RUNS a
-# script under `-w` and reads the stderr of a real run, which is how a gate over
-# executable tooling is written. It cannot reach this corpus at all: a gem's
-# `lib` file, a demo's `db/seeds.rb` and a spec are
-# not runnable that way — half of them would need a database and the rest would
-# need a Rails boot — so widening its corpus is not an option that exists. The
-# instrument for source is the OTHER verb of the same flag: PARSE it. Nothing is
-# executed here, so there is no library noise to filter and no service to stand
-# up, and the corpus can be the whole tracked tree.
+# The contract has two tiers:
 #
-# WHY A SPEC AND NOT A `bin/check-*`. It has to reach CI to be worth anything,
-# and `kiosk-test-support` is in the gems matrix, so a spec here gates every push
-# without a workflow of its own — the same reason `no_dated_literals_spec.rb`
-# and `skill_pin_spec.rb` live beside it.
+#   FAIL    the dead-binding family: «assigned but unused variable» and
+#           «shadowing outer local variable». Both are about this repository's
+#           own source, both are deterministic for a given parser, and neither
+#           has a realistic false positive: an underscore prefix says
+#           «deliberately dropped» in one character.
+#   REPORT  every other parse warning, with its file and line, and not fatal. A
+#           Ruby upgrade can start to warn about syntax this tree uses correctly
+#           today; that must show, and it must not fail a build that nobody can
+#           fix without a downgrade.
 #
-# THE CONTRACT IS TWO-TIER, deliberately, and it is NOT the same split
-# `check-script-warnings.rb` makes:
+# It cannot catch:
 #
-#   FAIL    the DEAD-BINDING family — «assigned but unused variable» and
-#           «shadowing outer local variable». Both are statements about THIS
-#           repository's own source, both are deterministic under a given
-#           parser, and neither has a realistic false positive: a binding
-#           nobody reads is either dead or misspelt, and an underscore prefix
-#           says «deliberately dropped» in one character.
-#   REPORT  every other parse warning, printed with its file and line and NOT
-#           fatal. A Ruby upgrade may start warning about a syntax this tree
-#           uses correctly today; that must surface, and it must not redden a
-#           build nobody can fix without upgrading back. K-1097's trade,
-#           applied to the half of the output that is not ours to promise.
-#
-# WHAT IT CANNOT CATCH, stated plainly because a parse is not an execution:
-#
-#   * a RUNTIME warning — a redefined method, a `Struct` member shadowing.
-#     Those need the file LOADED, so they belong to a gate that runs its corpus
-#     rather than parsing it. ONE of them is the exception below.
-#   * THE EXCEPTION IS `already initialized constant` BETWEEN TWO SPEC FILES
-#     (K-1851): its cause IS visible in the source, because a constant assigned
-#     at the top of an `RSpec.describe` block lands in Object rather than on the
-#     example group, so two files in one suite naming the same one redefine each
-#     other and whichever loads second wins. The last example reads that
-#     statically. A METHOD two files redefine has the identical shape and is not
-#     read here.
-#   * a variable that IS read, by code that never executes.
+#   * a runtime warning (a redefined method, a `Struct` member shadowing),
+#     because that needs the file loaded. The exception is `already initialized
+#     constant` between two spec files: a constant assigned outside a class or
+#     module lands in Object, so two files in one suite that assign the same one
+#     redefine each other. The last example reads that from the source. A method
+#     that two files redefine has the same shape and is not read here.
+#   * a variable that IS read, by code that never runs.
 #   * anything outside a tracked `.rb` or `.rake` file: `.erb` templates, the
-#     `.rb.tt` generator templates (which are not valid Ruby on their own), and
-#     any file `git ls-files` does not carry.
+#     `.rb.tt` generator templates (not valid Ruby alone), untracked files.
 #
-# It reads the TRACKED tree and does NOT skip when that tree is not where it
-# expects (K-502): a guard that goes quiet when its inputs move proves nothing.
+# It reads the tracked tree and never skips.
 
 require 'open3'
 require 'stringio'
 
-WARNINGS_REPO_ROOT = File.expand_path('../..', __dir__)
+module ParseWarnings
+  REPO_ROOT = File.expand_path('../..', __dir__)
 
-# The two shapes above, and only those, are fatal.
-FATAL_WARNING = /warning: (?:assigned but unused variable|shadowing outer local variable)/
+  # The two shapes above, and only those, are fatal.
+  FATAL = /warning: (?:assigned but unused variable|shadowing outer local variable)/
 
-RSpec.describe 'no Ruby parse warning in tracked source (K-1718)' do
-  # Compiled IN THIS PROCESS rather than by one `ruby -c -w` subprocess per
-  # file: `compile_file` emits the identical warnings and never executes the
-  # source, so the whole tree costs a second instead of the minute eight hundred
-  # subprocesses would.
-  #
-  # IT MUST BE `compile_file` AND NOT `compile`, and this was MEASURED by the
-  # plant rather than reasoned about — the first writing used
-  # `compile(File.read(abs), rel)` and was VACUOUS: on the very defect this
-  # guard is named for it reported nothing, because that entry point treats the
-  # script's top level as an eval scope where a local may still be read from
-  # outside, so it withholds the unused-variable warning there. `compile_file`
-  # on the identical file reports it, and so does `ruby -c -w`. A guard that had
-  # only been run green would have shipped blind.
-  def self.parse_warnings
-    out, err, status = Open3.capture3('git', '-C', WARNINGS_REPO_ROOT, 'ls-files', '-z', '*.rb', '*.rake')
-    raise "git ls-files failed in #{WARNINGS_REPO_ROOT}: #{err}" unless status.success?
+  module_function
+
+  def tracked_files
+    out, err, status = Open3.capture3('git', '-C', REPO_ROOT, 'ls-files', '-z', '*.rb', '*.rake')
+    raise "git ls-files failed in #{REPO_ROOT}: #{err}" unless status.success?
 
     files = out.split("\0").reject(&:empty?)
-    raise "git ls-files found no Ruby source at all under #{WARNINGS_REPO_ROOT}" if files.empty?
+    raise "git ls-files found no Ruby source at all under #{REPO_ROOT}" if files.empty?
 
-    warnings = []
-    verbose  = $VERBOSE
-    files.each do |rel|
-      abs = File.join(WARNINGS_REPO_ROOT, rel)
-      next unless File.file?(abs)
-
-      captured = StringIO.new
-      real     = $stderr
-      begin
-        $stderr  = captured
-        $VERBOSE = true
-        RubyVM::InstructionSequence.compile_file(abs)
-      rescue SyntaxError => e
-        # A file this repository cannot parse is a harder failure than a
-        # warning, and it is reported as one rather than swallowed.
-        captured.puts("#{rel}: warning: does not parse — #{e.message.lines.first.to_s.strip}")
-      ensure
-        $VERBOSE = verbose
-        $stderr  = real
-      end
-      # `compile_file` names the file by the path it was given, which is
-      # absolute; the report says where the file is IN THE REPOSITORY.
-      captured.string.each_line { |l| warnings << [rel, l.strip.sub("#{abs}:", '')] }
-    end
-    [files, warnings]
+    files
   end
 
-  FILES, WARNINGS = parse_warnings
+  # [rel, warning text] for every parse warning of the file at `rel`. The text
+  # names the file by its path in the repository.
+  def warnings(rel)
+    abs = File.join(REPO_ROOT, rel)
+    return [] unless File.file?(abs)
 
-  # The corpus is derived, so the only way it can go vacuous is by shrinking to
-  # nothing — which would exit green forever. A floor says so instead.
+    compile_warnings(abs, rel).each_line.map { |line| [rel, line.strip.sub("#{abs}:", '')] }
+  end
+
+  # Compiles in this process: `compile_file` emits the same warnings as
+  # `ruby -c -w` and runs no code. It must be `compile_file`, not `compile`:
+  # `compile` treats the top level as an eval scope and does not warn about an
+  # unused variable there.
+  def compile_warnings(abs, rel)
+    captured = StringIO.new
+    begin
+      redirect_warnings(captured) { RubyVM::InstructionSequence.compile_file(abs) }
+    rescue SyntaxError => e
+      # A file that does not parse is a harder failure than a warning.
+      captured.puts("#{rel}: warning: does not parse — #{e.message.lines.first.to_s.strip}")
+    end
+    captured.string
+  end
+
+  # Runs the block with warnings on and `$stderr` sent to `io`.
+  def redirect_warnings(io)
+    real    = $stderr
+    verbose = $VERBOSE
+    $stderr  = io
+    $VERBOSE = true
+    yield
+  ensure
+    $VERBOSE = verbose
+    $stderr  = real
+  end
+
+  # [name, line] of each constant that this source assigns outside every class,
+  # module and singleton class, that is, into Object.
+  def object_constants(node, scoped: false, found: [])
+    return found unless node.is_a?(RubyVM::AbstractSyntaxTree::Node)
+
+    scoped ||= %i[CLASS MODULE SCLASS].include?(node.type)
+    name = node.children.first
+    found << [name, node.first_lineno] if node.type == :CDECL && name.is_a?(Symbol) && !scoped
+    node.children.each { |child| object_constants(child, scoped:, found:) }
+    found
+  end
+
+  # {[top-level directory, constant] => ["file:line", …]} over the spec files that RSpec loads.
+  def spec_constants(files)
+    declared = Hash.new { |hash, key| hash[key] = [] }
+    files.grep(/_spec\.rb\z/).each do |rel|
+      src = File.read(File.join(REPO_ROOT, rel))
+      next unless src.include?('RSpec.describe')
+
+      object_constants(RubyVM::AbstractSyntaxTree.parse(src)).each do |(name, line)|
+        declared[[rel[%r{\A[^/]+}], name]] << "#{rel}:#{line}"
+      end
+    end
+    declared
+  end
+
+  FILES = tracked_files.freeze
+  WARNINGS = FILES.flat_map { |rel| warnings(rel) }.freeze
+end
+
+RSpec.describe 'no Ruby parse warning in tracked source (K-1718)' do
+  # A derived corpus can go vacuous only by shrinking to nothing; the floor says so.
   it 'reads the whole tracked Ruby corpus, so a green run means something' do
-    expect(FILES.length).to be > 500
+    expect(ParseWarnings::FILES.length).to be > 500
   end
 
   it 'has no dead binding anywhere in tracked source' do
-    fatal = WARNINGS.select { |(_, line)| line =~ FATAL_WARNING }
+    fatal = ParseWarnings::WARNINGS.select { |(_, line)| line =~ ParseWarnings::FATAL }
     expect(fatal).to be_empty, lambda {
-      "#{fatal.length} dead binding(s) across #{FILES.length} tracked Ruby file(s). " \
+      "#{fatal.length} dead binding(s) across #{ParseWarnings::FILES.length} tracked Ruby file(s). " \
       'Read the value, or prefix the name with an underscore to say it is deliberately ' \
       "dropped — a deletion hides WHICH half of a destructuring went away.\n" +
         fatal.map { |(rel, line)| "  #{rel}:#{line}" }.join("\n")
     }
   end
 
-  # Not an assertion: the other tier. A parse warning this guard does not gate
-  # is printed so it is a number on every run rather than a belief.
+  # The second tier: prints every other parse warning, so it is a number on
+  # every run.
   it 'reports every other parse warning without failing on it' do
-    rest = WARNINGS.reject { |(_, line)| line =~ FATAL_WARNING }
+    rest = ParseWarnings::WARNINGS.reject { |(_, line)| line =~ ParseWarnings::FATAL }
     rest.each { |(rel, line)| RSpec.configuration.reporter.message("  NOTICE #{rel}: #{line}") }
     expect(rest.length).to be_a(Integer)
   end
+end
 
-  # The one runtime warning a parse can see (K-1851). Scope: the files RSpec
-  # LOADS, which is why each one must carry an `RSpec.describe` — the demos run
-  # their `spec/*_spec.rb` as one `ruby` process each, so a name four of them
-  # share collides with nothing. The suite that loads a file is its gem, so the
-  # comparison is per top-level directory.
-  def object_constants(src)
-    found = []
-    walk  = lambda do |node, scoped|
-      next unless node.is_a?(RubyVM::AbstractSyntaxTree::Node)
-
-      case node.type
-      when :CLASS, :MODULE, :SCLASS
-        node.children.each { |c| walk.call(c, true) }
-        next
-      when :CDECL
-        name = node.children.first
-        found << [name, node.first_lineno] if name.is_a?(Symbol) && !scoped
-      end
-      node.children.each { |c| walk.call(c, scoped) }
-    end
-    walk.call(RubyVM::AbstractSyntaxTree.parse(src), false)
-    found
-  end
-
+RSpec.describe 'no constant assigned into Object by two spec files of one suite' do
+  # Scope: the spec files that RSpec loads, so each one carries an
+  # `RSpec.describe`. The demos run each `spec/*_spec.rb` as its own `ruby`
+  # process, so the comparison is per top-level directory.
   it 'has no constant two spec files of one suite both assign into Object' do
-    declared = {}
-    FILES.grep(/_spec\.rb\z/).each do |rel|
-      src = File.read(File.join(WARNINGS_REPO_ROOT, rel))
-      next unless src.include?('RSpec.describe')
-
-      object_constants(src).each do |(name, line)|
-        (declared[[rel[%r{\A[^/]+}], name]] ||= []) << "#{rel}:#{line}"
-      end
-    end
-
+    declared   = ParseWarnings.spec_constants(ParseWarnings::FILES)
     collisions = declared.select { |_, sites| sites.map { |s| s[/\A[^:]+/] }.uniq.length > 1 }
 
     expect(collisions).to be_empty, lambda {

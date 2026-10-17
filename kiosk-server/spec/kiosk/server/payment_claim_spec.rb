@@ -122,15 +122,24 @@ module PaymentClaimSpecHelpers
     SQL
   end
 
-  def insert_cart(agent, intent, id)
+  def insert_cart(agent, intent, id, mandate_id: SecureRandom.uuid)
     conn.select_value(<<~SQL)
       INSERT INTO "#{schema}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
         total_amount_cents, currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{intent}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',
+      VALUES ('#{mandate_id}', '#{intent}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',
         500, 'EUR', now() + interval '1 day', 'j')
       RETURNING id
     SQL
   end
+
+  # The engine's record of a cart the assistant signed, as phase 1 writes it.
+  def record(cart)
+    agent = SecureRandom.uuid
+    insert_cart(agent, insert_intent(agent), cart.line_items.first['booking_id'], mandate_id: cart.id)
+    cart
+  end
+
+  def put_status(value) = conn.execute(%(UPDATE "#{schema}".payables SET payment_status = '#{value}' WHERE id = '#{row}'))
 end
 
 RSpec.describe Kiosk::Server::PaymentClaim, '#mark_paid!' do
@@ -305,5 +314,52 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     untimed.capture(cart_for(id))
 
     expect(PaymentClaimSpecHelpers::Untimed.find(id).payment_status).to eq('paid')
+  end
+end
+
+# A repeat of a chain whose capture did not complete (§11.6).
+RSpec.describe Kiosk::Server::PaymentClaim, '#resume' do
+  include PaymentClaimSpecHelpers
+
+  it 'charges the newest unfinished chain again and flips the row to paid' do
+    put_status('paying')
+    claim.resume(record(cart_for(row)))
+
+    expect([psp.captures.size, status, paid]).to eq([1, 'paid', [row]])
+  end
+
+  it 'claims a row the first call never reached' do
+    claim.resume(record(cart_for(row)))
+
+    expect([psp.captures.size, status]).to eq([1, 'paid'])
+  end
+
+  it 'charges again a row flipped to paid whose settlement was never written, without a second after_payment' do
+    put_status('paid')
+    claim.resume(record(cart_for(row)))
+
+    expect([psp.captures.size, status, paid]).to eq([1, 'paid', []])
+  end
+end
+
+RSpec.describe Kiosk::Server::PaymentClaim, '#resume refusals' do
+  include PaymentClaimSpecHelpers
+
+  it 'refuses an older chain while a newer unfinished chain holds the row, before the PSP' do
+    older = record(cart_for(row))
+    record(cart_for(row))
+    put_status('paying')
+
+    expect { claim.resume(older) }.to raise_error(Kiosk::Server::Errors::Forbidden, /payment in progress under another chain/)
+    expect(psp.captures).to be_empty
+  end
+
+  it 'refuses a chain for a row another chain settled, before the PSP' do
+    cart = record(cart_for(row))
+    put_status('paid')
+    settle(row)
+
+    expect { claim.resume(cart) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
+    expect(psp.captures).to be_empty
   end
 end

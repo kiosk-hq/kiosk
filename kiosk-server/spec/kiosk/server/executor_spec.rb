@@ -34,13 +34,12 @@ module ExecutorSpecHelpers
 end
 
 module ExecutorSpecReplayHelpers
-  # {Executor#settlement_for_chain}'s meaning, evaluated over the recorded
-  # rows: the cart matched by (user_id, mandate_id, raw_jws), its intent and
-  # payment matched by the FK chain AND their own raw_jws, and finally the
-  # settlement of that cart. Every one of those conjuncts is load-bearing —
-  # drop the raw_jws comparisons and a mandate id re-used with different
-  # content would be handed a settlement it did not buy.
-  def settled_chain_rows(stored, binds)
+  # {Executor#chain_record}'s meaning, evaluated over the recorded rows: the
+  # cart matched by (user_id, mandate_id, raw_jws), its intent and payment
+  # matched by the FK chain AND their own raw_jws, then that cart's
+  # settlement, if any. Drop the raw_jws comparisons and a mandate id re-used
+  # with different content would be handed a settlement it did not buy.
+  def chain_rows(stored, binds)
     user_id, cart_mandate_id, cart_jws, intent_jws, payment_jws = binds
 
     cart = stored_row(stored, 'cart_mandates', 'mandate_id' => cart_mandate_id, 'user_id' => user_id, 'raw_jws' => cart_jws)
@@ -48,7 +47,13 @@ module ExecutorSpecReplayHelpers
     return [] unless stored_row(stored, 'intent_mandates', 'id' => cart['intent_mandate_id'], 'user_id' => user_id, 'raw_jws' => intent_jws)
     return [] unless stored_row(stored, 'payment_mandates', 'cart_mandate_id' => cart['id'], 'user_id' => user_id, 'raw_jws' => payment_jws)
 
-    stored['settlements'].select { |r| r['cart_mandate_id'] == cart['id'] }
+    [chain_row(cart, stored['settlements'].find { |r| r['cart_mandate_id'] == cart['id'] } || {})]
+  end
+
+  def chain_row(cart, settlement)
+    { 'cart_row' => cart['id'], 'declined_at' => cart['declined_at'], 'settlement_id' => settlement['id'],
+      'psp_reference' => settlement['psp_reference'], 'settled_amount_cents' => settlement['settled_amount_cents'],
+      'currency' => settlement['currency'] }
   end
 
   def stored_row(stored, table, match)
@@ -56,15 +61,20 @@ module ExecutorSpecReplayHelpers
   end
 
   def route_mandate_tables
-    route_exec_query(connection) do |sql, binds|
-      if sql.include?('INSERT INTO')
-        record_insert(sql, binds)
-      elsif sql.include?('settlements s')
-        settled_chain_rows(stored, binds)
-      else
-        [{ 'id' => "row-#{inserted.size}" }]
-      end
-    end
+    route_exec_query(connection) { |sql, binds| route_mandate(sql, binds) }
+  end
+
+  def route_mandate(sql, binds)
+    return record_insert(sql, binds) if sql.include?('INSERT INTO')
+    return chain_rows(stored, binds) if sql.include?('LEFT JOIN')
+    return record_decline(binds.first) if sql.include?('SET declined_at')
+
+    [{ 'id' => "row-#{inserted.size}" }]
+  end
+
+  def record_decline(cart_row)
+    stored['cart_mandates'].find { |r| r['id'] == cart_row }['declined_at'] = Time.now
+    []
   end
 
   def record_insert(sql, binds)
@@ -571,7 +581,7 @@ RSpec.shared_context 'executor spec: verb :pay' do
     # threads them through the FK chain.
     { persist_intent_mandate: 'intent-row', persist_cart_mandate: 'cart-row',
       persist_payment_mandate: 'pay-row', persist_settlement: 's-1',
-      in_flight_total_cents: 0, lock_assistant_payments!: nil }.each do |helper, value|
+      in_flight_total_cents: 0, lock_assistant_payments!: nil, cart_recorded?: false }.each do |helper, value|
       allow_any_instance_of(described_class).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double('PSP', capture: settlement, setup_required?: false)
@@ -625,14 +635,14 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay per-assistant spending cap' d
   include_context 'executor spec: verb :pay'
 
   it 'does not enforce when no spending_cap seam is configured (default)' do
-    expect_any_instance_of(described_class).not_to receive(:settled_total_cents)
+    expect_any_instance_of(described_class).not_to receive(:spent_in_window)
     expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
     pay
   end
 
   it 'does not enforce for an assistant the seam reports uncapped (nil)' do
     Kiosk.configuration.spending_cap = ->(**) {}
-    expect_any_instance_of(described_class).not_to receive(:settled_total_cents)
+    expect_any_instance_of(described_class).not_to receive(:spent_in_window)
     expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
     pay
   end
@@ -643,7 +653,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay per-assistant spending cap' d
 
   it 'proceeds when spent + cart total is within the cap' do
     Kiosk.configuration.spending_cap = ->(**) { 5000 }
-    allow_any_instance_of(described_class).to receive(:settled_total_cents).and_return(1000) # +1599 = 2599 <= 5000
+    allow_any_instance_of(described_class).to receive(:spent_in_window).and_return(1000) # +1599 = 2599 <= 5000
     expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
     result = pay
     expect(result.kind).to eq(:value)
@@ -651,7 +661,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay per-assistant spending cap' d
 
   it 'rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded' do
     Kiosk.configuration.spending_cap = ->(**) { 2000 }
-    allow_any_instance_of(described_class).to receive(:settled_total_cents).and_return(1000) # +1599 = 2599 > 2000
+    allow_any_instance_of(described_class).to receive(:spent_in_window).and_return(1000) # +1599 = 2599 > 2000
     expect(Kiosk.configuration.payment_provider).not_to receive(:capture)
     expect { pay }
       .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e| expect(e.http_status).to eq(403) }
@@ -663,18 +673,22 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay spending cap tally' do
 
   it 'treats a cap of 0 as disabled (any charge rejected)' do
     Kiosk.configuration.spending_cap = ->(**) { 0 }
-    allow_any_instance_of(described_class).to receive(:settled_total_cents).and_return(0)
+    allow_any_instance_of(described_class).to receive(:spent_in_window).and_return(0)
     expect(Kiosk.configuration.payment_provider).not_to receive(:capture)
     expect { pay }
       .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded)
   end
 
-  it 'passes the acting agent_id, window, and cart currency to the settled-total query' do
+  it 'binds the acting agent_id, the cart currency and the window to the one tally statement' do
     Kiosk.configuration.spending_cap = ->(**) { 5000 }
     Kiosk.configuration.spending_cap_window_days = 7
-    expect_any_instance_of(described_class).to receive(:settled_total_cents)
-      .with(agent_id: 'a-1', window_days: 7, currency: 'eur').and_return(0)
+    tally = nil
+    route_exec_query(connection) do |sql, binds|
+      tally = binds if sql.include?('AS total')
+      [{ 'total' => 0 }]
+    end
     pay
+    expect(tally).to eq(['a-1', 'eur', 7])
   end
 
   # K-551: the tally must be scoped to the cart's currency — summing cents
@@ -682,8 +696,8 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay spending cap tally' do
   # and a cross-currency sum could erode the cap. The cart here is EUR.
   it "scopes the settled-total tally to the cart's currency (not currency-blind)" do
     Kiosk.configuration.spending_cap = ->(**) { 5000 }
-    expect_any_instance_of(described_class).to receive(:settled_total_cents)
-      .with(hash_including(currency: 'eur')).and_return(0)
+    expect_any_instance_of(described_class).to receive(:spent_in_window)
+      .with(having_attributes(currency: 'eur'), nil).and_return(0)
     pay
   end
 end
@@ -814,10 +828,10 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay capture failure' do
     }
   end
 
-  # K-545: an UNKNOWN outcome (timeout / connectivity — non-retryable
-  # PaymentFailed) is also a typed 402, but its hint steers the agent to check
-  # my_orders BEFORE retrying so a lost-response retry can't double-charge.
-  it 'maps a non-retryable capture-time PaymentFailed to a 402 whose hint warns against a blind retry' do
+  # An UNKNOWN outcome (timeout / connectivity — non-retryable PaymentFailed)
+  # is also a typed 402; its hint sends the SAME chain again, which the
+  # operator charges at most once.
+  it 'maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same chain again' do
     fail_capture('the payment processor could not confirm the charge; its status is unknown',
                  reason: :processor_unavailable, retryable: false)
 
@@ -826,34 +840,8 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay capture failure' do
     end.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e|
       expect(e.http_status).to eq(402)
       expect(e.code).to        eq('payment_failed')
-      expect(e.hint).to        match(/my_orders/i)
-    }
-  end
-end
-
-RSpec.describe Kiosk::Server::Executor, 'verb :pay unknown capture outcome' do
-  include_context 'executor spec: verb :pay'
-
-  # K-851: the UNKNOWN hint used to end "retry only if it is still unpaid" —
-  # which reads a MISSING settlement record as proof that no money moved. It
-  # is not proof: the engine records the settlement in P3, AFTER the capture,
-  # so inside that window an operator's own records show an order that has
-  # already been charged as unpaid. An assistant that took the old sentence
-  # literally re-signed a fresh chain, drew a fresh cart id, drew a fresh PSP
-  # idempotency key, and charged its human twice. protocol.md §11.6 now
-  # requires a POSITIVE "not paid" before re-signing, and this pins the hint
-  # to that rule rather than to "still unpaid".
-  it 'tells the agent to retry only on a POSITIVE not-paid, never on a missing record (K-851)' do
-    fail_capture('the payment processor could not confirm the charge; its status is unknown',
-                 reason: :processor_unavailable, retryable: false)
-
-    expect do
-      pay
-    end.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e|
-      expect(e.hint).to     match(/positive .?not paid.?/i)
-      expect(e.hint).to     match(/missing or pending record is not/i)
-      expect(e.hint).to     match(/stop and tell your human/i)
-      expect(e.hint).not_to match(/retry only if it is still unpaid/i)
+      expect(e.hint).to        match(/Send the SAME chain again/)
+      expect(e.hint).to        match(/Do not sign a new chain/)
     }
   end
 end
@@ -960,9 +948,11 @@ RSpec.shared_context 'executor spec: replayed with the identical mandate chain' 
     route_mandate_tables
 
     Kiosk.configuration.payment_provider = instance_double('PSP', setup_required?: false)
-    allow(Kiosk.configuration.payment_provider).to receive(:capture) do |cart, **_kwargs|
-      captures << cart.id
-      settlement
+    %i[capture resume].each do |call|
+      allow(Kiosk.configuration.payment_provider).to receive(call) do |cart, **_kwargs|
+        captures << cart.id
+        settlement
+      end
     end
   end
 end
@@ -1020,11 +1010,9 @@ end
 RSpec.describe Kiosk::Server::Executor, 'verb :pay replay boundary' do
   include_context 'executor spec: replayed with the identical mandate chain'
 
-  # THE BOUNDARY. A chain re-presented before anything settled — here the
-  # trail is written and the capture then fails — has no settlement to hand
-  # back, so it keeps `409 conflict`, raised before any capture. The 409 now
-  # means one specific thing: "seen, and NOT settled".
-  it 'still answers 409 conflict when the re-presented chain never settled' do
+  # A chain whose charge was declined is closed: no money moved under it, and
+  # a repeat answers `409 conflict` before any capture.
+  it 'answers 409 conflict to a repeat of a declined chain' do
     allow(Kiosk.configuration.payment_provider).to receive(:capture)
       .and_raise(Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true))
     expect do
@@ -1059,63 +1047,23 @@ end
 RSpec.describe Kiosk::Server::Executor, 'verb :pay phase-3 window' do
   include_context 'executor spec: replayed with the identical mandate chain'
 
-  # ── K-851: the phase-3 window, walked end to end ────────────────────
-  #
-  # THE MEASURED REPRODUCTION. The capture SUCCEEDS and phase 3 — the
-  # separate transaction that records it — fails. Everything after that is
-  # the algorithm §11.6 prescribes, executed literally:
-  #
-  #   capture ok → persist_settlement raises → the request errors
-  #   → assistant re-presents the IDENTICAL chain (§11.6's MUST)
-  #   → phase 1 unique violation → 409 conflict
-  #   → assistant reconciles: are there settlements for this cart? NO
-  #   → the pre-K-851 §11.6 read that as "confirmed unpaid" and blessed a
-  #     freshly signed chain → fresh cart id → fresh PSP idempotency key
-  #   → SECOND REAL CHARGE for one purchase.
-  #
-  # This example is a CHARACTERIZATION of the engine, not a pin on the fix:
-  # the engine still cannot record a capture it did not survive, and it
-  # never could. What K-851 changed is what may be PUBLISHED about that
-  # state — §11.6 now forbids an operator from answering `not paid` while a
-  # capture may be outstanding and forbids an assistant from re-signing on
-  # anything short of a positive `not paid`, which cuts the arrow between
-  # step 4 and step 5 below. The engine behaviour asserted here is what
-  # makes that rule necessary, so it is worth a test that says so out loud.
-  it 'leaves a charge with no settlement row when phase 3 fails, and the reconciling read cannot see it (K-851)' do
+  # The capture succeeds and phase 3 — the transaction that records it —
+  # fails. The identical chain sent again charges under the same cart id,
+  # which the PSP's idempotency key turns into the first charge's answer,
+  # and writes the missing settlement.
+  it 'resumes a chain whose capture ran but whose settlement was never written' do
     allow_any_instance_of(described_class).to receive(:persist_settlement)
       .and_raise(StandardError, 'connection reset during settlement insert')
-
-    # 1. Capture succeeds; the settlement insert does not. The caller sees
-    #    an error, and cannot tell it from "nothing happened".
-    expect do
-      pay
-    end.to raise_error(StandardError, /connection reset/)
-    expect(captures).to eq(['cart-1'])
-    expect(inserted.map(&:first)).to include('cart_mandates')
+    expect { pay }.to raise_error(StandardError, /connection reset/)
     expect(inserted.map(&:first)).not_to include('settlements')
 
-    # 2. The assistant does what §11.6 REQUIRES: the identical chain again.
-    expect do
-      pay
-    end.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
-      expect(e.http_status).to eq(409)
-    }
-    expect(captures).to eq(['cart-1']) # the 409 is raised before any capture
-
-    # 3. It reconciles. Every operator-side record of the money is the
-    #    settlement row, and there is none — so a paid flag derived from
-    #    settlements alone answers "not paid" about a charged cart. That
-    #    false answer is the whole finding.
-    expect(inserted.map(&:first)).not_to include('settlements')
-
-    # 4. Acting on it — the freshly signed chain the old §11.6 called
-    #    correct — charges the human a second time.
     allow_any_instance_of(described_class).to receive(:persist_settlement).and_call_original
-    stub_fresh_chain
+    result = pay
 
-    pay
-
-    expect(captures).to eq(%w[cart-1 cart-2])
+    expect(result.payload).to include(psp_reference: 'pi_1', settled_amount_cents: 1599)
+    expect(captures).to eq(%w[cart-1 cart-1])
+    expect(Kiosk.configuration.payment_provider).to have_received(:resume).once
+    expect(inserted.count { |table, _| table == 'settlements' }).to eq(1)
   end
 end
 
@@ -1317,7 +1265,7 @@ RSpec.shared_context 'executor spec: really signed chain' do
       .to receive(:agent_payment_key).with('agent-1').and_return(agent_key.public_key)
     allow(Kiosk::Server::SessionContext).to receive(:open) { |**_kw, &blk| blk.call }
     { persist_intent_mandate: 'intent-row', persist_cart_mandate: 'cart-row',
-      persist_payment_mandate: 'pay-row', persist_settlement: 's-1', settled_replay: nil }.each do |helper, value|
+      persist_payment_mandate: 'pay-row', persist_settlement: 's-1' }.each do |helper, value|
       allow_any_instance_of(described_class).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double(

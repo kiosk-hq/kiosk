@@ -28,12 +28,7 @@ module Kiosk
       # The same claim over another PSP adapter.
       def over(psp) = self.class.new(psp, **@options)
 
-      def capture(cart_mandate, payment_method: nil)
-        id = claim!(cart_mandate)
-        settled = charge(id, cart_mandate, payment_method)
-        mark_paid!(id)
-        settled
-      end
+      def capture(cart_mandate, payment_method: nil) = charge_row(claim!(cart_mandate), cart_mandate, payment_method)
 
       def setup_required?(user_id:) = @psp.setup_required?(user_id: user_id)
 
@@ -62,6 +57,12 @@ module Kiosk
       def release!(id) = @row.flip(id, from: PAYING, to: @unpaid)
 
       private
+
+      def charge_row(id, cart_mandate, payment_method)
+        settled = charge(id, cart_mandate, payment_method)
+        mark_paid!(id)
+        settled
+      end
 
       # Releases the claim when the PSP refuses before any money moved.
       def charge(id, cart_mandate, payment_method)
@@ -122,9 +123,9 @@ module Kiosk
           mark_paid!(id)
           deny "#{noun} #{id} is already paid"
         end
-        deny "#{noun} #{id} has a payment in progress — re-read GET <endpoint>/#{@query}: while its " \
-             'payment_state is `pending` the charge may already have gone through, so do NOT sign a ' \
-             'fresh mandate chain; only a `paid` or `unpaid` answer is actionable'
+        deny "#{noun} #{id} has a payment in progress under another chain. Send that chain again, " \
+             'byte for byte: it cannot charge twice. Do not sign a new chain. ' \
+             "GET <endpoint>/#{@query} shows the payment state."
       end
 
       def noun = @reference.delete_suffix('_id')
@@ -165,6 +166,33 @@ module Kiosk
           raise Errors::Forbidden, message
         end
       end
+
+      # A repeat of a chain whose capture did not complete. The row stays with
+      # the newest unfinished chain, and the PSP keys the capture by the cart
+      # mandate id, so the repeat cannot charge twice.
+      module Resume
+        def resume(cart_mandate, payment_method: nil) = charge_row(reclaim!(cart_mandate), cart_mandate, payment_method)
+
+        private
+
+        # The row this repeated chain claimed, or the row it may claim now.
+        def reclaim!(cart)
+          id = referenced_id(cart)
+          payer = cart.user_id.to_s
+          status = @row.status(id, payer)
+          return claim!(cart) if status == @unpaid
+          return id if [PAYING, PAID].include?(status) && !settled?(id) && unfinished_chain(id, payer) == cart.id
+
+          refuse_unclaimable!(id, payer)
+        end
+
+        # The signed id of the newest cart for this row that is neither settled nor declined.
+        def unfinished_chain(id, payer)
+          Kiosk::CartMandate.referencing(@reference => id).where(user_id: payer, declined_at: nil)
+                            .where.missing(:settlements).order(created_at: :desc, id: :desc).pick(:mandate_id)
+        end
+      end
+      include Resume
 
       # The PSP names whose human came back from the setup page; the engine
       # serves the `payment_setup` topic only for a provider that has this method.

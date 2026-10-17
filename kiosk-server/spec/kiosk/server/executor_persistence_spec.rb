@@ -525,6 +525,75 @@ RSpec.describe Kiosk::Server::Executor, 'spending cap and carts in flight' do
     connection.exec_query("UPDATE #{table('cart_mandates')} SET expires_at = now() - INTERVAL '1 minute'", 'persist spec')
     expect { executor.send(:enforce_spending_cap!, another_cart(500)) }.not_to raise_error
   end
+
+  it 'stops counting a declined cart at once' do
+    _, cart_row = persist_trail
+    executor.send(:decline_cart, cart_row)
+    expect { executor.send(:enforce_spending_cap!, another_cart(500)) }.not_to raise_error
+  end
+
+  it 'does not count a repeat of a recorded cart a second time' do
+    persist_trail
+    expect { executor.send(:enforce_spending_cap!, cart) }.not_to raise_error
+  end
+end
+
+# Concurrent pays of one assistant, half of them declined by the payment
+# provider: what settles never passes the cap, and every decline is recorded.
+RSpec.shared_context 'executor persistence spec: six chains, half declined' do
+  include_context 'executor persistence spec: payment'
+
+  let(:chains) do
+    Array.new(6) do |n|
+      i = intent.with(id: "intent-#{n}-#{SecureRandom.hex(4)}", raw_jws: "intent-jws-#{n}")
+      c = cart.with(id: "cart-#{n}-#{SecureRandom.hex(4)}", intent_mandate_id: i.id, raw_jws: "cart-jws-#{n}",
+                    total_amount_cents: 700)
+      [i, c, payment.with(id: "pay-#{n}-#{SecureRandom.hex(4)}", cart_mandate_id: c.id, raw_jws: "payment-jws-#{n}")]
+    end
+  end
+
+  let(:provider) do
+    psp = instance_double('PSP', setup_required?: false)
+    allow(psp).to receive(:capture) do |charged, **|
+      sleep(0.05)
+      raise Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true) if charged.raw_jws.end_with?('0', '2', '4')
+
+      { psp_reference: "pi_#{charged.id}", settled_amount_cents: charged.total_amount_cents }
+    end
+    psp
+  end
+
+  before do
+    find = ->(raw_jws:, **) { chains.flatten.find { |m| m.raw_jws == raw_jws } }
+    %i[verify_intent verify_cart verify_payment].each { allow(Kiosk::Server::MandateVerifier).to receive(it, &find) }
+    Kiosk.configure { |c| (c.spending_cap = ->(**) { 2000 }) && (c.payment_provider = provider) }
+  end
+end
+
+RSpec.describe Kiosk::Server::Executor, 'concurrent pays with declines under one cap' do
+  include_context 'executor persistence spec: six chains, half declined'
+
+  def pay_in_a_thread(intent, cart, payment)
+    args = { intent_mandate_jws: intent.raw_jws, cart_mandate_jws: cart.raw_jws, payment_mandate_jws: payment.raw_jws }
+    Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do |conn|
+        described_class.call(kind: :pay, args: args, identity: identity, connection: conn) && :paid
+      rescue Kiosk::Server::Errors::SpendingCapExceeded
+        :refused
+      rescue Kiosk::Server::Errors::PaymentFailed
+        :declined
+      end
+    end
+  end
+
+  it 'never settles past the cap, and leaves no declined cart in flight' do
+    results = chains.map { |chain| pay_in_a_thread(*chain) }.map(&:value)
+
+    expect(value("SELECT COALESCE(SUM(settled_amount_cents), 0) FROM #{table('settlements')}").to_i).to be <= 2000
+    expect(executor.send(:in_flight_total_cents, agent_id: agent_uuid, currency: 'eur')).to eq(0)
+    expect(value("SELECT count(*) FROM #{table('cart_mandates')} WHERE declined_at IS NOT NULL").to_i)
+      .to eq(results.count(:declined))
+  end
 end
 
 RSpec.shared_context 'executor persistence spec: two chains of one assistant' do
@@ -598,9 +667,12 @@ RSpec.shared_context 'executor persistence spec: a replayed pay (K-850)' do
   let(:provider) do
     psp = instance_double('PSP')
     allow(psp).to receive(:setup_required?).and_return(false)
-    allow(psp).to receive(:capture) do |charged, **_kwargs|
-      captures << charged.id
-      { psp_reference: "pi_capture_#{captures.size}", settled_amount_cents: charged.total_amount_cents }
+    # The PSP keys a capture by the cart id: a second capture of one cart answers the first.
+    %i[capture resume].each do |call|
+      allow(psp).to receive(call) do |charged, **_kwargs|
+        captures << charged.id
+        { psp_reference: "pi_#{charged.id}", settled_amount_cents: charged.total_amount_cents }
+      end
     end
     psp
   end
@@ -630,7 +702,7 @@ RSpec.describe Kiosk::Server::Executor, 'a replayed pay of a settled chain' do
 
     expect(second.kind).to eq(:value)
     expect(second.payload).to eq(first.payload)
-    expect(second.payload[:psp_reference]).to eq('pi_capture_1')
+    expect(second.payload[:psp_reference]).to eq("pi_#{cart.id}")
     expect(captures).to eq([cart.id])   # NOT charged a second time
     expect(settlement_count).to eq(1)   # NO second settlement minted
   end
@@ -646,38 +718,77 @@ RSpec.describe Kiosk::Server::Executor, 'a replayed pay of a settled chain' do
   end
 end
 
-RSpec.describe Kiosk::Server::Executor, 'a replayed pay of an unsettled chain' do
+RSpec.describe Kiosk::Server::Executor, 'a repeated pay of an unfinished chain' do
   include_context 'executor persistence spec: a replayed pay (K-850)'
 
-  # THE BOUNDARY THAT DOES NOT MOVE. The trail is persisted and NOTHING was
-  # captured (the phase-1 rows of a call that died before, or during, the
-  # capture). There is no settlement to hand back, and re-running the
-  # capture on a re-presented chain is exactly the double charge §11.6
-  # exists to prevent — so this stays `409`, raised before any capture.
-  it 'still answers 409 conflict for a re-presented chain that was never captured' do
+  # The trail is persisted and nothing was captured: the call stopped before
+  # the capture. The repeat captures and settles.
+  it 'captures and settles a chain that was persisted but never captured' do
     persist_trail
 
-    expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
-      expect(e.http_status).to eq(409)
-      expect(e.code).to eq('conflict')
-    }
-    expect(captures).to be_empty
-    expect(settlement_count).to eq(0)
+    expect(pay.payload).to include(psp_reference: "pi_#{cart.id}", settled_amount_cents: 1599)
+    expect(captures).to eq([cart.id])
+    expect(settlement_count).to eq(1)
   end
 
-  # Same idea one phase later: the capture RETURNED but phase 3 never
-  # committed. That is K-851's window, and the answer there is unchanged —
-  # the engine has no settlement, so it must not pretend it has one.
-  it 'still answers 409 conflict when the capture happened but phase 3 never landed' do
+  # The capture returned and phase 3 never committed. The repeat charges again
+  # under the same cart id, which the PSP answers with the first charge, and
+  # writes the missing settlement.
+  it 'settles a chain whose capture ran but whose settlement was never written' do
     allow_any_instance_of(described_class).to receive(:persist_settlement)
       .and_raise(StandardError, 'connection reset during settlement insert')
     expect { pay }.to raise_error(StandardError, /connection reset/)
-    expect(captures).to eq([cart.id])
     expect(settlement_count).to eq(0)
 
     allow_any_instance_of(described_class).to receive(:persist_settlement).and_call_original
-    expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict)
-    expect(captures).to eq([cart.id])
+    expect(pay.payload[:psp_reference]).to eq("pi_#{cart.id}")
+    expect(captures).to eq([cart.id, cart.id])
+    expect(settlement_count).to eq(1)
+    expect(pay.payload[:psp_reference]).to eq("pi_#{cart.id}")
+    expect(captures).to eq([cart.id, cart.id])
+  end
+end
+
+RSpec.describe Kiosk::Server::Executor, 'a repeated pay of an unfinished chain, concurrent or declined' do
+  include_context 'executor persistence spec: a replayed pay (K-850)'
+
+  it 'answers two concurrent repeats with one settlement' do
+    persist_trail
+    results = Array.new(2) do
+      Thread.new do
+        ActiveRecord::Base.connection_pool.with_connection do |conn|
+          described_class.call(kind: :pay, args: args, identity: identity, connection: conn).payload
+        end
+      end
+    end.map(&:value)
+
+    expect(results.map { it[:settlement_id] }.uniq.size).to eq(1)
+    expect(settlement_count).to eq(1)
+  end
+
+  it 'answers 409 conflict to a repeat of a declined chain, before any capture' do
+    allow(provider).to receive(:capture)
+      .and_raise(Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true))
+    expect { pay }.to raise_error(Kiosk::Server::Errors::PaymentFailed)
+
+    expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
+      expect(e.http_status).to eq(409)
+    }
+    expect(provider).not_to have_received(:resume)
+    expect(settlement_count).to eq(0)
+  end
+end
+
+RSpec.describe Kiosk::Server::Executor, 'a repeated pay after an unknown outcome' do
+  include_context 'executor persistence spec: a replayed pay (K-850)'
+
+  it 'keeps an unknown outcome open: the repeat charges again under the same key' do
+    allow(provider).to receive(:capture)
+      .and_raise(Kiosk::PaymentProviders::PaymentFailed.new('unknown', retryable: false))
+    expect { pay }.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e| expect(e.hint).to match(/SAME chain/) }
+
+    expect(pay.payload[:psp_reference]).to eq("pi_#{cart.id}")
+    expect(settlement_count).to eq(1)
   end
 end
 
@@ -703,9 +814,7 @@ RSpec.describe Kiosk::Server::Executor, 'a replayed pay that is not the same req
   it "does not answer a DIFFERENT principal with this principal's settlement" do
     pay
     stranger = build_identity(user_id: SecureRandom.uuid, agent_id: SecureRandom.uuid)
-    expect(
-      described_class.new(connection: connection, identity: stranger)
-                     .send(:settlement_for_chain, intent: intent, cart: cart, payment: payment)
-    ).to be_nil
+    chain = described_class::Chain.new(intent, cart, payment)
+    expect(described_class.new(connection: connection, identity: stranger).send(:chain_record, chain)).to be_nil
   end
 end

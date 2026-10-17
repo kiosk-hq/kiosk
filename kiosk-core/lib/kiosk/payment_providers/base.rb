@@ -38,6 +38,10 @@ module Kiosk
       def capture(_cart_mandate, payment_method:)
         raise NotImplementedError, "#{self.class}#capture must be implemented by the adapter"
       end
+
+      # A repeat of a chain whose capture did not complete. The adapter keys its
+      # capture by the cart mandate id, so a second capture cannot charge twice.
+      def resume(cart_mandate, payment_method:) = capture(cart_mandate, payment_method:)
     end
   end
 end

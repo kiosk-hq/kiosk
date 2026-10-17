@@ -121,6 +121,12 @@ takes only the payer's own row. The status lives in `status_column:`
 Your per-user query publishes that status — `paying` as *pending* — so a
 capture in flight never reads as *not paid*.
 
+A repeat of a chain whose capture did not complete runs the capture again under
+the same key, the cart mandate id, so your PSP adapter must key its charge by
+it (`kiosk-pay-stripe` does). A charge refused with no money moved marks the
+cart declined: it stops counting against `spending_cap` at once, and a repeat of
+that chain answers `409 conflict`.
+
 
 ## Upgrading
 

@@ -136,19 +136,19 @@ module Kiosk
       # The `pay` verb: settles an AP2 cart. The PSP capture runs outside any transaction,
       # between phases 1 and 3 (§11.6).
       module Pay
-        RETRYABLE_HINT = 'the charge did not go through; no money moved. The human may need to ' \
-                         'update the payment method (payment_setup), then retry pay.'
-        UNKNOWN_HINT   = 'the charge status is UNKNOWN (the processor did not confirm). Do NOT blindly ' \
-                         "retry — first check `query my_orders` for this order's paid flag, and retry " \
-                         'ONLY on a positive "not paid". A missing or pending record is not a "not ' \
-                         'paid": if you cannot confirm either way, stop and tell your human.'
-        CONFLICT_HINT  = 'this exact chain has no recorded settlement — it may still be in flight, or ' \
-                         'its capture may never have run. Do NOT sign a fresh chain on the strength of ' \
-                         "that: reconcile against the operator's own per-user query and re-sign only on " \
-                         'a positive, unambiguous "not paid".'
+        RETRYABLE_HINT = 'the charge did not go through and no money moved. The human may need to ' \
+                         'update the payment method (payment_setup). Then sign a new chain and pay again.'
+        UNKNOWN_HINT   = 'the payment provider did not confirm the charge, so its status is unknown. ' \
+                         'Send the SAME chain again, byte for byte: this operator charges one chain at ' \
+                         'most once. Do not sign a new chain.'
+        CONFLICT_HINT  = 'this operator will not charge this chain: an earlier call with it was declined, ' \
+                         'or these mandate ids came before with other content. Before you sign a new ' \
+                         "chain, read the order's paid state through the operator's own query, and sign " \
+                         'a new chain only on a clear "not paid".'
 
-        # The verified mandates and the cart row they were persisted under.
-        Chain = Struct.new(:intent, :cart, :payment, :cart_row)
+        # The verified mandates, the cart row they were persisted under, and
+        # whether an earlier call already persisted them.
+        Chain = Struct.new(:intent, :cart, :payment, :cart_row, :repeat)
 
         private
 
@@ -189,16 +189,14 @@ module Kiosk
           end
         end
 
-        # Phase 1: verify and persist the mandate chain. A unique violation means the chain was presented
-        # before: an identical, settled chain answers its settlement; anything else is a conflict, before any capture.
+        # Phase 1: verify and persist the mandate chain. A unique violation means the chain was presented before.
         def persist_chain(raws)
           chain = Chain.new
           verify_and_persist(chain, raws)
         rescue StandardError => e
           raise unless unique_violation?(e)
 
-          settled_replay(intent: chain.intent, cart: chain.cart, payment: chain.payment) or
-            raise Errors::Conflict.new('mandate already processed', hint: CONFLICT_HINT)
+          repeat(chain)
         end
 
         def verify_and_persist(chain, raws)
@@ -225,106 +223,57 @@ module Kiosk
           cart_row
         end
 
-        # Phase 2: the irreversible capture. A definitive decline is safe to retry; an unknown outcome is not.
+        # Phase 2: the irreversible capture. A refusal under which no money moved
+        # declines the cart, so it stops counting against the spending cap.
         def capture(provider, chain)
-          provider.capture(chain.cart, payment_method: chain.payment.payment_method)
+          charge(provider, chain)
         rescue Kiosk::PaymentProviders::SetupRequired
+          decline(chain)
           raise Errors::PaymentSetupRequired
         rescue Kiosk::PaymentProviders::PaymentFailed => e
+          decline(chain) if e.retryable?
           raise Errors::PaymentFailed.new(e.message, hint: e.retryable? ? RETRYABLE_HINT : UNKNOWN_HINT)
+        rescue Errors::Forbidden, Errors::BadRequest
+          decline(chain)
+          raise
         end
 
-        # Phase 3: record the settlement.
+        # A repeated chain resumes its capture under the same idempotency key.
+        def charge(provider, chain)
+          method = chain.repeat ? :resume : :capture
+          provider.public_send(method, chain.cart, payment_method: chain.payment.payment_method)
+        end
+
+        # Phase 3: record the settlement. A concurrent call that settled the same cart first answers with its settlement.
         def settle(chain, settled)
           settlement_id = nil
           SessionContext.open(connection: connection, identity: identity) do
             settlement_id = persist_settlement(cart_row_id: chain.cart_row, cart: chain.cart, settled: settled)
           end
           settlement_result(settlement_id, settled[:psp_reference], settled[:settled_amount_cents], chain.cart.currency)
+        rescue StandardError => e
+          row = unique_violation?(e) && recorded_chain(chain)
+          raise unless row && row['settlement_id']
+
+          stored_settlement(row)
         end
 
         def settlement_result(settlement_id, psp_reference, settled_amount_cents, currency)
           Result.new(kind: :value, payload: { settlement_id:, psp_reference:, settled_amount_cents:, currency: })
-        end
-
-        # The settlement of an identical, already-settled chain, or nil. It writes nothing and runs
-        # before the capture, so a replay can neither charge nor settle twice.
-        def settled_replay(intent:, cart:, payment:)
-          return nil if intent.nil? || cart.nil? || payment.nil?
-
-          row = nil
-          SessionContext.open(connection: connection, identity: identity) do
-            row = settlement_for_chain(intent: intent, cart: cart, payment: payment)
-          end
-          return nil if row.nil?
-
-          settlement_result(row.fetch('id'), row.fetch('psp_reference'), row.fetch('settled_amount_cents').to_i, row.fetch('currency'))
-        end
-      end
-
-      # The assistant's spending cap, checked at pay time.
-      module SpendingCap
-        private
-
-        # A nil seam or a nil cap means uncapped. Runs in the transaction that
-        # persists the cart, under a per-assistant lock, so two concurrent pays
-        # see each other: the second counts the first's cart as in flight.
-        def enforce_spending_cap!(cart)
-          cap = Kiosk.configuration.spending_cap&.call(agent_id: identity.agent_id)
-          return if cap.nil? # this assistant is uncapped
-
-          window_days = Kiosk.configuration.spending_cap_window_days
-          spent = spent_in_window(cart, window_days)
-          return if spent + cart.total_amount_cents.to_i <= cap.to_i
-
-          raise Errors::SpendingCapExceeded.new('assistant spending cap exceeded', hint: cap_hint(cap, spent, window_days, cart))
-        end
-
-        # One tally per currency: cents are not fungible across currencies.
-        def spent_in_window(cart, window_days)
-          agent_id = identity.agent_id
-          lock_assistant_payments!(agent_id)
-          settled_total_cents(agent_id:, window_days:, currency: cart.currency) +
-            in_flight_total_cents(agent_id:, currency: cart.currency)
-        end
-
-        def cap_hint(cap, spent, window_days, cart)
-          window_note = window_days ? " in the last #{window_days.to_i} day(s)" : ''
-          "cap #{cap.to_i} cents; #{spent} already settled or in flight#{window_note}; " \
-            "this charge is #{cart.total_amount_cents.to_i}"
-        end
-
-        # Carts of this agent whose mandate is live and that have no settlement:
-        # a capture may still be running for each.
-        def in_flight_total_cents(agent_id:, currency:)
-          schema = Kiosk.configuration.schema
-          sql = <<~SQL
-            SELECT COALESCE(SUM(c.total_amount_cents), 0) AS total
-            FROM #{schema}.cart_mandates c
-            WHERE c.agent_id = $1 AND lower(btrim(c.currency)) = $2 AND c.expires_at > now()
-              AND NOT EXISTS (SELECT 1 FROM #{schema}.settlements s WHERE s.cart_mandate_id = c.id)
-          SQL
-          binds = [agent_id, MandateVerifier.canonical_currency(currency)]
-          connection.exec_query(sql, 'Kiosk in-flight total', binds).to_a.first.fetch('total').to_i
-        end
-
-        # Held to the end of the transaction; an advisory lock needs no grant on any table.
-        def lock_assistant_payments!(agent_id)
-          connection.exec_query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
-                                'Kiosk spending cap lock', [agent_id.to_s])
         end
       end
 
       # The mandate and settlement rows. Every value is a bind parameter; only the
       # operator-set schema name is interpolated.
       module Ledger
-        # Byte-identical chain, scoped to the acting principal on every mandate row.
-        CHAIN_SETTLEMENT_SQL = <<~SQL
-          SELECT s.id, s.psp_reference, s.settled_amount_cents, s.currency
-          FROM %<schema>s.settlements s
-          JOIN %<schema>s.cart_mandates    c ON c.id = s.cart_mandate_id
+        # Byte-identical chain, scoped to the acting principal on every mandate row, with its settlement if any.
+        CHAIN_SQL = <<~SQL
+          SELECT c.id AS cart_row, c.declined_at,
+                 s.id AS settlement_id, s.psp_reference, s.settled_amount_cents, s.currency
+          FROM %<schema>s.cart_mandates c
           JOIN %<schema>s.intent_mandates  i ON i.id = c.intent_mandate_id
           JOIN %<schema>s.payment_mandates p ON p.cart_mandate_id = c.id
+          LEFT JOIN %<schema>s.settlements s ON s.cart_mandate_id = c.id
           WHERE c.user_id = $1 AND i.user_id = $1 AND p.user_id = $1
             AND c.mandate_id = $2
             AND c.raw_jws = $3
@@ -368,12 +317,21 @@ module Kiosk
           RETURNING id
         SQL
 
+        DECLINE_SQL = <<~SQL
+          UPDATE %<schema>s.cart_mandates SET declined_at = now() WHERE id = $1 AND declined_at IS NULL
+        SQL
+
         private
 
-        def settlement_for_chain(intent:, cart:, payment:)
-          connection.exec_query(ledger_sql(CHAIN_SETTLEMENT_SQL), 'Kiosk settled replay lookup', [
-                                  identity.user_id, cart.id, cart.raw_jws, intent.raw_jws, payment.raw_jws
+        def chain_record(chain)
+          connection.exec_query(ledger_sql(CHAIN_SQL), 'Kiosk chain lookup', [
+                                  identity.user_id, chain.cart.id, chain.cart.raw_jws, chain.intent.raw_jws,
+                                  chain.payment.raw_jws
                                 ]).to_a.first
+        end
+
+        def decline_cart(cart_row)
+          connection.exec_query(ledger_sql(DECLINE_SQL), 'Kiosk cart decline', [cart_row])
         end
 
         def persist_intent_mandate(intent)
@@ -409,20 +367,6 @@ module Kiosk
                               ])
         end
 
-        # Settled cents for this agent in one currency, case-folded on both sides so `eur` and `EUR` are one tally.
-        def settled_total_cents(agent_id:, window_days:, currency:)
-          binds = [agent_id, MandateVerifier.canonical_currency(currency)]
-          # No window means no predicate; the day count is still a bind.
-          binds << window_days.to_i if window_days
-          window = window_days ? 'AND settled_at >= now() - make_interval(days => $3)' : ''
-          sql = <<~SQL
-            SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
-            FROM #{Kiosk.configuration.schema}.settlements
-            WHERE agent_id = $1 AND lower(btrim(currency)) = $2 #{window}
-          SQL
-          connection.exec_query(sql, 'Kiosk settled total', binds).to_a.first.fetch('total').to_i
-        end
-
         # Matched by class name so neither ActiveRecord nor PG has to be loaded.
         def unique_violation?(error)
           %w[ActiveRecord::RecordNotUnique PG::UniqueViolation].include?(error.class.name)
@@ -437,6 +381,7 @@ module Kiosk
       end
 
       include Pay
+      include Repeat
       include SpendingCap
       include Ledger
     end

@@ -124,7 +124,8 @@ module Kiosk
       end
 
       # 005: the AP2 trail. `id` is server-generated; the signed mandate id is
-      # `mandate_id`, unique per principal. A settlement is server-minted, so it
+      # `mandate_id`, unique per principal. A cart's `declined_at` records a
+      # charge refused with no money moved. A settlement is server-minted, so it
       # carries no `raw_jws`.
       def mandates_sql(schema: nil, user_id_type: nil)
         schema       ||= Kiosk.configuration.schema
@@ -162,6 +163,7 @@ module Kiosk
             expires_at         timestamptz NOT NULL,
             created_at         timestamptz NOT NULL DEFAULT now(),
             raw_jws            text NOT NULL,
+            declined_at        timestamptz,
             UNIQUE (user_id, mandate_id)
           );
           CREATE INDEX IF NOT EXISTS idx_cart_mandates_user_id ON "#{schema}".cart_mandates (user_id);

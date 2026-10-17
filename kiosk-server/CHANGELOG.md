@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: A repeat of an unfinished `pay` chain charges again under the same key and records the missing settlement. A declined charge stops counting against the spending cap at once.
+
 - 2026-10-17: `kiosk:install` writes each migration's DDL into the file, so a generated migration no longer depends on the installed kiosk-server version.
 
 - 2026-10-17: Registration proof-of-work always uses kiosk-pow-equihash's default params (n=168 k=7); the `registration_pow_params` setting is removed.

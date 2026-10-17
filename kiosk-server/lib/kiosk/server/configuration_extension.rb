@@ -68,16 +68,13 @@ module Kiosk
 
       # The proof-of-work settings: registration proofs and the reputation challenge.
       module ProofOfWork
-        # Equihash proofs required at `POST /auth/register`. Default 0 (open).
-        # Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
+        # Equihash proofs required at `POST /auth/register`, at the gem's default
+        # params. Default 0 (open). Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
         attr_writer :registration_pow_count
 
         def registration_pow_count
           @registration_pow_count ||= 0
         end
-
-        # Equihash (n, k) for registration. Default nil: the gem's own params.
-        attr_accessor :registration_pow_params
 
         # Decides when and how hard to challenge. Default nil: never.
         # `#challenge_for(identity:, verb:, factors:) → {alg:, params:, count:} | nil`;

@@ -12,19 +12,15 @@ module RegistrationPowSpec
 
   def configure(count:)
     Kiosk.configure do |c|
-      c.registration_pow_count  = count
-      c.registration_pow_params = EquihashKat::PARAMS
-      c.pow_secret              = secret
+      c.registration_pow_count = count
+      c.pow_secret             = secret
     end
   end
 
-  # Configure a registration toll of one challenge at `params`.
+  # A toll of one challenge, with the gem's default params stubbed to `params`.
   def configure_at(params)
-    Kiosk.configure do |c|
-      c.registration_pow_count  = 1
-      c.registration_pow_params = params
-      c.pow_secret              = secret
-    end
+    allow(Kiosk::Pow::Equihash).to receive(:params).and_return(params)
+    configure(count: 1)
   end
 
   # A KAT challenge bound to the register fingerprint, exactly what the gate
@@ -49,6 +45,7 @@ RSpec.shared_context 'registration pow spec: equihash backend' do
 
   before do
     Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
+    allow(Kiosk::Pow::Equihash).to receive(:params).and_return(EquihashKat::PARAMS)
   end
 
   after do
@@ -138,41 +135,10 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   include_context 'registration pow spec: equihash backend'
 
   it 'raises ConfigurationError when count > 0 but pow_secret is missing' do
-    Kiosk.configure do |c|
-      c.registration_pow_count  = 1
-      c.registration_pow_params = EquihashKat::PARAMS
-    end
+    Kiosk.configure { |c| c.registration_pow_count = 1 }
     expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)
     end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
-  end
-end
-
-# ── Refuse to MINT a challenge no proof could satisfy ────────────────────────
-#
-# A degenerate (n, k) would make the client burn a real solve and then get a
-# 403 about a correct proof. So the gate asks the backend first, and a
-# difficulty it refuses is a ConfigurationError naming the setting, the same
-# way a missing pow_secret is.
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
-
-  {
-    'n = 0 (every leaf is the integer 0)' => { n: 0, k: 7 },
-    'negative k (the solution disappears)' => { n: 168, k: -5 },
-    'zero bits per level' => { n: 8, k: 8 }
-  }.each do |label, bad_params|
-    it "raises ConfigurationError instead of minting a challenge at #{label}" do
-      Kiosk.configure do |c|
-        c.registration_pow_count  = 1
-        c.registration_pow_params = bad_params
-        c.pow_secret              = secret
-      end
-      expect do
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)
-      end.to raise_error(Kiosk::Server::Errors::ConfigurationError,
-                         /registration_pow_params/)
-    end
   end
 end
 
@@ -198,6 +164,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   end
 
   it 'still accepts the shipped default parameters — the accepted set is unchanged' do
+    allow(Kiosk::Pow::Equihash).to receive(:params).and_call_original
     configure(count: 1)
     expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)

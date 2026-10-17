@@ -32,12 +32,12 @@ end
 RSpec.shared_context 'auth controller 402 spec: registration toll' do
   before do
     Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
+    allow(Kiosk::Pow::Equihash).to receive(:params).and_return(AuthController402Spec::KAT_PARAMS_REGISTER)
     Kiosk.configure do |c|
-      c.signing_key             = Kiosk::Server::SigningKey.generate
-      c.issuer                  = 'https://demo.example'
-      c.registration_pow_count  = 1
-      c.registration_pow_params = AuthController402Spec::KAT_PARAMS_REGISTER
-      c.pow_secret              = 'registration-pow-secret-at-least-32-bytes'
+      c.signing_key            = Kiosk::Server::SigningKey.generate
+      c.issuer                 = 'https://demo.example'
+      c.registration_pow_count = 1
+      c.pow_secret             = 'registration-pow-secret-at-least-32-bytes'
     end
   end
 

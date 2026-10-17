@@ -108,8 +108,7 @@ module Kiosk
         raise Errors::ConfigurationError,
               "Kiosk::Server: the #{alg.to_s.inspect} proof-of-work backend refuses the configured " \
               "parameters #{params.inspect} — no proof solved at them could ever verify, so every " \
-              'honest client would be told its correct proof was invalid. Fix the source of the ' \
-              'parameters: `c.registration_pow_params` for POST /auth/register, or the `params:` ' \
+              'honest client would be told its correct proof was invalid. Fix the `params:` ' \
               'your reputation_policy returns from #challenge_for.'
       end
 

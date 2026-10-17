@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: New `kiosk/test_helpers/small_equihash`: required from test setup, it makes the Equihash default n=96 k=5 so test registrations stay fast.
+
 - 2026-10-17: Adds InProcessExecutor and Conformance::InProcessOrigin, moved from kiosk-server. Require them explicitly; they run against the host's kiosk-server.
 
 - 2026-10-17: `Assistant#pay` calls `payment_setup` when `pay` answers `payment_setup_required`, then pays once more.

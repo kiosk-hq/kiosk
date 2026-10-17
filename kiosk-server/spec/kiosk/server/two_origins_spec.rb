@@ -173,10 +173,10 @@ RSpec.describe 'two origins on one deployment' do
   describe 'the WWW-Authenticate realm' do
     before do
       Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
+      allow(Kiosk::Pow::Equihash).to receive(:params).and_return({ n: 8, k: 1 })
       Kiosk.configure do |c|
-        c.registration_pow_count  = 1
-        c.registration_pow_params = { n: 8, k: 1 }
-        c.pow_secret              = 'registration-pow-secret-at-least-32-bytes'
+        c.registration_pow_count = 1
+        c.pow_secret             = 'registration-pow-secret-at-least-32-bytes'
       end
     end
 

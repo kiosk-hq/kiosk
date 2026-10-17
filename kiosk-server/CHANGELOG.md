@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Registration proof-of-work always uses kiosk-pow-equihash's default params (n=168 k=7); the `registration_pow_params` setting is removed.
+
 - 2026-10-17: `schema` and `guc_namespace` are kiosk-server settings; the `registration_difficulty=` stub is gone. `kiosk:install` writes no line that repeats a default.
 
 - 2026-10-17: A production origin that serves events and has no Action Cable adapter in `config/cable.yml` does not boot; outside production it falls back to `async`.

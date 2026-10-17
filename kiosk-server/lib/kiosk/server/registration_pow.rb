@@ -13,8 +13,7 @@ module Kiosk
         return if count <= 0
 
         secret = secret!(config)
-        params = config.registration_pow_params || ::Kiosk::Pow::Equihash.params
-        spec   = { alg: 'equihash', params: params, count: count }
+        spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: count }
         fp = PowGate.request_fingerprint(method: 'POST', verb: 'auth/register',
                                          body: { public_key: public_key_pem })
 

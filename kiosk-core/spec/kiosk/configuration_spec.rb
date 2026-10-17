@@ -70,19 +70,6 @@ RSpec.describe Kiosk::Configuration do
       expect(Kiosk.configuration.payment_provider).to be(provider)
     end
   end
-
-  describe "#guc" do
-    it "composes a full GUC name using the configured namespace" do
-      config = described_class.new
-      expect(config.guc(Kiosk::GUC::USER_ID)).to eq("app.current_user_id")
-    end
-
-    it "reflects an override of guc_namespace" do
-      config = described_class.new
-      config.guc_namespace = "kiosk"
-      expect(config.guc(Kiosk::GUC::USER_ID)).to eq("kiosk.current_user_id")
-    end
-  end
 end
 
 RSpec.describe Kiosk do

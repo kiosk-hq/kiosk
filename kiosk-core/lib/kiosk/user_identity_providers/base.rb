@@ -9,11 +9,6 @@ module Kiosk
       def verify(_request)
         raise NotImplementedError, "#{self.class}#verify must be implemented by the adapter"
       end
-
-      # Unused extension point: nothing in kiosk-server calls it.
-      def user_active?(_user_id)
-        true
-      end
     end
   end
 end

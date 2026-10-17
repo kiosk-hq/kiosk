@@ -84,9 +84,5 @@ module Kiosk
     rescue URI::InvalidURIError
       nil
     end
-
-    def guc(name)
-      GUC.for(guc_namespace, name)
-    end
   end
 end

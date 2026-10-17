@@ -168,13 +168,4 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
       end
     end
   end
-
-  describe "#user_active?" do
-    # Inherits the default from {Kiosk::UserIdentityProviders::Base} — in
-    # embedded mode we rely on Devise's per-request `active_for_authentication?`
-    # hook instead of this opt-in callback.
-    it "returns true (default — embedded mode relies on Devise's per-request hook)" do
-      expect(adapter.user_active?(user_id)).to be(true)
-    end
-  end
 end

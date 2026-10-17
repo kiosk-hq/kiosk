@@ -71,6 +71,8 @@ require 'kiosk/server/routing'
 
 require 'kiosk/server/binding_module_gate'
 require 'kiosk/server/account_holder_gate'
+require 'kiosk/server/wrong_door'
+require 'kiosk/server/linked_assistants'
 
 module Kiosk
   module Server
@@ -158,9 +160,11 @@ module Kiosk
     #   - {Kiosk::Server::LinkCode}                   — link flow: .mint + .redeem
     #   - {Kiosk::Server::BindingModuleGate}          — the `501 module_not_served` refusal
     #   - {Kiosk::Server::AccountHolderGate}          — the signed-in-human check for the HTML pages
+    #   - {Kiosk::Server::WrongDoor}                  — points a JSON caller on an HTML page at the wire
     #   - {Kiosk::Server::OauthDeviceAuthorizationController} — POST /oauth/device_authorization
     #   - {Kiosk::Server::OauthTokenController}        — POST /oauth/token
     #   - {Kiosk::Server::DeviceVerifyController}      — GET/POST /oauth/device/verify
     #   - {Kiosk::Server::AssistantsController}        — «Link an assistant» page
+    #   - {Kiosk::Server::LinkedAssistants}            — the rows that page lists and edits
   end
 end

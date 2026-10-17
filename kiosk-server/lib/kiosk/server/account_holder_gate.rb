@@ -8,21 +8,23 @@ module Kiosk
     module AccountHolderGate
       private
 
+      # Answers the signed-in identity, or nil after it has answered the request.
       def require_account_holder!(prompt:, flash_alert:)
         @identity = Kiosk.configuration.user_idp&.verify(request)
-        return true if @identity
+        refuse_signed_out(prompt, flash_alert) unless @identity
+        @identity
+      end
 
+      def refuse_signed_out(prompt, flash_alert)
         sign_in_path = Kiosk.configuration.sign_in_path
         if sign_in_path && html_request?
-          set_sign_in_flash(flash_alert)
+          flash_sign_in_alert(flash_alert)
           store_return_location
           redirect_to sign_in_path
-          return false
+        else
+          render plain: sign_in_path ? "#{prompt} #{sign_in_directions(sign_in_path)}" : prompt,
+                 status: :unauthorized
         end
-
-        render plain: sign_in_path ? "#{prompt} #{sign_in_directions(sign_in_path)}" : prompt,
-               status: :unauthorized
-        false
       end
 
       def sign_in_directions(sign_in_path)
@@ -39,7 +41,7 @@ module Kiosk
       end
 
       # A host without the flash middleware must still redirect.
-      def set_sign_in_flash(message)
+      def flash_sign_in_alert(message)
         flash[:alert] = message
       rescue StandardError
         nil

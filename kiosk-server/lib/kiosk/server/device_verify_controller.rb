@@ -12,11 +12,17 @@ module Kiosk
     class DeviceVerifyController < ::ActionController::Base
       include AccountHolderGate
       include BindingModuleGate
+      include WrongDoor
 
       prepend_before_action :refuse_unserved_binding
 
       SIGN_IN_PROMPT = 'Sign in to your account first, then re-open this page to approve the assistant link.'
       SIGN_IN_ALERT  = 'Please sign in to approve the assistant link.'
+
+      CODE_NOT_RECOGNISED = 'That code was not recognised — it may have expired. Ask the assistant for a fresh one.'
+
+      WRONG_DOOR_MESSAGE = "this is the account holder's browser consent page, not the Kiosk wire — " \
+                           'it needs a signed-in session and a CSRF token from its own form'
 
       # Failed code lookups per session before a 429, against 31^8 possible codes.
       MAX_CODE_ATTEMPTS = 10
@@ -25,23 +31,12 @@ module Kiosk
       append_view_path File.expand_path('../../../app/views', __dir__)
       layout false
 
-      # An assistant POSTing JSON here is pointed at the wire; browsers still fail CSRF.
-      rescue_from ::ActionController::InvalidAuthenticityToken do |error|
-        raise error unless json_request?
-
-        render json: wrong_door_envelope, status: :unprocessable_entity
-      end
-
       def show
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
-        return if attempt_capped!
+        return render_attempts_capped if attempts_capped?
 
         @user_code = params[:user_code].to_s
-        @authorization = DeviceVerification.find_pending(user_code: @user_code) unless @user_code.empty?
-        if !@user_code.empty? && @authorization.nil?
-          record_failed_attempt
-          @error = 'That code was not recognised — it may have expired. Ask the assistant for a fresh one.'
-        end
+        @authorization = find_authorization(@user_code)
         @fingerprint = key_fingerprint(@authorization)
         @role = @identity.role
         render :show
@@ -49,65 +44,60 @@ module Kiosk
 
       def create
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
-        return if attempt_capped!
+        return render_attempts_capped if attempts_capped?
 
         @user_code = params[:user_code].to_s
         @role      = @identity.role
-        case params[:decision].to_s
-        when 'approve'
-          DeviceVerification.approve(
-            user_code: @user_code, user_id: @identity.user_id, role: @identity.role
-          )
-          @decision = :approved
-        when 'deny'
-          DeviceVerification.deny(user_code: @user_code)
-          @decision = :denied
-        else
-          return render plain: 'decision must be approve or deny', status: :bad_request
-        end
+        @decision  = decide(params[:decision].to_s)
+        return render plain: 'decision must be approve or deny', status: :bad_request unless @decision
+
         render :decided
       rescue DeviceVerification::CodeNotFoundError
-        record_failed_attempt
-        @authorization = nil
-        @error = 'That code was not recognised — it may have expired. Ask the assistant for a fresh one.'
-        render :show, status: :unprocessable_entity
+        render_code_not_recognised
       end
 
       private
 
-      def json_request?
-        return true if request.format.json?
+      def find_authorization(user_code)
+        return nil if user_code.empty?
 
-        !!request.content_mime_type&.json?
-      rescue StandardError
-        false
+        authorization = DeviceVerification.find_pending(user_code: user_code)
+        if authorization.nil?
+          record_failed_attempt
+          @error = CODE_NOT_RECOGNISED
+        end
+        authorization
       end
 
-      # Deliberately not a wire problem document or wire error code: this page is not the wire.
-      def wrong_door_envelope
-        {
-          ok: false,
-          error: {
-            code: 'invalid_authenticity_token',
-            message: "this is the account holder's browser consent page, not the Kiosk wire — " \
-                     'it needs a signed-in session and a CSRF token from its own form',
-            hint: "assistants use the wire: GET #{request.base_url}/.well-known/kiosk.json " \
-                  'for the register/login endpoints, then GET <endpoint>/schema ' \
-                  '(public) for the verbs this origin serves'
-          }
-        }
+      def render_code_not_recognised
+        record_failed_attempt
+        @authorization = nil
+        @error = CODE_NOT_RECOGNISED
+        render :show, status: :unprocessable_entity
+      end
+
+      def decide(decision)
+        case decision
+        when 'approve'
+          DeviceVerification.approve(user_code: @user_code, user_id: @identity.user_id, role: @identity.role)
+          :approved
+        when 'deny'
+          DeviceVerification.deny(user_code: @user_code)
+          :denied
+        end
       end
 
       def record_failed_attempt
         session[:kiosk_verify_attempts] = session[:kiosk_verify_attempts].to_i + 1
       end
 
-      def attempt_capped!
-        return false if session[:kiosk_verify_attempts].to_i < MAX_CODE_ATTEMPTS
+      def attempts_capped?
+        session[:kiosk_verify_attempts].to_i >= MAX_CODE_ATTEMPTS
+      end
 
+      def render_attempts_capped
         render plain: 'Too many code attempts — sign out and back in to retry.',
                status: :too_many_requests
-        true
       end
 
       # The key's RFC 7638 thumbprint, the `kid` the assistant prints.

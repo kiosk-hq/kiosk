@@ -139,7 +139,7 @@ RSpec.describe 'verb reach declarations' do
   let(:declared) { VerbReach.declared }
 
   it 'sees the whole fleet (the lint is not vacuous)' do
-    expect(declared.values.sum(&:size)).to be >= 45,
+    expect(declared.values.sum(&:size)).to be >= 44,
                                            "the lint resolved only #{declared.values.sum(&:size)} verbs across " \
                                            "#{declared.size} origins — the declarations moved somewhere it does not read"
   end

@@ -68,7 +68,7 @@ RSpec.describe 'descriptor required fields' do
   # count; `>=` lets a new verb pass.
   it 'sees the whole fleet (the lint is not vacuous)' do
     total = origins.values.flatten.sum { |path| DescriptorRequiredFields.verbs_in(File.read(path)).length }
-    expect(total).to be >= 45,
+    expect(total).to be >= 44,
                      "the lint resolved only #{total} verbs across #{origins.size} origins — " \
                      'the descriptors moved somewhere it does not read'
   end

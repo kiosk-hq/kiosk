@@ -27,8 +27,6 @@ class Guest < Kiosk::TestHelpers::Customer
          line_items: [{ qty: booking['nights'], price_cents: booking['nightly_price_cents'], booking_id: booking['booking_id'] }])
   end
 
-  def confirms(booking) = does(:confirm_booking, booking_id: booking['booking_id'])
-
   def a_free_room(check_in:, check_out:)
     browses_hotels.rows.each do |hotel|
       rooms = rooms_free(at: hotel['property_id'], check_in:, check_out:).rows

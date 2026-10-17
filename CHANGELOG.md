@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: skooti holds a vehicle for one rider at a time, for 15 minutes or until the rental token expires; a second `reserve` answers 409 `conflict`.
+
+- 2026-10-17: hoteling cancels a room hold left unpaid for 15 minutes and frees its nights; the property's answer to a paid booking refunds it at most once.
+
+- 2026-10-17: getgrocery keeps the price an order was placed at, refuses an order for more than the stock, lowers stock once per paid order, and sends one courier per order.
+
 - 2026-10-17: The spending cap counts carts whose capture may still run and serialises one assistant's pays, so two concurrent pays cannot pass the cap together.
 
 - 2026-10-17: `PaymentClaim` runs `after_payment` only for the call that moves the row to paid, so a hook never runs twice for one payment.

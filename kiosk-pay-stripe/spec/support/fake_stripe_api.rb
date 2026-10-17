@@ -83,7 +83,7 @@ class FakeStripeApi
     request_line = socket.gets
     return socket.close if request_line.nil?
 
-    method, target, = request_line.split(' ')
+    method, target, = request_line.split
     path, query = target.split('?', 2)
     headers = read_headers(socket)
     body    = headers['content-length'] ? socket.read(headers['content-length'].to_i).to_s : ''

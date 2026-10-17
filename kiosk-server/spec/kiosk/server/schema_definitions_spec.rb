@@ -191,26 +191,10 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
 
     it 'is emitted by no other canonical generator' do
       sql = [described_class.helper_functions_sql, described_class.identity_tables_sql,
-             described_class.reservations_sql, described_class.device_authorizations_sql,
+             described_class.device_authorizations_sql,
              described_class.mandates_sql].join("\n")
       expect(sql).not_to include('action_log')
       expect(sql).not_to include(%(CREATE TABLE IF NOT EXISTS "kiosk".actions))
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions do
-  describe '.reservations_sql' do
-    subject(:sql) { described_class.reservations_sql }
-
-    it 'creates `kiosk.reservations` with TTL fields for atomic reserve-then-pay' do
-      expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".reservations))
-      expect(sql).to include('expires_at    timestamptz NOT NULL')
-      expect(sql).to include('released_at   timestamptz')
-    end
-
-    it 'indexes active reservations by expiry for cleanup sweeps' do
-      expect(sql).to include('WHERE released_at IS NULL')
     end
   end
 end

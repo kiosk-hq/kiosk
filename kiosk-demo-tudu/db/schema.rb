@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_17_000001) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_17_000004) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -209,20 +209,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_17_000001) do
   create_table "kiosk.pow_spent", id: :text, force: :cascade do |t|
     t.timestamptz "expires_at", null: false
     t.index ["expires_at"], name: "idx_pow_spent_expires_at"
-  end
-
-  create_table "kiosk.reservations", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
-    t.uuid "user_id", null: false
-    t.uuid "agent_id"
-    t.text "resource_kind", null: false
-    t.text "resource_id", null: false
-    t.jsonb "args", default: {}, null: false
-    t.timestamptz "reserved_at", default: -> { "now()" }, null: false
-    t.timestamptz "expires_at", null: false
-    t.timestamptz "released_at"
-    t.index ["expires_at"], name: "idx_reservations_expiry", where: "(released_at IS NULL)"
-    t.index ["user_id"], name: "idx_reservations_user_id"
-    t.unique_constraint ["resource_kind", "resource_id", "released_at"], deferrable: :deferred, name: "reservations_unique_active"
   end
 
   create_table "kiosk.revocations", primary_key: "agent_id", id: :uuid, default: nil, force: :cascade do |t|

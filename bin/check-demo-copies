@@ -694,6 +694,9 @@ COPIES = {
   'db/migrate/20261017000001_create_kiosk_revocations.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk.revocations, the token revocation watermarks.'
   },
+  'db/migrate/20261017000004_drop_kiosk_reservations.rb' => {
+    rule: :identical, why: 'Drops kiosk.reservations, which the engine no longer creates.'
+  },
   'db/migrate/20260101000010_create_kiosk_pay_stripe_customers.rb' => {
     rule: :identical,
     ships: %w[getgrocery hoteling skooti],
@@ -746,7 +749,6 @@ GENERATOR_TEMPLATES = {
   'initializer.rb.tt' => { not_compared: 'emits config/initializers/kiosk.rb, per-demo by design.' },
   'create_kiosk_schema.rb.tt' => { emits: 'create_kiosk_schema.rb' },
   'create_kiosk_identity_tables.rb.tt' => { emits: 'create_kiosk_identity_tables.rb' },
-  'create_kiosk_reservations.rb.tt' => { emits: 'create_kiosk_reservations.rb' },
   'create_kiosk_device_authorizations.rb.tt' => { emits: 'create_kiosk_device_authorizations.rb' },
   'create_kiosk_mandates.rb.tt' => { emits: 'create_kiosk_mandates.rb' },
   'create_kiosk_kyc_attributes.rb.tt' => { emits: 'create_kiosk_kyc_attributes.rb' },

@@ -86,32 +86,6 @@ module Kiosk
         SQL
       end
 
-      # 003: TTL rows holding inventory while the mandate chain completes.
-      def reservations_sql(schema: nil, user_id_type: nil)
-        schema ||= Kiosk.configuration.schema
-        user_id_type ||= Kiosk.configuration.user_id_type
-        col_type = user_id_cast(user_id_type)
-
-        <<~SQL.strip
-          CREATE TABLE IF NOT EXISTS "#{schema}".reservations (
-            id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id       #{col_type} NOT NULL,
-            agent_id      uuid,
-            resource_kind text NOT NULL,
-            resource_id   text NOT NULL,
-            args          jsonb NOT NULL DEFAULT '{}'::jsonb,
-            reserved_at   timestamptz NOT NULL DEFAULT now(),
-            expires_at    timestamptz NOT NULL,
-            released_at   timestamptz,
-            CONSTRAINT reservations_unique_active
-              UNIQUE (resource_kind, resource_id, released_at)
-              DEFERRABLE INITIALLY DEFERRED
-          );
-          CREATE INDEX IF NOT EXISTS idx_reservations_user_id  ON "#{schema}".reservations (user_id);
-          CREATE INDEX IF NOT EXISTS idx_reservations_expiry   ON "#{schema}".reservations (expires_at) WHERE released_at IS NULL;
-        SQL
-      end
-
       # 004: account-binding requests; codes are stored hashed only.
       # `requested_role` is the approving human's role, never a client's.
       def device_authorizations_sql(schema: nil, user_id_type: nil)

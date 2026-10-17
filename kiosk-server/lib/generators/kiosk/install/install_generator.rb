@@ -66,11 +66,6 @@ module Kiosk
                            'db/migrate/create_kiosk_identity_tables.rb'
       end
 
-      def create_reservations_migration
-        migration_template 'create_kiosk_reservations.rb.tt',
-                           'db/migrate/create_kiosk_reservations.rb'
-      end
-
       def create_device_authorizations_migration
         migration_template 'create_kiosk_device_authorizations.rb.tt',
                            'db/migrate/create_kiosk_device_authorizations.rb'

@@ -197,14 +197,13 @@ end
 RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations' do
   include_context 'install generator spec: host app'
 
-  it 'creates exactly the nine canonical migrations (001-009)' do
+  it 'creates exactly the eight canonical migrations' do
     invoke!
-    expect(migrations.size).to eq(9)
+    expect(migrations.size).to eq(8)
     basenames = migrations.map { |p| File.basename(p) }
     expect(basenames).to include(
       a_string_ending_with('_create_kiosk_schema.rb'),
       a_string_ending_with('_create_kiosk_identity_tables.rb'),
-      a_string_ending_with('_create_kiosk_reservations.rb'),
       a_string_ending_with('_create_kiosk_device_authorizations.rb'),
       a_string_ending_with('_create_kiosk_mandates.rb'),
       a_string_ending_with('_create_kiosk_kyc_attributes.rb'),
@@ -235,7 +234,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations shape and order'
     invoke!
     timestamps = migrations.map { |p| File.basename(p).split('_').first.to_i }
     expect(timestamps).to eq(timestamps.sort)
-    expect(timestamps.uniq.size).to eq(9) # strictly ascending, no collisions
+    expect(timestamps.uniq.size).to eq(8) # strictly ascending, no collisions
   end
 end
 
@@ -343,25 +342,6 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 002 create_kiosk
     agents_idx   = body.index('DROP TABLE IF EXISTS "ksk".agents')
     expect(mappings_idx).to be < tokens_idx
     expect(tokens_idx).to be < agents_idx
-  end
-end
-
-RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 003 create_kiosk_reservations' do
-  include_context 'install generator spec: host app'
-
-  let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_reservations.rb') } }
-
-  it 'calls SchemaDefinitions.reservations_sql with the configured args' do
-    invoke!(%w[--schema=ksk --user-id-type=bigint])
-    body = File.read(file)
-    expect(body).to include('Kiosk::Server::SchemaDefinitions.reservations_sql(')
-    expect(body).to include('schema:       "ksk"')
-    expect(body).to include('user_id_type: :bigint')
-  end
-
-  it 'drops the reservations table in #down' do
-    invoke!(%w[--schema=ksk])
-    expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".reservations')
   end
 end
 

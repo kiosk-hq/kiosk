@@ -8,7 +8,7 @@ no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
 
 The AP2 mandate and settlement TABLES are present and empty, and that is the
 canonical install rather than an oversight: every demo runs the same unmodified
-`rails g kiosk:install`, so philslist carries `kiosk.reservations`, the four
+`rails g kiosk:install`, so philslist carries the four
 mandate/settlement tables and the KYC tables alongside the identity ones.
 `db/migrate/` is that install's output plus the users and classifieds tables,
 each created in its final shape.

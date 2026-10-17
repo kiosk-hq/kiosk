@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `kiosk:install` no longer creates `kiosk.reservations`, and `SchemaDefinitions.reservations_sql` is gone; nothing used the table.
+
 - 2026-10-17: The spending cap counts carts whose capture may still run and serialises one assistant's pays, so two concurrent pays cannot pass the cap together.
 - 2026-10-17: `PaymentClaim` runs `after_payment` only for the call that moves the row to paid, so a hook never runs twice for one payment.
 - 2026-10-17: The proof-of-work toll checks a proof's signature, expiry and parameters before it records the challenge as spent, and reads no more proofs than it asked for.

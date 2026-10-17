@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "kiosk/user_identity_providers/devise_session"
+require "kiosk/test_helpers/customer"
 
 module Kiosk
   module TestHelpers
@@ -14,6 +15,7 @@ module Kiosk
       attr_reader :site
 
       def initialize(origin, email:, password:)
+        @origin = origin
         @site = UserIdentityProviders::DeviseSession.new(origin).sign_in!(email:, password:)
       end
 
@@ -27,6 +29,9 @@ module Kiosk
 
       # `customer` redeems a fresh link code, and comes back acting for this person.
       def links(customer) = customer.redeems(link_code)
+
+      # A newly keyed assistant, linked to this person's account.
+      def links_a_newcomer = links(Customer.newcomer(Assistant.new(base_url: @origin)))
 
       # Approves the code an assistant showed, on the site's verification page.
       def approves(user_code)

@@ -40,6 +40,11 @@ module Kiosk
     class Customer
       attr_reader :principal
 
+      # An assistant holding a key and no account at its origin yet.
+      def self.newcomer(assistant)
+        new(assistant, Assistant::Principal.new(agent_id: nil, user_id: nil, token: nil, rsa_key: OpenSSL::PKey::RSA.generate(2048)))
+      end
+
       def initialize(assistant, principal)
         @assistant = assistant
         @principal = principal

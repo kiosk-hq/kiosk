@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "openssl"
 require "kiosk/test_helpers/customer"
 require "kiosk/test_helpers/live_server"
 
@@ -20,9 +19,7 @@ module Kiosk
       def a_customer(as: Customer) = as.new(assistant, register)
 
       # An assistant holding a key and no account here yet.
-      def a_newcomer(as: Customer)
-        as.new(assistant, Assistant::Principal.new(agent_id: nil, user_id: nil, token: nil, rsa_key: OpenSSL::PKey::RSA.generate(2048)))
-      end
+      def a_newcomer(as: Customer) = as.newcomer(assistant)
 
       # Someone with an account on the operator's site, signed in there.
       def a_person(email:, password:) = Person.new(live_url, email:, password:)

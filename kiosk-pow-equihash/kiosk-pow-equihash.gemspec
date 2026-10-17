@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require_relative "lib/kiosk/pow/equihash/version"
+require_relative 'lib/kiosk/pow/equihash/version'
 
 Gem::Specification.new do |spec|
-  spec.name    = "kiosk-pow-equihash"
+  spec.name    = 'kiosk-pow-equihash'
   spec.version = Kiosk::Pow::Equihash::VERSION
-  spec.authors = ["Phil Pirozhkov"]
-  spec.email   = ["hello@fili.pp.ru"]
-  spec.summary = "Equihash memory-hard PoW backend for Kiosk (default n=168, k=7; ~18 ms to verify, ~1.3 GiB for the reference solver to solve)"
+  spec.authors = ['Phil Pirozhkov']
+  spec.email   = ['hello@fili.pp.ru']
+  spec.summary = 'Equihash memory-hard PoW backend for Kiosk (default n=168, k=7; ~18 ms to verify, ~1.3 GiB for the reference solver to solve)'
   spec.description = <<~DESC
     kiosk-pow-equihash is the shipped default proof-of-work backend for the
     Kiosk framework: a pure-Ruby Equihash (Biryukov & Khovratovich birthday-
@@ -37,14 +37,15 @@ Gem::Specification.new do |spec|
     (solve.py) rides along for parity testing and for assistants that need
     one; production solving is the client's concern.
   DESC
-  spec.homepage = "https://kiosk.tech"
-  spec.license = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage = 'https://kiosk.tech'
+  spec.license = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]    = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]   = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-pow-equihash/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']    = spec.homepage
+  spec.metadata['source_code_uri'] = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']   = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-pow-equihash/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
   # `lib/**/*` rather than `lib/**/*.rb`: a `*.rb`-shaped glob silently drops the
   # first data file anyone puts under lib/ (a KAT vector, a JSON Schema), which
@@ -59,10 +60,10 @@ Gem::Specification.new do |spec|
   # `File.exist?("CHANGELOG.md") ? … : []` guard fails OPEN — it tells the
   # truth only by accident, and ships a package silently missing a file the
   # gemspec promises.
-  spec.files = Dir.glob("lib/**/*") + Dir.glob("bench/**/*") +
+  spec.files = Dir.glob('lib/**/*') + Dir.glob('bench/**/*') +
                %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.require_paths = ['lib']
 
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "base64"
+  spec.add_development_dependency 'base64'
+  spec.add_development_dependency 'rspec', '~> 3.13'
 end

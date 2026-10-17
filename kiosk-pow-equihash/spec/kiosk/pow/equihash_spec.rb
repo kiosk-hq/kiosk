@@ -1,52 +1,52 @@
 # frozen_string_literal: true
 
-require "spec_helper"
-require "json"
+require 'spec_helper'
+require 'json'
 
 RSpec.describe Kiosk::Pow::Equihash do
   # ─────────────────────────────────────────────────────────────────────
   # NAME / .params
   # ─────────────────────────────────────────────────────────────────────
 
-  describe "NAME" do
+  describe 'NAME' do
     it "is 'equihash'" do
-      expect(described_class::NAME).to eq("equihash")
+      expect(described_class::NAME).to eq('equihash')
     end
   end
 
-  describe "DEFAULT_N / DEFAULT_K" do
-    it "are the benchmark-chosen defaults (168, 7)" do
+  describe 'DEFAULT_N / DEFAULT_K' do
+    it 'are the benchmark-chosen defaults (168, 7)' do
       expect(described_class::DEFAULT_N).to eq(168)
       expect(described_class::DEFAULT_K).to eq(7)
     end
   end
 
-  describe ".params" do
-    it "returns n:168, k:7 by default" do
+  describe '.params' do
+    it 'returns n:168, k:7 by default' do
       p = described_class.params
       expect(p).to eq({ n: 168, k: 7 })
     end
 
-    it "accepts custom n and k" do
+    it 'accepts custom n and k' do
       p = described_class.params(n: 200, k: 9)
       expect(p).to eq({ n: 200, k: 9 })
     end
   end
 
-  describe ".solver_path" do
+  describe '.solver_path' do
     # The accessor is the PUBLIC contract consumers (kiosk-redteam's client
     # first) shell out to instead of reaching into this gem's directory by a
     # checkout-relative path — so it must name a file that actually exists,
     # inside this gem's own root, wherever the gem is installed.
-    it "returns the absolute path of an existing solve.py inside the gem root" do
+    it 'returns the absolute path of an existing solve.py inside the gem root' do
       path = described_class.solver_path
 
       expect(path).to eq(File.expand_path(path))                      # absolute
-      expect(File.basename(path)).to eq("solve.py")
+      expect(File.basename(path)).to eq('solve.py')
       expect(File.file?(path)).to be(true)
 
-      gem_root = File.expand_path("../../..", __dir__)                # spec/kiosk/pow → gem dir
-      expect(path).to eq(File.join(gem_root, "solve.py"))
+      gem_root = File.expand_path('../../..', __dir__)                # spec/kiosk/pow → gem dir
+      expect(path).to eq(File.join(gem_root, 'solve.py'))
     end
   end
 
@@ -60,31 +60,31 @@ RSpec.describe Kiosk::Pow::Equihash do
   #   => "324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf"
   # ─────────────────────────────────────────────────────────────────────
 
-  describe ".blake2b256" do
-    it "matches Python hashlib for empty input" do
-      result = described_class.blake2b256("".b)
-      expect(result.unpack1("H*")).to eq(
-        "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8"
+  describe '.blake2b256' do
+    it 'matches Python hashlib for empty input' do
+      result = described_class.blake2b256(''.b)
+      expect(result.unpack1('H*')).to eq(
+        '0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8'
       )
     end
 
     it "matches Python hashlib for 'hello'" do
-      result = described_class.blake2b256("hello")
-      expect(result.unpack1("H*")).to eq(
-        "324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf"
+      result = described_class.blake2b256('hello')
+      expect(result.unpack1('H*')).to eq(
+        '324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf'
       )
     end
 
-    it "returns 32 bytes" do
-      expect(described_class.blake2b256("x").bytesize).to eq(32)
+    it 'returns 32 bytes' do
+      expect(described_class.blake2b256('x').bytesize).to eq(32)
     end
 
-    it "is deterministic" do
-      expect(described_class.blake2b256("abc")).to eq(described_class.blake2b256("abc"))
+    it 'is deterministic' do
+      expect(described_class.blake2b256('abc')).to eq(described_class.blake2b256('abc'))
     end
 
-    it "changes with input" do
-      expect(described_class.blake2b256("a")).not_to eq(described_class.blake2b256("b"))
+    it 'changes with input' do
+      expect(described_class.blake2b256('a')).not_to eq(described_class.blake2b256('b'))
     end
   end
 
@@ -101,33 +101,33 @@ RSpec.describe Kiosk::Pow::Equihash do
   #   → XOR = 0 in first byte ✓
   # ─────────────────────────────────────────────────────────────────────
 
-  let(:kat_salt)    { "kat".b }
+  let(:kat_salt)    { 'kat'.b }
   let(:kat_params)  { described_class.params(n: 8, k: 1) }
   let(:kat_proof)   { { indices: [2, 10] } }
 
-  it "KAT: the constructed pair XORs to zero" do
-    seed = kat_salt + [0].pack("V")
-    h2  = described_class.blake2b256(seed + [2].pack("Q<"))
-    h10 = described_class.blake2b256(seed + [10].pack("Q<"))
+  it 'KAT: the constructed pair XORs to zero' do
+    seed = kat_salt + [0].pack('V')
+    h2  = described_class.blake2b256(seed + [2].pack('Q<'))
+    h10 = described_class.blake2b256(seed + [10].pack('Q<'))
     xor_byte = h2.bytes.first ^ h10.bytes.first
-    expect(xor_byte).to eq(0), "KAT construction is wrong"
+    expect(xor_byte).to eq(0), 'KAT construction is wrong'
   end
 
-  describe ".verify" do
-    it "ACCEPT — valid KAT (n=8,k=1, indices [2,10])" do
+  describe '.verify' do
+    it 'ACCEPT — valid KAT (n=8,k=1, indices [2,10])' do
       expect(described_class.verify(salt: kat_salt, params: kat_params, nonce: kat_proof)).to be(true)
     end
 
-    it "ACCEPT — valid KAT with string keys in nonce" do
+    it 'ACCEPT — valid KAT with string keys in nonce' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { "indices" => [2, 10] }
-      )).to be(true)
+               salt: kat_salt, params: kat_params, nonce: { 'indices' => [2, 10] }
+             )).to be(true)
     end
 
-    it "ACCEPT — valid KAT with string keys in params" do
+    it 'ACCEPT — valid KAT with string keys in params' do
       expect(described_class.verify(
-        salt: kat_salt, params: { "n" => 8, "k" => 1 }, nonce: kat_proof
-      )).to be(true)
+               salt: kat_salt, params: { 'n' => 8, 'k' => 1 }, nonce: kat_proof
+             )).to be(true)
     end
 
     # ─── Multi-level KATs (k ≥ 2) — the real Wagner tree ─────────────────
@@ -140,170 +140,170 @@ RSpec.describe Kiosk::Pow::Equihash do
     # prefix), and its canonical order is not ascending — the two properties
     # the pre-fix verifier got wrong (it demanded leaf-prefix equality + a
     # global sort, which no real k≥2 solution satisfies).
-    let(:m_salt) { "kiosk-eqx-kat-01".b }
+    let(:m_salt) { 'kiosk-eqx-kat-01'.b }
 
-    it "ACCEPT — valid k=2 KAT (n=24, canonical/tree order)" do
+    it 'ACCEPT — valid k=2 KAT (n=24, canonical/tree order)' do
       expect(described_class.verify(
-        salt: m_salt, params: described_class.params(n: 24, k: 2),
-        nonce: { indices: [29, 653, 113, 572] },
-      )).to be(true)
+               salt: m_salt, params: described_class.params(n: 24, k: 2),
+               nonce: { indices: [29, 653, 113, 572] }
+             )).to be(true)
     end
 
-    it "ACCEPT — valid k=3 KAT (n=32, canonical/tree order)" do
+    it 'ACCEPT — valid k=3 KAT (n=32, canonical/tree order)' do
       expect(described_class.verify(
-        salt: m_salt, params: described_class.params(n: 32, k: 3),
-        nonce: { indices: [31, 833, 279, 285, 147, 676, 596, 738] },
-      )).to be(true)
+               salt: m_salt, params: described_class.params(n: 32, k: 3),
+               nonce: { indices: [31, 833, 279, 285, 147, 676, 596, 738] }
+             )).to be(true)
     end
 
-    it "REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)" do
+    it 'REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)' do
       # Sorting regroups (29,653)(113,572) into (29,113)(572,653), which are
       # not the colliding pairs → the level-0 XOR no longer cancels.
       expect(described_class.verify(
-        salt: m_salt, params: described_class.params(n: 24, k: 2),
-        nonce: { indices: [29, 113, 572, 653] },
-      )).to be(false)
+               salt: m_salt, params: described_class.params(n: 24, k: 2),
+               nonce: { indices: [29, 113, 572, 653] }
+             )).to be(false)
     end
 
-    it "REJECT — k=2 with one mutated index (XOR no longer cancels)" do
+    it 'REJECT — k=2 with one mutated index (XOR no longer cancels)' do
       expect(described_class.verify(
-        salt: m_salt, params: described_class.params(n: 24, k: 2),
-        nonce: { indices: [29, 653, 113, 573] },
-      )).to be(false)
+               salt: m_salt, params: described_class.params(n: 24, k: 2),
+               nonce: { indices: [29, 653, 113, 573] }
+             )).to be(false)
     end
 
-    it "REJECT — k=2 canonical values but subtree order violated (halves swapped)" do
+    it 'REJECT — k=2 canonical values but subtree order violated (halves swapped)' do
       # Swap the two level-1 halves: right subtree (113,572) placed before the
       # left (29,653). XOR still cancels, but left.first(113) > right.first(29)
       # violates the canonical subtree ordering.
       expect(described_class.verify(
-        salt: m_salt, params: described_class.params(n: 24, k: 2),
-        nonce: { indices: [113, 572, 29, 653] },
-      )).to be(false)
+               salt: m_salt, params: described_class.params(n: 24, k: 2),
+               nonce: { indices: [113, 572, 29, 653] }
+             )).to be(false)
     end
 
     # ─── REJECT — hash mismatch ──────────────────────────────────────
 
-    it "REJECT — wrong salt" do
-      expect(described_class.verify(salt: "bad".b, params: kat_params, nonce: kat_proof)).to be(false)
+    it 'REJECT — wrong salt' do
+      expect(described_class.verify(salt: 'bad'.b, params: kat_params, nonce: kat_proof)).to be(false)
     end
 
-    it "REJECT — mutated index (2→3)" do
+    it 'REJECT — mutated index (2→3)' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [3, 10] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [3, 10] }
+             )).to be(false)
     end
 
     # ─── REJECT — structural violations ──────────────────────────────
 
-    it "REJECT — wrong count (3 indices, k=1 expects 2)" do
+    it 'REJECT — wrong count (3 indices, k=1 expects 2)' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10, 42] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2, 10, 42] }
+             )).to be(false)
     end
 
-    it "REJECT — too few indices" do
+    it 'REJECT — too few indices' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2] }
+             )).to be(false)
     end
 
-    it "REJECT — empty indices" do
+    it 'REJECT — empty indices' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [] }
+             )).to be(false)
     end
 
-    it "REJECT — non-ascending [10, 2]" do
+    it 'REJECT — non-ascending [10, 2]' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [10, 2] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [10, 2] }
+             )).to be(false)
     end
 
-    it "REJECT — duplicate [2, 2]" do
+    it 'REJECT — duplicate [2, 2]' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2, 2] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2, 2] }
+             )).to be(false)
     end
 
-    it "REJECT — float in indices" do
+    it 'REJECT — float in indices' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2.0, 10] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2.0, 10] }
+             )).to be(false)
     end
 
     # A malformed index (nil / non-numeric string) must return false,
     # never raise. Guards the `indices.all? { Integer && >= 0 }` check that
     # replaced a coercing `Integer(idx)` (which raised TypeError/ArgumentError).
-    it "REJECT — nil element in indices (returns false, does not raise)" do
+    it 'REJECT — nil element in indices (returns false, does not raise)' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [nil, 10] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [nil, 10] }
+             )).to be(false)
     end
 
-    it "REJECT — non-numeric string element in indices (returns false, does not raise)" do
+    it 'REJECT — non-numeric string element in indices (returns false, does not raise)' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: ["x", 10] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: ['x', 10] }
+             )).to be(false)
     end
 
     # ─── REJECT — guard rails ────────────────────────────────────────
 
-    it "REJECT — nonce is nil" do
+    it 'REJECT — nonce is nil' do
       expect(described_class.verify(salt: kat_salt, params: kat_params, nonce: nil)).to be(false)
     end
 
-    it "REJECT — nonce is not a Hash" do
-      expect(described_class.verify(salt: kat_salt, params: kat_params, nonce: "bad")).to be(false)
+    it 'REJECT — nonce is not a Hash' do
+      expect(described_class.verify(salt: kat_salt, params: kat_params, nonce: 'bad')).to be(false)
     end
 
-    it "REJECT — nonce missing :indices" do
+    it 'REJECT — nonce missing :indices' do
       expect(described_class.verify(salt: kat_salt, params: kat_params, nonce: {})).to be(false)
     end
 
-    it "REJECT — :indices is not an Array" do
+    it 'REJECT — :indices is not an Array' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: "nope" }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: 'nope' }
+             )).to be(false)
     end
 
     # ─── header_nonce ────────────────────────────────────────────────
 
-    it "REJECT — different header_nonce changes seed" do
+    it 'REJECT — different header_nonce changes seed' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 1 }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 1 }
+             )).to be(false)
     end
 
     # header_nonce is client-supplied and flowed straight
     # into `Integer(hn)` — a non-numeric value raised ArgumentError/TypeError
     # (an HTTP 500 at the wire), violating the "return false, never raise"
     # contract the index guard above already honours.
-    it "REJECT — non-numeric string header_nonce (returns false, does not raise)" do
+    it 'REJECT — non-numeric string header_nonce (returns false, does not raise)' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params,
-        nonce: { "indices" => [2, 10], "header_nonce" => "abc" }
-      )).to be(false)
+               salt: kat_salt, params: kat_params,
+               nonce: { 'indices' => [2, 10], 'header_nonce' => 'abc' }
+             )).to be(false)
     end
 
-    it "REJECT — non-coercible header_nonce type (Array) returns false, does not raise" do
+    it 'REJECT — non-coercible header_nonce type (Array) returns false, does not raise' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params,
-        nonce: { indices: [2, 10], header_nonce: [1] }
-      )).to be(false)
+               salt: kat_salt, params: kat_params,
+               nonce: { indices: [2, 10], header_nonce: [1] }
+             )).to be(false)
     end
 
-    it "REJECT — Hash header_nonce returns false, does not raise" do
+    it 'REJECT — Hash header_nonce returns false, does not raise' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params,
-        nonce: { indices: [2, 10], header_nonce: { "x" => 1 } }
-      )).to be(false)
+               salt: kat_salt, params: kat_params,
+               nonce: { indices: [2, 10], header_nonce: { 'x' => 1 } }
+             )).to be(false)
     end
 
-    it "ACCEPT — header_nonce=0 same as default" do
+    it 'ACCEPT — header_nonce=0 same as default' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 0 }
-      )).to be(true)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 0 }
+             )).to be(true)
     end
 
     # K-842 — the u32 RANGE, which the type check alone did not enforce.
@@ -312,25 +312,25 @@ RSpec.describe Kiosk::Pow::Equihash do
     # true under all three: one proof, infinitely many spellings on the wire.
     # Both specs call the field a u32 and `pow.schema.json` now states the same
     # bound, so the verifier and the schema accept one set, not two.
-    it "REJECT — header_nonce == 2**32 (the truncating alias of 0)" do
+    it 'REJECT — header_nonce == 2**32 (the truncating alias of 0)' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 2**32 }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: 2**32 }
+             )).to be(false)
     end
 
-    it "REJECT — header_nonce == -(2**32) (the negative truncating alias of 0)" do
+    it 'REJECT — header_nonce == -(2**32) (the negative truncating alias of 0)' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: -(2**32) }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: -(2**32) }
+             )).to be(false)
     end
 
-    it "REJECT — a negative header_nonce" do
+    it 'REJECT — a negative header_nonce' do
       expect(described_class.verify(
-        salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: -1 }
-      )).to be(false)
+               salt: kat_salt, params: kat_params, nonce: { indices: [2, 10], header_nonce: -1 }
+             )).to be(false)
     end
 
-    it "ACCEPT — the largest legal header_nonce is in range (2**32 - 1)" do
+    it 'ACCEPT — the largest legal header_nonce is in range (2**32 - 1)' do
       # Not a solution for THIS salt (the seed differs), so it verifies false —
       # but it must fail on the SOLUTION, not on the range pre-check, which is
       # what distinguishes an in-range value from an out-of-range one. Proven by
@@ -356,24 +356,24 @@ RSpec.describe Kiosk::Pow::Equihash do
   #   → top 2 bits all 0b10, top 4 all 0b1011, XOR = 0xbf^0xba^0xbc^0xb9 = 0 ✓
   # ─────────────────────────────────────────────────────────────────────
 
-  let(:kat8x2_salt)   { "kat".b }
+  let(:kat8x2_salt)   { 'kat'.b }
   let(:kat8x2_params) { described_class.params(n: 8, k: 2) }
   let(:kat8x2_proof)  { { indices: [0, 5, 33, 84] } }
 
-  it "KAT (8,2): indices XOR to zero and form a valid collision tree" do
-    seed = kat8x2_salt + [0].pack("V")
-    h0  = described_class.blake2b256(seed + [0].pack("Q<"))
-    h5  = described_class.blake2b256(seed + [5].pack("Q<"))
-    h33 = described_class.blake2b256(seed + [33].pack("Q<"))
-    h84 = described_class.blake2b256(seed + [84].pack("Q<"))
+  it 'KAT (8,2): indices XOR to zero and form a valid collision tree' do
+    seed = kat8x2_salt + [0].pack('V')
+    h0  = described_class.blake2b256(seed + [0].pack('Q<'))
+    h5  = described_class.blake2b256(seed + [5].pack('Q<'))
+    h33 = described_class.blake2b256(seed + [33].pack('Q<'))
+    h84 = described_class.blake2b256(seed + [84].pack('Q<'))
     xor_byte = h0.bytes[0] ^ h5.bytes[0] ^ h33.bytes[0] ^ h84.bytes[0]
-    expect(xor_byte).to eq(0), "KAT (8,2) XOR is wrong"
+    expect(xor_byte).to eq(0), 'KAT (8,2) XOR is wrong'
   end
 
-  it "ACCEPT — valid KAT (n=8,k=2, indices [0,5,33,84])" do
+  it 'ACCEPT — valid KAT (n=8,k=2, indices [0,5,33,84])' do
     expect(described_class.verify(
-      salt: kat8x2_salt, params: kat8x2_params, nonce: kat8x2_proof
-    )).to be(true)
+             salt: kat8x2_salt, params: kat8x2_params, nonce: kat8x2_proof
+           )).to be(true)
   end
 
   # ─────────────────────────────────────────────────────────────────────
@@ -385,28 +385,28 @@ RSpec.describe Kiosk::Pow::Equihash do
   # shipped default parameters, not just toy sizes.
   # ─────────────────────────────────────────────────────────────────────
 
-  describe "production params (n=168, k=7) KAT" do
-    let(:prod_salt) { "kiosk-eqx-kat-01".b }
+  describe 'production params (n=168, k=7) KAT' do
+    let(:prod_salt) { 'kiosk-eqx-kat-01'.b }
     let(:prod_params) { described_class.params(n: 168, k: 7) }
     let(:prod_indices) { prod_kat_indices }
 
-    it "ACCEPT — the frozen reference solution (canonical order)" do
+    it 'ACCEPT — the frozen reference solution (canonical order)' do
       expect(described_class.verify(
-        salt: prod_salt, params: prod_params, nonce: { indices: prod_indices }
-      )).to be(true)
+               salt: prod_salt, params: prod_params, nonce: { indices: prod_indices }
+             )).to be(true)
     end
 
-    it "REJECT — the same solution globally sorted (breaks tree pairing)" do
+    it 'REJECT — the same solution globally sorted (breaks tree pairing)' do
       expect(described_class.verify(
-        salt: prod_salt, params: prod_params, nonce: { indices: prod_indices.sort }
-      )).to be(false)
+               salt: prod_salt, params: prod_params, nonce: { indices: prod_indices.sort }
+             )).to be(false)
     end
 
-    it "REJECT — one mutated index (XOR no longer cancels)" do
+    it 'REJECT — one mutated index (XOR no longer cancels)' do
       mutated = prod_indices.dup.tap { |ix| ix[127] += 1 }
       expect(described_class.verify(
-        salt: prod_salt, params: prod_params, nonce: { indices: mutated }
-      )).to be(false)
+               salt: prod_salt, params: prod_params, nonce: { indices: mutated }
+             )).to be(false)
     end
   end
 
@@ -424,36 +424,36 @@ RSpec.describe Kiosk::Pow::Equihash do
   # below and the two KATs above cover 168/7, 8/2 and k = 0.
   # ─────────────────────────────────────────────────────────────────────
 
-  describe "degenerate parameters (K-840)" do
-    it "REJECT — negative k (was: NoMethodError on an empty stack)" do
+  describe 'degenerate parameters (K-840)' do
+    it 'REJECT — negative k (was: NoMethodError on an empty stack)' do
       # `1 << -5` is 0, so an EMPTY indices array satisfied the length check,
       # the fold loop never ran, and Step 4 dereferenced `stack.last`.
       expect(described_class.verify(
-        salt: "x".b, params: { n: 168, k: -5 }, nonce: { indices: [] }
-      )).to be(false)
+               salt: 'x'.b, params: { n: 168, k: -5 }, nonce: { indices: [] }
+             )).to be(false)
     end
 
-    it "REJECT — n = 0 (was: a VACUOUS TRUE for 128 arbitrary indices)" do
+    it 'REJECT — n = 0 (was: a VACUOUS TRUE for 128 arbitrary indices)' do
       # `n_bytes = 0` makes every leaf the integer 0, so every XOR cancels and
       # any 2^k distinct ascending indices were accepted as a solution.
       expect(described_class.verify(
-        salt: "x".b, params: { n: 0, k: 7 }, nonce: { indices: (0...128).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: { n: 0, k: 7 }, nonce: { indices: (0...128).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — negative n (was: NoMethodError, byteslice(0, -1) is nil)" do
+    it 'REJECT — negative n (was: NoMethodError, byteslice(0, -1) is nil)' do
       expect(described_class.verify(
-        salt: "x".b, params: { n: -8, k: 7 }, nonce: { indices: (0...128).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: { n: -8, k: 7 }, nonce: { indices: (0...128).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — n below one byte (n = 4: same vacuous leaf as n = 0)" do
+    it 'REJECT — n below one byte (n = 4: same vacuous leaf as n = 0)' do
       expect(described_class.verify(
-        salt: "x".b, params: { n: 4, k: 7 }, nonce: { indices: (0...128).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: { n: 4, k: 7 }, nonce: { indices: (0...128).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — n wider than the digest (n = 512 > 256 bits of BLAKE2b-256)" do
+    it 'REJECT — n wider than the digest (n = 512 > 256 bits of BLAKE2b-256)' do
       # NOT a regression example — the pre-guard code also answered false for
       # THESE indices, because the root XOR still had to cancel. What it did
       # not do is refuse the PARAMETERS: `byteslice` silently hands back the
@@ -461,31 +461,31 @@ RSpec.describe Kiosk::Pow::Equihash do
       # tree structure Equihash is named for stops being checked at all. This
       # pins the answer to the parameters rather than to the proof.
       expect(described_class.verify(
-        salt: "x".b, params: { n: 512, k: 7 }, nonce: { indices: (0...128).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: { n: 512, k: 7 }, nonce: { indices: (0...128).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — zero bits per level (n = 8, k = 8 ⇒ n_div = 0)" do
+    it 'REJECT — zero bits per level (n = 8, k = 8 ⇒ n_div = 0)' do
       # Also not a regression example: the old code rejected these particular
       # indices on the root XOR. But with n_div = 0 EVERY level check shifts
       # an 8-bit node right by 8 and passes, so the only surviving constraint
       # is a one-byte collision — a toll a client clears by trying 256 index
       # sets instead of by running Wagner. The parameters are the defect.
       expect(described_class.verify(
-        salt: "x".b, params: { n: 8, k: 8 }, nonce: { indices: (0...256).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: { n: 8, k: 8 }, nonce: { indices: (0...256).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — a non-numeric n (was: ArgumentError out of Integer())" do
+    it 'REJECT — a non-numeric n (was: ArgumentError out of Integer())' do
       expect(described_class.verify(
-        salt: "x".b, params: { n: "abc", k: 7 }, nonce: { indices: (0...128).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: { n: 'abc', k: 7 }, nonce: { indices: (0...128).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — params that are not a Hash at all (was: NoMethodError)" do
+    it 'REJECT — params that are not a Hash at all (was: NoMethodError)' do
       expect(described_class.verify(
-        salt: "x".b, params: nil, nonce: { indices: (0...128).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: nil, nonce: { indices: (0...128).to_a }
+             )).to be(false)
     end
 
     # ── the MINT-time half of the same guard (K-843) ────────────────────────
@@ -495,24 +495,24 @@ RSpec.describe Kiosk::Pow::Equihash do
     # invalid. `.valid_params?` is the same predicate asked BEFORE a challenge
     # is minted, so a gate can refuse at the source. It must answer for exactly
     # the same set — hence the table rather than a second hand-written list.
-    describe ".valid_params? (K-843)" do
+    describe '.valid_params? (K-843)' do
       rejected = {
-        "negative k"                => { n: 168, k: -5 },
-        "n = 0"                     => { n: 0,   k: 7 },
-        "negative n"                => { n: -8,  k: 7 },
-        "n below one byte"          => { n: 4,   k: 7 },
-        "n wider than the digest"   => { n: 512, k: 7 },
-        "zero bits per level"       => { n: 8,   k: 8 },
-        "a non-numeric n"           => { n: "abc", k: 7 },
-        "params that are not a Hash" => nil,
+        'negative k' => { n: 168, k: -5 },
+        'n = 0' => { n: 0,   k: 7 },
+        'negative n' => { n: -8,  k: 7 },
+        'n below one byte' => { n: 4, k: 7 },
+        'n wider than the digest' => { n: 512, k: 7 },
+        'zero bits per level' => { n: 8, k: 8 },
+        'a non-numeric n' => { n: 'abc', k: 7 },
+        'params that are not a Hash' => nil
       }
       accepted = {
-        "the shipped default"    => { n: 168, k: 7 },
-        "the KAT parameters"     => { n: 8,   k: 2 },
-        "k = 0"                  => { n: 8,   k: 0 },
-        "string keys off JSON"   => { "n" => 168, "k" => 7 },
-        "string values off JSON" => { n: "168", k: "7" },
-        "an empty Hash (both members default)" => {},
+        'the shipped default' => { n: 168, k: 7 },
+        'the KAT parameters' => { n: 8, k: 2 },
+        'k = 0' => { n: 8,   k: 0 },
+        'string keys off JSON' => { 'n' => 168, 'k' => 7 },
+        'string values off JSON' => { n: '168', k: '7' },
+        'an empty Hash (both members default)' => {}
       }
 
       rejected.each do |label, params|
@@ -534,36 +534,36 @@ RSpec.describe Kiosk::Pow::Equihash do
         # here: a well-formed nonce cannot rescue a refused parameter set.
         rejected.each_value do |params|
           expect(described_class.verify(
-            salt: "x".b, params: params, nonce: { indices: (0...128).to_a }
-          )).to be(false)
+                   salt: 'x'.b, params: params, nonce: { indices: (0...128).to_a }
+                 )).to be(false)
         end
       end
     end
 
-    it "ACCEPTS k = 0 — no tree, the root check is the only one" do
+    it 'ACCEPTS k = 0 — no tree, the root check is the only one' do
       # k = 0 is degenerate but DEFINED, and the fold loop is written for it
       # ("At k=0 there is no tree and this is the only one"). The guard must
       # reject k < 0 without taking k = 0 with it, so this is a POSITIVE proof
       # rather than another `be(false)`: brute-force the one index whose leaf
       # cancels all 8 bits and watch it verify.
-      salt  = "k0".b
-      seed  = salt + [0].pack("V")
+      salt  = 'k0'.b
+      seed  = salt + [0].pack('V')
       index = (0...4096).find do |i|
-        described_class.blake2b256(seed + [i].pack("Q<")).bytes[0].zero?
+        described_class.blake2b256(seed + [i].pack('Q<')).bytes[0].zero?
       end
-      expect(index).not_to be_nil, "no 8-bit-zero leaf in the first 4096 — widen the search"
+      expect(index).not_to be_nil, 'no 8-bit-zero leaf in the first 4096 — widen the search'
       expect(described_class.verify(
-        salt: salt, params: { n: 8, k: 0 }, nonce: { indices: [index] }
-      )).to be(true)
+               salt: salt, params: { n: 8, k: 0 }, nonce: { indices: [index] }
+             )).to be(true)
     end
 
-    it "ACCEPTS n % (k + 1) != 0 — the hand-computed (n=8, k=2) KAT" do
+    it 'ACCEPTS n % (k + 1) != 0 — the hand-computed (n=8, k=2) KAT' do
       # DELIBERATELY not required. 8 % 3 == 2, and that KAT is a real accepted
       # solution: a divisibility rule would have narrowed the accepted set,
       # which a robustness guard must not do.
       expect(described_class.verify(
-        salt: "kat".b, params: { n: 8, k: 2 }, nonce: { indices: [0, 5, 33, 84] }
-      )).to be(true)
+               salt: 'kat'.b, params: { n: 8, k: 2 }, nonce: { indices: [0, 5, 33, 84] }
+             )).to be(true)
     end
   end
 
@@ -571,35 +571,35 @@ RSpec.describe Kiosk::Pow::Equihash do
   # default params (n=168, k=7) structural checks
   # ─────────────────────────────────────────────────────────────────────
 
-  describe "default params (n=168, k=7)" do
+  describe 'default params (n=168, k=7)' do
     let(:big_params) { described_class.params }
 
-    it "REJECT — 127 indices (expect 128)" do
+    it 'REJECT — 127 indices (expect 128)' do
       expect(described_class.verify(
-        salt: "x".b, params: big_params, nonce: { indices: (0...127).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: big_params, nonce: { indices: (0...127).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — 129 indices (expect 128)" do
+    it 'REJECT — 129 indices (expect 128)' do
       expect(described_class.verify(
-        salt: "x".b, params: big_params, nonce: { indices: (0...129).to_a }
-      )).to be(false)
+               salt: 'x'.b, params: big_params, nonce: { indices: (0...129).to_a }
+             )).to be(false)
     end
 
-    it "REJECT — non-ascending (first two swapped)" do
+    it 'REJECT — non-ascending (first two swapped)' do
       indices = (0...128).to_a
       indices[0], indices[1] = indices[1], indices[0]
       expect(described_class.verify(
-        salt: "x".b, params: big_params, nonce: { indices: indices }
-      )).to be(false)
+               salt: 'x'.b, params: big_params, nonce: { indices: indices }
+             )).to be(false)
     end
 
-    it "REJECT — duplicate at end" do
+    it 'REJECT — duplicate at end' do
       indices = (0...128).to_a
       indices[127] = indices[126]
       expect(described_class.verify(
-        salt: "x".b, params: big_params, nonce: { indices: indices }
-      )).to be(false)
+               salt: 'x'.b, params: big_params, nonce: { indices: indices }
+             )).to be(false)
     end
   end
 
@@ -615,9 +615,9 @@ RSpec.describe Kiosk::Pow::Equihash do
   # any regression back to eager hashing fails here loudly.
   # ─────────────────────────────────────────────────────────────────────
 
-  describe "cost of rejecting an invalid proof (K-540)" do
+  describe 'cost of rejecting an invalid proof (K-540)' do
     let(:big_params)  { described_class.params }            # n=168, k=7
-    let(:cost_salt)   { "kiosk-eqx-kat-01".b }              # the frozen KAT salt
+    let(:cost_salt)   { 'kiosk-eqx-kat-01'.b }              # the frozen KAT salt
     let(:solution)    { prod_kat_indices }
 
     # Run `verify` while tallying every leaf hash it asks for. The stub calls
@@ -642,33 +642,33 @@ RSpec.describe Kiosk::Pow::Equihash do
       verify_counting(indices, params: big_params, salt: cost_salt, extra: extra)
     end
 
-    it "hashes NOTHING when the indices are not in canonical subtree order" do
+    it 'hashes NOTHING when the indices are not in canonical subtree order' do
       result, count = run((0...128).to_a.shuffle(random: Random.new(7)))
 
       expect(result).to be(false)
       expect(count).to eq(0)
     end
 
-    it "hashes NOTHING when an index is out of u64 range" do
+    it 'hashes NOTHING when an index is out of u64 range' do
       indices = (0...128).to_a
-      indices[127] = (1 << 64) + 5   # still the largest ⇒ ordering still holds
+      indices[127] = (1 << 64) + 5 # still the largest ⇒ ordering still holds
       result, count = run(indices)
 
       expect(result).to be(false)
       expect(count).to eq(0)
     end
 
-    it "hashes NOTHING when count, type or distinctness fails" do
+    it 'hashes NOTHING when count, type or distinctness fails' do
       expect(run((0...127).to_a).last).to eq(0)
-      expect(run((0...127).to_a + ["x"]).last).to eq(0)
+      expect(run((0...127).to_a + ['x']).last).to eq(0)
       expect(run((0...127).to_a + [126]).last).to eq(0)
     end
 
-    it "hashes NOTHING when header_nonce is not coercible" do
-      expect(run((0...128).to_a, extra: { header_nonce: "abc" }).last).to eq(0)
+    it 'hashes NOTHING when header_nonce is not coercible' do
+      expect(run((0...128).to_a, extra: { header_nonce: 'abc' }).last).to eq(0)
     end
 
-    it "stops after ONE sibling pair (2 hashes) on structurally clean rubbish" do
+    it 'stops after ONE sibling pair (2 hashes) on structurally clean rubbish' do
       # 0..127 ascending passes count, type, range, distinctness AND every
       # canonical-ordering comparison — only the hashes can reject it.
       result, count = run((0...128).to_a)
@@ -677,14 +677,14 @@ RSpec.describe Kiosk::Pow::Equihash do
       expect(count).to eq(2)
     end
 
-    it "stops after ONE sibling pair on a real solution that was globally sorted" do
+    it 'stops after ONE sibling pair on a real solution that was globally sorted' do
       result, count = run(solution.sort)
 
       expect(result).to be(false)
       expect(count).to eq(2)
     end
 
-    it "still hashes every leaf for a VALID proof (the toll is not weakened)" do
+    it 'still hashes every leaf for a VALID proof (the toll is not weakened)' do
       result, count = run(solution)
 
       expect(result).to be(true)
@@ -699,18 +699,18 @@ RSpec.describe Kiosk::Pow::Equihash do
     # level 1 would hash all 8 leaves, and one that folds the tree hashes 4.
     # That gap is what forces an attacker who wants the full hash loop to
     # carry an almost-complete solution instead of 2^(k-1) cheap collisions.
-    it "stops at the first failing tree NODE, not the first failing pair" do
-      salt   = "k540-dfs".b
+    it 'stops at the first failing tree NODE, not the first failing pair' do
+      salt   = 'k540-dfs'.b
       params = described_class.params(n: 8, k: 3)
       leaves = (0...8).map do |i|
-        described_class.blake2b256(salt + [0].pack("V") + [i].pack("Q<")).getbyte(0)
+        described_class.blake2b256(salt + [0].pack('V') + [i].pack('Q<')).getbyte(0)
       end
 
       # Premises — asserted so the fixture cannot rot into a vacuous pass.
-      expect((leaves[0] ^ leaves[1]) >> 6).to eq(0), "pair (0,1) must cancel 2 bits"
-      expect((leaves[2] ^ leaves[3]) >> 6).to eq(0), "pair (2,3) must cancel 2 bits"
+      expect((leaves[0] ^ leaves[1]) >> 6).to eq(0), 'pair (0,1) must cancel 2 bits'
+      expect((leaves[2] ^ leaves[3]) >> 6).to eq(0), 'pair (2,3) must cancel 2 bits'
       expect((leaves[0] ^ leaves[1] ^ leaves[2] ^ leaves[3]) >> 4).not_to eq(0),
-             "the height-2 node must NOT cancel 4 bits"
+                                                                          'the height-2 node must NOT cancel 4 bits'
 
       result, count = verify_counting((0...8).to_a, params: params, salt: salt)
 
@@ -718,7 +718,7 @@ RSpec.describe Kiosk::Pow::Equihash do
       expect(count).to eq(4)
     end
 
-    it "rejects a valid solution with 2**64 added to an index, without hashing" do
+    it 'rejects a valid solution with 2**64 added to an index, without hashing' do
       # `pack("Q<")` truncates mod 2**64, so without the range bound this proof
       # would hash identically to the real one and verify — one solution would
       # become 2**k spendable restatements.
@@ -735,52 +735,54 @@ RSpec.describe Kiosk::Pow::Equihash do
   # Python solver cross-implementation parity
   # ─────────────────────────────────────────────────────────────────────
 
-  describe "Python solver parity", :parity do
+  describe 'Python solver parity', :parity do
     let(:python) { find_python_with_blake2b }
 
-    before { parity_skip("python3 with hashlib.blake2b not found") unless python }
+    before { parity_skip('python3 with hashlib.blake2b not found') unless python }
 
-    it "Python blake2b matches Ruby for the KAT seed" do
-      require "tempfile"
+    it 'Python blake2b matches Ruby for the KAT seed' do
+      require 'tempfile'
       py_script = <<~PY
         import hashlib, struct
         seed = b"kat" + struct.pack("<I", 0)
         h = hashlib.blake2b(seed + struct.pack("<Q", 2), digest_size=32).digest()
         print(h.hex())
       PY
-      py_hex = Tempfile.open(["kiosk_eq", ".py"]) { |f| f.write(py_script); f.flush; `#{python} #{f.path.shellescape}`.strip }
+      py_hex = Tempfile.open(['kiosk_eq', '.py']) do |f|
+        f.write(py_script)
+        f.flush
+        `#{python} #{f.path.shellescape}`.strip
+      end
 
-      seed = "kat".b + [0].pack("V")
-      ruby_hex = described_class.blake2b256(seed + [2].pack("Q<")).unpack1("H*")
+      seed = 'kat'.b + [0].pack('V')
+      ruby_hex = described_class.blake2b256(seed + [2].pack('Q<')).unpack1('H*')
       expect(py_hex).to eq(ruby_hex)
     end
 
-    it "Ruby verify accepts a toy (n=8,k=1) proof from Python solver" do
-      solver_py = File.join(__dir__, "../../../solve.py")
-      skip "solve.py not found" unless File.exist?(solver_py)
+    it 'Ruby verify accepts a toy (n=8,k=1) proof from Python solver' do
+      solver_py = File.join(__dir__, '../../../solve.py')
+      skip 'solve.py not found' unless File.exist?(solver_py)
 
       # solve.py requires numpy; the plain blake2b python may lack it.
       python = find_python_with_numpy
-      parity_skip("python3 with numpy not found (pip install numpy)") unless python
+      parity_skip('python3 with numpy not found (pip install numpy)') unless python
 
-      require "base64"
+      require 'base64'
       challenge = JSON.generate(
-        "salt_b64" => Base64.strict_encode64("kat".b),
-        "params"   => { "n" => 8, "k" => 1 },
-        "header_nonce" => 0,
+        'salt_b64' => Base64.strict_encode64('kat'.b),
+        'params' => { 'n' => 8, 'k' => 1 },
+        'header_nonce' => 0
       )
       out    = `#{python} #{solver_py.shellescape} #{challenge.shellescape}`.strip
       result = JSON.parse(out)
 
-      if result.key?("error")
-        skip "Python solver failed: #{result["error"]}"
-      end
+      skip "Python solver failed: #{result['error']}" if result.key?('error')
 
       ok = described_class.verify(
-        salt: "kat".b, params: described_class.params(n: 8, k: 1),
-        nonce: { "indices" => result["indices"] },
+        salt: 'kat'.b, params: described_class.params(n: 8, k: 1),
+        nonce: { 'indices' => result['indices'] }
       )
-      expect(ok).to be(true), "Ruby verify rejected Python output: #{result["indices"].inspect}"
+      expect(ok).to be(true), "Ruby verify rejected Python output: #{result['indices'].inspect}"
     end
 
     # T-013: the toy roundtrip above proves the wire, but the shipped params are
@@ -788,30 +790,30 @@ RSpec.describe Kiosk::Pow::Equihash do
     # LIVE-solves there. This closes that gap end-to-end: solve.py produces a
     # fresh 168/7 proof and the Ruby verifier must accept it — the "KATs must run
     # at shipped params" lesson from the verifier-bug incident. ~9-10 s to solve.
-    it "Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver" do
-      solver_py = File.join(__dir__, "../../../solve.py")
-      skip "solve.py not found" unless File.exist?(solver_py)
+    it 'Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver' do
+      solver_py = File.join(__dir__, '../../../solve.py')
+      skip 'solve.py not found' unless File.exist?(solver_py)
 
       python = find_python_with_numpy
-      parity_skip("python3 with numpy not found (pip install numpy)") unless python
+      parity_skip('python3 with numpy not found (pip install numpy)') unless python
 
-      require "base64"
-      salt      = "kiosk-eqx-parity-168".b
+      require 'base64'
+      salt      = 'kiosk-eqx-parity-168'.b
       challenge = JSON.generate(
-        "salt_b64"     => Base64.strict_encode64(salt),
-        "params"       => { "n" => 168, "k" => 7 },
-        "header_nonce" => 0,
+        'salt_b64' => Base64.strict_encode64(salt),
+        'params' => { 'n' => 168, 'k' => 7 },
+        'header_nonce' => 0
       )
       out    = `#{python} #{solver_py.shellescape} #{challenge.shellescape}`.strip
       result = JSON.parse(out)
-      skip "Python solver failed: #{result["error"]}" if result.key?("error")
+      skip "Python solver failed: #{result['error']}" if result.key?('error')
 
       ok = described_class.verify(
         salt: salt, params: described_class.params(n: 168, k: 7),
-        nonce: { "indices" => result["indices"] },
+        nonce: { 'indices' => result['indices'] }
       )
       expect(ok).to be(true),
-        "Ruby verify rejected the solver's live 168/7 output: #{result["indices"].inspect}"
+                    "Ruby verify rejected the solver's live 168/7 output: #{result['indices'].inspect}"
     end
   end
 
@@ -821,22 +823,22 @@ RSpec.describe Kiosk::Pow::Equihash do
   # group so the two can never drift apart.
   def prod_kat_indices
     [
-      35635, 443602, 769922, 2841204, 288650, 2534367, 3711384, 4167287,
-      439322, 3579870, 3884016, 4011474, 1469807, 2859441, 1582951, 2663283,
-      175258, 904564, 2551933, 3478559, 2097074, 2914645, 3026485, 3645933,
-      326539, 3134338, 1410867, 3946408, 1215314, 2610863, 1729482, 2563633,
-      215557, 1365296, 3286033, 3379331, 1092666, 2048436, 1956659, 4083619,
-      327630, 966319, 546923, 3597822, 1019737, 3289324, 2515996, 4102785,
-      352766, 2643465, 2237387, 3118040, 1365775, 3292860, 1484813, 2325158,
-      1130131, 3785225, 1311199, 1689016, 1154546, 2027634, 2238579, 2294173,
-      47664, 1747214, 1924004, 2999276, 2036646, 2481260, 2187884, 3492692,
-      1006856, 1260610, 1570131, 3646554, 1388645, 2876691, 2128978, 2588422,
-      367435, 513091, 3105269, 4005382, 489985, 629292, 2672040, 2928191,
-      367906, 2335214, 761171, 3386820, 681939, 2064865, 1410874, 1730962,
-      219306, 4024412, 1712945, 3300801, 719958, 3009238, 1383878, 2994505,
-      417321, 3362644, 2678745, 2792851, 2071420, 2778845, 2441747, 4028940,
-      220716, 2282797, 1287422, 1739283, 1064154, 3198198, 3579075, 3590378,
-      228235, 2335503, 1297479, 3907179, 1108349, 2972099, 3417182, 3877732
+      35_635, 443_602, 769_922, 2_841_204, 288_650, 2_534_367, 3_711_384, 4_167_287,
+      439_322, 3_579_870, 3_884_016, 4_011_474, 1_469_807, 2_859_441, 1_582_951, 2_663_283,
+      175_258, 904_564, 2_551_933, 3_478_559, 2_097_074, 2_914_645, 3_026_485, 3_645_933,
+      326_539, 3_134_338, 1_410_867, 3_946_408, 1_215_314, 2_610_863, 1_729_482, 2_563_633,
+      215_557, 1_365_296, 3_286_033, 3_379_331, 1_092_666, 2_048_436, 1_956_659, 4_083_619,
+      327_630, 966_319, 546_923, 3_597_822, 1_019_737, 3_289_324, 2_515_996, 4_102_785,
+      352_766, 2_643_465, 2_237_387, 3_118_040, 1_365_775, 3_292_860, 1_484_813, 2_325_158,
+      1_130_131, 3_785_225, 1_311_199, 1_689_016, 1_154_546, 2_027_634, 2_238_579, 2_294_173,
+      47_664, 1_747_214, 1_924_004, 2_999_276, 2_036_646, 2_481_260, 2_187_884, 3_492_692,
+      1_006_856, 1_260_610, 1_570_131, 3_646_554, 1_388_645, 2_876_691, 2_128_978, 2_588_422,
+      367_435, 513_091, 3_105_269, 4_005_382, 489_985, 629_292, 2_672_040, 2_928_191,
+      367_906, 2_335_214, 761_171, 3_386_820, 681_939, 2_064_865, 1_410_874, 1_730_962,
+      219_306, 4_024_412, 1_712_945, 3_300_801, 719_958, 3_009_238, 1_383_878, 2_994_505,
+      417_321, 3_362_644, 2_678_745, 2_792_851, 2_071_420, 2_778_845, 2_441_747, 4_028_940,
+      220_716, 2_282_797, 1_287_422, 1_739_283, 1_064_154, 3_198_198, 3_579_075, 3_590_378,
+      228_235, 2_335_503, 1_297_479, 3_907_179, 1_108_349, 2_972_099, 3_417_182, 3_877_732
     ]
   end
 
@@ -845,27 +847,27 @@ RSpec.describe Kiosk::Pow::Equihash do
   # prints, so a job that installs the interpreter and then silently fails to
   # would otherwise read exactly like a job that ran the check.
   def parity_skip(reason)
-    if ENV["KIOSK_REQUIRE_PARITY"] == "1"
-      raise "KIOSK_REQUIRE_PARITY=1 was set, so the caller undertook to provide the parity " \
+    if ENV['KIOSK_REQUIRE_PARITY'] == '1'
+      raise 'KIOSK_REQUIRE_PARITY=1 was set, so the caller undertook to provide the parity ' \
             "toolchain — #{reason}. Do NOT relax this to a skip: these examples are the only " \
-            "cross-implementation check of the shipped solver, and a skipped example reads as " \
-            "a passing one."
+            'cross-implementation check of the shipped solver, and a skipped example reads as ' \
+            'a passing one.'
     end
 
     skip reason
   end
 
   def find_python_with_blake2b
-    %w[python3.14 python3.13 python3.12 python3 /opt/homebrew/bin/python3].find { |py|
+    %w[python3.14 python3.13 python3.12 python3 /opt/homebrew/bin/python3].find do |py|
       system("#{py} -c 'import hashlib; hashlib.blake2b(b\"\", digest_size=32)' 2>/dev/null")
-    }
+    end
   end
 
   # solve.py needs numpy (the Wagner sort/collide steps are vectorised), so its
   # parity test must pick an interpreter that has it, not just blake2b.
   def find_python_with_numpy
-    %w[python3.14 python3.13 python3.12 python3 /opt/homebrew/bin/python3].find { |py|
+    %w[python3.14 python3.13 python3.12 python3 /opt/homebrew/bin/python3].find do |py|
       system("#{py} -c 'import hashlib, numpy; hashlib.blake2b(b\"\", digest_size=32)' 2>/dev/null")
-    }
+    end
   end
 end

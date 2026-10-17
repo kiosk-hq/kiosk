@@ -307,8 +307,7 @@ BATTERY.record('DeviceGrantRoleComesFromTheApprover',
                "calendar #{rc_cust_cal} sees_own=#{cust_sees_own} own_only=#{cust_own_only}; " \
                "CONTROL owner-approved claim over the SAME endpoints → poll #{rc_own_poll}, token role " \
                "#{own_claim_role.inspect}, calendar #{rc_own_cal} whole_book=#{own_sees_others} " \
-               "(want customer/own-scoped and owner/whole-book — the role is the " \
-               "approver's, never the caller's)")
+               "(want customer/own-scoped and owner/whole-book — the role is the approver's, never the caller's)")
 
 # The verify page names the role it grants, and differs per approver.
 cust_page_names  = cust_page.to_s.include?('Access you are handing it') &&

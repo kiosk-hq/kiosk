@@ -11,7 +11,7 @@ class SalonBookStory < StoryTest
 
     book = owner.the_book.rows
     assert_equal [alices, bobs].sort, book.pluck('id').sort
-    assert_equal 12_500, book.sum { it['price_cents'] }
+    assert_equal 12_500, book.pluck('price_cents').sum
     assert_equal ['eur'], book.pluck('currency').uniq
   end
 

@@ -1,111 +1,87 @@
 # frozen_string_literal: true
 
-# THE MALFORMED-REQUEST SENTENCES THE ENGINE PUTS ON THE WIRE (K-1294).
+# The sentences the engine puts on the wire for a malformed request.
 #
-# The engine used to build both of them by splicing a Ruby exception's
-# `message` into the problem document's `detail`. MEASURED live against the
-# deployed fleet on 2026-09-05, `POST /kiosk/auth/register` with `{}` answered
+# A missing field reads `missing field: <name>`, the house sentence the demos
+# use too. A body that is not JSON reads `invalid JSON body`. Neither carries a
+# Ruby exception's message (`key not found: :public_key`) or a library's
+# wording (`unexpected token …`).
 #
-#   "detail":"missing field: key not found: :public_key"
+# The behavioural examples pin what each endpoint answers. The source sweeps at
+# the bottom stop the next site being written the wrong way, because an
+# example can only assert about the endpoints it dispatches.
 #
-# — `KeyError#message` verbatim, Ruby symbol and all, on the FIRST call any
-# assistant makes — and a body that was not JSON answered
-#
-#   "detail":"invalid JSON body: unexpected token 'notjson' at line 1 column 1"
-#
-# which is the json gem's wording rather than this protocol's.
-#
-# `missing field: <name>` is the house sentence: the demos answer an absent
-# argument with it, and the engine must too.
-#
-# Two arms, and they answer different questions. The behavioural ones pin what
-# each SITE answers today; the source sweep at the bottom is what stops the
-# next site being written the old way, because a spec can only assert about
-# endpoints somebody remembered to dispatch.
-#
-# Dispatch via `ActionController::Metal.action(...)` — a plain Rack app, no
+# Dispatch is via `ActionController::Metal.action(...)`: a plain Rack app, no
 # Rails host and no database.
 
 require 'rack/mock'
 require 'ripper'
 require 'json'
 
-# THE CLASS THE TWO SENTENCES ABOVE ARE ONE INSTANCE OF (K-1307).
-#
-# K-465 fixed the sites it found; K-1294 fixed five more; the pass that filed
-# K-1307 found three more by grepping `.message` rather than by re-reading
-# either row. A fourth recurrence is the default outcome unless the CLASS is
-# held by something, so the rule below is about a SHAPE and not about a
-# sentence:
-#
-#   AN EXCEPTION MESSAGE THIS REPOSITORY DOES NOT OWN MAY NOT REACH THE
-#   CONSTRUCTOR OF A WIRE ERROR.
-#
-# "Wire error" is asked of Ruby rather than listed here: a class is in scope
-# when it descends from `Kiosk::Server::Errors::Base`, because `Base#to_problem`
-# copies its `message` into the problem document's `detail` and nothing between
-# there and the socket redacts it. `Errors::ConfigurationError` is therefore
-# NOT in scope and its `#{e.message}` is not an offence — it is a bare
-# StandardError with no code, no status and no `to_problem`, raised while an
-# operator's own configuration is being read. The day someone gives it one it
-# enters scope by itself, with nothing here to edit.
-#
-# "Does not own" is asked of the RESCUE rather than of an allowlist: the
-# message is permitted when the variable it is read from was bound by a
-# `rescue` whose every named class sits under `Kiosk::`. Our adapters raise our
-# own exceptions carrying sentences we wrote and version — the PSP-agnostic
-# `Kiosk::PaymentProviders::PaymentFailed` the pay path re-raises is the live
-# instance — and banning those would only push the same text through a
-# laundering builder. Everything else (`JSON::ParserError`, `JWT::DecodeError`,
-# `OpenSSL::PKey::PKeyError`, `Rack::BadRequest`, a bare `StandardError`) is
-# some other library's wording: it moves when that dependency is upgraded and,
-# on the paths reachable before any credential is presented, it can echo the
-# caller's own bytes straight back out. A bare `rescue => e` names nothing, so
-# it is foreign too.
-#
-# TWO CONSTRUCTIONS, NOT ONE, AND THE SECOND WAS ADDED BY THE ROUTE THIS
-# SWEEP'S OWN SCOPE NOTE SAID IT COULD NOT SEE (K-1310).
-#
-# The note used to read «a foreign message reaching the wire by a route that is
-# not an `Errors` constructor — `HandlerMixin#kiosk_rescue_to_wire` renders
-# `message: exception.message` into the sub-dispatch envelope and
-# `HandlerDispatch#error_message` re-wraps that as the wire `detail`». That was
-# TRUE, it was written honestly, and it was still a hole: a scope note that
-# names a live leak documents the leak instead of holding it, and the leak was
-# live — actionpack's «param is missing or the value is empty or invalid: sku»
-# on a 400, MEASURED at head the day the note was read back.
-#
-# So `render` is the second construction. Every `render` in `kiosk-server/lib`
-# is a controller answering a caller, and the sub-dispatch envelope is a wire
-# error by a shorter road: {HandlerDispatch#decode} turns a non-2xx render into
-# an {Errors::Base} and its `message` into the problem document's `detail`. The
-# ownership rule is identical, so the same walker answers both — and it answers
-# `render` even when the render carries no `error` key at all, because a body
-# is a body.
-#
-# WHAT THIS SWEEP STILL DOES NOT SEE, said out loud rather than left to be
-# found — and this list is a statement about the DETECTOR, never a licence for
-# the paths it names:
-#
-#   * a message laundered through a local first (`detail = e.message` a line
-#     up, `Errors::BadRequest.new(detail)` a line down);
-#   * `#{e.class}`, which is a class NAME and not a sentence: it cannot carry
-#     the caller's bytes and does not move with a dependency's wording. Two
-#     500 paths keep it deliberately, with the message beside it in the log.
-module KioskWireErrorSweep
-  module_function
+# Readers for Ripper s-expression nodes.
+module KioskWireErrorNodes
+  def type?(node, type) = node.is_a?(Array) && node[0] == type
+  def ident?(node, name = nil) = type?(node, :@ident) && (name.nil? || node[1] == name)
+  def const_token(node) = type?(node, :@const) ? node[1] : nil
 
-  Offence = Struct.new(:path, :line, :source, :variable)
+  # The local variable name a `var_ref` or `var_field` node holds, or nil.
+  def local_name(node, type)
+    node[1][1] if type?(node, type) && ident?(node[1])
+  end
 
+  # The constant path a node spells, as an array of names, or nil.
+  def const_path(node)
+    return nil unless node.is_a?(Array)
+
+    case node[0]
+    when :var_ref, :const_ref, :top_const_ref then (name = const_token(node[1])) && [name]
+    when :@const then [node[1]]
+    when :const_path_ref then nested_const_path(node)
+    end
+  end
+
+  def nested_const_path(node)
+    left  = const_path(node[1])
+    right = const_token(node[2])
+    left && right ? left + [right] : nil
+  end
+
+  # Whole paths only: `::JWT::MissingRequiredClaim` is one answer, not two.
+  def maximal_const_paths(node, acc = [])
+    return acc unless node.is_a?(Array)
+
+    path = const_path(node)
+    return acc << path if path
+
+    node.each { |child| maximal_const_paths(child, acc) }
+    acc
+  end
+
+  # Every `<receiver>.message` in a subtree, as [line, receiver local name,
+  # what the enclosing rescues bound that name to]. An unknown receiver stays
+  # unknown, and unknown is treated as foreign.
+  def message_sends(node, env, acc = [])
+    return acc unless node.is_a?(Array)
+
+    if node[0] == :call && ident?(node[3], 'message')
+      name = local_name(node[1], :var_ref)
+      acc << [node[3][2][0], name, env[name]]
+    end
+    node.each { |child| message_sends(child, env, acc) }
+    acc
+  end
+end
+
+# Which constants are wire errors, and which rescues this repository owns.
+module KioskWireErrorScope
   def const_lookup(name)
     Object.const_get(name, false)
   rescue ::NameError, ::TypeError, ::LoadError
     nil
   end
 
-  # What an `Errors::X` / bare `X` / fully-qualified spelling names, resolved
-  # the way the `module Kiosk; module Server` nesting of the file it was read
-  # from would resolve it.
+  # Resolve an `Errors::X`, bare `X` or fully-qualified spelling the way the
+  # `module Kiosk; module Server` nesting of a lib file resolves it.
   def resolve(path)
     joined = path.join('::')
     ["Kiosk::Server::Errors::#{joined}", "Kiosk::Server::#{joined}", joined].each do |candidate|
@@ -116,189 +92,158 @@ module KioskWireErrorSweep
   end
 
   # In scope: everything whose `message` can become a problem document's
-  # `detail` — the error classes themselves, and the `Errors` module, whose
-  # builders return them.
+  # `detail`, that is the error classes and the `Errors` module whose builders
+  # return them.
   def in_scope?(const)
     return false if const.nil?
     return true if const.equal?(Kiosk::Server::Errors)
 
-    # `<=` answers nil, not false, for two unrelated classes; a predicate
-    # that can answer nil is a predicate whose negative nobody can assert.
+    # `<=` answers nil for two unrelated classes; this predicate answers false.
     const.is_a?(Class) && !(const <= Kiosk::Server::Errors::Base).nil? &&
       const <= Kiosk::Server::Errors::Base
   end
 
-  def const_path(node)
-    return nil unless node.is_a?(Array)
-
-    case node[0]
-    when :var_ref, :const_ref, :top_const_ref
-      inner = node[1]
-      inner.is_a?(Array) && inner[0] == :@const ? [inner[1]] : nil
-    when :@const
-      [node[1]]
-    when :const_path_ref
-      left  = const_path(node[1])
-      right = node[2]
-      left && right.is_a?(Array) && right[0] == :@const ? left + [right[1]] : nil
-    end
-  end
-
-  # Whole paths only: `::JWT::MissingRequiredClaim` is one answer, not two.
-  def maximal_const_paths(node, acc = [])
-    return acc unless node.is_a?(Array)
-
-    path = const_path(node)
-    return acc << path if path
-
-    node.each { |child| maximal_const_paths(child, acc) if child.is_a?(Array) }
-    acc
-  end
-
+  # A rescue is owned when every class it names sits under `Kiosk::`.
   def owned_rescue?(exception_node)
     paths = maximal_const_paths(exception_node)
     !paths.empty? && paths.all? { |path| path.first == 'Kiosk' }
   end
+end
 
-  # Every `<receiver>.message` in a subtree, with the line, the receiver's name
-  # when it is a plain local, and what the enclosing rescues bound it to. An
-  # unknown receiver stays unknown, and unknown is treated as foreign.
-  def message_sends(node, env, acc = [])
-    return acc unless node.is_a?(Array)
+# The rule: an exception message this repository does not own may not reach
+# the constructor of a wire error.
+#
+# A wire error is a class that descends from `Kiosk::Server::Errors::Base`,
+# because `Base#to_problem` copies its `message` into `detail`. So
+# `Errors::ConfigurationError`, which has no `to_problem`, is out of scope.
+#
+# A message is owned when the variable it is read from was bound by a rescue
+# whose every named class sits under `Kiosk::`. A bare `rescue => e` names
+# nothing, so it is foreign.
+#
+# There are two constructions: an `Errors` constructor or raise, and `render`.
+# A non-2xx render in a sub-dispatch becomes an `Errors::Base` whose `message`
+# is the `detail`, so every `render` body is judged, with or without an `error`
+# key.
+#
+# The sweep does not see:
+#   * a message passed through a local first (`detail = e.message`, then
+#     `Errors::BadRequest.new(detail)`);
+#   * `#{e.class}`, a class name that cannot carry the caller's bytes.
+module KioskWireErrorSweep
+  extend KioskWireErrorNodes
+  extend KioskWireErrorScope
 
-    if node[0] == :call
-      receiver = node[1]
-      meth     = node[3]
-      if meth.is_a?(Array) && meth[0] == :@ident && meth[1] == 'message'
-        name = if receiver.is_a?(Array) && receiver[0] == :var_ref &&
-                  receiver[1].is_a?(Array) && receiver[1][0] == :@ident
-                 receiver[1][1]
-               end
-        acc << [meth[2][0], name, env[name]]
-      end
-    end
+  module_function
 
-    node.each { |child| message_sends(child, env, acc) if child.is_a?(Array) }
-    acc
-  end
-
-  # The two-and-a-half spellings that build a wire error: `Errors::X.new(…)`
-  # and `Errors.builder(…)`; `raise Errors::X, "…"`; and the same raise with
-  # parentheses.
-  def constructor_arguments(node)
-    if node[0] == :method_add_arg && node[1].is_a?(Array)
-      head = node[1]
-      if head[0] == :call
-        target = const_path(head[1])
-        meth   = head[3]
-        const  = target && resolve(target)
-        if meth.is_a?(Array) && meth[0] == :@ident && in_scope?(const) &&
-           (meth[1] == 'new' || const.equal?(Kiosk::Server::Errors))
-          return node[2]
-        end
-      elsif head[0] == :fcall && head[1].is_a?(Array) && head[1][1] == 'raise'
-        return node[2] if raised_wire_error?(node[2])
-      end
-    end
-
-    if %i[command command_call].include?(node[0])
-      ident = node[0] == :command ? node[1] : node[3]
-      if ident.is_a?(Array) && ident[0] == :@ident && ident[1] == 'raise'
-        args = node.last
-        return args if raised_wire_error?(args)
-      end
-    end
-
-    nil
-  end
-
-  # The second construction (K-1310): `render …` — parenthesised or not. No
-  # receiver, so it is an `fcall`/`command` on the bare name, which is what a
-  # controller writes and what {HandlerMixin} wrote the leak in. The BODY is
-  # not inspected for an `error` key: `render json: { message: e.message }`
-  # with no envelope around it would reach a caller just as directly, and a
-  # detector that required the envelope would be checking the shape of a leak
-  # rather than the leak.
-  def render_arguments(node)
-    if node[0] == :method_add_arg && node[1].is_a?(Array) && node[1][0] == :fcall
-      name = node[1][1]
-      return node[2] if name.is_a?(Array) && name[0] == :@ident && name[1] == 'render'
-    end
-
-    if node[0] == :command
-      ident = node[1]
-      return node.last if ident.is_a?(Array) && ident[0] == :@ident && ident[1] == 'render'
-    end
-
-    nil
-  end
-
-  def raised_wire_error?(args)
-    return false unless args.is_a?(Array)
-
-    list  = args[0] == :arg_paren ? args[1] : args
-    list  = list[1] if list.is_a?(Array) && list[0] == :args_add_block
-    first = list.is_a?(Array) ? list[0] : nil
-    path  = first.is_a?(Array) ? const_path(first) : nil
-    !path.nil? && in_scope?(resolve(path))
-  end
-
-  def walk(node, env, result, lines, path)
-    return unless node.is_a?(Array)
-
-    if node[0] == :rescue
-      _, exception_node, var, body, following = node
-      name = if var.is_a?(Array) && var[0] == :var_field && var[1].is_a?(Array) &&
-                var[1][0] == :@ident
-               var[1][1]
-             end
-      inner = if name
-                env.merge(name => (owned_rescue?(exception_node) ? :owned : :foreign))
-              else
-                env
-              end
-      walk(exception_node, env, result, lines, path)
-      walk(body, inner, result, lines, path)
-      walk(following, env, result, lines, path)
-      return
-    end
-
-    args = constructor_arguments(node)
-    if args
-      result[:sites] += 1
-      collect(args, env, result, lines, path)
-    end
-
-    rendered = render_arguments(node)
-    if rendered
-      result[:renders] += 1
-      collect(rendered, env, result, lines, path)
-    end
-
-    node.each { |child| walk(child, env, result, lines, path) if child.is_a?(Array) }
-  end
-
-  def collect(args, env, result, lines, path)
-    message_sends(args, env).each do |(line, name, ownership)|
-      found = Offence.new(path, line, lines[line - 1].to_s.strip, name)
-      (ownership == :owned ? result[:owned] : result[:offences]) << found
-    end
-  end
+  Offence = Struct.new(:path, :line, :source, :variable)
 
   def scan(source, path: '(fixture)')
     tree = Ripper.sexp(source)
     raise ArgumentError, "#{path} does not parse" if tree.nil?
 
     result = { sites: 0, renders: 0, offences: [], owned: [] }
-    walk(tree, {}, result, source.lines, path)
+    walk(tree, {}, { result: result, lines: source.lines, path: path })
     result[:offences].uniq!
     result[:owned].uniq!
     result
   end
+
+  def walk(node, env, ctx)
+    return unless node.is_a?(Array)
+    return walk_rescue(node, env, ctx) if node[0] == :rescue
+
+    record(ctx, :sites, constructor_arguments(node), env)
+    record(ctx, :renders, render_arguments(node), env)
+    node.each { |child| walk(child, env, ctx) }
+  end
+
+  def walk_rescue(node, env, ctx)
+    _, exception_node, var, body, following = node
+    walk(exception_node, env, ctx)
+    walk(body, rescue_env(env, exception_node, local_name(var, :var_field)), ctx)
+    walk(following, env, ctx)
+  end
+
+  def rescue_env(env, exception_node, name)
+    return env unless name
+
+    env.merge(name => owned_rescue?(exception_node) ? :owned : :foreign)
+  end
+
+  def record(ctx, counter, args, env)
+    return unless args
+
+    ctx[:result][counter] += 1
+    message_sends(args, env).each do |(line, name, ownership)|
+      found = Offence.new(ctx[:path], line, ctx[:lines][line - 1].to_s.strip, name)
+      ctx[:result][ownership == :owned ? :owned : :offences] << found
+    end
+  end
+
+  # The spellings that build a wire error: `Errors::X.new(…)` and
+  # `Errors.builder(…)`; `raise Errors::X, "…"`; and that raise with
+  # parentheses.
+  def constructor_arguments(node)
+    case node[0]
+    when :method_add_arg then paren_constructor_arguments(node)
+    when :command, :command_call then command_raise_arguments(node)
+    end
+  end
+
+  def paren_constructor_arguments(node)
+    head = node[1]
+    if type?(head, :call)
+      node[2] if wire_error_call?(head)
+    elsif type?(head, :fcall) && head[1].is_a?(Array) && head[1][1] == 'raise'
+      node[2] if raised_wire_error?(node[2])
+    end
+  end
+
+  def wire_error_call?(call)
+    target = const_path(call[1])
+    const  = target && resolve(target)
+    ident?(call[3]) && in_scope?(const) && (call[3][1] == 'new' || const.equal?(Kiosk::Server::Errors))
+  end
+
+  def command_raise_arguments(node)
+    ident = node[0] == :command ? node[1] : node[3]
+    node.last if ident?(ident, 'raise') && raised_wire_error?(node.last)
+  end
+
+  # `render …`, with or without parentheses. The body is not inspected for an
+  # `error` key: `render json: { message: e.message }` reaches a caller too.
+  def render_arguments(node)
+    case node[0]
+    when :method_add_arg then node[2] if type?(node[1], :fcall) && ident?(node[1][1], 'render')
+    when :command then node.last if ident?(node[1], 'render')
+    end
+  end
+
+  def raised_wire_error?(args)
+    return false unless args.is_a?(Array)
+
+    path = const_path(first_argument(args))
+    !path.nil? && in_scope?(resolve(path))
+  end
+
+  def first_argument(args)
+    list = args[0] == :arg_paren ? args[1] : args
+    list = list[1] if type?(list, :args_add_block)
+    list[0] if list.is_a?(Array)
+  end
 end
 
-RSpec.describe 'the malformed-request sentences on the wire' do
-  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
+module WireWordingSpec
+  # Ruby-side leaks: `KeyError#message`, the json gem's parser wording, and an
+  # object rendered by `to_s`. None of them may appear in a detail.
+  RUBY_LEAKS = [/key not found/, /unexpected token/, /#</].freeze
+  HOUSE_SENTENCES = ['missing field:', 'invalid JSON body'].freeze
+  BUILDER_FILE    = 'lib/kiosk/server/errors.rb'
+  # Floors well below the counts in lib/ and well above zero, so a sweep that
+  # stops recognising sites cannot pass by judging nothing.
+  MINIMUM_CONSTRUCTOR_SITES = 80
+  MINIMUM_RENDER_SITES = 10
 
   def wire_user_idp(identity)
     idp = Class.new do
@@ -306,14 +251,6 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       def verify(_request) = @identity
     end
     Kiosk.configure { |c| c.user_idp = idp.new(identity) }
-  end
-
-  before do
-    Kiosk.configure do |c|
-      c.issuer      = 'https://provider.example'
-      c.signing_key = Kiosk::Server::SigningKey.generate
-      c.roles       = %i[customer]
-    end
   end
 
   def post(action, raw_body)
@@ -327,9 +264,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
     [status, headers, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
   end
 
-  # Every assertion below reads the SAME three things, because a detail that is
-  # right while the document around it is not would still not be usable: the
-  # media type that makes this a problem document, the flat `code` an assistant
+  # The media type of a problem document, the flat `code` an assistant
   # branches on, and the exact `detail`.
   def expect_detail(status, headers, body, detail)
     expect(status).to eq(400)
@@ -338,17 +273,70 @@ RSpec.describe 'the malformed-request sentences on the wire' do
     expect(body[:detail]).to eq(detail)
   end
 
-  # The Ruby-side leaks, named rather than implied: `KeyError#message` reads
-  # "key not found: :public_key", the json gem's reads "unexpected token …",
-  # and an object that reached `to_s` by accident reads "#<…>". None of the
-  # three may appear in a detail whatever else is true of it.
-  RUBY_LEAKS = [/key not found/, /unexpected token/, /#</].freeze
-
   def expect_no_ruby(body)
     RUBY_LEAKS.each { |leak| expect(body[:detail]).not_to match(leak) }
   end
 
-  # ── site 1 of 4: POST /auth/register, the first call an assistant makes ────
+  # The code of a file with comments removed. Ripper tells a comment from a
+  # `#` inside a string.
+  def code_without_comments(path)
+    Ripper.lex(File.read(path))
+          .reject { |(_, type, _)| %i[on_comment on_embdoc on_embdoc_beg].include?(type) }
+          .map { |(_, _, tok)| tok }
+          .join
+  end
+
+  # "rel:line: code" for every comment-free line of lib/ that holds a house
+  # sentence and matches the block.
+  def house_sentence_lines(&)
+    sources.flat_map do |path|
+      rel = path.delete_prefix("#{gem_root}/")
+      code_without_comments(path).lines.each_with_index.filter_map do |line, idx|
+        next unless WireWordingSpec::HOUSE_SENTENCES.any? { |s| line.include?(s) } && yield(rel, line)
+
+        "#{rel}:#{idx + 1}: #{line.strip}"
+      end
+    end
+  end
+
+  def sweep(source) = KioskWireErrorSweep.scan(source, path: '(self-test)')
+end
+
+RSpec.shared_context 'wire wording spec: provider' do
+  include WireWordingSpec
+
+  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
+
+  before do
+    Kiosk.configure do |c|
+      c.issuer      = 'https://provider.example'
+      c.signing_key = Kiosk::Server::SigningKey.generate
+      c.roles       = %i[customer]
+    end
+  end
+end
+
+RSpec.shared_context 'wire wording spec: lib sources' do
+  include_context 'wire wording spec: provider'
+
+  let(:gem_root) { File.expand_path('../../..', __dir__) }
+  let(:sources)  { Dir.glob("#{gem_root}/lib/**/*.rb").sort }
+
+  let(:census) do
+    sources.each_with_object({ sites: 0, renders: 0, offences: [], owned: [] }) do |path, acc|
+      found = KioskWireErrorSweep.scan(File.read(path), path: path.delete_prefix("#{gem_root}/"))
+      acc[:sites]   += found[:sites]
+      acc[:renders] += found[:renders]
+      acc[:offences].concat(found[:offences])
+      acc[:owned].concat(found[:owned])
+    end
+  end
+end
+
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
+  # The first call an assistant makes.
   describe 'POST /kiosk/auth/register' do
     it 'names the absent field and not the Ruby exception when public_key is omitted' do
       status, headers, body = post(:register, JSON.generate(signed: 'x'))
@@ -369,8 +357,11 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(body[:hint]).to eq(Kiosk::Server::Errors::MALFORMED_JSON_HINT)
     end
   end
+end
 
-  # ── site 2 of 4: POST /auth/login ─────────────────────────────────────────
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
   describe 'POST /kiosk/auth/login' do
     it 'names the absent field when signed is omitted' do
       status, headers, body = post(:login, JSON.generate(public_key: 'x'))
@@ -379,7 +370,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
     end
   end
 
-  # ── site 3 of 4: POST /auth/claim, the register-shaped redeem ─────────────
+  # The register-shaped redeem.
   describe 'POST /kiosk/auth/claim' do
     it 'names the absent field when signed is omitted' do
       status, headers, body = post(:claim, JSON.generate(code: 'c', public_key: 'PEM'))
@@ -388,7 +379,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
     end
   end
 
-  # ── site 4 of 4: POST /auth/unlink, behind the human's own session ────────
+  # Behind the human's own session.
   describe 'POST /kiosk/auth/unlink' do
     it 'names the absent field when agent_id is omitted' do
       wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id))
@@ -397,8 +388,11 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect_no_ruby(body)
     end
   end
+end
 
-  # ── the two builders themselves ───────────────────────────────────────────
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
   describe 'Kiosk::Server::Errors.missing_field' do
     it 'names the KEY of a rescued KeyError, never its message' do
       err = begin
@@ -415,16 +409,15 @@ RSpec.describe 'the malformed-request sentences on the wire' do
     end
 
     it 'falls back to plain words — never to `message` — for a KeyError carrying no key' do
-      err = begin
-        raise KeyError, 'key not found: :smuggled'
-      rescue KeyError => e
-        e
-      end
-      built = Kiosk::Server::Errors.missing_field(err)
+      built = Kiosk::Server::Errors.missing_field(KeyError.new('key not found: :smuggled'))
       expect(built.message).to eq('request is missing a required field')
       expect(built.message).not_to include('smuggled')
     end
   end
+end
+
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
 
   describe 'Kiosk::Server::Errors.malformed_json' do
     it 'is the whole detail, with the recovery sentence in the hint' do
@@ -439,8 +432,12 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(built.hint).to eq("a query's arguments are in the query string.")
     end
   end
+end
 
-  # ── the third sentence: a Rails-native raise (K-1310) ─────────────────────
+# The sentence for a Rails-native raise.
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
   describe 'Kiosk::Server::Errors.rescued_wire' do
     it 'words the refusal itself and names the verb, so nothing of the exception travels' do
       built = Kiosk::Server::Errors.rescued_wire('bad_request', verb: 'strict')
@@ -455,11 +452,15 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(Kiosk::Server::Errors.rescued_wire('not_found', verb: '')[:message])
         .to eq('this verb found no such record')
     end
+  end
+end
 
-    # THE TABLE IS THE CONTRACT. `kiosk_rescue_to_wire` reaches this builder for
-    # whatever code {STATUS_CODES} decides, so a code that table can produce and
-    # this one cannot word would be a `KeyError` at request time — a 500 in
-    # place of the 4xx the seam had already chosen.
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
+  describe 'Kiosk::Server::Errors.rescued_wire' do
+    # The rescue seam reaches this builder for every code STATUS_CODES can
+    # decide. A code it cannot word would be a KeyError, so a 500, at request time.
     it 'words every code the rescue seam can decide, and invents none' do
       reachable = Kiosk::Server::Errors::STATUS_CODES.values.uniq.sort
       expect(Kiosk::Server::Errors::RESCUED_DETAILS.keys.sort).to eq(reachable)
@@ -471,134 +472,61 @@ RSpec.describe 'the malformed-request sentences on the wire' do
         built = Kiosk::Server::Errors.rescued_wire(code, verb: 'v')
         expect(built[:message]).not_to be_empty
         expect(built[:hint]).not_to be_empty
-        RUBY_LEAKS.each do |leak|
+        WireWordingSpec::RUBY_LEAKS.each do |leak|
           expect(built[:message]).not_to match(leak)
           expect(built[:hint]).not_to match(leak)
         end
       end
     end
   end
+end
 
-  # ── the sweep: no site may build either sentence for itself ───────────────
-  #
-  # The behavioural arms above cover the endpoints somebody remembered to
-  # dispatch, which is exactly how the fourth wording survived: the leak was on
-  # register, and register had four specs about missing fields, none of which
-  # read the sentence. So the class is closed structurally instead — outside
-  # errors.rb, where the two builders live, either sentence may appear only as
-  # a COMPLETE literal (`"missing field: kyc_jws"`); an interpolation there is
-  # the splice this row is about, whatever it interpolates.
-  #
-  # Read from the code with comments stripped, via Ripper rather than a `^\s*#`
-  # scan, so this file's own quotations of the bad strings — and errors.rb's —
-  # are not evidence, while a `#` inside a string still is.
+# No site builds a house sentence for itself. Outside errors.rb, where the
+# builders live, neither sentence appears at all, literal or interpolated.
+# Comments are stripped first, so quotations of the bad strings do not count.
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: lib sources'
+
   describe "kiosk-server's source" do
-    HOUSE_SENTENCES = ['missing field:', 'invalid JSON body'].freeze
-    BUILDER_FILE    = 'lib/kiosk/server/errors.rb'
-
-    def code_without_comments(path)
-      Ripper.lex(File.read(path))
-            .reject { |(_, type, _)| %i[on_comment on_embdoc on_embdoc_beg].include?(type) }
-            .map { |(_, _, tok)| tok }
-            .join
-    end
-
-    let(:gem_root) { File.expand_path('../../..', __dir__) }
-    let(:sources)  { Dir.glob("#{gem_root}/lib/**/*.rb").sort }
-
     it 'has sources to sweep and a builder file among them (vacuity)' do
       expect(sources).not_to be_empty
-      expect(sources.map { |p| p.delete_prefix("#{gem_root}/") }).to include(BUILDER_FILE)
+      expect(sources.map { |p| p.delete_prefix("#{gem_root}/") }).to include(WireWordingSpec::BUILDER_FILE)
     end
 
     it 'still contains both house sentences somewhere, or this sweep guards nothing (vacuity)' do
-      HOUSE_SENTENCES.each do |sentence|
+      WireWordingSpec::HOUSE_SENTENCES.each do |sentence|
         expect(sources.any? { |p| code_without_comments(p).include?(sentence) })
           .to be(true), "no shipped line says #{sentence.inspect} any more — re-aim this sweep"
       end
     end
+  end
+end
 
-    # LITERAL OR INTERPOLATED, and the difference is why this arm was 15/0 with
-    # the defect in front of it (K-1306). It used to skip every line without a
-    # `#{`, so it hunted the SPLICE and was blind to the other way of breaking
-    # the same rule: `kyc_attestation_controller.rb` simply typed the sentence
-    # out — `raise Errors::BadRequest.new("missing field: kyc_jws")` — which is
-    # the correct sentence today and a second place for it to drift from
-    # tomorrow, while `errors.rb` two files away declared the sentences "BUILT
-    # HERE AND NOWHERE ELSE". A declaration nothing can falsify is the shape
-    # this whole file exists to stop, so the rule is now what the declaration
-    # says: outside errors.rb these bytes do not appear at all.
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: lib sources'
+
+  describe "kiosk-server's source" do
     it 'builds `missing field:` and `invalid JSON body` nowhere but errors.rb, literal or interpolated' do
-      offenders = sources.flat_map do |path|
-        rel = path.delete_prefix("#{gem_root}/")
-        next [] if rel == BUILDER_FILE
-
-        code_without_comments(path).lines.each_with_index.filter_map do |line, idx|
-          next unless HOUSE_SENTENCES.any? { |s| line.include?(s) }
-
-          "#{rel}:#{idx + 1}: #{line.strip}"
-        end
-      end
-      expect(offenders).to be_empty
+      expect(house_sentence_lines { |rel, _| rel != WireWordingSpec::BUILDER_FILE }).to be_empty
     end
 
-    # The other half of the same rule, and the one the live leak actually
-    # broke: errors.rb MAY interpolate — that is what a builder is — but it may
-    # not interpolate an exception's message back in.
+    # errors.rb may interpolate, since it holds the builders, but not an
+    # exception's message.
     it "never splices an exception's message into either sentence, errors.rb included" do
-      offenders = sources.flat_map do |path|
-        rel = path.delete_prefix("#{gem_root}/")
-        code_without_comments(path).lines.each_with_index.filter_map do |line, idx|
-          next unless HOUSE_SENTENCES.any? { |s| line.include?(s) }
-          next unless line.match?(/\#\{[^}]*\bmessage\b/)
-
-          "#{rel}:#{idx + 1}: #{line.strip}"
-        end
-      end
-      expect(offenders).to be_empty
+      expect(house_sentence_lines { |_, line| line.match?(/\#\{[^}]*\bmessage\b/) }).to be_empty
     end
   end
+end
 
-  # ── the K-1307 sweep: no FOREIGN message reaches a wire error ─────────────
-  #
-  # The rule, its scope line and the two things it deliberately cannot see are
-  # written out on {KioskWireErrorSweep} at the top of this file.
+# No foreign message reaches a wire error. The rule and its blind spots are on
+# KioskWireErrorSweep at the top of this file.
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: lib sources'
+
   describe "kiosk-server's wire errors" do
-    # Measured at head when this arm was written: 113 constructor sites and one
-    # message excused by ownership. The floor is set well below the count so
-    # ordinary editing does not move it, and well above zero so a sweep that has
-    # stopped recognising constructors cannot pass by finding nothing to judge.
-    MINIMUM_CONSTRUCTOR_SITES = 80
-    # Measured at head when the `render` arm was added (K-1310): 31 render
-    # sites (114 constructor sites beside them). Same reasoning as the floor above — well
-    # below the count so ordinary editing does not move it, well above zero so
-    # a walker that has stopped recognising `render` cannot pass by judging
-    # nothing.
-    MINIMUM_RENDER_SITES = 10
-
-    let(:gem_root) { File.expand_path('../../..', __dir__) }
-    let(:sources)  { Dir.glob("#{gem_root}/lib/**/*.rb").sort }
-
-    let(:census) do
-      sources.each_with_object({ sites: 0, renders: 0, offences: [], owned: [] }) do |path, acc|
-        found = KioskWireErrorSweep.scan(File.read(path), path: path.delete_prefix("#{gem_root}/"))
-        acc[:sites]   += found[:sites]
-        acc[:renders] += found[:renders]
-        acc[:offences].concat(found[:offences])
-        acc[:owned].concat(found[:owned])
-      end
-    end
-
     it 'never lets an exception message this repository does not own reach a wire error' do
       expect(census[:offences].map { |o| "#{o.path}:#{o.line}: #{o.source}" }).to be_empty
     end
-
-    # ── vacuity ────────────────────────────────────────────────────────────
-    #
-    # The failure this workspace repeats is a rule that matches NOTHING while
-    # reading as coverage: a pattern that required a word no live sentence used
-    # guarded nothing for its entire existence, and nothing said so. Three arms,
-    # one per way this sweep could quietly stop seeing.
 
     it 'resolves the constants it keys on, and draws its scope line where it says it does (vacuity)' do
       expect(KioskWireErrorSweep.resolve(%w[Errors BadRequest]))
@@ -606,33 +534,43 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(KioskWireErrorSweep.resolve(%w[Errors])).to be(Kiosk::Server::Errors)
       expect(KioskWireErrorSweep.in_scope?(Kiosk::Server::Errors::BadRequest)).to be(true)
       expect(KioskWireErrorSweep.in_scope?(Kiosk::Server::Errors)).to be(true)
-      # The boundary this sweep documents: ConfigurationError has no `to_problem`
-      # and never becomes a document, so its message is not the wire's business.
+      # ConfigurationError never becomes a problem document.
       expect(KioskWireErrorSweep.in_scope?(Kiosk::Server::Errors::ConfigurationError)).to be(false)
     end
+  end
+end
 
+# Vacuity: each way the sweep could stop seeing sites fails here.
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: lib sources'
+
+  describe "kiosk-server's wire errors" do
     it 'still recognises wire-error constructors in the shipped source (vacuity)' do
-      expect(census[:sites]).to be >= MINIMUM_CONSTRUCTOR_SITES,
+      expect(census[:sites]).to be >= WireWordingSpec::MINIMUM_CONSTRUCTOR_SITES,
                                 "the sweep found #{census[:sites]} constructor sites in lib/ — it has stopped " \
                                 'recognising them, and an empty offence list means nothing until it does'
     end
 
     it 'still recognises `render` sites in the shipped source (vacuity)' do
-      expect(census[:renders]).to be >= MINIMUM_RENDER_SITES,
-                                  "the sweep found #{census[:renders]} render sites in lib/ — the K-1310 arm has " \
-                                  'stopped recognising them, and it is the arm that covers the sub-dispatch envelope'
+      expect(census[:renders]).to be >= WireWordingSpec::MINIMUM_RENDER_SITES,
+                                  "the sweep found #{census[:renders]} render sites in lib/ — the render " \
+                                  'arm has stopped recognising them, and it covers the sub-dispatch envelope'
     end
 
     it 'still finds one of OUR OWN messages reaching a wire error, or the carve-out guards nothing (vacuity)' do
       expect(census[:owned]).not_to be_empty,
-                                    "no shipped site re-raises a Kiosk-owned exception's message any more — the ownership " \
-                                    'carve-out now excuses nothing that exists, so re-aim it or delete it'
+                                    "no shipped site re-raises a Kiosk-owned exception's message any more — the " \
+                                    'ownership carve-out now excuses nothing that exists, so re-aim it or delete it'
     end
+  end
+end
 
-    # ── self-test: the detector reports what it says it reports ─────────────
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
 
+  describe "kiosk-server's wire errors" do
     it 'reports a foreign message spliced into a wire error (self-test)' do
-      source = <<~'RUBY'
+      found = sweep(<<~'RUBY')
         module Kiosk
           module Server
             module Probe
@@ -645,19 +583,24 @@ RSpec.describe 'the malformed-request sentences on the wire' do
           end
         end
       RUBY
-      found = KioskWireErrorSweep.scan(source, path: '(self-test)')
       expect(found[:offences].size).to eq(1)
       expect(found[:offences].first.line).to eq(7)
       expect(found[:owned]).to be_empty
     end
+  end
+end
 
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
+  describe "kiosk-server's wire errors" do
     it 'reports one spliced into a HINT, which reaches the wire too (self-test)' do
       source = <<~'RUBY'
         rescue Rack::BadRequest => e
           raise Errors::BadRequest.new("undecodable", hint: "rack said #{e.message}")
         end
       RUBY
-      expect(KioskWireErrorSweep.scan("begin\n#{source}", path: '(self-test)')[:offences].size).to eq(1)
+      expect(sweep("begin\n#{source}")[:offences].size).to eq(1)
     end
 
     it 'reports the comma form, which carries no `.new` to key on (self-test)' do
@@ -668,9 +611,15 @@ RSpec.describe 'the malformed-request sentences on the wire' do
           raise Errors::Unauthenticated, "proof rejected: #{e.message}"
         end
       RUBY
-      expect(KioskWireErrorSweep.scan(source, path: '(self-test)')[:offences].size).to eq(1)
+      expect(sweep(source)[:offences].size).to eq(1)
     end
+  end
+end
 
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
+  describe "kiosk-server's wire errors" do
     it 'excuses a Kiosk-owned message, and ONLY a Kiosk-owned one (self-test)' do
       ours = <<~RUBY
         begin
@@ -681,11 +630,17 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       RUBY
       theirs = ours.sub('Kiosk::PaymentProviders::PaymentFailed', 'StandardError')
 
-      expect(KioskWireErrorSweep.scan(ours, path: '(self-test)')[:offences]).to be_empty
-      expect(KioskWireErrorSweep.scan(ours, path: '(self-test)')[:owned].size).to eq(1)
-      expect(KioskWireErrorSweep.scan(theirs, path: '(self-test)')[:offences].size).to eq(1)
+      expect(sweep(ours)[:offences]).to be_empty
+      expect(sweep(ours)[:owned].size).to eq(1)
+      expect(sweep(theirs)[:offences].size).to eq(1)
     end
+  end
+end
 
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
+  describe "kiosk-server's wire errors" do
     it 'treats a bare `rescue => e`, which names nothing, as foreign (self-test)' do
       source = <<~'RUBY'
         begin
@@ -694,16 +649,19 @@ RSpec.describe 'the malformed-request sentences on the wire' do
           raise Errors::BadRequest.new("no: #{e.message}")
         end
       RUBY
-      expect(KioskWireErrorSweep.scan(source, path: '(self-test)')[:offences].size).to eq(1)
+      expect(sweep(source)[:offences].size).to eq(1)
     end
+  end
+end
 
-    # ── the K-1310 arm: the sub-dispatch envelope is a wire error too ──────
+# The sub-dispatch envelope is a wire error too.
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
 
+  describe "kiosk-server's wire errors" do
+    # No `Errors` constructor on the line: only the render arm sees it.
     it 'reports a foreign message rendered into the sub-dispatch envelope (self-test)' do
-      # The leak verbatim, as `handler_mixin.rb` carried it: no `Errors`
-      # constructor anywhere on the line, which is exactly why the old sweep's
-      # scope note had to name this route instead of holding it.
-      source = <<~RUBY
+      found = sweep(<<~RUBY)
         begin
           nil
         rescue StandardError => exception
@@ -713,55 +671,61 @@ RSpec.describe 'the malformed-request sentences on the wire' do
           }, status: 400
         end
       RUBY
-      found = KioskWireErrorSweep.scan(source, path: '(self-test)')
       expect(found[:offences].size).to eq(1)
       expect(found[:renders]).to eq(1)
     end
+  end
+end
 
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
+  describe "kiosk-server's wire errors" do
+    # `rescue_from(StandardError, with: :kiosk_rescue_to_wire)` passes the
+    # exception as an argument, so no rescue owns it and it is foreign.
     it 'reports one rendered by a method PARAMETER, which no rescue owns (self-test)' do
-      # `rescue_from(StandardError, with: :kiosk_rescue_to_wire)` hands the
-      # exception in as an argument, so there is no `rescue` in the method at
-      # all — and an unknown receiver is foreign, which is what makes this
-      # shape visible rather than excused.
       source = <<~RUBY
         def kiosk_rescue_to_wire(exception)
           render(json: { error: { message: exception.message } }, status: 400)
         end
       RUBY
-      expect(KioskWireErrorSweep.scan(source, path: '(self-test)')[:offences].size).to eq(1)
+      expect(sweep(source)[:offences].size).to eq(1)
     end
 
     it 'excuses a Kiosk-owned message in a render, on the same terms (self-test)' do
-      source = <<~RUBY
+      found = sweep(<<~RUBY)
         begin
           nil
         rescue Kiosk::PaymentProviders::PaymentFailed => e
           render json: { error: { message: e.message } }, status: 402
         end
       RUBY
-      found = KioskWireErrorSweep.scan(source, path: '(self-test)')
       expect(found[:offences]).to be_empty
       expect(found[:owned].size).to eq(1)
     end
+  end
+end
 
+RSpec.describe 'the malformed-request sentences on the wire' do
+  include_context 'wire wording spec: provider'
+
+  describe "kiosk-server's wire errors" do
     it 'leaves a render that carries no exception message alone (self-test)' do
-      source = <<~RUBY
+      found = sweep(<<~RUBY)
         render json: { ok: false, error: Errors.rescued_wire(code, verb: name) }, status: 400
       RUBY
-      found = KioskWireErrorSweep.scan(source, path: '(self-test)')
       expect(found[:offences]).to be_empty
       expect(found[:renders]).to eq(1)
     end
 
     it 'leaves a non-wire error alone, which is where its scope line falls (self-test)' do
-      source = <<~'RUBY'
+      found = sweep(<<~'RUBY')
         begin
           nil
         rescue NameError => e
           raise Errors::ConfigurationError, "does not resolve (#{e.class}: #{e.message})"
         end
       RUBY
-      found = KioskWireErrorSweep.scan(source, path: '(self-test)')
       expect(found[:offences]).to be_empty
       expect(found[:sites]).to eq(0)
     end

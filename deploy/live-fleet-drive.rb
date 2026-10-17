@@ -109,6 +109,100 @@ end
 Finding = Struct.new(:origin, :beat, :detail)
 
 class Drive
+  # The refusals each origin must give. Every probe here reads nothing and writes nothing.
+  module FleetProbes
+    # An unproven registration and a malformed proof must both be REFUSED. A 201
+    # to either is a real breach AND the only way this script could create state,
+    # so it is reported rather than retried.
+    #
+    # The admitted set is wider than `Kiosk::Redteam.blocked?` allows. `pow: :skip`
+    # is met by the toll (402 pow_required) and `pow: "0"` by the header parser
+    # (400 bad_request); both refuse the registration before any possession proof
+    # is read. A finding is a 201, a 5xx, or a 2xx of any other shape.
+    REFUSALS = [400, 401, 402, 403].freeze
+
+    def registration_probes
+      { 'an unproven registration' => :skip, 'a malformed proof' => '0' }.each do |beat, pow|
+        response = @client.register_raw(pow: pow)
+        judge_registration(beat, response)
+        leak_check(beat, response.body)
+      end
+    end
+
+    def judge_registration(beat, response)
+      if response.status == 201
+        breach beat, 'HTTP 201 — the origin MINTED AN AGENT for a caller that proved nothing. ' \
+                     'This also means this run created state; deploy/demo-reset.sh clears it.'
+      elsif REFUSALS.include?(response.status)
+        ok "#{beat} is refused (HTTP #{response.status} #{Kiosk::Redteam.error_code(response).inspect})"
+      else
+        error beat, "HTTP #{response.status} #{response.body.inspect} — neither a refusal nor a " \
+                    'success, so nothing was proved about the gate'
+      end
+    end
+
+    # A forged bearer, no bearer at all, the wrong method at a real verb's path,
+    # and a verb nobody registered. All four are refusals by construction.
+    def wire_probes(catalog)
+      query = Array(catalog['queries']).first&.fetch('name', nil)
+      return skip 'the query-plane probes', 'this origin publishes no query' unless query
+
+      judge "a forged bearer at /kiosk/#{query}",
+            @wire.get("/kiosk/#{query}", {}, Kiosk::TestHelpers::Wire.bearer('not.a.token')), [401, 403]
+      judge "no bearer at all at /kiosk/#{query}", @wire.get("/kiosk/#{query}"), [401, 403]
+      method_mismatch_probe(query)
+      unknown_verb_probe
+    end
+
+    # One route per verb, the method following the kind, so a POST at a query's
+    # path matches no route: the framework's plain 404, no `Allow`, no `code`.
+    # The wrong method must never reach the verb; a 200 would mean it did.
+    def method_mismatch_probe(query)
+      mismatch = @wire.request(:post, "/kiosk/#{query}")
+      if mismatch.status == 404 && mismatch['allow'].nil? && !problem_code(mismatch)
+        ok "POST at a query's path is a plain 404 — no Allow, no code, the verb not reached"
+      else
+        breach "POST at /kiosk/#{query} (method mismatch)",
+               "HTTP #{mismatch.status} Allow=#{mismatch['allow'].inspect} code=#{(problem_code(mismatch) || '—').inspect}"
+      end
+    end
+
+    # A name nobody registered is the same plain 404.
+    def unknown_verb_probe
+      unknown = @wire.get("/kiosk/no_such_verb_#{Time.now.to_i}")
+      if unknown.status == 404 && !problem_code(unknown)
+        ok 'an unregistered verb name is a plain 404 with no problem-document code'
+      else
+        breach 'an unregistered verb name', "HTTP #{unknown.status} #{unknown.raw_body[0, 200].inspect}"
+      end
+    end
+
+    def problem_code(raw) = raw.body.is_a?(Hash) ? raw.body['code'] : nil
+
+    def judge(beat, raw, admitted)
+      if admitted.include?(raw.status)
+        ok "#{beat} is refused (HTTP #{raw.status} #{(problem_code(raw) || '—').inspect})"
+      else
+        judge_failure(beat, raw, admitted)
+      end
+      leak_check(beat, raw.respond_to?(:raw_body) ? raw.raw_body : raw.body)
+    end
+
+    def judge_failure(beat, raw, admitted)
+      return error(beat, "the connection failed: #{raw.body.inspect}") if raw.status.zero?
+      return breach(beat, "HTTP #{raw.status} — a crash is not a refusal") if raw.status >= 500
+
+      breach beat, "HTTP #{raw.status} #{raw.raw_body[0, 200].inspect} — expected one of #{admitted.inspect}"
+    end
+
+    def leak_check(beat, body)
+      scan = Kiosk::Redteam::LeakScan.scan(body, LEAK_NEEDLES)
+      breach "#{beat} — leak scan", "the refusal body names #{scan.leak.inspect}" if scan.leak?
+    end
+  end
+
+  include FleetProbes
+
   attr_reader :breaches, :errors, :passes, :skips
 
   def initialize(origin)
@@ -141,120 +235,41 @@ class Drive
     puts "  \e[1;33m–\e[0m SKIP #{beat} (#{reason})"
   end
 
-  # Discovery + catalog. Also the gate on everything below: an origin that
-  # serves no discovery document is not a Kiosk origin and the wire probes
-  # would be asserting about somebody else's 404s.
+  # Discovery + catalog. An origin with no discovery document is not a Kiosk
+  # origin, and the probes below would assert about somebody else's 404s.
   # @return [Hash, nil] the served catalog, or nil when this is not a Kiosk origin
   def survey
+    catalog if discovery_served?
+  end
+
+  def discovery_served?
     raw = @wire.get('/.well-known/kiosk.json')
+    unless raw.status == 200 && raw.body.is_a?(Hash) && raw.body['kiosk']
+      report_no_discovery(raw)
+      return false
+    end
+
+    ok "discovery document served (endpoint #{raw.body.dig('kiosk', 'endpoint')})"
+    true
+  end
+
+  def report_no_discovery(raw)
     if raw.status == 404
       skip 'the whole wire battery', 'serves no discovery document — not a Kiosk origin'
-      return nil
-    end
-    unless raw.status == 200 && raw.body.is_a?(Hash) && raw.body['kiosk']
+    else
       error 'GET /.well-known/kiosk.json', "HTTP #{raw.status} #{raw.raw_body[0, 200].inspect}"
-      return nil
     end
-    ok "discovery document served (endpoint #{raw.body.dig('kiosk', 'endpoint')})"
+  end
 
+  def catalog
     catalog = @wire.get('/kiosk/schema')
     unless catalog.status == 200 && catalog.body.is_a?(Hash)
       error 'GET /kiosk/schema', "HTTP #{catalog.status}"
       return nil
     end
-    ok "catalog served (#{Array(catalog.body['queries']).size} queries, " \
-       "#{Array(catalog.body['actions']).size} actions)"
+
+    ok "catalog served (#{Array(catalog.body['queries']).size} queries, #{Array(catalog.body['actions']).size} actions)"
     catalog.body
-  end
-
-  # An unproven registration and a malformed proof must both be REFUSED. A 201
-  # to either is a real breach AND the only way this script could create state,
-  # so it is reported rather than retried.
-  #
-  # THE ADMITTED SET IS WIDER THAN `Kiosk::Redteam.blocked?` ALLOWS, on purpose.
-  # That predicate excludes 400 because a validation error is not evidence of an
-  # auth gate — true of an attack on a VERB, and not the question here. The
-  # claim is that an unpaid caller does not get an agent: `pow: :skip` is met by
-  # the toll (402 pow_required) and `pow: "0"` is met by the header parser (400
-  # bad_request), and both are the registration being refused before any
-  # possession proof is read. What would be a finding is a 201, or a 5xx, or a
-  # 2xx of any other shape.
-  REFUSALS = [400, 401, 402, 403].freeze
-
-  def registration_probes
-    { 'an unproven registration' => :skip, 'a malformed proof' => '0' }.each do |beat, pow|
-      response = @client.register_raw(pow: pow)
-      if response.status == 201
-        breach beat, 'HTTP 201 — the origin MINTED AN AGENT for a caller that proved nothing. ' \
-                     'This also means this run created state; deploy/demo-reset.sh clears it.'
-      elsif REFUSALS.include?(response.status)
-        ok "#{beat} is refused (HTTP #{response.status} " \
-           "#{Kiosk::Redteam.error_code(response).inspect})"
-      else
-        error beat, "HTTP #{response.status} #{response.body.inspect} — neither a refusal nor a " \
-                    'success, so nothing was proved about the gate'
-      end
-      leak_check(beat, response.body)
-    end
-  end
-
-  # A forged bearer, no bearer at all, the wrong method at a real verb's path,
-  # and a verb nobody registered. All four are refusals by construction, so all
-  # four are reads that read nothing.
-  def wire_probes(catalog)
-    query = Array(catalog['queries']).first&.fetch('name', nil)
-    return skip 'the query-plane probes', 'this origin publishes no query' unless query
-
-    forged = @wire.get("/kiosk/#{query}", {}, Kiosk::TestHelpers::Wire.bearer('not.a.token'))
-    judge "a forged bearer at /kiosk/#{query}", forged, [401, 403]
-
-    anon = @wire.get("/kiosk/#{query}")
-    judge "no bearer at all at /kiosk/#{query}", anon, [401, 403]
-
-    # METHOD MISMATCH. An origin draws ONE EXPLICIT ROUTE PER VERB with the
-    # method following the kind — GET for a query, POST for an action — so a
-    # POST at a query's path matches no route at all and the answer is the host
-    # framework's ordinary 404: an HTML page with no `Allow` and no
-    # problem-document `code`. That is the engine's stated design, not a gap,
-    # and it is the same assertion each demo's own `MethodMismatch` beat makes.
-    # The security half is what is being checked: the wrong method must never
-    # reach the verb, and a 200 here would mean it did.
-    mismatch = @wire.request(:post, "/kiosk/#{query}")
-    if mismatch.status == 404 && mismatch['allow'].nil? &&
-       !(mismatch.body.is_a?(Hash) && mismatch.body['code'])
-      ok "POST at a query's path is a plain 404 — no Allow, no code, the verb not reached"
-    else
-      breach "POST at /kiosk/#{query} (method mismatch)",
-             "HTTP #{mismatch.status} Allow=#{mismatch['allow'].inspect} " \
-             "code=#{mismatch.body.is_a?(Hash) ? mismatch.body['code'].inspect : '—'}"
-    end
-
-    # A name nobody registered is the same ordinary 404, for the same reason.
-    unknown = @wire.get("/kiosk/no_such_verb_#{Time.now.to_i}")
-    if unknown.status == 404 && !(unknown.body.is_a?(Hash) && unknown.body['code'])
-      ok 'an unregistered verb name is a plain 404 with no problem-document code'
-    else
-      breach 'an unregistered verb name',
-             "HTTP #{unknown.status} #{unknown.raw_body[0, 200].inspect}"
-    end
-  end
-
-  def judge(beat, raw, admitted)
-    if admitted.include?(raw.status)
-      ok "#{beat} is refused (HTTP #{raw.status} #{raw.body.is_a?(Hash) ? raw.body['code'].inspect : '—'})"
-    elsif raw.status.zero?
-      error beat, "the connection failed: #{raw.body.inspect}"
-    elsif raw.status >= 500
-      breach beat, "HTTP #{raw.status} — a crash is not a refusal"
-    else
-      breach beat, "HTTP #{raw.status} #{raw.raw_body[0, 200].inspect} — expected one of #{admitted.inspect}"
-    end
-    leak_check(beat, raw.respond_to?(:raw_body) ? raw.raw_body : raw.body)
-  end
-
-  def leak_check(beat, body)
-    scan = Kiosk::Redteam::LeakScan.scan(body, LEAK_NEEDLES)
-    breach "#{beat} — leak scan", "the refusal body names #{scan.leak.inspect}" if scan.leak?
   end
 
   # The published JSON Schemas against THIS origin's served bytes.
@@ -281,59 +296,61 @@ def drive(origin)
   run
 end
 
-def self_test
-  failures = []
-  check = lambda do |name, ok|
-    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
-    failures << name unless ok
-  end
+CADDY_FIXTURE = <<~CADDY
+  # a comment naming fake.example.com { which must not be read as a vhost
+  (shared) {
+    header Strict-Transport-Security "max-age=31536000; includeSubDomains"
+  }
 
+  one.demo.kiosk.tech {
+    reverse_proxy localhost:3001
+  }
+  two.demo.kiosk.tech {
+    reverse_proxy localhost:3002
+  }
+CADDY
+
+def caddyfile_arms(check)
   require 'tmpdir'
   Dir.mktmpdir('live-fleet-selftest') do |dir|
     path = File.join(dir, 'Caddyfile')
-    File.write(path, <<~CADDY)
-      # a comment naming fake.example.com { which must not be read as a vhost
-      (shared) {
-        header Strict-Transport-Security "max-age=31536000; includeSubDomains"
-      }
-
-      one.demo.kiosk.tech {
-        reverse_proxy localhost:3001
-      }
-      two.demo.kiosk.tech {
-        reverse_proxy localhost:3002
-      }
-    CADDY
+    File.write(path, CADDY_FIXTURE)
     hosts = hosts_from_caddyfile(path)
     check.call('derives every vhost', hosts == %w[one.demo.kiosk.tech two.demo.kiosk.tech])
     check.call('does not read a commented host as a vhost', hosts.none? { it.include?('fake') })
     check.call('does not read a named snippet as a vhost', hosts.none? { it.include?('shared') })
     check.call('an unreadable Caddyfile answers empty', hosts_from_caddyfile(File.join(dir, 'nope')).empty?)
   end
+end
 
-  # THE PRECONDITION OF THE WHOLE SCRIPT: the drivers it is built on must dial
-  # TLS from the target's scheme. A fleet is served over https, so a driver that
-  # cannot is a runner that reaches nothing — and it fails by CONNECTION RESET,
-  # which reads like the box being down rather than like a bug here.
+# The drivers must dial TLS from the target's scheme: a fleet is served over
+# https, and a driver that cannot fails by connection reset.
+def driver_arms(check)
   https = Kiosk::TestHelpers::Wire.http_for(URI('https://one.demo.kiosk.tech/kiosk/schema'))
   plain = Kiosk::TestHelpers::Wire.http_for(URI('http://127.0.0.1:3001/kiosk/schema'))
   check.call('the drivers this script uses dial TLS for an https origin', https.use_ssl?)
   check.call('…and do not for a local http one', !plain.use_ssl?)
+end
 
-  # VACUITY: the real Caddyfile must still yield a fleet, and the harness this
-  # script hands the served bytes to must still exist.
+# The real Caddyfile must still yield a fleet, and the conformance harness must still exist.
+def vacuity_arms(check)
   check.call('the tracked Caddyfile yields at least one vhost', hosts_from_caddyfile.any?)
   check.call('e2e/schema_conformance.rb is where this expects it', File.exist?(CONFORMANCE))
   check.call('…and it carries the live-mode switch',
-             File.read(CONFORMANCE).include?('LIVE = ENV["KIOSK_LIVE"] == "1"'))
+             File.read(CONFORMANCE).include?("LIVE = ENV['KIOSK_LIVE'] == '1'"))
+end
 
-  if failures.empty?
-    puts 'SELF-TEST OK'
-    0
-  else
-    puts "SELF-TEST FAILED: #{failures.size} arm(s)"
-    1
+def self_test
+  failures = []
+  check = lambda do |name, ok|
+    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
+    failures << name unless ok
   end
+  caddyfile_arms(check)
+  driver_arms(check)
+  vacuity_arms(check)
+  puts failures.empty? ? 'SELF-TEST OK' : "SELF-TEST FAILED: #{failures.size} arm(s)"
+  failures.empty? ? 0 : 1
 end
 
 exit self_test if ARGV.include?('--self-test')

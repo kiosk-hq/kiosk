@@ -8,7 +8,7 @@
 require 'rack/mock'
 require 'json'
 
-RSpec.describe 'DiscoveryController' do
+RSpec.shared_context 'discovery controller spec: acme origin' do
   def dispatch(action, path, **)
     status, headers, body = Kiosk::Server::DiscoveryController.action(action).call(
       Rack::MockRequest.env_for("https://api.acme.example#{path}", **)
@@ -29,6 +29,10 @@ RSpec.describe 'DiscoveryController' do
       c.payment_provider = Object.new
     end
   end
+end
+
+RSpec.describe 'DiscoveryController' do
+  include_context 'discovery controller spec: acme origin'
 
   describe 'GET /agents.txt' do
     it 'returns 200 text/plain with the directives + CORS' do
@@ -55,6 +59,10 @@ RSpec.describe 'DiscoveryController' do
       expect(doc.dig('authorization', 'discovery')).to eq('/.well-known/agent-configuration')
     end
   end
+end
+
+RSpec.describe 'DiscoveryController' do
+  include_context 'discovery controller spec: acme origin'
 
   describe 'GET /.well-known/agent-configuration' do
     it 'returns 200 application/json listing the auth endpoints' do
@@ -80,6 +88,10 @@ RSpec.describe 'DiscoveryController' do
       expect(raw).to include('## Pick a method')
     end
   end
+end
+
+RSpec.describe 'DiscoveryController' do
+  include_context 'discovery controller spec: acme origin'
 
   describe 'GET /.well-known/kiosk.json' do
     it 'returns 200 application/json byte-identical to WellKnown.build_json' do
@@ -92,6 +104,10 @@ RSpec.describe 'DiscoveryController' do
       expect(raw).to eq(expected)
     end
   end
+end
+
+RSpec.describe 'DiscoveryController' do
+  include_context 'discovery controller spec: acme origin'
 
   describe 'GET /.well-known/api-catalog' do
     it 'returns 200 application/linkset+json (RFC 9727) with a non-empty item list' do
@@ -116,6 +132,10 @@ RSpec.describe 'DiscoveryController' do
       expect(schema['rel']).to eq('service-desc')
     end
   end
+end
+
+RSpec.describe 'DiscoveryController' do
+  include_context 'discovery controller spec: acme origin'
 
   # ─── the cache policy of the POINTER documents ───────────────────────────
   #

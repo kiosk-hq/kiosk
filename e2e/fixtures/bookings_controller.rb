@@ -10,139 +10,141 @@
 #
 # `my_appointments` is the harness's headline security assertion: per-principal
 # isolation through `Appointment.own`, with no RLS.
-class Kiosk::BookingsController < ApplicationController
-  include Kiosk::Handler
+module Kiosk
+  class BookingsController < ApplicationController
+    include Kiosk::Handler
 
-  # THE EXAMPLE SLOT IS RESOLVED, NOT WRITTEN DOWN. A literal instant in a
-  # descriptor goes into the past on its own, with nothing edited, in a
-  # document whose whole promise is «copy this verbatim» — so the value is
-  # computed at read time instead, and the spec that enforces it
-  # (`kiosk-test-support/spec/no_dated_literals_spec.rb`) reads this file by
-  # name alongside every tracked demo.
-  #
-  # `example_params`, `example_row` and `input_schema` are RESOLVABLE SLOTS
-  # (see {Kiosk::Server::SchemaSlots}), so a zero-arity proc in a declaration
-  # is called when the catalog is READ. A week out at 14:00 UTC: ahead of any
-  # caller's clock, and a round hour so it reads like something a human asked
-  # for. Same shape and same reasoning as stylish's
-  # `BookAppointmentOperation.example_slot`, which this fixture host mirrors.
-  #
-  # WHAT THIS DOES NOT COST, measured rather than assumed: the digest is a
-  # hash of `digest_inputs`, and `SchemaSlots.epoch` is a MEMO key that never
-  # reaches it — so a rolled 60-second bucket rebuilds the document and
-  # produces the SAME `?v=`/ETag while this value is unchanged. Pinned by
-  # kiosk-server's «keeps the digest UNCHANGED across an epoch roll» example.
-  #
-  # @return [String] an ISO 8601 instant, always later than now
-  def self.example_slot
-    (Time.current + 7.days).utc.change(hour: 14).iso8601
-  end
+    # THE EXAMPLE SLOT IS RESOLVED, NOT WRITTEN DOWN. A literal instant in a
+    # descriptor goes into the past on its own, with nothing edited, in a
+    # document whose whole promise is «copy this verbatim» — so the value is
+    # computed at read time instead, and the spec that enforces it
+    # (`kiosk-test-support/spec/no_dated_literals_spec.rb`) reads this file by
+    # name alongside every tracked demo.
+    #
+    # `example_params`, `example_row` and `input_schema` are RESOLVABLE SLOTS
+    # (see {Kiosk::Server::SchemaSlots}), so a zero-arity proc in a declaration
+    # is called when the catalog is READ. A week out at 14:00 UTC: ahead of any
+    # caller's clock, and a round hour so it reads like something a human asked
+    # for. Same shape and same reasoning as stylish's
+    # `BookAppointmentOperation.example_slot`, which this fixture host mirrors.
+    #
+    # WHAT THIS DOES NOT COST, measured rather than assumed: the digest is a
+    # hash of `digest_inputs`, and `SchemaSlots.epoch` is a MEMO key that never
+    # reaches it — so a rolled 60-second bucket rebuilds the document and
+    # produces the SAME `?v=`/ETag while this value is unchanged. Pinned by
+    # kiosk-server's «keeps the digest UNCHANGED across an epoch roll» example.
+    #
+    # @return [String] an ISO 8601 instant, always later than now
+    def self.example_slot
+      (Time.current + 7.days).utc.change(hour: 14).iso8601
+    end
 
-  # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
-  #
-  # Booking is the caller's own call and needs no event: the answer comes back
-  # in the response. CONFIRMING is not — a salon looks at its book and says yes
-  # some time later, on nobody's schedule, and until it does there is no
-  # question an assistant could usefully ask. That is the whole case for a
-  # stream on this origin, and it is why the topic is `appointment_confirmed`
-  # and not `appointment_booked`.
-  #
-  # `subject_reachable` is re-run while the subscription stands, with no
-  # request and therefore no session GUC, so it takes the principal from the
-  # identity it is handed rather than from `Kiosk.current_user_id`.
-  topic :appointment_confirmed do
-    description 'The salon confirmed an appointment of yours. Nothing to call back: this is ' \
-                'the salon acting, not an answer to a request of yours.'
-    payload_schema type: 'object', additionalProperties: false,
-                   properties: { appointment_id: { type: 'string', format: 'uuid' },
-                                 salon_id: { type: 'integer' },
-                                 slot: { type: 'string', format: 'date-time' } },
-                   required: %w[appointment_id salon_id slot]
-    subject_reachable lambda { |appointment_id, identity|
-      Appointment.where(id: appointment_id, user_id: identity.user_id).exists?
-    }
-  end
+    # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
+    #
+    # Booking is the caller's own call and needs no event: the answer comes back
+    # in the response. CONFIRMING is not — a salon looks at its book and says yes
+    # some time later, on nobody's schedule, and until it does there is no
+    # question an assistant could usefully ask. That is the whole case for a
+    # stream on this origin, and it is why the topic is `appointment_confirmed`
+    # and not `appointment_booked`.
+    #
+    # `subject_reachable` is re-run while the subscription stands, with no
+    # request and therefore no session GUC, so it takes the principal from the
+    # identity it is handed rather than from `Kiosk.current_user_id`.
+    topic :appointment_confirmed do
+      description 'The salon confirmed an appointment of yours. Nothing to call back: this is ' \
+                  'the salon acting, not an answer to a request of yours.'
+      payload_schema type: 'object', additionalProperties: false,
+                     properties: { appointment_id: { type: 'string', format: 'uuid' },
+                                   salon_id: { type: 'integer' },
+                                   slot: { type: 'string', format: 'date-time' } },
+                     required: %w[appointment_id salon_id slot]
+      subject_reachable lambda { |appointment_id, identity|
+        Appointment.where(id: appointment_id, user_id: identity.user_id).exists?
+      }
+    end
 
-  # my_appointments — the principal's own appointments; the caller supplies no filter.
-  kind :query
-  description 'List the appointments belonging to the authenticated principal. ' \
-              "The caller cannot widen this: the scope is the provider's, taken " \
-              "from the authenticated session, so another principal's bookings " \
-              'are never returned. Returns the complete set (not paginated).'
-  input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-  output_schema type: 'array',
-                description: "The principal's own appointments, complete and not paginated.",
-                items: {
-                  type: 'object', additionalProperties: false,
+    # my_appointments — the principal's own appointments; the caller supplies no filter.
+    kind :query
+    description 'List the appointments belonging to the authenticated principal. ' \
+                "The caller cannot widen this: the scope is the provider's, taken " \
+                "from the authenticated session, so another principal's bookings " \
+                'are never returned. Returns the complete set (not paginated).'
+    input_schema type: 'object', additionalProperties: false, properties: {}, required: []
+    output_schema type: 'array',
+                  description: "The principal's own appointments, complete and not paginated.",
+                  items: {
+                    type: 'object', additionalProperties: false,
+                    properties: {
+                      id: { type: 'string', description: 'uuid — the appointment. book_appointment calls the same value `appointment_id`.' },
+                      salon_id: { type: 'integer', description: 'The salon booked.' },
+                      slot: { type: 'string', description: 'Appointment time, ISO 8601.' }
+                    },
+                    required: %w[id salon_id slot]
+                  }
+    example_params({})
+    # A UUID, because `appointments.id` IS a uuid (`create_table :appointments,
+    # id: :uuid`) and the `output_schema` above says so. It published `1` until
+    # 2026-08-20, when e2e/schema_conformance.rb — the first thing ever to check
+    # a descriptor's examples against that descriptor's own schemas (§8.3,
+    # matrix SPEC-084) — refused it on its first run. An assistant that copied
+    # this row verbatim built an integer id for a value the wire never returns
+    # as one.
+    example_row({ id: '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f', salon_id: 1,
+                  slot: -> { example_slot } })
+    def my_appointments
+      render json: Appointment.own.order(:id).map { { 'id' => it.id, 'salon_id' => it.salon_id, 'slot' => it.slot.iso8601 } }
+    end
+
+    # book_appointment — reserves a slot for the CALLING principal. The owner is
+    # never a parameter: it is read from the session GUC, so an agent cannot book
+    # on someone else's behalf by supplying an id.
+    kind :action
+    description "Reserve a slot at one of this provider's salons for the " \
+                'authenticated principal. This is a COMMITMENT, not a quote — it ' \
+                'creates the booking immediately. The booking is made for the ' \
+                "caller; there is no way to book on another principal's behalf. " \
+                'Call `salons` first to choose where, and `my_appointments` ' \
+                'afterwards to see what is booked.'
+    input_schema type: 'object',
+                 additionalProperties: false,
+                 properties: {
+                   salon_id: { type: 'integer',
+                               description: 'The `id` of a row returned by the salons query.' },
+                   slot: { type: 'string', format: 'date-time',
+                           description: -> { "Appointment time as an ISO 8601 timestamp, e.g. #{example_slot}." } }
+                 },
+                 required: %w[salon_id slot]
+    output_schema type: 'object',
+                  description: 'The booking that was just created.',
+                  additionalProperties: false,
                   properties: {
-                    id: { type: 'string', description: 'uuid — the appointment. book_appointment calls the same value `appointment_id`.' },
-                    salon_id: { type: 'integer', description: 'The salon booked.' },
+                    appointment_id: { type: 'string', description: 'uuid — the booking. my_appointments calls the same value `id`.' },
+                    salon_id: { type: 'integer', description: 'The salon booked, echoed.' },
                     slot: { type: 'string', description: 'Appointment time, ISO 8601.' }
                   },
-                  required: %w[id salon_id slot]
-                }
-  example_params({})
-  # A UUID, because `appointments.id` IS a uuid (`create_table :appointments,
-  # id: :uuid`) and the `output_schema` above says so. It published `1` until
-  # 2026-08-20, when e2e/schema_conformance.rb — the first thing ever to check
-  # a descriptor's examples against that descriptor's own schemas (§8.3,
-  # matrix SPEC-084) — refused it on its first run. An assistant that copied
-  # this row verbatim built an integer id for a value the wire never returns
-  # as one.
-  example_row({ id: '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f', salon_id: 1,
-                slot: -> { example_slot } })
-  def my_appointments
-    render json: Appointment.own.order(:id).map { { 'id' => it.id, 'salon_id' => it.salon_id, 'slot' => it.slot.iso8601 } }
-  end
+                  required: %w[appointment_id salon_id slot]
+    example_params({ salon_id: 1, slot: -> { example_slot } })
+    # A UUID for the same reason `my_appointments` publishes one: this IS the
+    # same value under its other name, `appointments.id` is a uuid column, and
+    # the declaration above says `type: "string"`. Caught by
+    # e2e/schema_conformance.rb's §8.3 check.
+    example_row({ appointment_id: '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f', salon_id: 1,
+                  slot: -> { example_slot } })
+    def book_appointment
+      user_id = Kiosk.current_user_id
 
-  # book_appointment — reserves a slot for the CALLING principal. The owner is
-  # never a parameter: it is read from the session GUC, so an agent cannot book
-  # on someone else's behalf by supplying an id.
-  kind :action
-  description "Reserve a slot at one of this provider's salons for the " \
-              'authenticated principal. This is a COMMITMENT, not a quote — it ' \
-              'creates the booking immediately. The booking is made for the ' \
-              "caller; there is no way to book on another principal's behalf. " \
-              'Call `salons` first to choose where, and `my_appointments` ' \
-              'afterwards to see what is booked.'
-  input_schema type: 'object',
-               additionalProperties: false,
-               properties: {
-                 salon_id: { type: 'integer',
-                             description: 'The `id` of a row returned by the salons query.' },
-                 slot: { type: 'string', format: 'date-time',
-                         description: -> { "Appointment time as an ISO 8601 timestamp, e.g. #{example_slot}." } }
-               },
-               required: %w[salon_id slot]
-  output_schema type: 'object',
-                description: 'The booking that was just created.',
-                additionalProperties: false,
-                properties: {
-                  appointment_id: { type: 'string', description: 'uuid — the booking. my_appointments calls the same value `id`.' },
-                  salon_id: { type: 'integer', description: 'The salon booked, echoed.' },
-                  slot: { type: 'string', description: 'Appointment time, ISO 8601.' }
-                },
-                required: %w[appointment_id salon_id slot]
-  example_params({ salon_id: 1, slot: -> { example_slot } })
-  # A UUID for the same reason `my_appointments` publishes one: this IS the
-  # same value under its other name, `appointments.id` is a uuid column, and
-  # the declaration above says `type: "string"`. Caught by
-  # e2e/schema_conformance.rb's §8.3 check.
-  example_row({ appointment_id: '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f', salon_id: 1,
-                slot: -> { example_slot } })
-  def book_appointment
-    user_id = Kiosk.current_user_id
+      appointment = Appointment.create!(
+        user_id: user_id,
+        salon_id: params[:salon_id],
+        slot: params[:slot]
+      )
 
-    appointment = Appointment.create!(
-      user_id: user_id,
-      salon_id: params[:salon_id],
-      slot: params[:slot]
-    )
-
-    render json: {
-      appointment_id: appointment.id,
-      salon_id: appointment.salon_id,
-      slot: appointment.slot.iso8601
-    }
+      render json: {
+        appointment_id: appointment.id,
+        salon_id: appointment.salon_id,
+        slot: appointment.slot.iso8601
+      }
+    end
   end
 end

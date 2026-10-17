@@ -48,10 +48,12 @@ end
 
 # Spec-DSL bridges (`proc { ... }.must_raise_rls_denied`), when minitest/spec is loaded.
 if defined?(Minitest::Expectations)
-  module Minitest::Expectations
-    infect_an_assertion :assert_rls_denied,      :must_raise_rls_denied,      :block
-    infect_an_assertion :assert_quota_exceeded,  :must_raise_quota_exceeded,  :block
-    infect_an_assertion :refute_rls_denied,      :wont_raise_rls_denied,      :block
-    infect_an_assertion :refute_quota_exceeded,  :wont_raise_quota_exceeded,  :block
+  module Minitest
+    module Expectations
+      infect_an_assertion :assert_rls_denied,      :must_raise_rls_denied,      :block
+      infect_an_assertion :assert_quota_exceeded,  :must_raise_quota_exceeded,  :block
+      infect_an_assertion :refute_rls_denied,      :wont_raise_rls_denied,      :block
+      infect_an_assertion :refute_quota_exceeded,  :wont_raise_quota_exceeded,  :block
+    end
   end
 end

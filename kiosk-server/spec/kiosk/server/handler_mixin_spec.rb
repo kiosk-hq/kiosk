@@ -15,6 +15,7 @@
 require 'rack/mock'
 require 'uri'
 require 'json'
+require_relative '../../support/b1_handler_classes'
 
 # An operator's OWN base class — the shape K-495 describes and T-056 will
 # scaffold. Kiosk imposes neither this class nor its superclass; it only
@@ -162,17 +163,7 @@ class SpecReachController < SpecKioskBaseController
   def staff_book = render(json: {})
 end
 
-RSpec.describe 'Kiosk::Handler (the operator mixin)' do
-  let(:identity) { build_identity(user_id: 'u-1', agent_id: 'a-1') }
-  let(:connection) { FakeConnection.new }
-
-  # The class bodies above registered as they were read; spec_helper resets the
-  # registries before every example, so put them back.
-  before do
-    [SpecCatalogController, SpecOrdersController, SpecBoardController,
-     SpecReachController].each(&:kiosk_register!)
-  end
-
+module HandlerMixinSpec
   # The REAL dispatch path, minus HTTP: exactly what VerbController calls.
   # The wire NAME is an argument of its own — it is a path segment on the 0.4
   # wire, never a body field — so it is lifted out of `args` here the way the
@@ -185,6 +176,100 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
                                    connection: connection, name: name.empty? ? nil : name)
     end
   end
+
+  def party_model
+    Class.new do
+      include ActiveModel::Model
+
+      attr_accessor :size, :date
+
+      validates :size, numericality: { less_than_or_equal_to: 20 }
+      validate { errors.add(:date, 'is not among the upcoming seatings — currently 2026-09-01') }
+      def self.name = 'Party'
+    end
+  end
+
+  def validating(name, &)
+    stub_const('Party', party_model)
+    stub_handler('SpecValidatingController', :action, 'Validates its arguments in a model.') do
+      define_method(name, &)
+    end
+  end
+end
+
+module HandlerMixinWireSpec
+  # The 0.4 wire, exercised the way a router reaches it: the verb NAME is a
+  # path segment (`params[:kiosk_verb]`), a query is a GET whose arguments
+  # are the query string and an action is a POST whose arguments are the
+  # body. There is no `name` field and no /query or /run endpoint to post to.
+  def get_wire(name, args = {}, **)
+    query = args.empty? ? '' : "?#{URI.encode_www_form(args)}"
+    env = Rack::MockRequest.env_for(
+      "https://provider.example/kiosk/#{name}#{query}",
+      method: 'GET',
+      'HTTP_AUTHORIZATION' => "Bearer #{token}", **
+    )
+    dispatch(:show, name, env)
+  end
+
+  def post_wire(name, payload = {}, **)
+    env = Rack::MockRequest.env_for(
+      "https://provider.example/kiosk/#{name}",
+      method: 'POST', input: JSON.generate(payload),
+      'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}", **
+    )
+    dispatch(:create, name, env)
+  end
+
+  def dispatch(action, name, env)
+    env['action_dispatch.request.path_parameters'] =
+      { controller: 'kiosk/server/verb', action: action.to_s, kiosk_verb: name.to_s }
+    status, headers, body = Kiosk::Server::VerbController.action(action).call(env)
+    raw = +''
+    body.each { |chunk| raw << chunk }
+    [status, JSON.parse(raw), headers]
+  end
+end
+
+RSpec.shared_context 'handler mixin spec: executor' do
+  include B1HandlerClasses
+  include HandlerMixinSpec
+
+  let(:identity) { build_identity(user_id: 'u-1', agent_id: 'a-1') }
+  let(:connection) { FakeConnection.new }
+
+  # The class bodies above registered as they were read; spec_helper resets the
+  # registries before every example, so put them back.
+  before do
+    [SpecCatalogController, SpecOrdersController, SpecBoardController,
+     SpecReachController].each(&:kiosk_register!)
+  end
+end
+
+RSpec.shared_context 'handler mixin spec: wire' do
+  include HandlerMixinWireSpec
+
+  let(:token) do
+    Kiosk::Server::JwtIssuer.issue(
+      claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
+      audience: 'https://provider.example'
+    )
+  end
+
+  before do
+    Kiosk.configure do |c|
+      c.issuer      = 'https://provider.example'
+      c.roles       = %i[customer]
+      c.signing_key = Kiosk::Server::SigningKey.generate
+    end
+    [SpecCatalogController, SpecOrdersController, SpecBoardController].each(&:kiosk_register!)
+    allow(ActiveRecord::Base).to receive(:connection).and_return(connection)
+    allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
+  end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'declaring verbs' do
     it 'registers each decorated method under its wire name' do
@@ -212,7 +297,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(descriptor[:example_params]).to eq(q: 'milk')
       expect(descriptor[:example_row]).to eq(sku: 'MILK-1L', price_cents: 199)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'declaring verbs' do
     it 'omits params — the slot left the wire (ADR-0023 retired it, T-085 removed it)' do
       expect(Kiosk::Server::Queries.describe('catalog')).not_to have_key(:params)
     end
@@ -240,7 +331,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(Kiosk::Server::Queries.describe('shared_list')[:reach]).to eq('consented')
       expect(Kiosk::Server::Actions.describe('staff_book')[:reach]).to eq('role')
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'declaring verbs' do
     it 'carries reach onto the wire catalog the public `schema` endpoint serves' do
       document = Kiosk::Server::SchemaDocument.document
       reaches  = (document[:queries] + document[:actions]).to_h { |d| [d[:name], d[:reach]] }
@@ -265,7 +362,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(SpecBoardController.kiosk_declarations.transform_values { |d| d[:kind] })
         .to eq('board_listings' => :query, 'post_to_board' => :action)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'declaring verbs' do
     it 're-registers BOTH kinds from one class on every reload' do
       # `kiosk_register!` is what the engine's to_prepare runs on every reload,
       # and it now has to route each declaration to its OWN registry rather
@@ -278,6 +381,10 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(Kiosk::Server::Actions.known).to include('post_to_board')
     end
   end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'running a query through the executor' do
     it 'returns the rendered rows as the rows payload' do
@@ -310,13 +417,23 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       # T-092: the body is the bare rows; the cursor leaves as a `Link` header.
       expect(result.to_payload).to eq([{ 'order_id' => 'o-1', 'for' => 'u-1' }])
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'running a query through the executor' do
     it "runs inside the wire's GUC-scoped transaction" do
       execute(:query, { name: 'catalog' })
 
       expect(connection.bound(/set_config/).first.last.first).to eq('app.current_user_id')
     end
   end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'running an action through the executor' do
     it 'returns the rendered object as the value payload' do
@@ -331,6 +448,10 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         .to raise_error(Kiosk::Server::Errors::VerbNotFound, /Unknown action/)
     end
   end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'errors' do
     it "maps a rendered 400 to bad_request, keeping the handler's message and hint" do
@@ -350,7 +471,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
           expect(e.http_status).to eq(403)
         }
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'errors' do
     it 'lets a handler raise a wire error no HTTP status can carry' do
       expect { execute(:run, { name: 'rent_motorcycle' }) }
         .to raise_error(Kiosk::Server::Errors::KycRequired) { |e|
@@ -376,35 +503,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       end.to output(/\[kiosk-server\] Action "explode" raised RuntimeError: boom/).to_stderr
     end
   end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'Rails-native raises (the T-054 rescue_from seam)' do
     describe 'a failed model validation' do
-      let(:party) do
-        Class.new do
-          include ActiveModel::Model
-
-          attr_accessor :size, :date
-
-          validates :size, numericality: { less_than_or_equal_to: 20 }
-          validate { errors.add(:date, 'is not among the upcoming seatings — currently 2026-09-01') }
-          def self.name = 'Party'
-        end
-      end
-
-      def validating(name, &)
-        stub_const('Party', party)
-        klass = Class.new(ApplicationController) do
-          include Kiosk::Handler
-
-          kind :action
-          description 'Validates its arguments in a model.'
-          input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-          output_schema true
-          define_method(name, &)
-        end
-        stub_const('SpecValidatingController', klass)
-      end
-
       it "answers bad_request whose detail is the errors' full messages" do
         validating(:seat) { Party.new(size: 21).validate! }
 
@@ -427,7 +532,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
           .to raise_error(Kiosk::Server::Errors::BadRequest, /\ASize must be less than or equal to 20; Date/)
       end
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'Rails-native raises (the T-054 rescue_from seam)' do
     # `expect(e.message).to include("sku")` was the old assertion, and what it
     # was asserting — MEASURED at head on 2026-09-06, before the fix — was
     # `detail: "param is missing or the value is empty or invalid: sku"`:
@@ -437,19 +548,12 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
     # reddens here: the wire carries this protocol's words and the library's
     # go to the operator's log.
     it "maps params.require's ParameterMissing to bad_request — no Kiosk classes in the handler" do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description 'Requires a param the caller did not send.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecStrictController', :action, 'Requires a param the caller did not send.') do
         def strict
           params.require(:sku)
           render json: { ok: true }
         end
       end
-      stub_const('SpecStrictController', klass)
 
       expect do
         expect { execute(:run, { name: 'strict' }) }
@@ -466,7 +570,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       end.to output(/\[kiosk-server\] verb "strict" answered bad_request for ActionController::ParameterMissing: param is missing/)
         .to_stderr
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'Rails-native raises (the T-054 rescue_from seam)' do
     it 'maps an exception the HOST registered in rescue_responses, Pundit-style' do
       # This is the whole point of reusing Rails' own table: the host app's
       # `config.action_dispatch.rescue_responses` entries (a policy library's
@@ -482,16 +592,9 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       # the two specs below.
       stub_const('SpecVetoError', Class.new(StandardError))
       ActionDispatch::ExceptionWrapper.rescue_responses['SpecVetoError'] = :forbidden
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description "Raises the host's own policy error."
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecVetoedController', :action, "Raises the host's own policy error.") do
         def vetoed = raise(SpecVetoError, 'policy said no')
       end
-      stub_const('SpecVetoedController', klass)
 
       expect do
         expect { execute(:run, { name: 'vetoed' }) }
@@ -507,7 +610,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
     ensure
       ActionDispatch::ExceptionWrapper.rescue_responses.delete('SpecVetoError')
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'Rails-native raises (the T-054 rescue_from seam)' do
     # ── the two routes the redaction above deliberately does not touch ────
     #
     # Both are documented on {HandlerMixin}, both are what an operator uses when
@@ -516,13 +625,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
     # re-raised on its first line. They are asserted HERE, beside the loss,
     # because a cost is only priced when the alternative is proven to work.
     it 'still lets an operator SPEAK to the agent by rendering the envelope' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description "Refuses in the operator's own words, Rails-natively."
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecPoliteVetoController', :action, "Refuses in the operator's own words, Rails-natively.") do
         def vetoed_politely
           render json: { ok: false,
                          error: { code: 'forbidden', message: 'policy said no',
@@ -530,7 +633,6 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
                  status: :forbidden
         end
       end
-      stub_const('SpecPoliteVetoController', klass)
 
       expect { execute(:run, { name: 'vetoed_politely' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
@@ -539,21 +641,20 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
           expect(e.hint).to eq('ask your human to raise the limit')
         }
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'Rails-native raises (the T-054 rescue_from seam)' do
     it 'still lets an operator SPEAK to the agent by raising a Kiosk wire error' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description "Refuses in the operator's own words, by raising."
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecRaisedVetoController', :action, "Refuses in the operator's own words, by raising.") do
         def vetoed_by_raise
           raise Kiosk::Server::Errors::Forbidden.new('policy said no',
                                                      hint: 'ask your human to raise the limit')
         end
       end
-      stub_const('SpecRaisedVetoController', klass)
 
       expect { execute(:run, { name: 'vetoed_by_raise' }) }
         .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
@@ -561,22 +662,21 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
           expect(e.hint).to eq('ask your human to raise the limit')
         }
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'Rails-native raises (the T-054 rescue_from seam)' do
     it "lets the operator's own rescue_from win over the mixin's floor" do
       stub_const('SpecTeapotError', Class.new(StandardError))
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
+      stub_handler('SpecTeapotController', :action, "Raises an error the operator's own rescue_from handles.") do
         rescue_from(SpecTeapotError) do
           render json: { error: 'handled by the operator' }, status: :conflict
         end
-        kind :action
-        description "Raises an error the operator's own rescue_from handles."
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
         def brew = raise(SpecTeapotError)
       end
-      stub_const('SpecTeapotController', klass)
 
       expect { execute(:run, { name: 'brew' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
@@ -585,22 +685,19 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         }
     end
   end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'rendering an explicit wire code' do
     it 'carries a 403 code a bare status cannot name (rls_denied)' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :query
-        description 'Answers with the RLS denial code, Rails-natively.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecBlockedController', :query, 'Answers with the RLS denial code, Rails-natively.') do
         def blocked
           render json: { ok: false, error: { code: 'rls_denied', message: 'row policy said no' } },
                  status: :forbidden
         end
       end
-      stub_const('SpecBlockedController', klass)
 
       expect { execute(:query, { name: 'blocked' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
@@ -609,21 +706,20 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
           expect(e.message).to eq('row policy said no')
         }
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'rendering an explicit wire code' do
     it 'carries a SPECIFIC 402 — named by the handler, never guessed by the seam' do
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description 'Needs a card on file before it can run.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecNeedsCardController', :action, 'Needs a card on file before it can run.') do
         def needs_card
           render json: { ok: false, error: { code: 'payment_setup_required', message: 'no card on file' } },
                  status: :payment_required
         end
       end
-      stub_const('SpecNeedsCardController', klass)
 
       expect { execute(:run, { name: 'needs_card' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
@@ -632,57 +728,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         }
     end
   end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'the end-to-end wire path' do
-    let(:token) do
-      Kiosk::Server::JwtIssuer.issue(
-        claims: { sub: 'u-1', agent_id: 'a-1', role: 'customer', actor: 'agent' },
-        audience: 'https://provider.example'
-      )
-    end
-
-    before do
-      Kiosk.configure do |c|
-        c.issuer      = 'https://provider.example'
-        c.roles       = %i[customer]
-        c.signing_key = Kiosk::Server::SigningKey.generate
-      end
-      [SpecCatalogController, SpecOrdersController, SpecBoardController].each(&:kiosk_register!)
-      allow(ActiveRecord::Base).to receive(:connection).and_return(connection)
-      allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
-    end
-
-    # The 0.4 wire, exercised the way a router reaches it: the verb NAME is a
-    # path segment (`params[:kiosk_verb]`), a query is a GET whose arguments
-    # are the query string and an action is a POST whose arguments are the
-    # body. There is no `name` field and no /query or /run endpoint to post to.
-    def get_wire(name, args = {}, **)
-      query = args.empty? ? '' : "?#{URI.encode_www_form(args)}"
-      env = Rack::MockRequest.env_for(
-        "https://provider.example/kiosk/#{name}#{query}",
-        method: 'GET',
-        'HTTP_AUTHORIZATION' => "Bearer #{token}", **
-      )
-      dispatch(:show, name, env)
-    end
-
-    def post_wire(name, payload = {}, **)
-      env = Rack::MockRequest.env_for(
-        "https://provider.example/kiosk/#{name}",
-        method: 'POST', input: JSON.generate(payload),
-        'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}", **
-      )
-      dispatch(:create, name, env)
-    end
-
-    def dispatch(action, name, env)
-      env['action_dispatch.request.path_parameters'] =
-        { controller: 'kiosk/server/verb', action: action.to_s, kiosk_verb: name.to_s }
-      status, headers, body = Kiosk::Server::VerbController.action(action).call(env)
-      raw = +''
-      body.each { |chunk| raw << chunk }
-      [status, JSON.parse(raw), headers]
-    end
+    include_context 'handler mixin spec: wire'
 
     it 'answers a query with the rendered rows, verbatim' do
       status, payload = get_wire('catalog', { q: 'milk' })
@@ -712,6 +764,14 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(status).to eq(200)
       expect(payload).to eq('listing_id' => 'l-2', 'title' => 'Carbon road bike')
     end
+  end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'the end-to-end wire path' do
+    include_context 'handler mixin spec: wire'
 
     it 'still refuses the wrong method for each of the two, from one class' do
       status, problem, headers = post_wire('board_listings', {})
@@ -738,23 +798,24 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(problem['detail']).to eq('at least one item is required')
       expect(problem['hint']).to eq('pass items: [{sku:, quantity:}]')
     end
+  end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'the end-to-end wire path' do
+    include_context 'handler mixin spec: wire'
 
     it 'gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one' do
       # The challenge header is keyed on the wire CODE (T-054), so the
       # Rails-native way of saying a specific 402 loses nothing.
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description 'Needs a card on file before it can run.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecNeedsCardController', :action, 'Needs a card on file before it can run.') do
         def needs_card
           render json: { ok: false, error: { code: 'payment_setup_required', message: 'no card on file' } },
                  status: :payment_required
         end
       end
-      stub_const('SpecNeedsCardController', klass)
 
       status, problem, headers = post_wire('needs_card')
 
@@ -762,6 +823,14 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(problem['code']).to eq('payment_setup_required')
       expect(headers['WWW-Authenticate']).to eq(%(Payment realm="https://provider.example", method="ap2"))
     end
+  end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'the end-to-end wire path' do
+    include_context 'handler mixin spec: wire'
 
     it 'emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names' do
       # Spec §9 (matrix SPEC-099), a MUST-NOT and the one branch of the 402
@@ -776,19 +845,12 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       # header were never emitted anywhere. The third member of the trio
       # (`pow_required`) is controlled in wire_controller_402_spec.rb, by its
       # «carries WWW-Authenticate: Kiosk-PoW AND the challenges» example.
-      klass = Class.new(ApplicationController) do
-        include Kiosk::Handler
-
-        kind :action
-        description 'The card was declined.'
-        input_schema type: 'object', additionalProperties: false, properties: {}, required: []
-        output_schema true
+      stub_handler('SpecDeclinedController', :action, 'The card was declined.') do
         def declined
           render json: { ok: false, error: { code: 'payment_failed', message: 'card declined' } },
                  status: :payment_required
         end
       end
-      stub_const('SpecDeclinedController', klass)
 
       status, problem, headers = post_wire('declined')
 
@@ -808,6 +870,14 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
 
       expect(post_wire('create_order', { items: [1] }).first).to eq(200)
     end
+  end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'the end-to-end wire path' do
+    include_context 'handler mixin spec: wire'
 
     it "seeds the handler's request with the caller's headers" do
       _status, payload = get_wire('whoami', {}, 'HTTP_USER_AGENT' => 'kiosk-cli/1.0')
@@ -816,6 +886,10 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(payload['wire_name']).to eq('whoami')
     end
   end
+end
+
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
 
   describe 'guards' do
     it '404s a request that did not come through the Kiosk wire, as a problem document' do
@@ -849,7 +923,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(problem.keys).not_to include('ok')
       expect(problem.keys).not_to include('error')
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     it 'refuses to be included into something that is not a controller' do
       expect { Class.new { include Kiosk::Handler } }
         .to raise_error(ArgumentError, /needs an ActionController subclass/)
@@ -867,7 +947,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /without a `kind`/)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     it 'refuses a kind that is neither :query nor :action' do
       expect do
         Class.new(ApplicationController) do
@@ -887,7 +973,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /not a Kiosk verb reach/)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     # The SAME-CLASS half of one-name-one-kind. It could not arise before
     # K-921 — a class had one kind — and it is refused where the operator has
     # both methods in hand. The cross-class half is HandlerRegistrations'.
@@ -911,7 +1003,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /already declares it as a query/)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     # The EQUALITY case the kind check above skipped (K-1659). Before this the
     # second declaration was stored, silently replacing the first: the earlier
     # method went off the wire with nothing — not the cross-class check, which
@@ -937,7 +1035,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /#board on this class already declares/)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     # THE CONTROL for the refusal above: re-REGISTERING is not re-DECLARING.
     # The engine's `to_prepare` calls `kiosk_register!` on every reload, and a
     # reloaded class body is read on a new class object whose declarations
@@ -963,7 +1067,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect { generation.call }.not_to raise_error
       expect(Kiosk::Server::Queries.known).to include('board')
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     # ── spec §8.1/§8.3 + T-073 = A, refused where the mistake is made ────
     #
     # All four raise at CLASS-BODY LOAD, so an operator meets them at boot with
@@ -984,7 +1094,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /not a legal verb name/)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     it 'refuses a verb name the engine draws itself' do
       expect do
         Class.new(ApplicationController) do
@@ -998,7 +1114,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /RESERVED/)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     it 'refuses a declaration with no input_schema' do
       expect do
         Class.new(ApplicationController) do
@@ -1024,7 +1146,13 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /without output_schema/)
     end
+  end
+end
 
+RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+  include_context 'handler mixin spec: executor'
+
+  describe 'guards' do
     # The reserved list is the engine's own route table, and it must stay that
     # way, and this pins the names the mixin refuses today so a silent shrink is visible.
     it 'reserves every first path segment the engine draws under the mount' do

@@ -31,7 +31,7 @@
 # never serve a wire request. It reads the tracked tree (`git ls-files`), and it
 # never skips.
 
-require 'open3'
+require_relative 'support/demo_runtime_files'
 
 module InterpolatedSql
   REPO_ROOT = File.expand_path('../..', __dir__)
@@ -52,16 +52,6 @@ module InterpolatedSql
   KNOWN = {}.freeze
 
   module_function
-
-  # [git succeeded?, the tracked runtime .rb files of the demos]
-  def runtime_files
-    tracked, status = Open3.capture2('git', '-C', REPO_ROOT, 'ls-files', 'kiosk-demo-*')
-    files = tracked.lines(chomp: true).select do |f|
-      f.end_with?('.rb') && f.match?(%r{\Akiosk-demo-[a-z0-9_]+/(app|config|lib)/}) &&
-        !f.match?(%r{\Akiosk-demo-[a-z0-9_]+/lib/tasks/})
-    end
-    [status.success?, files.sort.freeze]
-  end
 
   # Every `[lineno, why, source]` this source splices, in file order.
   def violations(src)
@@ -112,8 +102,8 @@ module InterpolatedSql
 end
 
 RSpec.describe 'no demo splices a value into SQL statement text (K-654)' do
-  let(:git_ok) { InterpolatedSql.runtime_files.first }
-  let(:files)  { InterpolatedSql.runtime_files.last }
+  let(:git_ok) { DemoRuntimeFiles.list.first }
+  let(:files)  { DemoRuntimeFiles.list.last }
 
   it 'reads the tracked runtime tree (this spec never skips)' do
     expect(git_ok).to be(true), "git ls-files failed in #{InterpolatedSql::REPO_ROOT}"
@@ -121,7 +111,7 @@ RSpec.describe 'no demo splices a value into SQL statement text (K-654)' do
                           "found only #{files.size} tracked runtime .rb files under the demos — " \
                           'this guard has drifted, fix the scope'
     # A rename that moved one app out of the glob would shrink the scope silently.
-    expect(files.map { |f| f[/\Akiosk-demo-[a-z0-9_]+/] }.uniq.size).to eq(8)
+    expect(DemoRuntimeFiles.demos(files).size).to eq(8)
   end
 
   it 'lists no site that has since been deleted' do

@@ -74,17 +74,15 @@ def snapshot
     'actions' => Kiosk::Server::Actions.known.sort,
     'descriptions' => Kiosk::Server::Queries.catalog.to_h { |d| [d[:name], d[:description]] },
     'capabilities' => Kiosk.configuration.capabilities,
-    'browse_fetches' => begin
-      Kiosk::Server::Queries.fetch('probe_browse').class.name
-    rescue Kiosk::Server::Errors::VerbNotFound => e
-      "NotFound: #{e.hint}"
-    end,
-    'added_fetches' => begin
-      Kiosk::Server::Queries.fetch('probe_added').class.name
-    rescue Kiosk::Server::Errors::VerbNotFound => e
-      "NotFound: #{e.hint}"
-    end
+    'browse_fetches' => fetched_class('probe_browse'),
+    'added_fetches' => fetched_class('probe_added')
   }
+end
+
+def fetched_class(name)
+  Kiosk::Server::Queries.fetch(name).class.name
+rescue Kiosk::Server::Errors::VerbNotFound => e
+  "NotFound: #{e.hint}"
 end
 
 report = { 'boot' => snapshot.merge('derived_at_boot' => DERIVED_AT_BOOT) }

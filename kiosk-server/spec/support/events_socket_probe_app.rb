@@ -29,7 +29,7 @@ require 'websocket/driver'
 require 'openssl'
 require 'stringio'
 
-REPORT = {}
+report = {}
 # The engine's own log, so a scenario can assert a line the wire cannot carry.
 # ERROR level only: everything below it is request noise.
 LOG = StringIO.new
@@ -40,26 +40,37 @@ NO_TOPICS = ENV['PROBE_NO_TOPICS'] == '1'
 
 # ── a fake agent-IdP: one token, one identity ────────────────────────────────
 GOOD_TOKEN = 'good-token'
-REVOKED    = { value: false }
-# The operator's answer to "may this subscriber read this subject", flipped
-# under a socket that is already holding one.
-REACHABLE  = { value: true }
-# The `exp` this IdP stamps on the identity it resolves, and after which it
-# stops resolving at all. Moved back under a held socket to age its token out.
-EXPIRES_AT = { value: Time.now.to_i + 3600 }
-# The issuer in force each time the IdP was asked, newest last.
-ISSUERS_SEEN = []
+
+# The switches a scenario flips under a socket that is already open.
+module ProbeState
+  class << self
+    # When true, the IdP stops resolving the token.
+    attr_accessor :revoked
+    # The operator's answer to "may this subscriber read this subject".
+    attr_accessor :reachable
+    # The `exp` the IdP stamps on the identity it resolves, and after which it
+    # stops resolving at all. Moved back under a held socket to age its token out.
+    attr_accessor :expires_at
+    # The issuer in force each time the IdP was asked, newest last.
+    attr_reader :issuers_seen
+  end
+
+  self.revoked = false
+  self.reachable = true
+  self.expires_at = Time.now.to_i + 3600
+  @issuers_seen = []
+end
 
 class ProbeIdp
   def verify(request)
-    ISSUERS_SEEN << Kiosk.current_issuer
+    ProbeState.issuers_seen << Kiosk.current_issuer
     header = request.headers['Authorization'] || request.headers['HTTP_AUTHORIZATION']
     return nil unless header.to_s == "Bearer #{GOOD_TOKEN}"
-    return nil if REVOKED[:value]
-    return nil if Time.now.to_i >= EXPIRES_AT[:value]
+    return nil if ProbeState.revoked
+    return nil if Time.now.to_i >= ProbeState.expires_at
 
     Kiosk::Identity.new(user_id: 'u1', role: 'customer', actor: 'agent', agent_id: 'a1',
-                        claims: { exp: EXPIRES_AT[:value] })
+                        claims: { exp: ProbeState.expires_at })
   end
 end
 
@@ -76,7 +87,7 @@ class ProbeController < ActionController::Base
       reach :consented
       description 'A todo on a list you can reach changed.'
       payload_schema type: 'object'
-      subject_reachable ->(subject, _identity) { REACHABLE[:value] && subject.to_s == 'list_ok' }
+      subject_reachable ->(subject, _identity) { ProbeState.reachable && subject.to_s == 'list_ok' }
     end
 
     topic :boom do
@@ -98,7 +109,7 @@ end
 
 Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
 TOLL_EVERY_VERB = Class.new(Kiosk::Reputation::Policy) do
-  def challenge_for(identity:, verb:, factors:) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+  def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
 end.new
 
 class ProbeApp < Rails::Application
@@ -159,6 +170,11 @@ class ProbeSocket
     @closed = false
     @driver = WebSocket::Driver.client(self, protocols: ['actioncable-v1-json'])
     headers.each { |k, v| @driver.set_header(k, v) }
+    listen
+    @driver.start
+  end
+
+  def listen
     @driver.on(:open)    { @open = true }
     @driver.on(:message) do |e|
       frame = JSON.parse(e.data)
@@ -166,7 +182,6 @@ class ProbeSocket
     end
     @driver.on(:close)   { @closed = true }
     @driver.on(:error)   { @closed = true }
-    @driver.start
   end
 
   attr_reader :url
@@ -182,18 +197,17 @@ class ProbeSocket
       return true if yield
       break if @closed
 
-      ready = IO.select([@tcp], nil, nil, 0.1)
-      next unless ready
-
-      begin
-        @driver.parse(@tcp.read_nonblock(8192))
-      rescue IO::WaitReadable
-        next
-      rescue EOFError, Errno::ECONNRESET
-        @closed = true
-      end
+      read_available if @tcp.wait_readable(0.1)
     end
     yield
+  end
+
+  def read_available
+    @driver.parse(@tcp.read_nonblock(8192))
+  rescue IO::WaitReadable
+    nil
+  rescue EOFError, Errno::ECONNRESET
+    @closed = true
   end
 
   def open? = @open
@@ -236,16 +250,18 @@ SUBSCRIBE_TODO = frame('subscribe', identifier('todo', subject: 'list_ok'))
 def frame_answer(port, text, live: nil)
   sock = connect(port)
   sock.pump_until { sock.frames.any? }
-  if live
-    sock.send_raw(live)
-    sock.pump_until { sock.frames.any? { |f| f['type'] == 'confirm_subscription' } }
-  end
+  open_live(sock, live) if live
   sent = sock.frames.length
   sock.send_raw(text)
   sock.pump_until(seconds: 3) { sock.frames.length > sent }
   answer = { 'sent' => text, 'answer' => sock.frames[sent..], 'closed' => sock.closed? }
   sock.close
   answer
+end
+
+def open_live(sock, live)
+  sock.send_raw(live)
+  sock.pump_until { sock.frames.any? { |f| f['type'] == 'confirm_subscription' } }
 end
 
 # Frames an origin cannot act on, as the literal strings a broken client sends.
@@ -279,23 +295,38 @@ def raw_get(port, path, headers)
   socket = TCPSocket.new('127.0.0.1', port)
   lines  = ["GET #{path} HTTP/1.1", "Host: 127.0.0.1:#{port}"] + headers.map { |k, v| "#{k}: #{v}" }
   socket.write("#{lines.join("\r\n")}\r\n\r\n")
+  raw = read_response(socket)
+  socket.close
+  parse_response(raw)
+end
+
+def parse_response(raw)
+  head, _, body = raw.partition("\r\n\r\n")
+  { 'status' => head.lines.first.to_s.strip,
+    'content_type' => head.lines.grep(/^content-type:/i).first.to_s.strip,
+    'body' => body }
+end
+
+def read_response(socket)
   raw      = +''
   deadline = Time.now + 15
   until response_complete?(raw)
     remaining = deadline - Time.now
     break unless remaining.positive? && socket.wait_readable(remaining)
 
-    begin
-      raw << socket.readpartial(4096)
-    rescue EOFError
-      break
-    end
+    chunk = read_chunk(socket)
+    break unless chunk
+
+    raw << chunk
   end
-  socket.close
-  head, _, body = raw.partition("\r\n\r\n")
-  { 'status' => head.lines.first.to_s.strip,
-    'content_type' => head.lines.grep(/^content-type:/i).first.to_s.strip,
-    'body' => body }
+  raw
+end
+
+# The next bytes off the socket, or nil when the server has closed it.
+def read_chunk(socket)
+  socket.readpartial(4096)
+rescue EOFError
+  nil
 end
 
 def response_complete?(raw)
@@ -346,23 +377,23 @@ end
 # than upgrading — for a plain request, for an upgrade, and before any
 # credential is read. Nothing below this applies to such an origin.
 if NO_TOPICS
-  REPORT[:known_topics] = Kiosk::Server::Events.known
-  REPORT[:capabilities] =
+  report[:known_topics] = Kiosk::Server::Events.known
+  report[:capabilities] =
     JSON.parse(raw_get(port, '/.well-known/kiosk.json', 'Connection' => 'close')['body'])
         .dig('kiosk', 'capabilities')
-  REPORT[:plain]   = raw_get(port, '/kiosk/events', 'Connection' => 'close')
-  REPORT[:upgrade] =
+  report[:plain]   = raw_get(port, '/kiosk/events', 'Connection' => 'close')
+  report[:upgrade] =
     raw_get(port, '/kiosk/events', UPGRADE_HEADERS.merge('Authorization' => "Bearer #{GOOD_TOKEN}"))
-  REPORT[:anonymous_upgrade] = raw_get(port, '/kiosk/events', UPGRADE_HEADERS)
+  report[:anonymous_upgrade] = raw_get(port, '/kiosk/events', UPGRADE_HEADERS)
   # And what a real client makes of it: the driver never opens, and no frame
   # arrives for it to read.
   sock = connect(port)
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
-  REPORT[:upgrade_frames] = sock.frames
-  REPORT[:upgrade_open]   = sock.open?
+  report[:upgrade_frames] = sock.frames
+  report[:upgrade_open]   = sock.open?
   sock.close
-  REPORT[:ok] = true
-  puts JSON.generate(REPORT)
+  report[:ok] = true
+  puts JSON.generate(report)
   exit 0
 end
 
@@ -371,7 +402,7 @@ store = Kiosk.configuration.event_store
 begin
   # 0 — the toll is on: a verb called with a good credential and no proof is
   #     challenged, which is what makes every accepted upgrade below free.
-  REPORT[:tolled_verb_status] =
+  report[:tolled_verb_status] =
     raw_get(port, '/kiosk/list_nothing', 'Authorization' => "Bearer #{GOOD_TOKEN}",
                                          'Connection' => 'close')['status']
 
@@ -382,18 +413,18 @@ begin
   # fact that separates accepted from refused is therefore the `welcome` frame,
   # never the 101.
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
-  REPORT[:no_auth_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  report[:no_auth_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   # Everything the refused socket is told before it goes, which is the typed
   # disconnect spec Section 8.5.3 names and nothing else.
   sock.pump_until(seconds: 2) { sock.closed? }
-  REPORT[:no_auth_frames] = sock.frames
+  report[:no_auth_frames] = sock.frames
   sock.close
 
   # 2 — a bad token: refused.
   sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer,
                                   'Authorization' => 'Bearer nope' })
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
-  REPORT[:bad_token_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  report[:bad_token_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close
 
   # 2b — a GOOD token, but in the query string: refused. Spec Section 8.5.3
@@ -402,43 +433,43 @@ begin
   sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer },
                        path: "/kiosk/events?access_token=#{GOOD_TOKEN}")
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
-  REPORT[:query_token_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  report[:query_token_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close
 
   # 3 — a good upgrade: 101, and the welcome frame.
   sock = connect(port)
   sock.pump_until { sock.frames.any? }
-  REPORT[:opened] = sock.open?
-  REPORT[:welcome] = sock.frames.first
-  REPORT[:negotiated_protocol] = sock.protocol
+  report[:opened] = sock.open?
+  report[:welcome] = sock.frames.first
+  report[:negotiated_protocol] = sock.protocol
 
-  REPORT[:default_origin_issuer] = ISSUERS_SEEN.last
+  report[:default_origin_issuer] = ProbeState.issuers_seen.last
 
   # 3b — the same upgrade on the second origin resolves under that origin.
   other = connect(port, host: 'localhost')
   other.pump_until { other.frames.any? }
-  REPORT[:second_origin_welcomed] = other.frames.any? { |f| f['type'] == 'welcome' }
-  REPORT[:second_origin_issuer] = ISSUERS_SEEN.last
-  REPORT[:second_origin] = "http://localhost:#{port}"
-  REPORT[:default_origin] = Kiosk.configuration.issuer
+  report[:second_origin_welcomed] = other.frames.any? { |f| f['type'] == 'welcome' }
+  report[:second_origin_issuer] = ProbeState.issuers_seen.last
+  report[:second_origin] = "http://localhost:#{port}"
+  report[:default_origin] = Kiosk.configuration.issuer
   other.close
 
   # 4 — subscribe to a declared, principal-reach topic.
   sock.subscribe(identifier('order_delivery'))
   sock.pump_until { sock.messages.any? { |m| m['type'] == 'subscribed' } }
-  REPORT[:subscribed] = sock.messages.find { |m| m['type'] == 'subscribed' }
+  report[:subscribed] = sock.messages.find { |m| m['type'] == 'subscribed' }
   # The FRAME the confirmation travels in, rather than the message inside it:
   # everything about one subscription is wrapped, and everything about the
   # connection is not (spec Section 8.5.4).
-  REPORT[:subscribed_envelope] =
+  report[:subscribed_envelope] =
     sock.frames.find { |f| f.dig('message', 'type') == 'subscribed' }
   sock.pump_until { sock.frames.any? { |f| f['type'] == 'confirm_subscription' } }
-  REPORT[:confirmation] = sock.frames.find { |f| f['type'] == 'confirm_subscription' }
+  report[:confirmation] = sock.frames.find { |f| f['type'] == 'confirm_subscription' }
 
   # 5 — an UNdeclared topic is rejected, not streamed empty.
   sock.subscribe(identifier('nope'))
   sock.pump_until { sock.frames.any? { |f| f['type'] == 'reject_subscription' } }
-  REPORT[:undeclared_rejected] =
+  report[:undeclared_rejected] =
     sock.frames.any? { |f| f['type'] == 'reject_subscription' && f['identifier'].include?('nope') }
 
   # 6 — a consented topic whose subject is NOT reachable is rejected.
@@ -446,13 +477,13 @@ begin
   sock.pump_until do
     sock.frames.any? { |f| f['type'] == 'reject_subscription' && f['identifier'].include?('list_no') }
   end
-  REPORT[:unreachable_subject_rejected] =
+  report[:unreachable_subject_rejected] =
     sock.frames.any? { |f| f['type'] == 'reject_subscription' && f['identifier'].include?('list_no') }
 
   # 7 — and the reachable one is accepted.
   sock.subscribe(identifier('todo', subject: 'list_ok'))
   sock.pump_until { sock.messages.count { |m| m['type'] == 'subscribed' } >= 2 }
-  REPORT[:reachable_subject_subscribed] =
+  report[:reachable_subject_subscribed] =
     sock.messages.count { |m| m['type'] == 'subscribed' } >= 2
 
   # 7b — a consented topic with NO subject takes everything on it addressed to
@@ -461,13 +492,13 @@ begin
   whole.pump_until { whole.frames.any? }
   whole.subscribe(identifier('todo'))
   whole.pump_until { whole.frames.any? { |f| f['type'] =~ /confirm_subscription|reject_subscription/ } }
-  REPORT[:subjectless_consented_answer] =
+  report[:subjectless_consented_answer] =
     whole.frames.find { |f| f['type'] =~ /confirm_subscription|reject_subscription/ }&.dig('type')
   whole_ids = %w[list_ok list_other].map do |subject|
     Kiosk::Server::Events.emit(topic: :todo, subject: subject, identity_scope: %w[u1], data: {})
   end
   whole.pump_until { whole_ids.all? { |id| whole.messages.any? { |m| m['id'] == id } } }
-  REPORT[:subjectless_consented_delivered] = whole_ids.all? { |id| whole.messages.any? { |m| m['id'] == id } }
+  report[:subjectless_consented_delivered] = whole_ids.all? { |id| whole.messages.any? { |m| m['id'] == id } }
   whole.close
 
   # 8 — LIVE delivery: emit, and the socket sees it with the five closed members.
@@ -476,7 +507,7 @@ begin
     data: { 'status' => 'out_for_delivery' }
   )
   sock.pump_until { sock.messages.any? { |m| m['id'] == first_id } }
-  REPORT[:live] = sock.messages.find { |m| m['id'] == first_id }
+  report[:live] = sock.messages.find { |m| m['id'] == first_id }
 
   # 9 — subject filtering: an event on another subject of a subject-scoped
   #     subscription must not arrive.
@@ -484,7 +515,7 @@ begin
                              data: { 'done' => true })
   other_id = store.head
   sock.pump_until(seconds: 1) { false }
-  REPORT[:other_subject_delivered] = sock.messages.any? { |m| m['id'] == other_id }
+  report[:other_subject_delivered] = sock.messages.any? { |m| m['id'] == other_id }
   sock.close
 
   # 10 — RESUME: a second socket subscribing with `since` replays only the gap.
@@ -496,12 +527,12 @@ begin
   resumed.pump_until { resumed.frames.any? }
   resumed.subscribe(identifier('order_delivery', since: first_id))
   resumed.pump_until { resumed.messages.any? { |m| m['id'] == gap_id } }
-  REPORT[:resumed_ids] = resumed.messages.filter_map { |m| m['id'] }
+  report[:resumed_ids] = resumed.messages.filter_map { |m| m['id'] }
   # The tail between the two cursors also holds the step-9 `todo` event, which
   # this subscription did not ask for. Replay reads the whole tail, so this is
   # the one path that can reach another topic at all.
-  REPORT[:replayed_topics] = resumed.messages.select { |m| m['id'] }.map { |m| m['topic'] }.uniq
-  REPORT[:resume_head] = resumed.messages.find { |m| m['type'] == 'subscribed' }
+  report[:replayed_topics] = resumed.messages.select { |m| m['id'] }.map { |m| m['topic'] }.uniq
+  report[:resume_head] = resumed.messages.find { |m| m['type'] == 'subscribed' }
   resumed.close
 
   # 11 — TRUNCATED: a cursor older than what the store still holds says so.
@@ -510,7 +541,7 @@ begin
   truncated.pump_until { truncated.frames.any? }
   truncated.subscribe(identifier('order_delivery', since: 0))
   truncated.pump_until { truncated.messages.any? { |m| m['type'] == 'subscribed' } }
-  REPORT[:truncated_frame] = truncated.messages.find { |m| m['type'] == 'subscribed' }
+  report[:truncated_frame] = truncated.messages.find { |m| m['type'] == 'subscribed' }
   truncated.close
 
   # ── URL-declared subscriptions ────────────────────────────────────────────
@@ -520,8 +551,8 @@ begin
   #      string. Action Cable would otherwise stream it nothing at all.
   urlsub = connect(port, path: '/kiosk/events?topic=order_delivery&topic=todo:list_ok')
   urlsub.pump_until { urlsub.messages.count { |m| m['type'] == 'subscribed' } >= 2 }
-  REPORT[:url_welcomed] = urlsub.frames.any? { |f| f['type'] == 'welcome' }
-  REPORT[:url_subscribed_topics] =
+  report[:url_welcomed] = urlsub.frames.any? { |f| f['type'] == 'welcome' }
+  report[:url_subscribed_topics] =
     urlsub.messages.select { |m| m['type'] == 'subscribed' }.map { |m| m['topic'] }.sort
 
   # DELIBERATELY emitting on the `subscribed` frame and NOT on Action Cable's
@@ -531,7 +562,7 @@ begin
     topic: :order_delivery, subject: 'ord_3', identity_scope: %w[u1], data: { 'status' => 'out_for_delivery' }
   )
   urlsub.pump_until(seconds: 6) { urlsub.messages.any? { |m| m['id'] == url_id } }
-  REPORT[:url_delivered] = urlsub.messages.any? { |m| m['id'] == url_id }
+  report[:url_delivered] = urlsub.messages.any? { |m| m['id'] == url_id }
 
   urlsub.close
 
@@ -540,7 +571,7 @@ begin
   #      forgery control and there is no browser on this exchange.
   sock = connect(port, headers: { 'Authorization' => "Bearer #{GOOD_TOKEN}" })
   sock.pump_until { sock.frames.any? }
-  REPORT[:no_origin_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  report[:no_origin_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close
 
   # 14 — an `Origin` naming somewhere else entirely, same answer: a browser
@@ -549,7 +580,7 @@ begin
   sock = connect(port, headers: { 'Origin' => 'https://example.com',
                                   'Authorization' => "Bearer #{GOOD_TOKEN}" })
   sock.pump_until { sock.frames.any? }
-  REPORT[:foreign_origin_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
+  report[:foreign_origin_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close
 
   # 15 — an operator's OWN subject rule raises. The refusal is right, because
@@ -562,9 +593,9 @@ begin
   sock.pump_until do
     sock.frames.any? { |f| f['type'] == 'reject_subscription' && f['identifier'].include?('boom') }
   end
-  REPORT[:raising_rule_rejected] =
+  report[:raising_rule_rejected] =
     sock.frames.any? { |f| f['type'] == 'reject_subscription' && f['identifier'].include?('boom') }
-  REPORT[:raising_rule_logged] =
+  report[:raising_rule_logged] =
     LOG.string.include?(%([kiosk] events subject rule raised for topic "boom": RuntimeError: operator rule blew up at #{__FILE__}:))
   sock.close
 
@@ -573,7 +604,7 @@ begin
   #       AFTER the welcome so the answer is to the frame and not to the
   #       upgrade. Everything that arrived after the welcome is collected, so a
   #       second frame contradicting the first is visible.
-  REPORT[:bad_frames] = {}
+  report[:bad_frames] = {}
   BAD_FRAMES.each do |name, text|
     bad = connect(port)
     bad.pump_until { bad.frames.any? }
@@ -581,7 +612,7 @@ begin
     bad.send_raw(text)
     bad.pump_until(seconds: 3) { bad.frames.length > welcomed }
     bad.pump_until(seconds: 2) { bad.closed? }
-    REPORT[:bad_frames][name] = { 'sent' => text, 'answer' => bad.frames[welcomed..],
+    report[:bad_frames][name] = { 'sent' => text, 'answer' => bad.frames[welcomed..],
                                   'closed' => bad.closed? }
     bad.close
   end
@@ -595,45 +626,45 @@ begin
   sock.pump_until { sock.frames.any? { |f| f['type'] == 'reject_subscription' } }
   sock.subscribe(identifier('order_delivery'))
   sock.pump_until { sock.messages.any? { |m| m['type'] == 'subscribed' } }
-  REPORT[:after_bad_frame_subscribed] =
+  report[:after_bad_frame_subscribed] =
     sock.messages.select { |m| m['type'] == 'subscribed' }.map { |m| m['topic'] }
   sock.close
 
   # 15d — frames that name a subscription the origin cannot act on: one the
   #       socket does not hold, and a `since` that is not a cursor.
-  REPORT[:unopened_unsubscribe] =
+  report[:unopened_unsubscribe] =
     frame_answer(port, frame('unsubscribe', identifier('order_delivery')))
-  REPORT[:reserialised_unsubscribe] = frame_answer(
+  report[:reserialised_unsubscribe] = frame_answer(
     port,
     frame('unsubscribe',
           'subject' => 'list_ok', 'topic' => 'todo', 'channel' => 'KioskEvents'),
     live: SUBSCRIBE_TODO
   )
-  REPORT[:unreadable_cursor] =
+  report[:unreadable_cursor] =
     frame_answer(port, frame('subscribe', identifier('todo', subject: 'list_ok', since: {})))
 
   # 15d2 — every other `since` that is not a cursor, in both spellings; a
   #        `subject` that is not a string; and the largest cursor there is.
-  REPORT[:not_cursors] = NOT_CURSORS.transform_values do |since|
+  report[:not_cursors] = NOT_CURSORS.transform_values do |since|
     frame_answer(port, frame('subscribe', identifier('todo', subject: 'list_ok', since: since)))
   end
-  REPORT[:url_not_cursors] = %w[abc -5 1e3].to_h do |since|
+  report[:url_not_cursors] = %w[abc -5 1e3].to_h do |since|
     url = connect(port, path: "/kiosk/events?topic=todo:list_ok&since=#{since}")
     url.pump_until { url.frames.any? { |f| f['type'] == 'reject_subscription' } }
     answer = url.frames.reject { |f| f['type'] == 'welcome' }
     url.close
     [since, answer]
   end
-  REPORT[:not_subjects] = { 'list' => %w[ord_1 ord_2], 'number' => 5 }.transform_values do |subject|
+  report[:not_subjects] = { 'list' => %w[ord_1 ord_2], 'number' => 5 }.transform_values do |subject|
     frame_answer(port, frame('subscribe', identifier('order_delivery', subject: subject)))
   end
-  REPORT[:largest_cursor] = frame_answer(
+  report[:largest_cursor] = frame_answer(
     port, frame('subscribe', identifier('todo', subject: 'list_ok', since: (2**53) - 1))
   )
 
   # 15e — and the one frame on that list the origin CAN act on, where the
   #       action is nothing: a second identical `subscribe`.
-  REPORT[:duplicate_subscribe] = frame_answer(port, SUBSCRIBE_TODO, live: SUBSCRIBE_TODO)
+  report[:duplicate_subscribe] = frame_answer(port, SUBSCRIBE_TODO, live: SUBSCRIBE_TODO)
 
   # 15f — the subscription that duplicate named is untouched. One event emitted
   #       afterwards arrives ONCE, which is what says the second frame neither
@@ -647,8 +678,8 @@ begin
   dup_id = Kiosk::Server::Events.emit(topic: :todo, subject: 'list_ok', identity_scope: %w[u1],
                                       data: { 'done' => true })
   dup.pump_until { dup.messages.any? { |m| m['id'] == dup_id } }
-  REPORT[:after_duplicate_subscribed] = dup.messages.count { |m| m['type'] == 'subscribed' }
-  REPORT[:after_duplicate_delivered] = dup.messages.count { |m| m['id'] == dup_id }
+  report[:after_duplicate_subscribed] = dup.messages.count { |m| m['type'] == 'subscribed' }
+  report[:after_duplicate_delivered] = dup.messages.count { |m| m['id'] == dup_id }
   dup.close
 
   # 15g — an `unsubscribe` echoing a live subscription's identifier drops it:
@@ -660,24 +691,24 @@ begin
   before_id = Kiosk::Server::Events.emit(topic: :todo, subject: 'list_ok', identity_scope: %w[u1],
                                          data: { 'done' => false })
   gone.pump_until { gone.messages.any? { |m| m['id'] == before_id } }
-  REPORT[:before_unsubscribe_delivered] = gone.messages.any? { |m| m['id'] == before_id }
+  report[:before_unsubscribe_delivered] = gone.messages.any? { |m| m['id'] == before_id }
   sent = gone.frames.length
   gone.send_raw(frame('unsubscribe', identifier('todo', subject: 'list_ok')))
   gone.pump_until(seconds: 1) { false }
   Kiosk::Server::Events.emit(topic: :todo, subject: 'list_ok', identity_scope: %w[u1],
                              data: { 'done' => true })
   gone.pump_until(seconds: 2) { false }
-  REPORT[:after_unsubscribe_frames] = gone.frames[sent..]
+  report[:after_unsubscribe_frames] = gone.frames[sent..]
   gone.close
 
   # 15h — the heartbeat: two consecutive pings on one socket, in beats.
   beat = connect(port)
   ping_wait = 3 * Kiosk::Server::EventsConnection::BEATS_PER_PING * PROBE_BEAT_INTERVAL
   beat.pump_until(seconds: ping_wait) { beat.pings.length >= 2 }
-  REPORT[:ping] = beat.pings.first&.last
-  REPORT[:ping_gap_beats] =
+  report[:ping] = beat.pings.first&.last
+  report[:ping_gap_beats] =
     beat.pings.length >= 2 ? ((beat.pings[1][0] - beat.pings[0][0]) / PROBE_BEAT_INTERVAL).round : nil
-  REPORT[:shipped_beat_interval] = SHIPPED_BEAT_INTERVAL
+  report[:shipped_beat_interval] = SHIPPED_BEAT_INTERVAL
   beat.close
 
   # ── re-authorisation while the subscription stands (spec Section 8.5.6) ───
@@ -703,39 +734,39 @@ begin
   #      wrong as one that never ran.
   held.pump_until(seconds: 3) { false }
   plain.pump_until(seconds: 1) { false }
-  REPORT[:steady_unsubscribed] = held.messages.any? { |m| m['type'] == 'unsubscribed' }
-  REPORT[:steady_disconnected] = plain.frames.any? { |f| f['type'] == 'disconnect' }
+  report[:steady_unsubscribed] = held.messages.any? { |m| m['type'] == 'unsubscribed' }
+  report[:steady_disconnected] = plain.frames.any? { |f| f['type'] == 'disconnect' }
 
   # 17 — the operator's own rule stops saying yes. Delivery stops and the
   #      client is told why, on the subscription that lost it and no other.
-  REACHABLE[:value] = false
+  ProbeState.reachable = false
   held.pump_until(seconds: 5) { held.messages.any? { |m| m['type'] == 'unsubscribed' } }
-  REPORT[:reach_revoked_frame] = held.messages.find { |m| m['type'] == 'unsubscribed' }
+  report[:reach_revoked_frame] = held.messages.find { |m| m['type'] == 'unsubscribed' }
   plain.pump_until(seconds: 2) { false }
-  REPORT[:other_socket_unsubscribed] = plain.messages.any? { |m| m['type'] == 'unsubscribed' }
+  report[:other_socket_unsubscribed] = plain.messages.any? { |m| m['type'] == 'unsubscribed' }
 
   # 18 — the credential stops resolving for a reason that is not expiry. The
   #      whole connection goes, and the client is told that coming back with
   #      this token will not help.
-  REVOKED[:value] = true
+  ProbeState.revoked = true
   dormant.send_raw(frame('subscribe', identifier('todo', subject: 'list_ok', since: 0)))
   plain.pump_until(seconds: 5) { plain.frames.any? { |f| f['type'] == 'disconnect' } }
   plain.pump_until(seconds: 3) { plain.closed? }
-  REPORT[:revoked_socket_closed] = plain.closed?
+  report[:revoked_socket_closed] = plain.closed?
   # EVERY disconnect frame the socket was sent, collected after it closed:
   # `reconnect` is what a client acts on, so a second frame carrying the
   # opposite flag is the defect, and reading only the first cannot see it.
-  REPORT[:revoked_frames] = plain.frames.select { |f| f['type'] == 'disconnect' }
+  report[:revoked_frames] = plain.frames.select { |f| f['type'] == 'disconnect' }
   [idle, dormant].each { |sock| sock.pump_until(seconds: 5) { sock.closed? } }
-  REPORT[:revoked_idle_frames] = idle.frames.select { |f| f['type'] == 'disconnect' }
-  REPORT[:revoked_dormant_frames] = dormant.frames.reject { |f| f['type'] == 'welcome' }
+  report[:revoked_idle_frames] = idle.frames.select { |f| f['type'] == 'disconnect' }
+  report[:revoked_dormant_frames] = dormant.frames.reject { |f| f['type'] == 'welcome' }
   [held, plain, idle, dormant].each(&:close)
 
   # 19 — the access token AGES OUT under a held socket. The two sockets differ
   #      in nothing but their credential's `exp`, and that is what separates
   #      "come back" from "stop". Last, because after it no upgrade resolves.
-  REVOKED[:value] = false
-  EXPIRES_AT[:value] = Time.now.to_i + 3
+  ProbeState.revoked = false
+  ProbeState.expires_at = Time.now.to_i + 3
   expiring = connect(port, path: '/kiosk/events?topic=order_delivery')
   expiring.pump_until { expiring.messages.any? { |m| m['type'] == 'subscribed' } }
   expiring_idle = connect(port)
@@ -743,15 +774,15 @@ begin
   expiring.pump_until(seconds: 8) { expiring.frames.any? { |f| f['type'] == 'disconnect' } }
   expiring.pump_until(seconds: 3) { expiring.closed? }
   expiring_idle.pump_until(seconds: 5) { expiring_idle.closed? }
-  REPORT[:expired_frames] = expiring.frames.select { |f| f['type'] == 'disconnect' }
-  REPORT[:expired_idle_frames] = expiring_idle.frames.select { |f| f['type'] == 'disconnect' }
+  report[:expired_frames] = expiring.frames.select { |f| f['type'] == 'disconnect' }
+  report[:expired_idle_frames] = expiring_idle.frames.select { |f| f['type'] == 'disconnect' }
   [expiring, expiring_idle].each(&:close)
 
-  REPORT[:ok] = true
+  report[:ok] = true
 rescue StandardError => e
-  REPORT[:error] = "#{e.class}: #{e.message}"
-  REPORT[:backtrace] = e.backtrace&.first(6)
+  report[:error] = "#{e.class}: #{e.message}"
+  report[:backtrace] = e.backtrace&.first(6)
 end
 
-puts JSON.generate(REPORT)
+puts JSON.generate(report)
 exit 0

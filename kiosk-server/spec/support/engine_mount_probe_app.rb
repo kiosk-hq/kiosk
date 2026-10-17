@@ -81,15 +81,19 @@ def request(method, path, auth: false, origin: 'http://localhost')
   env = Rack::MockRequest.env_for("#{origin}#{path}", method: method)
   env['HTTP_AUTHORIZATION'] = "Bearer #{auth == true ? TOKEN : auth}" if auth
   status, headers, raw = Rails.application.call(env)
-  body = +''
-  raw.each { |chunk| body << chunk }
-  raw.close if raw.respond_to?(:close)
   {
     'status' => status,
     # Rack 3 downcases response header names; normalize anyway.
     'headers' => headers.to_h.transform_keys(&:downcase),
-    'body' => body
+    'body' => read_body(raw)
   }
+end
+
+def read_body(raw)
+  body = +''
+  raw.each { |chunk| body << chunk }
+  raw.close if raw.respond_to?(:close)
+  body
 end
 
 SURFACE = [
@@ -156,7 +160,9 @@ report['mounted']['mounted_in?'] =
 
 # Scenario 2 — gem loaded but NOT mounted: must be inert. Bundling kiosk-server
 # is not a decision to serve a Kiosk wire; mounting it is.
-Rails.application.routes.draw {}
+Rails.application.routes.draw do
+  # No routes: the engine is not mounted.
+end
 report['unmounted'] = {
   'GET /agents.txt' => request('GET', '/agents.txt'),
   'GET /.well-known/kiosk.json' => request('GET', '/.well-known/kiosk.json'),

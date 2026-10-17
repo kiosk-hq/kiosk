@@ -5,10 +5,10 @@
 class User < ApplicationRecord
   devise :database_authenticatable
 
-  enum :staff_role, { owner: "owner" }, validate: { allow_nil: true }
+  enum :staff_role, { owner: 'owner' }, validate: { allow_nil: true }
 
   has_many :appointments, dependent: :destroy
 
   # The Kiosk role the Devise adapter assigns this person's assistant.
-  def kiosk_role = staff_role || "customer"
+  def kiosk_role = staff_role || 'customer'
 end

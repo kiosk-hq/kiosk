@@ -23,7 +23,7 @@ class Appointment < ApplicationRecord
   def service_on_menu
     return if service_id.nil? || service
 
-    menu = Service.order(:id).pluck(:id, :name).map { |id, name| "#{id} (#{name})" }.join(", ")
+    menu = Service.order(:id).pluck(:id, :name).map { |id, name| "#{id} (#{name})" }.join(', ')
     errors.add(:service_id, "#{service_id.inspect} is not on the menu (#{menu}); omit it to book the salon alone")
   end
 

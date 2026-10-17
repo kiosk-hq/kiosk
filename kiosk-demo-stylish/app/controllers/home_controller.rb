@@ -7,6 +7,6 @@ class HomeController < ApplicationController
     @appointments_booked = Appointment.count
     @forecast_eur        = Service.format_eur(Appointment.sum(:price_cents))
 
-    response.set_header("Link", %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+    response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 end

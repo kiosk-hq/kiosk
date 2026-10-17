@@ -4,7 +4,7 @@
 # (`salons.timezone`). `Europe/Paris` is the origin default: what fills that
 # column, and what dates a published example, which addresses no salon.
 module SalonClock
-  DEFAULT_ZONE_NAME = "Europe/Paris"
+  DEFAULT_ZONE_NAME = 'Europe/Paris'
 
   module_function
 

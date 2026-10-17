@@ -35,38 +35,32 @@ an action is a `POST` whose arguments are the JSON body, and a success body IS
 the result (no envelope).
 
 - `GET /kiosk/availability?party_size=2[&neighborhood=&time=&date=]` — open tables
-  **across all restaurants** for the upcoming seatings that seat the party;
-  answers a bare array whose rows carry `restaurant_id`, `restaurant_table_id`,
-  `seating_date`, `seating_time`, `seating_label` (the seating with the zone it
-  is written in — `20:00 (Europe/Lisbon)`, because a bare `20:00` is a wall
-  clock with no clock named) and `seating_at`
-- `GET /kiosk/my_bookings` — this principal's bookings (owner-scoped), with table + restaurant
-- `POST /kiosk/book_table {restaurant_id, restaurant_table_id, date, time, party_size}` —
-  reserve a specific table at a chosen restaurant for a chosen seating; a table
-  already taken for that seating (or a seating that has passed) is rejected cleanly
-- `POST /kiosk/cancel_booking {booking_id}` — cancel one of your own bookings (owner-scoped)
+  **across all restaurants** for the upcoming seatings that seat the party; each
+  row carries `restaurant_table_id`, `seating_at` (ISO 8601 with the restaurant's
+  offset) and `seating_label` (`Sun 18 Oct, 20:00 (Europe/Lisbon)`, the line to
+  read to a human)
+- `GET /kiosk/my_bookings` — the signed-in customer's bookings, with table + restaurant
+- `POST /kiosk/book_table {restaurant_table_id, seating_at, party_size}` — book the
+  table and seating of an availability row; a table already taken for that
+  seating, or a seating that has passed, is refused
+- `POST /kiosk/cancel_booking {booking_id}` — cancel one of your own bookings
 - `GET /kiosk/schema` — self-discovery
 
-`seating_at` is one field on one clock across every verb that publishes it:
-`availability`, the `book_table` confirmation and `my_bookings` all spell it
-with the restaurant's own offset, so a booking read back after the fact is the
-same string it was confirmed with. Two spellings of one instant under schema
-text that describes the field identically is a difference a reader cannot
-resolve, so there is only ever one.
+`book_table` answers with the same row `my_bookings` lists, and `seating_at` is
+the same string in `availability`, `book_table` and `my_bookings`.
 
 There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 
-The verbs above are ordinary Rails controllers, not initializer blocks:
-`app/controllers/kiosk/dining_room_controller.rb` holds the two queries and
-`app/controllers/kiosk/bookings_controller.rb` the two actions — both
-`include Kiosk::Handler`, and each declaration says which verb reaches it with
-`kind :query` / `kind :action`, so the two-file split is this demo's choice
-rather than the framework's. Each is declared with the class-level descriptor
-macros; refusals are plain `render json:, status:` naming a wire
-error `code`, which the wire carries into the RFC 9457 problem document an
-assistant branches on. Every verb's `input_schema` is validated on every call,
-so an undeclared argument is a typed `400` naming it. Neither controller is
-routable — a handler is reached only through the wire.
+The verbs above are ordinary Rails controllers, one per resource:
+`app/controllers/kiosk/tables_controller.rb` serves `availability` and
+`app/controllers/kiosk/bookings_controller.rb` serves `my_bookings`,
+`book_table` and `cancel_booking`. Both `include Kiosk::Handler`, and each
+declaration says which kind of verb it is with `kind :query` / `kind :action`.
+Each is declared with the class-level descriptor macros. A refusal is a raised
+`Kiosk::Server::Errors` error or a failed model validation, which the wire turns
+into the RFC 9457 problem document an assistant branches on. Every verb's
+`input_schema` is validated on every call, so an undeclared argument is a typed
+`400` naming it. A handler is reached only through the wire.
 `config/initializers/kiosk.rb` is configuration only.
 
 ## Running it

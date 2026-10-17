@@ -12,8 +12,11 @@ class Restaurant < ApplicationRecord
   # "20:00", as the wire spells a seating time.
   def self.seating_times = SEATING_HOURS.map { format("%02d:00", _1) }
 
-  # "20:00 (Europe/Lisbon)": the wall clock and the zone it is read on.
-  def self.seating_label(seating) = "#{seating.strftime("%H:%M")} (#{seating.time_zone.name})"
+  # "Sun 18 Oct, 20:00 (Europe/Lisbon)": the day, the wall clock and the zone it is read on.
+  def self.seating_label(seating) = "#{seating.strftime("%a %d %b, %H:%M")} (#{seating.time_zone.name})"
+
+  # Tomorrow's 20:00 seating on the default clock, as the published examples show it.
+  def self.example_seating = new.then { _1.seating(_1.zone.tomorrow, 20) }
 
   def zone = Time.find_zone!(timezone)
 

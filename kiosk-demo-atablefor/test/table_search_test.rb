@@ -13,7 +13,7 @@ class TableSearchTest < ActiveSupport::TestCase
   test "a neighbourhood filter is one the aggregator serves, matched exactly" do
     assert_empty errors(neighborhood: "Alfama")
     assert_empty errors
-    assert_equal ['neighborhood "alfama" is not one this aggregator serves — currently Alfama, Graça'],
+    assert_equal ['neighborhood "alfama" is not served; try one of Alfama, Graça'],
                  errors(neighborhood: "alfama")
   end
 
@@ -22,7 +22,7 @@ class TableSearchTest < ActiveSupport::TestCase
 
     travel_to lisbon.local(2026, 9, 1, 19, 30) do
       assert_empty errors(date: "2026-09-02")
-      assert_equal ['date "2026-09-03" is not among the upcoming seatings — currently 2026-09-01, 2026-09-02'],
+      assert_equal ['date "2026-09-03" has no upcoming seatings; try one of 2026-09-01, 2026-09-02'],
                    errors(date: "2026-09-03")
     end
   end

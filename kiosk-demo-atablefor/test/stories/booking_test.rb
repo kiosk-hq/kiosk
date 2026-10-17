@@ -5,7 +5,7 @@ require "test_helper"
 class BookingStory < StoryTest
   test "a diner with no account books a table for two at eight and finds it among their bookings" do
     diner = a_diner
-    table = diner.open_tables.find { _1["seating_time"] == "20:00" }
+    table = diner.open_tables.find { Time.iso8601(_1["seating_at"]).hour == 20 }
 
     booking = diner.books(table)
     assert booking.ok?, booking

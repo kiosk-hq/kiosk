@@ -3,7 +3,7 @@
 require "digest"
 
 # A human diner (email + password) or a headless assistant account (no
-# credentials). Both are principals; `kiosk.current_user_id()` is this `id`.
+# credentials). Both hold bookings; `kiosk.current_user_id()` is this `id`.
 class User < ApplicationRecord
   devise :database_authenticatable
 

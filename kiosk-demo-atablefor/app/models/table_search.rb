@@ -34,14 +34,14 @@ class TableSearch
     served = Restaurant.served_neighborhoods
     return if served.include?(neighborhood)
 
-    errors.add(:neighborhood, "#{neighborhood.inspect} is not one this aggregator serves — currently #{listed(served)}")
+    errors.add(:neighborhood, "#{neighborhood.inspect} is not served; try one of #{listed(served)}")
   end
 
   def date_upcoming
     dates = Restaurant.select(:timezone).distinct.flat_map(&:upcoming_seatings).map { _1.to_date.iso8601 }.uniq.sort
     return if dates.include?(date)
 
-    errors.add(:date, "#{date.inspect} is not among the upcoming seatings — currently #{listed(dates)}")
+    errors.add(:date, "#{date.inspect} has no upcoming seatings; try one of #{listed(dates)}")
   end
 
   def listed(values) = values.join(", ").presence || "none"

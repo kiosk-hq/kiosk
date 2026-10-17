@@ -9,5 +9,4 @@ en:
     attributes:
       booking:
         party_size: party_size
-        restaurant_table: table
-        seating_at: seating
+        seating_at: seating_at

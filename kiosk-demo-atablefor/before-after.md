@@ -58,7 +58,7 @@ It writes `config/initializers/kiosk.rb`, the `kiosk.*` migrations and a
 `kiosk do … end` block in `config/routes.rb` that mounts the engine. What is
 left is read in the directory rather than quoted here: the queries and actions
 named in that block — GET for a query, POST for an action — and
-`app/controllers/kiosk/{dining_room,bookings}_controller.rb`, the verbs as
+`app/controllers/kiosk/{tables,bookings}_controller.rb`, the verbs as
 ordinary Rails controllers. The toll and the reputation policy are the
 initializer's.
 

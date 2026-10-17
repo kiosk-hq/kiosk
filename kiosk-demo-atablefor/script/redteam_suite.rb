@@ -42,9 +42,8 @@ end
 # Book an availability row as `token`, optionally injecting extra args.
 def book_slot(token, slot, extra = {})
   WIRE.post_json("/kiosk/book_table",
-                 { restaurant_id: slot.fetch("restaurant_id"),
-                   restaurant_table_id: slot.fetch("restaurant_table_id"),
-                   date: slot.fetch("seating_date"), time: slot.fetch("seating_time"),
+                 { restaurant_table_id: slot.fetch("restaurant_table_id"),
+                   seating_at: slot.fetch("seating_at"),
                    party_size: 2 }.merge(extra),
                  WIRE.bearer(token))
 end
@@ -187,16 +186,15 @@ BATTERY.record("InvalidFilterIsNotAnEmptyList",
                "#{rc_ctl}/#{(rc_ctl == 200 ? Array(ctl).size : 0)} rows " \
                "(want 400 bad_request naming the valid values for each filter, and a non-empty control)")
 
-# book_table must refuse a date availability never offers, at both ends of the horizon and in basic ISO.
+# book_table must refuse a seating availability never offers, at both ends of the horizon and in basic ISO.
 horizon_slot = open_slot
+BASIC_ISO = Time.now.strftime("%Y%m%dT%H%M%S%z")
 horizon_probes = [
-  ["date=#{FAR_FUTURE} (valid date, beyond the rolling horizon)", FAR_FUTURE, "upcoming seatings"],
-  ["date=#{PAST_DATE} (valid date, BEHIND the rolling horizon)",
-   PAST_DATE, "already started"],
-  ["date=#{Date.today.strftime('%Y%m%d')} (basic ISO-8601 — not the advertised YYYY-MM-DD)",
-   Date.today.strftime("%Y%m%d"), "date"],
-].map do |label, bad_date, named|
-  rc, resp = book_slot(TOKEN_A, horizon_slot, date: bad_date)
+  ["seating_at=#{FAR_FUTURE}T20:00 (beyond the rolling horizon)", "#{FAR_FUTURE}T20:00:00+00:00", "upcoming seating"],
+  ["seating_at=#{PAST_DATE}T20:00 (BEHIND the rolling horizon)", "#{PAST_DATE}T20:00:00+00:00", "already started"],
+  ["seating_at=#{BASIC_ISO} (basic ISO-8601, not the published extended form)", BASIC_ISO, "seating_at"],
+].map do |label, bad_seating, named|
+  rc, resp = book_slot(TOKEN_A, horizon_slot, seating_at: bad_seating)
   code   = resp.is_a?(Hash) ? resp["code"] : nil
   detail = resp.is_a?(Hash) ? resp["detail"].to_s : ""
   ok = rc == 400 && code == "bad_request" && detail.include?(named)
@@ -206,7 +204,7 @@ rc_horizon_ctl, horizon_ctl = book_slot(TOKEN_A, horizon_slot)
 horizon_control_ok = rc_horizon_ctl == 200 && !horizon_ctl["booking_id"].to_s.empty?
 BATTERY.record("BookOutsideOfferedHorizon",
                horizon_probes.all? { |ok, _| ok } && horizon_control_ok,
-               "#{horizon_probes.map(&:last).join(', ')}; CONTROL same row at its published date → " \
+               "#{horizon_probes.map(&:last).join(', ')}; CONTROL same row at its published seating → " \
                "#{rc_horizon_ctl}/#{horizon_ctl['booking_id'].inspect} " \
                "(want 400 bad_request naming the horizon for each, and a confirmed control)")
 
@@ -231,16 +229,14 @@ shape_slot   = open_slot
 shape_probes = []
 
 INT_SHAPES.each do |v|
-  %i[party_size restaurant_id restaurant_table_id].each do |arg|
+  %i[party_size restaurant_table_id].each do |arg|
     rc, body = book_slot(TOKEN_A, shape_slot, arg => v)
     shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body, supplied: { arg => v })
   end
 end
 NONSTRING.each do |v|
-  %i[date time].each do |arg|
-    rc, body = book_slot(TOKEN_A, shape_slot, arg => v)
-    shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body, supplied: { arg => v })
-  end
+  rc, body = book_slot(TOKEN_A, shape_slot, seating_at: v)
+  shape_probes << shape_verdict("book_table seating_at=#{v.inspect}", rc, body, supplied: { seating_at: v })
   rc, body = WIRE.post_json("/kiosk/cancel_booking", { booking_id: v }, WIRE.bearer(TOKEN_A))
   shape_probes << shape_verdict("cancel_booking booking_id=#{v.inspect}", rc, body, supplied: { booking_id: v })
 end
@@ -266,13 +262,13 @@ ECHO_CONTROL = "PG::22P02 invalid input syntax"
 rc_echo, body_echo = WIRE.get_json("/kiosk/availability",
                                    { party_size: 2, neighborhood: ECHO_CONTROL }, WIRE.bearer(TOKEN_A))
 ok_echo, detail_echo = shape_verdict(
-  "availability neighborhood=<a value spelling three SHAPE_LEAKS> (oracle control)",
+  "availability neighborhood=<a value spelling three SHAPE_LEAKS> (leak-scan control)",
   rc_echo, body_echo, supplied: { party_size: 2, neighborhood: ECHO_CONTROL }
 )
 unless JSON.generate(body_echo).include?(ECHO_CONTROL)
   ok_echo = false
   detail_echo += " [CONTROL VACUOUS: the refusal did not echo the value, so the " \
-                 "oracle was never asked to tell an echo from a leak]"
+                 "leak scan was never asked to tell an echo from a leak]"
 end
 shape_probes << [ok_echo, detail_echo]
 

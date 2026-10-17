@@ -1,102 +1,98 @@
 # frozen_string_literal: true
 
-# The write verbs. The work is in app/operations.
+# The signed-in customer's table bookings.
 class Kiosk::BookingsController < ApplicationController
   include Kiosk::Handler
 
+  BOOKING_ROW = {
+    type: "object", additionalProperties: false,
+    properties: {
+      booking_id:    { type: "string", description: "The booking; pass it to cancel_booking." },
+      restaurant:    { type: "string", description: "Restaurant name." },
+      neighborhood:  { type: %w[string null], description: "Lisbon neighbourhood." },
+      table_label:   { type: "string", description: "The table's name at the restaurant." },
+      party_size:    { type: "integer", description: "Guests the table is held for." },
+      seating_label: { type: "string", description: "The seating as the human reads it, in the " \
+                                                    "restaurant's zone, e.g. \"Sun 18 Oct, 20:00 (Europe/Lisbon)\"." },
+      seating_at:    { type: "string", description: "The seating with the restaurant's offset." },
+      status:        { type: "string", enum: Booking.statuses.values },
+    },
+    required: %w[booking_id restaurant neighborhood table_label party_size seating_label seating_at status],
+  }.freeze
+
+  kind :query
+  description "The signed-in customer's bookings at every restaurant, cancelled ones included. " \
+              "`cancel_booking` calls off the one the human picks."
+  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  output_schema type: "array", description: "Earliest seating first.", items: BOOKING_ROW
+  def my_bookings
+    render json: Booking.own.includes(:restaurant, :restaurant_table).order(:seating_at).map { row(_1) }
+  end
+
   kind :action
-  description "Book a specific restaurant table for a chosen upcoming " \
-              "seating, for the authenticated principal. Confirms the " \
-              "reservation outright: there is no hold to release and nothing " \
-              "is charged. Contention is real and finite, so a " \
-              "table already held for that seating is refused as a clean " \
-              "conflict rather than double-booked, and so is a seating that " \
-              "has already passed. Every value it needs is on the " \
-              "availability row the human picked."
+  description "Book a table for an upcoming seating. Nothing is charged. A table already taken for " \
+              "that seating is refused as a conflict."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 restaurant_id:       { type: "integer", minimum: 1,
-                                        description: "The restaurant_id from an availability row." },
                  restaurant_table_id: { type: "integer", minimum: 1,
-                                        description: "The restaurant_table_id from an availability row." },
-                 date:                { type: "string", format: "date",
-                                        description: "The seating_date (YYYY-MM-DD) from the availability row." },
-                 time:                { type: "string", enum: Restaurant.seating_times,
-                                        description: "The seating_time HH:MM (24-hour), e.g. \"20:00\"." },
+                                        description: "The table, from an availability row." },
+                 seating_at:          { type: "string", format: "date-time",
+                                        description: "The seating, from the same availability row." },
                  party_size:          { type: "integer", minimum: 1,
                                         maximum: Booking::MAX_PARTY_SIZE,
                                         description: "Number of guests." },
                },
-               required: ["restaurant_id", "restaurant_table_id", "date", "time", "party_size"]
-  output_schema type: "object",
-                description: "The confirmed booking.",
-                additionalProperties: false,
-                properties: {
-                  booking_id:          { type: "string", description: "Pass to cancel_booking as `booking_id`." },
-                  restaurant_id:       { type: "integer", description: "The restaurant booked." },
-                  restaurant_table_id: { type: "integer", description: "The table held." },
-                  party_size:          { type: "integer", description: "Guests the booking holds the table for." },
-                  date:                { type: "string", description: "The seating date, YYYY-MM-DD, on the restaurant's own clock — the row publishes it as `timezone`." },
-                  time:                { type: "string", description: "The seating time, HH:MM (24-hour) on THE RESTAURANT's own clock, " \
-                                                                      "published as `timezone` — the table is there, so that is the " \
-                                                                      "clock. `seating_at` is the same instant with its resolved " \
-                                                                      "offset; `seating_label` is this time with the zone written " \
-                                                                      "beside it." },
-                  seating_label:       { type: "string", description: "The seating rendered for a human, IN THE ZONE IT NAMES — " \
-                                                                      "e.g. \"20:00 (Europe/Lisbon)\". This is the line " \
-                                                                      "to read back to the human: `time` alone is a bare wall clock." },
-                  seating_at:          { type: "string", description: "The seating instant, ISO 8601 carrying THIS RESTAURANT's offset — every verb of this demo publishes this field on the clock of the restaurant the row is about." },
-                  timezone:            { type: "string", description: "The IANA zone this row is rendered in — a property of the RESTAURANT, not of this aggregator." },
-                  status:              { type: "string", description: "confirmed." },
-                },
-                required: %w[booking_id restaurant_id restaurant_table_id party_size
-                             date time seating_label seating_at timezone status]
-  example_params({
-    restaurant_id: 1, restaurant_table_id: 1,
-    date: -> { Time.find_zone!("Europe/Lisbon").tomorrow.iso8601 }, time: "20:00", party_size: 2,
-  })
+               required: %w[restaurant_table_id seating_at party_size]
+  output_schema BOOKING_ROW.merge(description: "The confirmed booking.")
+  example_params({ restaurant_table_id: 1, seating_at: -> { Restaurant.example_seating.iso8601 }, party_size: 2 })
   example_row({
     booking_id: "b1f2a3c4-5d6e-4f70-8a91-2b3c4d5e6f70",
-    restaurant_id: 1, restaurant_table_id: 1, party_size: 2,
-    date: -> { Time.find_zone!("Europe/Lisbon").tomorrow.iso8601 }, time: "20:00",
-    seating_label: "20:00 (Europe/Lisbon)",
-    seating_at: -> { Time.find_zone!("Europe/Lisbon").now.tomorrow.change(hour: 20).iso8601 },
-    timezone: "Europe/Lisbon",
+    restaurant: "Tasca do Tejo", neighborhood: "Alfama", table_label: "Window 6", party_size: 2,
+    seating_label: -> { Restaurant.seating_label(Restaurant.example_seating) },
+    seating_at:    -> { Restaurant.example_seating.iso8601 },
     status: "confirmed",
   })
   def book_table
-    render json: BookTableOperation.call(
-      principal_id:        kiosk_identity.user_id,
-      restaurant_id:       params[:restaurant_id].to_i,
+    render json: row(BookTableOperation.call(
+      customer_id:         kiosk_identity.user_id,
       restaurant_table_id: params[:restaurant_table_id].to_i,
-      date:                params[:date],
-      time:                params[:time],
+      seating_at:          Time.iso8601(params[:seating_at]),
       party_size:          params[:party_size].to_i,
-    )
+    ))
   end
 
   kind :action
-  description "Cancel one of the authenticated principal's own table bookings " \
-              "(requires the booking to belong to the principal). Frees the (table, seating)."
+  description "Cancel one of the signed-in customer's bookings, freeing the table for that seating."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 booking_id: { type: "string", format: "uuid",
-                               description: "The booking to cancel — a `booking_id` from " \
-                                            "book_table or my_bookings, verbatim; it must " \
-                                            "belong to the principal." },
+                 booking_id: { type: "string", format: "uuid", description: "The booking to cancel." },
                },
                required: ["booking_id"]
   output_schema type: "object",
                 description: "The cancelled booking.",
                 additionalProperties: false,
                 properties: {
-                  booking_id: { type: "string", description: "The booking that was cancelled, echoed." },
-                  status:     { type: "string", description: "cancelled." },
+                  booking_id: { type: "string", description: "The booking cancelled." },
+                  status:     { type: "string", enum: ["cancelled"] },
                 },
                 required: %w[booking_id status]
   def cancel_booking
     render json: CancelBookingOperation.call(booking_id: params[:booking_id])
+  end
+
+  private
+
+  def row(booking)
+    seating = booking.local_seating
+    { booking_id:    booking.id,
+      restaurant:    booking.restaurant.name,
+      neighborhood:  booking.restaurant.neighborhood,
+      table_label:   booking.restaurant_table.label,
+      party_size:    booking.party_size,
+      seating_label: Restaurant.seating_label(seating),
+      seating_at:    seating.iso8601,
+      status:        booking.status }
   end
 end

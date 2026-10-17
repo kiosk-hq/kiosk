@@ -9,7 +9,7 @@ class BookingTest < ActiveSupport::TestCase
   end
 
   def booking(**attributes)
-    Booking.new(user: User.create!, restaurant: @restaurant, restaurant_table: @table, party_size: 2,
+    Booking.new(user: User.create!, restaurant_table: @table, party_size: 2,
                 seating_at: @restaurant.seating(Date.new(2026, 9, 1), 20), status: :confirmed, **attributes)
   end
 
@@ -18,21 +18,20 @@ class BookingTest < ActiveSupport::TestCase
   test "a booking is for one of the restaurant's upcoming seatings" do
     travel_to @restaurant.seating(Date.new(2026, 9, 1), 19).change(min: 30) do
       assert_empty errors(booking)
-      assert_equal ["seating 2026-09-01 19:00 has already started — call availability again for the still-bookable seatings"],
+      assert_equal ["seating_at 2026-09-01 19:00 has already started; pick an upcoming seating from availability"],
                    errors(booking(seating_at: @restaurant.seating(Date.new(2026, 9, 1), 19)))
-      assert_equal ["seating 2026-09-05 20:00 is not among the upcoming seatings — currently 2026-09-01 20:00, " \
+      assert_equal ["seating_at 2026-09-05 20:00 is not an upcoming seating; currently 2026-09-01 20:00, " \
                     "2026-09-01 21:00, 2026-09-02 19:00, 2026-09-02 20:00, 2026-09-02 21:00"],
                    errors(booking(seating_at: @restaurant.seating(Date.new(2026, 9, 5), 20)))
     end
   end
 
-  test "the table is the restaurant's and seats the party" do
+  test "a booking is at its table's restaurant, and the table seats the party" do
     travel_to @restaurant.seating(Date.new(2026, 9, 1), 12) do
-      assert_equal ["table #{@table.id} at restaurant #{@restaurant.id} does not seat 5"], errors(booking(party_size: 5))
+      assert_equal ["T1 seats 4; pick a larger table from availability"], errors(booking(party_size: 5))
 
       elsewhere = Restaurant.create!(name: "Elsewhere").restaurant_tables.create!(label: "E1", capacity: 8)
-      assert_equal ["table #{elsewhere.id} at restaurant #{@restaurant.id} does not seat 2"],
-                   errors(booking(restaurant_table: elsewhere))
+      assert_equal elsewhere.restaurant, booking(restaurant_table: elsewhere).tap(&:validate).restaurant
     end
   end
 

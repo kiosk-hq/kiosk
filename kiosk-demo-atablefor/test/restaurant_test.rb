@@ -31,7 +31,7 @@ class RestaurantTest < ActiveSupport::TestCase
   end
 
   test "a seating label names the zone it is read on" do
-    assert_equal "20:00 (Australia/Sydney)",
+    assert_equal "Mon 15 Jun, 20:00 (Australia/Sydney)",
                  Restaurant.seating_label(Restaurant.new(timezone: "Australia/Sydney").seating(Date.new(2026, 6, 15), 20))
   end
 end

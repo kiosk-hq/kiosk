@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Cancels one of the principal's own bookings, freeing its (table, seating).
+# Cancels one of the customer's own bookings, freeing its (table, seating).
 class CancelBookingOperation
   def self.call(booking_id:)
     booking = Booking.own.confirmed.find_by(id: booking_id)

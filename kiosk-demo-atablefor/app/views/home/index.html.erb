@@ -29,7 +29,7 @@
         <ol class="steps">
           <li>Discovers this endpoint via <code>/.well-known/kiosk.json</code> — no <code>/bookings</code> web page, no browser login.</li>
           <li>Registers itself with a proof-of-possession handshake (creates its own account).</li>
-          <li>Calls <code>query availability</code>, then <code>run book_table</code> — the reservation is confirmed.</li>
+          <li>Calls <code>availability</code>, then <code>book_table</code> — the reservation is confirmed.</li>
         </ol>
         <p class="note">⚠ This demo runs <strong>production-grade proof-of-work</strong> (~9–10&nbsp;s per register on an M-series laptop core) on purpose — so you can feel the real anti-scalping toll first-hand. The other Kiosk demos are tuned light (sub-second) for quick poking.</p>
         <div class="linkbox">
@@ -49,7 +49,7 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>atablefor</strong> is a restaurant-booking aggregator (a handful of coined Lisbon restaurants, each with a few finite tables) and the <strong>human↔assistant account-linking</strong> reference: a diner signs in, mints a link code, their assistant redeems it, and the assistant's bookings tie to the diner's account — visible on the board above — all with <strong>no money on the wire</strong> (a reservation takes no card; any € figure is a no-show hold settled at the restaurant). Tables are finite: a fully-booked seating is honestly sold out.</p>
+        <p><strong>atablefor</strong> is a restaurant-booking aggregator (a handful of coined Lisbon restaurants, each with a few finite tables) and the <strong>human↔assistant account-linking</strong> reference: a diner signs in, mints a link code, their assistant redeems it, and the assistant's bookings tie to the diner's account — visible on the board above — all with <strong>no money on the wire</strong> (a reservation takes no card). Tables are finite: a fully-booked seating is honestly sold out.</p>
         <div class="chips">
           <span class="chip">🔗 Human↔assistant linking</span>
           <span class="chip">Viewable reservations board</span>

@@ -12,9 +12,8 @@ class Diner < Kiosk::TestHelpers::Customer
   def open_tables(party: 2, **filters) = asks(:availability, party_size: party, **filters).rows
 
   def books(table = open_tables.first, party: 2, **extra)
-    does(:book_table, party_size: party, restaurant_id: table["restaurant_id"],
-                      restaurant_table_id: table["restaurant_table_id"],
-                      date: table["seating_date"], time: table["seating_time"], **extra)
+    does(:book_table, restaurant_table_id: table["restaurant_table_id"], seating_at: table["seating_at"],
+                      party_size: party, **extra)
   end
 
   def cancels(booking) = does(:cancel_booking, booking_id: booking["booking_id"])

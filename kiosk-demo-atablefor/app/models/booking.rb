@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# One principal holding one table for one seating. Cancelling frees the
+# One customer holding one table for one seating. Cancelling frees the
 # (table, seating): the unique index `idx_bookings_confirmed_table_seating`
 # covers confirmed rows only.
 class Booking < ApplicationRecord
@@ -13,6 +13,8 @@ class Booking < ApplicationRecord
   belongs_to :user
   belongs_to :restaurant
   belongs_to :restaurant_table
+
+  before_validation(on: :create) { self.restaurant = restaurant_table&.restaurant }
 
   validates :party_size, numericality: { only_integer: true, in: 1..MAX_PARTY_SIZE }
   validate :table_seats_party, :seating_upcoming, on: :create
@@ -32,10 +34,9 @@ class Booking < ApplicationRecord
   private
 
   def table_seats_party
-    return if restaurant_table.nil? || party_size.nil?
-    return if restaurant_table.restaurant_id == restaurant_id && restaurant_table.capacity >= party_size
+    return if restaurant_table.nil? || party_size.nil? || restaurant_table.capacity >= party_size
 
-    errors.add(:restaurant_table, "#{restaurant_table_id} at restaurant #{restaurant_id} does not seat #{party_size}")
+    errors.add(:base, "#{restaurant_table.label} seats #{restaurant_table.capacity}; pick a larger table from availability")
   end
 
   def seating_upcoming
@@ -45,10 +46,9 @@ class Booking < ApplicationRecord
     return if upcoming.include?(seating_at)
 
     if seating_at.past?
-      errors.add(:seating_at, "#{wall_clock(local_seating)} has already started — call availability again " \
-                              "for the still-bookable seatings")
+      errors.add(:seating_at, "#{wall_clock(local_seating)} has already started; pick an upcoming seating from availability")
     else
-      errors.add(:seating_at, "#{wall_clock(local_seating)} is not among the upcoming seatings — currently " \
+      errors.add(:seating_at, "#{wall_clock(local_seating)} is not an upcoming seating; currently " \
                               "#{upcoming.map { wall_clock(_1) }.join(", ").presence || "none"}")
     end
   end

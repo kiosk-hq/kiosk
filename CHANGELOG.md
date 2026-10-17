@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Demo controllers are grouped by resource with short descriptions; getgrocery and atablefor verbs take the slot's or seating's instant in place of an id and a date.
+
 - 2026-10-17: Topics publish `examples` in the schema document, as verbs publish `example_params` and `example_row`.
 
 - 2026-10-17: Demo tooling that demonstrated nothing is gone: getgrocery's reconcile task, `Stripe::ChargeLookup` and the curl tours; red-team suites bind through kiosk-test-support.

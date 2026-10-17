@@ -231,11 +231,11 @@ PLANTS = [
   ["kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
    /description: "Hotel name\."/, 'description: "Optional. Hotel name."'],
   ["kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
-   /so the booking lands on the day you saw\./, "so the booking lands on the day you saw. Optional; pass it to amend."],
-  ["kiosk-demo-tudu/app/controllers/kiosk/todo_lists_controller.rb",
+   /description: "The `slot_at` of a delivery_slots row\."/, 'description: "Optional. The `slot_at` of a delivery_slots row."'],
+  ["kiosk-demo-tudu/app/controllers/kiosk/todos_controller.rb",
    /description: "The todo text/, 'description: "REQUIRED. The todo text'],
   ["kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb",
-   /description: "Appointment time, RFC 3339 timestamp/, 'description: "Appointment time (optional), RFC 3339 timestamp'],
+   /description: "Appointment time; must be in the future\."/, 'description: "Appointment time (optional); must be in the future."'],
   ["kiosk-server/lib/kiosk/server/open_api.rb",
    /description: "The verb's SEMANTICS, in prose\. Authoritative\."/,
    'description: "The verb\'s SEMANTICS, in prose. Mandatory."'],
@@ -255,7 +255,7 @@ FOIL_PLANTS = [
   ["kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb",
    /description: "Hotel name\."/, 'description: "Licence-required rooms included. Hotel name."'],
   ["kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb",
-   /so the booking lands on the day you saw\./, "so the booking lands on the day you saw. Unchanged if omitted."],
+   /description: "The `slot_at` of a delivery_slots row\."/, 'description: "The `slot_at` of a delivery_slots row. Unchanged if omitted."'],
 ].freeze
 
 def plant_hits(root, (rel, find, with))

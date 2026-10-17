@@ -571,6 +571,11 @@ COPIES = {
     rule: :per_demo,
     why:  "Each demo's own landing page.",
   },
+  "app/controllers/kiosk/bookings_controller.rb" => {
+    rule:  :per_demo,
+    ships: %w[atablefor hoteling],
+    why:   "Each demo's own booking verbs: a restaurant table in atablefor, a room type in hoteling.",
+  },
   "app/models/application_record.rb" => {
     rule: :identical,
     why:  "Rails skeleton.",

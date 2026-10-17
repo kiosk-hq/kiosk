@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# THE `schema` CATALOG AND ITS BOOT DIGEST (T-094).
+# The `schema` catalog and its boot digest.
 #
 # The document `GET <endpoint>/schema` serves, derived once from the registry
 # + the origin config + the gem version, and the digest that travels as its
@@ -11,7 +11,7 @@
 # otherwise.** A digest narrower than that is a stale catalogue with a green
 # check beside it.
 
-RSpec.describe Kiosk::Server::SchemaDocument do
+RSpec.shared_context 'schema document spec: fresh catalog' do
   before do
     Kiosk.configure do |c|
       c.issuer = 'https://demo.example'
@@ -22,6 +22,10 @@ RSpec.describe Kiosk::Server::SchemaDocument do
   after { described_class.reset! }
 
   def digest = described_class.digest
+end
+
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
 
   describe '.document' do
     it 'is exactly {queries, actions, events} — sorted descriptors, and NO `verbs`' do
@@ -35,9 +39,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(document[:actions].map { |d| d[:name] }).to eq(%w[place_order])
     end
 
-    # T-095 / K-801. `verbs` rendered `Array(Kiosk.configuration.capabilities)`
-    # — literally the call `/.well-known/kiosk.json` makes for `capabilities`,
-    # so it was one value published twice, not two facts that agreed.
+    # The module set belongs to `/.well-known/kiosk.json` alone.
     it 'does not republish the module set the discovery document owns' do
       declare_query('menu')
 
@@ -50,6 +52,10 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(described_class.document).to eq(queries: [], actions: [], events: [])
     end
   end
+end
+
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
 
   describe '.digest' do
     it 'is 32 lowercase hex characters' do
@@ -62,7 +68,13 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(digest).to eq(digest)
       expect(described_class.document).to equal(described_class.document)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
+
+  describe '.digest' do
     # ── THE REGISTRY ────────────────────────────────────────────────────
     it 'moves when a verb is ADDED' do
       declare_query('menu')
@@ -91,7 +103,13 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       declare_query('menu', description: 'Generation 2.')
       expect(digest).not_to eq(first)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
+
+  describe '.digest' do
     # ── THE ORIGIN CONFIG ───────────────────────────────────────────────
     it 'moves when the mount path moves' do
       declare_query('menu')
@@ -113,11 +131,8 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
     # ── THE GEM VERSION, which is the reason nothing is pre-generated ───
     #
-    # A file emitted at deploy time goes stale on more than a registry change:
-    # a kiosk-server PATCH bump can move the rendered document too. A digest
-    # over the
-    # registry alone would be unchanged across a PATCH bump that changed the
-    # renderer — and every cache in the world would keep the old answer.
+    # A kiosk-server PATCH bump can change the renderer with the registry
+    # untouched, so the digest must cover the gem version too.
     it "moves when kiosk-server's own version moves, with the registry untouched" do
       declare_query('menu')
       at_current = digest
@@ -127,6 +142,10 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(digest).not_to eq(at_current)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
 
   describe '.etag' do
     it 'is the digest, quoted, and STRONG — no `W/` prefix' do
@@ -135,6 +154,10 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(described_class.etag).not_to start_with('W/')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
 
   describe 'the boot contract' do
     it 'reports NOT derived before anything asks, and derived after derive!' do
@@ -165,16 +188,18 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(described_class.document[:queries].map { |d| d[:name] }).to eq(%w[brunch])
     end
   end
+end
 
-  # ── A DATA-DERIVED SLOT (K-922) ────────────────────────────────────────────
-  #
-  # The catalogue updates dynamically, without a deploy: publishing a new
-  # listing must never require one. A slot declared
-  # `enum: -> { Category.pluck(:slug) }` makes the catalogue a function of the
-  # operator's ROWS, and the boot memo is keyed on the verb NAMES — which do
-  # not move when a category is added. Without the epoch in {cache_key} the
-  # digest would freeze at boot and a new category would need a RESTART to be
-  # published: the exact failure the decision rules out.
+# ── A DATA-DERIVED SLOT ──────────────────────────────────────────────────────
+#
+# The catalogue updates without a deploy. A slot declared
+# `enum: -> { Category.pluck(:slug) }` makes the catalogue a function of the
+# operator's ROWS, and the boot memo is keyed on the verb NAMES, which do not
+# move when a category is added. The epoch in {cache_key} lets the digest
+# follow the rows without a restart.
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
+
   describe 'when a descriptor slot is data-derived' do
     it 'moves the digest when the derived value changes, with no reset and no restart' do
       slugs = %w[bikes]
@@ -201,22 +226,22 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
       expect(digest).to eq(first)
     end
+  end
+end
 
-    # THE OTHER HALF OF "moves when the value moves", and the one a caller
-    # actually depends on: the epoch is a MEMO key, not a digest input, so an
-    # epoch that rolls while the resolved value is unchanged must produce the
-    # SAME digest. Two documents publish this digest — the `?v=` on the
-    # discovery link and the catalog's own strong ETag — and nothing makes a
-    # client read them in the same 60-second window. If the epoch reached
-    # `digest_inputs`, every consumer comparing the two across a bucket
-    # boundary would see a mismatch caused by nothing (K-974, whose own
-    # analysis assumed exactly that and was wrong).
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
+
+  describe 'when a descriptor slot is data-derived' do
+    # The epoch is a MEMO key, not a digest input: an epoch that rolls while
+    # the resolved value is unchanged must produce the SAME digest. Two
+    # documents publish this digest (the `?v=` on the discovery link and the
+    # catalog's strong ETag), and a client may read them in different
+    # 60-second windows.
     it 'keeps the digest UNCHANGED across an epoch roll when the value has not moved' do
       slugs = %w[bikes]
       epoch = 1
-      # The epoch is DRIVEN rather than waited for: it is a monotonic clock
-      # read, and a spec that races a 60-second bucket boundary is a spec that
-      # fails on a Tuesday.
+      # Drive the epoch; do not wait for a 60-second bucket boundary.
       allow(Kiosk::Server::SchemaSlots).to receive(:epoch) { epoch }
       Kiosk::Server::SchemaSlots.refresh_seconds = 0 # never reuse a resolved value
       declare_query('board', input_schema: {
@@ -235,7 +260,13 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
       expect(digest).not_to eq(first)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::SchemaDocument do
+  include_context 'schema document spec: fresh catalog'
+
+  describe 'when a descriptor slot is data-derived' do
     # `after_initialize` runs on EVERY boot, `db:create` and `db:migrate`
     # included, and a proc that reads a table cannot succeed there. Eager
     # derivation is an optimisation, so it defers rather than taking the boot

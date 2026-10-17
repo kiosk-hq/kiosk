@@ -306,131 +306,193 @@ if ARGV.include?('--self-test')
       expect: %r{no `image: postgres:<major>` in \.github/workflows/ci\.yml} }
   ].freeze
 
+  def st_run(tree)
+    out, status = Open3.capture2e(RbConfig.ruby, File.join(tree, 'bin', 'check-demo-copies'))
+    [out, status.exitstatus]
+  end
+
+  def st_copy_tree(rels, tree)
+    FileUtils.mkdir_p(rels.map { |r| File.dirname(File.join(tree, r)) }.uniq)
+    rels.each { |r| FileUtils.copy_file(File.join(ROOT, r), File.join(tree, r), true) }
+    tree
+  end
+
+  # Relative paths the ops of `plant` may change.
+  def st_touched(tree, plant)
+    plant[:ops].flat_map do |op|
+      case op[0]
+      when :copy then [op[2]]
+      when :each then Dir[File.join(tree, op[1])].map { |f| f.delete_prefix("#{tree}/") }
+      else [op[1]]
+      end
+    end.uniq
+  end
+
+  def st_snapshot(tree, touched)
+    touched.to_h do |rel|
+      path = File.join(tree, rel)
+      [rel, File.exist?(path) ? [File.binread(path), File.stat(path).mode & 0o7777] : nil]
+    end
+  end
+
+  def st_restore(tree, saved)
+    saved.each do |rel, snap|
+      path = File.join(tree, rel)
+      next FileUtils.rm_f(path) if snap.nil?
+
+      File.binwrite(path, snap[0])
+      File.chmod(snap[1], path)
+    end
+  end
+
+  # Applies one step of a plant's `ops:` to `tree`; returns why it did not apply, or nil.
+  def st_apply(tree, step)
+    kind, *args = step
+    send(:"st_#{kind}", tree, *args)
+  end
+
+  def st_edit(tree, rel, needle, replacement)
+    path   = File.join(tree, rel)
+    before = File.exist?(path) ? File.read(path) : nil
+    after  = before&.gsub(needle) { replacement }
+    File.write(path, after) if after
+    "the needle #{needle.inspect} does not occur in #{rel}" if before.nil? || after == before
+  end
+
+  def st_prepend(tree, rel, text)
+    path = File.join(tree, rel)
+    File.write(path, text + File.read(path))
+    nil
+  end
+
+  def st_write(tree, rel, body)
+    path = File.join(tree, rel)
+    FileUtils.mkdir_p(File.dirname(path))
+    File.write(path, body)
+    nil
+  end
+
+  def st_chmod(tree, rel, mode)
+    path = File.join(tree, rel)
+    return "#{rel} is absent" unless File.exist?(path)
+
+    File.chmod(mode, path)
+    nil
+  end
+
+  def st_delete(tree, rel)
+    path    = File.join(tree, rel)
+    trouble = "#{rel} is already absent" unless File.exist?(path)
+    FileUtils.rm_f(path)
+    trouble
+  end
+
+  def st_copy(tree, from, to)
+    src  = File.join(tree, from)
+    path = File.join(tree, to)
+    FileUtils.mkdir_p(File.dirname(path))
+    return "#{from} does not exist" unless File.exist?(src)
+
+    FileUtils.copy_file(src, path, true)
+    nil
+  end
+
+  def st_each(tree, glob, needle, replacement)
+    hits = Dir[File.join(tree, glob)].reject do |f|
+      before = File.read(f)
+      after  = before.gsub(needle) { replacement }
+      File.write(f, after) unless after == before
+      after == before
+    end
+    "the needle #{needle.inspect} occurs in no file #{glob.inspect} matches" if hits.empty?
+  end
+
+  # Touched paths that differ from the original tree after the restore.
+  def st_drift(tree, touched)
+    touched.reject do |rel|
+      a = File.join(tree, rel)
+      b = File.join(ROOT, rel)
+      File.exist?(a) == File.exist?(b) &&
+        (!File.exist?(a) || Digest::SHA256.file(a).hexdigest == Digest::SHA256.file(b).hexdigest)
+    end
+  end
+
+  def st_try_plant(tree, plant)
+    touched = st_touched(tree, plant)
+    trouble, code, out = st_apply_and_run(tree, plant, st_snapshot(tree, touched))
+    { plant: plant, trouble: trouble, code: code, out: out.to_s, drift: st_drift(tree, touched) }
+  end
+
+  # Applies the plant and runs the check; the tree is restored afterwards.
+  def st_apply_and_run(tree, plant, saved)
+    trouble = plant[:ops].map { |step| st_apply(tree, step) }.compact.first
+    out, code = st_run(tree) if trouble.nil?
+    [trouble, code, out]
+  ensure
+    st_restore(tree, saved)
+  end
+
+  # Runs every plant, one worker thread per tree; results are in plant order.
+  def st_run_plants(trees)
+    results = Array.new(SELF_TEST_PLANTS.length)
+    queue   = Queue.new
+    SELF_TEST_PLANTS.each_with_index { |plant, idx| queue << [plant, idx] }
+    queue.close
+    trees.map { |tree| Thread.new { st_work(tree, queue, results) } }.each(&:join)
+    results
+  end
+
+  def st_work(tree, queue, results)
+    while (job = queue.pop)
+      plant, idx = job
+      results[idx] = st_try_plant(tree, plant)
+    end
+  end
+
+  def st_failure(result)
+    return "the plant did not apply — #{result[:trouble]}. Re-point it at the live text." if result[:trouble]
+    return "planted «#{result[:plant][:what]}» and the check exited #{result[:code].inspect}, not 1." if result[:code] != 1
+
+    st_mismatch(result)
+  end
+
+  def st_first_failure(out)
+    out.lines.grep(/✗/).first.to_s.rstrip[0, 200]
+  end
+
+  def st_mismatch(result)
+    expect = result[:plant][:expect]
+    if result[:out] !~ expect
+      "red, but nothing matched #{expect.inspect}. First failure:\n      #{st_first_failure(result[:out])}"
+    elsif result[:drift].any?
+      "after restoring, #{result[:drift].join(', ')} no longer matches the original."
+    end
+  end
+
   st_bad = []
   st_ls, st_git = Open3.capture2('git', '-C', ROOT, 'ls-files', '-z', '--cached', '--others', '--exclude-standard')
   abort "check-demo-copies --self-test: `git ls-files` failed in #{ROOT}." unless st_git.success?
   st_rels = st_ls.split("\0").select { |r| File.file?(File.join(ROOT, r)) }
   st_jobs = [4, SELF_TEST_PLANTS.length].min
-  st_results = Array.new(SELF_TEST_PLANTS.length)
+  st_results = []
 
   Dir.mktmpdir('check-demo-copies-self-test') do |tmp|
-    st_trees = (0...st_jobs).map do |i|
-      tree = File.join(tmp, "tree#{i}")
-      FileUtils.mkdir_p(st_rels.map { |r| File.dirname(File.join(tree, r)) }.uniq)
-      st_rels.each { |r| FileUtils.copy_file(File.join(ROOT, r), File.join(tree, r), true) }
-      tree
-    end
-    st_run = lambda do |tree|
-      out, status = Open3.capture2e(RbConfig.ruby, File.join(tree, 'bin', 'check-demo-copies'))
-      [out, status.exitstatus]
-    end
-
-    base_out, base_code = st_run.call(st_trees[0])
-    unless base_code.zero?
+    st_trees = (0...st_jobs).map { |i| st_copy_tree(st_rels, File.join(tmp, "tree#{i}")) }
+    base_out, base_code = st_run(st_trees[0])
+    if base_code.zero?
+      st_results = st_run_plants(st_trees)
+    else
       st_bad << ("the untouched copy is not green (exit #{base_code.inspect}); run bin/check-demo-copies bare first:\n" +
                 base_out.lines.grep(/✗/).first(4).map { |l| "      #{l.rstrip[0, 160]}" }.join("\n"))
-    end
-
-    if st_bad.empty?
-      queue = SELF_TEST_PLANTS.each_with_index.to_a
-      lock  = Mutex.new
-      st_trees.map do |tree|
-        Thread.new do
-          loop do
-            plant, idx = lock.synchronize { queue.shift }
-            break if plant.nil?
-
-            touched = plant[:ops].flat_map do |op|
-              case op[0]
-              when :copy then [op[2]]
-              when :each then Dir[File.join(tree, op[1])].map { |f| f.delete_prefix("#{tree}/") }
-              else [op[1]]
-              end
-            end.uniq
-            saved = touched.to_h do |rel|
-              path = File.join(tree, rel)
-              [rel, File.exist?(path) ? [File.binread(path), File.stat(path).mode & 0o7777] : nil]
-            end
-
-            trouble = nil
-            out = code = nil
-            begin
-              plant[:ops].each do |op|
-                path = File.join(tree, op[0] == :copy ? op[2] : op[1])
-                case op[0]
-                when :edit
-                  before = File.exist?(path) ? File.read(path) : nil
-                  after  = before&.gsub(op[2]) { op[3] }
-                  trouble ||= "the needle #{op[2].inspect} does not occur in #{op[1]}" if before.nil? || after == before
-                  File.write(path, after) if after
-                when :prepend
-                  File.write(path, op[2] + File.read(path))
-                when :write
-                  FileUtils.mkdir_p(File.dirname(path))
-                  File.write(path, op[2])
-                when :chmod
-                  trouble ||= "#{op[1]} is absent" unless File.exist?(path)
-                  File.chmod(op[2], path) if File.exist?(path)
-                when :delete
-                  trouble ||= "#{op[1]} is already absent" unless File.exist?(path)
-                  FileUtils.rm_f(path)
-                when :copy
-                  src = File.join(tree, op[1])
-                  trouble ||= "#{op[1]} does not exist" unless File.exist?(src)
-                  FileUtils.mkdir_p(File.dirname(path))
-                  FileUtils.copy_file(src, path, true) if File.exist?(src)
-                when :each
-                  hits = Dir[File.join(tree, op[1])].reject do |f|
-                    before = File.read(f)
-                    after  = before.gsub(op[2]) { op[3] }
-                    File.write(f, after) unless after == before
-                    after == before
-                  end
-                  trouble ||= "the needle #{op[2].inspect} occurs in no file #{op[1].inspect} matches" if hits.empty?
-                end
-              end
-              out, code = st_run.call(tree) if trouble.nil?
-            ensure
-              saved.each do |rel, snap|
-                p = File.join(tree, rel)
-                if snap.nil?
-                  FileUtils.rm_f(p)
-                else
-                  File.binwrite(p, snap[0])
-                  File.chmod(snap[1], p)
-                end
-              end
-            end
-
-            drift = touched.reject do |rel|
-              a = File.join(tree, rel)
-              b = File.join(ROOT, rel)
-              File.exist?(a) == File.exist?(b) &&
-                (!File.exist?(a) || Digest::SHA256.file(a).hexdigest == Digest::SHA256.file(b).hexdigest)
-            end
-            st_results[idx] = { plant: plant, trouble: trouble, code: code, out: out.to_s, drift: drift }
-          end
-        end
-      end.each(&:join)
     end
   end
 
   st_results.compact.each do |r|
-    plant = r[:plant]
-    failure = if r[:trouble]
-                "the plant did not apply — #{r[:trouble]}. Re-point it at the live text."
-              elsif r[:code] != 1
-                "planted «#{plant[:what]}» and the check exited #{r[:code].inspect}, not 1."
-              elsif r[:out] !~ plant[:expect]
-                "red, but nothing matched #{plant[:expect].inspect}. First failure:\n      " +
-                  r[:out].lines.grep(/✗/).first.to_s.rstrip[0, 200]
-              elsif r[:drift].any?
-                "after restoring, #{r[:drift].join(', ')} no longer matches the original."
-              end
+    failure = st_failure(r)
     if failure
-      st_bad << "#{plant[:id]} (#{plant[:rule]}): #{failure}"
+      st_bad << "#{r[:plant][:id]} (#{r[:plant][:rule]}): #{failure}"
     else
-      puts format('  RED  %-36s %s', plant[:id], plant[:what])
+      puts format('  RED  %<id>-36s %<what>s', id: r[:plant][:id], what: r[:plant][:what])
     end
   end
 

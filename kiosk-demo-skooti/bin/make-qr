@@ -71,7 +71,7 @@ if options[:from_server]
   env_passthrough['KIOSK_ISSUER']  = ENV['KIOSK_ISSUER'] if ENV['KIOSK_ISSUER']
 
   cmd = [env_passthrough, RbConfig.ruby, flow_rb, { err: :err }]
-  stdout_str = IO.popen(cmd) { |io| io.read }
+  stdout_str = IO.popen(cmd, &:read)
   abort "script/rental_flow.rb exited with status #{$?.exitstatus}." unless $?.success?
 
   # rental_flow prints exactly ONE JSON line on stdout.

@@ -23,7 +23,7 @@ module Kiosk
       # Adds the wire `Vary`; forces `no-store` on a 402; defaults to
       # `private, no-store` and refuses a shared-cache directive (§3.7.3).
       def self.add_cache_policy(headers, status:)
-        present = headers['Vary'].to_s.split(',').map { |t| t.strip }.reject(&:empty?)
+        present = headers['Vary'].to_s.split(',').map(&:strip).reject(&:empty?)
         missing = WIRE_VARY.reject { |t| present.any? { |p| p.casecmp?(t) } }
         headers['Vary'] = (present + missing).join(', ')
 

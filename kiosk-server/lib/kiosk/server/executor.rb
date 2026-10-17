@@ -410,7 +410,7 @@ module Kiosk
 
       def symbolize(value)
         case value
-        when Hash then value.transform_keys { |k| k.to_sym }
+        when Hash then value.transform_keys(&:to_sym)
         when nil  then {}
         else value
         end

@@ -21,17 +21,10 @@ module Kiosk
 
         # `lease_connection`: the operator's hooks must share this transaction.
         conn = ::ActiveRecord::Base.lease_connection
-        existing = conn.exec_query(<<~SQL, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
-          SELECT id, user_id FROM #{config.schema}.agents
-          WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
-          LIMIT 1
-        SQL
+        existing = Rows.live_by_key(conn, config.schema, pem)
+        return rebind(conn, config, existing, user_id, requested_role) if existing
 
-        if existing
-          rebind(conn, config, existing, user_id, requested_role)
-        else
-          register_linked(conn, config, pem, user_id, requested_role)
-        end
+        register_linked(conn, config, pem, user_id, requested_role)
       end
 
       # Revokes `agent_id`'s binding, which must belong to `user_id`; its tokens
@@ -43,28 +36,25 @@ module Kiosk
         raise Errors::BadRequest, 'agent_id required' if agent_id.nil? || agent_id.to_s.empty?
 
         # The ownership predicate is the security boundary: both values are binds.
-        conn = ::ActiveRecord::Base.lease_connection
-        row = conn.exec_query(<<~SQL, 'Kiosk agent unlink', [agent_id, user_id, Kiosk.current_issuer]).to_a.first
-          UPDATE #{config.schema}.agents
-          SET revoked_at = now()
-          WHERE id = $1
-            AND user_id = $2
-            AND issuer = $3
-            AND revoked_at IS NULL
-          RETURNING id
-        SQL
-        if row.nil?
-          raise Errors::NotFound.new(
-            'no linked assistant account with this agent_id',
-            hint: 'only assistant accounts bound to the signed-in account can be unlinked'
-          )
-        end
+        raise not_linked unless Rows.revoke_owned(::ActiveRecord::Base.lease_connection, config.schema, agent_id, user_id)
 
-        # Next second: JWT `iat` is whole seconds and the check is `iat < watermark` (§6.3).
-        config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
+        revoke_tokens(config, agent_id)
         config.assistant_unlinked&.call(agent: agent_id, account: config.user_model.constantize.find(user_id))
         { agent_id: agent_id }
       end
+
+      ROLE_NOT_TOTAL =
+        '[kiosk-server] an account-binding ceremony resolved NO role for the approving ' \
+        'human, and this origin declares more than one role ' \
+        '(%<roles>s). Role resolution must be TOTAL: an operator that ' \
+        'assigns roles at all assigns one to EVERY human who can approve a binding. A ' \
+        'role for staff and nothing for customers is not a supported configuration — ' \
+        'this binding lands on %<role>s, the role registration would assign, so a human ' \
+        'who should hold a privileged one gets an assistant ' \
+        'that cannot act for them. Fix the identity system, not the ceremony: a ' \
+        '`#kiosk_role` that can answer nil is the usual cause, and returning the ' \
+        'least-privileged declared role instead makes it total.'
+      private_constant :ROLE_NOT_TOTAL
 
       class << self
         private
@@ -75,51 +65,40 @@ module Kiosk
           agent_id = existing.fetch('id')
           previous = existing.fetch('user_id')
           role     = resolved_role(config, requested_role)
-
           # The same holder still gets the role remap and revocation; only the hook is skipped.
           transition = previous.to_s != user_id.to_s
-          # An empty array cannot travel as a bind, so "no role" is a different statement.
-          role_set, role_binds =
-            role ? [', allowed_roles = ARRAY[$3]::text[]', [role]] : [", allowed_roles = '{}'::text[]", []]
           conn.transaction do
-            conn.exec_query(<<~SQL, 'Kiosk agent rebind', [user_id, agent_id, *role_binds])
-              UPDATE #{config.schema}.agents
-              SET user_id = $1#{role_set}
-              WHERE id = $2
-            SQL
-            if transition && config.assistant_claimed
-              accounts = config.user_model.constantize
-              config.assistant_claimed.call(agent: agent_id, from: accounts.find(previous), to: accounts.find(user_id))
-            end
+            Rows.rebind(conn, config.schema, agent_id, user_id, role)
+            claimed(config, agent_id, previous, user_id) if transition && config.assistant_claimed
           end
-
           # The old holder's tokens die (§6.3). The IdP dates new mints at the
           # watermark, so the token minted below survives it.
-          config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
+          revoke_tokens(config, agent_id)
+          { agent_id: agent_id, user_id: user_id.to_s, access_token: issue_token(agent_id, role), fresh: false }
+        end
 
-          token = issue_token(agent_id, role)
-          { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: false }
+        # Next second: JWT `iat` is whole seconds and the check is `iat < watermark` (§6.3).
+        def revoke_tokens(config, agent_id)
+          config.revocation_store&.revoke_all(agent_id, at: Time.now.to_i + 1)
+        end
+
+        def claimed(config, agent_id, previous, user_id)
+          accounts = config.user_model.constantize
+          config.assistant_claimed.call(agent: agent_id, from: accounts.find(previous), to: accounts.find(user_id))
         end
 
         # Fresh key: a new linked agent row under the approving human.
         def register_linked(conn, config, pem, user_id, requested_role)
           role = resolved_role(config, requested_role)
+          agent_id = conn.transaction { Rows.insert_linked(conn, config.schema, user_id, pem, role) }
+          { agent_id: agent_id, user_id: user_id.to_s, access_token: issue_token(agent_id, role), fresh: true }
+        end
 
-          # The column is NOT NULL: no role is `'{}'`, never NULL.
-          allowed_roles_sql, role_binds =
-            role ? ['ARRAY[$4]::text[]', [role]] : ["'{}'::text[]", []]
-          sql = <<~SQL
-            INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key, issuer)
-            VALUES ($1, #{allowed_roles_sql}, $2, $3)
-            RETURNING id
-          SQL
-          agent_id = conn.transaction do
-            conn.exec_query(sql, 'Kiosk linked agent insert', [user_id, pem, Kiosk.current_issuer, *role_binds])
-                .to_a.first.fetch('id')
-          end
-
-          token = issue_token(agent_id, role)
-          { agent_id: agent_id, user_id: user_id.to_s, access_token: token, fresh: true }
+        def not_linked
+          Errors::NotFound.new(
+            'no linked assistant account with this agent_id',
+            hint: 'only assistant accounts bound to the signed-in account can be unlinked'
+          )
         end
 
         # The ceremony's role, else the operator's default; never the key's previous role.
@@ -143,20 +122,11 @@ module Kiosk
           return unless requested_role.nil? || requested_role.to_s.strip.empty?
           return unless config.roles.to_a.size > 1
 
-          landing =
-            "this binding lands on #{config.registration_role.inspect}, the role " \
-            'registration would assign'
-          message =
-            '[kiosk-server] an account-binding ceremony resolved NO role for the approving ' \
-            'human, and this origin declares more than one role ' \
-            "(#{config.roles.inspect}). Role resolution must be TOTAL: an operator that " \
-            'assigns roles at all assigns one to EVERY human who can approve a binding. A ' \
-            'role for staff and nothing for customers is not a supported configuration — ' \
-            "#{landing}, so a human who should hold a privileged one gets an assistant " \
-            'that cannot act for them. Fix the identity system, not the ceremony: a ' \
-            '`#kiosk_role` that can answer nil is the usual cause, and returning the ' \
-            'least-privileged declared role instead makes it total.'
-          # Rails.logger is nil before the host app boots.
+          log_warning(format(ROLE_NOT_TOTAL, roles: config.roles.inspect, role: config.registration_role.inspect))
+        end
+
+        # Rails.logger is nil before the host app boots.
+        def log_warning(message)
           logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
           logger ? logger.warn(message) : Kernel.warn(message)
         end
@@ -165,6 +135,54 @@ module Kiosk
           AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)
         end
       end
+
+      # The agents-table statements a binding runs.
+      module Rows
+        module_function
+
+        def live_by_key(conn, schema, pem)
+          conn.exec_query(<<~SQL, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
+            SELECT id, user_id FROM #{schema}.agents
+            WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
+            LIMIT 1
+          SQL
+        end
+
+        def revoke_owned(conn, schema, agent_id, user_id)
+          conn.exec_query(<<~SQL, 'Kiosk agent unlink', [agent_id, user_id, Kiosk.current_issuer]).to_a.first
+            UPDATE #{schema}.agents
+            SET revoked_at = now()
+            WHERE id = $1
+              AND user_id = $2
+              AND issuer = $3
+              AND revoked_at IS NULL
+            RETURNING id
+          SQL
+        end
+
+        # An empty array cannot travel as a bind, so "no role" is a different statement.
+        def rebind(conn, schema, agent_id, user_id, role)
+          role_set, role_binds =
+            role ? [', allowed_roles = ARRAY[$3]::text[]', [role]] : [", allowed_roles = '{}'::text[]", []]
+          conn.exec_query(<<~SQL, 'Kiosk agent rebind', [user_id, agent_id, *role_binds])
+            UPDATE #{schema}.agents
+            SET user_id = $1#{role_set}
+            WHERE id = $2
+          SQL
+        end
+
+        # The column is NOT NULL: no role is `'{}'`, never NULL.
+        def insert_linked(conn, schema, user_id, pem, role)
+          allowed_roles_sql, role_binds = role ? ['ARRAY[$4]::text[]', [role]] : ["'{}'::text[]", []]
+          rows = conn.exec_query(<<~SQL, 'Kiosk linked agent insert', [user_id, pem, Kiosk.current_issuer, *role_binds])
+            INSERT INTO #{schema}.agents (user_id, allowed_roles, public_key, issuer)
+            VALUES ($1, #{allowed_roles_sql}, $2, $3)
+            RETURNING id
+          SQL
+          rows.to_a.first.fetch('id')
+        end
+      end
+      private_constant :Rows
     end
   end
 end

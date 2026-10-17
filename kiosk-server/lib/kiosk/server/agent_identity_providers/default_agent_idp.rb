@@ -12,14 +12,7 @@ module Kiosk
           header = authorization_for(request)
           return nil if header.nil? || header.empty?
 
-          token  = header.sub(/\ABearer\s+/i, '')
-          config = Kiosk.configuration
-          claims = JwtIssuer.verify(
-            token: token,
-            jwks: Jwks.build(keys: [config.signing_key]),
-            audience: Kiosk.current_issuer,
-            issuer: Kiosk.current_issuer
-          )
+          claims = verified_claims(header.sub(/\ABearer\s+/i, ''))
           Kiosk::Identity.new(
             user_id: claims[:sub], role: claims[:role], actor: 'agent',
             agent_id: claims[:agent_id], claims: claims
@@ -44,6 +37,15 @@ module Kiosk
         end
 
         private
+
+        def verified_claims(token)
+          JwtIssuer.verify(
+            token: token,
+            jwks: Jwks.build(keys: [Kiosk.configuration.signing_key]),
+            audience: Kiosk.current_issuer,
+            issuer: Kiosk.current_issuer
+          )
+        end
 
         # Never earlier than the revocation watermark, so a token minted in the
         # second a rebind revoked (§6.3) still survives `iat < watermark`.

@@ -18,12 +18,33 @@ SERVER_DEFAULT = File.join(ROOT, 'kiosk-server', 'lib', 'kiosk', 'server', 'conf
 SITE_ROOT      = File.expand_path('../kiosk.tech', ROOT)
 HOST_RE        = /\A[a-z0-9-]+\.demo\.kiosk\.tech\z/
 
-FAILURES = []
-SKIPS    = []
+# Collects findings and skips, and prints each one as it arrives.
+class Report
+  attr_reader :failures, :skips
 
-def pass(msg)  = puts("  ok:   #{msg}")
-def fail!(msg) = (FAILURES << msg) && puts("  FAIL: #{msg}")
-def skip!(msg) = (SKIPS << msg) && puts("  SKIP: #{msg}")
+  def initialize
+    @failures = []
+    @skips = []
+  end
+
+  def pass(msg) = puts("  ok:   #{msg}")
+
+  def fail!(msg)
+    @failures << msg
+    puts("  FAIL: #{msg}")
+  end
+
+  def skip!(msg)
+    @skips << msg
+    puts("  SKIP: #{msg}")
+  end
+end
+
+REPORT = Report.new
+
+def pass(msg)  = REPORT.pass(msg)
+def fail!(msg) = REPORT.fail!(msg)
+def skip!(msg) = REPORT.skip!(msg)
 
 def short(sha) = sha.to_s[0, 12]
 
@@ -32,17 +53,21 @@ def hosts_from_readme
   return {} unless File.file?(DEPLOY_README)
 
   File.readlines(DEPLOY_README, chomp: true).each_with_object({}) do |line, acc|
-    next unless line.start_with?('|')
-
-    cells = line.split('|').map(&:strip)
-    next if cells.length < 3
-
-    name = cells[1][/\A[a-z0-9_]+/]
-    host = cells[2].delete('`').strip
-    next if name.nil? || !host.match?(HOST_RE)
-
-    acc[name] = host
+    name, host = readme_row(line)
+    acc[name] = host if name
   end
+end
+
+# [demo, host] for a per-demo map row; nil for any other line.
+def readme_row(line)
+  return unless line.start_with?('|')
+
+  cells = line.split('|').map(&:strip)
+  return if cells.length < 3
+
+  name = cells[1][/\A[a-z0-9_]+/]
+  host = cells[2].delete('`').strip
+  [name, host] if name && host.match?(HOST_RE)
 end
 
 # A demo is a Kiosk operator iff it configures the engine.
@@ -70,76 +95,106 @@ def cuts_on_disk
      .sort_by(&:first)
 end
 
+def sha256_of(path) = Digest::SHA256.hexdigest(File.binread(path))
+
 # GET with retries, so a transient blip is reported as unreachable rather than as drift.
 def fetch_json(url, attempts: 3)
   last = nil
   attempts.times do |i|
     sleep(2**i) if i.positive?
-    begin
-      uri  = URI(url)
-      http = Net::HTTP.new(uri.host, uri.port)
-      http.use_ssl      = uri.scheme == 'https'
-      http.open_timeout = 10
-      http.read_timeout = 15
-      res = http.request(Net::HTTP::Get.new(uri))
-      if res.is_a?(Net::HTTPOK)
-        begin
-          return [JSON.parse(res.body), nil]
-        rescue JSON::ParserError => e
-          return [nil, "HTTP 200 but the body is not JSON (#{e.class})"]
-        end
-      end
-      last = "HTTP #{res.code}"
-    rescue StandardError => e
-      last = "#{e.class}: #{e.message}"
-    end
+    result, last = fetch_json_once(url)
+    return result if result
   end
   [nil, "unreachable after #{attempts} attempts (#{last})"]
+end
+
+# [[doc, error], nil] when the origin answered 200; [nil, reason] when a retry may help.
+def fetch_json_once(url)
+  res = http_get(URI(url))
+  return [nil, "HTTP #{res.code}"] unless res.is_a?(Net::HTTPOK)
+
+  [parse_json_body(res.body), nil]
+rescue StandardError => e
+  [nil, "#{e.class}: #{e.message}"]
+end
+
+def http_get(uri)
+  http = Net::HTTP.new(uri.host, uri.port)
+  http.use_ssl      = uri.scheme == 'https'
+  http.open_timeout = 10
+  http.read_timeout = 15
+  http.request(Net::HTTP::Get.new(uri))
+end
+
+def parse_json_body(body)
+  [JSON.parse(body), nil]
+rescue JSON::ParserError => e
+  [nil, "HTTP 200 but the body is not JSON (#{e.class})"]
 end
 
 # {demo => {host:, url:, sha256:}} — the pin a deploy of HEAD would serve; {} when unresolved.
 def resolve_expectation
   puts '── Tree: the origins, and the pin a deploy of HEAD would serve ──'
 
+  expected = expected_pins(readme_hosts)
+  return unresolved if expected.empty?
+
+  pins = expected.values.map { |e| [e[:url], e[:sha256]] }.uniq
+  report_pins(expected, pins)
+  report_engine_default(pins)
+  check_newest_cut(pins)
+  expected
+end
+
+def unresolved
+  fail! 'no probeable operator origin resolved'
+  {}
+end
+
+def readme_hosts
   hosts = hosts_from_readme
   if hosts.empty?
     fail! 'deploy/README.md: no `*.demo.kiosk.tech` rows found — the per-demo map is the ' \
           'origin list and it did not parse'
   end
+  hosts
+end
 
-  expected = {}
-  operator_dirs.each do |initializer|
+def expected_pins(hosts)
+  operator_dirs.each_with_object({}) do |initializer, expected|
     demo = File.basename(File.expand_path('../../..', initializer)).sub('kiosk-demo-', '')
-    host = hosts[demo]
-    if host.nil?
-      fail! "kiosk-demo-#{demo} configures the engine but deploy/README.md maps no " \
-            '`*.demo.kiosk.tech` host to it; add its row to the per-demo map'
-      next
-    end
+    pin = expected_pin(demo, hosts[demo], initializer)
+    expected[demo] = pin if pin
+  end
+end
 
-    url, sha = demo_pin(initializer)
-    if url.nil? || sha.nil?
-      fail! "kiosk-demo-#{demo}/config/initializers/kiosk.rb: no `c.skill_url`/`c.skill_sha256` " \
-            'pair — cannot say what that box is meant to serve'
-      next
-    end
-    expected[demo] = { host: host, url: url, sha256: sha }
+def expected_pin(demo, host, initializer)
+  if host.nil?
+    return fail! "kiosk-demo-#{demo} configures the engine but deploy/README.md maps no " \
+                 '`*.demo.kiosk.tech` host to it; add its row to the per-demo map'
   end
 
-  if expected.empty?
-    fail! 'no probeable operator origin resolved'
-    return {}
-  end
+  url, sha = demo_pin(initializer)
+  return { host: host, url: url, sha256: sha } if url && sha
 
-  pins = expected.values.map { |e| [e[:url], e[:sha256]] }.uniq
+  fail! "kiosk-demo-#{demo}/config/initializers/kiosk.rb: no `c.skill_url`/`c.skill_sha256` " \
+        'pair — cannot say what that box is meant to serve'
+end
+
+def report_pins(expected, pins)
+  pass "#{expected.size} operator origin(s), #{pins_summary(expected, pins)}"
+end
+
+def pins_summary(expected, pins)
   if pins.length == 1
-    pass "#{expected.size} operator origin(s), all pinning #{File.basename(pins[0][0])} " \
-         "(#{short(pins[0][1])}…): #{expected.keys.sort.join(', ')}"
+    "all pinning #{File.basename(pins[0][0])} (#{short(pins[0][1])}…): #{expected.keys.sort.join(', ')}"
   else
-    pass "#{expected.size} operator origin(s), pinning #{pins.length} DIFFERENT cuts: " \
-         "#{expected.map { |d, e| "#{d}→#{File.basename(e[:url])}" }.sort.join(', ')}"
+    "pinning #{pins.length} DIFFERENT cuts: " \
+      "#{expected.map { |d, e| "#{d}→#{File.basename(e[:url])}" }.sort.join(', ')}"
   end
+end
 
+def report_engine_default(pins)
   default = engine_default_url
   if default.nil?
     fail! 'kiosk-server/lib/kiosk/server/configuration_extension.rb: no `@skill_url ||= "…"` — ' \
@@ -150,27 +205,29 @@ def resolve_expectation
   else
     pass "kiosk-server default skill_url is #{File.basename(default.to_s)}"
   end
+end
 
+def check_newest_cut(pins)
   cuts = cuts_on_disk
   if cuts.empty?
-    skip! 'no ../kiosk.tech checkout beside this repo — the pins above are not cross-checked ' \
-          'against the newest cut on disk (normal in a public CI clone)'
-  else
-    newest_path = cuts.last[1]
-    newest_sha  = Digest::SHA256.hexdigest(File.binread(newest_path))
-    pins.each do |url, sha|
-      if File.basename(url) == File.basename(newest_path) && sha == newest_sha
-        pass "#{File.basename(url)} is the newest of #{cuts.length} cut(s) in ../kiosk.tech and " \
-             "its sha256 is #{short(newest_sha)}…"
-      else
-        fail! "the demos pin #{File.basename(url)} (#{short(sha)}…) but the newest cut on disk " \
-              "is #{File.basename(newest_path)} (#{short(newest_sha)}…); relink every demo and the " \
-              'engine default to the newest cut'
-      end
-    end
+    return skip! 'no ../kiosk.tech checkout beside this repo — the pins above are not cross-checked ' \
+                 'against the newest cut on disk (normal in a public CI clone)'
   end
 
-  expected
+  newest_path = cuts.last[1]
+  newest_sha  = sha256_of(newest_path)
+  pins.each { |url, sha| check_pin_is_newest(url, sha, cuts.length, newest_path, newest_sha) }
+end
+
+def check_pin_is_newest(url, sha, cut_count, newest_path, newest_sha)
+  if File.basename(url) == File.basename(newest_path) && sha == newest_sha
+    pass "#{File.basename(url)} is the newest of #{cut_count} cut(s) in ../kiosk.tech and " \
+         "its sha256 is #{short(newest_sha)}…"
+  else
+    fail! "the demos pin #{File.basename(url)} (#{short(sha)}…) but the newest cut on disk " \
+          "is #{File.basename(newest_path)} (#{short(newest_sha)}…); relink every demo and the " \
+          'engine default to the newest cut'
+  end
 end
 
 # ── Network: what the fleet actually serves ──────────────────────────────────
@@ -178,57 +235,60 @@ def check_live(expected)
   puts
   puts '── Live: /.well-known/kiosk.json on each origin ──'
 
-  if expected.empty?
-    fail! 'nothing probed — the expectation did not resolve (see above)'
-    return
-  end
+  return fail!('nothing probed — the expectation did not resolve (see above)') if expected.empty?
 
   cuts = cuts_on_disk
-  by_name = cuts.to_h { |_v, p| [File.basename(p), p] }
+  expected.keys.sort.each { |demo| check_origin(demo, expected[demo], cuts) }
+end
 
-  expected.keys.sort.each do |demo|
-    e   = expected[demo]
-    url = "https://#{e[:host]}/.well-known/kiosk.json"
-    doc, err = fetch_json(url)
-    if err
-      fail! "#{demo} (#{e[:host]}): #{err} — NOT a pass; the pin on that box is unmeasured"
-      next
-    end
+def check_origin(demo, pin, cuts)
+  doc, err = fetch_json("https://#{pin[:host]}/.well-known/kiosk.json")
+  return fail!("#{demo} (#{pin[:host]}): #{err} — NOT a pass; the pin on that box is unmeasured") if err
 
-    skill = doc.dig('kiosk', 'skill')
-    if skill.nil?
-      fail! "#{demo} (#{e[:host]}): serves a discovery document with NO `kiosk.skill` block — " \
-            'an assistant is told nothing about which wire to speak'
-      next
-    end
+  skill = doc.dig('kiosk', 'skill')
+  if skill.nil?
+    return fail! "#{demo} (#{pin[:host]}): serves a discovery document with NO `kiosk.skill` block — " \
+                 'an assistant is told nothing about which wire to speak'
+  end
 
-    served_url = skill['url'].to_s
-    served_sha = skill['sha256'].to_s
-    if served_url == e[:url] && served_sha == e[:sha256]
-      pass "#{demo} (#{e[:host]}): #{File.basename(served_url)} (#{short(served_sha)}…) — current"
-      next
-    end
+  compare_served(demo, pin, skill['url'].to_s, skill['sha256'].to_s, cuts)
+end
 
-    detail = []
-    if (local = by_name[File.basename(served_url)])
-      local_sha = Digest::SHA256.hexdigest(File.binread(local))
-      detail << if local_sha == served_sha
-                  "the served pin is INTERNALLY CONSISTENT (that sha really is that cut's) — " \
-                    "old, not corrupt, so an assistant's dual-check passes and nothing warns it"
-                else
-                  "and the served sha256 is NOT that cut's sha256 (#{short(local_sha)}… on disk) " \
-                    '— an assistant following this pin REFUSES the file'
-                end
-      served_v = Gem::Version.new(cut_version(served_url).to_s)
-      behind   = cuts.count { |v, _p| v > served_v }
-      detail << "#{behind} cut(s) newer exist in ../kiosk.tech" if behind.positive?
-    elsif !cuts.empty?
-      detail << 'no such cut in ../kiosk.tech — the fleet points at a file this tree does not have'
-    end
+def compare_served(demo, pin, served_url, served_sha, cuts)
+  current = served_url == pin[:url] && served_sha == pin[:sha256]
+  served = cut_label(served_url, served_sha)
+  return pass("#{demo} (#{pin[:host]}): #{served} — current") if current
 
-    fail! "#{demo} (#{e[:host]}): serves #{File.basename(served_url)} (#{short(served_sha)}…), " \
-          "this tree ships #{File.basename(e[:url])} (#{short(e[:sha256])}…)" \
-          "#{"; #{detail.join('; ')}" unless detail.empty?}"
+  detail = drift_detail(served_url, served_sha, cuts)
+  fail! "#{demo} (#{pin[:host]}): serves #{served}, this tree ships #{cut_label(pin[:url], pin[:sha256])}" \
+        "#{"; #{detail.join('; ')}" unless detail.empty?}"
+end
+
+def cut_label(url, sha) = "#{File.basename(url)} (#{short(sha)}…)"
+
+def drift_detail(served_url, served_sha, cuts)
+  local = cuts.to_h { |_v, p| [File.basename(p), p] }[File.basename(served_url)]
+  return local_cut_detail(local, served_url, served_sha, cuts) if local
+  return [] if cuts.empty?
+
+  ['no such cut in ../kiosk.tech — the fleet points at a file this tree does not have']
+end
+
+def local_cut_detail(local, served_url, served_sha, cuts)
+  detail = [consistency_detail(sha256_of(local), served_sha)]
+  served_v = Gem::Version.new(cut_version(served_url).to_s)
+  behind   = cuts.count { |v, _p| v > served_v }
+  detail << "#{behind} cut(s) newer exist in ../kiosk.tech" if behind.positive?
+  detail
+end
+
+def consistency_detail(local_sha, served_sha)
+  if local_sha == served_sha
+    "the served pin is INTERNALLY CONSISTENT (that sha really is that cut's) — " \
+      "old, not corrupt, so an assistant's dual-check passes and nothing warns it"
+  else
+    "and the served sha256 is NOT that cut's sha256 (#{short(local_sha)}… on disk) " \
+      '— an assistant following this pin REFUSES the file'
   end
 end
 
@@ -243,12 +303,12 @@ check_live(expectation) if mode == '--network'
 
 puts
 puts '(no origin probed — this mode reads the tree only; pass --network)' if mode == '--offline'
-SKIPS.each { puts "skipped: #{it}" }
-if FAILURES.empty?
+REPORT.skips.each { puts "skipped: #{it}" }
+if REPORT.failures.empty?
   puts "check-live-skill-pin: OK (#{mode}) — no drift"
   exit 0
 else
   fix = mode == '--offline' ? 'fix the pins in this tree' : 'deploy this tree; do not edit it to chase the fleet'
-  puts "x check-live-skill-pin (#{mode}): #{FAILURES.size} finding(s) — #{fix}."
+  puts "x check-live-skill-pin (#{mode}): #{REPORT.failures.size} finding(s) — #{fix}."
   exit 1
 end

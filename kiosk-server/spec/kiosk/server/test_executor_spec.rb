@@ -2,52 +2,52 @@
 
 require 'kiosk/server/test_executor'
 
-RSpec.describe Kiosk::Server::TestExecutor do
-  # Test connection that can pretend to be either a real AR connection
-  # or an RLS-violating Postgres. FakeConnection in spec_helper.rb is
-  # too minimal — we extend it here so tests can stage queued results
-  # and queued errors.
-  class TestableConnection
-    attr_reader :executed_sql, :transactions_opened, :exec_queries
+# A connection that stages queued results and queued errors, so a spec can
+# stand in for a real connection or for a Postgres that denies by RLS.
+class TestExecutorSpecConnection
+  attr_reader :executed_sql, :transactions_opened, :exec_queries
 
-    def initialize
-      @executed_sql        = []
-      @exec_queries        = []
-      @transactions_opened = 0
-      @queued_results      = []
-      @queued_errors       = []
-    end
-
-    def transaction
-      @transactions_opened += 1
-      yield
-    end
-
-    def execute(sql)
-      @executed_sql << sql
-
-      raise @queued_errors.shift if @queued_errors.any?
-
-      @queued_results.empty? ? [] : @queued_results.shift
-    end
-
-    # The identity GUCs travel as bind parameters (K-789), so they arrive
-    # here and NOT through `#execute`. They are housekeeping — they must not
-    # consume from the queue, which is staged for the SQL under test.
-    def exec_query(sql, name = 'SQL', binds = [])
-      @exec_queries << [sql, name, binds]
-      []
-    end
-
-    # Test rig:
-    def queue_result(rows)         = @queued_results << rows
-    def queue_error(klass, msg)    = @queued_errors  << klass.new(msg)
+  def initialize
+    @executed_sql        = []
+    @exec_queries        = []
+    @transactions_opened = 0
+    @queued_results      = []
+    @queued_errors       = []
   end
 
-  let(:connection)        { TestableConnection.new }
-  let(:system_connection) { TestableConnection.new }
+  def transaction
+    @transactions_opened += 1
+    yield
+  end
+
+  def execute(sql)
+    @executed_sql << sql
+
+    raise @queued_errors.shift if @queued_errors.any?
+
+    @queued_results.empty? ? [] : @queued_results.shift
+  end
+
+  # The identity GUCs arrive here as bind parameters, not through `#execute`.
+  # They must not take from the queue, which holds results for the SQL under test.
+  def exec_query(sql, name = 'SQL', binds = [])
+    @exec_queries << [sql, name, binds]
+    []
+  end
+
+  def queue_result(rows)         = @queued_results << rows
+  def queue_error(klass, msg)    = @queued_errors  << klass.new(msg)
+end
+
+RSpec.shared_context 'test executor spec: executor' do
+  let(:connection)        { TestExecutorSpecConnection.new }
+  let(:system_connection) { TestExecutorSpecConnection.new }
   let(:executor)          { described_class.new(connection: connection, system_connection: system_connection) }
   let(:identity)          { build_identity(actor: 'agent') }
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
 
   describe '#with_identity' do
     it 'opens exactly one transaction' do
@@ -68,7 +68,13 @@ RSpec.describe Kiosk::Server::TestExecutor do
       executor.with_identity(identity) { observed = executor.current_identity }
       expect(observed).to eq(identity)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#with_identity' do
     it 'clears identity after the block returns' do
       executor.with_identity(identity) { :inside }
       expect(executor.current_identity).to be_nil
@@ -90,7 +96,13 @@ RSpec.describe Kiosk::Server::TestExecutor do
       # Identity was still cleaned up even after the raise.
       expect(executor.current_identity).to be_nil
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#with_identity' do
     it 'skips GUC setup when identity is nil (as_anonymous semantics)' do
       executor.with_identity(nil) { :inside }
       expect(connection.exec_queries.select { |sql, _n, _b| sql.include?('set_config') }).to be_empty
@@ -99,7 +111,13 @@ RSpec.describe Kiosk::Server::TestExecutor do
     it 'requires a block' do
       expect { executor.with_identity(identity) }.to raise_error(ArgumentError, /block required/)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#with_identity' do
     it 'leaves an enclosing scope intact when a blockless call is rescued inside it' do
       preserved = nil
       executor.with_identity(nil) do
@@ -113,13 +131,20 @@ RSpec.describe Kiosk::Server::TestExecutor do
       end
       expect(preserved).to be(true)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#with_identity' do
     it 'keeps current_identity from an enclosing scope after a rescued blockless call' do
       observed = nil
       executor.with_identity(identity) do
         begin
           executor.with_identity(identity) # blockless → ArgumentError
         rescue ArgumentError
+          # swallow, as a careless test might
         end
         observed = executor.current_identity
       end
@@ -133,6 +158,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(executor.in_scope?).to be(false)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
 
   describe '#query (default-deny enforcement)' do
     it 'raises NoScopeError when called outside any with_identity scope' do
@@ -152,7 +181,13 @@ RSpec.describe Kiosk::Server::TestExecutor do
       rows = executor.with_identity(identity) { executor.query('SELECT id,name FROM users') }
       expect(rows.first.keys).to all(be_a(Symbol))
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#query (default-deny enforcement)' do
     it 'translates RLS denial (PG message) to Kiosk::TestHelpers::Errors::RLSDenied' do
       connection.queue_error(StandardError, 'ERROR: new row violates row-level security policy')
       expect do
@@ -174,6 +209,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
       end.to raise_error(ArgumentError, /syntax/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
 
   describe '#run_action' do
     it 'raises NoScopeError outside scope' do
@@ -193,12 +232,13 @@ RSpec.describe Kiosk::Server::TestExecutor do
       end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
 
   describe '#run_query' do
-    # The read-side twin of #run_action. Before it existed, a `kind :query`
-    # declaration was reachable through nothing at all — `query` takes SQL and
-    # `run_action` resolves against the Action registry — so half of every
-    # origin's wire had no seam in this DSL.
+    # The read-side twin of #run_action.
     it 'raises NoScopeError outside scope' do
       expect { executor.run_query(:foo, {}) }.to raise_error(described_class::NoScopeError)
     end
@@ -214,7 +254,13 @@ RSpec.describe Kiosk::Server::TestExecutor do
       result = executor.with_identity(identity) { executor.run_query(:mine, {}) }
       expect(result).to eq([{ 'user' => identity.user_id }])
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#run_query' do
     it 'answers a paginated query with its rows — what a caller receives' do
       declare_query('paged') { render_kiosk_page([{ id: 1 }], next_cursor: 'opaque') }
       result = executor.with_identity(identity) { executor.run_query(:paged, {}) }
@@ -234,6 +280,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
       end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
 
   describe '#pay_action' do
     it 'raises NotImplementedError — pay is not exercised through the journey DSL' do
@@ -242,6 +292,10 @@ RSpec.describe Kiosk::Server::TestExecutor do
       end.to raise_error(NotImplementedError, /not exercised through the RLS journey DSL/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
 
   describe '#seed' do
     let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
@@ -260,6 +314,14 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(inserts.size).to eq(3)
       expect(inserts.first).to include('RETURNING *')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#seed' do
+    let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
 
     it 'quotes column names + table to defang reserved words / casing' do
       system_connection.queue_result([row])
@@ -279,6 +341,14 @@ RSpec.describe Kiosk::Server::TestExecutor do
       executor.seed(:t, { amount_cents: 5_000 }, count: 1)
       expect(system_connection.executed_sql.first).to include('VALUES (5000)')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#seed' do
+    let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
 
     it 'renders NULL for nil and TRUE/FALSE for booleans' do
       system_connection.queue_result([row])
@@ -293,6 +363,14 @@ RSpec.describe Kiosk::Server::TestExecutor do
       result = executor.seed(:appointments, { user_id: 'u-1', salon_id: 1 }, count: 1)
       expect(result.first).to include(id: 42, user_id: 'u-1', salon_id: 1)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::TestExecutor do
+  include_context 'test executor spec: executor'
+
+  describe '#seed' do
+    let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
 
     it "renders a Time as a UTC ISO-8601 literal without mutating the caller's object" do
       system_connection.queue_result([row])

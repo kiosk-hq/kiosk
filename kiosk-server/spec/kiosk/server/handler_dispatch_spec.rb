@@ -198,6 +198,11 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       klass.kiosk_register!
     end
 
+    it "leaves ActionController loading to the host, so a view library can set it up first" do
+      script = 'require "kiosk/server"; exit(ActionController.autoload?(:API) && ActionController.autoload?(:Base) ? 0 : 1)'
+      expect(system(RbConfig.ruby, "-e", script, chdir: File.expand_path("../../..", __dir__))).to be(true)
+    end
+
     it "renders the JSON template whatever the caller's Accept header asks for" do
       result = Kiosk::Server::CurrentRequest.with(identity: identity,
                                                   env: { "HTTP_ACCEPT" => "text/html" }) do

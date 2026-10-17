@@ -69,24 +69,27 @@ require "kiosk/server/mandate_verifier"
 require "kiosk/server/engine"
 require "kiosk/server/routing"
 
-require "kiosk/server/wire_controller"
-require "kiosk/server/verb_controller"
-require "kiosk/server/payment_setup_controller"
-require "kiosk/server/open_api_controller"
-require "kiosk/server/discovery_controller"
-require "kiosk/server/jwks_controller"
 require "kiosk/server/binding_module_gate"
-require "kiosk/server/oauth_device_authorization_controller"
-require "kiosk/server/oauth_token_controller"
 require "kiosk/server/account_holder_gate"
-require "kiosk/server/device_verify_controller"
-require "kiosk/server/assistants_controller"
-require "kiosk/server/auth_controller"
-require "kiosk/server/kyc_attestation_controller"
-require "kiosk/server/kyc_callback_controller"
 
 module Kiosk
   module Server
+    # The controllers load on first use, after the host's initializers, so a view library such as
+    # Jbuilder has set ActionController::API up by then.
+    autoload :WireController,                     "kiosk/server/wire_controller"
+    autoload :VerbController,                     "kiosk/server/verb_controller"
+    autoload :PaymentSetupController,             "kiosk/server/payment_setup_controller"
+    autoload :OpenApiController,                  "kiosk/server/open_api_controller"
+    autoload :DiscoveryController,                "kiosk/server/discovery_controller"
+    autoload :JwksController,                     "kiosk/server/jwks_controller"
+    autoload :OauthDeviceAuthorizationController, "kiosk/server/oauth_device_authorization_controller"
+    autoload :OauthTokenController,               "kiosk/server/oauth_token_controller"
+    autoload :DeviceVerifyController,             "kiosk/server/device_verify_controller"
+    autoload :AssistantsController,               "kiosk/server/assistants_controller"
+    autoload :AuthController,                     "kiosk/server/auth_controller"
+    autoload :KycAttestationController,           "kiosk/server/kyc_attestation_controller"
+    autoload :KycCallbackController,              "kiosk/server/kyc_callback_controller"
+
     # Pieces shipped in this gem:
     #
     #   Wire plane:

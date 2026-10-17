@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The controller lists in `kiosk/server.rb` (the require block and the
+# The controller lists in `kiosk/server.rb` (the autoload block and the
 # «Pieces shipped in this gem» manifest) name exactly the controllers on disk.
 RSpec.describe "kiosk/server.rb's controller manifest" do
   SERVER_ENTRY_PATH   = File.expand_path("../../../lib/kiosk/server.rb", __dir__)
@@ -22,7 +22,7 @@ RSpec.describe "kiosk/server.rb's controller manifest" do
     # A vacuity arm: an empty derivation would make every example below pass by
     # comparing nothing, which is the shape this file exists to prevent.
     expect(names).not_to be_empty,
-                         "no `*_controller.rb` was found beside kiosk/server/. The oracle is the " \
+                         "no `*_controller.rb` was found beside kiosk/server/. The list is the " \
                          "directory; if the layout moved, move this example with it rather than " \
                          "letting an empty set agree with every list."
   end
@@ -35,15 +35,14 @@ RSpec.describe "kiosk/server.rb's controller manifest" do
                        "so a file that does not define its own name makes them uncheckable."
   end
 
-  it "requires every one of them" do
+  it "autoloads every one of them" do
     missing = names.reject do |name|
       require_path = name.gsub(/([a-z])([A-Z])/, '\1_\2').downcase
-      entry.include?(%(require "kiosk/server/#{require_path}"))
+      entry.match?(/autoload :#{name},\s+"kiosk\/server\/#{require_path}"/)
     end
     expect(missing).to be_empty,
-                       "server.rb does not require #{missing.join(", ")}. This file is what " \
-                       "`require \"kiosk/server\"` loads; a controller it does not require is " \
-                       "loaded only by autoload luck."
+                       "server.rb does not autoload #{missing.join(", ")}, so " \
+                       "`require \"kiosk/server\"` leaves it undefined."
   end
 
   it "names every one of them in the «Pieces shipped in this gem» manifest" do

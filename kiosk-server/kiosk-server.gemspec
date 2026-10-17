@@ -142,19 +142,4 @@ Gem::Specification.new do |spec|
   # activesupport — String#constantize (agent_registration) and String#classify
   #                 (generator template).
   spec.add_dependency 'activesupport', '~> 8.1'
-
-  spec.add_development_dependency 'rack',     '~> 3.0'
-  spec.add_development_dependency 'rake',     '~> 13.2'
-  spec.add_development_dependency 'rspec',    '~> 3.13'
-  # puma — the events socket cannot be exercised without a server that supports
-  # `rack.hijack`: Action Cable's connection takes the socket away from Rack,
-  # and a handler that cannot give it up answers the upgrade with an ordinary
-  # HTTP response. So the one spec that drives a real WebSocket boots Puma in a
-  # subprocess. Development only; nothing at runtime depends on a server.
-  spec.add_development_dependency 'puma',     '~> 6.0'
-  # TestExecutor (lib/kiosk/server/test_executor.rb) implements the
-  # Kiosk::TestHelpers::Journey contract; we need the error classes
-  # at test time. Host apps depending on TestExecutor will have
-  # kiosk-test-support loaded transitively via kiosk-rls-{rspec,minitest}.
-  spec.add_development_dependency 'kiosk-test-support', '~> 0.5.0'
 end

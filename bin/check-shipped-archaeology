@@ -12,7 +12,7 @@ REPO = File.expand_path('..', __dir__)
 # A leading boundary that also opens after a string escape such as `\n`, which leaves a
 # word character right before the id. Fixed-length lookbehinds, one per escape length.
 ESCAPE_RUN_MAX = 5
-WORD_START = "(?:#{(1..ESCAPE_RUN_MAX).map { |n| "(?<=\\\\[A-Za-z0-9]{#{n}})" }.join('|')}|(?<![A-Za-z0-9_]))"
+WORD_START = "(?:#{(1..ESCAPE_RUN_MAX).map { |n| "(?<=\\\\[A-Za-z0-9]{#{n}})" }.join('|')}|(?<![A-Za-z0-9_]))".freeze
 
 LEDGER_ID_RE  = /#{WORD_START}[KT]-\d{3,4}\b/
 ADR_RE        = /#{WORD_START}ADR-\d{4}\b/
@@ -79,20 +79,25 @@ def author_only?(exists:, tracked:, directory:)
 end
 
 def author_only_paths(line, doc_dir = REPO)
-  candidates = []
-  [[AUTHOR_ONLY_RE, REPO], [bare_names_re(doc_dir), doc_dir]].each do |re, base|
-    next if re.nil?
-
-    line.to_enum(:scan, re).each do
-      m = Regexp.last_match
-      candidates << File.join(base, m[0]) unless disclaimed_at?(line, m.begin(0))
-    end
+  candidates = [[AUTHOR_ONLY_RE, REPO], [bare_names_re(doc_dir), doc_dir]].flat_map do |re, base|
+    re ? undisclaimed_matches(line, re).map { |name| File.join(base, name) } : []
   end
-  candidates.uniq.filter_map do |full|
-    rel = full.delete_prefix("#{REPO}/")
-    rel if author_only?(exists: File.exist?(full), tracked: tracked_paths.include?(rel),
-                        directory: File.directory?(full))
-  end.uniq
+  candidates.uniq.filter_map { |full| author_only_rel(full) }.uniq
+end
+
+def undisclaimed_matches(line, regex)
+  names = []
+  line.to_enum(:scan, regex).each do
+    m = Regexp.last_match
+    names << m[0] unless disclaimed_at?(line, m.begin(0))
+  end
+  names
+end
+
+def author_only_rel(full)
+  rel = full.delete_prefix("#{REPO}/")
+  rel if author_only?(exists: File.exist?(full), tracked: tracked_paths.include?(rel),
+                      directory: File.directory?(full))
 end
 
 # `developer: true` rules also hold the spec/ and test/ trees.
@@ -144,7 +149,7 @@ def tracked_under(prefix) = tracked_paths.select { |p| p.start_with?(prefix) }
 
 def demo_file?(rel)
   _, top, *rest = rel.split('/')
-  return false if DEMO_NOT_READ.include?(top) || %w[CHANGELOG.md CLAUDE.md].include?(File.basename(rel))
+  return false if demo_tooling?(top, rel)
   return !rel.match?(VENDORED_RE) if CFAMILY_EXTS.include?(File.extname(rel))
 
   return true if rel.end_with?('.md') || (rest.empty? && %w[Rakefile config.ru].include?(top))
@@ -152,11 +157,16 @@ def demo_file?(rel)
   DEMO_ROOTS.include?(top) && DEMO_EXTS.include?(File.extname(rel))
 end
 
+def demo_tooling?(top, rel) = DEMO_NOT_READ.include?(top) || %w[CHANGELOG.md CLAUDE.md].include?(File.basename(rel))
+
 def published_files
-  gem_files +
-    tracked_under('kiosk-demo-').select { |rel| demo_file?(rel) }.map { |rel| File.join(REPO, rel) } +
-    (tracked_under('e2e/') + tracked_under('deploy/')).map { |rel| File.join(REPO, rel) } +
-    tracked_paths.reject { |rel| rel.include?('/') || ROOT_NOT_READ.include?(rel) }.map { |rel| File.join(REPO, rel) }
+  gem_files + published_rels.map { |rel| File.join(REPO, rel) }
+end
+
+def published_rels
+  tracked_under('kiosk-demo-').select { |rel| demo_file?(rel) } +
+    tracked_under('e2e/') + tracked_under('deploy/') +
+    tracked_paths.reject { |rel| rel.include?('/') || ROOT_NOT_READ.include?(rel) }
 end
 
 def developer_files
@@ -171,26 +181,40 @@ def text_file?(path) = File.file?(path) && !File.binread(path, 8192).to_s.includ
 # C-family and Swift sources are read for their comments only; other lines become blank.
 def cfamily_comments(src)
   out = String.new
-  i = 0
-  while i < src.length
-    ch = src[i]
-    if ['"', "'"].include?(ch)
-      i += 1
-      while i < src.length && src[i] != ch
-        out << "\n" if src[i] == "\n"
-        i += src[i] == '\\' ? 2 : 1
-      end
-      i += 1
-    elsif ch == '/' && ['/', '*'].include?(src[i + 1])
-      j = src[i + 1] == '/' ? (src.index("\n", i) || src.length) : ((src.index('*/', i + 2) || (src.length - 2)) + 2)
-      out << src[i...j]
-      i = j
-    else
-      out << "\n" if ch == "\n"
-      i += 1
-    end
-  end
+  pos = 0
+  pos = cfamily_step(src, pos, out) while pos < src.length
   out
+end
+
+# Consumes one token at `pos` into `out` and returns the position after it.
+def cfamily_step(src, pos, out)
+  ch = src[pos]
+  return skip_string_literal(src, pos, out) if ['"', "'"].include?(ch)
+  return copy_comment(src, pos, out) if ch == '/' && ['/', '*'].include?(src[pos + 1])
+
+  out << "\n" if ch == "\n"
+  pos + 1
+end
+
+# A string literal keeps only its newlines.
+def skip_string_literal(src, start, out)
+  quote = src[start]
+  pos = start + 1
+  while pos < src.length && src[pos] != quote
+    out << "\n" if src[pos] == "\n"
+    pos += src[pos] == '\\' ? 2 : 1
+  end
+  pos + 1
+end
+
+def copy_comment(src, start, out)
+  stop = if src[start + 1] == '/'
+           src.index("\n", start) || src.length
+         else
+           (src.index('*/', start + 2) || (src.length - 2)) + 2
+         end
+  out << src[start...stop]
+  stop
 end
 
 Hit = Struct.new(:path, :line, :rule, :text)
@@ -198,164 +222,247 @@ Hit = Struct.new(:path, :line, :rule, :text)
 def scan(path, rules = RULES)
   src = File.read(path, encoding: 'UTF-8', invalid: :replace, undef: :replace)
   src = cfamily_comments(src) if CFAMILY_EXTS.include?(File.extname(path))
-  re_for = ->(r) { r[:resolve] == :author_only ? author_only_re_for(path) : r[:re] }
-  return [] unless rules.any? { |r| src.match?(re_for.call(r)) }
+  return [] unless rules.any? { |r| src.match?(rule_re(r, path)) }
 
-  hits = []
-  src.each_line.with_index(1) do |line, lineno|
-    next if line.match?(TODO_RE)
-
-    rules.each do |rule|
-      next unless line.match?(re_for.call(rule))
-      next if rule[:id] == 'R4' && line.match?(AUTHORS_RE)
-
-      found =
-        case rule[:resolve]
-        when :missing     then missing_paths(line)
-        when :author_only then author_only_paths(line, File.dirname(path))
-        end
-      next if found && found.empty?
-
-      text = found ? "#{found.join(', ')} — #{line.strip[0, 80]}" : line.strip[0, 100]
-      hits << Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, text)
-    end
+  src.each_line.with_index(1).flat_map do |line, lineno|
+    line.match?(TODO_RE) ? [] : line_hits(path, line, lineno, rules)
   end
-  hits
+end
+
+def rule_re(rule, path) = rule[:resolve] == :author_only ? author_only_re_for(path) : rule[:re]
+
+def line_hits(path, line, lineno, rules)
+  rules.filter_map do |rule|
+    text = hit_text(path, line, rule)
+    Hit.new(path.delete_prefix("#{REPO}/"), lineno, rule, text) if text
+  end
+end
+
+# The text a hit reports, or nil when the rule does not fire on this line.
+def hit_text(path, line, rule)
+  return unless line.match?(rule_re(rule, path))
+  return if rule[:id] == 'R4' && line.match?(AUTHORS_RE)
+
+  found = resolved_paths(rule, line, path)
+  return line.strip[0, 100] if found.nil?
+
+  "#{found.join(', ')} — #{line.strip[0, 80]}" unless found.empty?
+end
+
+def resolved_paths(rule, line, path)
+  case rule[:resolve]
+  when :missing     then missing_paths(line)
+  when :author_only then author_only_paths(line, File.dirname(path))
+  end
+end
+
+def scoped_files
+  { published: published_files, developer: developer_files }
+    .transform_values { |files| files.uniq.select { |p| text_file?(p) }.sort }
+end
+
+def report_hit(hit)
+  puts "FAIL #{hit.path}:#{hit.line} — #{hit.rule[:what]}; #{hit.rule[:fix]}.\n       #{hit.text}"
 end
 
 def run_check
-  scopes = { published: published_files, developer: developer_files }
-           .transform_values { |files| files.uniq.select { |p| text_file?(p) }.sort }
+  scopes = scoped_files
   hits = scopes.flat_map { |scope, files| files.flat_map { |p| scan(p, rules_for(scope)) } }
-  hits.each do |h|
-    puts "FAIL #{h.path}:#{h.line} — #{h.rule[:what]}; #{h.rule[:fix]}.\n       #{h.text}"
-  end
-  if hits.empty?
-    puts "OK: no unresolvable citation in #{scopes[:published].size} published and " \
-         "#{scopes[:developer].size} spec/test files"
-  end
-  hits.empty? ? 0 : 1
+  hits.each { |h| report_hit(h) }
+  return 1 unless hits.empty?
+
+  puts "OK: no unresolvable citation in #{scopes[:published].size} published and " \
+       "#{scopes[:developer].size} spec/test files"
+  0
 end
 
 # ── self-test ────────────────────────────────────────────────────────────────
 
+# Every rule fires, in each place a citation can hide: [rule, where, file name, body].
+RULE_PLANTS = [
+  ['R1', 'a Ruby comment', 'a.rb', "# The past-slot filter, K-480.\ndef f = 1\n"],
+  ['R1', 'a Ruby string', 'b.rb', "MSG = \"blocked by K-072\"\n"],
+  ['R1', 'a Ruby symbol', 'c.rb', "SYM = :\"K-1035\"\n"],
+  ['R1', 'a trailing comment', 'd.rb', "VALUE = 1 # widened by T-158\n"],
+  ['R1', 'a Rake desc', 'e.rake', "desc \"Seed the slots (K-1234)\"\n"],
+  ['R1', 'a Markdown README', 'README.md', "The wire error contract (T-054) is closed.\n"],
+  ['R1', 'a JSON description', 'g.json', "{ \"description\": \"the toll, K-512\" }\n"],
+  ['R1', 'an ERB comment', 'h.html.erb', "<%# The access line is a CONSENT field (K-072). %>\n"],
+  ['R1', 'a generator template', 'i.rb.tt', "# Emitted into the host app (K-830).\n"],
+  ['R1', 'a C comment', 'fw.c', "int x = 1; /* see K-1554 */\n"],
+  ['R2', 'a Ruby comment', 'j.rb', "# The refusal shape is fixed by ADR-0018.\n"],
+  ['R2', 'a Ruby string', 'k.rb', "MSG = \"see ADR-0007\"\n"],
+  ['R3', 'a Ruby comment', 'l.rb', "# The trade-off, weighed: «пусть будет 1m».\n"],
+  ['R3', 'a Markdown README', 'README.md', "Убери из демок всю археологию.\n"],
+  ['R4', 'a Ruby comment', 'm.rb', "# Phil accepted this control's weakness openly.\n"]
+].freeze
+
+# Lines no rule may flag: [assertion, file name, body].
+CLEAN_PLANTS = [
+  ['a live TODO or FIXME carrying its id is not flagged', 'todo.rb', "# TODO(K-1099): widen.\n# FIXME: T-186 narrow.\n"],
+  ['OK-1234, RFC 8628 and CVE-2021-0001 are not ledger ids',
+   'clean.rb', "# OK-1234 is a fixture, RFC 8628 a standard, CVE-2021-0001 neither.\n"],
+  ['too few digits is not a ledger id', 'short.rb', "# K-12 and T-9 and ADR-12 are not ledger ids.\n"],
+  ['SK-001, SK-999 and unK-724 are not ledger ids',
+   'boundary.md', "The scooter is SK-001, its twin SK-999; unK-724 is a word.\n"],
+  ['C code outside a comment is not read', 'code.c', "const char *s = \"K-1554 // not a comment\";\n"]
+].freeze
+
+# Lines a rule matches and deliberately skips: [assertion, file name, body].
+SKIPPED_PLANTS = [
+  ['R4 skips the `spec.authors` line', 'm.gemspec', "  spec.authors = [\"Phil Pirozhkov\"]\n"],
+  ['R3 skips guillemets, dashes, §, arrows and accented Latin',
+   'punct.rb', "# «08:00–10:00» per §11.6 — naïve ← → ✓ €200.\n"]
+].freeze
+
+# Plants files in a scratch directory and asserts what the scan reports for each.
+class SelfTest
+  # Writes plant files into a scratch directory and records each assertion.
+  module Helpers
+    attr_reader :failures
+
+    private
+
+    def check(name, passed)
+      puts(passed ? "  ok   #{name}" : "  FAIL #{name}")
+      @failures << name unless passed
+    end
+
+    def plant(basename, body) = File.join(@dir, basename).tap { |p| File.write(p, body) }
+    def ids(path, rules = RULES) = scan(path, rules).map { |h| h.rule[:id] }
+    def hits(path, id) = scan(path).select { |h| h.rule[:id] == id }
+  end
+
+  include Helpers
+
+  STEPS = %i[rule_plants clean_plants single_escapes escape_runs newline_escapes skipped_plants
+             developer_scope r7_paths r7_accepts r8_predicate r8_tracked root_name_boundaries
+             r8_root_untracked r8_siblings r8_sibling_clauses].freeze
+
+  def initialize(dir)
+    @dir = dir
+    @failures = []
+  end
+
+  def run = STEPS.each { |step| send(step) }
+
+  private
+
+  def clean_plants = clean(CLEAN_PLANTS)
+  def skipped_plants = clean(SKIPPED_PLANTS)
+
+  def rule_plants
+    RULE_PLANTS.each do |id, where, basename, body|
+      check("#{id} fires in #{where}", ids(plant(basename, body)).include?(id))
+    end
+  end
+
+  def clean(plants)
+    plants.each { |name, basename, body| check(name, ids(plant(basename, body)).empty?) }
+  end
+
+  # Every single-character escape, and escape runs up to the ceiling, open the boundary.
+  def single_escapes
+    missed = [*'a'..'z', *'A'..'Z', *'0'..'9'].reject { |c| ids(plant("esc_#{c}.md", %(A line "\\#{c}K-724 refused".\n))).any? }
+    check("R1 fires behind every single-character escape#{" — missed #{missed.join}" unless missed.empty?}",
+          missed.empty?)
+  end
+
+  def escape_runs
+    missed = (1..ESCAPE_RUN_MAX).reject { |k| ids(plant("run_#{k}.md", %(a "\\#{'a' * k}K-724"\n))).any? }
+    check("R1 fires behind an escape run of 1..#{ESCAPE_RUN_MAX}", missed.empty?)
+    check('…and not past it', ids(plant('run_over.md', %(a "\\#{'a' * (ESCAPE_RUN_MAX + 1)}K-724"\n))).empty?)
+  end
+
+  def newline_escapes
+    check('R2 fires behind a `\\n` escape', ids(plant('esc_adr.rb', %(M = "\\nADR-0018"\n))) == ['R2'])
+    check('R4 fires behind a `\\n` escape', ids(plant('esc_phil.rb', %(M = "\\nPhil said"\n))) == ['R4'])
+  end
+
+  def developer_scope
+    developer = plant('salon_clock_spec.rb', "# K-9999 / ADR-0029 — так решил Phil.\n")
+    check('a spec/ tree allows ledger ids and ADR references but not Cyrillic or the maintainer',
+          ids(developer, rules_for(:developer)).sort == %w[R3 R4])
+  end
+
+  def gone = @gone ||= plant('gone.md', "Re-check it with `deploy/check-edge-ratelimit.sh` first.\n")
+  def live = @live ||= plant('live.md', "See `deploy/README.md`, `kiosk-server/lib` and e2e/run.sh.\n")
+
+  # R7: a path is a violation only when it names nothing.
+  def r7_paths
+    check('R7 flags a path that names nothing, and names the path',
+          hits(gone, 'R7').size == 1 && hits(gone, 'R7').first.text.start_with?('deploy/check-edge-ratelimit.sh —'))
+    check('R7 accepts an existing file or directory', hits(live, 'R7').empty?)
+  end
+
+  def r7_accepts
+    check('R7 accepts a path that ends a sentence',
+          hits(plant('stop.md', "The adopter edits e2e/README.md. Then run it.\n"), 'R7').empty?)
+    check('R7 does not read `bin/<x>` as a repository path',
+          hits(plant('binstub.md', "Run `bin/rails demo:setup`, then `bin/dev`.\n"), 'R7').empty?)
+  end
+
+  # R8: a path that resolves only here.
+  def r8_predicate
+    check('R8 fires on a path that exists and git does not carry',
+          author_only?(exists: true, tracked: false, directory: false))
+    check('…not on a tracked path', !author_only?(exists: true, tracked: true, directory: false))
+    check("…not on an absent path, which is R7's", !author_only?(exists: false, tracked: false, directory: false))
+    check('…and not on a directory', !author_only?(exists: true, tracked: false, directory: true))
+  end
+
+  def r8_tracked
+    check('R8 passes a tracked path, and leaves an absent one to R7',
+          hits(live, 'R8').empty? && hits(gone, 'R8').empty?)
+  end
+
+  def root_name_boundaries
+    probe = Dir.children(REPO).find { |n| !n.start_with?('.') && File.file?(File.join(REPO, n)) }
+    check('the root-name recogniser respects word characters on both sides',
+          ("`X#{probe}` pins it" =~ ROOT_FILE_RE).nil? && ("`#{probe}1` pins it" =~ ROOT_FILE_RE).nil? &&
+          ('See e2e/README.md.' =~ ROOT_FILE_RE).nil?)
+  end
+
+  def r8_root_untracked
+    root_untracked = Dir.children(REPO).find { |n| File.file?(File.join(REPO, n)) && !tracked_paths.include?(n) }
+    return unless root_untracked
+
+    check("R8 fires on a bare untracked root file (#{root_untracked})",
+          hits(plant('rootfile.md', "The version is pinned in `#{root_untracked}`.\n"), 'R8').size == 1)
+  end
+
+  def sibdir
+    @sibdir ||= File.join(@dir, 'sibling-leg').tap do |d|
+      FileUtils.mkdir_p(d)
+      File.write(File.join(d, 'local.toml'), '')
+      File.write(File.join(d, 'other.toml'), '')
+    end
+  end
+
+  def sibling(name, body) = hits(File.join(sibdir, name).tap { |p| File.write(p, body) }, 'R8')
+
+  def r8_siblings
+    check('R8 fires on a bare name naming an untracked file beside the document',
+          sibling('LAYOUT.md', "├── local.toml    # pins the Ruby\n").size == 1)
+    check('…not on a clause that says the file does not ship',
+          sibling('OK.md', "No pin ships: `local.toml` is gitignored, so a clone has none.\n").empty?)
+  end
+
+  def r8_sibling_clauses
+    check('…the excuse covers only its own clause',
+          author_only_paths('`local.toml` pins it (`other.toml` is untracked).', sibdir) ==
+            [File.join(sibdir, 'local.toml')])
+    check('…a comma does not end the clause',
+          sibling('COMMA.md', "`local.toml` and `other.toml` are gitignored, so none ships.\n").empty?)
+    check('…not on a tracked sibling, nor on a name that resolves to nothing',
+          author_only_paths('then run.sh does the rest; see nosuchfile.toml', File.join(REPO, 'e2e')).empty?)
+  end
+end
+
 def self_test
   require 'tmpdir'
   require 'fileutils'
-  failures = []
-  check = lambda do |name, ok|
-    puts(ok ? "  ok   #{name}" : "  FAIL #{name}")
-    failures << name unless ok
-  end
-
-  Dir.mktmpdir('shipped-archaeology-selftest') do |dir|
-    plant = ->(basename, body) { File.join(dir, basename).tap { |p| File.write(p, body) } }
-    ids = ->(path, rules = RULES) { scan(path, rules).map { |h| h.rule[:id] } }
-
-    # Every rule fires, in each place a citation can hide.
-    [
-      ['R1', 'a Ruby comment', 'a.rb', "# The past-slot filter, K-480.\ndef f = 1\n"],
-      ['R1', 'a Ruby string', 'b.rb', "MSG = \"blocked by K-072\"\n"],
-      ['R1', 'a Ruby symbol', 'c.rb', "SYM = :\"K-1035\"\n"],
-      ['R1', 'a trailing comment', 'd.rb', "VALUE = 1 # widened by T-158\n"],
-      ['R1', 'a Rake desc', 'e.rake', "desc \"Seed the slots (K-1234)\"\n"],
-      ['R1', 'a Markdown README', 'README.md', "The wire error contract (T-054) is closed.\n"],
-      ['R1', 'a JSON description', 'g.json', "{ \"description\": \"the toll, K-512\" }\n"],
-      ['R1', 'an ERB comment', 'h.html.erb', "<%# The access line is a CONSENT field (K-072). %>\n"],
-      ['R1', 'a generator template', 'i.rb.tt', "# Emitted into the host app (K-830).\n"],
-      ['R1', 'a C comment', 'fw.c', "int x = 1; /* see K-1554 */\n"],
-      ['R2', 'a Ruby comment', 'j.rb', "# The refusal shape is fixed by ADR-0018.\n"],
-      ['R2', 'a Ruby string', 'k.rb', "MSG = \"see ADR-0007\"\n"],
-      ['R3', 'a Ruby comment', 'l.rb', "# The trade-off, weighed: «пусть будет 1m».\n"],
-      ['R3', 'a Markdown README', 'README.md', "Убери из демок всю археологию.\n"],
-      ['R4', 'a Ruby comment', 'm.rb', "# Phil accepted this control's weakness openly.\n"]
-    ].each do |id, where, basename, body|
-      check.call("#{id} fires in #{where}", ids.call(plant.call(basename, body)).include?(id))
-    end
-
-    check.call('a live TODO or FIXME carrying its id is not flagged',
-               ids.call(plant.call('todo.rb', "# TODO(K-1099): widen.\n# FIXME: T-186 narrow.\n")).empty?)
-    check.call('OK-1234, RFC 8628 and CVE-2021-0001 are not ledger ids',
-               ids.call(plant.call('clean.rb', "# OK-1234 is a fixture, RFC 8628 a standard, CVE-2021-0001 neither.\n")).empty?)
-    check.call('too few digits is not a ledger id',
-               ids.call(plant.call('short.rb', "# K-12 and T-9 and ADR-12 are not ledger ids.\n")).empty?)
-    check.call('SK-001, SK-999 and unK-724 are not ledger ids',
-               ids.call(plant.call('boundary.md', "The scooter is SK-001, its twin SK-999; unK-724 is a word.\n")).empty?)
-    check.call('C code outside a comment is not read',
-               ids.call(plant.call('code.c', "const char *s = \"K-1554 // not a comment\";\n")).empty?)
-
-    # Every single-character escape, and escape runs up to the ceiling, open the boundary.
-    bodies = [*'a'..'z', *'A'..'Z', *'0'..'9']
-    missed = bodies.reject { |c| ids.call(plant.call("esc_#{c}.md", %(A line "\\#{c}K-724 refused".\n))).any? }
-    check.call("R1 fires behind every single-character escape#{" — missed #{missed.join}" unless missed.empty?}",
-               missed.empty?)
-    missed = (1..ESCAPE_RUN_MAX).reject { |k| ids.call(plant.call("run_#{k}.md", %(a "\\#{'a' * k}K-724"\n))).any? }
-    check.call("R1 fires behind an escape run of 1..#{ESCAPE_RUN_MAX}", missed.empty?)
-    check.call('…and not past it',
-               ids.call(plant.call('run_over.md', %(a "\\#{'a' * (ESCAPE_RUN_MAX + 1)}K-724"\n))).empty?)
-    check.call('R2 fires behind a `\\n` escape', ids.call(plant.call('esc_adr.rb', %(M = "\\nADR-0018"\n))) == ['R2'])
-    check.call('R4 fires behind a `\\n` escape', ids.call(plant.call('esc_phil.rb', %(M = "\\nPhil said"\n))) == ['R4'])
-
-    check.call('R4 skips the `spec.authors` line',
-               ids.call(plant.call('m.gemspec', "  spec.authors = [\"Phil Pirozhkov\"]\n")).empty?)
-    check.call('R3 skips guillemets, dashes, §, arrows and accented Latin',
-               ids.call(plant.call('punct.rb', "# «08:00–10:00» per §11.6 — naïve ← → ✓ €200.\n")).empty?)
-
-    developer = plant.call('salon_clock_spec.rb', "# K-9999 / ADR-0029 — так решил Phil.\n")
-    check.call('a spec/ tree allows ledger ids and ADR references but not Cyrillic or the maintainer',
-               ids.call(developer, rules_for(:developer)).sort == %w[R3 R4])
-
-    # R7: a path is a violation only when it names nothing.
-    r7 = ->(p) { scan(p).select { |h| h.rule[:id] == 'R7' } }
-    gone = plant.call('gone.md', "Re-check it with `deploy/check-edge-ratelimit.sh` first.\n")
-    check.call('R7 flags a path that names nothing, and names the path',
-               r7.call(gone).size == 1 && r7.call(gone).first.text.start_with?('deploy/check-edge-ratelimit.sh —'))
-    live = plant.call('live.md', "See `deploy/README.md`, `kiosk-server/lib` and e2e/run.sh.\n")
-    check.call('R7 accepts an existing file or directory', r7.call(live).empty?)
-    check.call('R7 accepts a path that ends a sentence',
-               r7.call(plant.call('stop.md', "The adopter edits e2e/README.md. Then run it.\n")).empty?)
-    check.call('R7 does not read `bin/<x>` as a repository path',
-               r7.call(plant.call('binstub.md', "Run `bin/rails demo:setup`, then `bin/dev`.\n")).empty?)
-
-    # R8: a path that resolves only here.
-    check.call('R8 fires on a path that exists and git does not carry',
-               author_only?(exists: true, tracked: false, directory: false))
-    check.call('…not on a tracked path', !author_only?(exists: true, tracked: true, directory: false))
-    check.call("…not on an absent path, which is R7's", !author_only?(exists: false, tracked: false, directory: false))
-    check.call('…and not on a directory', !author_only?(exists: true, tracked: false, directory: true))
-
-    r8 = ->(p) { scan(p).select { |h| h.rule[:id] == 'R8' } }
-    check.call('R8 passes a tracked path, and leaves an absent one to R7',
-               r8.call(live).empty? && r8.call(gone).empty?)
-
-    probe = Dir.children(REPO).find { |n| !n.start_with?('.') && File.file?(File.join(REPO, n)) }
-    check.call('the root-name recogniser respects word characters on both sides',
-               ("`X#{probe}` pins it" =~ ROOT_FILE_RE).nil? && ("`#{probe}1` pins it" =~ ROOT_FILE_RE).nil? &&
-               ('See e2e/README.md.' =~ ROOT_FILE_RE).nil?)
-    root_untracked = Dir.children(REPO).find { |n| File.file?(File.join(REPO, n)) && !tracked_paths.include?(n) }
-    if root_untracked
-      check.call("R8 fires on a bare untracked root file (#{root_untracked})",
-                 r8.call(plant.call('rootfile.md', "The version is pinned in `#{root_untracked}`.\n")).size == 1)
-    end
-
-    sibdir = File.join(dir, 'sibling-leg')
-    FileUtils.mkdir_p(sibdir)
-    File.write(File.join(sibdir, 'local.toml'), '')
-    File.write(File.join(sibdir, 'other.toml'), '')
-    write = ->(name, body) { File.join(sibdir, name).tap { |p| File.write(p, body) } }
-    check.call('R8 fires on a bare name naming an untracked file beside the document',
-               r8.call(write.call('LAYOUT.md', "├── local.toml    # pins the Ruby\n")).size == 1)
-    check.call('…not on a clause that says the file does not ship',
-               r8.call(write.call('OK.md', "No pin ships: `local.toml` is gitignored, so a clone has none.\n")).empty?)
-    check.call('…the excuse covers only its own clause',
-               author_only_paths('`local.toml` pins it (`other.toml` is untracked).', sibdir) ==
-                 [File.join(sibdir, 'local.toml')])
-    check.call('…a comma does not end the clause',
-               r8.call(write.call('COMMA.md', "`local.toml` and `other.toml` are gitignored, so none ships.\n")).empty?)
-    check.call('…not on a tracked sibling, nor on a name that resolves to nothing',
-               author_only_paths('then run.sh does the rest; see nosuchfile.toml', File.join(REPO, 'e2e')).empty?)
-  end
-
+  failures = Dir.mktmpdir('shipped-archaeology-selftest') { |dir| SelfTest.new(dir).tap(&:run).failures }
   puts(failures.empty? ? 'self-test: all assertions passed' : "self-test: #{failures.size} FAILED")
   failures.empty? ? 0 : 1
 end

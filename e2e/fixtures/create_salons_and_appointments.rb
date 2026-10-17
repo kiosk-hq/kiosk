@@ -14,7 +14,10 @@ class CreateSalonsAndAppointments < ActiveRecord::Migration[ActiveRecord::Migrat
       t.string :name, null: false
       t.timestamps
     end
+    create_appointments
+  end
 
+  def create_appointments
     create_table :appointments, id: :uuid do |t|
       t.references :user,  null: false, foreign_key: true, type: :uuid
       t.references :salon, null: false, foreign_key: true

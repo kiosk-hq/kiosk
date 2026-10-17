@@ -70,7 +70,7 @@ def pop_proof(key, pem)
   JWT.encode({ aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
 end
 
-TOKEN_URL = "#{SERVER}/kiosk/oauth/token"
+TOKEN_URL = "#{SERVER}/kiosk/oauth/token".freeze
 GRANT     = 'urn:ietf:params:oauth:grant-type:device_code'
 results   = {}
 

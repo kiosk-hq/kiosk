@@ -31,9 +31,15 @@ class SalonDeskController < ApplicationController
 
     appointment.update!(confirmed_at: Time.current)
 
-    # THE AUDIENCE IS THE OWNER, and it is named rather than derived from a
-    # request: there is no request here that belongs to the guest. The subject
-    # is the appointment, so a subscriber may narrow to one row.
+    announce(appointment)
+    head :ok
+  end
+
+  private
+
+  # The audience is the owner, named here: no request in this call belongs to
+  # the guest. The subject is the appointment, so a subscriber may narrow to one row.
+  def announce(appointment)
     Kiosk::Server::Events.emit(
       topic: :appointment_confirmed,
       subject: appointment.id,
@@ -42,7 +48,5 @@ class SalonDeskController < ApplicationController
               'salon_id' => appointment.salon_id,
               'slot' => appointment.slot.utc.iso8601 }
     )
-
-    head :ok
   end
 end

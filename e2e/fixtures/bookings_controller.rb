@@ -132,13 +132,7 @@ module Kiosk
     example_row({ appointment_id: '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f', salon_id: 1,
                   slot: -> { example_slot } })
     def book_appointment
-      user_id = Kiosk.current_user_id
-
-      appointment = Appointment.create!(
-        user_id: user_id,
-        salon_id: params[:salon_id],
-        slot: params[:slot]
-      )
+      appointment = Appointment.create!(user_id: Kiosk.current_user_id, salon_id: params[:salon_id], slot: params[:slot])
 
       render json: {
         appointment_id: appointment.id,

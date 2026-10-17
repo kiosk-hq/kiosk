@@ -90,8 +90,6 @@ results[:challenge_params_nk] = [challenge_params['n'], challenge_params['k']].j
 reg_key, reg = equihash_register(
   server: SERVER,
   issuer: ISSUER,
-  get_json: ->(url) { get_json(url) },
-  post_json: ->(url, body, headers = {}) { post_json(url, body, headers) },
   on_proofs: lambda { |proofs|
     capture = ENV.fetch('POW_CAPTURE', nil)
     File.write(capture, JSON.generate(proofs: proofs)) if capture && !capture.empty?
@@ -131,8 +129,7 @@ _, second_reg = equihash_register(
   server: SERVER,
   issuer: SECOND,
   key: reg_key,
-  get_json: ->(url) { get_json(url, second_host) },
-  post_json: ->(url, body, headers = {}) { post_json(url, body, headers.merge(second_host)) }
+  headers: second_host
 )
 results[:second_origin_new_account] = second_reg.fetch('agent_id') != reg.fetch('agent_id')
 second_token = second_reg.fetch('access_token')

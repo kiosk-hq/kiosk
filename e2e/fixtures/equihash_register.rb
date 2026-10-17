@@ -13,8 +13,8 @@
 # sending the proof(s) in the Kiosk-PoW request header as raw JSON.
 #
 # Requires: json, jwt, openssl, securerandom, uri (callers already require most
-# of these). Callers supply get_json/post_json lambdas so the helper stays
-# transport-agnostic.
+# of these), and the caller's own `get_json(url, headers)` and
+# `post_json(url, body, headers)`, which return `[code, body]`.
 #
 # The generated app bundles kiosk-pow-equihash, and that gem owns solve.py and
 # knows where it is inside its own package — so nothing here, and nothing in
@@ -33,48 +33,38 @@ end
 #
 # @param server   [String]  base URL (e.g. http://127.0.0.1:3001)
 # @param issuer   [String]  issuer origin for the PoP `aud` claim
-# @param get_json  [#call]  ->(url) { [code, body] }
-# @param post_json [#call]  ->(url, body, headers = {}) { [code, body] }
-#   (the header slot carries the Kiosk-PoW proof on the retry)
-# @param on_proofs [#call, nil] called with the proofs array this helper put in
-#   the `Kiosk-PoW` header, AFTER the server accepted them.  The e2e
-#   schema-conformance block validates those very bytes against
-#   `pow.schema.json#/$defs/proof`, which nothing reached before: the only path
-#   into that schema was `problem.schema.json`'s cross-file `$ref`, and that
-#   lands on `#/$defs/challenge` — the half the SERVER writes.  The half the
-#   CLIENT writes, where `indices` and its u64 bound live, was unvalidated on
-#   the wire.  Not called when the toll never fired.
+# @param headers  [Hash]    sent on every request (e.g. a Host for a second origin)
+# @param on_proofs [#call, nil] called with the proofs this helper sent, once the server accepted them
 # @param key [OpenSSL::PKey::RSA] the keypair to register; a fresh one by default
 # @return [Array(OpenSSL::PKey::RSA, Hash)] the keypair and the 201 register body
-def equihash_register(server:, issuer:, get_json:, post_json:, on_proofs: nil, key: OpenSSL::PKey::RSA.generate(2048))
-  pem = key.public_key.to_pem
-
-  rc_ch, ch = get_json.call("#{server}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-  abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
-  pop = JWT.encode(
-    { aud: issuer, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i },
-    key, 'RS256'
-  )
-
-  body = { public_key: pem, signed: pop }
-  rc, reg = post_json.call("#{server}/kiosk/auth/register", body)
-
-  if rc == 402
-    # The PoP nonce is NOT consumed on a 402 (the gate runs before the
-    # challenge is spent), so we resubmit the SAME signed proof + the PoW.
-    # RFC 9457: the 402 is a problem document, so `challenges` is a TOP-LEVEL
-    # extension member — there is no nested `error` object to reach into.
-    challenges = reg['challenges']
-    abort "402 without challenges[]: #{JSON.generate(reg)}" unless challenges.is_a?(Array) && challenges.any?
-    proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
-    rc, reg = post_json.call(
-      "#{server}/kiosk/auth/register", body, { 'Kiosk-PoW' => JSON.generate(proofs) }
-    )
-    # Only once the server has ACCEPTED them: a proof the origin refused would
-    # prove nothing about the shape the origin requires.
-    on_proofs&.call(proofs) if rc == 201
-  end
+def equihash_register(server:, issuer:, headers: {}, on_proofs: nil, key: OpenSSL::PKey::RSA.generate(2048))
+  pem  = key.public_key.to_pem
+  body = { public_key: pem, signed: registration_pop(server, issuer, key, headers) }
+  rc, reg = post_json("#{server}/kiosk/auth/register", body, headers)
+  rc, reg = pay_registration_toll(server, body, reg, headers, on_proofs) if rc == 402
 
   abort "register failed (#{rc}): #{JSON.generate(reg)}" unless rc == 201
   [key, reg]
+end
+
+# A proof of possession of `key`, signed over a fresh server challenge.
+def registration_pop(server, issuer, key, headers)
+  pem = URI.encode_www_form_component(key.public_key.to_pem)
+  rc_ch, ch = get_json("#{server}/kiosk/auth/challenge?public_key=#{pem}", headers)
+  abort "challenge failed (#{rc_ch}): #{JSON.generate(ch)}" unless rc_ch == 200
+
+  JWT.encode({ aud: issuer, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
+end
+
+# Solves every challenge of the 402 and resubmits the SAME body: the PoP nonce
+# is not consumed on a 402. RFC 9457: `challenges` is a top-level member.
+def pay_registration_toll(server, body, problem, headers, on_proofs)
+  challenges = problem['challenges']
+  abort "402 without challenges[]: #{JSON.generate(problem)}" unless challenges.is_a?(Array) && challenges.any?
+
+  proofs = challenges.map { |c| { challenge: c, nonce: equihash_solve(c) } }
+  rc, reg = post_json("#{server}/kiosk/auth/register", body, headers.merge('Kiosk-PoW' => JSON.generate(proofs)))
+  # Only proofs the server accepted say anything about the shape it requires.
+  on_proofs&.call(proofs) if rc == 201
+  [rc, reg]
 end

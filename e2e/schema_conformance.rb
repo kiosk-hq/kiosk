@@ -79,23 +79,21 @@ ENGINE_SCHEMA_DIR = File.expand_path(
   '../kiosk-server/lib/kiosk/server/schemas', E2E_DIR
 )
 
-PASS = []
-FAIL = []
-SKIP = []
+RESULTS = { pass: [], fail: [], skip: [] }.freeze
 
 def ok(label)
-  PASS << label
+  RESULTS[:pass] << label
   puts "  \e[1;32m✓\e[0m #{label}"
 end
 
 def bad(label, detail)
-  FAIL << label
+  RESULTS[:fail] << label
   puts "  \e[1;31m✗\e[0m #{label}\n     #{detail}"
 end
 
 # NOT A PASS. A check whose input this run is not permitted to create.
 def skipped(label, reason)
-  SKIP << label
+  RESULTS[:skip] << label
   puts "  \e[1;33m–\e[0m SKIP #{label}\n     #{reason}"
 end
 
@@ -111,13 +109,9 @@ end
 # cross-file `$ref` to `pow.schema.json#/$defs/challenge` resolves LOCALLY —
 # a validator that reached out to https://kiosk.tech to resolve it would be
 # testing the network, and would pass on a stale cache.
-DOCS = {}
-[SCHEMA_DIR, ENGINE_SCHEMA_DIR].each do |dir|
-  Dir[File.join(dir, '*.schema.json')].each do |path|
-    doc = JSON.parse(File.read(path))
-    DOCS[doc.fetch('$id')] = doc
-  end
-end
+DOCS = [SCHEMA_DIR, ENGINE_SCHEMA_DIR].flat_map { Dir[File.join(it, '*.schema.json')] }
+                                      .to_h { |path| JSON.parse(File.read(path)).then { [it.fetch('$id'), it] } }
+                                      .freeze
 
 REF_RESOLVER = lambda do |uri|
   DOCS[uri.to_s.split('#').first] or
@@ -145,24 +139,25 @@ end
 # @param pointer [String, nil] `$defs` pointer, when the document defines many
 # @param mutate  [Proc] given a deep copy of the payload, breaks it
 def conforms(label, id, payload, pointer: nil, &mutate)
-  schema = schema_for(id, pointer)
-  errors = schema.validate(payload).to_a
-  if errors.empty?
-    ok "#{label} validates against #{File.basename(id)}#{" #{pointer}" if pointer}"
-  else
-    bad "#{label} does NOT validate against #{File.basename(id)}",
-        errors.first(3).map { |e| e['error'] }.join('; ')
-  end
-
   raise ArgumentError, "#{label}: no control mutation given" unless mutate
 
-  broken = mutate.call(JSON.parse(JSON.generate(payload)))
-  if schema.valid?(broken)
-    bad "#{label}: the schema ACCEPTED a deliberately broken copy",
-        "the check above proves nothing — #{File.basename(id)} is vacuous for this payload"
-  else
-    ok '…and the same schema REFUSES a broken copy of those very bytes'
-  end
+  schema = schema_for(id, pointer)
+  validates(label, schema, id, pointer, payload)
+  refuses_broken_copy(label, schema, id, mutate.call(JSON.parse(JSON.generate(payload))))
+end
+
+def validates(label, schema, id, pointer, payload)
+  errors = schema.validate(payload).to_a
+  return ok("#{label} validates against #{File.basename(id)}#{" #{pointer}" if pointer}") if errors.empty?
+
+  bad "#{label} does NOT validate against #{File.basename(id)}", errors.first(3).map { |e| e['error'] }.join('; ')
+end
+
+def refuses_broken_copy(label, schema, id, broken)
+  return ok('…and the same schema REFUSES a broken copy of those very bytes') unless schema.valid?(broken)
+
+  bad "#{label}: the schema ACCEPTED a deliberately broken copy",
+      "the check above proves nothing — #{File.basename(id)} is vacuous for this payload"
 end
 
 def get(path, headers = {})
@@ -445,8 +440,8 @@ end
 auth_capture = ENV.fetch('AUTH_CAPTURE', nil)
 if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   auth = JSON.parse(File.read(auth_capture))
-  A = "#{B}/auth.schema.json"
-  BI = "#{B}/binding.schema.json"
+  A = "#{B}/auth.schema.json".freeze
+  BI = "#{B}/binding.schema.json".freeze
 
   # §5.1 — the challenge this origin issued for a real key.
   conforms('GET /auth/challenge', A, auth.fetch('challenge'),
@@ -625,6 +620,6 @@ else
          "an event is pushed only when the operator's state changes"
 end
 
-puts "\n  pass: #{PASS.size}\n  fail: #{FAIL.size}\n  skip: #{SKIP.size}"
+puts "\n  pass: #{RESULTS[:pass].size}\n  fail: #{RESULTS[:fail].size}\n  skip: #{RESULTS[:skip].size}"
 puts "  (#{SERVER} — read-only live mode: a skip is not a pass)" if LIVE
-exit 1 unless FAIL.empty?
+exit 1 unless RESULTS[:fail].empty?

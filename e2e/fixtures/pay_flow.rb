@@ -45,9 +45,7 @@ end
 require_relative 'equihash_register'
 key, reg = equihash_register(
   server: SERVER,
-  issuer: ISSUER,
-  get_json: ->(url) { get_json(url) },
-  post_json: ->(url, body, headers = {}) { post_json(url, body, headers) }
+  issuer: ISSUER
 )
 agent_id = reg.fetch('agent_id')
 user_id = reg.fetch('user_id')

@@ -138,9 +138,7 @@ cap = {}
 # new. What this leg is here for is the 201 body and the challenge that opened
 # it.
 reg_key, reg = equihash_register(
-  server: SERVER, issuer: ISSUER,
-  get_json: ->(url) { get_json(url) },
-  post_json: ->(url, body, headers = {}) { post_json(url, body, headers) }
+  server: SERVER, issuer: ISSUER
 )
 reg_pem = reg_key.public_key.to_pem
 cap['registration'] = reg

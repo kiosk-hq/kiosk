@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-require "base64"
-require "openssl"
+require 'base64'
+require 'openssl'
 
-ENV["KIOSK_ISSUER"]          ||= "http://localhost:#{ENV.fetch("PORT", "3000")}"
-ENV["KIOSK_SIGNING_KEY_B64"] ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
-ENV["KIOSK_POW_SECRET"]      ||= "hoteling-local-pow-secret-not-a-secret"
-ENV["STRIPE_SECRET_KEY"]     ||= "sk_test_mock"
+ENV['KIOSK_ISSUER']          ||= "http://localhost:#{ENV.fetch('PORT', '3000')}"
+ENV['KIOSK_SIGNING_KEY_B64'] ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
+ENV['KIOSK_POW_SECRET']      ||= 'hoteling-local-pow-secret-not-a-secret'
+ENV['STRIPE_SECRET_KEY']     ||= 'sk_test_mock'
 
 Rails.application.configure do
   config.enable_reloading = true
@@ -22,5 +22,5 @@ Rails.application.configure do
   config.action_dispatch.verbose_redirect_logs = true
   config.action_view.annotate_rendered_view_with_filenames = true
   config.action_controller.raise_on_missing_callback_actions = true
-  config.hosts << "hoteling.demo.kiosk.tech"
+  config.hosts << 'hoteling.demo.kiosk.tech'
 end

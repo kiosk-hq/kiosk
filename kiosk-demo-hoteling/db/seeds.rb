@@ -5,9 +5,9 @@
 # guests who sign in with a password. Assistants register themselves on the wire.
 
 # ── Two guests who sign in with a password ──────────────────────────────────
-password = "hoteling-demo-password"
-guests = { "00000000-0000-0000-0000-000000000001" => "ada@example.com",
-           "00000000-0000-0000-0000-000000000002" => "ben@example.com" }.map do |id, email|
+password = 'hoteling-demo-password'
+guests = { '00000000-0000-0000-0000-000000000001' => 'ada@example.com',
+           '00000000-0000-0000-0000-000000000002' => 'ben@example.com' }.map do |id, email|
   User.find_or_initialize_by(id:).tap do |guest|
     guest.email    = email
     guest.password = password unless guest.valid_password?(password)
@@ -17,26 +17,26 @@ end
 
 # ── The five originals (kept, with search columns backfilled) ────────────────
 originals = [
-  { name: "Gran Hotel Istanbul", neighbourhood: "Beyoğlu",       stars: 5,
-    address: "İstiklal Cd. 12, Beyoğlu, Istanbul",
+  { name: 'Gran Hotel Istanbul', neighbourhood: 'Beyoğlu',       stars: 5,
+    address: 'İstiklal Cd. 12, Beyoğlu, Istanbul',
     amenities: %w[wifi breakfast spa restaurant rooftop_bar],
-    rooms: [["Standard", 8000], ["Deluxe", 12000], ["Suite", 20000]] },
-  { name: "Kadikoy Suites", neighbourhood: "Kadıköy",            stars: 3,
-    address: "Bahariye Cd. 40, Kadıköy, Istanbul",
+    rooms: [['Standard', 8000], ['Deluxe', 12_000], ['Suite', 20_000]] },
+  { name: 'Kadikoy Suites', neighbourhood: 'Kadıköy',            stars: 3,
+    address: 'Bahariye Cd. 40, Kadıköy, Istanbul',
     amenities: %w[wifi breakfast parking],
-    rooms: [["Standard", 6000], ["Deluxe", 9000]] },
-  { name: "Sultanahmet Court", neighbourhood: "Sultanahmet",     stars: 4,
-    address: "Divanyolu Cd. 5, Sultanahmet, Istanbul",
+    rooms: [['Standard', 6000], ['Deluxe', 9000]] },
+  { name: 'Sultanahmet Court', neighbourhood: 'Sultanahmet',     stars: 4,
+    address: 'Divanyolu Cd. 5, Sultanahmet, Istanbul',
     amenities: %w[wifi breakfast hammam restaurant],
-    rooms: [["Standard", 7000], ["Harbor View", 11000], ["Suite", 18000]] },
-  { name: "Bosphorus Palace", neighbourhood: "Beşiktaş",         stars: 5,
-    address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
+    rooms: [['Standard', 7000], ['Harbor View', 11_000], ['Suite', 18_000]] },
+  { name: 'Bosphorus Palace', neighbourhood: 'Beşiktaş',         stars: 5,
+    address: 'Çırağan Cd. 88, Beşiktaş, Istanbul',
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
-    rooms: [["Classic", 15000], ["Bosphorus", 25000]] },
-  { name: "Galata House", neighbourhood: "Galata",               stars: 4,
-    address: "Galata Kulesi Sk. 3, Galata, Istanbul",
+    rooms: [['Classic', 15_000], ['Bosphorus', 25_000]] },
+  { name: 'Galata House', neighbourhood: 'Galata',               stars: 4,
+    address: 'Galata Kulesi Sk. 3, Galata, Istanbul',
     amenities: %w[wifi breakfast rooftop_bar],
-    rooms: [["Standard", 10000], ["Suite", 16000]] },
+    rooms: [['Standard', 10_000], ['Suite', 16_000]] }
 ]
 
 # ── Seed-time vocabulary check ──────────────────────────────────────────────
@@ -53,7 +53,7 @@ raise "seeds: amenity(ies) outside AMENITY_POOL: #{stray_amenities.inspect}" if 
 
 originals.each do |h|
   prop = Property.find_or_create_by!(name: h[:name]) do |p|
-    p.city = "Istanbul"
+    p.city = 'Istanbul'
   end
   prop.update!(neighbourhood: h[:neighbourhood], stars: h[:stars],
                amenities: h[:amenities], address: h[:address])
@@ -74,14 +74,14 @@ descriptors = %w[Grand Blue Old City Marmara Golden Pearl Anatolia Levant
                  Harbor Central Boutique Imperial Silk Bosphorus Sunset Amber
                  Mosaic Lantern Tulip Nightingale Serene Vantage].freeze
 
-forms = ["Hotel", "Suites", "Inn", "Residence", "Palace", "House", "Rooms", "Konak"].freeze
+forms = %w[Hotel Suites Inn Residence Palace House Rooms Konak].freeze
 
 room_menus = [
-  [["Economy", 4000], ["Standard", 6000]],
-  [["Standard", 7000], ["Deluxe", 10500]],
-  [["Standard", 9000], ["Deluxe", 13500], ["Suite", 21000]],
-  [["Classic", 12000], ["Junior Suite", 18000], ["Grand Suite", 30000]],
-  [["Double", 5500], ["Family", 8500]],
+  [['Economy', 4000], ['Standard', 6000]],
+  [['Standard', 7000], ['Deluxe', 10_500]],
+  [['Standard', 9000], ['Deluxe', 13_500], ['Suite', 21_000]],
+  [['Classic', 12_000], ['Junior Suite', 18_000], ['Grand Suite', 30_000]],
+  [['Double', 5500], ['Family', 8500]]
 ].freeze
 
 seen_names = Property.pluck(:name).to_set
@@ -104,8 +104,8 @@ while Property.count < target_total
   address = "#{desc} Sk. #{rng.rand(1..120)}, #{nb}, Istanbul"
 
   prop = Property.create!(
-    name: name, city: "Istanbul", neighbourhood: nb, stars: stars,
-    amenities: amenities, address: address,
+    name: name, city: 'Istanbul', neighbourhood: nb, stars: stars,
+    amenities: amenities, address: address
   )
 
   menu = room_menus.sample(random: rng)

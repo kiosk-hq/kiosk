@@ -6,7 +6,7 @@ class StayValidator < ActiveModel::Validator
   def validate(record)
     return if record.check_in.nil? || record.check_out.nil?
 
-    record.errors.add(:check_out, "must be after check_in") unless record.check_out > record.check_in
+    record.errors.add(:check_out, 'must be after check_in') unless record.check_out > record.check_in
     return if record.property.nil?
 
     zone = record.property.zone

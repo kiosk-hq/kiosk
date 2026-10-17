@@ -4,14 +4,14 @@
 # engine-backed origin, require the RSpec adapter, and hand the one to the
 # other. kiosk-demo-getgrocery is the Minitest spelling of the same.
 
-ENV["RAILS_ENV"] ||= "test"
-ENV["KIOSK_TEST_AUTOCARD"] = "1"
+ENV['RAILS_ENV'] ||= 'test'
+ENV['KIOSK_TEST_AUTOCARD'] = '1'
 
-require_relative "../config/environment"
-require "rspec/rails"
+require_relative '../config/environment'
+require 'rspec/rails'
 
-require "kiosk/server/conformance_origin"
-require "kiosk/test_helpers/conformance/rspec"
+require 'kiosk/server/conformance_origin'
+require 'kiosk/test_helpers/conformance/rspec'
 
 Kiosk::TestHelpers::Conformance.origin = Kiosk::Server::ConformanceOrigin.new
 

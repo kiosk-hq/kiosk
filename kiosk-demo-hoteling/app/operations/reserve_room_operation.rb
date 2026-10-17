@@ -9,9 +9,7 @@ class ReserveRoomOperation
     booking.validate!
     booking.total_cents = booking.nights * booking.room_type.nightly_price_cents
 
-    if Booking.live.where(room_type_id: room_type_id).overlapping(booking.check_in, booking.check_out).exists?
-      already_booked!(room_type_id, booking.check_in, booking.check_out)
-    end
+    already_booked!(room_type_id, booking.check_in, booking.check_out) if Booking.live.where(room_type_id: room_type_id).overlapping(booking.check_in, booking.check_out).exists?
 
     # The exclusion constraint answers the race the check above loses.
     begin
@@ -28,6 +26,6 @@ class ReserveRoomOperation
   def self.already_booked!(room_type_id, check_in, check_out)
     raise Kiosk::Server::Errors::Conflict,
           "room type #{room_type_id} is already booked for #{check_in}..#{check_out} — " \
-          "call availability for the room types still free"
+          'call availability for the room types still free'
   end
 end

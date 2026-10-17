@@ -11,21 +11,21 @@ class Property < ApplicationRecord
   def self.from_price_cents
     rt = RoomType.arel_table
     Arel::Nodes::Grouping.new(
-      rt.project(rt[:nightly_price_cents].minimum).where(rt[:property_id].eq(arel_table[:id])).ast,
+      rt.project(rt[:nightly_price_cents].minimum).where(rt[:property_id].eq(arel_table[:id])).ast
     )
   end
 
   def self.room_type_count
     rt = RoomType.arel_table
     Arel::Nodes::Grouping.new(
-      rt.project(Arel.star.count).where(rt[:property_id].eq(arel_table[:id])).ast,
+      rt.project(Arel.star.count).where(rt[:property_id].eq(arel_table[:id])).ast
     )
   end
 
   # `amenities @> '["spa"]'`
   scope :offering, lambda { |amenity|
     where(Arel::Nodes::InfixOperation.new(
-      "@>", arel_table[:amenities], Arel::Nodes.build_quoted([amenity].to_json),
-    ))
+            '@>', arel_table[:amenities], Arel::Nodes.build_quoted([amenity].to_json)
+          ))
   }
 end

@@ -19,7 +19,7 @@ class PropertyDecisionJob < ApplicationJob
     code = booking.confirmation_code.presence || SecureRandom.uuid
     booking.update!(status: :confirmed, confirmation_code: code)
 
-    emit(booking, "confirmed", { "confirmation_code" => code })
+    emit(booking, 'confirmed', { 'confirmation_code' => code })
   end
 
   # A booking with no settlement was never charged: cancelled, nothing refunded.
@@ -36,12 +36,12 @@ class PropertyDecisionJob < ApplicationJob
     booking.save!
 
     refund = if receipt
-               { "refund" => { "amount_cents"  => booking.total_cents,
-                               "currency"      => "eur",
-                               "psp_reference" => receipt[:psp_reference],
-                               "reverses"      => charge } }
+               { 'refund' => { 'amount_cents' => booking.total_cents,
+                               'currency' => 'eur',
+                               'psp_reference' => receipt[:psp_reference],
+                               'reverses' => charge } }
              end
-    emit(booking, "cancelled", { "reason" => "property_declined", **refund.to_h })
+    emit(booking, 'cancelled', { 'reason' => 'property_declined', **refund.to_h })
   end
 
   def settled_reference(booking)
@@ -57,7 +57,7 @@ class PropertyDecisionJob < ApplicationJob
   def emit(booking, status, extra)
     Kiosk::Server::Events.emit(
       topic: :booking_confirmation, subject: booking.id, identity_scope: [booking.user_id],
-      data: { "booking_id" => booking.id, "status" => status }.merge(extra),
+      data: { 'booking_id' => booking.id, 'status' => status }.merge(extra)
     )
   end
 

@@ -26,6 +26,6 @@ class RoomSearch
   def dates_together
     return if check_in.present? == check_out.present?
 
-    errors.add(:base, "check_in and check_out go together: pass both, or neither for every room type")
+    errors.add(:base, 'check_in and check_out go together: pass both, or neither for every room type')
   end
 end

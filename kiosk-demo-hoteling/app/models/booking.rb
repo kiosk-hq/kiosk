@@ -9,16 +9,16 @@ class Booking < ApplicationRecord
   MAX_NIGHTS = 30
 
   enum :status, {
-    reserved:  "reserved",
-    confirmed: "confirmed",
-    cancelled: "cancelled",
+    reserved: 'reserved',
+    confirmed: 'confirmed',
+    cancelled: 'cancelled'
   }
 
   enum :payment_status, {
-    unpaid:   "unpaid",
-    paying:   "paying",
-    paid:     "paid",
-    refunded: "refunded",
+    unpaid: 'unpaid',
+    paying: 'paying',
+    paid: 'paid',
+    refunded: 'refunded'
   }
 
   belongs_to :user
@@ -40,14 +40,14 @@ class Booking < ApplicationRecord
 
   # A settlement whose cart names this booking (`line_items @> [{booking_id}]`).
   SETTLEMENT_FOR_ROW = Arel.sql(
-    "kiosk.cart_mandates.line_items @> json_build_array(json_build_object('booking_id', bookings.id::text))::jsonb",
+    "kiosk.cart_mandates.line_items @> json_build_array(json_build_object('booking_id', bookings.id::text))::jsonb"
   ).freeze
 
   # Adds `settled`, read from the given settlements.
   scope :with_settlement, lambda { |settlements|
     settlement = settlements.joins(:cart_mandate).where(SETTLEMENT_FOR_ROW)
     select(arel_table[Arel.star],
-           Arel::Nodes::Exists.new(settlement.select(Arel.sql("1")).arel).as("settled"))
+           Arel::Nodes::Exists.new(settlement.select(Arel.sql('1')).arel).as('settled'))
   }
 
   def self.readable_by?(booking_id, user_id) = where(id: booking_id, user_id: user_id).exists?
@@ -59,7 +59,7 @@ class Booking < ApplicationRecord
     if owner_id
       Kiosk::Server::Events.emit(
         topic: :booking_payment, subject: booking_id, identity_scope: [owner_id],
-        data: { "booking_id" => booking_id, "payment_state" => "paid" },
+        data: { 'booking_id' => booking_id, 'payment_state' => 'paid' }
       )
     end
     wait = Rails.configuration.x.hoteling.decision_delay_seconds.to_i
@@ -74,11 +74,11 @@ class Booking < ApplicationRecord
   # What `my_bookings` publishes about the money. `pending` means a capture is
   # in flight: the caller must reconcile, not sign a new mandate.
   def payment_state
-    return "refunded" if refunded?
-    return "paid"     if paid? || settled
-    return "pending"  if paying?
+    return 'refunded' if refunded?
+    return 'paid'     if paid? || settled
+    return 'pending'  if paying?
 
-    "unpaid"
+    'unpaid'
   end
 
   private

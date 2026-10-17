@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-require "story_helper"
+require 'story_helper'
 
-RSpec.describe "The toll an assistant pays", type: :story do
-  it "an assistant reading the hotel list over and over pays more each time instead of being turned away, and every hold is tolled" do
+RSpec.describe 'The toll an assistant pays', type: :story do
+  it 'an assistant reading the hotel list over and over pays more each time instead of being turned away, and every hold is tolled' do
     guest = a_guest
-    tolls = Array.new(7) { guest.browses_hotels.tap { expect(_1).to be_ok }.tolls_paid }
+    tolls = Array.new(7) { guest.browses_hotels.tap { expect(it).to be_ok }.tolls_paid }
     expect(tolls).to start_with(0).and include(be_positive)
     expect(tolls).to eq(tolls.sort)
 

@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "spec_helper"
-require "kiosk/story_spec"
-require "kiosk/test_helpers/stripe_mock"
+require 'spec_helper'
+require 'kiosk/story_spec'
+require 'kiosk/test_helpers/stripe_mock'
 
 # A guest's AI assistant: searches the hotels, reserves a room, pays for it and
 # asks for the confirmation code the hotel minted.
@@ -22,18 +22,20 @@ class Guest < Kiosk::TestHelpers::Customer
   end
 
   # Signs a cart for every night of the booking at its nightly price.
-  def pays_for(booking, currency: "eur")
-    pays(total: booking["total_cents"], scope: "lodging", currency:,
-         line_items: [{ qty: booking["nights"], price_cents: booking["nightly_price_cents"], booking_id: booking["booking_id"] }])
+  def pays_for(booking, currency: 'eur')
+    pays(total: booking['total_cents'], scope: 'lodging', currency:,
+         line_items: [{ qty: booking['nights'], price_cents: booking['nightly_price_cents'], booking_id: booking['booking_id'] }])
   end
 
-  def confirms(booking) = does(:confirm_booking, booking_id: booking["booking_id"])
+  def confirms(booking) = does(:confirm_booking, booking_id: booking['booking_id'])
 
   def a_free_room(check_in:, check_out:)
     browses_hotels.rows.each do |hotel|
-      rooms = rooms_free(at: hotel["property_id"], check_in:, check_out:).rows
-      return { room_type_id: rooms.first["room_type_id"], check_in: check_in.iso8601,
-               check_out: check_out.iso8601 } if rooms.any?
+      rooms = rooms_free(at: hotel['property_id'], check_in:, check_out:).rows
+      if rooms.any?
+        return { room_type_id: rooms.first['room_type_id'], check_in: check_in.iso8601,
+                 check_out: check_out.iso8601 }
+      end
     end
     raise "no room is free for #{check_in}..#{check_out}"
   end

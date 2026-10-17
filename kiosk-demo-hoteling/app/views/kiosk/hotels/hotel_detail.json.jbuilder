@@ -1,7 +1,7 @@
 json.array! [@property] do |property|
   json.property_id property.id
   json.extract! property, :name, :neighbourhood, :stars, :address, :amenities
-  json.currency "eur"
+  json.currency 'eur'
   json.check_in @search.check_in&.iso8601
   json.check_out @search.check_out&.iso8601
   json.timezone property.timezone

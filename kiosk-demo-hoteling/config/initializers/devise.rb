@@ -7,5 +7,5 @@
 # (see config/initializers/kiosk.rb). Assistants never use this channel — they
 # authenticate with kiosk-pop key possession.
 Devise.setup do |_config|
-  require "devise/orm/active_record"
+  require 'devise/orm/active_record'
 end

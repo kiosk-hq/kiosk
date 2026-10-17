@@ -5,6 +5,7 @@
 class BookAppointmentOperation
   def self.call(customer_id:, salon_id:, slot:, service_id:)
     Appointment.create!(user_id: customer_id, salon_id: salon_id, slot: Time.iso8601(slot), service_id: service_id)
+               .tap { AppointmentKeptJob.set(wait_until: it.slot).perform_later(it.id) }
   end
 
   # A week out at 14:00 on the origin's clock: always in the future, on a round hour.

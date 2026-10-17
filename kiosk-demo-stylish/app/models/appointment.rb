@@ -12,6 +12,19 @@ class Appointment < ApplicationRecord
 
   before_create { self.price_cents = service&.price_cents }
 
+  # Records the visit of an appointment whose slot has passed, worth its
+  # service's price, once: only the call that stamps `visit_recorded_at` records it.
+  def self.honour!(appointment_id)
+    transaction do
+      stamped = where(id: appointment_id, visit_recorded_at: nil, slot: ..Time.current)
+                .update_all(visit_recorded_at: Time.current)
+      next unless stamped == 1
+
+      appointment = find(appointment_id)
+      Kiosk::Visit.record!(user_id: appointment.user_id, value_cents: appointment.price_cents.to_i)
+    end
+  end
+
   private
 
   def salon_exists

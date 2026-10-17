@@ -17,6 +17,8 @@ module KioskDemoAtablefor
     config.load_defaults 8.1
     config.autoload_lib(ignore: %w[assets tasks])
 
+    # Demo only: jobs run inside the web process and are lost on restart. Use a durable queue.
+    config.active_job.queue_adapter = :async
     # public first: the kiosk tables reference public.users.
     config.active_record.dump_schemas = 'public,kiosk'
   end

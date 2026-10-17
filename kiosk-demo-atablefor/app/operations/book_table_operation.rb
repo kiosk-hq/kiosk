@@ -8,6 +8,7 @@ class BookTableOperation
     raise Kiosk::Server::Errors::Conflict, booked if Booking.confirmed.exists?(restaurant_table: table, seating_at:)
 
     Booking.create!(user_id: customer_id, restaurant_table: table, party_size:, seating_at:, status: :confirmed)
+           .tap { SeatingJob.set(wait_until: it.seating_at).perform_later(it.id) }
   rescue ActiveRecord::RecordNotUnique
     raise Kiosk::Server::Errors::Conflict, booked
   end

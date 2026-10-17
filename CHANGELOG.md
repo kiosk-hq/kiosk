@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: atablefor and stylish record a kept booking as a `Kiosk::Visit` once its time has passed, so a returning customer's toll falls without any payment.
+
 ## [0.5.14] — 2026-10-18
 
 - 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.14, matching skill 0.5.14.**

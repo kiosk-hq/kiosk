@@ -28,6 +28,19 @@ class Booking < ApplicationRecord
              .limit(50)
   }
 
+  # Records the visit of a confirmed booking whose seating has passed, once:
+  # only the call that stamps `visit_recorded_at` records it.
+  def self.honour!(booking_id)
+    transaction do
+      stamped = confirmed.where(id: booking_id, visit_recorded_at: nil, seating_at: ..Time.current)
+                         .update_all(visit_recorded_at: Time.current)
+      next unless stamped == 1
+
+      booking = includes(:restaurant).find(booking_id)
+      Kiosk::Visit.record!(user_id: booking.user_id, value_cents: booking.restaurant.average_spend_cents * booking.party_size)
+    end
+  end
+
   # The seating on the restaurant's own clock.
   def local_seating = seating_at.in_time_zone(restaurant.zone)
 

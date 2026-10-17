@@ -4,8 +4,8 @@ require 'test_helper'
 
 class TableSearchTest < ActiveSupport::TestCase
   setup do
-    Restaurant.create!(name: 'Tasca', neighborhood: 'Alfama', timezone: 'Europe/Lisbon')
-    Restaurant.create!(name: 'Adega', neighborhood: 'Graça', timezone: 'Europe/Lisbon')
+    Restaurant.create!(name: 'Tasca', neighborhood: 'Alfama', timezone: 'Europe/Lisbon', average_spend_cents: 2500)
+    Restaurant.create!(name: 'Adega', neighborhood: 'Graça', timezone: 'Europe/Lisbon', average_spend_cents: 2500)
   end
 
   def errors(**filters) = TableSearch.new(party_size: 2, **filters).tap(&:validate).errors.full_messages

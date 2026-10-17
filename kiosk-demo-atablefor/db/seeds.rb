@@ -16,22 +16,22 @@ diners = [
   end
 end
 
-# Each table is [label, seats].
+# Each table is [label, seats]; average_spend_cents is what one guest spends.
 roster = [
-  { name: 'Tasca do Tejo',      neighborhood: 'Alfama',        cuisine: 'Portuguese tavern',
+  { name: 'Tasca do Tejo',      neighborhood: 'Alfama',        cuisine: 'Portuguese tavern', average_spend_cents: 2200,
     tables: [['Window 6', 2], ['Bar 1', 2], ['Terrace 2', 4], ['Garden 4', 6]] },
-  { name: 'Adega da Graça',     neighborhood: 'Graça',         cuisine: 'Grilled fish',
+  { name: 'Adega da Graça',     neighborhood: 'Graça',         cuisine: 'Grilled fish', average_spend_cents: 3000,
     tables: [['Miradouro 1', 2], ['Nook 3', 2], ['Hall 5', 4], ['Long 8', 8]] },
-  { name: 'Cantinho do Bairro', neighborhood: 'Bairro Alto',   cuisine: 'Petiscos & wine',
+  { name: 'Cantinho do Bairro', neighborhood: 'Bairro Alto',   cuisine: 'Petiscos & wine', average_spend_cents: 2500,
     tables: [['Counter 2', 2], ['Corner 4', 4], ['Snug 6', 6]] },
-  { name: 'Marisqueira Belém',  neighborhood: 'Belém',         cuisine: 'Seafood',
+  { name: 'Marisqueira Belém',  neighborhood: 'Belém',         cuisine: 'Seafood', average_spend_cents: 4500,
     tables: [['Riverside 3', 2], ['Riverside 4', 2], ['Family 6', 6], ['Banquet 10', 10]] },
-  { name: 'Forno do Príncipe',  neighborhood: 'Príncipe Real', cuisine: 'Wood-fired',
+  { name: 'Forno do Príncipe',  neighborhood: 'Príncipe Real', cuisine: 'Wood-fired', average_spend_cents: 2800,
     tables: [['Booth 1', 2], ['Booth 2', 2], ['Terrace 5', 5], ['Chef 4', 4]] }
 ]
 
 roster.each do |entry|
-  restaurant = Restaurant.create_with(entry.slice(:neighborhood, :cuisine)).find_or_create_by!(name: entry[:name])
+  restaurant = Restaurant.create_with(entry.slice(:neighborhood, :cuisine, :average_spend_cents)).find_or_create_by!(name: entry[:name])
   entry[:tables].each do |label, capacity|
     RestaurantTable.create_with(capacity:).find_or_create_by!(restaurant:, label:)
   end

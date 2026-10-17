@@ -4,7 +4,7 @@ require 'test_helper'
 
 class BookingTest < ActiveSupport::TestCase
   setup do
-    @restaurant = Restaurant.create!(name: 'Tasca de Teste', timezone: 'Europe/Lisbon')
+    @restaurant = Restaurant.create!(name: 'Tasca de Teste', timezone: 'Europe/Lisbon', average_spend_cents: 2500)
     @table      = @restaurant.restaurant_tables.create!(label: 'T1', capacity: 4)
   end
 
@@ -30,7 +30,7 @@ class BookingTest < ActiveSupport::TestCase
     travel_to @restaurant.seating(Date.new(2026, 9, 1), 12) do
       assert_equal ['T1 seats 4; pick a larger table from availability'], errors(booking(party_size: 5))
 
-      elsewhere = Restaurant.create!(name: 'Elsewhere').restaurant_tables.create!(label: 'E1', capacity: 8)
+      elsewhere = Restaurant.create!(name: 'Elsewhere', average_spend_cents: 2500).restaurant_tables.create!(label: 'E1', capacity: 8)
       assert_equal elsewhere.restaurant, booking(restaurant_table: elsewhere).tap(&:validate).restaurant
     end
   end

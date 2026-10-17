@@ -32,14 +32,14 @@ RSpec.describe Kiosk::Server::Events do
 
   it "defaults reach to :principal, exactly as a verb does" do
     controller.class_eval do
-      topic :order_payment do
-        description "Your order was paid."
+      topic :order_delivery do
+        description "Your order is on its way or at the door."
         payload_schema type: "object"
       end
     end
     controller.kiosk_register!
 
-    expect(described_class.fetch("order_payment")[:reach]).to eq(:principal)
+    expect(described_class.fetch("order_delivery")[:reach]).to eq(:principal)
   end
 
   # THE REASON `topic` TAKES A BLOCK. `reach` and `description` write into

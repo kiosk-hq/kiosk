@@ -82,7 +82,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     it "opens, subscribes and delivers without a proof on an origin that tolls every verb" do
       expect(report["tolled_verb_status"]).to include("402")
       expect(report["welcome"]).to eq("type" => "welcome")
-      expect(report["live"]).to include("topic" => "order_payment", "subject" => "ord_1")
+      expect(report["live"]).to include("topic" => "order_delivery", "subject" => "ord_1")
     end
 
     it "accepts an upgrade that carries NO Origin header" do
@@ -109,7 +109,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     it "wraps a subscription's own frames, echoing the identifier it was given" do
       expect(report["subscribed_envelope"].keys).to contain_exactly("identifier", "message")
       expect(JSON.parse(report["subscribed_envelope"]["identifier"]))
-        .to eq("channel" => "KioskEvents", "topic" => "order_payment")
+        .to eq("channel" => "KioskEvents", "topic" => "order_delivery")
     end
 
     it "confirms a live subscription at top level, with the identifier and no message" do
@@ -122,7 +122,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
   describe "subscribing" do
     it "confirms a declared topic with head and truncated" do
       expect(report["subscribed"]).to include(
-        "type" => "subscribed", "topic" => "order_payment", "truncated" => false
+        "type" => "subscribed", "topic" => "order_delivery", "truncated" => false
       )
       expect(report["subscribed"]["head"]).to be_a(Integer)
     end
@@ -217,7 +217,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     # What says the refusal is aimed at a FRAME and not at a client: the socket
     # that was just told off subscribes normally straight afterwards.
     it "goes on serving a well-formed subscribe on the same socket" do
-      expect(report["after_bad_frame_subscribed"]).to eq(["order_payment"])
+      expect(report["after_bad_frame_subscribed"]).to eq(["order_delivery"])
     end
   end
 
@@ -228,7 +228,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
   describe "a frame the origin cannot act on for a reason inside the identifier" do
     it "REJECTS an unsubscribe naming a subscription this socket never opened" do
       expect(report.dig("unopened_unsubscribe", "answer"))
-        .to eq([{ "identifier" => '{"channel":"KioskEvents","topic":"order_payment"}',
+        .to eq([{ "identifier" => '{"channel":"KioskEvents","topic":"order_delivery"}',
                   "type" => "reject_subscription" }])
       expect(report.dig("unopened_unsubscribe", "closed")).to be(false)
     end
@@ -281,7 +281,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     # these, and no event's subject can match them.
     { "list" => %w[ord_1 ord_2], "number" => 5 }.each do |name, subject|
       it "REJECTS a subscribe whose subject is a #{name}" do
-        sent = JSON.generate("channel" => "KioskEvents", "topic" => "order_payment",
+        sent = JSON.generate("channel" => "KioskEvents", "topic" => "order_delivery",
                              "subject" => subject)
         expect(report.dig("not_subjects", name, "answer"))
           .to eq([{ "identifier" => sent, "type" => "reject_subscription" }])
@@ -316,8 +316,8 @@ RSpec.describe "the Kiosk event stream over a real socket" do
       expect(report["live"]).not_to be_nil
       expect(report["live"].keys)
         .to contain_exactly("id", "topic", "subject", "occurred_at", "data")
-      expect(report["live"]).to include("topic" => "order_payment", "subject" => "ord_1",
-                                        "data" => { "status" => "paid" })
+      expect(report["live"]).to include("topic" => "order_delivery", "subject" => "ord_1",
+                                        "data" => { "status" => "out_for_delivery" })
     end
 
     it "does NOT deliver another subject's event to a subject-scoped subscription" do
@@ -331,7 +331,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     # the identity's whole tail — and a subscriber handed another topic's event
     # inside this identifier rejects a legitimately delivered frame.
     it "does NOT replay another TOPIC's event to a subscription that named one" do
-      expect(report["replayed_topics"]).to eq(["order_payment"])
+      expect(report["replayed_topics"]).to eq(["order_delivery"])
     end
   end
 
@@ -364,7 +364,7 @@ RSpec.describe "the Kiosk event stream over a real socket" do
     end
 
     it "subscribes to every topic in the query string without the client sending a frame" do
-      expect(report["url_subscribed_topics"]).to eq(%w[order_payment todo])
+      expect(report["url_subscribed_topics"]).to eq(%w[order_delivery todo])
     end
 
     # THE RACE THIS FOUND. `stream_from` posts its pubsub subscribe to Action

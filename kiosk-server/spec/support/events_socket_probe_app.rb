@@ -67,8 +67,8 @@ class ProbeController < ActionController::Base
   include Kiosk::Handler
 
   unless NO_TOPICS
-    topic :order_payment do
-      description "Your order was paid."
+    topic :order_delivery do
+      description "Your order is on its way or at the door."
       payload_schema type: "object"
     end
 
@@ -421,7 +421,7 @@ begin
   other.close
 
   # 4 — subscribe to a declared, principal-reach topic.
-  sock.subscribe(identifier("order_payment"))
+  sock.subscribe(identifier("order_delivery"))
   sock.pump_until { sock.messages.any? { |m| m["type"] == "subscribed" } }
   REPORT[:subscribed] = sock.messages.find { |m| m["type"] == "subscribed" }
   # The FRAME the confirmation travels in, rather than the message inside it:
@@ -469,8 +469,8 @@ begin
 
   # 8 — LIVE delivery: emit, and the socket sees it with the five closed members.
   first_id = Kiosk::Server::Events.emit(
-    topic: :order_payment, subject: "ord_1", identity_scope: %w[u1],
-    data: { "status" => "paid" },
+    topic: :order_delivery, subject: "ord_1", identity_scope: %w[u1],
+    data: { "status" => "out_for_delivery" },
   )
   sock.pump_until { sock.messages.any? { |m| m["id"] == first_id } }
   REPORT[:live] = sock.messages.find { |m| m["id"] == first_id }
@@ -486,12 +486,12 @@ begin
 
   # 10 — RESUME: a second socket subscribing with `since` replays only the gap.
   gap_id = Kiosk::Server::Events.emit(
-    topic: :order_payment, subject: "ord_2", identity_scope: %w[u1],
-    data: { "status" => "refunded" },
+    topic: :order_delivery, subject: "ord_2", identity_scope: %w[u1],
+    data: { "status" => "delivered" },
   )
   resumed = connect(port)
   resumed.pump_until { resumed.frames.any? }
-  resumed.subscribe(identifier("order_payment", since: first_id))
+  resumed.subscribe(identifier("order_delivery", since: first_id))
   resumed.pump_until { resumed.messages.any? { |m| m["id"] == gap_id } }
   REPORT[:resumed_ids] = resumed.messages.filter_map { |m| m["id"] }
   # The tail between the two cursors also holds the step-9 `todo` event, which
@@ -505,7 +505,7 @@ begin
   store.prune_before(store.head) if store.respond_to?(:prune_before)
   truncated = connect(port)
   truncated.pump_until { truncated.frames.any? }
-  truncated.subscribe(identifier("order_payment", since: 0))
+  truncated.subscribe(identifier("order_delivery", since: 0))
   truncated.pump_until { truncated.messages.any? { |m| m["type"] == "subscribed" } }
   REPORT[:truncated_frame] = truncated.messages.find { |m| m["type"] == "subscribed" }
   truncated.close
@@ -515,7 +515,7 @@ begin
   # 12 — a client that never SENDS a frame: it authenticates the upgrade the
   #      one way there is, with the header, and names its topics in the query
   #      string. Action Cable would otherwise stream it nothing at all.
-  urlsub = connect(port, path: "/kiosk/events?topic=order_payment&topic=todo:list_ok")
+  urlsub = connect(port, path: "/kiosk/events?topic=order_delivery&topic=todo:list_ok")
   urlsub.pump_until { urlsub.messages.count { |m| m["type"] == "subscribed" } >= 2 }
   REPORT[:url_welcomed] = urlsub.frames.any? { |f| f["type"] == "welcome" }
   REPORT[:url_subscribed_topics] =
@@ -525,7 +525,7 @@ begin
   # later `confirm_subscription`: an event emitted in that window still has to
   # reach the subscriber, and this is the assertion that it does.
   url_id = Kiosk::Server::Events.emit(
-    topic: :order_payment, subject: "ord_3", identity_scope: %w[u1], data: { "status" => "paid" },
+    topic: :order_delivery, subject: "ord_3", identity_scope: %w[u1], data: { "status" => "out_for_delivery" },
   )
   urlsub.pump_until(seconds: 6) { urlsub.messages.any? { |m| m["id"] == url_id } }
   REPORT[:url_delivered] = urlsub.messages.any? { |m| m["id"] == url_id }
@@ -590,7 +590,7 @@ begin
   sock.pump_until { sock.frames.any? }
   sock.send_raw(BAD_FRAMES["unparsed_id"])
   sock.pump_until { sock.frames.any? { |f| f["type"] == "reject_subscription" } }
-  sock.subscribe(identifier("order_payment"))
+  sock.subscribe(identifier("order_delivery"))
   sock.pump_until { sock.messages.any? { |m| m["type"] == "subscribed" } }
   REPORT[:after_bad_frame_subscribed] =
     sock.messages.select { |m| m["type"] == "subscribed" }.map { |m| m["topic"] }
@@ -599,7 +599,7 @@ begin
   # 15d — frames that name a subscription the origin cannot act on: one the
   #       socket does not hold, and a `since` that is not a cursor.
   REPORT[:unopened_unsubscribe] =
-    frame_answer(port, frame("unsubscribe", identifier("order_payment")))
+    frame_answer(port, frame("unsubscribe", identifier("order_delivery")))
   REPORT[:reserialised_unsubscribe] = frame_answer(
     port,
     frame("unsubscribe",
@@ -622,7 +622,7 @@ begin
     [since, answer]
   end
   REPORT[:not_subjects] = { "list" => %w[ord_1 ord_2], "number" => 5 }.transform_values do |subject|
-    frame_answer(port, frame("subscribe", identifier("order_payment", subject: subject)))
+    frame_answer(port, frame("subscribe", identifier("order_delivery", subject: subject)))
   end
   REPORT[:largest_cursor] = frame_answer(
     port, frame("subscribe", identifier("todo", subject: "list_ok", since: 2**53 - 1)),
@@ -686,7 +686,7 @@ begin
   # first change is what says the teardown was aimed rather than global.
   held = connect(port, path: "/kiosk/events?topic=todo:list_ok")
   held.pump_until { held.messages.any? { |m| m["type"] == "subscribed" } }
-  plain = connect(port, path: "/kiosk/events?topic=order_payment")
+  plain = connect(port, path: "/kiosk/events?topic=order_delivery")
   plain.pump_until { plain.messages.any? { |m| m["type"] == "subscribed" } }
   # Two sockets holding NO subscription: one stays idle, one subscribes only
   # after the credential is revoked.
@@ -733,7 +733,7 @@ begin
   #      "come back" from "stop". Last, because after it no upgrade resolves.
   REVOKED[:value] = false
   EXPIRES_AT[:value] = Time.now.to_i + 3
-  expiring = connect(port, path: "/kiosk/events?topic=order_payment")
+  expiring = connect(port, path: "/kiosk/events?topic=order_delivery")
   expiring.pump_until { expiring.messages.any? { |m| m["type"] == "subscribed" } }
   expiring_idle = connect(port)
   expiring_idle.pump_until { expiring_idle.frames.any? { |f| f["type"] == "welcome" } }

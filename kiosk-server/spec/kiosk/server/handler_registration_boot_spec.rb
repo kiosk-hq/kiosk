@@ -19,10 +19,14 @@ module HandlerRegistrationProbe
   end
 end
 
-RSpec.describe 'handler registration in a booted app' do
+module HandlerRegistrationBootSpec
   def probe(scenario, phase = 'boot')
     HandlerRegistrationProbe.report(scenario).fetch(phase)
   end
+end
+
+RSpec.describe 'handler registration in a booted app' do
+  include HandlerRegistrationBootSpec
 
   context 'in development (eager_load = false)' do
     it 'has the full catalog at boot, before any request touches a controller' do
@@ -41,7 +45,13 @@ RSpec.describe 'handler registration in a booted app' do
       expect(probe('development', 'after_edit').dig('descriptions', 'probe_browse'))
         .to eq('EDITED without a restart.')
     end
+  end
+end
 
+RSpec.describe 'handler registration in a booted app' do
+  include HandlerRegistrationBootSpec
+
+  context 'in development (eager_load = false)' do
     it 'picks up an ADDED verb on reload' do
       after_add = probe('development', 'after_add')
       expect(after_add['queries']).to include('probe_added')
@@ -57,7 +67,13 @@ RSpec.describe 'handler registration in a booted app' do
       # disappears while the previous generation's handler stays callable.
       expect(probe('development', 'after_remove')['browse_fetches']).to start_with('NotFound:')
     end
+  end
+end
 
+RSpec.describe 'handler registration in a booted app' do
+  include HandlerRegistrationBootSpec
+
+  context 'in development (eager_load = false)' do
     # ── THE BOOT DIGEST (T-094) ─────────────────────────────────────────
     #
     # The catalog `GET <mount>/schema` serves is derived ONCE, by the engine,

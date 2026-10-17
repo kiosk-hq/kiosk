@@ -49,8 +49,4 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   # No runtime dependencies — pure Ruby, no native extensions.
-
-  spec.add_development_dependency 'base64', '~> 0.2'
-  spec.add_development_dependency 'rake',   '~> 13.2'
-  spec.add_development_dependency 'rspec',  '~> 3.13'
 end

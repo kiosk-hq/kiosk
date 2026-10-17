@@ -47,7 +47,4 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency 'kiosk-core',   '~> 0.5.0'
   spec.add_dependency 'kiosk-server', '~> 0.5.0'
-
-  spec.add_development_dependency 'rake',  '~> 13.2'
-  spec.add_development_dependency 'rspec', '~> 3.13'
 end

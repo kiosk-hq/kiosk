@@ -50,7 +50,4 @@ Gem::Specification.new do |spec|
   # m_cost (the high-level Password API uses a power-of-two exponent instead).
   spec.add_dependency 'argon2', '~> 2.3'
   spec.add_dependency 'ffi',    '~> 1.0'
-
-  spec.add_development_dependency 'rake',  '~> 13.2'
-  spec.add_development_dependency 'rspec', '~> 3.13'
 end

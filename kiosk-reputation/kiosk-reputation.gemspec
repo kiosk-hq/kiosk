@@ -46,7 +46,4 @@ Gem::Specification.new do |spec|
   # base64 was a default gem through Ruby 3.3 but must be explicitly required
   # from Ruby 3.4+ (it became a bundled gem, no longer auto-loaded).
   spec.add_dependency 'base64'
-
-  spec.add_development_dependency 'rake',  '~> 13.2'
-  spec.add_development_dependency 'rspec', '~> 3.13'
 end

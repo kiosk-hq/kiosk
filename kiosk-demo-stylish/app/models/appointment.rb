@@ -17,22 +17,20 @@ class Appointment < ApplicationRecord
   def salon_exists
     return if salon
 
-    errors.add(:salon_id, "#{salon_id.inspect} is not a salon here — call the `salons` query for the bookable salons")
+    errors.add(:salon_id, "#{salon_id.inspect} is not a salon here; the `salons` query lists them")
   end
 
   def service_on_menu
     return if service_id.nil? || service
 
     menu = Service.order(:id).pluck(:id, :name).map { |id, name| "#{id} (#{name})" }.join(", ")
-    errors.add(:service_id, "#{service_id.inspect} is not on the menu — bookable services: #{menu}; " \
-                            "or omit service_id for a bare salon booking")
+    errors.add(:service_id, "#{service_id.inspect} is not on the menu (#{menu}); omit it to book the salon alone")
   end
 
   def slot_ahead
     return if salon.nil? || slot.nil? || slot.future?
 
-    errors.add(:slot, "#{SalonClock.publish(slot, salon.zone)} has already passed — book a time in the future " \
-                      "(now is #{SalonClock.publish(Time.current, salon.zone)}); this salon does not record " \
-                      "appointments in the past")
+    errors.add(:slot, "#{SalonClock.publish(slot, salon.zone)} has already passed; book a time after " \
+                      "#{SalonClock.publish(Time.current, salon.zone)}")
   end
 end

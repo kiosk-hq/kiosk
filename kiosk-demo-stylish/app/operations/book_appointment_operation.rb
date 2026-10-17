@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Books a salon, optionally one service from its menu, for the principal at the
+# Books a salon, optionally one service from its menu, for the customer at the
 # price the menu quotes now.
 class BookAppointmentOperation
-  def self.call(principal_id:, salon_id:, slot:, service_id:)
-    appointment = Appointment.create!(user_id: principal_id, salon_id: salon_id, slot: Time.iso8601(slot),
+  def self.call(customer_id:, salon_id:, slot:, service_id:)
+    appointment = Appointment.create!(user_id: customer_id, salon_id: salon_id, slot: Time.iso8601(slot),
                                       service_id: service_id)
     salon   = appointment.salon
     service = appointment.service

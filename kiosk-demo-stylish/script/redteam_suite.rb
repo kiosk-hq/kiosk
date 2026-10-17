@@ -60,7 +60,7 @@ end
 
 BATTERY = Kiosk::Redteam::Battery.new
 
-# Two customer principals, each linked to its seeded human's account.
+# Two customers' assistants, each linked to its seeded human's account.
 ALICE = Kiosk::TestHelpers::Person.new(SERVER, email: ALICE_EMAIL, password: DEMO_PASSWORD).links_a_newcomer.principal
 BOB   = Kiosk::TestHelpers::Person.new(SERVER, email: BOB_EMAIL,   password: DEMO_PASSWORD).links_a_newcomer.principal
 abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no boundary to attack" \

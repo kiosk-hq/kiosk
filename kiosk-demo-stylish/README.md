@@ -64,7 +64,7 @@ The test asserts every step, and that the booking landed on the human's own row.
 
 ### Roles from an IdP (`test/stories/salon_book_test.rb`)
 
-The role an assistant works with is sourced **indirectly, from the bound human's IdP role** — the natural extension of the link ceremony. Both principals use the SAME channel: they sign in at `/users/sign_in` with real Devise, and `kiosk-user-idp-devise` asks the `User` model for `#kiosk_role`, which returns the provider's own `staff_role` column. The salon **owner** carries `owner` there; a plain **customer** carries none:
+The role an assistant works with is sourced **indirectly, from the bound human's IdP role** — the natural extension of the link ceremony. The owner and a customer use the SAME channel: they sign in at `/users/sign_in` with real Devise, and `kiosk-user-idp-devise` asks the `User` model for `#kiosk_role`, which returns the provider's own `staff_role` column. The salon **owner** carries `owner` there; a plain **customer** carries none:
 
 1. **Owner** links an assistant → the token carries `role: owner` → `salon_calendar` returns the **whole book** (every visitor's booking) plus a **forecasted** € revenue total — summed live from the actual bookings' prices, starting at €0 and growing as visitors book, never a fixed number.
 2. **Customer** → the token carries `role: customer` → `salon_calendar` returns **only that customer's own bookings**, and **no forecast**.
@@ -99,9 +99,8 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 |---|---|
 | `db/migrate/` | `users` (Devise login columns + a `staff_role`), the generator's kiosk migrations, Action Cable's table, then the Stylish schema: `salons`, `services` (the evergreen menu) and `appointments`, which accumulate real bookings and capture the booked `service_id` + `price_cents` |
 | `app/models/{user,salon,service,appointment}.rb` | Trivial AR models; `User` is `database_authenticatable` for the human sign-in and carries `staff_role` (owner); `Service` is a menu item priced in EUR cents |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` block — configuration only; it names the two handler controllers, it does not contain them |
-| `app/controllers/kiosk/front_desk_controller.rb` | The `salons` / `service_menu` / `availability` / `my_appointments` queries and the role-gated `salon_calendar` forecast — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/appointments_controller.rb` | The `book_appointment` action — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. A refusal is a raised `Kiosk::Server::Errors::BadRequest`, which the wire renders as an RFC 9457 problem document |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` block — configuration only |
+| `app/controllers/kiosk/` | One controller per resource, each an ordinary Rails controller with `include Kiosk::Handler`: `salons_controller.rb` (`salons`), `services_controller.rb` (`service_menu`, `availability`) and `appointments_controller.rb` (`book_appointment`, `my_appointments` and the role-gated `salon_calendar`). Handlers are reached only through the wire. A failed model validation is answered `400 bad_request`, an RFC 9457 problem document in the model's own words |
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine ships as its fallback. Nothing here parses a self-asserted bearer, in any environment |
 | `app/models/salon_clock.rb` | The origin's default IANA zone and the one writer every verb publishes an instant with |

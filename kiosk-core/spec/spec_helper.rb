@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk"
+require 'kiosk'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -12,7 +12,7 @@ RSpec.configure do |config|
   end
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
-  config.example_status_persistence_file_path = ".rspec_status"
+  config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false
 
@@ -38,7 +38,7 @@ module SlowConfigurationAllocation
   COUNTER = Mutex.new
 
   module SlowNew
-    def new(*args, **kwargs, &blk)
+    def new(*args, **kwargs, &)
       seconds = SlowConfigurationAllocation::DELAY[:seconds]
       sleep(seconds) if seconds > 0
       SlowConfigurationAllocation::COUNTER.synchronize do
@@ -69,7 +69,12 @@ end
 # them race: without it the first thread finishes before the last is spawned.
 def race(n, &block)
   latch   = Queue.new
-  threads = Array.new(n) { Thread.new { latch.pop; block.call } }
+  threads = Array.new(n) do
+    Thread.new do
+      latch.pop
+      block.call
+    end
+  end
   n.times { latch.push(:go) }
   threads.map(&:value)
 end

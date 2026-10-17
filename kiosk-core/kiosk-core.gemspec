@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/version"
+require_relative 'lib/kiosk/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-core"
+  spec.name          = 'kiosk-core'
   spec.version       = Kiosk::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Core abstractions for Kiosk — value types, abstract bases, GUC constants, configuration"
+  spec.summary       = 'Core abstractions for Kiosk — value types, abstract bases, GUC constants, configuration'
   spec.description   = <<~DESC
     kiosk-core is the foundation for the Kiosk framework. It defines the value
     types (Identity, Mandate), the abstract base classes adapters extend
@@ -17,18 +17,19 @@ Gem::Specification.new do |spec|
     No Rails dependency. Loadable in any Ruby app; the heavier kiosk-server
     and kiosk-rls gems build on top of this.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]     = spec.homepage
-  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-core/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']     = spec.homepage
+  spec.metadata['source_code_uri']  = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']    = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-core/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri']  = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
 
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rake",  "~> 13.2"
+  spec.add_development_dependency 'rake',  '~> 13.2'
+  spec.add_development_dependency 'rspec', '~> 3.13'
 end

@@ -3,14 +3,15 @@
 module Kiosk
   module PaymentProviders
     # The principal has nothing to charge yet; their human must finish {Base#setup_url} first.
-    SetupRequired = Class.new(StandardError)
+    class SetupRequired < StandardError
+    end
 
     # A charge failed at the processor. `retryable?` is true only when nothing
     # was charged; false means the outcome is unknown, so reconcile, do not retry.
     class PaymentFailed < StandardError
       attr_reader :reason
 
-      def initialize(message = "payment failed", reason: :error, retryable: false)
+      def initialize(message = 'payment failed', reason: :error, retryable: false)
         super(message)
         @reason    = reason
         @retryable = retryable
@@ -28,9 +29,9 @@ module Kiosk
       end
 
       # The page the human opens to make payment possible; the PSP returns the browser to `return_url`.
-      def setup_url(user_id:, return_url:) # rubocop:disable Lint/UnusedMethodArgument
+      def setup_url(user_id:, return_url:)
         raise NotImplementedError, "#{self.class}#setup_url must be implemented by an adapter " \
-                                   "whose setup_required? can answer true"
+                                   'whose setup_required? can answer true'
       end
 
       # @return [Hash] `psp_reference`, `settled_amount_cents`, `settled_at`

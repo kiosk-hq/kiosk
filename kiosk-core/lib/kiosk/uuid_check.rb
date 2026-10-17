@@ -9,7 +9,7 @@ module Kiosk
     PATTERN = /\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/
 
     # {PATTERN} for a verb descriptor's `input_schema` (ECMA-262).
-    JSON_SCHEMA_PATTERN = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    JSON_SCHEMA_PATTERN = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 
     def self.valid?(value)
       PATTERN.match?(value.to_s)

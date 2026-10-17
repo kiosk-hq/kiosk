@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "uri"
+require 'uri'
 
 module Kiosk
   # Host-application settings, filled via `Kiosk.configure`. Defaults suit a greenfield
@@ -13,7 +13,7 @@ module Kiosk
     # :uuid (default), :bigint, :integer or :text.
     attr_accessor :user_id_type
 
-    attr_accessor :user_id_column
+    attr_accessor :user_id_column, :guc_namespace
 
     # Nil in satellite mode: the provider's own frontend drives the wire endpoints.
     attr_accessor :user_idp
@@ -26,8 +26,6 @@ module Kiosk
 
     # A {Kiosk::KycProviders::Base}; nil makes `request_kyc` answer `module_not_served`.
     attr_accessor :kyc_provider
-
-    attr_accessor :guc_namespace
 
     # Postgres schema for Kiosk's own tables and functions.
     attr_accessor :schema
@@ -57,8 +55,8 @@ module Kiosk
       @payment_provider = nil
       @kyc_provider     = nil
       @guc_namespace    = GUC::DEFAULT_NAMESPACE
-      @schema           = "kiosk"
-      @app_role         = "app_role"
+      @schema           = 'kiosk'
+      @app_role         = 'app_role'
       @roles            = []
       @issuer           = nil
       @additional_origins = []
@@ -79,7 +77,7 @@ module Kiosk
       uri = URI.parse(value.to_s.strip)
       return unless uri.is_a?(URI::HTTP) && uri.host
 
-      port = uri.port == uri.default_port ? "" : ":#{uri.port}"
+      port = uri.port == uri.default_port ? '' : ":#{uri.port}"
       "#{uri.scheme.downcase}://#{uri.host.downcase}#{port}"
     rescue URI::InvalidURIError
       nil

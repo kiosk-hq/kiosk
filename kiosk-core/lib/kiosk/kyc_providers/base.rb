@@ -3,7 +3,8 @@
 module Kiosk
   module KycProviders
     # The provider did not open a verification now; a later attempt may.
-    Unavailable = Class.new(StandardError)
+    class Unavailable < StandardError
+    end
 
     # Port for a KYC provider (`kiosk-kyc-*`); kiosk-server serves `request_kyc`
     # whenever `Kiosk.configuration.kyc_provider` is set.
@@ -11,7 +12,7 @@ module Kiosk
       # The provider later POSTs `{request_id, nonce, kyc_jws}` to `callback_url`.
       # @return [Hash] `request_id:`, `verification_url:`, `nonce:`
       # @raise [Unavailable]
-      def open_verification(subject:, claims:, audience:, callback_url:) # rubocop:disable Lint/UnusedMethodArgument
+      def open_verification(subject:, claims:, audience:, callback_url:)
         raise NotImplementedError, "#{self.class}#open_verification must be implemented by the adapter"
       end
 

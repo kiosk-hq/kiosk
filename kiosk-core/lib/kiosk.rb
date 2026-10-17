@@ -2,18 +2,18 @@
 
 # kiosk-core — foundation for the Kiosk framework (https://kiosk.tech).
 
-require "kiosk/version"
-require "kiosk/protocol"
-require "kiosk/guc"
-require "kiosk/configuration"
-require "kiosk/identity"
-require "kiosk/mandate"
-require "kiosk/uuid_check"
+require 'kiosk/version'
+require 'kiosk/protocol'
+require 'kiosk/guc'
+require 'kiosk/configuration'
+require 'kiosk/identity'
+require 'kiosk/mandate'
+require 'kiosk/uuid_check'
 
-require "kiosk/agent_identity_providers/base"
-require "kiosk/user_identity_providers/base"
-require "kiosk/payment_providers/base"
-require "kiosk/kyc_providers/base"
+require 'kiosk/agent_identity_providers/base'
+require 'kiosk/user_identity_providers/base'
+require 'kiosk/payment_providers/base'
+require 'kiosk/kyc_providers/base'
 
 module Kiosk
   # Serialises the first build of {configuration}, so racing threads never

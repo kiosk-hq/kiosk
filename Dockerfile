@@ -3,8 +3,8 @@
 # repository; each demo's compose.yaml picks the working directory.
 #
 # The image carries the tools demo code runs: python3 with numpy (registering
-# an assistant solves an Equihash toll with the bundled solve.py), and curl and
-# jq for the shell walkthroughs. Compose provides Postgres.
+# an assistant solves an Equihash toll with the bundled solve.py). Compose
+# provides Postgres.
 #
 # The Ruby version is a build argument, and `bin/check-demo-copies` holds it to
 # a version this repository's CI actually runs and to the floor the gemspecs
@@ -13,15 +13,13 @@ ARG RUBY_VERSION=4.0.1
 FROM ruby:${RUBY_VERSION}-slim
 
 # python3-numpy for the Equihash solver (the Debian package, so no pip and no
-# wheel build); curl and jq for the shell walkthroughs; the rest is what the
-# `pg` and `psych` native extensions need to compile.
+# wheel build); the rest is what the `pg` and `psych` native extensions need
+# to compile.
 RUN apt-get update -qq \
  && apt-get install --no-install-recommends -y \
       build-essential \
       ca-certificates \
-      curl \
       git \
-      jq \
       libpq-dev \
       libyaml-dev \
       python3 \

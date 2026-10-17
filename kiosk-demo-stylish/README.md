@@ -23,7 +23,6 @@ The demo lives in the Kiosk monorepo and resolves its gems by path
 cd kiosk-demo-stylish
 bundle install
 bin/setup      # seed, then serve the origin
-bin/demo       # in a second terminal: a curl tour of that origin
 ```
 
 `bin/setup` creates the Postgres database, loads the schema + seeds and leaves the origin running for an assistant to drive — see "Watch it work" below.
@@ -39,7 +38,6 @@ On your own machine you need:
 - **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
 - **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
-- **`curl` and `jq`** for `bin/demo`.
 
 From this directory:
 
@@ -53,14 +51,6 @@ bin/rails test         # the tests; CI runs exactly this
 assistant does.
 
 ## What the demo shows
-
-The walkthrough (`bin/demo`, against the origin `bin/dev` serves) prints these sections:
-
-1. **Binding** — Alice's and Bob's assistants each earn a token through the real ceremony: register under the Equihash toll, the human signs in, link, claim
-2. **Discovery** — well-known + JWKS payloads, so an AI-assistant host like claude.ai sees what's behind the URL
-3. **A query** — `GET /kiosk/salons` and `GET /kiosk/availability`, each answering a bare JSON array scoped by app-layer authz
-4. **An Action** — `POST /kiosk/book_appointment` (the demo's lone registered Action), arguments in the JSON body, answering the booking object itself
-5. **Isolation** — same query run as Alice vs Bob; each sees only their own (enforced in the query block)
 
 ### Account binding (`test/stories/linking_test.rb`)
 
@@ -115,7 +105,6 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `config/initializers/devise.rb` | Minimal Devise setup — the human session that approves assistant links |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine ships as its fallback. Nothing here parses a self-asserted bearer, in any environment |
 | `script/bound_assistant.rb` | The ONE way a driver obtains an AGENT principal bound to a seeded human. It runs the shipped ceremony over real HTTP, and is hand-copied across the demos and held byte-identical by `bin/check-demo-copies`. Its HUMAN counterpart is `Kiosk::UserIdentityProviders::DeviseSession`, shipped by `kiosk-user-idp-devise` |
-| `bin/demo` | The walkthrough — curl and jq against a running origin |
 | `app/models/salon_clock.rb` | The origin's default IANA zone and the one writer every verb publishes an instant with |
 | `test/` | `bin/rails test`: `test/stories/` tells each client's and the owner's story over HTTP, as their assistants live it; `book_appointment_test.rb` holds the salon's clock |
 

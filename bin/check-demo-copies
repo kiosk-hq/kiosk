@@ -668,7 +668,6 @@ SKELETON_NOT_COMPARED = {
   "db/schema.rb" => "Generated from the migrations, which are compared.",
   "bin/rails" => "Rails generator output.",
   "bin/rake" => "Rails generator output.",
-  "bin/demo" => "Per-demo entry point into that demo's flow tasks.",
   "log/.keep" => "Empty placeholder.",
   "tmp/.keep" => "Empty placeholder.",
   "tmp/pids/.keep" => "Empty placeholder.",

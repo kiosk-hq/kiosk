@@ -88,14 +88,12 @@ On your own machine you need:
 - **Ruby 4.0 or newer**, then `bundle install`.
 - **Postgres**, reachable — `pg_isready` returns OK.
 - **python3 with numpy** — registering an assistant pays an Equihash toll, solved by the bundled `solve.py`.
-- **`curl` and `jq`** on PATH — `bin/demo` drives the walkthrough with them.
 
 From this directory:
 
 ```
 bin/rails db:reset     # DROPS and recreates kiosk_philslist_development, then seeds the board
 bin/dev                # serves the origin on http://localhost:3000
-bin/demo               # the walkthrough, against that origin
 bin/rails test         # the tests; CI runs exactly this
 ```
 
@@ -104,15 +102,7 @@ assistant does.
 
 ## What the demo shows
 
-`bin/demo` walks Alice's assistant through the board with `curl`:
-
-1. **Binding** — the assistant registers under the Equihash toll, Alice signs in, and a link code binds it to her account
-2. **Discovery** — the well-known capabilities, with no `pay` among them
-3. **Browse** — `browse_listings` across the open, cross-owner board
-4. **Post → edit → close** — the owned-listing lifecycle over the three
-   action endpoints, with `my_listings` showing the final state
-
-The stories in `test/stories/` hold the rest:
+The stories in `test/stories/` show it:
 
 - **Isolation** — the board shows every seller's listings and `my_listings` only
   the caller's; editing or closing another seller's listing is **403**; a forged
@@ -163,7 +153,6 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only principal shape: an identity here is a verified JWT or it is nothing |
 | `script/bound_assistant.rb` | The ONE way a driver obtains an AGENT principal bound to a seeded human. It runs the shipped ceremony over real HTTP, and is hand-copied across the demos and held byte-identical by `bin/check-demo-copies`. Its HUMAN counterpart is `Kiosk::UserIdentityProviders::DeviseSession`, shipped by `kiosk-user-idp-devise` |
 | `script/redteam_suite.rb` | The adversarial battery, run against a live origin |
-| `bin/demo` | The browse→post→edit→close walkthrough (curl-driven) |
 | `test/` | Minitest tests, run by `bin/rails test`; `test/stories/` drives the origin over HTTP as sellers' assistants |
 
 ## Make it real

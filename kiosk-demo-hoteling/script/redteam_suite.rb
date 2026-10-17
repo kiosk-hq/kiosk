@@ -99,12 +99,6 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  gated_action: 'confirm_booking',
-  gated_args: ->(ref) { { booking_id: ref[:id] } },
-
-  # confirm_booking spends nothing, so SpentResourceReuse skips with this reason.
-  gated_action_consumes: false,
-
   # scope=lodging, one line per booking, as reserve_room's pay_hint asks.
   pay_for: lambda { |_client, principal, owned_ref|
     total_cents   = owned_ref[:total_cents].to_i
@@ -177,7 +171,7 @@ module HotelingScenarios
     end
   end
 
-  # confirm_booking's arg is refused by its schema; the signed-cart ref reaches Kiosk::UuidCheck at capture.
+  # The signed-cart ref reaches Kiosk::UuidCheck at capture.
   class MalformedUuidArg < Kiosk::Redteam::Scenario
     MALFORMED     = ['not-a-uuid', '1; DROP TABLE bookings', ''].freeze
     SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
@@ -186,7 +180,7 @@ module HotelingScenarios
       super(
         name: 'MalformedUuidArg',
         category: 'input',
-        description: 'A malformed booking_id — as a confirm_booking arg AND inside a signed cart — must be a typed 400, never a 500',
+        description: 'A malformed booking_id inside a signed cart must be a typed 400, never a 500',
       )
     end
 
@@ -204,8 +198,6 @@ module HotelingScenarios
     private
 
     def probe(junk)
-      check("confirm_booking(#{junk.inspect})",
-            @client.run(@principal, name: 'confirm_booking', booking_id: junk), supplied: junk)
       check("pay cart booking_id=#{junk.inspect}", pay_with_ref(junk), supplied: junk)
     end
 
@@ -716,9 +708,9 @@ module HotelingScenarios
 end
 
 scenarios = [
-  Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # C2 — headline
-  Kiosk::Redteam::Scenarios::SpentResourceReuse.new,      # C3 — skips: nothing is spent
-  Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,
+  Kiosk::Redteam::Scenarios::PayForOtherUseSelf.new,      # → SKIP (no action waits on a payment)
+  Kiosk::Redteam::Scenarios::SpentResourceReuse.new,      # → SKIP (no action waits on a payment)
+  Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,       # → SKIP (no action waits on a payment)
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
@@ -742,12 +734,14 @@ scenarios = [
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new # → BLOCKED (register PoW ON)
 ]
 
-# No KYC, and confirm_booking spends nothing; register PoW is on, so RegistrationWithoutPow runs.
+# No KYC, and no action waits on a payment; register PoW is on, so RegistrationWithoutPow runs.
 EXPECTED_SKIP_NAMES = %w[
   ExpiredKyc
   ForgedKyc
   MissingKyc
+  PayForOtherUseSelf
   SpentResourceReuse
+  UnpaidGatedAction
 ].freeze
 
 puts "\n── hoteling redteam battery ──"

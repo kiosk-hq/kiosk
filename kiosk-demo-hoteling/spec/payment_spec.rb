@@ -30,13 +30,6 @@ RSpec.shared_context 'a booking two customers can pay for' do
       total_amount_cents: 18_000, currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'cart'
     )
   end
-
-  def confirm(as:)
-    identity = Kiosk::Identity.new(user_id: as.id, role: 'customer', actor: 'agent', agent_id: SecureRandom.uuid)
-    Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.lease_connection, identity: identity) do
-      ConfirmBookingOperation.call(booking_id: booking.id)
-    end
-  end
 end
 
 RSpec.describe 'paying for a booking' do
@@ -48,15 +41,10 @@ RSpec.describe 'paying for a booking' do
     expect(booking.reload).to be_unpaid
   end
 
-  it "takes the owner's payment, and the property's answer is what confirm_booking hands back" do
+  it "takes the owner's payment, and the property confirms the paid booking" do
     cashier.capture(cart(ada))
 
     expect(booking.reload).to be_paid.and be_confirmed
-    expect(confirm(as: ada)).to eq(booking)
-    expect { confirm(as: ben) }.to raise_error(Kiosk::Server::Errors::Forbidden, 'booking not found or not yours')
-  end
-
-  it 'refuses to confirm an unpaid booking' do
-    expect { confirm(as: ada) }.to raise_error(Kiosk::Server::Errors::Forbidden, 'this booking is not paid yet')
+    expect(booking.confirmation_code).to be_present
   end
 end

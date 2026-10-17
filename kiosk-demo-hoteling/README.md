@@ -20,7 +20,8 @@ RFC 9457 problem document.
 - `GET /kiosk/properties` — browse all available hotel properties
 - `GET /kiosk/availability?property_id=&check_in=&check_out=` — check room
   availability for a stay
-- `GET /kiosk/my_bookings` — the signed-in customer's bookings
+- `GET /kiosk/my_bookings` — the signed-in customer's bookings: each stay's
+  status, its payment state and, once the hotel confirms it, its confirmation code
 - `GET /kiosk/search_hotels?...` — paginated search over the ~100-hotel
   catalogue; the only paginating verb here, and since RFC 8288 it answers the
   same bare array as the rest — a truncated page says so in a `Link: <…>;
@@ -32,8 +33,6 @@ RFC 9457 problem document.
   its room is free for other guests
 - `POST /kiosk/payment_setup` — check whether the customer has a saved payment method
   (served by kiosk-server)
-- `POST /kiosk/confirm_booking` — collect the hotel's answer to a paid booking:
-  its confirmation code, or the refund
 - `POST /kiosk/pay` — settle the AP2 mandate chain (intent → cart → payment)
   through Stripe
 - `GET /kiosk/schema` — self-discovery

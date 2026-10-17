@@ -1583,7 +1583,6 @@ SPEC_UNITS = {
   'capture' => { rule: :per_file, why: "Each stub's charge, and each test's capture of its own product." },
   'payment_state' => { rule: :per_file, why: "The wire's payment state, read through each demo's own query." },
   'payment_status' => { rule: :per_file, why: "The stored payment status of each demo's own model." },
-  'confirm' => { rule: :per_file, why: "hoteling's `confirm_booking`, called as each spec needs it." },
   'reserve' => { rule: :per_file, why: "Each demo's own reserve verb and arguments." },
   'reserves' => { rule: :per_file, why: "Each demo's customer reserves its own kind of thing." },
   'books' => { rule: :per_file, why: "Each demo's customer books through its own verb and arguments." },

@@ -17,7 +17,7 @@ RSpec.describe 'Discovering the hotel', type: :story do
     %w[properties availability my_bookings search_hotels hotel_detail].each do |name|
       expect(queries.dig(name, 'description')).to be_present, name
     end
-    %w[reserve_room confirm_booking payment_setup].each do |name|
+    %w[reserve_room payment_setup].each do |name|
       expect(actions.dig(name, 'description')).to be_present, name
     end
     queries.values_at('search_hotels', 'hotel_detail').each do |descriptor|

@@ -18,6 +18,29 @@ module Kiosk
       subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
     end
 
+    topic :booking_confirmation do
+      description 'The hotel answered a paid booking: `confirmed`, with the code the guest gives at the desk, ' \
+                  'or `cancelled`, with the refund to the card that paid.'
+      payload_schema type: 'object', additionalProperties: false,
+                     properties: { booking_id: { type: 'string', format: 'uuid' },
+                                   status: { enum: %w[confirmed cancelled] },
+                                   confirmation_code: { type: 'string' },
+                                   reason: { type: 'string' },
+                                   refund: { type: 'object', additionalProperties: false,
+                                             properties: {
+                                               amount_cents: { type: 'integer' },
+                                               currency: { type: 'string' },
+                                               psp_reference: { type: 'string' },
+                                               reverses: { type: 'string',
+                                                           description: 'The charge this refund reverses.' }
+                                             } } },
+                     required: %w[booking_id status]
+      example booking_id: BOOKING_ID, status: 'confirmed', confirmation_code: '5d1c9e04-8f2b-4a6e-b3c7-2e9f0a4d6b18'
+      example booking_id: BOOKING_ID, status: 'cancelled', reason: 'property_declined',
+              refund: { amount_cents: 45_000, currency: 'eur', psp_reference: 're_3Q8x2L', reverses: 'pi_3Q8x2K' }
+      subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
+    end
+
     kind :query
     description "The signed-in customer's bookings, newest first. Re-read it after a payment whose answer " \
                 'never arrived: each row says where the stay and its money stand.'
@@ -26,7 +49,7 @@ module Kiosk
                   items: {
                     type: 'object', additionalProperties: false,
                     properties: {
-                      booking_id: { type: 'string', description: 'Pass to confirm_booking.' },
+                      booking_id: { type: 'string', description: 'The booking reserve_room held.' },
                       property_id: { type: 'integer' },
                       room_type_id: { type: 'integer' },
                       check_in: { type: 'string', description: 'First night.' },
@@ -51,7 +74,8 @@ module Kiosk
 
     kind :action
     description "Hold a room type for a stay for #{Booking::PAY_WINDOW.inspect}. Nothing is charged: pay the " \
-                'quoted total with a cart naming the booking, then call `confirm_booking`. A hold left unpaid ' \
+                'quoted total with a cart naming the booking; the hotel answers on `booking_confirmation`, and ' \
+                '`my_bookings` shows the answer and its confirmation code. A hold left unpaid ' \
                 'past that time is cancelled and its room is free for other guests.'
     input_schema type: 'object',
                  additionalProperties: false,
@@ -67,7 +91,7 @@ module Kiosk
                   additionalProperties: false,
                   properties: {
                     booking_id: { type: 'string',
-                                  description: "Name it in the cart's line item; pass it to confirm_booking." },
+                                  description: "Name it in the cart's line item; my_bookings lists it." },
                     total_cents: { type: 'integer',
                                    description: 'Price of the whole stay, in cents; sign the cart at exactly this.' },
                     currency: { type: 'string', description: 'Sign the cart in this currency.' },

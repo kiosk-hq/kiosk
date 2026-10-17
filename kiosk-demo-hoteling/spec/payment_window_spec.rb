@@ -51,8 +51,8 @@ RSpec.shared_context 'a guest with a room to pay for' do
     end['booking_id']
   end
 
-  def confirm(id) = as_guest { Kiosk::Server::Actions.fetch('confirm_booking').call(booking_id: id) }
-  def payment_state(id) = as_guest { Kiosk::Server::Queries.fetch('my_bookings').call({}) }.find { it['booking_id'] == id }['payment_state']
+  def booking_row(id) = as_guest { Kiosk::Server::Queries.fetch('my_bookings').call({}) }.find { it['booking_id'] == id }
+  def payment_state(id) = booking_row(id)['payment_state']
   def payment_status(id) = Booking.uncached { Booking.find(id).payment_status }
 end
 
@@ -89,10 +89,9 @@ RSpec.describe 'the window between a capture and its settlement' do
 
   let(:blocking_psp) { BlockingPsp.new }
 
-  it 'reads an untouched booking unpaid, and does not confirm it' do
+  it 'reads an untouched booking unpaid and unconfirmed' do
     id = reserve
-    expect(payment_state(id)).to eq('unpaid')
-    expect { confirm(id) }.to raise_error(Kiosk::Server::Errors::Forbidden, 'this booking is not paid yet')
+    expect(booking_row(id)).to include('payment_state' => 'unpaid', 'status' => 'reserved', 'confirmation_code' => nil)
   end
 
   it 'reads a capture in flight pending, and a returned capture paid before its settlement row' do
@@ -100,14 +99,13 @@ RSpec.describe 'the window between a capture and its settlement' do
     paying = Thread.new { capture(blocking_psp, id) }
 
     expect(eventually? { payment_status(id) == 'paying' }).to be(true)
-    expect(payment_state(id)).to eq('pending')
-    expect { confirm(id) }.to raise_error(Kiosk::Server::Errors::Forbidden, /in progress/)
+    expect(booking_row(id)).to include('payment_state' => 'pending', 'status' => 'reserved')
 
     blocking_psp.release!
     ActiveSupport::Dependencies.interlock.permit_concurrent_loads { paying.join }
     expect(settled?(id)).to be(false)
     expect(payment_state(id)).to eq('paid')
-    expect(confirm(id)).to include('status' => 'confirmed')
+    expect(booking_row(id)).to include('status' => 'confirmed', 'confirmation_code' => be_present)
 
     events = Kiosk.configuration.event_store.since(guest.id, 0).select { it['topic'] == 'booking_payment' }
     expect(events.map { it['subject'] }).to eq([id])

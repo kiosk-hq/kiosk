@@ -26,6 +26,5 @@ RSpec.describe 'A hold nobody pays for', type: :story do
     expect(late).to be_refused(:forbidden)
     expect(late.detail).to include('pay-by time passed')
     expect(Booking.find(held['booking_id'])).to be_unpaid
-    expect(ada.confirms(held).detail).to eq('this hold lapsed unpaid and the room was released')
   end
 end

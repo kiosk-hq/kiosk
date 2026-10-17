@@ -3,17 +3,13 @@
 require 'story_helper'
 
 RSpec.describe "One guest's bookings", type: :story do
-  it 'another guest can neither pay for, confirm, nor see them' do
+  it 'another guest can neither pay for nor see them' do
     alice = a_guest
     bob = a_guest
     alices = alice.reserves
 
     expect(bob.pays_for(alices)).to be_refused(:forbidden)
     expect(alice.pays_for(alices)).to be_ok
-
-    snooping = bob.confirms(alices)
-    expect(snooping).to be_refused(:forbidden)
-    expect(snooping['detail']).to eq('booking not found or not yours')
 
     bobs = bob.reserves(check_in: Date.current + 60)
     expect(bob.bookings.pluck('booking_id')).to eq([bobs['booking_id']])

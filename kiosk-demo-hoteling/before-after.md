@@ -31,7 +31,7 @@ answer.
 `spec/stories/booking_spec.rb` runs the errand with no human present: the assistant
 registers itself under the toll, reads `availability`, calls `reserve_room`,
 signs the three AP2 mandates and pays, and the booking is confirmed only once
-payment settles. Settlement goes through Stripe in test mode, and the test
+payment settles; `my_bookings` then hands back the hotel's confirmation code. Settlement goes through Stripe in test mode, and the test
 charges a local stripe-mock, so the flow runs with no real card.
 
 Two things the incumbent flow cannot do follow from that. Payment is part of

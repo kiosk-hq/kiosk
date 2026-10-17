@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: hoteling drops `confirm_booking`, which wrote nothing: `my_bookings` carries the hotel's answer and its confirmation code.
+
 - 2026-10-17: tudu's `remove_member` refuses only an owner removing themselves; the last-owner count is gone.
 
 - 2026-10-17: The engine no longer creates `kiosk.reservations`, which nothing used; every demo drops it with a new migration.

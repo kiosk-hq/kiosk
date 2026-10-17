@@ -14,6 +14,6 @@ Rails.application.routes.draw do
   # ── The Kiosk wire surface ────────────────────────────────────────────────
   kiosk do
     queries :availability, :hotel_detail, :my_bookings, :properties, :search_hotels
-    actions :confirm_booking, :reserve_room
+    actions :reserve_room
   end
 end

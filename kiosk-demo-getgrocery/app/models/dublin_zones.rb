@@ -45,41 +45,31 @@ module DublinZones
   # "Dublin 2", "D02", "D2" or an Eircode routing key ("D02 XY45") → "D02".
   def extract_district(str)
     s = str.to_s
-    if (m = s.match(/\bD\s?0?(\d{1,2})\b/i))
-      n = m[1].to_i
-      return normalise(n)
-    end
-    if (m = s.match(/\bdublin\s+0?(\d{1,2})\b/i))
-      n = m[1].to_i
-      return normalise(n)
-    end
-    nil
+    m = s.match(/\bD\s?0?(\d{1,2})\b/i) || s.match(/\bdublin\s+0?(\d{1,2})\b/i)
+    m && normalise(m[1].to_i)
   end
 
-  def normalise(n)
-    return nil if n < 1 || n > 24
+  def normalise(number)
+    return nil if number < 1 || number > 24
 
-    format('D%02d', n)
+    format('D%02d', number)
   end
 
-  # Why the address is refused, worded to follow its field name.
+  # Why an address is refused, by Result#reason, worded to follow its field name.
+  REJECT_MESSAGES = {
+    blank: 'is missing — getgrocery needs a Dublin delivery address with a postal district ' \
+           '(e.g. "42 Camden Street, Dublin 2") before it can show delivery slots. Ask the ' \
+           'customer for their real address.',
+    no_district: 'names Dublin but no postal district — getgrocery delivers by district and needs one ' \
+                 '(e.g. "Dublin 2" or an Eircode like "D02 XY45"). Served districts: %<served>s. ' \
+                 'Ask the customer to confirm their real address.',
+    not_dublin: 'is not a Dublin address — getgrocery delivers only within Dublin (served districts ' \
+                '%<served>s). Confirm the real delivery address with the customer.',
+    out_of_zone: 'is in %<district>s, which getgrocery does not deliver to — served districts are ' \
+                 '%<served>s. Ask the customer for an address in a served district.'
+  }.freeze
+
   def reject_message(result)
-    served = SERVED.join(', ')
-    case result.reason
-    when :blank
-      'is missing — getgrocery needs a Dublin delivery address with a postal district ' \
-      '(e.g. "42 Camden Street, Dublin 2") before it can show delivery slots. Ask the ' \
-      'customer for their real address.'
-    when :no_district
-      'names Dublin but no postal district — getgrocery delivers by district and needs one ' \
-      "(e.g. \"Dublin 2\" or an Eircode like \"D02 XY45\"). Served districts: #{served}. " \
-      'Ask the customer to confirm their real address.'
-    when :not_dublin
-      'is not a Dublin address — getgrocery delivers only within Dublin (served districts ' \
-      "#{served}). Confirm the real delivery address with the customer."
-    when :out_of_zone
-      "is in #{result.district}, which getgrocery does not deliver to — served districts are " \
-      "#{served}. Ask the customer for an address in a served district."
-    end
+    format(REJECT_MESSAGES.fetch(result.reason), served: SERVED.join(', '), district: result.district)
   end
 end

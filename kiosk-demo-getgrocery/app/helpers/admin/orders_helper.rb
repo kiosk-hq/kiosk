@@ -15,7 +15,8 @@ module Admin
 
     # An amount in the currency the order settled in; € until it has settled.
     def order_money(order, cents)
-      format('%s%.2f', CURRENCY_GLYPHS.fetch(order.settled_currency.to_s.downcase, '€'), cents / 100.0)
+      glyph = CURRENCY_GLYPHS.fetch(order.settled_currency.to_s.downcase, '€')
+      format('%<glyph>s%<amount>.2f', glyph:, amount: cents / 100.0)
     end
 
     # The delivery window on the order's own clock, worded as the wire words it.

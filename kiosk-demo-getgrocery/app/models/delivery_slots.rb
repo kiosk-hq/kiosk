@@ -37,7 +37,7 @@ module DeliverySlots
   # "08:00–10:00 (Europe/Dublin)".
   def label(time, zone = default_zone)
     hour = time.in_time_zone(zone).hour
-    format('%02d:00–%02d:00 (%s)', hour, hour + WINDOW_HOURS, zone.name)
+    format('%<from>02d:00–%<to>02d:00 (%<zone>s)', from: hour, to: hour + WINDOW_HOURS, zone: zone.name)
   end
 
   # A window takes orders while a basket paid now still reaches the door inside it.

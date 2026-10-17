@@ -12,7 +12,7 @@ class Product < ApplicationRecord
   # 1299 → "€12.99", 300 → "€3".
   def self.format_eur(cents)
     whole, frac = cents.divmod(100)
-    frac.zero? ? "€#{whole}" : format('€%d.%02d', whole, frac)
+    frac.zero? ? "€#{whole}" : format('€%<whole>d.%<frac>02d', whole:, frac:)
   end
 
   def low_stock? = stock <= LOW_STOCK_THRESHOLD

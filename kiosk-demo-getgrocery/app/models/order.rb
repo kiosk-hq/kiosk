@@ -21,7 +21,7 @@ class Order < ApplicationRecord
 
   # What a caller placing or moving an order is held to.
   validates :order_items, length: { in: 1..MAX_ITEMS, too_short: 'must name a product',
-                                    too_long: 'are at most %{count} lines' }, on: :place
+                                    too_long: 'are at most %{count} lines' }, on: :place # rubocop:disable Style/FormatStringToken -- Rails I18n interpolates %{count}
   validates :address, served_address: true, on: %i[place reschedule]
   validate :window_bookable, on: %i[place reschedule]
 
@@ -66,8 +66,10 @@ class Order < ApplicationRecord
     if slot_at.nil? || !DeliverySlots.start?(slot_at, zone)
       errors.add(:slot_at, 'must be the slot_at of a delivery_slots row')
     elsif DeliverySlots.closed?(slot_at)
-      errors.add(:slot_at, "#{DeliverySlots.label(slot_at, zone)} on #{slot_at.in_time_zone(zone).to_date.iso8601} " \
-                           'is no longer bookable; call delivery_slots for the open windows')
+      errors.add(:slot_at, "#{window_name} is no longer bookable; call delivery_slots for the open windows")
     end
   end
+
+  # "08:00–10:00 (Europe/Dublin) on 2026-09-01".
+  def window_name = "#{DeliverySlots.label(slot_at, zone)} on #{slot_at.in_time_zone(zone).to_date.iso8601}"
 end

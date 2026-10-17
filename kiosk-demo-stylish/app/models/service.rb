@@ -8,6 +8,6 @@ class Service < ApplicationRecord
   # "€35", "€49.50".
   def self.format_eur(cents)
     whole, frac = cents.to_i.divmod(100)
-    frac.zero? ? "€#{whole}" : format('€%d.%02d', whole, frac)
+    frac.zero? ? "€#{whole}" : format('€%<whole>d.%<frac>02d', whole:, frac:)
   end
 end

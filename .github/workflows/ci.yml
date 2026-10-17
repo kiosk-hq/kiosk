@@ -221,7 +221,7 @@ jobs:
         run: |
           if [ -n "${{ matrix.stripe_mock }}" ]; then
             ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::TestHelpers::StripeMock.start; sleep' &
-            export STRIPE_MOCK_URL=http://127.0.0.1:12111 KIOSK_TEST_AUTOCARD=1
+            export STRIPE_MOCK_URL=http://127.0.0.1:12111
           fi
           if [ -n "${{ matrix.prove_broker }}" ]; then
             (cd ../kiosk-demo-prove && bin/rails db:reset && bin/rails server -p 3020 -d)

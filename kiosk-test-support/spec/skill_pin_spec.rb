@@ -198,7 +198,7 @@ RSpec.describe 'the skill pin' do
     #
     # THE VOCABULARY IS DERIVED, NEVER LISTED. The engine is the authority on
     # which OAuth errors a poll can meet, so the expectation reads them out of
-    # `DeviceCodeGrant`'s own `failure(:code, …)` calls. A code added there and
+    # `DeviceCodeGrant`'s own `failure(:code, …)` calls and `[:code, …]` table rows. A code added there and
     # not taught to the skill fails here — which is the D3 drift this guards —
     # and a hand-kept list in a spec file would have been a second place the
     # vocabulary lives, the divergence K-605 closed by deleting one.
@@ -208,7 +208,7 @@ RSpec.describe 'the skill pin' do
       )
       expect(File).to exist(grant_source)
 
-      emitted = File.read(grant_source).scan(/failure\(:([a-z_]+)/).flatten.uniq
+      emitted = File.read(grant_source).scan(/(?:failure\(|\[):([a-z_]+)/).flatten.uniq
       # invalid_request is a malformed CALL (no device_code parameter), not an
       # outcome of a ceremony in progress: an assistant that sent no
       # device_code has a bug, not a poll to terminate.

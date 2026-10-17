@@ -172,11 +172,14 @@ def dirty_cited(rels)
   out, ok = git('status', '--porcelain', '--', *rels)
   return [] unless ok
 
-  out.lines.filter_map do |line|
-    path = line[3..].to_s.strip.split(' -> ').last.to_s
-    path = path[1..-2].to_s if path.start_with?('"') && path.end_with?('"')
-    path unless path.empty?
-  end.uniq
+  out.lines.filter_map { |line| porcelain_path(line) }.uniq
+end
+
+# The path a `git status --porcelain` line names, or nil.
+def porcelain_path(line)
+  path = line[3..].to_s.strip.split(' -> ').last.to_s
+  path = path[1..-2].to_s if path.start_with?('"') && path.end_with?('"')
+  path unless path.empty?
 end
 
 # A path is in scope when it equals P, sits under P/, or matches P as a glob.
@@ -184,6 +187,72 @@ def in_scope?(rel, scopes)
   scopes.any? do |s|
     rel == s || rel.start_with?("#{s}/") || File.fnmatch?(s, rel, File::FNM_PATHNAME)
   end
+end
+
+# ── re-measuring each row at its own ref ────────────────────────────────────
+def ref_absent?(ref)
+  (@absent_refs ||= {}).fetch(ref) do
+    @absent_refs[ref] = !git('rev-parse', '--verify', '--quiet', "#{ref}^{commit}").last
+  end
+end
+
+def lines_at(ref, rel)
+  (@at_ref ||= {}).fetch([ref, rel]) do
+    text, ok = git('show', "#{ref}:#{rel}")
+    @at_ref[[ref, rel]] = ok ? blob_lines(text) : nil
+  end
+end
+
+# [fingerprint, nil] at `ref`, or [nil, why] when the row cannot be re-measured there.
+def remeasure(rel, ref, anchor)
+  return [nil, "#{ref} is not a commit in this repository"] if ref_absent?(ref)
+
+  lines = lines_at(ref, rel)
+  return [nil, "no such path at #{ref}"] if lines.nil?
+
+  hits = lines.each_index.select { |i| lines[i].include?(anchor) }
+  return [nil, "anchor #{hits.empty? ? 'absent' : 'ambiguous'} at #{ref}"] unless hits.length == 1
+
+  [fingerprint(region_at(lines, hits.first)), nil]
+end
+
+def verify_row(results, rel, fingerprint, ref, anchor)
+  got, why = remeasure(rel, ref, anchor)
+  return results[:unmeasured] << "#{rel}  #{anchor.inspect}: #{why}" if why
+  return results[:verified] += 1 if got == fingerprint
+
+  results[:mismatched] << "#{rel}  #{anchor.inspect}: recorded #{fingerprint}, re-measures #{got} at #{ref}"
+end
+
+# Every fingerprint must re-measure to its recorded value at its own row's ref.
+# Returns [verified row count, notes, provenance defects].
+def provenance(rows)
+  results = { verified: 0, mismatched: [], unmeasured: [] }
+  unverifiable = Hash.new(0)
+  rows.each do |rel, fp, ref, anchor|
+    next unverifiable[ref] += 1 if UNVERIFIABLE.include?(ref)
+
+    verify_row(results, rel, fp, ref, anchor)
+  end
+  [results[:verified], unverifiable_notes(unverifiable), provenance_defects(results, rows.length)]
+end
+
+def unverifiable_notes(unverifiable)
+  unverifiable.map do |sentinel, n|
+    "#{n} row(s) name #{sentinel.inspect} rather than a commit and cannot be re-measured; " \
+      're-record those paths from a clean checkout to make them verifiable.'
+  end
+end
+
+def provenance_defects(results, total)
+  { 'do NOT re-measure to their recorded value at their own ref' => results[:mismatched],
+    'name an anchor that does not resolve uniquely at their own ref' => results[:unmeasured] }
+    .filter_map do |what, list|
+      next if list.empty?
+
+      "#{list.length} of #{total} row(s) #{what}:\n#{list.first(12).map { |m| "      #{m}" }.join("\n")}" \
+        "#{"\n      … and #{list.length - 12} more" if list.length > 12}"
+    end
 end
 
 # ── --self-test: each arm runs this script inside a throwaway git repository ───
@@ -195,9 +264,6 @@ if self_test
   GIT_ENV = { 'GIT_CONFIG_GLOBAL' => '/dev/null', 'GIT_CONFIG_SYSTEM' => '/dev/null',
               'GIT_AUTHOR_NAME' => 't', 'GIT_AUTHOR_EMAIL' => 't@t',
               'GIT_COMMITTER_NAME' => 't', 'GIT_COMMITTER_EMAIL' => 't@t' }.freeze
-
-  failures = []
-  arms     = 0
 
   def st_run(root, *args)
     out = IO.popen(GIT_ENV, [File.join(root, 'bin', 'check-conformance-drift'), *args],
@@ -214,135 +280,176 @@ if self_test
     File.write(path, File.read(path).sub(from, to))
   end
 
-  def st_fixture(root, marker)
-    FileUtils.mkdir_p(File.join(root, 'bin'))
-    FileUtils.mkdir_p(File.join(root, 'spec'))
-    FileUtils.cp(SCRIPT, File.join(root, 'bin', 'check-conformance-drift'))
-    File.chmod(0o755, File.join(root, 'bin', 'check-conformance-drift'))
-    File.write(File.join(root, 'spec', 'conformance-anchors.tsv'), <<~TSV)
+  FIXTURE = {
+    'spec/conformance-anchors.tsv' => <<~TSV,
       # a fixture manifest
       spec/alpha_spec.rb\tthe ALPHA example
       spec/beta_spec.rb\tthe BETA example
     TSV
-    File.write(File.join(root, 'spec', 'alpha_spec.rb'), <<~RB)
+    'spec/alpha_spec.rb' => <<~RB,
       it "the ALPHA example" do
-        expect(1).to eq(1) # #{marker}
+        expect(1).to eq(1) # MARKER
       end
     RB
-    File.write(File.join(root, 'spec', 'beta_spec.rb'), <<~RB)
+    'spec/beta_spec.rb' => <<~RB
       it "the BETA example" do
         expect(2).to eq(2)
       end
     RB
+  }.freeze
+
+  def st_install_script(root)
+    FileUtils.mkdir_p(File.join(root, 'bin'))
+    FileUtils.mkdir_p(File.join(root, 'spec'))
+    FileUtils.cp(SCRIPT, File.join(root, 'bin', 'check-conformance-drift'))
+    File.chmod(0o755, File.join(root, 'bin', 'check-conformance-drift'))
+  end
+
+  def st_head(root) = st_git(root, 'rev-parse', '--short', 'HEAD').strip
+
+  def st_fixture(root, marker)
+    st_install_script(root)
+    FIXTURE.each { |rel, body| File.write(File.join(root, rel), body.sub('MARKER', marker)) }
     st_git(root, 'init', '--quiet', '--initial-branch=main')
     st_git(root, 'add', '-A')
     st_git(root, 'commit', '--quiet', '-m', 'fixture')
-    st_git(root, 'rev-parse', '--short', 'HEAD').strip
+    st_head(root)
   end
 
   def st_rows(root)
     rows = baseline_rows(File.join(root, 'spec', 'conformance-drift-baseline.tsv'))
-    Hash.new([nil, nil]).merge(rows.to_h { |f| [f[0], [f[1], f[2]]] })
+    Hash.new { [nil, nil] }.merge(rows.to_h { |f| [f[0], [f[1], f[2]]] })
   end
 
-  arm = lambda do |name, ok, detail|
-    arms += 1
-    failures << "#{name}: #{detail}" unless ok
+  # The arms, in order; later arms build on the repository earlier arms left behind.
+  class DriftSelfTest
+    attr_reader :arms, :failures
+
+    STEPS = %i[record_whole record_partial check_mixed unjudged_row hand_edited_rows
+               hand_edited_header refusals dirty_record].freeze
+
+    def initialize(tmp)
+      @tmp = tmp
+      @arms = 0
+      @failures = []
+    end
+
+    def run = STEPS.each { |step| send(step) }
+
+    private
+
+    def arm(name, passed, detail)
+      @arms += 1
+      @failures << "#{name}: #{detail}" unless passed
+    end
+
+    # Runs the script with `args` and asserts the block's verdict on its output and exit code.
+    def arm_run(name, *, root: @root)
+      out, rc = st_run(root, *)
+      arm(name, yield(out, rc), "exit #{rc}: #{out}")
+      out
+    end
+
+    def ref_of(rel, root = @root) = st_rows(root)[rel].last
+    def baseline_path = File.join(@root, 'spec', 'conformance-drift-baseline.tsv')
+
+    def record_whole
+      @root = File.join(@tmp, 'mixed')
+      @c1 = st_fixture(@root, 'v1')
+      arm_run('A1 --record writes a baseline', '--record') { |_, rc| rc.zero? }
+      refs = st_rows(@root).values.map(&:last)
+      arm('A2 every row carries its own ref', refs.uniq == [@c1], "refs are #{refs.inspect}, want all #{@c1}")
+    end
+
+    def record_partial
+      st_edit(@root, 'spec/alpha_spec.rb', 'v1', 'v2')
+      st_git(@root, 'commit', '--quiet', '-am', 'move alpha')
+      @c2 = st_head(@root)
+      arm_run('A3 --record --only re-records the scope', '--record', '--only', 'spec/alpha_spec.rb') do |out, rc|
+        rc.zero? && out.include?('PARTIAL')
+      end
+      rows = st_rows(@root)
+      arm('A4 the baseline mixes a re-judged row with a pending one',
+          ref_of('spec/alpha_spec.rb') == @c2 && ref_of('spec/beta_spec.rb') == @c1,
+          "alpha at #{rows['spec/alpha_spec.rb'].inspect}, beta at #{rows['spec/beta_spec.rb'].inspect}")
+    end
+
+    def check_mixed
+      out = arm_run('A5 --check accepts a mixed baseline', '--check') { |_, rc| rc.zero? }
+      arm('A6 --check says how many commits the rows were judged at', out.include?('across 2 commit(s)'), out)
+
+      st_run(@root, '--record', '--only', 'spec/alpha_spec.rb')
+      arm('A7 an out-of-scope row is carried through byte-identical',
+          ref_of('spec/beta_spec.rb') == @c1, "beta moved to #{st_rows(@root)['spec/beta_spec.rb'].inspect}")
+    end
+
+    def unjudged_row
+      st_edit(@root, 'spec/beta_spec.rb', 'eq(2)', 'eq(3)')
+      out = arm_run('A8 the unjudged row is still reported as moved') do |o, rc|
+        rc.zero? && o.include?('moved 1') && o.include?('beta_spec.rb')
+      end
+      arm('A9 the report names the ref each moved row was last judged at', out.include?("last judged at #{@c1}"), out)
+      st_edit(@root, 'spec/beta_spec.rb', 'eq(3)', 'eq(2)')
+    end
+
+    def hand_edited_rows
+      @raw = File.read(baseline_path)
+      File.write(baseline_path, @raw.sub(%r{^spec/beta_spec\.rb\t[0-9a-f]{16}}) { "spec/beta_spec.rb\t#{'0' * 16}" })
+      arm_run('A10 a hand-edited fingerprint is refused', '--check') { |out, rc| rc == 1 && out.include?('re-measures') }
+
+      File.write(baseline_path, @raw.sub(%r{^(spec/alpha_spec\.rb\t[0-9a-f]{16}\t)#{Regexp.escape(@c2)}\t}) do
+        "#{Regexp.last_match(1)}#{@c1}\t"
+      end)
+      arm_run('A11 a row stamped at the wrong commit is refused', '--check') do |out, rc|
+        rc == 1 && out.include?('re-measures')
+      end
+    end
+
+    def hand_edited_header
+      File.write(baseline_path, @raw.sub('# Do not edit by hand', '# Please do not edit by hand'))
+      arm_run('A12 a hand-edited header is refused, naming --reheader', '--check') do |out, rc|
+        rc == 1 && out.include?('Repair with --reheader')
+      end
+      arm_run('A13 --reheader re-renders the header', '--reheader') { |out, rc| rc.zero? && out.include?('re-rendered') }
+      arm('A14 ...and moves no row', File.read(baseline_path) == @raw, 'the rows changed under --reheader')
+      arm_run('A15 ...and the repaired file passes', '--check') { |_, rc| rc.zero? }
+    end
+
+    def refusals
+      arm_run('A16 a scope matching nothing is refused', '--record', '--only', 'spec/nothing_here.rb') do |out, rc|
+        rc == 1 && out.include?('matches no path')
+      end
+      arm_run('A17 --only without --record is refused', '--only', 'spec/alpha_spec.rb') do |out, rc|
+        rc == 1 && out.include?('means nothing on its own')
+      end
+      root = File.join(@tmp, 'nobaseline')
+      st_fixture(root, 'v1')
+      arm_run('A18 a partial record with no baseline is refused', '--record', '--only', 'spec/alpha_spec.rb',
+              root: root) { |out, rc| rc == 1 && out.include?('nothing to update') }
+    end
+
+    def dirty_record
+      root = File.join(@tmp, 'dirty')
+      st_fixture(root, 'v1')
+      st_edit(root, 'spec/alpha_spec.rb', 'v1', 'uncommitted')
+      _, rc = st_run(root, '--record')
+      arm("A19 --record stamps only the modified file's row `dirty`",
+          rc.zero? && ref_of('spec/alpha_spec.rb', root) == 'dirty' && ref_of('spec/beta_spec.rb', root) != 'dirty',
+          "exit #{rc}: #{st_rows(root).inspect}")
+      arm_run('A20 --check verifies the clean row and notices the dirty one', '--check', root: root) do |out, code|
+        code.zero? && out.include?('NOTICE') && out.include?('1 of 2')
+      end
+    end
   end
 
-  Dir.mktmpdir('drift-selftest') do |tmp|
-    root = File.join(tmp, 'mixed')
-    c1   = st_fixture(root, 'v1')
-
-    out, rc = st_run(root, '--record')
-    arm.call('A1 --record writes a baseline', rc.zero?, "exit #{rc}: #{out}")
-    rows = st_rows(root)
-    arm.call('A2 every row carries its own ref', rows.values.map(&:last).uniq == [c1],
-             "refs are #{rows.values.map(&:last).inspect}, want all #{c1}")
-
-    st_edit(root, 'spec/alpha_spec.rb', 'v1', 'v2')
-    st_git(root, 'commit', '--quiet', '-am', 'move alpha')
-    c2 = st_git(root, 'rev-parse', '--short', 'HEAD').strip
-
-    out, rc = st_run(root, '--record', '--only', 'spec/alpha_spec.rb')
-    arm.call('A3 --record --only re-records the scope', rc.zero? && out.include?('PARTIAL'), "exit #{rc}: #{out}")
-    rows = st_rows(root)
-    arm.call('A4 the baseline mixes a re-judged row with a pending one',
-             rows['spec/alpha_spec.rb'].last == c2 && rows['spec/beta_spec.rb'].last == c1,
-             "alpha at #{rows['spec/alpha_spec.rb'].inspect}, beta at #{rows['spec/beta_spec.rb'].inspect}")
-
-    out, rc = st_run(root, '--check')
-    arm.call('A5 --check accepts a mixed baseline', rc.zero?, "exit #{rc}: #{out}")
-    arm.call('A6 --check says how many commits the rows were judged at', out.include?('across 2 commit(s)'), out)
-
-    st_run(root, '--record', '--only', 'spec/alpha_spec.rb')
-    arm.call('A7 an out-of-scope row is carried through byte-identical',
-             st_rows(root)['spec/beta_spec.rb'].last == c1, "beta moved to #{st_rows(root)['spec/beta_spec.rb'].inspect}")
-
-    st_edit(root, 'spec/beta_spec.rb', 'eq(2)', 'eq(3)')
-    out, rc = st_run(root)
-    arm.call('A8 the unjudged row is still reported as moved',
-             rc.zero? && out.include?('moved 1') && out.include?('beta_spec.rb'), "exit #{rc}: #{out}")
-    arm.call('A9 the report names the ref each moved row was last judged at', out.include?("last judged at #{c1}"), out)
-    st_edit(root, 'spec/beta_spec.rb', 'eq(3)', 'eq(2)')
-
-    bl  = File.join(root, 'spec', 'conformance-drift-baseline.tsv')
-    raw = File.read(bl)
-
-    File.write(bl, raw.sub(%r{^spec/beta_spec\.rb\t[0-9a-f]{16}}) { "spec/beta_spec.rb\t#{'0' * 16}" })
-    out, rc = st_run(root, '--check')
-    arm.call('A10 a hand-edited fingerprint is refused', rc == 1 && out.include?('re-measures'), "exit #{rc}: #{out}")
-
-    File.write(bl, raw.sub(%r{^(spec/alpha_spec\.rb\t[0-9a-f]{16}\t)#{Regexp.escape(c2)}\t}) do
-      "#{Regexp.last_match(1)}#{c1}\t"
-    end)
-    out, rc = st_run(root, '--check')
-    arm.call('A11 a row stamped at the wrong commit is refused', rc == 1 && out.include?('re-measures'),
-             "exit #{rc}: #{out}")
-
-    File.write(bl, raw.sub('# Do not edit by hand', '# Please do not edit by hand'))
-    out, rc = st_run(root, '--check')
-    arm.call('A12 a hand-edited header is refused, naming --reheader', rc == 1 && out.include?('Repair with --reheader'),
-             "exit #{rc}: #{out}")
-    out, rc = st_run(root, '--reheader')
-    arm.call('A13 --reheader re-renders the header', rc.zero? && out.include?('re-rendered'), "exit #{rc}: #{out}")
-    arm.call('A14 ...and moves no row', File.read(bl) == raw, 'the rows changed under --reheader')
-    out, rc = st_run(root, '--check')
-    arm.call('A15 ...and the repaired file passes', rc.zero?, "exit #{rc}: #{out}")
-
-    out, rc = st_run(root, '--record', '--only', 'spec/nothing_here.rb')
-    arm.call('A16 a scope matching nothing is refused', rc == 1 && out.include?('matches no path'), "exit #{rc}: #{out}")
-
-    out, rc = st_run(root, '--only', 'spec/alpha_spec.rb')
-    arm.call('A17 --only without --record is refused', rc == 1 && out.include?('means nothing on its own'),
-             "exit #{rc}: #{out}")
-
-    root2 = File.join(tmp, 'nobaseline')
-    st_fixture(root2, 'v1')
-    out, rc = st_run(root2, '--record', '--only', 'spec/alpha_spec.rb')
-    arm.call('A18 a partial record with no baseline is refused', rc == 1 && out.include?('nothing to update'),
-             "exit #{rc}: #{out}")
-
-    root3 = File.join(tmp, 'dirty')
-    st_fixture(root3, 'v1')
-    st_edit(root3, 'spec/alpha_spec.rb', 'v1', 'uncommitted')
-    _, rc = st_run(root3, '--record')
-    arm.call("A19 --record stamps only the modified file's row `dirty`",
-             rc.zero? && st_rows(root3)['spec/alpha_spec.rb'].last == 'dirty' &&
-               st_rows(root3)['spec/beta_spec.rb'].last != 'dirty',
-             "exit #{rc}: #{st_rows(root3).inspect}")
-    out, rc = st_run(root3, '--check')
-    arm.call('A20 --check verifies the clean row and notices the dirty one',
-             rc.zero? && out.include?('NOTICE') && out.include?('1 of 2'), "exit #{rc}: #{out}")
-  end
-
-  if failures.empty?
-    puts "check-conformance-drift --self-test: OK — #{arms} arm(s) green."
+  test = Dir.mktmpdir('drift-selftest') { |tmp| DriftSelfTest.new(tmp).tap(&:run) }
+  if test.failures.empty?
+    puts "check-conformance-drift --self-test: OK — #{test.arms} arm(s) green."
     exit 0
   end
 
-  warn "check-conformance-drift --self-test: FAIL — #{failures.length} of #{arms} arm(s) red."
-  failures.each { |f| warn "  x #{f}" }
+  warn "check-conformance-drift --self-test: FAIL — #{test.failures.length} of #{test.arms} arm(s) red."
+  test.failures.each { |f| warn "  x #{f}" }
   exit 1
 end
 
@@ -457,61 +564,12 @@ if check || reheader
     end
   end
 
-  # Every fingerprint must re-measure to its recorded value at its own row's ref.
   verified_rows = 0
   if head.nil?
     notes << 'provenance not checked: the recorded stamp did not parse.'
   else
-    at_ref       = {}
-    mismatched   = []
-    unmeasured   = []
-    unverifiable = Hash.new(0)
-    absent_refs  = {}
-
-    rows.each do |rel, fp, ref, anchor|
-      next unverifiable[ref] += 1 if UNVERIFIABLE.include?(ref)
-
-      if absent_refs.fetch(ref) { absent_refs[ref] = !git('rev-parse', '--verify', '--quiet', "#{ref}^{commit}").last }
-        unmeasured << "#{rel}  #{anchor.inspect}: #{ref} is not a commit in this repository"
-        next
-      end
-
-      lines_at = at_ref.fetch([ref, rel]) do
-        text, ok = git('show', "#{ref}:#{rel}")
-        at_ref[[ref, rel]] = ok ? blob_lines(text) : nil
-      end
-      if lines_at.nil?
-        unmeasured << "#{rel}  #{anchor.inspect}: no such path at #{ref}"
-        next
-      end
-
-      hits = lines_at.each_index.select { |i| lines_at[i].include?(anchor) }
-      unless hits.length == 1
-        unmeasured << "#{rel}  #{anchor.inspect}: anchor #{hits.empty? ? 'absent' : 'ambiguous'} at #{ref}"
-        next
-      end
-
-      got = fingerprint(region_at(lines_at, hits.first))
-      if got == fp
-        verified_rows += 1
-      else
-        mismatched << "#{rel}  #{anchor.inspect}: recorded #{fp}, re-measures #{got} at #{ref}"
-      end
-    end
-
-    unverifiable.each do |sentinel, n|
-      notes << "#{n} row(s) name #{sentinel.inspect} rather than a commit and cannot be re-measured; " \
-               're-record those paths from a clean checkout to make them verifiable.'
-    end
-
-    { 'do NOT re-measure to their recorded value at their own ref' => mismatched,
-      'name an anchor that does not resolve uniquely at their own ref' => unmeasured }.each do |what, list|
-      next if list.empty?
-
-      prov << ("#{list.length} of #{rows.length} row(s) #{what}:\n" +
-              list.first(12).map { |m| "      #{m}" }.join("\n") +
-              (list.length > 12 ? "\n      … and #{list.length - 12} more" : ''))
-    end
+    verified_rows, more_notes, prov = provenance(rows)
+    notes.concat(more_notes)
   end
 
   problems = parse + form + prov
@@ -690,12 +748,13 @@ def section(title, entries, rows_for)
   puts title
   entries.group_by(&:first).each do |rel, group|
     puts "  #{rel}"
-    group.each do |_rel, anchor, *rest|
-      rows = rows_for[[rel, anchor]]
-      puts "    #{"#{rows.join(', ')}  " unless rows.empty?}#{anchor.inspect}"
-      puts "      #{rest.compact.join('  ')}"
-    end
+    group.each { |_rel, anchor, *rest| section_entry(rows_for[[rel, anchor]], anchor, rest) }
   end
+end
+
+def section_entry(rows, anchor, rest)
+  puts "    #{"#{rows.join(', ')}  " unless rows.empty?}#{anchor.inspect}"
+  puts "      #{rest.compact.join('  ')}"
 end
 
 puts "check-conformance-drift: #{pairs.length} anchors, baseline last recorded #{recorded || '(unstamped)'}"
@@ -705,8 +764,8 @@ puts matrix ? "  matrix rows named from #{matrix}" : '  (no --matrix given: anch
 
 judged = pairs.filter_map { |k| baseline_ref[k] }.tally
 unless judged.empty?
-  puts '  judged at: ' + judged.sort_by { |ref, n| [-n, ref] }.first(6).map { |ref, n| "#{ref} #{n}" }.join('   ') +
-       (judged.size > 6 ? "   … #{judged.size - 6} more commit(s)" : '')
+  puts "  judged at: #{judged.sort_by { |ref, n| [-n, ref] }.first(6).map { |ref, n| "#{ref} #{n}" }.join('   ')}" \
+       "#{"   … #{judged.size - 6} more commit(s)" if judged.size > 6}"
 end
 
 section('MOVED — the anchored region changed since the baseline; re-judge these rows:', moved, rows_for)

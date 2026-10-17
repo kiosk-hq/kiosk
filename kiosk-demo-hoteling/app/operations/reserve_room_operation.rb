@@ -30,9 +30,9 @@ class ReserveRoomOperation
       currency:            "eur",
       nights:              booking.nights,
       nightly_price_cents: nightly_price_cents,
-      pay_hint:            "pay in EUR with a cart mandate whose total_amount_cents == #{booking.total_cents} and " \
+      pay_hint:            "sign a cart mandate in EUR with total_amount_cents #{booking.total_cents} and " \
                            "one line item {\"qty\": #{booking.nights}, \"price_cents\": #{nightly_price_cents}, " \
-                           "\"booking_id\": \"#{booking.id}\"}",
+                           "\"booking_id\": \"#{booking.id}\"}, then call pay",
     }
   end
 

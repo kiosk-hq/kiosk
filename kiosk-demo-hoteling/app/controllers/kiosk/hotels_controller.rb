@@ -6,7 +6,7 @@ class Kiosk::HotelsController < ActionController::API
   include Kiosk::Handler
 
   kind :query
-  description "Every hotel on this origin, by name. `search_hotels` narrows them down."
+  description "Every hotel here, by name. `search_hotels` narrows them down."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 items: {

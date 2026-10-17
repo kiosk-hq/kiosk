@@ -54,6 +54,6 @@ RSpec.describe "paying for a booking" do
   end
 
   it "refuses to confirm an unpaid booking" do
-    expect { confirm(as: ada) }.to raise_error(Kiosk::Server::Errors::Forbidden, "no settlement for this booking")
+    expect { confirm(as: ada) }.to raise_error(Kiosk::Server::Errors::Forbidden, "this booking is not paid yet")
   end
 end

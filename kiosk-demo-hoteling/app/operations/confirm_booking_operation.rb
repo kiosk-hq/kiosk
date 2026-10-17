@@ -17,7 +17,8 @@ class ConfirmBookingOperation
       refuse "a payment for this booking is in progress — re-read my_bookings until payment_state is " \
              "`paid`, and do not pay again"
     end
-    refuse "no settlement for this booking" unless booking.paid?
+    refuse "this booking is not paid yet", hint: "Pay the total reserve_room quoted, then call again." \
+      unless booking.paid?
     unless booking.confirmed?
       refuse "the hotel has not answered this booking yet",
              hint: "Wait for the `booking_confirmation` event."

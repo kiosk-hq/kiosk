@@ -28,6 +28,6 @@ RSpec.describe "Booking a room", type: :story do
 
     unpaid = guest.confirms(booking)
     expect(unpaid).to be_refused(:forbidden)
-    expect(unpaid["detail"]).to eq("no settlement for this booking")
+    expect(unpaid["detail"]).to eq("this booking is not paid yet")
   end
 end

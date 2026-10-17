@@ -21,7 +21,7 @@
         <p class="say">“Book me a room in Istanbul at hoteling.demo.kiosk.tech for next weekend.”</p>
         <p>It discovers the hotel, registers itself, checks availability, and books — no account, no app. The booking is only confirmed once it is paid for. When it hands you the Stripe checkout link, save the test card:</p>
         <p class="card"><strong>4242&nbsp;4242&nbsp;4242&nbsp;4242</strong> &nbsp;·&nbsp; any future expiry &nbsp;·&nbsp; any CVC &nbsp;·&nbsp; any ZIP</p>
-        <p class="note">Payment is <strong>Stripe in test mode</strong> (card-on-file, <code>off_session</code>) — no real charge, no real card touched. If the hotel declines, the charge is refunded to that card.</p>
+        <p class="note">Payment runs on <strong>Stripe in test mode</strong>: no real money moves and no real card is touched. If the hotel declines, the charge is refunded to that card.</p>
       </div>
     </section>
 
@@ -29,11 +29,11 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>hoteling</strong> is a hotel-booking demo operator. It is the <strong>payment-gated fulfilment</strong> reference: availability and rates over the wire, then a booking that only confirms once <code>pay</code> succeeds — paid through Stripe in test mode, and refunded if the hotel declines.</p>
+        <p><strong>hoteling</strong> is a demo hotel-booking site. Your assistant checks free rooms and prices. The hotel confirms a booking only once it is paid. Payment goes through Stripe in test mode, and is refunded if the hotel declines.</p>
         <div class="chips">
-          <span class="chip">🏨 Payment-gated booking</span>
+          <span class="chip">🏨 Confirmed once paid</span>
           <span class="chip">💳 Stripe test mode</span>
-          <span class="chip">Availability + rates queries</span>
+          <span class="chip">Free rooms and prices</span>
         </div>
         <div class="links">
           <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling">▶ Source on GitHub</a>
@@ -48,7 +48,7 @@
       <div class="stats">
         <div class="stat"><div class="n"><%= @rooms_booked %></div><div class="l">Rooms booked</div></div>
         <div class="stat"><div class="n"><%= @nights_reserved %></div><div class="l">Nights reserved</div></div>
-        <div class="stat"><div class="n"><%= @properties %></div><div class="l">Properties</div></div>
+        <div class="stat"><div class="n"><%= @properties %></div><div class="l">Hotels</div></div>
         <div class="stat"><div class="n"><%= @room_types %></div><div class="l">Room types offered</div></div>
       </div>
     </section>

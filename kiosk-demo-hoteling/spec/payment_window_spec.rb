@@ -80,7 +80,7 @@ RSpec.describe "the window between a capture and its settlement" do
   it "reads an untouched booking unpaid, and does not confirm it" do
     id = reserve
     expect(payment_state(id)).to eq("unpaid")
-    expect { confirm(id) }.to raise_error(Kiosk::Server::Errors::Forbidden, "no settlement for this booking")
+    expect { confirm(id) }.to raise_error(Kiosk::Server::Errors::Forbidden, "this booking is not paid yet")
   end
 
   it "reads a capture in flight pending, and a returned capture paid before its settlement row" do

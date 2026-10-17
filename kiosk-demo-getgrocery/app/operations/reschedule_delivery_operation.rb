@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Moves a paid order to another delivery window, and optionally another
-# address, on the payment it already has. Raises a wire error on a refusal.
+# address, on the payment it already has. Returns the order; raises a wire error on a refusal.
 class RescheduleDeliveryOperation
   def self.call(order_id:, slot_at:, delivery_address:)
     order = Order.own.reschedulable.find_by(id: order_id)
@@ -15,11 +15,7 @@ class RescheduleDeliveryOperation
     order.assign_attributes(status: :rescheduled, address: address, timezone: zone.name, slot_at: slot_at)
     order.save!(context: :reschedule)
     CourierDispatchJob.arm!(order.id)
-
-    { order_id:          order.id,
-      rescheduled_at:    order.slot_at.in_time_zone(zone).iso8601,
-      rescheduled_label: DeliverySlots.label(order.slot_at, zone),
-      timezone:          zone.name }
+    order
   end
 
   def self.refuse(message)

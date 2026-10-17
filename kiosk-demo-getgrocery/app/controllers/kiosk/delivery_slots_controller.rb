@@ -37,16 +37,8 @@ class Kiosk::DeliverySlotsController < ActionController::API
                 label:    "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: "D02" })
   def delivery_slots
-    search = SlotSearch.new(delivery_address: params[:delivery_address], date: params[:date],
-                            caller_zone: Kiosk::Server::CurrentRequest.timezone)
-    search.validate!
-
-    zone = search.zone
-    render json: DeliverySlots.bookable(search.day, zone).map { |slot_at|
-      { "slot_at"  => slot_at.iso8601,
-        "label"    => DeliverySlots.label(slot_at, zone),
-        "timezone" => zone.name,
-        "district" => search.district }
-    }
+    @search = SlotSearch.new(delivery_address: params[:delivery_address], date: params[:date],
+                             caller_zone: Kiosk::Server::CurrentRequest.timezone)
+    @search.validate!
   end
 end

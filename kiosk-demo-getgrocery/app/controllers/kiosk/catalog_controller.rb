@@ -29,15 +29,6 @@ class Kiosk::CatalogController < ActionController::API
     price_eur: "€4.49", currency: "eur",
   })
   def catalog
-    render json: Product.in_stock.order(:name).map { |product|
-      row = { "sku"         => product.sku,
-              "name"        => product.name,
-              "price_cents" => product.price_cents,
-              "price_eur"   => Product.format_eur(product.price_cents),
-              "currency"    => "eur" }
-      row["low"] = true if product.low_stock?
-      row["age_restricted"] = true if product.age_restricted?
-      row
-    }
+    @products = Product.in_stock.order(:name)
   end
 end

@@ -7,6 +7,9 @@ gem "puma", ">= 5.0"
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 gem "bootsnap", require: false
 
+# The answers to the Kiosk queries and actions are app/views/kiosk/**/*.json.jbuilder.
+gem "jbuilder"
+
 # The human shopper signs in with a real Devise session; the Kiosk
 # account-binding surfaces (device verify page, link mint, unlink) authenticate
 # that Warden session through the kiosk-user-idp-devise adapter below.

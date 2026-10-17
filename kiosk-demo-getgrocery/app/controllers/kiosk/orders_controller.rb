@@ -58,15 +58,7 @@ class Kiosk::OrdersController < ActionController::API
                   required: %w[order_id status total_cents slot_at slot_label address payment_state],
                 }
   def my_orders
-    render json: Order.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc).map { |order|
-      { "order_id"      => order.id,
-        "status"        => order.status,
-        "total_cents"   => order.total_cents,
-        "slot_at"       => order.slot_at.in_time_zone(order.zone).iso8601,
-        "slot_label"    => DeliverySlots.label(order.slot_at, order.zone),
-        "address"       => order.address,
-        "payment_state" => order.payment_state }
-    }
+    @orders = Order.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc)
   end
 
   kind :action
@@ -119,7 +111,7 @@ class Kiosk::OrdersController < ActionController::API
     pay_hint: "Call `pay` in EUR with a cart mandate (a signed cart) for exactly this order …",
   })
   def create_order
-    render json: CreateOrderOperation.call(
+    @order = CreateOrderOperation.call(
       customer_id:      kiosk_identity.user_id,
       items:            params[:items].map { _1.permit(:sku, :qty).to_h.symbolize_keys },
       slot_at:          params[:slot_at],
@@ -157,7 +149,7 @@ class Kiosk::OrdersController < ActionController::API
                 rescheduled_label: "12:00–14:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                 timezone: DeliverySlots::DEFAULT_ZONE_NAME })
   def reschedule_delivery
-    render json: RescheduleDeliveryOperation.call(
+    @order = RescheduleDeliveryOperation.call(
       order_id:         params[:order_id],
       slot_at:          params[:slot_at],
       delivery_address: params[:delivery_address],

@@ -9,7 +9,7 @@ class Kiosk::ListingsController < ApplicationController
 
   kind :query
   reach :published
-  description "Search the open board across all sellers. To reach a seller, use the contact details in the listing text."
+  description "Search the open board across all sellers. To contact a seller, use the contact details in the listing text."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -31,7 +31,7 @@ class Kiosk::ListingsController < ApplicationController
                     category_slug: { type: "string", description: "The listing's category." },
                     posted_at:     { type: "string", description: "When it was posted, in your `Kiosk-Timezone` or the board's own zone." },
                     timezone:      { type: "string", description: "The IANA zone of `posted_at`." },
-                    owner_handle:  { type: "string", description: "The seller's pseudonym, the same on all their listings. It reveals nothing about them." },
+                    owner_handle:  { type: "string", description: "A name for the seller, the same on all their listings. It does not reveal who they are." },
                   },
                   required: %w[listing_id title body price_text category_slug posted_at timezone owner_handle],
                 }
@@ -105,8 +105,8 @@ class Kiosk::ListingsController < ApplicationController
                                   description: "The section to post in." },
                  title:         { type: "string", description: "Short headline." },
                  body:          { type: "string",
-                                  description: "The listing text, public to everyone. Buyers reach the seller only " \
-                                               "through it, so ask your human how they want to be contacted and include that." },
+                                  description: "The listing text, public to everyone. Buyers can contact the seller only " \
+                                               "through it, so ask the seller how they want to be contacted and include that." },
                  price_text:    { type: "string", description: "Display price, e.g. \"€300\" or \"Free\"." },
                },
                required: ["category_slug", "title", "body"]

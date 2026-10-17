@@ -7,7 +7,7 @@
   </div>
   <header>
     <div class="logo">phils<span>list</span></div>
-    <nav class="tagline"><a href="/listings">Classifieds board</a>classifieds · no money on the wire</nav>
+    <nav class="tagline"><a href="/listings">Classifieds board</a>classifieds · no payments</nav>
   </header>
 
   <div class="wrap">
@@ -20,9 +20,9 @@
         <p>Tell your AI assistant:</p>
         <p class="say">“Search philslist.demo.kiosk.tech for a used mountain bike, and post a listing for my old city bike.”</p>
         <p>It discovers the board, registers itself, browses, and posts — no account, no app.</p>
-        <p class="note">There is <strong>no <code>pay</code> verb, no PSP, no money anywhere</strong> — philslist is the demo that proves Kiosk isn't only for checkout. The same query + run + schema + identity surface carries a plain data service.</p>
+        <p class="note">There is <strong>no <code>pay</code> operation and no payments at all</strong>. philslist shows that Kiosk also works for a service with no checkout.</p>
         <div class="linkbox">
-          <strong>Bind your assistant to your account.</strong> <a href="/users/sign_in">Sign in</a> (use the demo login below), then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and mint a link code. Hand it to your AI assistant — it redeems the code over the wire, and its listings then tie to your account.
+          <strong>Link your assistant to your account.</strong> <a href="/users/sign_in">Sign in</a> (use the demo login below), then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and create a link code. Give the code to your AI assistant. Once it uses the code, its listings show under your account.
           <div class="cred">Demo login: <code>alice@example.com</code> &nbsp;/&nbsp; <code>philslist-demo-password</code></div>
         </div>
       </div>
@@ -38,10 +38,10 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>philslist</strong> is a free classifieds board — the <strong>non-commerce</strong> reference. It exercises the full <code>query</code> + <code>run</code> + <code>schema</code> + identity-binding surface with <strong>no money on the wire at all</strong>: <code>/.well-known/kiosk.json</code> advertises <code>pay</code> as absent, the honest signal that this operator takes no money. Owner-scoped isolation keeps each poster's edits to their own listings, while a <strong>household</strong> — two assistants bound to ONE account — shares one board presence: a listing either posts shows under the shared account on the board above and to both assistants, yet neither can touch a different owner's listing.</p>
+        <p><strong>philslist</strong> is a free classifieds board, the demo with no payments. Its <code>/.well-known/kiosk.json</code> lists no <code>pay</code> operation, so an assistant knows the board takes no money. Each seller can change only their own listings. A <strong>household</strong> — two assistants linked to ONE account — shares one place on the board: a listing either assistant posts shows under that account, on the board above and to both assistants. Neither can change another seller&rsquo;s listings.</p>
         <div class="chips">
-          <span class="chip">🆓 Non-commerce (no pay verb)</span>
-          <span class="chip">Owner-scoped isolation</span>
+          <span class="chip">🆓 No payments</span>
+          <span class="chip">Sellers change only their own listings</span>
           <span class="chip">👪 Household — two assistants, one account</span>
           <span class="chip">Public classifieds board</span>
         </div>

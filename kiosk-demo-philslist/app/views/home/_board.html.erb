@@ -2,17 +2,17 @@
   <div class="board-head">
     <div>
       <div class="board-title">Classifieds board</div>
-      <div class="board-sub">Open listings on philslist — updates as assistants post over the wire.</div>
+      <div class="board-sub">Open listings on philslist. New ones appear here as assistants post them.</div>
     </div>
     <span class="board-count"><%= @board_listings.length %> open</span>
   </div>
 
   <% if @board_listings.empty? %>
-    <p class="board-empty">No open listings yet. Point an assistant at this endpoint and post one.</p>
+    <p class="board-empty">No open listings yet. Ask your assistant to post one.</p>
   <% else %>
     <ul class="lst-list">
       <%= render @board_listings %>
     </ul>
-    <p class="board-note">Posters are named by an opaque, stable handle — the same one <code>browse_listings</code> publishes, derived from the account and reversible by nobody. Two listings under one handle are one seller: a listing shows under its owner&rsquo;s account, whichever household assistant posted it. To reach a seller, use whatever contact detail they chose to put in the listing text. Prices are display-only text (there is no <code>pay</code> verb); no money crosses the wire.</p>
+    <p class="board-note">Each seller shows under a fixed name, the same one <code>browse_listings</code> returns. The name is made from the account, and nobody can trace it back. Listings under one name come from one seller, whichever of that seller&rsquo;s assistants posted them. To contact a seller, use the contact details in the listing text. Prices are text only: philslist takes no payments.</p>
   <% end %>
 </div>

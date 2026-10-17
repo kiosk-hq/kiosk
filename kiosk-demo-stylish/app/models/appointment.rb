@@ -17,7 +17,7 @@ class Appointment < ApplicationRecord
   def salon_exists
     return if salon
 
-    errors.add(:salon_id, "#{salon_id.inspect} is not a salon here; the `salons` query lists them")
+    errors.add(:salon_id, "#{salon_id.inspect} is not a salon here; call `salons` for the list")
   end
 
   def service_on_menu

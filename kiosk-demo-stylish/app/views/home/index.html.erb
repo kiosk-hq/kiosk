@@ -16,19 +16,19 @@
     <section class="sec">
       <div class="sec-k">🤖 Try it with your own assistant</div>
       <div class="tryit">
-        <h2>This is a Kiosk endpoint — an AI assistant drives it</h2>
-        <p>stylish is a salon an AI assistant transacts with directly over the Kiosk wire. There are <strong>two entrances</strong>, and you take <strong>one or the other</strong> — a tester acts as a <strong>visitor</strong> <em>or</em> as <strong>staff</strong>, not both at once (multi-account is not wired yet).</p>
+        <h2>An AI assistant books here for you</h2>
+        <p>stylish is a salon your AI assistant books with directly. There are <strong>two entrances</strong>. Pick <strong>one</strong>: come in as a <strong>visitor</strong> <em>or</em> as <strong>staff</strong>. One assistant cannot be both at once.</p>
 
         <div class="linkbox">
           <strong>① Visitor entrance — book any service.</strong>
           Tell your AI assistant:
           <p class="say">“Book a haircut at stylish.demo.kiosk.tech.”</p>
-          It discovers the salon, registers itself, reads the <strong>service menu</strong>, picks a service, and books — no account, no app. <strong>The salon always has room:</strong> every service is open any time, any number of bookings (evergreen, infinite capacity — nothing to fill up). Your booking is real: it lands in the salon's book and shows up in the staff view.
+          It finds the salon, signs itself up, reads the <strong>service menu</strong>, picks a service and books. You need no account and no app. <strong>The salon always has room:</strong> every service is open at any time, for any number of bookings. Your booking is real: it goes into the salon's book and the staff see it.
         </div>
 
         <div class="linkbox">
           <strong>② Staff entrance — see the forecasted revenue.</strong>
-          Use <a href="/users/sign_in"><strong>Staff login</strong></a> to sign in as the salon owner, then open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and <strong>mint a link code</strong> — hand it to your assistant and it <strong>inherits your role</strong>, sourced from the operator's IdP. The role-gated <code>salon_calendar</code> query then scopes what it sees: an <strong>owner-linked assistant sees every booking plus the salon's <em>forecasted</em> € revenue</strong> — summed live from the actual bookings' prices, starting at €0 and growing as visitors book; a visitor-linked one sees only their own bookings and no forecast. The figures come from the live salon's real bookings.
+          Use <a href="/users/sign_in"><strong>Staff login</strong></a> to sign in as the salon owner. Open <a href="/kiosk/auth/assistants">Manage&nbsp;assistants</a> and press <strong>Mint a link code</strong>. Give the code to your assistant: it now acts <strong>as the owner</strong>, because the salon's staff list says you are the owner. Ask it for <code>salon_calendar</code>. <strong>The owner's assistant sees every booking and the salon's <em>forecasted</em> € revenue.</strong> That total adds up the prices of the real bookings: it starts at €0 and grows as visitors book. A visitor's assistant sees only its own bookings and no forecast.
           <div class="cred">Demo staff login (owner): <code>owner@combette.example</code> &nbsp;/&nbsp; <code>combette-demo-password</code></div>
         </div>
       </div>
@@ -38,13 +38,13 @@
     <section class="sec">
       <div class="sec-k">About this demo</div>
       <div class="about">
-        <p><strong>stylish</strong> (seeded salon: Combette on Park) is a salon-booking demo built on an <strong>evergreen service menu</strong>: a small set of services, each with a EUR price, all always bookable — infinite capacity, overbooking allowed, so the salon never fills up and the demo never goes empty or stale. It is the <strong>roles-from-IdP</strong> reference: staff roles supplied by the operator's own identity system are inherited by a linked assistant, and the role-gated <code>salon_calendar</code> query scopes what each assistant can see (owner → every booking + a forecasted € revenue summed live from real bookings; visitor → only their own bookings, no forecast). It also walks human↔assistant account binding over real Devise sessions.</p>
+        <p><strong>stylish</strong> (the salon: Combette on Park) is a salon-booking demo. It has a small menu of services, each with a price in euros. Every service can always be booked, as many times as people like, so the salon never fills up. It shows how a salon's staff list decides what an assistant may see. A staff member links their assistant to their own account, and the assistant gets their job. With <code>salon_calendar</code>, the owner's assistant sees every booking and a forecast of the € revenue from them. A visitor's assistant sees only its own bookings and no forecast.</p>
         <div class="chips">
-          <span class="chip">✂️ Evergreen service menu</span>
-          <span class="chip">♾️ Always bookable (overbooking)</span>
-          <span class="chip">🪪 IdP roles (staff RBAC)</span>
+          <span class="chip">✂️ Small service menu</span>
+          <span class="chip">♾️ Always bookable</span>
+          <span class="chip">🪪 Staff jobs decide what the assistant sees</span>
           <span class="chip">💶 Forecasted € revenue</span>
-          <span class="chip">Human↔assistant linking</span>
+          <span class="chip">Link your account to your assistant</span>
         </div>
         <div class="links">
           <a href="https://github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish">▶ Source on GitHub</a>

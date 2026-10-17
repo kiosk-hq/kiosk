@@ -51,7 +51,7 @@ class Kiosk::AppointmentsController < ApplicationController
     currency: "EUR", price_cents: 9000, price_eur: "€90",
   })
   def book_appointment
-    render json: BookAppointmentOperation.call(
+    @appointment = BookAppointmentOperation.call(
       customer_id: kiosk_identity.user_id,
       salon_id:    params[:salon_id].to_i,
       slot:        params[:slot],
@@ -75,9 +75,7 @@ class Kiosk::AppointmentsController < ApplicationController
                   required: %w[id salon_id slot timezone],
                 }
   def my_appointments
-    render json: Appointment.own.includes(:salon).order(:id).map { |appointment|
-      { id: appointment.id, salon_id: appointment.salon_id, **on_salon_clock(appointment) }
-    }
+    @appointments = Appointment.own.includes(:salon).order(:id)
   end
 
   kind :query
@@ -117,24 +115,7 @@ class Kiosk::AppointmentsController < ApplicationController
                   ],
                 }
   def salon_calendar
-    owner = Kiosk.current_role == "owner"
-    bookings = (owner ? Appointment.all : Appointment.own).includes(:salon, :service).order(:slot).map { |appointment|
-      { id: appointment.id, salon_id: appointment.salon_id, **on_salon_clock(appointment),
-        service_id: appointment.service_id, service: appointment.service&.name,
-        price_cents: appointment.price_cents, kind: "booking", currency: "EUR",
-        price_eur: Service.format_eur(appointment.price_cents) }
-    }
-    return render json: bookings unless owner
-
-    forecast_cents = bookings.sum { _1[:price_cents].to_i }
-    render json: bookings + [{ summary: "forecast", bookings: bookings.size, currency: "EUR",
-                               forecast_cents: forecast_cents, forecast_eur: Service.format_eur(forecast_cents) }]
-  end
-
-  private
-
-  def on_salon_clock(appointment)
-    zone = appointment.salon.zone
-    { slot: SalonClock.publish(appointment.slot, zone), timezone: zone.name }
+    @owner = Kiosk.current_role == "owner"
+    @appointments = (@owner ? Appointment.all : Appointment.own).includes(:salon, :service).order(:slot)
   end
 end

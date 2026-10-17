@@ -23,7 +23,7 @@ class Kiosk::ServicesController < ApplicationController
   example_params({})
   example_row({ service_id: 1, name: "Cut", price_cents: 3500, currency: "EUR", price_eur: "€35" })
   def service_menu
-    render json: menu.map { |service| { service_id: service.id, name: service.name, **price(service) } }
+    @menu = Service.order(:price_cents)
   end
 
   kind :query
@@ -46,12 +46,6 @@ class Kiosk::ServicesController < ApplicationController
   example_params({})
   example_row({ service_id: 3, service: "Colour", open: true, currency: "EUR", price_cents: 9000, price_eur: "€90" })
   def availability
-    render json: menu.map { |service| { service_id: service.id, service: service.name, open: true, **price(service) } }
+    @menu = Service.order(:price_cents)
   end
-
-  private
-
-  def menu = Service.order(:price_cents)
-
-  def price(service) = { price_cents: service.price_cents, currency: "EUR", price_eur: service.price_eur }
 end

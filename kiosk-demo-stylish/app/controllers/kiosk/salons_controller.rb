@@ -20,6 +20,6 @@ class Kiosk::SalonsController < ApplicationController
                   required: %w[salon_id name timezone],
                 }
   def salons
-    render json: Salon.order(:id).map { |salon| { salon_id: salon.id, name: salon.name, timezone: salon.timezone } }
+    @salons = Salon.order(:id)
   end
 end

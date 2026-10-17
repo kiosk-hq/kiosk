@@ -1,0 +1,4 @@
+# Solid Queue's recurring tasks, in every environment.
+restock:
+  class: RestockJob
+  schedule: every day at 4am Europe/Dublin

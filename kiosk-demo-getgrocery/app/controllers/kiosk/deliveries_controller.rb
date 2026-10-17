@@ -8,11 +8,12 @@ module Kiosk
     ETA = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow).first + 40.minutes
 
     topic :order_delivery do
-      description "The order is on its way (`out_for_delivery`, with the courier's ETA) or at the " \
-                  'door (`delivered`).'
+      description "The order is on its way (`out_for_delivery`, with the courier's ETA), at the " \
+                  'door (`delivered`), or `cancelled`: everything in it sold out before it was packed, and the ' \
+                  'payment went back to the card.'
       payload_schema type: 'object', additionalProperties: false,
                      properties: { order_id: { type: 'string', format: 'uuid' },
-                                   status: { enum: %w[out_for_delivery delivered] },
+                                   status: { enum: %w[out_for_delivery delivered cancelled] },
                                    eta: { type: 'string', format: 'date-time',
                                           description: 'When the courier arrives.' },
                                    eta_label: { type: 'string', description: 'The ETA as a human reads it.' },
@@ -22,6 +23,7 @@ module Kiosk
               eta_label: DeliverySlots.clock_label(ETA, DeliverySlots.default_zone),
               timezone: DeliverySlots::DEFAULT_ZONE_NAME
       example order_id: OrdersController::ORDER_ID, status: 'delivered'
+      example order_id: OrdersController::ORDER_ID, status: 'cancelled'
       subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
     end
 

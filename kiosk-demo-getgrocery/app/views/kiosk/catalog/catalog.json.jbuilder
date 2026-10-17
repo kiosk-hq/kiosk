@@ -6,5 +6,6 @@ json.array! @products do |product|
   json.price_eur Product.format_eur(product.price_cents)
   json.currency 'eur'
   json.low product.low_stock? || nil
+  json.sold_out(Product::SOLD_OUT) if product.sold_out?
   json.age_restricted product.age_restricted? || nil
 end

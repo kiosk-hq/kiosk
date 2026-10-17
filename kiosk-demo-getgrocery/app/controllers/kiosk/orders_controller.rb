@@ -25,9 +25,12 @@ module Kiosk
                       address: { type: 'string' },
                       payment_state: { type: 'string', enum: %w[unpaid pending paid],
                                        description: '`pending`: a charge is under way, so wait and ' \
-                                                    'read again. Pay again only on `unpaid`.' }
+                                                    'read again. Pay again only on `unpaid`.' },
+                      refunded_cents: { type: 'integer',
+                                        description: 'EUR cents returned to the card for items that sold out ' \
+                                                     'before the basket was packed; all of it on a `cancelled` order.' }
                     },
-                    required: %w[order_id status total_cents slot_at slot_label address payment_state]
+                    required: %w[order_id status total_cents slot_at slot_label address payment_state refunded_cents]
                   }
     def my_orders
       @orders = Order.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc)

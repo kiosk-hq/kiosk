@@ -13,7 +13,7 @@ module PriceChecker
       unless presented.sort == ordered(order)
 
     short = order.shortfall
-    return "sold out since the order was placed: #{short.join(', ')} — place a new order" if short.any?
+    return "sold out since the order was placed — #{short.join('; ')} — place a new order" if short.any?
 
     order.total_cents
   end

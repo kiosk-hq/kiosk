@@ -13,7 +13,8 @@ class Order < ApplicationRecord
     paid: 'paid',
     rescheduled: 'rescheduled',
     out_for_delivery: 'out_for_delivery',
-    delivered: 'delivered'
+    delivered: 'delivered',
+    cancelled: 'cancelled'
   }
 
   belongs_to :user
@@ -29,7 +30,7 @@ class Order < ApplicationRecord
   AWAITING_COURIER = %w[paid rescheduled].freeze
   scope :awaiting_courier, -> { where(status: AWAITING_COURIER) }
   # One move per order, and none once the courier has the basket.
-  scope :reschedulable,    -> { where.not(status: %i[rescheduled out_for_delivery delivered]) }
+  scope :reschedulable,    -> { where.not(status: %i[rescheduled out_for_delivery delivered cancelled]) }
 
   # A settlement whose cart names this order (`line_items @> [{order_id}]`).
   SETTLEMENT_FOR_ROW = Arel.sql(
@@ -60,24 +61,37 @@ class Order < ApplicationRecord
 
   def items_by_product = order_items.sort_by { it.product.name }
 
-  # What the shelf cannot fill, e.g. ["milk-1l (2 ordered, 0 in stock)"]; empty when it can.
+  # What the shelf cannot fill, e.g. ["milk-1l: Sold out. Check back tomorrow.", "banana: 3 ordered, 2 left"];
+  # empty when it can.
   def shortfall
     order_items.group_by(&:product).filter_map do |product, items|
       qty = items.sum(&:qty)
-      "#{product.sku} (#{qty} ordered, #{product.stock} in stock)" if qty > product.stock
+      next if qty <= product.stock
+
+      product.sold_out? ? "#{product.sku}: #{Product::SOLD_OUT}" : "#{product.sku}: #{qty} ordered, #{product.stock} left"
     end
   end
 
   # Once per paid order, whoever reports the payment first: the basket leaves
-  # the shelf and the courier is booked. `dispatch_at` is NULL until then.
+  # the shelf and the courier is booked. `dispatch_at` is NULL until then. A
+  # line a concurrent payment emptied the shelf of is refunded; an order with
+  # no line left is cancelled.
   def self.fulfil!(order_id)
     transaction do
       order = paid.where(dispatch_at: nil).lock.find_by(id: order_id)
       next unless order
 
-      order.order_items.sort_by(&:product_id).each { Product.take!(it.product_id, it.qty) }
-      CourierDispatchJob.arm!(order)
+      missing = order.order_items.sort_by(&:product_id).reject { Product.take!(it.product_id, it.qty).positive? }
+      order.refund!(missing) if missing.any?
+      CourierDispatchJob.arm!(order) unless order.cancelled?
     end
+  end
+
+  def refund!(lines)
+    amount = lines.sum { it.price_cents * it.qty }
+    Kiosk.configuration.payment_provider.refund(psp_reference: settled_reference, amount_cents: amount)
+    update!(refunded_cents: amount, status: amount == total_cents ? :cancelled : status)
+    announce_cancelled if cancelled?
   end
 
   # The order, for the one caller that moves the basket from the shop to the
@@ -88,6 +102,17 @@ class Order < ApplicationRecord
   end
 
   private
+
+  def settled_reference
+    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: id)).pick(:psp_reference)
+  end
+
+  def announce_cancelled
+    Kiosk::Server::Events.emit(
+      topic: :order_delivery, subject: id, identity_scope: [user_id],
+      data: { 'order_id' => id, 'status' => 'cancelled' }
+    )
+  end
 
   # A window takes orders while a basket paid now still reaches the door inside it.
   def window_bookable

@@ -138,10 +138,15 @@ declared calendar.
 ## Prices and stock
 
 `create_order` keeps each line at the catalogue price of that moment, and `pay`
-charges that price even if the catalogue changes before payment. An order for
-more than the shelf holds is refused with **409 (`conflict`)**, and `pay` is
-refused when an item has sold out since the order was placed. A paid order takes
-its items off the shelf. `test/stories/shelf_test.rb` drives all four.
+charges that price even if the catalogue changes before payment. Every shelf is
+refilled to 400 each morning at 04:00 Dublin time (`RestockJob`, a Solid Queue
+recurring task in `config/recurring.yml`, run inside Puma). The catalogue lists a
+product with nothing left as `sold_out: "Sold out. Check back tomorrow."`; an order
+for more than the shelf holds is refused with **409 (`conflict`)**, and `pay` is
+refused before any charge when an item has sold out since the order was placed. A
+paid order takes its items off the shelf; a line a concurrent payment emptied the
+shelf of is refunded (`refunded_cents` in `my_orders`), and an order with nothing
+left is `cancelled` and refunded in full. `test/stories/shelf_test.rb` drives each case.
 
 ## Age-restricted purchases (anonymized KYC)
 

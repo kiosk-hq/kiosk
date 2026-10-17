@@ -4,10 +4,11 @@
 class Product < ApplicationRecord
   LOW_STOCK_THRESHOLD = 5
   MAX_PRICE_CENTS     = 100_000
+  # Every shelf holds this many each morning: two of each for 200 shoppers.
+  DAILY_STOCK = 400
+  SOLD_OUT    = 'Sold out. Check back tomorrow.'
 
   validates :price_cents, numericality: { only_integer: true, in: 1..MAX_PRICE_CENTS }
-
-  scope :in_stock, -> { where(stock: 1..) }
 
   # 1299 → "€12.99", 300 → "€3".
   def self.format_eur(cents)
@@ -15,9 +16,14 @@ class Product < ApplicationRecord
     frac.zero? ? "€#{whole}" : format('€%<whole>d.%<frac>02d', whole:, frac:)
   end
 
-  def low_stock? = stock <= LOW_STOCK_THRESHOLD
+  def low_stock? = stock.between?(1, LOW_STOCK_THRESHOLD)
 
-  # One statement, so concurrent payments never lose a decrement. A shelf
-  # oversold by a payment race reads 0.
-  def self.take!(id, qty) = where(id:).update_all(['stock = GREATEST(stock - ?, 0)', qty])
+  def sold_out? = stock.zero?
+
+  # Takes `qty` off the shelf when it holds that many; the count of shelves
+  # taken from, 0 or 1. One statement, so concurrent payments never take the same item twice.
+  def self.take!(id, qty) = where(id:, stock: qty..).update_all(['stock = stock - ?', qty])
+
+  # The morning delivery: every shelf back to DAILY_STOCK (RestockJob).
+  def self.restock! = update_all(stock: DAILY_STOCK, updated_at: Time.current)
 end

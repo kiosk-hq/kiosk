@@ -19,7 +19,7 @@ class CreateOrderOperation
     short = order.shortfall
     return if short.empty?
 
-    raise Kiosk::Server::Errors::Conflict.new("not enough in stock: #{short.join(', ')}",
+    raise Kiosk::Server::Errors::Conflict.new("not enough in stock — #{short.join('; ')}",
                                               hint: 'Call catalog for what is in stock, then order again.')
   end
 

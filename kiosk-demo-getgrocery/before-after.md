@@ -31,10 +31,9 @@ product.
 
 `test/stories/shop_test.rb` runs the errand end to end: the assistant registers itself
 under the toll, reads `catalog` and `delivery_slots`, calls `create_order` with
-a slot and an in-zone address, and pays. The catalog returns in-stock items
-only, so the assistant resolves substitutions by reasoning over it — no
-operator-side substitution surface, and no push notification for a human to
-answer.
+a slot and an in-zone address, and pays. The catalog marks a sold-out item, so
+the assistant resolves substitutions by reasoning over it — no operator-side
+substitution surface, and no push notification for a human to answer.
 
 **The human is needed once.** A card has to reach the operator: `payment_setup`
 returns a URL the assistant relays for its human to open. After that, repeat

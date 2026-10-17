@@ -58,35 +58,37 @@
 # asking you to remember which directory to stand in. KIOSK_DRIVE_BUNDLE names
 # a different demo if you want a specific one.
 
-REPO = File.expand_path("..", __dir__)
+REPO = File.expand_path('..', __dir__)
 
 # ── Bundle: re-exec under a demo's Gemfile when this process cannot load the
 #    drivers. Guarded so a bundle that still cannot load them fails LOUDLY
 #    instead of re-execing forever.
 begin
-  require "kiosk/redteam"
+  require 'kiosk/redteam'
 rescue LoadError => e
-  abort "live-fleet-drive: #{e.message}\n  …and re-exec already happened, so the " \
-        "bundle named by KIOSK_DRIVE_BUNDLE does not carry kiosk-redteam." if ENV["KIOSK_DRIVE_REEXEC"]
+  if ENV['KIOSK_DRIVE_REEXEC']
+    abort "live-fleet-drive: #{e.message}\n  …and re-exec already happened, so the " \
+          'bundle named by KIOSK_DRIVE_BUNDLE does not carry kiosk-redteam.'
+  end
 
-  demo = ENV["KIOSK_DRIVE_BUNDLE"] ||
-         Dir[File.join(REPO, "kiosk-demo-*")].sort.find { |d| File.exist?(File.join(d, "Gemfile.lock")) }
-  abort "live-fleet-drive: no demo bundle to borrow — run `bundle install` in a kiosk-demo-* first" unless demo
+  demo = ENV['KIOSK_DRIVE_BUNDLE'] ||
+         Dir[File.join(REPO, 'kiosk-demo-*')].sort.find { |d| File.exist?(File.join(d, 'Gemfile.lock')) }
+  abort 'live-fleet-drive: no demo bundle to borrow — run `bundle install` in a kiosk-demo-* first' unless demo
 
-  demo = File.join(REPO, demo) unless demo.start_with?("/")
-  exec({ "BUNDLE_GEMFILE" => File.join(demo, "Gemfile"), "KIOSK_DRIVE_REEXEC" => "1" },
-       "bundle", "exec", "ruby", __FILE__, *ARGV)
+  demo = File.join(REPO, demo) unless demo.start_with?('/')
+  exec({ 'BUNDLE_GEMFILE' => File.join(demo, 'Gemfile'), 'KIOSK_DRIVE_REEXEC' => '1' },
+       'bundle', 'exec', 'ruby', __FILE__, *ARGV)
 end
 
-require "json"
+require 'json'
 
-CADDYFILE = File.join(REPO, "deploy", "Caddyfile")
-CONFORMANCE = File.join(REPO, "e2e", "schema_conformance.rb")
+CADDYFILE = File.join(REPO, 'deploy', 'Caddyfile')
+CONFORMANCE = File.join(REPO, 'e2e', 'schema_conformance.rb')
 
 # Leak vocabulary for the refusals below: a problem document may name the code
 # and the title, and must never hand a stranger the runtime's internals.
-LEAK_NEEDLES = ["PG::", "ActiveRecord::", "22P02", "invalid input syntax",
-                "/app/", "gems/", "SELECT ", "schema.rb"].freeze
+LEAK_NEEDLES = ['PG::', 'ActiveRecord::', '22P02', 'invalid input syntax',
+                '/app/', 'gems/', 'SELECT ', 'schema.rb'].freeze
 
 # ── The hosts, DERIVED from deploy/Caddyfile's own vhost blocks ──────────────
 #
@@ -97,9 +99,9 @@ def hosts_from_caddyfile(path = CADDYFILE)
   return [] unless File.readable?(path)
 
   File.readlines(path)
-      .map { |line| line.sub(/#.*\z/, "") }
+      .map { |line| line.sub(/#.*\z/, '') }
       .grep(/\A[a-z0-9.-]+\.[a-z]+\s*\{\s*\z/)
-      .map { |line| line.sub(/\s*\{\s*\z/, "").strip }
+      .map { |line| line.sub(/\s*\{\s*\z/, '').strip }
       .uniq
 end
 
@@ -144,24 +146,24 @@ class Drive
   # would be asserting about somebody else's 404s.
   # @return [Hash, nil] the served catalog, or nil when this is not a Kiosk origin
   def survey
-    raw = @wire.get("/.well-known/kiosk.json")
+    raw = @wire.get('/.well-known/kiosk.json')
     if raw.status == 404
-      skip "the whole wire battery", "serves no discovery document — not a Kiosk origin"
+      skip 'the whole wire battery', 'serves no discovery document — not a Kiosk origin'
       return nil
     end
-    unless raw.status == 200 && raw.body.is_a?(Hash) && raw.body["kiosk"]
-      error "GET /.well-known/kiosk.json", "HTTP #{raw.status} #{raw.raw_body[0, 200].inspect}"
+    unless raw.status == 200 && raw.body.is_a?(Hash) && raw.body['kiosk']
+      error 'GET /.well-known/kiosk.json', "HTTP #{raw.status} #{raw.raw_body[0, 200].inspect}"
       return nil
     end
-    ok "discovery document served (endpoint #{raw.body.dig("kiosk", "endpoint")})"
+    ok "discovery document served (endpoint #{raw.body.dig('kiosk', 'endpoint')})"
 
-    catalog = @wire.get("/kiosk/schema")
+    catalog = @wire.get('/kiosk/schema')
     unless catalog.status == 200 && catalog.body.is_a?(Hash)
-      error "GET /kiosk/schema", "HTTP #{catalog.status}"
+      error 'GET /kiosk/schema', "HTTP #{catalog.status}"
       return nil
     end
-    ok "catalog served (#{Array(catalog.body["queries"]).size} queries, " \
-       "#{Array(catalog.body["actions"]).size} actions)"
+    ok "catalog served (#{Array(catalog.body['queries']).size} queries, " \
+       "#{Array(catalog.body['actions']).size} actions)"
     catalog.body
   end
 
@@ -180,17 +182,17 @@ class Drive
   REFUSALS = [400, 401, 402, 403].freeze
 
   def registration_probes
-    { "an unproven registration" => :skip, "a malformed proof" => "0" }.each do |beat, pow|
+    { 'an unproven registration' => :skip, 'a malformed proof' => '0' }.each do |beat, pow|
       response = @client.register_raw(pow: pow)
       if response.status == 201
-        breach beat, "HTTP 201 — the origin MINTED AN AGENT for a caller that proved nothing. " \
-                     "This also means this run created state; deploy/demo-reset.sh clears it."
+        breach beat, 'HTTP 201 — the origin MINTED AN AGENT for a caller that proved nothing. ' \
+                     'This also means this run created state; deploy/demo-reset.sh clears it.'
       elsif REFUSALS.include?(response.status)
         ok "#{beat} is refused (HTTP #{response.status} " \
            "#{Kiosk::Redteam.error_code(response).inspect})"
       else
         error beat, "HTTP #{response.status} #{response.body.inspect} — neither a refusal nor a " \
-                    "success, so nothing was proved about the gate"
+                    'success, so nothing was proved about the gate'
       end
       leak_check(beat, response.body)
     end
@@ -200,10 +202,10 @@ class Drive
   # and a verb nobody registered. All four are refusals by construction, so all
   # four are reads that read nothing.
   def wire_probes(catalog)
-    query = Array(catalog["queries"]).first&.fetch("name", nil)
-    return skip "the query-plane probes", "this origin publishes no query" unless query
+    query = Array(catalog['queries']).first&.fetch('name', nil)
+    return skip 'the query-plane probes', 'this origin publishes no query' unless query
 
-    forged = @wire.get("/kiosk/#{query}", {}, Kiosk::TestHelpers::Wire.bearer("not.a.token"))
+    forged = @wire.get("/kiosk/#{query}", {}, Kiosk::TestHelpers::Wire.bearer('not.a.token'))
     judge "a forged bearer at /kiosk/#{query}", forged, [401, 403]
 
     anon = @wire.get("/kiosk/#{query}")
@@ -218,28 +220,28 @@ class Drive
     # The security half is what is being checked: the wrong method must never
     # reach the verb, and a 200 here would mean it did.
     mismatch = @wire.request(:post, "/kiosk/#{query}")
-    if mismatch.status == 404 && mismatch["allow"].nil? &&
-       !(mismatch.body.is_a?(Hash) && mismatch.body["code"])
+    if mismatch.status == 404 && mismatch['allow'].nil? &&
+       !(mismatch.body.is_a?(Hash) && mismatch.body['code'])
       ok "POST at a query's path is a plain 404 — no Allow, no code, the verb not reached"
     else
       breach "POST at /kiosk/#{query} (method mismatch)",
-             "HTTP #{mismatch.status} Allow=#{mismatch["allow"].inspect} " \
-             "code=#{mismatch.body.is_a?(Hash) ? mismatch.body["code"].inspect : "—"}"
+             "HTTP #{mismatch.status} Allow=#{mismatch['allow'].inspect} " \
+             "code=#{mismatch.body.is_a?(Hash) ? mismatch.body['code'].inspect : '—'}"
     end
 
     # A name nobody registered is the same ordinary 404, for the same reason.
     unknown = @wire.get("/kiosk/no_such_verb_#{Time.now.to_i}")
-    if unknown.status == 404 && !(unknown.body.is_a?(Hash) && unknown.body["code"])
-      ok "an unregistered verb name is a plain 404 with no problem-document code"
+    if unknown.status == 404 && !(unknown.body.is_a?(Hash) && unknown.body['code'])
+      ok 'an unregistered verb name is a plain 404 with no problem-document code'
     else
-      breach "an unregistered verb name",
+      breach 'an unregistered verb name',
              "HTTP #{unknown.status} #{unknown.raw_body[0, 200].inspect}"
     end
   end
 
   def judge(beat, raw, admitted)
     if admitted.include?(raw.status)
-      ok "#{beat} is refused (HTTP #{raw.status} #{raw.body.is_a?(Hash) ? raw.body["code"].inspect : "—"})"
+      ok "#{beat} is refused (HTTP #{raw.status} #{raw.body.is_a?(Hash) ? raw.body['code'].inspect : '—'})"
     elsif raw.status.zero?
       error beat, "the connection failed: #{raw.body.inspect}"
     elsif raw.status >= 500
@@ -257,11 +259,11 @@ class Drive
 
   # The published JSON Schemas against THIS origin's served bytes.
   def schema_conformance
-    env = { "SERVER_URL" => @origin, "KIOSK_LIVE" => "1" }
+    env = { 'SERVER_URL' => @origin, 'KIOSK_LIVE' => '1' }
     if system(env, RbConfig.ruby, CONFORMANCE)
       @passes += 1
     else
-      @errors << Finding.new(@origin, "schema_conformance.rb", "exited non-zero — see above")
+      @errors << Finding.new(@origin, 'schema_conformance.rb', 'exited non-zero — see above')
     end
   end
 end
@@ -286,9 +288,9 @@ def self_test
     failures << name unless ok
   end
 
-  require "tmpdir"
-  Dir.mktmpdir("live-fleet-selftest") do |dir|
-    path = File.join(dir, "Caddyfile")
+  require 'tmpdir'
+  Dir.mktmpdir('live-fleet-selftest') do |dir|
+    path = File.join(dir, 'Caddyfile')
     File.write(path, <<~CADDY)
       # a comment naming fake.example.com { which must not be read as a vhost
       (shared) {
@@ -303,30 +305,30 @@ def self_test
       }
     CADDY
     hosts = hosts_from_caddyfile(path)
-    check.call("derives every vhost", hosts == %w[one.demo.kiosk.tech two.demo.kiosk.tech])
-    check.call("does not read a commented host as a vhost", hosts.none? { _1.include?("fake") })
-    check.call("does not read a named snippet as a vhost", hosts.none? { _1.include?("shared") })
-    check.call("an unreadable Caddyfile answers empty", hosts_from_caddyfile(File.join(dir, "nope")).empty?)
+    check.call('derives every vhost', hosts == %w[one.demo.kiosk.tech two.demo.kiosk.tech])
+    check.call('does not read a commented host as a vhost', hosts.none? { it.include?('fake') })
+    check.call('does not read a named snippet as a vhost', hosts.none? { it.include?('shared') })
+    check.call('an unreadable Caddyfile answers empty', hosts_from_caddyfile(File.join(dir, 'nope')).empty?)
   end
 
   # THE PRECONDITION OF THE WHOLE SCRIPT: the drivers it is built on must dial
   # TLS from the target's scheme. A fleet is served over https, so a driver that
   # cannot is a runner that reaches nothing — and it fails by CONNECTION RESET,
   # which reads like the box being down rather than like a bug here.
-  https = Kiosk::TestHelpers::Wire.http_for(URI("https://one.demo.kiosk.tech/kiosk/schema"))
-  plain = Kiosk::TestHelpers::Wire.http_for(URI("http://127.0.0.1:3001/kiosk/schema"))
-  check.call("the drivers this script uses dial TLS for an https origin", https.use_ssl?)
-  check.call("…and do not for a local http one", !plain.use_ssl?)
+  https = Kiosk::TestHelpers::Wire.http_for(URI('https://one.demo.kiosk.tech/kiosk/schema'))
+  plain = Kiosk::TestHelpers::Wire.http_for(URI('http://127.0.0.1:3001/kiosk/schema'))
+  check.call('the drivers this script uses dial TLS for an https origin', https.use_ssl?)
+  check.call('…and do not for a local http one', !plain.use_ssl?)
 
   # VACUITY: the real Caddyfile must still yield a fleet, and the harness this
   # script hands the served bytes to must still exist.
-  check.call("the tracked Caddyfile yields at least one vhost", hosts_from_caddyfile.any?)
-  check.call("e2e/schema_conformance.rb is where this expects it", File.exist?(CONFORMANCE))
-  check.call("…and it carries the live-mode switch",
+  check.call('the tracked Caddyfile yields at least one vhost', hosts_from_caddyfile.any?)
+  check.call('e2e/schema_conformance.rb is where this expects it', File.exist?(CONFORMANCE))
+  check.call('…and it carries the live-mode switch',
              File.read(CONFORMANCE).include?('LIVE = ENV["KIOSK_LIVE"] == "1"'))
 
   if failures.empty?
-    puts "SELF-TEST OK"
+    puts 'SELF-TEST OK'
     0
   else
     puts "SELF-TEST FAILED: #{failures.size} arm(s)"
@@ -334,16 +336,16 @@ def self_test
   end
 end
 
-exit self_test if ARGV.include?("--self-test")
+exit self_test if ARGV.include?('--self-test')
 
-require "uri"
+require 'uri'
 hosts = ARGV.empty? ? hosts_from_caddyfile : ARGV
 if hosts.empty?
   abort "live-fleet-drive: no hosts. The list is derived from deploy/Caddyfile's vhost blocks; " \
-        "an empty list means the derivation stopped matching, not that the fleet is fine."
+        'an empty list means the derivation stopped matching, not that the fleet is fine.'
 end
 
-runs = hosts.map { |host| drive(host.start_with?("http") ? host : "https://#{host}") }
+runs = hosts.map { |host| drive(host.start_with?('http') ? host : "https://#{host}") }
 
 puts
 puts "\e[1m── the fleet ──\e[0m"
@@ -351,10 +353,10 @@ breaches = runs.flat_map(&:breaches)
 errors   = runs.flat_map(&:errors)
 puts "  #{hosts.size} origin(s) · #{runs.sum(&:passes)} passed · " \
      "#{breaches.size} breach(es) · #{errors.size} error(s) · " \
-     "#{runs.sum { _1.skips.size }} skipped"
-puts "  NO DOMAIN ROW WAS WRITTEN: every probe above is a read or a refusal. The one"
+     "#{runs.sum { it.skips.size }} skipped"
+puts '  NO DOMAIN ROW WAS WRITTEN: every probe above is a read or a refusal. The one'
 puts "  residue is a single-use auth-challenge nonce per origin, in the origin's own"
-puts "  in-process TTL store, which expires unaided."
+puts '  in-process TTL store, which expires unaided.'
 (breaches + errors).each { |f| puts "  #{f.origin}  #{f.beat} — #{f.detail}" }
 
 exit((breaches + errors).empty? ? 0 : 1)

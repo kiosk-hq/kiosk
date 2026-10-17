@@ -17,41 +17,22 @@ require_relative '../../support/equihash_kat'
 # concern. This spec proves the GATE ORCHESTRATION with the
 # real equihash crypto: N distinct challenges, verify-through-backend, the
 # all-or-re-challenge quota, spend semantics, and fingerprint binding.
-RSpec.describe 'PowGate × equihash (real backend, real gate)' do
-  before(:each) do
-    Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
-    Kiosk.configure do |c|
-      c.reputation_policy = equihash_policy
-      c.pow_secret        = secret
-      c.schema            = 'kiosk'
-    end
-  end
-
-  after(:each) do
-    Kiosk::Reputation::Backends.reset!
-    Kiosk.reset!
-  end
-
-  let(:identity) { build_identity }
-  let(:secret)   { 'equihash-e2e-secret-of-at-least-32-bytes' }
-  let(:count)    { 1 }
-
-  # Policy that demands `count` equihash proofs at the KAT params.
-  let(:equihash_policy) do
-    demanded = count
-    params   = EquihashKat::PARAMS
-    Class.new(Kiosk::Reputation::Policy) do
-      define_method(:challenge_for) do |identity:, verb:, factors:|
-        { alg: 'equihash', params: params, count: demanded }
-      end
-    end.new
-  end
-
+module PowGateEquihashE2eSpec
   # The call under test, as a router reaches it on the wire:
   # `GET <endpoint>/catalog?q=milk`. `command:` is the gate/POLICY verb the
   # policy branches on; `method:`/`verb:` are the two halves the request
   # fingerprint binds to alongside the arguments.
   ARGS = { q: 'milk' }.freeze
+
+  # Demands `count` equihash proofs at the KAT params.
+  class Policy < Kiosk::Reputation::Policy
+    def initialize(count)
+      super()
+      @count = count
+    end
+
+    def challenge_for(**) = { alg: 'equihash', params: EquihashKat::PARAMS, count: @count }
+  end
 
   # Drive the gate for that call. `command:` stays the POLICY verb; any of the
   # three fingerprint inputs can be overridden to build a MISMATCHED submission.
@@ -76,19 +57,39 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       id: id
     )
   end
+end
+
+RSpec.shared_context 'pow gate equihash e2e spec: gate' do
+  include PowGateEquihashE2eSpec
+
+  before do
+    Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
+    Kiosk.configure do |c|
+      c.reputation_policy = PowGateEquihashE2eSpec::Policy.new(count)
+      c.pow_secret        = secret
+      c.schema            = 'kiosk'
+    end
+  end
+
+  after do
+    Kiosk::Reputation::Backends.reset!
+    Kiosk.reset!
+  end
+
+  let(:identity) { build_identity }
+  let(:secret)   { 'equihash-e2e-secret-of-at-least-32-bytes' }
+  let(:count)    { 1 }
+end
+
+RSpec.describe 'PowGate × equihash (real backend, real gate)' do
+  include_context 'pow gate equihash e2e spec: gate'
 
   it 'issues `count` equihash challenges on an unproven request (the 402 shape)' do
-    err = nil
-    begin
-      gate(pow: nil)
-    rescue Kiosk::Server::Errors::PowRequired => e
-      err = e
-    end
-
-    expect(err).not_to be_nil
-    expect(err.challenges.length).to eq(count)
-    expect(err.challenges.first[:alg]).to eq('equihash')
-    expect(err.challenges.first[:params]).to eq(EquihashKat::PARAMS)
+    expect { gate(pow: nil) }.to raise_error(Kiosk::Server::Errors::PowRequired) { |err|
+      expect(err.challenges.length).to eq(count)
+      expect(err.challenges.first[:alg]).to eq('equihash')
+      expect(err.challenges.first[:params]).to eq(EquihashKat::PARAMS)
+    }
   end
 
   it 'proceeds when the real equihash verifier accepts the submitted proof (N=1)' do
@@ -108,6 +109,10 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
     expect(penalty).to eq([identity])
   end
+end
+
+RSpec.describe 'PowGate × equihash (real backend, real gate)' do
+  include_context 'pow gate equihash e2e spec: gate'
 
   context 'N = 3 independent proofs' do
     let(:count) { 3 }
@@ -122,6 +127,10 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       expect(gate(pow: { proofs: proofs })).to eq(:proceed)
     end
   end
+end
+
+RSpec.describe 'PowGate × equihash (real backend, real gate)' do
+  include_context 'pow gate equihash e2e spec: gate'
 
   # ── fingerprint binding, through the real crypto ─────────────────────────
   #

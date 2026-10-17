@@ -137,34 +137,47 @@ ALLOW = [
 
 # ── the published section index ───────────────────────────────────────────────
 
+SECTION_HEADING = /\A\#{2,4}\s+(\d+(?:\.\d+)*)\.?\s+\S/
+SECTION_ITEM    = /\A(\s*)(\d+)\.\s+\S/
+
 # Section numbers of a markdown spec: numbered headings, plus ordered-list items nested under them.
 def sections_from(path)
-  found  = {}
-  head   = nil
-  stack  = []
+  found = {}
+  state = { head: nil, stack: [] }
+  unfenced_spec_lines(path) do |line, lineno|
+    num = section_number(state, line)
+    found[num] = lineno if num
+  end
+  found
+end
+
+def unfenced_spec_lines(path)
   fenced = false
   File.readlines(path, chomp: true).each_with_index do |line, i|
     fenced = !fenced if line.start_with?('```')
-    next if fenced
-
-    if (m = line.match(/\A\#{2,4}\s+(\d+(?:\.\d+)*)\.?\s+\S/))
-      head  = m[1].split('.')
-      stack = []
-      found[head.join('.')] = i + 1
-      next
-    end
-    next if line.start_with?('#') || head.nil?
-
-    next unless (m = line.match(/\A(\s*)(\d+)\.\s+\S/))
-
-    indent = m[1].length
-    stack.pop while !stack.empty? && stack.last[0] >= indent
-    base = stack.empty? ? head : stack.last[1]
-    item = base + [m[2]]
-    found[item.join('.')] = i + 1
-    stack.push([indent, item])
+    yield line, i + 1 unless fenced
   end
-  found
+end
+
+# The section number `line` opens, or nil.
+def section_number(state, line)
+  if (m = line.match(SECTION_HEADING))
+    state[:stack].clear
+    return (state[:head] = m[1].split('.')).join('.')
+  end
+  return if line.start_with?('#') || state[:head].nil?
+
+  m = line.match(SECTION_ITEM)
+  nested_item(state, m).join('.') if m
+end
+
+def nested_item(state, match)
+  stack  = state[:stack]
+  indent = match[1].length
+  stack.pop while !stack.empty? && stack.last[0] >= indent
+  item = (stack.empty? ? state[:head] : stack.last[1]) + [match[2]]
+  stack.push([indent, item])
+  item
 end
 
 def live_spec_source
@@ -235,213 +248,279 @@ def joins_with_previous(prev_line, line)
   ["#{head} #{cont}", "#{head}#{cont}"]
 end
 
+# Matched by shape, so this pattern's own line does not open a range.
+BLOCK_MARKER = /\A#\s+(>>>|<<<)\s+.*--\s+(BEGIN|END)\s*\z/
+
 # The two declared blocks of this file, as line ranges; absent markers exempt nothing.
 def self_exempt_ranges
-  ranges = []
-  open   = nil
-  File.readlines(SELF_PATH, chomp: true).each_with_index do |line, i|
-    # Matched by shape, so this detector's own line does not open a range.
-    m = line.match(/\A#\s+(>>>|<<<)\s+.*--\s+(BEGIN|END)\s*\z/)
-    next if m.nil?
+  marks = File.readlines(SELF_PATH, chomp: true).each_with_index.filter_map do |line, i|
+    m = line.match(BLOCK_MARKER)
+    [m[2], i + 1] if m
+  end
+  pair_markers(marks)
+end
 
-    open = i + 1 if m[2] == 'BEGIN'
-    if m[2] == 'END' && open
-      ranges << (open..(i + 1))
+def pair_markers(marks)
+  open = nil
+  marks.each_with_object([]) do |(kind, lineno), ranges|
+    if kind == 'BEGIN'
+      open = lineno
+    elsif open
+      ranges << (open..lineno)
       open = nil
     end
   end
-  ranges
 end
 
-def scan_repo(index)
-  findings   = []
-  suppressed = Hash.new(0)
-  cites      = 0
-  files      = 0
-  keys       = 0
-  self_ranges = self_exempt_ranges
+DECLARED_KEY_FAULT = [
+  'a declared development keypair that has lost its do-not-use banner',
+  "restore the \"#{KEY_BANNER}\" banner"
+].freeze
+UNDECLARED_KEY_FAULT = [
+  'a private key committed to a published repository',
+  'read it from the environment or generate it at setup; a genuine test vector goes ' \
+  'in DECLARED_DEV_KEYS and carries the banner'
+].freeze
 
-  tracked_files(REPO).each do |rel|
-    abs = File.join(REPO, rel)
-    next unless File.file?(abs)
+OUR_SPEC_BEFORE    = /\b(?:specs?|specification|protocol)\b[^§]{0,24}\z/i
+EXTERNAL_BEFORE    = /\b(?:RFC|OAS|OpenAPI)\b/
+IDENTIFIER_BEFORE  = /(?<![A-Za-z0-9-])(?:ADR|K|T)-\d+\s*\z/
 
-    text = readable_text(abs)
-    next if text.nil?
+# The exemption a citation falls under, by the text before its marker, or nil.
+def citation_exemption(befores)
+  if befores.any? { |b| b =~ EXTERNAL_BEFORE }
+    'AL-3'
+  elsif befores.any? { |b| b =~ IDENTIFIER_BEFORE }
+    'AL-4'
+  end
+end
 
-    files += 1
-    path_allow = ALLOW.select { |a| a[:match]&.call(rel, nil) }
-    lines = text.lines.map { |l| l.chomp }
+# Scans every tracked text file for the PATTERNS, for section citations and for private keys.
+class RepoScan
+  Line = Struct.new(:rel, :lineno, :text, :prev, :pair)
 
-    # File-level: a key is a block, not a line.
-    if (key_hit = KEY_BLOCK_RE.match(text))
-      keys += 1
-      declared = DECLARED_DEV_KEYS.key?(rel)
-      if declared && text.include?(KEY_BANNER)
-        suppressed['AL-7'] += 1
-      else
-        findings << {
-          path: rel, line: text[0...key_hit.begin(0)].count("\n") + 1, id: 'KEY-1',
-          what: if declared
-                  'a declared development keypair that has lost its do-not-use banner'
-                else
-                  'a private key committed to a published repository'
-                end,
-          repair: if declared
-                    "restore the \"#{KEY_BANNER}\" banner"
-                  else
-                    'read it from the environment or generate it at setup; a genuine test vector goes ' \
-                      'in DECLARED_DEV_KEYS and carries the banner'
-                  end,
-          text: "#{rel}: a private-key block with key material under it starts here",
-          wrapped: false
-        }
-      end
-    end
+  attr_reader :findings, :suppressed, :files, :cites, :keys
 
-    lines.each_with_index do |line, i|
-      lineno = i + 1
-      if rel == SELF_REL && self_ranges.any? { |r| r.cover?(lineno) }
-        suppressed['AL-6'] += 1 if PATTERNS.any? { |p| line =~ p[:re] } || line.include?('§')
-        next
-      end
+  def initialize(index)
+    @index       = index
+    @findings    = []
+    @suppressed  = Hash.new(0)
+    @files       = 0
+    @cites       = 0
+    @keys        = 0
+    @self_ranges = self_exempt_ranges
+  end
 
-      prev = i.zero? ? nil : lines[i - 1]
-      pair = joins_with_previous(prev, line)
+  def run
+    tracked_files(REPO).each { |rel| scan_file(rel) }
+    [findings, suppressed, files, cites, keys]
+  end
 
-      PATTERNS.each do |pat|
-        hit_line = line =~ pat[:re]
-        hit_pair = !hit_line && prev && prev !~ pat[:re] && pair.any? { |j| j =~ pat[:re] }
-        next unless hit_line || hit_pair
+  private
 
-        skipped = path_allow.find { |a| a[:arms] == :all }
-        if skipped
-          suppressed[skipped[:id]] += 1
-          next
-        end
-        findings << {
-          path: rel, line: lineno, id: pat[:id], what: pat[:what], repair: pat[:repair],
-          text: (hit_pair ? "#{prev.strip} / #{line.strip}" : line.strip),
-          wrapped: !hit_line
-        }
-      end
+  def scan_file(rel)
+    abs  = File.join(REPO, rel)
+    text = File.file?(abs) ? readable_text(abs) : nil
+    return if text.nil?
 
-      pos = 0
-      while (m = line.match(CITE, pos))
-        pos = m.end(0)
-        num = m[1]
+    @files += 1
+    @path_allow = ALLOW.select { |a| a[:match]&.call(rel, nil) }
+    check_key(rel, text)
+    scan_lines(rel, text.lines.map(&:chomp))
+  end
 
-        skipped = path_allow.find { |a| %i[all sec].include?(a[:arms]) }
-        if skipped
-          suppressed[skipped[:id]] += 1
-          next
-        end
-        cites += 1
+  def scan_lines(rel, lines)
+    lines.each_with_index { |line, i| scan_line(rel, line, i + 1, i.zero? ? nil : lines[i - 1]) }
+  end
 
-        # Text before the marker, on the line and on each two-line join.
-        befores = [line[0, m.begin(0)]]
-        pair.each do |j|
-          at = j.index("§#{num}")
-          befores << j[0, at] if at
-        end
+  # File-level: a key is a block, not a line.
+  def check_key(rel, text)
+    hit = KEY_BLOCK_RE.match(text)
+    return unless hit
 
-        # A citation attributed to our spec is never exempt (AL-3, AL-4).
-        ours = befores.any? { |b| b =~ /\b(?:specs?|specification|protocol)\b[^§]{0,24}\z/i }
-        if !ours && befores.any? { |b| b =~ /\b(?:RFC|OAS|OpenAPI)\b/ }
-          suppressed['AL-3'] += 1
-          next
-        end
-        if !ours && befores.any? { |b| b =~ /(?<![A-Za-z0-9-])(?:ADR|K|T)-\d+\s*\z/ }
-          suppressed['AL-4'] += 1
-          next
-        end
-        next if index.key?(num)
+    @keys += 1
+    declared = DECLARED_DEV_KEYS.key?(rel)
+    return @suppressed['AL-7'] += 1 if declared && text.include?(KEY_BANNER)
 
-        findings << {
-          path: rel, line: lineno, id: 'SEC-1',
-          what: "the citation of section #{num} resolves to nothing in the published specification",
-          repair: 'cite the section that carries the rule, name the external standard the number ' \
-                  'belongs to, or state the rule inline',
-          text: line.strip, wrapped: false
-        }
-      end
+    what, repair = declared ? DECLARED_KEY_FAULT : UNDECLARED_KEY_FAULT
+    @findings << { path: rel, line: text[0...hit.begin(0)].count("\n") + 1, id: 'KEY-1', what: what, repair: repair,
+                   text: "#{rel}: a private-key block with key material under it starts here", wrapped: false }
+  end
+
+  def scan_line(rel, text, lineno, prev)
+    return suppress_self_line(text) if rel == SELF_REL && @self_ranges.any? { |r| r.cover?(lineno) }
+
+    line = Line.new(rel, lineno, text, prev, joins_with_previous(prev, text))
+    PATTERNS.each { |pat| check_pattern(pat, line) }
+    check_citations(line)
+  end
+
+  def suppress_self_line(text)
+    @suppressed['AL-6'] += 1 if PATTERNS.any? { |p| text =~ p[:re] } || text.include?('§')
+  end
+
+  # Increments the count of the first exemption of `arms` that covers this file.
+  def suppressed_by?(arms)
+    skipped = @path_allow.find { |a| arms.include?(a[:arms]) }
+    @suppressed[skipped[:id]] += 1 if skipped
+    skipped
+  end
+
+  # :line when the line matches, :pair when only its join with the previous line does.
+  def pattern_hit(pat, line)
+    return :line if line.text =~ pat[:re]
+
+    :pair if line.prev && line.prev !~ pat[:re] && line.pair.any? { |j| j =~ pat[:re] }
+  end
+
+  def check_pattern(pat, line)
+    hit = pattern_hit(pat, line)
+    return if hit.nil? || suppressed_by?(%i[all])
+
+    text = hit == :pair ? "#{line.prev.strip} / #{line.text.strip}" : line.text.strip
+    @findings << { path: line.rel, line: line.lineno, id: pat[:id], what: pat[:what], repair: pat[:repair],
+                   text: text, wrapped: hit == :pair }
+  end
+
+  def check_citations(line)
+    pos = 0
+    while (m = line.text.match(CITE, pos))
+      pos = m.end(0)
+      check_citation(line, m)
     end
   end
 
-  [findings, suppressed, files, cites, keys]
+  def check_citation(line, match)
+    return if suppressed_by?(%i[all sec])
+
+    @cites += 1
+    return if exempt_citation?(citation_befores(line, match)) || @index.key?(match[1])
+
+    @findings << {
+      path: line.rel, line: line.lineno, id: 'SEC-1',
+      what: "the citation of section #{match[1]} resolves to nothing in the published specification",
+      repair: 'cite the section that carries the rule, name the external standard the number ' \
+              'belongs to, or state the rule inline',
+      text: line.text.strip, wrapped: false
+    }
+  end
+
+  # Text before the marker, on the line and on each two-line join.
+  def citation_befores(line, match)
+    joined = line.pair.filter_map do |j|
+      at = j.index("§#{match[1]}")
+      j[0, at] if at
+    end
+    [line.text[0, match.begin(0)]] + joined
+  end
+
+  # A citation attributed to our spec is never exempt (AL-3, AL-4).
+  def exempt_citation?(befores)
+    return false if befores.any? { |b| b =~ OUR_SPEC_BEFORE }
+
+    id = citation_exemption(befores)
+    @suppressed[id] += 1 if id
+    id
+  end
+end
+
+def scan_repo(index)
+  RepoScan.new(index).run
 end
 
 # ── modes ────────────────────────────────────────────────────────────────────
 
 def resolve_index
+  rel = SECTIONS_TSV.delete_prefix("#{REPO}/")
+  fail_missing_index(rel) unless File.file?(SECTIONS_TSV)
   live = live_spec_source
-  rel  = SECTIONS_TSV.delete_prefix("#{REPO}/")
-  unless File.file?(SECTIONS_TSV)
-    warn "check-publication-paths: FAIL -- #{rel} is missing. Record it with --record-sections " \
-         "beside a #{SITE_REPO} checkout."
-    exit 1
-  end
   return [read_sections_tsv, "#{rel} (#{SITE_REPO} not checked out here, not re-derived)"] unless live
 
-  derived  = sections_from(live)
+  derived = sections_from(live)
+  check_index_drift(rel, live, derived)
+  [derived, "#{rel}, re-derived from #{SITE_REPO}/#{SPEC_REL} (sections and source digest)"]
+end
+
+def fail_missing_index(rel)
+  warn "check-publication-paths: FAIL -- #{rel} is missing. Record it with --record-sections " \
+       "beside a #{SITE_REPO} checkout."
+  exit 1
+end
+
+# Exits 1 when the vendored index does not match the live spec, by sections or by source digest.
+def check_index_drift(rel, live, derived)
   vendored = read_sections_tsv
   recorded = read_sections_tsv_source_digest
   actual   = Digest::SHA256.file(live).hexdigest
-  if derived.keys.sort != vendored.keys.sort || recorded != actual
-    warn "check-publication-paths: FAIL -- #{rel} does not match #{live}. " \
-         'Re-record it with `bin/check-publication-paths --record-sections`.'
-    only_live = (derived.keys - vendored.keys).sort
-    only_tsv  = (vendored.keys - derived.keys).sort
-    warn "  published but not vendored: #{only_live.join(', ')}" unless only_live.empty?
-    warn "  vendored but not published: #{only_tsv.join(', ')}" unless only_tsv.empty?
-    warn "  source sha256 recorded #{recorded || '(none)'}, actual #{actual}" if recorded != actual
-    exit 1
-  end
-  [derived, "#{rel}, re-derived from #{SITE_REPO}/#{SPEC_REL} (sections and source digest)"]
+  return if derived.keys.sort == vendored.keys.sort && recorded == actual
+
+  warn "check-publication-paths: FAIL -- #{rel} does not match #{live}. " \
+       'Re-record it with `bin/check-publication-paths --record-sections`.'
+  warn_section_diff(derived.keys, vendored.keys)
+  warn "  source sha256 recorded #{recorded || '(none)'}, actual #{actual}" if recorded != actual
+  exit 1
+end
+
+def warn_section_diff(live_keys, tsv_keys)
+  only_live = (live_keys - tsv_keys).sort
+  only_tsv  = (tsv_keys - live_keys).sort
+  warn "  published but not vendored: #{only_live.join(', ')}" unless only_live.empty?
+  warn "  vendored but not published: #{only_tsv.join(', ')}" unless only_tsv.empty?
+end
+
+def key_fault_finding(fault)
+  { path: SELF_REL, line: 0, id: 'KEY-0',
+    what: "the tracked-key detector is broken: #{fault}",
+    repair: 'repair KEY_BLOCK_RE',
+    text: 'KEY_BLOCK_RE failed its own two-sided probe', wrapped: false }
 end
 
 def run_check(quiet: false)
   index, note = resolve_index
-  findings, suppressed, files, cites, keys = scan_repo(index)
-
+  scan = RepoScan.new(index)
+  scan.run
   key_faults = key_detector_faults
-  key_faults.each do |fault|
-    findings << { path: SELF_REL, line: 0, id: 'KEY-0',
-                  what: "the tracked-key detector is broken: #{fault}",
-                  repair: 'repair KEY_BLOCK_RE',
-                  text: 'KEY_BLOCK_RE failed its own two-sided probe', wrapped: false }
-  end
+  findings   = scan.findings + key_faults.map { |fault| key_fault_finding(fault) }
+  print_check_summary(scan, index.size, key_faults.empty?, note) unless quiet
+  return print_check_ok(quiet) if findings.empty?
 
+  print_check_failures(findings)
+  1
+end
+
+def print_check_summary(scan, sections, detector_ok, note)
+  puts "check-publication-paths: #{scan.files} tracked text file(s), #{scan.cites} section citation(s) " \
+       "resolved against #{sections} published section number(s), #{scan.keys} private-key block(s) " \
+       "(#{DECLARED_DEV_KEYS.size} declared here; detector " \
+       "#{detector_ok ? 'RE-PROVED this run' : 'BROKEN -- see KEY-0 below'})"
+  puts "  section index: #{note}"
+  ALLOW.each do |a|
+    puts format('  %<id>-5s %<scope>-62s suppressed %<count>d', id: a[:id], scope: a[:scope], count: scan.suppressed[a[:id]])
+  end
+end
+
+def print_check_ok(quiet)
   unless quiet
-    puts "check-publication-paths: #{files} tracked text file(s), #{cites} section citation(s) " \
-         "resolved against #{index.size} published section number(s), #{keys} private-key block(s) " \
-         "(#{DECLARED_DEV_KEYS.size} declared here; detector " \
-         "#{key_faults.empty? ? 'RE-PROVED this run' : 'BROKEN -- see KEY-0 below'})"
-    puts "  section index: #{note}"
-    ALLOW.each do |a|
-      n = suppressed[a[:id]]
-      puts format('  %-5s %-62s suppressed %d', a[:id], a[:scope], n)
-    end
+    puts
+    puts 'check-publication-paths: OK -- nothing shipped here points at material that does not ' \
+         'ship with it.'
   end
+  0
+end
 
-  if findings.empty?
-    unless quiet
-      puts
-      puts 'check-publication-paths: OK -- nothing shipped here points at material that does not ' \
-           'ship with it.'
-    end
-    return 0
-  end
-
+def print_check_failures(findings)
   $stdout.flush
   warn ''
   warn "check-publication-paths: FAIL -- #{findings.length} line(s) point at material a reader of " \
        'this repository will not have.'
-  findings.sort_by { |f| [f[:path], f[:line]] }.each do |f|
-    warn "  #{f[:path]}:#{f[:line]}: [#{f[:id]}] #{f[:what]}#{' (wrapped over two lines)' if f[:wrapped]}"
-    warn "      #{f[:text]}"
-    warn "      repair: #{f[:repair]}"
-  end
-  1
+  findings.sort_by { |f| [f[:path], f[:line]] }.each { |f| print_finding(f) }
+end
+
+def print_finding(finding)
+  warn "  #{finding[:path]}:#{finding[:line]}: [#{finding[:id]}] #{finding[:what]}" \
+       "#{' (wrapped over two lines)' if finding[:wrapped]}"
+  warn "      #{finding[:text]}"
+  warn "      repair: #{finding[:repair]}"
 end
 
 def run_record_sections
@@ -515,26 +594,34 @@ def fixture_key_file(banner:)
   "#{head}\n#{pem}"
 end
 
-def plant(dir, rel, lines)
-  abs = File.join(dir, rel)
+def write_file(abs, body)
   FileUtils.mkdir_p(File.dirname(abs))
-  File.write(abs, "#{lines.join("\n")}\n")
+  File.write(abs, body)
+end
+
+def plant(dir, rel, lines)
+  write_file(File.join(dir, rel), "#{lines.join("\n")}\n")
+end
+
+def install_script(repo)
+  script = File.join(repo, 'bin', File.basename(SELF_PATH))
+  write_file(script, File.binread(SELF_PATH))
+  File.chmod(0o755, script)
+end
+
+def init_and_stage(dir)
+  _, err, st = Open3.capture3('git', '-C', dir, 'init', '-q')
+  raise "git init failed: #{err}" unless st.success?
+
+  stage(dir)
 end
 
 def build_fixture_repo(dir)
-  Dir.mkdir(File.join(dir, 'bin'))
-  FileUtils.mkdir_p(File.join(dir, 'spec'))
-  File.write(File.join(dir, 'bin', File.basename(SELF_PATH)), File.binread(SELF_PATH))
-  File.chmod(0o755, File.join(dir, 'bin', File.basename(SELF_PATH)))
-  File.write(File.join(dir, 'spec', 'public-spec-sections.tsv'), File.binread(SECTIONS_TSV))
+  install_script(dir)
+  write_file(File.join(dir, 'spec', 'public-spec-sections.tsv'), File.binread(SECTIONS_TSV))
   GREEN_FIXTURES.each { |rel, lines| plant(dir, rel, lines) }
-  DECLARED_DEV_KEYS.each_key do |rel|
-    abs = File.join(dir, rel)
-    FileUtils.mkdir_p(File.dirname(abs))
-    File.write(abs, fixture_key_file(banner: true))
-  end
-  _, err, st = Open3.capture3('git', '-C', dir, 'init', '-q')
-  raise "git init failed: #{err}" unless st.success?
+  DECLARED_DEV_KEYS.each_key { |rel| write_file(File.join(dir, rel), fixture_key_file(banner: true)) }
+  init_and_stage(dir)
 end
 
 def stage(dir)
@@ -551,127 +638,156 @@ end
 def run_index_self_test(index)
   failures = []
   Dir.mktmpdir('check-publication-paths-index') do |root|
-    repo = File.join(root, 'reference')
-    live = File.join(root, SITE_REPO, SPEC_REL)
-    FileUtils.mkdir_p(File.dirname(live))
-    FileUtils.mkdir_p(File.join(repo, 'bin'))
-    FileUtils.mkdir_p(File.join(repo, 'spec'))
-    File.write(live, index.keys.sort_by { |k| k.split('.').map(&:to_i) }
-                          .map { |k| "## #{k}. Section #{k}\n\nProse.\n\n" }.join)
-
-    script = File.join(repo, 'bin', File.basename(SELF_PATH))
-    File.write(script, File.binread(SELF_PATH))
-    File.chmod(0o755, script)
-
-    tsv_path = File.join(repo, 'spec', 'public-spec-sections.tsv')
-    tsv      = render_sections_tsv(sections_from(live), live)
-    File.write(tsv_path, tsv)
-    plant(repo, 'lib/cites.rb', ['# The scope is §1.1 and the notation §1.3.'])
-
-    _, err, st = Open3.capture3('git', '-C', repo, 'init', '-q')
-    raise "git init failed: #{err}" unless st.success?
-
-    stage(repo)
-
-    out1, err1, st1 = run_guard_in(repo)
-    if st1.exitstatus.zero?
-      puts '  vendored index: keys agree and the recorded source digest matches -- exit 0 -- OK'
-    else
-      failures << "the vendored-index fixture exited #{st1.exitstatus} with a matching digest\n#{out1}#{err1}"
-    end
-
-    File.write(tsv_path, tsv.sub(/^# source sha256: .*$/, "# source sha256: #{'0' * 64}"))
-    stage(repo)
-    out2, err2, st2 = run_guard_in(repo)
-    combined = "#{out2}#{err2}"
-    if st2.exitstatus.zero?
-      failures << 'a stale source digest with every section number unchanged stayed green'
-    elsif !combined.include?('--record-sections')
-      failures << "the stale-digest failure did not name --record-sections as the repair:\n#{combined}"
-    else
-      puts "  vendored index: source digest staled, keys UNTOUCHED -- exit #{st2.exitstatus}, repair " \
-           'named -- OK'
-    end
-
-    File.write(tsv_path, tsv)
-    stage(repo)
-    _, _, st3 = run_guard_in(repo)
-    failures << 'the vendored-index fixture did not return to exit 0 after the digest was restored' unless st3.exitstatus.zero?
+    repo, tsv_path, tsv = build_index_fixture(root, index)
+    expect_index_green(failures, repo)
+    expect_stale_digest_red(failures, repo, tsv_path, tsv)
+    _, _, st = run_guard_in(repo)
+    failures << 'the vendored-index fixture did not return to exit 0 after the digest was restored' unless st.exitstatus.zero?
   end
   failures
 end
 
-def run_self_test
-  failures = []
-  Dir.mktmpdir('check-publication-paths') do |dir|
-    build_fixture_repo(dir)
-    stage(dir)
+# A spec with one numbered heading per section of `index`.
+def write_stand_in_spec(live, index)
+  write_file(live, index.keys.sort_by { |k| k.split('.').map(&:to_i) }
+                        .map { |k| "## #{k}. Section #{k}\n\nProse.\n\n" }.join)
+end
 
-    out, err, st = run_guard_in(dir)
-    if st.exitstatus.zero?
-      puts '  green tree: exit 0 with every exempt shape present -- OK'
-    else
-      failures << "the green fixture tree should exit 0; it exited #{st.exitstatus}\n#{out}#{err}"
-    end
-    failures << 'the guard printed no citation count, so non-vacuity cannot be read off it' unless out.include?('section citation(s)')
+def build_index_fixture(root, index)
+  repo = File.join(root, 'reference')
+  live = File.join(root, SITE_REPO, SPEC_REL)
+  write_stand_in_spec(live, index)
+  install_script(repo)
+  tsv_path = File.join(repo, 'spec', 'public-spec-sections.tsv')
+  tsv      = render_sections_tsv(sections_from(live), live)
+  write_file(tsv_path, tsv)
+  plant(repo, 'lib/cites.rb', ['# The scope is §1.1 and the notation §1.3.'])
+  init_and_stage(repo)
+  [repo, tsv_path, tsv]
+end
 
-    # Each exemption must have done the work, read back off the suppression counts.
-    counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
-    { 'AL-2' => 1, 'AL-3' => 3, 'AL-4' => 2, 'AL-7' => DECLARED_DEV_KEYS.size }.each do |id, want|
-      got = counted[id].to_i
-      if got < want
-        failures << "#{id} suppressed #{got} on the fixture tree, expected at least #{want}"
-      else
-        puts "  fixture tree: #{id} did the work #{got} time(s) -- OK"
-      end
-    end
-
-    cases = PATTERNS.map { |p| [p[:id], "lib/plant_#{p[:id].downcase.tr('-', '_')}.rb", p[:example]] }
-    cases += RED_EXTRA.map { |id, rel, lines| [id, rel, lines] }
-    cases << ['KEY-1', 'config/some_service_key.pem', fixture_key_file(banner: true).lines.map(&:chomp)]
-    cases << ['KEY-1', DECLARED_DEV_KEYS.keys.first, fixture_key_file(banner: false).lines.map(&:chomp)]
-
-    cases.each do |id, rel, lines|
-      plant(dir, rel, lines)
-      stage(dir)
-      out2, err2, st2 = run_guard_in(dir)
-      combined = "#{out2}#{err2}"
-      if st2.exitstatus.zero?
-        failures << "planting #{id} in #{rel} did not turn the guard red"
-      elsif !combined.include?("#{rel}:")
-        failures << "#{id} fired but did not name #{rel}:\n#{combined}"
-      elsif !combined.include?("[#{id}]")
-        failures << "#{id} fired on #{rel} but was not reported under its own id:\n#{combined}"
-      else
-        wrapped = lines.length > 1 ? ' (wrapped over two lines)' : ''
-        puts "  plant #{id} in #{rel}#{wrapped}: exit #{st2.exitstatus}, reported by id -- OK"
-      end
-      File.delete(File.join(dir, rel))
-      stage(dir)
-    end
-
-    _, _, st3 = run_guard_in(dir)
-    failures << 'the fixture tree did not return to exit 0 after the plants were removed' unless st3.exitstatus.zero?
+def expect_index_green(failures, repo)
+  out, err, st = run_guard_in(repo)
+  if st.exitstatus.zero?
+    puts '  vendored index: keys agree and the recorded source digest matches -- exit 0 -- OK'
+  else
+    failures << "the vendored-index fixture exited #{st.exitstatus} with a matching digest\n#{out}#{err}"
   end
+end
 
-  index, = resolve_index
+# Stales only the recorded source digest, expects red naming the repair, then restores the index.
+def expect_stale_digest_red(failures, repo, tsv_path, tsv)
+  File.write(tsv_path, tsv.sub(/^# source sha256: .*$/, "# source sha256: #{'0' * 64}"))
+  stage(repo)
+  out, err, st = run_guard_in(repo)
+  failure = stale_digest_failure(st.exitstatus, "#{out}#{err}")
+  failures << failure if failure
+  puts "  vendored index: source digest staled, keys UNTOUCHED -- exit #{st.exitstatus}, repair named -- OK" unless failure
+  File.write(tsv_path, tsv)
+  stage(repo)
+end
+
+def stale_digest_failure(status, combined)
+  if status.zero?
+    'a stale source digest with every section number unchanged stayed green'
+  elsif !combined.include?('--record-sections')
+    "the stale-digest failure did not name --record-sections as the repair:\n#{combined}"
+  end
+end
+
+def expect_fixture_green(failures, dir)
+  out, err, st = run_guard_in(dir)
+  if st.exitstatus.zero?
+    puts '  green tree: exit 0 with every exempt shape present -- OK'
+  else
+    failures << "the green fixture tree should exit 0; it exited #{st.exitstatus}\n#{out}#{err}"
+  end
+  failures << 'the guard printed no citation count, so non-vacuity cannot be read off it' unless out.include?('section citation(s)')
+  out
+end
+
+# Each exemption must have done the work, read back off the suppression counts.
+def expect_exemptions_counted(failures, out)
+  counted = out.scan(/^\s+(AL-\d)\s+.*suppressed (\d+)\s*$/).to_h { |id, n| [id, n.to_i] }
+  { 'AL-2' => 1, 'AL-3' => 3, 'AL-4' => 2, 'AL-7' => DECLARED_DEV_KEYS.size }.each do |id, want|
+    got = counted[id].to_i
+    if got < want
+      failures << "#{id} suppressed #{got} on the fixture tree, expected at least #{want}"
+    else
+      puts "  fixture tree: #{id} did the work #{got} time(s) -- OK"
+    end
+  end
+end
+
+def red_cases
+  cases = PATTERNS.map { |p| [p[:id], "lib/plant_#{p[:id].downcase.tr('-', '_')}.rb", p[:example]] }
+  cases + RED_EXTRA.map { |id, rel, lines| [id, rel, lines] } + key_cases
+end
+
+def key_cases
+  [['KEY-1', 'config/some_service_key.pem', fixture_key_file(banner: true).lines.map(&:chomp)],
+   ['KEY-1', DECLARED_DEV_KEYS.keys.first, fixture_key_file(banner: false).lines.map(&:chomp)]]
+end
+
+def expect_plant_red(failures, dir, kase)
+  id, rel, lines = kase
+  plant(dir, rel, lines)
+  stage(dir)
+  out, err, st = run_guard_in(dir)
+  failure = plant_failure(id, rel, st.exitstatus, "#{out}#{err}")
+  failures << failure if failure
+  puts "  plant #{id} in #{rel}#{' (wrapped over two lines)' if lines.length > 1}: exit #{st.exitstatus}, reported by id -- OK" unless failure
+  File.delete(File.join(dir, rel))
+  stage(dir)
+end
+
+def plant_failure(id, rel, status, combined)
+  if status.zero?
+    "planting #{id} in #{rel} did not turn the guard red"
+  elsif !combined.include?("#{rel}:")
+    "#{id} fired but did not name #{rel}:\n#{combined}"
+  elsif !combined.include?("[#{id}]")
+    "#{id} fired on #{rel} but was not reported under its own id:\n#{combined}"
+  end
+end
+
+def fixture_self_test(failures, dir)
+  build_fixture_repo(dir)
+  out = expect_fixture_green(failures, dir)
+  expect_exemptions_counted(failures, out)
+  red_cases.each { |kase| expect_plant_red(failures, dir, kase) }
+  _, _, st = run_guard_in(dir)
+  failures << 'the fixture tree did not return to exit 0 after the plants were removed' unless st.exitstatus.zero?
+end
+
+def check_real_tree_volume(failures, index)
   _, _, files, cites, = scan_repo(index)
   failures << "the real tree scanned #{files} files -- the file set is empty or nearly so" if files < 50
   failures << "the real tree examined #{cites} section citations -- the section arm is vacuous here" if cites < 1
   puts "  real tree: #{files} tracked text file(s), #{cites} section citation(s) examined -- non-vacuous"
+end
 
+def run_self_test
+  failures = []
+  Dir.mktmpdir('check-publication-paths') { |dir| fixture_self_test(failures, dir) }
+  index, = resolve_index
+  check_real_tree_volume(failures, index)
   failures.concat(run_index_self_test(index))
-
   status = run_check(quiet: true)
   failures << "the guard is not green over this repository (exit #{status})" unless status.zero?
   puts "  real tree: check exits #{status}"
+  return self_test_ok if failures.empty?
 
-  if failures.empty?
-    puts
-    puts 'check-publication-paths --self-test: OK'
-    return 0
-  end
+  self_test_fail(failures)
+end
 
+def self_test_ok
+  puts
+  puts 'check-publication-paths --self-test: OK'
+  0
+end
+
+def self_test_fail(failures)
   $stdout.flush
   warn ''
   warn 'check-publication-paths --self-test: FAIL'

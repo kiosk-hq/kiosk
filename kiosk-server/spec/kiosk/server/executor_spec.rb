@@ -80,13 +80,16 @@ module ExecutorSpecReplayHelpers
   end
 
   def stub_fresh_chain
-    remint  = ->(mandate, id) { mandate.class.new(**mandate.to_h, id: id) }
-    intent2 = remint.call(intent, 'intent-2')
-    cart2   = Kiosk::Mandate::CartMandate.new(**cart.to_h, id: 'cart-2', intent_mandate_id: 'intent-2')
-    pay2    = Kiosk::Mandate::PaymentMandate.new(**payment.to_h, id: 'pay-2', cart_mandate_id: 'cart-2')
+    intent2, cart2, pay2 = fresh_chain
     allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent).and_return(intent2)
     allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(cart2)
     allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(pay2)
+  end
+
+  def fresh_chain
+    [Kiosk::Mandate::IntentMandate.new(**intent.to_h, id: 'intent-2'),
+     Kiosk::Mandate::CartMandate.new(**cart.to_h, id: 'cart-2', intent_mandate_id: 'intent-2'),
+     Kiosk::Mandate::PaymentMandate.new(**payment.to_h, id: 'pay-2', cart_mandate_id: 'cart-2')]
   end
 end
 
@@ -446,6 +449,12 @@ RSpec.describe Kiosk::Server::Executor, "reporting a handler's crash safely" do
       expect(message.lines.size).to eq(21)
     }
   end
+end
+
+RSpec.describe Kiosk::Server::Executor, "reporting a handler's crash safely" do
+  include_context 'executor spec: fake connection'
+
+  let(:logger) { instance_double(Logger, error: nil) }
 
   it 'does not turn one failure into two when the LOGGER is the thing that raises' do
     allow(Rails).to receive(:logger).and_return(logger)
@@ -587,6 +596,10 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay' do
       .with(cart, intent_row_id: 'intent-row').and_return('cart-row')
     pay
   end
+end
+
+RSpec.describe Kiosk::Server::Executor, 'verb :pay' do
+  include_context 'executor spec: verb :pay'
 
   it 'threads the SERVER-generated cart id into the payment mandate persist (FK chain)' do
     expect_any_instance_of(described_class).to receive(:persist_payment_mandate)
@@ -622,6 +635,10 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay per-assistant spending cap' d
     expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
     pay
   end
+end
+
+RSpec.describe Kiosk::Server::Executor, 'verb :pay per-assistant spending cap' do
+  include_context 'executor spec: verb :pay'
 
   it 'proceeds when spent + cart total is within the cap' do
     Kiosk.configuration.spending_cap = ->(**) { 5000 }
@@ -1283,17 +1300,7 @@ RSpec.describe Kiosk::Server::Executor, 'pay-path #settled_total_cents' do
   end
 end
 
-# ── §11.3: the currency `pay` ANSWERS with is the OPERATOR's (K-1257) ────
-#
-# WHY THIS IS ITS OWN BLOCK RATHER THAN AN EXAMPLE IN `verb :pay` ABOVE.
-# That block stubs `MandateVerifier.verify_*`, so the object the executor
-# echoes is one the spec handed it, already lower-cased. Composing "the
-# verifier folds" (mandate_verifier_spec) with "the executor echoes
-# `cart.currency`" (above) is an INFERENCE about two files, and the sentence
-# §11.3 now states normatively is about the byte a third party reads off the
-# wire. So this runs the REAL verifier on a really-signed chain and looks at
-# the answer.
-RSpec.describe Kiosk::Server::Executor, 'the currency a `pay` answers with (§11.3, K-1257)' do
+RSpec.shared_context 'executor spec: really signed chain' do
   include ExecutorSpecCurrencyHelpers
 
   let(:agent_key)  { OpenSSL::PKey::RSA.generate(2048) }
@@ -1318,6 +1325,13 @@ RSpec.describe Kiosk::Server::Executor, 'the currency a `pay` answers with (§11
       setup_required?: false
     )
   end
+end
+
+# The currency `pay` ANSWERS with is the operator's canonical one. The
+# `verb :pay` groups stub `MandateVerifier.verify_*`, so this group runs the
+# REAL verifier on a really signed chain and reads the answer.
+RSpec.describe Kiosk::Server::Executor, 'the currency a `pay` answers with (§11.3, K-1257)' do
+  include_context 'executor spec: really signed chain'
 
   it 'answers `eur` to a chain signed `EUR` throughout' do
     expect(answered('EUR')).to eq('eur')

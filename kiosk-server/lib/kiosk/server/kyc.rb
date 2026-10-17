@@ -85,63 +85,25 @@ module Kiosk
             "#{OPEN_WINDOW / 60} minutes after it was opened. A check your human refuses sends no event."
         end
 
-        def call(_args)
-          user_id = CurrentRequest.identity.user_id.to_s
-          refuse_over_cap!(user_id)
-
-          opened = begin
-            provider.open_verification(subject: user_id, claims: claims,
-                                       audience: Kiosk.configuration.kyc_audience.to_s,
-                                       callback_url: callback_url)
-          rescue Kiosk::KycProviders::Unavailable => e
-            FailureLog.report("#{NAME} could not open a verification", e)
-            raise Errors::WireError.new(
-              'the verification service this operator uses did not open a request',
-              code: 'action_failed',
-              hint: 'nothing about your call is wrong. Try `request_kyc` again shortly.'
-            )
-          end
-
-          execute("INSERT INTO #{table('kyc_requests')} (id, user_id, nonce) VALUES ($1, $2, $3)",
-                  opened.fetch(:request_id), user_id, opened.fetch(:nonce))
-          { 'request_id' => opened.fetch(:request_id), 'verification_url' => opened.fetch(:verification_url),
-            'status' => 'pending' }
-        end
+        def call(_args) = Verification.open(CurrentRequest.identity.user_id.to_s)
 
         def callback_url
           "#{Kiosk.current_issuer.to_s.chomp('/')}#{Kiosk.configuration.mount_path}/#{CALLBACK_PATH}"
         end
 
         # The provider's `POST <endpoint>/kyc/callback`.
-        def callback(body)
-          body       = body.transform_keys(&:to_s)
-          request_id = body['request_id'].to_s
-          kyc_jws    = body['kyc_jws'].to_s
-          raise Errors.missing_field('request_id') if request_id.empty?
-          raise Errors.missing_field('kyc_jws') if kyc_jws.empty?
-
-          row = open_request(request_id)
-          raise Errors::NotFound, 'no open verification has that request_id' unless row
-          raise Errors::Forbidden, "the callback's nonce does not match the verification" unless secure_equal?(row.fetch('nonce'), body['nonce'].to_s)
-
-          claims = KycVerifier.verify(raw_jws: kyc_jws, subject: row.fetch('user_id'))
-          raise Errors::Forbidden, "the KYC provider's attestation is addressed to another operator" unless provider.accepts?(claims.transform_keys(&:to_s))
-
-          approve!(row, claims[:attributes])
-          Events.emit(topic: TOPIC, subject: request_id, identity_scope: [row.fetch('user_id')],
-                      data: { 'request_id' => request_id, 'status' => 'approved', 'kyc_jws' => kyc_jws })
-        end
+        def callback(body) = Verification.complete(body.transform_keys(&:to_s))
 
         # Replaces the person's grants with the names `attributes` holds as
         # JSON `true`.
         def grant!(user_id, attributes)
-          connection.transaction { write_grants(user_id, attributes) }
+          Store.grant!(user_id, attributes)
         end
 
         # The gate: raises `kyc_required` unless the calling principal holds
         # every one of `kyc_claims`.
         def require!
-          return if granted?(CurrentRequest.identity.user_id)
+          return if Store.granted?(CurrentRequest.identity.user_id, claims.uniq)
 
           raise Errors::KycRequired.new(
             "this action requires the verified attributes #{claims.join(', ')}",
@@ -151,16 +113,6 @@ module Kiosk
 
         private
 
-        def granted?(user_id)
-          names = claims.uniq
-          return false if names.empty?
-
-          quoted = names.map { |name| connection.quote(name) }.join(', ')
-          rows = execute("SELECT count(*) AS n FROM #{table('kyc_attributes')} " \
-                         "WHERE user_id = $1 AND name IN (#{quoted})", user_id.to_s)
-          rows.first.fetch('n').to_i == names.size
-        end
-
         # Names only a path this origin serves.
         def gate_hint
           return REQUEST_HINT if provider
@@ -169,55 +121,146 @@ module Kiosk
           CLOSED_HINT
         end
 
-        def refuse_over_cap!(user_id)
-          open = execute("SELECT count(*) AS n FROM #{table('kyc_requests')} WHERE user_id = $1 " \
-                         'AND approved_at IS NULL AND created_at > now() - make_interval(secs => $2)',
-                         user_id, OPEN_WINDOW).first.fetch('n').to_i
-          return if open < MAX_OPEN
+        def owner_of(request_id) = Store.owner_of(request_id)
+      end
 
-          raise Errors::WireError.new(
-            'too many verifications are already open for this account',
-            code: 'quota_exceeded',
-            hint: "at most #{MAX_OPEN} may be open at once; one stops counting when your human " \
-                  "approves it, and in any case #{OPEN_WINDOW / 60} minutes after it was opened. " \
-                  "Wait for the #{TOPIC} event on a page you were already given."
-          )
-        end
+      # Opens a verification at the provider and completes it from the provider's callback.
+      module Verification
+        class << self
+          def open(user_id)
+            refuse_over_cap!(user_id)
+            opened = open_verification(user_id)
+            Store.insert_request(opened.fetch(:request_id), user_id, opened.fetch(:nonce))
+            { 'request_id' => opened.fetch(:request_id), 'verification_url' => opened.fetch(:verification_url),
+              'status' => 'pending' }
+          end
 
-        def open_request(request_id)
-          execute("SELECT id, user_id::text AS user_id, nonce FROM #{table('kyc_requests')} " \
-                  'WHERE id = $1 AND approved_at IS NULL', request_id).first
-        end
+          def complete(body)
+            request_id = required_field(body, 'request_id')
+            kyc_jws    = required_field(body, 'kyc_jws')
+            row = matching_request(request_id, body['nonce'].to_s)
+            Store.approve!(row, verified_claims(kyc_jws, row)[:attributes])
+            Events.emit(topic: TOPIC, subject: request_id, identity_scope: [row.fetch('user_id')],
+                        data: { 'request_id' => request_id, 'status' => 'approved', 'kyc_jws' => kyc_jws })
+          end
 
-        def owner_of(request_id)
-          execute("SELECT user_id::text AS user_id FROM #{table('kyc_requests')} WHERE id = $1",
-                  request_id.to_s).first&.fetch('user_id')
-        end
+          private
 
-        def approve!(row, attributes)
-          connection.transaction do
-            execute("UPDATE #{table('kyc_requests')} SET approved_at = now() WHERE id = $1", row.fetch('id'))
-            write_grants(row.fetch('user_id'), attributes)
+          def verified_claims(kyc_jws, row)
+            claims = KycVerifier.verify(raw_jws: kyc_jws, subject: row.fetch('user_id'))
+            raise Errors::Forbidden, "the KYC provider's attestation is addressed to another operator" unless Kyc.provider.accepts?(claims.transform_keys(&:to_s))
+
+            claims
+          end
+
+          def open_verification(user_id)
+            Kyc.provider.open_verification(subject: user_id, claims: Kyc.claims,
+                                           audience: Kiosk.configuration.kyc_audience.to_s,
+                                           callback_url: Kyc.callback_url)
+          rescue Kiosk::KycProviders::Unavailable => e
+            FailureLog.report("#{NAME} could not open a verification", e)
+            raise Errors::WireError.new(
+              'the verification service this operator uses did not open a request',
+              code: 'action_failed',
+              hint: 'nothing about your call is wrong. Try `request_kyc` again shortly.'
+            )
+          end
+
+          def refuse_over_cap!(user_id)
+            return if Store.open_count(user_id, OPEN_WINDOW) < MAX_OPEN
+
+            raise Errors::WireError.new(
+              'too many verifications are already open for this account',
+              code: 'quota_exceeded',
+              hint: "at most #{MAX_OPEN} may be open at once; one stops counting when your human " \
+                    "approves it, and in any case #{OPEN_WINDOW / 60} minutes after it was opened. " \
+                    "Wait for the #{TOPIC} event on a page you were already given."
+            )
+          end
+
+          def required_field(body, name)
+            value = body[name].to_s
+            raise Errors.missing_field(name) if value.empty?
+
+            value
+          end
+
+          # The open verification `request_id` names, if `nonce` is the one it was opened with.
+          def matching_request(request_id, nonce)
+            row = Store.open_request(request_id)
+            raise Errors::NotFound, 'no open verification has that request_id' unless row
+            raise Errors::Forbidden, "the callback's nonce does not match the verification" unless secure_equal?(row.fetch('nonce'), nonce)
+
+            row
+          end
+
+          def secure_equal?(expected, given)
+            !expected.to_s.empty? && expected.bytesize == given.bytesize &&
+              OpenSSL.fixed_length_secure_compare(expected, given)
           end
         end
+      end
 
-        def write_grants(user_id, attributes)
-          execute("DELETE FROM #{table('kyc_attributes')} WHERE user_id = $1", user_id.to_s)
-          execute("INSERT INTO #{table('kyc_attributes')} (user_id, name) " \
-                  "SELECT $2, key FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb",
-                  JSON.generate(attributes || {}), user_id.to_s)
+      # The `kyc_requests` and `kyc_attributes` tables.
+      module Store
+        class << self
+          def insert_request(request_id, user_id, nonce)
+            execute("INSERT INTO #{table('kyc_requests')} (id, user_id, nonce) VALUES ($1, $2, $3)",
+                    request_id, user_id, nonce)
+          end
+
+          def open_count(user_id, window)
+            execute("SELECT count(*) AS n FROM #{table('kyc_requests')} WHERE user_id = $1 " \
+                    'AND approved_at IS NULL AND created_at > now() - make_interval(secs => $2)',
+                    user_id, window).first.fetch('n').to_i
+          end
+
+          def open_request(request_id)
+            execute("SELECT id, user_id::text AS user_id, nonce FROM #{table('kyc_requests')} " \
+                    'WHERE id = $1 AND approved_at IS NULL', request_id).first
+          end
+
+          def owner_of(request_id)
+            execute("SELECT user_id::text AS user_id FROM #{table('kyc_requests')} WHERE id = $1",
+                    request_id.to_s).first&.fetch('user_id')
+          end
+
+          def approve!(row, attributes)
+            connection.transaction do
+              execute("UPDATE #{table('kyc_requests')} SET approved_at = now() WHERE id = $1", row.fetch('id'))
+              write_grants(row.fetch('user_id'), attributes)
+            end
+          end
+
+          def grant!(user_id, attributes)
+            connection.transaction { write_grants(user_id, attributes) }
+          end
+
+          # True when the person holds every one of `names`; false for none.
+          def granted?(user_id, names)
+            return false if names.empty?
+
+            quoted = names.map { |name| connection.quote(name) }.join(', ')
+            rows = execute("SELECT count(*) AS n FROM #{table('kyc_attributes')} " \
+                           "WHERE user_id = $1 AND name IN (#{quoted})", user_id.to_s)
+            rows.first.fetch('n').to_i == names.size
+          end
+
+          private
+
+          def write_grants(user_id, attributes)
+            execute("DELETE FROM #{table('kyc_attributes')} WHERE user_id = $1", user_id.to_s)
+            execute("INSERT INTO #{table('kyc_attributes')} (user_id, name) " \
+                    "SELECT $2, key FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb",
+                    JSON.generate(attributes || {}), user_id.to_s)
+          end
+
+          def table(name) = connection.quote_table_name("#{Kiosk.configuration.schema}.#{name}")
+
+          def execute(sql, *binds) = connection.exec_query(sql, 'Kiosk KYC', binds).to_a
+
+          def connection = ::ActiveRecord::Base.lease_connection
         end
-
-        def secure_equal?(expected, given)
-          !expected.to_s.empty? && expected.bytesize == given.bytesize &&
-            OpenSSL.fixed_length_secure_compare(expected, given)
-        end
-
-        def table(name) = connection.quote_table_name("#{Kiosk.configuration.schema}.#{name}")
-
-        def execute(sql, *binds) = connection.exec_query(sql, 'Kiosk KYC', binds).to_a
-
-        def connection = ::ActiveRecord::Base.lease_connection
       end
     end
   end

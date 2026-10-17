@@ -10,72 +10,27 @@ module Kiosk
     module KycVerifier
       # Named once for the decode and the published hint.
       REQUIRED_CLAIMS = %w[exp iss aud sub].freeze
+      SIGNATURE_HINT  = 'an attestation is a compact RS256 JWS signed by the issuer this origin ' \
+                        'is configured to trust'
+      SUBJECT_HINT    = "sub must name the principal: the caller's at POST <endpoint>/agents/kyc, " \
+                        "the open verification's at the callback"
 
       module_function
 
       def verify(raw_jws:, subject:)
-        config = Kiosk.configuration
-        key    = config.kyc_public_key
-
-        if key.nil?
-          raise Errors::ModuleNotServed.new(
-            'this operator does not serve the KYC module',
-            hint: 'no KYC attestation is accepted at this origin; retrying will not help. ' \
-                  'An operator that means to serve KYC sets Kiosk.configuration.kyc_public_key.'
-          )
-        end
-
-        payload, = ::JWT.decode(
-          raw_jws, key, true,
-          algorithms: ['RS256'],
-          verify_expiration: true,
-          required_claims: REQUIRED_CLAIMS
-        )
-        payload = payload.transform_keys(&:to_sym)
-
-        if payload[:iss] != config.kyc_issuer
-          raise Errors::Forbidden.new(
-            'KYC attestation issuer mismatch',
-            hint: "expected #{config.kyc_issuer.inspect}, got #{payload[:iss].inspect}"
-          )
-        end
-
+        config  = Kiosk.configuration
+        payload = decode(raw_jws, config)
+        check_issuer!(payload, config)
         # Binds the attestation to this operator.
         if payload[:aud].to_s != config.kyc_audience.to_s
-          raise Errors::Forbidden.new(
-            'KYC attestation audience mismatch',
-            hint: "aud must equal this operator's kyc_audience " \
-                  "(expected #{config.kyc_audience.inspect}, got #{payload[:aud].inspect})"
-          )
+          raise Errors::Forbidden.new('KYC attestation audience mismatch',
+                                      hint: audience_hint(payload, config))
         end
 
-        # A bigint-PK host's subject is an Integer.
-        unless payload[:sub].to_s == subject.to_s
-          raise Errors::Forbidden.new(
-            'KYC attestation subject mismatch',
-            hint: "sub must name the principal: the caller's at POST <endpoint>/agents/kyc, " \
-                  "the open verification's at the callback"
-          )
-        end
-
-        raise Errors::Forbidden, 'kyc level not verified' unless payload[:level] == 'verified'
+        check_subject!(payload, subject)
 
         payload[:attributes] = verified_attributes(payload[:attributes])
-
         payload
-      rescue ::JWT::ExpiredSignature
-        raise Errors::Forbidden, 'KYC attestation expired'
-      rescue ::JWT::MissingRequiredClaim
-        raise Errors::Forbidden.new(
-          'KYC attestation missing a required claim',
-          hint: "an attestation carries #{REQUIRED_CLAIMS.join(', ')}"
-        )
-      rescue ::JWT::DecodeError
-        raise Errors::Forbidden.new(
-          'KYC attestation signature invalid',
-          hint: 'an attestation is a compact RS256 JWS signed by the issuer this origin ' \
-                'is configured to trust'
-        )
       end
 
       # The names granted as literal `true`; `{}` when absent; a non-object
@@ -89,6 +44,54 @@ module Kiosk
           acc[name.to_s] = true if value == true
         end
       end
+
+      # The verified payload with symbol keys.
+      def decode(raw_jws, config)
+        payload, = ::JWT.decode(raw_jws, public_key!(config), true,
+                                algorithms: ['RS256'], verify_expiration: true, required_claims: REQUIRED_CLAIMS)
+        payload.transform_keys(&:to_sym)
+      rescue ::JWT::ExpiredSignature
+        raise Errors::Forbidden, 'KYC attestation expired'
+      rescue ::JWT::MissingRequiredClaim
+        raise Errors::Forbidden.new('KYC attestation missing a required claim', hint: "an attestation carries #{REQUIRED_CLAIMS.join(', ')}")
+      rescue ::JWT::DecodeError
+        raise Errors::Forbidden.new('KYC attestation signature invalid', hint: SIGNATURE_HINT)
+      end
+
+      # Refused when this origin trusts no KYC issuer.
+      def public_key!(config)
+        key = config.kyc_public_key
+        return key unless key.nil?
+
+        raise Errors::ModuleNotServed.new(
+          'this operator does not serve the KYC module',
+          hint: 'no KYC attestation is accepted at this origin; retrying will not help. ' \
+                'An operator that means to serve KYC sets Kiosk.configuration.kyc_public_key.'
+        )
+      end
+
+      def check_issuer!(payload, config)
+        return if payload[:iss] == config.kyc_issuer
+
+        raise Errors::Forbidden.new(
+          'KYC attestation issuer mismatch',
+          hint: "expected #{config.kyc_issuer.inspect}, got #{payload[:iss].inspect}"
+        )
+      end
+
+      def audience_hint(payload, config)
+        "aud must equal this operator's kyc_audience " \
+          "(expected #{config.kyc_audience.inspect}, got #{payload[:aud].inspect})"
+      end
+
+      # Subject and level. A bigint-PK host's subject is an Integer.
+      def check_subject!(payload, subject)
+        raise Errors::Forbidden.new('KYC attestation subject mismatch', hint: SUBJECT_HINT) unless payload[:sub].to_s == subject.to_s
+
+        raise Errors::Forbidden, 'kyc level not verified' unless payload[:level] == 'verified'
+      end
+
+      private_class_method :decode, :public_key!, :check_issuer!, :audience_hint, :check_subject!
     end
   end
 end

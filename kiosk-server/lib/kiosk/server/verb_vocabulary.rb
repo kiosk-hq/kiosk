@@ -12,7 +12,6 @@ module Kiosk
 
       COMPARISONS = %i[== != eql? equal?].freeze
 
-      # `method_name` nil when `target` is itself the callable.
       def self.assert!(target, method_name, label)
         location = HookSource.location_for(target, method_name)
         return :unreadable if location.nil?
@@ -105,8 +104,6 @@ module Kiosk
         end
 
         def callable_for(target, method_name)
-          return target if method_name.nil?
-
           target.method(method_name) if target.respond_to?(method_name)
         end
 

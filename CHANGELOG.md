@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The proof-of-work toll is paid once per access token (`access_token_ttl`, 3600 s). Settlements and recorded visits count as recent spend; `reputation_factors` is gone.
+
 - 2026-10-18: A repeat of an unfinished `pay` chain charges again under the same key and records the missing settlement. A declined charge stops counting against the spending cap at once.
 
 - 2026-10-18: hoteling tells the guest's assistant when an unpaid hold lapses: `booking_confirmation` carries `cancelled` with reason `hold_lapsed`, once.

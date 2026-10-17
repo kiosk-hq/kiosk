@@ -127,6 +127,26 @@ it (`kiosk-pay-stripe` does). A charge refused with no money moved marks the
 cart declined: it stops counting against `spending_cap` at once, and a repeat of
 that chain answers `409 conflict`.
 
+### Proof of work
+
+Set a policy and the engine tolls the first call of each access token; the
+token then calls freely until it expires (`access_token_ttl`, 3600 seconds by
+default). The ready-made policy lowers the toll by what the customer spent here:
+
+```ruby
+Kiosk.configure do |c|
+  c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET")
+  c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 1.week)
+end
+```
+
+The engine counts the customer's settlements, and the visits you record when
+you honour a booking that takes no payment:
+
+```ruby
+Kiosk::Visit.record!(user_id: booking.user_id, value_cents: 45_00)
+```
+
 
 ## Upgrading
 

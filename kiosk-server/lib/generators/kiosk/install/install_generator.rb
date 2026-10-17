@@ -110,6 +110,11 @@ module Kiosk
         migration_template 'create_kiosk_auth_challenges.rb.tt',
                            'db/migrate/create_kiosk_auth_challenges.rb'
       end
+
+      def create_visits_migration
+        migration_template 'create_kiosk_visits.rb.tt',
+                           'db/migrate/create_kiosk_visits.rb'
+      end
     end
   end
 end

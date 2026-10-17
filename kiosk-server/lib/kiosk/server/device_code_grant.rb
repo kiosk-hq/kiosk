@@ -106,7 +106,7 @@ module Kiosk
           result = AccountBinding.bind!(public_key_pem: authorization.public_key_pem,
                                         user_id: authorization.user_id, requested_role: role)
           response = { ok: true, access_token: result[:access_token], token_type: 'Bearer',
-                       expires_in: JwtIssuer::DEFAULT_EXPIRES_IN }
+                       expires_in: Kiosk.configuration.access_token_ttl }
           # RFC 6749 §5.1: the granted scope is the approving human's role.
           response[:scope] = role if role
           response

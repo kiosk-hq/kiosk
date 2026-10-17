@@ -1,0 +1,16 @@
+# frozen_string_literal: true
+
+# Migration 011 — create kiosk.visits.
+# The visits the operator records as fulfilled (Kiosk::Visit.record!), which
+# lower the proof-of-work toll for a returning customer.
+class CreateKioskVisits < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def up
+    execute <<~'SQL'
+<%= ddl(:visits, user_id_type: user_id_type) %>
+    SQL
+  end
+
+  def down
+    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".visits)
+  end
+end

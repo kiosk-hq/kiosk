@@ -8,6 +8,7 @@ require 'kiosk/reputation/policy'
 require 'kiosk/reputation/backoff_store'
 require 'kiosk/reputation/policies/rate_and_reputation'
 require 'kiosk/reputation/policies/backoff'
+require 'kiosk/reputation/policies/recent_spend'
 
 module Kiosk
   # Policy and wire-challenge layer for proof of work, independent of any PoW

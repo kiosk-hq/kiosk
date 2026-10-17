@@ -25,7 +25,8 @@ module Kiosk
           claims = { sub: lookup_user_id(agent_id), agent_id: agent_id, actor: 'agent' }
           claims[:role] = role.to_s unless role.nil? || role.to_s.empty?
           JwtIssuer.issue(
-            claims: claims, audience: Kiosk.current_issuer, now: mint_instant(agent_id)
+            claims: claims, audience: Kiosk.current_issuer, now: mint_instant(agent_id),
+            expires_in: Kiosk.configuration.access_token_ttl
           )
         end
 

@@ -220,8 +220,7 @@ class MyPolicy < Kiosk::Reputation::Policy
   #   because branching on :action would otherwise be silent: it matches
   #   nothing, so the toll never applies to a write and no error, log line or
   #   test says so. kiosk-server does not let it be silent: assigning a
-  #   policy whose #challenge_for compares the verb against :action (or a
-  #   reputation_factors callable that does) raises
+  #   policy whose #challenge_for compares the verb against :action raises
   #   Kiosk::Server::Errors::ConfigurationError from
   #   `Kiosk.configure`, at boot, naming :run.
   # @param factors  [Factors] reputation inputs
@@ -236,6 +235,19 @@ end
 ```
 
 The base `Policy` class returns `nil` for every request (never challenge).
+
+### `Policies::RecentSpend` — one toll per session, lowered by recent spend
+
+```ruby
+c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 1.week)
+```
+
+Trust is 1.0 when the customer spent `trusted_at` cents or more within
+`within`, and falls logarithmically to 0 at no spend. The toll asks for
+`round(count * (1 - trust))` proofs (`count:` defaults to 1), at the Equihash
+gem's default params, so a trusted customer pays nothing. An operator that
+takes no payment records each fulfilled visit with
+`Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
 
 ### `Policies::RateAndReputation` — EXAMPLE (providers replace this)
 
@@ -361,7 +373,6 @@ The server gate (`Kiosk::Server::PowGate`) reads these config slots:
 | `reputation_policy` | `Kiosk::Reputation::Policy` instance (or duck type) | `nil` | Policy that decides when and how hard to challenge. `nil` = never challenge (zero overhead). |
 | `pow_secret` | String | required when policy is set | HMAC key for challenge signing. Load from env: `ENV.fetch("KIOSK_POW_SECRET")`. |
 | `pow_ttl` | Integer (seconds) | `300` | Challenge validity window. |
-| `reputation_factors` | `(identity:, verb:) → Factors` callable | returns `Factors.empty` | Host-supplied callable that gathers reputation context per request. |
 | `on_bad_proof` | `(identity:) → void` callable | no-op | Called when a submitted proof has a wrong nonce. Increment `bad_proof_count` here. |
 | `pow_spent_store` | `#claim`/`#release`/`#spent?`/`#mark_spent` | `Kiosk::Server::PowSpentStores::ActiveRecord` (the `kiosk.pow_spent` table) | Tracks spent challenge ids so a proof is accepted once, across every process and deploy. See kiosk-server's README, "Multi-process deployments". |
 
@@ -370,20 +381,18 @@ Kiosk.configure do |c|
   c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new
   c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET")
   c.pow_ttl           = 300
-  c.reputation_factors = ->(identity:, verb:) {
-    Kiosk::Reputation::Factors.new(
-      settled_purchases_count: identity.settled_purchases_count,
-      request_rate_per_min:    RateStore.rate(identity.id),
-      bad_proof_count:         identity.bad_proof_count,
-      kyc_level:               identity.kyc_level,
-      settled_purchases_cents: nil,
-      account_age_seconds:     nil,
-      dispute_count:           nil
-    )
-  }
-  c.on_bad_proof = ->(identity:) { identity.increment!(:bad_proof_count) }
+  c.on_bad_proof      = ->(identity:) { identity.increment!(:bad_proof_count) }
 end
 ```
+
+The engine supplies the factors. For a policy that answers `#within` (a window
+in seconds), it fills `settled_purchases_count` and `settled_purchases_cents`
+from the customer's own settlements and recorded visits in that window; for any
+other policy the factors are `Factors.empty`.
+
+The gate tolls once per access token: after one paid toll, every call made
+with that token proceeds until the token expires (`c.access_token_ttl`,
+default 3600 seconds).
 
 ## Honesty / guardrails
 

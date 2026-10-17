@@ -970,13 +970,6 @@ RSpec.describe Kiosk::Server::PowGate, 'new config slots (defaults)' do
     expect(Kiosk.configuration.pow_spent_store).to be_a(Kiosk::Server::PowSpentStores::ActiveRecord)
   end
 
-  it 'reputation_factors default returns Factors.empty when kiosk-reputation is loaded' do
-    cb = Kiosk.configuration.reputation_factors
-    expect(cb).to respond_to(:call)
-    result = cb.call(identity: identity, verb: :query)
-    expect(result).to be_a(Kiosk::Reputation::Factors)
-  end
-
   it 'pow_spent_store is fresh after Kiosk.reset!' do
     store_before = Kiosk.configuration.pow_spent_store
     Kiosk.reset!
@@ -1217,5 +1210,41 @@ RSpec.describe 'Kiosk::Server::PowGate.proofs_from_header (b3 dual-accept)' do
   it 'raises Errors::BadRequest with a Kiosk-PoW hint on malformed JSON' do
     expect { parse.call('{not json') }
       .to raise_error(Kiosk::Server::Errors::BadRequest, /Kiosk-PoW/)
+  end
+end
+
+# One paid toll buys every call made with that access token, until it expires.
+RSpec.describe Kiosk::Server::PowGate, 'the session toll' do
+  include PowGateSpecHelpers
+
+  def token_identity(jti) = build_identity(claims: { jti: jti, exp: Time.now.to_i + 3600 })
+
+  def pay_once
+    challenge = issue_challenge_via_gate
+    described_class.gate(identity: identity, command: 'query', body: { name: 'menu' },
+                         pow: { challenge: challenge, nonce: solve_nonce(challenge) })
+  end
+
+  before { configure_with_policy(always_challenge_policy) }
+
+  it 'lets every later call with the paid token through, without a proof' do
+    @identity = token_identity('t-1')
+    pay_once
+
+    expect(described_class.gate(identity: identity, command: 'run', body: { name: 'order' }, pow: nil)).to eq(:proceed)
+  end
+
+  it 'tolls a new token again' do
+    @identity = token_identity('t-1')
+    pay_once
+    @identity = token_identity('t-2')
+
+    expect(issue_challenge_via_gate).to include(:id, :sig)
+  end
+
+  it 'tolls every call of a caller with no token id' do
+    pay_once
+
+    expect(issue_challenge_via_gate).to include(:id, :sig)
   end
 end

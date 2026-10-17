@@ -142,15 +142,6 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
 end
 
 RSpec.describe Kiosk::Server::VerbVocabulary do
-  it 'refuses a reputation_factors callable that branches on :action' do
-    factors = ->(verb:, **) { Kiosk::Reputation::Factors.empty if verb == :action }
-
-    expect { Kiosk.configure { |c| c.reputation_factors = factors } }
-      .to raise_error(Kiosk::Server::Errors::ConfigurationError, /reputation_factors/)
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbVocabulary do
   include VerbVocabularySpec
 
   # ── the false-positive control ─────────────────────────────────────────────

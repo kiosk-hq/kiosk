@@ -188,9 +188,9 @@ end
 RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations' do
   include_context 'install generator spec: host app'
 
-  it 'creates exactly the nine canonical migrations' do
+  it 'creates exactly the ten canonical migrations' do
     invoke!
-    expect(migrations.size).to eq(9)
+    expect(migrations.size).to eq(10)
     basenames = migrations.map { |p| File.basename(p) }
     expect(basenames).to include(
       a_string_ending_with('_create_kiosk_schema.rb'),
@@ -201,7 +201,8 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations' do
       a_string_ending_with('_create_kiosk_events.rb'),
       a_string_ending_with('_create_kiosk_pow_spent.rb'),
       a_string_ending_with('_create_kiosk_revocations.rb'),
-      a_string_ending_with('_create_kiosk_auth_challenges.rb')
+      a_string_ending_with('_create_kiosk_auth_challenges.rb'),
+      a_string_ending_with('_create_kiosk_visits.rb')
     )
   end
 end
@@ -222,11 +223,27 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations shape and order'
     expect(basenames).not_to include(a_string_starting_with('rebuild_'), a_string_starting_with('add_'))
   end
 
-  it 'orders the migration timestamps in 001 → 010 sequence' do
+  it 'orders the migration timestamps in 001 → 011 sequence' do
     invoke!
     timestamps = migrations.map { |p| File.basename(p).split('_').first.to_i }
     expect(timestamps).to eq(timestamps.sort)
-    expect(timestamps.uniq.size).to eq(9) # strictly ascending, no collisions
+    expect(timestamps.uniq.size).to eq(10) # strictly ascending, no collisions
+  end
+end
+
+RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 011 create_kiosk_visits' do
+  include_context 'install generator spec: host app'
+
+  let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_visits.rb') } }
+
+  it "writes visits_sql's DDL for the configured schema and user id type" do
+    invoke!(%w[--schema=ksk --user_id_type=bigint])
+    expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.visits_sql(schema: 'ksk', user_id_type: :bigint)}\n")
+  end
+
+  it 'drops the table on down' do
+    invoke!(%w[--schema=ksk])
+    expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".visits))
   end
 end
 

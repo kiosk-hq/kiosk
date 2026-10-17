@@ -282,6 +282,22 @@ module Kiosk
         SQL
       end
 
+      # 011: the visits an operator records as fulfilled; reputation counts their value.
+      def visits_sql(schema: nil, user_id_type: nil)
+        schema ||= Kiosk.configuration.schema
+        col_type = user_id_cast(user_id_type || Kiosk.configuration.user_id_type)
+
+        <<~SQL.strip
+          CREATE TABLE IF NOT EXISTS "#{schema}".visits (
+            id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id     #{col_type} NOT NULL,
+            value_cents bigint NOT NULL CHECK (value_cents >= 0),
+            visited_at  timestamptz NOT NULL DEFAULT now()
+          );
+          CREATE INDEX IF NOT EXISTS idx_visits_user_id ON "#{schema}".visits (user_id, visited_at);
+        SQL
+      end
+
       # 010: each public key's outstanding auth challenge; the primary key keeps it single.
       def auth_challenge_sql(schema: nil)
         schema ||= Kiosk.configuration.schema

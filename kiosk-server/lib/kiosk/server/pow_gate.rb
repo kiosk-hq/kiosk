@@ -6,7 +6,9 @@ require 'json'
 module Kiosk
   module Server
     # The proof-of-work toll, in front of every verb that reaches the executor.
-    # With no `reputation_policy` it returns `:proceed` and touches nothing;
+    # It is paid once per access token: after one paid toll, every call made
+    # with that token proceeds until the token expires. With no
+    # `reputation_policy` it returns `:proceed` and touches nothing;
     # `kiosk-reputation` is required only when a policy is set.
     module PowGate
       module_function
@@ -24,25 +26,40 @@ module Kiosk
       def gate(identity:, command:, body:, pow:, method: 'POST', verb: nil) # rubocop:disable Metrics/ParameterLists -- the wire controller and the specs pass these six by name
         config = Kiosk.configuration
         policy = config.reputation_policy
-        return :proceed if policy.nil?
+        return :proceed if policy.nil? || session_paid?(config, identity)
 
         secret = pow_secret!(config)
-        spec   = toll_for(policy, config, identity, command.to_sym)
+        spec   = toll_for(policy, identity, command.to_sym)
         return :proceed if spec.nil?
 
-        fp   = request_fingerprint(method: method, verb: verb || command, body: body)
-        toll = PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config,
-                           on_bad_proof: bad_proof_hook(config, identity))
-        # Optional policy hook, reached only after a real solve.
-        toll.collect!(pow).tap { policy.on_proof_verified(identity: identity) if policy.respond_to?(:on_proof_verified) }
+        fp = request_fingerprint(method: method, verb: verb || command, body: body)
+        PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config, on_bad_proof: bad_proof_hook(config, identity))
+               .collect!(pow).tap { paid(policy, config, identity) }
+      end
+
+      def session_paid?(config, identity)
+        session = session_id(identity)
+        !session.nil? && config.pow_spent_store.spent?(session)
+      end
+
+      # The token's session is paid; the optional policy hook is reached only after a real solve.
+      def paid(policy, config, identity)
+        session = session_id(identity)
+        config.pow_spent_store.mark_spent(session, identity.claims[:exp]) if session
+        policy.on_proof_verified(identity: identity) if policy.respond_to?(:on_proof_verified)
+      end
+
+      # The access token a toll pays for, by its `jti`, or nil for a caller without one.
+      def session_id(identity)
+        claims = identity&.claims || {}
+        "session:#{claims[:jti]}" if claims[:jti] && claims[:exp]
       end
 
       def bad_proof_hook(config, identity) = -> { config.on_bad_proof.call(identity: identity) }
 
       # The policy's toll for this caller and verb, or nil for none.
-      def toll_for(policy, config, identity, verb)
-        factors = config.reputation_factors.call(identity: identity, verb: verb)
-        policy.challenge_for(identity: identity, verb: verb, factors: factors)
+      def toll_for(policy, identity, verb)
+        policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
       end
 
       def pow_secret!(config)

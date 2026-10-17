@@ -108,16 +108,6 @@ module Kiosk
           @pow_ttl ||= 300
         end
 
-        # `(identity:, verb:) → Kiosk::Reputation::Factors`. Default: empty factors.
-        def reputation_factors=(value)
-          VerbVocabulary.assert!(value, nil, 'reputation_factors callable') unless value.nil?
-          @reputation_factors = value
-        end
-
-        def reputation_factors
-          @reputation_factors ||= ->(**) { ::Kiosk::Reputation::Factors.empty }
-        end
-
         # `(identity:)`, called on a cryptographically invalid proof. Default: no-op.
         attr_writer :on_bad_proof
 
@@ -324,6 +314,13 @@ module Kiosk
           LAZY_STORE_MUTEX.synchronize do
             @auth_challenge_store ||= Kiosk::Server::AuthChallengeStores::ActiveRecord.new
           end
+      end
+
+      # Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
+      attr_writer :access_token_ttl
+
+      def access_token_ttl
+        @access_token_ttl ||= JwtIssuer::DEFAULT_EXPIRES_IN
       end
 
       # Seconds between `GET /auth/challenge` and the signed POST. Default covers

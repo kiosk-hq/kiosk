@@ -222,6 +222,16 @@ def oauth_post(path, form)
   end]
 end
 
+# The human approves `user_code` on the verify page; returns that page.
+def approve_on_verify_page(session, user_code)
+  page = session.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
+  form = { 'user_code' => user_code, 'decision' => 'approve' }
+  csrf = session.csrf_token(page.body)
+  form['authenticity_token'] = csrf if csrf
+  session.post_form('/kiosk/oauth/device/verify', form)
+  page
+end
+
 # Open a ceremony, approve it on the verify page as `session`'s human, poll once.
 # Returns [authorization_http, poll_http, token_or_nil, verify_page_html].
 def claim_ceremony(session, key, pem, extra = {})
@@ -229,13 +239,7 @@ def claim_ceremony(session, key, pem, extra = {})
                       { 'client_id' => 'redteam-claim', 'public_key' => pem }.merge(extra))
   return [rc, nil, nil, nil] unless rc == 200
 
-  user_code = da.fetch('user_code')
-  page = session.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
-  form = { 'user_code' => user_code, 'decision' => 'approve' }
-  csrf = session.csrf_token(page.body)
-  form['authenticity_token'] = csrf if csrf
-  session.post_form('/kiosk/oauth/device/verify', form)
-
+  page = approve_on_verify_page(session, da.fetch('user_code'))
   rc_poll, tok = oauth_post('/kiosk/oauth/token',
                             { 'grant_type' => DEVICE_GRANT,
                               'device_code' => da.fetch('device_code'),

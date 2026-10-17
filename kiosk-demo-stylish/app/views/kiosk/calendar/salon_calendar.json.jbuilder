@@ -2,7 +2,7 @@
 
 json.array! @appointments do |appointment|
   json.extract! appointment, :id, :salon_id
-  json.partial! 'clock', appointment: appointment
+  json.partial! 'kiosk/appointments/clock', appointment: appointment
   json.service_id appointment.service_id
   json.service appointment.service&.name
   json.price_cents appointment.price_cents

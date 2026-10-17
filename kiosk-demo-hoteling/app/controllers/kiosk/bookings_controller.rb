@@ -19,10 +19,9 @@ module Kiosk
     end
 
     topic :booking_confirmation do
-      description 'A booking is settled one way or the other: `confirmed`, with the code the guest gives at the ' \
-                  'desk, or `cancelled` with its `reason`: `property_declined`, the hotel declined a paid booking ' \
-                  'and the `refund` goes to the card that paid; `hold_lapsed`, the hold went unpaid past its ' \
-                  'pay-by time and nothing was charged.'
+      description '`confirmed`, with the code the guest gives at the desk, or `cancelled` with its `reason`: ' \
+                  '`property_declined` (the hotel declined a paid booking; `refund` goes to the card that paid) ' \
+                  'or `hold_lapsed` (unpaid past its pay-by time; nothing was charged).'
       payload_schema type: 'object', additionalProperties: false,
                      properties: { booking_id: { type: 'string', format: 'uuid' },
                                    status: { enum: %w[confirmed cancelled] },
@@ -33,8 +32,7 @@ module Kiosk
                                                amount_cents: { type: 'integer' },
                                                currency: { type: 'string' },
                                                psp_reference: { type: 'string' },
-                                               reverses: { type: 'string',
-                                                           description: 'The charge this refund reverses.' }
+                                               reverses: { type: 'string', description: 'The charge this refund reverses.' }
                                              } } },
                      required: %w[booking_id status]
       example booking_id: BOOKING_ID, status: 'confirmed', confirmation_code: '5d1c9e04-8f2b-4a6e-b3c7-2e9f0a4d6b18'

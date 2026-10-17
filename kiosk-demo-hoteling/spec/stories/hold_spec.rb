@@ -3,14 +3,6 @@
 require 'story_helper'
 
 RSpec.describe 'A hold nobody pays for', type: :story do
-  def lapse_notices(booking)
-    ActiveRecord::Base.connection.select_value(
-      ActiveRecord::Base.sanitize_sql_array(
-        ["SELECT count(*) FROM kiosk.events WHERE topic = 'booking_confirmation' AND subject = ?", booking['booking_id']]
-      )
-    )
-  end
-
   it 'an unpaid hold past its pay-by time frees the room for another guest, and its owner can no longer pay' do
     ada = a_guest
     ben = a_guest
@@ -38,8 +30,10 @@ RSpec.describe 'A hold nobody pays for', type: :story do
     expect(late.detail).to include('pay-by time passed')
     expect(Booking.find(held['booking_id'])).to be_unpaid
   end
+end
 
-  it "the hold's pay-by time cancels it and tells its owner once, with no other guest asking for the room" do
+RSpec.describe 'A hold nobody pays for', 'at its pay-by time', type: :story do
+  it 'is cancelled, and its owner is told once' do
     ada = a_guest
     held = ada.reserves
     ada.listens_for(:booking_confirmation)
@@ -53,10 +47,13 @@ RSpec.describe 'A hold nobody pays for', type: :story do
     expect(ada.hears(:booking_confirmation, about: held['booking_id']))
       .to eq('booking_id' => held['booking_id'], 'status' => 'cancelled', 'reason' => 'hold_lapsed')
     expect(Booking.find(held['booking_id'])).to be_cancelled
-    expect(lapse_notices(held)).to eq(1)
+    notices = "SELECT count(*) FROM kiosk.events WHERE subject = #{Booking.connection.quote(held['booking_id'])}"
+    expect(Booking.connection.select_value(notices)).to eq(1)
   end
+end
 
-  it 'a paid hold is not cancelled at its pay-by time' do
+RSpec.describe 'A paid hold', 'at its pay-by time', type: :story do
+  it 'is not cancelled' do
     ada = a_guest
     held = ada.reserves
     expect(ada.pays_for(held)).to be_ok

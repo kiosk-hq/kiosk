@@ -11,6 +11,10 @@ module Kiosk
       DEFAULT_EXPIRES_IN = 3600
       DEFAULT_LEEWAY = 60
 
+      # A `kid` not in the JWKS: the signature cannot be checked.
+      UNKNOWN_KID = ->(e) { e.message.include?('public key for kid') || e.message.include?('Could not find public key') }
+      private_constant :UNKNOWN_KID
+
       class Error < StandardError; end
       class SignatureError < Error; end
       class ExpiredError < Error; end
@@ -21,63 +25,57 @@ module Kiosk
 
       module_function
 
+      # rubocop:disable Metrics/ParameterLists -- a keyword-only public API; callers pass each option by name
       def issue(claims:, audience:, signing_key: nil, issuer: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.now)
         signing_key ||= Kiosk.configuration.signing_key
         issuer      ||= Kiosk.current_issuer
         raise ArgumentError, 'issuer is required (set Kiosk.configuration.issuer or pass :issuer)' if issuer.nil? || issuer.empty?
         raise ArgumentError, 'signing_key must carry a private key for issuance' unless signing_key.private?
 
-        payload = claims.dup
-        payload[:iat] = now.to_i
-        payload[:nbf] = now.to_i
-        payload[:exp] = now.to_i + expires_in
-        payload[:iss] = issuer
-        payload[:aud] = audience
-        payload[:jti] ||= SecureRandom.uuid
-
-        ::JWT.encode(
-          payload,
-          signing_key.rsa,
-          ALGORITHM,
-          { kid: signing_key.kid, typ: 'JWT' }
-        )
+        payload = registered_claims(claims, issuer: issuer, audience: audience, issued_at: now.to_i, expires_in: expires_in)
+        ::JWT.encode(payload, signing_key.rsa, ALGORITHM, { kid: signing_key.kid, typ: 'JWT' })
       end
 
       # `revocation_store: nil` skips the revocation check.
       def verify(token:, jwks:, audience: nil, issuer: nil, leeway: DEFAULT_LEEWAY,
                  revocation_store: :from_config)
-        jwks_doc = normalize_jwks(jwks)
-
-        decoded, = ::JWT.decode(
-          token,
-          nil,
-          true,
-          jwks: jwks_doc,
-          algorithms: [ALGORITHM],
-          aud: audience,
-          iss: issuer,
-          verify_aud: !audience.nil?,
-          verify_iss: !issuer.nil?,
-          leeway: leeway
-        )
-
-        claims = symbolize(decoded)
-
+        claims = decode(token, normalize_jwks(jwks), audience: audience, issuer: issuer, leeway: leeway)
         store = revocation_store == :from_config ? configured_revocation_store : revocation_store
         raise RevokedError, 'access token revoked' if store&.revoked?(agent_id: claims[:agent_id], iat: claims[:iat])
 
         claims
-      rescue ::JWT::ExpiredSignature => e
-        raise ExpiredError, e.message
-      rescue ::JWT::InvalidAudError => e
-        raise AudienceError, e.message
-      rescue ::JWT::VerificationError, ::JWT::IncorrectAlgorithm => e
-        raise SignatureError, e.message
-      rescue ::JWT::DecodeError => e
-        # A `kid` not in the JWKS: the signature cannot be checked.
-        raise SignatureError, e.message if e.message.include?('public key for kid') || e.message.include?('Could not find public key')
+      end
+      # rubocop:enable Metrics/ParameterLists
 
-        raise InvalidError, e.message
+      def registered_claims(claims, issuer:, audience:, issued_at:, expires_in:)
+        payload = claims.dup
+        payload[:iat] = issued_at
+        payload[:nbf] = issued_at
+        payload[:exp] = issued_at + expires_in
+        payload[:iss] = issuer
+        payload[:aud] = audience
+        payload[:jti] ||= SecureRandom.uuid
+        payload
+      end
+
+      def decode(token, jwks, audience:, issuer:, leeway:)
+        decoded, = ::JWT.decode(
+          token, nil, true,
+          jwks: jwks, algorithms: [ALGORITHM], aud: audience, iss: issuer,
+          verify_aud: !audience.nil?, verify_iss: !issuer.nil?, leeway: leeway
+        )
+        symbolize(decoded)
+      rescue ::JWT::DecodeError => e
+        raise error_class_for(e), e.message
+      end
+
+      def error_class_for(error)
+        case error
+        when ::JWT::ExpiredSignature then ExpiredError
+        when ::JWT::InvalidAudError then AudienceError
+        when ::JWT::VerificationError, ::JWT::IncorrectAlgorithm, UNKNOWN_KID then SignatureError
+        else InvalidError
+        end
       end
 
       def normalize_jwks(input)
@@ -103,6 +101,7 @@ module Kiosk
       rescue StandardError
         nil
       end
+      private_class_method :registered_claims, :decode, :error_class_for
     end
   end
 end

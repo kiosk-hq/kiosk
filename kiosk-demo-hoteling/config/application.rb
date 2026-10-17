@@ -23,8 +23,7 @@ module KioskDemoHoteling
     config.active_record.dump_schemas = "public,kiosk"
 
     # The property's own decision: how often it declines, and how long it takes.
-    config.x.hoteling.decline_rate           = ENV.fetch("HOTELING_DECLINE_RATE", "0.2").to_f
-    config.x.hoteling.decision_delay_seconds =
-      ENV.fetch("HOTELING_DECISION_DELAY_SECONDS", rand(120..300).to_s).to_i
+    config.x.hoteling.decline_rate           = 0.2
+    config.x.hoteling.decision_delay_seconds = rand(120..300)
   end
 end

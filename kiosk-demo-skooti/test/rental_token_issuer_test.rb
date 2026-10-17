@@ -24,7 +24,7 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
 
   test "the known answer" do
     with_known_jti { assert_equal "#{MESSAGE}.#{SIGNATURE}", issue }
-    assert_equal PUBLIC_KEY, RentalTokenIssuer.public_key_raw32_hex
+    assert_equal PUBLIC_KEY, Kiosk.configuration.unlock_signing_key.public_to_der[-32..].unpack1("H*")
     assert_equal "SK-001", verify("#{MESSAGE}.#{SIGNATURE}")[:scooter_code]
   end
 
@@ -46,9 +46,10 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
     assert_nil verify("")
   end
 
-  test "the published public key verifies the signature" do
+  test "the public key verifies the signature" do
     message, _, signature = issue.rpartition(".")
-    assert OpenSSL::PKey.read(RentalTokenIssuer.public_key_pem).verify(nil, Base64.urlsafe_decode64(signature), message)
+    public_key = OpenSSL::PKey.read(Kiosk.configuration.unlock_signing_key.public_to_pem)
+    assert public_key.verify(nil, Base64.urlsafe_decode64(signature), message)
   end
 
   test "a field that would break the format is refused" do

@@ -119,16 +119,6 @@ module RentalTokenIssuer
       nil
     end
 
-    def public_key_pem
-      public_key.public_to_pem
-    end
-
-    # The 32 raw key bytes a lock is provisioned with: the tail of the DER encoding.
-    def public_key_raw32_hex
-      der = public_key.public_to_der
-      der[-32..].unpack1("H*")
-    end
-
     private
 
     def timestamp?(s)

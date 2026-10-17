@@ -7,7 +7,6 @@ require_relative "../config/environment"
 require "rails/test_help"
 require "kiosk/story_test"
 require "kiosk/test_helpers/stripe_mock"
-require_relative "../script/dev_unlock_key"
 require_relative "../script/lock_sim"
 
 # A rider's AI assistant: finds a vehicle nearby, reserves it, pays for the
@@ -31,6 +30,8 @@ class StoryTest < Kiosk::StoryTest
 
   def a_rider = a_customer(as: Rider)
 
-  # The lock on `vehicle`, which checks a rental token offline.
-  def the_lock_on(vehicle) = LockSim.new(scooter_code: vehicle, skooti_public_key: OpenSSL::PKey.read(DevUnlockKey.public_key_pem))
+  DEV_UNLOCK_PUBLIC_KEY = OpenSSL::PKey.read(OpenSSL::PKey.read(Rails.root.join("config/dev_unlock_key.pem").read).public_to_pem)
+
+  # The lock on `vehicle`, provisioned with the development key; it checks a rental token offline.
+  def the_lock_on(vehicle) = LockSim.new(scooter_code: vehicle, skooti_public_key: DEV_UNLOCK_PUBLIC_KEY)
 end

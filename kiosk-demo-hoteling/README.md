@@ -46,10 +46,7 @@ nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. **Registration is
 always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-new agent key pays one solve to register. Separately, a browse toll prices
-QUERIES after the first few free ones, and each `reserve_room` hold costs one
-proof — a metered toll, not a wall: an AI assistant pays a few seconds of compute
-to look deeper, a bulk scraper pays linearly and forever.
+new agent key pays one solve to register: a metered toll, not a wall.
 
 ## The human channel
 

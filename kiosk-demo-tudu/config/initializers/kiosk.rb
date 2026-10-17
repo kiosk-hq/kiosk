@@ -2,12 +2,6 @@
 
 require 'base64'
 require 'kiosk/user_identity_providers/devise'
-require 'kiosk/pow/equihash'
-require 'kiosk/reputation'
-
-Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
-EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
 
 # No payment_provider: tudu takes no money, so discovery advertises no `pay`.
 Kiosk.configure do |c|
@@ -35,7 +29,6 @@ Kiosk.configure do |c|
     from.memberships.delete_all
   }
 
-  c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
-  c.registration_pow_count  = 1
-  c.registration_pow_params = EQUIHASH_PARAMS
+  c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
+  c.registration_pow_count = 1
 end

@@ -3,6 +3,7 @@
 ENV['RAILS_ENV'] ||= 'test'
 
 require_relative '../config/environment'
+require 'kiosk/test_helpers/small_equihash'
 require 'rails/test_help'
 require 'kiosk/story_test'
 
@@ -20,15 +21,6 @@ class Diner < Kiosk::TestHelpers::Customer
   def bookings = asks(:my_bookings).rows.pluck('booking_id')
 end
 
-# Searching for a table is free unless a story turns the toll on;
-# registering is tolled as shipped.
 class StoryTest < Kiosk::StoryTest
-  SHIPPED_TOLL = Kiosk.configuration.reputation_policy
-
-  setup { toll(nil) }
-  teardown { toll(SHIPPED_TOLL) }
-
-  def toll(policy) = Kiosk.configuration.reputation_policy = policy
-
   def a_diner = a_customer(as: Diner)
 end

@@ -2,12 +2,6 @@
 
 require 'base64'
 require 'kiosk/user_identity_providers/devise'
-require 'kiosk/pow/equihash'
-require 'kiosk/reputation'
-
-Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
-EQUIHASH_PARAMS = Rails.configuration.x.equihash
 
 Kiosk.configure do |c|
   c.user_model = 'User'
@@ -27,13 +21,7 @@ end
 Kiosk.configure do |c|
   c.owner = {
     name: 'atablefor',
-    support: 'demo@kiosk.tech',
-    pow_difficulty: 'high',
-    pow_notice: 'beware: heavy proof-of-work. Signing up and calling here asks for Equihash ' \
-                'n=168 k=7 proofs (~1.3 GiB of memory per proof; ~10 s on a reference numpy ' \
-                'solver, measured on one M-series laptop core). This is on purpose: the cost ' \
-                'falls on the caller, not on the restaurant site, and keeps floods out. ' \
-                'Solve it with the solver the Kiosk skill pins.'
+    support: 'demo@kiosk.tech'
   }
   c.skill_url    = 'https://kiosk.tech/skill-v0.5.13.md'
   c.skill_sha256 = '786041de6e738cb55311eb852162509f23115227be9ab1c6837b9741840e990b'
@@ -41,37 +29,6 @@ end
 
 # The proof-of-work toll.
 Kiosk.configure do |c|
-  c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
-  c.pow_ttl                 = 300
-  c.registration_pow_count  = 1
-  c.registration_pow_params = EQUIHASH_PARAMS
-end
-
-# 0 confirmed bookings: 2 proofs · 1: 1 proof · 2+: free.
-Kiosk.configure do |c|
-  c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new(
-    proven_purchases_threshold: 2,
-    low_rate_threshold: 100,
-    base_count: 1,
-    count_min: 1,
-    count_max: 10,
-    rate_count_step: 1,
-    rate_step: 10,
-    unproven_count_bonus: 1,
-    bad_proof_count_factor: 3,
-    equihash_n: EQUIHASH_PARAMS[:n],
-    equihash_k: EQUIHASH_PARAMS[:k]
-  )
-  # The gate runs before the session context is set, so `Booking.own` cannot be used here.
-  c.reputation_factors = lambda { |identity:, **|
-    Kiosk::Reputation::Factors.new(
-      kyc_level: nil,
-      settled_purchases_count: Booking.confirmed.where(user_id: identity.user_id).count,
-      settled_purchases_cents: nil,
-      request_rate_per_min: 0,
-      account_age_seconds: nil,
-      dispute_count: nil,
-      bad_proof_count: 0
-    )
-  }
+  c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
+  c.registration_pow_count = 1
 end

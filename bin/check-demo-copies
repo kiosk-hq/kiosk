@@ -1593,7 +1593,6 @@ SPEC_UNITS = {
   'bookings' => { rule: :per_file, why: "Each demo's customer reads its own bookings back." },
   'browses' => { rule: :per_file, why: "Each demo's customer browses its own public listing." },
   'pays_for' => { rule: :per_file, why: "Each demo's quote: its own scope, total and line items." },
-  'guesses' => { rule: :per_file, why: 'Each toll story forges a wrong solution to its own challenges.' },
   'kiosk_origin' => { rule: :code, why: "The conformance origin where a demo's tests drive its handlers." },
   'assert_kiosk_refused' => { rule: :per_file, why: "Each helper's refusal assertion." },
   'NOON_UTC' => { rule: :code, why: 'The instant two clock tests pin.' },

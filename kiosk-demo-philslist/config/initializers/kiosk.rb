@@ -2,12 +2,6 @@
 
 require 'base64'
 require 'kiosk/user_identity_providers/devise'
-require 'kiosk/pow/equihash'
-require 'kiosk/reputation'
-
-Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
-EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
 
 # A classifieds board takes no money: no payment_provider, so `pay` is absent from discovery.
 Kiosk.configure do |c|
@@ -26,7 +20,6 @@ Kiosk.configure do |c|
   c.user_idp     = Kiosk::UserIdentityProviders::Devise.new
   c.sign_in_path = '/users/sign_in'
 
-  c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
-  c.registration_pow_count  = 1
-  c.registration_pow_params = EQUIHASH_PARAMS
+  c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
+  c.registration_pow_count = 1
 end

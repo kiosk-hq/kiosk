@@ -375,7 +375,7 @@ EXPECTED_SKIP_NAMES = [].freeze
 
 puts "\n── skooti redteam battery ──"
 puts "  base_url:              #{BASE_URL}"
-puts '  register gate:         Equihash n=96 k=5 ' \
+puts '  register gate:         Equihash ' \
      "(profile pow_difficulty: #{profile.pow_difficulty} → RegistrationWithoutPow " \
      "#{profile.pow_difficulty.positive? ? %(applicable) : %(SKIPPED)})"
 puts "  requires_kyc:          #{profile.requires_kyc}"

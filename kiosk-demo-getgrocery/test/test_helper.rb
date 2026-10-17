@@ -3,6 +3,7 @@
 ENV['RAILS_ENV'] ||= 'test'
 
 require_relative '../config/environment'
+require 'kiosk/test_helpers/small_equihash'
 require 'rails/test_help'
 require 'kiosk/test_helpers/conformance/in_process_origin'
 require 'kiosk/test_helpers/conformance/minitest'

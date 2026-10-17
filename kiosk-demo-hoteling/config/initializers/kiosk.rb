@@ -4,15 +4,6 @@ require 'base64'
 require 'stripe'
 require 'kiosk/payment_providers/stripe'
 require 'kiosk/user_identity_providers/devise'
-require 'kiosk/pow/equihash'
-require 'kiosk/reputation'
-
-Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
-EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
-
-# Availability queries per agent, in process.
-HOTELING_BROWSE_COUNT = Hash.new(0)
 
 Kiosk.configure do |c|
   c.user_model = 'User'
@@ -45,19 +36,8 @@ end
 
 # The proof-of-work toll.
 Kiosk.configure do |c|
-  c.pow_secret         = ENV.fetch('KIOSK_POW_SECRET')
-  c.pow_ttl            = 300
-  c.reputation_policy  = HotelingBrowsePolicy.new(EQUIHASH_PARAMS)
-  c.reputation_factors = lambda { |identity:, verb:|
-    HOTELING_BROWSE_COUNT[identity.agent_id] += 1 if verb == :query
-    Kiosk::Reputation::Factors.new(
-      kyc_level: nil, settled_purchases_count: nil, settled_purchases_cents: nil,
-      request_rate_per_min: HOTELING_BROWSE_COUNT[identity.agent_id],
-      account_age_seconds: nil, dispute_count: nil, bad_proof_count: 0
-    )
-  }
-  c.registration_pow_count  = 1
-  c.registration_pow_params = EQUIHASH_PARAMS
+  c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
+  c.registration_pow_count = 1
 end
 
 # The closed vocabularies behind the search_hotels enums and the seeds. A

@@ -31,15 +31,9 @@ drive it rather than a script, see "Watch it work" in `README.md`.
 
 A table operator's fear is not fraud but reservation-scalping: scripts that
 mass-claim prime-time two-tops to resell. Kiosk prices that at the door:
-
-- The `availability` query sits behind an Equihash
-  proof-of-work. A script probing inventory at scale pays a real per-query
-  cost; one diner's assistant pays once. A toll, not a hardware wall.
-- That toll falls as a booking history accrues:
-  two proofs unproven, one after a first confirmed booking, free with a real
-  history. A scalper renting identities pays every time, and the factor is a
-  `COUNT(*)` of confirmed bookings rather than a dial. `test/stories/toll_test.rb`
-  holds both.
+every new assistant pays an Equihash proof-of-work to register. One diner's
+assistant pays once; a script that rents a fresh identity for each claim pays
+every time. A toll, not a hardware wall.
 
 An assistant sees and cancels only its own bookings: `test/stories/privacy_test.rb`
 and `script/redteam_suite.rb` assert that a cross-tenant read, a cross-owner cancel and
@@ -59,8 +53,7 @@ It writes `config/initializers/kiosk.rb`, the `kiosk.*` migrations and a
 left is read in the directory rather than quoted here: the queries and actions
 named in that block — GET for a query, POST for an action — and
 `app/controllers/kiosk/{tables,bookings}_controller.rb`, the verbs as
-ordinary Rails controllers. The toll and the reputation policy are the
-initializer's.
+ordinary Rails controllers. The toll is the initializer's.
 
 No new human-facing login, no ceded customer relationship, no change to the
 site humans use.

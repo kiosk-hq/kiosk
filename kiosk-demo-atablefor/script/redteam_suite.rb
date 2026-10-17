@@ -23,7 +23,7 @@ DIEGO_UUID = DIEGO.user_id
 TOKEN_A    = DIEGO.token
 TOKEN_B    = BEA.token
 
-WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
+WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
 
 BATTERY = Kiosk::Redteam::Battery.new
 

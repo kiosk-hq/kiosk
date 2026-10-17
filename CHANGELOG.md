@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Every demo tolls registration only, at n=168 k=7: the per-demo query, browse and hold tolls are removed, and tests require `small_equihash`.
+
 - 2026-10-17: Registration proof-of-work runs at the Equihash default everywhere; `registration_pow_params` is gone, and only test setup may pick small params.
 
 - 2026-10-17: Settings live in the gem that reads them; `system_role` and `registration_difficulty=` are gone and initializers drop default lines. skooti reads its unlock key from `config.x`.

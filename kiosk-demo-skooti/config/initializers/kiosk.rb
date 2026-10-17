@@ -6,12 +6,6 @@ require 'stripe'
 require 'kiosk/payment_providers/stripe'
 require 'kiosk/kyc_providers/prove'
 require 'kiosk/user_identity_providers/devise'
-require 'kiosk/pow/equihash'
-require 'kiosk/reputation'
-
-Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
-EQUIHASH_PARAMS = { n: 96, k: 5 }.freeze
 
 Kiosk.configure do |c|
   c.user_model = 'User'
@@ -53,7 +47,6 @@ Kiosk.configure do |c|
   c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
   c.kyc_audience   = 'skooti'
 
-  c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
-  c.registration_pow_count  = 1
-  c.registration_pow_params = EQUIHASH_PARAMS
+  c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
+  c.registration_pow_count = 1
 end

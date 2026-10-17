@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: Demo lockfiles take the patched crass, loofah, mail, nokogiri, rails-html-sanitizer and websocket-driver releases.
+
+- 2026-10-17: `bin/lint` and CI run RuboCop with the default cops over the whole tree, bundler-audit over every lockfile and Brakeman over every demo.
+
 - 2026-10-17: Public methods nothing called are removed from kiosk-core, kiosk-server, kiosk-redteam and kiosk-test-support; hoteling drops two environment overrides nothing set.
 
 - 2026-10-17: Every demo renders its query and action answers with Jbuilder views; getgrocery no longer declares `order_payment`, a topic nothing emitted.

@@ -80,6 +80,12 @@ universal agent skill is `skill.md` on the same site.
 - Demos: `bin/rails db:reset` prepares one, `bin/rails test` (hoteling and
   kiosk-demo-prove: `bundle exec rspec`) tests it, and CI also runs its
   `script/redteam_suite.rb` against a started server. Postgres required.
+- Lint: `bin/lint` from the root bundle — RuboCop with the default cops (only
+  `Layout/LineLength` and `Style/Documentation` off) over the whole tree,
+  bundler-audit over every tracked `Gemfile.lock`, Brakeman over every demo app;
+  CI's `lint` job runs it. Fix an offense, do not disable the cop; a rare inline
+  `# rubocop:disable` carries its reason after `--`, and a Brakeman false
+  positive goes into that app's `config/brakeman.ignore` with a note.
 - Full e2e: `./e2e/run.sh` (Postgres + jq). CI: `.github/workflows/ci.yml`
   (gems matrix + demos matrix + e2e). A demo task's namespace says what it is:
   `check:` ASSERTS and goes red, `demo:` is one a person runs and reads. Which

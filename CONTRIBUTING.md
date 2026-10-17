@@ -96,6 +96,22 @@ run its self-test; if you add a rule to one, add an arm for it.
 bin/check-publication-paths --self-test
 ```
 
+**Lint and security.** The root bundle holds RuboCop, bundler-audit and
+Brakeman. `bin/lint` runs RuboCop over the whole tree with the one root
+`.rubocop.yml`, bundler-audit over every tracked `Gemfile.lock`, and Brakeman
+over every demo app:
+
+```bash
+bundle install
+bin/lint
+```
+
+RuboCop runs with its default cops; only `Layout/LineLength` and
+`Style/Documentation` are off. Fix an offense rather than disable the cop. An
+inline `# rubocop:disable` is for a line where the cop is wrong, and it carries
+its reason after `--`. A Brakeman false positive goes into that app's
+`config/brakeman.ignore` with a note.
+
 ## The merge gate
 
 Tests covering the change must be green before merge. For this repository that

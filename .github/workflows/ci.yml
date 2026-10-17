@@ -639,6 +639,24 @@ jobs:
           KIOSK_REQUIRE_SITE_SIBLING: "1"
         run: ./bin/check-solver-pin
 
+  # RuboCop over the whole tree, bundler-audit over every tracked lockfile and
+  # Brakeman over every Rails app; the root Gemfile holds the three tools.
+  lint:
+    name: lint and security (bin/lint)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.1"
+          bundler-cache: true
+
+      - name: RuboCop, bundler-audit, Brakeman
+        run: ./bin/lint
+
   # Before 1.0 every gem, lockfile entry, API_VERSION, MIN_CLIENT and skill pin
   # carries the same MAJOR.MINOR.PATCH (protocol.md §14.1).
   version-parity:

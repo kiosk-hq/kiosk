@@ -174,7 +174,8 @@ means adding it to that gem's `spec.files`.
 ## Contributing
 
 **[CONTRIBUTING.md](CONTRIBUTING.md)** is the whole of it: how to run one gem,
-one demo, the end-to-end harness and the `bin/check-*` guards; what the merge
+one demo, the end-to-end harness, `bin/lint` (RuboCop, bundler-audit, Brakeman)
+and the `bin/check-*` guards; what the merge
 gate is; and what this repository expects of a changelog entry and a comment.
 **A security flaw goes through a GitHub issue — read
 [SECURITY.md](SECURITY.md) first**, for which repository takes it and for the

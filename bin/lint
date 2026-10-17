@@ -1,0 +1,24 @@
+#!/bin/sh
+# RuboCop over the whole repository, bundler-audit over every tracked
+# Gemfile.lock, and Brakeman over every Rails app. Run it from anywhere:
+#   bin/lint
+# It runs every check and exits 1 if any of them failed.
+
+cd "$(dirname "$0")/.." || exit 1
+status=0
+
+bundle exec rubocop || status=1
+
+bundle exec bundle-audit update --quiet || status=1
+for lock in $(git ls-files '*Gemfile.lock'); do
+  echo "bundle-audit: $lock"
+  bundle exec bundle-audit check "$(dirname "$lock")" || status=1
+done
+
+for app in kiosk-demo-*/; do
+  echo "brakeman: $app"
+  bundle exec brakeman --quiet --no-pager --no-progress --ensure-ignore-notes \
+    --ensure-no-obsolete-ignore-entries "$app" || status=1
+done
+
+exit $status

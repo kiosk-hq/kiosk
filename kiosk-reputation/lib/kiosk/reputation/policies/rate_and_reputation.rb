@@ -7,7 +7,7 @@ module Kiosk
       # with no bad proofs; otherwise a number of independent equihash proofs that
       # grows with request rate, no purchases and past bad proofs.
       class RateAndReputation < Policy
-        def initialize(
+        def initialize( # rubocop:disable Metrics/ParameterLists -- public constructor; each keyword is one tuning value.
           proven_purchases_threshold: 5,
           low_rate_threshold:         10,
           base_count:                 1,
@@ -21,6 +21,7 @@ module Kiosk
           equihash_n:                 168,
           equihash_k:                 7
         )
+          super()
           @proven_purchases_threshold = proven_purchases_threshold
           @low_rate_threshold         = low_rate_threshold
           @base_count                 = base_count
@@ -28,12 +29,11 @@ module Kiosk
           @rate_step                  = rate_step
           @unproven_count_bonus       = unproven_count_bonus
           @bad_proof_count_factor     = bad_proof_count_factor
-          @count_min                  = count_min
-          @count_max                  = count_max
+          @count_range                = (count_min..count_max)
           @equihash_params            = { n: equihash_n, k: equihash_k }
         end
 
-        def challenge_for(identity:, verb:, factors:)
+        def challenge_for(factors:, **)
           purchases   = factors.settled_purchases_count.to_i
           rate        = factors.request_rate_per_min.to_i
           bad_proofs  = factors.bad_proof_count.to_i
@@ -70,7 +70,7 @@ module Kiosk
 
           count += bad_proofs * @bad_proof_count_factor
 
-          count.clamp(@count_min, @count_max)
+          count.clamp(@count_range)
         end
       end
     end

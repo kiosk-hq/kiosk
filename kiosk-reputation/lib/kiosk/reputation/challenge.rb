@@ -17,80 +17,81 @@ module Kiosk
 
       DELIMITERS = [OUTER_DELIM, PARAM_DELIM, KV_DELIM].freeze
 
+      # The signed fields, in canonical-string order. `salt` is base64.
+      Fields = Data.define(:id, :alg, :params, :salt, :exp, :request_fingerprint)
+      private_constant :Fields
+
       class << self
         # @return [Hash] wire challenge: {id:, alg:, params:, salt: <base64>, exp:, sig:}
         # @raise [ArgumentError] when a field carries a delimiter or `params` is not a Hash
-        def issue(alg:, params:, request_fingerprint:, secret:, ttl:,
+        def issue(alg:, params:, request_fingerprint:, secret:, ttl:, # rubocop:disable Metrics/ParameterLists -- public keyword signature; every keyword is part of it.
                   now: Time.now.to_i,
                   salt: SecureRandom.bytes(16),
                   id: SecureRandom.uuid)
-          salt_b64 = Base64.strict_encode64(salt)
-          exp      = now + ttl
+          fields = Fields.new(id:, alg:, params:, salt: Base64.strict_encode64(salt), exp: now + ttl, request_fingerprint:)
+          offence = delimiter_offence(fields)
+          raise ArgumentError, ambiguity_message(offence) if offence
 
-          offence = delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
-          if offence
-            raise ArgumentError,
-                  "challenge field would make the signed canonical string ambiguous: #{offence}. " \
-                  'Fix the source of the value: the `alg`/`params` your reputation_policy returns ' \
-                  'from #challenge_for, or `c.registration_pow_params` for POST /auth/register.'
-          end
-
-          sig = compute_sig(secret, id, alg, params, salt_b64, exp, request_fingerprint)
-
-          { id: id, alg: alg, params: params, salt: salt_b64, exp: exp, sig: sig }
+          { id:, alg:, params:, salt: fields.salt, exp: fields.exp, sig: compute_sig(secret, fields) }
         end
 
         # Cheap checks run before the one expensive backend evaluation.
         # `expect:` is the `{alg:, params:}` the caller re-derived from its live config.
         # @return [Symbol] :ok | :bad_sig | :expired | :bad_params | :bad_proof
-        def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil)
-          id       = challenge[:id]
-          alg      = challenge[:alg]
-          params   = challenge[:params]
-          salt_b64 = challenge[:salt]
-          exp      = challenge[:exp]
-          stored_sig = challenge[:sig].to_s
+        def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil) # rubocop:disable Metrics/ParameterLists -- public keyword signature; every keyword is part of it.
+          fields = Fields.new(id: challenge[:id], alg: challenge[:alg], params: challenge[:params],
+                              salt: challenge[:salt], exp: challenge[:exp], request_fingerprint:)
+          failure = cheap_failure(fields, challenge[:sig].to_s, secret, now, expect)
+          return failure if failure
 
-          # --- Step 1 (CHEAP): sig check + request binding ---
-          expected_sig = compute_sig(secret, id, alg, params, salt_b64, exp, request_fingerprint)
-          return :bad_sig unless constant_time_compare(expected_sig, stored_sig)
-
-          # --- Step 2 (CHEAP): expiry check ---
-          return :expired unless exp.to_i > now.to_i
-
-          # --- Step 3a (CHEAP): the signed string must have ONE pre-image ---
-          return :bad_params if delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
-
-          # --- Step 3b (CHEAP): the sig proves we minted it, not that we still demand it ---
-          return :bad_params unless matches_expected?(expect, alg, params)
-
-          # --- Step 4 (EXPENSIVE): one backend eval ---
-          raw_salt   = Base64.strict_decode64(salt_b64)
-          sym_params = symbolize_keys(params)
-          result     = Backends.fetch(alg).verify(salt: raw_salt, params: sym_params, nonce: nonce)
-          result ? :ok : :bad_proof
+          proof_valid?(fields, nonce) ? :ok : :bad_proof
         end
 
         private
 
+        # The checks that cost no proof evaluation, in order. Nil when all pass.
+        def cheap_failure(fields, sig, secret, now, expect)
+          return :bad_sig unless constant_time_compare(compute_sig(secret, fields), sig)
+          return :expired unless fields.exp.to_i > now.to_i
+          # The signed string must have one pre-image.
+          return :bad_params if delimiter_offence(fields)
+
+          # The signature proves that we minted the challenge, not that we still demand it.
+          :bad_params unless matches_expected?(expect, fields.alg, fields.params)
+        end
+
+        # The one expensive step: a single backend evaluation.
+        def proof_valid?(fields, nonce)
+          Backends.fetch(fields.alg).verify(salt: Base64.strict_decode64(fields.salt),
+                                            params: fields.params.transform_keys(&:to_sym), nonce:)
+        end
+
+        def ambiguity_message(offence)
+          "challenge field would make the signed canonical string ambiguous: #{offence}. " \
+            'Fix the source of the value: the `alg`/`params` your reputation_policy returns ' \
+            'from #challenge_for, or `c.registration_pow_params` for POST /auth/register.'
+        end
+
         # A delimiter inside a value gives the canonical string a second pre-image,
         # so one signature would cover two (alg, params) splits.
-        def delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
-          { 'id' => id, 'alg' => alg, 'salt' => salt_b64,
-            'exp' => exp, 'request_fingerprint' => request_fingerprint }.each do |field, value|
-            return "#{field} #{value.to_s.inspect} contains #{OUTER_DELIM.inspect}" if value.to_s.include?(OUTER_DELIM)
-          end
+        def delimiter_offence(fields)
+          outer_offence(fields) || params_offence(fields.params)
+        end
 
+        def outer_offence(fields)
+          field, value = fields.to_h.except(:params).find { |_, text| text.to_s.include?(OUTER_DELIM) }
+          "#{field} #{value.to_s.inspect} contains #{OUTER_DELIM.inspect}" if field
+        end
+
+        def params_offence(params)
           return nil unless params.is_a?(Hash)
 
           params.each do |key, value|
             DELIMITERS.each do |delim|
               return "params key #{key.to_s.inspect} contains #{delim.inspect}" if key.to_s.include?(delim)
-
               return "params value #{value.to_s.inspect} (key #{key.to_s.inspect}) contains #{delim.inspect}" if value.to_s.include?(delim)
             end
           end
-
           nil
         end
 
@@ -107,13 +108,14 @@ module Kiosk
           params_string(expected_params) == params_string(params)
         end
 
-        def compute_sig(secret, id, alg, params, salt_b64, exp, request_fingerprint)
-          OpenSSL::HMAC.hexdigest('SHA256', secret, canonical_string(id, alg, params, salt_b64, exp, request_fingerprint))
+        def compute_sig(secret, fields)
+          OpenSSL::HMAC.hexdigest('SHA256', secret, canonical_string(fields))
         end
 
         # id|alg|k=7,n=168|<salt_b64>|<exp>|<fingerprint>
-        def canonical_string(id, alg, params, salt_b64, exp, request_fingerprint)
-          [id, alg, params_string(params), salt_b64, exp.to_s, request_fingerprint].join(OUTER_DELIM)
+        def canonical_string(fields)
+          [fields.id, fields.alg, params_string(fields.params), fields.salt, fields.exp.to_s,
+           fields.request_fingerprint].join(OUTER_DELIM)
         end
 
         def params_string(params)
@@ -125,14 +127,10 @@ module Kiosk
             .join(PARAM_DELIM)
         end
 
-        def constant_time_compare(a, b)
-          return false if a.bytesize != b.bytesize
+        def constant_time_compare(expected, given)
+          return false if expected.bytesize != given.bytesize
 
-          OpenSSL.fixed_length_secure_compare(a, b)
-        end
-
-        def symbolize_keys(hash)
-          hash.transform_keys(&:to_sym)
+          OpenSSL.fixed_length_secure_compare(expected, given)
         end
       end
     end

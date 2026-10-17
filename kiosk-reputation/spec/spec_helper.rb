@@ -20,28 +20,20 @@ RSpec.configure do |config|
   config.before(:each) { Kiosk::Reputation::Backends.reset! }
 end
 
-# ---------------------------------------------------------------------------
-# StubBackend — registered as "equihash" in tests that need a PoW backend.
-#
-# The Challenge module is algorithm-agnostic: .issue/.verify treat alg/params
-# as opaque and only call the backend's .verify. So these doubles need .verify
-# alone — no .params dial (equihash memory is fixed by (n,k); the policy
-# escalates by PROOF COUNT, not by params).
-#
-# .verify returns true iff nonce == "good" (any other value is a "bad proof").
-# ---------------------------------------------------------------------------
+# PoW backend doubles. Challenge treats alg and params as opaque and calls only
+# the backend's .verify, so a double needs .verify alone.
 module TestHelpers
+  # Registered as "equihash". Accepts the nonce "good" only.
   class StubBackend
-    def self.verify(salt:, params:, nonce:)
+    def self.verify(nonce:, **) # rubocop:disable Naming/PredicateMethod -- the PoW backend interface name.
       nonce.to_s == 'good'
     end
   end
 
-  # SpyBackend — raises immediately if .verify is called.
-  # Use this to prove the anti-DoS ordering: if the backend is invoked before
-  # the cheap checks (sig / expiry) have passed, the suite fails loudly.
+  # Raises when .verify is called: proves that the cheap checks (sig, expiry)
+  # answer before the expensive backend evaluation.
   class SpyRaisingBackend
-    def self.verify(salt:, params:, nonce:)
+    def self.verify(**)
       raise 'SpyRaisingBackend#verify called — ' \
             'the expensive backend eval must NOT be reached before sig/expiry checks pass'
     end

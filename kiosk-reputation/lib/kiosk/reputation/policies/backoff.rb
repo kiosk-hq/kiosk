@@ -24,9 +24,8 @@ module Kiosk
           @store = store
         end
 
-        def challenge_for(identity:, verb:, factors:)
-          key = identity_key(identity)
-          return nil if @store.consume(key)
+        def challenge_for(identity:, **)
+          return nil if @store.consume(identity_key(identity))
 
           @base.dup
         end

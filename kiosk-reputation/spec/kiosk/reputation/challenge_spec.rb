@@ -1,7 +1,30 @@
 # frozen_string_literal: true
 
-RSpec.describe Kiosk::Reputation::Challenge do
-  # Inject deterministic values so tests don't depend on random state.
+# Calls into Kiosk::Reputation::Challenge with the fixture's fields, any of
+# them replaced.
+module ChallengeCalls
+  def issue_challenge(**overrides)
+    fields = { alg:, params:, request_fingerprint: fingerprint, secret:, ttl:, now:, salt:, id: }
+    described_class.issue(**fields, **overrides)
+  end
+
+  # `.verify` of `challenge` one second after it was issued.
+  def verify_challenge(**overrides)
+    arguments = { challenge:, nonce: 'good', request_fingerprint: fingerprint, secret:, now: now + 1 }
+    described_class.verify(**arguments, **overrides)
+  end
+
+  # A backend that raises when called: the cheap checks must answer first.
+  def register_spy_backend
+    Kiosk::Reputation::Backends.reset!
+    Kiosk::Reputation::Backends.register('equihash', TestHelpers::SpyRaisingBackend)
+  end
+end
+
+# Deterministic fields, so no example depends on random state.
+RSpec.shared_context 'with a challenge fixture' do
+  include ChallengeCalls
+
   let(:secret)      { 'test-hmac-secret' }
   let(:fingerprint) { 'fp:sha256:abc123' }
   let(:salt)        { 'A' * 16 } # 16 raw bytes (ASCII)
@@ -10,569 +33,310 @@ RSpec.describe Kiosk::Reputation::Challenge do
   let(:ttl)         { 300 }
   let(:params)      { { n: 168, k: 7 } }
   let(:alg)         { 'equihash' }
+  let(:challenge)   { issue_challenge }
 
-  let(:challenge) do
-    described_class.issue(
-      alg: alg, params: params,
-      request_fingerprint: fingerprint,
-      secret: secret, ttl: ttl,
-      now: now, salt: salt, id: id
-    )
+  before { Kiosk::Reputation::Backends.register('equihash', TestHelpers::StubBackend) }
+end
+
+RSpec.describe Kiosk::Reputation::Challenge, '.issue' do
+  include_context 'with a challenge fixture'
+
+  it 'returns a hash with all required wire fields' do
+    expect(challenge).to include(:id, :alg, :params, :salt, :exp, :sig)
   end
 
-  before do
-    Kiosk::Reputation::Backends.register('equihash', TestHelpers::StubBackend)
+  it 'sets exp = now + ttl' do
+    expect(challenge[:exp]).to eq(now + ttl)
   end
 
-  # ---------------------------------------------------------------------------
-  # .issue
-  # ---------------------------------------------------------------------------
-  describe '.issue' do
-    it 'returns a hash with all required wire fields' do
-      expect(challenge).to include(:id, :alg, :params, :salt, :exp, :sig)
-    end
-
-    it 'sets exp = now + ttl' do
-      expect(challenge[:exp]).to eq(now + ttl)
-    end
-
-    it 'base64-encodes the raw salt' do
-      expect(challenge[:salt]).to eq(Base64.strict_encode64(salt))
-    end
-
-    it 'stores the injected id' do
-      expect(challenge[:id]).to eq(id)
-    end
-
-    it 'produces a non-empty sig' do
-      expect(challenge[:sig]).not_to be_empty
-    end
-
-    it 'uses SecureRandom defaults when salt/id are not injected' do
-      c1 = described_class.issue(
-        alg: alg, params: params,
-        request_fingerprint: fingerprint,
-        secret: secret, ttl: ttl, now: now
-      )
-      c2 = described_class.issue(
-        alg: alg, params: params,
-        request_fingerprint: fingerprint,
-        secret: secret, ttl: ttl, now: now
-      )
-      expect(c1[:id]).not_to eq(c2[:id])
-      expect(c1[:salt]).not_to eq(c2[:salt])
-    end
+  it 'base64-encodes the raw salt' do
+    expect(challenge[:salt]).to eq(Base64.strict_encode64(salt))
   end
 
-  # ---------------------------------------------------------------------------
-  # .verify — happy path
-  # ---------------------------------------------------------------------------
-  describe '.verify — round-trip' do
-    it 'returns :ok for a correct nonce and matching fingerprint/secret' do
-      result = described_class.verify(
-        challenge: challenge,
-        nonce: 'good',
-        request_fingerprint: fingerprint,
-        secret: secret,
-        now: now + 1
-      )
-      expect(result).to eq(:ok)
-    end
+  it 'stores the injected id' do
+    expect(challenge[:id]).to eq(id)
   end
 
-  # ---------------------------------------------------------------------------
-  # .verify — :bad_sig cases (cheap check, step 1)
-  # ---------------------------------------------------------------------------
-  describe '.verify — :bad_sig' do
-    def verify_with(overrides = {})
-      c = overrides.key?(:challenge) ? overrides[:challenge] : challenge.dup
-      described_class.verify(
-        challenge: c,
-        nonce: 'good',
-        request_fingerprint: overrides.fetch(:request_fingerprint, fingerprint),
-        secret: overrides.fetch(:secret, secret),
-        now: overrides.fetch(:now, now + 1)
-      )
-    end
-
-    it 'returns :bad_sig when params are tampered' do
-      tampered = challenge.merge(params: { n: 168, k: 9 })
-      expect(verify_with(challenge: tampered)).to eq(:bad_sig)
-    end
-
-    it 'returns :bad_sig when salt is tampered' do
-      tampered = challenge.merge(salt: Base64.strict_encode64('X' * 16))
-      expect(verify_with(challenge: tampered)).to eq(:bad_sig)
-    end
-
-    it 'returns :bad_sig when exp is tampered' do
-      tampered = challenge.merge(exp: now + ttl + 9999)
-      expect(verify_with(challenge: tampered)).to eq(:bad_sig)
-    end
-
-    it 'returns :bad_sig when request_fingerprint at verify differs from issue' do
-      expect(verify_with(request_fingerprint: 'fp:different')).to eq(:bad_sig)
-    end
-
-    it 'returns :bad_sig when a wrong secret is used at verify' do
-      expect(verify_with(secret: 'wrong-secret')).to eq(:bad_sig)
-    end
-
-    it 'returns :bad_sig when the sig field itself is corrupted' do
-      tampered = challenge.merge(sig: 'deadbeef' * 8)
-      expect(verify_with(challenge: tampered)).to eq(:bad_sig)
-    end
-
-    context 'anti-DoS ordering — backend is NOT called on :bad_sig' do
-      it 'does not invoke the backend when sig is wrong (uses spy backend)' do
-        Kiosk::Reputation::Backends.reset!
-        Kiosk::Reputation::Backends.register('equihash', TestHelpers::SpyRaisingBackend)
-
-        tampered = challenge.merge(sig: "#{'badbad' * 10}ab")
-        # If the backend were called the SpyRaisingBackend would raise.
-        expect do
-          described_class.verify(
-            challenge: tampered,
-            nonce: 'good',
-            request_fingerprint: fingerprint,
-            secret: secret,
-            now: now + 1
-          )
-        end.not_to raise_error
-      end
-    end
+  it 'produces a non-empty sig' do
+    expect(challenge[:sig]).not_to be_empty
   end
 
-  # ---------------------------------------------------------------------------
-  # .verify — :expired (cheap check, step 2)
-  # ---------------------------------------------------------------------------
-  describe '.verify — :expired' do
-    it 'returns :expired when now >= exp' do
-      result = described_class.verify(
-        challenge: challenge,
-        nonce: 'good',
-        request_fingerprint: fingerprint,
-        secret: secret,
-        now: now + ttl + 1 # one second past exp
-      )
-      expect(result).to eq(:expired)
+  it 'uses SecureRandom defaults when salt/id are not injected' do
+    first, second = Array.new(2) do
+      described_class.issue(alg:, params:, request_fingerprint: fingerprint, secret:, ttl:, now:)
     end
+    expect(first[:id]).not_to eq(second[:id])
+    expect(first[:salt]).not_to eq(second[:salt])
+  end
+end
 
-    context 'anti-DoS ordering — backend is NOT called on :expired' do
-      it 'does not invoke the backend for an expired challenge (uses spy backend)' do
-        Kiosk::Reputation::Backends.reset!
-        Kiosk::Reputation::Backends.register('equihash', TestHelpers::SpyRaisingBackend)
+RSpec.describe Kiosk::Reputation::Challenge, '.verify outcomes' do
+  include_context 'with a challenge fixture'
 
-        # Re-issue with the spy backend now registered.
-        c = described_class.issue(
-          alg: alg, params: params,
-          request_fingerprint: fingerprint,
-          secret: secret, ttl: ttl,
-          now: now, salt: salt, id: id
-        )
-
-        # If the backend were called the SpyRaisingBackend would raise.
-        expect do
-          described_class.verify(
-            challenge: c,
-            nonce: 'good',
-            request_fingerprint: fingerprint,
-            secret: secret,
-            now: now + ttl + 1
-          )
-        end.not_to raise_error
-      end
-
-      it 'returns :expired (not any other symbol) for the expired spy scenario' do
-        Kiosk::Reputation::Backends.reset!
-        Kiosk::Reputation::Backends.register('equihash', TestHelpers::SpyRaisingBackend)
-
-        c = described_class.issue(
-          alg: alg, params: params,
-          request_fingerprint: fingerprint,
-          secret: secret, ttl: ttl,
-          now: now, salt: salt, id: id
-        )
-
-        result = described_class.verify(
-          challenge: c, nonce: 'good',
-          request_fingerprint: fingerprint,
-          secret: secret,
-          now: now + ttl + 1
-        )
-        expect(result).to eq(:expired)
-      end
-    end
+  it 'returns :ok for a correct nonce and matching fingerprint/secret' do
+    expect(verify_challenge).to eq(:ok)
   end
 
-  # ---------------------------------------------------------------------------
-  # .verify — :bad_params (cheap check, step 3 — K-541)
-  #
-  # The sig proves WE minted the challenge; it does NOT prove the params are
-  # still the difficulty this server demands. Every challenge below has a VALID
-  # sig, a live exp, and a nonce the backend accepts — the ONLY thing wrong is
-  # that its params are not what the caller re-derived from its own config.
-  # ---------------------------------------------------------------------------
-  describe '.verify — :bad_params' do
-    def verify_expecting(expect_spec, c = challenge)
-      described_class.verify(
-        challenge: c,
-        nonce: 'good',
-        request_fingerprint: fingerprint,
-        secret: secret,
-        now: now + 1,
-        expect: expect_spec
-      )
+  it 'returns :bad_proof when the nonce is wrong but the challenge is valid' do
+    expect(verify_challenge(nonce: 'bad')).to eq(:bad_proof)
+  end
+
+  it 'returns :expired when now >= exp' do
+    expect(verify_challenge(now: now + ttl + 1)).to eq(:expired)
+  end
+end
+
+RSpec.describe Kiosk::Reputation::Challenge, '.verify answers :bad_sig' do
+  include_context 'with a challenge fixture'
+
+  it 'returns :bad_sig when params are tampered' do
+    expect(verify_challenge(challenge: challenge.merge(params: { n: 168, k: 9 }))).to eq(:bad_sig)
+  end
+
+  it 'returns :bad_sig when salt is tampered' do
+    expect(verify_challenge(challenge: challenge.merge(salt: Base64.strict_encode64('X' * 16)))).to eq(:bad_sig)
+  end
+
+  it 'returns :bad_sig when exp is tampered' do
+    expect(verify_challenge(challenge: challenge.merge(exp: now + ttl + 9999))).to eq(:bad_sig)
+  end
+
+  it 'returns :bad_sig when request_fingerprint at verify differs from issue' do
+    expect(verify_challenge(request_fingerprint: 'fp:different')).to eq(:bad_sig)
+  end
+
+  it 'returns :bad_sig when a wrong secret is used at verify' do
+    expect(verify_challenge(secret: 'wrong-secret')).to eq(:bad_sig)
+  end
+
+  it 'returns :bad_sig when the sig field itself is corrupted' do
+    expect(verify_challenge(challenge: challenge.merge(sig: 'deadbeef' * 8))).to eq(:bad_sig)
+  end
+end
+
+# The spy backend raises if the expensive evaluation runs before the cheap checks.
+RSpec.describe Kiosk::Reputation::Challenge, '.verify cheap checks run before the backend' do
+  include_context 'with a challenge fixture'
+
+  before { register_spy_backend }
+
+  it 'does not invoke the backend when sig is wrong (uses spy backend)' do
+    expect { verify_challenge(challenge: challenge.merge(sig: "#{'badbad' * 10}ab")) }.not_to raise_error
+  end
+
+  it 'does not invoke the backend for an expired challenge (uses spy backend)' do
+    expect { verify_challenge(now: now + ttl + 1) }.not_to raise_error
+  end
+
+  it 'returns :expired (not any other symbol) for the expired spy scenario' do
+    expect(verify_challenge(now: now + ttl + 1)).to eq(:expired)
+  end
+
+  it 'rejects off-spec params without spending a backend eval (spy backend)' do
+    cheap  = issue_challenge(params: { n: 8, k: 1 })
+    result = nil
+    expect do
+      result = verify_challenge(challenge: cheap, expect: { alg: 'equihash', params: { n: 168, k: 7 } })
+    end.not_to raise_error
+    expect(result).to eq(:bad_params)
+  end
+end
+
+# The sig proves that we minted the challenge, not that its params are still
+# the difficulty the server demands. Each challenge here has a valid sig, a live
+# exp and an accepted nonce; only its params differ from `expect:`.
+RSpec.describe Kiosk::Reputation::Challenge, '.verify answers :bad_params' do
+  include_context 'with a challenge fixture'
+
+  let(:demanded) { { alg: 'equihash', params: { n: 168, k: 7 } } }
+
+  it 'returns :ok when the challenge names exactly the expected alg + params' do
+    expect(verify_challenge(expect: demanded)).to eq(:ok)
+  end
+
+  # Signed with the real secret and bound to the real request: the forgery a
+  # leaked secret allows, and a challenge minted just before a difficulty raise.
+  it 'REJECTS an HMAC-valid challenge that names cheaper params' do
+    expect(verify_challenge(challenge: issue_challenge(params: { n: 8, k: 1 }), expect: demanded)).to eq(:bad_params)
+  end
+
+  it 'REJECTS a challenge naming a different alg (backend substitution)' do
+    expect(verify_challenge(expect: { alg: 'argon2id', params: { n: 168, k: 7 } })).to eq(:bad_params)
+  end
+
+  it 'rejects a single changed param value' do
+    expect(verify_challenge(expect: { alg: 'equihash', params: { n: 168, k: 8 } })).to eq(:bad_params)
+  end
+
+  it 'rejects params with an extra key the server does not demand' do
+    expect(verify_challenge(expect: { alg: 'equihash', params: { n: 168, k: 7, rounds: 3 } })).to eq(:bad_params)
+  end
+
+  it 'keeps the pre-K-541 behaviour when expect: is omitted (opt-in check)' do
+    expect(verify_challenge(challenge: issue_challenge(params: { n: 8, k: 1 }))).to eq(:ok)
+  end
+end
+
+RSpec.describe Kiosk::Reputation::Challenge, '.verify check order' do
+  include_context 'with a challenge fixture'
+
+  it 'still reports :bad_sig (not :bad_params) when the sig is also wrong' do
+    tampered = challenge.merge(sig: 'deadbeef' * 8)
+    expect(verify_challenge(challenge: tampered, expect: { alg: 'equihash', params: { n: 8, k: 1 } })).to eq(:bad_sig)
+  end
+
+  it 'still reports :expired (not :bad_params) when the challenge is also dead' do
+    expect(verify_challenge(challenge: issue_challenge(params: { n: 8, k: 1 }), now: now + ttl + 1,
+                            expect: { alg: 'equihash', params: { n: 168, k: 7 } })).to eq(:expired)
+  end
+end
+
+# `expect:` is compared in the signed rendering, so there are no false rejections.
+RSpec.describe Kiosk::Reputation::Challenge, '.verify expect: equality' do
+  include_context 'with a challenge fixture'
+
+  it 'ignores key ORDER in the expected params' do
+    expect(verify_challenge(expect: { alg:, params: { k: 7, n: 168 } })).to eq(:ok)
+  end
+
+  it 'ignores Symbol-vs-String param keys' do
+    expect(verify_challenge(expect: { alg:, params: { 'n' => 168, 'k' => 7 } })).to eq(:ok)
+  end
+
+  it 'ignores Integer-vs-String param values (one identical signed string)' do
+    expect(verify_challenge(expect: { alg:, params: { n: '168', k: '7' } })).to eq(:ok)
+  end
+
+  it 'accepts a String-keyed expect hash' do
+    expect(verify_challenge(expect: { 'alg' => 'equihash', 'params' => { n: 168, k: 7 } })).to eq(:ok)
+  end
+
+  it 'skips the alg check when expect omits :alg' do
+    expect(verify_challenge(expect: { params: { n: 168, k: 7 } })).to eq(:ok)
+  end
+
+  it 'skips the params check when expect omits :params' do
+    expect(verify_challenge(expect: { alg: 'equihash' })).to eq(:ok)
+  end
+end
+
+# A JSON round trip delivers string keys ({"n"=>168,"k"=>7}); they still verify.
+RSpec.describe Kiosk::Reputation::Challenge, '.verify with string-keyed params' do
+  include_context 'with a challenge fixture'
+
+  let(:string_challenge) { issue_challenge(params: { 'n' => 168, 'k' => 7 }) }
+
+  it 'returns :ok for a string-keyed challenge with a correct nonce' do
+    expect(verify_challenge(challenge: string_challenge)).to eq(:ok)
+  end
+
+  it 'produces the same sig as the symbol-keyed challenge (key type is invisible to the sig)' do
+    expect(string_challenge[:sig]).to eq(challenge[:sig])
+  end
+end
+
+# A nil or non-Hash params raises a typed ArgumentError, never a NoMethodError.
+RSpec.describe Kiosk::Reputation::Challenge, 'with malformed (nil / non-Hash) params' do
+  include_context 'with a challenge fixture'
+
+  [nil, 'n=168,k=7', [%i[n k]], 42].each do |bad|
+    it "raises a typed ArgumentError (not NoMethodError) from .issue for #{bad.inspect}" do
+      expect { issue_challenge(params: bad) }.to raise_error(ArgumentError, /params must be a Hash/)
     end
 
-    it 'returns :ok when the challenge names exactly the expected alg + params' do
-      expect(verify_expecting({ alg: 'equihash', params: { n: 168, k: 7 } })).to eq(:ok)
-    end
-
-    it 'REJECTS an HMAC-valid challenge that names cheaper params' do
-      cheap = described_class.issue(
-        alg: alg, params: { n: 8, k: 1 },
-        request_fingerprint: fingerprint,
-        secret: secret, ttl: ttl, now: now, salt: salt, id: id
-      )
-      # Signed with the REAL secret and bound to the REAL request — the exact
-      # forgery a leaked KIOSK_POW_SECRET would enable, and the exact shape of a
-      # challenge minted just before a difficulty raise.
-      expect(verify_expecting({ alg: 'equihash', params: { n: 168, k: 7 } }, cheap)).to eq(:bad_params)
-    end
-
-    it 'REJECTS a challenge naming a different alg (backend substitution)' do
-      expect(verify_expecting({ alg: 'argon2id', params: { n: 168, k: 7 } })).to eq(:bad_params)
-    end
-
-    it 'rejects a single changed param value' do
-      expect(verify_expecting({ alg: 'equihash', params: { n: 168, k: 8 } })).to eq(:bad_params)
-    end
-
-    it 'rejects params with an extra key the server does not demand' do
-      expect(verify_expecting({ alg: 'equihash', params: { n: 168, k: 7, rounds: 3 } })).to eq(:bad_params)
-    end
-
-    it 'keeps the pre-K-541 behaviour when expect: is omitted (opt-in check)' do
-      cheap = described_class.issue(
-        alg: alg, params: { n: 8, k: 1 },
-        request_fingerprint: fingerprint,
-        secret: secret, ttl: ttl, now: now, salt: salt, id: id
-      )
-      result = described_class.verify(
-        challenge: cheap, nonce: 'good',
-        request_fingerprint: fingerprint, secret: secret, now: now + 1
-      )
-      expect(result).to eq(:ok)
-    end
-
-    context 'equality matches exactly what the sig commits to (no false rejections)' do
-      it 'ignores key ORDER in the expected params' do
-        expect(verify_expecting({ alg: alg, params: { k: 7, n: 168 } })).to eq(:ok)
-      end
-
-      it 'ignores Symbol-vs-String param keys' do
-        expect(verify_expecting({ alg: alg, params: { 'n' => 168, 'k' => 7 } })).to eq(:ok)
-      end
-
-      it 'ignores Integer-vs-String param values (one identical signed string)' do
-        expect(verify_expecting({ alg: alg, params: { n: '168', k: '7' } })).to eq(:ok)
-      end
-
-      it 'accepts a String-keyed expect hash' do
-        expect(verify_expecting({ 'alg' => 'equihash', 'params' => { n: 168, k: 7 } })).to eq(:ok)
-      end
-
-      it 'skips the alg check when expect omits :alg' do
-        expect(verify_expecting({ params: { n: 168, k: 7 } })).to eq(:ok)
-      end
-
-      it 'skips the params check when expect omits :params' do
-        expect(verify_expecting({ alg: 'equihash' })).to eq(:ok)
-      end
-    end
-
-    context 'anti-DoS ordering — backend is NOT called on :bad_params' do
-      it 'rejects off-spec params without spending a backend eval (spy backend)' do
-        Kiosk::Reputation::Backends.reset!
-        Kiosk::Reputation::Backends.register('equihash', TestHelpers::SpyRaisingBackend)
-
-        c = described_class.issue(
-          alg: alg, params: { n: 8, k: 1 },
-          request_fingerprint: fingerprint,
-          secret: secret, ttl: ttl, now: now, salt: salt, id: id
-        )
-
-        result = nil
-        expect do
-          result = described_class.verify(
-            challenge: c, nonce: 'good',
-            request_fingerprint: fingerprint, secret: secret, now: now + 1,
-            expect: { alg: 'equihash', params: { n: 168, k: 7 } }
-          )
-        end.not_to raise_error
-        expect(result).to eq(:bad_params)
-      end
-    end
-
-    it 'still reports :bad_sig (not :bad_params) when the sig is also wrong' do
-      tampered = challenge.merge(sig: 'deadbeef' * 8)
-      expect(verify_expecting({ alg: 'equihash', params: { n: 8, k: 1 } }, tampered)).to eq(:bad_sig)
-    end
-
-    it 'still reports :expired (not :bad_params) when the challenge is also dead' do
-      cheap = described_class.issue(
-        alg: alg, params: { n: 8, k: 1 },
-        request_fingerprint: fingerprint,
-        secret: secret, ttl: ttl, now: now, salt: salt, id: id
-      )
-      result = described_class.verify(
-        challenge: cheap, nonce: 'good',
-        request_fingerprint: fingerprint, secret: secret, now: now + ttl + 1,
-        expect: { alg: 'equihash', params: { n: 168, k: 7 } }
-      )
-      expect(result).to eq(:expired)
+    it "raises a typed ArgumentError (not NoMethodError) from .verify for #{bad.inspect}" do
+      expect { verify_challenge(challenge: challenge.merge(params: bad)) }
+        .to raise_error(ArgumentError, /params must be a Hash/)
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # .verify — :bad_proof (expensive check, step 4)
-  # ---------------------------------------------------------------------------
-  describe '.verify — :bad_proof' do
-    it 'returns :bad_proof when the nonce is wrong but the challenge is valid' do
-      result = described_class.verify(
-        challenge: challenge,
-        nonce: 'bad',
-        request_fingerprint: fingerprint,
-        secret: secret,
-        now: now + 1
-      )
-      expect(result).to eq(:bad_proof)
+  it 'raises ArgumentError specifically, never the pre-guard NoMethodError' do
+    raised = begin
+      issue_challenge(params: nil)
+    rescue StandardError => e
+      e
+    end
+    expect(raised).to be_a(ArgumentError)
+    expect(raised).not_to be_a(NoMethodError)
+  end
+end
+
+# A delimiter inside a value gives the canonical string a second pre-image, so
+# one signature covers two (alg, params) splits.
+RSpec.describe Kiosk::Reputation::Challenge, '.issue refuses a delimiter in a field' do
+  include_context 'with a challenge fixture'
+
+  it 'refuses an alg carrying the field delimiter' do
+    expect { issue_challenge(alg: 'equi|hash') }.to raise_error(ArgumentError, /ambiguous.*alg .* contains/)
+  end
+
+  it 'refuses an id carrying the field delimiter' do
+    expect { issue_challenge(id: 'a|b') }.to raise_error(ArgumentError, /ambiguous.*id .* contains/)
+  end
+
+  it 'refuses a request fingerprint carrying the field delimiter' do
+    expect { issue_challenge(request_fingerprint: 'fp|forged') }
+      .to raise_error(ArgumentError, /ambiguous.*request_fingerprint .* contains/)
+  end
+
+  it 'still mints the ordinary challenge (control)' do
+    expect(challenge[:sig]).not_to be_empty
+  end
+end
+
+RSpec.describe Kiosk::Reputation::Challenge, '.issue refuses a delimiter in params' do
+  include_context 'with a challenge fixture'
+
+  [['|', :outer], [',', :param], ['=', :kv]].each do |delim, name|
+    it "refuses a params KEY carrying the #{name} delimiter" do
+      expect { issue_challenge(params: { "n#{delim}x" => 168 }) }
+        .to raise_error(ArgumentError, /ambiguous.*params key .* contains/)
+    end
+
+    it "refuses a params VALUE carrying the #{name} delimiter" do
+      expect { issue_challenge(params: { n: "168#{delim}7" }) }
+        .to raise_error(ArgumentError, /ambiguous.*params value .* contains/)
+    end
+  end
+end
+
+# Re-partitioned params need no delimiter in any issued field, and `expect:`
+# cannot see them: `{n: 168, k: 7}` renders `k=7,n=168`, and so do both of these.
+RSpec.describe Kiosk::Reputation::Challenge, '.verify refuses a re-partitioned submission' do
+  include_context 'with a challenge fixture'
+
+  [{ 'k=7,n' => '168' }, { 'k' => '7,n=168' }].each do |repartition|
+    it "answers :bad_params for #{repartition.inspect} under the honest sig" do
+      forged = challenge.merge(params: repartition)
+      expect(forged[:sig]).to eq(challenge[:sig])
+      expect(verify_challenge(challenge: forged)).to eq(:bad_params)
+    end
+
+    it "answers :bad_params for #{repartition.inspect} even WITH expect:" do
+      expect(verify_challenge(challenge: challenge.merge(params: repartition), expect: { alg:, params: })).to eq(:bad_params)
     end
   end
 
-  # ---------------------------------------------------------------------------
-  # String-keyed params (JSON round-trip shape from the wire)
-  # ---------------------------------------------------------------------------
-  describe '.verify — string-keyed params (production/JSON shape)' do
-    # In production the gate's symbolize_keys is shallow, so nested `params`
-    # keys arrive as strings ({"n"=>168,"k"=>7}). canonical_string (k.to_s) and
-    # verify's symbolize_keys exist precisely so this round-trips to :ok.
-    let(:string_params) { { 'n' => 168, 'k' => 7 } }
-
-    let(:string_challenge) do
-      described_class.issue(
-        alg: alg, params: string_params,
-        request_fingerprint: fingerprint,
-        secret: secret, ttl: ttl,
-        now: now, salt: salt, id: id
-      )
+  it 'does not invoke the backend for a re-partitioned submission' do
+    spy = Class.new do
+      def self.called? = defined?(@called) && @called
+      def self.verify(**) = (@called = true)
     end
+    Kiosk::Reputation::Backends.register('equihash', spy)
 
-    it 'returns :ok for a string-keyed challenge with a correct nonce' do
-      result = described_class.verify(
-        challenge: string_challenge,
-        nonce: 'good',
-        request_fingerprint: fingerprint,
-        secret: secret,
-        now: now + 1
-      )
-      expect(result).to eq(:ok)
-    end
-
-    it 'produces the same sig as the symbol-keyed challenge (key type is invisible to the sig)' do
-      expect(string_challenge[:sig]).to eq(challenge[:sig])
-    end
+    verify_challenge(challenge: challenge.merge(params: { 'k=7,n' => '168' }))
+    expect(spy.called?).to be_falsey
   end
 
-  # ---------------------------------------------------------------------------
-  # Malformed params — root-cause guard (K-574)
-  # ---------------------------------------------------------------------------
-  describe 'malformed (nil / non-Hash) params' do
-    # canonical_string is the first place params is touched, in BOTH issue and
-    # verify. Before the guard, a nil/non-Hash params raised a cryptic
-    # NoMethodError deep in the gem (a 500 at any surface that did not
-    # pre-guard). It now fails loud with a typed, rescuable ArgumentError —
-    # never a NoMethodError — matching Policies::Backoff's is_a?(Hash) style.
-    [nil, 'n=168,k=7', [%i[n k]], 42].each do |bad|
-      it "raises a typed ArgumentError (not NoMethodError) from .issue for #{bad.inspect}" do
-        expect do
-          described_class.issue(
-            alg: alg, params: bad,
-            request_fingerprint: fingerprint,
-            secret: secret, ttl: ttl, now: now, salt: salt, id: id
-          )
-        end.to raise_error(ArgumentError, /params must be a Hash/)
-      end
-
-      it "raises a typed ArgumentError (not NoMethodError) from .verify for #{bad.inspect}" do
-        malformed = challenge.merge(params: bad)
-        expect do
-          described_class.verify(
-            challenge: malformed, nonce: 'good',
-            request_fingerprint: fingerprint, secret: secret, now: now + 1
-          )
-        end.to raise_error(ArgumentError, /params must be a Hash/)
-      end
-    end
-
-    it 'raises ArgumentError specifically, never the pre-guard NoMethodError' do
-      raised =
-        begin
-          described_class.issue(
-            alg: alg, params: nil,
-            request_fingerprint: fingerprint,
-            secret: secret, ttl: ttl, now: now, salt: salt, id: id
-          )
-          nil
-        rescue StandardError => e
-          e
-        end
-      expect(raised).to be_a(ArgumentError)
-      expect(raised).not_to be_a(NoMethodError)
-    end
+  it 'leaves the honest echo verifying (control)' do
+    expect(verify_challenge(expect: { alg:, params: })).to eq(:ok)
   end
+end
 
-  # ---------------------------------------------------------------------------
-  # Canonical-string ambiguity — the delimiter invariant (K-1693)
-  # ---------------------------------------------------------------------------
-  describe 'canonical-string delimiters may not appear in field values' do
-    # The canonical string joins six fields with OUTER_DELIM and renders params
-    # as `k=v` pairs joined with PARAM_DELIM. A delimiter inside a value gives
-    # that string a SECOND pre-image, so one signature covers two different
-    # (alg, params) splits — a substituted backend under a valid sig. The
-    # constants declared the invariant from the first commit and nothing
-    # checked it.
-    describe '.issue refuses to mint an ambiguous challenge' do
-      it 'refuses an alg carrying the field delimiter' do
-        expect do
-          described_class.issue(
-            alg: 'equi|hash', params: params,
-            request_fingerprint: fingerprint,
-            secret: secret, ttl: ttl, now: now, salt: salt, id: id
-          )
-        end.to raise_error(ArgumentError, /ambiguous.*alg .* contains/)
-      end
+RSpec.describe Kiosk::Reputation::Challenge, 'canonical string' do
+  include_context 'with a challenge fixture'
 
-      it 'refuses an id carrying the field delimiter' do
-        expect do
-          described_class.issue(
-            alg: alg, params: params,
-            request_fingerprint: fingerprint,
-            secret: secret, ttl: ttl, now: now, salt: salt, id: 'a|b'
-          )
-        end.to raise_error(ArgumentError, /ambiguous.*id .* contains/)
-      end
-
-      it 'refuses a request fingerprint carrying the field delimiter' do
-        expect do
-          described_class.issue(
-            alg: alg, params: params,
-            request_fingerprint: 'fp|forged',
-            secret: secret, ttl: ttl, now: now, salt: salt, id: id
-          )
-        end.to raise_error(ArgumentError, /ambiguous.*request_fingerprint .* contains/)
-      end
-
-      [['|', :outer], [',', :param], ['=', :kv]].each do |delim, name|
-        it "refuses a params KEY carrying the #{name} delimiter" do
-          expect do
-            described_class.issue(
-              alg: alg, params: { "n#{delim}x" => 168 },
-              request_fingerprint: fingerprint,
-              secret: secret, ttl: ttl, now: now, salt: salt, id: id
-            )
-          end.to raise_error(ArgumentError, /ambiguous.*params key .* contains/)
-        end
-
-        it "refuses a params VALUE carrying the #{name} delimiter" do
-          expect do
-            described_class.issue(
-              alg: alg, params: { n: "168#{delim}7" },
-              request_fingerprint: fingerprint,
-              secret: secret, ttl: ttl, now: now, salt: salt, id: id
-            )
-          end.to raise_error(ArgumentError, /ambiguous.*params value .* contains/)
-        end
-      end
-
-      it 'still mints the ordinary challenge (control)' do
-        expect(challenge[:sig]).not_to be_empty
-      end
-    end
-
-    describe '.verify refuses a re-partitioned submission' do
-      # THIS is the half a caller can reach at head: re-partitioning the params
-      # of an honestly-minted challenge needs NO delimiter in any ISSUED field,
-      # and `expect:` cannot see it, because both sides render to one string.
-      # `{n: 168, k: 7}` renders `k=7,n=168`, and so do both of these.
-      [{ 'k=7,n' => '168' }, { 'k' => '7,n=168' }].each do |repartition|
-        it "answers :bad_params for #{repartition.inspect} under the honest sig" do
-          forged = challenge.merge(params: repartition)
-          # The sig is the HONEST one, untouched — the attack is that it still verifies.
-          expect(forged[:sig]).to eq(challenge[:sig])
-          expect(
-            described_class.verify(
-              challenge: forged, nonce: 'good',
-              request_fingerprint: fingerprint, secret: secret, now: now + 1
-            )
-          ).to eq(:bad_params)
-        end
-
-        it "answers :bad_params for #{repartition.inspect} even WITH expect:" do
-          forged = challenge.merge(params: repartition)
-          expect(
-            described_class.verify(
-              challenge: forged, nonce: 'good',
-              request_fingerprint: fingerprint, secret: secret, now: now + 1,
-              expect: { alg: alg, params: params }
-            )
-          ).to eq(:bad_params)
-        end
-      end
-
-      it 'does not invoke the backend for a re-partitioned submission' do
-        spy = Class.new do
-          def self.called? = defined?(@called) && @called
-          def self.verify(salt:, params:, nonce:) = (@called = true)
-        end
-        Kiosk::Reputation::Backends.register('equihash', spy)
-
-        described_class.verify(
-          challenge: challenge.merge(params: { 'k=7,n' => '168' }), nonce: 'good',
-          request_fingerprint: fingerprint, secret: secret, now: now + 1
-        )
-        expect(spy.called?).to be_falsey
-      end
-
-      it 'leaves the honest echo verifying (control)' do
-        expect(
-          described_class.verify(
-            challenge: challenge, nonce: 'good',
-            request_fingerprint: fingerprint, secret: secret, now: now + 1,
-            expect: { alg: alg, params: params }
-          )
-        ).to eq(:ok)
-      end
-    end
-  end
-
-  # ---------------------------------------------------------------------------
-  # Canonical string stability
-  # ---------------------------------------------------------------------------
-  describe 'canonical string is param-key-order-independent' do
-    it 'produces the same sig regardless of params hash key insertion order' do
-      c1 = described_class.issue(
-        alg: alg, params: { n: 168, k: 7 },
-        request_fingerprint: fingerprint, secret: secret,
-        ttl: ttl, now: now, salt: salt, id: id
-      )
-      c2 = described_class.issue(
-        alg: alg, params: { k: 7, n: 168 },
-        request_fingerprint: fingerprint, secret: secret,
-        ttl: ttl, now: now, salt: salt, id: id
-      )
-      expect(c1[:sig]).to eq(c2[:sig])
-    end
+  it 'produces the same sig regardless of params hash key insertion order' do
+    expect(issue_challenge(params: { n: 168, k: 7 })[:sig]).to eq(issue_challenge(params: { k: 7, n: 168 })[:sig])
   end
 end

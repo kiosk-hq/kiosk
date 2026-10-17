@@ -11,8 +11,8 @@ module Kiosk
         @mutex   = Mutex.new
       end
 
-      def grant(key, n)
-        @mutex.synchronize { @counter[key] = n.to_i }
+      def grant(key, count)
+        @mutex.synchronize { @counter[key] = count.to_i }
         nil
       end
 

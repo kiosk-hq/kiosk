@@ -18,7 +18,7 @@ Rails.application.routes.draw do
   # what makes the `appointment_confirmed` topic a push rather than a reply —
   # nothing the assistant calls produces this transition. See
   # app/controllers/salon_desk_controller.rb.
-  post "/salon_desk/confirm/:appointment_id", to: "salon_desk#confirm"
+  post '/salon_desk/confirm/:appointment_id', to: 'salon_desk#confirm'
 
   # ── the responses RAILS composes, not Kiosk ──────────────────────────────
   #
@@ -35,7 +35,7 @@ Rails.application.routes.draw do
   # Rack endpoints rather than controllers: there is nothing to hold in a
   # class, and a fixture controller that only raises would have to be copied
   # and declared like every other hand-written file.
-  get "/kiosk/boom",      to: ->(_env) { raise "e2e: a deliberate unhandled 500 under the mount" }
-  get "/operator/health", to: ->(_env) { [200, { "content-type" => "text/plain" }, ["ok"]] }
-  get "/operator/boom",   to: ->(_env) { raise "e2e: a deliberate unhandled 500 OUTSIDE the mount" }
+  get '/kiosk/boom',      to: ->(_env) { raise 'e2e: a deliberate unhandled 500 under the mount' }
+  get '/operator/health', to: ->(_env) { [200, { 'content-type' => 'text/plain' }, ['ok']] }
+  get '/operator/boom',   to: ->(_env) { raise 'e2e: a deliberate unhandled 500 OUTSIDE the mount' }
 end

@@ -35,12 +35,12 @@ class SalonDeskController < ApplicationController
     # request: there is no request here that belongs to the guest. The subject
     # is the appointment, so a subscriber may narrow to one row.
     Kiosk::Server::Events.emit(
-      topic:          :appointment_confirmed,
-      subject:        appointment.id,
+      topic: :appointment_confirmed,
+      subject: appointment.id,
       identity_scope: [appointment.user_id],
-      data:           { "appointment_id" => appointment.id,
-                        "salon_id"       => appointment.salon_id,
-                        "slot"           => appointment.slot.utc.iso8601 },
+      data: { 'appointment_id' => appointment.id,
+              'salon_id' => appointment.salon_id,
+              'slot' => appointment.slot.utc.iso8601 }
     )
 
     head :ok

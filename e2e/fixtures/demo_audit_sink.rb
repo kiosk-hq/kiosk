@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "json"
-require "time"
+require 'json'
+require 'time'
 
 # THE OPERATOR'S AUDIT SINK — what an adopter writes, not what Kiosk ships.
 #
@@ -29,7 +29,7 @@ class DemoAuditSink
   # A slot value this sink deliberately cannot handle. Nothing in Kiosk knows
   # about it — it is a bug we planted in OUR code to prove that our bug stays
   # ours.
-  EXPLODING_SLOT = "2030-01-01T00:00:00Z"
+  EXPLODING_SLOT = '2030-01-01T00:00:00Z'
 
   def initialize(path:, redacted_path:)
     @path          = path
@@ -48,6 +48,6 @@ class DemoAuditSink
 
   def append(path, event)
     payload = event.to_h.merge(invoked_at: event.invoked_at.utc.iso8601)
-    File.open(path, "a") { |file| file.puts(JSON.generate(payload)) }
+    File.open(path, 'a') { |file| file.puts(JSON.generate(payload)) }
   end
 end

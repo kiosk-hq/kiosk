@@ -50,36 +50,44 @@
 #
 # Prints ONE JSON line of counters for the log; aborts on any unexpected status.
 
-require "base64"
-require "json"
-require "jwt"
-require "net/http"
-require "kiosk/test_helpers/wire"
-require "openssl"
-require "securerandom"
-require "uri"
+require 'base64'
+require 'json'
+require 'jwt'
+require 'net/http'
+require 'kiosk/test_helpers/wire'
+require 'openssl'
+require 'securerandom'
+require 'uri'
 
-require "kiosk/user_identity_providers/devise_session"
-require_relative "equihash_register"
+require 'kiosk/user_identity_providers/devise_session'
+require_relative 'equihash_register'
 
-SERVER   = ENV.fetch("SERVER_URL")
-ISSUER   = ENV.fetch("KIOSK_ISSUER")
-EMAIL    = ENV.fetch("HUMAN_EMAIL")
-PASSWORD = ENV.fetch("HUMAN_PASSWORD")
-CAPTURE  = ENV.fetch("AUTH_CAPTURE")
+SERVER   = ENV.fetch('SERVER_URL')
+ISSUER   = ENV.fetch('KIOSK_ISSUER')
+EMAIL    = ENV.fetch('HUMAN_EMAIL')
+PASSWORD = ENV.fetch('HUMAN_PASSWORD')
+CAPTURE  = ENV.fetch('AUTH_CAPTURE')
 
 def get_json(url, headers = {})
   uri = URI(url)
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  [res.code.to_i, begin
+    JSON.parse(res.body)
+  rescue StandardError
+    {}
+  end]
 end
 
 def post_json(url, body, headers = {})
   uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
+  req = Net::HTTP::Post.new(uri, { 'Content-Type' => 'application/json' }.merge(headers))
   req.body = JSON.generate(body)
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  [res.code.to_i, begin
+    JSON.parse(res.body)
+  rescue StandardError
+    {}
+  end]
 end
 
 # The OAuth half of the ceremony is `application/x-www-form-urlencoded` — the
@@ -92,15 +100,19 @@ def post_form(url, form)
   req = Net::HTTP::Post.new(uri)
   req.set_form_data(form)
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  [res.code.to_i, begin
+    JSON.parse(res.body)
+  rescue StandardError
+    {}
+  end]
 end
 
 # The decoded payload of a compact JWS/JWT, without verifying — the point here
 # is to keep the bytes a verifier reads, not to re-verify what the origin
 # already accepted.
 def payload_of(compact)
-  seg = compact.to_s.split(".")[1].to_s
-  JSON.parse(Base64.urlsafe_decode64(seg + ("=" * ((4 - (seg.length % 4)) % 4))))
+  seg = compact.to_s.split('.')[1].to_s
+  JSON.parse(Base64.urlsafe_decode64(seg + ('=' * ((4 - (seg.length % 4)) % 4))))
 end
 
 # A fresh possession proof for `key`: Section 5.1's challenge, signed as
@@ -110,8 +122,8 @@ def possession_proof(key, pem)
   abort "challenge failed (#{rc}): #{JSON.generate(ch)}" unless rc == 200
 
   signed = JWT.encode(
-    { aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i },
-    key, "RS256",
+    { aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i },
+    key, 'RS256'
   )
   [signed, ch]
 end
@@ -128,28 +140,28 @@ cap = {}
 reg_key, reg = equihash_register(
   server: SERVER, issuer: ISSUER,
   get_json: ->(url) { get_json(url) },
-  post_json: ->(url, body, headers = {}) { post_json(url, body, headers) },
+  post_json: ->(url, body, headers = {}) { post_json(url, body, headers) }
 )
 reg_pem = reg_key.public_key.to_pem
-cap["registration"] = reg
+cap['registration'] = reg
 
 # The challenge document and the proof payload are captured from a SECOND
 # handshake with the same key rather than reached into the helper for: a
 # challenge is single-use, so the one the helper spent is gone, and this is the
 # same endpoint answering the same key.
 login_signed, challenge_doc = possession_proof(reg_key, reg_pem)
-cap["challenge"]        = challenge_doc
-cap["possession_proof"] = payload_of(login_signed)
+cap['challenge']        = challenge_doc
+cap['possession_proof'] = payload_of(login_signed)
 
 # Section 5.4 — what the operator put inside the token it just minted.
-cap["access_token_claims"] = payload_of(reg.fetch("access_token"))
+cap['access_token_claims'] = payload_of(reg.fetch('access_token'))
 
 # ── Section 5.3 — login, with the credential request that produced it ───────
-login_body = { "public_key" => reg_pem, "signed" => login_signed }
+login_body = { 'public_key' => reg_pem, 'signed' => login_signed }
 rc, login = post_json("#{SERVER}/kiosk/auth/login", login_body)
 abort "login failed (#{rc}): #{JSON.generate(login)}" unless rc == 200
-cap["credential_request"] = login_body
-cap["token_login"]        = login
+cap['credential_request'] = login_body
+cap['token_login']        = login
 
 # ── Section 5.5 — revoke answers the SAME object as login ───────────────────
 #
@@ -158,24 +170,24 @@ cap["token_login"]        = login
 # member of that answer until 2026-08-30; `#/$defs/token` now says it
 # is login's object member for member, and this is the byte that has to agree.
 rc, revoked = post_json("#{SERVER}/kiosk/auth/revoke", {},
-                        { "Authorization" => "Bearer #{login.fetch("access_token")}" })
+                        { 'Authorization' => "Bearer #{login.fetch('access_token')}" })
 abort "revoke failed (#{rc}): #{JSON.generate(revoked)}" unless rc == 200
-cap["token_revoke"] = revoked
+cap['token_revoke'] = revoked
 
 # ── Section 6.2 — the human's link code, redeemed by the agent's key ────────
 session = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 session.sign_in!(email: EMAIL, password: PASSWORD)
 
-rc, link = session.post_json("/kiosk/auth/link", {}, { session: true })
+rc, link = session.post_json('/kiosk/auth/link', {}, { session: true })
 abort "link mint failed (#{rc}): #{JSON.generate(link)}" unless rc == 201
-cap["link_code"] = link
+cap['link_code'] = link
 
 claim_signed, = possession_proof(reg_key, reg_pem)
-claim_body = { "code" => link.fetch("link_code"), "public_key" => reg_pem, "signed" => claim_signed }
+claim_body = { 'code' => link.fetch('link_code'), 'public_key' => reg_pem, 'signed' => claim_signed }
 rc, claimed = post_json("#{SERVER}/kiosk/auth/claim", claim_body)
 abort "claim failed (#{rc}): #{JSON.generate(claimed)}" unless rc == 201
-cap["claim_request"]  = claim_body
-cap["claim_response"] = claimed
+cap['claim_request']  = claim_body
+cap['claim_response'] = claimed
 
 # ── Section 6.1 — the two OAuth refusals ────────────────────────────────────
 #
@@ -185,40 +197,40 @@ cap["claim_response"] = claimed
 # `invalid_request` for a `role` or `scope` parameter, and an enum written from
 # the section's own six-code closing list could not have expressed it.
 rc, role_refused = post_form("#{SERVER}/kiosk/oauth/device_authorization",
-                             { "client_id" => "e2e-auth-capture",
-                               "public_key" => reg_pem, "role" => "owner" })
+                             { 'client_id' => 'e2e-auth-capture',
+                               'public_key' => reg_pem, 'role' => 'owner' })
 abort "a role parameter was not refused (#{rc}): #{JSON.generate(role_refused)}" unless rc == 400
-cap["oauth_error_role_refused"] = role_refused
+cap['oauth_error_role_refused'] = role_refused
 
-rc, bad_grant = post_form("#{SERVER}/kiosk/oauth/token", { "grant_type" => "client_credentials" })
+rc, bad_grant = post_form("#{SERVER}/kiosk/oauth/token", { 'grant_type' => 'client_credentials' })
 abort "an unknown grant_type was not refused (#{rc}): #{JSON.generate(bad_grant)}" unless rc == 400
-cap["oauth_error_unsupported_grant"] = bad_grant
+cap['oauth_error_unsupported_grant'] = bad_grant
 
 # ── Section 6.1 — the device grant, all three steps ─────────────────────────
 rc, da = post_form("#{SERVER}/kiosk/oauth/device_authorization",
-                   { "client_id" => "e2e-auth-capture", "public_key" => reg_pem })
+                   { 'client_id' => 'e2e-auth-capture', 'public_key' => reg_pem })
 abort "device_authorization failed (#{rc}): #{JSON.generate(da)}" unless rc == 200
-cap["device_authorization"] = da
+cap['device_authorization'] = da
 
 # The human approves on the REAL verify page: GET for the page and its CSRF
 # token, POST the decision over the same session.
-user_code = da.fetch("user_code")
+user_code = da.fetch('user_code')
 show = session.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
 abort "verify page: #{show.code}" unless show.code.to_i == 200
-form = { "user_code" => user_code, "decision" => "approve" }
+form = { 'user_code' => user_code, 'decision' => 'approve' }
 if (csrf = session.csrf_token(show.body))
-  form["authenticity_token"] = csrf
+  form['authenticity_token'] = csrf
 end
-approve = session.post_form("/kiosk/oauth/device/verify", form)
+approve = session.post_form('/kiosk/oauth/device/verify', form)
 abort "approval failed (#{approve.code})" unless [200, 302, 303].include?(approve.code.to_i)
 
 poll_signed, = possession_proof(reg_key, reg_pem)
 rc, granted = post_form("#{SERVER}/kiosk/oauth/token",
-                        { "grant_type" => "urn:ietf:params:oauth:grant-type:device_code",
-                          "device_code" => da.fetch("device_code"),
-                          "signed" => poll_signed })
+                        { 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code',
+                          'device_code' => da.fetch('device_code'),
+                          'signed' => poll_signed })
 abort "token poll failed (#{rc}): #{JSON.generate(granted)}" unless rc == 200
-cap["device_token_response"] = granted
+cap['device_token_response'] = granted
 
 # ── Section 6.3 — unlink, which answers 204 and no body at all ──────────────
 #
@@ -232,17 +244,17 @@ cap["device_token_response"] = granted
 # «no body at all», so the body's LENGTH is part of what has to be captured,
 # and the JSON wrapper hands back a parsed Hash that cannot tell an empty body
 # from an unparseable one.
-unlink_body = { "agent_id" => cap.fetch("claim_response").fetch("agent_id") }
+unlink_body = { 'agent_id' => cap.fetch('claim_response').fetch('agent_id') }
 unlink_req = Net::HTTP::Post.new(URI("#{SERVER}/kiosk/auth/unlink"),
-                                 { "Content-Type" => "application/json" })
-unlink_req["Cookie"] = session.cookie_header
+                                 { 'Content-Type' => 'application/json' })
+unlink_req['Cookie'] = session.cookie_header
 unlink_req.body = JSON.generate(unlink_body)
 unlink = session.request(unlink_req)
 rc = unlink.code.to_i
 abort "unlink failed (#{rc}): #{unlink.body.inspect}" unless rc == 204
-cap["unlink_request"]  = unlink_body
-cap["unlink_status"]   = rc
-cap["unlink_body_len"] = unlink.body.to_s.length
+cap['unlink_request']  = unlink_body
+cap['unlink_status']   = rc
+cap['unlink_body_len'] = unlink.body.to_s.length
 
 File.write(CAPTURE, JSON.generate(cap))
-puts JSON.generate(objects: cap.keys.length, agent_id: cap.fetch("claim_response").fetch("agent_id"))
+puts JSON.generate(objects: cap.keys.length, agent_id: cap.fetch('claim_response').fetch('agent_id'))

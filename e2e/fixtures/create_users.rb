@@ -6,11 +6,11 @@
 # the wire has no login.
 class CreateUsers < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change
-    enable_extension "pgcrypto" unless extension_enabled?("pgcrypto")
+    enable_extension 'pgcrypto' unless extension_enabled?('pgcrypto')
 
     create_table :users, id: :uuid do |t|
       t.string :email, index: { unique: true }
-      t.string :encrypted_password, null: false, default: ""
+      t.string :encrypted_password, null: false, default: ''
       t.timestamps
     end
   end

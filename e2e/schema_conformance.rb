@@ -46,14 +46,14 @@
 #
 # Exits non-zero on any failure.
 
-require "json"
-require "json_schemer"
-require "net/http"
-require "kiosk/test_helpers/descriptor_examples"
-require "kiosk/test_helpers/wire"
-require "uri"
+require 'json'
+require 'json_schemer'
+require 'net/http'
+require 'kiosk/test_helpers/descriptor_examples'
+require 'kiosk/test_helpers/wire'
+require 'uri'
 
-SERVER  = ENV.fetch("SERVER_URL")
+SERVER = ENV.fetch('SERVER_URL')
 # LIVE MODE — the same file, pointed at a DEPLOYED origin instead of at the app
 # e2e/run.sh just built.
 #
@@ -68,15 +68,15 @@ SERVER  = ENV.fetch("SERVER_URL")
 # Everything that survives is what an unauthenticated stranger can see: the
 # discovery document, the served catalog and the examples in it, and the
 # problem documents an origin hands a caller who has proved nothing.
-LIVE = ENV["KIOSK_LIVE"] == "1"
+LIVE = ENV['KIOSK_LIVE'] == '1'
 E2E_DIR = __dir__
-SCHEMA_DIR = File.join(E2E_DIR, "schemas")
+SCHEMA_DIR = File.join(E2E_DIR, 'schemas')
 # The schemas kiosk-server ENFORCES at runtime are not copied here — the gem
 # vendors them already, for its own request-shape validation, and one repo
 # holding two copies of one file is the drift this whole exercise is about.
 # This directory keeps the rest: the documents only this harness reads.
 ENGINE_SCHEMA_DIR = File.expand_path(
-  "../kiosk-server/lib/kiosk/server/schemas", E2E_DIR
+  '../kiosk-server/lib/kiosk/server/schemas', E2E_DIR
 )
 
 PASS = []
@@ -113,16 +113,16 @@ end
 # testing the network, and would pass on a stale cache.
 DOCS = {}
 [SCHEMA_DIR, ENGINE_SCHEMA_DIR].each do |dir|
-  Dir[File.join(dir, "*.schema.json")].sort.each do |path|
+  Dir[File.join(dir, '*.schema.json')].sort.each do |path|
     doc = JSON.parse(File.read(path))
-    DOCS[doc.fetch("$id")] = doc
+    DOCS[doc.fetch('$id')] = doc
   end
 end
 
 REF_RESOLVER = lambda do |uri|
-  DOCS[uri.to_s.split("#").first] or
+  DOCS[uri.to_s.split('#').first] or
     raise "schema_conformance: unresolvable $ref #{uri} — a schema references a " \
-          "document this harness does not vendor"
+          'document this harness does not vendor'
 end
 
 # @param id [String] the `$id` of the schema document
@@ -130,8 +130,8 @@ end
 #   subject is one part of a multi-definition document (the mandates file)
 def schema_for(id, pointer = nil)
   root = DOCS.fetch(id)
-  root = root.merge("$ref" => pointer) if pointer
-  JSONSchemer.schema(root, meta_schema: "https://json-schema.org/draft/2020-12/schema",
+  root = root.merge('$ref' => pointer) if pointer
+  JSONSchemer.schema(root, meta_schema: 'https://json-schema.org/draft/2020-12/schema',
                            ref_resolver: REF_RESOLVER)
 end
 
@@ -148,10 +148,10 @@ def conforms(label, id, payload, pointer: nil, &mutate)
   schema = schema_for(id, pointer)
   errors = schema.validate(payload).to_a
   if errors.empty?
-    ok "#{label} validates against #{File.basename(id)}#{pointer ? " #{pointer}" : ""}"
+    ok "#{label} validates against #{File.basename(id)}#{" #{pointer}" if pointer}"
   else
     bad "#{label} does NOT validate against #{File.basename(id)}",
-        errors.first(3).map { |e| e["error"] }.join("; ")
+        errors.first(3).map { |e| e['error'] }.join('; ')
   end
 
   raise ArgumentError, "#{label}: no control mutation given" unless mutate
@@ -161,7 +161,7 @@ def conforms(label, id, payload, pointer: nil, &mutate)
     bad "#{label}: the schema ACCEPTED a deliberately broken copy",
         "the check above proves nothing — #{File.basename(id)} is vacuous for this payload"
   else
-    ok "…and the same schema REFUSES a broken copy of those very bytes"
+    ok '…and the same schema REFUSES a broken copy of those very bytes'
   end
 end
 
@@ -173,7 +173,7 @@ end
 
 def post(path, body, headers = {})
   uri = URI("#{SERVER}#{path}")
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
+  req = Net::HTTP::Post.new(uri, { 'Content-Type' => 'application/json' }.merge(headers))
   req.body = body
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   [res.code.to_i, res.body]
@@ -181,24 +181,24 @@ end
 
 def parse(raw) = JSON.parse(raw)
 
-B = "https://kiosk.tech/spec/schemas"
+B = 'https://kiosk.tech/spec/schemas'
 
 puts "\n\e[1m=== published JSON Schemas vs this origin's LIVE bytes (§16.3 anchor 1) ===\e[0m"
 
 # ── 1. the discovery document ────────────────────────────────────────────────
-_status, raw = get("/.well-known/kiosk.json")
-conforms("GET /.well-known/kiosk.json", "#{B}/discovery.schema.json", parse(raw)) do |doc|
-  doc["kiosk"]["auth"]["kind"] = "oauth2"  # `kind` is a const
+_status, raw = get('/.well-known/kiosk.json')
+conforms('GET /.well-known/kiosk.json', "#{B}/discovery.schema.json", parse(raw)) do |doc|
+  doc['kiosk']['auth']['kind'] = 'oauth2' # `kind` is a const
   doc
 end
 
 # ── 2. the catalog ───────────────────────────────────────────────────────────
-_status, raw = get("/kiosk/schema")
+_status, raw = get('/kiosk/schema')
 catalog = parse(raw)
-conforms("GET /kiosk/schema", "#{B}/schema-descriptor.schema.json", catalog) do |doc|
+conforms('GET /kiosk/schema', "#{B}/schema-descriptor.schema.json", catalog) do |doc|
   # `verbs` is not a member of the catalog, and the schema's root is CLOSED so
   # it can say so.
-  doc["verbs"] = ["schema", "queries"]
+  doc['verbs'] = %w[schema queries]
   doc
 end
 
@@ -220,10 +220,10 @@ problems = []
 # trips: `registration_pow_count` is paid before the possession proof is
 # verified, but a key that will not parse is refused earlier still, and the
 # 402 this block is here to capture would never be issued.
-require "openssl"
-status, raw = post("/kiosk/auth/register",
+require 'openssl'
+status, raw = post('/kiosk/auth/register',
                    JSON.generate(public_key: OpenSSL::PKey::RSA.new(2048).public_key.to_pem,
-                                 signed: "not-reached-the-toll-comes-first"))
+                                 signed: 'not-reached-the-toll-comes-first'))
 problems << ["POST /kiosk/auth/register (unpaid toll, #{status})", parse(raw)]
 
 # THE PROBE VERB IS READ OFF THE CATALOG THIS ORIGIN JUST SERVED, not named
@@ -233,24 +233,24 @@ problems << ["POST /kiosk/auth/register (unpaid toll, #{status})", parse(raw)]
 # is CLOSED and EMPTY, because that is the one an undeclared argument turns into
 # the wire's own 400 below.
 PROBE_QUERY = begin
-  queries = Array(catalog["queries"])
+  queries = Array(catalog['queries'])
   closed  = queries.find do |q|
-    schema = q["input_schema"]
-    schema.is_a?(Hash) && schema["additionalProperties"] == false &&
-      (schema["properties"].nil? || schema["properties"].empty?)
+    schema = q['input_schema']
+    schema.is_a?(Hash) && schema['additionalProperties'] == false &&
+      (schema['properties'].nil? || schema['properties'].empty?)
   end
-  (closed || queries.find { |q| q.dig("input_schema", "additionalProperties") == false } ||
-    queries.first || {})["name"]
+  (closed || queries.find { |q| q.dig('input_schema', 'additionalProperties') == false } ||
+    queries.first || {})['name']
 end
-abort "schema_conformance: the served catalog publishes no query to probe" unless PROBE_QUERY
+abort 'schema_conformance: the served catalog publishes no query to probe' unless PROBE_QUERY
 
 status, raw = get("/kiosk/#{PROBE_QUERY}")
 problems << ["GET /kiosk/#{PROBE_QUERY} unauthenticated (#{status})", parse(raw)]
 
 # A live run holds no bearer: minting one means registering an agent on a
 # machine this harness does not own.
-TOKEN = LIVE ? ENV["TOKEN"] : ENV.fetch("TOKEN")
-AUTH  = TOKEN ? { "Authorization" => "Bearer #{TOKEN}" } : nil
+TOKEN = LIVE ? ENV.fetch('TOKEN', nil) : ENV.fetch('TOKEN')
+AUTH  = TOKEN ? { 'Authorization' => "Bearer #{TOKEN}" } : nil
 
 # `salons` declares a CLOSED empty input_schema, so an undeclared argument is
 # the wire's own 400 from RequestValidation — a document built on a different
@@ -259,25 +259,25 @@ if AUTH
   status, raw = get("/kiosk/#{PROBE_QUERY}?zzz=1", AUTH)
   problems << ["GET /kiosk/#{PROBE_QUERY}?zzz=1 — an undeclared argument (#{status})", parse(raw)]
 else
-  skipped "the RequestValidation 400 (an undeclared argument)",
-          "it is an AUTHENTICATED probe and a live run mints no bearer"
+  skipped 'the RequestValidation 400 (an undeclared argument)',
+          'it is an AUTHENTICATED probe and a live run mints no bearer'
 end
 
 # This origin configures no `kyc_public_key`, so the KYC attestation path is
 # PUBLISHED with no module behind it: 501 module_not_served.
 if AUTH
-  status, raw = post("/kiosk/agents/kyc", JSON.generate(kyc_jws: "not.a.jws"), AUTH)
+  status, raw = post('/kiosk/agents/kyc', JSON.generate(kyc_jws: 'not.a.jws'), AUTH)
   problems << ["POST /kiosk/agents/kyc — no KYC module here (#{status})", parse(raw)]
 else
-  skipped "the 501 module_not_served problem document",
-          "it is an AUTHENTICATED probe and a live run mints no bearer"
+  skipped 'the 501 module_not_served problem document',
+          'it is an AUTHENTICATED probe and a live run mints no bearer'
 end
 
 problems.each do |label, doc|
   conforms(label, "#{B}/problem.schema.json", doc) do |broken|
     # `code` is the closed vocabulary — the one member an assistant branches
     # on, and the one this schema exists to keep closed.
-    broken["code"] = "teapot"
+    broken['code'] = 'teapot'
     broken
   end
 end
@@ -288,17 +288,17 @@ end
 # validate — `challenges` is optional — and the cross-file reference would then
 # be checked by nothing at all.
 pow_problem = problems.first.last
-if pow_problem["code"] == "pow_required" && pow_problem["challenges"].is_a?(Array) &&
-   !pow_problem["challenges"].empty?
-  ok "the 402 carries live PoW challenges, so the cross-file $ref into pow.schema.json is exercised"
-  conforms("one live PoW challenge", "#{B}/pow.schema.json",
-           pow_problem["challenges"].first, pointer: "#/$defs/challenge") do |ch|
-    ch.delete("sig")  # `sig` is required — without it a challenge is unbindable
+if pow_problem['code'] == 'pow_required' && pow_problem['challenges'].is_a?(Array) &&
+   !pow_problem['challenges'].empty?
+  ok 'the 402 carries live PoW challenges, so the cross-file $ref into pow.schema.json is exercised'
+  conforms('one live PoW challenge', "#{B}/pow.schema.json",
+           pow_problem['challenges'].first, pointer: '#/$defs/challenge') do |ch|
+    ch.delete('sig') # `sig` is required — without it a challenge is unbindable
     ch
   end
 else
-  bad "the 402 carries live PoW challenges",
-      "got code=#{pow_problem["code"].inspect} challenges=#{pow_problem["challenges"].inspect} — " \
+  bad 'the 402 carries live PoW challenges',
+      "got code=#{pow_problem['code'].inspect} challenges=#{pow_problem['challenges'].inspect} — " \
       "without them problem.schema.json's $ref into pow.schema.json is never followed"
 end
 
@@ -319,44 +319,44 @@ end
 if examples.size >= 4
   ok "…across #{examples.size} published examples (the loop is not empty)"
 else
-  bad "descriptor examples were checked", "only #{examples.size} examples found in the served " \
-      "catalog — the §8.3 loop above asserted almost nothing"
+  bad 'descriptor examples were checked', "only #{examples.size} examples found in the served " \
+                                          'catalog — the §8.3 loop above asserted almost nothing'
 end
 
 # ── 5. the AP2 mandate chain and the settlement it answered ──────────────────
 #
 # Read from the file e2e/run.sh had pay_flow.rb write: these are the REQUEST
 # this origin accepted and the RESPONSE it produced, not a reconstruction.
-pay_capture = ENV["PAY_CAPTURE"]
+pay_capture = ENV.fetch('PAY_CAPTURE', nil)
 if pay_capture && File.exist?(pay_capture)
   cap = JSON.parse(File.read(pay_capture))
 
-  conforms("the pay REQUEST body", "#{B}/mandates.schema.json", cap.fetch("request"),
-           pointer: "#/$defs/payRequest") do |body|
-    body.delete("cart_mandate_jws")  # all three are required — the chain is the point
+  conforms('the pay REQUEST body', "#{B}/mandates.schema.json", cap.fetch('request'),
+           pointer: '#/$defs/payRequest') do |body|
+    body.delete('cart_mandate_jws') # all three are required — the chain is the point
     body
   end
 
   %w[intent cart payment].each do |defn|
     conforms("the #{defn} mandate's claims", "#{B}/mandates.schema.json",
-             cap.fetch("claims").fetch(defn), pointer: "#/$defs/#{defn}") do |claims|
+             cap.fetch('claims').fetch(defn), pointer: "#/$defs/#{defn}") do |claims|
       # `exp` is REQUIRED on every mandate by `baseClaims` — "a missing or
       # passed exp is rejected" — and it reaches this `$def` through an
       # `allOf`, so the control also proves the composition is being applied.
-      claims.delete("exp")
+      claims.delete('exp')
       claims
     end
   end
 
-  conforms("the settlement this origin answered", "#{B}/mandates.schema.json",
-           cap.fetch("response"), pointer: "#/$defs/settlement") do |settled|
-    settled["settled_amount_cents"] = "1599"  # integer cents, never a string
+  conforms('the settlement this origin answered', "#{B}/mandates.schema.json",
+           cap.fetch('response'), pointer: '#/$defs/settlement') do |settled|
+    settled['settled_amount_cents'] = '1599' # integer cents, never a string
     settled
   end
 else
-  absent "the AP2 mandate chain was validated",
+  absent 'the AP2 mandate chain was validated',
          "PAY_CAPTURE (#{pay_capture.inspect}) is missing — pay_flow.rb did not write the " \
-         "captured request/claims/response, so five mandate schemas checked nothing",
+         'captured request/claims/response, so five mandate schemas checked nothing',
          "settling a payment means charging somebody's deployment"
 end
 
@@ -375,40 +375,40 @@ end
 # POW_CAPTURE. The whole array is validated against the ROOT schema too, which
 # is `$ref`d to `#/$defs/powHeader`: that is the one thing asserting the
 # ARRAY-of-proofs presentation of the `Kiosk-PoW` raw-JSON header.
-pow_capture = ENV["POW_CAPTURE"]
+pow_capture = ENV.fetch('POW_CAPTURE', nil)
 if pow_capture && !pow_capture.empty? && File.exist?(pow_capture)
-  proofs = JSON.parse(File.read(pow_capture)).fetch("proofs")
+  proofs = JSON.parse(File.read(pow_capture)).fetch('proofs')
 
   if proofs.is_a?(Array) && !proofs.empty?
     ok "the register toll fired and its solved proof(s) were kept (#{proofs.length})"
 
-    conforms("the Kiosk-PoW header this origin ACCEPTED", "#{B}/pow.schema.json", proofs) do |hdr|
+    conforms('the Kiosk-PoW header this origin ACCEPTED', "#{B}/pow.schema.json", proofs) do |hdr|
       # ONE PAST THE INCLUSIVE u64 BOUND, which is the reason the control is
       # here: a schema that stated the bound
       # exclusively, or dropped it, would accept this and the check above would
       # be proving nothing about the range at all.
-      hdr.first["nonce"]["indices"][0] = 18_446_744_073_709_551_616
+      hdr.first['nonce']['indices'][0] = 18_446_744_073_709_551_616
       hdr
     end
 
-    conforms("one solved PoW proof", "#{B}/pow.schema.json", proofs.first,
-             pointer: "#/$defs/proof") do |proof|
+    conforms('one solved PoW proof', "#{B}/pow.schema.json", proofs.first,
+             pointer: '#/$defs/proof') do |proof|
       # `challenge` is REQUIRED beside `nonce`: a proof that did not echo the
       # challenge back verbatim is unbindable to the request it paid for.
-      proof.delete("challenge")
+      proof.delete('challenge')
       proof
     end
   else
-    bad "the register toll fired and its solved proof(s) were kept",
+    bad 'the register toll fired and its solved proof(s) were kept',
         "POW_CAPTURE holds #{proofs.inspect} — no proof to validate, so pow.schema.json's " \
-        "`#/$defs/proof` half is again reached by nothing"
+        '`#/$defs/proof` half is again reached by nothing'
   end
 else
-  absent "the solved PoW proof was validated",
+  absent 'the solved PoW proof was validated',
          "POW_CAPTURE (#{pow_capture.inspect}) is missing — register_pow_flow.rb did not write " \
-         "the accepted Kiosk-PoW header, so `#/$defs/proof` and the u64 index bound checked " \
-         "nothing",
-         "an ACCEPTED proof only exists once a registration succeeded, which creates an agent"
+         'the accepted Kiosk-PoW header, so `#/$defs/proof` and the u64 index bound checked ' \
+         'nothing',
+         'an ACCEPTED proof only exists once a registration succeeded, which creates an agent'
 end
 
 # ── 7. kyc.schema.json — vendored, compiled, and honestly not exercised ──────
@@ -420,9 +420,9 @@ end
 # is what validate.sh checks for every schema before it validates anything.
 begin
   schema_for("#{B}/kyc.schema.json")
-  ok "kyc.schema.json compiles (no live KYC bytes on this origin — see the demos)"
+  ok 'kyc.schema.json compiles (no live KYC bytes on this origin — see the demos)'
 rescue StandardError => e
-  bad "kyc.schema.json compiles", e.message
+  bad 'kyc.schema.json compiles', e.message
 end
 
 # ── 8. §5 and §6 — the auth and binding planes ──────────────────────────────
@@ -442,75 +442,75 @@ end
 # come to exist — but there is nothing to validate them against. `unlink`'s
 # 204 is the other one: §6.3 gives it no body at all, which is asserted here as
 # a length rather than as a schema.
-auth_capture = ENV["AUTH_CAPTURE"]
+auth_capture = ENV.fetch('AUTH_CAPTURE', nil)
 if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   auth = JSON.parse(File.read(auth_capture))
   A = "#{B}/auth.schema.json"
   BI = "#{B}/binding.schema.json"
 
   # §5.1 — the challenge this origin issued for a real key.
-  conforms("GET /auth/challenge", A, auth.fetch("challenge"),
-           pointer: "#/$defs/challenge") do |doc|
-    doc.delete("exp")  # required: a challenge with no expiry is not short-lived
+  conforms('GET /auth/challenge', A, auth.fetch('challenge'),
+           pointer: '#/$defs/challenge') do |doc|
+    doc.delete('exp') # required: a challenge with no expiry is not short-lived
     doc
   end
 
   # §5.2 — the payload of the `signed` JWS this origin ACCEPTED. `aud` is the
   # origin binding, and dropping it is the difference between a proof and a
   # relayable one.
-  conforms("the possession proof this origin accepted", A, auth.fetch("possession_proof"),
-           pointer: "#/$defs/possessionProof") do |doc|
-    doc.delete("aud")
+  conforms('the possession proof this origin accepted', A, auth.fetch('possession_proof'),
+           pointer: '#/$defs/possessionProof') do |doc|
+    doc.delete('aud')
     doc
   end
 
   # §5.3 — the login body, which is register's body member for member.
-  conforms("the POST /auth/login body", A, auth.fetch("credential_request"),
-           pointer: "#/$defs/credentialRequest") do |doc|
-    doc.delete("signed")  # a public key with no proof is an assertion, not a credential
+  conforms('the POST /auth/login body', A, auth.fetch('credential_request'),
+           pointer: '#/$defs/credentialRequest') do |doc|
+    doc.delete('signed') # a public key with no proof is an assertion, not a credential
     doc
   end
 
   # §5.3 — the tolled 201.
-  conforms("the POST /auth/register 201", A, auth.fetch("registration"),
-           pointer: "#/$defs/registration") do |doc|
-    doc.delete("access_token")
+  conforms('the POST /auth/register 201', A, auth.fetch('registration'),
+           pointer: '#/$defs/registration') do |doc|
+    doc.delete('access_token')
     doc
   end
 
   # §5.4 — what the operator put INSIDE the token it minted. `actor` is a
   # `const`, and it is the one member that says this is a Kiosk access token
   # rather than some other JWT the same key signed.
-  conforms("the access token's claims", A, auth.fetch("access_token_claims"),
-           pointer: "#/$defs/accessTokenClaims") do |doc|
-    doc["actor"] = "human"
+  conforms("the access token's claims", A, auth.fetch('access_token_claims'),
+           pointer: '#/$defs/accessTokenClaims') do |doc|
+    doc['actor'] = 'human'
     doc
   end
 
   # §5.3 and §5.5 — login's answer and revoke's answer are ONE object, and the
   # two arms carry different controls on purpose: `required` on one side,
   # `type` on the other, so neither half of the `$def` is taken on trust.
-  conforms("the POST /auth/login 200", A, auth.fetch("token_login"),
-           pointer: "#/$defs/token") do |doc|
-    doc.delete("access_token")
+  conforms('the POST /auth/login 200', A, auth.fetch('token_login'),
+           pointer: '#/$defs/token') do |doc|
+    doc.delete('access_token')
     doc
   end
-  conforms("the POST /auth/revoke 200 — the SAME object as login", A, auth.fetch("token_revoke"),
-           pointer: "#/$defs/token") do |doc|
-    doc["access_token"] = 1  # a compact JWT is a string
+  conforms('the POST /auth/revoke 200 — the SAME object as login', A, auth.fetch('token_revoke'),
+           pointer: '#/$defs/token') do |doc|
+    doc['access_token'] = 1 # a compact JWT is a string
     doc
   end
 
   # §6.2 — the human's link code, minted on a real Devise session.
-  conforms("the POST /auth/link 201", BI, auth.fetch("link_code"),
-           pointer: "#/$defs/linkCode") do |doc|
-    doc["expires_in"] = "900"  # seconds, an integer — not the string spelling
+  conforms('the POST /auth/link 201', BI, auth.fetch('link_code'),
+           pointer: '#/$defs/linkCode') do |doc|
+    doc['expires_in'] = '900' # seconds, an integer — not the string spelling
     doc
   end
 
-  conforms("the POST /auth/claim body", BI, auth.fetch("claim_request"),
-           pointer: "#/$defs/claimRequest") do |doc|
-    doc.delete("code")  # without the code this is a bare register
+  conforms('the POST /auth/claim body', BI, auth.fetch('claim_request'),
+           pointer: '#/$defs/claimRequest') do |doc|
+    doc.delete('code') # without the code this is a bare register
     doc
   end
 
@@ -518,18 +518,18 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   # auth.schema.json's `registration`. The control therefore breaks a member
   # that only the REFERENCED document declares: if the `$ref` were not followed
   # the mutation would pass and this line would be proving nothing.
-  conforms("the POST /auth/claim 201", BI, auth.fetch("claim_response"),
-           pointer: "#/$defs/claimResponse") do |doc|
-    doc.delete("user_id")
+  conforms('the POST /auth/claim 201', BI, auth.fetch('claim_response'),
+           pointer: '#/$defs/claimResponse') do |doc|
+    doc.delete('user_id')
     doc
   end
 
   # §6.1 step 1 — all six members are REQUIRED here, which is narrower than RFC
   # 8628 makes them, so `interval` is the control: an operator porting a stock
   # device-grant answer is exactly who this refusal is for.
-  conforms("the POST /oauth/device_authorization 200", BI, auth.fetch("device_authorization"),
-           pointer: "#/$defs/deviceAuthorization") do |doc|
-    doc.delete("interval")
+  conforms('the POST /oauth/device_authorization 200', BI, auth.fetch('device_authorization'),
+           pointer: '#/$defs/deviceAuthorization') do |doc|
+    doc.delete('interval')
     doc
   end
 
@@ -537,52 +537,52 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   # RFC 9457 problem document. The first is the clause `oauthError` was widened
   # for: §6.1 step 1 requires `invalid_request` for a `role` parameter, and an
   # enum written from the section's own closing list of six could not say it.
-  conforms("the /oauth/device_authorization refusal of a `role` parameter", BI,
-           auth.fetch("oauth_error_role_refused"), pointer: "#/$defs/oauthError") do |doc|
-    doc["error"] = "role_not_allowed"  # the vocabulary is CLOSED at eight
+  conforms('the /oauth/device_authorization refusal of a `role` parameter', BI,
+           auth.fetch('oauth_error_role_refused'), pointer: '#/$defs/oauthError') do |doc|
+    doc['error'] = 'role_not_allowed' # the vocabulary is CLOSED at eight
     doc
   end
-  conforms("the /oauth/token refusal of an unknown grant_type", BI,
-           auth.fetch("oauth_error_unsupported_grant"), pointer: "#/$defs/oauthError") do |doc|
-    doc.delete("error")
+  conforms('the /oauth/token refusal of an unknown grant_type', BI,
+           auth.fetch('oauth_error_unsupported_grant'), pointer: '#/$defs/oauthError') do |doc|
+    doc.delete('error')
     doc
   end
 
   # The `error` VALUES, which no schema can pin to an endpoint: the enum says
   # the vocabulary is closed, not which member each refusal owes.
-  if auth.dig("oauth_error_role_refused", "error") == "invalid_request"
-    ok "…and the role refusal is `invalid_request`, the code §6.1 step 1 names"
+  if auth.dig('oauth_error_role_refused', 'error') == 'invalid_request'
+    ok '…and the role refusal is `invalid_request`, the code §6.1 step 1 names'
   else
-    bad "the role refusal is `invalid_request`",
-        "got #{auth.dig("oauth_error_role_refused", "error").inspect}"
+    bad 'the role refusal is `invalid_request`',
+        "got #{auth.dig('oauth_error_role_refused', 'error').inspect}"
   end
-  if auth.dig("oauth_error_unsupported_grant", "error") == "unsupported_grant_type"
-    ok "…and an unknown grant_type is `unsupported_grant_type`"
+  if auth.dig('oauth_error_unsupported_grant', 'error') == 'unsupported_grant_type'
+    ok '…and an unknown grant_type is `unsupported_grant_type`'
   else
-    bad "an unknown grant_type is `unsupported_grant_type`",
-        "got #{auth.dig("oauth_error_unsupported_grant", "error").inspect}"
+    bad 'an unknown grant_type is `unsupported_grant_type`',
+        "got #{auth.dig('oauth_error_unsupported_grant', 'error').inspect}"
   end
 
   # §6.1 step 3 — the answer to the poll that COMPLETED the ceremony, after a
   # real human approved on the real verify page.
-  conforms("the POST /oauth/token 200 (the completed device grant)", BI,
-           auth.fetch("device_token_response"), pointer: "#/$defs/deviceTokenResponse") do |doc|
-    doc["token_type"] = "bearer"  # `const` "Bearer" — the spelling is the contract
+  conforms('the POST /oauth/token 200 (the completed device grant)', BI,
+           auth.fetch('device_token_response'), pointer: '#/$defs/deviceTokenResponse') do |doc|
+    doc['token_type'] = 'bearer' # `const` "Bearer" — the spelling is the contract
     doc
   end
 
   # §6.3 — the unlink body. Its RESPONSE has no schema because it has no body,
   # which is asserted right after as the length it must be.
-  conforms("the POST /auth/unlink body", BI, auth.fetch("unlink_request"),
-           pointer: "#/$defs/unlinkRequest") do |doc|
-    doc["agent_id"] = 42
+  conforms('the POST /auth/unlink body', BI, auth.fetch('unlink_request'),
+           pointer: '#/$defs/unlinkRequest') do |doc|
+    doc['agent_id'] = 42
     doc
   end
-  if auth["unlink_status"] == 204 && auth["unlink_body_len"].to_i.zero?
-    ok "…and /auth/unlink answered 204 with no body at all (§6.3)"
+  if auth['unlink_status'] == 204 && auth['unlink_body_len'].to_i.zero?
+    ok '…and /auth/unlink answered 204 with no body at all (§6.3)'
   else
-    bad "/auth/unlink answered 204 with no body at all",
-        "status=#{auth["unlink_status"].inspect} body_len=#{auth["unlink_body_len"].inspect}"
+    bad '/auth/unlink answered 204 with no body at all',
+        "status=#{auth['unlink_status'].inspect} body_len=#{auth['unlink_body_len'].inspect}"
   end
 
   # The `$ref` claim itself, stated as an assertion rather than left to be
@@ -590,18 +590,18 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   # register answer «byte-for-byte the same shape», which is why the schema
   # refers rather than restates. Two objects that both validate could still
   # differ — one may carry a member the open root permits.
-  if auth.fetch("claim_response").keys.sort == auth.fetch("registration").keys.sort
+  if auth.fetch('claim_response').keys.sort == auth.fetch('registration').keys.sort
     ok "…and the claim 201 carries exactly the register 201's members (§6.2's `$ref`, not a coincidence)"
   else
     bad "the claim 201 carries exactly the register 201's members",
-        "claim=#{auth.fetch("claim_response").keys.sort.inspect} " \
-        "register=#{auth.fetch("registration").keys.sort.inspect}"
+        "claim=#{auth.fetch('claim_response').keys.sort.inspect} " \
+        "register=#{auth.fetch('registration').keys.sort.inspect}"
   end
 else
-  absent "the §5/§6 auth and binding wire objects were validated",
+  absent 'the §5/§6 auth and binding wire objects were validated',
          "AUTH_CAPTURE (#{auth_capture.inspect}) is missing — auth_wire_capture.rb did not write " \
          "the ceremonies' bytes, so auth.schema.json and binding.schema.json checked nothing",
-         "both ceremonies register, bind and unlink an agent"
+         'both ceremonies register, bind and unlink an agent'
 end
 
 # ── 7. an event pushed on the stream ─────────────────────────────────────────
@@ -609,19 +609,19 @@ end
 # Read from what the pinned listener printed in assistant.sh: one line per
 # socket message, the operator's event with the listener's own `"type":"event"`
 # in front. Dropping that one key leaves the event exactly as it was framed.
-event_capture = ENV["EVENT_CAPTURE"]
+event_capture = ENV.fetch('EVENT_CAPTURE', nil)
 event_line = event_capture && File.exist?(event_capture) &&
              File.foreach(event_capture).find { |line| line.include?('"type":"event"') }
 if event_line
-  event = JSON.parse(event_line).tap { |line| line.delete("type") }
-  conforms("the event pushed on the stream", "#{B}/event.schema.json", event) do |ev|
-    ev["id"] = ev["id"].to_s  # a per-origin integer, never a string
+  event = JSON.parse(event_line).tap { |line| line.delete('type') }
+  conforms('the event pushed on the stream', "#{B}/event.schema.json", event) do |ev|
+    ev['id'] = ev['id'].to_s # a per-origin integer, never a string
     ev
   end
 else
-  absent "an event pushed on the stream was validated",
+  absent 'an event pushed on the stream was validated',
          "EVENT_CAPTURE (#{event_capture.inspect}) holds no event line — the listener in " \
-         "assistant.sh received nothing, so event.schema.json checked nothing",
+         'assistant.sh received nothing, so event.schema.json checked nothing',
          "an event is pushed only when the operator's state changes"
 end
 

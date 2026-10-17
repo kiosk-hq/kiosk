@@ -20,26 +20,26 @@ class Kiosk::CatalogController < ApplicationController
   # salons — public catalog. Any authenticated agent can browse. No per-user
   # scoping: the WHERE is provider-controlled and always TRUE.
   kind :query
-  description "Browse the salons this provider takes bookings for. Returns the " \
-              "complete public catalogue (small; not paginated) — every salon " \
-              "listed here is bookable. Once the human picks one, `book_appointment` " \
-              "reserves a slot at it."
+  description 'Browse the salons this provider takes bookings for. Returns the ' \
+              'complete public catalogue (small; not paginated) — every salon ' \
+              'listed here is bookable. Once the human picks one, `book_appointment` ' \
+              'reserves a slot at it.'
   # A verb that takes nothing still declares the empty closed object, so "this
   # verb takes no arguments" is a published fact rather than an absence an
   # assistant has to interpret.
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  output_schema type: "array",
-                description: "The complete public catalogue.",
+  input_schema type: 'object', additionalProperties: false, properties: {}, required: []
+  output_schema type: 'array',
+                description: 'The complete public catalogue.',
                 items: {
-                  type: "object", additionalProperties: false,
+                  type: 'object', additionalProperties: false,
                   properties: {
-                    id:   { type: "integer", description: "Pass to book_appointment as `salon_id`." },
-                    name: { type: "string", description: "Salon name." },
+                    id: { type: 'integer', description: 'Pass to book_appointment as `salon_id`.' },
+                    name: { type: 'string', description: 'Salon name.' }
                   },
-                  required: %w[id name],
+                  required: %w[id name]
                 }
   example_params({})
-  example_row({ id: 1, name: "Combette on Park" })
+  example_row({ id: 1, name: 'Combette on Park' })
   def salons
     # §3.7.4, THE ONE CACHE PERMISSION THE SPEC GIVES AN OPERATOR, exercised
     # here because this verb is its worked example: "the default for a `200` is
@@ -56,9 +56,9 @@ class Kiosk::CatalogController < ApplicationController
     # from the one kind of code an operator writes. `my_appointments`
     # (Kiosk::BookingsController) sets nothing and keeps `private, no-store` —
     # the control, and the honest policy for a per-principal payload.
-    response.headers["Cache-Control"] = "private, max-age=60"
+    response.headers['Cache-Control'] = 'private, max-age=60'
     render json: ActiveRecord::Base.connection.execute(
-      "SELECT id, name FROM salons ORDER BY id",
+      'SELECT id, name FROM salons ORDER BY id'
     ).to_a
   end
 end

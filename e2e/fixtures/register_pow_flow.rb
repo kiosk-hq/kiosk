@@ -18,26 +18,41 @@
 #
 # Usage (invoked by assistant.sh — needs a running server + numpy on PATH):
 #   SERVER_URL=… KIOSK_ISSUER=… KIOSK_ADDITIONAL_ORIGINS=… bundle exec ruby register_pow_flow.rb
-require "jwt"; require "json"; require "net/http"; require "kiosk/test_helpers/wire"; require "uri"; require "openssl"; require "securerandom"; require "base64"
+require 'jwt'
+require 'json'
+require 'net/http'
+require 'kiosk/test_helpers/wire'
+require 'uri'
+require 'openssl'
+require 'securerandom'
+require 'base64'
 
-SERVER = ENV.fetch("SERVER_URL")
-ISSUER = ENV.fetch("KIOSK_ISSUER")
+SERVER = ENV.fetch('SERVER_URL')
+ISSUER = ENV.fetch('KIOSK_ISSUER')
 
 def post_json(url, body, headers = {})
   uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { "Content-Type" => "application/json" }.merge(headers))
+  req = Net::HTTP::Post.new(uri, { 'Content-Type' => 'application/json' }.merge(headers))
   req.body = JSON.generate(body)
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  [res.code.to_i, begin
+    JSON.parse(res.body)
+  rescue StandardError
+    {}
+  end]
 end
 
 def get_json(url, headers = {})
   uri = URI(url)
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(Net::HTTP::Get.new(uri, headers))
-  [res.code.to_i, (JSON.parse(res.body) rescue {})]
+  [res.code.to_i, begin
+    JSON.parse(res.body)
+  rescue StandardError
+    {}
+  end]
 end
 
-require_relative "equihash_register"
+require_relative 'equihash_register'
 
 results = {}
 
@@ -46,13 +61,13 @@ key = OpenSSL::PKey::RSA.generate(2048)
 pem = key.public_key.to_pem
 rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
 abort "challenge failed: #{rc_ch} #{ch}" unless rc_ch == 200
-pop = JWT.encode({ aud: ISSUER, nonce: ch.fetch("challenge"), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, "RS256")
+pop = JWT.encode({ aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
 rc_noproof, reg_noproof = post_json("#{SERVER}/kiosk/auth/register", { public_key: pem, signed: pop })
 results[:no_proof_status] = rc_noproof
 # RFC 9457: the branch point is the TOP-LEVEL `code`, and `challenges` is a
 # top-level extension member beside it.
-results[:no_proof_code]   = reg_noproof["code"]
-results[:challenges_len]  = Array(reg_noproof["challenges"]).length
+results[:no_proof_code]   = reg_noproof['code']
+results[:challenges_len]  = Array(reg_noproof['challenges']).length
 # HOW BIG THE TOLL IS, OFF THE WIRE. `challenges_len` above says how MANY
 # proofs this origin demanded; how HARD each one is would otherwise be stated
 # only by a comment, which cannot notice a retune. The Equihash (n,k)
@@ -62,8 +77,8 @@ results[:challenges_len]  = Array(reg_noproof["challenges"]).length
 # it against the pair the fixture initializer CONFIGURED, read out of that file
 # rather than typed — a typed expectation would put a fourth hand-kept copy of
 # the constant inside the assertion that is supposed to end them.
-challenge_params = Array(reg_noproof["challenges"]).first&.fetch("params", nil) || {}
-results[:challenge_params_nk] = [challenge_params["n"], challenge_params["k"]].join(":")
+challenge_params = Array(reg_noproof['challenges']).first&.fetch('params', nil) || {}
+results[:challenge_params_nk] = [challenge_params['n'], challenge_params['k']].join(':')
 
 # ── 2. Solve the toll + register succeeds (fresh key via the shared helper) ──
 # THE BYTES, KEPT — the same discipline `pay_flow.rb` uses for the
@@ -73,26 +88,30 @@ results[:challenge_params_nk] = [challenge_params["n"], challenge_params["k"]].j
 # existed, `#/$defs/proof` — where `indices`, its Zcash canonical order and the
 # inclusive u64 `maximum` live — had no over-the-wire coverage at all.
 reg_key, reg = equihash_register(
-  server:    SERVER,
-  issuer:    ISSUER,
-  get_json:  ->(url) { get_json(url) },
+  server: SERVER,
+  issuer: ISSUER,
+  get_json: ->(url) { get_json(url) },
   post_json: ->(url, body, headers = {}) { post_json(url, body, headers) },
-  on_proofs: ->(proofs) {
-    capture = ENV["POW_CAPTURE"]
+  on_proofs: lambda { |proofs|
+    capture = ENV.fetch('POW_CAPTURE', nil)
     File.write(capture, JSON.generate(proofs: proofs)) if capture && !capture.empty?
-  },
+  }
 )
-token = reg.fetch("access_token")
+token = reg.fetch('access_token')
 results[:with_proof_registered] = !token.to_s.empty?
 # The pinned registration_role rides inside the minted JWT claims (the 201 body
 # is {agent_id, user_id, access_token} — no top-level role). Decode it to prove
 # the agent got the server-pinned :customer role it never chose.
-claims_seg = token.split(".")[1].to_s
-claims = JSON.parse(Base64.urlsafe_decode64(claims_seg + "=" * ((4 - claims_seg.length % 4) % 4))) rescue {}
-results[:role] = claims["role"]
+claims_seg = token.split('.')[1].to_s
+claims = begin
+  JSON.parse(Base64.urlsafe_decode64(claims_seg + ('=' * ((4 - (claims_seg.length % 4)) % 4))))
+rescue StandardError
+  {}
+end
+results[:role] = claims['role']
 
 # ── 3. The PoW-minted token authenticates a real wire verb ──────────────────
-rc_wire, wire = get_json("#{SERVER}/kiosk/salons", { "Authorization" => "Bearer #{token}" })
+rc_wire, wire = get_json("#{SERVER}/kiosk/salons", { 'Authorization' => "Bearer #{token}" })
 results[:wire_status] = rc_wire
 # A query is answered with the handler's payload verbatim, so
 # the proof that the wire served this token is that a LIST came back — there
@@ -104,21 +123,21 @@ results[:wire_payload_is_array] = wire.is_a?(Array)
 # deployment resolves it to that origin. The key registered above is unknown
 # there: it registers again as a second account, and neither origin's token is
 # accepted on the other.
-SECOND = ENV.fetch("KIOSK_ADDITIONAL_ORIGINS").split(",").first
-second_host = { "Host" => URI(SECOND).authority }
-results[:first_origin_issuer]  = get_json("#{SERVER}/.well-known/kiosk.json").last.dig("kiosk", "issuer")
-results[:second_origin_issuer] = get_json("#{SERVER}/.well-known/kiosk.json", second_host).last.dig("kiosk", "issuer")
+SECOND = ENV.fetch('KIOSK_ADDITIONAL_ORIGINS').split(',').first
+second_host = { 'Host' => URI(SECOND).authority }
+results[:first_origin_issuer]  = get_json("#{SERVER}/.well-known/kiosk.json").last.dig('kiosk', 'issuer')
+results[:second_origin_issuer] = get_json("#{SERVER}/.well-known/kiosk.json", second_host).last.dig('kiosk', 'issuer')
 _, second_reg = equihash_register(
-  server:    SERVER,
-  issuer:    SECOND,
-  key:       reg_key,
-  get_json:  ->(url) { get_json(url, second_host) },
-  post_json: ->(url, body, headers = {}) { post_json(url, body, headers.merge(second_host)) },
+  server: SERVER,
+  issuer: SECOND,
+  key: reg_key,
+  get_json: ->(url) { get_json(url, second_host) },
+  post_json: ->(url, body, headers = {}) { post_json(url, body, headers.merge(second_host)) }
 )
-results[:second_origin_new_account] = second_reg.fetch("agent_id") != reg.fetch("agent_id")
-second_token = second_reg.fetch("access_token")
-results[:second_token_on_second] = get_json("#{SERVER}/kiosk/salons", second_host.merge("Authorization" => "Bearer #{second_token}")).first
-results[:first_token_on_second]  = get_json("#{SERVER}/kiosk/salons", second_host.merge("Authorization" => "Bearer #{token}")).first
-results[:second_token_on_first]  = get_json("#{SERVER}/kiosk/salons", { "Authorization" => "Bearer #{second_token}" }).first
+results[:second_origin_new_account] = second_reg.fetch('agent_id') != reg.fetch('agent_id')
+second_token = second_reg.fetch('access_token')
+results[:second_token_on_second] = get_json("#{SERVER}/kiosk/salons", second_host.merge('Authorization' => "Bearer #{second_token}")).first
+results[:first_token_on_second]  = get_json("#{SERVER}/kiosk/salons", second_host.merge('Authorization' => "Bearer #{token}")).first
+results[:second_token_on_first]  = get_json("#{SERVER}/kiosk/salons", { 'Authorization' => "Bearer #{second_token}" }).first
 
 puts JSON.generate(results)

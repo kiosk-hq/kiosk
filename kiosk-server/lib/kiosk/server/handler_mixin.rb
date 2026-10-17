@@ -28,18 +28,15 @@ module Kiosk
       # First path segments the engine draws under the mount; keep in step with its routes.
       RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 
+      # The declaration members a verb registry entry takes.
+      REGISTERED_KEYS = %i[reach description input_schema output_schema example_params example_row].freeze
+
       # Required on every verb (§8.3); a declaration missing either is refused at class load.
       REQUIRED_DECLARATIONS = %i[input_schema output_schema].freeze
 
       # Installs the mixin. Called from Kiosk::Handler.included.
       def self.install(base)
-        unless base.is_a?(Class) && base <= ::ActionController::Metal
-          raise ArgumentError,
-                'include Kiosk::Handler into a controller class — Kiosk dispatches ' \
-                'handlers through Controller.action(…), which needs an ActionController subclass. ' \
-                'Pick the base class yourself (ApplicationController, ActionController::API, …); ' \
-                'Kiosk does not impose one.'
-        end
+        raise ArgumentError, Refusal::NOT_A_CONTROLLER unless base.is_a?(Class) && base <= ::ActionController::Metal
 
         # An operator's base class and its subclass may both include the mixin.
         return if base.respond_to?(:kiosk_declarations)
@@ -60,6 +57,114 @@ module Kiosk
       # Resolved lazily so this file can be required before the registries.
       def self.registry_for(kind)
         kind == :action ? Actions : Queries
+      end
+
+      # The sentences a refused declaration raises with.
+      module Refusal
+        module_function
+
+        NOT_A_CONTROLLER =
+          'include Kiosk::Handler into a controller class — Kiosk dispatches ' \
+          'handlers through Controller.action(…), which needs an ActionController subclass. ' \
+          'Pick the base class yourself (ApplicationController, ActionController::API, …); ' \
+          'Kiosk does not impose one.'
+
+        def mount_path = Kiosk.configuration.mount_path
+
+        def bad_kind(owner, value)
+          "#{owner} declared `kind #{value.inspect}`, which is not a Kiosk verb kind. " \
+            "It is :query (reached by GET #{mount_path}/<name>) or " \
+            ":action (POST #{mount_path}/<name>)."
+        end
+
+        def bad_reach(owner, value)
+          "#{owner} declared `reach #{value.inspect}`, which is not a Kiosk verb reach. " \
+            "It is :principal (the default — only the calling principal's own rows, or rows " \
+            'that belong to no principal), :published (the operator publishes owner-carrying ' \
+            'rows to everyone, by intent), :consented (a principal shared them, and the ' \
+            'operator can point at the artefact that says so) or :role (the reach follows the ' \
+            "caller's operator-assigned role claim). A verb that touches nobody else's rows " \
+            'declares nothing at all.'
+        end
+
+        def bad_topic_name(owner, name)
+          "#{owner} declared `topic #{name.inspect}`, which is not a legal Kiosk name. " \
+            "A topic name is a wire name: #{NAME_PATTERN.inspect}."
+        end
+
+        def reserved_topic(owner, name)
+          "#{owner} declared `topic #{name.inspect}`, but that name is reserved by the " \
+            "engine itself: #{RESERVED_NAMES.join(', ')}. Give the topic a name of its own."
+        end
+
+        # The §8.1/§8.3 name rules and required fields, first failure first; nil when none fails.
+        # `clash` is a declaration of the same name earlier in this class body.
+        def declaration(where, name, declaration, clash)
+          return missing_kind(where, name) if declaration[:kind].nil?
+          return name_clash(where, name, declaration, clash) if clash
+          return illegal_name(where, name) unless NAME_PATTERN.match?(name)
+          return reserved_name(where, name) if RESERVED_NAMES.include?(name)
+
+          missing = REQUIRED_DECLARATIONS.reject { |key| declaration.key?(key) }
+          missing_schemas(where, name, missing) unless missing.empty?
+        end
+
+        def missing_kind(where, name)
+          "#{where} declares the Kiosk verb #{name.inspect} without a `kind`. Every " \
+            'declaration says which verb reaches it: `kind :query` is served at ' \
+            "GET #{mount_path}/#{name}, `kind :action` at " \
+            "POST #{mount_path}/#{name}. One controller may declare " \
+            'both — the kind belongs to the declaration, not to the class — so there is ' \
+            'no default to fall back on.'
+        end
+
+        # One name declared twice in one class body; the cross-class case is {HandlerRegistrations}.
+        def name_clash(where, name, declaration, clash)
+          return same_name(where, name, declaration, clash) if clash[:kind] == declaration[:kind]
+
+          "#{where} declares #{name.inspect} as a#{'n' if declaration[:kind] == :action} " \
+            "#{declaration[:kind]}, but ##{clash[:method_name]} on this class already " \
+            "declares it as a#{'n' if clash[:kind] == :action} #{clash[:kind]}. A verb " \
+            'name is one path segment and one kind: ' \
+            "GET #{mount_path}/#{name} and " \
+            "POST #{mount_path}/#{name} cannot reach different handlers. " \
+            'Rename one, or give it a `wire_name` of its own.'
+        end
+
+        def same_name(where, name, declaration, clash)
+          "#{where} declares the Kiosk verb #{name.inspect}, which ##{clash[:method_name]} " \
+            'on this class already declares. A verb name is ONE path segment reaching ONE ' \
+            'method: storing the second would replace the first, ' \
+            "#{mount_path}/#{name} would reach " \
+            "##{declaration[:method_name]}, and ##{clash[:method_name]} would be off the wire " \
+            'with nothing to say so. Rename one of the methods, or give one of them a ' \
+            '`wire_name` of its own.'
+        end
+
+        def illegal_name(where, name)
+          "#{where} declares the Kiosk verb #{name.inspect}, which is not a legal verb " \
+            "name. A verb is ONE path segment matching #{NAME_PATTERN.source} " \
+            '(spec §8.1) — lower case, starting with a letter, digits and underscores after ' \
+            'that. Rename the method, or give it a legal `wire_name`.'
+        end
+
+        def reserved_name(where, name)
+          "#{where} declares the Kiosk verb #{name.inspect}, which is RESERVED: the engine " \
+            "draws #{mount_path}/#{name} itself, and the mount is drawn " \
+            'before your own routes, so that route wins by first-match — the verb would never ' \
+            'be reached. Reserved: ' \
+            "#{RESERVED_NAMES.join(', ')}. Give it a `wire_name` of its own."
+        end
+
+        def missing_schemas(where, name, missing)
+          "#{where} declares the Kiosk verb #{name.inspect} without #{missing.join(' and ')}. " \
+            'Both are REQUIRED on every verb: `input_schema` is the contract the wire ' \
+            'coerces and validates arguments against, and `output_schema` is the only ' \
+            'machine-readable statement of what the call returns now that the response ' \
+            'envelope is gone. A verb that takes nothing still declares ' \
+            '`input_schema type: "object", additionalProperties: false, properties: {}, ' \
+            'required: []`.'
+        end
       end
 
       # Evaluates a `topic` block, keeping its declarations out of the verb macros' pending state.
@@ -99,6 +204,13 @@ module Kiosk
         # `(subject, identity) -> Boolean`; runs outside any request, so it cannot read {CurrentRequest}.
         def subject_reachable(callable) = @subject_reachable_value = callable
 
+        # What {Events.register} takes for the topic `name`.
+        def registration(name)
+          { name: name, reach: reach_value || :principal, description: description_value,
+            payload_schema: payload_schema_value, examples: examples_value,
+            subject_reachable: subject_reachable_value }
+        end
+
         # Each macro must be called; `description nil` is a valid answer (§8.5.1).
         def validate!(owner:, name:)
           missing = Events::REQUIRED - declared
@@ -136,28 +248,14 @@ module Kiosk
       module ClassMethods
         # Which HTTP method reaches the next-defined method; one controller may declare both.
         def kind(value)
-          unless KINDS.include?(value)
-            raise ArgumentError,
-                  "#{self} declared `kind #{value.inspect}`, which is not a Kiosk verb kind. " \
-                  "It is :query (reached by GET #{Kiosk.configuration.mount_path}/<name>) or " \
-                  ":action (POST #{Kiosk.configuration.mount_path}/<name>)."
-          end
+          raise ArgumentError, Refusal.bad_kind(self, value) unless KINDS.include?(value)
 
           kiosk_pending[:kind] = value
         end
 
         # Whose rows the next verb may touch (§7.2); the default is :principal.
         def reach(value)
-          unless REACHES.include?(value)
-            raise ArgumentError,
-                  "#{self} declared `reach #{value.inspect}`, which is not a Kiosk verb reach. " \
-                  "It is :principal (the default — only the calling principal's own rows, or rows " \
-                  'that belong to no principal), :published (the operator publishes owner-carrying ' \
-                  'rows to everyone, by intent), :consented (a principal shared them, and the ' \
-                  'operator can point at the artefact that says so) or :role (the reach follows the ' \
-                  "caller's operator-assigned role claim). A verb that touches nobody else's rows " \
-                  'declares nothing at all.'
-          end
+          raise ArgumentError, Refusal.bad_reach(self, value) unless REACHES.include?(value)
 
           kiosk_pending[:reach] = value
         end
@@ -190,31 +288,13 @@ module Kiosk
         # `example` and `subject_reachable`.
         def topic(name, &block)
           name = name.to_s
-
-          unless name.match?(NAME_PATTERN)
-            raise ArgumentError,
-                  "#{self} declared `topic #{name.inspect}`, which is not a legal Kiosk name. " \
-                  "A topic name is a wire name: #{NAME_PATTERN.inspect}."
-          end
-
-          if RESERVED_NAMES.include?(name)
-            raise ArgumentError,
-                  "#{self} declared `topic #{name.inspect}`, but that name is reserved by the " \
-                  "engine itself: #{RESERVED_NAMES.join(', ')}. Give the topic a name of its own."
-          end
+          raise ArgumentError, Refusal.bad_topic_name(self, name) unless name.match?(NAME_PATTERN)
+          raise ArgumentError, Refusal.reserved_topic(self, name) if RESERVED_NAMES.include?(name)
 
           declaration = TopicDeclaration.new
           declaration.instance_eval(&block) if block
           declaration.validate!(owner: self, name: name)
-
-          kiosk_topic_declarations[name] = {
-            name: name,
-            reach: declaration.reach_value || :principal,
-            description: declaration.description_value,
-            payload_schema: declaration.payload_schema_value,
-            examples: declaration.examples_value,
-            subject_reachable: declaration.subject_reachable_value
-          }
+          kiosk_topic_declarations[name] = declaration.registration(name)
         end
 
         # `super` first: AbstractController::Base also hooks method_added.
@@ -265,67 +345,8 @@ module Kiosk
         def kiosk_refuse_bad_declaration!(declaration)
           name = declaration[:wire_name]
           where = "#{self}##{declaration[:method_name]}"
-
-          if declaration[:kind].nil?
-            raise ArgumentError,
-                  "#{where} declares the Kiosk verb #{name.inspect} without a `kind`. Every " \
-                  'declaration says which verb reaches it: `kind :query` is served at ' \
-                  "GET #{Kiosk.configuration.mount_path}/#{name}, `kind :action` at " \
-                  "POST #{Kiosk.configuration.mount_path}/#{name}. One controller may declare " \
-                  'both — the kind belongs to the declaration, not to the class — so there is ' \
-                  'no default to fall back on.'
-          end
-
-          # One name declared twice in one class body; the cross-class case is {HandlerRegistrations}.
-          clash = kiosk_declarations[name]
-          if clash && clash[:kind] != declaration[:kind]
-            raise ArgumentError,
-                  "#{where} declares #{name.inspect} as a#{'n' if declaration[:kind] == :action} " \
-                  "#{declaration[:kind]}, but ##{clash[:method_name]} on this class already " \
-                  "declares it as a#{'n' if clash[:kind] == :action} #{clash[:kind]}. A verb " \
-                  'name is one path segment and one kind: ' \
-                  "GET #{Kiosk.configuration.mount_path}/#{name} and " \
-                  "POST #{Kiosk.configuration.mount_path}/#{name} cannot reach different handlers. " \
-                  'Rename one, or give it a `wire_name` of its own.'
-          elsif clash
-            raise ArgumentError,
-                  "#{where} declares the Kiosk verb #{name.inspect}, which ##{clash[:method_name]} " \
-                  'on this class already declares. A verb name is ONE path segment reaching ONE ' \
-                  'method: storing the second would replace the first, ' \
-                  "#{Kiosk.configuration.mount_path}/#{name} would reach " \
-                  "##{declaration[:method_name]}, and ##{clash[:method_name]} would be off the wire " \
-                  'with nothing to say so. Rename one of the methods, or give one of them a ' \
-                  '`wire_name` of its own.'
-          end
-
-          unless HandlerMixin::NAME_PATTERN.match?(name)
-            raise ArgumentError,
-                  "#{where} declares the Kiosk verb #{name.inspect}, which is not a legal verb " \
-                  "name. A verb is ONE path segment matching #{HandlerMixin::NAME_PATTERN.source} " \
-                  '(spec §8.1) — lower case, starting with a letter, digits and underscores after ' \
-                  'that. Rename the method, or give it a legal `wire_name`.'
-          end
-
-          if HandlerMixin::RESERVED_NAMES.include?(name)
-            raise ArgumentError,
-                  "#{where} declares the Kiosk verb #{name.inspect}, which is RESERVED: the engine " \
-                  "draws #{Kiosk.configuration.mount_path}/#{name} itself, and the mount is drawn " \
-                  'before your own routes, so that route wins by first-match — the verb would never ' \
-                  'be reached. Reserved: ' \
-                  "#{HandlerMixin::RESERVED_NAMES.join(', ')}. Give it a `wire_name` of its own."
-          end
-
-          missing = HandlerMixin::REQUIRED_DECLARATIONS.reject { |key| declaration.key?(key) }
-          return if missing.empty?
-
-          raise ArgumentError,
-                "#{where} declares the Kiosk verb #{name.inspect} without #{missing.join(' and ')}. " \
-                'Both are REQUIRED on every verb: `input_schema` is the contract the wire ' \
-                'coerces and validates arguments against, and `output_schema` is the only ' \
-                'machine-readable statement of what the call returns now that the response ' \
-                'envelope is gone. A verb that takes nothing still declares ' \
-                '`input_schema type: "object", additionalProperties: false, properties: {}, ' \
-                'required: []`.'
+          refusal = Refusal.declaration(where, name, declaration, kiosk_declarations[name])
+          raise ArgumentError, refusal if refusal
         end
 
         def kiosk_register_one(declaration)
@@ -336,13 +357,7 @@ module Kiosk
             kind: declaration[:kind]
           )
           HandlerMixin.registry_for(declaration[:kind]).declare(
-            declaration[:wire_name], handler,
-            reach: declaration[:reach],
-            description: declaration[:description],
-            input_schema: declaration[:input_schema],
-            output_schema: declaration[:output_schema],
-            example_params: declaration[:example_params],
-            example_row: declaration[:example_row]
+            declaration[:wire_name], handler, **REGISTERED_KEYS.to_h { |key| [key, declaration[key]] }
           )
         end
       end
@@ -378,10 +393,18 @@ module Kiosk
           invalid = kiosk_invalid_model(exception)
           raise Kiosk::Server::Errors::BadRequest, invalid.errors.full_messages.join('; ') if invalid
 
-          status = ::ActionDispatch::ExceptionWrapper.rescue_responses[exception.class.name]
-          code   = Kiosk::Server::Errors::STATUS_CODES[::Rack::Utils.status_code(status)]
+          code = kiosk_rescued_code(exception)
           raise exception if code.nil?
 
+          kiosk_render_rescued(exception, code)
+        end
+
+        def kiosk_rescued_code(exception)
+          status = ::ActionDispatch::ExceptionWrapper.rescue_responses[exception.class.name]
+          Kiosk::Server::Errors::STATUS_CODES[::Rack::Utils.status_code(status)]
+        end
+
+        def kiosk_render_rescued(exception, code)
           Kiosk::Server::FailureLog.report(
             "verb #{kiosk_wire_name.inspect} answered #{code} for #{exception.class}", exception
           )

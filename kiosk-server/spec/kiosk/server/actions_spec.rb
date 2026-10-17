@@ -30,7 +30,9 @@ RSpec.describe Kiosk::Server::Actions do
       expect(described_class.fetch(:ping)).to eq(described_class.fetch('ping'))
     end
   end
+end
 
+RSpec.describe Kiosk::Server::Actions do
   describe '.fetch unknown name' do
     it 'raises NotFound whose hint names the available actions and points at the schema' do
       declare_action('place_order')
@@ -48,7 +50,9 @@ RSpec.describe Kiosk::Server::Actions do
         }
     end
   end
+end
 
+RSpec.describe Kiosk::Server::Actions do
   describe '.known' do
     it 'lists registered action names' do
       declare_action('a')
@@ -62,7 +66,9 @@ RSpec.describe Kiosk::Server::Actions do
       expect(described_class.known).to be_empty
     end
   end
+end
 
+RSpec.describe Kiosk::Server::Actions do
   describe '.describe' do
     it 'carries the declared description into the descriptor' do
       declare_action('place_order', description: 'Place an order')
@@ -98,7 +104,9 @@ RSpec.describe Kiosk::Server::Actions do
       expect(fetched).to respond_to(:call)
     end
   end
+end
 
+RSpec.describe Kiosk::Server::Actions do
   describe '.catalog' do
     it 'returns all descriptors sorted by name' do
       declare_action('zebra', description: 'Last')
@@ -121,7 +129,9 @@ RSpec.describe Kiosk::Server::Actions do
       expect(described_class.known).to eq(['x'])
     end
   end
+end
 
+RSpec.describe Kiosk::Server::Actions do
   describe 'machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)' do
     let(:input_schema) do
       {
@@ -143,7 +153,11 @@ RSpec.describe Kiosk::Server::Actions do
       expect(d[:example_params]).to eq({ items: ['milk-1l'] })
       expect(d[:example_row]).to    eq({ order_id: 'abc', status: 'placed' })
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::Actions do
+  describe 'machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)' do
     # Through `declare` rather than the mixin: T-073 = A makes both schemas
     # REQUIRED, so {HandlerMixin} raises on a declaration missing either and no
     # operator can produce one. The omission behaviour is this REGISTRY's, and

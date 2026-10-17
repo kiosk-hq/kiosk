@@ -3,7 +3,7 @@
 # Red-team battery for getgrocery: attacks a running server and asserts every attack is refused.
 # Usage: SERVER_URL=http://127.0.0.1:3001 bundle exec ruby script/redteam_suite.rb
 
-require "date"
+require "active_support/time"
 require "json"
 require "kiosk/redteam"
 require "net/http"
@@ -11,8 +11,14 @@ require "openssl"
 require "securerandom"
 require "uri"
 
-# The day every order here is booked on: tomorrow, so every window is open.
-ORDER_DAY = (Date.today + 1).iso8601
+DUBLIN = ActiveSupport::TimeZone["Europe/Dublin"]
+
+# The start of the window at `hour` on `day`, as a delivery_slots row publishes it.
+def slot_at(day, hour = 8) = day.in_time_zone(DUBLIN).change(hour: hour).iso8601
+
+# Every order here is booked tomorrow, so every window is open.
+SLOT_AT   = slot_at(DUBLIN.today + 1)
+SLOT_AT_2 = slot_at(DUBLIN.today + 1, 10)
 
 BASE_URL = ENV.fetch("SERVER_URL")
 ISSUER   = BASE_URL
@@ -30,18 +36,18 @@ profile = Kiosk::Redteam::Profile.new(
   row_id_key:    "order_id",
 
   # The items are kept so pay_for can mirror the order at catalog prices (the cashier check).
-  create_owned: ->(client, principal) {
-    catalog_resp = client.query(principal, name: "catalog")
+  create_owned: ->(client, customer) {
+    catalog_resp = client.query(customer, name: "catalog")
     # A non-paginating query answers a BARE ARRAY — there is no `rows` to unwrap.
     catalog = catalog_resp.body.is_a?(Array) ? catalog_resp.body : []
     raise "redteam: catalog returned empty" if catalog.empty?
     product = catalog.first
 
     order_resp = client.run(
-      principal,
+      customer,
       name:             "create_order",
       items:            [{ sku: product["sku"], qty: 1 }],
-      delivery_slot_id: 1, delivery_date: ORDER_DAY,
+      slot_at: SLOT_AT,
       delivery_address: "1 Redteam St, Dublin 1",
     )
     raise "redteam: create_order failed (#{order_resp.status}): #{order_resp.body.inspect}" \
@@ -59,14 +65,14 @@ profile = Kiosk::Redteam::Profile.new(
   },
 
   forge_action: "create_order",
-  forge_args: ->(client, _principal_a, _principal_b) {
-    catalog_resp = client.query(_principal_b, name: "catalog")
+  forge_args: ->(client, _customer_a, _customer_b) {
+    catalog_resp = client.query(_customer_b, name: "catalog")
     catalog = catalog_resp.body.is_a?(Array) ? catalog_resp.body : []
     raise "redteam: catalog empty for forge_args" if catalog.empty?
     product = catalog.first
     {
       items:            [{ sku: product["sku"], qty: 1 }],
-      delivery_slot_id: 1, delivery_date: ORDER_DAY,
+      slot_at: SLOT_AT,
       delivery_address: "1 Redteam St, Dublin 1",
     }
   },
@@ -76,12 +82,12 @@ profile = Kiosk::Redteam::Profile.new(
   gated_args:   ->(owned_ref) {
     {
       order_id:         owned_ref[:id],
-      delivery_slot_id: 2, delivery_date: ORDER_DAY,
+      slot_at: SLOT_AT_2,
     }
   },
 
   # No card-setup step: KIOSK_TEST_AUTOCARD=1 against stripe-mock provisions a test card at capture.
-  pay_for: ->(_client, principal, owned_ref) {
+  pay_for: ->(_client, customer, owned_ref) {
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
     cart_id   = SecureRandom.uuid
@@ -91,8 +97,8 @@ profile = Kiosk::Redteam::Profile.new(
 
     intent = {
       id:               intent_id,
-      user_id:          principal.user_id,
-      agent_id:         principal.agent_id,
+      user_id:          customer.user_id,
+      agent_id:         customer.agent_id,
       iss:              ISSUER,
       scope:            "grocery",
       cap_amount_cents: cap_amount_cents,
@@ -104,8 +110,8 @@ profile = Kiosk::Redteam::Profile.new(
     cart = {
       id:                 cart_id,
       intent_mandate_id:  intent_id,
-      user_id:            principal.user_id,
-      agent_id:           principal.agent_id,
+      user_id:            customer.user_id,
+      agent_id:           customer.agent_id,
       iss:                ISSUER,
       line_items:         [{ order_id: owned_ref[:id] }] + (owned_ref[:items] || []),
       total_amount_cents: total_cents,
@@ -199,7 +205,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
     statuses = []
 
     BAD_ITEMS.each do |label, items|
-      args = { delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS }
+      args = { slot_at: SLOT_AT, delivery_address: ADDRESS }
       args[:items] = items unless items.nil?
       resp = client.run(a, name: "create_order", **args)
       statuses << resp.status
@@ -217,7 +223,7 @@ class MalformedItemsCart < Kiosk::Redteam::Scenario
     catalog = catalog_body.is_a?(Array) ? catalog_body : []
     control = client.run(a, name: "create_order",
                             items: [{ sku: catalog.first["sku"], qty: 1 }],
-                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS)
+                            slot_at: SLOT_AT, delivery_address: ADDRESS)
     statuses << control.status
     unless control.status == 200
       failures << "CONTROL well-formed items → HTTP #{control.status} #{control.body.inspect} (want 200)"
@@ -245,7 +251,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     super(
       name:        "HostileArgShapes",
       category:    "input",
-      description: "Boolean/array/object/junk values on items[].qty, delivery_slot_id, delivery_date, delivery_address and order_id are a typed 400 — never a 500",
+      description: "Boolean/array/object/junk values on items[].qty, slot_at, delivery_address and order_id are a typed 400 — never a 500",
     )
   end
 
@@ -258,19 +264,17 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     good_items = [{ sku: catalog.first["sku"], qty: 1 }]
 
     SHAPES.each do |v|
-      refused "create_order delivery_slot_id=#{v.inspect}",
-              client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: v, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
+      refused "create_order slot_at=#{v.inspect}",
+              client.run(a, name: "create_order", items: good_items, slot_at: v, delivery_address: ADDRESS),
               supplied: v
       refused "reschedule_delivery order_id=#{v.inspect}",
-              client.run(a, name: "reschedule_delivery", order_id: v, delivery_slot_id: 1, delivery_date: ORDER_DAY),
+              client.run(a, name: "reschedule_delivery", order_id: v, slot_at: SLOT_AT),
               supplied: v
     end
-    # Outside the declared slot range 1..6.
-    [0, -1, 7, 999].each do |v|
-      refused "create_order delivery_slot_id=#{v.inspect}",
-              client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: v, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
+    # Instants that start no window.
+    [slot_at(DUBLIN.today + 1, 9), slot_at(DUBLIN.today + 1, 20), SLOT_AT.sub(":00:00", ":30:00")].each do |v|
+      refused "create_order slot_at=#{v.inspect}",
+              client.run(a, name: "create_order", items: good_items, slot_at: v, delivery_address: ADDRESS),
               supplied: v
     end
 
@@ -278,37 +282,36 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     (SHAPES + [0, -1]).each do |v|
       refused "create_order items[0].qty=#{v.inspect}",
               client.run(a, name: "create_order", items: [{ sku: sku, qty: v }],
-                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
+                            slot_at: SLOT_AT, delivery_address: ADDRESS),
               supplied: { sku: sku, qty: v }
     end
 
     # Magnitude: a qty no line carries, and more lines than an order carries — both refused by the schema.
     refused "create_order items[0].qty=1000",
             client.run(a, name: "create_order", items: [{ sku: sku, qty: 1000 }],
-                          delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS),
+                          slot_at: SLOT_AT, delivery_address: ADDRESS),
             supplied: { sku: sku, qty: 1000 }
     refused "create_order with 1000 lines",
             client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }] * 1000,
-                          delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS)
+                          slot_at: SLOT_AT, delivery_address: ADDRESS)
 
-    # A date is `YYYY-MM-DD` only; an ambiguous `09/01/2026` must not be guessed at.
-    ["nope", "2026-13-45", "0000-01-01", "true",
-     "[2026-09-01]", "20260101", "09/01/2026"].each do |v|
-      refused "create_order delivery_date=#{v.inspect}",
-              client.run(a, name: "create_order", items: good_items, delivery_slot_id: 1,
-                            delivery_address: ADDRESS, delivery_date: v),
+    # An instant is RFC 3339 with its offset; an ambiguous `09/01/2026 08:00` must not be guessed at.
+    ["nope", "2026-13-45T08:00:00Z", "0000-01-01T08:00:00Z", "true", "2026-09-01",
+     "2026-09-01T08:00:00", "09/01/2026 08:00"].each do |v|
+      refused "create_order slot_at=#{v.inspect}",
+              client.run(a, name: "create_order", items: good_items, slot_at: v, delivery_address: ADDRESS),
               supplied: v
     end
     # The served zone is the demo's own guard; the schema says only `string`.
     ["", "   ", "1 Main St, Cork", "Dublin 99", "somewhere"].each do |v|
       refused "create_order delivery_address=#{v.inspect}",
               client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: v),
+                            slot_at: SLOT_AT, delivery_address: v),
               supplied: v
     end
 
     control = client.run(a, name: "create_order", items: good_items,
-                            delivery_slot_id: 1, delivery_date: ORDER_DAY, delivery_address: ADDRESS)
+                            slot_at: SLOT_AT, delivery_address: ADDRESS)
     unless control.status == 200
       @failures << "CONTROL well-formed create_order → HTTP #{control.status} " \
                    "#{control.body.inspect[0, 90]} (want 200; the probes above prove nothing " \
@@ -436,13 +439,13 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
 
     sku      = (client.query(a, name: "catalog").body.then { |b| b.is_a?(Array) ? b : [] }).first&.dig("sku")
     order    = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
-                             delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: past)
+                             slot_at: slot_at(Date.iso8601(past)), delivery_address: ADDRESS)
     o_detail = order.body.is_a?(Hash) ? order.body["detail"].to_s : ""
     order_refused = order.status == 400 && error_code(order) == "bad_request" &&
-                    o_detail.include?("in the past") && o_detail.match?(/\d{4}-\d{2}-\d{2}/)
+                    o_detail.include?("no longer bookable") && o_detail.include?(past)
 
     order_ctl = client.run(a, name: "create_order", items: [{ sku: sku, qty: 1 }],
-                              delivery_slot_id: 1, delivery_address: ADDRESS, delivery_date: future)
+                              slot_at: slot_at(Date.iso8601(future)), delivery_address: ADDRESS)
     order_control = order_ctl.status == 200 && order_ctl.body.is_a?(Hash) &&
                     !order_ctl.body["order_id"].to_s.empty?
 
@@ -455,10 +458,10 @@ class PastDeliveryDate < Kiosk::Redteam::Scenario
                  "delivery_slots date=#{past} → #{bad.status}/#{error_code(bad).inspect} " \
                  "detail=#{detail[0, 120].inspect}; " \
                  "CONTROL date=#{future} → #{ctl.status}/#{ctl.body.is_a?(Array) ? ctl.body.size : 0} rows; " \
-                 "create_order delivery_date=#{past} → #{order.status}/#{error_code(order).inspect} " \
+                 "create_order slot_at on #{past} → #{order.status}/#{error_code(order).inspect} " \
                  "detail=#{o_detail[0, 120].inspect}; " \
-                 "CONTROL create_order delivery_date=#{future} → #{order_ctl.status} " \
-                 "(want 400 bad_request naming the earliest bookable date on BOTH, and both controls answered)",
+                 "CONTROL create_order slot_at on #{future} → #{order_ctl.status} " \
+                 "(want 400 bad_request naming the day on BOTH, and both controls answered)",
     )
   end
 end
@@ -548,7 +551,7 @@ end
 # §3.8.9: one rendering per row, never a second wall clock in the caller's zone.
 class OneRenderingPerRow < Kiosk::Redteam::Scenario
   ADDRESS   = "1 Redteam St, Dublin 1"
-  RENDERING = %w[date slot_at label timezone].freeze
+  RENDERING = %w[slot_at label timezone].freeze
 
   def initialize
     super(
@@ -571,8 +574,8 @@ class OneRenderingPerRow < Kiosk::Redteam::Scenario
     answered = [west, east].all? { |r| r.status == 200 && r.body.is_a?(Array) && r.body.any? }
 
     # Compared per shared slot: a window may begin between the two calls and drop out.
-    rows_w = answered ? west.body.to_h { |r| [r["delivery_slot_id"], r] } : {}
-    rows_e = answered ? east.body.to_h { |r| [r["delivery_slot_id"], r] } : {}
+    rows_w = answered ? west.body.to_h { |r| [r["slot_at"], r] } : {}
+    rows_e = answered ? east.body.to_h { |r| [r["slot_at"], r] } : {}
     shared = rows_w.keys & rows_e.keys
     agree  = shared.any? &&
              shared.all? { |id| RENDERING.all? { |f| rows_w[id][f] == rows_e[id][f] } }

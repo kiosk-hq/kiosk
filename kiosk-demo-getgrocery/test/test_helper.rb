@@ -38,9 +38,8 @@ class Shopper < Kiosk::TestHelpers::Customer
   def delivery_windows(address: HOME, **) = asks(:delivery_slots, delivery_address: address, **)
   def orders_placed = asks(:my_orders).rows
 
-  def orders(*skus, window: 1, on: Date.current + 1, address: HOME, **extra)
-    does(:create_order, items: skus.map { { sku: _1, qty: 1 } }, delivery_slot_id: window,
-                        delivery_date: on.to_s, delivery_address: address, **extra)
+  def orders(*skus, window: 1, on: Date.current + 1, address: HOME, slot_at: window_start(window, on, address), **extra)
+    does(:create_order, items: skus.map { { sku: _1, qty: 1 } }, slot_at:, delivery_address: address, **extra)
       .tap { (@baskets ||= {})[_1["order_id"]] = skus }
   end
 
@@ -51,8 +50,11 @@ class Shopper < Kiosk::TestHelpers::Customer
   end
 
   def moves(order, to_window:, on: Date.current + 1)
-    does(:reschedule_delivery, order_id: order["order_id"], delivery_slot_id: to_window, delivery_date: on.to_s)
+    does(:reschedule_delivery, order_id: order["order_id"], slot_at: window_start(to_window, on, HOME))
   end
+
+  # The start of the window-th window (1-based) on `on`, as delivery_slots publishes it.
+  def window_start(window, on, address) = DeliverySlots.starts(on, DeliverySlots.zone_at(address))[window - 1].iso8601
 end
 
 class StoryTest < Kiosk::StoryTest

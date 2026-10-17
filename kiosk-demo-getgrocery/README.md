@@ -100,18 +100,15 @@ still IN is never "in the past" even when the shop has already rolled over —
 that is the 23:05 case the rule exists for — and the rows then come back on the
 **shop's** calendar, which is how you learn that your tonight became its
 tomorrow. A day you have entirely finished IS past, and is a `400` naming the
-earliest day the shop can serve. `create_order`'s `delivery_date` is the other
-case and its descriptor says so: it ECHOES a row, so it is read on the clock
-that row was published on, or handing back the day you were offered would book
-a different one.
+earliest day the shop can serve. `create_order` and `reschedule_delivery` take
+the row's `slot_at`, an instant, so no calendar is involved.
 
-**The row names its zone, and that is the point of it.** `slot_at` has
-always been unambiguous, but nobody says an offset out loud: the field a human
+**The row names its zone, and that is the point of it.** `slot_at` is
+unambiguous, but nobody says an offset out loud: the field a human
 is actually read out is `label`, and a bare `08:00–10:00` is a wall clock with
 no clock named — a customer three hours away hears their own 08:00. So the row
 carries `timezone` beside the label. It also carries `district` (the served
-postal district, `D02`), which is a ROUTING key and not a time zone — one word
-for both was unreadable three lines apart.
+postal district, `D02`), which is a routing key.
 
 **Every verb that publishes this window publishes it the same way.**
 `delivery_slots` offers a window, `create_order` books it,

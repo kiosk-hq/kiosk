@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
-# Places one order for the principal: the basket, its delivery window and
+# Places one order for the customer: the basket, its delivery window and
 # address, priced at catalogue prices. Raises a wire error on a refusal.
 class CreateOrderOperation
-  def self.call(principal_id:, items:, delivery_slot_id:, delivery_date:, delivery_address:)
+  def self.call(customer_id:, items:, slot_at:, delivery_address:)
     zone     = DeliverySlots.zone_at(delivery_address)
     products = Product.where(sku: items.pluck(:sku)).index_by(&:sku)
     order    = Order.new(
-      user_id:     principal_id,
-      slot_at:     DeliverySlots.slot_at(Date.iso8601(delivery_date), delivery_slot_id, zone),
+      user_id:     customer_id,
+      slot_at:     slot_at,
       address:     delivery_address,
       timezone:    zone.name,
       order_items: items.map { OrderItem.new(sku: _1[:sku], product: products[_1[:sku]], qty: _1[:qty]) },

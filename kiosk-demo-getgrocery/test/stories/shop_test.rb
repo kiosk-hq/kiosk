@@ -9,7 +9,7 @@ class ShopStory < StoryTest
     window = shopper.delivery_windows(date: (Date.current + 1).iso8601).rows.first
     assert_equal "08:00–10:00 (Europe/Dublin)", window["label"]
 
-    order = shopper.orders(*groceries.pluck("sku"), window: window["delivery_slot_id"])
+    order = shopper.orders(*groceries.pluck("sku"), slot_at: window["slot_at"])
     assert order.ok?, order
     assert_equal groceries.sum { _1["price_cents"] }, order["total_cents"]
 

@@ -63,13 +63,11 @@ class Order < ApplicationRecord
 
   # A window takes orders while a basket paid now still reaches the door inside it.
   def window_bookable
-    day = slot_at.in_time_zone(zone).to_date
-    if day < zone.today
-      errors.add(:slot_at, "is on #{day.iso8601}, which is in the past at the delivery address")
+    if slot_at.nil? || !DeliverySlots.start?(slot_at, zone)
+      errors.add(:slot_at, "must be the slot_at of a delivery_slots row")
     elsif DeliverySlots.closed?(slot_at)
-      errors.add(:slot_at, "#{DeliverySlots.label(slot_at, zone)} on #{day.iso8601} closes too soon to deliver " \
-                           "an order placed now — choose a later slot; call delivery_slots again for the " \
-                           "still-bookable windows")
+      errors.add(:slot_at, "#{DeliverySlots.label(slot_at, zone)} on #{slot_at.in_time_zone(zone).to_date.iso8601} " \
+                           "is no longer bookable; call delivery_slots for the open windows")
     end
   end
 end

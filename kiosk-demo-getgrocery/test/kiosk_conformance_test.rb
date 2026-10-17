@@ -17,7 +17,7 @@ require "test_helper"
 # asserted is the operator's own code rather than the wire in front of it. The
 # wire itself is driven by the stories under `test/stories/`.
 class KioskConformanceTest < ActiveSupport::TestCase
-  # Two principals with a shopping history each. `my_orders` answers whoever is
+  # Two customers with a shopping history each. `my_orders` answers whoever is
   # calling, so a scoping assertion needs both sides seeded: one to see rows and
   # one to be refused them.
   setup do
@@ -58,7 +58,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # With no arguments given, each check runs the verb's OWN `example_params` —
   # the object the descriptor tells an assistant to copy — so this executes the
   # published example as well as the handler.
-  test "the read surface executes as an authenticated principal" do
+  test "the read surface executes as a signed-in customer" do
     assert_kiosk_verb_executes :catalog,        as: @alice
     assert_kiosk_verb_executes :delivery_slots, as: @alice
     assert_kiosk_verb_executes :my_orders,      as: @alice
@@ -87,7 +87,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
     assert_kiosk_answer_matches_declared_schema :delivery_slots, as: @alice
   end
 
-  # ── 4. DATA ACCESS IS SCOPED TO THE PRINCIPAL ───────────────────────────
+  # ── 4. DATA ACCESS IS SCOPED TO THE CUSTOMER ───────────────────────────
   #
   # `my_orders` declares no `reach`, which means `principal` — the strongest
   # claim in the descriptor and the one made by saying nothing. The assertion is

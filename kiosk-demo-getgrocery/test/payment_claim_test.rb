@@ -46,7 +46,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
   def place(sku, qty: 1)
     as_shopper do
       Kiosk::Server::Actions.fetch("create_order").call(
-        items: [{ sku:, qty: }], delivery_slot_id: 3, delivery_date: (Date.current + 1).iso8601,
+        items: [{ sku:, qty: }], slot_at: DeliverySlots.starts(Date.current + 1)[2].iso8601,
         delivery_address: "42 Camden Street, Dublin 2",
       ).merge("sku" => sku)
     end
@@ -125,8 +125,8 @@ class PaymentClaimTest < ActiveSupport::TestCase
     assert_raises(Kiosk::Server::Errors::Forbidden) { capture(CountingPsp.new, theirs) }
     error = assert_raises(Kiosk::Server::Errors::Forbidden) do
       as_shopper do
-        Kiosk::Server::Actions.fetch("reschedule_delivery").call(order_id: SecureRandom.uuid, delivery_slot_id: 4,
-                                                                 delivery_date: (Date.current + 1).iso8601)
+        Kiosk::Server::Actions.fetch("reschedule_delivery").call(order_id: SecureRandom.uuid,
+                                                                 slot_at: DeliverySlots.starts(Date.current + 1)[3].iso8601)
       end
     end
     assert_equal 403, error.http_status

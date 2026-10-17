@@ -57,8 +57,8 @@ It writes `config/initializers/kiosk.rb`, the `kiosk.*` migrations and a
 `kiosk do … end` block in `config/routes.rb` that mounts the engine. What is
 left is read in the directory rather than quoted here: the queries and actions
 named in that block — GET for a query, POST for an action — and
-`app/controllers/kiosk/{storefront,orders}_controller.rb`, the verbs as
-ordinary Rails controllers. The toll, the cashier check and the Stripe adapter
+`app/controllers/kiosk/{catalog,delivery_slots,orders}_controller.rb`, the verbs
+as ordinary Rails controllers, one per resource. The toll, the cashier check and the Stripe adapter
 are the initializer's.
 
 No new human-facing login, no ceded customer relationship, no change to the

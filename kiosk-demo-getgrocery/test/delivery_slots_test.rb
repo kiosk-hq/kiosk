@@ -8,20 +8,27 @@ class DeliverySlotsTest < ActiveSupport::TestCase
   AUGUST_7TH    = Date.new(2026, 8, 7)
 
   test "windows are on the district's clock, across daylight saving" do
-    assert_equal 3600, DeliverySlots.slot_at(AUGUST_7TH, 1).utc_offset
-    assert_equal 0, DeliverySlots.slot_at(Date.new(2026, 1, 15), 1).utc_offset
-    assert_equal 9 * 3600, DeliverySlots.slot_at(AUGUST_7TH, 1, TOKYO).utc_offset
+    assert_equal 3600, DeliverySlots.starts(AUGUST_7TH).first.utc_offset
+    assert_equal 0, DeliverySlots.starts(Date.new(2026, 1, 15)).first.utc_offset
+    assert_equal 9 * 3600, DeliverySlots.starts(AUGUST_7TH, TOKYO).first.utc_offset
+  end
+
+  test "a window start is one of the day's six starts on the address's clock" do
+    assert DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 12), DUBLIN)
+    refute DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 13), DUBLIN)
+    refute DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 12, 30), DUBLIN)
+    refute DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 20), DUBLIN)
   end
 
   test "a window takes orders until picking and the drive no longer fit before it ends" do
     travel_to DUBLIN.local(2026, 8, 7, 11) do
-      assert_equal [2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN)
-      assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH + 1, DUBLIN)
-      assert_equal [6], DeliverySlots.bookable_ids(AUGUST_7TH, TOKYO)
+      assert_equal [10, 12, 14, 16, 18], hours(AUGUST_7TH, DUBLIN)
+      assert_equal [8, 10, 12, 14, 16, 18], hours(AUGUST_7TH + 1, DUBLIN)
+      assert_equal [18], hours(AUGUST_7TH, TOKYO)
     end
-    travel_to(DUBLIN.local(2026, 8, 7, 11, 25)) { assert_includes DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN), 2 }
-    travel_to(DUBLIN.local(2026, 8, 7, 11, 26)) { assert_equal [3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN) }
-    travel_to(DUBLIN.local(2026, 8, 7, 6)) { assert_equal [1, 2, 3, 4, 5, 6], DeliverySlots.bookable_ids(AUGUST_7TH, DUBLIN) }
+    travel_to(DUBLIN.local(2026, 8, 7, 11, 25)) { assert_includes hours(AUGUST_7TH, DUBLIN), 10 }
+    travel_to(DUBLIN.local(2026, 8, 7, 11, 26)) { assert_equal [12, 14, 16, 18], hours(AUGUST_7TH, DUBLIN) }
+    travel_to(DUBLIN.local(2026, 8, 7, 6)) { assert_equal [8, 10, 12, 14, 16, 18], hours(AUGUST_7TH, DUBLIN) }
   end
 
   test "the soonest day steps over a day whose windows have all closed" do
@@ -30,8 +37,8 @@ class DeliverySlotsTest < ActiveSupport::TestCase
   end
 
   test "the label names its zone" do
-    assert_equal "08:00–10:00 (Asia/Tokyo)", DeliverySlots.label(DeliverySlots.slot_at(AUGUST_7TH, 1, TOKYO), TOKYO)
-    assert_equal "08:00–10:00 (Europe/Dublin)", DeliverySlots.label(DeliverySlots.slot_at(AUGUST_7TH, 1))
+    assert_equal "08:00–10:00 (Asia/Tokyo)", DeliverySlots.label(DeliverySlots.starts(AUGUST_7TH, TOKYO).first, TOKYO)
+    assert_equal "08:00–10:00 (Europe/Dublin)", DeliverySlots.label(DeliverySlots.starts(AUGUST_7TH).first)
   end
 
   test "every served district has a clock" do
@@ -52,4 +59,8 @@ class DeliverySlotsTest < ActiveSupport::TestCase
       assert_equal DublinZones::SERVED.sort, message[/erved districts.*/].scan(/D\d\d/).uniq.sort
     end
   end
+
+  private
+
+  def hours(date, zone) = DeliverySlots.bookable(date, zone).map { _1.in_time_zone(zone).hour }
 end

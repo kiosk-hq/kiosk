@@ -57,22 +57,15 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
     assert_equal 1347, second["total_cents"]
   end
 
-  test "the delivery day is REQUIRED: a slot id names a window only together with the row's date" do
-    refusal = assert_kiosk_refused { place(delivery_date: nil) }
+  test "slot_at must be the start of a delivery window" do
+    off_grid = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2] + 30.minutes
+    refusal = assert_kiosk_refused { place(slot_at: off_grid.iso8601) }
     assert_equal "bad_request", refusal.code
-    assert_includes refusal.message, "delivery_date"
+    assert_includes refusal.message, "slot_at of a delivery_slots row"
     assert_equal 0, Order.where(user_id: @shopper.id).count
   end
 
-  test "both write verbs PUBLISH delivery_date as required" do
-    %w[create_order reschedule_delivery].each do |name|
-      verb = kiosk_origin.verbs.find { |v| v.name == name }
-      required = verb.input_schema.with_indifferent_access[:required]
-      assert_includes required, "delivery_date", "#{name}'s input_schema must list delivery_date as required"
-    end
-  end
-
-  test "an abandoned order stays unpaid on the principal's own reconciliation surface" do
+  test "an abandoned order stays unpaid on the customer's own reconciliation surface" do
     place
     rows = kiosk_origin.call("my_orders", kind: :query, params: {}, as: @shopper)
 
@@ -83,11 +76,10 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
 
   private
 
-  def place(order_id: nil, qty: 1, delivery_date: DeliverySlots.default_zone.tomorrow.iso8601)
+  def place(order_id: nil, qty: 1, slot_at: DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601)
     params = { items: [{ sku: "sourdough-bread", qty: qty }],
-               delivery_slot_id: 3,
-               delivery_date:    delivery_date,
-               delivery_address: ADDRESS }.compact
+               slot_at:          slot_at,
+               delivery_address: ADDRESS }
     params[:order_id] = order_id if order_id
     kiosk_origin.call("create_order", kind: :action, params: params, as: @shopper)
   end

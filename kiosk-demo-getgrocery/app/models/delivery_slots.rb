@@ -24,12 +24,15 @@ module DeliverySlots
   # Today, or tomorrow once today's last window has closed.
   def soonest_date(zone)
     today = zone.today
-    bookable_ids(today, zone).empty? ? today + 1 : today
+    bookable(today, zone).empty? ? today + 1 : today
   end
 
-  def slot_at(date, slot_id, zone = default_zone)
-    date.in_time_zone(zone).change(hour: FIRST_HOUR + (slot_id - 1) * WINDOW_HOURS)
+  # Each window's start on `date`, on the clock of `zone`.
+  def starts(date, zone = default_zone)
+    Array.new(COUNT) { date.in_time_zone(zone).change(hour: FIRST_HOUR + _1 * WINDOW_HOURS) }
   end
+
+  def start?(time, zone) = starts(time.in_time_zone(zone).to_date, zone).include?(time)
 
   # "08:00–10:00 (Europe/Dublin)".
   def label(time, zone = default_zone)
@@ -42,9 +45,7 @@ module DeliverySlots
     (slot_at + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
   end
 
-  def bookable_ids(date, zone)
-    (1..COUNT).reject { |slot_id| closed?(slot_at(date, slot_id, zone)) }
-  end
+  def bookable(date, zone) = starts(date, zone).reject { closed?(_1) }
 
   # "14:35 (Europe/Dublin)".
   def clock_label(time, zone) = "#{time.in_time_zone(zone).strftime("%H:%M")} (#{zone.name})"

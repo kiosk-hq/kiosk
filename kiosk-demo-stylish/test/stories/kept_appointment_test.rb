@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-class VisitStory < StoryTest
+class KeptAppointmentStory < StoryTest
   test "a client whose appointment time has passed is recorded as a visit, once, worth the service's price" do
     client = a_customer(as: Client)
     service = client.menu.first

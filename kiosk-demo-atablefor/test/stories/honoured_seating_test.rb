@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-class VisitStory < StoryTest
+class HonouredSeatingStory < StoryTest
   def visits_of(diner) = Kiosk::Visit.where(user_id: diner.principal.user_id).pluck(:value_cents)
 
   test 'a diner whose seating has passed is recorded as a visit, once, worth the average spend of the party' do

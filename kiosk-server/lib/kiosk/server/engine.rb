@@ -67,26 +67,85 @@ module Kiosk
       LOOPBACK_ISSUER =
         %r{\A(?:https?://)?(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d+)?/?\z}i
 
-      def self.issuer_warning(config:, local:)
-        issuer = config.issuer.to_s.strip
+      # The boot-time configuration checks. Each answers a message, or nil when the configuration is sound.
+      module BootChecks
+        ISSUER_UNSET =
+          '[kiosk-server] `c.issuer` is not set, so every authenticated request is refused ' \
+          'with "proof audience mismatch". Set it to the origin assistants dial: ' \
+          'Kiosk.configure { |c| c.issuer = "https://api.example.com" }.'
 
-        if issuer.empty?
-          return '[kiosk-server] `c.issuer` is not set, so every authenticated request is refused ' \
-                 'with "proof audience mismatch". Set it to the origin assistants dial: ' \
-                 'Kiosk.configure { |c| c.issuer = "https://api.example.com" }.'
-        end
-
-        return nil if local
-
-        loopback = [issuer, *config.additional_origins].map { |o| o.to_s.strip }
-                                                       .find { |o| LOOPBACK_ISSUER.match?(o) }
-        return nil unless loopback
-
-        "[kiosk-server] The served origin #{loopback.inspect} is a loopback origin outside " \
+        ISSUER_LOOPBACK =
+          '[kiosk-server] The served origin %<origin>s is a loopback origin outside ' \
           'development and test; no assistant can reach it, so every authenticated request is ' \
           'refused with "proof audience mismatch". Set `c.issuer` to the public origin and ' \
           'list a second business in `c.additional_origins`.'
+
+        DEFAULT_ROLE =
+          'There is always a default role: an AI assistant admitted with no role of its own ' \
+          '— a self-registration, or a binding whose approving human resolves none — lands on the ' \
+          'EMPTY role set and gets a token with NO role claim, at an origin whose verbs branch on ' \
+          'one. Configure the default, naming the least-privileged role you declare: ' \
+          'Kiosk.configure { |c| c.registration_role = :%<first>s }. Or assign roles to ' \
+          'nobody — `c.roles = []` — which is the other supported shape: then no binding carries a ' \
+          'role and no token has one. Both are total; the mixture is what is refused ' \
+          '(kiosk.tech protocol.md Section 6.3).'
+
+        EPHEMERAL_EVENT_STORE =
+          '[kiosk-server] this origin declares event topic(s) (%<topics>s) and its ' \
+          '`event_store` is the IN-PROCESS default. The operator keeps every event for 24 hours, ' \
+          'so a subscriber that reconnects with `since` misses nothing; this store is a Hash in ' \
+          'one process, not shared between Puma workers, dynos or pods, and a restart or deploy ' \
+          'loses every event inside that window, so the subscriber is told `truncated: true`. ' \
+          'Nothing reports it: a lost tail produces no error, no metric and no log line. Set the ' \
+          'durable store: c.event_store = Kiosk::Server::EventStores::ActiveRecord.new — which ' \
+          '`rails generate kiosk:install` writes into the initializer, beside the ' \
+          '`%<schema>s.events` migration it writes for it.'
+
+        def issuer_warning(config:, local:)
+          issuer = config.issuer.to_s.strip
+          return ISSUER_UNSET if issuer.empty?
+          return nil if local
+
+          loopback = [issuer, *config.additional_origins].map { |o| o.to_s.strip }
+                                                         .find { |o| LOOPBACK_ISSUER.match?(o) }
+          format(ISSUER_LOOPBACK, origin: loopback.inspect) if loopback
+        end
+
+        # An origin that declares roles must configure a `registration_role` among
+        # them (protocol.md §6.3); an origin with no roles needs none.
+        def default_role_configuration_error(config:)
+          declared = Array(config.roles).map(&:to_s).reject(&:empty?)
+          return nil if declared.empty?
+
+          configured = config.registration_role.to_s.strip
+          return nil if declared.include?(configured)
+
+          "#{default_role_head(config, declared, configured)} #{format(DEFAULT_ROLE, first: declared.first)}"
+        end
+
+        # A production origin with event topics must keep 24 hours of events,
+        # which the in-process {EventStore} cannot.
+        def ephemeral_event_store_error(config:, production:, topics:)
+          return nil unless production
+
+          declared = Array(topics).map { |topic| topic.to_s.strip }.reject(&:empty?)
+          return nil if declared.empty?
+          return nil unless config.event_store.is_a?(Kiosk::Server::EventStore)
+
+          format(EPHEMERAL_EVENT_STORE, topics: declared.sort.join(', '), schema: Kiosk.configuration.schema)
+        end
+
+        private
+
+        def default_role_head(config, declared, configured)
+          roles = declared.join(', ')
+          return "[kiosk-server] this origin declares roles (#{roles}) and configures no `registration_role`." if configured.empty?
+
+          "[kiosk-server] this origin declares roles (#{roles}) and its " \
+            "`registration_role` is #{config.registration_role.inspect}, which is not one of them."
+        end
       end
+      extend BootChecks
 
       config.after_initialize do
         message = Kiosk::Server::Engine.issuer_warning(
@@ -97,57 +156,9 @@ module Kiosk
         ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
       end
 
-      # An origin that declares roles must configure a `registration_role` among
-      # them (protocol.md §6.3); an origin with no roles needs none.
-      def self.default_role_configuration_error(config:)
-        declared = Array(config.roles).map(&:to_s).reject(&:empty?)
-        return nil if declared.empty?
-
-        configured = config.registration_role.to_s.strip
-        return nil if declared.include?(configured)
-
-        head =
-          if configured.empty?
-            "[kiosk-server] this origin declares roles (#{declared.join(', ')}) and configures no " \
-              '`registration_role`.'
-          else
-            "[kiosk-server] this origin declares roles (#{declared.join(', ')}) and its " \
-              "`registration_role` is #{config.registration_role.inspect}, which is not one of them."
-          end
-
-        "#{head} There is always a default role: an AI assistant admitted with no role of its own " \
-          '— a self-registration, or a binding whose approving human resolves none — lands on the ' \
-          'EMPTY role set and gets a token with NO role claim, at an origin whose verbs branch on ' \
-          'one. Configure the default, naming the least-privileged role you declare: ' \
-          "Kiosk.configure { |c| c.registration_role = :#{declared.first} }. Or assign roles to " \
-          'nobody — `c.roles = []` — which is the other supported shape: then no binding carries a ' \
-          'role and no token has one. Both are total; the mixture is what is refused ' \
-          '(kiosk.tech protocol.md Section 6.3).'
-      end
-
       config.after_initialize do
         message = Kiosk::Server::Engine.default_role_configuration_error(config: Kiosk.configuration)
         raise Kiosk::Server::Errors::ConfigurationError, message if message
-      end
-
-      # A production origin with event topics must keep 24 hours of events,
-      # which the in-process {EventStore} cannot.
-      def self.ephemeral_event_store_error(config:, production:, topics:)
-        return nil unless production
-
-        declared = Array(topics).map { |topic| topic.to_s.strip }.reject(&:empty?)
-        return nil if declared.empty?
-        return nil unless config.event_store.is_a?(Kiosk::Server::EventStore)
-
-        "[kiosk-server] this origin declares event topic(s) (#{declared.sort.join(', ')}) and its " \
-          '`event_store` is the IN-PROCESS default. The operator keeps every event for 24 hours, ' \
-          'so a subscriber that reconnects with `since` misses nothing; this store is a Hash in ' \
-          'one process, not shared between Puma workers, dynos or pods, and a restart or deploy ' \
-          'loses every event inside that window, so the subscriber is told `truncated: true`. ' \
-          'Nothing reports it: a lost tail produces no error, no metric and no log line. Set the ' \
-          'durable store: c.event_store = Kiosk::Server::EventStores::ActiveRecord.new — which ' \
-          '`rails generate kiosk:install` writes into the initializer, beside the ' \
-          "`#{Kiosk.configuration.schema}.events` migration it writes for it."
       end
 
       config.after_initialize do
@@ -186,8 +197,7 @@ module Kiosk
 
         # Our own cable app, so a host's Action Cable config is never touched.
         # `events` is also in {HandlerMixin::RESERVED_NAMES}; keep the two in step.
-        mount Kiosk::Server::EventsCable::RACK_APP => 'events',
-              internal: true, anchor: true, as: :kiosk_events
+        mount Kiosk::Server::EventsCable::RACK_APP => 'events', internal: true, anchor: true, as: :kiosk_events
 
         get  'auth/challenge', to: 'auth#challenge'
         post 'auth/register',  to: 'auth#register'

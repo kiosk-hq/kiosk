@@ -56,16 +56,8 @@ module Kiosk
       def call(name, kind:, params:, as: nil)
         registry = kind == :query ? Queries : Actions
         handler  = registry.fetch(name)
-        RequestValidation.validate_arguments!(
-          params, input_schema: registry.describe(name)[:input_schema], verb: name.to_s
-        )
-
-        identity = identity_for(as)
-        answer   = nil
-        SessionContext.open(connection: resolved_connection, identity: identity) do
-          CurrentRequest.with(identity: identity) { answer = handler.call(symbolize(params)) }
-        end
-        unwrap(answer)
+        RequestValidation.validate_arguments!(params, input_schema: registry.describe(name)[:input_schema], verb: name.to_s)
+        unwrap(answer_as(identity_for(as)) { handler.call(symbolize(params)) })
       end
 
       # Uses the wire's own validators, so reserved `limit`/`cursor` pass as they do on the wire.
@@ -83,12 +75,7 @@ module Kiosk
 
       # A record contributes its `#id`; anything else is the principal id itself.
       def identity_for(subject, role: nil)
-        if subject.nil?
-          raise ArgumentError,
-                'a conformance call needs a principal — pass `as:` a record or a principal id. ' \
-                'Every verb is served behind authentication, so there is no anonymous call ' \
-                'to make.'
-        end
+        raise ArgumentError, NO_PRINCIPAL if subject.nil?
 
         Kiosk::Identity.new(
           user_id: subject.respond_to?(:id) ? subject.id : subject,
@@ -98,7 +85,21 @@ module Kiosk
         )
       end
 
+      NO_PRINCIPAL =
+        'a conformance call needs a principal — pass `as:` a record or a principal id. ' \
+        'Every verb is served behind authentication, so there is no anonymous call ' \
+        'to make.'
+      private_constant :NO_PRINCIPAL
+
       private
+
+      def answer_as(identity)
+        answer = nil
+        SessionContext.open(connection: resolved_connection, identity: identity) do
+          CurrentRequest.with(identity: identity) { answer = yield }
+        end
+        answer
+      end
 
       def descriptors(registry, kind)
         registry.catalog.map do |descriptor|

@@ -11,12 +11,177 @@ module Kiosk
       # cannot each build their own store (a double-spent proof of work).
       LAZY_STORE_MUTEX = Mutex.new
 
-      # Default `/kiosk`. Discovery advertises `endpoint = origin + mount_path`.
-      attr_writer :mount_path
+      # The discovery settings: where the wire is mounted and what it advertises.
+      module Discovery
+        # Default `/kiosk`. Discovery advertises `endpoint = origin + mount_path`.
+        attr_writer :mount_path
 
-      def mount_path
-        @mount_path ||= Kiosk::Protocol::DEFAULT_MOUNT_PATH
+        def mount_path
+          @mount_path ||= Kiosk::Protocol::DEFAULT_MOUNT_PATH
+        end
+
+        # Module names advertised in `/.well-known/kiosk.json`. Default: computed
+        # from what is registered and configured; a set value is returned verbatim.
+        attr_writer :capabilities
+
+        def capabilities
+          return @capabilities if @capabilities
+
+          computed_capabilities
+        end
+
+        # Free-form owner block for discovery, e.g. `{ name:, support: }`.
+        attr_writer :owner
+
+        def owner
+          @owner ||= {}
+        end
+
+        # Advertised in discovery and the `Kiosk-Min-Client` header. Advisory only.
+        attr_writer :min_client
+
+        def min_client
+          @min_client ||= Kiosk::Protocol::MIN_CLIENT
+        end
+
+        # The skill this origin was built against. Discovery emits the `skill`
+        # block only when `skill_sha256` is set.
+        attr_writer :skill_url
+
+        def skill_url
+          @skill_url ||= 'https://kiosk.tech/skill-v0.5.13.md'
+        end
+        attr_accessor :skill_sha256
+
+        private
+
+        # The spec's order; `events` stays last.
+        def computed_capabilities
+          has_queries = Kiosk::Server::Queries.known.any?
+          has_actions = Kiosk::Server::Actions.known.any?
+          {
+            'schema' => has_queries || has_actions,
+            'queries' => has_queries,
+            'actions' => has_actions,
+            'pay' => !payment_provider.nil?,
+            'events' => Kiosk::Server::Events.known.any?
+          }.select { |_, served| served }.keys.freeze
+        end
       end
+
+      # The proof-of-work settings: registration proofs and the reputation challenge.
+      module ProofOfWork
+        # Equihash proofs required at `POST /auth/register`. Default 0 (open).
+        # Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
+        attr_writer :registration_pow_count
+
+        def registration_pow_count
+          @registration_pow_count ||= 0
+        end
+
+        # Equihash (n, k) for registration. Default nil: the gem's own params.
+        attr_accessor :registration_pow_params
+
+        def registration_difficulty=(_)
+          raise ArgumentError,
+                'registration_difficulty (SHA256 hashcash) was removed — spec amended, ' \
+                'one PoW = Equihash. Use `c.registration_pow_count = 1` (Equihash) and set ' \
+                '`c.pow_secret`.'
+        end
+
+        # Decides when and how hard to challenge. Default nil: never.
+        # `#challenge_for(identity:, verb:, factors:) → {alg:, params:, count:} | nil`;
+        # the verb it receives is `:run`, never `:action`.
+        def reputation_policy=(value)
+          VerbVocabulary.assert!(value, :challenge_for, 'reputation_policy #challenge_for') unless value.nil?
+          @reputation_policy = value
+        end
+
+        def reputation_policy
+          @reputation_policy
+        end
+
+        # HMAC key for proof-of-work challenges, at least 32 bytes.
+        attr_reader :pow_secret
+
+        def pow_secret=(value)
+          if value.to_s.bytesize < 32
+            raise Errors::ConfigurationError,
+                  "c.pow_secret must be at least 32 bytes (got #{value.to_s.bytesize}). " \
+                  'Generate one with `openssl rand -hex 32`.'
+          end
+
+          @pow_secret = value
+        end
+
+        # Seconds. Default 300.
+        attr_writer :pow_ttl
+
+        def pow_ttl
+          @pow_ttl ||= 300
+        end
+
+        # `(identity:, verb:) → Kiosk::Reputation::Factors`. Default: empty factors.
+        def reputation_factors=(value)
+          VerbVocabulary.assert!(value, nil, 'reputation_factors callable') unless value.nil?
+          @reputation_factors = value
+        end
+
+        def reputation_factors
+          @reputation_factors ||= ->(**) { ::Kiosk::Reputation::Factors.empty }
+        end
+
+        # `(identity:)`, called on a cryptographically invalid proof. Default: no-op.
+        attr_writer :on_bad_proof
+
+        def on_bad_proof
+          @on_bad_proof ||= ->(**) {}
+        end
+      end
+
+      # The anonymized-KYC attestation settings.
+      module Kyc
+        # Anonymized attributes gated actions need, e.g. %w[age_over_18].
+        attr_writer :kyc_claims
+
+        def kyc_claims
+          @kyc_claims || []
+        end
+
+        # Must match the `iss` of submitted KYC attestations.
+        attr_writer :kyc_issuer
+
+        def kyc_issuer
+          @kyc_issuer
+        end
+
+        # The `aud` a KYC attestation must carry. Default: the origin being served.
+        attr_writer :kyc_audience
+
+        def kyc_audience
+          @kyc_audience || Kiosk.current_issuer
+        end
+
+        # The KYC provider's RSA key: an OpenSSL::PKey or a PEM string.
+        def kyc_public_key
+          @kyc_public_key
+        end
+
+        def kyc_public_key=(value)
+          @kyc_public_key = case value
+                            when OpenSSL::PKey::PKey then value
+                            when String              then OpenSSL::PKey::RSA.new(value)
+                            when nil                 then nil
+                            else
+                              raise ArgumentError,
+                                    "kyc_public_key must be an OpenSSL::PKey or PEM string, got #{value.class}"
+                            end
+        end
+      end
+
+      include Discovery
+      include ProofOfWork
+      include Kyc
 
       # When true, every request transaction runs `SET LOCAL ROLE <app_role>`;
       # that role then needs grants on every table the verbs touch. Default false.
@@ -26,39 +191,6 @@ module Kiosk
         @enforce_db_role ||= false
       end
 
-      # Module names advertised in `/.well-known/kiosk.json`. Default: computed
-      # from what is registered and configured; a set value is returned verbatim.
-      attr_writer :capabilities
-
-      def capabilities
-        return @capabilities if @capabilities
-
-        computed_capabilities
-      end
-
-      # Free-form owner block for discovery, e.g. `{ name:, support: }`.
-      attr_writer :owner
-
-      def owner
-        @owner ||= {}
-      end
-
-      # Advertised in discovery and the `Kiosk-Min-Client` header. Advisory only.
-      attr_writer :min_client
-
-      def min_client
-        @min_client ||= Kiosk::Protocol::MIN_CLIENT
-      end
-
-      # The skill this origin was built against. Discovery emits the `skill`
-      # block only when `skill_sha256` is set.
-      attr_writer :skill_url
-
-      def skill_url
-        @skill_url ||= 'https://kiosk.tech/skill-v0.5.13.md'
-      end
-      attr_accessor :skill_sha256
-
       # Required. A SigningKey or a PEM string.
       def signing_key
         @signing_key || raise(Errors::ConfigurationError,
@@ -67,34 +199,10 @@ module Kiosk
 
       def signing_key=(value)
         @signing_key = case value
-                       when Kiosk::Server::SigningKey
-                         value
-                       when String
-                         Kiosk::Server::SigningKey.from_pem(value)
-                       when nil
-                         nil
-                       else
-                         raise ArgumentError,
-                               "signing_key must be a SigningKey or PEM string, got #{value.class}"
+                       when Kiosk::Server::SigningKey, nil then value
+                       when String then Kiosk::Server::SigningKey.from_pem(value)
+                       else raise ArgumentError, "signing_key must be a SigningKey or PEM string, got #{value.class}"
                        end
-      end
-
-      # Equihash proofs required at `POST /auth/register`. Default 0 (open).
-      # Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
-      attr_writer :registration_pow_count
-
-      def registration_pow_count
-        @registration_pow_count ||= 0
-      end
-
-      # Equihash (n, k) for registration. Default nil: the gem's own params.
-      attr_accessor :registration_pow_params
-
-      def registration_difficulty=(_)
-        raise ArgumentError,
-              'registration_difficulty (SHA256 hashcash) was removed — spec amended, ' \
-              'one PoW = Equihash. Use `c.registration_pow_count = 1` (Equihash) and set ' \
-              '`c.pow_secret`.'
       end
 
       # The role every self-registered agent is pinned to, and the default a
@@ -105,43 +213,6 @@ module Kiosk
       # Optional `->(public_key) { record_id }` creating the account behind a
       # self-registered agent. Unset: `user_model.constantize.create!`.
       attr_accessor :assistant_creation
-
-      # Anonymized attributes gated actions need, e.g. %w[age_over_18].
-      attr_writer :kyc_claims
-
-      def kyc_claims
-        @kyc_claims || []
-      end
-
-      # Must match the `iss` of submitted KYC attestations.
-      attr_writer :kyc_issuer
-
-      def kyc_issuer
-        @kyc_issuer
-      end
-
-      # The `aud` a KYC attestation must carry. Default: the origin being served.
-      attr_writer :kyc_audience
-
-      def kyc_audience
-        @kyc_audience || Kiosk.current_issuer
-      end
-
-      # The KYC provider's RSA key: an OpenSSL::PKey or a PEM string.
-      def kyc_public_key
-        @kyc_public_key
-      end
-
-      def kyc_public_key=(value)
-        @kyc_public_key = case value
-                          when OpenSSL::PKey::PKey then value
-                          when String              then OpenSSL::PKey::RSA.new(value)
-                          when nil                 then nil
-                          else
-                            raise ArgumentError,
-                                  "kyc_public_key must be an OpenSSL::PKey or PEM string, got #{value.class}"
-                          end
-      end
 
       # Account-binding ceremony state. Default: the shared database store.
       attr_writer :device_authorization_store
@@ -234,55 +305,6 @@ module Kiosk
         @audit_sink = value
       end
 
-      # Decides when and how hard to challenge. Default nil: never.
-      # `#challenge_for(identity:, verb:, factors:) → {alg:, params:, count:} | nil`;
-      # the verb it receives is `:run`, never `:action`.
-      def reputation_policy=(value)
-        VerbVocabulary.assert!(value, :challenge_for, 'reputation_policy #challenge_for') unless value.nil?
-        @reputation_policy = value
-      end
-
-      def reputation_policy
-        @reputation_policy
-      end
-
-      # HMAC key for proof-of-work challenges, at least 32 bytes.
-      attr_reader :pow_secret
-
-      def pow_secret=(value)
-        if value.to_s.bytesize < 32
-          raise Errors::ConfigurationError,
-                "c.pow_secret must be at least 32 bytes (got #{value.to_s.bytesize}). " \
-                'Generate one with `openssl rand -hex 32`.'
-        end
-
-        @pow_secret = value
-      end
-
-      # Seconds. Default 300.
-      attr_writer :pow_ttl
-
-      def pow_ttl
-        @pow_ttl ||= 300
-      end
-
-      # `(identity:, verb:) → Kiosk::Reputation::Factors`. Default: empty factors.
-      def reputation_factors=(value)
-        VerbVocabulary.assert!(value, nil, 'reputation_factors callable') unless value.nil?
-        @reputation_factors = value
-      end
-
-      def reputation_factors
-        @reputation_factors ||= ->(**) { ::Kiosk::Reputation::Factors.empty }
-      end
-
-      # `(identity:)`, called on a cryptographically invalid proof. Default: no-op.
-      attr_writer :on_bad_proof
-
-      def on_bad_proof
-        @on_bad_proof ||= ->(**) {}
-      end
-
       # Spent challenge ids, so a proof is accepted once. Default: the shared database table.
       attr_writer :pow_spent_store
 
@@ -321,24 +343,6 @@ module Kiosk
 
           @revocation_store = Kiosk::Server::RevocationStore.new
         end
-      end
-
-      private
-
-      # The spec's order; `events` stays last.
-      def computed_capabilities
-        has_queries = Kiosk::Server::Queries.known.any?
-        has_actions = Kiosk::Server::Actions.known.any?
-        has_pay     = !payment_provider.nil?
-        has_events  = Kiosk::Server::Events.known.any?
-
-        caps = []
-        caps << 'schema'  if has_queries || has_actions
-        caps << 'queries' if has_queries
-        caps << 'actions' if has_actions
-        caps << 'pay'     if has_pay
-        caps << 'events'  if has_events
-        caps.freeze
       end
     end
   end

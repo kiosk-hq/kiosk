@@ -48,8 +48,7 @@ RSpec.describe "paying for a booking" do
     cashier.capture(cart(ada))
 
     expect(booking.reload).to be_paid.and be_confirmed
-    expect(confirm(as: ada)).to eq(booking_id: booking.id, status: "confirmed",
-                                   confirmation_code: booking.confirmation_code)
+    expect(confirm(as: ada)).to eq(booking)
     expect { confirm(as: ben) }.to raise_error(Kiosk::Server::Errors::Forbidden, "booking not found or not yours")
   end
 

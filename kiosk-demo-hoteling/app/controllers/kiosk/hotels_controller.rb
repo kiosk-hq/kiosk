@@ -19,9 +19,7 @@ class Kiosk::HotelsController < ActionController::API
                   required: %w[property_id name city],
                 }
   def properties
-    render json: Property.order(:name).pluck(:id, :name, :city).map { |id, name, city|
-      { property_id: id, name: name, city: city }
-    }
+    @properties = Property.order(:name)
   end
 
   SEARCH_PAGE = 20
@@ -77,24 +75,17 @@ class Kiosk::HotelsController < ActionController::API
       scope = scope.where(Property.from_price_cents.lteq(params[:max_price_cents].to_i))
     end
 
-    rows = scope.order(Property.arel_table[:stars].desc, Property.from_price_cents.asc, Property.arel_table[:id].asc)
-                .limit(limit + 1)
-                .offset(offset)
-                .pluck(:id, :name, :neighbourhood, :stars, Property.from_price_cents, Property.room_type_count)
-
-    page = rows.first(limit).map { |id, name, neighbourhood, stars, from_price_cents, room_type_count|
-      { property_id:      id,
-        name:             name,
-        neighbourhood:    neighbourhood,
-        stars:            stars,
-        from_price_cents: from_price_cents,
-        room_type_count:  room_type_count,
-        currency:         "eur" }
-    }
+    hotels = scope.select(Property.arel_table[Arel.star],
+                          Property.from_price_cents.as("from_price_cents"),
+                          Property.room_type_count.as("room_type_count"))
+                  .order(Property.arel_table[:stars].desc, Property.from_price_cents.asc, Property.arel_table[:id].asc)
+                  .limit(limit + 1)
+                  .offset(offset)
+                  .to_a
+    @hotels = hotels.first(limit)
 
     render_kiosk_page(
-      page,
-      next_cursor: rows.length > limit ? Kiosk::Server::Cursor.encode_offset(offset + limit) : nil,
+      next_cursor: hotels.length > limit ? Kiosk::Server::Cursor.encode_offset(offset + limit) : nil,
       total:       scope.count,
     )
   end
@@ -160,24 +151,8 @@ class Kiosk::HotelsController < ActionController::API
     ],
   })
   def hotel_detail
-    property = Property.find(params[:property_id])
-    search   = RoomSearch.new(property:, check_in: params[:check_in], check_out: params[:check_out])
-    search.validate!
-
-    render json: [{
-      property_id:   property.id,
-      name:          property.name,
-      neighbourhood: property.neighbourhood,
-      stars:         property.stars,
-      address:       property.address,
-      amenities:     property.amenities,
-      currency:      "eur",
-      check_in:      search.check_in&.iso8601,
-      check_out:     search.check_out&.iso8601,
-      timezone:      property.timezone,
-      room_types:    search.room_types.order(:nightly_price_cents)
-                           .pluck(:id, :name, :nightly_price_cents)
-                           .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents } },
-    }]
+    @property = Property.find(params[:property_id])
+    @search   = RoomSearch.new(property: @property, check_in: params[:check_in], check_out: params[:check_out])
+    @search.validate!
   end
 end

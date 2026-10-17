@@ -31,11 +31,8 @@ class Kiosk::RoomTypesController < ActionController::API
                   required: %w[room_type_id name nightly_price_cents currency],
                 }
   def availability
-    search = RoomSearch.new(property: Property.find(params[:property_id]),
-                            check_in: params[:check_in], check_out: params[:check_out])
-    search.validate!
-
-    render json: search.room_types.order(:nightly_price_cents).pluck(:id, :name, :nightly_price_cents)
-                       .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents, currency: "eur" } }
+    @search = RoomSearch.new(property: Property.find(params[:property_id]),
+                             check_in: params[:check_in], check_out: params[:check_out])
+    @search.validate!
   end
 end

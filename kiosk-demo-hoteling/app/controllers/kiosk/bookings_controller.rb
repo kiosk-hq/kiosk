@@ -67,17 +67,7 @@ class Kiosk::BookingsController < ActionController::API
                                total_cents status payment_state confirmation_code],
                 }
   def my_bookings
-    render json: Booking.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc).map { |booking|
-      { booking_id:        booking.id,
-        property_id:       booking.property_id,
-        room_type_id:      booking.room_type_id,
-        check_in:          booking.check_in,
-        check_out:         booking.check_out,
-        total_cents:       booking.total_cents,
-        status:            booking.status,
-        payment_state:     booking.payment_state,
-        confirmation_code: booking.confirmation_code }
-    }
+    @bookings = Booking.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc)
   end
 
   kind :action
@@ -107,7 +97,7 @@ class Kiosk::BookingsController < ActionController::API
                 },
                 required: %w[booking_id total_cents currency nights nightly_price_cents pay_hint]
   def reserve_room
-    render json: ReserveRoomOperation.call(
+    @booking = ReserveRoomOperation.call(
       customer_id:  kiosk_identity.user_id,
       agent_id:     kiosk_identity.agent_id,
       room_type_id: params[:room_type_id].to_i,
@@ -134,6 +124,6 @@ class Kiosk::BookingsController < ActionController::API
                 },
                 required: %w[booking_id status confirmation_code]
   def confirm_booking
-    render json: ConfirmBookingOperation.call(booking_id: params[:booking_id])
+    @booking = ConfirmBookingOperation.call(booking_id: params[:booking_id])
   end
 end

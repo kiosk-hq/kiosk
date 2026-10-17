@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Hands back the hotel's answer to a paid booking: the confirmation code it
-# minted, or why there is none. Writes nothing. Raises a wire error on a refusal.
+# minted, or why there is none. Writes nothing. Returns the booking; raises a wire error on a refusal.
 class ConfirmBookingOperation
   def self.call(booking_id:)
     booking = Booking.own.find_by(id: booking_id)
@@ -24,7 +24,7 @@ class ConfirmBookingOperation
              hint: "Wait for the `booking_confirmation` event."
     end
 
-    { booking_id: booking.id, status: "confirmed", confirmation_code: booking.confirmation_code }
+    booking
   end
 
   def self.refuse(message, hint: nil)

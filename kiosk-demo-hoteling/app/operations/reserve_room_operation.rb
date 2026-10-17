@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Holds one room type for one stay for the customer: the booking and the
-# engine's reservation row, together. Raises a wire error on a refusal.
+# engine's reservation row, together. Returns the booking; raises a wire error on a refusal.
 class ReserveRoomOperation
   def self.call(customer_id:, agent_id:, room_type_id:, check_in:, check_out:)
     booking = Booking.new(user_id: customer_id, room_type: RoomType.find_by(id: room_type_id),
@@ -22,18 +22,7 @@ class ReserveRoomOperation
 
     RoomHold.create!(user_id: customer_id, agent_id: agent_id, resource_kind: RoomHold::RESOURCE_KIND,
                      resource_id: booking.id, args: {}, expires_at: RoomHold::PAY_BY.from_now)
-
-    nightly_price_cents = booking.room_type.nightly_price_cents
-    {
-      booking_id:          booking.id,
-      total_cents:         booking.total_cents,
-      currency:            "eur",
-      nights:              booking.nights,
-      nightly_price_cents: nightly_price_cents,
-      pay_hint:            "sign a cart mandate in EUR with total_amount_cents #{booking.total_cents} and " \
-                           "one line item {\"qty\": #{booking.nights}, \"price_cents\": #{nightly_price_cents}, " \
-                           "\"booking_id\": \"#{booking.id}\"}, then call pay",
-    }
+    booking
   end
 
   def self.already_booked!(room_type_id, check_in, check_out)

@@ -12,9 +12,8 @@ class ListingOwnershipTest < ActiveSupport::TestCase
 
   test "the owner edits and closes their listing" do
     as(@alice) do
-      assert_equal({ listing_id: @listing.id, updated: true },
-                   EditListingOperation.call(listing_id: @listing.id, changes: { "price_text" => nil }))
-      assert_equal({ listing_id: @listing.id, status: "closed" }, CloseListingOperation.call(listing_id: @listing.id))
+      assert_equal @listing, EditListingOperation.call(listing_id: @listing.id, changes: { "price_text" => nil })
+      assert_equal @listing, CloseListingOperation.call(listing_id: @listing.id)
     end
     assert_nil @listing.reload.price_text
     assert @listing.closed?

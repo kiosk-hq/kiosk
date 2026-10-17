@@ -45,22 +45,13 @@ class Kiosk::ListingsController < ApplicationController
     owner_handle: "seller-4f2a9c1e3b7d",
   })
   def browse_listings
-    board = Listing.open.joins(:category, :owner).order(created_at: :desc, id: :asc)
+    board = Listing.open.joins(:category, :owner).includes(:category).order(created_at: :desc, id: :asc)
     board = board.where(categories: { slug: params[:category_slug] }) if params[:category_slug].present?
     if params[:keyword].present?
       pattern = "%#{Listing.sanitize_sql_like(params[:keyword])}%"
       board = board.where(Listing.arel_table[:title].matches(pattern).or(Listing.arel_table[:body].matches(pattern)))
     end
-
-    zone = BoardClock.zone
-    render json: board.pluck(
-      "listings.id", "listings.title", "listings.body", "listings.price_text",
-      "categories.slug", "listings.created_at", "users.id",
-    ).map { |id, title, body, price_text, category_slug, created_at, owner_id|
-      { listing_id: id, title: title, body: body, price_text: price_text, category_slug: category_slug,
-        posted_at: BoardClock.publish(created_at, zone), timezone: zone.name,
-        owner_handle: User.public_handle(owner_id) }
-    }
+    @listings = board
   end
 
   kind :query
@@ -82,17 +73,7 @@ class Kiosk::ListingsController < ApplicationController
                   required: %w[listing_id title price_text status category_slug posted_at timezone],
                 }
   def my_listings
-    zone = BoardClock.zone
-    render json: Listing.own
-                        .joins(:category)
-                        .order(created_at: :desc, id: :asc)
-                        .pluck("listings.id", "listings.title", "listings.price_text",
-                               "listings.status", "categories.slug", "listings.created_at")
-                        .map { |id, title, price_text, row_status, category_slug, created_at|
-                          { listing_id: id, title: title, price_text: price_text,
-                            status: row_status, category_slug: category_slug,
-                            posted_at: BoardClock.publish(created_at, zone), timezone: zone.name }
-                        }
+    @listings = Listing.own.includes(:category).order(created_at: :desc, id: :asc)
   end
 
   kind :action
@@ -125,7 +106,7 @@ class Kiosk::ListingsController < ApplicationController
   })
   example_row({ listing_id: "9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f", status: "open" })
   def post_listing
-    render json: PostListingOperation.call(
+    @listing = PostListingOperation.call(
       seller_id:     kiosk_identity.user_id,
       agent_id:      kiosk_identity.agent_id,
       category_slug: params[:category_slug],
@@ -155,7 +136,7 @@ class Kiosk::ListingsController < ApplicationController
                 },
                 required: %w[listing_id updated]
   def edit_listing
-    render json: EditListingOperation.call(
+    @listing = EditListingOperation.call(
       listing_id: params[:listing_id],
       changes:    params.permit(:title, :body, :price_text).to_h,
     )
@@ -176,6 +157,6 @@ class Kiosk::ListingsController < ApplicationController
                 },
                 required: %w[listing_id status]
   def close_listing
-    render json: CloseListingOperation.call(listing_id: params[:listing_id])
+    @listing = CloseListingOperation.call(listing_id: params[:listing_id])
   end
 end

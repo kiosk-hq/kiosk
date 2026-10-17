@@ -1,12 +1,14 @@
 # frozen_string_literal: true
 
 # Holds one room type for one stay for the customer until `Booking::PAY_WINDOW`
-# passes unpaid. Returns the booking; raises a wire error on a refusal.
+# passes unpaid, when HoldLapseJob cancels it. Returns the booking; raises a
+# wire error on a refusal.
 class ReserveRoomOperation
   def self.call(customer_id:, room_type_id:, check_in:, check_out:)
     booking = priced(Booking.new(user_id: customer_id, room_type: RoomType.find_by(id: room_type_id),
                                  check_in: Date.iso8601(check_in), check_out: Date.iso8601(check_out)))
     save_unless_booked!(booking)
+    HoldLapseJob.set(wait_until: booking.pay_by).perform_later(booking.id)
     booking
   end
 
@@ -29,7 +31,7 @@ class ReserveRoomOperation
   # still counts. Returns the bookings on these nights.
   def self.release_lapsed(booking)
     held = Booking.where(room_type_id: booking.room_type_id).overlapping(booking.check_in, booking.check_out)
-    held.reserved.lapsed.update_all(status: 'cancelled', updated_at: Time.current)
+    held.reserved.lapsed.ids.each { Booking.cancel_lapsed!(it) }
     held
   end
 

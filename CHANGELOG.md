@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: hoteling tells the guest's assistant when an unpaid hold lapses: `booking_confirmation` carries `cancelled` with reason `hold_lapsed`, once.
+
 - 2026-10-18: getgrocery restocks every shelf each morning, lists sold-out items as «Sold out. Check back tomorrow.», and refunds a line a payment race left empty.
 
 - 2026-10-18: skooti holds a vehicle 3 minutes; a paid hold whose ride has not started by then is released and refunded, and `booking_payment` says `refunded`.

@@ -19,13 +19,15 @@ module Kiosk
     end
 
     topic :booking_confirmation do
-      description 'The hotel answered a paid booking: `confirmed`, with the code the guest gives at the desk, ' \
-                  'or `cancelled`, with the refund to the card that paid.'
+      description 'A booking is settled one way or the other: `confirmed`, with the code the guest gives at the ' \
+                  'desk, or `cancelled` with its `reason`: `property_declined`, the hotel declined a paid booking ' \
+                  'and the `refund` goes to the card that paid; `hold_lapsed`, the hold went unpaid past its ' \
+                  'pay-by time and nothing was charged.'
       payload_schema type: 'object', additionalProperties: false,
                      properties: { booking_id: { type: 'string', format: 'uuid' },
                                    status: { enum: %w[confirmed cancelled] },
                                    confirmation_code: { type: 'string' },
-                                   reason: { type: 'string' },
+                                   reason: { enum: %w[property_declined hold_lapsed] },
                                    refund: { type: 'object', additionalProperties: false,
                                              properties: {
                                                amount_cents: { type: 'integer' },
@@ -38,6 +40,7 @@ module Kiosk
       example booking_id: BOOKING_ID, status: 'confirmed', confirmation_code: '5d1c9e04-8f2b-4a6e-b3c7-2e9f0a4d6b18'
       example booking_id: BOOKING_ID, status: 'cancelled', reason: 'property_declined',
               refund: { amount_cents: 45_000, currency: 'eur', psp_reference: 're_3Q8x2L', reverses: 'pi_3Q8x2K' }
+      example booking_id: BOOKING_ID, status: 'cancelled', reason: 'hold_lapsed'
       subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
     end
 
@@ -76,7 +79,7 @@ module Kiosk
     description "Hold a room type for a stay for #{Booking::PAY_WINDOW.inspect}. Nothing is charged: pay the " \
                 'quoted total with a cart naming the booking; the hotel answers on `booking_confirmation`, and ' \
                 '`my_bookings` shows the answer and its confirmation code. A hold left unpaid ' \
-                'past that time is cancelled and its room is free for other guests.'
+                'past that time is cancelled, `booking_confirmation` says so, and its room is free for other guests.'
     input_schema type: 'object',
                  additionalProperties: false,
                  properties: {

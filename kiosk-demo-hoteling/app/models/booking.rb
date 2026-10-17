@@ -34,7 +34,7 @@ class Booking < ApplicationRecord
   scope :lapsed, -> { unpaid.where(created_at: ..PAY_WINDOW.ago) }
 
   # The bookings that hold their nights. `bookings_no_overlapping_room_nights`
-  # still counts a lapsed hold until `reserve_room` cancels it.
+  # still counts a lapsed hold until `cancel_lapsed!` cancels it.
   scope :live, -> { where(status: %i[reserved confirmed]).where.not(id: lapsed.select(:id)) }
 
   # Half-open nights: a checkout day is the next guest's check-in day.
@@ -65,6 +65,17 @@ class Booking < ApplicationRecord
     return PropertyDecisionJob.new.perform(booking_id) if wait.zero?
 
     PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)
+  end
+
+  # Cancels a hold left unpaid past its pay-by time and tells its owner, once:
+  # only the call that moves the row announces it.
+  def self.cancel_lapsed!(booking_id)
+    return unless reserved.lapsed.where(id: booking_id).update_all(status: 'cancelled', updated_at: Time.current) == 1
+
+    Kiosk::Server::Events.emit(
+      topic: :booking_confirmation, subject: booking_id, identity_scope: [where(id: booking_id).pick(:user_id)],
+      data: { 'booking_id' => booking_id, 'status' => 'cancelled', 'reason' => 'hold_lapsed' }
+    )
   end
 
   def self.announce_payment(booking_id)

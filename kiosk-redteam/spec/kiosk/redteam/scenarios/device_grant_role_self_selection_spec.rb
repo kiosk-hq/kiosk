@@ -4,15 +4,8 @@ require 'spec_helper'
 require 'base64'
 require_relative 'support'
 
-RSpec.shared_context 'device_grant_role_self_selection setup' do
-  subject(:scenario) { described_class.new }
-
-  let(:client)     { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
-
-  let(:profile)    { minimal_profile(declared_roles: %w[customer owner]) }
-
-  let(:device_url) { "#{BASE_URL}/kiosk/oauth/device_authorization" }
-
+# Stubs for the registration and device-authorization endpoints.
+module DeviceGrantStubs
   # A JWS whose payload carries the given role claim — the scenario reads the
   # claim without verifying, so the signature segment is irrelevant.
   def token_with_role(role)
@@ -59,6 +52,16 @@ RSpec.shared_context 'device_grant_role_self_selection setup' do
       .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=/) }
       .to_return(oauth_error)
   end
+end
+
+RSpec.shared_context 'device_grant_role_self_selection setup' do
+  include DeviceGrantStubs
+
+  subject(:scenario) { described_class.new }
+
+  let(:client)     { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
+  let(:profile)    { minimal_profile(declared_roles: %w[customer owner]) }
+  let(:device_url) { "#{BASE_URL}/kiosk/oauth/device_authorization" }
 
   before { stub_register }
 end

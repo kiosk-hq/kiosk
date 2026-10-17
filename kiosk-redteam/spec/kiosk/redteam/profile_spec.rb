@@ -36,21 +36,11 @@ RSpec.describe Kiosk::Redteam::Profile, 'constructor' do
     create_owned = ->(_c, _p) { { id: 'r1' } }
     pay_for      = ->(_c, _p, _r) { { intent: {}, cart: {} } }
     kyc_valid    = ->(_uid) { 'valid.jws' }
-
     profile = described_class.new(
-      pow_difficulty: 20,
-      requires_kyc: true,
-      per_user_query: 'my_reservations',
-      row_id_key: 'reservation_id',
-      create_owned: create_owned,
-      forge_action: 'reserve',
-      forge_args: ->(_c, _a, _b) { { scooter_code: 'SK-001' } },
-      gated_action: 'start_rental',
-      gated_args: ->(ref) { { reservation_id: ref[:id] } },
-      pay_for: pay_for,
-      kyc_valid: kyc_valid,
-      kyc_expired: ->(_uid) { 'expired.jws' },
-      kyc_forged: ->(_uid) { 'forged.jws' }
+      pow_difficulty: 20, requires_kyc: true, per_user_query: 'my_reservations', row_id_key: 'reservation_id',
+      create_owned:, forge_action: 'reserve', forge_args: ->(_c, _a, _b) { { scooter_code: 'SK-001' } },
+      gated_action: 'start_rental', gated_args: ->(ref) { { reservation_id: ref[:id] } }, pay_for:,
+      kyc_valid:, kyc_expired: ->(_uid) { 'expired.jws' }, kyc_forged: ->(_uid) { 'forged.jws' }
     )
 
     expect(profile.pow_difficulty).to eq(20)

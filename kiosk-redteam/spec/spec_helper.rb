@@ -3,59 +3,51 @@
 require 'kiosk/redteam'
 require 'webmock/rspec'
 
-# ── The 0.4 wire, as the specs speak it ──────────────────────────────────────
-#
 # Every error on the Kiosk wire is an RFC 9457 problem document served as
 # `application/problem+json`, and a problem document is FLAT:
 #
 #   { "type": "https://kiosk.tech/problems/<code>", "title": "…",
 #     "status": 403, "detail": "…", "code": "…", "hint": "…" }
 #
-# `code` is a TOP-LEVEL extension member — it is THE branch point every verdict
-# in this gem reads (Kiosk::Redteam.error_code). 0.3's `{ok:false, error:{code:}}`
-# envelope was deleted with the endpoints that served it, so a stub that nests
-# an `error` object makes `error_code` answer nil and the verdict it drives
-# collapses silently. These helpers exist so no spec can write that shape by
-# accident.
+# `code` is a top-level extension member, and every verdict in this gem
+# branches on it (Kiosk::Redteam.error_code). A stub that nests an `error`
+# object makes `error_code` answer nil. The helpers below write the flat shape.
 
-# ── THE ERROR VOCABULARY IS READ OFF THE ENGINE, NEVER COPIED HERE ───────────
-#
-# Every verdict this gem reaches branches on `code`, and the specs that prove
-# the branching stub the wire from the two tables below. A hand-typed copy of
-# them would go green on a code the engine re-statuses or drops, while stubbing
-# an answer the server can no longer send — so there is no copy: both tables are
-# PARSED out of `kiosk-server/lib/kiosk/server/errors.rb` when this file loads.
-#
-# It is a SPEC-TIME textual read and not a dependency. This gem may not require
-# `kiosk-server` — it speaks the wire from outside, which is the whole point of
-# a red team — and reading a sibling's source at spec time costs it nothing at
-# runtime. The read does NOT skip when the sibling is missing (K-502): a guard
-# that goes quiet when its subject moves is worse than no guard, the specs are
-# not shipped in the gemspec, and inside this monorepo the sibling is always
-# there. If it is not, this raises and says which file it wanted.
+# The error vocabulary is read from the engine source, not copied here: both
+# tables below are parsed out of `kiosk-server/lib/kiosk/server/errors.rb` when
+# this file loads. This is a spec-time text read, not a dependency; this gem
+# speaks the wire from outside and does not require `kiosk-server`. When the
+# file is missing the read raises and names the file; it does not skip.
 KIOSK_ENGINE_ERRORS_RB =
   File.expand_path('../../kiosk-server/lib/kiosk/server/errors.rb', __dir__)
 
-# Parse one frozen literal `NAME = { … }.freeze` table out of that file. Keys
-# and values are each a quoted string or an integer, which is the whole of the
-# grammar these two tables use. Every non-blank line inside the braces must
-# parse: an under-match is the one failure this could suffer silently, so it is
-# the one this refuses to return from. `path` is a seam for
-# `engine_vocabulary_parity_spec.rb`, which points it at fixtures to prove each
-# of the three raises is reachable.
-def kiosk_engine_table(constant, path = KIOSK_ENGINE_ERRORS_RB)
-  source = File.read(path)
-  body   = source[/^[ \t]*#{constant} = \{$(.*?)^[ \t]*\}\.freeze$/m, 1]
-  raise "#{constant} is not a frozen literal table in #{path}" if body.nil?
+# One `key => value` line of a table: each side a quoted string or an integer.
+ENGINE_TABLE_PAIR = /\A(?:'([^']+)'|(\d+))[ \t]*=>[ \t]*(?:'([^']+)'|(\d+)),?\z/
 
-  lines = body.lines.map(&:strip).reject { |line| line.empty? || line.start_with?('#') }
-  pairs = lines.filter_map do |line|
-    line.match(/\A(?:'([^']+)'|(\d+))[ \t]*=>[ \t]*(?:'([^']+)'|(\d+)),?\z/)
-  end
+# Parses one frozen literal `NAME = { … }.freeze` table out of that file. Every
+# non-blank line inside the braces must parse, so an under-match raises instead
+# of returning a short table. `path` lets `engine_vocabulary_parity_spec.rb`
+# point it at fixtures to reach each of the three raises.
+def kiosk_engine_table(constant, path = KIOSK_ENGINE_ERRORS_RB)
+  lines = kiosk_engine_table_lines(constant, path)
+  pairs = lines.filter_map { |line| line.match(ENGINE_TABLE_PAIR) }
   raise "#{constant} parsed to nothing in #{path}" if pairs.empty?
   raise "#{constant} has #{lines.size - pairs.size} line(s) this parser cannot read" if pairs.size != lines.size
 
-  pairs.to_h { |m| [m[1] || Integer(m[2]), m[3] || Integer(m[4])] }.freeze
+  pairs.to_h { |match| engine_table_entry(match) }.freeze
+end
+
+# A matched `key => value` line as [key, value], each a String or an Integer.
+def engine_table_entry(match)
+  [match[1] || Integer(match[2]), match[3] || Integer(match[4])]
+end
+
+# The non-blank, non-comment lines inside the braces of `NAME = { … }.freeze`.
+def kiosk_engine_table_lines(constant, path)
+  body = File.read(path)[/^[ \t]*#{constant} = \{$(.*?)^[ \t]*\}\.freeze$/m, 1]
+  raise "#{constant} is not a frozen literal table in #{path}" if body.nil?
+
+  body.lines.map(&:strip).reject { |line| line.empty? || line.start_with?('#') }
 end
 
 # `Errors::CODES` — the closed vocabulary and the status each code canonically
@@ -64,9 +56,9 @@ PROBLEM_STATUS = kiosk_engine_table('CODES')
 
 # `Errors::STATUS_CODES` — the ONE code a bare status carries by itself. 402 is
 # deliberately absent from it (three codes share 402), so a stub that means a
-# 402 must name which one; 404 carries two codes since T-158 and the engine maps
-# the bare status to `not_found`, because `verb_not_found` comes from the
-# registry lookup rather than from a status.
+# 402 must name which one. 404 carries two codes, and the engine maps the bare
+# status to `not_found`, because `verb_not_found` comes from the registry lookup
+# rather than from a status.
 ENGINE_STATUS_CODES = kiosk_engine_table('STATUS_CODES')
 
 # What this gem adds to it, and the only thing here that is ours: the statuses a

@@ -149,8 +149,7 @@ RSpec.describe Kiosk::Redteam::Runner, 'a scenario that raises' do
 
   it 'leaves all_blocked? false — an aborted battery proved nothing' do
     runner = described_class.new(base_url:, profile:)
-    suppress = ->(&blk) { begin; blk.call; rescue RuntimeError; end }
-    suppress.call { runner.run([raising_scenario('Boom')]) }
+    expect { runner.run([raising_scenario('Boom')]) }.to raise_error(RuntimeError)
     expect(runner.all_blocked?).to be(false)
   end
 end

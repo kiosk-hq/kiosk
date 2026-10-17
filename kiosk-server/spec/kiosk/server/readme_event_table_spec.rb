@@ -1,5 +1,25 @@
 # frozen_string_literal: true
 
+# Reads the event-field table out of the README.
+module ReadmeEventTableSpecHelpers
+  README = File.read(File.expand_path('../../../README.md', __dir__))
+
+  # The first column of every row under the heading, as the names it carries.
+  # A cell may pair two fields (`user_id` / `agent_id`), which is prose the
+  # author owns; the NAMES are what this compares. A first cell can never carry
+  # a pipe, so taking it up to the next one is safe even though a later cell in
+  # the same row escapes one.
+  def self.table_fields(readme)
+    section = readme[/^### What the event carries\n(.*?)(?=\n^### |\z)/m, 1]
+    return nil if section.nil?
+
+    section.lines
+           .filter_map { |l| l[/\A\|([^|]*)\|/, 1] }
+           .flat_map { |cell| cell.scan(/`([a-z_]+)`/).flatten }
+           .uniq
+  end
+end
+
 # THE README's «What the event carries» TABLE IS THE FIELD LIST, DERIVED.
 #
 # `c.audit_sink` hands the operator one {Kiosk::Server::ActionEvent} per action
@@ -21,25 +41,8 @@
 # README's solve/verify lever the same way. A guard would need a CI job of its
 # own to be a gate at all.
 RSpec.describe "the kiosk-server README's event-field table" do
-  readme = File.read(File.expand_path('../../../README.md', __dir__))
-
-  # The first column of every row under the heading, as the names it carries.
-  # A cell may pair two fields (`user_id` / `agent_id`), which is prose the
-  # author owns; the NAMES are what this compares. A first cell can never carry
-  # a pipe, so taking it up to the next one is safe even though a later cell in
-  # the same row escapes one.
-  def self.table_fields(readme)
-    section = readme[/^### What the event carries\n(.*?)(?=\n^### |\z)/m, 1]
-    return nil if section.nil?
-
-    section.lines
-           .filter_map { |l| l[/\A\|([^|]*)\|/, 1] }
-           .flat_map { |cell| cell.scan(/`([a-z_]+)`/).flatten }
-           .uniq
-  end
-
   it 'names every member of ActionEvent, and nothing that is not one' do
-    listed = self.class.table_fields(readme)
+    listed = ReadmeEventTableSpecHelpers.table_fields(ReadmeEventTableSpecHelpers::README)
     expect(listed).not_to be_nil,
                           'kiosk-server/README.md has no `### What the event carries` section. ' \
                           'That table is where an operator reads what `c.audit_sink` receives; ' \

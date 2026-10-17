@@ -32,7 +32,9 @@ RSpec.describe Kiosk::Server::RevocationStore do
     store.revoke_all('agent-1', at: base) # earlier, ignored
     expect(store.revoked?(agent_id: 'agent-1', iat: base + 500)).to be(true)
   end
+end
 
+RSpec.describe Kiosk::Server::RevocationStore, 'retention' do
   it 'prunes watermarks older than the retention window' do
     short = described_class.new(retention: 10)
     short.revoke_all('agent-1', at: Time.now.to_i - 100) # well past retention

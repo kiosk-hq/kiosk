@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Kiosk::Server::Routing do
+module RoutingSpecHelpers
   def draw(&)
     ActionDispatch::Routing::RouteSet.new.tap { |set| set.draw(&) }
   end
@@ -9,14 +9,18 @@ RSpec.describe Kiosk::Server::Routing do
     set.recognize_path(path, method: method)
   end
 
-  let(:routes) do
-    draw do
+  def routes
+    @routes ||= draw do
       kiosk do
         queries :catalog, :my_orders
         actions :place_order
       end
     end
   end
+end
+
+RSpec.describe Kiosk::Server::Routing do
+  include RoutingSpecHelpers
 
   it 'mounts the engine FIRST, so the protocol plane wins by first match' do
     first = routes.routes.first
@@ -40,6 +44,10 @@ RSpec.describe Kiosk::Server::Routing do
     expect { recognize(routes, :post, '/kiosk/catalog') }.to raise_error(ActionController::RoutingError)
     expect { recognize(routes, :get, '/kiosk/place_order') }.to raise_error(ActionController::RoutingError)
   end
+end
+
+RSpec.describe Kiosk::Server::Routing, 'the kiosk block' do
+  include RoutingSpecHelpers
 
   it 'honours the configured mount_path' do
     previous = Kiosk.configuration.mount_path

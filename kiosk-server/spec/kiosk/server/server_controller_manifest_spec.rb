@@ -2,21 +2,26 @@
 
 # The controller lists in `kiosk/server.rb` (the autoload block and the
 # «Pieces shipped in this gem» manifest) name exactly the controllers on disk.
-RSpec.describe "kiosk/server.rb's controller manifest" do
+module ServerControllerManifestSpecHelpers
   SERVER_ENTRY_PATH   = File.expand_path('../../../lib/kiosk/server.rb', __dir__)
   CONTROLLER_LIB_GLOB = File.expand_path('../../../lib/kiosk/server/*_controller.rb', __dir__)
+
+  def entry
+    File.read(SERVER_ENTRY_PATH)
+  end
 
   # `open_api_controller.rb` → `OpenApiController`. Plain segment capitalisation
   # rather than an inflector: the inflector has acronym rules an operator can
   # configure, and this derivation must answer the same in every host.
-  def self.controller_class_names
+  def names
     Dir.glob(CONTROLLER_LIB_GLOB).map do |path|
       File.basename(path, '.rb').split('_').map(&:capitalize).join
     end
   end
+end
 
-  let(:entry) { File.read(SERVER_ENTRY_PATH) }
-  let(:names) { self.class.controller_class_names }
+RSpec.describe "kiosk/server.rb's controller manifest" do
+  include ServerControllerManifestSpecHelpers
 
   it 'finds the controllers on disk at all' do
     # A vacuity arm: an empty derivation would make every example below pass by
@@ -44,6 +49,10 @@ RSpec.describe "kiosk/server.rb's controller manifest" do
                        "server.rb does not autoload #{missing.join(', ')}, so " \
                        "`require 'kiosk/server'` leaves it undefined."
   end
+end
+
+RSpec.describe "kiosk/server.rb's controller manifest", 'the shipped-pieces list' do
+  include ServerControllerManifestSpecHelpers
 
   it 'names every one of them in the «Pieces shipped in this gem» manifest' do
     manifest = entry[/#\s+Pieces shipped in this gem:.*/m]

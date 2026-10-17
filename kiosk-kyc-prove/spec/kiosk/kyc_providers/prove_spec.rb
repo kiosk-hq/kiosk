@@ -3,7 +3,7 @@
 require 'json'
 require 'net/http'
 
-RSpec.describe Kiosk::KycProviders::Prove do
+RSpec.shared_context 'with a Prove broker client' do
   subject(:prove) { described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: 'https://broker.example/') }
 
   let(:sent) { [] }
@@ -19,10 +19,28 @@ RSpec.describe Kiosk::KycProviders::Prove do
     prove.open_verification(subject: 'u-1', claims: %w[age_over_18 licence_a], audience: 'shop',
                             callback_url: 'https://shop.example/kiosk/kyc/callback')
   end
+end
+
+RSpec.describe Kiosk::KycProviders::Prove do
+  include_context 'with a Prove broker client'
 
   it 'is a KycProviders::Base' do
     expect(prove).to be_a(Kiosk::KycProviders::Base)
   end
+
+  it 'accepts only an attestation the broker minted for this operator' do
+    expect(prove.accepts?('operator' => 'shop')).to be(true)
+    expect(prove.accepts?('operator' => 'other')).to be(false)
+    expect(prove.accepts?({})).to be(false)
+  end
+
+  it 'refuses to be built without an intake secret' do
+    expect { described_class.new(operator_id: 'shop', intake_secret: '') }.to raise_error(ArgumentError)
+  end
+end
+
+RSpec.describe Kiosk::KycProviders::Prove, '#open_verification' do
+  include_context 'with a Prove broker client'
 
   it "opens a verification at the broker's intake, in the broker's claim vocabulary" do
     answer(201, request_id: 'r-1', verification_url: 'https://broker.example/v/r-1', nonce: 'n-1')
@@ -47,15 +65,5 @@ RSpec.describe Kiosk::KycProviders::Prove do
   it 'raises Unavailable when the broker cannot be reached' do
     allow_any_instance_of(Net::HTTP).to receive(:request).and_raise(Errno::ECONNREFUSED)
     expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
-  end
-
-  it 'accepts only an attestation the broker minted for this operator' do
-    expect(prove.accepts?('operator' => 'shop')).to be(true)
-    expect(prove.accepts?('operator' => 'other')).to be(false)
-    expect(prove.accepts?({})).to be(false)
-  end
-
-  it 'refuses to be built without an intake secret' do
-    expect { described_class.new(operator_id: 'shop', intake_secret: '') }.to raise_error(ArgumentError)
   end
 end

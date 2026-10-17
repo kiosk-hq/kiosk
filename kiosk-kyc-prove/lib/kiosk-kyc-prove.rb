@@ -1,3 +1,5 @@
+# rubocop:disable Naming/FileName -- Bundler.require loads the file named after the gem.
 # frozen_string_literal: true
 
 require 'kiosk/kyc_providers/prove'
+# rubocop:enable Naming/FileName

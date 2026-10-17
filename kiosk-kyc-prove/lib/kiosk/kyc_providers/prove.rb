@@ -47,24 +47,35 @@ module Kiosk
       private
 
       def post(body)
+        response = http_client.request(intake_request(body))
+        raise Unavailable, "the KYC broker answered #{response.code}" unless response.code.to_i == 201
+
+        parse(response.body)
+      rescue Timeout::Error, SocketError, SystemCallError, IOError, OpenSSL::SSL::SSLError => e
+        raise Unavailable, "the KYC broker could not be reached (#{e.class})"
+      end
+
+      def intake_request(body)
         request = Net::HTTP::Post.new(@intake, 'Content-Type' => 'application/json',
                                                'Authorization' => "Bearer #{@secret}")
         request.body = JSON.generate(body)
+        request
+      end
+
+      def http_client
         http = Net::HTTP.new(@intake.host, @intake.port)
         http.use_ssl = @intake.scheme == 'https'
         http.open_timeout = http.read_timeout = 5
+        http
+      end
 
-        response = http.request(request)
-        raise Unavailable, "the KYC broker answered #{response.code}" unless response.code.to_i == 201
-
-        parsed = JSON.parse(response.body)
+      def parse(body)
+        parsed = JSON.parse(body)
         raise Unavailable, 'the KYC broker answered a body that is not an object' unless parsed.is_a?(Hash)
 
         parsed
       rescue JSON::ParserError
         raise Unavailable, 'the KYC broker answered a body that is not JSON'
-      rescue Timeout::Error, SocketError, SystemCallError, IOError, OpenSSL::SSL::SSLError => e
-        raise Unavailable, "the KYC broker could not be reached (#{e.class})"
       end
     end
   end

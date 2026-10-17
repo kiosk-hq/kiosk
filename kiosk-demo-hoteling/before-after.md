@@ -57,8 +57,8 @@ It writes `config/initializers/kiosk.rb`, the `kiosk.*` migrations and a
 `kiosk do … end` block in `config/routes.rb` that mounts the engine. What is
 left is read in the directory rather than quoted here: the queries and actions
 named in that block — GET for a query, POST for an action — and
-`app/controllers/kiosk/{hotels,reservations}_controller.rb`, the verbs as
-ordinary Rails controllers. The toll, the PSP adapter and the spending cap are
+the controllers in `app/controllers/kiosk/`, the verbs as ordinary Rails
+controllers. The toll, the PSP adapter and the spending cap are
 the initializer's.
 
 No new human-facing login, no ceded customer relationship, no change to the

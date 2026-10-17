@@ -56,17 +56,4 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'kiosk-core', '~> 0.5.0'
   spec.add_dependency 'kiosk-pow-equihash', '~> 0.5.0'
   spec.add_dependency 'websocket-driver', '~> 0.7'
-
-  # Both adapters are exercised by this gem's own suite — that a fault reads
-  # identically through each is the whole claim of a framework-agnostic core,
-  # and it is worth nothing unless something runs both. They stay DEVELOPMENT
-  # dependencies: an adopter installs whichever framework they already use, and
-  # requiring an adapter is what pulls that framework in.
-  spec.add_development_dependency 'minitest',     '>= 5', '< 7'
-  spec.add_development_dependency 'rake',         '~> 13.2'
-  spec.add_development_dependency 'rspec',        '~> 3.13'
-  spec.add_development_dependency 'webmock',      '~> 3.0'
-
-  # `Person` signs in through its DeviseSession, which every operator demo already carries.
-  spec.add_development_dependency 'kiosk-user-idp-devise', '~> 0.5.0'
 end

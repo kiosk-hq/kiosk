@@ -7,4 +7,12 @@ gemspec
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
 gem 'kiosk-core', path: '../kiosk-core'
 gem 'kiosk-pow-equihash', path: '../kiosk-pow-equihash'
+
+# The suite runs both adapters. An adopter installs the framework they use.
+gem 'minitest', '>= 5', '< 7'
+gem 'rake', '~> 13.2'
+gem 'rspec', '~> 3.13'
+gem 'webmock', '~> 3.0'
+
+# `Person` signs in through its DeviseSession, which every operator demo already carries.
 gem 'kiosk-user-idp-devise', path: '../kiosk-user-idp-devise'

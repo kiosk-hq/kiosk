@@ -1,12 +1,18 @@
 # frozen_string_literal: true
 
+RSpec.shared_context 'kyc schema spec: grants sql' do
+  subject(:sql) { described_class.kyc_attributes_sql(schema: 'kiosk', user_id_type: :bigint, user_table: 'people') }
+end
+
 RSpec.describe Kiosk::Server::SchemaDefinitions do
   it "puts no KYC column on agents — the grants are the person's" do
     expect(described_class.identity_tables_sql).not_to include('kyc')
   end
+end
 
+RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe '.kyc_attributes_sql' do
-    subject(:sql) { described_class.kyc_attributes_sql(schema: 'kiosk', user_id_type: :bigint, user_table: 'people') }
+    include_context 'kyc schema spec: grants sql'
 
     it "keys the grants on the person, in the host's user id type" do
       grants = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.kyc_attributes.*?\);/m]
@@ -23,6 +29,12 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(grants).not_to include('jsonb')
       expect(grants).not_to match(/\bvalue\b/)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::SchemaDefinitions do
+  describe '.kyc_attributes_sql' do
+    include_context 'kyc schema spec: grants sql'
 
     it 'lays down the verification requests beside them' do
       requests = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.kyc_requests.*?\);/m]

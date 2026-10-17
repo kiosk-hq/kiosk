@@ -20,7 +20,7 @@ WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
 
 BATTERY = Kiosk::Redteam::Battery.new
 
-# Two principals, each linked to its seeded human's account.
+# Two sellers' assistants, each linked to its seeded human's account.
 ALICE = Kiosk::TestHelpers::Person.new(SERVER, email: ALICE_EMAIL, password: PASSWORD).links_a_newcomer.principal
 BOB   = Kiosk::TestHelpers::Person.new(SERVER, email: BOB_EMAIL,   password: PASSWORD).links_a_newcomer.principal
 abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no boundary to attack" \

@@ -34,7 +34,7 @@ Demonstrates:
   and `POST /kiosk/pay` — which the mounted engine draws at every origin, because
   the path is the protocol's — refuses an authenticated caller with `501
   module_not_served`, the origin-wide refusal
-- App-layer data isolation on an **owned resource**: any principal may
+- App-layer data isolation on an **owned resource**: any signed-in assistant may
   `browse_listings` across all sellers, but `my_listings` /
   `edit_listing` / `close_listing` are scoped to
   `owner_id = kiosk.current_user_id()` — the first demo where cross-owner
@@ -45,7 +45,7 @@ Demonstrates:
   are public by nature, so a listing an assistant posts over the wire visibly
   appears here on the next refresh
 - **A cross-owner board that still publishes no PII.** The board is open by
-  design, so its seller column is disclosed to every principal that can
+  design, so its seller column is disclosed to every assistant that can
   authenticate. It carries an opaque `seller-<hex>` pseudonym derived from the
   account id — never an address — and the same pseudonym on the wire and on the
   web page. It is **per-seller**, so two listings under one handle are one
@@ -146,11 +146,10 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | Path | What's there |
 |---|---|
 | `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, reservations, device_authorizations, mandates, KYC, events) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `users`, Action Cable's table and `categories` + `listings` |
-| `app/models/{user,category,listing}.rb` | `User` is the account principal and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
-| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; it names the two handler controllers, it does not contain them |
-| `app/controllers/kiosk/board_controller.rb` | The `browse_listings` / `my_listings` queries — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query`. Not routable: handlers are reached only through the wire |
-| `app/controllers/kiosk/listings_controller.rb` | The `post_listing` / `edit_listing` / `close_listing` actions — same mixin, `kind :action`. Two files is a choice, not a rule: one controller may declare both kinds. The operations in `app/operations/` raise `Kiosk::Server::Errors` refusals, which the wire renders as the RFC 9457 problem document an assistant branches on |
-| *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only principal shape: an identity here is a verified JWT or it is nothing |
+| `app/models/{user,category,listing}.rb` | `User` is a seller's account and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
+| `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; the handler controller is separate |
+| `app/controllers/kiosk/listings_controller.rb` | Every verb on listings: the `browse_listings` / `my_listings` queries and the `post_listing` / `edit_listing` / `close_listing` actions — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query` or `kind :action`, reached only through the wire. The operations in `app/operations/` raise `Kiosk::Server::Errors` refusals, which the wire renders as the RFC 9457 problem document an assistant branches on |
+| *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only identity shape: an identity here is a verified JWT or it is nothing |
 | `script/redteam_suite.rb` | The adversarial battery, run against a live origin |
 | `test/` | Minitest tests, run by `bin/rails test`; `test/stories/` drives the origin over HTTP as sellers' assistants |
 

@@ -12,6 +12,13 @@ class Listing < ApplicationRecord
 
   scope :own, -> { where(owner_id: Kiosk.current_user_id) }
 
+  # One answer for absent and foreign, so a foreign id reads as absent.
+  def self.own!(id)
+    own.find_by(id:) or
+      raise Kiosk::Server::Errors::Forbidden.new("listing_id is not one of your listings.",
+                                                 hint: "Pass a listing_id from my_listings.")
+  end
+
   # The public board: the fifty newest open listings, every owner's.
   scope :on_board, -> { open.includes(:category, :owner).order(created_at: :desc, id: :asc).limit(50) }
 end

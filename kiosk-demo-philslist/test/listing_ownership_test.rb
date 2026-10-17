@@ -25,10 +25,8 @@ class ListingOwnershipTest < ActiveSupport::TestCase
       [@listing.id, SecureRandom.uuid].each do |id|
         edit = assert_raises(Kiosk::Server::Errors::Forbidden) { EditListingOperation.call(listing_id: id, changes: { "title" => "x" }) }
         close = assert_raises(Kiosk::Server::Errors::Forbidden) { CloseListingOperation.call(listing_id: id) }
-        assert_equal "listing not owned by the authenticated principal", edit.message
-        assert_equal edit.message, close.message
-        assert_equal "You may only edit your own listings.", edit.hint
-        assert_equal "You may only close your own listings.", close.hint
+        assert_equal "listing_id is not one of your listings.", edit.message
+        assert_equal [edit.message, edit.hint], [close.message, close.hint]
       end
     end
     assert @listing.reload.open?

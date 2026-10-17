@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Posts an open listing owned by the principal the wire resolved.
+# Posts an open listing owned by the signed-in seller.
 class PostListingOperation
-  def self.call(principal_id:, agent_id:, category_slug:, title:, body:, price_text:)
+  def self.call(seller_id:, agent_id:, category_slug:, title:, body:, price_text:)
     listing = Listing.create!(
-      owner_id:            principal_id,
+      owner_id:            seller_id,
       category:            Category.find_by!(slug: category_slug),
       title:               title,
       body:                body,

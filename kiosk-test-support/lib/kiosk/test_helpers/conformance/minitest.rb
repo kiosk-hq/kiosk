@@ -30,6 +30,7 @@ module Kiosk
           )
         end
 
+        # rubocop:disable-next Metrics/ParameterLists -- public assertion signature; every keyword is part of it
         def assert_kiosk_scoped_to_principal(name, as:, and_not:, params: Checks::EXAMPLE,
                                              message: nil, origin: nil)
           kiosk_conformance!(

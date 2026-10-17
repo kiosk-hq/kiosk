@@ -20,7 +20,7 @@ module Kiosk
         def [](header) = headers[header.to_s.downcase]
 
         # Whether the client paid a proof-of-work toll and sent the request again.
-        def pow_retried = proofs.positive?
+        def pow_retried? = proofs.positive?
       end
 
       METHODS = {
@@ -72,17 +72,30 @@ module Kiosk
 
       def request(method, path, body: nil, params: nil, headers: {}, &form)
         klass = METHODS.fetch(method.to_s.downcase.to_sym) { raise ArgumentError, "unsupported HTTP method #{method.inspect}" }
-        uri = URI("#{@base_url}#{path}")
-        uri.query = URI.encode_www_form(params) if params&.any?
+        uri = request_uri(path, params)
         answer = deliver(klass, uri, body, headers, &form)
-        challenges = answer.body['challenges'] if @pay_tolls && answer.status == 402 && answer.body.is_a?(Hash)
-        return answer unless challenges.is_a?(Array) && challenges.any?
+        challenges = toll_challenges(answer)
+        return answer unless challenges
 
         proofs = self.class.solve(challenges)
         deliver(klass, uri, body, headers.merge('Kiosk-PoW' => JSON.generate(proofs)), &form).with(proofs: proofs.size)
       end
 
       private
+
+      def request_uri(path, params)
+        uri = URI("#{@base_url}#{path}")
+        uri.query = URI.encode_www_form(params) if params&.any?
+        uri
+      end
+
+      # The proof-of-work challenges of a toll this client pays, or nil.
+      def toll_challenges(answer)
+        return unless @pay_tolls && answer.status == 402 && answer.body.is_a?(Hash)
+
+        challenges = answer.body['challenges']
+        challenges if challenges.is_a?(Array) && challenges.any?
+      end
 
       def deliver(klass, uri, body, headers)
         request = klass.new(uri, body.nil? ? headers : { 'Content-Type' => 'application/json' }.merge(headers))

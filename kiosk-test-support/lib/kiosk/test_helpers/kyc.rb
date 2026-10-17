@@ -63,8 +63,7 @@ module Kiosk
         request_id = @kyc_provider.latest_check_for(customer.principal.user_id)
         check  = @kyc_provider.check(request_id)
         jws    = @kyc_provider.attest(check.subject, check.audience, attributes)
-        answer = Wire.new(base_url: URI.join(check.callback_url, '/').to_s)
-                     .post(URI(check.callback_url).path, { request_id:, nonce: check.nonce, kyc_jws: jws })
+        answer = deliver_callback(check, { request_id:, nonce: check.nonce, kyc_jws: jws })
         raise "the engine refused the KYC callback: #{answer.status} #{answer.body}" unless answer.status == 200
 
         jws
@@ -77,6 +76,10 @@ module Kiosk
       end
 
       private
+
+      def deliver_callback(check, body)
+        Wire.new(base_url: URI.join(check.callback_url, '/').to_s).post(URI(check.callback_url).path, body)
+      end
 
       def stand_in_for_kyc_provider
         config = Kiosk.configuration

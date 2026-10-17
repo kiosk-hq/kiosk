@@ -76,6 +76,7 @@ module Kiosk
       end
 
       # Whether the origin reports the verification this customer asked for last passed.
+      # rubocop:disable-next Naming/PredicateMethod -- public journey DSL name the demo stories call
       def hears_verification_passed = hears(:kyc_verification, about: @verification)['status'] == 'approved'
 
       # Hands the origin an identity attestation the person obtained elsewhere.
@@ -122,10 +123,7 @@ module Kiosk
       # What the origin told the assistant on `topic` (about `subject`, carrying `data`),
       # in the shape the origin publishes for that topic.
       def hears(topic, about: nil, on: @news, **data)
-        event = on.await do |heard|
-          heard['topic'] == topic.to_s && (about.nil? || heard['subject'] == about.to_s) &&
-            data.all? { |key, value| heard.dig('data', key.to_s) == value }
-        end
+        event = on.await { heard?(it, topic, about, data) }
         errors = Assistant::Events.payload_errors(@assistant.schema, [event])
         raise Assistant::Events::Error, "#{origin} published #{event} off its schema: #{errors.join('; ')}" if errors.any?
 
@@ -133,6 +131,11 @@ module Kiosk
       end
 
       private
+
+      def heard?(event, topic, about, data)
+        event['topic'] == topic.to_s && (about.nil? || event['subject'] == about.to_s) &&
+          data.all? { |key, value| event.dig('data', key.to_s) == value }
+      end
 
       def holding(answer)
         raise "#{origin} issued no credential: #{answer}" unless answer.ok?

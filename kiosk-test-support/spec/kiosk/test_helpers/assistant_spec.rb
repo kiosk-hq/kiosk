@@ -115,7 +115,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
 
     response = assistant.query(principal, name: 'catalog', city: 'Lisbon')
 
-    expect(response).to have_attributes(status: 200, proofs: 1, pow_retried: true)
+    expect(response).to have_attributes(status: 200, proofs: 1, pow_retried?: true)
     expect(sent.map(&:uri).uniq.size).to eq(1)
   end
 
@@ -123,7 +123,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
     stub, sent = requests_to(:get, '/kiosk/catalog')
     stub.to_return { problem_return('pow_required', status: 402, challenges: [toll]) }
 
-    expect(assistant.query(principal, name: 'catalog')).to have_attributes(status: 402, pow_retried: true)
+    expect(assistant.query(principal, name: 'catalog')).to have_attributes(status: 402, pow_retried?: true)
     expect(sent.size).to eq(2)
   end
 
@@ -131,7 +131,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
     stub, sent = requests_to(:post, '/kiosk/reschedule')
     stub.to_return(problem_return('payment_setup_required', status: 402))
 
-    expect(assistant.run(principal, name: 'reschedule')).to have_attributes(status: 402, pow_retried: false)
+    expect(assistant.run(principal, name: 'reschedule')).to have_attributes(status: 402, pow_retried?: false)
     expect(sent.size).to eq(1)
   end
 

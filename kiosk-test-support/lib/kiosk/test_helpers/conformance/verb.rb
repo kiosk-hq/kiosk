@@ -12,14 +12,12 @@ module Kiosk
 
       # One declared verb, as an origin's descriptor presents it to the checks.
       Verb = Data.define(:name, :kind, :reach, :input_schema, :output_schema, :example_params) do
-        def initialize(name:, kind:, reach: 'principal', input_schema: nil,
-                       output_schema: nil, example_params: nil)
+        def initialize(name:, kind:, reach: 'principal', **schemas)
           kind = kind.to_sym
           raise ArgumentError, "kind must be :query or :action, got #{kind.inspect}" unless HTTP_METHODS.key?(kind)
 
           super(name: name.to_s, kind: kind, reach: (reach || 'principal').to_s,
-                input_schema: input_schema, output_schema: output_schema,
-                example_params: example_params)
+                input_schema: nil, output_schema: nil, example_params: nil, **schemas)
         end
 
         def query? = kind == :query

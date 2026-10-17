@@ -13,7 +13,7 @@ module Kiosk
     module StripeMock
       PORT          = 12_111
       UPSTREAM_PORT = 12_112
-      URL           = "http://127.0.0.1:#{PORT}"
+      URL           = "http://127.0.0.1:#{PORT}".freeze
       LOG           = '/tmp/stripe-mock.log'
       DROPPED       = %w[accept-encoding connection content-length host transfer-encoding].freeze
 
@@ -28,18 +28,26 @@ module Kiosk
 
         abort 'stripe-mock not found. Install it: brew install stripe-mock' unless system('command -v stripe-mock >/dev/null 2>&1')
 
+        pids = spawn_processes
+        at_exit { pids.each { stop(it) } }
+        await_ready
+      end
+
+      def spawn_processes
         pids = []
         pids << spawn('stripe-mock', '-http-port', UPSTREAM_PORT.to_s, out: LOG, err: LOG) unless listening?(UPSTREAM_PORT)
         pids << spawn(RbConfig.ruby, '-I', File.expand_path('../..', __dir__), '-rkiosk/test_helpers/stripe_mock',
                       '-e', 'Kiosk::TestHelpers::StripeMock.serve', out: LOG, err: LOG)
-        at_exit do
-          pids.each do |pid|
-            Process.kill('TERM', pid)
-            Process.wait(pid)
-          rescue Errno::ESRCH, Errno::ECHILD
-            nil
-          end
-        end
+      end
+
+      def stop(pid)
+        Process.kill('TERM', pid)
+        Process.wait(pid)
+      rescue Errno::ESRCH, Errno::ECHILD
+        nil
+      end
+
+      def await_ready
         30.times do
           return URL if listening? && listening?(UPSTREAM_PORT)
 
@@ -65,25 +73,40 @@ module Kiosk
         method, path = client.gets.to_s.split
         return unless path # a readiness check connects and hangs up
 
+        headers  = read_headers(client)
+        body     = client.read(headers['content-length'].to_i)
+        upstream = forward(method, path, body, headers)
+        answer   = upstream.body.to_s
+        answer = settled(answer) if confirmed_create?(method, path, body)
+        respond(client, upstream, answer)
+      ensure
+        client.close
+      end
+
+      def forward(method, path, body, headers)
+        Net::HTTP.start('127.0.0.1', UPSTREAM_PORT) do |http|
+          http.send_request(method, path, body, headers.except(*DROPPED))
+        end
+      end
+
+      def read_headers(client)
         headers = {}
         while (line = client.gets) && line != "\r\n"
           name, value = line.split(':', 2)
           headers[name.downcase] = value.strip
         end
-        body = client.read(headers['content-length'].to_i)
+        headers
+      end
 
-        upstream = Net::HTTP.start('127.0.0.1', UPSTREAM_PORT) do |http|
-          http.send_request(method, path, body, headers.except(*DROPPED))
-        end
-        answer = upstream.body.to_s
-        answer = settled(answer) if method == 'POST' && path == '/v1/payment_intents' &&
-                                    URI.decode_www_form(body.to_s).to_h['confirm'] == 'true'
+      def confirmed_create?(method, path, body)
+        method == 'POST' && path == '/v1/payment_intents' &&
+          URI.decode_www_form(body.to_s).to_h['confirm'] == 'true'
+      end
 
+      def respond(client, upstream, answer)
         client.write("HTTP/1.1 #{upstream.code} #{upstream.message}\r\n")
         upstream.each_header { |k, v| client.write("#{k}: #{v}\r\n") unless DROPPED.include?(k) || k == 'content-encoding' }
         client.write("content-length: #{answer.bytesize}\r\nconnection: close\r\n\r\n#{answer}")
-      ensure
-        client.close
       end
 
       def settled(answer)

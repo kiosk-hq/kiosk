@@ -42,12 +42,7 @@ module Kiosk
           @io  = open_socket(uri.host, uri.port, tls)
           @frames = []
           @closed = false
-          @driver = WebSocket::Driver.client(self)
-          @driver.set_header('Authorization', "Bearer #{token}")
-          @driver.on(:message) { @frames << JSON.parse(it.data) }
-          @driver.on(:close)   { @closed = true }
-          @driver.on(:error)   { @closed = true }
-          @driver.start
+          @driver = start_driver(token)
           pump(timeout) { @frames.any? { it['type'] == 'welcome' } } || raise(Error, "#{@url} did not welcome the connection")
         end
 
@@ -103,22 +98,33 @@ module Kiosk
           ssl
         end
 
+        def start_driver(token)
+          driver = WebSocket::Driver.client(self)
+          driver.set_header('Authorization', "Bearer #{token}")
+          driver.on(:message) { @frames << JSON.parse(it.data) }
+          driver.on(:close)   { @closed = true }
+          driver.on(:error)   { @closed = true }
+          driver.start
+          driver
+        end
+
         def pump(seconds)
           deadline = Time.now + seconds
           until Time.now > deadline
             return true if yield
             break if @closed
-            next unless buffered? || @io.wait_readable(0.1)
 
-            begin
-              @driver.parse(@io.read_nonblock(8192))
-            rescue IO::WaitReadable
-              next
-            rescue EOFError, IOError, Errno::ECONNRESET
-              @closed = true
-            end
+            read_frames if buffered? || @io.wait_readable(0.1)
           end
           yield
+        end
+
+        def read_frames
+          @driver.parse(@io.read_nonblock(8192))
+        rescue IO::WaitReadable
+          nil
+        rescue IOError, Errno::ECONNRESET
+          @closed = true
         end
 
         # TLS decrypts ahead of the socket.

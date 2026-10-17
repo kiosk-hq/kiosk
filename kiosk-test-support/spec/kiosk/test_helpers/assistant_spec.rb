@@ -3,7 +3,22 @@
 require 'base64'
 require 'kiosk/test_helpers/assistant'
 
-RSpec.describe Kiosk::TestHelpers::Assistant do
+# Records the requests an origin receives, and answers a toll first.
+module AssistantRequests
+  def requests_to(method, path)
+    sent = []
+    [stub_request(method, /\A#{origin}#{path}/).with { sent << it }, sent]
+  end
+
+  def toll_then(stub, answer)
+    calls = 0
+    stub.to_return { (calls += 1) == 1 ? problem_return('pow_required', status: 402, challenges: [toll]) : answer }
+  end
+end
+
+RSpec.shared_context 'with an assistant and an origin' do
+  include AssistantRequests
+
   subject(:assistant) { described_class.new(base_url: origin) }
 
   let(:origin)     { 'http://kiosk.example.com' }
@@ -18,69 +33,96 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
   before do
     stub_request(:get, %r{/kiosk/auth/challenge}).to_return(json_return(200, 'challenge' => 'nonce-1'))
   end
+end
 
-  def requests_to(method, path)
-    sent = []
-    [stub_request(method, /\A#{origin}#{path}/).with { sent << it }, sent]
+RSpec.describe Kiosk::TestHelpers::Assistant, '#register!' do
+  include_context 'with an assistant and an origin'
+
+  it 'proves possession of a fresh key, origin-bound, and answers the principal' do
+    stub, sent = requests_to(:post, '/kiosk/auth/register')
+    stub.to_return(registered)
+
+    registered_principal = assistant.register!
+
+    body = JSON.parse(sent.first.body)
+    claims, = JWT.decode(body['signed'], registered_principal.rsa_key.public_key, true, algorithm: 'RS256')
+    expect(body.keys).to contain_exactly('public_key', 'signed')
+    expect(claims).to include('aud' => origin, 'nonce' => 'nonce-1')
+    expect(registered_principal).to have_attributes(agent_id: 'a1', user_id: 'u1', token: 'tok')
   end
 
-  def toll_then(stub, answer)
-    calls = 0
-    stub.to_return { (calls += 1) == 1 ? problem_return('pow_required', status: 402, challenges: [toll]) : answer }
+  it 'pays a registration toll with the proofs in the Kiosk-PoW header and the same body' do
+    stub, sent = requests_to(:post, '/kiosk/auth/register')
+    toll_then(stub, registered)
+
+    assistant.register!
+
+    expect(sent.map(&:body).uniq.size).to eq(1)
+    expect(sent.first.headers).not_to have_key('Kiosk-Pow')
+    expect(JSON.parse(sent.last.headers['Kiosk-Pow']).first).to include('challenge' => toll, 'nonce' => include('indices'))
   end
 
-  describe '#register!' do
-    it 'proves possession of a fresh key, origin-bound, and answers the principal' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
-      stub.to_return(registered)
+  it 'raises when the origin does not register' do
+    stub_request(:post, "#{origin}/kiosk/auth/register").to_return(problem_return('bad_request', status: 422))
 
-      registered_principal = assistant.register!
+    expect { assistant.register! }.to raise_error(described_class::RegistrationError, /expected 201, got 422/)
+  end
+end
 
-      body = JSON.parse(sent.first.body)
-      claims, = JWT.decode(body['signed'], registered_principal.rsa_key.public_key, true, algorithm: 'RS256')
-      expect(body.keys).to contain_exactly('public_key', 'signed')
-      expect(claims).to include('aud' => origin, 'nonce' => 'nonce-1')
-      expect(registered_principal).to have_attributes(agent_id: 'a1', user_id: 'u1', token: 'tok')
-    end
+RSpec.describe Kiosk::TestHelpers::Assistant, '#register_raw' do
+  include_context 'with an assistant and an origin'
 
-    it 'pays a registration toll with the proofs in the Kiosk-PoW header and the same body' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
-      toll_then(stub, registered)
+  it 'sends no proof when told to skip, and a verbatim one when given a string' do
+    stub, sent = requests_to(:post, '/kiosk/auth/register')
+    stub.to_return(problem_return('pow_required', status: 402, challenges: [toll]))
 
-      assistant.register!
+    expect(assistant.register_raw(pow: :skip).status).to eq(402)
+    assistant.register_raw(pow: 'not-a-proof')
 
-      expect(sent.map(&:body).uniq.size).to eq(1)
-      expect(sent.first.headers).not_to have_key('Kiosk-Pow')
-      expect(JSON.parse(sent.last.headers['Kiosk-Pow']).first).to include('challenge' => toll, 'nonce' => include('indices'))
-    end
-
-    it 'raises when the origin does not register' do
-      stub_request(:post, "#{origin}/kiosk/auth/register").to_return(problem_return('bad_request', status: 422))
-
-      expect { assistant.register! }.to raise_error(described_class::RegistrationError, /expected 201, got 422/)
-    end
+    expect(sent.map { it.headers['Kiosk-Pow'] }).to eq([nil, 'not-a-proof'])
   end
 
-  describe '#register_raw' do
-    it 'sends no proof when told to skip, and a verbatim one when given a string' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
-      stub.to_return(problem_return('pow_required', status: 402, challenges: [toll]))
+  it 'sends the role an assistant has no right to choose' do
+    stub, sent = requests_to(:post, '/kiosk/auth/register')
+    stub.to_return(registered)
 
-      expect(assistant.register_raw(pow: :skip).status).to eq(402)
-      assistant.register_raw(pow: 'not-a-proof')
+    assistant.register_raw(wire_role: 'admin')
 
-      expect(sent.map { it.headers['Kiosk-Pow'] }).to eq([nil, 'not-a-proof'])
-    end
-
-    it 'sends the role an assistant has no right to choose' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
-      stub.to_return(registered)
-
-      assistant.register_raw(wire_role: 'admin')
-
-      expect(JSON.parse(sent.first.body)['role']).to eq('admin')
-    end
+    expect(JSON.parse(sent.first.body)['role']).to eq('admin')
   end
+end
+
+RSpec.describe Kiosk::TestHelpers::Assistant, '#pay' do
+  include_context 'with an assistant and an origin'
+
+  let(:now)    { Time.now.to_i }
+  let(:intent) { { id: 'i1', user_id: 'u1', exp: now + 600, iat: now } }
+  let(:cart)   { { id: 'c1', intent_mandate_id: 'i1', total_amount_cents: 100, currency: 'eur', iss: origin, exp: now + 600, iat: now } }
+
+  it "signs the three mandates with the principal's key and binds the payment to the cart" do
+    stub, sent = requests_to(:post, '/kiosk/pay')
+    stub.to_return(json_return(200, 'settlement_id' => 's1'))
+
+    assistant.pay(principal, intent:, cart:)
+
+    mandates = JSON.parse(sent.first.body).transform_values { JWT.decode(it, key.public_key, true, algorithm: 'RS256').first }
+    expect(mandates.transform_values { it['id'] }).to include('intent_mandate_jws' => 'i1', 'cart_mandate_jws' => 'c1')
+    expect(mandates['payment_mandate_jws']).to include('cart_mandate_id' => 'c1', 'amount_cents' => 100, 'currency' => 'eur',
+                                                       'user_id' => 'u1', 'agent_id' => 'a1', 'iss' => origin)
+  end
+
+  it 're-sends the same signed mandates when it pays a toll' do
+    stub, sent = requests_to(:post, '/kiosk/pay')
+    toll_then(stub, json_return(200, 'settlement_id' => 's1'))
+
+    assistant.pay(principal, intent:, cart:)
+
+    expect(sent.map(&:body).uniq.size).to eq(1)
+  end
+end
+
+RSpec.describe Kiosk::TestHelpers::Assistant, 'queries and actions' do
+  include_context 'with an assistant and an origin'
 
   it 'queries with the arguments on the query string' do
     stub, sent = requests_to(:get, '/kiosk/my_orders')
@@ -108,6 +150,10 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
 
     expect(assistant.query(principal, name: 'search')['x-total-count']).to eq('42')
   end
+end
+
+RSpec.describe Kiosk::TestHelpers::Assistant, 'proof-of-work tolls' do
+  include_context 'with an assistant and an origin'
 
   it 'pays a toll once and says how many proofs it cost' do
     stub, sent = requests_to(:get, '/kiosk/catalog')
@@ -134,33 +180,10 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
     expect(assistant.run(principal, name: 'reschedule')).to have_attributes(status: 402, pow_retried?: false)
     expect(sent.size).to eq(1)
   end
+end
 
-  describe '#pay' do
-    let(:now)    { Time.now.to_i }
-    let(:intent) { { id: 'i1', user_id: 'u1', exp: now + 600, iat: now } }
-    let(:cart)   { { id: 'c1', intent_mandate_id: 'i1', total_amount_cents: 100, currency: 'eur', iss: origin, exp: now + 600, iat: now } }
-
-    it "signs the three mandates with the principal's key and binds the payment to the cart" do
-      stub, sent = requests_to(:post, '/kiosk/pay')
-      stub.to_return(json_return(200, 'settlement_id' => 's1'))
-
-      assistant.pay(principal, intent:, cart:)
-
-      mandates = JSON.parse(sent.first.body).transform_values { JWT.decode(it, key.public_key, true, algorithm: 'RS256').first }
-      expect(mandates.transform_values { it['id'] }).to include('intent_mandate_jws' => 'i1', 'cart_mandate_jws' => 'c1')
-      expect(mandates['payment_mandate_jws']).to include('cart_mandate_id' => 'c1', 'amount_cents' => 100, 'currency' => 'eur',
-                                                         'user_id' => 'u1', 'agent_id' => 'a1', 'iss' => origin)
-    end
-
-    it 're-sends the same signed mandates when it pays a toll' do
-      stub, sent = requests_to(:post, '/kiosk/pay')
-      toll_then(stub, json_return(200, 'settlement_id' => 's1'))
-
-      assistant.pay(principal, intent:, cart:)
-
-      expect(sent.map(&:body).uniq.size).to eq(1)
-    end
-  end
+RSpec.describe Kiosk::TestHelpers::Assistant, 'attestation and account binding' do
+  include_context 'with an assistant and an origin'
 
   it 'submits an attestation' do
     stub, sent = requests_to(:post, '/kiosk/agents/kyc')

@@ -17,7 +17,7 @@ require 'json'
 require 'kiosk/pow/equihash'
 require 'kiosk/reputation'
 
-RSpec.describe 'AuthController 402 WWW-Authenticate' do
+module AuthController402Spec
   KAT_PARAMS_REGISTER = { n: 8, k: 1 }.freeze
   PEM_REGISTER = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
 
@@ -27,14 +27,16 @@ RSpec.describe 'AuthController 402 WWW-Authenticate' do
     body.each { |chunk| raw << chunk }
     [status, headers, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
   end
+end
 
+RSpec.shared_context 'auth controller 402 spec: registration toll' do
   before do
     Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
     Kiosk.configure do |c|
       c.signing_key             = Kiosk::Server::SigningKey.generate
       c.issuer                  = 'https://demo.example'
       c.registration_pow_count  = 1
-      c.registration_pow_params = KAT_PARAMS_REGISTER
+      c.registration_pow_params = AuthController402Spec::KAT_PARAMS_REGISTER
       c.pow_secret              = 'registration-pow-secret-at-least-32-bytes'
     end
   end
@@ -43,11 +45,16 @@ RSpec.describe 'AuthController 402 WWW-Authenticate' do
     Kiosk::Reputation::Backends.reset!
     Kiosk.reset!
   end
+end
+
+RSpec.describe 'AuthController 402 WWW-Authenticate' do
+  include_context 'auth controller 402 spec: registration toll'
+  include AuthController402Spec
 
   it 'register toll 402 pow_required carries WWW-Authenticate: Kiosk-PoW AND the challenges body' do
     env = Rack::MockRequest.env_for(
       '/kiosk/auth/register', method: 'POST', 'CONTENT_TYPE' => 'application/json',
-                              input: JSON.generate(public_key: PEM_REGISTER, signed: 'dummy-not-reached')
+                              input: JSON.generate(public_key: AuthController402Spec::PEM_REGISTER, signed: 'dummy-not-reached')
     )
     status, headers, body = dispatch(:register, env)
 

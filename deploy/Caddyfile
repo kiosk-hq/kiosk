@@ -159,8 +159,7 @@
 # If you ever
 # uncomment it, uncomment the `import ratelimit` line above with it, and treat
 # the 60/min as a placeholder rather than a finding — it is far above any honest
-# agent's pace (register once, then solve one PoW per tolled call — sub-second at
-# the hosted `low`, ~10 s at `high`, on the M-series laptop core
+# agent's pace (register once, ~10 s of proof-of-work on the M-series laptop core
 # kiosk-pow-equihash/bench/README.md names) and far below what it takes to
 # saturate a worker, but no measurement chose it.
 # (ratelimit) {

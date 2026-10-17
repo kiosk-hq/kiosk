@@ -47,13 +47,8 @@ What each unit must carry. For EACH of the 7 apps:
       `KIOSK_ISSUER=https://<app>.demo.kiosk.tech`: **change it if you serve a different origin**, because it is the `aud`
       every assistant proof is checked against — a wrong value rejects every assistant with "proof audience mismatch"
       rather than failing loudly at boot.
-- [ ] **PoW:** nothing to set — difficulty is fixed in each demo's initializer
-      (atablefor n=168 k=7, the other six n=96 k=5).
-- [ ] **PoW toll:** atablefor runs the **reputation** anti-scalping policy in production (RateAndReputation with the
-      real confirmed-bookings factor) — its initializer's production default, so its env sets nothing for it. At `high`
-      a fresh visitor pays ~2 proofs (~20 s) at first contact, dropping to 1 then a free pass as its bookings confirm.
-      getgrocery tolls every query and hoteling prices browse depth and holds; both are configured in their
-      initializers, with no env flag.
+- [ ] **PoW:** nothing to set beyond `KIOSK_POW_SECRET` — every demo tolls registration with one Equihash proof
+      at the gem default, n=168 k=7, set in its initializer.
 - [ ] ⚠ **UPGRADING AN EXISTING BOX — `deploy/rollout.sh` is the whole of it.** The rollout renders each file from
       its template on every run, so a name no template declares does not come across. It edits only
       `/etc/kiosk-demo/*.env`; it does
@@ -274,7 +269,7 @@ getgrocery's real third-party orders included.
 - [ ] Verify as §8; `\d` on any table in `psql` shows the shape `db/schema.rb` states.
 
 ## 8. Verify (per subdomain)
-- [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery (atablefor's carries the "beware: heavy proof-of-work" notice).
+- [ ] `GET https://<app>.demo.kiosk.tech/.well-known/kiosk.json` returns discovery.
 - [ ] The demo **root page** loads (what it is + the live activity counters). The copy-paste curl
       flow lives in `deploy/README.md` §"Poke it"; no landing page carries one.
 - [ ] getgrocery, hoteling, skooti: a Stripe test card `4242 4242 4242 4242` completes a real test-mode pay.

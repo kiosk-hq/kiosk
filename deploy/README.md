@@ -90,15 +90,15 @@ migrated or restarted, and the push ends in `DEPLOY FAILED`.
 
 ## Per-demo map
 
-| Demo | Subdomain | Port | PoW difficulty | Stripe (test) |
+| Demo | Subdomain | Port | PoW | Stripe (test) |
 |------|-----------|------|----------------|---------------|
-| getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | **low** (sub-second, poke-friendly) | yes |
-| atablefor  | `atablefor.demo.kiosk.tech` | 3002 | **HIGH** (~9–10 s on an M-series laptop core, "beware: heavy proof-of-work") | — (no payment provider) |
-| hoteling   | `hoteling.demo.kiosk.tech` | 3003 | **low** | yes |
-| skooti     | `skooti.demo.kiosk.tech` | 3004 | **low** | yes |
-| stylish    | `stylish.demo.kiosk.tech` | 3005 | **low** | — |
-| philslist  | `philslist.demo.kiosk.tech` | 3006 | **low** | — |
-| tudu       | `tudu.demo.kiosk.tech` | 3007 | **low** | — |
+| getgrocery | `getgrocery.demo.kiosk.tech` | 3001 | n=168 k=7 | yes |
+| atablefor  | `atablefor.demo.kiosk.tech` | 3002 | n=168 k=7 | — (no payment provider) |
+| hoteling   | `hoteling.demo.kiosk.tech` | 3003 | n=168 k=7 | yes |
+| skooti     | `skooti.demo.kiosk.tech` | 3004 | n=168 k=7 | yes |
+| stylish    | `stylish.demo.kiosk.tech` | 3005 | n=168 k=7 | — |
+| philslist  | `philslist.demo.kiosk.tech` | 3006 | n=168 k=7 | — |
+| tudu       | `tudu.demo.kiosk.tech` | 3007 | n=168 k=7 | — |
 | prove (KYC broker) | `kyc.demo.kiosk.tech` | 3008 | — (not a Kiosk operator) | — |
 
 **The KYC broker is the odd one out**: the gem dir is `kiosk-demo-prove` but it serves
@@ -109,13 +109,11 @@ on no kiosk gem. Its env template is `env/kyc-demo.env.example` → copy to
 its Caddy vhost is `kyc.demo.kiosk.tech → 127.0.0.1:3008`. skooti trusts it as
 its KYC issuer (skooti's env pins `KIOSK_PROVE_*` at this broker).
 
-**PoW difficulty is fixed per demo** in its `config/initializers/kiosk.rb`:
-atablefor, the production-grade showcase, tolls at Equihash n=168 k=7 (~1.3 GiB
-and ~10 s per proof on the reference solver, measured on one M-series laptop
-core) behind a "beware: heavy proof-of-work" notice in `/.well-known/kiosk.json`; the
-other six toll at n=96 k=5, a sub-second solve. (The toll prices abuse; it is
-not by itself a DoS shield, and there is deliberately no default edge throttle —
-see "Edge rate-limit" below.)
+**Every demo tolls registration the same way**: one Equihash proof at the gem
+default n=168 k=7 (~1.3 GiB and ~10 s per proof on the reference solver,
+measured on one M-series laptop core), set in its `config/initializers/kiosk.rb`.
+(The toll prices abuse; it is not by itself a DoS shield, and there is
+deliberately no default edge throttle — see "Edge rate-limit" below.)
 
 ## What the operator does vs. what's automated
 
@@ -446,12 +444,10 @@ assistant) can read what the origin offers before it registers. Everything else
 — every query, every action, `pay` — needs a Bearer token and MAY toll
 proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
 by design, and the "true" one-liner ships a copy-paste **solver**
-(`kiosk-pow-equihash/solve.py`). Hosted difficulty is
-n=96 k=5 (~0.2 s) in every demo
-but atablefor, which is intentionally ~9–10 s on an M-series laptop core, the
-only hardware either figure has ever been measured on — both rows of
-`kiosk-pow-equihash/bench/README.md`'s measured grid, which is where to re-run
-them for your own machine (you'll feel the high one — that's the point). Flow:
+(`kiosk-pow-equihash/solve.py`). Every demo asks for n=168 k=7, ~9–10 s on an
+M-series laptop core, the only hardware that figure has been measured on —
+`kiosk-pow-equihash/bench/README.md`'s measured grid is where to re-run it for
+your own machine. Flow:
 **discover (free) → read the schema (free) → register (solve PoW) → call a verb
 (each MAY toll PoW too)**.
 
@@ -476,7 +472,7 @@ b64url() { openssl base64 -A | tr '+/' '-_' | tr -d '='; }
 proofs_for() { jq -c '.challenges[]' | while read -r c; do
     jq -cn --argjson challenge "$c" \
            --argjson nonce "$(python3 kiosk-pow-equihash/solve.py "$c")" \
-           '{challenge:$challenge,nonce:$nonce}'   # ~0.2 s low / ~9–10 s high on an M-series core (atablefor)
+           '{challenge:$challenge,nonce:$nonce}'   # ~9–10 s on an M-series core
   done | jq -sc .; }
 
 #    a) an agent keypair, and a challenge nonce FOR THAT KEY. `public_key` is
@@ -541,7 +537,5 @@ curl -s -X POST "$BASE/kiosk/create_order" \
 > The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`
 > returns and `solve.py` consumes, and the block above is the copy-paste form of
 > it. It is the only one: no demo landing page carries a curl one-liner.
-> atablefor's `pow_notice` says "beware: heavy proof-of-work", and its landing
-> page warns of the full-strength puzzle, so callers expect the ~9–10 s
+> Registration asks for the full-strength puzzle, so expect ~9–10 s
 > (measured on an M-series laptop core; other hardware differs).
-

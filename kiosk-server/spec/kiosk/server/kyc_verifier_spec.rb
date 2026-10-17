@@ -3,7 +3,23 @@
 require 'jwt'
 require 'openssl'
 
-RSpec.describe Kiosk::Server::KycVerifier do
+module KycVerifierSpec
+  # Sign a KYC attestation payload with the test KYC key.
+  def sign_kyc(payload)
+    JWT.encode(payload, kyc_key, 'RS256')
+  end
+
+  def valid_payload(**overrides)
+    {
+      sub: 'u-1', level: 'verified',
+      iss: kyc_issuer, aud: kyc_audience, iat: (Time.now - 5).to_i, exp: future
+    }.merge(overrides)
+  end
+end
+
+RSpec.shared_context 'kyc verifier spec: configured' do
+  include KycVerifierSpec
+
   let(:kyc_key)      { OpenSSL::PKey::RSA.generate(2048) }
   let(:kyc_issuer)   { 'https://kyc.example' }
   let(:kyc_audience) { 'acme-operator' }
@@ -17,20 +33,10 @@ RSpec.describe Kiosk::Server::KycVerifier do
       c.kyc_public_key = kyc_key.public_key
     end
   end
+end
 
-  # Sign a KYC attestation payload with the test KYC key.
-  def sign_kyc(payload)
-    JWT.encode(payload, kyc_key, 'RS256')
-  end
-
-  def valid_payload(**overrides)
-    {
-      sub: 'u-1', level: 'verified',
-      iss: kyc_issuer, aud: kyc_audience, iat: (Time.now - 5).to_i, exp: future
-    }.merge(overrides)
-  end
-
-  # ─── happy path ───────────────────────────────────────────────────────
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
 
   describe '.verify' do
     it 'returns claims hash for a valid attestation' do
@@ -41,25 +47,27 @@ RSpec.describe Kiosk::Server::KycVerifier do
       expect(claims[:iss]).to   eq(kyc_issuer)
     end
 
-    # ─── rejection paths ─────────────────────────────────────────────
-
-    # ─── named anonymized attributes ─────────────────────────────
-
     it 'returns an empty attribute set for a bare binary attestation (backward-compat)' do
       claims = described_class.verify(raw_jws: sign_kyc(valid_payload), subject: 'u-1')
       expect(claims[:attributes]).to eq({})
     end
+  end
+end
 
+# Named anonymized attributes.
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
+
+  describe '.verify' do
     it 'returns the granted named boolean attributes (String-keyed)' do
-      raw_jws = sign_kyc(valid_payload(attributes: { age_over_18: true, licence_a: true }))
+      raw_jws = sign_kyc(valid_payload(attributes: { 'age_over_18' => true, 'licence_a' => true }))
       claims  = described_class.verify(raw_jws: raw_jws, subject: 'u-1')
       expect(claims[:attributes]).to eq('age_over_18' => true, 'licence_a' => true)
     end
 
     it 'drops any non-true attribute value (no truthy-but-not-true grants)' do
-      raw_jws = sign_kyc(valid_payload(attributes: {
-                                         age_over_18: true, licence_a: false, licence_b: 'yes', extra: 1
-                                       }))
+      attributes = { 'age_over_18' => true, 'licence_a' => false, 'licence_b' => 'yes', 'extra' => 1 }
+      raw_jws = sign_kyc(valid_payload(attributes: attributes))
       claims = described_class.verify(raw_jws: raw_jws, subject: 'u-1')
       expect(claims[:attributes]).to eq('age_over_18' => true)
     end
@@ -69,18 +77,21 @@ RSpec.describe Kiosk::Server::KycVerifier do
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /attributes must be an object/)
     end
+  end
+end
 
+# The issuer and the audience bind a claim to this operator. A claim minted
+# for another operator's audience does not unlock this one.
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
+
+  describe '.verify' do
     it 'raises Errors::Forbidden when the iss does not match kyc_issuer' do
       raw_jws = sign_kyc(valid_payload(iss: 'https://evil-kyc.example'))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /issuer/)
     end
 
-    # ─── OPERATOR-BINDING: aud (cross-operator claim replay) ──────────────
-    # A claim the KYC provider minted for a DIFFERENT operator's audience is
-    # rejected at the wire — this is the engine-level CrossOperatorClaimReplay
-    # block. Without the aud check a claim solicited by/for operator A would
-    # unlock operator B.
     it "raises Errors::Forbidden when aud does not match this operator's kyc_audience" do
       raw_jws = sign_kyc(valid_payload(aud: 'other-operator'))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
@@ -88,12 +99,17 @@ RSpec.describe Kiosk::Server::KycVerifier do
     end
 
     it 'raises Errors::Forbidden when the aud claim is absent' do
-      payload = valid_payload.except(:aud)
-      raw_jws = sign_kyc(payload)
+      raw_jws = sign_kyc(valid_payload.except(:aud))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
+
+  describe '.verify' do
     it 'accepts an attestation whose aud matches kyc_audience (happy path)' do
       raw_jws = sign_kyc(valid_payload(aud: kyc_audience))
       claims  = described_class.verify(raw_jws: raw_jws, subject: 'u-1')
@@ -110,22 +126,24 @@ RSpec.describe Kiosk::Server::KycVerifier do
       claims  = described_class.verify(raw_jws: raw_jws, subject: 'u-1')
       expect(claims[:aud]).to eq('https://operator.example')
     end
+  end
+end
 
+# The subject check compares as String on both sides: a bigint-PK host has an
+# Integer user_id, and the KYC provider signs `sub` as a String.
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
+
+  describe '.verify' do
     it 'raises Errors::Forbidden when the sub does not match identity.user_id' do
       raw_jws = sign_kyc(valid_payload(sub: 'u-other'))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /subject/)
     end
 
-    # On a bigint-PK host the authenticated Identity carries an Integer
-    # user_id (the token `sub` round-trips as bigint) while the KYC provider
-    # signs `sub` with the String id it was handed. The subject check must
-    # compare as STRING on both sides, or every attestation on a bigint host is
-    # wrongly Forbidden. (Mirrors MandateVerifier's bigint contract.)
     context 'on a bigint-PK host (Integer identity, String attestation sub)' do
       it 'verifies an Integer identity against a String attestation sub' do
-        raw_jws = sign_kyc(valid_payload(sub: '42'))
-        claims  = described_class.verify(raw_jws: raw_jws, subject: 42)
+        claims = described_class.verify(raw_jws: sign_kyc(valid_payload(sub: '42')), subject: 42)
         expect(claims[:sub]).to eq('42')
         expect(claims[:level]).to eq('verified')
       end
@@ -136,7 +154,13 @@ RSpec.describe Kiosk::Server::KycVerifier do
           .to raise_error(Kiosk::Server::Errors::Forbidden, /subject/)
       end
     end
+  end
+end
 
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
+
+  describe '.verify' do
     it 'raises Errors::Forbidden for an expired attestation' do
       raw_jws = sign_kyc(valid_payload(exp: past))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
@@ -149,36 +173,40 @@ RSpec.describe Kiosk::Server::KycVerifier do
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
+  end
+end
 
-    # T-158: `module_not_served` (501), not `forbidden` (403). An origin with no
-    # `kyc_public_key` serves no KYC at all — an ORIGIN-WIDE fact, true of an
-    # anonymous caller too — while `forbidden` is glossed "authenticated, but
-    # this identity may not do this". That mis-fit is what K-1207 measured and
-    # what decision «A» split into its own code.
+# An origin with no `kyc_public_key` serves no KYC at all. That is an
+# origin-wide fact, so the answer is module_not_served (501), not forbidden.
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
+
+  before { Kiosk.configure { |c| c.kyc_public_key = nil } }
+
+  describe '.verify' do
     it 'raises Errors::ModuleNotServed when kyc_public_key is not configured' do
-      Kiosk.configure { |c| c.kyc_public_key = nil }
-      raw_jws = sign_kyc(valid_payload)
-      expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
+      expect { described_class.verify(raw_jws: sign_kyc(valid_payload), subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::ModuleNotServed, /does not serve the KYC module/)
     end
 
     it 'puts module_not_served/501 on the wire for it, and names the module in detail' do
-      Kiosk.configure { |c| c.kyc_public_key = nil }
-      raw_jws = sign_kyc(valid_payload)
-      expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
+      expect { described_class.verify(raw_jws: sign_kyc(valid_payload), subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::ModuleNotServed) { |e|
           expect(e.code).to        eq('module_not_served')
           expect(e.http_status).to eq(501)
           expect(e.to_problem[:type]).to   eq('https://kiosk.tech/problems/module_not_served')
           expect(e.to_problem[:detail]).to include('KYC')
-          # It is NOT a Forbidden: an assistant that branches on `forbidden` must
-          # not catch this, which is the whole point of the split.
+          # An assistant that branches on `forbidden` must not catch this.
           expect(e).not_to be_a(Kiosk::Server::Errors::Forbidden)
         }
     end
+  end
+end
 
-    # ─── I1: KYC level check ──────────────────────────────────────────────
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
 
+  describe '.verify' do
     it "I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')" do
       raw_jws = sign_kyc(valid_payload(level: 'pending'))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
@@ -186,33 +214,23 @@ RSpec.describe Kiosk::Server::KycVerifier do
     end
 
     it 'I1: raises Errors::Forbidden when level is missing entirely' do
-      payload = valid_payload.except(:level)
-      raw_jws = sign_kyc(payload)
+      raw_jws = sign_kyc(valid_payload.except(:level))
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /kyc level not verified/)
     end
+  end
+end
 
-    # ─── I2: require exp (and iss, sub) claims ────────────────────────────
+RSpec.describe Kiosk::Server::KycVerifier do
+  include_context 'kyc verifier spec: configured'
 
-    it 'I2: raises Errors::Forbidden when exp claim is absent' do
-      payload = valid_payload.except(:exp)
-      raw_jws = sign_kyc(payload)
-      expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
-        .to raise_error(Kiosk::Server::Errors::Forbidden)
-    end
-
-    it 'I2: raises Errors::Forbidden when iss claim is absent' do
-      payload = valid_payload.except(:iss)
-      raw_jws = sign_kyc(payload)
-      expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
-        .to raise_error(Kiosk::Server::Errors::Forbidden)
-    end
-
-    it 'I2: raises Errors::Forbidden when sub claim is absent' do
-      payload = valid_payload.except(:sub)
-      raw_jws = sign_kyc(payload)
-      expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
-        .to raise_error(Kiosk::Server::Errors::Forbidden)
+  describe '.verify' do
+    %i[exp iss sub].each do |claim|
+      it "I2: raises Errors::Forbidden when #{claim} claim is absent" do
+        raw_jws = sign_kyc(valid_payload.except(claim))
+        expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
+          .to raise_error(Kiosk::Server::Errors::Forbidden)
+      end
     end
   end
 end

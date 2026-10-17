@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk"
+require 'kiosk'
 
 module Kiosk
   module UserIdentityProviders
@@ -8,8 +8,8 @@ module Kiosk
     # reads the request's Warden user, so password, magic-link and OmniAuth
     # sign-ins all resolve, and a locked or unconfirmed user resolves to nil.
     class Devise < Base
-      autoload :SessionsController, "kiosk/user_identity_providers/devise/sessions_controller"
-      autoload :WireSignpost,       "kiosk/user_identity_providers/devise/wire_signpost"
+      autoload :SessionsController, 'kiosk/user_identity_providers/devise/sessions_controller'
+      autoload :WireSignpost,       'kiosk/user_identity_providers/devise/wire_signpost'
 
       # Raised when neither the user model nor the configuration names a role.
       class ConfigurationError < StandardError; end
@@ -22,11 +22,11 @@ module Kiosk
         return nil if user.nil?
 
         Kiosk::Identity.new(
-          user_id:  user.public_send(Kiosk.configuration.user_id_column),
-          role:     role_for(user),
-          actor:    "human",
+          user_id: user.public_send(Kiosk.configuration.user_id_column),
+          role: role_for(user),
+          actor: 'human',
           agent_id: nil,
-          claims:   {},
+          claims: {}
         )
       end
 
@@ -38,7 +38,7 @@ module Kiosk
         env = rack_env_for(request)
         return nil if env.nil?
 
-        warden = env["warden"]
+        warden = env['warden']
         warden && warden.user
       end
 
@@ -70,7 +70,7 @@ module Kiosk
   end
 end
 
-require "kiosk/user_identity_providers/devise/version"
+require 'kiosk/user_identity_providers/devise/version'
 
 Kiosk::UserIdentityProviders::Devise::VERSION =
   Kiosk::UserIdentityProviders::DeviseVersion::VERSION

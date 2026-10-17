@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/user_identity_providers/devise"
+require 'kiosk/user_identity_providers/devise'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -12,7 +12,7 @@ RSpec.configure do |config|
   end
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
-  config.example_status_persistence_file_path = ".rspec_status"
+  config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false
 
@@ -35,9 +35,7 @@ class FakeUser
   end
 
   # Only define `#kiosk_role` if the test set one — mimics provider opt-in.
-  def kiosk_role
-    @kiosk_role
-  end
+  attr_reader :kiosk_role
 
   # Hide `#kiosk_role` from `respond_to?` unless the test opted in.
   def respond_to?(name, include_private = false)
@@ -75,6 +73,6 @@ class FakeActionDispatchRequest
   attr_reader :env
 
   def initialize(warden: nil)
-    @env = warden.nil? ? {} : { "warden" => warden }
+    @env = warden.nil? ? {} : { 'warden' => warden }
   end
 end

@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/user_identity_providers/devise/version"
+require_relative 'lib/kiosk/user_identity_providers/devise/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-user-idp-devise"
+  spec.name          = 'kiosk-user-idp-devise'
   spec.version       = Kiosk::UserIdentityProviders::DeviseVersion::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Devise user-IdP adapter for the Kiosk framework"
+  spec.summary       = 'Devise user-IdP adapter for the Kiosk framework'
   spec.description   = <<~DESC
     kiosk-user-idp-devise is the opt-in user-IdP adapter for Rails
     providers that authenticate principals through Devise. Add it to your
@@ -28,22 +28,23 @@ Gem::Specification.new do |spec|
     request's Warden user, so the provider's already-installed Devise
     satisfies the requirement.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]     = spec.homepage
-  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-user-idp-devise/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']     = spec.homepage
+  spec.metadata['source_code_uri']  = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']    = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-user-idp-devise/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri']  = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
 
-  spec.add_dependency "kiosk-core", "~> 0.5.0"
+  spec.add_dependency 'kiosk-core', '~> 0.5.0'
 
-  spec.add_development_dependency "activemodel", ">= 7.0"
-  spec.add_development_dependency "devise", "~> 5.0"
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rake",  "~> 13.2"
+  spec.add_development_dependency 'activemodel', '>= 7.0'
+  spec.add_development_dependency 'devise', '~> 5.0'
+  spec.add_development_dependency 'rake',  '~> 13.2'
+  spec.add_development_dependency 'rspec', '~> 3.13'
 end

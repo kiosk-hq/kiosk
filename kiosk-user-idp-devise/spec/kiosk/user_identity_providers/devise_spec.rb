@@ -3,12 +3,12 @@
 RSpec.describe Kiosk::UserIdentityProviders::Devise do
   subject(:adapter) { described_class.new }
 
-  let(:user_id) { "11111111-1111-1111-1111-111111111111" }
+  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
 
   before { Kiosk.configure { |c| c.roles = %i[customer master] } }
 
-  describe "#verify" do
-    context "when current_user is present" do
+  describe '#verify' do
+    context 'when current_user is present' do
       let(:user)    { FakeUser.new(id: user_id) }
       let(:request) { FakeRequest.new(current_user: user) }
 
@@ -19,23 +19,23 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
         expect(identity.user_id).to eq(user_id)
       end
 
-      it "marks the identity as a human actor (no agent_id)" do
+      it 'marks the identity as a human actor (no agent_id)' do
         identity = adapter.verify(request)
 
-        expect(identity.actor).to    eq("human")
+        expect(identity.actor).to    eq('human')
         expect(identity.agent_id).to be_nil
         expect(identity).to          be_human
       end
 
-      it "passes through an empty claims hash (Devise has no extra claims)" do
+      it 'passes through an empty claims hash (Devise has no extra claims)' do
         expect(adapter.verify(request).claims).to eq({})
       end
     end
 
-    context "when current_user is nil" do
+    context 'when current_user is nil' do
       let(:request) { FakeRequest.new(current_user: nil) }
 
-      it "returns nil (covers unauthenticated, locked, and unconfirmed uniformly)" do
+      it 'returns nil (covers unauthenticated, locked, and unconfirmed uniformly)' do
         # Devise's `active_for_authentication?` already gates `current_user`,
         # so a locked or unconfirmed user yields `current_user == nil` —
         # one signal, three failure modes, no extra branching in the adapter.
@@ -43,38 +43,38 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
       end
     end
 
-    context "role resolution" do
-      it "uses #kiosk_role when the user model defines it" do
+    context 'role resolution' do
+      it 'uses #kiosk_role when the user model defines it' do
         user    = FakeUser.new(id: user_id, kiosk_role: :master)
         request = FakeRequest.new(current_user: user)
 
-        expect(adapter.verify(request).role).to eq("master")
+        expect(adapter.verify(request).role).to eq('master')
       end
 
-      it "falls back to the first symbol in Kiosk.configuration.roles" do
+      it 'falls back to the first symbol in Kiosk.configuration.roles' do
         user    = FakeUser.new(id: user_id)
         request = FakeRequest.new(current_user: user)
 
-        expect(adapter.verify(request).role).to eq("customer")
+        expect(adapter.verify(request).role).to eq('customer')
       end
 
-      it "raises ConfigurationError when roles is empty AND #kiosk_role is undefined" do
+      it 'raises ConfigurationError when roles is empty AND #kiosk_role is undefined' do
         Kiosk.configure { |c| c.roles = [] }
         user    = FakeUser.new(id: user_id)
         request = FakeRequest.new(current_user: user)
 
         expect { adapter.verify(request) }.to raise_error(
           described_class::ConfigurationError,
-          /Cannot resolve a role.*kiosk_role/m,
+          /Cannot resolve a role.*kiosk_role/m
         )
       end
 
-      it "does NOT raise when roles is empty but #kiosk_role IS defined" do
+      it 'does NOT raise when roles is empty but #kiosk_role IS defined' do
         Kiosk.configure { |c| c.roles = [] }
         user    = FakeUser.new(id: user_id, kiosk_role: :customer)
         request = FakeRequest.new(current_user: user)
 
-        expect(adapter.verify(request).role).to eq("customer")
+        expect(adapter.verify(request).role).to eq('customer')
       end
 
       # ── K-1124: #kiosk_role is returned VERBATIM, nil included ────────────
@@ -91,7 +91,7 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
       # must be TOTAL. `kiosk-demo-stylish`'s is, and
       # `kiosk-test-support/spec/demo_roles_are_total_spec.rb` fails the build
       # if a demo grows one whose nil-ness nobody reasoned about.
-      it "returns NO role when #kiosk_role answers nil, even with roles declared" do
+      it 'returns NO role when #kiosk_role answers nil, even with roles declared' do
         Kiosk.configure { |c| c.roles = %i[owner customer] }
         user    = FakeUser.new(id: user_id, kiosk_role: nil)
         request = FakeRequest.new(current_user: user)
@@ -100,29 +100,30 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
       end
     end
 
-    context "Kiosk.configuration.user_id_column" do
-      it "defaults to :id" do
+    context 'Kiosk.configuration.user_id_column' do
+      it 'defaults to :id' do
         user    = FakeUser.new(id: user_id)
         request = FakeRequest.new(current_user: user)
 
         expect(adapter.verify(request).user_id).to eq(user_id)
       end
 
-      it "honours a custom column" do
+      it 'honours a custom column' do
         Kiosk.configure { |c| c.user_id_column = :external_id }
 
         user_class = Class.new do
           attr_reader :external_id
-          def initialize(external_id:); @external_id = external_id; end
+
+          def initialize(external_id:) = @external_id = external_id
         end
-        user    = user_class.new(external_id: "ext-42")
+        user    = user_class.new(external_id: 'ext-42')
         request = FakeRequest.new(current_user: user)
 
-        expect(adapter.verify(request).user_id).to eq("ext-42")
+        expect(adapter.verify(request).user_id).to eq('ext-42')
       end
     end
 
-    context "shipped wire — ActionDispatch::Request" do
+    context 'shipped wire — ActionDispatch::Request' do
       # kiosk-server's WireController does NOT pass `self`; it passes
       # `request` (an ActionDispatch::Request) to
       # `IdentityResolution.resolve(request)`. That object has no
@@ -140,30 +141,30 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
         expect(identity).to be_human
       end
 
-      it "returns nil when the request carries a Warden proxy with no signed-in user" do
+      it 'returns nil when the request carries a Warden proxy with no signed-in user' do
         request = FakeActionDispatchRequest.new(warden: FakeWarden.new(user: nil))
 
         expect(adapter.verify(request)).to be_nil
       end
 
-      it "returns nil when the request env has no Warden proxy at all" do
+      it 'returns nil when the request env has no Warden proxy at all' do
         request = FakeActionDispatchRequest.new(warden: nil)
 
         expect(adapter.verify(request)).to be_nil
       end
     end
 
-    context "Rack env shim" do
+    context 'Rack env shim' do
       it "reads the user from env['warden'].user when the request is a Hash" do
         user   = FakeUser.new(id: user_id)
-        warden = double("Warden::Proxy", user: user)
-        env    = { "warden" => warden }
+        warden = double('Warden::Proxy', user: user)
+        env    = { 'warden' => warden }
 
         identity = adapter.verify(env)
         expect(identity.user_id).to eq(user_id)
       end
 
-      it "returns nil for a Hash env that has no warden entry" do
+      it 'returns nil for a Hash env that has no warden entry' do
         expect(adapter.verify({})).to be_nil
       end
     end

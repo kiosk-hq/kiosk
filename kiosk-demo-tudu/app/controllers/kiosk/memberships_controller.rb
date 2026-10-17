@@ -6,7 +6,7 @@ class Kiosk::MembershipsController < ApplicationController
 
   topic :list_membership do
     reach :consented
-    description "A member `joined` a list you can reach, or an owner `removed` one."
+    description "A member `joined` a list you are on, or an owner `removed` one."
     payload_schema type: "object", additionalProperties: false,
                    properties: { account_id: { type: "string", format: "uuid" },
                                  role:       { type: "string" },
@@ -18,8 +18,8 @@ class Kiosk::MembershipsController < ApplicationController
   end
 
   kind :query
-  description "Who this call is signed in as: the member, the acting assistant, and the name the " \
-              "member shows on shared lists."
+  description "Who is signed in for this call: the member, the assistant acting for them, and the " \
+              "name the member shows on shared lists."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
                 description: "The signed-in member.",
@@ -28,8 +28,8 @@ class Kiosk::MembershipsController < ApplicationController
                   type: "object", additionalProperties: false,
                   properties: {
                     account_id:   { type: "string", description: "The signed-in member's account." },
-                    agent_id:     { type: %w[string null], description: "The acting assistant, or null for a human session." },
-                    display_name: { type: "string", description: "The name other members see: the one chosen, or an opaque `member-<hex>`." },
+                    agent_id:     { type: %w[string null], description: "The assistant making this call, or null when a human is signed in." },
+                    display_name: { type: "string", description: "The name other members see: the one the member chose, or a generated `member-<hex>` name." },
                   },
                   required: %w[account_id agent_id display_name],
                 }
@@ -55,7 +55,7 @@ class Kiosk::MembershipsController < ApplicationController
                   type: "object", additionalProperties: false,
                   properties: {
                     account_id:   { type: "string", description: "Pass to remove_member as `account_id`." },
-                    display_name: { type: "string", description: "The member's chosen name, or an opaque `member-<hex>`." },
+                    display_name: { type: "string", description: "The member's chosen name, or a generated `member-<hex>` name." },
                     role:         { enum: Membership.roles.keys, description: "Their role on this list." },
                   },
                   required: %w[account_id display_name role],
@@ -66,8 +66,8 @@ class Kiosk::MembershipsController < ApplicationController
   end
 
   kind :action
-  description "Owner only: mint a single-use invite to a list, valid for ten minutes. Hand it to the " \
-              "other person; their assistant redeems it with `accept_invite`."
+  description "Owner only: create a single-use invite to a list, valid for ten minutes. Give it to the " \
+              "other person; their assistant joins with it through `accept_invite`."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -78,7 +78,7 @@ class Kiosk::MembershipsController < ApplicationController
                 description: "The invite.",
                 additionalProperties: false,
                 properties: {
-                  code:       { type: "string", description: "The invite, shown only this once." },
+                  code:       { type: "string", description: "The invite code. It is shown only this once." },
                   expires_in: { type: "integer", description: "Seconds until it expires." },
                 },
                 required: %w[code expires_in]
@@ -88,11 +88,11 @@ class Kiosk::MembershipsController < ApplicationController
 
   kind :action
   reach :consented
-  description "Join a list with an invite somebody shared with you. An invite works once, within ten minutes."
+  description "Join a list with an invite somebody gave you. An invite works once, within ten minutes."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 code: { type: "string", minLength: 1, description: "The invite you were given." },
+                 code: { type: "string", minLength: 1, description: "The invite code you were given." },
                },
                required: ["code"]
   output_schema type: "object",

@@ -6,7 +6,7 @@ class Kiosk::TodosController < ApplicationController
 
   topic :todo do
     reach :consented
-    description "A todo on a list you can reach was `added` or `completed`, by any member or in the browser."
+    description "A todo on a list you are on was `added` or `completed`, by any member or in the browser."
     payload_schema type: "object", additionalProperties: false,
                    properties: { todo_id: { type: "string", format: "uuid" },
                                  title:   { type: "string" },
@@ -20,8 +20,8 @@ class Kiosk::TodosController < ApplicationController
 
   kind :query
   reach :consented
-  description "The todos on a list you are on. Deadlines are rendered in the zone you declare in " \
-              "`Kiosk-Timezone`, else in the household's."
+  description "The todos on a list you are on. Deadlines are shown in the time zone you send in the " \
+              "`Kiosk-Timezone` header, or else in the household's time zone."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
@@ -37,9 +37,9 @@ class Kiosk::TodosController < ApplicationController
                     title:               { type: "string", description: "The todo text." },
                     done:                { type: "boolean", description: "Whether it is done." },
                     created_by_agent_id: { type: %w[string null], description: "The assistant that added it, or null when a human did." },
-                    due_at:              { type: %w[string null], description: "The deadline at your zone's offset, or null." },
+                    due_at:              { type: %w[string null], description: "The deadline in your time zone, or null." },
                     due_label:           { type: %w[string null], description: "The deadline to read out to your human, e.g. \"Tue 8 Sep, 14:00 (Europe/Istanbul)\", or null." },
-                    timezone:            { type: "string", description: "The IANA zone these rows are rendered in." },
+                    timezone:            { type: "string", description: "The time zone of these deadlines, e.g. \"Europe/Lisbon\"." },
                   },
                   required: %w[todo_id title done created_by_agent_id due_at due_label timezone],
                 }
@@ -57,8 +57,8 @@ class Kiosk::TodosController < ApplicationController
                  list_id: { type: "string", format: "uuid", description: "A `list_id` from my_lists." },
                  title:   { type: "string", minLength: 1, description: "The todo text." },
                  due_at:  { type: "string", format: "date-time",
-                            description: "The deadline, with its offset. Resolve «tomorrow at two» on the " \
-                                         "clock of the human who said it." },
+                            description: "The deadline, with its time-zone offset. Work out «tomorrow at " \
+                                         "two» in the time zone of the person who said it." },
                },
                required: ["list_id", "title"]
   output_schema type: "object",

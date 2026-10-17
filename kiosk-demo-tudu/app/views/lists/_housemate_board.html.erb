@@ -3,13 +3,13 @@
   <div class="board-head">
     <div>
       <div class="board-title">Housemate view — <%= ListsController::HOUSEMATE_LABEL %></div>
-      <div class="board-sub">Lists shared with this housemate account, and the tasks on them — updates as assistants create &amp; share lists over the wire.</div>
+      <div class="board-sub">Lists shared with this housemate account, and the tasks on them — updates as assistants create and share lists.</div>
     </div>
     <span class="board-count"><%= @housemate_board.size %> <%= "list".pluralize(@housemate_board.size) %></span>
   </div>
 
   <% if @housemate_board.empty? %>
-    <p class="board-empty">No shared lists yet. Point an assistant at this endpoint, create a list, and share it with the housemate — it appears here.</p>
+    <p class="board-empty">No shared lists yet. Point an assistant at this site, create a list, and share it with the housemate — it appears here.</p>
   <% else %>
     <ul class="board-list">
       <% @housemate_board.each do |list| %>
@@ -42,6 +42,6 @@
         </li>
       <% end %>
     </ul>
-    <p class="board-note">This is the housemate's own view. An assistant's list shows up here the moment it is shared with this account — no second sign-in, no payment anywhere. Task text is the shared world; “added by an assistant” marks who added it.</p>
+    <p class="board-note">This is the housemate's own view. An assistant's list shows up here the moment it is shared with this account — no second sign-in, no payment anywhere. “added by an assistant” marks a task an assistant added.</p>
   <% end %>
 </div>

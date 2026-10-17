@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'base64'
-require 'json'
 require 'openssl'
 
 module Kiosk
@@ -34,34 +32,38 @@ module Kiosk
           declared = (profile.declared_roles + [wire_role]).compact.uniq
           return skip_verdict(no_declared_role_reason) if declared.empty?
 
-          key = OpenSSL::PKey::RSA.generate(2048)
-          pem = key.public_key.to_pem
-
-          probes = probe_labels(declared).map do |label, param, value|
-            resp = client.device_authorization(
-              client_id: 'redteam-device-grant-role', public_key: pem, param => value
-            )
-            refused = resp.status == 400 && resp.body.is_a?(Hash) &&
-                      resp.body['error'] == 'invalid_request'
-            [refused, "#{label} -> HTTP #{resp.status} " \
-                      "error=#{(resp.body.is_a?(Hash) ? resp.body['error'] : nil).inspect}"]
-          end
-
+          probes = probe(client, declared)
           control_ok, control_detail = control(client)
-
-          Verdict.new(
-            blocked: probes.all?(&:first) && control_ok,
-            skipped: false,
-            status: probes.all?(&:first) ? 400 : 200,
-            detail: "#{probes.map(&:last).join('; ')}; #{control_detail} " \
-                    "[declared roles probed: #{declared.inspect} " \
-                    "(#{wire_role.inspect} read off this origin's own registration token); " \
-                    'want every role/scope refused 400 invalid_request AND the role-less ' \
-                    'ceremony still opening]'
-          )
+          refused = probes.all?(&:first)
+          Verdict.new(blocked: refused && control_ok, skipped: false, status: refused ? 400 : 200,
+                      detail: summary(probes, control_detail, declared, wire_role))
         end
 
         private
+
+        # [refused?, detail] for each role or scope the request names.
+        def probe(client, declared)
+          pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
+          probe_labels(declared).map do |label, param, value|
+            resp = client.device_authorization(
+              client_id: 'redteam-device-grant-role', public_key: pem, param => value
+            )
+            [resp.status == 400 && body_field(resp, 'error') == 'invalid_request',
+             "#{label} -> HTTP #{resp.status} error=#{body_field(resp, 'error').inspect}"]
+          end
+        end
+
+        def summary(probes, control_detail, declared, wire_role)
+          "#{probes.map(&:last).join('; ')}; #{control_detail} " \
+            "[declared roles probed: #{declared.inspect} " \
+            "(#{wire_role.inspect} read off this origin's own registration token); " \
+            'want every role/scope refused 400 invalid_request AND the role-less ' \
+            'ceremony still opening]'
+        end
+
+        def body_field(resp, key)
+          resp.body.is_a?(Hash) ? resp.body[key] : nil
+        end
 
         def probe_labels(declared)
           declared.flat_map do |role|
@@ -87,18 +89,20 @@ module Kiosk
         # The `role` claim of a token this origin mints at registration.
         def wire_declared_role(client)
           resp = client.register_raw
-          if (failure = setup_failure(
-            resp.status == 201 ? nil : resp,
+          failure = (registration_failure(resp) unless resp.status == 201)
+          return [nil, failure] if failure
+
+          [token_role(body_field(resp, 'access_token')), nil]
+        end
+
+        def registration_failure(resp)
+          setup_failure(
+            resp,
             step: 'the CONTROL registration this scenario reads a declared role from',
             because: 'without a role the origin actually declares, the only probe left is an ' \
                      'invented one — which even a vulnerable origin refuses, so the battery ' \
                      'would print BLOCKED without testing anything.'
-          ))
-            return [nil, failure]
-          end
-
-          token = resp.body.is_a?(Hash) ? resp.body['access_token'] : nil
-          [token_role(token), nil]
+          )
         end
 
         def no_declared_role_reason
@@ -109,14 +113,8 @@ module Kiosk
 
         # Unverified: only what the server put there matters.
         def token_role(token)
-          payload_b64 = token.to_s.split('.')[1]
-          return nil if payload_b64.nil?
-
-          padded = payload_b64 + ('=' * ((4 - (payload_b64.length % 4)) % 4))
-          role = JSON.parse(Base64.urlsafe_decode64(padded))['role']
+          role = TokenClaims.claims(token)&.fetch('role', nil)
           role.nil? || role.to_s.empty? ? nil : role.to_s
-        rescue StandardError
-          nil
         end
       end
     end

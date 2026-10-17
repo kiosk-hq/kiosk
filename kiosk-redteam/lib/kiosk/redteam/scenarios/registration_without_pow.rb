@@ -17,36 +17,40 @@ module Kiosk
         def call(client, profile)
           return skip_verdict('pow_difficulty is 0 (no PoW gate)') unless profile.pow_difficulty.positive?
 
-          resp_skip = client.register_raw(pow: :skip)
-
-          resp_zero = client.register_raw(pow: '0')
-
-          problems = [
-            not_a_pow_rejection('pow: :skip', resp_skip),
-            not_a_pow_rejection('pow: "0"', resp_zero)
-          ].compact
-
-          # The control costs a real solve, so it runs only when both attempts were refused.
-          control = nil
-          if problems.empty?
-            control = client.register_raw
-            unless control.status == 201 && token_of(control)
-              problems << 'CONTROL FAILED: a properly solved registration must return 201 with ' \
-                          "an access_token — got HTTP #{control.status} #{control.body.inspect}. " \
-                          'A server that refuses every registration refuses the two unproven ' \
-                          'ones too, which says nothing about a PoW gate.'
-            end
-          end
-
-          Verdict.new(
-            blocked: problems.empty?,
-            skipped: false,
-            status: control ? control.status : resp_zero.status,
-            detail: problems.join('; ')
-          )
+          attack(client)
         end
 
         private
+
+        def attack(client)
+          attempts = [['pow: :skip', client.register_raw(pow: :skip)], ['pow: "0"', client.register_raw(pow: '0')]]
+          problems = attempts.filter_map { |label, resp| not_a_pow_rejection(label, resp) }
+          control = control_registration(client, problems)
+
+          Verdict.new(blocked: problems.empty?, skipped: false,
+                      status: (control || attempts.last.last).status, detail: problems.join('; '))
+        end
+
+        # The control costs a real solve, so it runs only when both attempts were refused.
+        # A failed control appends its problem.
+        def control_registration(client, problems)
+          return nil unless problems.empty?
+
+          control = client.register_raw
+          problems << control_problem(control) unless honest_registration?(control)
+          control
+        end
+
+        def honest_registration?(control)
+          control.status == 201 && token_of(control)
+        end
+
+        def control_problem(control)
+          'CONTROL FAILED: a properly solved registration must return 201 with ' \
+            "an access_token — got HTTP #{control.status} #{control.body.inspect}. " \
+            'A server that refuses every registration refuses the two unproven ' \
+            'ones too, which says nothing about a PoW gate.'
+        end
 
         # Why this attempt is not a PoW refusal, or nil when it is.
         def not_a_pow_rejection(label, resp)

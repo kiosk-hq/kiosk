@@ -14,31 +14,31 @@ module Kiosk
         end
 
         def call(client, profile)
-          return skip_verdict('no pay_for')      unless profile.pay_for
-          return skip_verdict('no create_owned') unless profile.create_owned
+          skip_unless(profile, pay_for: 'no pay_for', create_owned: 'no create_owned') ||
+            attack(client, profile)
+        end
 
+        private
+
+        def attack(client, profile)
           a = client.register!
           b = client.register!
-
-          owned_ref = profile.create_owned.call(client, a)
-          mandates  = profile.pay_for.call(client, a, owned_ref)
-
-          intent_jws  = client.sign_mandate(a, mandates[:intent])
-          cart_jws    = client.sign_mandate(a, mandates[:cart])
-          payment     = client.payment_mandate(a, cart: mandates[:cart])
-          payment_jws = client.sign_mandate(a, payment)
-
+          mandates = profile.pay_for.call(client, a, profile.create_owned.call(client, a))
+          signed = signed_mandates(client, a, mandates)
           client.pay(a, intent: mandates[:intent], cart: mandates[:cart])
-
-          resp = client.pay_raw(b, intent_jws:, cart_jws:, payment_jws:)
+          resp = client.pay_raw(b, **signed)
 
           # Only 403: a 402 decline would mean the replay was never verified.
-          verdict_from(
-            resp,
-            expect: 403,
-            expect_code: %w[forbidden rls_denied],
-            detail: "mandate replay accepted under B's token (HTTP #{resp.status})"
-          )
+          verdict_from(resp, expect: 403, expect_code: %w[forbidden rls_denied],
+                             detail: "mandate replay accepted under B's token (HTTP #{resp.status})")
+        end
+
+        def signed_mandates(client, principal, mandates)
+          {
+            intent_jws: client.sign_mandate(principal, mandates[:intent]),
+            cart_jws: client.sign_mandate(principal, mandates[:cart]),
+            payment_jws: client.sign_mandate(principal, client.payment_mandate(principal, cart: mandates[:cart]))
+          }
         end
       end
     end

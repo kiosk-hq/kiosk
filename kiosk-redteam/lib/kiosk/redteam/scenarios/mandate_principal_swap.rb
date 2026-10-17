@@ -14,25 +14,21 @@ module Kiosk
         end
 
         def call(client, profile)
-          return skip_verdict('no pay_for')      unless profile.pay_for
-          return skip_verdict('no create_owned') unless profile.create_owned
+          skip_unless(profile, pay_for: 'no pay_for', create_owned: 'no create_owned') ||
+            attack(client, profile)
+        end
 
+        private
+
+        def attack(client, profile)
           a = client.register!
           b = client.register!
-
-          owned_ref = profile.create_owned.call(client, a)
-
-          mandates = profile.pay_for.call(client, a, owned_ref)
-
+          mandates = profile.pay_for.call(client, a, profile.create_owned.call(client, a))
           resp = client.pay(b, intent: mandates[:intent], cart: mandates[:cart])
 
           # Only 403: a 402 or 401 means the swap was never examined.
-          verdict_from(
-            resp,
-            expect: 403,
-            expect_code: %w[forbidden rls_denied],
-            detail: "principal-swap mandate accepted (HTTP #{resp.status})"
-          )
+          verdict_from(resp, expect: 403, expect_code: %w[forbidden rls_denied],
+                             detail: "principal-swap mandate accepted (HTTP #{resp.status})")
         end
       end
     end

@@ -1,15 +1,15 @@
-require "active_support/core_ext/integer/time"
+require 'active_support/core_ext/integer/time'
 
-require "openssl"
+require 'openssl'
 
 # The KYC broker as the local operator demos expect it: their issuer, their intake
 # secrets, callbacks on loopback, and the development signing key.
-ENV["KIOSK_PROVE_ISSUER"]                   ||= "https://kyc.test.local"
-ENV["KIOSK_PROVE_SKOOTI_SECRET"]            ||= "prove-skooti-demo-shared-secret"
-ENV["KIOSK_PROVE_GETGROCERY_SECRET"]        ||= "prove-getgrocery-demo-shared-secret"
-ENV["KIOSK_PROVE_SKOOTI_CALLBACK_HOST"]     ||= "127.0.0.1"
-ENV["KIOSK_PROVE_GETGROCERY_CALLBACK_HOST"] ||= "127.0.0.1"
-ENV["PROVE_KEY_PEM"]                        ||= File.read(File.expand_path("../dev_prove_key.pem", __dir__))
+ENV['KIOSK_PROVE_ISSUER']                   ||= 'https://kyc.test.local'
+ENV['KIOSK_PROVE_SKOOTI_SECRET']            ||= 'prove-skooti-demo-shared-secret'
+ENV['KIOSK_PROVE_GETGROCERY_SECRET']        ||= 'prove-getgrocery-demo-shared-secret'
+ENV['KIOSK_PROVE_SKOOTI_CALLBACK_HOST']     ||= '127.0.0.1'
+ENV['KIOSK_PROVE_GETGROCERY_CALLBACK_HOST'] ||= '127.0.0.1'
+ENV['PROVE_KEY_PEM']                        ||= File.read(File.expand_path('../dev_prove_key.pem', __dir__))
 
 Rails.application.configure do
   config.enable_reloading = true
@@ -17,8 +17,8 @@ Rails.application.configure do
   config.consider_all_requests_local = true
   config.server_timing = true
 
-  if Rails.root.join("tmp/caching-dev.txt").exist?
-    config.public_file_server.headers = { "cache-control" => "public, max-age=#{2.days.to_i}" }
+  if Rails.root.join('tmp/caching-dev.txt').exist?
+    config.public_file_server.headers = { 'cache-control' => "public, max-age=#{2.days.to_i}" }
   else
     config.action_controller.perform_caching = false
   end
@@ -33,5 +33,5 @@ Rails.application.configure do
   # served broker origin; in local runs the broker answers on 127.0.0.1).
   # Rails 8 HostAuthorization otherwise 403s any Host that isn't
   # localhost/127.0.0.1.
-  config.hosts << "kyc.demo.kiosk.tech"
+  config.hosts << 'kyc.demo.kiosk.tech'
 end

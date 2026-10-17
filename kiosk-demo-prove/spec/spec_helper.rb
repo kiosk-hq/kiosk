@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-ENV["RAILS_ENV"] ||= "test"
-require_relative "../config/environment"
-require "rspec/rails"
+ENV['RAILS_ENV'] ||= 'test'
+require_relative '../config/environment'
+require 'rspec/rails'
 
-load Rails.root.join("db/schema.rb") unless ActiveRecord::Base.connection.table_exists?("prove_requests")
+load Rails.root.join('db/schema.rb') unless ActiveRecord::Base.connection.table_exists?('prove_requests')
 
 RSpec.configure do |config|
   config.expect_with(:rspec) { |c| c.syntax = :expect }

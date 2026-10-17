@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "uri"
+require 'uri'
 
 # The operators this broker serves: each authenticates with its own secret,
 # and the broker posts its callbacks to that operator's registered host only.

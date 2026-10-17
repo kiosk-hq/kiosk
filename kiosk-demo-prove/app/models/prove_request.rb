@@ -3,9 +3,9 @@
 # One verification the broker is running. Its unguessable request_id is the
 # only credential the human's verification page needs.
 class ProveRequest < ApplicationRecord
-  self.primary_key = "request_id"
+  self.primary_key = 'request_id'
 
-  enum :status, { pending: "pending", confirmed: "confirmed", declined: "declined" }, validate: true
+  enum :status, { pending: 'pending', confirmed: 'confirmed', declined: 'declined' }, validate: true
 
   # Single use, and only within its time to live.
   def confirmable? = pending? && !expired?

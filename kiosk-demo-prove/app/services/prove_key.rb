@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "openssl"
-require "jwt"
+require 'openssl'
+require 'jwt'
 
 # The broker's signing key. Operators trust its public half, so every claim it
 # signs is an anonymized attestation they accept: booleans only, bound to one
@@ -18,10 +18,10 @@ module ProveKey
   def mint(subject:, operator:, attributes:, request_id:, nonce:, audience: nil)
     now = Time.now.to_i
     JWT.encode(
-      { sub: subject.to_s, level: "verified", iss: issuer, operator: operator.to_s,
+      { sub: subject.to_s, level: 'verified', iss: issuer, operator: operator.to_s,
         aud: audience.presence || operator.to_s, request_id: request_id.to_s, nonce: nonce.to_s,
         attributes: attributes, iat: now, exp: now + LIFETIME },
-      keypair, "RS256",
+      keypair, 'RS256'
     )
   end
 end

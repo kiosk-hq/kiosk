@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "securerandom"
+require 'securerandom'
 
 # An operator opens a verification (POST /verifications, with its bearer
 # secret); the human answers it on the page the request_id links to; an
@@ -17,34 +17,32 @@ class VerificationsController < ActionController::Base
     return if performed?
 
     body = intake_body
-    requested_claims = Array(body["requested_claims"]).map(&:to_s)
-    callback_url     = body["callback_url"].to_s
-    subject_handle   = body["subject_handle"].to_s
+    requested_claims = Array(body['requested_claims']).map(&:to_s)
+    callback_url     = body['callback_url'].to_s
+    subject_handle   = body['subject_handle'].to_s
     # The audience is the registered operator's, never the body's.
     audience = operator[:audience].to_s
     audience = operator_id_param if audience.empty?
 
-    if subject_handle.empty?
-      return render_json({ error: "missing field: subject_handle" }, :bad_request)
-    end
+    return render_json({ error: 'missing field: subject_handle' }, :bad_request) if subject_handle.empty?
     unless ClaimCatalog.all_known?(requested_claims)
       return render_json(
         { error: "unknown or empty requested_claims; broker can answer: #{ClaimCatalog::ENTRIES.keys.inspect}" },
-        :bad_request,
+        :bad_request
       )
     end
     # The broker posts only to the operator's registered host.
     unless OperatorRegistry.callback_allowed?(operator, callback_url)
       return render_json(
-        { error: "callback_url host is not allow-listed for this operator" },
-        :forbidden,
+        { error: 'callback_url host is not allow-listed for this operator' },
+        :forbidden
       )
     end
-    declared_audience = body["audience"].to_s
+    declared_audience = body['audience'].to_s
     unless declared_audience.empty? || declared_audience == audience
       return render_json(
         { error: "audience does not match this operator's registration" },
-        :forbidden,
+        :forbidden
       )
     end
 
@@ -52,26 +50,26 @@ class VerificationsController < ActionController::Base
     nonce      = SecureRandom.urlsafe_base64(32)
 
     ProveRequest.create!(
-      request_id:       request_id,
-      operator_id:      operator_id_param,
-      callback_url:     callback_url,
+      request_id: request_id,
+      operator_id: operator_id_param,
+      callback_url: callback_url,
       requested_claims: requested_claims,
-      subject_handle:   subject_handle,
-      nonce:            nonce,
-      audience:         (audience.empty? ? nil : audience),
-      expires_at:       Time.current + REQUEST_TTL,
+      subject_handle: subject_handle,
+      nonce: nonce,
+      audience: (audience.empty? ? nil : audience),
+      expires_at: Time.current + REQUEST_TTL
     )
 
     render_json(
       {
-        request_id:       request_id,
+        request_id: request_id,
         verification_url: verification_url_for(request_id),
-        status:           "pending",
+        status: 'pending',
         # The callback echoes it, so the operator can tell it from a replay.
-        nonce:            nonce,
-        expires_at:       (Time.current + REQUEST_TTL).utc.iso8601,
+        nonce: nonce,
+        expires_at: (Time.current + REQUEST_TTL).utc.iso8601
       },
-      :created,
+      :created
     )
   end
 
@@ -90,27 +88,27 @@ class VerificationsController < ActionController::Base
     end
 
     case params[:decision].to_s
-    when "approve"
-      if claim!(@request, "confirmed")
+    when 'approve'
+      if claim!(@request, 'confirmed')
         approve!(@request)
       else
         lost_race_response
       end
-    when "decline"
-      if claim!(@request, "declined")
+    when 'decline'
+      if claim!(@request, 'declined')
         @decision = :declined
         render :decided
       else
         lost_race_response
       end
     else
-      render plain: "decision must be approve or decline", status: :bad_request
+      render plain: 'decision must be approve or decline', status: :bad_request
     end
   end
 
   # The public key operators verify claims with.
   def public_key
-    render plain: ProveKey.public_key, content_type: "application/x-pem-file"
+    render plain: ProveKey.public_key, content_type: 'application/x-pem-file'
   end
 
   private
@@ -119,19 +117,19 @@ class VerificationsController < ActionController::Base
     attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
 
     kyc_jws = ProveKey.mint(
-      subject:    prove_request.subject_handle,
-      operator:   prove_request.operator_id,
-      audience:   prove_request.audience,
+      subject: prove_request.subject_handle,
+      operator: prove_request.operator_id,
+      audience: prove_request.audience,
       attributes: attributes,
       request_id: prove_request.request_id,
-      nonce:      prove_request.nonce,
+      nonce: prove_request.nonce
     )
 
     delivery_status = CallbackPoster.deliver(
       callback_url: prove_request.callback_url,
-      request_id:   prove_request.request_id,
-      kyc_jws:      kyc_jws,
-      nonce:        prove_request.nonce,
+      request_id: prove_request.request_id,
+      kyc_jws: kyc_jws,
+      nonce: prove_request.nonce
     )
 
     @decision   = :approved
@@ -143,8 +141,8 @@ class VerificationsController < ActionController::Base
   # Claims the row before minting: of concurrent decisions, exactly one wins.
   def claim!(prove_request, new_status)
     claimed = ProveRequest
-      .pending.where(request_id: prove_request.request_id)
-      .update_all(status: new_status, updated_at: Time.current) == 1
+              .pending.where(request_id: prove_request.request_id)
+              .update_all(status: new_status, updated_at: Time.current) == 1
     prove_request.status = new_status if claimed
     claimed
   end
@@ -165,31 +163,39 @@ class VerificationsController < ActionController::Base
   def authenticate_operator!
     operator = OperatorRegistry.authenticate(operator_id: operator_id_param, secret: bearer_token)
     if operator.nil?
-      render_json({ error: "unknown operator or bad credential" }, :unauthorized)
+      render_json({ error: 'unknown operator or bad credential' }, :unauthorized)
       return nil
     end
     operator
   end
 
   def operator_id_param
-    intake_body["operator_id"].to_s
+    intake_body['operator_id'].to_s
   end
 
   def bearer_token
-    auth = request.headers["Authorization"].to_s
-    auth.start_with?("Bearer ") ? auth.delete_prefix("Bearer ") : ""
+    auth = request.headers['Authorization'].to_s
+    auth.start_with?('Bearer ') ? auth.delete_prefix('Bearer ') : ''
   end
 
   def intake_body
     @intake_body ||= begin
       raw = request.raw_post
-      raw.nil? || raw.empty? ? {} : (JSON.parse(raw) rescue {})
+      if raw.nil? || raw.empty?
+        {}
+      else
+        begin
+          JSON.parse(raw)
+        rescue StandardError
+          {}
+        end
+      end
     end
     @intake_body.is_a?(Hash) ? @intake_body : {}
   end
 
   def verification_url_for(request_id)
-    base = (Rails.configuration.x.prove.public_url || request.base_url).to_s.chomp("/")
+    base = (Rails.configuration.x.prove.public_url || request.base_url).to_s.chomp('/')
     "#{base}/verify?request=#{request_id}"
   end
 

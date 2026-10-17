@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
+require_relative '../../support/postgres'
 
 # The gap K-751 is about, made executable. This is NOT a defect of
 # AuthChallengeStore — it is its documented scope — but it is the exact reason
@@ -28,31 +29,6 @@ end
 module AuthChallengeStoresSpec
   AUTH_CHALLENGE_SPEC_SCHEMA = 'kiosk_auth_challenge_store_spec'
 
-  def self.postgres_error
-    @postgres_error ||= begin
-      connect!
-      [false]
-    rescue StandardError => e
-      ["#{e.class}: #{e.message}"]
-    end
-    @postgres_error.first
-  end
-
-  def self.connect!
-    ActiveRecord::Base.establish_connection(
-      adapter: 'postgresql',
-      host: ENV.fetch('PGHOST', nil),
-      username: ENV.fetch('PGUSER', nil),
-      password: ENV.fetch('PGPASSWORD', nil),
-      database: ENV.fetch('PGDATABASE', 'postgres')
-    )
-    execute('SELECT 1')
-  end
-
-  def self.execute(sql)
-    ActiveRecord::Base.connection.execute(sql)
-  end
-
   def expiry_row(public_key)
     ActiveRecord::Base.connection.exec_query(<<~SQL, 'spec types', [public_key]).to_a.first
       SELECT pg_typeof(expires_at)::text AS at_type,
@@ -78,25 +54,18 @@ RSpec.shared_context 'auth challenge stores spec: postgres schema' do
   let(:schema) { AuthChallengeStoresSpec::AUTH_CHALLENGE_SPEC_SCHEMA }
 
   before(:context) do
-    skip "no local Postgres reachable (#{AuthChallengeStoresSpec.postgres_error})" if AuthChallengeStoresSpec.postgres_error
+    skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
 
     schema = AuthChallengeStoresSpec::AUTH_CHALLENGE_SPEC_SCHEMA
-    AuthChallengeStoresSpec.execute(%(DROP SCHEMA IF EXISTS "#{schema}" CASCADE))
-    AuthChallengeStoresSpec.execute(%(CREATE SCHEMA "#{schema}"))
-    AuthChallengeStoresSpec.execute(Kiosk::Server::SchemaDefinitions.auth_challenge_sql(schema: schema))
+    SpecPostgres.recreate_schema(schema)
+    ActiveRecord::Base.connection.execute(Kiosk::Server::SchemaDefinitions.auth_challenge_sql(schema: schema))
   end
 
-  after(:context) do
-    unless AuthChallengeStoresSpec.postgres_error
-      AuthChallengeStoresSpec.execute(
-        %(DROP SCHEMA IF EXISTS "#{AuthChallengeStoresSpec::AUTH_CHALLENGE_SPEC_SCHEMA}" CASCADE)
-      )
-    end
-  end
+  after(:context) { SpecPostgres.drop_schema(AuthChallengeStoresSpec::AUTH_CHALLENGE_SPEC_SCHEMA) }
 
   before do
     Kiosk.configure { |c| c.schema = schema }
-    AuthChallengeStoresSpec.execute(%(DELETE FROM "#{schema}".auth_challenges))
+    ActiveRecord::Base.connection.execute(%(DELETE FROM "#{schema}".auth_challenges))
   end
 end
 

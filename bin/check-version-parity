@@ -43,7 +43,7 @@ elsif series(min_client) != series(api) || Gem::Version.new(min_client) > Gem::V
 end
 
 # ── Gems ─────────────────────────────────────────────────────────────────────
-specs = Dir[File.join(ROOT, '*', '*.gemspec')].sort.to_h do |path|
+specs = Dir[File.join(ROOT, '*', '*.gemspec')].to_h do |path|
   spec = Gem::Specification.load(path) or abort "check-version-parity: #{rel(path)} does not evaluate"
   [spec, File.dirname(path)]
 end
@@ -77,7 +77,7 @@ IO.popen(['git', '-C', ROOT, 'ls-files', '*Gemfile.lock'], &:readlines).map(&:ch
 end
 
 # ── Skill pins ───────────────────────────────────────────────────────────────
-initializers = Dir[File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb')].sort
+initializers = Dir[File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb')]
 errors << 'no kiosk-demo-*/config/initializers/kiosk.rb found' if initializers.empty?
 
 pins = [['kiosk-server (default)', File.read(DEFAULTS)[/@skill_url\s*\|\|=\s*['"]([^'"]+)['"]/, 1]]]
@@ -101,7 +101,7 @@ initializers.map { File.expand_path('../../..', it) }.each do |dir|
   demo  = File.basename(dir)
   forms = { view: 0, controller: 0 }
 
-  Dir[File.join(dir, 'app', '**', '*.{rb,erb}')].sort.each do |path|
+  Dir[File.join(dir, 'app', '**', '*.{rb,erb}')].each do |path|
     File.readlines(path).each.with_index(1) do |line, n|
       errors << "#{rel(path)}:#{n}: hardcodes #{line[LITERAL]}; read #{ACCESSOR}" if line.match?(LITERAL)
       next unless line.match?(SIGNAL) && line.match?(EMITS)

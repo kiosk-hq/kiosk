@@ -65,7 +65,7 @@ RSpec.describe 'the skill pin' do
 
   initializers = Dir[
     File.join(monorepo_root, 'kiosk-demo-*/config/initializers/kiosk.rb')
-  ].sort
+  ]
 
   # A demo that sets no `skill_url` inherits kiosk-server's default — a
   # legitimate configuration, and the reason `default_url` is a real value

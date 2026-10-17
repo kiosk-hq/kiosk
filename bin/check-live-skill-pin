@@ -47,7 +47,7 @@ end
 
 # A demo is a Kiosk operator iff it configures the engine.
 def operator_dirs
-  Dir.glob(File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb')).sort
+  Dir.glob(File.join(ROOT, 'kiosk-demo-*', 'config', 'initializers', 'kiosk.rb'))
 end
 
 def demo_pin(initializer)

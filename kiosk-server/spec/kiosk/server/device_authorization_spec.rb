@@ -160,7 +160,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
     # asserting it again is red (K-1671).
     it 'is described as neither Crockford nor 32^8 anywhere in lib or app' do
       root = File.expand_path('../../..', __dir__)
-      offenders = Dir.glob("#{root}/{lib,app}/**/*.{rb,erb}").sort.flat_map do |path|
+      offenders = Dir.glob("#{root}/{lib,app}/**/*.{rb,erb}").flat_map do |path|
         File.readlines(path).each_with_index.filter_map do |line, idx|
           next unless line.match?(%r{32\^8|32\*\*8|no 0/O/1/I/L/U}) ||
                       (line.include?('Crockford') && !line.include?('NOT Crockford'))

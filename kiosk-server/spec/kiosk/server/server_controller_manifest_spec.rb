@@ -10,7 +10,7 @@ RSpec.describe "kiosk/server.rb's controller manifest" do
   # rather than an inflector: the inflector has acronym rules an operator can
   # configure, and this derivation must answer the same in every host.
   def self.controller_class_names
-    Dir.glob(CONTROLLER_LIB_GLOB).sort.map do |path|
+    Dir.glob(CONTROLLER_LIB_GLOB).map do |path|
       File.basename(path, '.rb').split('_').map(&:capitalize).join
     end
   end

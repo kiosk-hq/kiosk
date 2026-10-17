@@ -120,7 +120,7 @@ end
 # Every input-schema property name this demo constrains with a keyword the engine validates.
 def constrained_input_fields(demo_dir)
   names = []
-  Dir.glob(File.join(demo_dir, 'app/**/*.rb')).sort.each do |f|
+  Dir.glob(File.join(demo_dir, 'app/**/*.rb')).each do |f|
     src = input_schema_regions(File.read(f))
     idx = 0
     while (m = src.match(/^[ \t]*([a-z_][a-z0-9_]*):\s*\{/, idx))
@@ -215,11 +215,11 @@ def check(root)
   notes    = []
   stats    = Hash.new(0)
 
-  Dir.glob(File.join(root, 'kiosk-demo-*')).sort.each do |demo_dir|
+  Dir.glob(File.join(root, 'kiosk-demo-*')).each do |demo_dir|
     demo   = File.basename(demo_dir)
     fields = constrained_input_fields(demo_dir)
     stats[:fields] += fields.length
-    Dir.glob(File.join(demo_dir, 'script/*.rb')).sort.each do |f|
+    Dir.glob(File.join(demo_dir, 'script/*.rb')).each do |f|
       src = File.read(f)
       rel = f.delete_prefix("#{root}/")
       call_sites(src, RECEIVER).each do |line, body|

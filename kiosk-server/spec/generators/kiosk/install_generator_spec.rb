@@ -47,7 +47,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   def migrations
-    Dir[File.join(@destination, 'db/migrate/*.rb')].sort
+    Dir[File.join(@destination, 'db/migrate/*.rb')]
   end
 
   describe 'initializer' do

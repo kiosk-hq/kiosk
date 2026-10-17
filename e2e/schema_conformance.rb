@@ -113,7 +113,7 @@ end
 # testing the network, and would pass on a stale cache.
 DOCS = {}
 [SCHEMA_DIR, ENGINE_SCHEMA_DIR].each do |dir|
-  Dir[File.join(dir, '*.schema.json')].sort.each do |path|
+  Dir[File.join(dir, '*.schema.json')].each do |path|
     doc = JSON.parse(File.read(path))
     DOCS[doc.fetch('$id')] = doc
   end

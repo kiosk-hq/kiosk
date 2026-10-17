@@ -72,7 +72,7 @@ rescue LoadError => e
   end
 
   demo = ENV['KIOSK_DRIVE_BUNDLE'] ||
-         Dir[File.join(REPO, 'kiosk-demo-*')].sort.find { |d| File.exist?(File.join(d, 'Gemfile.lock')) }
+         Dir[File.join(REPO, 'kiosk-demo-*')].find { |d| File.exist?(File.join(d, 'Gemfile.lock')) }
   abort 'live-fleet-drive: no demo bundle to borrow — run `bundle install` in a kiosk-demo-* first' unless demo
 
   demo = File.join(REPO, demo) unless demo.start_with?('/')

@@ -343,7 +343,7 @@ if ARGV.include?('--self-test')
             touched = plant[:ops].flat_map do |op|
               case op[0]
               when :copy then [op[2]]
-              when :each then Dir[File.join(tree, op[1])].sort.map { |f| f.delete_prefix("#{tree}/") }
+              when :each then Dir[File.join(tree, op[1])].map { |f| f.delete_prefix("#{tree}/") }
               else [op[1]]
               end
             end.uniq
@@ -826,7 +826,7 @@ found = Hash.new { |h, k| h[k] = {} } # relative path => demo => absolute path
 demos.each do |dir|
   demo = File.basename(dir)
   SCAN_ROOTS.each do |sub|
-    Dir[File.join(dir, sub, '**', '*.rb')].sort.each do |path|
+    Dir[File.join(dir, sub, '**', '*.rb')].each do |path|
       rel = path.delete_prefix("#{dir}/")
       next if rel.start_with?('lib/tasks/')
 
@@ -843,7 +843,7 @@ dups = found.select { |_rel, copies| copies.size >= 2 }
 # db/migrate by timestamp-stripped basename, since each demo stamps its own copy.
 migrations = Hash.new { |h, k| h[k] = {} }
 demos.each do |dir|
-  Dir[File.join(dir, 'db/migrate', '*.rb')].sort.each do |path|
+  Dir[File.join(dir, 'db/migrate', '*.rb')].each do |path|
     migrations[File.basename(path).sub(/\A\d+_/, '')][File.basename(dir)] = path
   end
 end
@@ -1537,7 +1537,7 @@ end
 
 initializer_demos = 0
 operator_demos.each do |demo|
-  paths = Dir[File.join(ROOT, demo, 'config/initializers', '*.rb')].sort
+  paths = Dir[File.join(ROOT, demo, 'config/initializers', '*.rb')]
   if paths.empty?
     errors << "#{short.call(demo)}: ships no config/initializers/*.rb at all."
     next
@@ -1575,7 +1575,7 @@ driver_env_held    = DRIVER_NO_DEFAULT_VARS.keys.to_h { |var| [var, 0] }
 driver_env_scripts = 0
 
 operator_demos.each do |demo|
-  Dir[File.join(ROOT, demo, 'script', '*.rb')].sort.each do |path|
+  Dir[File.join(ROOT, demo, 'script', '*.rb')].each do |path|
     rel = path.delete_prefix("#{File.join(ROOT, demo)}/")
     driver_env_scripts += 1
     File.read(path).each_line.with_index(1) do |line, lineno|
@@ -1752,7 +1752,7 @@ else
     end
 
     copies = demos.each_with_object({}) do |dir, acc|
-      match = spec.include?('*') ? Dir[File.join(dir, spec)].sort.first : File.join(dir, spec)
+      match = spec.include?('*') ? Dir[File.join(dir, spec)].first : File.join(dir, spec)
       acc[short.call(File.basename(dir))] = match if match && File.file?(match)
     end
     if copies.empty?

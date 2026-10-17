@@ -339,12 +339,12 @@ RSpec.describe 'demo descriptor cross-references' do
     DESCRIPTOR_MACRO = /^[ \t]*(?:description|input_schema)[ \t(]/
 
     def handler_files(demo_dir)
-      Dir[File.join(demo_dir, HANDLERS_DIR, '**/*.rb')].sort
+      Dir[File.join(demo_dir, HANDLERS_DIR, '**/*.rb')]
     end
 
     # Files under app/ that declare verbs outside the directory the engine loads.
     def stray_handlers(demo_dir)
-      Dir[File.join(demo_dir, 'app/**/*.rb')].sort
+      Dir[File.join(demo_dir, 'app/**/*.rb')]
                                              .select { |path| File.read(path).match?(DESCRIPTOR_MACRO) } - handler_files(demo_dir)
     end
 
@@ -469,8 +469,7 @@ RSpec.describe 'demo descriptor cross-references' do
 
   monorepo_root = File.expand_path('../..', __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
   # …/kiosk-demo-X/config/initializers/kiosk.rb → …/kiosk-demo-X
-  demo_dirs = Dir[File.join(monorepo_root, 'kiosk-demo-*/config/initializers/kiosk.rb')]
-              .sort.map { |path| File.expand_path('../../..', path) }
+  demo_dirs = Dir[File.join(monorepo_root, 'kiosk-demo-*/config/initializers/kiosk.rb')].map { |path| File.expand_path('../../..', path) }
 
   it 'finds the demo descriptor sources' do
     expect(demo_dirs).not_to be_empty

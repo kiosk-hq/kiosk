@@ -196,7 +196,7 @@ module Kiosk
           fingerprint: fingerprint(row.fetch('public_key')),
           created_at: row.fetch('created_at'),
           human_label: row.fetch('human_label', nil),
-          spending_cap_cents: cap.nil? ? nil : cap.to_i,
+          spending_cap_cents: cap&.to_i,
           settled_cents: row.fetch('settled_cents', 0).to_i
         }
       end

@@ -269,7 +269,7 @@ def scan_repo(index)
     next if text.nil?
 
     files += 1
-    path_allow = ALLOW.select { |a| a[:match] && a[:match].call(rel, nil) }
+    path_allow = ALLOW.select { |a| a[:match]&.call(rel, nil) }
     lines = text.lines.map { |l| l.chomp("\n") }
 
     # File-level: a key is a block, not a line.

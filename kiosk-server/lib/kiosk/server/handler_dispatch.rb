@@ -171,7 +171,7 @@ module Kiosk
                     end
         return Errors::ActionFailed.new(error_message(parsed, status), hint: error_hint(parsed)) if code.nil?
 
-        extra = error_obj && error_obj.except('code', 'message', 'hint').transform_keys(&:to_sym)
+        extra = error_obj&.except('code', 'message', 'hint')&.transform_keys(&:to_sym)
         Errors::WireError.new(error_message(parsed, status),
                               code: code, hint: error_hint(parsed), extra: extra)
       end

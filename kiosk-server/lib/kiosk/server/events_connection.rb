@@ -153,7 +153,7 @@ module Kiosk
         issuer = Kiosk.configuration.issuer_for(request.base_url)
         Kiosk.with_issuer(issuer) { Kiosk::Server::IdentityResolution.resolve(request) }
       rescue StandardError => e
-        logger.error("[kiosk] events connection identity resolution failed: #{e.class}") if logger
+        logger&.error("[kiosk] events connection identity resolution failed: #{e.class}")
         nil
       end
     end

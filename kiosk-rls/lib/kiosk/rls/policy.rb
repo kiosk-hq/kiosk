@@ -18,8 +18,8 @@ module Kiosk
         super(
           name: name.to_s,
           action: action,
-          using: using && using.to_s,
-          check: check && check.to_s,
+          using: using&.to_s,
+          check: check&.to_s,
         )
       end
     end

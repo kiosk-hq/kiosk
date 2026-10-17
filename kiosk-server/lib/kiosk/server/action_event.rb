@@ -21,9 +21,9 @@ module Kiosk
           actor: identity.actor,
           args: args.is_a?(Hash) ? args : {},
           status: status.to_s,
-          error_class: error && error.class.name,
+          error_class: error&.class&.name,
           error_message: error && error.message.to_s,
-          cause_class: cause && cause.class.name,
+          cause_class: cause&.class&.name,
           cause_message: cause && cause.message.to_s,
           invoked_at: invoked_at
         )

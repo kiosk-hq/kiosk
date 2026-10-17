@@ -39,7 +39,7 @@ module Kiosk
         return nil if env.nil?
 
         warden = env['warden']
-        warden && warden.user
+        warden&.user
       end
 
       def rack_env_for(request)

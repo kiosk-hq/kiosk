@@ -64,7 +64,7 @@ module Kiosk
         claims = symbolize(decoded)
 
         store = revocation_store == :from_config ? configured_revocation_store : revocation_store
-        raise RevokedError, 'access token revoked' if store && store.revoked?(agent_id: claims[:agent_id], iat: claims[:iat])
+        raise RevokedError, 'access token revoked' if store&.revoked?(agent_id: claims[:agent_id], iat: claims[:iat])
 
         claims
       rescue ::JWT::ExpiredSignature => e

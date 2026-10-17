@@ -18,9 +18,9 @@ module Kiosk
           key = alg_name.to_s
           @registry.fetch(key) do
             raise KeyError,
-              "Unknown PoW backend: #{key.inspect}. " \
-              "Known algorithms: #{known.inspect}. " \
-              "Register a backend with Kiosk::Reputation::Backends.register(#{key.inspect}, backend)."
+                  "Unknown PoW backend: #{key.inspect}. " \
+                  "Known algorithms: #{known.inspect}. " \
+                  "Register a backend with Kiosk::Reputation::Backends.register(#{key.inspect}, backend)."
           end
         end
 

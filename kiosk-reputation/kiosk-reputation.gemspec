@@ -1,10 +1,10 @@
-require_relative "lib/kiosk/reputation/version"
+require_relative 'lib/kiosk/reputation/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-reputation"
+  spec.name          = 'kiosk-reputation'
   spec.version       = Kiosk::Reputation::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
   spec.summary       = "Policy + wire-challenge layer for Kiosk's proof-of-work system"
   spec.description   = <<~DESC
@@ -28,22 +28,23 @@ Gem::Specification.new do |spec|
     a fixed COUNT of subsequent ungated requests, then the identity is
     re-challenged. Providers are expected to replace or subclass either.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]    = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]   = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-reputation/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"] = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']    = spec.homepage
+  spec.metadata['source_code_uri'] = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']   = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-reputation/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
 
   # base64 was a default gem through Ruby 3.3 but must be explicitly required
   # from Ruby 3.4+ (it became a bundled gem, no longer auto-loaded).
-  spec.add_dependency "base64"
+  spec.add_dependency 'base64'
 
-  spec.add_development_dependency "rspec", "~> 3.13"
-  spec.add_development_dependency "rake",  "~> 13.2"
+  spec.add_development_dependency 'rake',  '~> 13.2'
+  spec.add_development_dependency 'rspec', '~> 3.13'
 end

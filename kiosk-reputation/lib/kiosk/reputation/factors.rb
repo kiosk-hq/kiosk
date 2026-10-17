@@ -15,13 +15,13 @@ module Kiosk
     ) do
       def self.empty
         new(
-          kyc_level:               nil,
+          kyc_level: nil,
           settled_purchases_count: nil,
           settled_purchases_cents: nil,
-          request_rate_per_min:    nil,
-          account_age_seconds:     nil,
-          dispute_count:           nil,
-          bad_proof_count:         nil
+          request_rate_per_min: nil,
+          account_age_seconds: nil,
+          dispute_count: nil,
+          bad_proof_count: nil
         )
       end
     end

@@ -42,9 +42,9 @@ module Kiosk
           return nil if proven?(purchases) && low_rate?(rate) && bad_proofs.zero?
 
           {
-            alg:    "equihash",
+            alg: 'equihash',
             params: @equihash_params,
-            count:  compute_count(purchases, rate, bad_proofs),
+            count: compute_count(purchases, rate, bad_proofs)
           }
         end
 

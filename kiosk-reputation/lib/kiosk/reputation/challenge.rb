@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "openssl"
-require "base64"
-require "securerandom"
+require 'openssl'
+require 'base64'
+require 'securerandom'
 
 module Kiosk
   module Reputation
@@ -11,9 +11,9 @@ module Kiosk
     # The caller keeps the spent-id set.
     module Challenge
       # Canonical-string delimiters; no field may contain one (see {delimiter_offence}).
-      OUTER_DELIM = "|"
-      PARAM_DELIM = ","
-      KV_DELIM = "="
+      OUTER_DELIM = '|'
+      PARAM_DELIM = ','
+      KV_DELIM = '='
 
       DELIMITERS = [OUTER_DELIM, PARAM_DELIM, KV_DELIM].freeze
 
@@ -30,12 +30,12 @@ module Kiosk
           offence = delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
           if offence
             raise ArgumentError,
-              "challenge field would make the signed canonical string ambiguous: #{offence}. " \
-              "Fix the source of the value: the `alg`/`params` your reputation_policy returns " \
-              "from #challenge_for, or `c.registration_pow_params` for POST /auth/register."
+                  "challenge field would make the signed canonical string ambiguous: #{offence}. " \
+                  'Fix the source of the value: the `alg`/`params` your reputation_policy returns ' \
+                  'from #challenge_for, or `c.registration_pow_params` for POST /auth/register.'
           end
 
-          sig      = compute_sig(secret, id, alg, params, salt_b64, exp, request_fingerprint)
+          sig = compute_sig(secret, id, alg, params, salt_b64, exp, request_fingerprint)
 
           { id: id, alg: alg, params: params, salt: salt_b64, exp: exp, sig: sig }
         end
@@ -76,11 +76,9 @@ module Kiosk
         # A delimiter inside a value gives the canonical string a second pre-image,
         # so one signature would cover two (alg, params) splits.
         def delimiter_offence(id, alg, params, salt_b64, exp, request_fingerprint)
-          { "id" => id, "alg" => alg, "salt" => salt_b64,
-            "exp" => exp, "request_fingerprint" => request_fingerprint }.each do |field, value|
-            if value.to_s.include?(OUTER_DELIM)
-              return "#{field} #{value.to_s.inspect} contains #{OUTER_DELIM.inspect}"
-            end
+          { 'id' => id, 'alg' => alg, 'salt' => salt_b64,
+            'exp' => exp, 'request_fingerprint' => request_fingerprint }.each do |field, value|
+            return "#{field} #{value.to_s.inspect} contains #{OUTER_DELIM.inspect}" if value.to_s.include?(OUTER_DELIM)
           end
 
           return nil unless params.is_a?(Hash)
@@ -89,9 +87,7 @@ module Kiosk
             DELIMITERS.each do |delim|
               return "params key #{key.to_s.inspect} contains #{delim.inspect}" if key.to_s.include?(delim)
 
-              if value.to_s.include?(delim)
-                return "params value #{value.to_s.inspect} (key #{key.to_s.inspect}) contains #{delim.inspect}"
-              end
+              return "params value #{value.to_s.inspect} (key #{key.to_s.inspect}) contains #{delim.inspect}" if value.to_s.include?(delim)
             end
           end
 
@@ -102,19 +98,17 @@ module Kiosk
         def matches_expected?(expect, alg, params)
           return true if expect.nil?
 
-          expected_alg = expect[:alg] || expect["alg"]
-          unless expected_alg.nil? || expected_alg.to_s == alg.to_s
-            return false
-          end
+          expected_alg = expect[:alg] || expect['alg']
+          return false unless expected_alg.nil? || expected_alg.to_s == alg.to_s
 
-          expected_params = expect[:params] || expect["params"]
+          expected_params = expect[:params] || expect['params']
           return true if expected_params.nil?
 
           params_string(expected_params) == params_string(params)
         end
 
         def compute_sig(secret, id, alg, params, salt_b64, exp, request_fingerprint)
-          OpenSSL::HMAC.hexdigest("SHA256", secret, canonical_string(id, alg, params, salt_b64, exp, request_fingerprint))
+          OpenSSL::HMAC.hexdigest('SHA256', secret, canonical_string(id, alg, params, salt_b64, exp, request_fingerprint))
         end
 
         # id|alg|k=7,n=168|<salt_b64>|<exp>|<fingerprint>
@@ -123,9 +117,7 @@ module Kiosk
         end
 
         def params_string(params)
-          unless params.is_a?(Hash)
-            raise ArgumentError, "params must be a Hash (got #{params.inspect})"
-          end
+          raise ArgumentError, "params must be a Hash (got #{params.inspect})" unless params.is_a?(Hash)
 
           params
             .sort_by { |k, _| k.to_s }
@@ -135,6 +127,7 @@ module Kiosk
 
         def constant_time_compare(a, b)
           return false if a.bytesize != b.bytesize
+
           OpenSSL.fixed_length_secure_compare(a, b)
         end
 

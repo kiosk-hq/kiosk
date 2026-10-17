@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/reputation/backoff_store"
+require 'kiosk/reputation/backoff_store'
 
 module Kiosk
   module Reputation

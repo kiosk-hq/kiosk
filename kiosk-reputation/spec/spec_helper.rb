@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/reputation"
+require 'kiosk/reputation'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -12,7 +12,7 @@ RSpec.configure do |config|
   end
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
-  config.example_status_persistence_file_path = ".rspec_status"
+  config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false
 
@@ -33,7 +33,7 @@ end
 module TestHelpers
   class StubBackend
     def self.verify(salt:, params:, nonce:)
-      nonce.to_s == "good"
+      nonce.to_s == 'good'
     end
   end
 
@@ -42,8 +42,8 @@ module TestHelpers
   # the cheap checks (sig / expiry) have passed, the suite fails loudly.
   class SpyRaisingBackend
     def self.verify(salt:, params:, nonce:)
-      raise "SpyRaisingBackend#verify called — " \
-            "the expensive backend eval must NOT be reached before sig/expiry checks pass"
+      raise 'SpyRaisingBackend#verify called — ' \
+            'the expensive backend eval must NOT be reached before sig/expiry checks pass'
     end
   end
 end

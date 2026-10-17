@@ -2,13 +2,42 @@
 
 require 'json'
 
-RSpec.describe Kiosk::Server::WellKnown do
+module WellKnownSpec
+  # Parse the non-comment, non-blank lines into a Key => value hash.
+  def directives(text)
+    text.each_line.filter_map do |line|
+      line = line.strip
+      next if line.empty? || line.start_with?('#')
+
+      key, _, value = line.partition(':')
+      [key.strip, value.strip]
+    end.to_h
+  end
+
+  # The linkset's single member: anchored at the api-catalog URL, carrying
+  # the `item` link array.
+  def member(linkset) = linkset[:linkset].first
+
+  # The `?v=` both descriptions carry. This document is a pointer with a short
+  # TTL; the two it points at are immutable at their versioned url. Derived
+  # here, because the digest moves with the registry these examples register
+  # into.
+  def v = "?v=#{Kiosk::Server::SchemaDocument.digest}"
+end
+
+RSpec.shared_context 'well known spec: acme origin' do
+  include WellKnownSpec
+
   before do
     Kiosk.configure do |c|
       c.issuer = 'https://api.acme.example'
       c.owner  = { name: 'Acme Inc.', support: 'support@acme.example' }
     end
   end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
 
   describe '.build' do
     subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
@@ -35,6 +64,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.build(base_url: 'https://api.acme.example/')
       expect(d[:kiosk][:endpoint]).to eq('https://api.acme.example/kiosk')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.build' do
+    subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
 
     it 'advertises the proof-of-possession auth surface under the same origin' do
       expect(doc[:kiosk][:auth][:kind]).to          eq('kiosk-pop')
@@ -60,6 +97,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:auth].keys.first(5))
         .to eq(%i[kind challenge_url register_url login_url revoke_url])
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.build' do
+    subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
 
     # capabilities is computed from the live registry: empty here
     # since this context registers no queries/actions and wires no payment.
@@ -74,14 +119,18 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.build(base_url: 'https://api.acme.example')
       expect(d[:kiosk][:capabilities]).to eq(%w[schema queries actions pay])
     end
+  end
+end
 
-    # STILL TRUE, FOR A DIFFERENT REASON (T-093, 2026-08-19). It was a
-    # SECURITY property — the verb names stayed behind the Bearer gate on
-    # `GET <endpoint>/schema`. That gate is gone and the api-catalog now
-    # hyperlinks every verb, so nothing is being withheld here. What holds the
-    # rule up is T-075 = A: `kiosk.json` is a POINTER, not a copy of the
-    # contract. An assistant reads the module set here and the names from the
-    # catalog, and there is exactly one place each of those is published.
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.build' do
+    subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
+
+    # `kiosk.json` is a POINTER, not a copy of the contract. An assistant
+    # reads the module set here and the names from the catalog, and each of
+    # those is published in exactly one place.
     it 'never names a registered verb in this document — pointer, not copy' do
       declare_query('secret_pricing_tiers')
       declare_action('cancel_enterprise_contract')
@@ -89,15 +138,20 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(JSON.generate(d)).not_to include('secret_pricing_tiers')
       expect(JSON.generate(d)).not_to include('cancel_enterprise_contract')
     end
+  end
+end
 
-    # ── THE CACHE-BUSTED CATALOG LINK (T-094) ────────────────────────────
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.build' do
+    subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
+
+    # ── THE CACHE-BUSTED CATALOG LINK ────────────────────────────────────
     #
     # This document is the SHORT-lived half of the asset-pipeline pair: it
     # expires in minutes and republishes the link, which is what lets
-    # `/kiosk/schema?v=<digest>` be cached for a year. Without the digest in
-    # the URL a week-long TTL on a FIXED path means a CDN serving a catalogue
-    # from before the last deploy — invisibly, to an assistant that then calls
-    # verbs which no longer exist.
+    # `/kiosk/schema?v=<digest>` be cached for a year.
     it 'links the catalog at its digest-versioned, immutable URL' do
       declare_query('catalog')
       d = described_class.build(base_url: 'https://api.acme.example')
@@ -117,6 +171,14 @@ RSpec.describe Kiosk::Server::WellKnown do
 
       expect(after_add).not_to eq(before_add)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.build' do
+    subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
 
     it 'passes through an explicitly pinned capability list' do
       declare_query('catalog')
@@ -139,20 +201,24 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:kiosk][:owner][:name]).to    eq('Acme Inc.')
       expect(doc[:kiosk][:owner][:support]).to eq('support@acme.example')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.build' do
+    subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
 
     it 'omits the skill block when skill_sha256 is not set' do
       expect(doc[:kiosk]).not_to have_key(:skill)
     end
 
-    # The default URL literal lives in exactly ONE place — kiosk-server's own
-    # `@skill_url ||=` in configuration_extension.rb (K-750). Restating it here
-    # made a second copy that had to be hand-chased on every skill cut, and it
-    # went red exactly that way; nothing guarded it, because the pin guard
-    # reads initializers, not specs. What this example is actually about is the
-    # WIRING — the discovery document advertises the configured default,
-    # whatever it currently is — plus the one property that makes a pin
-    # verifiable at all: the default names an IMMUTABLE versioned cut, never
-    # the mutable `skill.md` alias, whose bytes change under a pin.
+    # The default URL literal lives in exactly ONE place: the
+    # `@skill_url ||=` in configuration_extension.rb. This example holds the
+    # WIRING (the discovery document advertises the configured default) plus
+    # the property that makes a pin verifiable: the default names an
+    # IMMUTABLE versioned cut, never the mutable `skill.md` alias.
     #
     # Which version that is belongs to kiosk-test-support's skill_pin_spec,
     # which holds it against the bytes kiosk.tech actually publishes.
@@ -172,6 +238,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.build(base_url: 'https://api.acme.example')
       expect(d[:kiosk][:skill]).to eq(url: 'https://kiosk.tech/skill-v1.1.md', sha256: 'def456')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.build' do
+    subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
 
     it 'raises if issuer is not configured' do
       Kiosk.reset!
@@ -185,6 +259,10 @@ RSpec.describe Kiosk::Server::WellKnown do
         .to raise_error(ArgumentError, /issuer/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
 
   describe '.build_json' do
     it 'returns a parse-able JSON string' do
@@ -193,21 +271,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(parsed.dig('kiosk', 'endpoint')).to eq('https://api.acme.example/kiosk')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
 
   # ─── W1: agents.txt native discovery envelope ────────────────────────────
   describe '.agents_txt' do
     subject(:body) { described_class.agents_txt(base_url: 'https://api.acme.example') }
-
-    # Parse the non-comment, non-blank lines into a Key => value hash.
-    def directives(text)
-      text.each_line.filter_map do |line|
-        line = line.strip
-        next if line.empty? || line.start_with?('#')
-
-        key, _, value = line.partition(':')
-        [key.strip, value.strip]
-      end.to_h
-    end
 
     it 'returns a String' do
       expect(body).to be_a(String)
@@ -218,6 +289,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d['Authorization']).to eq('agent-auth auth-md')
       expect(d['Identity']).to eq('required')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_txt' do
+    subject(:body) { described_class.agents_txt(base_url: 'https://api.acme.example') }
 
     # Payment directives are pay-conditional: emitted only when the
     # provider serves `pay` (a payment_provider is configured → `pay` is in the
@@ -243,12 +322,20 @@ RSpec.describe Kiosk::Server::WellKnown do
         expect(d['Identity']).to eq('required')
       end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_txt' do
+    subject(:body) { described_class.agents_txt(base_url: 'https://api.acme.example') }
 
     it 'emits a Skills directive pointing at the configured skill URL' do
       # Deliberately synthetic (not a published kiosk.tech artifact): this is a
       # round-trip on whatever skill_url is configured, and a synthetic value
       # cannot go stale — and cannot be mistaken for the shipped default, which
-      # is asserted separately above (K-641).
+      # is asserted separately above.
       Kiosk.configure { |c| c.skill_url = 'https://example.test/skill.md' }
       d = directives(described_class.agents_txt(base_url: 'https://api.acme.example'))
       expect(d['Skills']).to eq('https://example.test/skill.md')
@@ -258,6 +345,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to match(/\A#/)
       expect(body).to include('# JSON: https://api.acme.example/agents.json')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_txt' do
+    subject(:body) { described_class.agents_txt(base_url: 'https://api.acme.example') }
 
     it 'every non-comment, non-blank line is a `Key: value` directive' do
       body.each_line do |line|
@@ -274,6 +369,10 @@ RSpec.describe Kiosk::Server::WellKnown do
         .to raise_error(ArgumentError, /issuer/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
 
   # ─── W1: agents.json native discovery companion ──────────────────────────
   describe '.agents_json' do
@@ -295,6 +394,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.agents_json(base_url: 'https://api.acme.example')
       expect(d[:site][:name]).to eq('api.acme.example')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_json' do
+    subject(:doc) { described_class.agents_json(base_url: 'https://api.acme.example') }
 
     # The `payments` block is pay-conditional: present only when the
     # provider serves `pay` (payment_provider configured → `pay` in capabilities).
@@ -316,6 +423,14 @@ RSpec.describe Kiosk::Server::WellKnown do
         expect(doc).not_to have_key(:payments)
       end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_json' do
+    subject(:doc) { described_class.agents_json(base_url: 'https://api.acme.example') }
 
     it 'advertises agent-auth + auth-md with the agent-configuration discovery pointer' do
       expect(doc[:authorization][:protocols]).to eq(%w[agent-auth auth-md])
@@ -325,14 +440,22 @@ RSpec.describe Kiosk::Server::WellKnown do
 
     it 'lists the configured skill' do
       # Synthetic on purpose — round-trip of the configured value, immune to
-      # published-skill version bumps (K-641). The shipped default is pinned
+      # published-skill version bumps. The shipped default is pinned
       # and asserted in the skill-descriptor example above.
       Kiosk.configure { |c| c.skill_url = 'https://example.test/skill.md' }
       d = described_class.agents_json(base_url: 'https://api.acme.example')
       expect(d[:skills].first[:url]).to eq('https://example.test/skill.md')
     end
+  end
+end
 
-    # T-075 = A / ADR-0025: the block carries POINTERS, not a copy of the
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_json' do
+    subject(:doc) { described_class.agents_json(base_url: 'https://api.acme.example') }
+
+    # The block carries POINTERS, not a copy of the
     # contract. Four keys, exactly.
     it 'carries the wire pointers under the x-kiosk extension' do
       declare_query('catalog')
@@ -340,13 +463,21 @@ RSpec.describe Kiosk::Server::WellKnown do
       xk = d[:'x-kiosk']
       expect(xk.keys).to eq(%i[schema api_catalog mount_path api_version])
       # The pointer carries the same `?v=<digest>` cache-buster `kiosk.json`
-      # publishes (T-094): a pointer a client may follow must point at the URL
+      # publishes: a pointer a client may follow must point at the URL
       # that is safe to cache.
       expect(xk[:schema]).to eq("/kiosk/schema?v=#{Kiosk::Server::SchemaDocument.digest}")
       expect(xk[:api_catalog]).to eq('/.well-known/api-catalog')
       expect(xk[:mount_path]).to eq('/kiosk')
       expect(xk[:api_version]).to eq(Kiosk::Protocol::API_VERSION)
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_json' do
+    subject(:doc) { described_class.agents_json(base_url: 'https://api.acme.example') }
 
     # It stopped echoing `capabilities` (the `wire.verbs` key is GONE): a
     # discovery envelope that restates the catalog is a second source of truth
@@ -367,11 +498,23 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.agents_json(base_url: 'https://api.acme.example')
       expect(JSON.generate(d)).not_to include('secret_pricing_tiers')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agents_json' do
+    subject(:doc) { described_class.agents_json(base_url: 'https://api.acme.example') }
 
     it 'points at the RFC 9727 api-catalog under the x-kiosk extension' do
       expect(doc[:'x-kiosk'][:api_catalog]).to eq('/.well-known/api-catalog')
     end
   end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
 
   # ─── W3: /.well-known/agent-configuration (agent-auth discovery) ─────────
   describe '.agent_configuration' do
@@ -395,6 +538,14 @@ RSpec.describe Kiosk::Server::WellKnown do
     it 'declares kiosk-pop plus the binding modes' do
       expect(doc[:auth_modes]).to eq(%w[kiosk-pop user-claimed link-code])
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.agent_configuration' do
+    subject(:doc) { described_class.agent_configuration(base_url: 'https://api.acme.example') }
 
     it 'points at /auth.md for the full method description' do
       expect(doc[:auth_md]).to eq('https://api.acme.example/auth.md')
@@ -413,6 +564,10 @@ RSpec.describe Kiosk::Server::WellKnown do
         .to raise_error(ArgumentError, /issuer/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
 
   # ─── W5: /auth.md (auth.md-vocabulary method description) ────────────────
   describe '.auth_md' do
@@ -440,22 +595,28 @@ RSpec.describe Kiosk::Server::WellKnown do
     it 'labels the link flow a Kiosk extension (auth.md has no human-initiated direction)' do
       expect(body).to match(/Link code.*Kiosk extension/m)
     end
+  end
+end
 
-    # ── K-675: the register step must teach the ADR-0022 PoW transport ──────
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.auth_md' do
+    subject(:body) { described_class.auth_md(base_url: 'https://api.acme.example') }
+
+    # ── The register step teaches the header PoW transport ──────────────────
     #
-    # This is not a doc nit. The server reads registration proofs ONLY from
-    # the `Kiosk-PoW` request header ({AuthController#register} →
-    # {PowGate.proofs_from_header}); a `pow` key in the register BODY is
-    # silently ignored. Every pow demo tolls registration unconditionally, so
-    # an assistant that follows a body-pow auth.md 402-loops forever on the
-    # very first call it makes. These two examples pin the served bytes.
+    # The server reads registration proofs ONLY from the `Kiosk-PoW` request
+    # header ({AuthController#register} → {PowGate.proofs_from_header}); a
+    # `pow` key in the register BODY is ignored, and an assistant that sent
+    # one would get 402 forever. These two examples pin the served bytes.
     describe 'the Register step (PoW transport)' do
       subject(:register) { body[/^## Register$.*?(?=^## )/m] }
 
       it 'renders the register body as `{ public_key, signed }` — no body `pow`' do
         expect(register).to include('`{ public_key, signed }`')
         # No JSON-ish body example anywhere in the file may pair `signed`
-        # with a `pow` field — that is the retired pre-ADR-0022 wire.
+        # with a `pow` field.
         expect(body).not_to match(/\{[^}]*\bsigned\b[^}]*\bpow\b/)
       end
 
@@ -469,15 +630,20 @@ RSpec.describe Kiosk::Server::WellKnown do
         expect(register).to include(%(WWW-Authenticate: Kiosk-PoW realm="<issuer>"))
       end
     end
+  end
+end
 
-    # ── T-069: the cold-start dead end ──────────────────────────────────────
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.auth_md' do
+    subject(:body) { described_class.auth_md(base_url: 'https://api.acme.example') }
+
+    # ── Cold-start pointers ─────────────────────────────────────────────────
     #
-    # This document is what an assistant that discovers via auth.md reads
-    # before it has a token. It told that assistant it must solve Equihash and
-    # then pointed it at nothing executable — not the skill, not the solver —
-    # while `skill_url` was already rendered into all three sibling surfaces.
-    # A prose spec section is not a solver, and the solve is the one step of
-    # the handshake an assistant cannot derive.
+    # An assistant that discovers via auth.md reads this document before it
+    # has a token, and the Equihash solve is the one step of the handshake it
+    # cannot derive. So the document points at the skill and the solver.
     describe 'the Discover list (cold-start pointers)' do
       subject(:discover) { body[/^## Discover$.*?(?=^## )/m] }
 
@@ -503,6 +669,14 @@ RSpec.describe Kiosk::Server::WellKnown do
         expect(body[/^## Discover$.*?(?=^## )/m]).not_to include('Wire skill')
       end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.auth_md' do
+    subject(:body) { described_class.auth_md(base_url: 'https://api.acme.example') }
 
     describe 'the Register step (where the solver is)' do
       subject(:register) { body[/^## Register$.*?(?=^## )/m] }
@@ -521,6 +695,14 @@ RSpec.describe Kiosk::Server::WellKnown do
         expect(register).to match(/SHA-256.*pin/m)
       end
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.auth_md' do
+    subject(:body) { described_class.auth_md(base_url: 'https://api.acme.example') }
 
     it 'advertises the ceremony endpoints as absolute URLs under the mount' do
       expect(body).to include('https://api.acme.example/kiosk/oauth/device_authorization')
@@ -529,13 +711,9 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to include('https://api.acme.example/kiosk/auth/unlink')
     end
 
-    # K-1248: the vocabulary is EIGHT, not six. This document recited the six
-    # RFC 8628 polling codes while the engine's own controllers also emit
-    # `invalid_request` and `unsupported_grant_type` — and spec §6.1 step 1
-    # REQUIRES the first of those for a `role`/`scope` parameter, so
-    # the short list contradicted the section it was copied from. An assistant
-    # reading this file to learn how a refusal is shaped has a branch it cannot
-    # take if the list is short, which is the same defect a soft enum would be.
+    # The vocabulary is EIGHT codes: the six RFC 8628 polling codes plus
+    # `invalid_request` (spec §6.1 step 1 requires it for a `role`/`scope`
+    # parameter) and `unsupported_grant_type`, all of which the engine emits.
     it 'documents the OAuth error vocabulary as the one exception' do
       %w[authorization_pending slow_down expired_token access_denied
          invalid_grant invalid_client invalid_request
@@ -543,11 +721,17 @@ RSpec.describe Kiosk::Server::WellKnown do
         expect(body).to include(code)
       end
     end
+  end
+end
 
-    # This section described the 0.3 `{ ok: false, error: {…} }` envelope until
-    # T-068 slice 7 — a wrong error contract in a document EVERY operator
-    # serves, and the one an assistant reads to learn how a refusal is shaped.
-    # Pinned by shape, not by prose, so it cannot drift back.
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.auth_md' do
+    subject(:body) { described_class.auth_md(base_url: 'https://api.acme.example') }
+
+    # Every operator serves this document, and an assistant reads it to learn
+    # how a refusal is shaped. Pinned by shape, not by prose.
     it 'teaches the RFC 9457 problem document, with the code FLAT' do
       expect(body).to include('RFC 9457 problem document')
       expect(body).to include('application/problem+json')
@@ -562,6 +746,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to match(/`signed`.*possession proof/m)
       expect(body).to include('No binding happens without a valid possession proof')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.auth_md' do
+    subject(:body) { described_class.auth_md(base_url: 'https://api.acme.example') }
 
     it 'states the reputation-carry rule (claiming never whitewashes)' do
       expect(body).to match(/reputation\s+carries over/)
@@ -573,26 +765,27 @@ RSpec.describe Kiosk::Server::WellKnown do
         .to raise_error(ArgumentError, /issuer/)
     end
   end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
 
   # ─── W-catalog: /.well-known/api-catalog (RFC 9727 linkset) ──────────────
   describe '.api_catalog' do
     subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
-    # The linkset's single member: anchored at the api-catalog URL, carrying
-    # the `item` link array.
-    def member(d) = d[:linkset].first
-
-    # THE `?v=` BOTH DESCRIPTIONS NOW CARRY (K-804). This document is a
-    # pointer with a short TTL; the two it points at are immutable at their
-    # versioned url, so linking the bare path would hand a reader the one url
-    # that may not be cached. Derived here rather than pasted, because the
-    # digest moves with the registry these examples register into.
-    def v = "?v=#{Kiosk::Server::SchemaDocument.digest}"
-
     it 'returns an RFC 9727 linkset anchored at the api-catalog URL' do
       expect(doc).to have_key(:linkset)
       expect(member(doc)[:anchor]).to eq('https://api.acme.example/.well-known/api-catalog')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     it 'carries a non-empty item array of endpoint links' do
       items = member(doc)[:item]
@@ -602,13 +795,18 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it 'maps only the modules that still HAVE a single endpoint' do
-      # `queries` and `actions` LEFT this table at the 0.4 cutover, with the
-      # two multiplexed endpoints they named (T-074 = A), and they do not come
-      # back: a module holding N verbs has N endpoints, so the catalog links
-      # THE VERBS (below) rather than inventing a module URL that answers
-      # nothing.
+      # A module holding N verbs has N endpoints, so the catalog links THE
+      # VERBS (below) rather than a module URL that answers nothing.
       expect(described_class::MODULE_ENDPOINTS).to eq('pay' => 'pay')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     it 'links the two descriptions, THEN every registered verb, then pay' do
       declare_query('catalog')
@@ -617,9 +815,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
       hrefs = member(d)[:item].map { |i| i[:href] }
       # Every module is live here — schema, queries, actions AND pay. The two
-      # `service-desc` members are UNCHANGED by T-093 (the strict RFC 9727
-      # reading survives); what is new is one `item` per registered verb,
-      # ALONGSIDE them, at the real 0.4 endpoint the verb answers on.
+      # `service-desc` members come first; then one `item` per registered
+      # verb, at the endpoint the verb answers on.
       expect(hrefs).to eq(["https://api.acme.example/kiosk/schema#{v}",
                            "https://api.acme.example/kiosk/openapi.json#{v}",
                            'https://api.acme.example/kiosk/catalog',
@@ -629,6 +826,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(hrefs).not_to include('https://api.acme.example/kiosk/query')
       expect(hrefs).not_to include('https://api.acme.example/kiosk/run')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     it 'omits the endpoints of modules not present in capabilities' do
       # Register only a query → capabilities = [schema, queries]; the pay
@@ -639,21 +844,21 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(hrefs).to include("https://api.acme.example/kiosk/schema#{v}")
       expect(hrefs).not_to include('https://api.acme.example/kiosk/pay')
     end
+  end
+end
 
-    # ── K-799 = (b), T-093: THE INVERSE OF WHAT THIS FILE ASSERTED ───────
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
+
+    # ── Verb names are public ────────────────────────────────────────────
     #
-    # This example is the same two fixture verbs as before — deliberately
-    # named to sound like secrets — with the expectation turned around. Until
-    # 2026-08-19 the catalog was required NOT to contain them, because it is
-    # unauthenticated and the catalogue was behind a Bearer token. That
-    # premise is rejected: a static GET endpoint may be hammered anonymously
-    # as hard as anyone likes, and that is acceptable. The names are
-    # not secret, and this document is a render of in-process state, so it
-    # caches behind a CDN and anonymous enumeration costs the origin nothing.
-    #
-    # It is written as the POSITIVE assertion rather than as the removal of a
-    # negative one: "does not refuse to publish" is a green nothing, and this
-    # has to fail if the widening is ever quietly reverted.
+    # The fixture verbs are named to sound like secrets. They are not: this
+    # document is a render of in-process state, so it caches behind a CDN and
+    # anonymous enumeration costs the origin nothing. Asserted positively, so
+    # it fails if the catalog stops publishing them.
     it 'hyperlinks EVERY registered verb, at its own endpoint, unauthenticated' do
       declare_query('secret_pricing_tiers')
       declare_action('cancel_enterprise_contract')
@@ -667,6 +872,14 @@ RSpec.describe Kiosk::Server::WellKnown do
           rel: 'item', 'kiosk-method': ['POST'] }
       )
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     # The METHOD is the half a bare href cannot carry, and it is not decorative:
     # a GET at an action's path is a 405. `kiosk-method` is an EXTENSION target
@@ -682,11 +895,18 @@ RSpec.describe Kiosk::Server::WellKnown do
       # A service description is not an operation and carries no method.
       expect(by_href["https://api.acme.example/kiosk/schema#{v}"]).to be_nil
     end
+  end
+end
 
-    # The RFC question T-093 re-settled: the SECURITY objection was overruled,
-    # not slice 5's reading of RFC 9727 (a catalog lists APIs and points at
-    # their DESCRIPTIONS). So both members survive, unchanged, and the
-    # operations were ADDED alongside them rather than replacing them.
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
+
+    # RFC 9727: a catalog lists APIs and points at their DESCRIPTIONS. So
+    # both description members stay, and the operations are listed beside
+    # them.
     it 'keeps both service-desc members — the operations are added, not swapped in' do
       declare_query('catalog')
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
@@ -695,10 +915,8 @@ RSpec.describe Kiosk::Server::WellKnown do
                            "https://api.acme.example/kiosk/openapi.json#{v}"])
     end
 
-    # THE CONDITION ON THE K-799 ANSWER, which is a condition and not a
-    # footnote: it covers documents that are CHEAP AND STATIC to compose.
-    # Widening the loop is only in scope while every member comes from
-    # in-process state.
+    # Publishing every verb is acceptable only while the document is CHEAP
+    # AND STATIC to compose: every member comes from in-process state.
     it 'composes from the registry alone — no per-request work to widen it' do
       declare_query('catalog')
       declare_action('checkout')
@@ -707,6 +925,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(Kiosk::Server::Actions).to receive(:known).at_least(:once).and_call_original
       described_class.api_catalog(base_url: 'https://api.acme.example')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     it 'links no wire endpoints when nothing is registered (schema module absent)' do
       # Bare config registers no queries/actions → capabilities = []; only the
@@ -722,9 +948,17 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(schema[:href]).to eq("https://api.acme.example/kiosk/schema#{v}")
       expect(schema[:rel]).to eq('service-desc')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     it 'advertises the DERIVED openapi.json beside it — the only place it is advertised' do
-      # T-071 = C. RFC 8631 allows more than one `service-desc`; the canonical
+      # RFC 8631 allows more than one `service-desc`; the canonical
       # bespoke catalog stays FIRST, and the derived document — which the skill
       # names nowhere — follows it. This item and the renderer are the whole of
       # the provisional surface.
@@ -740,6 +974,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       hrefs = member(doc)[:item].map { |i| i[:href] }
       expect(hrefs.grep(%r{/kiosk/openapi\.json})).to be_empty
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     it 'tags the one remaining non-description wire endpoint — `pay` — with rel=item' do
       # `service-desc` is for the two documents that DESCRIBE the API; a live
@@ -756,6 +998,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       hrefs = member(doc)[:item].map { |i| i[:href] }
       expect(hrefs).to include('https://api.acme.example/agents.json')
     end
+  end
+end
+
+RSpec.describe Kiosk::Server::WellKnown do
+  include_context 'well known spec: acme origin'
+
+  describe '.api_catalog' do
+    subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
     it 'respects an overridden mount_path for the wire endpoints' do
       declare_query('catalog')

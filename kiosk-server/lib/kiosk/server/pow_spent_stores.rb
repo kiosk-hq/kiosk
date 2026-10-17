@@ -18,19 +18,11 @@ module Kiosk
         end
 
         # One statement: the primary key picks the winner; an expired row is reclaimable.
-        def claim(id, exp)
+        def claim(id, exp) # rubocop:disable Naming/PredicateMethod -- `claim` is the store contract `config.pow_spent_store` names
           return false if id.nil?
 
           prune_if_due!
-          sql = <<~SQL
-            INSERT INTO #{table} AS s (id, expires_at)
-            VALUES ($1, to_timestamp($2))
-            ON CONFLICT (id) DO UPDATE
-              SET expires_at = EXCLUDED.expires_at
-              WHERE s.expires_at <= now()
-            RETURNING s.id
-          SQL
-          rows = connection.exec_query(sql, 'Kiosk pow_spent claim', [id, exp.to_i]).to_a
+          rows = connection.exec_query(claim_sql, 'Kiosk pow_spent claim', [id, exp.to_i]).to_a
           !rows.empty?
         end
 
@@ -71,6 +63,17 @@ module Kiosk
         end
 
         private
+
+        def claim_sql
+          <<~SQL
+            INSERT INTO #{table} AS s (id, expires_at)
+            VALUES ($1, to_timestamp($2))
+            ON CONFLICT (id) DO UPDATE
+              SET expires_at = EXCLUDED.expires_at
+              WHERE s.expires_at <= now()
+            RETURNING s.id
+          SQL
+        end
 
         def prune_if_due!
           now = Time.now.to_i

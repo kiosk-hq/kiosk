@@ -23,20 +23,26 @@ module Kiosk
       # Adds the wire `Vary`; forces `no-store` on a 402; defaults to
       # `private, no-store` and refuses a shared-cache directive (§3.7.3).
       def self.add_cache_policy(headers, status:)
+        add_wire_vary(headers)
+        policy = wire_cache_control(headers['Cache-Control'].to_s, status)
+        headers['Cache-Control'] = policy if policy
+        headers
+      end
+
+      def self.add_wire_vary(headers)
         present = headers['Vary'].to_s.split(',').map(&:strip).reject(&:empty?)
         missing = WIRE_VARY.reject { |t| present.any? { |p| p.casecmp?(t) } }
         headers['Vary'] = (present + missing).join(', ')
+      end
 
-        operator = headers['Cache-Control'].to_s
-        if status.to_i == 402
-          headers['Cache-Control'] = 'no-store'
-        elsif operator.empty?
-          headers['Cache-Control'] = 'private, no-store'
-        elsif shared_cacheable?(operator)
-          refuse_shared_cache(operator)
-          headers['Cache-Control'] = 'private, no-store'
-        end
-        headers
+      # nil keeps the operator's own policy.
+      def self.wire_cache_control(operator, status)
+        return 'no-store' if status.to_i == 402
+        return 'private, no-store' if operator.empty?
+        return unless shared_cacheable?(operator)
+
+        refuse_shared_cache(operator)
+        'private, no-store'
       end
 
       # RFC 9111 §3.5: the directives that let a shared cache reuse an answer
@@ -47,17 +53,19 @@ module Kiosk
         SHARED_CACHE_DIRECTIVES.match?(cache_control.to_s)
       end
 
+      SHARED_CACHE_RULE =
+        'Spec §3.7.3 forbids `public`, ' \
+        '`s-maxage` and `must-revalidate` on a verb response — RFC 9111 ' \
+        '§3.5 makes those three the directives that let a shared cache ' \
+        'reuse an answer to an authenticated request, and the payload is ' \
+        'scoped to one identity, so any of them would hand it to another ' \
+        'caller. ' \
+        'Sent `private, no-store` instead; `private, max-age=N` is the ' \
+        'relaxation §3.7.4 allows.'
+
       def self.refuse_shared_cache(value)
-        message =
-          '[kiosk-server] refused a shared-cache policy on a wire response: ' \
-          "Cache-Control: #{value.inspect}. Spec §3.7.3 forbids `public`, " \
-          '`s-maxage` and `must-revalidate` on a verb response — RFC 9111 ' \
-          '§3.5 makes those three the directives that let a shared cache ' \
-          'reuse an answer to an authenticated request, and the payload is ' \
-          'scoped to one identity, so any of them would hand it to another ' \
-          'caller. ' \
-          'Sent `private, no-store` instead; `private, max-age=N` is the ' \
-          'relaxation §3.7.4 allows.'
+        message = '[kiosk-server] refused a shared-cache policy on a wire response: ' \
+                  "Cache-Control: #{value.inspect}. #{SHARED_CACHE_RULE}"
         logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
         logger ? logger.warn(message) : warn(message)
       end
@@ -68,8 +76,8 @@ module Kiosk
       IMMUTABLE_MAX_AGE = 31_536_000
 
       # Spelt in the order ActionDispatch re-emits the header.
-      PUBLIC_SHORT     = "max-age=#{SHORT_MAX_AGE}, public"
-      PUBLIC_IMMUTABLE = "max-age=#{IMMUTABLE_MAX_AGE}, public, immutable"
+      PUBLIC_SHORT     = "max-age=#{SHORT_MAX_AGE}, public".freeze
+      PUBLIC_IMMUTABLE = "max-age=#{IMMUTABLE_MAX_AGE}, public, immutable".freeze
 
       # Sets no `Vary`: a public document has one answer for every caller.
       def self.add_public_cache_policy(headers, etag:, immutable:)

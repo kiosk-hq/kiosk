@@ -20,7 +20,7 @@ module Kiosk
       PROOF_CLAIMS_HINT =
         "a proof's payload carries #{PROOF_REQUIRED_CLAIMS.join(', ')} — `aud` is the origin " \
         'you connected to, `nonce` the value GET /auth/challenge just issued for this key, ' \
-        '`jti` a unique id for this proof'
+        '`jti` a unique id for this proof'.freeze
 
       PROOF_SIGNATURE_HINT =
         'a proof is a compact RS256 JWS — header.payload.signature — signed with the ' \
@@ -30,27 +30,28 @@ module Kiosk
 
       def verify!(public_key_pem:, signed:)
         pem = public_key_pem.to_s.strip
-        key = load_public_key(pem)
-
-        payload, = ::JWT.decode(
-          signed.to_s, key, true,
-          algorithms: ['RS256'], required_claims: PROOF_REQUIRED_CLAIMS
-        )
-        payload = payload.transform_keys(&:to_sym)
-
-        issuer = Kiosk.current_issuer
-        unless payload[:aud] == issuer
-          log_audience_mismatch(signed_aud: payload[:aud], issuer: issuer)
-          raise Errors::Unauthenticated.new('proof audience mismatch', hint: AUDIENCE_HINT)
-        end
-
+        payload = decode(signed, load_public_key(pem))
+        check_audience!(payload[:aud])
         raise Errors::Unauthenticated, 'proof key thumbprint mismatch' if payload.key?(:pub) && payload[:pub] != SigningKey.from_pem(pem).kid
 
         payload
+      end
+
+      def decode(signed, key)
+        payload, = ::JWT.decode(signed.to_s, key, true, algorithms: ['RS256'], required_claims: PROOF_REQUIRED_CLAIMS)
+        payload.transform_keys(&:to_sym)
       rescue ::JWT::MissingRequiredClaim
         raise Errors::Unauthenticated.new('proof is missing a required claim', hint: PROOF_CLAIMS_HINT)
       rescue ::JWT::DecodeError
         raise Errors::Unauthenticated.new('proof signature invalid', hint: PROOF_SIGNATURE_HINT)
+      end
+
+      def check_audience!(signed_aud)
+        issuer = Kiosk.current_issuer
+        return if signed_aud == issuer
+
+        log_audience_mismatch(signed_aud: signed_aud, issuer: issuer)
+        raise Errors::Unauthenticated.new('proof audience mismatch', hint: AUDIENCE_HINT)
       end
 
       # Operator log only, since the response must not name an origin: the

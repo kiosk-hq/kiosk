@@ -35,12 +35,8 @@ module Kiosk
         prune!
         now = Time.now.to_i
         @mutex.synchronize do
-          stored = @store[public_key_pem]
-          next false if stored.nil?
-
-          got_nonce, exp = stored
-          next false if exp <= now
-          next false unless constant_time_eq?(got_nonce, nonce)
+          got_nonce, exp = @store[public_key_pem]
+          next false if exp.nil? || exp <= now || !constant_time_eq?(got_nonce, nonce)
 
           @store.delete(public_key_pem)
           true
@@ -54,10 +50,10 @@ module Kiosk
 
       private
 
-      def constant_time_eq?(a, b)
-        return false if a.nil? || b.nil? || a.bytesize != b.bytesize
+      def constant_time_eq?(left, right)
+        return false if left.nil? || right.nil? || left.bytesize != right.bytesize
 
-        OpenSSL.fixed_length_secure_compare(a, b)
+        OpenSSL.fixed_length_secure_compare(left, right)
       end
     end
   end

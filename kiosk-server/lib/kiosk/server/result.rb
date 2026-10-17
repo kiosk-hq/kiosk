@@ -41,7 +41,7 @@ module Kiosk
 
     # The executor's internal carrier for a successful call; only {#to_payload}
     # reaches the wire, as the body.
-    Result = Data.define(:kind, :payload, :next_cursor, :total) do
+    class Result < Data.define(:kind, :payload, :next_cursor, :total)
       KINDS = %i[rows value].freeze
 
       def initialize(kind:, payload:, next_cursor: nil, total: nil)

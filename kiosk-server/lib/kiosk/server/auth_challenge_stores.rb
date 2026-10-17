@@ -36,7 +36,7 @@ module Kiosk
         end
 
         # One atomic DELETE, so two processes presenting one challenge get one `true`.
-        def take(public_key_pem, nonce)
+        def take(public_key_pem, nonce) # rubocop:disable Naming/PredicateMethod -- `take` is the store contract `config.auth_challenge_store` names
           return false if public_key_pem.nil? || nonce.nil?
 
           sql = <<~SQL

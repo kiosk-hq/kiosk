@@ -4,7 +4,7 @@ require "openssl"
 require "jwt"
 
 # Signs KYC attestations with the broker's development key, so a test or an
-# attack can attest a principal without the broker's round trip. The key ships
+# attack can attest a customer without the broker's round trip. The key ships
 # in this public repository, so it never signs under production.
 module ProveTestIssuer
   KEY = File.expand_path("../../kiosk-demo-prove/config/dev_prove_key.pem", __dir__)

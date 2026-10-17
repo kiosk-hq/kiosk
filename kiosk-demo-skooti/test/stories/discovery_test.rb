@@ -11,6 +11,8 @@ class DiscoveryStory < StoryTest
     assert_empty %w[schema queries actions pay events] - kiosk["capabilities"]
     assert_match %r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z}, kiosk["events_url"]
     assert_equal %w[booking_payment kyc_verification payment_setup], schema["events"].map { _1["name"] }.sort
+    assert_equal [{ "reservation_id" => "a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f", "payment_state" => "paid" }],
+                 schema["events"].find { _1["name"] == "booking_payment" }["examples"]
 
     actions = schema["actions"].index_by { _1["name"] }
     %w[reserve start_rental rent_motorcycle payment_setup].each do |name|

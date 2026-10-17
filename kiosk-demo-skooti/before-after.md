@@ -50,7 +50,7 @@ is the point.
 ## What an operator adds
 
 The Kiosk gems and `rails g kiosk:install`; the `kiosk` block in `config/routes.rb`;
-`app/controllers/kiosk/{fleet,rentals}_controller.rb`; a fleet Ed25519 keypair
+`app/controllers/kiosk/{fleet,reservations,rentals}_controller.rb`; a fleet Ed25519 keypair
 whose public half is baked into every lock; the lock firmware (`firmware/`, an
 ESP32-C3 reference) and the App Clip (`appclip/`, iOS only).
 

@@ -26,12 +26,12 @@ is decided before any credential is read.
 
 | Endpoint | Verb | What it does |
 |---|---|---|
-| `GET /kiosk/scooters_available` | `scooters_available` | Browse the fleet (scooters + motorcycles); `needs_licence` flags the KYC-gated combustion vehicles |
-| `GET /kiosk/my_reservations` | `my_reservations` | This principal's reservations (owner-scoped) |
-| `POST /kiosk/reserve` | `reserve(scooter_code)` | Reserve a vehicle by its code (inserts a `status='reserved'` row; the hold has no expiry/TTL — it stays until `start_rental` flips it to `active`) |
-| `POST /kiosk/payment_setup` | `payment_setup` | Check whether the principal has a saved payment method (served by kiosk-server) |
-| `POST /kiosk/start_rental` | `start_rental(reservation_id)` | Verify three gates (ownership, the vehicle being licence-free, and a settled payment for THIS reservation) and issue an offline Ed25519 rental token (licence-free scooters need no KYC; a `needs_licence` vehicle is refused here and sent to `rent_motorcycle`) |
-| `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The combustion motorcycle; KYC-gated on `age_over_18` AND `licence_a` (category-A licence) before it issues a token |
+| `GET /kiosk/scooters_available` | `scooters_available` | The fleet (scooters and motorcycles); `needs_licence` marks the KYC-gated motorcycle |
+| `GET /kiosk/my_reservations` | `my_reservations` | The signed-in customer's reservations and where each one's payment stands |
+| `POST /kiosk/reserve` | `reserve(scooter_code)` | Hold a vehicle until its rental starts, and quote the first minute to pay |
+| `POST /kiosk/payment_setup` | `payment_setup` | Whether the customer has a saved payment method (served by kiosk-server) |
+| `POST /kiosk/start_rental` | `start_rental(reservation_id)` | Start the rental of a paid, licence-free vehicle and issue its offline Ed25519 unlock token |
+| `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The same for the motorcycle, once the customer is attested `age_over_18` and `licence_a` |
 | `POST /kiosk/request_kyc` | `request_kyc` | Hand back the broker link the human completes; the `kyc_verification` event then carries the signed attestation |
 
 Plus the two reserved endpoints every origin serves: `POST /kiosk/pay` —

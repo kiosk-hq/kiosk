@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# A hold on one fleet vehicle for one principal. `status` is the ride,
+# A hold on one fleet vehicle for one customer. `status` is the ride,
 # `payment_status` the money.
 class Reservation < ApplicationRecord
   include Kiosk::Owned
@@ -55,22 +55,18 @@ class Reservation < ApplicationRecord
   def scooter_in_fleet
     return if scooter
 
-    errors.add(:scooter_code, "#{scooter_code} is not in this fleet — call scooters_available for the " \
-                              "vehicles you can reserve")
+    errors.add(:scooter_code, "#{scooter_code} is not in this fleet — pick a code from scooters_available")
   end
 
   def licence_free
     return if scooter.licence_free?
 
-    errors.add(:base, "#{scooter.code} is a licence-required motorcycle — use rent_motorcycle for " \
-                      "licence-required vehicles; it requires the KYC attributes age_over_18 and " \
-                      "licence_a, so POST <endpoint>/request_kyc first if you do not have them yet")
+    errors.add(:base, "#{scooter.code} needs a licence — rent it with rent_motorcycle")
   end
 
   def licence_required
     return if scooter.licence_required?
 
-    errors.add(:base, "#{scooter.code} is not a licence-required motorcycle — use start_rental for " \
-                      "licence-free vehicles")
+    errors.add(:base, "#{scooter.code} needs no licence — rent it with start_rental")
   end
 end

@@ -60,9 +60,9 @@ def post_kyc_callback(body)
   res.code.to_i
 end
 
-# The kyc_verification events this principal's stream replays from the start.
-def kyc_events_for(principal)
-  stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: principal.token)
+# The kyc_verification events this customer's stream replays from the start.
+def kyc_events_for(customer)
+  stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: customer.token)
   stream.subscribe("kyc_verification", since: 0)
   stream.listen(2)
 ensure
@@ -81,27 +81,26 @@ profile = Kiosk::Redteam::Profile.new(
   result_id_key: "reservation_id",
 
   # Reserves the first available scooter; reserve needs no KYC.
-  create_owned: lambda { |client, principal|
-    fleet_resp = client.query(principal, name: "scooters_available")
+  create_owned: lambda { |client, customer|
+    fleet_resp = client.query(customer, name: "scooters_available")
     rows       = fleet_resp.body.is_a?(Array) ? fleet_resp.body : []
     scooter    = rows.first
     raise "redteam(skooti): no available scooters in scooters_available" unless scooter
 
-    rsv_resp = client.run(principal, name: "reserve", scooter_code: scooter["code"])
+    rsv_resp = client.run(customer, name: "reserve", scooter_code: scooter["code"])
     raise "redteam(skooti): reserve failed (#{rsv_resp.status}): #{rsv_resp.body.inspect}" \
       unless rsv_resp.status == 200
 
     {
       id:                  rsv_resp.body["reservation_id"],
-      code:                rsv_resp.body["scooter_code"],
       price_per_min_cents: rsv_resp.body["price_per_min_cents"].to_i,
     }
   },
 
   # reserve declares only scooter_code, so an injected user_id is a typed 400.
   forge_action: "reserve",
-  forge_args:   lambda { |client, principal_a, _principal_b|
-    fleet_resp = client.query(principal_a, name: "scooters_available")
+  forge_args:   lambda { |client, customer_a, _customer_b|
+    fleet_resp = client.query(customer_a, name: "scooters_available")
     rows       = fleet_resp.body.is_a?(Array) ? fleet_resp.body : []
     scooter    = rows.first
     raise "redteam(skooti): no scooters for forge_args" unless scooter
@@ -113,7 +112,7 @@ profile = Kiosk::Redteam::Profile.new(
   gated_args:   ->(ref) { { reservation_id: ref[:id] } },
 
   # The mandate shapes script/rental_flow.rb builds.
-  pay_for: lambda { |_client, principal, owned_ref|
+  pay_for: lambda { |_client, customer, owned_ref|
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
     cart_id   = SecureRandom.uuid
@@ -124,8 +123,8 @@ profile = Kiosk::Redteam::Profile.new(
 
     intent = {
       id:               intent_id,
-      user_id:          principal.user_id,
-      agent_id:         principal.agent_id,
+      user_id:          customer.user_id,
+      agent_id:         customer.agent_id,
       iss:              ISSUER,
       scope:            "mobility",
       cap_amount_cents: cap_amount_cents,
@@ -137,8 +136,8 @@ profile = Kiosk::Redteam::Profile.new(
     cart = {
       id:                 cart_id,
       intent_mandate_id:  intent_id,
-      user_id:            principal.user_id,
-      agent_id:           principal.agent_id,
+      user_id:            customer.user_id,
+      agent_id:           customer.agent_id,
       iss:                ISSUER,
       line_items:         [{ qty: 1, price_cents: total_cents, reservation_id: owned_ref[:id] }],
       total_amount_cents: total_cents,
@@ -271,17 +270,17 @@ class MalformedUuidArg < Kiosk::Redteam::Scenario
   end
 
   # Reserves nothing: the shape check runs before the cashier, so the shared fleet is untouched.
-  def pay_with_ref(client, principal, junk)
+  def pay_with_ref(client, customer, junk)
     now       = Time.now.to_i
     intent_id = SecureRandom.uuid
-    intent = { id: intent_id, user_id: principal.user_id, agent_id: principal.agent_id,
+    intent = { id: intent_id, user_id: customer.user_id, agent_id: customer.agent_id,
                iss: ISSUER, scope: "mobility", cap_amount_cents: 200, currency: "eur",
                exp: now + 600, iat: now }
-    cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: principal.user_id,
-             agent_id: principal.agent_id, iss: ISSUER,
+    cart = { id: SecureRandom.uuid, intent_mandate_id: intent_id, user_id: customer.user_id,
+             agent_id: customer.agent_id, iss: ISSUER,
              line_items: [{ qty: 1, price_cents: 100, reservation_id: junk }],
              total_amount_cents: 100, currency: "eur", exp: now + 600, iat: now }
-    client.pay(principal, intent:, cart:)
+    client.pay(customer, intent:, cart:)
   end
 end
 
@@ -322,12 +321,12 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     # Control for the leak scan: a needle ReserveOperation echoes back from the probe is not a leak.
     echo_control = "PG:: 22P02 invalid input syntax"
     echo_resp    = client.run(a, name: "reserve", scooter_code: echo_control)
-    refused "reserve scooter_code=<a value spelling three LEAKS> (oracle control)",
+    refused "reserve scooter_code=<a value spelling three LEAKS> (leak-scan control)",
             echo_resp, supplied: echo_control
     # Vacuous unless the refusal really echoed the value.
     unless JSON.generate(echo_resp.body).include?(echo_control)
       @failures << "CONTROL VACUOUS: reserve did not echo the scooter_code it refused, so the " \
-                   "oracle was never asked to tell an echo from a leak"
+                   "leak scan was never asked to tell an echo from a leak"
     end
 
     # Control: a real vehicle code still reserves.
@@ -670,7 +669,7 @@ end
 
 fcb_beat = forged_callback_no_sig.call
 
-# The wire-shape beats share one principal; neither touches the fleet.
+# The wire-shape beats share one customer; neither touches the fleet.
 wire_probe = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
                                    .register!
 

@@ -209,7 +209,7 @@ Assistant (agent token → Kiosk API)
   │
   └─ start_rental(reservation_id)
        │
-       Gate 1:  reservation exists, belongs to this principal, status = 'reserved'
+       Gate 1:  reservation exists, belongs to this customer, status = 'reserved'
        Gate 1b: the reserved vehicle is licence-FREE — a motorcycle
                 is refused here and goes through rent_motorcycle, whose Gate 0
                 is the KYC one. start_rental has NO KYC gate.
@@ -265,4 +265,4 @@ The rental token is a **bearer capability**: any party that holds the wire token
 
 **It reaches the human as a plain string, and that is where it is most exposed.** The wire hands the token to the assistant and the assistant relays it onward, so it travels whatever channel that assistant uses to talk to its human — a hosted model's chat transcript included. Anyone who can read that channel inside the window holds the capability. A deployment that cares should hand the token to the human's device rather than to their conversation; the delivery options below are the same answer from the other end.
 
-What is not yet in place: the token is not bound to the device or principal that requested it. A production deployment may add device attestation (e.g., bind the token to the App Clip installation's device key) or deliver it via a Shared App Group Keychain rather than a URL parameter, reducing exposure further.
+What is not yet in place: the token is not bound to the device or customer that requested it. A production deployment may add device attestation (e.g., bind the token to the App Clip installation's device key) or deliver it via a Shared App Group Keychain rather than a URL parameter, reducing exposure further.

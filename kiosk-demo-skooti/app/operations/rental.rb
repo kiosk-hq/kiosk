@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# What both rental verbs share: the principal's own reservation, its payment,
+# What both rental verbs share: the customer's own reservation, its payment,
 # and the activation that signs the rental token the lock verifies offline.
 module Rental
   module_function
@@ -13,12 +13,11 @@ module Rental
     return if reservation.paid?
 
     if reservation.paying?
-      refuse "a payment for this reservation is in progress and its outcome is not yet known — " \
-             "re-read my_reservations and start the rental once its payment_state is `paid`; do " \
-             "NOT sign a fresh mandate chain while it reads `pending`"
+      refuse "this reservation's payment is in progress — re-read my_reservations and start the " \
+             "rental once it reads `paid`; do not pay again"
     end
-    refuse "this reservation is not paid — pay for it first: POST <endpoint>/pay with the cart " \
-           "mandate reserve's pay_hint describes, then call this verb again"
+    refuse "this reservation is not paid — pay for it first (POST <endpoint>/pay with the cart " \
+           "reserve's pay_hint describes), then call this again"
   end
 
   def activate!(reservation)

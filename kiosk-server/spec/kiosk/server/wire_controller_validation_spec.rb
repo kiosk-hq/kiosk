@@ -1,15 +1,14 @@
 # frozen_string_literal: true
 
-# PoW-SHAPE validation (closes K-479; re-pointed to the Kiosk-PoW header by
-# ADR-0022).
+# PoW-SHAPE validation of the `Kiosk-PoW` request header.
 #
 # When `config.validate_requests` is true — which is its default — the proof(s)
 # parsed from the `Kiosk-PoW` request header are validated against the vendored
-# normative PoW schema BEFORE PowGate.gate consumes them. The motivating failure: an agent
-# submitted a `{solutions:[…]}` shape (not the schema shape
-# `{challenge:,nonce:}`); PowGate.extract_proofs returned [] and the gate
-# re-issued a fresh 402 on every retry — an infinite loop with no diagnostic.
-# This layer turns that silent re-challenge into a clear 400 hint.
+# normative PoW schema BEFORE PowGate.gate consumes them. Without this check a
+# `{solutions:[…]}` shape (not the schema shape `{challenge:,nonce:}`) gives
+# PowGate.extract_proofs an empty list, and the gate re-issues a fresh 402 on
+# every retry with no diagnostic. This layer turns that silent re-challenge
+# into a clear 400 hint.
 #
 # `validate_requests` is the PROOF-shape flag and only that: a verb's own
 # ARGUMENTS are validated against its `input_schema` unconditionally on the
@@ -26,7 +25,13 @@ require 'json'
 require 'kiosk/pow'
 require 'kiosk/reputation'
 
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+module WireControllerValidationSpec
+  # Challenges every verb, so a request that clears validation reaches the
+  # gate (402 pow_required) rather than Executor.
+  class AlwaysChallengePolicy < Kiosk::Reputation::Policy
+    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+  end
+
   def dispatch_verb(name, env)
     env['action_dispatch.request.path_parameters'] =
       { controller: 'kiosk/server/verb', action: 'show', kiosk_verb: name }
@@ -50,7 +55,7 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
   # Dial `GET /kiosk/catalog` carrying the proof in the `Kiosk-PoW` header (as
   # raw JSON — the header is the wire location per ADR-0022, and on a GET it is
   # the ONLY location there is). An always-challenge reputation policy is
-  # configured (see the shared `before`), so a request that CLEARS validation
+  # configured (see the shared context), so a request that CLEARS validation
   # reaches PowGate.gate and comes back 402 pow_required — never touching
   # Executor / ActiveRecord. That lets us assert cleanly on the validation
   # OUTCOME: a malformed proof is a 400 (rejected before the gate), a
@@ -66,6 +71,8 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
     dispatch_verb('catalog', bearer_env('/kiosk/catalog', agent_token, **opts))
   end
 
+  def validate_any_proof! = Kiosk::Server::RequestValidation.validate_proofs!([{ challenge: {}, nonce: {} }])
+
   # A structurally VALID challenge object (all schema-required fields present).
   def valid_challenge
     {
@@ -77,23 +84,19 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       sig: 'deadbeef'
     }
   end
+end
+
+RSpec.shared_context 'wire controller validation spec: gated origin' do
+  include WireControllerValidationSpec
 
   before do
-    # An always-challenge policy so a request that clears validation reaches the
-    # gate (402 pow_required) rather than Executor — see post_pow.
     Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
-    policy = Class.new(Kiosk::Reputation::Policy) do
-      def challenge_for(identity:, verb:, factors:)
-        { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
-      end
-    end.new
-
     Kiosk.configure do |c|
       c.signing_key       = Kiosk::Server::SigningKey.generate
       c.issuer            = 'https://demo.example'
       c.roles             = %i[customer]
       c.agent_idp         = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-      c.reputation_policy = policy
+      c.reputation_policy = WireControllerValidationSpec::AlwaysChallengePolicy.new
       c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
     end
     Kiosk::Server::RequestValidation.reset!
@@ -108,10 +111,17 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
     Kiosk::Server::RequestValidation.reset!
     Kiosk::Reputation::Backends.reset!
   end
+end
 
-  # ── Flag ON: malformed pow → 400 bad_request with a shape hint ─────────────
+RSpec.shared_context 'wire controller validation spec: shape check on' do
+  before { Kiosk.configure { |c| c.validate_requests = true } }
+end
+
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
   context 'with validate_requests: true' do
-    before { Kiosk.configure { |c| c.validate_requests = true } }
+    include_context 'wire controller validation spec: shape check on'
 
     it 'rejects the K-479 shape ({solutions:[…]}) with 400 bad_request + hint (NOT a 402)' do
       status, headers, problem = call_with_pow(solutions: [{ indices: [1, 2, 3], header_nonce: 0 }])
@@ -136,6 +146,14 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
       expect(problem[:hint]).to include('challenge')
     end
+  end
+end
+
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
+  context 'with validate_requests: true' do
+    include_context 'wire controller validation spec: shape check on'
 
     it 'rejects a malformed proof inside a JSON-array header (per-proof validation)' do
       status, _headers, problem = call_with_pow(
@@ -162,6 +180,14 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).not_to eq('bad_request')
       expect(problem[:challenges]).to be_an(Array)
     end
+  end
+end
+
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
+  context 'with validate_requests: true' do
+    include_context 'wire controller validation spec: shape check on'
 
     it 'accepts a JSON-array of well-formed proofs (passes to the gate)' do
       status, _headers, problem = call_with_pow(
@@ -173,12 +199,9 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).not_to eq('bad_request')
     end
 
-    # K-839: `indices` items are u64. `pack("Q<")` truncates mod 2**64, so an
-    # out-of-range index is a DIFFERENT spelling of an in-range leaf — the
-    # verifier has refused it since K-540, but the schema described a wider
-    # accepted set than any implementation had, so the shape gate waved it
-    # through to burn a challenge id and a backend eval. It is now refused as
-    # what it is: a malformed proof, 400, before the gate.
+    # `indices` items are u64. `pack("Q<")` truncates mod 2**64, so an
+    # out-of-range index is a different spelling of an in-range leaf. It is
+    # refused as a malformed proof, 400, before the gate.
     it 'rejects an index at 2**64 with 400 bad_request (u64 upper bound)' do
       status, _headers, problem = call_with_pow(
         challenge: valid_challenge, nonce: { indices: [1, 2, 3, 1 << 64] }
@@ -188,15 +211,19 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
       expect(problem[:code]).not_to eq('pow_required')
     end
+  end
+end
 
-    # K-845: and the bound must not eat the LARGEST LEGAL index. The schema
-    # writes the upper bound as an inclusive `maximum: 2**64 - 1` rather than an
-    # exclusive `2**64` so that a double-precision validator — the likely reader
-    # of the PUBLISHED copy on kiosk.tech — cannot round this value onto the
-    # excluded bound and refuse a proof this implementation accepts. Ruby's JSON
-    # parser is exact, so what this pins locally is the accepted SET rather than
-    # the portability: 2**64 - 1 is in it, and a bound edit that shifts by one
-    # takes this line red.
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
+  context 'with validate_requests: true' do
+    include_context 'wire controller validation spec: shape check on'
+
+    # The bound must not refuse the largest legal index. The schema writes the
+    # upper bound as an inclusive `maximum: 2**64 - 1`, so a double-precision
+    # validator cannot round this value onto an excluded bound. Ruby's JSON
+    # parser is exact, so this pins the accepted set: 2**64 - 1 is in it.
     it 'accepts an index at 2**64 - 1 — the largest legal u64 (passes to the gate)' do
       status, _headers, problem = call_with_pow(
         challenge: valid_challenge, nonce: { indices: [1, 2, 3, (1 << 64) - 1] }
@@ -216,13 +243,18 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
       expect(problem[:code]).not_to eq('pow_required')
     end
+  end
+end
 
-    # K-842: the same argument one field across. `header_nonce` is a u32 in both
-    # specs, is folded into the seed with `pack("V")` — which truncates mod
-    # 2**32 rather than raising — and was declared an unbounded integer, so
-    # 0, 2**32 and -(2**32) were three spellings of ONE proof. The verifier now
-    # refuses the out-of-range ones and this gate refuses them earlier, as the
-    # malformed proofs they are.
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
+  context 'with validate_requests: true' do
+    include_context 'wire controller validation spec: shape check on'
+
+    # `header_nonce` is a u32, folded into the seed with `pack("V")`, which
+    # truncates mod 2**32. Out-of-range values are refused here as malformed
+    # proofs, before the gate.
     it 'rejects a header_nonce at 2**32 with 400 bad_request (u32 upper bound)' do
       status, _headers, problem = call_with_pow(
         challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: 1 << 32 }
@@ -242,6 +274,14 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('pow_required')
       expect(problem[:code]).not_to eq('bad_request')
     end
+  end
+end
+
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
+  context 'with validate_requests: true' do
+    include_context 'wire controller validation spec: shape check on'
 
     it 'rejects a negative header_nonce with 400 bad_request (u32 lower bound)' do
       status, _headers, problem = call_with_pow(
@@ -261,6 +301,14 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(body[:code]).to eq('pow_required')
       expect(body[:challenges].map { |c| c[:alg] }).to eq(['argon2id'])
     end
+  end
+end
+
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
+  context 'with validate_requests: true' do
+    include_context 'wire controller validation spec: shape check on'
 
     it 'leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)' do
       # An absent header means the initial request; the gate must still issue the
@@ -283,17 +331,18 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:hint]).to include('Kiosk-PoW')
     end
   end
+end
 
-  # ── Flag OFF (an operator's explicit opt-OUT since K-1399 made it default
-  # true): a malformed proof falls back to the pre-fix behaviour ─────────────
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
+
   context 'with validate_requests explicitly off' do
     before { Kiosk.configure { |c| c.validate_requests = false } }
 
     it 'does NOT raise a validation error on a malformed proof (byte-identical to today)' do
-      # With the flag off, the malformed proof is simply ignored by
-      # extract_proofs ([] proofs) and the gate re-issues a fresh 402 — the exact
-      # K-479 pre-fix behaviour. The point: no 400 bad_request from a validation
-      # step that isn't running.
+      # With the flag off, extract_proofs ignores the malformed proof ([] proofs)
+      # and the gate re-issues a fresh 402. No 400 bad_request comes from a
+      # validation step that is not running.
       status, _headers, problem = call_with_pow(solutions: [{ indices: [1, 2, 3] }])
 
       expect(status).to eq(402)
@@ -310,6 +359,10 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
     end
   end
+end
+
+RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+  include_context 'wire controller validation spec: gated origin'
 
   # ── Fail-loud when the RUNTIME dependency is not loadable ──────────────────
   context 'when validate_requests is on but json_schemer is not loadable' do
@@ -321,25 +374,19 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
     end
 
     it 'raises a ConfigurationError naming the gem' do
-      expect do
-        Kiosk::Server::RequestValidation.validate_proofs!([{ challenge: {}, nonce: {} }])
-      end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /json_schemer/)
+      expect { validate_any_proof! }
+        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /json_schemer/)
     end
 
-    # K-931: the message is the one surface an operator reads at the moment
-    # they are debugging, and it told the retired story — "an OPTIONAL
-    # dependency" — two years after the gemspec made it `add_dependency`.
-    # Pinned against the gemspec rather than against a literal so the two
-    # cannot drift apart again silently.
+    # The message must agree with the gemspec, which declares json_schemer a
+    # runtime dependency.
     it 'does not call the gem optional, because the gemspec declares it a runtime dependency' do
       spec = Gem::Specification.load(
         File.expand_path('../../../kiosk-server.gemspec', __dir__)
       )
       expect(spec.runtime_dependencies.map(&:name)).to include('json_schemer')
 
-      expect do
-        Kiosk::Server::RequestValidation.validate_proofs!([{ challenge: {}, nonce: {} }])
-      end.to raise_error(Kiosk::Server::Errors::ConfigurationError) { |e|
+      expect { validate_any_proof! }.to raise_error(Kiosk::Server::Errors::ConfigurationError) { |e|
         expect(e.message).not_to match(/optional/i)
         expect(e.message).to match(/RUNTIME dependency/)
       }

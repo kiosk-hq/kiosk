@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-require "kiosk/test_helpers/customer"
-require "kiosk/test_helpers/live_server"
+require 'kiosk/test_helpers/customer'
+require 'kiosk/test_helpers/live_server'
 
 module Kiosk
   module TestHelpers
-    autoload :Person, "kiosk/test_helpers/person"
+    autoload :Person, 'kiosk/test_helpers/person'
 
     # A test that tells a business story: who comes to the origin, what they
     # ask for, what the origin answers and what they learn afterwards.

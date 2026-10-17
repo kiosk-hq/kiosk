@@ -65,15 +65,15 @@
 # It reads the TRACKED tree and does NOT skip when that tree is not where it
 # expects (K-502): a guard that goes quiet when its inputs move proves nothing.
 
-require "open3"
-require "stringio"
+require 'open3'
+require 'stringio'
 
-WARNINGS_REPO_ROOT = File.expand_path("../..", __dir__)
+WARNINGS_REPO_ROOT = File.expand_path('../..', __dir__)
 
 # The two shapes above, and only those, are fatal.
-FATAL_WARNING = /warning: (?:assigned but unused variable|shadowing outer local variable)/.freeze
+FATAL_WARNING = /warning: (?:assigned but unused variable|shadowing outer local variable)/
 
-RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
+RSpec.describe 'no Ruby parse warning in tracked source (K-1718)' do
   # Compiled IN THIS PROCESS rather than by one `ruby -c -w` subprocess per
   # file: `compile_file` emits the identical warnings and never executes the
   # source, so the whole tree costs a second instead of the minute eight hundred
@@ -88,7 +88,7 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
   # on the identical file reports it, and so does `ruby -c -w`. A guard that had
   # only been run green would have shipped blind.
   def self.parse_warnings
-    out, err, status = Open3.capture3("git", "-C", WARNINGS_REPO_ROOT, "ls-files", "-z", "*.rb", "*.rake")
+    out, err, status = Open3.capture3('git', '-C', WARNINGS_REPO_ROOT, 'ls-files', '-z', '*.rb', '*.rake')
     raise "git ls-files failed in #{WARNINGS_REPO_ROOT}: #{err}" unless status.success?
 
     files = out.split("\0").reject(&:empty?)
@@ -116,7 +116,7 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
       end
       # `compile_file` names the file by the path it was given, which is
       # absolute; the report says where the file is IN THE REPOSITORY.
-      captured.string.each_line { |l| warnings << [rel, l.strip.sub("#{abs}:", "")] }
+      captured.string.each_line { |l| warnings << [rel, l.strip.sub("#{abs}:", '')] }
     end
     [files, warnings]
   end
@@ -125,15 +125,15 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
 
   # The corpus is derived, so the only way it can go vacuous is by shrinking to
   # nothing — which would exit green forever. A floor says so instead.
-  it "reads the whole tracked Ruby corpus, so a green run means something" do
+  it 'reads the whole tracked Ruby corpus, so a green run means something' do
     expect(FILES.length).to be > 500
   end
 
-  it "has no dead binding anywhere in tracked source" do
+  it 'has no dead binding anywhere in tracked source' do
     fatal = WARNINGS.select { |(_, line)| line =~ FATAL_WARNING }
     expect(fatal).to be_empty, lambda {
       "#{fatal.length} dead binding(s) across #{FILES.length} tracked Ruby file(s). " \
-      "Read the value, or prefix the name with an underscore to say it is deliberately " \
+      'Read the value, or prefix the name with an underscore to say it is deliberately ' \
       "dropped — a deletion hides WHICH half of a destructuring went away.\n" +
         fatal.map { |(rel, line)| "  #{rel}:#{line}" }.join("\n")
     }
@@ -141,7 +141,7 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
 
   # Not an assertion: the other tier. A parse warning this guard does not gate
   # is printed so it is a number on every run rather than a belief.
-  it "reports every other parse warning without failing on it" do
+  it 'reports every other parse warning without failing on it' do
     rest = WARNINGS.reject { |(_, line)| line =~ FATAL_WARNING }
     rest.each { |(rel, line)| RSpec.configuration.reporter.message("  NOTICE #{rel}: #{line}") }
     expect(rest.length).to be_a(Integer)
@@ -171,14 +171,14 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
     found
   end
 
-  it "has no constant two spec files of one suite both assign into Object" do
+  it 'has no constant two spec files of one suite both assign into Object' do
     declared = {}
     FILES.grep(/_spec\.rb\z/).each do |rel|
       src = File.read(File.join(WARNINGS_REPO_ROOT, rel))
-      next unless src.include?("RSpec.describe")
+      next unless src.include?('RSpec.describe')
 
       object_constants(src).each do |(name, line)|
-        ((declared[[rel[%r{\A[^/]+}], name]] ||= []) << "#{rel}:#{line}")
+        (declared[[rel[%r{\A[^/]+}], name]] ||= []) << "#{rel}:#{line}"
       end
     end
 
@@ -188,7 +188,7 @@ RSpec.describe "no Ruby parse warning in tracked source (K-1718)" do
       "#{collisions.length} constant(s) are assigned into Object by two spec files of one suite. " \
       "Whichever loads second wins, so editing one file silently changes the other's inputs. " \
       "Give it one home — a module in spec/support, required by both.\n" +
-        collisions.map { |(gem, name), sites| "  #{gem}: #{name} — #{sites.join(", ")}" }.join("\n")
+        collisions.map { |(gem, name), sites| "  #{gem}: #{name} — #{sites.join(', ')}" }.join("\n")
     }
   end
 end

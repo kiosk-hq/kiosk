@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/test_helpers"
+require 'kiosk/test_helpers'
 
 # The four conformance checks, against a hand-built {NullOrigin}.
 #
@@ -20,224 +20,224 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
   # A catalogue-shaped query: array of objects, closed, two required fields.
   def catalog_verb(**overrides)
     verb_class.new(
-      name: "catalog", kind: :query,
-      input_schema:  { "type" => "object", "additionalProperties" => false,
-                       "properties" => {}, "required" => [] },
-      output_schema: { "type" => "array",
-                       "items" => { "type" => "object", "additionalProperties" => false,
-                                    "properties" => { "sku" => { "type" => "string" },
-                                                      "price_cents" => { "type" => "integer" } },
-                                    "required" => %w[sku price_cents] } },
-      **overrides,
+      name: 'catalog', kind: :query,
+      input_schema: { 'type' => 'object', 'additionalProperties' => false,
+                      'properties' => {}, 'required' => [] },
+      output_schema: { 'type' => 'array',
+                       'items' => { 'type' => 'object', 'additionalProperties' => false,
+                                    'properties' => { 'sku' => { 'type' => 'string' },
+                                                      'price_cents' => { 'type' => 'integer' } },
+                                    'required' => %w[sku price_cents] } },
+      **overrides
     )
   end
 
   def my_orders_verb(**overrides)
     verb_class.new(
-      name: "my_orders", kind: :query,
-      input_schema:  { "type" => "object", "additionalProperties" => false,
-                       "properties" => {}, "required" => [] },
-      output_schema: { "type" => "array", "items" => { "type" => "object" } },
-      **overrides,
+      name: 'my_orders', kind: :query,
+      input_schema: { 'type' => 'object', 'additionalProperties' => false,
+                      'properties' => {}, 'required' => [] },
+      output_schema: { 'type' => 'array', 'items' => { 'type' => 'object' } },
+      **overrides
     )
   end
 
   def create_order_verb(**overrides)
     verb_class.new(
-      name: "create_order", kind: :action,
-      input_schema:  { "type" => "object", "additionalProperties" => false,
-                       "properties" => { "sku" => { "type" => "string" } },
-                       "required" => %w[sku] },
-      output_schema: { "type" => "object", "properties" => { "order_id" => { "type" => "string" } },
-                       "required" => %w[order_id] },
-      example_params: { "sku" => "sourdough-bread" },
-      **overrides,
+      name: 'create_order', kind: :action,
+      input_schema: { 'type' => 'object', 'additionalProperties' => false,
+                      'properties' => { 'sku' => { 'type' => 'string' } },
+                      'required' => %w[sku] },
+      output_schema: { 'type' => 'object', 'properties' => { 'order_id' => { 'type' => 'string' } },
+                       'required' => %w[order_id] },
+      example_params: { 'sku' => 'sourdough-bread' },
+      **overrides
     )
   end
 
   # ── 1. ROUTES ─────────────────────────────────────────────────────────────
 
-  describe ".routes" do
-    it "passes when every verb is routed with the method its kind requires" do
+  describe '.routes' do
+    it 'passes when every verb is routed with the method its kind requires' do
       origin  = null_origin.new(verbs: [catalog_verb, create_order_verb])
       outcome = described_class.routes(origin)
 
       expect(outcome).to be_ok
-      expect(outcome.message).to include("all 2 declared verbs are routed under /kiosk/")
+      expect(outcome.message).to include('all 2 declared verbs are routed under /kiosk/')
     end
 
-    it "FAILS when a declared verb has no route at all — the T-183 bug class" do
+    it 'FAILS when a declared verb has no route at all — the T-183 bug class' do
       verbs  = [catalog_verb, create_order_verb]
-      table  = null_origin.routes_for("/kiosk", verbs)
-      table.delete(["POST", "/kiosk/create_order"])
+      table  = null_origin.routes_for('/kiosk', verbs)
+      table.delete(['POST', '/kiosk/create_order'])
 
       outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("nothing answers POST /kiosk/create_order")
-      expect(outcome.message).to include("404 to every caller")
+      expect(outcome.message).to include('nothing answers POST /kiosk/create_order')
+      expect(outcome.message).to include('404 to every caller')
     end
 
-    it "FAILS when a query is routed POST instead of GET" do
+    it 'FAILS when a query is routed POST instead of GET' do
       verbs = [catalog_verb]
-      table = { ["POST", "/kiosk/catalog"] => { controller: "kiosk/server/verb", action: "create",
-                                                kiosk_verb: "catalog" } }
+      table = { ['POST', '/kiosk/catalog'] => { controller: 'kiosk/server/verb', action: 'create',
+                                                kiosk_verb: 'catalog' } }
 
       outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("nothing answers GET /kiosk/catalog")
+      expect(outcome.message).to include('nothing answers GET /kiosk/catalog')
     end
 
-    it "FAILS when a verb ALSO answers the other method on the verb wire" do
+    it 'FAILS when a verb ALSO answers the other method on the verb wire' do
       verbs = [catalog_verb]
-      table = null_origin.routes_for("/kiosk", verbs)
-      table[["POST", "/kiosk/catalog"]] = { controller: "kiosk/server/verb", action: "create",
-                                            kiosk_verb: "catalog" }
+      table = null_origin.routes_for('/kiosk', verbs)
+      table[['POST', '/kiosk/catalog']] = { controller: 'kiosk/server/verb', action: 'create',
+                                            kiosk_verb: 'catalog' }
 
       outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("also reaches the verb wire on POST")
+      expect(outcome.message).to include('also reaches the verb wire on POST')
     end
 
-    it "FAILS when a route reaches the handler controller directly" do
+    it 'FAILS when a route reaches the handler controller directly' do
       verbs = [catalog_verb]
-      table = { ["GET", "/kiosk/catalog"] => { controller: "kiosk/storefront", action: "catalog",
-                                               kiosk_verb: "catalog" } }
+      table = { ['GET', '/kiosk/catalog'] => { controller: 'kiosk/storefront', action: 'catalog',
+                                               kiosk_verb: 'catalog' } }
 
       outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("bypasses authentication")
+      expect(outcome.message).to include('bypasses authentication')
     end
 
-    it "FAILS when the path segment and the kiosk_verb default disagree" do
+    it 'FAILS when the path segment and the kiosk_verb default disagree' do
       verbs = [catalog_verb]
-      table = { ["GET", "/kiosk/catalog"] => { controller: "kiosk/server/verb", action: "show",
-                                               kiosk_verb: "catalogue" } }
+      table = { ['GET', '/kiosk/catalog'] => { controller: 'kiosk/server/verb', action: 'show',
+                                               kiosk_verb: 'catalogue' } }
 
       outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("two spellings of one name")
+      expect(outcome.message).to include('two spellings of one name')
     end
 
-    it "VACUITY ARM: FAILS on an origin that declares no verbs at all" do
+    it 'VACUITY ARM: FAILS on an origin that declares no verbs at all' do
       outcome = described_class.routes(null_origin.new(verbs: []))
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("declares no verbs at all")
+      expect(outcome.message).to include('declares no verbs at all')
     end
   end
 
   # ── 2. VERB EXECUTES ──────────────────────────────────────────────────────
 
-  describe ".executes" do
+  describe '.executes' do
     it "passes and reports the answer's shape" do
       origin  = null_origin.new(verbs: [catalog_verb],
-                               answers: { "catalog" => [{ "sku" => "a", "price_cents" => 1 }] })
+                                answers: { 'catalog' => [{ 'sku' => 'a', 'price_cents' => 1 }] })
       outcome = described_class.executes(origin, :catalog)
 
       expect(outcome).to be_ok
-      expect(outcome.message).to include("query \"catalog\" executed")
-      expect(outcome.message).to include("1 row(s)")
+      expect(outcome.message).to include('query "catalog" executed')
+      expect(outcome.message).to include('1 row(s)')
     end
 
     it "uses the verb's own example_params when none are given, and says so" do
       origin  = null_origin.new(verbs: [create_order_verb],
-                               answers: { "create_order" => { "order_id" => "x" } })
+                                answers: { 'create_order' => { 'order_id' => 'x' } })
       outcome = described_class.executes(origin, :create_order)
 
       expect(outcome).to be_ok
-      expect(outcome.message).to include("with its own example_params")
-      expect(origin.calls.last[:params]).to eq({ "sku" => "sourdough-bread" })
+      expect(outcome.message).to include('with its own example_params')
+      expect(origin.calls.last[:params]).to eq({ 'sku' => 'sourdough-bread' })
     end
 
-    it "reports a refusal with its wire code, message and hint" do
+    it 'reports a refusal with its wire code, message and hint' do
       refusal = Class.new(StandardError) do
-        def code = "forbidden"
+        def code = 'forbidden'
         def hint = "this verb only answers the order's owner"
-      end.new("not yours")
+      end.new('not yours')
 
-      origin  = null_origin.new(verbs: [my_orders_verb], answers: { "my_orders" => refusal })
+      origin  = null_origin.new(verbs: [my_orders_verb], answers: { 'my_orders' => refusal })
       outcome = described_class.executes(origin, :my_orders)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("did not execute")
-      expect(outcome.message).to include("code=forbidden")
+      expect(outcome.message).to include('did not execute')
+      expect(outcome.message).to include('code=forbidden')
       expect(outcome.message).to include("hint: this verb only answers the order's owner")
     end
 
-    it "names the declared verbs when asked for one that is not declared" do
+    it 'names the declared verbs when asked for one that is not declared' do
       origin  = null_origin.new(verbs: [catalog_verb, create_order_verb])
       outcome = described_class.executes(origin, :catalogue)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("no verb named \"catalogue\"")
-      expect(outcome.message).to include("Declared: catalog, create_order")
+      expect(outcome.message).to include('no verb named "catalogue"')
+      expect(outcome.message).to include('Declared: catalog, create_order')
     end
   end
 
   # ── 3. THE DECLARED SHAPE ─────────────────────────────────────────────────
 
-  describe ".declared_shape" do
+  describe '.declared_shape' do
     it "passes when the answer satisfies the verb's own output_schema" do
       origin = null_origin.new(
         verbs: [catalog_verb],
-        answers: { "catalog" => [{ "sku" => "sourdough", "price_cents" => 449 }] },
+        answers: { 'catalog' => [{ 'sku' => 'sourdough', 'price_cents' => 449 }] }
       )
 
       expect(described_class.declared_shape(origin, :catalog)).to be_ok
     end
 
-    it "FAILS when the handler renders a shape the descriptor rejects" do
+    it 'FAILS when the handler renders a shape the descriptor rejects' do
       origin = null_origin.new(
         verbs: [catalog_verb],
         # `price_cents` as a formatted String — the commonest descriptor lie
         # there is, and one nothing on the wire would notice.
-        answers: { "catalog" => [{ "sku" => "sourdough", "price_cents" => "4.49" }] },
+        answers: { 'catalog' => [{ 'sku' => 'sourdough', 'price_cents' => '4.49' }] }
       )
       outcome = described_class.declared_shape(origin, :catalog)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("rendered a payload its own output_schema rejects")
-      expect(outcome.message).to include("/0/price_cents")
+      expect(outcome.message).to include('rendered a payload its own output_schema rejects')
+      expect(outcome.message).to include('/0/price_cents')
       expect(outcome.details[:stage]).to eq(:output)
     end
 
-    it "FAILS on the ARGUMENTS separately, before executing anything" do
+    it 'FAILS on the ARGUMENTS separately, before executing anything' do
       origin  = null_origin.new(verbs: [create_order_verb],
-                               answers: { "create_order" => { "order_id" => "x" } })
-      outcome = described_class.declared_shape(origin, :create_order, params: { "sku" => 12 })
+                                answers: { 'create_order' => { 'order_id' => 'x' } })
+      outcome = described_class.declared_shape(origin, :create_order, params: { 'sku' => 12 })
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("do not satisfy")
-      expect(outcome.message).to include("input_schema")
+      expect(outcome.message).to include('do not satisfy')
+      expect(outcome.message).to include('input_schema')
       expect(outcome.details[:stage]).to eq(:input)
       expect(origin.calls).to be_empty
     end
 
-    it "FAILS rather than skipping when the verb declares no output_schema" do
+    it 'FAILS rather than skipping when the verb declares no output_schema' do
       origin  = null_origin.new(verbs: [catalog_verb(output_schema: nil)])
       outcome = described_class.declared_shape(origin, :catalog)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("publishes no output_schema")
+      expect(outcome.message).to include('publishes no output_schema')
     end
 
-    it "FAILS rather than skipping when the verb declares no input_schema" do
+    it 'FAILS rather than skipping when the verb declares no input_schema' do
       origin  = null_origin.new(verbs: [catalog_verb(input_schema: nil)])
       outcome = described_class.declared_shape(origin, :catalog)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("publishes no input_schema")
+      expect(outcome.message).to include('publishes no input_schema')
     end
 
-    it "delegates validation to an origin that brings its own checker" do
-      origin = null_origin.new(verbs: [catalog_verb], answers: { "catalog" => [] })
+    it 'delegates validation to an origin that brings its own checker' do
+      origin = null_origin.new(verbs: [catalog_verb], answers: { 'catalog' => [] })
       def origin.schema_errors(_payload, schema:, verb:, kind:, slot:)
-        slot == "output_schema" ? ["(root): the engine's own checker said so"] : []
+        slot == 'output_schema' ? ["(root): the engine's own checker said so"] : []
       end
 
       outcome = described_class.declared_shape(origin, :catalog)
@@ -249,34 +249,34 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
 
   # ── 4. PRINCIPAL SCOPE ────────────────────────────────────────────────────
 
-  describe ".principal_scope" do
+  describe '.principal_scope' do
     def scoped_origin(alice_rows:, bob_rows:, verb: my_orders_verb)
       null_origin.new(
-        verbs:   [verb],
-        answers: { [verb.name, :alice] => alice_rows, [verb.name, :bob] => bob_rows },
+        verbs: [verb],
+        answers: { [verb.name, :alice] => alice_rows, [verb.name, :bob] => bob_rows }
       )
     end
 
     it "passes when the second principal sees none of the first's rows" do
-      origin = scoped_origin(alice_rows: [{ "order_id" => "a1" }],
-                             bob_rows:   [{ "order_id" => "b1" }])
+      origin = scoped_origin(alice_rows: [{ 'order_id' => 'a1' }],
+                             bob_rows: [{ 'order_id' => 'b1' }])
       outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
 
       expect(outcome).to be_ok
-      expect(outcome.message).to include("none of which reached :bob")
+      expect(outcome.message).to include('none of which reached :bob')
     end
 
-    it "FAILS when a row leaks across principals" do
-      leaked = { "order_id" => "a1", "total_cents" => 500 }
-      origin = scoped_origin(alice_rows: [leaked], bob_rows: [leaked, { "order_id" => "b1" }])
+    it 'FAILS when a row leaks across principals' do
+      leaked = { 'order_id' => 'a1', 'total_cents' => 500 }
+      origin = scoped_origin(alice_rows: [leaked], bob_rows: [leaked, { 'order_id' => 'b1' }])
 
       outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("leaked 1 row(s) belonging to :alice")
+      expect(outcome.message).to include('leaked 1 row(s) belonging to :alice')
     end
 
-    it "VACUITY ARM: FAILS when the first principal sees nothing" do
+    it 'VACUITY ARM: FAILS when the first principal sees nothing' do
       # The trap this arm exists for: a verb that answers EVERYBODY with
       # nothing satisfies "bob sees none of alice's rows" vacuously, and the
       # naive spelling of this assertion goes green on a broken verb.
@@ -284,36 +284,36 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
       outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("no positive control")
+      expect(outcome.message).to include('no positive control')
     end
 
-    it "FAILS on a verb declared reach: published, naming the declared reach" do
-      origin  = scoped_origin(alice_rows: [{ "id" => 1 }], bob_rows: [{ "id" => 1 }],
-                              verb: my_orders_verb(reach: "published"))
+    it 'FAILS on a verb declared reach: published, naming the declared reach' do
+      origin  = scoped_origin(alice_rows: [{ 'id' => 1 }], bob_rows: [{ 'id' => 1 }],
+                              verb: my_orders_verb(reach: 'published'))
       outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("reach: :published")
-      expect(outcome.message).to include("asserts the opposite of the descriptor")
+      expect(outcome.message).to include('reach: :published')
+      expect(outcome.message).to include('asserts the opposite of the descriptor')
     end
 
-    it "PASSES when the second principal is REFUSED outright" do
+    it 'PASSES when the second principal is REFUSED outright' do
       # Refusing is the stronger spelling of scoping: an origin that answers 404
       # to a row it will not show does not even confirm the row exists.
       refusal = Class.new(StandardError) do
-        def code = "not_found"
+        def code = 'not_found'
         def http_status = 404
-      end.new("no such verification request for this principal")
+      end.new('no such verification request for this principal')
 
       origin = null_origin.new(
-        verbs:   [my_orders_verb],
-        answers: { ["my_orders", :alice] => [{ "order_id" => "a1" }],
-                   ["my_orders", :bob]   => refusal },
+        verbs: [my_orders_verb],
+        answers: { ['my_orders', :alice] => [{ 'order_id' => 'a1' }],
+                   ['my_orders', :bob] => refusal }
       )
       outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
 
       expect(outcome).to be_ok
-      expect(outcome.message).to include("REFUSED :bob outright (404 not_found)")
+      expect(outcome.message).to include('REFUSED :bob outright (404 not_found)')
     end
 
     it "still FAILS when the second principal's call breaks rather than refuses" do
@@ -321,59 +321,59 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
       # arguments. Neither is scoping, and reading either as a pass is how this
       # check would go green on a verb nobody can call.
       broken = Class.new(StandardError) do
-        def code = "action_failed"
+        def code = 'action_failed'
         def http_status = 500
-      end.new("undefined method for nil")
+      end.new('undefined method for nil')
 
       origin = null_origin.new(
-        verbs:   [my_orders_verb],
-        answers: { ["my_orders", :alice] => [{ "order_id" => "a1" }],
-                   ["my_orders", :bob]   => broken },
+        verbs: [my_orders_verb],
+        answers: { ['my_orders', :alice] => [{ 'order_id' => 'a1' }],
+                   ['my_orders', :bob] => broken }
       )
       outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("did not execute")
+      expect(outcome.message).to include('did not execute')
     end
 
-    it "FAILS when the FIRST principal is refused their own rows" do
+    it 'FAILS when the FIRST principal is refused their own rows' do
       refusal = Class.new(StandardError) do
-        def code = "forbidden"
+        def code = 'forbidden'
         def http_status = 403
-      end.new("not yours")
+      end.new('not yours')
 
       origin = null_origin.new(
-        verbs:   [my_orders_verb],
-        answers: { ["my_orders", :alice] => refusal, ["my_orders", :bob] => [] },
+        verbs: [my_orders_verb],
+        answers: { ['my_orders', :alice] => refusal, ['my_orders', :bob] => [] }
       )
       outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
 
       expect(outcome).to be_failed
-      expect(outcome.message).to include("did not execute")
+      expect(outcome.message).to include('did not execute')
     end
 
     it "treats an action's single object as one row" do
       origin = null_origin.new(
-        verbs:   [create_order_verb],
-        answers: { ["create_order", :alice] => { "order_id" => "a1" },
-                   ["create_order", :bob]   => { "order_id" => "b1" } },
+        verbs: [create_order_verb],
+        answers: { ['create_order', :alice] => { 'order_id' => 'a1' },
+                   ['create_order', :bob] => { 'order_id' => 'b1' } }
       )
 
       expect(
-        described_class.principal_scope(origin, :create_order, as: :alice, and_not: :bob),
+        described_class.principal_scope(origin, :create_order, as: :alice, and_not: :bob)
       ).to be_ok
     end
   end
 
   # ── Wiring ────────────────────────────────────────────────────────────────
 
-  describe "the origin seam" do
-    it "raises a wiring hint when no origin is configured" do
+  describe 'the origin seam' do
+    it 'raises a wiring hint when no origin is configured' do
       expect { conformance.routes }
         .to raise_error(Kiosk::TestHelpers::Errors::OriginNotConfigured, /ConformanceOrigin/)
     end
 
-    it "runs the checks against the configured origin" do
+    it 'runs the checks against the configured origin' do
       conformance.origin = null_origin.new(verbs: [catalog_verb])
 
       expect(conformance.routes).to be_ok

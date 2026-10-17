@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "kiosk/user_identity_providers/devise_session"
-require "kiosk/test_helpers/customer"
+require 'kiosk/user_identity_providers/devise_session'
+require 'kiosk/test_helpers/customer'
 
 module Kiosk
   module TestHelpers
@@ -21,10 +21,10 @@ module Kiosk
 
       # A one-time code for an assistant to redeem.
       def link_code
-        status, link = site.post_json("/kiosk/auth/link", {}, { session: true })
+        status, link = site.post_json('/kiosk/auth/link', {}, { session: true })
         raise "the site minted no link code: #{status} #{link}" unless status == 201
 
-        link.fetch("link_code")
+        link.fetch('link_code')
       end
 
       # `customer` redeems a fresh link code, and comes back acting for this person.
@@ -36,13 +36,13 @@ module Kiosk
       # Approves the code an assistant showed, on the site's verification page.
       def approves(user_code)
         page = site.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
-        approved = site.post_form("/kiosk/oauth/device/verify", "user_code" => user_code, "decision" => "approve",
-                                                                "authenticity_token" => site.csrf_token(page.body))
+        approved = site.post_form('/kiosk/oauth/device/verify', 'user_code' => user_code, 'decision' => 'approve',
+                                                                'authenticity_token' => site.csrf_token(page.body))
         raise "the site did not approve #{user_code}: #{page.code}, #{approved.code}" unless [page.code, approved.code] == %w[200 200]
       end
 
       def unlinks(customer)
-        status, = site.post_json("/kiosk/auth/unlink", { agent_id: customer.principal.agent_id }, { session: true })
+        status, = site.post_json('/kiosk/auth/unlink', { agent_id: customer.principal.agent_id }, { session: true })
         raise "the site did not unlink #{customer.principal.agent_id}: #{status}" unless status == 204
       end
 

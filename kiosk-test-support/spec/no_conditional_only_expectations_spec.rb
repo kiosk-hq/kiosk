@@ -22,15 +22,15 @@
 # Corpus: every tracked `*_spec.rb`, parsed rather than loaded, the way
 # `no_ruby_warnings_spec.rb` beside it reads its own.
 
-require "open3"
+require 'open3'
 
-CONDEXP_REPO_ROOT = File.expand_path("../..", __dir__)
+CONDEXP_REPO_ROOT = File.expand_path('../..', __dir__)
 CONDEXP_EXAMPLE   = %i[it specify example].freeze
 CONDEXP_STUB      = %i[receive receive_messages and_return and_invoke and_yield].freeze
 CONDEXP_ASSERTING = %i[expect expect_any_instance_of].freeze
 CONDEXP_ANNOUNCE  = %i[skip pending].freeze
 
-CONDEXP_TRACKED, CONDEXP_GIT = Open3.capture2("git", "-C", CONDEXP_REPO_ROOT, "ls-files", "-z", "*_spec.rb")
+CONDEXP_TRACKED, CONDEXP_GIT = Open3.capture2('git', '-C', CONDEXP_REPO_ROOT, 'ls-files', '-z', '*_spec.rb')
 raise "git ls-files failed in #{CONDEXP_REPO_ROOT}" unless CONDEXP_GIT.success?
 
 CONDEXP_FILES = CONDEXP_TRACKED.split("\0").reject(&:empty?).sort.freeze
@@ -108,12 +108,12 @@ end
 # [line, expectation count].
 def condexp_offenders(src) = condexp_walk(RubyVM::AbstractSyntaxTree.parse(src), [])
 
-RSpec.describe "no example asserts only under a condition (K-1846)" do
-  it "reads every tracked spec file, so a green run means something" do
+RSpec.describe 'no example asserts only under a condition (K-1846)' do
+  it 'reads every tracked spec file, so a green run means something' do
     expect(CONDEXP_FILES.length).to be > 150
   end
 
-  it "finds no example whose every expectation is conditional" do
+  it 'finds no example whose every expectation is conditional' do
     report = CONDEXP_FILES.flat_map do |rel|
       src = File.read(File.join(CONDEXP_REPO_ROOT, rel))
       begin
@@ -125,13 +125,13 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
 
     expect(report).to be_empty, lambda {
       "#{report.length} example(s) assert nothing unless the condition holds. Assert the raise " \
-      "itself — `expect { … }.to raise_error(Klass) { |e| … }` — or capture what the stub received " \
+      'itself — `expect { … }.to raise_error(Klass) { |e| … }` — or capture what the stub received ' \
       "and assert it after the call.\n" + report.join("\n")
     }
   end
 
-  describe "the shapes it flags, and the ones it does not" do
-    it "FLAGS a begin/rescue whose expectations are all in the rescue clause" do
+  describe 'the shapes it flags, and the ones it does not' do
+    it 'FLAGS a begin/rescue whose expectations are all in the rescue clause' do
       src = <<~RUBY
         it "x" do
           thing.call
@@ -142,7 +142,7 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to eq([[1, 1]])
     end
 
-    it "FLAGS expectations inside a stub implementation block" do
+    it 'FLAGS expectations inside a stub implementation block' do
       src = <<~RUBY
         it "x" do
           allow(idp).to receive(:issue) do |role:|
@@ -155,11 +155,11 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to eq([[1, 1]])
     end
 
-    it "FLAGS an expectation reachable only through an if" do
+    it 'FLAGS an expectation reachable only through an if' do
       expect(condexp_offenders(%(it "x" do\n  expect(a).to eq(1) if ready?\nend\n))).to eq([[1, 1]])
     end
 
-    it "ALLOWS raise_error with a block — the raise itself is asserted" do
+    it 'ALLOWS raise_error with a block — the raise itself is asserted' do
       src = <<~RUBY
         it "x" do
           expect { thing.call }.to raise_error(Boom) { |e| expect(e.code).to eq("boom") }
@@ -168,7 +168,7 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to be_empty
     end
 
-    it "ALLOWS a block on a message expectation, which asserts the call" do
+    it 'ALLOWS a block on a message expectation, which asserts the call' do
       src = <<~RUBY
         it "x" do
           expect(idp).to receive(:issue) { |role:| expect(role).to eq("customer") }
@@ -178,7 +178,7 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to be_empty
     end
 
-    it "ALLOWS a rescue clause protecting a body that raises" do
+    it 'ALLOWS a rescue clause protecting a body that raises' do
       src = <<~RUBY
         it "x" do
           begin
@@ -191,7 +191,7 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to be_empty
     end
 
-    it "ALLOWS an example that skips the branch it cannot assert" do
+    it 'ALLOWS an example that skips the branch it cannot assert' do
       src = <<~RUBY
         it "x" do
           if wrong_nonce?
@@ -204,7 +204,7 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to be_empty
     end
 
-    it "ALLOWS an expectation after a closed begin/rescue" do
+    it 'ALLOWS an expectation after a closed begin/rescue' do
       src = <<~RUBY
         it "x" do
           caught = nil
@@ -219,7 +219,7 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to be_empty
     end
 
-    it "ALLOWS a stub block whose assertion sits outside it" do
+    it 'ALLOWS a stub block whose assertion sits outside it' do
       src = <<~RUBY
         it "x" do
           allow(idp).to receive(:issue) { |role:| seen = role }
@@ -230,7 +230,7 @@ RSpec.describe "no example asserts only under a condition (K-1846)" do
       expect(condexp_offenders(src)).to be_empty
     end
 
-    it "says nothing about an example with no expectation at all" do
+    it 'says nothing about an example with no expectation at all' do
       expect(condexp_offenders(%(it "x" do\n  subject.call\nend\n))).to be_empty
     end
   end

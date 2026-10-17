@@ -3,23 +3,21 @@
 module Kiosk
   module TestHelpers
     module Conformance
-      HTTP_METHODS = { query: "GET", action: "POST" }.freeze
+      HTTP_METHODS = { query: 'GET', action: 'POST' }.freeze
 
       WIRE_ENDPOINTS = {
-        query:  "kiosk/server/verb#show",
-        action: "kiosk/server/verb#create",
+        query: 'kiosk/server/verb#show',
+        action: 'kiosk/server/verb#create'
       }.freeze
 
       # One declared verb, as an origin's descriptor presents it to the checks.
       Verb = Data.define(:name, :kind, :reach, :input_schema, :output_schema, :example_params) do
-        def initialize(name:, kind:, reach: "principal", input_schema: nil,
+        def initialize(name:, kind:, reach: 'principal', input_schema: nil,
                        output_schema: nil, example_params: nil)
           kind = kind.to_sym
-          unless HTTP_METHODS.key?(kind)
-            raise ArgumentError, "kind must be :query or :action, got #{kind.inspect}"
-          end
+          raise ArgumentError, "kind must be :query or :action, got #{kind.inspect}" unless HTTP_METHODS.key?(kind)
 
-          super(name: name.to_s, kind: kind, reach: (reach || "principal").to_s,
+          super(name: name.to_s, kind: kind, reach: (reach || 'principal').to_s,
                 input_schema: input_schema, output_schema: output_schema,
                 example_params: example_params)
         end

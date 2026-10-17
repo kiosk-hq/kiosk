@@ -59,9 +59,9 @@
 # demo) and requires each to be declared by the target verb. Tokens that are
 # plainly prose ("it", "both", "the id") are not param-like and are ignored —
 # the lint is about names that LOOK like params and do not resolve.
-require "fileutils"
+require 'fileutils'
 
-RSpec.describe "demo descriptor cross-references" do
+RSpec.describe 'demo descriptor cross-references' do
   # ── Source-text extraction ────────────────────────────────────────────────
   module DescriptorSource
     module_function
@@ -100,24 +100,24 @@ RSpec.describe "demo descriptor cross-references" do
     # method BODY — the one place in these files where heredocs and regexp
     # literals do occur — is read by nothing here.
     def without_comments(text)
-      out = +""
+      out = +''
       i = 0
       quote = nil
       while i < text.length
         ch = text[i]
         if quote
-          if ch == "\\"
+          if ch == '\\'
             out << ch << text[i + 1].to_s
             i += 2
             next
           end
           quote = nil if ch == quote
           out << ch
-        elsif ch == "#"
+        elsif ch == '#'
           i += 1 while i < text.length && text[i] != "\n" # the newline itself is kept
           next
         else
-          quote = ch if ch == '"' || ch == "'"
+          quote = ch if ['"', "'"].include?(ch)
           out << ch
         end
         i += 1
@@ -140,16 +140,19 @@ RSpec.describe "demo descriptor cross-references" do
     def adjacent_strings(text, i)
       parts = []
       loop do
-        i += 1 while i < text.length && (text[i].match?(/\s/) || text[i] == "\\")
+        i += 1 while i < text.length && (text[i].match?(/\s/) || text[i] == '\\')
         break unless text[i] == '"'
 
         i += 1
-        buf = +""
+        buf = +''
         while i < text.length
           case text[i]
-          when "\\" then buf << text[i + 1]; i += 2
-          when '"' then i += 1; break
-          else buf << text[i]; i += 1
+          when '\\' then buf << text[i + 1]
+                         i += 2
+          when '"' then i += 1
+                        break
+          else buf << text[i]
+               i += 1
           end
         end
         parts << buf
@@ -172,14 +175,14 @@ RSpec.describe "demo descriptor cross-references" do
       while i < text.length && depth.positive?
         ch = text[i]
         if quote
-          if ch == "\\" then i += 1
+          if ch == '\\' then i += 1
           elsif ch == quote then quote = nil
           end
         else
           case ch
           when '"', "'" then quote = ch
-          when "{", "[" then depth += 1
-          when "}", "]" then depth -= 1
+          when '{', '[' then depth += 1
+          when '}', ']' then depth -= 1
           end
         end
         i += 1
@@ -204,14 +207,14 @@ RSpec.describe "demo descriptor cross-references" do
       while i < body.length
         ch = body[i]
         if quote
-          if ch == "\\" then i += 1
+          if ch == '\\' then i += 1
           elsif ch == quote then quote = nil
           end
         else
           case ch
           when '"', "'" then quote = ch
-          when "{", "[" then depth += 1
-          when "}", "]" then depth -= 1
+          when '{', '[' then depth += 1
+          when '}', ']' then depth -= 1
           else
             if depth.zero? && (m = body[i..].match(/\A([a-z_][a-z0-9_]*):(?!:)/)) &&
                (i.zero? || !body[i - 1].match?(/[A-Za-z0-9_:]/))
@@ -234,7 +237,7 @@ RSpec.describe "demo descriptor cross-references" do
       names = []
       pos = 0
       while (m = schema_body.match(/(?<![a-z_])properties:\s*\{/, pos))
-        body, = brace_body_at(schema_body, "properties", m.begin(0))
+        body, = brace_body_at(schema_body, 'properties', m.begin(0))
         names.concat(top_level_keys(body)) if body
         # Keep scanning INSIDE the block just read, not past it (K-852). Jumping
         # to the closing brace is what made this method's own doc-comment false:
@@ -275,7 +278,7 @@ RSpec.describe "demo descriptor cross-references" do
       # WHERE TO CUT.
       first_line_end = rest.index("\n") || rest.length
       following = rest[first_line_end..].to_s
-      stop = following.index(/^[ \t]*(?:#{MACRO_NAMES.join("|")})[ \t]|^[ \t]*def[ \t]/)
+      stop = following.index(/^[ \t]*(?:#{MACRO_NAMES.join('|')})[ \t]|^[ \t]*def[ \t]/)
       stop.nil? ? rest : rest[0, first_line_end + stop]
     end
 
@@ -311,29 +314,29 @@ RSpec.describe "demo descriptor cross-references" do
         offset       = m.end(0)
         previous_end = offset
 
-        description  = macro_string_value(header, "description")
-        schema_props = schema_property_names(macro_region(header, "input_schema"))
+        description  = macro_string_value(header, 'description')
+        schema_props = schema_property_names(macro_region(header, 'input_schema'))
         next if description.nil? && schema_props.empty?
 
-        name = macro_string_value(header, "wire_name") || method_name
+        name = macro_string_value(header, 'wire_name') || method_name
         out << { name: name, description: description.to_s, params: schema_props.uniq }
       end
       out
     end
 
-    HANDLERS_DIR = "app/controllers/kiosk"
+    HANDLERS_DIR = 'app/controllers/kiosk'
 
     # Pre-filter for {controller_verbs}, which is priced for a handful of files.
     DESCRIPTOR_MACRO = /^[ \t]*(?:description|input_schema)[ \t(]/
 
     def handler_files(demo_dir)
-      Dir[File.join(demo_dir, HANDLERS_DIR, "**/*.rb")].sort
+      Dir[File.join(demo_dir, HANDLERS_DIR, '**/*.rb')].sort
     end
 
     # Files under app/ that declare verbs outside the directory the engine loads.
     def stray_handlers(demo_dir)
-      Dir[File.join(demo_dir, "app/**/*.rb")].sort
-        .select { |path| File.read(path).match?(DESCRIPTOR_MACRO) } - handler_files(demo_dir)
+      Dir[File.join(demo_dir, 'app/**/*.rb')].sort
+                                             .select { |path| File.read(path).match?(DESCRIPTOR_MACRO) } - handler_files(demo_dir)
     end
 
     # Every verb a demo publishes. ONE list per demo, because a cross-reference routinely points across the
@@ -360,7 +363,7 @@ RSpec.describe "demo descriptor cross-references" do
     tokens = []
     span.scan(/(?<![.\w])([a-z][a-z0-9]*(?:_[a-z0-9]+)*)\b/) { tokens << Regexp.last_match(1) }
     tokens.uniq.select do |t|
-      (t.include?("_") || known_params.include?(t)) &&
+      (t.include?('_') || known_params.include?(t)) &&
         !NON_PARAM_TOKENS.include?(t) && !verb_names.include?(t)
     end
   end
@@ -389,7 +392,7 @@ RSpec.describe "demo descriptor cross-references" do
   def self.chained_targets(rest, names)
     found = []
     loop do
-      m = rest.match(/\A\s*[\/,]\s*`?/)
+      m = rest.match(%r{\A\s*[/,]\s*`?})
       break unless m
 
       after = rest[m.end(0)..].to_s
@@ -398,7 +401,7 @@ RSpec.describe "demo descriptor cross-references" do
 
       found << hit
       rest = after[hit.length..].to_s
-      rest = rest[1..].to_s if rest.start_with?("`")
+      rest = rest[1..].to_s if rest.start_with?('`')
     end
     [found, rest]
   end
@@ -437,8 +440,8 @@ RSpec.describe "demo descriptor cross-references" do
         tokens = param_like("#{span} #{tail}", known_params, names)
         next if tokens.empty?
 
-        phrase = "…#{span.strip} to #{([target] + chained).join(" / ")}" \
-                 "#{tail.empty? ? "" : " as #{tail.strip}"}"
+        phrase = "…#{span.strip} to #{([target] + chained).join(' / ')}" \
+                 "#{" as #{tail.strip}" unless tail.empty?}"
         ([target] + chained).uniq.each { |t| found << { target: t, tokens: tokens, phrase: phrase } }
       end
 
@@ -455,12 +458,12 @@ RSpec.describe "demo descriptor cross-references" do
     found
   end
 
-  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
+  monorepo_root = File.expand_path('../..', __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
   # …/kiosk-demo-X/config/initializers/kiosk.rb → …/kiosk-demo-X
-  demo_dirs = Dir[File.join(monorepo_root, "kiosk-demo-*/config/initializers/kiosk.rb")]
-              .sort.map { |path| File.expand_path("../../..", path) }
+  demo_dirs = Dir[File.join(monorepo_root, 'kiosk-demo-*/config/initializers/kiosk.rb')]
+              .sort.map { |path| File.expand_path('../../..', path) }
 
-  it "finds the demo descriptor sources" do
+  it 'finds the demo descriptor sources' do
     expect(demo_dirs).not_to be_empty
   end
 
@@ -481,23 +484,23 @@ RSpec.describe "demo descriptor cross-references" do
     seen = demo_dirs.to_h do |dir|
       verbs = DescriptorSource.demo_verbs(dir)
       [File.basename(dir), {
-        verbs:    verbs.size,
+        verbs: verbs.size,
         described: verbs.count { |v| !v[:description].empty? },
-        schemas:  verbs.count { |v| v[:params].any? },
+        schemas: verbs.count { |v| v[:params].any? }
       }]
     end
 
     expect(seen.values.sum { |c| c[:verbs] }).to be >= 40,
                                                  "the extractor found only #{seen.values.sum { |c| c[:verbs] }} " \
                                                  "verb(s) across the fleet #{seen.inspect} — the descriptors have " \
-                                                 "moved somewhere this lint does not read"
+                                                 'moved somewhere this lint does not read'
     dark = seen.reject { |_demo, c| c[:verbs].positive? && c[:described].positive? && c[:schemas].positive? }
     expect(dark.keys).to be_empty,
                          "these demos yielded no readable descriptors: #{dark.inspect} — verbs, prose or " \
-                         "input_schema moved somewhere this lint does not read"
+                         'input_schema moved somewhere this lint does not read'
   end
 
-  it "keeps every handler where the engine loads it" do
+  it 'keeps every handler where the engine loads it' do
     problems = demo_dirs.to_h { |dir| [File.basename(dir), DescriptorSource.stray_handlers(dir)] }
                         .reject { |_demo, files| files.empty? }
 
@@ -513,7 +516,7 @@ RSpec.describe "demo descriptor cross-references" do
   # deciding nothing. The distinction is not real, and the four inputs below
   # are what say so to the next reader who is tempted to "restore" a branch:
   # the cut is decided by what FOLLOWS, never by the macro's own shape.
-  it "cuts a macro region at what follows it, not at its own line count" do
+  it 'cuts a macro region at what follows it, not at its own line count' do
     one_line = <<~RB
       kind :query
       input_schema type: "object"
@@ -527,19 +530,19 @@ RSpec.describe "demo descriptor cross-references" do
     trailing = 'input_schema type: "object"'
 
     # Followed by a `def`: cut there, and the one-line macro keeps its own line.
-    expect(DescriptorSource.macro_region(one_line, "input_schema"))
+    expect(DescriptorSource.macro_region(one_line, 'input_schema'))
       .to eq(%(input_schema type: "object"\n))
     # Followed by another macro, over several lines: every line of THIS macro
     # and none of the next.
-    expect(DescriptorSource.macro_region(multi_line, "input_schema"))
+    expect(DescriptorSource.macro_region(multi_line, 'input_schema'))
       .to eq(%(input_schema type: "object",\n             properties: { basket_id: { type: "string" } }\n))
     # Followed by nothing at all, no trailing newline: the whole remainder.
-    expect(DescriptorSource.macro_region(trailing, "input_schema")).to eq(trailing)
+    expect(DescriptorSource.macro_region(trailing, 'input_schema')).to eq(trailing)
     # THE CASE THE DELETED BRANCH PRETENDED TO DECIDE, and the only one where a
     # "one-line macros yield their own line" rule would differ: several lines,
     # with nothing after them. The answer is still the whole remainder.
-    last = multi_line[0, multi_line.index("output_schema")]
-    expect(DescriptorSource.macro_region(last, "input_schema")).to eq(last)
+    last = multi_line[0, multi_line.index('output_schema')]
+    expect(DescriptorSource.macro_region(last, 'input_schema')).to eq(last)
   end
 
   # K-1772, and it is the reason {without_comments} exists. Every extractor
@@ -557,8 +560,8 @@ RSpec.describe "demo descriptor cross-references" do
   # The fixture is SYNTHETIC on purpose. Asserting against the fleet's own
   # comments would let this example go quietly green the day somebody rewords
   # one, which is precisely the cheap repair this fix was chosen over.
-  it "reads code out of a descriptor, never comments or string literals (K-1772)" do
-    src = <<~'RB'
+  it 'reads code out of a descriptor, never comments or string literals (K-1772)' do
+    src = <<~RB
       class Kiosk::PhantomController < ApplicationController
         kind :action
         description "Edit one listing."
@@ -589,7 +592,7 @@ RSpec.describe "demo descriptor cross-references" do
     expect(verbs.first[:params]).to eq(%w[listing_id price_text])
     expect(verbs.last[:params]).to eq(%w[keyword])
     # …and a `#` inside a string literal is content, not the start of a comment.
-    expect(verbs.last[:description]).to eq("Ranking is by recency; a # in prose is not a comment.")
+    expect(verbs.last[:description]).to eq('Ranking is by recency; a # in prose is not a comment.')
   end
 
   # ── ADR-0023: a description may not carry a parameter list (K-846) ────────
@@ -604,7 +607,7 @@ RSpec.describe "demo descriptor cross-references" do
   # prohibits "a field or parameter list, or any param name that input_schema
   # declares"; this is the mechanical half of that, and the half that catches
   # the retired field coming back through the prose door.
-  it "no demo description carries a prose parameter list (ADR-0023 §Decision 1/4)" do
+  it 'no demo description carries a prose parameter list (ADR-0023 §Decision 1/4)' do
     offenders = demo_dirs.flat_map do |dir|
       demo = File.basename(dir)
       DescriptorSource.demo_verbs(dir).filter_map do |verb|
@@ -664,7 +667,7 @@ RSpec.describe "demo descriptor cross-references" do
   # by requiring some demo to still carry an offence: that is the trap K-846
   # removed from this file, where the floor demanded the forbidden construct and
   # writing a description correctly turned the suite red.
-  it "no demo description names a param some verb declares (ADR-0023 §Decision 1)" do
+  it 'no demo description names a param some verb declares (ADR-0023 §Decision 1)' do
     offenders = demo_dirs.flat_map do |dir|
       demo     = File.basename(dir)
       verbs    = DescriptorSource.demo_verbs(dir)

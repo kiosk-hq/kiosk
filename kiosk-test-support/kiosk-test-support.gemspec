@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/test_helpers/version"
+require_relative 'lib/kiosk/test_helpers/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-test-support"
+  spec.name          = 'kiosk-test-support'
   spec.version       = Kiosk::TestHelpers::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Kiosk conformance checks and journey-test DSL for RSpec and Minitest"
+  spec.summary       = 'Kiosk conformance checks and journey-test DSL for RSpec and Minitest'
   spec.description   = <<~DESC
     kiosk-test-support is the framework-agnostic test surface a Kiosk
     provider uses on their OWN application.
@@ -36,34 +36,35 @@ Gem::Specification.new do |spec|
     Executor (which runs SQL with the right GUCs) is provided by
     `kiosk-server` at runtime via `Kiosk::TestHelpers.executor=`.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]     = spec.homepage
-  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-test-support/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']     = spec.homepage
+  spec.metadata['source_code_uri']  = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']    = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-test-support/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri']  = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob("lib/**/*") + %w[README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
+  spec.require_paths = ['lib']
 
-  spec.add_dependency "kiosk-core", "~> 0.5.0"
-  spec.add_dependency "kiosk-pow-equihash", "~> 0.5.0"
-  spec.add_dependency "jwt", ">= 2.0", "< 4.0"
-  spec.add_dependency "websocket-driver", "~> 0.7"
-  spec.add_dependency "json_schemer", ">= 2.3", "< 3.0"
+  spec.add_dependency 'json_schemer', '>= 2.3', '< 3.0'
+  spec.add_dependency 'jwt', '>= 2.0', '< 4.0'
+  spec.add_dependency 'kiosk-core', '~> 0.5.0'
+  spec.add_dependency 'kiosk-pow-equihash', '~> 0.5.0'
+  spec.add_dependency 'websocket-driver', '~> 0.7'
 
   # Both adapters are exercised by this gem's own suite — that a fault reads
   # identically through each is the whole claim of a framework-agnostic core,
   # and it is worth nothing unless something runs both. They stay DEVELOPMENT
   # dependencies: an adopter installs whichever framework they already use, and
   # requiring an adapter is what pulls that framework in.
-  spec.add_development_dependency "minitest",     ">= 5", "< 7"
-  spec.add_development_dependency "rspec",        "~> 3.13"
-  spec.add_development_dependency "rake",         "~> 13.2"
-  spec.add_development_dependency "webmock",      "~> 3.0"
+  spec.add_development_dependency 'minitest',     '>= 5', '< 7'
+  spec.add_development_dependency 'rake',         '~> 13.2'
+  spec.add_development_dependency 'rspec',        '~> 3.13'
+  spec.add_development_dependency 'webmock',      '~> 3.0'
 
   # `Person` signs in through its DeviseSession, which every operator demo already carries.
-  spec.add_development_dependency "kiosk-user-idp-devise", "~> 0.5.0"
+  spec.add_development_dependency 'kiosk-user-idp-devise', '~> 0.5.0'
 end

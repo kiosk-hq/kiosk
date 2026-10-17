@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "securerandom"
+require 'securerandom'
 
 module Kiosk
   module TestHelpers
@@ -9,38 +9,38 @@ module Kiosk
     module Journey
       # @param user [#id, #role] the principal; `user.id` becomes `current_user_id`
       # @param role [String, Symbol, nil] defaults to `user.role`, else the first configured role
-      def as_agent_of(user, role: nil, &block)
-        identity = Kiosk::Identity.new(
-          user_id:  user_id_of(user),
-          role:     resolve_role(user, role),
-          actor:    "agent",
-          agent_id: SecureRandom.uuid,
-        )
-        scope_to(identity, &block)
-      end
-
-      def as_user(user, role: nil, &block)
+      def as_agent_of(user, role: nil, &)
         identity = Kiosk::Identity.new(
           user_id: user_id_of(user),
-          role:    resolve_role(user, role),
-          actor:   "human",
+          role: resolve_role(user, role),
+          actor: 'agent',
+          agent_id: SecureRandom.uuid
         )
-        scope_to(identity, &block)
+        scope_to(identity, &)
+      end
+
+      def as_user(user, role: nil, &)
+        identity = Kiosk::Identity.new(
+          user_id: user_id_of(user),
+          role: resolve_role(user, role),
+          actor: 'human'
+        )
+        scope_to(identity, &)
       end
 
       # An agent for a synthetic user named `name`, when no `users` row exists.
-      def as_agent(name, role: nil, &block)
+      def as_agent(name, role: nil, &)
         identity = Kiosk::Identity.new(
-          user_id:  "synthetic:#{name}",
-          role:     role&.to_s || default_role,
-          actor:    "agent",
-          agent_id: SecureRandom.uuid,
+          user_id: "synthetic:#{name}",
+          role: role&.to_s || default_role,
+          actor: 'agent',
+          agent_id: SecureRandom.uuid
         )
-        scope_to(identity, &block)
+        scope_to(identity, &)
       end
 
-      def as_anonymous(&block)
-        scope_to(nil, &block)
+      def as_anonymous(&)
+        scope_to(nil, &)
       end
 
       # Raw SQL; a query verb is {#run_query}.
@@ -70,7 +70,7 @@ module Kiosk
       private
 
       def scope_to(identity, &block)
-        raise ArgumentError, "block required" unless block
+        raise ArgumentError, 'block required' unless block
 
         TestHelpers.require_executor!.with_identity(identity, &block)
       end

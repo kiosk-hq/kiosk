@@ -18,7 +18,7 @@
 # The extraction is descriptor_cross_reference_spec.rb's, for the same reason it
 # is that spec's: a demo declares its verbs in ONE place, the class-level macro
 # run above each `def` in `app/controllers/kiosk/*.rb`.
-RSpec.describe "descriptor required fields" do
+RSpec.describe 'descriptor required fields' do
   REQUIRED_MACROS = %w[description input_schema output_schema].freeze
 
   # The macro run above each `def`, per handler controller. A `def` with no run
@@ -44,38 +44,38 @@ RSpec.describe "descriptor required fields" do
     out
   end
 
-  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
-  origins = Dir[File.join(monorepo_root, "kiosk-demo-*/app/controllers/kiosk/*.rb")]
+  monorepo_root = File.expand_path('../..', __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
+  origins = Dir[File.join(monorepo_root, 'kiosk-demo-*/app/controllers/kiosk/*.rb')]
             .group_by { |path| path[%r{/(kiosk-demo-[^/]+)/}, 1] }
-  origins["e2e"] = Dir[File.join(monorepo_root, "e2e/fixtures/*_controller.rb")]
+  origins['e2e'] = Dir[File.join(monorepo_root, 'e2e/fixtures/*_controller.rb')]
 
-  it "finds the handler controllers" do
-    expect(origins.keys.sort).to include("e2e", "kiosk-demo-atablefor", "kiosk-demo-tudu")
+  it 'finds the handler controllers' do
+    expect(origins.keys.sort).to include('e2e', 'kiosk-demo-atablefor', 'kiosk-demo-tudu')
   end
 
   # Non-vacuity floor: the lint is a text matcher, so a reworded or relocated
   # descriptor would make every example below pass while checking nothing. 45 is
   # the fleet's verb count; the assertion is `>=` so
   # adding a verb never fails it, but losing sight of the fleet does.
-  it "sees the whole fleet (the lint is not vacuous)" do
-    total = origins.sum { |_origin, paths|
+  it 'sees the whole fleet (the lint is not vacuous)' do
+    total = origins.sum do |_origin, paths|
       paths.sum { |path| self.class.verbs_in(File.read(path)).length }
-    }
+    end
     expect(total).to be >= 45,
                      "the lint resolved only #{total} verbs across #{origins.size} origins — " \
-                     "the descriptors moved somewhere it does not read"
+                     'the descriptors moved somewhere it does not read'
   end
 
   origins.sort.each do |origin, paths|
-    it "#{origin}: every verb declares #{REQUIRED_MACROS.join(", ")}" do
-      missing = paths.sort.flat_map { |path|
-        self.class.verbs_in(File.read(path)).filter_map { |verb|
+    it "#{origin}: every verb declares #{REQUIRED_MACROS.join(', ')}" do
+      missing = paths.sort.flat_map do |path|
+        self.class.verbs_in(File.read(path)).filter_map do |verb|
           absent = REQUIRED_MACROS - verb[:declared]
           next if absent.empty?
 
-          "#{origin} #{verb[:name]} (#{File.basename(path)}): missing #{absent.join(", ")}"
-        }
-      }
+          "#{origin} #{verb[:name]} (#{File.basename(path)}): missing #{absent.join(', ')}"
+        end
+      end
 
       expect(missing).to be_empty, <<~MSG
         #{missing.size} verb(s) publish an incomplete descriptor:

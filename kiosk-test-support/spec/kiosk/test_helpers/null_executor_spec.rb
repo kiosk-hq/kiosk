@@ -4,27 +4,27 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
   subject(:executor) { described_class.new }
 
   let(:identity) do
-    Kiosk::Identity.new(user_id: "u1", role: "customer", actor: "human")
+    Kiosk::Identity.new(user_id: 'u1', role: 'customer', actor: 'human')
   end
 
-  describe "#with_identity" do
-    it "pushes and pops the identity stack around the block" do
+  describe '#with_identity' do
+    it 'pushes and pops the identity stack around the block' do
       observed = nil
       executor.with_identity(identity) { observed = executor.current_identity }
       expect(observed).to eq(identity)
       expect(executor.current_identity).to be_nil
     end
 
-    it "pops even when the block raises" do
-      expect {
-        executor.with_identity(identity) { raise "boom" }
-      }.to raise_error("boom")
+    it 'pops even when the block raises' do
+      expect do
+        executor.with_identity(identity) { raise 'boom' }
+      end.to raise_error('boom')
       expect(executor.current_identity).to be_nil
     end
 
-    it "supports nested scopes" do
+    it 'supports nested scopes' do
       outer = identity
-      inner = Kiosk::Identity.new(user_id: "u2", role: "customer", actor: "human")
+      inner = Kiosk::Identity.new(user_id: 'u2', role: 'customer', actor: 'human')
 
       observed = []
       executor.with_identity(outer) do
@@ -37,52 +37,52 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
     end
   end
 
-  describe "#query" do
-    it "records the call with the current identity" do
-      executor.with_identity(identity) { executor.query("select 1") }
+  describe '#query' do
+    it 'records the call with the current identity' do
+      executor.with_identity(identity) { executor.query('select 1') }
       call = executor.calls.first
       expect(call.kind).to     eq(:query)
-      expect(call.args).to     eq(sql: "select 1")
+      expect(call.args).to     eq(sql: 'select 1')
       expect(call.identity).to eq(identity)
     end
 
-    it "returns [] by default" do
-      expect(executor.query("select 1")).to eq([])
+    it 'returns [] by default' do
+      expect(executor.query('select 1')).to eq([])
     end
 
-    it "returns the queued result FIFO" do
-      executor.enqueue_query([{ "n" => 1 }])
-      executor.enqueue_query([{ "n" => 2 }])
-      expect(executor.query("a")).to eq([{ "n" => 1 }])
-      expect(executor.query("b")).to eq([{ "n" => 2 }])
+    it 'returns the queued result FIFO' do
+      executor.enqueue_query([{ 'n' => 1 }])
+      executor.enqueue_query([{ 'n' => 2 }])
+      expect(executor.query('a')).to eq([{ 'n' => 1 }])
+      expect(executor.query('b')).to eq([{ 'n' => 2 }])
     end
 
-    it "raises RLSDenied when an error is enqueued" do
+    it 'raises RLSDenied when an error is enqueued' do
       executor.enqueue_error(:query, :rls_denied)
-      expect { executor.query("x") }
+      expect { executor.query('x') }
         .to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
     end
   end
 
-  describe "#run_action" do
-    it "records name + args" do
-      executor.run_action(:create_order, { items: ["bread"] })
+  describe '#run_action' do
+    it 'records name + args' do
+      executor.run_action(:create_order, { items: ['bread'] })
       call = executor.calls_of(:run_action).first
-      expect(call.args).to eq(name: :create_order, args: { items: ["bread"] })
+      expect(call.args).to eq(name: :create_order, args: { items: ['bread'] })
     end
 
-    it "raises QuotaExceeded when enqueued" do
+    it 'raises QuotaExceeded when enqueued' do
       executor.enqueue_error(:run_action, :quota_exceeded)
       expect { executor.run_action(:x, {}) }
         .to raise_error(Kiosk::TestHelpers::Errors::QuotaExceeded)
     end
   end
 
-  describe "#run_query" do
-    it "records name + args under its own kind" do
-      executor.run_query(:my_orders, { since: "2026-01-01" })
+  describe '#run_query' do
+    it 'records name + args under its own kind' do
+      executor.run_query(:my_orders, { since: '2026-01-01' })
       call = executor.calls_of(:run_query).first
-      expect(call.args).to eq(name: :my_orders, args: { since: "2026-01-01" })
+      expect(call.args).to eq(name: :my_orders, args: { since: '2026-01-01' })
       expect(executor.calls_of(:run_action)).to be_empty
     end
 
@@ -90,78 +90,78 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
     # KINDS: `default_for` answers [] for a read and nil for a write, so a verb
     # declared `kind :query` yields rows rather than nothing when no result was
     # queued. The pay_action example below is the control for the other half.
-    it "returns [] by default, as the READ side does and the action kinds do not" do
+    it 'returns [] by default, as the READ side does and the action kinds do not' do
       expect(executor.run_query(:my_orders, {})).to eq([])
       expect(executor.run_action(:x, {})).to be_nil
     end
 
-    it "returns the queued result FIFO via enqueue_run_query" do
-      executor.enqueue_run_query([{ "id" => 1 }])
-      executor.enqueue_run_query([{ "id" => 2 }])
-      expect(executor.run_query(:my_orders, {})).to eq([{ "id" => 1 }])
-      expect(executor.run_query(:my_orders, {})).to eq([{ "id" => 2 }])
+    it 'returns the queued result FIFO via enqueue_run_query' do
+      executor.enqueue_run_query([{ 'id' => 1 }])
+      executor.enqueue_run_query([{ 'id' => 2 }])
+      expect(executor.run_query(:my_orders, {})).to eq([{ 'id' => 1 }])
+      expect(executor.run_query(:my_orders, {})).to eq([{ 'id' => 2 }])
     end
 
-    it "raises RLSDenied when an error is enqueued" do
+    it 'raises RLSDenied when an error is enqueued' do
       executor.enqueue_error(:run_query, :rls_denied)
       expect { executor.run_query(:my_orders, {}) }
         .to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
     end
   end
 
-  describe "#pay_action" do
-    it "records under its own kind" do
-      executor.pay_action(:buy, { sku: "x" })
+  describe '#pay_action' do
+    it 'records under its own kind' do
+      executor.pay_action(:buy, { sku: 'x' })
       expect(executor.calls_of(:pay_action).size).to eq(1)
       expect(executor.calls_of(:run_action)).to be_empty
     end
 
-    it "returns nil by default" do
-      expect(executor.pay_action(:buy, { sku: "x" })).to be_nil
+    it 'returns nil by default' do
+      expect(executor.pay_action(:buy, { sku: 'x' })).to be_nil
     end
 
-    it "returns the queued result FIFO via enqueue_pay_action" do
-      executor.enqueue_pay_action({ "status" => "captured" })
-      executor.enqueue_pay_action({ "status" => "declined" })
-      expect(executor.pay_action(:buy, {})).to eq("status" => "captured")
-      expect(executor.pay_action(:buy, {})).to eq("status" => "declined")
+    it 'returns the queued result FIFO via enqueue_pay_action' do
+      executor.enqueue_pay_action({ 'status' => 'captured' })
+      executor.enqueue_pay_action({ 'status' => 'declined' })
+      expect(executor.pay_action(:buy, {})).to eq('status' => 'captured')
+      expect(executor.pay_action(:buy, {})).to eq('status' => 'declined')
     end
   end
 
-  describe "#seed" do
-    it "records table, attrs, count" do
+  describe '#seed' do
+    it 'records table, attrs, count' do
       executor.seed(:rentals, { active: true }, count: 3)
       call = executor.calls_of(:seed).first
       expect(call.args).to eq(table: :rentals, attrs: { active: true }, count: 3)
     end
 
-    it "returns nil by default" do
+    it 'returns nil by default' do
       expect(executor.seed(:rentals, { active: true }, count: 1)).to be_nil
     end
 
-    it "returns the queued result FIFO via enqueue_seed" do
-      executor.enqueue_seed([{ "id" => 1 }])
-      executor.enqueue_seed([{ "id" => 2 }])
-      expect(executor.seed(:rentals, {}, count: 1)).to eq([{ "id" => 1 }])
-      expect(executor.seed(:rentals, {}, count: 1)).to eq([{ "id" => 2 }])
+    it 'returns the queued result FIFO via enqueue_seed' do
+      executor.enqueue_seed([{ 'id' => 1 }])
+      executor.enqueue_seed([{ 'id' => 2 }])
+      expect(executor.seed(:rentals, {}, count: 1)).to eq([{ 'id' => 1 }])
+      expect(executor.seed(:rentals, {}, count: 1)).to eq([{ 'id' => 2 }])
     end
   end
 
-  describe "#calls_of" do
-    it "filters by kind" do
-      executor.query("a")
+  describe '#calls_of' do
+    it 'filters by kind' do
+      executor.query('a')
       executor.run_action(:x, {})
-      executor.query("b")
+      executor.query('b')
       expect(executor.calls_of(:query).size).to       eq(2)
       expect(executor.calls_of(:run_action).size).to  eq(1)
     end
   end
 
-  describe "enqueued errors with custom class" do
-    it "raises any provided exception class" do
+  describe 'enqueued errors with custom class' do
+    it 'raises any provided exception class' do
       custom = Class.new(StandardError)
       executor.enqueue_error(:query, custom)
-      expect { executor.query("x") }.to raise_error(custom)
+      expect { executor.query('x') }.to raise_error(custom)
     end
   end
 
@@ -184,17 +184,17 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
   # loses — a verb, a helper, a reader — reddens it and has to be placed by
   # hand. That is also what holds the second half of K-1708: re-exposing the
   # identity stack fails the roll-call, not only the example that names it.
-  describe "the enqueue_<kind> naming rule" do
+  describe 'the enqueue_<kind> naming rule' do
     # Invocations, not assertions. The key is the VERB METHOD the lambda
     # calls; it is never used as the kind, which is always read back off the
     # rig, because a helper whose name matches a hand-typed kind is exactly
     # the defect above wearing a correct spelling.
     verb_invocations = {
-      "query"      => ->(x) { x.query("select 1") },
-      "run_query"  => ->(x) { x.run_query(:rooms, {}) },
-      "run_action" => ->(x) { x.run_action(:book, {}) },
-      "pay_action" => ->(x) { x.pay_action(:buy, {}) },
-      "seed"       => ->(x) { x.seed(:rooms, {}, count: 1) },
+      'query' => ->(x) { x.query('select 1') },
+      'run_query' => ->(x) { x.run_query(:rooms, {}) },
+      'run_action' => ->(x) { x.run_action(:book, {}) },
+      'pay_action' => ->(x) { x.pay_action(:buy, {}) },
+      'seed' => ->(x) { x.seed(:rooms, {}, count: 1) }
     }.freeze
 
     def kind_recorded_by(invoke)
@@ -218,7 +218,7 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
       end
     end
 
-    it "has one public method per verb, per kind helper, and per named reader — and no others" do
+    it 'has one public method per verb, per kind helper, and per named reader — and no others' do
       kinds = verb_invocations.values.map { |invoke| kind_recorded_by(invoke) }
       expect(kinds.uniq.size).to eq(verb_invocations.size)
 
@@ -236,7 +236,7 @@ RSpec.describe Kiosk::TestHelpers::NullExecutor do
     # The stack behind `current_identity` is not public surface (K-1708): the
     # question a rig user asks is the current identity, and the identity a call
     # ran under is stamped on the recorded Call.
-    it "does not expose the identity stack" do
+    it 'does not expose the identity stack' do
       expect(executor).not_to respond_to(:identity_stack)
     end
   end

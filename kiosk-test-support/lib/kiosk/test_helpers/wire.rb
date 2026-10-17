@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "json"
-require "net/http"
-require "uri"
-require "kiosk/pow/equihash/solver"
+require 'json'
+require 'net/http'
+require 'uri'
+require 'kiosk/pow/equihash/solver'
 
 module Kiosk
   module TestHelpers
@@ -15,7 +15,7 @@ module Kiosk
     class Wire
       # One answer: a body that is not JSON reads as `{}`, an unreachable origin as status 0.
       Response = Data.define(:status, :headers, :body, :raw_body, :proofs) do
-        def initialize(status:, body:, headers: {}, raw_body: "", proofs: 0) = super
+        def initialize(status:, body:, headers: {}, raw_body: '', proofs: 0) = super
 
         def [](header) = headers[header.to_s.downcase]
 
@@ -24,33 +24,33 @@ module Kiosk
       end
 
       METHODS = {
-        get:     Net::HTTP::Get,
-        post:    Net::HTTP::Post,
-        put:     Net::HTTP::Put,
-        patch:   Net::HTTP::Patch,
-        delete:  Net::HTTP::Delete,
-        head:    Net::HTTP::Head,
-        options: Net::HTTP::Options,
+        get: Net::HTTP::Get,
+        post: Net::HTTP::Post,
+        put: Net::HTTP::Put,
+        patch: Net::HTTP::Patch,
+        delete: Net::HTTP::Delete,
+        head: Net::HTTP::Head,
+        options: Net::HTTP::Options
       }.freeze
 
       # The scheme decides TLS.
       def self.http_for(uri, open_timeout: nil, read_timeout: nil)
         http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl      = uri.scheme == "https"
+        http.use_ssl      = uri.scheme == 'https'
         http.open_timeout = open_timeout if open_timeout
         http.read_timeout = read_timeout if read_timeout
         http
       end
 
-      def self.bearer(token) = { "Authorization" => "Bearer #{token}" }
+      def self.bearer(token) = { 'Authorization' => "Bearer #{token}" }
 
       # A solved proof of work for each challenge, as the `Kiosk-PoW` header carries them.
-      def self.solve(challenges) = challenges.map { { challenge: _1, nonce: Kiosk::Pow::Equihash.solve(_1) } }
+      def self.solve(challenges) = challenges.map { { challenge: it, nonce: Kiosk::Pow::Equihash.solve(it) } }
 
       attr_reader :base_url
 
       def initialize(base_url:, pay_tolls: false, open_timeout: 10, read_timeout: 30)
-        @base_url     = base_url.to_s.chomp("/")
+        @base_url     = base_url.to_s.chomp('/')
         @pay_tolls    = pay_tolls
         @open_timeout = open_timeout
         @read_timeout = read_timeout
@@ -58,16 +58,16 @@ module Kiosk
 
       def bearer(token) = self.class.bearer(token)
 
-      def post_json(path, body = {}, headers = {}) = post(path, body, headers).then { [_1.status, _1.body] }
+      def post_json(path, body = {}, headers = {}) = post(path, body, headers).then { [it.status, it.body] }
 
-      def get_json(path, params = {}, headers = {}) = get(path, params, headers).then { [_1.status, _1.body] }
+      def get_json(path, params = {}, headers = {}) = get(path, params, headers).then { [it.status, it.body] }
 
       def post(path, body = {}, headers = {}) = request(:post, path, body:, headers:)
 
       def get(path, params = {}, headers = {}) = request(:get, path, params:, headers:)
 
       def post_form(path, form, headers = {})
-        request(:post, path, headers:) { _1.set_form_data(form) }
+        request(:post, path, headers:) { it.set_form_data(form) }
       end
 
       def request(method, path, body: nil, params: nil, headers: {}, &form)
@@ -75,23 +75,23 @@ module Kiosk
         uri = URI("#{@base_url}#{path}")
         uri.query = URI.encode_www_form(params) if params&.any?
         answer = deliver(klass, uri, body, headers, &form)
-        challenges = answer.body["challenges"] if @pay_tolls && answer.status == 402 && answer.body.is_a?(Hash)
+        challenges = answer.body['challenges'] if @pay_tolls && answer.status == 402 && answer.body.is_a?(Hash)
         return answer unless challenges.is_a?(Array) && challenges.any?
 
         proofs = self.class.solve(challenges)
-        deliver(klass, uri, body, headers.merge("Kiosk-PoW" => JSON.generate(proofs)), &form).with(proofs: proofs.size)
+        deliver(klass, uri, body, headers.merge('Kiosk-PoW' => JSON.generate(proofs)), &form).with(proofs: proofs.size)
       end
 
       private
 
       def deliver(klass, uri, body, headers)
-        request = klass.new(uri, body.nil? ? headers : { "Content-Type" => "application/json" }.merge(headers))
+        request = klass.new(uri, body.nil? ? headers : { 'Content-Type' => 'application/json' }.merge(headers))
         request.body = JSON.generate(body) unless body.nil?
         yield request if block_given?
         begin
           answer = self.class.http_for(uri, open_timeout: @open_timeout, read_timeout: @read_timeout).request(request)
         rescue StandardError => e
-          return Response.new(status: 0, body: { "error" => e.class.name, "detail" => e.message })
+          return Response.new(status: 0, body: { 'error' => e.class.name, 'detail' => e.message })
         end
         response(answer)
       end

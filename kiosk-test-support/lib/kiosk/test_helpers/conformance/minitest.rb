@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "minitest/assertions"
+require 'minitest/assertions'
 
-require "kiosk/test_helpers/conformance"
+require 'kiosk/test_helpers/conformance'
 
 module Kiosk
   module TestHelpers
@@ -18,7 +18,7 @@ module Kiosk
                                        message: nil, origin: nil)
           kiosk_conformance!(
             Checks.executes(kiosk_conformance_origin(origin), name, params: params, as: as),
-            message,
+            message
           )
         end
 
@@ -26,7 +26,7 @@ module Kiosk
                                                         message: nil, origin: nil)
           kiosk_conformance!(
             Checks.declared_shape(kiosk_conformance_origin(origin), name, params: params, as: as),
-            message,
+            message
           )
         end
 
@@ -35,7 +35,7 @@ module Kiosk
           kiosk_conformance!(
             Checks.principal_scope(kiosk_conformance_origin(origin), name,
                                    as: as, and_not: and_not, params: params),
-            message,
+            message
           )
         end
 

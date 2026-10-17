@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-require "kiosk"
+require 'kiosk'
 
-require "kiosk/test_helpers/version"
-require "kiosk/test_helpers/errors"
-require "kiosk/test_helpers/null_executor"
-require "kiosk/test_helpers/journey"
-require "kiosk/test_helpers/conformance"
+require 'kiosk/test_helpers/version'
+require 'kiosk/test_helpers/errors'
+require 'kiosk/test_helpers/null_executor'
+require 'kiosk/test_helpers/journey'
+require 'kiosk/test_helpers/conformance'
 
 module Kiosk
   # Test support for Kiosk operators: the journey DSL over a pluggable executor,

@@ -42,7 +42,7 @@
 # The extraction is descriptor_required_fields_spec.rb's, for the same reason it
 # is that spec's: a demo declares its verbs in ONE place, the class-level macro
 # run above each `def` in `app/controllers/kiosk/*.rb`.
-RSpec.describe "verb reach declarations" do
+RSpec.describe 'verb reach declarations' do
   # THE REVIEWED INVENTORY. origin => { verb => reach }. Every entry is a verb
   # that legitimately touches rows belonging to a principal other than the
   # caller; every verb NOT here is `principal`-reach and is held to §7.2's
@@ -52,8 +52,8 @@ RSpec.describe "verb reach declarations" do
     # which IS a user_id, and every authenticated principal sees all of them.
     # `published`, not `consented`: no seller consented to anything, the
     # operator publishes the board because a board is what philslist IS.
-    "kiosk-demo-philslist" => {
-      "browse_listings" => "published",
+    'kiosk-demo-philslist' => {
+      'browse_listings' => 'published'
     },
     # tudu: household collaboration. `lists.account_id` and
     # `memberships.account_id` are user_ids; what admits another account's row
@@ -61,21 +61,21 @@ RSpec.describe "verb reach declarations" do
     # created. That artefact is why these are `consented` — the stronger claim.
     # `create_list` and `invite` are absent on purpose: both act only on rows
     # the caller already owns.
-    "kiosk-demo-tudu" => {
-      "my_lists"      => "consented",
-      "list_todos"    => "consented",
-      "list_members"  => "consented",
-      "add_todo"      => "consented",
-      "complete_todo" => "consented",
-      "accept_invite" => "consented",
-      "remove_member" => "consented",
+    'kiosk-demo-tudu' => {
+      'my_lists' => 'consented',
+      'list_todos' => 'consented',
+      'list_members' => 'consented',
+      'add_todo' => 'consented',
+      'complete_todo' => 'consented',
+      'accept_invite' => 'consented',
+      'remove_member' => 'consented'
     },
     # stylish: the staff forecast. An `owner` role reads `Appointment.all` —
     # every principal's bookings — and every other role reads its own. Sound
     # only because the role is operator-assigned and never client-requested.
-    "kiosk-demo-stylish" => {
-      "salon_calendar" => "role",
-    },
+    'kiosk-demo-stylish' => {
+      'salon_calendar' => 'role'
+    }
   }.freeze
 
   # The four §7.2 values. A fifth would be a wire change, not a demo change.
@@ -103,39 +103,39 @@ RSpec.describe "verb reach declarations" do
     out
   end
 
-  monorepo_root = File.expand_path("../..", __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
-  origins = Dir[File.join(monorepo_root, "kiosk-demo-*/app/controllers/kiosk/*.rb")]
+  monorepo_root = File.expand_path('../..', __dir__) # spec/ -> kiosk-test-support/ -> monorepo root
+  origins = Dir[File.join(monorepo_root, 'kiosk-demo-*/app/controllers/kiosk/*.rb')]
             .group_by { |path| path[%r{/(kiosk-demo-[^/]+)/}, 1] }
-  origins["e2e"] = Dir[File.join(monorepo_root, "e2e/fixtures/*_controller.rb")]
+  origins['e2e'] = Dir[File.join(monorepo_root, 'e2e/fixtures/*_controller.rb')]
 
   # origin => { verb => declared reach or nil }, read from the sources.
-  declared = origins.transform_values { |paths|
+  declared = origins.transform_values do |paths|
     paths.sort.flat_map { |path| verbs_in(File.read(path)) }
          .to_h { |verb| [verb[:name], verb[:reach]] }
-  }
+  end
 
-  it "sees the whole fleet (the lint is not vacuous)" do
+  it 'sees the whole fleet (the lint is not vacuous)' do
     expect(declared.values.sum(&:size)).to be >= 45,
                                            "the lint resolved only #{declared.values.sum(&:size)} verbs across " \
                                            "#{declared.size} origins — the declarations moved somewhere it does not read"
   end
 
-  it "every declared reach is one of the four the spec names" do
-    strays = declared.flat_map { |origin, verbs|
-      verbs.filter_map { |name, reach|
+  it 'every declared reach is one of the four the spec names' do
+    strays = declared.flat_map do |origin, verbs|
+      verbs.filter_map do |name, reach|
         next if reach.nil? || REACHES.include?(reach)
 
         "#{origin} #{name}: reach :#{reach}"
-      }
-    }
-    expect(strays).to be_empty, "reach is a CLOSED vocabulary (#{REACHES.join(", ")}):\n#{strays.join("\n")}"
+      end
+    end
+    expect(strays).to be_empty, "reach is a CLOSED vocabulary (#{REACHES.join(', ')}):\n#{strays.join("\n")}"
   end
 
-  it "the reviewed inventory is exactly what the fleet declares" do
-    actual = declared.each_with_object({}) { |(origin, verbs), acc|
-      widened = verbs.reject { |_name, reach| reach.nil? || reach == "principal" }
+  it 'the reviewed inventory is exactly what the fleet declares' do
+    actual = declared.each_with_object({}) do |(origin, verbs), acc|
+      widened = verbs.reject { |_name, reach| reach.nil? || reach == 'principal' }
       acc[origin] = widened unless widened.empty?
-    }
+    end
 
     expect(actual).to eq(CROSS_PRINCIPAL), <<~MSG
       The fleet's cross-principal surface is not the reviewed one.

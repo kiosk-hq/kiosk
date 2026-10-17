@@ -51,9 +51,9 @@
 # NOT skip when the tree is not where it expects (K-502): a guard that goes
 # quiet when its inputs move proves nothing after the next move.
 
-require "open3"
+require 'open3'
 
-SQLI_REPO_ROOT = File.expand_path("../..", __dir__)
+SQLI_REPO_ROOT = File.expand_path('../..', __dir__)
 
 # A string fragment that OPENS with a SQL statement or clause keyword. Anchoring
 # at the start is what keeps English prose out: "… use the YYYY-MM-DD from an
@@ -85,7 +85,7 @@ def sqli_violations(src)
     stripped = line.strip
 
     if heredoc
-      out << [no, "interpolation inside a SQL heredoc", stripped] if stripped.include?('#{')
+      out << [no, 'interpolation inside a SQL heredoc', stripped] if stripped.include?('#{')
       heredoc = nil if stripped == heredoc
       next
     end
@@ -93,18 +93,18 @@ def sqli_violations(src)
     # Full-line comments only. Trailing comments are not stripped: a `#` can
     # live inside a string, and guessing which one is which is how a guard
     # starts lying. In this tree the SQL commentary is all full-line.
-    next if stripped.start_with?("#")
+    next if stripped.start_with?('#')
 
     heredoc = Regexp.last_match(1) if line =~ /<<[-~]?['"]?(SQL[A-Z0-9_]*)['"]?/
 
-    out << [no, "hand-quoted value (`.quote(`)", stripped] if line =~ SQLI_QUOTE_CALL
+    out << [no, 'hand-quoted value (`.quote(`)', stripped] if line =~ SQLI_QUOTE_CALL
 
     next unless stripped.include?('#{')
 
     line.scan(/"((?:[^"\\]|\\.)*)"/) do |(fragment)|
       next unless fragment =~ SQLI_CLAUSE && fragment.include?('#{')
 
-      out << [no, "interpolation inside SQL statement text", stripped]
+      out << [no, 'interpolation inside SQL statement text', stripped]
       break
     end
   end
@@ -112,31 +112,31 @@ def sqli_violations(src)
   out
 end
 
-RSpec.describe "no demo splices a value into SQL statement text (K-654)" do
-  tracked, status = Open3.capture2("git", "-C", SQLI_REPO_ROOT, "ls-files", "kiosk-demo-*")
+RSpec.describe 'no demo splices a value into SQL statement text (K-654)' do
+  tracked, status = Open3.capture2('git', '-C', SQLI_REPO_ROOT, 'ls-files', 'kiosk-demo-*')
   SQLI_GIT_OK = status.success?
   SQLI_FILES  = tracked.lines(chomp: true).select do |f|
-    f.end_with?(".rb") &&
+    f.end_with?('.rb') &&
       f.match?(%r{\Akiosk-demo-[a-z0-9_]+/(app|config|lib)/}) &&
       !f.match?(%r{\Akiosk-demo-[a-z0-9_]+/lib/tasks/})
   end.sort.freeze
 
-  it "reads the tracked runtime tree (this spec never skips)" do
+  it 'reads the tracked runtime tree (this spec never skips)' do
     expect(SQLI_GIT_OK).to be(true), "git ls-files failed in #{SQLI_REPO_ROOT}"
     expect(SQLI_FILES.size).to be >= 150,
                                "found only #{SQLI_FILES.size} tracked runtime .rb files under the demos — " \
-                               "this guard has drifted, fix the scope"
+                               'this guard has drifted, fix the scope'
     # Every demo must be represented: a rename that moved one app out of the
     # glob would otherwise shrink the scope silently.
-    expect(SQLI_FILES.map { |f| f[%r{\Akiosk-demo-[a-z0-9_]+}] }.uniq.size).to eq(8)
+    expect(SQLI_FILES.map { |f| f[/\Akiosk-demo-[a-z0-9_]+/] }.uniq.size).to eq(8)
   end
 
-  it "lists no site that has since been deleted" do
+  it 'lists no site that has since been deleted' do
     missing = SQLI_KNOWN.keys.reject { |f| File.exist?(File.join(SQLI_REPO_ROOT, f)) }
     expect(missing).to be_empty, "SQLI_KNOWN names files that no longer exist: #{missing.inspect}"
   end
 
-  it "finds no interpolated SQL outside the listed sites, and none of those has grown" do
+  it 'finds no interpolated SQL outside the listed sites, and none of those has grown' do
     found = SQLI_FILES.to_h { |rel| [rel, sqli_violations(File.read(File.join(SQLI_REPO_ROOT, rel)))] }
                       .reject { |_, v| v.empty? }
 
@@ -150,10 +150,10 @@ RSpec.describe "no demo splices a value into SQL statement text (K-654)" do
     drained = SQLI_KNOWN.keys.reject { |rel| found.key?(rel) }
 
     expect(report + drained.map { |rel| "#{rel}: clean now — delete its SQLI_KNOWN entry" }).to be_empty,
-      "a demo splices a value into SQL statement text (K-654). Pass it as a bind " \
-      "parameter instead — `conn.exec_update(\"UPDATE t SET s = $1 WHERE id = $2::uuid\", " \
-      "\"label\", [s, id])` — the way kiosk-server's executor.rb does.\n" +
-      (report + drained.map { |rel| "#{rel}: clean now — delete its SQLI_KNOWN entry" }).join("\n")
+                                                                                                'a demo splices a value into SQL statement text (K-654). Pass it as a bind ' \
+                                                                                                'parameter instead — `conn.exec_update("UPDATE t SET s = $1 WHERE id = $2::uuid", ' \
+                                                                                                "\"label\", [s, id])` — the way kiosk-server's executor.rb does.\n" +
+                                                                                                (report + drained.map { |rel| "#{rel}: clean now — delete its SQLI_KNOWN entry" }).join("\n")
   end
 
   # ── the shapes it forbids, and the ones it must not ───────────────────────
@@ -161,46 +161,46 @@ RSpec.describe "no demo splices a value into SQL statement text (K-654)" do
   # Written against strings rather than the tree, because what has to hold is
   # the RULE, and (after this row) the tree is clean — an example that only
   # ever sees clean sources cannot show which shape it would have caught.
-  describe "the shapes it forbids, and the ones it does not" do
-    it "FORBIDS a quoted value spliced into an UPDATE" do
+  describe 'the shapes it forbids, and the ones it does not' do
+    it 'FORBIDS a quoted value spliced into an UPDATE' do
       v = sqli_violations(%(conn.execute("UPDATE orders SET status = \#{conn.quote(to)} WHERE id = 1")\n))
-      expect(v.map { |x| x[1] }).to include("hand-quoted value (`.quote(`)",
-                                            "interpolation inside SQL statement text")
+      expect(v.map { |x| x[1] }).to include('hand-quoted value (`.quote(`)',
+                                            'interpolation inside SQL statement text')
     end
 
-    it "FORBIDS a bare splice into a WHERE continuation fragment" do
+    it 'FORBIDS a bare splice into a WHERE continuation fragment' do
       v = sqli_violations(%(  "WHERE id = '\#{order_id}'::uuid " \\\n))
-      expect(v.first[1]).to eq("interpolation inside SQL statement text")
+      expect(v.first[1]).to eq('interpolation inside SQL statement text')
     end
 
-    it "FORBIDS a splice inside a SQL-tagged heredoc body" do
+    it 'FORBIDS a splice inside a SQL-tagged heredoc body' do
       src = "sql = <<~SQL\n  UPDATE t SET s = '\#{value}'\nSQL\n"
-      expect(sqli_violations(src).first[1]).to eq("interpolation inside a SQL heredoc")
+      expect(sqli_violations(src).first[1]).to eq('interpolation inside a SQL heredoc')
     end
 
-    it "ALLOWS the bind-parameter form the engine uses" do
+    it 'ALLOWS the bind-parameter form the engine uses' do
       src = %(conn.exec_update("UPDATE orders SET status = $1 WHERE id = $2::uuid", "flip", [to, id])\n)
       expect(sqli_violations(src)).to be_empty
     end
 
-    it "ALLOWS an ActiveRecord relation carrying the value out of the string" do
+    it 'ALLOWS an ActiveRecord relation carrying the value out of the string' do
       expect(sqli_violations(%(Order.where(id: order_id, status: "created").pick(:total_cents)\n))).to be_empty
     end
 
-    it "ALLOWS English prose that happens to contain a SQL word" do
+    it 'ALLOWS English prose that happens to contain a SQL word' do
       src = %(bad_request("invalid date: \#{date} — use the YYYY-MM-DD from an availability row")\n)
       expect(sqli_violations(src)).to be_empty
     end
 
-    it "ALLOWS a full-line comment that shows the forbidden shape" do
+    it 'ALLOWS a full-line comment that shows the forbidden shape' do
       expect(sqli_violations(%(  # was: "WHERE id = \#{conn.quote(id)}::uuid"\n))).to be_empty
     end
 
-    it "cannot see a statement assembled from pieces (a KNOWN blind spot)" do
+    it 'cannot see a statement assembled from pieces (a KNOWN blind spot)' do
       src = %(sql = +"UPDATE orders SET status = "\nsql << conn.quote(to)\n)
       # The `quote` call is still caught — that is rule A doing the work — but
       # the splice itself is invisible to rule B, which is why rule A exists.
-      expect(sqli_violations(src).map { |x| x[1] }).to eq(["hand-quoted value (`.quote(`)"])
+      expect(sqli_violations(src).map { |x| x[1] }).to eq(['hand-quoted value (`.quote(`)'])
     end
   end
 end

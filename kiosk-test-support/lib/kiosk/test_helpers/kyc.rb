@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-require "jwt"
-require "openssl"
-require "securerandom"
-require "uri"
-require "kiosk"
-require "kiosk/test_helpers/wire"
+require 'jwt'
+require 'openssl'
+require 'securerandom'
+require 'uri'
+require 'kiosk'
+require 'kiosk/test_helpers/wire'
 
 module Kiosk
   module TestHelpers
@@ -17,7 +17,7 @@ module Kiosk
     #   rider.requests_verification
     #   the_verification_service_confirms(rider, age_over_18: true)
     module Kyc
-      ISSUER   = "https://kyc.test.invalid"
+      ISSUER   = 'https://kyc.test.invalid'
       SETTINGS = %i[kyc_provider kyc_issuer kyc_public_key].freeze
 
       # Opens checks without a network and signs attestations for them.
@@ -46,8 +46,8 @@ module Kiosk
 
         def attest(subject, audience, attributes)
           now = Time.now.to_i
-          JWT.encode({ sub: subject.to_s, level: "verified", iss: ISSUER, aud: audience.to_s, attributes:,
-                       iat: now, exp: now + 3600 }, self.class.key, "RS256")
+          JWT.encode({ sub: subject.to_s, level: 'verified', iss: ISSUER, aud: audience.to_s, attributes:,
+                       iat: now, exp: now + 3600 }, self.class.key, 'RS256')
         end
       end
 
@@ -63,7 +63,7 @@ module Kiosk
         request_id = @kyc_provider.latest_check_for(customer.principal.user_id)
         check  = @kyc_provider.check(request_id)
         jws    = @kyc_provider.attest(check.subject, check.audience, attributes)
-        answer = Wire.new(base_url: URI.join(check.callback_url, "/").to_s)
+        answer = Wire.new(base_url: URI.join(check.callback_url, '/').to_s)
                      .post(URI(check.callback_url).path, { request_id:, nonce: check.nonce, kyc_jws: jws })
         raise "the engine refused the KYC callback: #{answer.status} #{answer.body}" unless answer.status == 200
 
@@ -80,7 +80,7 @@ module Kiosk
 
       def stand_in_for_kyc_provider
         config = Kiosk.configuration
-        @replaced_kyc_settings = SETTINGS.to_h { [_1, config.public_send(_1)] }
+        @replaced_kyc_settings = SETTINGS.to_h { [it, config.public_send(it)] }
         @kyc_provider = Provider.new
         config.kyc_provider   = @kyc_provider
         config.kyc_issuer     = ISSUER

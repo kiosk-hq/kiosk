@@ -2,11 +2,11 @@
 
 # `minitest` (not `minitest/autorun` — no second at_exit runner inside an
 # RSpec process): the Minitest half below runs a real Minitest::Test.
-require "minitest"
+require 'minitest'
 
-require "kiosk/test_helpers"
-require "kiosk/test_helpers/conformance/minitest"
-require "kiosk/test_helpers/conformance/rspec"
+require 'kiosk/test_helpers'
+require 'kiosk/test_helpers/conformance/minitest'
+require 'kiosk/test_helpers/conformance/rspec'
 
 # THE FRAMEWORK-AGNOSTIC CLAIM, EXECUTED.
 #
@@ -19,7 +19,7 @@ require "kiosk/test_helpers/conformance/rspec"
 # The Minitest half is driven by instantiating a real `Minitest::Test` and
 # running it — not by stubbing `assert`. A test double would prove that this
 # file calls the adapter, which is not the question.
-RSpec.describe "the conformance adapters" do
+RSpec.describe 'the conformance adapters' do
   def verb_class  = Kiosk::TestHelpers::Conformance::Verb
   def null_origin = Kiosk::TestHelpers::Conformance::NullOrigin
 
@@ -28,39 +28,41 @@ RSpec.describe "the conformance adapters" do
   # would notice, and the shape check's reason for existing.
   let(:lying_verb) do
     verb_class.new(
-      name: "catalog", kind: :query,
-      input_schema:  { "type" => "object", "additionalProperties" => false,
-                       "properties" => {}, "required" => [] },
-      output_schema: { "type" => "array",
-                       "items" => { "type" => "object",
-                                    "properties" => { "price_cents" => { "type" => "integer" } },
-                                    "required" => %w[price_cents] } },
+      name: 'catalog', kind: :query,
+      input_schema: { 'type' => 'object', 'additionalProperties' => false,
+                      'properties' => {}, 'required' => [] },
+      output_schema: { 'type' => 'array',
+                       'items' => { 'type' => 'object',
+                                    'properties' => { 'price_cents' => { 'type' => 'integer' } },
+                                    'required' => %w[price_cents] } }
     )
   end
 
   let(:lying_origin) do
-    null_origin.new(verbs: [lying_verb], answers: { "catalog" => [{ "price_cents" => "4.49" }] })
+    null_origin.new(verbs: [lying_verb], answers: { 'catalog' => [{ 'price_cents' => '4.49' }] })
   end
 
   let(:honest_origin) do
-    null_origin.new(verbs: [lying_verb], answers: { "catalog" => [{ "price_cents" => 449 }] })
+    null_origin.new(verbs: [lying_verb], answers: { 'catalog' => [{ 'price_cents' => 449 }] })
   end
 
   # Run ONE Minitest test method and return [passed?, message].
-  def run_minitest(&body)
+  def run_minitest(&)
     klass = Class.new(Minitest::Test) do
       include Kiosk::TestHelpers::Conformance::Assertions
-      define_method(:test_the_one_thing, &body)
+
+      define_method(:test_the_one_thing, &)
     end
     result = klass.new(:test_the_one_thing).run
     [result.passed?, result.failures.map(&:message).join("\n")]
   end
 
-  describe "Minitest assertions" do
-    it "passes on a conforming origin and COUNTS the assertion" do
+  describe 'Minitest assertions' do
+    it 'passes on a conforming origin and COUNTS the assertion' do
       origin = honest_origin
       klass  = Class.new(Minitest::Test) do
         include Kiosk::TestHelpers::Conformance::Assertions
+
         define_method(:test_shape) do
           assert_kiosk_answer_matches_declared_schema(:catalog, origin: origin)
         end
@@ -73,15 +75,15 @@ RSpec.describe "the conformance adapters" do
       expect(result.assertions).to eq(1)
     end
 
-    it "fails on the descriptor lie" do
+    it 'fails on the descriptor lie' do
       origin = lying_origin
       passed, message = run_minitest { assert_kiosk_answer_matches_declared_schema(:catalog, origin: origin) }
 
       expect(passed).to be(false)
-      expect(message).to include("rendered a payload its own output_schema rejects")
+      expect(message).to include('rendered a payload its own output_schema rejects')
     end
 
-    it "reaches all four checks" do
+    it 'reaches all four checks' do
       origin = honest_origin
       passed, message = run_minitest do
         assert_kiosk_verbs_routed(origin: origin)
@@ -94,40 +96,40 @@ RSpec.describe "the conformance adapters" do
       # fixture answers both principals the same rows, which is the vacuity the
       # scoping check refuses to pass.
       expect(passed).to be(false)
-      expect(message).to include("leaked")
+      expect(message).to include('leaked')
     end
 
-    it "honours an explicit message" do
+    it 'honours an explicit message' do
       origin = lying_origin
       _, message = run_minitest do
-        assert_kiosk_answer_matches_declared_schema(:catalog, origin: origin, message: "catalog lies")
+        assert_kiosk_answer_matches_declared_schema(:catalog, origin: origin, message: 'catalog lies')
       end
 
-      expect(message).to include("catalog lies")
+      expect(message).to include('catalog lies')
     end
 
-    it "reports the wiring hint when no origin is configured" do
+    it 'reports the wiring hint when no origin is configured' do
       # Minitest turns an exception inside a test method into a recorded
       # error, so the hint reaches the operator through the run result rather
       # than by propagating out of it.
       passed, message = run_minitest { assert_kiosk_verbs_routed }
 
       expect(passed).to be(false)
-      expect(message).to include("has no origin configured")
-      expect(message).to include("ConformanceOrigin")
+      expect(message).to include('has no origin configured')
+      expect(message).to include('ConformanceOrigin')
     end
   end
 
-  describe "RSpec matchers" do
+  describe 'RSpec matchers' do
     before { Kiosk::TestHelpers::Conformance.origin = honest_origin }
 
-    it "passes on a conforming origin" do
+    it 'passes on a conforming origin' do
       expect(kiosk_origin).to have_a_route_for_every_verb
       expect(:catalog).to execute_as_a_kiosk_verb
       expect(:catalog).to answer_its_declared_schema
     end
 
-    it "falls back to the configured origin when handed nil" do
+    it 'falls back to the configured origin when handed nil' do
       expect(nil).to have_a_route_for_every_verb
     end
 
@@ -137,7 +139,7 @@ RSpec.describe "the conformance adapters" do
     # CONFIGURED origin, which is a wrong verdict rather than an error. The
     # adopter this bites has more than one origin, which is what this gem's own
     # suite is: an engine-backed one and a NullOrigin.
-    it "honours an explicit origin: over a broken configured one" do
+    it 'honours an explicit origin: over a broken configured one' do
       broken = null_origin.new(verbs: [lying_verb], routes: {})
       Kiosk::TestHelpers::Conformance.origin = broken
 
@@ -154,12 +156,12 @@ RSpec.describe "the conformance adapters" do
       expect(nil).to have_a_route_for_every_verb(origin: honest_origin)
     end
 
-    it "honours origin: on all four matchers, the parity the header claims" do
+    it 'honours origin: on all four matchers, the parity the header claims' do
       Kiosk::TestHelpers::Conformance.origin = null_origin.new(verbs: [lying_verb], routes: {})
       scoped = null_origin.new(
-        verbs:   [lying_verb],
-        answers: { ["catalog", :alice] => [{ "price_cents" => 1 }],
-                   ["catalog", :bob]   => [{ "price_cents" => 2 }] },
+        verbs: [lying_verb],
+        answers: { ['catalog', :alice] => [{ 'price_cents' => 1 }],
+                   ['catalog', :bob] => [{ 'price_cents' => 2 }] }
       )
 
       expect(nil).to have_a_route_for_every_verb(origin: honest_origin)
@@ -168,7 +170,7 @@ RSpec.describe "the conformance adapters" do
       expect(:catalog).to be_scoped_to_principal(as: :alice, and_not: :bob, origin: scoped)
     end
 
-    it "fails on the descriptor lie" do
+    it 'fails on the descriptor lie' do
       Kiosk::TestHelpers::Conformance.origin = lying_origin
 
       expect { expect(:catalog).to answer_its_declared_schema }
@@ -176,18 +178,18 @@ RSpec.describe "the conformance adapters" do
                         /rendered a payload its own output_schema rejects/)
     end
 
-    it "forwards params: and as: to the check" do
-      expect(:catalog).to execute_as_a_kiosk_verb(params: { "q" => 1 }, as: :alice)
+    it 'forwards params: and as: to the check' do
+      expect(:catalog).to execute_as_a_kiosk_verb(params: { 'q' => 1 }, as: :alice)
 
-      expect(honest_origin.calls.last).to include(params: { "q" => 1 }, as: :alice)
+      expect(honest_origin.calls.last).to include(params: { 'q' => 1 }, as: :alice)
     end
 
-    it "runs the scoping matcher with both principals" do
+    it 'runs the scoping matcher with both principals' do
       origin = null_origin.new(
-        verbs:   [lying_verb],
+        verbs: [lying_verb],
         answers: { %w[catalog].first => nil,
-                   ["catalog", :alice] => [{ "price_cents" => 1 }],
-                   ["catalog", :bob]   => [{ "price_cents" => 2 }] },
+                   ['catalog', :alice] => [{ 'price_cents' => 1 }],
+                   ['catalog', :bob] => [{ 'price_cents' => 2 }] }
       )
       Kiosk::TestHelpers::Conformance.origin = origin
 
@@ -195,8 +197,8 @@ RSpec.describe "the conformance adapters" do
     end
   end
 
-  describe "the two adapters report the SAME sentence" do
-    it "for a descriptor lie" do
+  describe 'the two adapters report the SAME sentence' do
+    it 'for a descriptor lie' do
       origin = lying_origin
       _, minitest_message = run_minitest do
         assert_kiosk_answer_matches_declared_schema(:catalog, origin: origin)
@@ -218,7 +220,7 @@ RSpec.describe "the conformance adapters" do
       expect(rspec_message).to include(core_message)
     end
 
-    it "for a verb that is not declared at all" do
+    it 'for a verb that is not declared at all' do
       origin = honest_origin
       _, minitest_message = run_minitest { assert_kiosk_verb_executes(:catalogue, origin: origin) }
 

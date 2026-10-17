@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "puma"
-require "socket"
-require "kiosk/test_helpers/assistant"
+require 'puma'
+require 'socket'
+require 'kiosk/test_helpers/assistant'
 
 module Kiosk
   module TestHelpers
@@ -20,12 +20,12 @@ module Kiosk
 
       def self.empty
         connection = ActiveRecord::Base.connection
-        schemas = ActiveRecord.dump_schemas.split(",").map { connection.quote(_1.strip) }.join(", ")
+        schemas = ActiveRecord.dump_schemas.split(',').map { connection.quote(it.strip) }.join(', ')
         tables = connection.select_values(<<~SQL)
           SELECT format('%I.%I', schemaname, tablename) FROM pg_tables
           WHERE schemaname IN (#{schemas}) AND tablename NOT IN ('schema_migrations', 'ar_internal_metadata')
         SQL
-        connection.execute("TRUNCATE #{tables.join(", ")} RESTART IDENTITY CASCADE") if tables.any?
+        connection.execute("TRUNCATE #{tables.join(', ')} RESTART IDENTITY CASCADE") if tables.any?
       end
     end
 
@@ -38,9 +38,9 @@ module Kiosk
 
       def self.url
         @url ||= begin
-          port   = TCPServer.open("127.0.0.1", 0) { |socket| socket.addr[1] }
+          port   = TCPServer.open('127.0.0.1', 0) { |socket| socket.addr[1] }
           server = Puma::Server.new(Rails.application, nil, min_threads: 0, max_threads: 8)
-          server.add_tcp_listener("127.0.0.1", port)
+          server.add_tcp_listener('127.0.0.1', port)
           server.run
           Kiosk.configuration.issuer = "http://127.0.0.1:#{port}"
         end

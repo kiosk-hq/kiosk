@@ -34,9 +34,9 @@
 # It does NOT skip when the tree is not where it expects (K-502): a guard that
 # goes quiet when its inputs move proves nothing after the next move.
 
-require "open3"
+require 'open3'
 
-XAPP_REPO_ROOT = File.expand_path("../..", __dir__)
+XAPP_REPO_ROOT = File.expand_path('../..', __dir__)
 
 # `require "x"` / `require_relative 'x'` / `require(File.expand_path("…"))` —
 # the leading token plus the first quoted string on the line. A `require` whose
@@ -47,16 +47,16 @@ XAPP_REQUIRE = /^[ \t]*(require_relative|require)\b[ \t(]*(?:File\.expand_path\(
 
 # Which `kiosk-demo-*` app owns a repo-relative path, if any.
 def xapp_owner(rel_path)
-  rel_path[%r{\Akiosk-demo-[a-z0-9_]+}]
+  rel_path[/\Akiosk-demo-[a-z0-9_]+/]
 end
 
 # The demo tree a require statement lands in, or nil when it stays inside the
 # repo's own file, names a gem, or points outside the demos altogether.
 def xapp_require_target(rel_path, kind, arg)
   abs =
-    if kind == "require_relative"
+    if kind == 'require_relative'
       File.expand_path(arg, File.join(XAPP_REPO_ROOT, File.dirname(rel_path)))
-    elsif arg.include?("kiosk-demo-")
+    elsif arg.include?('kiosk-demo-')
       # An absolute-ish `require` that spells a demo out: normalise from the
       # first segment that names one, whatever precedes it.
       File.expand_path(arg[/kiosk-demo-.*/], XAPP_REPO_ROOT)
@@ -80,33 +80,33 @@ def xapp_violations(files)
       next if target.nil?
 
       into, into_rel = target
-      next if into == from                       # inside its own app: fine
+      next if into == from # inside its own app: fine
 
-      "#{rel}:#{lineno} requires #{into_rel} (#{from || "e2e"} → #{into})"
+      "#{rel}:#{lineno} requires #{into_rel} (#{from || 'e2e'} → #{into})"
     end
   end
 end
 
 RSpec.describe "no demo requires another demo's source into its process (K-683)" do
   tracked, status = Open3.capture2(
-    "git", "-C", XAPP_REPO_ROOT, "ls-files", "kiosk-demo-*", "e2e"
+    'git', '-C', XAPP_REPO_ROOT, 'ls-files', 'kiosk-demo-*', 'e2e'
   )
   XAPP_GIT_OK = status.success?
-  XAPP_FILES  = tracked.lines(chomp: true).select { |f| f.end_with?(".rb", ".rake") }.sort.freeze
+  XAPP_FILES  = tracked.lines(chomp: true).select { |f| f.end_with?('.rb', '.rake') }.sort.freeze
 
-  it "reads the tracked tree (this spec never skips)" do
+  it 'reads the tracked tree (this spec never skips)' do
     expect(XAPP_GIT_OK).to be(true), "git ls-files failed in #{XAPP_REPO_ROOT}"
     expect(XAPP_FILES.size).to be >= 200,
                                "found only #{XAPP_FILES.size} tracked .rb/.rake files under the demos " \
-                               "and e2e — this guard has drifted, fix the path"
-    expect(XAPP_FILES.count { |f| f.start_with?("e2e/") }).to be >= 5
+                               'and e2e — this guard has drifted, fix the path'
+    expect(XAPP_FILES.count { |f| f.start_with?('e2e/') }).to be >= 5
   end
 
-  it "finds no cross-app require anywhere in the demos or the e2e harness" do
+  it 'finds no cross-app require anywhere in the demos or the e2e harness' do
     expect(xapp_violations(XAPP_FILES)).to be_empty,
                                            "a file loaded another standalone Rails app's source into its " \
-                                           "own process (K-681). Boot the other app out of process, or " \
-                                           "copy the file and declare the copy in bin/check-demo-copies"
+                                           'own process (K-681). Boot the other app out of process, or ' \
+                                           'copy the file and declare the copy in bin/check-demo-copies'
   end
 
   # ── the three-kinds distinction, pinned on synthetic inputs ────────────────
@@ -115,7 +115,7 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
   # the RULE, and the tree is (correctly) free of violations — an example that
   # only ever sees a clean tree cannot show which of the three kinds it would
   # have caught.
-  describe "the shapes it forbids, and the shapes it does not" do
+  describe 'the shapes it forbids, and the shapes it does not' do
     # `xapp_violations` reads each file through File.read, so a stubbed read is
     # the whole probe — no temp tree, and the resolver still does the real
     # path arithmetic against the real repo root.
@@ -125,29 +125,29 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
       rel
     end
 
-    it "FORBIDS an in-process require_relative into another demo" do
-      rel = source("kiosk-demo-skooti/script/prove_test_issuer.rb",
+    it 'FORBIDS an in-process require_relative into another demo' do
+      rel = source('kiosk-demo-skooti/script/prove_test_issuer.rb',
                    %(require_relative "../../kiosk-demo-prove/app/services/prove_key"\n))
-      expect(xapp_violations([rel]).first).to include("kiosk-demo-skooti", "kiosk-demo-prove")
+      expect(xapp_violations([rel]).first).to include('kiosk-demo-skooti', 'kiosk-demo-prove')
     end
 
-    it "ALLOWS a data-file path read — a PEM is bytes, not code" do
-      rel = source("kiosk-demo-skooti/script/prove_test_issuer.rb",
+    it 'ALLOWS a data-file path read — a PEM is bytes, not code' do
+      rel = source('kiosk-demo-skooti/script/prove_test_issuer.rb',
                    %(DEV_KEY_PATH = "../kiosk-demo-prove/config/dev_key.pem"\n))
       expect(xapp_violations([rel])).to be_empty
     end
 
     it "ALLOWS naming another app's directory in order to BOOT it (K-663)" do
-      rel = source("kiosk-demo-skooti/script/rental_flow.rb",
+      rel = source('kiosk-demo-skooti/script/rental_flow.rb',
                    %(BROKER_APP = File.expand_path("../../kiosk-demo-prove", __dir__)\n) +
                    %(spawn({}, "bin/rails s", chdir: BROKER_APP)\n))
       expect(xapp_violations([rel])).to be_empty
     end
 
     it "FORBIDS the e2e harness reaching into a demo's app/ or config/" do
-      rel = source("e2e/fixtures/bind_assistants.rb",
+      rel = source('e2e/fixtures/bind_assistants.rb',
                    %(require_relative "../../kiosk-demo-stylish/app/models/user"\n))
-      expect(xapp_violations([rel]).first).to include("e2e → kiosk-demo-stylish")
+      expect(xapp_violations([rel]).first).to include('e2e → kiosk-demo-stylish')
     end
   end
 end

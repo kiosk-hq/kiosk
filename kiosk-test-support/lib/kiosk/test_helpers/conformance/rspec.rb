@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "rspec/expectations"
+require 'rspec/expectations'
 
-require "kiosk/test_helpers/conformance"
+require 'kiosk/test_helpers/conformance'
 
 module Kiosk
   module TestHelpers
@@ -33,14 +33,14 @@ end
 RSpec::Matchers.define :have_a_route_for_every_verb do |options = {}|
   match do |origin|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.routes(
-      origin || Kiosk::TestHelpers::Conformance::RSpecOptions.origin(options),
+      origin || Kiosk::TestHelpers::Conformance::RSpecOptions.origin(options)
     )
     @outcome.ok?
   end
 
   failure_message { @outcome.message }
   failure_message_when_negated { "expected some verb to be unrouted, but #{@outcome.message}" }
-  description { "have a route for every declared verb" }
+  description { 'have a route for every declared verb' }
 end
 
 # `expect(:catalog).to execute_as_a_kiosk_verb`
@@ -49,14 +49,14 @@ RSpec::Matchers.define :execute_as_a_kiosk_verb do |options = {}|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.executes(
       Kiosk::TestHelpers::Conformance::RSpecOptions.origin(options), name,
       params: Kiosk::TestHelpers::Conformance::RSpecOptions.params(options),
-      as:     options[:as],
+      as: options[:as]
     )
     @outcome.ok?
   end
 
   failure_message { @outcome.message }
   failure_message_when_negated { "expected #{@outcome.subject} to refuse, but #{@outcome.message}" }
-  description { "execute as a Kiosk verb" }
+  description { 'execute as a Kiosk verb' }
 end
 
 # `expect(:catalog).to answer_its_declared_schema`
@@ -65,7 +65,7 @@ RSpec::Matchers.define :answer_its_declared_schema do |options = {}|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.declared_shape(
       Kiosk::TestHelpers::Conformance::RSpecOptions.origin(options), name,
       params: Kiosk::TestHelpers::Conformance::RSpecOptions.params(options),
-      as:     options[:as],
+      as: options[:as]
     )
     @outcome.ok?
   end
@@ -75,7 +75,7 @@ RSpec::Matchers.define :answer_its_declared_schema do |options = {}|
     "expected #{@outcome.subject} to answer something its own schema rejects, " \
       "but #{@outcome.message}"
   end
-  description { "answer the shape its own output_schema declares" }
+  description { 'answer the shape its own output_schema declares' }
 end
 
 # `expect(:my_orders).to be_scoped_to_principal(as: alice, and_not: bob)`
@@ -83,9 +83,9 @@ RSpec::Matchers.define :be_scoped_to_principal do |options = {}|
   match do |name|
     @outcome = Kiosk::TestHelpers::Conformance::Checks.principal_scope(
       Kiosk::TestHelpers::Conformance::RSpecOptions.origin(options), name,
-      as:      options.fetch(:as),
+      as: options.fetch(:as),
       and_not: options.fetch(:and_not),
-      params:  Kiosk::TestHelpers::Conformance::RSpecOptions.params(options),
+      params: Kiosk::TestHelpers::Conformance::RSpecOptions.params(options)
     )
     @outcome.ok?
   end
@@ -94,9 +94,7 @@ RSpec::Matchers.define :be_scoped_to_principal do |options = {}|
   failure_message_when_negated do
     "expected #{@outcome.subject} to leak across principals, but #{@outcome.message}"
   end
-  description { "be scoped to the calling principal" }
+  description { 'be scoped to the calling principal' }
 end
 
-if defined?(RSpec) && RSpec.respond_to?(:configure)
-  RSpec.configure { |config| config.include(Kiosk::TestHelpers::Conformance::RSpecHelpers) }
-end
+RSpec.configure { |config| config.include(Kiosk::TestHelpers::Conformance::RSpecHelpers) } if defined?(RSpec) && RSpec.respond_to?(:configure)

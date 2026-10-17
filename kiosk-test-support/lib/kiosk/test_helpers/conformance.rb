@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require "kiosk/test_helpers/errors"
-require "kiosk/test_helpers/conformance/outcome"
-require "kiosk/test_helpers/conformance/verb"
-require "kiosk/test_helpers/conformance/checks"
-require "kiosk/test_helpers/conformance/null_origin"
+require 'kiosk/test_helpers/errors'
+require 'kiosk/test_helpers/conformance/outcome'
+require 'kiosk/test_helpers/conformance/verb'
+require 'kiosk/test_helpers/conformance/checks'
+require 'kiosk/test_helpers/conformance/null_origin'
 
 module Kiosk
   module TestHelpers

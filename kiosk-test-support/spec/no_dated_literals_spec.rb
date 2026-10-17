@@ -80,9 +80,9 @@
 # NOT skip when the tree is not where it expects (K-502): a guard that goes
 # quiet when its inputs move proves nothing after the next move.
 
-require "open3"
+require 'open3'
 
-DATED_REPO_ROOT = File.expand_path("../..", __dir__)
+DATED_REPO_ROOT = File.expand_path('../..', __dir__)
 
 # A calendar date in ISO order. Bounded to 1000-2999 so a bare four-digit
 # number followed by two hyphenated pairs — a phone number, a UUID fragment —
@@ -100,36 +100,36 @@ def dated_violations(src)
     # inside a `#{…}`), and guessing which one is which is how a guard starts
     # lying — so a date in a trailing comment is FLAGGED, which is the safe
     # direction. In this tree the dated commentary is all full-line.
-    next if stripped.start_with?("#")
+    next if stripped.start_with?('#')
     next unless stripped.match?(DATED_LITERAL)
 
     [no, stripped]
   end
 end
 
-RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
-  tracked, status = Open3.capture2("git", "-C", DATED_REPO_ROOT, "ls-files", "kiosk-demo-*")
+RSpec.describe 'no demo writes a calendar date into runtime code (K-972)' do
+  tracked, status = Open3.capture2('git', '-C', DATED_REPO_ROOT, 'ls-files', 'kiosk-demo-*')
   DATED_GIT_OK = status.success?
   DATED_FILES  = tracked.lines(chomp: true).select do |f|
-    f.end_with?(".rb") &&
+    f.end_with?('.rb') &&
       f.match?(%r{\Akiosk-demo-[a-z0-9_]+/(app|config|lib)/}) &&
       !f.match?(%r{\Akiosk-demo-[a-z0-9_]+/lib/tasks/})
   end.sort.freeze
 
   # The e2e fixture host's descriptor-bearing files (K-974). Same rule, same
   # reason, different directory — see the scope note in the header.
-  e2e_tracked, e2e_status = Open3.capture2("git", "-C", DATED_REPO_ROOT, "ls-files", "e2e/fixtures")
+  e2e_tracked, e2e_status = Open3.capture2('git', '-C', DATED_REPO_ROOT, 'ls-files', 'e2e/fixtures')
   DATED_E2E_GIT_OK = e2e_status.success?
-  DATED_E2E_FILES  = e2e_tracked.lines(chomp: true).select { |f| f.end_with?("_controller.rb") }.sort.freeze
+  DATED_E2E_FILES  = e2e_tracked.lines(chomp: true).select { |f| f.end_with?('_controller.rb') }.sort.freeze
 
-  it "reads the tracked runtime tree (this spec never skips)" do
+  it 'reads the tracked runtime tree (this spec never skips)' do
     expect(DATED_GIT_OK).to be(true), "git ls-files failed in #{DATED_REPO_ROOT}"
     expect(DATED_FILES.size).to be >= 150,
                                 "found only #{DATED_FILES.size} tracked runtime .rb files under the demos — " \
-                                "this guard has drifted, fix the scope"
+                                'this guard has drifted, fix the scope'
     # Every demo must be represented: a rename that moved one app out of the
     # glob would otherwise shrink the scope silently.
-    expect(DATED_FILES.map { |f| f[%r{\Akiosk-demo-[a-z0-9_]+}] }.uniq.size).to eq(8)
+    expect(DATED_FILES.map { |f| f[/\Akiosk-demo-[a-z0-9_]+/] }.uniq.size).to eq(8)
   end
 
   it "reads the e2e fixture host's controllers too (K-974)" do
@@ -137,7 +137,7 @@ RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
     # A rename that moved the descriptor-bearing fixtures out of this glob
     # would otherwise empty the scope and stay green — the exact way this
     # guard missed `bookings_controller.rb` for as long as it did.
-    expect(DATED_E2E_FILES).to include("e2e/fixtures/bookings_controller.rb")
+    expect(DATED_E2E_FILES).to include('e2e/fixtures/bookings_controller.rb')
     expect(DATED_E2E_FILES.size).to be >= 2
   end
 
@@ -148,9 +148,9 @@ RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
     end
 
     expect(report).to be_empty,
-                      "a demo states a calendar date in runtime code (K-972). A written-down day " \
-                      "ages into a 400 with nothing in the tree changing. In a descriptor use a " \
-                      "RESOLVABLE SLOT — `example_params({ date: -> { Time.find_zone!(\"Europe/Dublin\").tomorrow.iso8601 } })`, " \
+                      'a demo states a calendar date in runtime code (K-972). A written-down day ' \
+                      'ages into a 400 with nothing in the tree changing. In a descriptor use a ' \
+                      'RESOLVABLE SLOT — `example_params({ date: -> { Time.find_zone!("Europe/Dublin").tomorrow.iso8601 } })`, ' \
                       "see Kiosk::Server::SchemaSlots — and in prose interpolate the same helper.\n" +
                       report.join("\n")
   end
@@ -160,50 +160,50 @@ RSpec.describe "no demo writes a calendar date into runtime code (K-972)" do
   # Written against strings rather than the tree, because what has to hold is
   # the RULE, and (after K-972) the tree is clean — an example that only ever
   # sees clean sources cannot show which shape it would have caught.
-  describe "the shapes it forbids, and the ones it does not" do
-    it "FORBIDS a dated example_params" do
+  describe 'the shapes it forbids, and the ones it does not' do
+    it 'FORBIDS a dated example_params' do
       src = %(  example_params({ date: "2026-08-10", delivery_address: "42 Camden Street" })\n)
       expect(dated_violations(src).map(&:first)).to eq([1])
     end
 
-    it "FORBIDS a dated example_row, including a timestamp" do
+    it 'FORBIDS a dated example_row, including a timestamp' do
       src = %(  example_row({ slot_at: "2026-08-10T08:00:00+01:00" })\n)
       expect(dated_violations(src).map(&:first)).to eq([1])
     end
 
-    it "FORBIDS a date buried in a sentence rather than standing alone" do
+    it 'FORBIDS a date buried in a sentence rather than standing alone' do
       src = %(    room_types_scope: "free 2026-09-01..2026-09-04",\n)
       expect(dated_violations(src).map(&:first)).to eq([1])
     end
 
-    it "FORBIDS a dated «e.g.» inside a refusal message" do
+    it 'FORBIDS a dated «e.g.» inside a refusal message' do
       src = %(      refused("missing field: slot — an ISO 8601 timestamp, e.g. \\"2026-10-01T14:00:00Z\\"")\n)
       expect(dated_violations(src).map(&:first)).to eq([1])
     end
 
-    it "ALLOWS the resolvable-slot form the engine resolves per read" do
+    it 'ALLOWS the resolvable-slot form the engine resolves per read' do
       src = %(  example_params({ date: -> { DeliverySlots.default_zone.tomorrow.iso8601 } })\n)
       expect(dated_violations(src)).to be_empty
     end
 
-    it "ALLOWS a date computed relative to now" do
+    it 'ALLOWS a date computed relative to now' do
       expect(dated_violations(%(  CHECK_IN = (Date.today + 30).to_s.freeze\n))).to be_empty
     end
 
-    it "ALLOWS a full-line comment that shows the forbidden shape" do
+    it 'ALLOWS a full-line comment that shows the forbidden shape' do
       expect(dated_violations(%(  # it published check_in: "2026-09-01" until K-972\n))).to be_empty
     end
 
-    it "ALLOWS a wall-clock time, which never ages" do
+    it 'ALLOWS a wall-clock time, which never ages' do
       expect(dated_violations(%(  example_params({ time: "20:00" })\n))).to be_empty
     end
 
-    it "ALLOWS a version or an id that merely looks numeric" do
+    it 'ALLOWS a version or an id that merely looks numeric' do
       src = %(  PIN = "0.4.5"\n  ID = "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e"\n)
       expect(dated_violations(src)).to be_empty
     end
 
-    it "cannot see a date assembled from parts, or written as a Date (KNOWN blind spots)" do
+    it 'cannot see a date assembled from parts, or written as a Date (KNOWN blind spots)' do
       expect(dated_violations(%(  date = "\#{Date.today.year}-09-01"\n))).to be_empty
       expect(dated_violations(%(  date = Date.new(2026, 9, 1).iso8601\n))).to be_empty
     end

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "digest"
-require "kiosk"
+require 'digest'
+require 'kiosk'
 
 # K-1124 regression: NO shipped host may hand the binding ceremony a NIL role
 # without somebody having reasoned about it first.
@@ -47,10 +47,10 @@ require "kiosk"
 #
 # It does NOT skip when the demos are absent (K-502): a guard that goes quiet
 # when its subject moves is worse than no guard.
-ROLES_TOTAL_REPO_ROOT = File.expand_path("../..", __dir__)
-ROLES_TOTAL_DEMOS     = Dir.glob(File.join(ROLES_TOTAL_REPO_ROOT, "kiosk-demo-*"))
+ROLES_TOTAL_REPO_ROOT = File.expand_path('../..', __dir__)
+ROLES_TOTAL_DEMOS     = Dir.glob(File.join(ROLES_TOTAL_REPO_ROOT, 'kiosk-demo-*'))
                            .select { |d| File.directory?(d) }.sort
-ROLES_TOTAL_E2E_INIT   = File.join(ROLES_TOTAL_REPO_ROOT, "e2e/fixtures/initializer_kiosk.rb")
+ROLES_TOTAL_E2E_INIT = File.join(ROLES_TOTAL_REPO_ROOT, 'e2e/fixtures/initializer_kiosk.rb')
 
 # Demos that configure no Kiosk engine at all, so no `c.roles` line is expected.
 # kiosk-demo-prove is the KYC broker: it is a CONSUMER of a Kiosk operator, not
@@ -65,11 +65,11 @@ ROLES_TOTAL_NO_ENGINE = %w[kiosk-demo-prove].freeze
 # and blank lines removed and whitespace collapsed, so re-wording the comment
 # above a method does not flap this, and changing one line of its logic does.
 ROLES_TOTAL_DECLARED = {
-  "kiosk-demo-stylish/app/models/user.rb" => [
-    "38337e4b616c47f9",
-    "TOTAL by construction: `staff_role` is an enum validated on write to be " \
-    "'owner' or nil, and nil falls to the literal 'customer'.",
-  ],
+  'kiosk-demo-stylish/app/models/user.rb' => [
+    '38337e4b616c47f9',
+    'TOTAL by construction: `staff_role` is an enum validated on write to be ' \
+    "'owner' or nil, and nil falls to the literal 'customer'."
+  ]
 }.freeze
 
 # Extract the source of a `def kiosk_role` body from a file, or nil.
@@ -85,28 +85,28 @@ end
 # Comment-insensitive, whitespace-insensitive fingerprint of a method body.
 def roles_total_fingerprint(body)
   normalized = body.lines
-                   .map { |l| l.sub(/(\A|\s)#(?!\{).*$/, "") }
+                   .map { |l| l.sub(/(\A|\s)#(?!\{).*$/, '') }
                    .reject { |l| l.strip.empty? }
-                   .join(" ")
-                   .gsub(/\s+/, " ").strip
+                   .join(' ')
+                   .gsub(/\s+/, ' ').strip
   Digest::SHA256.hexdigest(normalized)[0, 16]
 end
 
-RSpec.describe "no shipped host hands the binding ceremony a nil role (K-1124)" do
-  it "finds the demo tree where it expects it (this spec never skips)" do
+RSpec.describe 'no shipped host hands the binding ceremony a nil role (K-1124)' do
+  it 'finds the demo tree where it expects it (this spec never skips)' do
     expect(ROLES_TOTAL_DEMOS.size).to be >= 7,
-                                      "expected the operator demos beside kiosk-test-support, " \
+                                      'expected the operator demos beside kiosk-test-support, ' \
                                       "found #{ROLES_TOTAL_DEMOS.size} — this spec has drifted"
     expect(File.exist?(ROLES_TOTAL_E2E_INIT)).to be(true),
                                                  "expected #{ROLES_TOTAL_E2E_INIT}"
   end
 
   # Invariant 1 — the adapter's default arm is never the nil one.
-  it "declares a non-empty c.roles in every engine-configuring host" do
+  it 'declares a non-empty c.roles in every engine-configuring host' do
     initializers =
       ROLES_TOTAL_DEMOS
       .reject { |d| ROLES_TOTAL_NO_ENGINE.include?(File.basename(d)) }
-      .map { |d| File.join(d, "config/initializers/kiosk.rb") } + [ROLES_TOTAL_E2E_INIT]
+      .map { |d| File.join(d, 'config/initializers/kiosk.rb') } + [ROLES_TOTAL_E2E_INIT]
 
     empty = initializers.filter_map do |path|
       rel  = path.delete_prefix("#{ROLES_TOTAL_REPO_ROOT}/")
@@ -120,33 +120,33 @@ RSpec.describe "no shipped host hands the binding ceremony a nil role (K-1124)" 
     end
 
     expect(empty).to be_empty,
-                     "these hosts declare no role: #{empty.join(", ")}. A model without " \
-                     "`#kiosk_role` then resolves to no role at all, and a role-less " \
-                     "ceremony binds at `registration_role` — so a human the IdP cannot " \
-                     "answer for gets an assistant that cannot act for them (K-1124, K-1791)."
+                     "these hosts declare no role: #{empty.join(', ')}. A model without " \
+                     '`#kiosk_role` then resolves to no role at all, and a role-less ' \
+                     'ceremony binds at `registration_role` — so a human the IdP cannot ' \
+                     'answer for gets an assistant that cannot act for them (K-1124, K-1791).'
   end
 
   # Invariant 2 — every #kiosk_role is declared, with a reason, at a pinned body.
-  it "declares every #kiosk_role in the corpus, at the body that was reasoned about" do
-    found = (ROLES_TOTAL_DEMOS.flat_map { |d| Dir.glob(File.join(d, "app/**/*.rb")) } +
-             Dir.glob(File.join(ROLES_TOTAL_REPO_ROOT, "e2e/fixtures/*.rb")))
-           .sort
-           .filter_map do |path|
-             body = roles_total_body(path)
-             body && [path.delete_prefix("#{ROLES_TOTAL_REPO_ROOT}/"), body]
-           end
+  it 'declares every #kiosk_role in the corpus, at the body that was reasoned about' do
+    found = (ROLES_TOTAL_DEMOS.flat_map { |d| Dir.glob(File.join(d, 'app/**/*.rb')) } +
+             Dir.glob(File.join(ROLES_TOTAL_REPO_ROOT, 'e2e/fixtures/*.rb')))
+            .sort
+            .filter_map do |path|
+              body = roles_total_body(path)
+              body && [path.delete_prefix("#{ROLES_TOTAL_REPO_ROOT}/"), body]
+            end
 
     undeclared = found.reject { |rel, _| ROLES_TOTAL_DECLARED.key?(rel) }
     expect(undeclared.map(&:first)).to be_empty,
-                                       "a new #kiosk_role appeared and nobody has said whether " \
-                                       "it can answer nil: #{undeclared.map(&:first).join(", ")}. " \
-                                       "Declare it in ROLES_TOTAL_DECLARED with a reason and the " \
-                                       "fingerprint the drift check names, or make the method total."
+                                       'a new #kiosk_role appeared and nobody has said whether ' \
+                                       "it can answer nil: #{undeclared.map(&:first).join(', ')}. " \
+                                       'Declare it in ROLES_TOTAL_DECLARED with a reason and the ' \
+                                       'fingerprint the drift check names, or make the method total.'
 
     gone = ROLES_TOTAL_DECLARED.keys - found.map(&:first)
     expect(gone).to be_empty,
-                    "declared but no longer present: #{gone.join(", ")} — delete the entry, an " \
-                    "exception for a method that does not exist is a comfortable lie."
+                    "declared but no longer present: #{gone.join(', ')} — delete the entry, an " \
+                    'exception for a method that does not exist is a comfortable lie.'
 
     drifted = found.filter_map do |rel, body|
       want = ROLES_TOTAL_DECLARED.fetch(rel).first
@@ -154,8 +154,8 @@ RSpec.describe "no shipped host hands the binding ceremony a nil role (K-1124)" 
       "#{rel}: declared #{want}, now #{got}" unless want == got
     end
     expect(drifted).to be_empty,
-                       "a declared #kiosk_role changed: #{drifted.join("; ")}. Re-read the method, " \
-                       "decide again whether it can answer nil, then update the fingerprint AND " \
-                       "the reason beside it."
+                       "a declared #kiosk_role changed: #{drifted.join('; ')}. Re-read the method, " \
+                       'decide again whether it can answer nil, then update the fingerprint AND ' \
+                       'the reason beside it.'
   end
 end

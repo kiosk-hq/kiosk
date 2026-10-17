@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/test_helpers/conformance/verb"
+require 'kiosk/test_helpers/conformance/verb'
 
 module Kiosk
   module TestHelpers
@@ -18,7 +18,7 @@ module Kiosk
 
         # @param routes [Hash] `[method, path] => {controller:, action:, kiosk_verb:}`
         # @param answers [Hash] `[verb_name, principal]` or `verb_name` => answer; an Exception is raised
-        def initialize(mount_path: "/kiosk", verbs: [], routes: nil, answers: {})
+        def initialize(mount_path: '/kiosk', verbs: [], routes: nil, answers: {})
           @mount_path = mount_path
           @verbs      = verbs
           @routes     = routes || self.class.routes_for(mount_path, verbs)
@@ -29,10 +29,10 @@ module Kiosk
         # The route table a correctly routed origin would have.
         def self.routes_for(mount_path, verbs)
           verbs.each_with_object({}) do |verb, table|
-            path = "#{mount_path.chomp("/")}/#{verb.name}"
-            controller, action = verb.endpoint.split("#")
+            path = "#{mount_path.chomp('/')}/#{verb.name}"
+            controller, action = verb.endpoint.split('#')
             table[[verb.http_method, path]] = {
-              controller: controller, action: action, kiosk_verb: verb.name,
+              controller: controller, action: action, kiosk_verb: verb.name
             }
           end
         end

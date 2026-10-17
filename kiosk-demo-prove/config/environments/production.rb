@@ -9,7 +9,7 @@ Rails.application.configure do
   config.public_file_server.headers = { 'cache-control' => 'no-cache' }
   config.assume_ssl = true
   config.log_tags = [:request_id]
-  config.logger   = ActiveSupport::TaggedLogging.logger(STDOUT)
+  config.logger   = ActiveSupport::TaggedLogging.logger($stdout)
   config.log_level = ENV.fetch('RAILS_LOG_LEVEL', 'info')
   config.silence_healthcheck_path = '/up'
   config.active_support.report_deprecations = false

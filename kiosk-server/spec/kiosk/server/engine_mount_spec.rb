@@ -1,32 +1,24 @@
 # frozen_string_literal: true
 
-# The one-line adoption proof (T-055 slice of K-495; closes K-505): a fresh
-# Rails app whose ONLY Kiosk line is
+# The one-line adoption proof: a fresh Rails app whose ONLY Kiosk line is
 #
 #   mount Kiosk::Server::Engine => "/kiosk"
 #
 # must serve the full surface — wire + auth plane + JWKS + KYC + binding
 # ceremony under the mount, and the ROOT-relative discovery documents
 # (/agents.txt, /agents.json, /auth.md, /.well-known/*) installed by the
-# engine's routes.append initializer. Three properties are pinned here:
+# engine's routes.append initializer. Three properties hold:
 #
 #   1. mounted        → full surface, end-to-end through the real Rack stack;
-#   2. NOT mounted    → the gem is inert: bundling it adds NO routes, so an
-#                       app that has not decided to serve a Kiosk wire serves
-#                       none;
+#   2. NOT mounted    → the gem is inert: bundling it adds NO routes;
 #   3. a host line drawn ABOVE the mount wins (config/routes.rb precedes
-#                       routes.append; Rails dispatches the first match). That
-#                       is the mechanism the mount-goes-first rule rests on —
-#                       an operator's verb line written above the mount really
-#                       would shadow the protocol, which is why the mount
-#                       goes first.
+#                       routes.append; Rails dispatches the first match), so
+#                       the mount goes first.
 #
 # The probe app is a real, booted Rails::Application run ONCE as a SUBPROCESS
-# (spec/support/engine_mount_probe_app.rb — see its header for why a
-# subprocess: booting Rails inside the suite process leaks Rails.logger and
-# ActionDispatch::Flash into unrelated controller specs). The engine's
-# initializers run through the genuine boot path; this file asserts on the
-# probe's JSON report.
+# (spec/support/engine_mount_probe_app.rb): booting Rails inside the suite
+# process leaks Rails.logger and ActionDispatch::Flash into unrelated
+# controller specs. This file asserts on the probe's JSON report.
 
 require 'open3'
 
@@ -45,11 +37,42 @@ module EngineMountProbe
   end
 end
 
-RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+module EngineMountSpec
+  THREE_HEADERS = %w[kiosk-server-version kiosk-api-version kiosk-min-client].freeze
+
+  DECLINED_PATHS = [
+    'POST /kiosk/oauth/device_authorization',
+    'POST /kiosk/auth/claim',
+    'POST /kiosk/oauth/token',
+    'GET /kiosk/oauth/device/verify',
+    'POST /kiosk/auth/link',
+    'POST /kiosk/auth/unlink',
+    'GET /kiosk/auth/assistants'
+  ].freeze
+
   def probe(scenario, key = nil)
     scenario_report = EngineMountProbe.report.fetch(scenario)
     key ? scenario_report.fetch(key) : scenario_report
   end
+
+  # The mounted scenario's answer to `request_line`, which must be a 200.
+  def served(request_line)
+    res = probe('mounted', request_line)
+    expect(res['status']).to eq(200), "#{request_line}: got #{res['status']}"
+    res
+  end
+
+  def three_headers = THREE_HEADERS
+
+  def header_names(scenario, request_line)
+    probe(scenario, request_line)['headers'].keys & three_headers
+  end
+
+  def issuer_on(key) = JSON.parse(probe('two_origins', key)['body']).dig('kiosk', 'issuer')
+end
+
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
 
   context 'when the engine is mounted (fresh app, one line)' do
     it 'reports itself mounted' do
@@ -57,35 +80,27 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
     end
 
     it 'serves the root discovery documents end-to-end' do
-      res = probe('mounted', 'GET /agents.txt')
-      expect(res['status']).to eq(200)
-      expect(res['body']).to include('http://localhost/agents.json')
+      expect(served('GET /agents.txt')['body']).to include('http://localhost/agents.json')
 
-      res = probe('mounted', 'GET /agents.json')
-      expect(res['status']).to eq(200)
-      # The pointer carries the boot digest as `?v=` (T-094).
-      expect(JSON.parse(res['body']).dig('x-kiosk', 'schema'))
+      # The pointer carries the boot digest as `?v=`.
+      expect(JSON.parse(served('GET /agents.json')['body']).dig('x-kiosk', 'schema'))
         .to match(%r{\A/kiosk/schema\?v=[0-9a-f]{32}\z})
 
-      res = probe('mounted', 'GET /.well-known/kiosk.json')
-      expect(res['status']).to eq(200)
-      expect(JSON.parse(res['body']).dig('kiosk', 'capabilities')).to include('queries')
-      expect(JSON.parse(res['body']).dig('kiosk', 'schema_url'))
-        .to match(%r{\Ahttp://localhost/kiosk/schema\?v=[0-9a-f]{32}\z})
+      kiosk = JSON.parse(served('GET /.well-known/kiosk.json')['body']).fetch('kiosk')
+      expect(kiosk['capabilities']).to include('queries')
+      expect(kiosk['schema_url']).to match(%r{\Ahttp://localhost/kiosk/schema\?v=[0-9a-f]{32}\z})
 
-      res = probe('mounted', 'GET /.well-known/agent-configuration')
-      expect(res['status']).to eq(200)
-      expect(JSON.parse(res['body'])).to be_a(Hash)
-
-      res = probe('mounted', 'GET /.well-known/api-catalog')
-      expect(res['status']).to eq(200)
-      expect(res['headers']['content-type']).to include('linkset+json')
-
-      res = probe('mounted', 'GET /auth.md')
-      expect(res['status']).to eq(200)
-      expect(res['headers']['content-type']).to include('markdown')
+      expect(JSON.parse(served('GET /.well-known/agent-configuration')['body'])).to be_a(Hash)
+      expect(served('GET /.well-known/api-catalog')['headers']['content-type']).to include('linkset+json')
+      expect(served('GET /auth.md')['headers']['content-type']).to include('markdown')
     end
+  end
+end
 
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
+  context 'when the engine is mounted (fresh app, one line)' do
     it 'serves JWKS under the mount, stamped by the auto-injected middleware' do
       res = probe('mounted', 'GET /kiosk/.well-known/jwks.json')
       expect(res['status']).to eq(200)
@@ -96,19 +111,14 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
     end
 
     it 'routes the RESERVED `pay` into WireController (401 problem, not 404)' do
-      # `POST <endpoint>/{query,run}` were DELETED at the 0.4 cutover
-      # (T-074 = A) — see the example below for what answers there now.
       res = probe('mounted', 'POST /kiosk/pay')
       expect(res['status']).to eq(401)
       expect(res['headers']['content-type']).to include('application/problem+json')
       expect(JSON.parse(res['body'])['code']).to eq('unauthenticated')
     end
 
-    # THE OTHER RESERVED ENDPOINT, AND IT ANSWERS THE OPPOSITE (T-094).
-    # `GET /kiosk/schema` was in the loop above until 2026-08-19. It is public
-    # now — routed into the same controller, resolving no identity — so the
-    # end-to-end proof that the route reaches the engine is a 200 CATALOG
-    # rather than a 401 problem document.
+    # `GET /kiosk/schema` is public — routed into the same controller,
+    # resolving no identity — so it answers a 200 CATALOG, not a 401.
     it 'routes the RESERVED `schema` into WireController and answers it PUBLIC' do
       res = probe('mounted', 'GET /kiosk/schema')
       expect(res['status']).to eq(200)
@@ -120,12 +130,17 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(body.keys).to eq(%w[queries actions events])
       expect(body['queries']).not_to be_empty
     end
+  end
+end
 
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
+  context 'when the engine is mounted (fresh app, one line)' do
     it 'has no 0.3 multiplexed wire left: /query and /run name no route at all' do
       # Dialed WITH a Bearer token, so the identity gate cannot be what produced
-      # the answer. Nothing draws these paths, so nothing matches them, and the
-      # answer is the host framework's ordinary 404 — no tombstone, no Kiosk
-      # body, no hint that a wire ever lived there.
+      # the answer. Nothing draws these paths, so the answer is the host
+      # framework's ordinary 404 with no Kiosk body.
       ['POST /kiosk/query (bearer)', 'POST /kiosk/run (bearer)'].each do |request_line|
         res = probe('mounted', request_line)
         expect(res['status']).to eq(404), "#{request_line}: got #{res['status']}"
@@ -146,7 +161,13 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(res['status']).to eq(404)
       expect(res['headers']['content-type']).not_to include('application/problem+json')
     end
+  end
+end
 
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
+  context 'when the engine is mounted (fresh app, one line)' do
     it 'routes the kiosk-pop auth plane into AuthController' do
       # A malformed register/login/revoke answers with the wire's RFC 9457
       # problem document — reaching the controller at all is what this route
@@ -167,7 +188,13 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(res['status']).to eq(401)
       expect(JSON.parse(res['body'])['code']).to eq('unauthenticated')
     end
+  end
+end
 
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
+  context 'when the engine is mounted (fresh app, one line)' do
     it 'routes the binding ceremony: claim wire + link surface + HTML pages' do
       res = probe('mounted', 'POST /kiosk/oauth/device_authorization')
       expect(res['status']).to eq(400)
@@ -190,13 +217,17 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       end
 
       # The page's own forms post to these three; the engine must route them
-      # all (update was missing from the pre-T-055 drawer).
+      # all.
       %w[link update unlink].each do |action|
         res = probe('mounted', "POST /kiosk/auth/assistants/#{action}")
         expect(res['status']).to eq(401), "assistants/#{action}: got #{res['status']}"
       end
     end
   end
+end
+
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
 
   context 'when the engine is NOT mounted' do
     it 'installs no root discovery routes — loading the gem is inert' do
@@ -212,11 +243,15 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(probe('unmounted', 'mounted_in?')).to be(false)
     end
   end
+end
 
-  # The first-match property MOUNT-FIRST rests on, measured rather than assumed:
-  # a host line drawn ABOVE the mount really does take the path. That is why the
-  # mount is the first line of an operator's wire file and why a verb written
-  # above it is a defect — not an invitation to draw the plane by hand.
+# The first-match property MOUNT-FIRST rests on, measured rather than assumed:
+# a host line drawn ABOVE the mount really does take the path. That is why the
+# mount is the first line of an operator's wire file and why a verb written
+# above it is a defect — not an invitation to draw the plane by hand.
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
   context 'when a host route is drawn ABOVE the mount at a path the engine draws' do
     it "the host's ROOT route wins: config/routes.rb precedes routes.append" do
       res = probe('double_draw', 'GET /agents.txt')
@@ -239,14 +274,15 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(probe('double_draw', 'GET /kiosk/.well-known/jwks.json')['status']).to eq(200)
     end
   end
+end
 
-  # ── THE OPERATOR'S OWN VERBS, drawn below the mount ─────────────────────
-  #
-  # A verb reaches the wire because the `kiosk` block in `routes.rb` names it.
-  # The engine draws the PROTOCOL PLANE and the block draws one route per verb
-  # underneath it. This
-  # scenario is that arrangement, through a booted app and the whole Rack stack,
-  # answering four questions the routing layer cannot be asked any other way.
+# A verb reaches the wire because the `kiosk` block in `routes.rb` names it.
+# The engine draws the PROTOCOL PLANE and the block draws one route per verb
+# underneath it. This scenario is that arrangement, through a booted app and
+# the whole Rack stack.
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
   context 'when the host draws its own verbs with the `kiosk` block' do
     it 'a declared query reaches the VERB wire' do
       # `?zzz=1` against a CLOSED empty input_schema is `400 bad_request` from
@@ -270,13 +306,18 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(res['headers']['allow']).to be_nil
       expect(res['headers']['content-type']).not_to include('application/problem+json')
     end
+  end
+end
 
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
+  context 'when the host draws its own verbs with the `kiosk` block' do
     it 'answers a name nobody registered the same ordinary 404' do
       # A name nobody registered has no route by construction, so it is
       # indistinguishable at the routing layer from a path that could never BE a
-      # verb name — which is what keeps the K-824 probe (`GET /kiosk/nope/nope`)
-      # measuring the same thing it always did. All three are dialed WITH a
-      # token, so the 401 gate cannot be what produced the answer.
+      # verb name. All three are dialed WITH a token, so the 401 gate cannot
+      # be what produced the answer.
       ['GET /kiosk/frobnicate', 'GET /kiosk/Catalog', 'GET /kiosk/9lives'].each do |line|
         res = probe('operator_verbs', line)
         expect(res['status']).to eq(404), "#{line}: got #{res['status']}"
@@ -308,38 +349,17 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(JSON.parse(res['body']).keys).to eq(%w[queries actions events])
     end
   end
+end
 
-  # ── §3.6 ON THE RESPONSES RAILS COMPOSES ITSELF (K-824) ────────────────
-  #
-  # The header stamp is a Rack middleware, and until this finding it was
-  # installed with `config.middleware.use` — appended, i.e. INNERMOST, below
-  # `ActionDispatch::ShowExceptions`. A response manufactured from an exception
-  # therefore never passed through it: a routing 404 under the mount and an
-  # unhandled 500 both left the origin with none of the three headers, while
-  # every controller-rendered refusal on the same origin carried all three.
-  #
-  # These examples are about the middleware's POSITION, which is why they need
-  # a booted app and the full Rack stack; a unit test on HeadersMiddleware
-  # cannot see where it was installed. The two host routes are the blast-radius
-  # half: an engine mounted inside somebody else's application must not stamp
-  # that application's responses, working or broken.
-  # K-749(b). §3 point 6 is a MUST over the WHOLE mount — "the discovery
-  # document's `endpoint`, and everything below it: every verb endpoint, the
-  # auth endpoints, the account-binding endpoints, the KYC endpoint, and the
-  # mount-relative JWKS … on success and on error alike" — and until this
-  # example the only coverage was three `assert` lines in `e2e/assistant.sh`
-  # against ONE endpoint, plus unit examples that drive `HeadersMiddleware`
-  # with synthetic paths rather than the real route set. Neither could tell you
-  # whether the auth, binding, KYC or JWKS routes actually carry the headers.
-  #
-  # This walks the whole mounted surface the probe already dials — every path
-  # the engine draws, whatever each answers — and asserts both halves of the
-  # rule at once: everything under the mount carries all three, and the
-  # ROOT-served discovery documents carry none, because they sit outside the
-  # mount and state their own `min_client` and format `version` instead.
+# §3 point 6 is a MUST over the WHOLE mount, on success and on error alike.
+# This walks every path the engine draws and asserts both halves of the
+# rule: everything under the mount carries all three headers, and the
+# ROOT-served discovery documents carry none, because they sit outside the
+# mount and state their own `min_client` and format `version` instead.
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
   context 'the three version headers, over the whole mounted surface (§3 point 6)' do
-    def three_headers = %w[kiosk-server-version kiosk-api-version kiosk-min-client]
-
     it 'stamps every path UNDER the mount — success and refusal alike' do
       under_mount = probe('mounted').select { |line, _| line.start_with?('GET /kiosk', 'POST /kiosk') }
       expect(under_mount.size).to be >= 18 # the drawn surface, not a sample
@@ -362,14 +382,18 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       end
     end
   end
+end
+
+# The header stamp is a Rack middleware that must sit OUTSIDE
+# `ActionDispatch::ShowExceptions`, so a response Rails composes from an
+# exception under the mount carries the headers too. Only a booted app shows
+# where the middleware sits. The host routes are the other half: an engine
+# mounted inside somebody else's application must not stamp that
+# application's responses, working or broken.
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
 
   context 'when Rails composes the response itself (§3.6, K-824)' do
-    def three_headers = %w[kiosk-server-version kiosk-api-version kiosk-min-client]
-
-    def header_names(scenario, request_line)
-      probe(scenario, request_line)['headers'].keys & three_headers
-    end
-
     it 'a routing 404 UNDER the mount carries all three' do
       res = probe('exceptions', 'GET /kiosk/nope/nope')
       expect(res['status']).to eq(404)
@@ -384,7 +408,13 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(res['status']).to eq(500)
       expect(header_names('exceptions', 'POST /kiosk/pay')).to match_array(three_headers)
     end
+  end
+end
 
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
+  context 'when Rails composes the response itself (§3.6, K-824)' do
     it "the HOST's own route outside the mount carries none — on a 200" do
       res = probe('exceptions', 'GET /outside')
       expect(res['status']).to eq(200)
@@ -404,24 +434,18 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(header_names('exceptions', 'GET /nope')).to be_empty
     end
   end
+end
 
-  # §16.1 item 7 on real bytes. The per-endpoint contract is pinned in
-  # binding_module_gate_spec.rb; what only a booted host can show is the
-  # `/oauth/*` carve-out ARRIVING through the mount as an
-  # `application/problem+json` body where that pair otherwise answers the OAuth
-  # error object.
+# §16.1 item 7 on real bytes. The per-endpoint contract is pinned in
+# binding_module_gate_spec.rb; what only a booted host can show is the
+# `/oauth/*` carve-out ARRIVING through the mount as an
+# `application/problem+json` body where that pair otherwise answers the OAuth
+# error object.
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
   context 'when the origin declines the account-binding module (§16.1 item 7)' do
-    DECLINED_PATHS = [
-      'POST /kiosk/oauth/device_authorization',
-      'POST /kiosk/auth/claim',
-      'POST /kiosk/oauth/token',
-      'GET /kiosk/oauth/device/verify',
-      'POST /kiosk/auth/link',
-      'POST /kiosk/auth/unlink',
-      'GET /kiosk/auth/assistants'
-    ].freeze
-
-    DECLINED_PATHS.each do |line|
+    EngineMountSpec::DECLINED_PATHS.each do |line|
       it "answers #{line} with a 501 module_not_served problem document" do
         res = probe('binding_declined', line)
         expect(res['status']).to eq(501)
@@ -441,7 +465,13 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(challenge['status']).to eq(400)
       expect(JSON.parse(challenge['body'])['code']).to eq('bad_request')
     end
+  end
+end
 
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
+  context 'when the origin declines the account-binding module (§16.1 item 7)' do
     # §4.3: the auth block is core discovery, so nothing about the declined
     # module is visible before a caller dials it.
     it 'publishes all six auth URLs and no binding capability' do
@@ -457,12 +487,14 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(kiosk.fetch('capabilities').grep(/bind/)).to be_empty
     end
   end
+end
 
-  # ADR-0040: the engine's issuer middleware makes every request answer for its
-  # own origin, so this is measured through the booted stack.
+# The engine's issuer middleware makes every request answer for its
+# own origin, so this is measured through the booted stack.
+RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
+  include EngineMountSpec
+
   context 'when a second origin is served' do
-    def issuer_on(key) = JSON.parse(probe('two_origins', key)['body']).dig('kiosk', 'issuer')
-
     it 'advertises each origin as its own issuer' do
       expect(issuer_on('localhost kiosk.json')).to eq('http://localhost')
       expect(issuer_on('buymilk kiosk.json')).to eq('http://buymilk.example')

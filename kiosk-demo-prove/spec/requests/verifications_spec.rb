@@ -1,345 +1,220 @@
 # frozen_string_literal: true
 
 require 'spec_helper'
-require 'jwt'
-require 'openssl'
 
-# Exercises the broker's security model end to end over HTTP:
-# intake auth + allow-list, unguessable capability, single-use, TTL, the signed
-# anonymized per-request/operator/subject claim, and the SSRF/open-relay guard.
-RSpec.describe 'KYC broker (kiosk-demo-prove)', type: :request do
-  let(:operator_secret) { OperatorRegistry.registry['skooti'][:secret] }
-  let(:callback_url)    { 'http://127.0.0.1:3004/kyc/callback' }
-  let(:intake_headers)  { { 'Authorization' => "Bearer #{operator_secret}", 'Content-Type' => 'application/json' } }
+# The broker's security model over HTTP: intake auth and allow-list, the
+# unguessable capability, single use, TTL, the signed anonymized claim bound to
+# one request, operator and subject, and the callback allow-list.
+RSpec.describe 'KYC broker: POST /verifications (intake)', type: :request do
+  it 'creates a pending request and returns a verification_url carrying the token' do
+    intake(valid_intake_body)
+    expect(response).to have_http_status(:created)
+    json = JSON.parse(response.body)
+    expect(json['status']).to eq('pending')
+    expect(json['request_id']).to be_present
+    expect(json['verification_url']).to include("/verify?request=#{json['request_id']}")
+    # The operator gets the nonce at intake. The human page does not show it.
+    expect(json['nonce']).to be_present
 
-  def intake(body, headers: intake_headers)
-    post '/verifications', params: body.to_json, headers: headers
+    row = ProveRequest.find(json['request_id'])
+    expect(json['nonce']).to eq(row.nonce)
+    expect(row.operator_id).to eq('skooti')
+    expect(row.subject_handle).to eq('user-uuid-123')
+    expect(row.status).to eq('pending')
+    expect(row.nonce).to be_present
+    expect(row.expires_at).to be > Time.current
+  end
+end
+
+RSpec.describe 'KYC broker: intake refusals', type: :request do
+  it 'rejects an unknown operator / bad secret (401) — a stranger cannot open requests' do
+    intake(valid_intake_body, headers: intake_headers('wrong'))
+    expect(response).to have_http_status(:unauthorized)
+    expect(ProveRequest.count).to eq(0)
   end
 
-  def valid_intake_body(overrides = {})
-    {
-      operator_id: 'skooti',
-      callback_url: callback_url,
-      requested_claims: ['age_over_18', 'licence_category:A'],
-      subject_handle: 'user-uuid-123'
-    }.merge(overrides)
+  it 'rejects a callback_url whose host is NOT allow-listed (SSRF/open-relay guard, 403)' do
+    intake(valid_intake_body(callback_url: 'http://evil.example.com/steal'))
+    expect(response).to have_http_status(:forbidden)
+    expect(ProveRequest.count).to eq(0)
   end
 
-  describe 'POST /verifications (intake)' do
-    it 'creates a pending request and returns a verification_url carrying the token' do
-      intake(valid_intake_body)
-      expect(response).to have_http_status(:created)
-      json = JSON.parse(response.body)
-      expect(json['status']).to eq('pending')
-      expect(json['request_id']).to be_present
-      expect(json['verification_url']).to include("/verify?request=#{json['request_id']}")
-      # The nonce is returned to the operator at intake (callback anti-replay)
-      # but not exposed on the human page.
-      expect(json['nonce']).to be_present
-
-      row = ProveRequest.find(json['request_id'])
-      expect(json['nonce']).to eq(row.nonce)
-      expect(row.operator_id).to eq('skooti')
-      expect(row.subject_handle).to eq('user-uuid-123')
-      expect(row.status).to eq('pending')
-      expect(row.nonce).to be_present
-      expect(row.expires_at).to be > Time.current
-    end
-
-    it 'rejects an unknown operator / bad secret (401) — a stranger cannot open requests' do
-      intake(valid_intake_body, headers: { 'Authorization' => 'Bearer wrong', 'Content-Type' => 'application/json' })
-      expect(response).to have_http_status(:unauthorized)
-      expect(ProveRequest.count).to eq(0)
-    end
-
-    it 'rejects a callback_url whose host is NOT allow-listed (SSRF/open-relay guard, 403)' do
-      intake(valid_intake_body(callback_url: 'http://evil.example.com/steal'))
-      expect(response).to have_http_status(:forbidden)
-      expect(ProveRequest.count).to eq(0)
-    end
-
-    it 'rejects unknown/empty requested_claims (400)' do
-      intake(valid_intake_body(requested_claims: ['not_a_claim']))
-      expect(response).to have_http_status(:bad_request)
-    end
-
-    it 'rejects a missing subject_handle (400)' do
-      intake(valid_intake_body(subject_handle: ''))
-      expect(response).to have_http_status(:bad_request)
-    end
-
-    it "rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)" do
-      # Operator B (getgrocery) authenticates with its OWN bearer secret but asks
-      # the broker to stamp operator A's (skooti's) audience into the attestation,
-      # delivered to B's own callback. The broker derives `aud` from B's
-      # REGISTRATION and rejects the mismatched body audience — B can never obtain
-      # a skooti-audience ProveKey-signed claim (the cross-operator claim the wire
-      # aud-check exists to stop). Pre-fix this stamped `aud: skooti` verbatim.
-      gg_secret = OperatorRegistry.registry['getgrocery'][:secret]
-      gg_headers = { 'Authorization' => "Bearer #{gg_secret}", 'Content-Type' => 'application/json' }
-      intake(
-        {
-          operator_id: 'getgrocery',
-          callback_url: 'http://127.0.0.1/kyc/callback',
-          requested_claims: ['age_over_18'],
-          subject_handle: 'victim-subject',
-          audience: 'skooti' # operator A's audience — must be refused
-        },
-        headers: gg_headers
-      )
-      expect(response).to have_http_status(:forbidden)
-      expect(JSON.parse(response.body)['error']).to match(/audience/)
-      expect(ProveRequest.count).to eq(0)
-    end
+  it 'rejects unknown/empty requested_claims (400)' do
+    intake(valid_intake_body(requested_claims: ['not_a_claim']))
+    expect(response).to have_http_status(:bad_request)
   end
 
-  describe 'GET /verify (human page)' do
-    it 'shows the yes/no questions for a live request' do
-      intake(valid_intake_body)
-      rid = JSON.parse(response.body)['request_id']
-      get '/verify', params: { request: rid }
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('over 18')
-      expect(response.body).to include('category A')
-    end
+  it 'rejects a missing subject_handle (400)' do
+    intake(valid_intake_body(subject_handle: ''))
+    expect(response).to have_http_status(:bad_request)
+  end
+end
 
-    it 'does not reveal anything for an unknown token' do
-      get '/verify', params: { request: 'not-a-real-token' }
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('not recognised')
-    end
+RSpec.describe 'KYC broker: intake audience', type: :request do
+  # getgrocery authenticates with its own secret but asks for skooti's audience.
+  # The broker takes `aud` from getgrocery's registration and refuses the body's value.
+  it "rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)" do
+    intake(
+      {
+        operator_id: 'getgrocery',
+        callback_url: 'http://127.0.0.1/kyc/callback',
+        requested_claims: ['age_over_18'],
+        subject_handle: 'victim-subject',
+        audience: 'skooti'
+      },
+      headers: intake_headers(OperatorRegistry.registry['getgrocery'][:secret])
+    )
+    expect(response).to have_http_status(:forbidden)
+    expect(JSON.parse(response.body)['error']).to match(/audience/)
+    expect(ProveRequest.count).to eq(0)
+  end
+end
+
+RSpec.describe 'KYC broker: GET /verify (human page)', type: :request do
+  it 'shows the yes/no questions for a live request' do
+    rid = open_request
+    get '/verify', params: { request: rid }
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include('over 18')
+    expect(response.body).to include('category A')
   end
 
-  describe 'POST /verify approve (mint + bind + single-use)' do
-    def open_request(overrides = {})
-      intake(valid_intake_body(overrides))
-      JSON.parse(response.body)['request_id']
-    end
+  it 'does not reveal anything for an unknown token' do
+    get '/verify', params: { request: 'not-a-real-token' }
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include('not recognised')
+  end
+end
 
-    def decode(jws)
-      key = OpenSSL::PKey::RSA.new(ProveKey.public_key)
-      JWT.decode(jws, key, true, algorithms: ['RS256'], required_claims: %w[exp iss sub]).first
-    end
+RSpec.describe 'KYC broker: POST /verify approve (the signed claim)', type: :request do
+  it 'mints a signed claim bound to (subject + operator + request) and echoes the nonce' do
+    rid = open_request
+    row = ProveRequest.find(rid)
+    delivered = capture_delivery
+    approve(rid)
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include('Confirmed')
 
-    it 'mints a signed claim bound to (subject + operator + request) and echoes the nonce' do
-      rid = open_request
-      row = ProveRequest.find(rid)
+    payload = decode(delivered[:kyc_jws])
+    expect(payload['sub']).to eq(row.subject_handle)
+    expect(payload['iss']).to eq(ProveKey.issuer)
+    expect(payload['level']).to eq('verified')
+    expect(payload['operator']).to eq('skooti')
+    expect(payload['aud']).to eq('skooti')
+    expect(payload['request_id']).to eq(rid)
+    expect(payload['nonce']).to eq(row.nonce)
+    expect(payload['attributes']).to eq({ 'age_over_18' => true, 'licence_a' => true })
 
-      # The broker POSTs to the callback; stub the poster so no real host is hit,
-      # and capture the delivered jws.
-      delivered = {}
-      allow(CallbackPoster).to receive(:deliver) do |args|
-        delivered = args
-        200
-      end
+    expect(delivered[:nonce]).to eq(row.nonce)
+    expect(delivered[:callback_url]).to eq(callback_url)
+    expect(row.reload.status).to eq('confirmed')
+  end
+end
 
-      post '/verify', params: { request: rid, decision: 'approve' }
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('Confirmed')
+RSpec.describe 'KYC broker: POST /verify approve (the audience)', type: :request do
+  # The broker checks a declared audience against the registration and stamps
+  # the registered one, which the operator's KycVerifier compares against.
+  it "binds aud to the operator's REGISTERED audience, accepting a matching body declaration" do
+    rid = open_request(audience: 'skooti')
+    expect(ProveRequest.find(rid).audience).to eq('skooti')
+    delivered = capture_delivery
+    approve(rid)
 
-      payload = decode(delivered[:kyc_jws])
-      expect(payload['sub']).to eq(row.subject_handle)
-      expect(payload['iss']).to eq(ProveKey.issuer)
-      expect(payload['level']).to eq('verified')
-      expect(payload['operator']).to eq('skooti')
-      expect(payload['aud']).to eq('skooti')
-      expect(payload['request_id']).to eq(rid)
-      expect(payload['nonce']).to eq(row.nonce)
-      expect(payload['attributes']).to eq({ 'age_over_18' => true, 'licence_a' => true })
-
-      expect(delivered[:nonce]).to eq(row.nonce)
-      expect(delivered[:callback_url]).to eq(callback_url)
-      expect(row.reload.status).to eq('confirmed')
-    end
-
-    it "binds aud to the operator's REGISTERED audience, accepting a matching body declaration" do
-      # The honest operator sends its own kyc_audience (== its registered audience)
-      # in the intake body; the broker bind-AND-verifies it against the operator's
-      # registration record and stamps THAT as `aud` — the value the operator's
-      # engine KycVerifier compares against, so a claim minted for operator A is
-      # rejected at operator B.
-      rid = open_request(audience: 'skooti')
-      row = ProveRequest.find(rid)
-      expect(row.audience).to eq('skooti')
-
-      delivered = {}
-      allow(CallbackPoster).to receive(:deliver) { |args|
-        delivered = args
-        200
-      }
-      post '/verify', params: { request: rid, decision: 'approve' }
-
-      payload = decode(delivered[:kyc_jws])
-      expect(payload['aud']).to eq('skooti')
-      # operator handle is retained separately for callback correlation/logging
-      expect(payload['operator']).to eq('skooti')
-    end
-
-    it 'mints aud from the registration even when the body declares no audience (aud == operator_id)' do
-      rid = open_request # no audience in the body
-      # The row records the registration-derived audience, never a raw body value.
-      expect(ProveRequest.find(rid).audience).to eq('skooti')
-      delivered = {}
-      allow(CallbackPoster).to receive(:deliver) { |args|
-        delivered = args
-        200
-      }
-      post '/verify', params: { request: rid, decision: 'approve' }
-      expect(decode(delivered[:kyc_jws])['aud']).to eq('skooti')
-    end
-
-    it 'mints an attestation valid for one year' do
-      rid = open_request
-      delivered = {}
-      allow(CallbackPoster).to receive(:deliver) { |args|
-        delivered = args
-        200
-      }
-      post '/verify', params: { request: rid, decision: 'approve' }
-      payload = decode(delivered[:kyc_jws])
-      expect(payload['exp'] - payload['iat']).to eq(365 * 24 * 3600)
-    end
-
-    it 'grants ONLY the attributes the operator asked for (age_over_18 alone)' do
-      rid = open_request(requested_claims: ['age_over_18'])
-      delivered = {}
-      allow(CallbackPoster).to receive(:deliver) { |args|
-        delivered = args
-        200
-      }
-      post '/verify', params: { request: rid, decision: 'approve' }
-      payload = decode(delivered[:kyc_jws])
-      expect(payload['attributes']).to eq({ 'age_over_18' => true })
-    end
-
-    it 'is single-use: a second approve on a confirmed request is rejected (no re-mint)' do
-      rid = open_request
-      allow(CallbackPoster).to receive(:deliver).and_return(200)
-      post '/verify', params: { request: rid, decision: 'approve' }
-      expect(ProveRequest.find(rid).status).to eq('confirmed')
-
-      expect(CallbackPoster).not_to receive(:deliver)
-      post '/verify', params: { request: rid, decision: 'approve' }
-      expect(response).to have_http_status(:unprocessable_entity)
-    end
-
-    # The sequential test above only proves the FIRST-LEVEL guard
-    # (#confirmable? on a row already flipped). It does NOT catch a
-    # check-then-write TOCTOU, where two concurrent approvals both read the
-    # row as pending BEFORE either has written — the same shape the PoW
-    # spent-store in kiosk-server has to close. This test drives real
-    # concurrency: N genuinely racing POST /verify against the SAME pending
-    # row, over separate connections/threads, so the DB (not an in-process
-    # mock) is what serializes the claim. It needs the row to be actually
-    # committed — see the `:real_concurrency` exception in spec_helper.rb —
-    # and cleans up its own row since no transaction rolls it back.
-    #
-    # WHICH WINDOW IS WIDENED IS THE WHOLE TEST, AND IT USED TO BE THE WRONG ONE
-    # (K-1736). A delay inside `ProveKey.mint` widens claim -> mint, which runs
-    # AFTER the conditional UPDATE: every losing thread then did its read only
-    # once the winner's UPDATE had already committed, saw a row that was no
-    # longer pending, and was turned away by the in-memory `#confirmable?`
-    # pre-check at the top of #decide. That is the check-then-write shape this
-    # example exists to disprove, so the example was passing for the wrong
-    # reason. MEASURED by three mutations of the controller, each run against
-    # this file: `raise` as the first statement of `lost_race_response` left it
-    # GREEN (the loser arm was never reached at all), defeating the conditional
-    # claim itself -- `update_all(...) == 1` rewritten `>= 0`, so every caller
-    # "wins" -- left it GREEN, and only reordering `approve!` before `claim!`
-    # turned it red. It pinned the ORDER and not the ATOMICITY.
-    #
-    # So the delay is on the READ. Every thread is held inside the read -> claim
-    # window until all of them have seen the row as pending -- `reads` below
-    # asserts exactly that, and it is what makes the N-1 refusals a statement
-    # about the conditional UPDATE rather than about the pre-check. The mint
-    # delay stays beside it, for its original purpose: it holds the winner
-    # inside the expensive half while the losers are still racing, so a second
-    # mint would overlap the first rather than following it.
-    it 'is single-use under concurrency: N racing approvals mint exactly once', :real_concurrency do
-      rid = open_request
-      begin
-        # THE WINDOW THE RACE NEEDS: hold every reader between its read and its
-        # claim. With no delay here the window is sub-millisecond and which
-        # branch refuses the losers is a timing coin-flip (same technique as
-        # kiosk-server's pow_gate_spec slow_ok_backend, aimed one seam earlier).
-        reads = []
-        read_mutex = Mutex.new
-        allow(ProveRequest).to receive(:find_by).and_wrap_original do |original, *args, **kwargs|
-          row = original.call(*args, **kwargs)
-          read_mutex.synchronize { reads << row&.status }
-          sleep 0.15
-          row
-        end
-
-        # And hold the WINNER inside the expensive half, so a second mint would
-        # overlap the first instead of following it.
-        allow(ProveKey).to receive(:mint).and_wrap_original do |original, **kwargs|
-          sleep 0.15
-          original.call(**kwargs)
-        end
-
-        deliveries = []
-        delivery_mutex = Mutex.new
-        allow(CallbackPoster).to receive(:deliver) do |**kwargs|
-          delivery_mutex.synchronize { deliveries << kwargs[:kyc_jws] }
-          200
-        end
-
-        # One single-threaded request first: with eager_load off, Rails
-        # finalizes routes lazily on first dispatch, and that finalization
-        # is not itself safe against simultaneous first-dispatches — a
-        # harness artifact (spurious ActionController::RoutingError),
-        # unrelated to the app, that a warm-up avoids.
-        ActionDispatch::Integration::Session.new(Rails.application).get('/prove_key.pem')
-
-        n = 6
-        threads = Array.new(n) do
-          Thread.new do
-            session = ActionDispatch::Integration::Session.new(Rails.application)
-            session.post('/verify', params: { request: rid, decision: 'approve' })
-            session.response.status
-          end
-        end
-        statuses = threads.map(&:value)
-
-        # THE PRECONDITION, asserted rather than assumed: all N read the row as
-        # pending, so none of them can have been refused by the `#confirmable?`
-        # pre-check. Without this the two assertions below are satisfied by a
-        # plain check-then-write and say nothing about the claim.
-        expect(reads.count('pending')).to eq(n)
-
-        expect(statuses.count(200)).to eq(1)
-        expect(statuses.count(422)).to eq(n - 1)
-        expect(deliveries.size).to eq(1) # exactly one mint+deliver from N racing approvals
-        expect(ProveRequest.find(rid).status).to eq('confirmed')
-      ensure
-        ProveRequest.delete(rid)
-      end
-    end
-
-    it 'is un-confirmable once past its TTL' do
-      rid = open_request
-      ProveRequest.find(rid).update!(expires_at: 1.hour.ago)
-      expect(CallbackPoster).not_to receive(:deliver)
-      post '/verify', params: { request: rid, decision: 'approve' }
-      expect(response).to have_http_status(:unprocessable_entity)
-    end
-
-    it 'records a decline without minting' do
-      rid = open_request
-      expect(CallbackPoster).not_to receive(:deliver)
-      post '/verify', params: { request: rid, decision: 'decline' }
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('Declined')
-      expect(ProveRequest.find(rid).status).to eq('declined')
-    end
+    payload = decode(delivered[:kyc_jws])
+    expect(payload['aud']).to eq('skooti')
+    # The operator handle stays a separate claim, for the callback.
+    expect(payload['operator']).to eq('skooti')
   end
 
-  describe 'GET /prove_key.pem' do
-    it 'serves the ProveKey public PEM operators pin' do
-      get '/prove_key.pem'
-      expect(response).to have_http_status(:ok)
-      expect(response.body).to include('PUBLIC KEY')
-    end
+  it 'mints aud from the registration even when the body declares no audience (aud == operator_id)' do
+    rid = open_request
+    # The row records the registered audience, never a raw body value.
+    expect(ProveRequest.find(rid).audience).to eq('skooti')
+    delivered = capture_delivery
+    approve(rid)
+    expect(decode(delivered[:kyc_jws])['aud']).to eq('skooti')
+  end
+end
+
+RSpec.describe 'KYC broker: POST /verify approve (lifetime and attributes)', type: :request do
+  it 'mints an attestation valid for one year' do
+    rid = open_request
+    delivered = capture_delivery
+    approve(rid)
+    payload = decode(delivered[:kyc_jws])
+    expect(payload['exp'] - payload['iat']).to eq(365 * 24 * 3600)
+  end
+
+  it 'grants ONLY the attributes the operator asked for (age_over_18 alone)' do
+    rid = open_request(requested_claims: ['age_over_18'])
+    delivered = capture_delivery
+    approve(rid)
+    payload = decode(delivered[:kyc_jws])
+    expect(payload['attributes']).to eq({ 'age_over_18' => true })
+  end
+end
+
+RSpec.describe 'KYC broker: POST /verify single use', type: :request do
+  it 'is single-use: a second approve on a confirmed request is rejected (no re-mint)' do
+    rid = open_request
+    allow(CallbackPoster).to receive(:deliver).and_return(200)
+    approve(rid)
+    expect(ProveRequest.find(rid).status).to eq('confirmed')
+
+    expect(CallbackPoster).not_to receive(:deliver)
+    approve(rid)
+    expect(response).to have_http_status(:unprocessable_entity)
+  end
+
+  it 'is un-confirmable once past its TTL' do
+    rid = open_request
+    ProveRequest.find(rid).update!(expires_at: 1.hour.ago)
+    expect(CallbackPoster).not_to receive(:deliver)
+    approve(rid)
+    expect(response).to have_http_status(:unprocessable_entity)
+  end
+end
+
+RSpec.describe 'KYC broker: POST /verify decline', type: :request do
+  it 'records a decline without minting' do
+    rid = open_request
+    expect(CallbackPoster).not_to receive(:deliver)
+    post '/verify', params: { request: rid, decision: 'decline' }
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include('Declined')
+    expect(ProveRequest.find(rid).status).to eq('declined')
+  end
+end
+
+# Real threads on separate connections race one committed row, so Postgres,
+# not an in-process mock, decides which claim wins. Every reader is held
+# between its read and its claim, so all of them see the row as pending and
+# the refusals come from the conditional UPDATE, not from the pre-check.
+RSpec.describe 'KYC broker: POST /verify under concurrency', type: :request do
+  # `:real_concurrency` commits the row (see spec_helper.rb), so the example deletes it.
+  it 'is single-use under concurrency: N racing approvals mint exactly once', :real_concurrency do
+    racers = 6
+    rid = open_request
+    reads = hold_every_read
+    slow_down_mint
+    deliveries = capture_deliveries
+    warm_up_routes
+    statuses = race_approvals(rid, racers)
+
+    expect(reads.count('pending')).to eq(racers)
+    expect(statuses.count(200)).to eq(1)
+    expect(statuses.count(422)).to eq(racers - 1)
+    expect(deliveries.size).to eq(1) # exactly one mint+deliver from N racing approvals
+    expect(ProveRequest.find(rid).status).to eq('confirmed')
+  ensure
+    ProveRequest.delete(rid)
+  end
+end
+
+RSpec.describe 'KYC broker: GET /prove_key.pem', type: :request do
+  it 'serves the ProveKey public PEM operators pin' do
+    get '/prove_key.pem'
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include('PUBLIC KEY')
   end
 end

@@ -3,6 +3,7 @@
 ENV['RAILS_ENV'] ||= 'test'
 require_relative '../config/environment'
 require 'rspec/rails'
+Dir[File.join(__dir__, 'support', '*.rb')].each { |helper| require helper }
 
 load Rails.root.join('db/schema.rb') unless ActiveRecord::Base.connection.table_exists?('prove_requests')
 

@@ -29,8 +29,8 @@ module Kiosk
           slot: SLOT,
           timezone: TIMEZONE,
           service: { type: 'string', description: 'The service booked.' },
-          currency: { type: 'string', description: 'EUR.' },
-          price_cents: { type: 'integer', description: 'EUR cents captured at booking.' },
+          currency: { type: 'string', description: "The price's currency." },
+          price_cents: { type: 'integer', description: 'In cents, captured at booking.' },
           price_eur: { type: 'string', description: 'The price for a human, e.g. "€90".' }
         },
         required: %w[appointment_id salon_id slot timezone service currency price_cents price_eur] },
@@ -49,7 +49,7 @@ module Kiosk
                   appointment_id: '6b1f0c5a-9d3e-4f27-8a10-2c7e4b9d5f83', salon_id: 1,
                   slot: -> { BookAppointmentOperation.example_slot },
                   timezone: SalonClock::DEFAULT_ZONE_NAME, service: 'Colour',
-                  currency: 'EUR', price_cents: 9000, price_eur: '€90'
+                  currency: 'eur', price_cents: 9000, price_eur: '€90'
                 })
     def book_appointment
       @appointment = BookAppointmentOperation.call(

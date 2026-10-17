@@ -184,7 +184,7 @@ BATTERY.record('OwnerLinkIgnoresForgedClaimBody',
                rc == 201 && role_claim == 'owner',
                "owner link with forged claim body → token role #{role_claim.inspect} (want \"owner\", body ignored)")
 
-# Alice's calendar excludes Bob's booking (`kind` is stamped on every row, so it proves nothing).
+# Alice's calendar excludes Bob's booking.
 rc_b3, appt_b3 = WIRE.post_json(
   '/kiosk/book_appointment',
   { salon_id: salon_id, slot: FUTURE_SLOT.call(3) },
@@ -194,16 +194,15 @@ appt_id_b3 = appt_b3['appointment_id']
 
 rc, cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(ALICE.token))
 rows = Array(cal)
-own_ids     = rows.reject { |r| r['summary'] }.map { |r| r['id'] }
+own_ids  = rows.map { |r| r['id'] }
 # Positive control: an empty calendar would satisfy every absence.
-sees_own    = own_ids.include?(appt_id_a)
-own_only    = !own_ids.include?(appt_id_b3)
-no_forecast = rows.none? { |r| r['summary'] == 'forecast' }
+sees_own = own_ids.include?(appt_id_a)
+own_only = !own_ids.include?(appt_id_b3)
 BATTERY.record('CustomerCalendarStaysOwnScoped',
-               rc == 200 && rc_b3 == 200 && sees_own && own_only && no_forecast,
+               rc == 200 && rc_b3 == 200 && sees_own && own_only,
                "customer salon_calendar: #{rows.size} rows #{own_ids.inspect}, carries her OWN " \
                "#{appt_id_a.inspect} (sees_own=#{sees_own}), excludes B's #{appt_id_b3.inspect} " \
-               "(own_only=#{own_only}), forecast_hidden=#{no_forecast}")
+               "(own_only=#{own_only})")
 
 # Role escalation through the device-grant ceremony (RFC 8628): the role is the approver's.
 
@@ -290,7 +289,6 @@ cust_rows      = Array(cust_cal)
 # Positive control: the customer token reaches Alice's own booking.
 cust_sees_own  = cust_rows.any? { |r| r['id'] == appt_id_a }
 cust_own_only  = cust_rows.none? { |r| r['id'] == appt_id_b3 }
-cust_noforecast = cust_rows.none? { |r| r['summary'] == 'forecast' }
 
 own_key  = OpenSSL::PKey::RSA.generate(2048)
 own_pem  = own_key.public_key.to_pem
@@ -299,19 +297,17 @@ own_claim_role = token_role(own_claim_token)['role']
 rc_own_cal, own_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(own_claim_token))
 own_rows        = Array(own_cal)
 own_sees_others = own_rows.any? { |r| r['id'] == appt_id_b3 }
-own_forecast    = own_rows.any? { |r| r['summary'] == 'forecast' }
 
 BATTERY.record('DeviceGrantRoleComesFromTheApprover',
                rc_cust_poll == 200 && cust_claim_role == 'customer' &&
-                 rc_cust_cal == 200 && cust_sees_own && cust_own_only && cust_noforecast &&
+                 rc_cust_cal == 200 && cust_sees_own && cust_own_only &&
                  rc_own_poll == 200 && own_claim_role == 'owner' &&
-                 rc_own_cal == 200 && own_sees_others && own_forecast,
+                 rc_own_cal == 200 && own_sees_others,
                "customer-approved claim → poll #{rc_cust_poll}, token role #{cust_claim_role.inspect}, " \
-               "calendar #{rc_cust_cal} sees_own=#{cust_sees_own} own_only=#{cust_own_only} " \
-               "forecast_hidden=#{cust_noforecast}; " \
+               "calendar #{rc_cust_cal} sees_own=#{cust_sees_own} own_only=#{cust_own_only}; " \
                "CONTROL owner-approved claim over the SAME endpoints → poll #{rc_own_poll}, token role " \
                "#{own_claim_role.inspect}, calendar #{rc_own_cal} whole_book=#{own_sees_others} " \
-               "forecast=#{own_forecast} (want customer/own-scoped and owner/whole-book — the role is the " \
+               "(want customer/own-scoped and owner/whole-book — the role is the " \
                "approver's, never the caller's)")
 
 # The verify page names the role it grants, and differs per approver.
@@ -339,16 +335,14 @@ rebind_rows      = Array(rebind_cal)
 # Positive control: the rebound token still reads Alice's book.
 rebind_sees_own  = rebind_rows.any? { |r| r['id'] == appt_id_a }
 rebind_own_only  = rebind_rows.none? { |r| r['id'] == appt_id_b3 }
-rebind_noforecast = rebind_rows.none? { |r| r['summary'] == 'forecast' }
 BATTERY.record('DeviceGrantRebindCannotEscalate',
                rc_rebind_refused == 400 && rebind_refused_body['error'] == 'invalid_request' &&
                  rc_rebind_poll == 200 && rebind_role == 'customer' && rebind_stable &&
-                 rc_rebind_cal == 200 && rebind_sees_own && rebind_own_only && rebind_noforecast,
+                 rc_rebind_cal == 200 && rebind_sees_own && rebind_own_only,
                "known key re-runs the ceremony: role=owner → #{rc_rebind_refused}/" \
                "#{rebind_refused_body['error'].inspect}; the honest re-run → poll #{rc_rebind_poll}, " \
                "role #{rebind_role.inspect}, agent_id stable=#{rebind_stable}, calendar #{rc_rebind_cal} " \
-               "sees_own=#{rebind_sees_own} own_only=#{rebind_own_only} " \
-               "forecast_hidden=#{rebind_noforecast} (want the rebind to stay " \
+               "sees_own=#{rebind_sees_own} own_only=#{rebind_own_only} (want the rebind to stay " \
                "the approver's role, not one ceremony later's escalation)")
 
 # An unsigned `agent:u-…:r-owner` bearer resolves to no identity; the owner's real token is the control.
@@ -358,14 +352,14 @@ rc_forged_book, = WIRE.post_json('/kiosk/book_appointment',
                                  { salon_id: salon_id, slot: FUTURE_SLOT.call(5) },
                                  forged_owner_bearer)
 rc_owner_cal, owner_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(owner_token))
-owner_sees_forecast = Array(owner_cal).any? { |r| r['summary'] == 'forecast' }
+owner_sees_book = Array(owner_cal).any? { |r| r['id'] == appt_id_b3 }
 BATTERY.record('SelfAssertedTokenForgery',
                rc_forged_cal == 401 && rc_forged_book == 401 &&
-                 rc_owner_cal == 200 && owner_sees_forecast,
+                 rc_owner_cal == 200 && owner_sees_book,
                "self-asserted `agent:u-#{OWNER_ID}:a-…:r-owner` → salon_calendar #{rc_forged_cal}, " \
                "book_appointment #{rc_forged_book} (want 401/401: it resolves to NO identity, in THIS " \
                "environment — no env gate involved); CONTROL the owner's GENUINELY-BOUND token → " \
-               "salon_calendar #{rc_owner_cal}, forecast_visible=#{owner_sees_forecast} (want 200/true, so " \
+               "salon_calendar #{rc_owner_cal}, whole_book=#{owner_sees_book} (want 200/true, so " \
                'the refusal is about the bearer and not a closed endpoint)')
 
 # A self-asserted X-Staff-Session header buys nothing; the owner's real session is the control.

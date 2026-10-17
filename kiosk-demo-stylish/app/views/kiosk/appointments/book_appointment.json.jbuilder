@@ -5,6 +5,6 @@ json.salon_id @appointment.salon_id
 json.partial! 'clock', appointment: @appointment
 if (service = @appointment.service)
   json.service service.name
-  json.currency 'EUR'
+  json.currency 'eur'
   json.extract! service, :price_cents, :price_eur
 end

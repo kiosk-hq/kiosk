@@ -9,17 +9,18 @@ class SalonBookStory < StoryTest
     owner  = assistant_of(:owner)
     assert_equal 'owner', owner.role
 
-    *bookings, forecast = owner.the_book.rows
-    assert_equal [alices, bobs].sort, bookings.pluck('id').sort
-    assert_equal ['forecast', 2, 12_500], forecast.values_at('summary', 'bookings', 'forecast_cents')
+    book = owner.the_book.rows
+    assert_equal [alices, bobs].sort, book.pluck('id').sort
+    assert_equal 12_500, book.sum { it['price_cents'] }
+    assert_equal ['eur'], book.pluck('currency').uniq
   end
 
-  test "a client's assistant sees only the client's own booking and no forecast" do
+  test "a client's assistant sees only the client's own booking" do
     alice  = assistant_of(:alice)
     alices = alice.books['appointment_id']
     assistant_of(:bob).books
     assert_equal 'customer', alice.role
 
-    assert_equal([[alices, 'booking']], alice.the_book.rows.map { it.values_at('id', 'kind') })
+    assert_equal [alices], alice.the_book.rows.pluck('id')
   end
 end

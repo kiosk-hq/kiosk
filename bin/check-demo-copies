@@ -779,7 +779,7 @@ def agree_check(label, what, bodies, declared, errors)
     next if groups.key?(demos) || widened.key?(demos)
     next if (demos - bodies.keys).any?
 
-    actual = bodies.select { |d, _| demos.include?(d) }
+    actual = bodies.slice(*demos)
                    .group_by { |_d, norm| norm }
                    .values.map { |g| "[#{g.map(&:first).sort.join(',')}]" }.sort.join(' ')
     errors << if spec[:rule] == :lockstep
@@ -1301,7 +1301,7 @@ FRAGMENTS.each do |id, entry|
   end
   errors << "#{id}: `except:` only means something on a `:code` entry." if excepted.any? && entry[:rule] != :code
 
-  held = per_demo.select { |demo, _| entry[:ships].include?(demo) }
+  held = per_demo.slice(*entry[:ships])
   next if held.size < 2
 
   fragment_comparisons += held.size

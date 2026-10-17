@@ -505,6 +505,76 @@ RSpec.describe Kiosk::Server::Executor, 'spending cap across spellings' do
   end
 end
 
+# A cart whose capture may still be running counts against the cap, and two
+# concurrent pays of one assistant are serialised, so neither can miss the other.
+RSpec.describe Kiosk::Server::Executor, 'spending cap and carts in flight' do
+  include_context 'executor persistence spec: payment'
+
+  before { Kiosk.configuration.spending_cap = ->(**) { 2000 } }
+
+  def another_cart(cents) = cart.with(id: "cart-#{SecureRandom.hex(6)}", total_amount_cents: cents)
+
+  it 'counts a persisted cart with no settlement yet' do
+    persist_trail
+    expect { executor.send(:enforce_spending_cap!, another_cart(500)) }
+      .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e| expect(e.hint).to include('1599 already settled or in flight') }
+  end
+
+  it 'stops counting an unsettled cart once its mandate has expired' do
+    persist_trail
+    connection.exec_query("UPDATE #{table('cart_mandates')} SET expires_at = now() - INTERVAL '1 minute'", 'persist spec')
+    expect { executor.send(:enforce_spending_cap!, another_cart(500)) }.not_to raise_error
+  end
+end
+
+RSpec.shared_context 'executor persistence spec: two chains of one assistant' do
+  include_context 'executor persistence spec: payment'
+
+  let(:chains) do
+    Array.new(2) do |n|
+      i = intent.with(id: "intent-#{n}-#{SecureRandom.hex(4)}", raw_jws: "intent-jws-#{n}")
+      c = cart.with(id: "cart-#{n}-#{SecureRandom.hex(4)}", intent_mandate_id: i.id, raw_jws: "cart-jws-#{n}")
+      [i, c, payment.with(id: "pay-#{n}-#{SecureRandom.hex(4)}", cart_mandate_id: c.id, raw_jws: "payment-jws-#{n}")]
+    end
+  end
+
+  before do
+    mandates = chains.flatten
+    find = ->(raw_jws:, **) { mandates.find { |m| m.raw_jws == raw_jws } }
+    allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent, &find)
+    allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart, &find)
+    # Between the cap check and the cart insert: the window two pays race in.
+    allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment) do |**kw|
+      sleep(0.3)
+      find.call(**kw)
+    end
+    Kiosk.configure do |c|
+      c.spending_cap     = ->(**) { 2000 }
+      c.payment_provider = instance_double('PSP', setup_required?: false, capture: settled)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::Executor, 'two concurrent pays under one cap' do
+  include_context 'executor persistence spec: two chains of one assistant'
+
+  def pay_in_a_thread(intent, cart, payment)
+    args = { intent_mandate_jws: intent.raw_jws, cart_mandate_jws: cart.raw_jws, payment_mandate_jws: payment.raw_jws }
+    Thread.new do
+      ActiveRecord::Base.connection_pool.with_connection do |conn|
+        described_class.call(kind: :pay, args: args, identity: identity, connection: conn) && :paid
+      rescue Kiosk::Server::Errors::SpendingCapExceeded
+        :refused
+      end
+    end
+  end
+
+  it 'lets one through when each fits the cap alone and the two together do not' do
+    results = chains.map { |chain| pay_in_a_thread(*chain) }.map(&:value)
+    expect(results.sort).to eq(%i[paid refused])
+  end
+end
+
 # ── The settled replay (K-850), driven end to end ──────────────────────
 #
 # WHY IT IS HERE and not only in executor_spec.rb. The whole behaviour is a

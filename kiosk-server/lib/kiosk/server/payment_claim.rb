@@ -51,10 +51,12 @@ module Kiosk
         Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(@reference => id)).exists?
       end
 
-      # `paying → paid`, then `c.after_payment`. A failure here never surfaces:
-      # the charge has happened and the settlement row records it.
+      # `paying → paid`, then `c.after_payment`, once: only the call that moved
+      # the row runs the hook. A failure here never surfaces: the charge has
+      # happened and the settlement row records it.
       def mark_paid!(id)
-        @row.flip(id, from: PAYING, to: PAID)
+        return unless @row.flip(id, from: PAYING, to: PAID).positive?
+
         Kiosk.configuration.after_payment&.call(id)
       rescue StandardError => e
         FailureLog.report("#{self.class} could not mark #{id} paid", e)

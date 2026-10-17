@@ -126,6 +126,17 @@ module PaymentClaimSpecHelpers
   end
 end
 
+RSpec.describe Kiosk::Server::PaymentClaim, '#mark_paid!' do
+  include PaymentClaimSpecHelpers
+
+  it 'runs after_payment once when two callers mark one row paid' do
+    claim.capture(cart_for(row))
+    claim.mark_paid!(row)
+
+    expect(paid).to eq([row])
+  end
+end
+
 # §11.6's operator half against a real Postgres: one capture per payable row,
 # and a paid state that rests on the capture. No reachable server skips, as the
 # other persistence specs do.

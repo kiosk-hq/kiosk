@@ -275,7 +275,9 @@ module Kiosk
       module SpendingCap
         private
 
-        # Best-effort at pay time. A nil seam or a nil cap means uncapped.
+        # A nil seam or a nil cap means uncapped. Runs in the transaction that
+        # persists the cart, under a per-assistant lock, so two concurrent pays
+        # see each other: the second counts the first's cart as in flight.
         def enforce_spending_cap!(cart)
           cap = Kiosk.configuration.spending_cap&.call(agent_id: identity.agent_id)
           return if cap.nil? # this assistant is uncapped
@@ -289,12 +291,36 @@ module Kiosk
 
         # One tally per currency: cents are not fungible across currencies.
         def spent_in_window(cart, window_days)
-          settled_total_cents(agent_id: identity.agent_id, window_days: window_days, currency: cart.currency)
+          agent_id = identity.agent_id
+          lock_assistant_payments!(agent_id)
+          settled_total_cents(agent_id:, window_days:, currency: cart.currency) +
+            in_flight_total_cents(agent_id:, currency: cart.currency)
         end
 
         def cap_hint(cap, spent, window_days, cart)
           window_note = window_days ? " in the last #{window_days.to_i} day(s)" : ''
-          "cap #{cap.to_i} cents; #{spent} already settled#{window_note}; this charge is #{cart.total_amount_cents.to_i}"
+          "cap #{cap.to_i} cents; #{spent} already settled or in flight#{window_note}; " \
+            "this charge is #{cart.total_amount_cents.to_i}"
+        end
+
+        # Carts of this agent whose mandate is live and that have no settlement:
+        # a capture may still be running for each.
+        def in_flight_total_cents(agent_id:, currency:)
+          schema = Kiosk.configuration.schema
+          sql = <<~SQL
+            SELECT COALESCE(SUM(c.total_amount_cents), 0) AS total
+            FROM #{schema}.cart_mandates c
+            WHERE c.agent_id = $1 AND lower(btrim(c.currency)) = $2 AND c.expires_at > now()
+              AND NOT EXISTS (SELECT 1 FROM #{schema}.settlements s WHERE s.cart_mandate_id = c.id)
+          SQL
+          binds = [agent_id, MandateVerifier.canonical_currency(currency)]
+          connection.exec_query(sql, 'Kiosk in-flight total', binds).to_a.first.fetch('total').to_i
+        end
+
+        # Held to the end of the transaction; an advisory lock needs no grant on any table.
+        def lock_assistant_payments!(agent_id)
+          connection.exec_query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))',
+                                'Kiosk spending cap lock', [agent_id.to_s])
         end
       end
 

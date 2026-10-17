@@ -570,8 +570,9 @@ RSpec.shared_context 'executor spec: verb :pay' do
     # Persist helpers return SERVER-generated ids (uuid PKs); the verb
     # threads them through the FK chain.
     { persist_intent_mandate: 'intent-row', persist_cart_mandate: 'cart-row',
-      persist_payment_mandate: 'pay-row', persist_settlement: 's-1' }.each do |helper, id|
-      allow_any_instance_of(described_class).to receive(helper).and_return(id)
+      persist_payment_mandate: 'pay-row', persist_settlement: 's-1',
+      in_flight_total_cents: 0, lock_assistant_payments!: nil }.each do |helper, value|
+      allow_any_instance_of(described_class).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double('PSP', capture: settlement, setup_required?: false)
   end

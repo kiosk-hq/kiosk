@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: The spending cap counts carts whose capture may still run and serialises one assistant's pays, so two concurrent pays cannot pass the cap together.
+- 2026-10-17: `PaymentClaim` runs `after_payment` only for the call that moves the row to paid, so a hook never runs twice for one payment.
 - 2026-10-17: The proof-of-work toll checks a proof's signature, expiry and parameters before it records the challenge as spent, and reads no more proofs than it asked for.
 - 2026-10-17: Token revocation is stored in the new `kiosk.revocations` table by default, so a revoke or an unlink holds in every process and after a restart; run `kiosk:install`'s new migration.
 - 2026-10-17: The wire and the event stream accept only a bearer token, never the operator's session cookie; `auth/link` and `auth/unlink` refuse a request that is not `application/json`.

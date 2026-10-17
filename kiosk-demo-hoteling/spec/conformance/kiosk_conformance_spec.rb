@@ -34,7 +34,7 @@ RSpec.describe "Kiosk conformance" do
     expect(kiosk_origin).to have_a_route_for_every_verb
   end
 
-  it "executes its read surface as an authenticated principal" do
+  it "executes its read surface as a signed-in customer" do
     expect(:properties).to    execute_as_a_kiosk_verb(as: ada)
     expect(:my_bookings).to   execute_as_a_kiosk_verb(as: ada)
     expect(:search_hotels).to execute_as_a_kiosk_verb(as: ada)
@@ -65,7 +65,7 @@ RSpec.describe "Kiosk conformance" do
     expect(:my_bookings).to be_scoped_to_principal(as: ada, and_not: ben)
   end
 
-  it "publishes the same shelf to every principal" do
+  it "publishes the same shelf to every customer" do
     ada_shelf = Kiosk::TestHelpers::Conformance.executes(:properties, as: ada)
     ben_shelf = Kiosk::TestHelpers::Conformance.executes(:properties, as: ben)
 

@@ -32,8 +32,8 @@ class Guest < Kiosk::TestHelpers::Customer
   def a_free_room(check_in:, check_out:)
     browses_hotels.rows.each do |hotel|
       rooms = rooms_free(at: hotel["property_id"], check_in:, check_out:).rows
-      return { property_id: hotel["property_id"], room_type_id: rooms.first["room_type_id"],
-               check_in: check_in.iso8601, check_out: check_out.iso8601 } if rooms.any?
+      return { room_type_id: rooms.first["room_type_id"], check_in: check_in.iso8601,
+               check_out: check_out.iso8601 } if rooms.any?
     end
     raise "no room is free for #{check_in}..#{check_out}"
   end

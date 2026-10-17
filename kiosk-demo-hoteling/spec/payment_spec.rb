@@ -38,7 +38,7 @@ RSpec.describe "paying for a booking" do
     end
   end
 
-  it "refuses a principal paying for somebody else's booking" do
+  it "refuses a customer paying for somebody else's booking" do
     expect { cashier.capture(cart(ben)) }
       .to raise_error(Kiosk::Server::Errors::Forbidden, "booking not found or not yours")
     expect(booking.reload).to be_unpaid

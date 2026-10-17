@@ -53,12 +53,9 @@ profile = Kiosk::Redteam::Profile.new(
   result_id_key: "booking_id",
 
   create_owned: lambda { |client, principal|
-    found = FIND_AVAILABLE.call(client, principal)
-    prop  = found[:prop]
-    room  = found[:room]
+    room = FIND_AVAILABLE.call(client, principal)[:room]
 
     rsv_resp = client.run(principal, name: "reserve_room",
-      property_id:  prop["property_id"],
       room_type_id: room["room_type_id"],
       check_in:     CHECK_IN,
       check_out:    CHECK_OUT)
@@ -81,12 +78,9 @@ profile = Kiosk::Redteam::Profile.new(
   # The scenario injects user_id; reserve_room's schema forbids extra properties, so it is a 400.
   forge_action: "reserve_room",
   forge_args:   lambda { |client, principal_a, _principal_b|
-    found = FIND_AVAILABLE.call(client, principal_a)
-    prop  = found[:prop]
-    room  = found[:room]
+    room = FIND_AVAILABLE.call(client, principal_a)[:room]
 
     {
-      property_id:  prop["property_id"],
       room_type_id: room["room_type_id"],
       check_in:     CHECK_IN,
       check_out:    CHECK_OUT,
@@ -272,7 +266,7 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
     super(
       name:        "DoubleBookedRoom",
       category:    "inventory",
-      description: "A room-night already held must not be reservable again — same or overlapping dates, same or another principal",
+      description: "A room-night already held must not be reservable again — same or overlapping dates, same or another customer",
     )
   end
 
@@ -291,27 +285,27 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
     pid = found[:property_id]
     rid = found[:room_type_id]
 
-    held = reserve(client, a, pid, rid, DBL_IN, DBL_OUT)
+    held = reserve(client, a, rid, DBL_IN, DBL_OUT)
     statuses << held.status
     failures << "setup: A's first reserve_room → HTTP #{held.status} #{held.body.inspect}" unless held.status == 200
 
-    # 1 — the headline: another principal takes the identical room-night.
+    # 1 — the headline: another customer takes the identical room-night.
     conflict(failures, statuses, "B reserve_room same nights",
-             reserve(client, b, pid, rid, DBL_IN, DBL_OUT))
+             reserve(client, b, rid, DBL_IN, DBL_OUT))
 
     # 2 — overlap, not equality: one night in common is one night too many.
     conflict(failures, statuses, "A reserve_room overlapping nights",
-             reserve(client, a, pid, rid, DBL_IN_OVL, DBL_OUT_OVL))
+             reserve(client, a, rid, DBL_IN_OVL, DBL_OUT_OVL))
 
     # 3 — CONTROL: checkout day is the next guest's check-in day, so this must succeed.
-    adjacent = reserve(client, b, pid, rid, DBL_OUT, DBL_OUT_ADJ)
+    adjacent = reserve(client, b, rid, DBL_OUT, DBL_OUT_ADJ)
     statuses << adjacent.status
     unless adjacent.status == 200
       failures << "CONTROL abutting nights #{DBL_OUT}..#{DBL_OUT_ADJ} → HTTP #{adjacent.status} " \
                   "(want 200; a checkout day is the next guest's check-in day)"
     end
 
-    # 4 — dated hotel_detail must not offer the taken room; undated must say it is a catalogue.
+    # 4 — dated hotel_detail must not offer the taken room; undated lists every room type.
     dated = client.query(a, name: "hotel_detail", property_id: pid,
                             check_in: DBL_IN, check_out: DBL_OUT)
     statuses << dated.status
@@ -319,10 +313,9 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
       failures << "hotel_detail(#{DBL_IN}..#{DBL_OUT}) still offers the taken room_type #{rid}"
     end
     undated = client.query(a, name: "hotel_detail", property_id: pid)
-    scope   = detail(undated)["room_types_scope"].to_s
-    unless room_ids(undated).include?(rid) && scope.include?("catalogue")
-      failures << "undated hotel_detail must still list the full catalogue AND say so " \
-                  "(room #{rid} listed: #{room_ids(undated).include?(rid)}, scope: #{scope.inspect})"
+    unless room_ids(undated).include?(rid) && detail(undated).key?("check_in") && detail(undated)["check_in"].nil?
+      failures << "undated hotel_detail must list every room type, with a null check_in " \
+                  "(room #{rid} listed: #{room_ids(undated).include?(rid)}, check_in: #{detail(undated)["check_in"].inspect})"
     end
 
     Kiosk::Redteam::Verdict.new(
@@ -335,9 +328,8 @@ class DoubleBookedRoom < Kiosk::Redteam::Scenario
 
   private
 
-  def reserve(client, principal, property_id, room_type_id, check_in, check_out)
-    client.run(principal, name: "reserve_room", property_id:, room_type_id:,
-                          check_in:, check_out:)
+  def reserve(client, principal, room_type_id, check_in, check_out)
+    client.run(principal, name: "reserve_room", room_type_id:, check_in:, check_out:)
   end
 
   # Exactly 409 conflict: a 500 also creates no row.
@@ -406,7 +398,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
     super(
       name:        "HostileArgShapes",
       category:    "input",
-      description: "Boolean/array/object/junk-integer/unparseable-date values on reserve_room's four arguments, availability's three and search_hotels' four filters are a typed 400 — never a 500, never a wrong answer served as 200",
+      description: "Boolean/array/object/junk-integer/unparseable-date values on reserve_room's three arguments, availability's three and search_hotels' four filters are a typed 400 — never a 500, never a wrong answer served as 200",
     )
   end
 
@@ -417,22 +409,18 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     # Action path: real JSON types.
     INT_SHAPES.each do |v|
-      refused "reserve_room property_id=#{v.inspect}",
-              client.run(a, name: "reserve_room", property_id: v, room_type_id: room,
-                            check_in: PROBE_IN, check_out: PROBE_OUT),
-              supplied: v
       refused "reserve_room room_type_id=#{v.inspect}",
-              client.run(a, name: "reserve_room", property_id: prop, room_type_id: v,
+              client.run(a, name: "reserve_room", room_type_id: v,
                             check_in: PROBE_IN, check_out: PROBE_OUT),
               supplied: v
     end
     DATE_SHAPES.each do |v|
       refused "reserve_room check_in=#{v.inspect}",
-              client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
+              client.run(a, name: "reserve_room", room_type_id: room,
                             check_in: v, check_out: PROBE_OUT),
               supplied: v
       refused "reserve_room check_out=#{v.inspect}",
-              client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
+              client.run(a, name: "reserve_room", room_type_id: room,
                             check_in: PROBE_IN, check_out: v),
               supplied: v
     end
@@ -497,7 +485,7 @@ class HostileArgShapes < Kiosk::Redteam::Scenario
 
     # Asked from the far end: an old check_in would hit the past-date refusal first.
     refused "reserve_room check_out=\"9999-12-31\" (unpriceable stay)",
-            client.run(a, name: "reserve_room", property_id: prop, room_type_id: room,
+            client.run(a, name: "reserve_room", room_type_id: room,
                           check_in: PROBE_IN, check_out: "9999-12-31"),
             supplied: "9999-12-31"
 
@@ -668,7 +656,7 @@ class PastStay < Kiosk::Redteam::Scenario
     end
 
     # Write side: no hold for a past room-night.
-    past_hold = client.run(a, name: "reserve_room", property_id: prop_id, room_type_id: room_id,
+    past_hold = client.run(a, name: "reserve_room", room_type_id: room_id,
                                                     check_in: PAST_IN, check_out: PAST_OUT)
     statuses << past_hold.status
     unless refusal?(past_hold)
@@ -679,7 +667,7 @@ class PastStay < Kiosk::Redteam::Scenario
 
     # CONTROL: the same call at a future date must hold.
     ctl_room = ctl_rows.first ? ctl_rows.first["room_type_id"] : room_id
-    ctl_hold = client.run(a, name: "reserve_room", property_id: prop_id, room_type_id: ctl_room,
+    ctl_hold = client.run(a, name: "reserve_room", room_type_id: ctl_room,
                                                    check_in: CTL_IN, check_out: CTL_OUT)
     unless ctl_hold.status == 200
       failures << "CONTROL reserve_room(#{CTL_IN}..#{CTL_OUT}) → HTTP #{ctl_hold.status} " \

@@ -1,24 +1,20 @@
 # frozen_string_literal: true
 
-# The read verbs.
+# The hotel catalogue.
 
 class Kiosk::HotelsController < ActionController::API
   include Kiosk::Handler
 
   kind :query
-  description "Browse the whole hotel catalogue this origin serves — an empty answer would mean this " \
-              "origin lists no hotels at all. Once the human narrows to one, `availability` says " \
-              "which of its room types are still free for the nights they want and `reserve_room` " \
-              "takes the hold."
+  description "Every hotel on this origin, by name. `search_hotels` narrows them down."
   input_schema type: "object", additionalProperties: false, properties: {}, required: []
   output_schema type: "array",
-                description: "The whole (small) catalogue of properties, name-ordered.",
                 items: {
                   type: "object", additionalProperties: false,
                   properties: {
-                    property_id: { type: "integer", description: "Pass to availability, hotel_detail and reserve_room as `property_id`." },
+                    property_id: { type: "integer", description: "Pass to availability and hotel_detail." },
                     name:        { type: "string", description: "Hotel name." },
-                    city:        { type: "string", description: "City the property is in." },
+                    city:        { type: "string" },
                   },
                   required: %w[property_id name city],
                 }
@@ -28,145 +24,41 @@ class Kiosk::HotelsController < ActionController::API
     }
   end
 
-  kind :query
-  description "Check which room types are still free at ONE hotel for ONE stay. An EMPTY array " \
-              "means that hotel is SOLD OUT for those nights, not that it has no rooms. There is no " \
-              "availability in the past either: this hotel sells no room-night before tonight, read " \
-              "in THE PROPERTY's own clock, which `hotel_detail` publishes as `timezone` and which " \
-              "is a fact about the hotel rather than about this operator, and tonight itself IS " \
-              "bookable because " \
-              "a same-day arrival is an ordinary room-night. " \
-              "Rates are quoted PER NIGHT, but a cart is signed for " \
-              "the WHOLE stay at the total the operator quotes, which `reserve_room` returns. Once " \
-              "the human picks a room type, `reserve_room` holds it."
-  input_schema type: "object",
-               additionalProperties: false,
-               properties: {
-                 property_id: { type: "integer",
-                                description: "Property to check — the `property_id` from a properties row. " \
-                                             "An id no property has is 404 not_found." },
-                 check_in:    { type: "string", format: "date",
-                                description: "First night (YYYY-MM-DD). Today or later, read in THIS " \
-                                             "PROPERTY's own clock (`hotel_detail` publishes it as " \
-                                             "`timezone`) — a date before that is refused 400 naming " \
-                                             "the earliest night and the zone it was judged on, never " \
-                                             "answered with an empty list. A calendar day is never " \
-                                             "converted: send the day you mean the hotel to sell." },
-                 check_out:   { type: "string", format: "date",
-                                description: "Checkout day (YYYY-MM-DD, exclusive) — a checkout day is " \
-                                             "the next guest's check-in day." },
-               },
-               required: ["property_id", "check_in", "check_out"]
-  output_schema type: "array",
-                description: "Room types free for the requested nights, cheapest first.",
-                items: {
-                  type: "object", additionalProperties: false,
-                  properties: {
-                    room_type_id:        { type: "integer", description: "Pass to reserve_room as `room_type_id`, with the same `property_id`." },
-                    name:                { type: "string", description: "Room-type name." },
-                    nightly_price_cents: { type: "integer", description: "EUR cents PER NIGHT — the stay total is nights × this." },
-                    currency:            { type: "string", description: "eur — the currency the cart must be signed in." },
-                  },
-                  required: %w[room_type_id name nightly_price_cents currency],
-                }
-  def availability
-    search = RoomSearch.new(property: Property.find(params[:property_id]),
-                            check_in: params[:check_in], check_out: params[:check_out])
-    search.validate!
-
-    render json: search.room_types.order(:nightly_price_cents).pluck(:id, :name, :nightly_price_cents)
-                       .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents, currency: "eur" } }
-  end
-
-  kind :query
-  description "List this principal's hotel bookings (scoped to authenticated user). " \
-              "This is the query to re-read after a payment whose response never arrived: " \
-              "each row says where that booking stands with the hotel and where its money " \
-              "stands, and a booking whose charge is still outstanding says so rather than " \
-              "reporting itself unpaid. A confirmed row also carries the reference the guest " \
-              "gives at the desk — the hotel's own record of it, readable at any time and not " \
-              "only in the `confirm_booking` answer."
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
-  output_schema type: "array",
-                description: "The principal's bookings, newest first.",
-                items: {
-                  type: "object", additionalProperties: false,
-                  properties: {
-                    booking_id:        { type: "string", description: "uuid. Pass to confirm_booking as `booking_id`." },
-                    property_id:       { type: "integer", description: "The property booked." },
-                    room_type_id:      { type: "integer", description: "The room type held." },
-                    check_in:          { type: "string", description: "First night, YYYY-MM-DD." },
-                    check_out:         { type: "string", description: "Checkout day (exclusive), YYYY-MM-DD." },
-                    total_cents:       { type: "integer", description: "EUR cents for the whole stay." },
-                    status:            { type: "string", description: "The room-night's own state: reserved | confirmed | cancelled. It says nothing about money — payment_state does." },
-                    payment_state:     { type: "string", enum: %w[unpaid pending paid refunded],
-                                         description: "Where this booking's money stands, anchored to the CAPTURE and not to the operator's settlement record. `paid` = the charge went through; there is nothing to retry. `pending` = a capture for this booking has been started and its outcome is not known yet — it may already have taken the money, so do NOT sign a fresh mandate chain: wait and re-read. `unpaid` = no capture has ever been started, and this is the only answer that makes a fresh chain correct. `refunded` = the charge was reversed to the card it came from (a booking the property declined)." },
-                    confirmation_code: { type: %w[string null], description: "The reference the guest gives at the desk. Null until the booking is confirmed; durable afterwards." },
-                  },
-                  required: %w[booking_id property_id room_type_id check_in check_out
-                               total_cents status payment_state confirmation_code],
-                }
-  def my_bookings
-    render json: Booking.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc).map { |booking|
-      { booking_id:        booking.id,
-        property_id:       booking.property_id,
-        room_type_id:      booking.room_type_id,
-        check_in:          booking.check_in,
-        check_out:         booking.check_out,
-        total_cents:       booking.total_cents,
-        status:            booking.status,
-        payment_state:     booking.payment_state,
-        confirmation_code: booking.confirmation_code }
-    }
-  end
-
   SEARCH_PAGE = 20
   SEARCH_MAX  = 50
 
   kind :query
-  description "Search Istanbul hotels, returning a paginated page of SUMMARY rows — one per hotel, " \
-              "priced from its cheapest room. Apply the human's stated constraints as filters so the " \
-              "search NARROWS; do not pull the whole catalogue and sift it yourself. Filters AND " \
-              "together. Page size defaults to 20 and is CLAMPED to 1..50 — " \
-              "send `limit` to override it (a value outside that range is clamped, never refused). " \
-              "Once the human picks a row, `hotel_detail` returns " \
-              "everything a summary leaves out — the rooms, the amenities, the address."
+  description "Search hotels, best-rated first: one summary row per hotel, priced from its cheapest room. " \
+              "Pass every constraint the customer gave; `hotel_detail` has the rooms, amenities and address."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 neighbourhood: {
-                   type: "string",
-                   enum: NEIGHBOURHOOD_POOL,
-                   description: "Exact Istanbul area name.",
-                 },
-                 max_price_cents: {
-                   type: "integer", minimum: 0, maximum: RoomType::MAX_NIGHTLY_PRICE_CENTS,
-                   description: "Cheapest room ≤ this, EUR cents.",
-                 },
-                 min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Star-rating floor." },
-                 amenity:         { type: "string", enum: AMENITY_POOL, description: "Property must offer this amenity." },
+                 neighbourhood:   { type: "string", enum: NEIGHBOURHOOD_POOL, description: "Istanbul area." },
+                 max_price_cents: { type: "integer", minimum: 0, maximum: RoomType::MAX_NIGHTLY_PRICE_CENTS,
+                                    description: "Most the cheapest room may cost per night, in cents." },
+                 min_stars:       { type: "integer", minimum: 1, maximum: 5, description: "Fewest stars." },
+                 amenity:         { type: "string", enum: AMENITY_POOL, description: "An amenity the hotel must offer." },
                },
                required: []
   output_schema "$defs": {
                   hotel: {
                     type: "object", additionalProperties: false,
-                    description: "One SUMMARY row — one property, its cheapest room's rate.",
                     properties: {
-                      property_id:      { type: "integer", description: "Pass to hotel_detail (and reserve_room) as `property_id`." },
-                      name:             { type: "string", description: "Hotel name." },
-                      neighbourhood:    { type: %w[string null], description: "Istanbul area, or null." },
-                      stars:            { type: "integer", description: "Star rating, 1..5." },
-                      from_price_cents: { type: %w[integer null], description: "EUR cents per night for the CHEAPEST room type; null when the property lists none." },
-                      room_type_count:  { type: "integer", description: "How many room types this property lists." },
-                      currency:         { type: "string", description: "eur — the currency the cart must be signed in." },
+                      property_id:      { type: "integer", description: "Pass to hotel_detail and availability." },
+                      name:             { type: "string" },
+                      neighbourhood:    { type: %w[string null], description: "Istanbul area." },
+                      stars:            { type: "integer" },
+                      from_price_cents: { type: %w[integer null],
+                                          description: "Cheapest nightly rate, in cents; null when the hotel lists no rooms." },
+                      room_type_count:  { type: "integer" },
+                      currency:         { type: "string", description: "Sign the cart in this currency." },
                     },
                     required: %w[property_id name neighbourhood stars from_price_cents
                                  room_type_count currency],
                   },
                 },
                 type: "array",
-                description: "One page of matching hotels — the same array shape whether or not " \
-                             "more match; a `Link` header with rel=\"next\" is what says there are.",
+                description: "One page of hotels; a `Link` header with rel=\"next\" means more match.",
                 items: { "$ref": "#/$defs/hotel" }
   example_params({ neighbourhood: "Beşiktaş", min_stars: 4, max_price_cents: 20000, limit: 20 })
   example_row({
@@ -208,66 +100,48 @@ class Kiosk::HotelsController < ActionController::API
   end
 
   kind :query
-  description "Fetch the full record for ONE hotel — the «search returns summaries, fetch detail on " \
-              "demand» half of this origin's read surface. Call it for the one or few hotels the " \
-              "human is choosing between, never across a whole result set. The argument ADDRESSES a " \
-              "hotel rather than filtering for one, so the answer is a ONE-ROW array and an id this " \
-              "origin does not list is 404 not_found rather than an empty one. THE DATES CHANGE " \
-              "WHAT THE ROOM LIST MEANS: give both ends of a stay and the rooms listed are only " \
-              "those still FREE " \
-              "for those nights — the same rule `availability` applies and `reserve_room` enforces. " \
-              "Leave them out and the list is this hotel's full CATALOGUE, which says nothing about " \
-              "what is bookable: a room in it may already be taken for the nights you want, and " \
-              "`reserve_room` will answer 409."
+  description "One hotel in full, as a one-row array. Given a stay, `room_types` lists only the rooms free " \
+              "for those nights; without one, every room type the hotel has."
   input_schema type: "object",
                additionalProperties: false,
                properties: {
-                 property_id: { type: "integer", description: "`property_id` from a search_hotels row." },
+                 property_id: { type: "integer", description: "From a search_hotels or properties row." },
                  check_in:    { type: "string", format: "date",
-                                description: "First night (YYYY-MM-DD); pass with check_out to list only free room types. " \
-                                             "When passed it must be today or later in THIS PROPERTY's own clock, which the " \
-                                             "row publishes as `timezone` — not this operator's, and not yours. A calendar " \
-                                             "day is never converted: send the day you mean the hotel to sell." },
-                 check_out:   { type: "string", format: "date",
-                                description: "Checkout day (YYYY-MM-DD, exclusive); pass with check_in to list only free room types." },
+                                description: "First night, on the hotel's own clock (`timezone`). Pass with check_out." },
+                 check_out:   { type: "string", format: "date", description: "Checkout day. Pass with check_in." },
                },
                required: ["property_id"]
   output_schema type: "array",
-                description: "ONE property in full, with its room types — a one-row array. " \
-                             "A property_id nobody has is 404 not_found, not an empty array.",
                 items: {
-                  type: "object",
-                  description: "The property.",
-                  additionalProperties: false,
+                  type: "object", additionalProperties: false,
                   properties: {
-                    property_id:      { type: "integer", description: "The property, echoed." },
-                    name:             { type: "string", description: "Hotel name." },
-                    neighbourhood:    { type: %w[string null], description: "Istanbul area, or null." },
-                    stars:            { type: "integer", description: "Star rating, 1..5." },
-                    address:          { type: %w[string null], description: "Street address, or null." },
-                    amenities:        { type: "array", items: { type: "string" },
-                                        description: "Amenity slugs this property offers." },
-                    currency:         { type: "string", description: "eur — the currency the cart must be signed in." },
-                    room_types_scope: { type: "string", description: "WHICH list `room_types` is: free for the given nights, or the property's full catalogue when no dates were passed. Read it before treating the list as an offer." },
-                    check_in:         { type: %w[string null], description: "The first night the list was computed for, YYYY-MM-DD; null when no dates were passed." },
-                    check_out:        { type: %w[string null], description: "The checkout day the list was computed for, YYYY-MM-DD; null when no dates were passed." },
-                    timezone:         { type: "string", description: "The IANA zone THIS property's calendar runs on — the clock `check_in` is a day of, and the clock a past date is judged against. It is a property of the hotel, not of this operator: another hotel in the same answer may be on a different one." },
-                    room_types:       {
+                    property_id:   { type: "integer" },
+                    name:          { type: "string" },
+                    neighbourhood: { type: %w[string null], description: "Istanbul area." },
+                    stars:         { type: "integer" },
+                    address:       { type: %w[string null] },
+                    amenities:     { type: "array", items: { type: "string" } },
+                    currency:      { type: "string", description: "Sign the cart in this currency." },
+                    check_in:      { type: %w[string null],
+                                     description: "The first night `room_types` is free for; null when no dates were given." },
+                    check_out:     { type: %w[string null], description: "The checkout day; null when no dates were given." },
+                    timezone:      { type: "string", description: "The IANA zone the hotel's calendar runs on." },
+                    room_types:    {
                       type: "array",
-                      description: "The property's room types, cheapest first.",
+                      description: "Cheapest first.",
                       items: {
                         type: "object", additionalProperties: false,
                         properties: {
-                          room_type_id:        { type: "integer", description: "Pass to reserve_room as `room_type_id`." },
-                          name:                { type: "string", description: "Room-type name." },
-                          nightly_price_cents: { type: "integer", description: "EUR cents PER NIGHT." },
+                          room_type_id:        { type: "integer", description: "Pass to reserve_room." },
+                          name:                { type: "string" },
+                          nightly_price_cents: { type: "integer", description: "Price per night, in cents." },
                         },
                         required: %w[room_type_id name nightly_price_cents],
                       },
                     },
                   },
                   required: %w[property_id name neighbourhood stars address amenities currency
-                               room_types_scope check_in check_out timezone room_types],
+                               check_in check_out timezone room_types],
                 }
   example_params({ property_id: 4,
                    check_in:  -> { Time.find_zone!("Europe/Istanbul").tomorrow.iso8601 },
@@ -277,9 +151,6 @@ class Kiosk::HotelsController < ActionController::API
     address: "Çırağan Cd. 88, Beşiktaş, Istanbul",
     amenities: %w[wifi breakfast pool spa sea_view airport_shuttle],
     currency: "eur",
-    room_types_scope: -> {
-      "free #{Time.find_zone!("Europe/Istanbul").tomorrow.iso8601}..#{(Time.find_zone!("Europe/Istanbul").tomorrow + 3).iso8601}"
-    },
     check_in:  -> { Time.find_zone!("Europe/Istanbul").tomorrow.iso8601 },
     check_out: -> { (Time.find_zone!("Europe/Istanbul").tomorrow + 3).iso8601 },
     timezone:  "Europe/Istanbul",
@@ -294,20 +165,19 @@ class Kiosk::HotelsController < ActionController::API
     search.validate!
 
     render json: [{
-      property_id:      property.id,
-      name:             property.name,
-      neighbourhood:    property.neighbourhood,
-      stars:            property.stars,
-      address:          property.address,
-      amenities:        property.amenities,
-      currency:         "eur",
-      room_types_scope: search.dated? ? "free #{search.check_in}..#{search.check_out}" : "catalogue (no dates given — not an availability statement)",
-      check_in:         search.check_in&.iso8601,
-      check_out:        search.check_out&.iso8601,
-      timezone:         property.timezone,
-      room_types:       search.room_types.order(:nightly_price_cents)
-                              .pluck(:id, :name, :nightly_price_cents)
-                              .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents } },
+      property_id:   property.id,
+      name:          property.name,
+      neighbourhood: property.neighbourhood,
+      stars:         property.stars,
+      address:       property.address,
+      amenities:     property.amenities,
+      currency:      "eur",
+      check_in:      search.check_in&.iso8601,
+      check_out:     search.check_out&.iso8601,
+      timezone:      property.timezone,
+      room_types:    search.room_types.order(:nightly_price_cents)
+                           .pluck(:id, :name, :nightly_price_cents)
+                           .map { |id, name, cents| { room_type_id: id, name: name, nightly_price_cents: cents } },
     }]
   end
 end

@@ -10,7 +10,7 @@ RSpec.describe Booking do
   let(:guest)     { User.create!(email: "booking-spec@example.test", password: "booking-spec-password") }
 
   def errors(check_in: "2026-09-01", check_out: "2026-09-04", **attributes)
-    booking = described_class.new(user: guest, property:, room_type:, total_cents: 0,
+    booking = described_class.new(user: guest, room_type:, total_cents: 0,
                                   check_in: Date.iso8601(check_in), check_out: Date.iso8601(check_out), **attributes)
     booking.tap(&:validate).errors.full_messages
   end
@@ -35,13 +35,13 @@ RSpec.describe Booking do
     expect(Booking::MAX_NIGHTS * RoomType::MAX_NIGHTLY_PRICE_CENTS).to be <= 2_147_483_647
   end
 
-  it "names a room type of the property it books" do
+  it "books the hotel its room type belongs to" do
     elsewhere = RoomType.create!(property: Property.create!(name: "Elsewhere", city: "Istanbul", stars: 3, amenities: []),
                                  name: "Single", nightly_price_cents: 9_000)
+    booking = described_class.new(user: guest, property:, room_type: elsewhere,
+                                  check_in: Date.new(2026, 9, 1), check_out: Date.new(2026, 9, 2))
 
-    expect(errors(room_type: elsewhere))
-      .to eq(["room_type_id #{elsewhere.id} is not a room type of property #{property.id} — call availability for the ones it has"])
-    expect(errors(room_type: nil))
-      .to eq(["room_type_id is not a room type of this property — call availability for the ones it has"])
+    expect(booking.tap(&:validate).property).to eq(elsewhere.property)
+    expect(errors(room_type: nil)).to eq(["room_type_id is not a room type here — call availability for the free ones"])
   end
 end

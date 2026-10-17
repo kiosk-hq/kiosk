@@ -18,7 +18,7 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
 
     waiting = guest.confirms(booking)
     expect(waiting).to be_refused(:forbidden)
-    expect(waiting["detail"]).to eq("the property has not answered this booking yet")
+    expect(waiting["detail"]).to eq("the hotel has not answered this booking yet")
     expect(waiting.hint).to include("booking_confirmation")
     expect(Booking.find(booking["booking_id"])).to have_attributes(status: "reserved", confirmation_code: nil)
 

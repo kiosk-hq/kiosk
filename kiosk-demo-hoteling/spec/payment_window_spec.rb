@@ -50,8 +50,8 @@ RSpec.describe "the window between a capture and its settlement" do
   def reserve
     check_in = Date.current + 30
     as_guest do
-      Kiosk::Server::Actions.fetch("reserve_room").call(property_id: room.property_id, room_type_id: room.id,
-                                                        check_in: check_in.iso8601, check_out: (check_in + 1).iso8601)
+      Kiosk::Server::Actions.fetch("reserve_room").call(room_type_id: room.id, check_in: check_in.iso8601,
+                                                        check_out: (check_in + 1).iso8601)
     end["booking_id"]
   end
 

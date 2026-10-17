@@ -20,21 +20,21 @@ RFC 9457 problem document.
 - `GET /kiosk/properties` — browse all available hotel properties
 - `GET /kiosk/availability?property_id=&check_in=&check_out=` — check room
   availability for a stay
-- `GET /kiosk/my_bookings` — this principal's bookings (owner-scoped)
+- `GET /kiosk/my_bookings` — the signed-in customer's bookings
 - `GET /kiosk/search_hotels?...` — paginated search over the ~100-hotel
   catalogue; the only paginating verb here, and since RFC 8288 it answers the
   same bare array as the rest — a truncated page says so in a `Link: <…>;
   rel="next"` header, with `X-Total-Count` carrying the matching total
 - `GET /kiosk/hotel_detail?property_id=` — ONE property in full, as a one-row
   array (a `property_id` no property has is 404 `not_found`)
-- `POST /kiosk/reserve_room` — reserve a room for the principal (writes the
-  booking plus the engine's reserve-then-pay row in `kiosk.reservations`,
-  stamped with a 15-minute pay-by deadline — recorded for an operator to act
-  on, not enforced by `confirm_booking`, which gates on ownership + payment)
-- `POST /kiosk/payment_setup` — check whether the principal has a saved payment method
+- `POST /kiosk/reserve_room` — hold a room type for a stay, for the signed-in
+  customer (writes the booking plus the engine's reserve-then-pay row in
+  `kiosk.reservations`, stamped with a 15-minute pay-by deadline that nothing
+  enforces)
+- `POST /kiosk/payment_setup` — check whether the customer has a saved payment method
   (served by kiosk-server)
-- `POST /kiosk/confirm_booking` — confirm a reserved booking; requires a
-  settled payment whose cart mandate references this booking
+- `POST /kiosk/confirm_booking` — collect the hotel's answer to a paid booking:
+  its confirmation code, or the refund
 - `POST /kiosk/pay` — settle the AP2 mandate chain (intent → cart → payment)
   through Stripe
 - `GET /kiosk/schema` — self-discovery

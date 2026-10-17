@@ -56,4 +56,14 @@ class CourierStatesTest < ActiveSupport::TestCase
     assert_predicate order.reload, :paid?
     assert_empty events_since(head)
   end
+
+  test 'of two runs that read the order before either hands it over, one sends the courier' do
+    order = paid_order(1.hour.ago)
+    first  = Order.find(order.id)
+    second = Order.find(order.id)
+
+    assert first.hand_to_courier
+    assert_nil second.hand_to_courier
+    assert_predicate order.reload, :out_for_delivery?
+  end
 end

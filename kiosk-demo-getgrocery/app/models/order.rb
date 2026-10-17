@@ -26,7 +26,8 @@ class Order < ApplicationRecord
   validate :window_bookable, on: %i[place reschedule]
 
   # Paid and not yet with the courier.
-  scope :awaiting_courier, -> { where(status: %i[paid rescheduled]) }
+  AWAITING_COURIER = %w[paid rescheduled].freeze
+  scope :awaiting_courier, -> { where(status: AWAITING_COURIER) }
   # One move per order, and none once the courier has the basket.
   scope :reschedulable,    -> { where.not(status: %i[rescheduled out_for_delivery delivered]) }
 
@@ -77,6 +78,13 @@ class Order < ApplicationRecord
       order.order_items.sort_by(&:product_id).each { Product.take!(it.product_id, it.qty) }
       CourierDispatchJob.arm!(order)
     end
+  end
+
+  # The order, for the one caller that moves the basket from the shop to the
+  # courier; nil for any other.
+  def hand_to_courier
+    handed = self.class.where(id:, status: AWAITING_COURIER).update_all(status: 'out_for_delivery', updated_at: Time.current)
+    tap { it.status = 'out_for_delivery' } if handed == 1
   end
 
   private

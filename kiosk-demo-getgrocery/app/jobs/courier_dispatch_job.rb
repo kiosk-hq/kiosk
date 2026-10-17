@@ -18,8 +18,9 @@ class CourierDispatchJob < ApplicationJob
     order = Order.awaiting_courier.find_by(id: order_id)
     return unless order&.dispatch_at
     return self.class.enqueue_for(order) if order.dispatch_at > Time.current
+    # Two runs can both get here after a reschedule; one hands the basket over.
+    return unless order.hand_to_courier
 
-    order.out_for_delivery!
     arrival = DeliverySlots::DRIVE.from_now
     announce_departure(order, arrival)
     OrderDeliveredJob.set(wait_until: arrival).perform_later(order.id)

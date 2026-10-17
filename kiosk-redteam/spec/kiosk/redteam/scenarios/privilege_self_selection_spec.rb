@@ -4,10 +4,11 @@ require 'spec_helper'
 require 'base64'
 require_relative 'support'
 
-RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
+RSpec.shared_context 'privilege_self_selection setup' do
   subject(:scenario) { described_class.new }
 
   let(:client)  { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
+
   let(:profile) { minimal_profile }
 
   # A JWS whose payload carries the given role claim (signature is irrelevant —
@@ -35,6 +36,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
           end
     stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(ret)
   end
+end
+
+RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
+  include_context 'privilege_self_selection setup'
 
   it 'injects the escalated role onto the register wire (attack simulation)' do
     stub = stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
@@ -45,89 +50,133 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
     scenario.call(client, profile)
     expect(stub).to have_been_requested
   end
+end
 
-  context 'when the server IGNORES the injected role (pinned server-side — correct)' do
-    it 'returns blocked: true' do
-      stub_register_returning(token_with_role('customer'))
-      verdict = scenario.call(client, profile)
-      expect(verdict.blocked).to be(true)
-    end
+RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection, 'when the server IGNORES the injected role (pinned server-side — correct)' do
+  include_context 'privilege_self_selection setup'
+
+  it 'returns blocked: true' do
+    stub_register_returning(token_with_role('customer'))
+    verdict = scenario.call(client, profile)
+    expect(verdict.blocked).to be(true)
+  end
+end
+
+RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection, 'when the server HONOURS the injected role (escalation — BREACH)' do
+  include_context 'privilege_self_selection setup'
+
+  it 'returns blocked: false and names the escalated role' do
+    stub_register_returning(token_with_role('master'))
+    verdict = scenario.call(client, profile)
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to match(/master/)
+  end
+end
+
+# ── K-730 ────────────────────────────────────────────────────────────────
+#
+# A refusal of the injected registration is role-pinning only if an HONEST
+# registration would have succeeded. This block overturns the bare
+# "refuses outright → blocked: true" assertion below it: that reading was
+# demonstrated scoring BLOCKED against a server answering 404 on every path,
+# where no role is pinned because no agent is ever registered.
+RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection, 'when the server refuses the injected registration' do
+  include_context 'privilege_self_selection setup'
+
+  def register_returns(*responses)
+    stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
   end
 
-  context 'when the server HONOURS the injected role (escalation — BREACH)' do
-    it 'returns blocked: false and names the escalated role' do
-      stub_register_returning(token_with_role('master'))
-      verdict = scenario.call(client, profile)
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to match(/master/)
-    end
+  # Every refusal on the auth plane is an RFC 9457 problem document too —
+  # the paths and SUCCESS bodies survived the cutover, the error shape did not.
+  def refused(status, code = nil)
+    problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
   end
 
-  # ── K-730 ────────────────────────────────────────────────────────────────
-  #
-  # A refusal of the injected registration is role-pinning only if an HONEST
-  # registration would have succeeded. This block overturns the bare
-  # "refuses outright → blocked: true" assertion below it: that reading was
-  # demonstrated scoring BLOCKED against a server answering 404 on every path,
-  # where no role is pinned because no agent is ever registered.
-  context 'when the server refuses the injected registration' do
-    def register_returns(*responses)
-      stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
-    end
+  def issued
+    json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
+                     'access_token' => token_with_role('customer'))
+  end
 
-    # Every refusal on the auth plane is an RFC 9457 problem document too —
-    # the paths and SUCCESS bodies survived the cutover, the error shape did not.
-    def refused(status, code = nil)
-      problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
-    end
+  it 'returns blocked: true when the CONTROL registration succeeds (no escalation possible)' do
+    register_returns(refused(400), issued)
 
-    def issued
-      json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
-                       'access_token' => token_with_role('customer'))
-    end
+    verdict = scenario.call(client, profile)
 
-    it 'returns blocked: true when the CONTROL registration succeeds (no escalation possible)' do
-      register_returns(refused(400), issued)
+    expect(verdict.blocked).to be(true)
+    expect(verdict.status).to eq(400)
+  end
 
-      verdict = scenario.call(client, profile)
+  it 'returns blocked: false when the server 404s every path' do
+    register_returns(refused(404))
 
-      expect(verdict.blocked).to be(true)
-      expect(verdict.status).to eq(400)
-    end
+    verdict = scenario.call(client, profile)
 
-    it 'returns blocked: false when the server 404s every path' do
-      register_returns(refused(404))
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('CONTROL FAILED')
+  end
+end
 
-      verdict = scenario.call(client, profile)
+RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection, 'when the server refuses the injected registration' do
+  include_context 'privilege_self_selection setup'
 
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('CONTROL FAILED')
-    end
+  def register_returns(*responses)
+    stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
+  end
 
-    it 'returns blocked: false when the control is refused too' do
-      register_returns(refused(400), refused(400))
+  # Every refusal on the auth plane is an RFC 9457 problem document too —
+  # the paths and SUCCESS bodies survived the cutover, the error shape did not.
+  def refused(status, code = nil)
+    problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
+  end
 
-      verdict = scenario.call(client, profile)
+  def issued
+    json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
+                     'access_token' => token_with_role('customer'))
+  end
 
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('CONTROL FAILED')
-    end
+  it 'returns blocked: false when the control is refused too' do
+    register_returns(refused(400), refused(400))
 
-    it 'returns blocked: false on a 500 without spending a control registration' do
-      stub = register_returns(refused(500))
+    verdict = scenario.call(client, profile)
 
-      verdict = scenario.call(client, profile)
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('CONTROL FAILED')
+  end
 
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('a crash is not a gate')
-      expect(stub).to have_been_requested.once
-    end
+  it 'returns blocked: false on a 500 without spending a control registration' do
+    stub = register_returns(refused(500))
 
-    it 'does not spend a control registration when the server issues a token' do
-      stub = register_returns(issued)
+    verdict = scenario.call(client, profile)
 
-      expect(scenario.call(client, profile).blocked).to be(true)
-      expect(stub).to have_been_requested.once
-    end
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('a crash is not a gate')
+    expect(stub).to have_been_requested.once
+  end
+end
+
+RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection, 'when the server refuses the injected registration' do
+  include_context 'privilege_self_selection setup'
+
+  def register_returns(*responses)
+    stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
+  end
+
+  # Every refusal on the auth plane is an RFC 9457 problem document too —
+  # the paths and SUCCESS bodies survived the cutover, the error shape did not.
+  def refused(status, code = nil)
+    problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
+  end
+
+  def issued
+    json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
+                     'access_token' => token_with_role('customer'))
+  end
+
+  it 'does not spend a control registration when the server issues a token' do
+    stub = register_returns(issued)
+
+    expect(scenario.call(client, profile).blocked).to be(true)
+    expect(stub).to have_been_requested.once
   end
 end

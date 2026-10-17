@@ -3,127 +3,142 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart do
+RSpec.shared_context 'wrong_currency_cart setup' do
   subject(:scenario) { described_class.new }
 
   let(:client)  { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
+
   let(:profile) { minimal_profile(currency: 'eur', pay_for: pay_for_callable) }
+end
 
-  describe '#call — non-vacuity' do
-    context 'when the operator settles a cart in a currency it does not price in (BREACH)' do
-      it 'returns blocked: false' do
-        stub_registers('a')
-        stub_pay(status: 200)
+RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart, '#call — non-vacuity' do
+  include_context 'wrong_currency_cart setup'
 
-        verdict = scenario.call(client, profile)
-
-        expect(verdict.blocked).to be(false)
-        expect(verdict.skipped).to be(false)
-        expect(verdict.detail).to include('usd cart settled at a EUR operator')
-      end
-    end
-
-    context 'when the operator refuses it' do
-      it 'returns blocked: true' do
-        stub_registers('a')
-        stub_pay(status: 403, code: 'forbidden')
-
-        verdict = scenario.call(client, profile)
-
-        expect(verdict.blocked).to be(true)
-        expect(verdict.skipped).to be(false)
-      end
-    end
-
-    # AND A 401 IS NOT A CASHIER CHECK EITHER. It says the credential was
-    # rejected, so the cart never reached the counter; delegating to the gem's
-    # generic `blocked?` set would score that a BLOCK and print a refusal for an
-    # attack that never executed, which is why this scenario names its status.
-    it 'does not score a 401 as a refusal — the cart never reached the cashier' do
+  context 'when the operator settles a cart in a currency it does not price in (BREACH)' do
+    it 'returns blocked: false' do
       stub_registers('a')
-      stub_pay(status: 401, code: 'unauthenticated')
+      stub_pay(status: 200)
 
       verdict = scenario.call(client, profile)
 
       expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('want status 403')
-    end
-
-    # A crash is not a cashier check. The operator that 500s on a foreign
-    # currency has not refused it — it has fallen over on the way to deciding.
-    it 'does not score a 500 as a refusal' do
-      stub_registers('a')
-      stub_pay(status: 500, code: 'internal_error')
-
-      expect(scenario.call(client, profile).blocked).to be(false)
+      expect(verdict.skipped).to be(false)
+      expect(verdict.detail).to include('usd cart settled at a EUR operator')
     end
   end
 
-  describe 'the probed currency' do
-    it "denominates both mandates in a currency that is NOT the operator's" do
+  context 'when the operator refuses it' do
+    it 'returns blocked: true' do
       stub_registers('a')
-      captured = nil
-      stub_request(:post, "#{BASE_URL}/kiosk/pay")
-        .with do |req|
-        captured = JSON.parse(req.body)
-        true
-      end
-        .to_return(wire_return(status: 403, code: 'forbidden'))
+      stub_pay(status: 403, code: 'forbidden')
 
-      scenario.call(client, profile)
+      verdict = scenario.call(client, profile)
 
-      expect(captured).not_to be_nil
-      intent = JWT.decode(captured.fetch('intent_mandate_jws'), nil, false).first
-      cart   = JWT.decode(captured.fetch('cart_mandate_jws'), nil, false).first
-      expect(intent['currency']).to eq('usd')
-      expect(cart['currency']).to eq('usd')
-    end
-
-    # An operator that prices in dollars must not be probed with dollars: the
-    # cart would never have been foreign, and BLOCKED would be printed for an
-    # attack that did not happen.
-    it 'picks a different currency for a dollar-priced operator' do
-      stub_registers('a')
-      captured = nil
-      stub_request(:post, "#{BASE_URL}/kiosk/pay")
-        .with do |req|
-        captured = JSON.parse(req.body)
-        true
-      end
-        .to_return(wire_return(status: 403, code: 'forbidden'))
-
-      usd = minimal_profile(currency: 'usd', pay_for: pay_for_callable)
-      verdict = scenario.call(client, usd)
-
-      cart = JWT.decode(captured.fetch('cart_mandate_jws'), nil, false).first
-      expect(cart['currency']).to eq('eur')
-      expect(verdict.detail).to be_a(String)
+      expect(verdict.blocked).to be(true)
+      expect(verdict.skipped).to be(false)
     end
   end
+end
 
-  describe '#call — skips' do
-    it 'skips when the profile names no currency' do
-      verdict = scenario.call(client, minimal_profile(pay_for: pay_for_callable))
+RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart, '#call — non-vacuity' do
+  include_context 'wrong_currency_cart setup'
 
-      expect(verdict.skipped).to be(true)
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('no currency')
+  # AND A 401 IS NOT A CASHIER CHECK EITHER. It says the credential was
+  # rejected, so the cart never reached the counter; delegating to the gem's
+  # generic `blocked?` set would score that a BLOCK and print a refusal for an
+  # attack that never executed, which is why this scenario names its status.
+  it 'does not score a 401 as a refusal — the cart never reached the cashier' do
+    stub_registers('a')
+    stub_pay(status: 401, code: 'unauthenticated')
+
+    verdict = scenario.call(client, profile)
+
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('want status 403')
+  end
+
+  # A crash is not a cashier check. The operator that 500s on a foreign
+  # currency has not refused it — it has fallen over on the way to deciding.
+  it 'does not score a 500 as a refusal' do
+    stub_registers('a')
+    stub_pay(status: 500, code: 'internal_error')
+
+    expect(scenario.call(client, profile).blocked).to be(false)
+  end
+end
+
+RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart, 'the probed currency' do
+  include_context 'wrong_currency_cart setup'
+
+  it "denominates both mandates in a currency that is NOT the operator's" do
+    stub_registers('a')
+    captured = nil
+    stub_request(:post, "#{BASE_URL}/kiosk/pay")
+      .with do |req|
+      captured = JSON.parse(req.body)
+      true
     end
+      .to_return(wire_return(status: 403, code: 'forbidden'))
 
-    it 'skips when the profile cannot build a mandate pair' do
-      verdict = scenario.call(client, minimal_profile(currency: 'eur'))
+    scenario.call(client, profile)
 
-      expect(verdict.skipped).to be(true)
-      expect(verdict.detail).to include('no pay_for')
+    expect(captured).not_to be_nil
+    intent = JWT.decode(captured.fetch('intent_mandate_jws'), nil, false).first
+    cart   = JWT.decode(captured.fetch('cart_mandate_jws'), nil, false).first
+    expect(intent['currency']).to eq('usd')
+    expect(cart['currency']).to eq('usd')
+  end
+end
+
+RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart, 'the probed currency' do
+  include_context 'wrong_currency_cart setup'
+
+  # An operator that prices in dollars must not be probed with dollars: the
+  # cart would never have been foreign, and BLOCKED would be printed for an
+  # attack that did not happen.
+  it 'picks a different currency for a dollar-priced operator' do
+    stub_registers('a')
+    captured = nil
+    stub_request(:post, "#{BASE_URL}/kiosk/pay")
+      .with do |req|
+      captured = JSON.parse(req.body)
+      true
     end
+      .to_return(wire_return(status: 403, code: 'forbidden'))
 
-    it 'skips when the profile cannot create an owned resource' do
-      no_owner = Kiosk::Redteam::Profile.new(currency: 'eur', pay_for: pay_for_callable)
+    usd = minimal_profile(currency: 'usd', pay_for: pay_for_callable)
+    verdict = scenario.call(client, usd)
 
-      verdict = scenario.call(client, no_owner)
+    cart = JWT.decode(captured.fetch('cart_mandate_jws'), nil, false).first
+    expect(cart['currency']).to eq('eur')
+    expect(verdict.detail).to be_a(String)
+  end
+end
 
-      expect(verdict.skipped).to be(true)
-      expect(verdict.detail).to include('no create_owned')
-    end
+RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart, '#call — skips' do
+  include_context 'wrong_currency_cart setup'
+
+  it 'skips when the profile names no currency' do
+    verdict = scenario.call(client, minimal_profile(pay_for: pay_for_callable))
+
+    expect(verdict.skipped).to be(true)
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('no currency')
+  end
+
+  it 'skips when the profile cannot build a mandate pair' do
+    verdict = scenario.call(client, minimal_profile(currency: 'eur'))
+
+    expect(verdict.skipped).to be(true)
+    expect(verdict.detail).to include('no pay_for')
+  end
+
+  it 'skips when the profile cannot create an owned resource' do
+    no_owner = Kiosk::Redteam::Profile.new(currency: 'eur', pay_for: pay_for_callable)
+
+    verdict = scenario.call(client, no_owner)
+
+    expect(verdict.skipped).to be(true)
+    expect(verdict.detail).to include('no create_owned')
   end
 end

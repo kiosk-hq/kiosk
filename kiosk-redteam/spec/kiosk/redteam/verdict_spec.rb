@@ -2,10 +2,14 @@
 
 require 'spec_helper'
 
-RSpec.describe 'Kiosk::Redteam.blocked?' do
+RSpec.shared_context 'verdict setup' do
   def response(status, body = {})
     Kiosk::TestHelpers::Wire::Response.new(status:, body:)
   end
+end
+
+RSpec.describe 'Kiosk::Redteam.blocked?' do
+  include_context 'verdict setup'
 
   # ── Explicit block statuses ──────────────────────────────────────────────
 
@@ -45,25 +49,31 @@ RSpec.describe 'Kiosk::Redteam.blocked?' do
   it 'returns false for a 403 whose problem document says payment_failed (status and code disagree)' do
     expect(Kiosk::Redteam.blocked?(response(403, problem('payment_failed', status: 403)))).to be(false)
   end
+end
 
-  describe '.payment_required_reason' do
-    it 'names which of the three answered' do
-      Kiosk::Redteam::PAYMENT_REQUIRED_CODES.each_key do |code|
-        reason = Kiosk::Redteam.payment_required_reason(response(402, problem(code)))
-        expect(reason).to include(code.inspect)
-        expect(reason).to include('HTTP 402')
-      end
-    end
+RSpec.describe 'Kiosk::Redteam.blocked?', '.payment_required_reason' do
+  include_context 'verdict setup'
 
-    it 'says the bare status named none of them' do
-      expect(Kiosk::Redteam.payment_required_reason(response(402))).to include('named none of them')
-    end
-
-    it 'is nil for anything that is not a 402 answer' do
-      expect(Kiosk::Redteam.payment_required_reason(response(403, problem('forbidden')))).to be_nil
-      expect(Kiosk::Redteam.payment_required_reason(response(200))).to be_nil
+  it 'names which of the three answered' do
+    Kiosk::Redteam::PAYMENT_REQUIRED_CODES.each_key do |code|
+      reason = Kiosk::Redteam.payment_required_reason(response(402, problem(code)))
+      expect(reason).to include(code.inspect)
+      expect(reason).to include('HTTP 402')
     end
   end
+
+  it 'says the bare status named none of them' do
+    expect(Kiosk::Redteam.payment_required_reason(response(402))).to include('named none of them')
+  end
+
+  it 'is nil for anything that is not a 402 answer' do
+    expect(Kiosk::Redteam.payment_required_reason(response(403, problem('forbidden')))).to be_nil
+    expect(Kiosk::Redteam.payment_required_reason(response(200))).to be_nil
+  end
+end
+
+RSpec.describe 'Kiosk::Redteam.blocked?' do
+  include_context 'verdict setup'
 
   # ── Not blocked ──────────────────────────────────────────────────────────
 
@@ -100,6 +110,10 @@ RSpec.describe 'Kiosk::Redteam.blocked?' do
   it 'returns false for a connection error (status 0) even with a denial code' do
     expect(Kiosk::Redteam.blocked?(response(0, problem('unauthenticated')))).to be(false)
   end
+end
+
+RSpec.describe 'Kiosk::Redteam.blocked?' do
+  include_context 'verdict setup'
 
   it 'returns false for HTTP 422 (unprocessable entity is not a security block)' do
     expect(Kiosk::Redteam.blocked?(response(422, problem('bad_request', status: 422)))).to be(false)
@@ -134,6 +148,10 @@ RSpec.describe 'Kiosk::Redteam.blocked?' do
   it 'returns false for an unrecognised domain error code' do
     expect(Kiosk::Redteam.blocked?(response(200, problem('internal_error', status: 200)))).to be(false)
   end
+end
+
+RSpec.describe 'Kiosk::Redteam.blocked?' do
+  include_context 'verdict setup'
 
   it 'returns false when body is an empty hash (no error code present)' do
     expect(Kiosk::Redteam.blocked?(response(200, {}))).to be(false)
@@ -162,27 +180,25 @@ RSpec.describe 'Kiosk::Redteam.blocked?' do
   it "answers nil for a bare-array body (a non-paginating query's answer)" do
     expect(Kiosk::Redteam.error_code(response(200, [{ 'id' => 'r1' }]))).to be_nil
   end
+end
 
-  # ── Verdict struct ───────────────────────────────────────────────────────
+RSpec.describe Kiosk::Redteam::Verdict do
+  it 'is a Data with blocked, skipped, status, and detail' do
+    v = described_class.new(blocked: true, skipped: false, status: 403, detail: 'forbidden')
+    expect(v.blocked).to be(true)
+    expect(v.skipped).to be(false)
+    expect(v.status).to eq(403)
+    expect(v.detail).to eq('forbidden')
+  end
 
-  describe Kiosk::Redteam::Verdict do
-    it 'is a Data with blocked, skipped, status, and detail' do
-      v = described_class.new(blocked: true, skipped: false, status: 403, detail: 'forbidden')
-      expect(v.blocked).to be(true)
-      expect(v.skipped).to be(false)
-      expect(v.status).to eq(403)
-      expect(v.detail).to eq('forbidden')
-    end
+  it 'is immutable (frozen)' do
+    v = described_class.new(blocked: false, skipped: false, status: 200, detail: 'breach!')
+    expect(v).to be_frozen
+  end
 
-    it 'is immutable (frozen)' do
-      v = described_class.new(blocked: false, skipped: false, status: 200, detail: 'breach!')
-      expect(v).to be_frozen
-    end
-
-    it 'carries skipped: true for a skip verdict' do
-      v = described_class.new(blocked: false, skipped: true, status: 0, detail: 'SKIP — no gated_action')
-      expect(v.skipped).to be(true)
-      expect(v.blocked).to be(false)
-    end
+  it 'carries skipped: true for a skip verdict' do
+    v = described_class.new(blocked: false, skipped: true, status: 0, detail: 'SKIP — no gated_action')
+    expect(v.skipped).to be(true)
+    expect(v.blocked).to be(false)
   end
 end

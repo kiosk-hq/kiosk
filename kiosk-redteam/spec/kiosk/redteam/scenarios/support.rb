@@ -28,6 +28,7 @@
 
 require 'openssl'
 require 'json'
+require 'securerandom'
 
 BASE_URL = 'http://kiosk.test'
 
@@ -110,39 +111,31 @@ end
 
 def pay_for_callable
   lambda do |_client, principal, owned_ref|
-    t = now_ish
-    {
-      intent: {
-        'id' => "intent-#{begin
-          SecureRandom.uuid
-        rescue StandardError
-          'x'
-        end}",
-        'user_id' => principal.user_id,
-        'agent_id' => principal.agent_id,
-        'iss' => 'http://test.example',
-        'scope' => 'test',
-        'cap_amount_cents' => 1000,
-        'currency' => 'eur',
-        'exp' => t + 600,
-        'iat' => t
-      },
-      cart: {
-        'id' => "cart-#{begin
-          SecureRandom.uuid
-        rescue StandardError
-          'x'
-        end}",
-        'intent_mandate_id' => 'intent-x',
-        'user_id' => principal.user_id,
-        'agent_id' => principal.agent_id,
-        'iss' => 'http://test.example',
-        'line_items' => [{ 'sku' => owned_ref[:id] || 'res-1', 'qty' => 1 }],
-        'total_amount_cents' => 100,
-        'currency' => 'eur',
-        'exp' => t + 600,
-        'iat' => t
-      }
-    }
+    { intent: intent_mandate(principal), cart: cart_mandate(principal, owned_ref) }
   end
+end
+
+def mandate_fields(principal, prefix)
+  t = now_ish
+  {
+    'id' => "#{prefix}-#{SecureRandom.uuid}",
+    'user_id' => principal.user_id,
+    'agent_id' => principal.agent_id,
+    'iss' => 'http://test.example',
+    'currency' => 'eur',
+    'exp' => t + 600,
+    'iat' => t
+  }
+end
+
+def intent_mandate(principal)
+  mandate_fields(principal, 'intent').merge('scope' => 'test', 'cap_amount_cents' => 1000)
+end
+
+def cart_mandate(principal, owned_ref)
+  mandate_fields(principal, 'cart').merge(
+    'intent_mandate_id' => 'intent-x',
+    'line_items' => [{ 'sku' => owned_ref[:id] || 'res-1', 'qty' => 1 }],
+    'total_amount_cents' => 100
+  )
 end

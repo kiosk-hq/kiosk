@@ -14,13 +14,13 @@ require 'spec_helper'
 #
 # Every example states the OLD oracle's answer beside the new one wherever they
 # differ, so the regression this file prevents is visible in the file itself.
-RSpec.describe Kiosk::Redteam::LeakScan do
-  # The vocabulary the fleet's beats actually forbid (the union of atablefor's
-  # SHAPE_LEAKS, hoteling's and skooti's LEAKS, and every SQL_INTERNALS copy).
-  NEEDLES = ['NoMethodError', 'undefined method', 'TypeError', 'no implicit conversion',
-             '::uuid', '::integer', '::date', 'PG::', '22P02', 'invalid input syntax',
-             'ActiveRecord::', 'ActiveModel::'].freeze
+# The vocabulary the fleet's beats actually forbid (the union of atablefor's
+# SHAPE_LEAKS, hoteling's and skooti's LEAKS, and every SQL_INTERNALS copy).
+NEEDLES = ['NoMethodError', 'undefined method', 'TypeError', 'no implicit conversion',
+           '::uuid', '::integer', '::date', 'PG::', '22P02', 'invalid input syntax',
+           'ActiveRecord::', 'ActiveModel::'].freeze
 
+RSpec.shared_context 'leak_scan setup' do
   # The oracle as it stood before this module existed, so "removing the fix"
   # is something this spec can EXECUTE rather than something a comment claims.
   def pre_fix_oracle(body)
@@ -33,154 +33,172 @@ RSpec.describe Kiosk::Redteam::LeakScan do
   def refusal(detail)
     problem('bad_request', detail: detail)
   end
+end
 
-  # ── The false BREACH this closes ────────────────────────────────────────────
+# ── The false BREACH this closes ────────────────────────────────────────────
 
-  context "when the ONLY occurrence of a needle is the probe's own echoed value" do
-    let(:junk) { 'PG::22P02 invalid input syntax' }
-    let(:body) { refusal(%(neighborhood #{junk.inspect} is not one this aggregator serves — currently Alfama)) }
+RSpec.describe Kiosk::Redteam::LeakScan, "when the ONLY occurrence of a needle is the probe's own echoed value" do
+  include_context 'leak_scan setup'
 
-    it 'reports NO leak' do
-      expect(described_class.leak(body, NEEDLES, supplied: { neighborhood: junk })).to be_nil
-    end
+  let(:junk) { 'PG::22P02 invalid input syntax' }
+  let(:body) { refusal(%(neighborhood #{junk.inspect} is not one this aggregator serves — currently Alfama)) }
 
-    it 'would have been a BREACH under the pre-fix oracle' do
-      expect(pre_fix_oracle(body)).to eq('PG::')
-    end
-
-    it 'names every discounted needle rather than swallowing the judgement' do
-      result = described_class.scan(body, NEEDLES, supplied: { neighborhood: junk })
-
-      expect(result.leak?).to be(false)
-      expect(result.echoed).to contain_exactly('PG::', '22P02', 'invalid input syntax')
-      expect(result.note).to include('echoed, not leaked')
-    end
+  it 'reports NO leak' do
+    expect(described_class.leak(body, NEEDLES, supplied: { neighborhood: junk })).to be_nil
   end
 
-  # ── The genuine leak that must still be found ───────────────────────────────
-
-  context 'when the runtime spoke' do
-    it 'finds a needle in a sentence the probe did not supply' do
-      body = refusal('PG::InvalidTextRepresentation: invalid input syntax for type uuid')
-
-      expect(described_class.leak(body, NEEDLES, supplied: { booking_id: 'not-a-uuid' })).to eq('PG::')
-    end
-
-    it 'finds a needle even when the echoed value sits INSIDE the leaking sentence' do
-      body = refusal(%(PG::InvalidTextRepresentation: invalid input syntax for type uuid: "not-a-uuid"))
-
-      expect(described_class.leak(body, NEEDLES, supplied: { booking_id: 'not-a-uuid' })).to eq('PG::')
-    end
-
-    # THE `gsub` REJECTION, EXECUTED. A probe value that is a SUBSTRING of a
-    # needle is what makes blind subtraction unsafe: deleting `input syntax`
-    # from the body destroys the `invalid input syntax` around it and the real
-    # breach reads clean. The positional scan keeps it, because the genuine
-    # occurrence STARTS BEFORE the echoed span and so is not contained by it.
-    it 'keeps a needle whose bytes merely OVERLAP the echo (what gsub would have erased)' do
-      supplied = { neighborhood: 'input syntax' }
-      body     = refusal(%(PG::InvalidTextRepresentation: invalid input syntax for type uuid; ) +
-                         %(neighborhood "input syntax" is not one this aggregator serves))
-
-      expect(described_class.leak(body, ['invalid input syntax'], supplied: supplied))
-        .to eq('invalid input syntax')
-
-      naive = JSON.generate(body).gsub('input syntax', '')
-      expect(naive.include?('invalid input syntax')).to be(false) # the false negative, demonstrated
-    end
-
-    it 'still finds a DIFFERENT needle the app produced beside the echoed one' do
-      supplied = { neighborhood: 'PG::' }
-      body     = refusal(%(invalid input syntax for type uuid; neighborhood "PG::" is not one this aggregator serves))
-
-      result = described_class.scan(body, NEEDLES, supplied: supplied)
-      expect(result.leak).to eq('invalid input syntax')
-      expect(result.echoed).to eq(['PG::'])
-    end
-
-    # THE RESIDUAL LIMIT, PINNED RATHER THAN CLAIMED. When the probe supplies a
-    # needle VERBATIM, every occurrence of that needle looks echoed, including
-    # one the app really did produce — nothing about the bytes distinguishes
-    # "you sent me this" from "I said this", and no content-only oracle can.
-    # This example exists so the limit is a measured, executable fact rather
-    # than a sentence in a comment: the needle is not reported as a leak, it IS
-    # reported as discounted, and `note` puts that in front of a human. The
-    # protection against it is the example above — a real leak is essentially
-    # never a lone needle with nothing else of the runtime's around it.
-    it 'cannot separate an echoed needle from an identical one the app produced' do
-      supplied = { neighborhood: 'PG::' }
-      body     = refusal(%(PG::UndefinedColumn; neighborhood "PG::" is not one this aggregator serves))
-
-      result = described_class.scan(body, ['PG::'], supplied: supplied)
-      expect(result.leak).to be_nil
-      expect(result.echoed).to eq(['PG::'])
-      expect(result.note).to include('PG::')
-    end
+  it 'would have been a BREACH under the pre-fix oracle' do
+    expect(pre_fix_oracle(body)).to eq('PG::')
   end
 
-  # ── Shape coverage: the four spellings a demo may echo a value in ───────────
+  it 'names every discounted needle rather than swallowing the judgement' do
+    result = described_class.scan(body, NEEDLES, supplied: { neighborhood: junk })
 
-  describe 'the spellings an echo can take' do
-    it "covers a bare interpolation (\#{value})" do
-      body = refusal('invalid date: PG::22P02 — use the YYYY-MM-DD from an availability row')
+    expect(result.leak?).to be(false)
+    expect(result.echoed).to contain_exactly('PG::', '22P02', 'invalid input syntax')
+    expect(result.note).to include('echoed, not leaked')
+  end
+end
 
-      expect(described_class.leak(body, NEEDLES, supplied: { date: 'PG::22P02' })).to be_nil
-    end
+# ── The genuine leak that must still be found ───────────────────────────────
 
-    it "covers an inspected interpolation (\#{value.inspect})" do
-      body = refusal(%(booking_id "PG::22P02" is not a uuid))
+RSpec.describe Kiosk::Redteam::LeakScan, 'when the runtime spoke' do
+  include_context 'leak_scan setup'
 
-      expect(described_class.leak(body, NEEDLES, supplied: { booking_id: 'PG::22P02' })).to be_nil
-    end
+  it 'finds a needle in a sentence the probe did not supply' do
+    body = refusal('PG::InvalidTextRepresentation: invalid input syntax for type uuid')
 
-    it 'covers a leaf inside a container the probe sent whole' do
-      cart = { items: [{ 'sku' => 'TypeError', 'qty' => 1 }] }
-      body = refusal(%(unknown sku(s): TypeError))
-
-      expect(described_class.leak(body, NEEDLES, supplied: cart)).to be_nil
-    end
-
-    it "covers the container's own inspected spelling" do
-      item = { sku: 'TypeError', qty: 1 }
-      body = refusal("each item must be a {sku, qty} object — got #{item.class} (#{item.inspect})")
-
-      expect(described_class.leak(body, NEEDLES, supplied: { items: [item] })).to be_nil
-    end
-
-    it 'handles non-string probe values without raising' do
-      [true, false, nil, 1.5, 20_260_826, [], {}, [1], { 'a' => 1 }].each do |value|
-        expect { described_class.scan(refusal('no leak here'), NEEDLES, supplied: { arg: value }) }
-          .not_to raise_error
-      end
-    end
+    expect(described_class.leak(body, NEEDLES, supplied: { booking_id: 'not-a-uuid' })).to eq('PG::')
   end
 
-  # ── Degradation is towards the LOUD answer, never the quiet one ─────────────
+  it 'finds a needle even when the echoed value sits INSIDE the leaking sentence' do
+    body = refusal(%(PG::InvalidTextRepresentation: invalid input syntax for type uuid: "not-a-uuid"))
 
-  describe 'a beat that declares nothing' do
-    it 'behaves exactly as the pre-fix oracle did' do
-      junk = 'PG::22P02'
-      body = refusal(%(neighborhood #{junk.inspect} is not one this aggregator serves))
-
-      expect(described_class.leak(body, NEEDLES)).to eq(pre_fix_oracle(body))
-    end
+    expect(described_class.leak(body, NEEDLES, supplied: { booking_id: 'not-a-uuid' })).to eq('PG::')
   end
 
-  # ── The bodies these beats actually meet ────────────────────────────────────
+  # THE `gsub` REJECTION, EXECUTED. A probe value that is a SUBSTRING of a
+  # needle is what makes blind subtraction unsafe: deleting `input syntax`
+  # from the body destroys the `invalid input syntax` around it and the real
+  # breach reads clean. The positional scan keeps it, because the genuine
+  # occurrence STARTS BEFORE the echoed span and so is not contained by it.
+  it 'keeps a needle whose bytes merely OVERLAP the echo (what gsub would have erased)' do
+    supplied = { neighborhood: 'input syntax' }
+    body     = refusal(%(PG::InvalidTextRepresentation: invalid input syntax for type uuid; ) +
+                       %(neighborhood "input syntax" is not one this aggregator serves))
 
-  describe 'input shapes' do
-    it 'accepts a bare Array body (a successful query answers one)' do
-      expect(described_class.leak([{ 'id' => 1 }], NEEDLES, supplied: { limit: 1 })).to be_nil
-    end
+    expect(described_class.leak(body, ['invalid input syntax'], supplied: supplied))
+      .to eq('invalid input syntax')
 
-    it 'accepts an already-serialized String body' do
-      expect(described_class.leak(%({"detail":"PG::"}), NEEDLES)).to eq('PG::')
-    end
+    naive = JSON.generate(body).gsub('input syntax', '')
+    expect(naive.include?('invalid input syntax')).to be(false) # the false negative, demonstrated
+  end
 
-    it 'reports no leak for an empty body' do
-      expect(described_class.scan({}, NEEDLES, supplied: nil).leak?).to be(false)
+  it 'still finds a DIFFERENT needle the app produced beside the echoed one' do
+    supplied = { neighborhood: 'PG::' }
+    body     = refusal(%(invalid input syntax for type uuid; neighborhood "PG::" is not one this aggregator serves))
+
+    result = described_class.scan(body, NEEDLES, supplied: supplied)
+    expect(result.leak).to eq('invalid input syntax')
+    expect(result.echoed).to eq(['PG::'])
+  end
+end
+
+RSpec.describe Kiosk::Redteam::LeakScan, 'when the runtime spoke' do
+  include_context 'leak_scan setup'
+
+  # THE RESIDUAL LIMIT, PINNED RATHER THAN CLAIMED. When the probe supplies a
+  # needle VERBATIM, every occurrence of that needle looks echoed, including
+  # one the app really did produce — nothing about the bytes distinguishes
+  # "you sent me this" from "I said this", and no content-only oracle can.
+  # This example exists so the limit is a measured, executable fact rather
+  # than a sentence in a comment: the needle is not reported as a leak, it IS
+  # reported as discounted, and `note` puts that in front of a human. The
+  # protection against it is the example above — a real leak is essentially
+  # never a lone needle with nothing else of the runtime's around it.
+  it 'cannot separate an echoed needle from an identical one the app produced' do
+    supplied = { neighborhood: 'PG::' }
+    body     = refusal(%(PG::UndefinedColumn; neighborhood "PG::" is not one this aggregator serves))
+
+    result = described_class.scan(body, ['PG::'], supplied: supplied)
+    expect(result.leak).to be_nil
+    expect(result.echoed).to eq(['PG::'])
+    expect(result.note).to include('PG::')
+  end
+end
+
+# ── Shape coverage: the four spellings a demo may echo a value in ───────────
+
+RSpec.describe Kiosk::Redteam::LeakScan, 'the spellings an echo can take' do
+  include_context 'leak_scan setup'
+
+  it "covers a bare interpolation (\#{value})" do
+    body = refusal('invalid date: PG::22P02 — use the YYYY-MM-DD from an availability row')
+
+    expect(described_class.leak(body, NEEDLES, supplied: { date: 'PG::22P02' })).to be_nil
+  end
+
+  it "covers an inspected interpolation (\#{value.inspect})" do
+    body = refusal(%(booking_id "PG::22P02" is not a uuid))
+
+    expect(described_class.leak(body, NEEDLES, supplied: { booking_id: 'PG::22P02' })).to be_nil
+  end
+
+  it 'covers a leaf inside a container the probe sent whole' do
+    cart = { items: [{ 'sku' => 'TypeError', 'qty' => 1 }] }
+    body = refusal(%(unknown sku(s): TypeError))
+
+    expect(described_class.leak(body, NEEDLES, supplied: cart)).to be_nil
+  end
+
+  it "covers the container's own inspected spelling" do
+    item = { sku: 'TypeError', qty: 1 }
+    body = refusal("each item must be a {sku, qty} object — got #{item.class} (#{item.inspect})")
+
+    expect(described_class.leak(body, NEEDLES, supplied: { items: [item] })).to be_nil
+  end
+
+  it 'handles non-string probe values without raising' do
+    [true, false, nil, 1.5, 20_260_826, [], {}, [1], { 'a' => 1 }].each do |value|
+      expect { described_class.scan(refusal('no leak here'), NEEDLES, supplied: { arg: value }) }
+        .not_to raise_error
     end
   end
+end
+
+# ── Degradation is towards the LOUD answer, never the quiet one ─────────────
+
+RSpec.describe Kiosk::Redteam::LeakScan, 'a beat that declares nothing' do
+  include_context 'leak_scan setup'
+
+  it 'behaves exactly as the pre-fix oracle did' do
+    junk = 'PG::22P02'
+    body = refusal(%(neighborhood #{junk.inspect} is not one this aggregator serves))
+
+    expect(described_class.leak(body, NEEDLES)).to eq(pre_fix_oracle(body))
+  end
+end
+
+# ── The bodies these beats actually meet ────────────────────────────────────
+
+RSpec.describe Kiosk::Redteam::LeakScan, 'input shapes' do
+  include_context 'leak_scan setup'
+
+  it 'accepts a bare Array body (a successful query answers one)' do
+    expect(described_class.leak([{ 'id' => 1 }], NEEDLES, supplied: { limit: 1 })).to be_nil
+  end
+
+  it 'accepts an already-serialized String body' do
+    expect(described_class.leak(%({"detail":"PG::"}), NEEDLES)).to eq('PG::')
+  end
+
+  it 'reports no leak for an empty body' do
+    expect(described_class.scan({}, NEEDLES, supplied: nil).leak?).to be(false)
+  end
+end
+
+RSpec.describe Kiosk::Redteam::LeakScan do
+  include_context 'leak_scan setup'
 
   # ── The strict containment rule ─────────────────────────────────────────────
 

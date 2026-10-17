@@ -4,11 +4,13 @@ require 'spec_helper'
 require 'base64'
 require_relative 'support'
 
-RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
+RSpec.shared_context 'device_grant_role_self_selection setup' do
   subject(:scenario) { described_class.new }
 
   let(:client)     { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
+
   let(:profile)    { minimal_profile(declared_roles: %w[customer owner]) }
+
   let(:device_url) { "#{BASE_URL}/kiosk/oauth/device_authorization" }
 
   # A JWS whose payload carries the given role claim — the scenario reads the
@@ -59,6 +61,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
   end
 
   before { stub_register }
+end
+
+RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
+  include_context 'device_grant_role_self_selection setup'
 
   it 'is BLOCKED against the engine at head' do
     stub_fixed_engine
@@ -82,106 +88,122 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
       end
     end
   end
+end
 
-  # THE REGRESSION THIS FILE EXISTS FOR (K-072). The vulnerable engine refused
-  # an UNDECLARED role and honoured a declared one, so a battery probing only
-  # `role=master` printed BLOCKED against a live escalation.
-  context 'against the PRE-K-072 engine (a declared role is honoured)' do
-    def stub_vulnerable_engine
-      stub_request(:post, device_url).to_return(opened)
-      stub_request(:post, device_url)
-        .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=master/) }
-        .to_return(oauth_error)
-    end
+# THE REGRESSION THIS FILE EXISTS FOR (K-072). The vulnerable engine refused
+# an UNDECLARED role and honoured a declared one, so a battery probing only
+# `role=master` printed BLOCKED against a live escalation.
+RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection, 'against the PRE-K-072 engine (a declared role is honoured)' do
+  include_context 'device_grant_role_self_selection setup'
 
-    it 'returns blocked: false and names the answer the declared role got' do
-      stub_vulnerable_engine
-
-      verdict = scenario.call(client, profile)
-
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('role=owner (DECLARED')
-      expect(verdict.detail).to include('HTTP 200')
-    end
+  def stub_vulnerable_engine
+    stub_request(:post, device_url).to_return(opened)
+    stub_request(:post, device_url)
+      .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=master/) }
+      .to_return(oauth_error)
   end
 
-  # `params[:role] || params[:scope]` was the vulnerable read, so a fix that
-  # guarded only one spelling must still fail here.
-  context 'when only `role` is guarded and `scope` still passes' do
-    it 'returns blocked: false' do
-      stub_request(:post, device_url).to_return(opened)
-      stub_request(:post, device_url)
-        .with { |req| req.body.to_s.match?(/(\A|&)role=[^&]+/) }
-        .to_return(oauth_error)
+  it 'returns blocked: false and names the answer the declared role got' do
+    stub_vulnerable_engine
 
-      verdict = scenario.call(client, profile)
+    verdict = scenario.call(client, profile)
 
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('scope=customer (DECLARED')
-    end
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('role=owner (DECLARED')
+    expect(verdict.detail).to include('HTTP 200')
+  end
+end
+
+# `params[:role] || params[:scope]` was the vulnerable read, so a fix that
+# guarded only one spelling must still fail here.
+RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection, 'when only `role` is guarded and `scope` still passes' do
+  include_context 'device_grant_role_self_selection setup'
+
+  it 'returns blocked: false' do
+    stub_request(:post, device_url).to_return(opened)
+    stub_request(:post, device_url)
+      .with { |req| req.body.to_s.match?(/(\A|&)role=[^&]+/) }
+      .to_return(oauth_error)
+
+    verdict = scenario.call(client, profile)
+
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('scope=customer (DECLARED')
+  end
+end
+
+# A refusal is free: an origin that refuses EVERY device_authorization must
+# not score a pass here.
+RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection, 'when the origin refuses the role-less request too' do
+  include_context 'device_grant_role_self_selection setup'
+
+  it 'returns blocked: false and shows the control failing' do
+    stub_request(:post, device_url).to_return(oauth_error)
+
+    verdict = scenario.call(client, profile)
+
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('CONTROL role-less request -> HTTP 400')
+  end
+end
+
+# The wire-derived floor: a stale/empty `declared_roles` must not make the
+# probe set vacuous.
+RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection, 'when the profile declares no roles' do
+  include_context 'device_grant_role_self_selection setup'
+
+  let(:profile) { minimal_profile }
+
+  it "still probes the role the origin's own registration token carries" do
+    stub_fixed_engine
+
+    expect(scenario.call(client, profile).blocked).to be(true)
+    expect(a_request(:post, device_url).with(body: hash_including('role' => 'customer')))
+      .to have_been_made.at_least_once
   end
 
-  # A refusal is free: an origin that refuses EVERY device_authorization must
-  # not score a pass here.
-  context 'when the origin refuses the role-less request too' do
-    it 'returns blocked: false and shows the control failing' do
-      stub_request(:post, device_url).to_return(oauth_error)
+  it 'is a BREACH when that wire-derived role is honoured' do
+    stub_request(:post, device_url).to_return(opened)
+    stub_request(:post, device_url)
+      .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=master/) }
+      .to_return(oauth_error)
 
-      verdict = scenario.call(client, profile)
+    verdict = scenario.call(client, profile)
 
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('CONTROL role-less request -> HTTP 400')
-    end
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('"customer" read off this origin')
   end
+end
 
-  # The wire-derived floor: a stale/empty `declared_roles` must not make the
-  # probe set vacuous.
-  context 'when the profile declares no roles' do
-    let(:profile) { minimal_profile }
+RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection, 'when the profile declares no roles' do
+  include_context 'device_grant_role_self_selection setup'
 
-    it "still probes the role the origin's own registration token carries" do
-      stub_fixed_engine
+  let(:profile) { minimal_profile }
 
-      expect(scenario.call(client, profile).blocked).to be(true)
-      expect(a_request(:post, device_url).with(body: hash_including('role' => 'customer')))
-        .to have_been_made.at_least_once
-    end
+  it 'SKIPS — not passes — when the origin declares no role at all' do
+    stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
+      .to_return(json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
+                                  'access_token' => 'eyJhbGciOiJSUzI1NiJ9.e30.sig'))
 
-    it 'is a BREACH when that wire-derived role is honoured' do
-      stub_request(:post, device_url).to_return(opened)
-      stub_request(:post, device_url)
-        .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=master/) }
-        .to_return(oauth_error)
+    verdict = scenario.call(client, profile)
 
-      verdict = scenario.call(client, profile)
-
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('"customer" read off this origin')
-    end
-
-    it 'SKIPS — not passes — when the origin declares no role at all' do
-      stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-        .to_return(json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
-                                    'access_token' => 'eyJhbGciOiJSUzI1NiJ9.e30.sig'))
-
-      verdict = scenario.call(client, profile)
-
-      expect(verdict.skipped).to be(true)
-      expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('declares no role')
-    end
+    expect(verdict.skipped).to be(true)
+    expect(verdict.blocked).to be(false)
+    expect(verdict.detail).to include('declares no role')
   end
+end
 
-  context 'when the control registration does not succeed' do
-    it 'returns a SETUP FAILED verdict rather than falling back to the vacuous probe' do
-      stub_register(status: 404)
+RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection, 'when the control registration does not succeed' do
+  include_context 'device_grant_role_self_selection setup'
 
-      verdict = scenario.call(client, profile)
+  it 'returns a SETUP FAILED verdict rather than falling back to the vacuous probe' do
+    stub_register(status: 404)
 
-      expect(verdict.blocked).to be(false)
-      expect(verdict.skipped).to be(false)
-      expect(verdict.detail).to include('SETUP FAILED')
-      expect(a_request(:post, device_url)).not_to have_been_made
-    end
+    verdict = scenario.call(client, profile)
+
+    expect(verdict.blocked).to be(false)
+    expect(verdict.skipped).to be(false)
+    expect(verdict.detail).to include('SETUP FAILED')
+    expect(a_request(:post, device_url)).not_to have_been_made
   end
 end

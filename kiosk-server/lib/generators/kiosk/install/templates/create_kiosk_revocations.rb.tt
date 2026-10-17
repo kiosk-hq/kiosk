@@ -5,9 +5,9 @@
 # every process and across restarts (RevocationStores::ActiveRecord, the default).
 class CreateKioskRevocations < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
-    execute Kiosk::Server::SchemaDefinitions.revocations_sql(
-      schema: <%= options[:schema].inspect %>,
-    )
+    execute <<~'SQL'
+<%= ddl(:revocations) %>
+    SQL
   end
 
   def down

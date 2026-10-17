@@ -9,9 +9,9 @@
 # Additive/opt-in: needed only if an Action gates on specific KYC attributes.
 class CreateKioskKycAttributes < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
-    execute Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(
-      schema: <%= options[:schema].inspect %>,
-    )
+    execute <<~'SQL'
+<%= ddl(:kyc_attributes, user_id_type: user_id_type, user_table: options[:user_table]) %>
+    SQL
   end
 
   def down

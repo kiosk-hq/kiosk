@@ -7,7 +7,7 @@ require 'rails/generators/migration'
 module Kiosk
   module Generators
     # `bin/rails g kiosk:install`: writes the Kiosk initializer, the wire routes
-    # and the migrations, which call {Kiosk::Server::SchemaDefinitions} at migrate time.
+    # and the migrations, with the DDL of {Kiosk::Server::SchemaDefinitions} written into each.
     class InstallGenerator < ::Rails::Generators::Base
       include ::Rails::Generators::Migration
 
@@ -34,6 +34,16 @@ module Kiosk
           @migration_counter += 1
           format('%014d', number)
         end
+      end
+
+      no_commands do
+        # One SchemaDefinitions method's DDL, indented for the migration's heredoc.
+        def ddl(name, **)
+          Kiosk::Server::SchemaDefinitions.public_send(:"#{name}_sql", schema: options[:schema], **)
+                                          .gsub(/^(?=.)/, '      ')
+        end
+
+        def user_id_type = options[:user_id_type].to_sym
       end
 
       def create_initializer

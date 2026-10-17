@@ -1,17 +1,11 @@
 # frozen_string_literal: true
 
 # Migration 002 — Kiosk identity tables: agents, agent_tokens, agent_mappings.
-# `agents` carries kyc_verified_at, spending_cap_cents and human_label in the
-# CREATE: they are nullable and cost an operator who never uses them nothing, so
-# they belong here rather than in three separate later migrations amending this
-# table.
 class CreateKioskIdentityTables < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
-    execute Kiosk::Server::SchemaDefinitions.identity_tables_sql(
-      schema:       <%= options[:schema].inspect %>,
-      user_id_type: :<%= options[:user_id_type] %>,
-      user_table:   <%= options[:user_table].inspect %>,
-    )
+    execute <<~'SQL'
+<%= ddl(:identity_tables, user_id_type: user_id_type, user_table: options[:user_table]) %>
+    SQL
   end
 
   def down

@@ -8,7 +8,6 @@
 # Usage: bin/check-demo-copies [--self-test]
 
 require 'digest'
-require 'erb'
 require 'open3'
 require 'ripper'
 
@@ -68,11 +67,6 @@ if ARGV.include?('--self-test')
             [:delete, 'kiosk-demo-getgrocery/config/locales/en.yml'],
             [:delete, 'kiosk-demo-hoteling/config/locales/en.yml']],
       expect: %r{config/locales/en\.yml: recorded in SKELETON_NOT_COMPARED but only 1 demo ships it} },
-    { id: 'template-regenerated-alone', rule: 'generator templates',
-      what: 'an install template is edited and the demos are not regenerated',
-      ops: [[:edit, 'kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_schema.rb.tt',
-             "  def up\n", "  def up\n    # engine-side change that never reached the demos\n"]],
-      expect: /create_kiosk_schema\.rb\.tt: rendered with the generator's default options/ },
     { id: 'template-undeclared', rule: 'generator templates',
       what: 'a new install template appears with no GENERATOR_TEMPLATES entry',
       ops: [[:write, 'kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_audit_log.rb.tt',
@@ -741,11 +735,8 @@ SKELETON_NOT_COMPARED = {
   'vendor/.keep' => 'Empty placeholder.'
 }.freeze
 
-# Install-generator templates: `emits:` (byte-match in every operator demo) or `not_compared:`.
+# Install-generator templates: `emits:` (every operator demo ships that migration) or `not_compared:`.
 GENERATOR_TEMPLATES_DIR = 'kiosk-server/lib/generators/kiosk/install/templates'
-GENERATOR_DEFAULTS = {
-  schema: 'kiosk', user_id_type: 'uuid', user_table: 'users', guc_namespace: 'app'
-}.freeze
 NON_OPERATOR_DEMOS = %w[kiosk-demo-prove].freeze
 
 GENERATOR_TEMPLATES = {
@@ -898,12 +889,6 @@ class AgreeCheck
                    "ended: #{actual}. Drop the group."
                end
   end
-end
-
-def render_template(path)
-  b = binding
-  b.local_variable_set(:options, GENERATOR_DEFAULTS)
-  ERB.new(File.read(path)).result(b)
 end
 
 # ── Magic comments: the only comments Ruby acts on, so :code compares them ──
@@ -1098,7 +1083,7 @@ COPIES.each do |rel, entry|
   check_copy(rel, entry, copies, errors, agree)
 end
 
-# ── Generator templates: each render must byte-match every operator demo's migration ──
+# ── Generator templates: every operator demo ships each migration a template emits ──
 tpl_files = Dir[File.join(ROOT, GENERATOR_TEMPLATES_DIR, '*.tt')].map { |p| File.basename(p) }
 
 (tpl_files - GENERATOR_TEMPLATES.keys).sort.each do |name|
@@ -1120,7 +1105,6 @@ def check_template(name, entry, migrations, operator_demos, errors)
   return errors << "#{name}: no demo ships a db/migrate copy of #{emits}. Regenerate the demos, or drop the entry." if copies.empty?
 
   check_template_demos(name, emits, copies.keys, operator_demos, errors)
-  check_template_render(name, emits, copies, errors)
 end
 
 def template_not_compared(name, entry, errors)
@@ -1136,28 +1120,6 @@ def check_template_demos(name, emits, shipping, operator_demos, errors)
   extra = shipping & NON_OPERATOR_DEMOS
   errors << "#{name}: #{short_list(extra)} ships #{emits}, but is declared a non-operator demo." unless extra.empty?
 end
-
-def check_template_render(name, emits, copies, errors)
-  rendered   = render_template(File.join(ROOT, GENERATOR_TEMPLATES_DIR, name))
-  mismatched = copies.reject { |_demo, path| File.read(path) == rendered }
-  return if mismatched.empty?
-
-  demo, path = mismatched.first
-  errors << "#{GENERATOR_TEMPLATES_DIR}/#{name}: rendered with the generator's default options it must " \
-            "byte-match every demo copy of #{emits}, and #{short_list(mismatched.keys)} " \
-            "#{mismatched.size == 1 ? 'disagrees' : 'disagree'} (#{first_difference(rendered, File.read(path), short_name(demo))}). " \
-            'Regenerate the copies or lift the edit into the template.'
-end
-
-# Names the first line where `copy` differs from the template's render.
-def first_difference(rendered, copy, demo)
-  a = rendered.lines
-  b = copy.lines
-  i = (0...[a.size, b.size].max).find { |j| a[j] != b[j] }
-  "line #{i + 1}: template renders #{shown_line(a[i])}, #{demo} has #{shown_line(b[i])}"
-end
-
-def shown_line(line) = (line || '<nothing>').chomp.strip.inspect
 
 GENERATOR_TEMPLATES.each do |name, entry|
   next unless tpl_files.include?(name)

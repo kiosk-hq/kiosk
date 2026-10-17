@@ -11,9 +11,9 @@
 # whether or not this origin declares a topic, and an empty table costs nothing.
 class CreateKioskEvents < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
-    execute Kiosk::Server::SchemaDefinitions.events_sql(
-      schema: <%= options[:schema].inspect %>,
-    )
+    execute <<~'SQL'
+<%= ddl(:events) %>
+    SQL
   end
 
   def down

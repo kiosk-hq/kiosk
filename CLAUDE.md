@@ -119,12 +119,11 @@ universal agent skill is `skill.md` on the same site.
   declared in `EXTRA_SCANNED`, which is what hands it to the file-level manifest
   and its COPIES entry — without that the unit rule compares the names it knows
   and everything else in the copy is compared against nothing (K-1550).
-  The `db/migrate` copies are ALSO held against the engine's install-generator
-  `.rb.tt` templates (rendered with the generator's defaults, byte-matched), so
-  editing a template in kiosk-server without regenerating the demos — or
-  vice versa — fails the build. Every template is declared in `GENERATOR_TEMPLATES`
-  either `emits:` (compared in all seven) or `not_compared:` with its reason;
-  there is no third state, so a divergence is fixed rather than recorded.
+  Every install-generator `.rb.tt` template is declared in `GENERATOR_TEMPLATES`
+  either `emits:` (every operator demo ships that migration) or `not_compared:`
+  with its reason. The generator writes the DDL into each migration it emits;
+  the demos' shipped migrations still call `SchemaDefinitions`, and a shipped
+  migration is never edited, so the template text is not compared with them.
   Most of the Rails skeleton (`bin/`, `config/`, `public/`, `Rakefile`,
   `config.ru`, `db/seeds.rb`) is deliberately NOT compared — each demo edits it
   for its own port and host — and that exclusion is recorded, path by path with

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: `kiosk:install` writes each migration's DDL into the file, so a generated migration no longer depends on the installed kiosk-server version.
+
 - 2026-10-17: Every demo tolls registration only, at n=168 k=7: the per-demo query, browse and hold tolls are removed, and tests require `small_equihash`.
 
 - 2026-10-17: Registration proof-of-work runs at the Equihash default everywhere; `registration_pow_params` is gone, and only test setup may pick small params.

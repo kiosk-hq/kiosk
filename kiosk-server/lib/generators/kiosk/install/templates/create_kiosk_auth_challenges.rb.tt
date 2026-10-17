@@ -5,9 +5,9 @@
 # process is redeemed by any other (AuthChallengeStores::ActiveRecord, the default).
 class CreateKioskAuthChallenges < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
-    execute Kiosk::Server::SchemaDefinitions.auth_challenge_sql(
-      schema: <%= options[:schema].inspect %>,
-    )
+    execute <<~'SQL'
+<%= ddl(:auth_challenge) %>
+    SQL
   end
 
   def down

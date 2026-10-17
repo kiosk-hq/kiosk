@@ -40,6 +40,11 @@ module InstallGeneratorSpecHelpers
     Dir[File.join(@destination, 'db/migrate/*.rb')]
   end
 
+  # The SQL a generated migration executes in `up`, as its heredoc yields it.
+  def ddl_of(path)
+    File.read(path)[/<<~'SQL'\n(.*?)^    SQL$/m, 1].gsub(/^ {6}/, '')
+  end
+
   def routes_code
     read('config/routes.rb').lines.map(&:strip).reject { |l| l.empty? || l.start_with?('#') }
   end
@@ -230,10 +235,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 010 create_kiosk
 
   let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_auth_challenges.rb') } }
 
-  it 'calls SchemaDefinitions.auth_challenge_sql with the configured schema' do
+  it "writes auth_challenge_sql's DDL for the configured schema" do
     invoke!(%w[--schema=ksk])
-    expect(File.read(file)).to include('Kiosk::Server::SchemaDefinitions.auth_challenge_sql')
-    expect(File.read(file)).to include(%(schema: "ksk"))
+    expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.auth_challenge_sql(schema: 'ksk')}\n")
   end
 
   it 'drops the table on down' do
@@ -247,10 +251,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 009 create_kiosk
 
   let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_revocations.rb') } }
 
-  it 'calls SchemaDefinitions.revocations_sql with the configured schema' do
+  it "writes revocations_sql's DDL for the configured schema" do
     invoke!(%w[--schema=ksk])
-    expect(File.read(file)).to include('Kiosk::Server::SchemaDefinitions.revocations_sql')
-    expect(File.read(file)).to include(%(schema: "ksk"))
+    expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.revocations_sql(schema: 'ksk')}\n")
   end
 end
 
@@ -259,10 +262,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 008 create_kiosk
 
   let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_pow_spent.rb') } }
 
-  it 'calls SchemaDefinitions.pow_spent_sql with the configured schema' do
+  it "writes pow_spent_sql's DDL for the configured schema" do
     invoke!(%w[--schema=ksk])
-    expect(File.read(file)).to include('Kiosk::Server::SchemaDefinitions.pow_spent_sql')
-    expect(File.read(file)).to include(%(schema: "ksk"))
+    expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: 'ksk')}\n")
   end
 
   it 'drops the table on down' do
@@ -281,10 +283,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 007 create_kiosk
     expect(file).not_to be_nil
   end
 
-  it 'calls SchemaDefinitions.events_sql with the configured schema' do
+  it "writes events_sql's DDL for the configured schema" do
     invoke!(%w[--schema=ksk])
-    expect(File.read(file)).to include('Kiosk::Server::SchemaDefinitions.events_sql')
-    expect(File.read(file)).to include(%(schema: "ksk"))
+    expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.events_sql(schema: 'ksk')}\n")
   end
 
   it 'drops the table on down' do
@@ -303,13 +304,10 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 001 create_kiosk
     expect(file).not_to be_nil
   end
 
-  it 'calls SchemaDefinitions.helper_functions_sql with the configured args' do
+  it "writes helper_functions_sql's DDL for the configured args" do
     invoke!(%w[--schema=ksk --guc-namespace=kiosk-all --user-id-type=bigint])
-    body = File.read(file)
-    expect(body).to include('Kiosk::Server::SchemaDefinitions.helper_functions_sql(')
-    expect(body).to include('schema:        "ksk"')
-    expect(body).to include('guc_namespace: "kiosk-all"')
-    expect(body).to include('user_id_type:  :bigint')
+    expected = Kiosk::Server::SchemaDefinitions.helper_functions_sql(schema: 'ksk', guc_namespace: 'kiosk-all', user_id_type: :bigint)
+    expect(ddl_of(file)).to eq("#{expected}\n")
   end
 
   it 'is reversible — drops the schema CASCADE' do
@@ -329,13 +327,10 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 002 create_kiosk
 
   let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_identity_tables.rb') } }
 
-  it 'calls SchemaDefinitions.identity_tables_sql with schema, user_id_type, user_table' do
+  it "writes identity_tables_sql's DDL for schema, user_id_type, user_table" do
     invoke!(%w[--user-table=members --user-id-type=bigint --schema=ksk])
-    body = File.read(file)
-    expect(body).to include('Kiosk::Server::SchemaDefinitions.identity_tables_sql(')
-    expect(body).to include('schema:       "ksk"')
-    expect(body).to include('user_id_type: :bigint')
-    expect(body).to include('user_table:   "members"')
+    expected = Kiosk::Server::SchemaDefinitions.identity_tables_sql(schema: 'ksk', user_id_type: :bigint, user_table: 'members')
+    expect(ddl_of(file)).to eq("#{expected}\n")
   end
 
   it 'drops the three tables in reverse-FK order in #down' do
@@ -354,12 +349,10 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 004 create_kiosk
 
   let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_device_authorizations.rb') } }
 
-  it 'calls SchemaDefinitions.device_authorizations_sql with the configured args' do
+  it "writes device_authorizations_sql's DDL for the configured args" do
     invoke!(%w[--schema=ksk --user-id-type=bigint])
-    body = File.read(file)
-    expect(body).to include('Kiosk::Server::SchemaDefinitions.device_authorizations_sql(')
-    expect(body).to include('schema:       "ksk"')
-    expect(body).to include('user_id_type: :bigint')
+    expected = Kiosk::Server::SchemaDefinitions.device_authorizations_sql(schema: 'ksk', user_id_type: :bigint)
+    expect(ddl_of(file)).to eq("#{expected}\n")
   end
 
   it 'drops the device_authorizations table in #down' do
@@ -373,12 +366,10 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 005 create_kiosk
 
   let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_mandates.rb') } }
 
-  it 'calls SchemaDefinitions.mandates_sql with the configured args' do
+  it "writes mandates_sql's DDL for the configured args" do
     invoke!(%w[--schema=ksk --user-id-type=bigint])
-    body = File.read(file)
-    expect(body).to include('Kiosk::Server::SchemaDefinitions.mandates_sql(')
-    expect(body).to include('schema:       "ksk"')
-    expect(body).to include('user_id_type: :bigint')
+    expected = Kiosk::Server::SchemaDefinitions.mandates_sql(schema: 'ksk', user_id_type: :bigint)
+    expect(ddl_of(file)).to eq("#{expected}\n")
   end
 
   it 'drops all four mandate tables — including settlements — in reverse-FK order in #down' do
@@ -405,11 +396,10 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 006 create_kiosk
 
   let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_kyc_attributes.rb') } }
 
-  it 'calls SchemaDefinitions.kyc_attributes_sql with the configured schema' do
-    invoke!(%w[--schema=ksk])
-    body = File.read(file)
-    expect(body).to include('Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(')
-    expect(body).to include('schema: "ksk"')
+  it "writes kyc_attributes_sql's DDL for schema, user_id_type, user_table" do
+    invoke!(%w[--schema=ksk --user-id-type=bigint --user-table=members])
+    expected = Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(schema: 'ksk', user_id_type: :bigint, user_table: 'members')
+    expect(ddl_of(file)).to eq("#{expected}\n")
   end
 
   it 'sorts after 002 (the agents table its rows reference)' do
@@ -430,10 +420,12 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'default options' do
 
   it "uses :uuid, schema 'kiosk', guc 'app', table 'users' when no flags are passed" do
     invoke!
-    schema_migration = migrations.find { |p| p.end_with?('_create_kiosk_schema.rb') }
-    body = File.read(schema_migration)
-    expect(body).to include('schema:        "kiosk"')
-    expect(body).to include('guc_namespace: "app"')
-    expect(body).to include('user_id_type:  :uuid')
+    expected = Kiosk::Server::SchemaDefinitions.identity_tables_sql(schema: 'kiosk', user_id_type: :uuid, user_table: 'users')
+    expect(ddl_of(migrations.find { |p| p.end_with?('_create_kiosk_identity_tables.rb') })).to eq("#{expected}\n")
+  end
+
+  it "calls nothing at migrate time: every migration's DDL is written into it" do
+    invoke!
+    expect(migrations.map { |p| File.read(p) }).to all(satisfy { |body| !body.include?('SchemaDefinitions') })
   end
 end

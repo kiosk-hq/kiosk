@@ -5,9 +5,9 @@
 # every process and every deploy (PowSpentStores::ActiveRecord, the default).
 class CreateKioskPowSpent < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def up
-    execute Kiosk::Server::SchemaDefinitions.pow_spent_sql(
-      schema: <%= options[:schema].inspect %>,
-    )
+    execute <<~'SQL'
+<%= ddl(:pow_spent) %>
+    SQL
   end
 
   def down

@@ -26,7 +26,12 @@ class PropertyDecisionJob < ApplicationJob
   def decline!(booking)
     charge  = settled_reference(booking)
     receipt = charge && refund!(charge, booking.total_cents)
+    cancel!(booking, receipt)
 
+    emit(booking, 'cancelled', { 'reason' => 'property_declined', **refund_news(booking, receipt, charge) })
+  end
+
+  def cancel!(booking, receipt)
     booking.status = :cancelled
     if receipt
       booking.payment_status       = :refunded
@@ -34,14 +39,15 @@ class PropertyDecisionJob < ApplicationJob
       booking.refund_psp_reference = receipt[:psp_reference]
     end
     booking.save!
+  end
 
-    refund = if receipt
-               { 'refund' => { 'amount_cents' => booking.total_cents,
-                               'currency' => 'eur',
-                               'psp_reference' => receipt[:psp_reference],
-                               'reverses' => charge } }
-             end
-    emit(booking, 'cancelled', { 'reason' => 'property_declined', **refund.to_h })
+  def refund_news(booking, receipt, charge)
+    return {} unless receipt
+
+    { 'refund' => { 'amount_cents' => booking.total_cents,
+                    'currency' => 'eur',
+                    'psp_reference' => receipt[:psp_reference],
+                    'reverses' => charge } }
   end
 
   def settled_reference(booking)

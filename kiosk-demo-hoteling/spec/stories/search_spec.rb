@@ -2,10 +2,14 @@
 
 require 'story_helper'
 
-RSpec.describe 'Finding a hotel', type: :story do
+RSpec.shared_context 'a guest searching hotels' do
   let(:guest) { a_guest }
 
   def total(found) = found.header('x-total-count').to_i
+end
+
+RSpec.describe 'Finding a hotel', type: :story do
+  include_context 'a guest searching hotels'
 
   it 'a guest pages through every hotel in town, and a narrow search fits on one page' do
     first = guest.searches(limit: 20)
@@ -22,6 +26,10 @@ RSpec.describe 'Finding a hotel', type: :story do
     expect(narrow.next_page).to be_nil
     expect(total(narrow)).to eq(narrow.rows.size)
   end
+end
+
+RSpec.describe 'Finding a hotel', 'one hotel, or none', type: :story do
+  include_context 'a guest searching hotels'
 
   it "a guest reads one hotel's rooms, and is told when a hotel does not exist" do
     hotel = guest.searches(limit: 1).rows.first['property_id']
@@ -45,6 +53,10 @@ RSpec.describe 'Finding a hotel', type: :story do
     expect(atlantis['detail']).to include('Sultanahmet', 'Beyoğlu', 'Kadıköy')
     expect(atlantis['detail']).not_to include('Atlantis')
   end
+end
+
+RSpec.describe 'Finding a hotel', 'page size', type: :story do
+  include_context 'a guest searching hotels'
 
   it 'a guest asking for fewer than one or more than fifty hotels at once gets one or fifty' do
     one = guest.searches(limit: 0)

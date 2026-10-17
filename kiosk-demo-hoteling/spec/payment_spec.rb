@@ -2,7 +2,14 @@
 
 require 'spec_helper'
 
-RSpec.describe 'paying for a booking' do
+# A PSP that settles every capture at once.
+class InstantPsp
+  def capture(cart, **)
+    { psp_reference: 'pi_fixture', settled_amount_cents: cart.total_amount_cents, settled_at: Time.now.utc }
+  end
+end
+
+RSpec.shared_context 'a booking two customers can pay for' do
   let(:ada) { User.create!(email: 'ada-pay@example.test', password: 'payment-fixture') }
   let(:ben) { User.create!(email: 'ben-pay@example.test', password: 'payment-fixture') }
 
@@ -13,14 +20,7 @@ RSpec.describe 'paying for a booking' do
                     check_in: Date.current + 30, check_out: Date.current + 31, total_cents: 18_000)
   end
 
-  let(:psp) do
-    Class.new do
-      def capture(cart, payment_method: nil)
-        { psp_reference: 'pi_fixture', settled_amount_cents: cart.total_amount_cents, settled_at: Time.now.utc }
-      end
-    end.new
-  end
-  let(:cashier) { Kiosk.configuration.payment_provider.over(psp) }
+  let(:cashier) { Kiosk.configuration.payment_provider.over(InstantPsp.new) }
 
   def cart(payer)
     Kiosk::Mandate::CartMandate.new(
@@ -37,6 +37,10 @@ RSpec.describe 'paying for a booking' do
       ConfirmBookingOperation.call(booking_id: booking.id)
     end
   end
+end
+
+RSpec.describe 'paying for a booking' do
+  include_context 'a booking two customers can pay for'
 
   it "refuses a customer paying for somebody else's booking" do
     expect { cashier.capture(cart(ben)) }

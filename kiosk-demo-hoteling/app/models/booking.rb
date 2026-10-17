@@ -55,18 +55,22 @@ class Booking < ApplicationRecord
   # The capture returned: tell the owner, and let the property decide. A zero
   # wait decides inline.
   def self.captured!(booking_id)
-    owner_id = where(id: booking_id).pick(:user_id)
-    if owner_id
-      Kiosk::Server::Events.emit(
-        topic: :booking_payment, subject: booking_id, identity_scope: [owner_id],
-        data: { 'booking_id' => booking_id, 'payment_state' => 'paid' }
-      )
-    end
+    announce_payment(booking_id)
     wait = Rails.configuration.x.hoteling.decision_delay_seconds.to_i
     where(id: booking_id).update_all(decision_due_at: Time.current + wait)
     return PropertyDecisionJob.new.perform(booking_id) if wait.zero?
 
     PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)
+  end
+
+  def self.announce_payment(booking_id)
+    owner_id = where(id: booking_id).pick(:user_id)
+    return unless owner_id
+
+    Kiosk::Server::Events.emit(
+      topic: :booking_payment, subject: booking_id, identity_scope: [owner_id],
+      data: { 'booking_id' => booking_id, 'payment_state' => 'paid' }
+    )
   end
 
   def nights = (check_out - check_in).to_i

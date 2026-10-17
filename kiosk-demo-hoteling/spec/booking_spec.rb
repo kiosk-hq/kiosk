@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.describe Booking do
+RSpec.shared_context 'a booking on the first of September in Istanbul' do
   include ActiveSupport::Testing::TimeHelpers
 
   let(:property)  { Property.create!(name: 'Booking Spec', city: 'Istanbul', timezone: 'Europe/Istanbul', stars: 4, amenities: []) }
@@ -16,6 +16,10 @@ RSpec.describe Booking do
   end
 
   around { |example| travel_to(Time.find_zone!('Europe/Istanbul').local(2026, 9, 1, 12)) { example.run } }
+end
+
+RSpec.describe Booking, 'stay dates' do
+  include_context 'a booking on the first of September in Istanbul'
 
   it 'holds the checkout after the first night' do
     expect(errors).to be_empty
@@ -34,6 +38,10 @@ RSpec.describe Booking do
       .to eq(['check_out is 31 nights after check_in; one reservation holds at most 30'])
     expect(Booking::MAX_NIGHTS * RoomType::MAX_NIGHTLY_PRICE_CENTS).to be <= 2_147_483_647
   end
+end
+
+RSpec.describe Booking, 'room type' do
+  include_context 'a booking on the first of September in Istanbul'
 
   it 'books the hotel its room type belongs to' do
     elsewhere = RoomType.create!(property: Property.create!(name: 'Elsewhere', city: 'Istanbul', stars: 3, amenities: []),

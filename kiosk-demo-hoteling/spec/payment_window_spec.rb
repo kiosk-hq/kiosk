@@ -4,38 +4,34 @@ require 'spec_helper'
 require 'kiosk/test_helpers/live_server'
 require 'kiosk/test_helpers/assistant'
 
-# A booking reads `paid` from the moment the PSP captures, not from the moment
-# the settlement row lands; and racing pays charge it at most once.
-RSpec.describe 'the window between a capture and its settlement' do
+# A PSP whose capture waits until the test releases it.
+class BlockingPsp
+  def initialize = @gate = Queue.new
+  def release! = @gate << :go
+  def setup_required?(*) = false
+
+  def capture(cart_mandate, **)
+    @gate.pop
+    { psp_reference: 'pi_blocking', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
+  end
+end
+
+# A PSP that counts its captures.
+class CountingPsp
+  attr_reader :captures
+
+  def initialize = @captures = Concurrent::AtomicFixnum.new
+  def setup_required?(*) = false
+
+  def capture(cart_mandate, **)
+    @captures.increment
+    sleep 0.05
+    { psp_reference: 'pi_counting', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
+  end
+end
+
+RSpec.shared_context 'a guest with a room to pay for' do
   include Kiosk::TestHelpers::SeededDatabase
-
-  let(:blocking_psp) do
-    Class.new do
-      def initialize = @gate = Queue.new
-      def release! = @gate << :go
-      def setup_required?(*) = false
-
-      def capture(cart_mandate, payment_method: nil)
-        @gate.pop
-        { psp_reference: 'pi_blocking', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
-      end
-    end.new
-  end
-
-  let(:counting_psp) do
-    Class.new do
-      attr_reader :captures
-
-      def initialize = @captures = Concurrent::AtomicFixnum.new
-      def setup_required?(*) = false
-
-      def capture(cart_mandate, payment_method: nil)
-        @captures.increment
-        sleep 0.05
-        { psp_reference: 'pi_counting', settled_amount_cents: cart_mandate.total_amount_cents, settled_at: Time.now.utc }
-      end
-    end.new
-  end
 
   let(:guest)    { User.create! }
   let(:room)     { RoomType.first }
@@ -58,18 +54,24 @@ RSpec.describe 'the window between a capture and its settlement' do
   def confirm(id) = as_guest { Kiosk::Server::Actions.fetch('confirm_booking').call(booking_id: id) }
   def payment_state(id) = as_guest { Kiosk::Server::Queries.fetch('my_bookings').call({}) }.find { it['booking_id'] == id }['payment_state']
   def payment_status(id) = Booking.uncached { Booking.find(id).payment_status }
+end
+
+RSpec.shared_context 'a capture in a second thread' do
   def settled?(id) = Kiosk::Settlement.uncached { Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(booking_id: id)).exists? }
 
   def capture(psp, booking_id)
-    cart = Kiosk::Mandate::CartMandate.new(
+    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart_for(booking_id)) }
+  end
+
+  def cart_for(booking_id)
+    Kiosk::Mandate::CartMandate.new(
       id: SecureRandom.uuid, intent_mandate_id: SecureRandom.uuid, user_id: guest.id, agent_id: identity.agent_id,
       issuer: Kiosk.configuration.issuer, line_items: [{ 'qty' => 1, 'price_cents' => room.nightly_price_cents, 'booking_id' => booking_id }],
       total_amount_cents: room.nightly_price_cents, currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'cart'
     )
-    ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart) }
   end
 
-  def wait_until
+  def eventually?
     50.times do
       return true if yield
 
@@ -77,6 +79,15 @@ RSpec.describe 'the window between a capture and its settlement' do
     end
     false
   end
+end
+
+# A booking reads `paid` from the moment the PSP captures, not from the moment
+# the settlement row lands.
+RSpec.describe 'the window between a capture and its settlement' do
+  include_context 'a guest with a room to pay for'
+  include_context 'a capture in a second thread'
+
+  let(:blocking_psp) { BlockingPsp.new }
 
   it 'reads an untouched booking unpaid, and does not confirm it' do
     id = reserve
@@ -88,7 +99,7 @@ RSpec.describe 'the window between a capture and its settlement' do
     id = reserve
     paying = Thread.new { capture(blocking_psp, id) }
 
-    expect(wait_until { payment_status(id) == 'paying' }).to be(true)
+    expect(eventually? { payment_status(id) == 'paying' }).to be(true)
     expect(payment_state(id)).to eq('pending')
     expect { confirm(id) }.to raise_error(Kiosk::Server::Errors::Forbidden, /in progress/)
 
@@ -102,6 +113,14 @@ RSpec.describe 'the window between a capture and its settlement' do
     expect(events.map { it['subject'] }).to eq([id])
     expect(Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)).to be_empty
   end
+end
+
+# Racing pays charge a booking at most once.
+RSpec.describe 'the window between a capture and its settlement', 'racing pays' do
+  include_context 'a guest with a room to pay for'
+  include_context 'a capture in a second thread'
+
+  let(:counting_psp) { CountingPsp.new }
 
   it 'charges a booking once however many pays race for it' do
     id = reserve

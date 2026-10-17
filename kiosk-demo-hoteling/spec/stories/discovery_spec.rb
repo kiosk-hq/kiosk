@@ -28,7 +28,9 @@ RSpec.describe 'Discovering the hotel', type: :story do
     expect(examples.size).to be >= 4
     expect(examples.filter_map(&:violation)).to be_empty
   end
+end
 
+RSpec.describe 'Discovering the hotel', 'the landing page', type: :story do
   it 'the landing page advertises the skill this origin pins' do
     pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
     expect(pinned).to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})

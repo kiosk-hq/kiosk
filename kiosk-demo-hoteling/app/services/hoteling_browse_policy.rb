@@ -10,10 +10,11 @@ class HotelingBrowsePolicy < Kiosk::Reputation::Policy
   WRITE_PROOFS = 1
 
   def initialize(params)
+    super()
     @params = params
   end
 
-  def challenge_for(identity:, verb:, factors:)
+  def challenge_for(verb:, factors:, **)
     return { alg: Kiosk::Pow::Equihash::NAME, params: @params, count: WRITE_PROOFS } if verb == :run
     return nil unless verb == :query
 

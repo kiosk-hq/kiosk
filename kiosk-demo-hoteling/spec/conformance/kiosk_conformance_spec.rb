@@ -2,8 +2,7 @@
 
 require 'spec_helper'
 
-# The four properties the protocol makes normative of an origin.
-RSpec.describe 'Kiosk conformance' do
+RSpec.shared_context 'two guests with a booking each' do
   let(:ada) { User.create!(email: 'ada-conformance@example.test', password: 'conformance-fixture') }
   let(:ben) { User.create!(email: 'ben-conformance@example.test', password: 'conformance-fixture') }
 
@@ -29,6 +28,11 @@ RSpec.describe 'Kiosk conformance' do
     book_for(ada, double)
     book_for(ben, suite)
   end
+end
+
+# The four properties the protocol makes normative of an origin.
+RSpec.describe 'Kiosk conformance' do
+  include_context 'two guests with a booking each'
 
   it 'routes every verb it declares, with the method its kind requires' do
     expect(kiosk_origin).to have_a_route_for_every_verb
@@ -39,6 +43,10 @@ RSpec.describe 'Kiosk conformance' do
     expect(:my_bookings).to   execute_as_a_kiosk_verb(as: ada)
     expect(:search_hotels).to execute_as_a_kiosk_verb(as: ada)
   end
+end
+
+RSpec.describe 'Kiosk conformance', 'declared schemas' do
+  include_context 'two guests with a booking each'
 
   it 'answers the shape `properties` publishes' do
     expect(:properties).to answer_its_declared_schema(as: ada)
@@ -60,6 +68,10 @@ RSpec.describe 'Kiosk conformance' do
                 check_out: check_out.iso8601 }
     )
   end
+end
+
+RSpec.describe 'Kiosk conformance', 'principal scoping' do
+  include_context 'two guests with a booking each'
 
   it 'hands one guest nothing belonging to another' do
     expect(:my_bookings).to be_scoped_to_principal(as: ada, and_not: ben)

@@ -7,8 +7,12 @@ class StayValidator < ActiveModel::Validator
     return if record.check_in.nil? || record.check_out.nil?
 
     record.errors.add(:check_out, 'must be after check_in') unless record.check_out > record.check_in
-    return if record.property.nil?
+    refuse_past_check_in(record) if record.property
+  end
 
+  private
+
+  def refuse_past_check_in(record)
     zone = record.property.zone
     return if record.check_in >= zone.today
 

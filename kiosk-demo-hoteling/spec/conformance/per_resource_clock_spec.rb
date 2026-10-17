@@ -2,11 +2,7 @@
 
 require 'spec_helper'
 
-# Every seeded hotel is in Istanbul, so two fixtures in two zones are what show
-# the clock is read off the property rather than off the origin.
-RSpec.describe "a property's clock is the property's" do
-  include ActiveSupport::Testing::TimeHelpers
-
+RSpec.shared_context 'one operator with hotels in Istanbul and Auckland' do
   # 15:00 on the 15th in Istanbul, 01:00 on the 16th in Auckland.
   let(:instant)  { Time.utc(2026, 3, 15, 12, 0, 0) }
   let(:the_15th) { Date.new(2026, 3, 15) }
@@ -27,6 +23,14 @@ RSpec.describe "a property's clock is the property's" do
     RoomType.create!(property: istanbul, name: 'Double', nightly_price_cents: 18_000)
     RoomType.create!(property: auckland, name: 'Double', nightly_price_cents: 21_000)
   end
+end
+
+# Every seeded hotel is in Istanbul, so two fixtures in two zones are what show
+# the clock is read off the property rather than off the origin.
+RSpec.describe "a property's clock is the property's" do
+  include ActiveSupport::Testing::TimeHelpers
+
+  include_context 'one operator with hotels in Istanbul and Auckland'
 
   it "reads each property's zone off the property" do
     expect(istanbul.zone.name).to eq('Europe/Istanbul')
@@ -42,6 +46,10 @@ RSpec.describe "a property's clock is the property's" do
         .to match(%r{is in the past.*Pacific/Auckland})
     end
   end
+end
+
+RSpec.describe "a property's clock is the property's", 'on the wire' do
+  include_context 'one operator with hotels in Istanbul and Auckland'
 
   it "publishes each property's own zone in its hotel_detail row" do
     ist = kiosk_origin.call(:hotel_detail, kind: :query,

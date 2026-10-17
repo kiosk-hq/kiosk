@@ -2,7 +2,7 @@
 
 require 'story_helper'
 
-RSpec.describe "The hotel's answer to a paid booking", type: :story do
+RSpec.shared_context 'a hotel that answers on demand' do
   before { Rails.configuration.x.hoteling.decision_delay_seconds = 1.hour }
 
   def the_hotel_answers(booking, accepts:)
@@ -10,6 +10,10 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
     PropertyDecisionJob.perform_now(booking['booking_id'])
     Booking.find(booking['booking_id'])
   end
+end
+
+RSpec.describe "The hotel's answer to a paid booking", type: :story do
+  include_context 'a hotel that answers on demand'
 
   it 'a guest waits for the hotel, and once it accepts is handed the confirmation code, which a later answer does not change' do
     guest = a_guest
@@ -31,6 +35,10 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
 
     expect(the_hotel_answers(booking, accepts: false)).to have_attributes(status: 'confirmed', confirmation_code: code)
   end
+end
+
+RSpec.describe 'A hotel that declines a booking', type: :story do
+  include_context 'a hotel that answers on demand'
 
   it 'a hotel that declines cancels the booking, frees its nights and refunds the guest' do
     guest = a_guest
@@ -48,6 +56,10 @@ RSpec.describe "The hotel's answer to a paid booking", type: :story do
                        'refund' => { 'amount_cents' => declined.total_cents, 'currency' => 'eur',
                                      'psp_reference' => declined.refund_psp_reference, 'reverses' => charge })
   end
+end
+
+RSpec.describe 'A hotel that declines a booking', 'with no charge on record', type: :story do
+  include_context 'a hotel that answers on demand'
 
   it 'a hotel that declines a booking with no charge on record refunds nothing' do
     guest = a_guest

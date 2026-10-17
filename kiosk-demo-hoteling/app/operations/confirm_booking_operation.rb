@@ -6,16 +6,19 @@ class ConfirmBookingOperation
   def self.call(booking_id:)
     booking = Booking.own.find_by(id: booking_id)
     refuse 'booking not found or not yours' unless booking
+    refuse 'the hotel declined this booking and cancelled it', hint: cancellation_hint(booking) if booking.cancelled?
+    refuse_until_answered(booking)
 
-    if booking.cancelled?
-      refuse 'the hotel declined this booking and cancelled it',
-             hint: if booking.refund_psp_reference
-                     "The charge was refunded (#{booking.refund_psp_reference}) " \
-                       'to the card that paid. Search again for another room.'
-                   else
-                     'Nothing was charged. Search again for another room.'
-                   end
-    end
+    booking
+  end
+
+  def self.cancellation_hint(booking)
+    return 'Nothing was charged. Search again for another room.' unless booking.refund_psp_reference
+
+    "The charge was refunded (#{booking.refund_psp_reference}) to the card that paid. Search again for another room."
+  end
+
+  def self.refuse_until_answered(booking)
     if booking.paying?
       refuse 'a payment for this booking is in progress — re-read my_bookings until payment_state is ' \
              '`paid`, and do not pay again'
@@ -26,8 +29,6 @@ class ConfirmBookingOperation
       refuse 'the hotel has not answered this booking yet',
              hint: 'Wait for the `booking_confirmation` event.'
     end
-
-    booking
   end
 
   def self.refuse(message, hint: nil)

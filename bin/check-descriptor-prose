@@ -88,51 +88,65 @@ end
 # An OpenAPI parameter object: `in:`, `description:` and a boolean `required:`.
 def descriptions_in_parameter(rel, hash_node, out)
   pairs = assoc_pairs(hash_node)
-  return if pairs.key?('properties') || !pairs.key?('in') || !pairs.key?('description')
+  return unless parameter_object?(pairs)
 
   membership = { Prism::TrueNode => true, Prism::FalseNode => false }[pairs['required'].class]
   text = literal_string(pairs['description'])
   return if membership.nil? || text.nil?
 
-  name = pairs['name'] && literal_string(pairs['name'])
   out << Desc.new(kind: :parameter, file: rel, line: pairs['description'].location.start_line,
-                  prop: name || '(unnamed parameter)', required: membership, text: text)
+                  prop: parameter_name(pairs), required: membership, text: text)
+end
+
+def parameter_object?(pairs) = !pairs.key?('properties') && pairs.key?('in') && pairs.key?('description')
+def parameter_name(pairs) = (pairs['name'] && literal_string(pairs['name'])) || '(unnamed parameter)'
+
+# Yields every node of the tree, breadth first.
+def each_node(root)
+  queue = [root]
+  until queue.empty?
+    node = queue.shift
+    next unless node
+
+    yield node
+    queue.concat(node.compact_child_nodes)
+  end
 end
 
 def descriptions_in(rel, source)
   result = Prism.parse(source)
   return [[], "#{rel}: Prism cannot parse it"] unless result.success?
 
-  out   = []
-  queue = [result.value]
-  until queue.empty?
-    node = queue.shift
-    next unless node
+  out = []
+  each_node(result.value) do |node|
+    next unless node.is_a?(Prism::HashNode) || node.is_a?(Prism::KeywordHashNode)
 
-    if node.is_a?(Prism::HashNode) || node.is_a?(Prism::KeywordHashNode)
-      descriptions_in_schema(rel, node, out)
-      descriptions_in_parameter(rel, node, out)
-    end
-    queue.concat(node.compact_child_nodes)
+    descriptions_in_schema(rel, node, out)
+    descriptions_in_parameter(rel, node, out)
   end
   [out.uniq, nil]
 end
 
 def build_corpus(root)
   errors = []
-  descriptions = IO.popen(['git', '-C', root, 'ls-files', '--', '*.rb', '*.rake'], &:read)
-                   .split("\n").flat_map do |rel|
-    path = File.join(root, rel)
-    next [] unless File.file?(path)
-
-    source = File.read(path, encoding: 'UTF-8')
-    next [] unless source.include?('description')
-
-    found, error = descriptions_in(rel, source)
+  descriptions = tracked_ruby(root).flat_map do |rel|
+    found, error = file_descriptions(root, rel)
     errors << error if error
     found
   end
   [descriptions, errors]
+end
+
+def tracked_ruby(root) = IO.popen(['git', '-C', root, 'ls-files', '--', '*.rb', '*.rake'], &:read).split("\n")
+
+def file_descriptions(root, rel)
+  path = File.join(root, rel)
+  return [[], nil] unless File.file?(path)
+
+  source = File.read(path, encoding: 'UTF-8')
+  return [[], nil] unless source.include?('description')
+
+  descriptions_in(rel, source)
 end
 
 def label_hits(descriptions) = descriptions.select { |d| label_marker(d.text) }
@@ -144,21 +158,20 @@ def reserved_argument_names(root)
   path = File.join(root, ARGUMENT_DECODER)
   return [] unless File.file?(path)
 
-  queue = [Prism.parse(File.read(path, encoding: 'UTF-8')).value]
-  until queue.empty?
-    node = queue.shift
-    next unless node
-
-    if node.is_a?(Prism::ConstantWriteNode) && node.name == :RESERVED
-      value = node.value
-      value = value.receiver if value.is_a?(Prism::CallNode) && value.name == :freeze
-      if value.is_a?(Prism::HashNode)
-        return value.elements.filter_map { |e| e.key.unescaped if e.is_a?(Prism::AssocNode) }
-      end
-    end
-    queue.concat(node.compact_child_nodes)
+  each_node(Prism.parse(File.read(path, encoding: 'UTF-8')).value) do |node|
+    hash = reserved_hash(node)
+    return hash.elements.filter_map { |e| e.key.unescaped if e.is_a?(Prism::AssocNode) } if hash
   end
   []
+end
+
+# The hash literal of a `RESERVED = { … }` or `RESERVED = { … }.freeze` node; nil for any other node.
+def reserved_hash(node)
+  return unless node.is_a?(Prism::ConstantWriteNode) && node.name == :RESERVED
+
+  value = node.value
+  value = value.receiver if value.is_a?(Prism::CallNode) && value.name == :freeze
+  value if value.is_a?(Prism::HashNode)
 end
 
 # The reader still reaches what it must: every demo handler controller, the engine,
@@ -166,23 +179,33 @@ end
 def structural_faults(root, descriptions)
   return ['the corpus is empty: nothing parsed as a property or parameter description'] if descriptions.empty?
 
-  faults = []
-  Dir[File.join(root, 'kiosk-demo-*/app/controllers/kiosk/**/*.rb')].each do |path|
+  controller_faults(root, descriptions) + engine_faults(descriptions) + reserved_faults(root, descriptions)
+end
+
+def controller_faults(root, descriptions)
+  Dir[File.join(root, 'kiosk-demo-*/app/controllers/kiosk/**/*.rb')].filter_map do |path|
     rel = path.delete_prefix("#{root}/")
     next if descriptions.any? { |d| d.file == rel && d.kind == :property }
 
-    faults << "#{rel} yields no property description; the schema reader has stopped reading it."
+    "#{rel} yields no property description; the schema reader has stopped reading it."
   end
-  faults << 'every property description is inside a demo; the scope no longer reaches the engine.' if descriptions.select { |d| d.kind == :property }.all? { |d| d.file.start_with?('kiosk-demo-') }
+end
+
+def engine_faults(descriptions)
+  return [] unless descriptions.select { |d| d.kind == :property }.all? { |d| d.file.start_with?('kiosk-demo-') }
+
+  ['every property description is inside a demo; the scope no longer reaches the engine.']
+end
+
+def reserved_faults(root, descriptions)
   reserved = reserved_argument_names(root)
-  missing  = reserved - descriptions.select { |d| d.kind == :parameter }.map(&:prop)
-  if reserved.empty?
-    faults << "#{ARGUMENT_DECODER} yields no RESERVED names to compare the parameter corpus against."
-  elsif !missing.empty?
-    faults << "reserved query argument(s) #{missing.join(', ')} have no OpenAPI parameter description; " \
-              'describe them, or teach this reader the new parameter shape.'
-  end
-  faults
+  return ["#{ARGUMENT_DECODER} yields no RESERVED names to compare the parameter corpus against."] if reserved.empty?
+
+  missing = reserved - descriptions.select { |d| d.kind == :parameter }.map(&:prop)
+  return [] if missing.empty?
+
+  ["reserved query argument(s) #{missing.join(', ')} have no OpenAPI parameter description; " \
+   'describe them, or teach this reader the new parameter shape.']
 end
 
 LABEL_PROBES = [
@@ -265,28 +288,38 @@ def plant_hits(root, (rel, find, with))
 end
 
 def self_test(root)
-  failures = detector_faults
   descriptions, errors = build_corpus(root)
-  failures.concat(errors).concat(structural_faults(root, descriptions))
+  detector_faults + errors + structural_faults(root, descriptions) +
+    plant_failures(root) + foil_failures(root) + corpus_failures(root, descriptions)
+end
 
-  PLANTS.each do |plant|
+def plant_failures(root)
+  PLANTS.filter_map do |plant|
     hits, error = plant_hits(root, plant)
-    failures << (error || "#{plant[0]}: a planted label stays green") if error || hits.empty?
+    error || "#{plant[0]}: a planted label stays green" if error || hits.empty?
   end
-  FOIL_PLANTS.each do |plant|
-    hits, error = plant_hits(root, plant)
-    failures << (error || "#{plant[0]}: a correct sentence reddens: #{plant[2]}") if error || hits.any?
-  end
+end
 
+def foil_failures(root)
+  FOIL_PLANTS.filter_map do |plant|
+    hits, error = plant_hits(root, plant)
+    error || "#{plant[0]}: a correct sentence reddens: #{plant[2]}" if error || hits.any?
+  end
+end
+
+# Each damaged corpus must raise a structural fault.
+def corpus_failures(root, descriptions)
+  damaged_corpora(root, descriptions).filter_map do |what, corpus|
+    "#{what} raises no structural fault" if structural_faults(root, corpus).empty?
+  end
+end
+
+def damaged_corpora(root, descriptions)
+  first_controller = Dir.glob('kiosk-demo-*/app/controllers/kiosk/*.rb', base: root).min
   { 'an empty corpus' => [],
     'a corpus with no engine property' => descriptions.reject { |d| d.kind == :property && !d.file.start_with?('kiosk-demo-') },
     'a corpus with no parameter' => descriptions.reject { |d| d.kind == :parameter },
-    'a corpus missing one demo controller' =>
-      descriptions.reject { |d| d.file == Dir.glob('kiosk-demo-*/app/controllers/kiosk/*.rb', base: root).min } }
-    .each do |what, corpus|
-      failures << "#{what} raises no structural fault" if structural_faults(root, corpus).empty?
-    end
-  failures
+    'a corpus missing one demo controller' => descriptions.reject { |d| d.file == first_controller } }
 end
 
 if ARGV.include?('--self-test')

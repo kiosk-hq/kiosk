@@ -1028,16 +1028,10 @@ assert "the two 'it is not here' answers are two DIFFERENT codes" \
 
 # ─── register-PoW golden path (402 pow_required → solve Equihash → 201) ──────
 #
-# The DoD-2 leg: the agent golden path registers through a REAL register-time
-# Equihash proof-of-work, not a toll-free shortcut. HOW MANY proofs and HOW BIG
-# is the app's configuration — `registration_pow_count` and
-# `E2E_REGISTRATION_POW_PARAMS`, both in fixtures/initializer_kiosk.rb — and
-# this comment does not restate either: a number typed here, in the fixture
-# that sets it, and in the register helper is three hand-kept copies, and one
-# edit to the constant leaves two of them describing a toll the server does
-# not charge. The count is asserted from the WIRE by the "1 challenge
-# issued" check below — `challenges_len`, read off the 402 the server actually
-# answered with — which is where a number in this file belongs.
+# The agent golden path registers through a real register-time Equihash
+# proof-of-work. How many proofs is `registration_pow_count` in
+# fixtures/initializer_kiosk.rb; the params are kiosk-pow-equihash's default.
+# Both are asserted below from the 402 the server answered with.
 # register_pow_flow.rb proves, in one run: (1) a no-proof register is
 # REJECTED 402 pow_required with challenges[], (2) solving each challenge with
 # the bundled numpy solver and re-POSTing the SAME body with the proof(s) in the
@@ -1056,29 +1050,13 @@ assert "register-pow: 1 challenge issued"      "$(echo "$reg_out" | jq -r '.chal
 
 # ─── HOW BIG the toll is, asserted off the wire ──────────────────────────────
 #
-# The count above is read off the 402, and so is the SIZE. A comment stating
-# the register toll's (n, k) is true only until somebody retunes it and cannot
-# notice when they do, so the server has to say it instead:
-# `challenge_params_nk` is `challenges[0].params`
-# joined `n:k`, off the same 402 the count comes from.
-#
-# THE EXPECTED PAIR IS READ, NOT TYPED. Typing `96:5` here would put a fourth
-# hand-kept copy of the constant in this file, and this assertion
-# would then hold two hand edits in agreement rather than the server to its own
-# configuration. It is extracted from the initializer that CONFIGURES the gate,
-# so what is proven is that the origin publishes the toll this harness asked for
-# — which a config read cannot show, because it never leaves the config.
-reg_pow_expected=$(
-  sed -n 's/^E2E_REGISTRATION_POW_PARAMS[[:space:]]*=[[:space:]]*{[[:space:]]*n:[[:space:]]*\([0-9][0-9]*\)[[:space:]]*,[[:space:]]*k:[[:space:]]*\([0-9][0-9]*\)[[:space:]]*}.*/\1:\2/p' \
-      "$FIXTURES/initializer_kiosk.rb"
-)
-# The vacuity arm, and it guards the READING rather than the comparison: if the
-# constant is renamed, reformatted or deleted, `sed` prints nothing and the
-# comparison below would hold "" against "" the moment the server also stopped
-# publishing params. This fails first, and says which half broke.
-assert "register-pow: the expected (n,k) was READ from the initializer" \
+# `challenge_params_nk` is `challenges[0].params` joined `n:k`, off the same
+# 402. The expected pair is the gem's default, read from the gem.
+reg_pow_expected=$( cd "$APP_DIR" && bundle exec ruby -rkiosk/pow/equihash \
+  -e 'p = Kiosk::Pow::Equihash.params; print "#{p[:n]}:#{p[:k]}"' )
+assert "register-pow: the expected (n,k) was READ from the gem" \
        "$(printf '%s' "$reg_pow_expected" | grep -cE '^[0-9]+:[0-9]+$')"                             "1"
-assert "register-pow: served (n,k) IS the configured pair" \
+assert "register-pow: served (n,k) IS the gem default" \
        "$(echo "$reg_out" | jq -r '.challenge_params_nk')"    "$reg_pow_expected"
 assert "register-pow: solve+proof → registered" "$(echo "$reg_out" | jq -r '.with_proof_registered')" "true"
 assert "register-pow: role pinned customer"    "$(echo "$reg_out" | jq -r '.role')"                   "customer"

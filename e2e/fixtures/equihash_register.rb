@@ -2,12 +2,8 @@
 
 # Shared registration helper for the e2e flows.
 #
-# Registration is gated by Equihash proofs — how MANY is the app's
-# `registration_pow_count` and how BIG is its `E2E_REGISTRATION_POW_PARAMS`,
-# both set in initializer_kiosk.rb and NEITHER RESTATED HERE: this helper reads
-# neither, because it takes both off the 402
-# it is answering, so a comment quoting them here could only ever be a second
-# copy of a fact this file does not depend on. It does the full handshake:
+# Registration is gated by Equihash proofs; this helper takes their count and
+# params off the 402 it is answering. It does the full handshake:
 # challenge → sign PoP → register; on a 402 pow_required it solves every
 # challenge with the shipped Python solver and retries the SAME register body,
 # sending the proof(s) in the Kiosk-PoW request header as raw JSON.

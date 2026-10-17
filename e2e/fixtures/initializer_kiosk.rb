@@ -4,12 +4,6 @@ require 'base64'
 require 'stripe'
 require 'kiosk/payment_providers/stripe'
 require 'kiosk/user_identity_providers/devise'
-require 'kiosk/pow/equihash'
-require 'kiosk/reputation'
-
-Kiosk::Reputation::Backends.register(Kiosk::Pow::Equihash::NAME, Kiosk::Pow::Equihash)
-
-E2E_REGISTRATION_POW_PARAMS = { n: 96, k: 5 }.freeze
 
 Stripe.api_base = ENV.fetch('STRIPE_MOCK_URL')
 
@@ -23,9 +17,8 @@ Kiosk.configure do |c|
   c.registration_role  = :customer
   c.owner              = { name: 'Combette E2E Demo', support: 'demo@kiosk.tech' }
 
-  c.registration_pow_count  = 1
-  c.registration_pow_params = E2E_REGISTRATION_POW_PARAMS
-  c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
+  c.registration_pow_count = 1
+  c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
 
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 

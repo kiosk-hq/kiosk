@@ -17,6 +17,41 @@ module Kiosk
     # The spec's challenge-response auth paths (§6), drawn by the engine: challenge, register, login,
     # revoke, and the account-binding link, claim and unlink.
     class AuthController < ::ActionController::API
+      # The JSON answers and RFC 9457 problem documents of the auth paths.
+      module Answers
+        private
+
+        def respond(payload, status)
+          Kiosk::Server::Headers.add_to(response.headers)
+          render json: payload, status: status
+        end
+
+        # The same RFC 9457 problem document as the wire (§9).
+        def render_error(err)
+          add_problem_headers(err)
+          render json: err.to_problem, status: err.http_status,
+                 content_type: Errors::PROBLEM_CONTENT_TYPE
+        end
+
+        def add_problem_headers(err)
+          Kiosk::Server::Headers.add_to(response.headers)
+          Kiosk::Server::Headers.add_cache_policy(response.headers, status: err.http_status)
+          err.response_headers.each { |name, value| response.set_header(name, value) }
+          challenge = www_authenticate_for(err)
+          response.set_header('WWW-Authenticate', challenge) if challenge
+        end
+
+        # RFC 7235 challenge header for the 402s, as on the wire.
+        def www_authenticate_for(err)
+          issuer = Kiosk.current_issuer
+          case err
+          when Errors::PowRequired          then %(Kiosk-PoW realm="#{issuer}")
+          when Errors::PaymentSetupRequired then %(Payment realm="#{issuer}", method="ap2")
+          end
+        end
+      end
+      include Answers
+
       # Only the binding actions depend on this origin serving binding.
       include BindingModuleGate
 
@@ -37,12 +72,8 @@ module Kiosk
       def register
         body   = parse_body!('POST <endpoint>/auth/register')
         pow    = PowGate.proofs_from_header(request.get_header('HTTP_KIOSK_POW'))
-        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
-        result = AgentRegistration.call(
-          public_key_pem: body.fetch(:public_key),
-          signed: body.fetch(:signed),
-          pow: pow
-        )
+        validate_proofs!(pow)
+        result = AgentRegistration.call(public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed), pow: pow)
         respond(result, :created)
       rescue KeyError => e
         render_error(Errors.missing_field(e))
@@ -53,10 +84,7 @@ module Kiosk
       # Refresh a token for an EXISTING public key (404 if unknown → register).
       def login
         body   = parse_body!('POST <endpoint>/auth/login')
-        result = AgentLogin.call(
-          public_key_pem: body.fetch(:public_key),
-          signed: body.fetch(:signed)
-        )
+        result = AgentLogin.call(public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed))
         respond(result, :ok)
       rescue KeyError => e
         render_error(Errors.missing_field(e))
@@ -70,10 +98,7 @@ module Kiosk
         raise Errors::Unauthenticated, 'agent authentication required' if identity.nil? || identity.agent_id.nil?
 
         Kiosk.configuration.revocation_store&.revoke_all(identity.agent_id, at: Time.now.to_i)
-        # Auth endpoints always mint through the bundled DefaultAgentIdp.
-        token = AgentIdentityProviders::DefaultAgentIdp.new.issue(
-          agent_id: identity.agent_id, role: identity.role
-        )
+        token = fresh_token(identity)
         respond({ access_token: token }, :ok)
       rescue Errors::Base => e
         render_error(e)
@@ -93,11 +118,7 @@ module Kiosk
 
       def claim
         body   = parse_body!('POST <endpoint>/auth/claim')
-        result = LinkCode.redeem(
-          code: body.fetch(:code),
-          public_key_pem: body.fetch(:public_key),
-          signed: body.fetch(:signed)
-        )
+        result = LinkCode.redeem(code: body.fetch(:code), public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed))
         respond(result.slice(*CLAIM_RESPONSE_FIELDS), :created)
       rescue KeyError => e
         render_error(Errors.missing_field(e))
@@ -120,16 +141,24 @@ module Kiosk
 
       private
 
+      def validate_proofs!(pow)
+        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
+      end
+
+      # Auth endpoints always mint through the bundled DefaultAgentIdp.
+      def fresh_token(identity)
+        AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: identity.agent_id, role: identity.role)
+      end
+
       # The human's side of binding authenticates by the provider's session, never by an agent token.
       def authenticated_account_holder!
         identity = Kiosk.configuration.user_idp&.verify(request)
-        if identity.nil?
-          raise Errors::Unauthenticated.new(
-            'account session required',
-            hint: "sign in to the provider first — this endpoint authenticates via the provider's own session"
-          )
-        end
-        identity
+        return identity if identity
+
+        raise Errors::Unauthenticated.new(
+          'account session required',
+          hint: "sign in to the provider first — this endpoint authenticates via the provider's own session"
+        )
       end
 
       # nil for a missing, invalid or revoked bearer token.
@@ -151,34 +180,6 @@ module Kiosk
         parsed
       rescue JSON::ParserError
         raise Errors.malformed_json
-      end
-
-      def respond(payload, status)
-        Kiosk::Server::Headers.add_to(response.headers)
-        render json: payload, status: status
-      end
-
-      # The same RFC 9457 problem document as the wire (§9).
-      def render_error(err)
-        Kiosk::Server::Headers.add_to(response.headers)
-        Kiosk::Server::Headers.add_cache_policy(
-          response.headers, status: err.http_status
-        )
-        err.response_headers.each { |name, value| response.set_header(name, value) }
-        if (challenge = www_authenticate_for(err))
-          response.set_header('WWW-Authenticate', challenge)
-        end
-        render json: err.to_problem, status: err.http_status,
-               content_type: Errors::PROBLEM_CONTENT_TYPE
-      end
-
-      # RFC 7235 challenge header for the 402s, as on the wire.
-      def www_authenticate_for(err)
-        issuer = Kiosk.current_issuer
-        case err
-        when Errors::PowRequired          then %(Kiosk-PoW realm="#{issuer}")
-        when Errors::PaymentSetupRequired then %(Payment realm="#{issuer}", method="ap2")
-        end
       end
     end
   end

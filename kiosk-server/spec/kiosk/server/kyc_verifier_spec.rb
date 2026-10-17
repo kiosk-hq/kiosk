@@ -88,7 +88,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
     end
 
     it 'raises Errors::Forbidden when the aud claim is absent' do
-      payload = valid_payload.reject { |k, _| k == :aud }
+      payload = valid_payload.except(:aud)
       raw_jws = sign_kyc(payload)
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)
@@ -186,7 +186,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
     end
 
     it 'I1: raises Errors::Forbidden when level is missing entirely' do
-      payload = valid_payload.reject { |k, _| k == :level }
+      payload = valid_payload.except(:level)
       raw_jws = sign_kyc(payload)
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /kyc level not verified/)
@@ -195,21 +195,21 @@ RSpec.describe Kiosk::Server::KycVerifier do
     # ─── I2: require exp (and iss, sub) claims ────────────────────────────
 
     it 'I2: raises Errors::Forbidden when exp claim is absent' do
-      payload = valid_payload.reject { |k, _| k == :exp }
+      payload = valid_payload.except(:exp)
       raw_jws = sign_kyc(payload)
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
     it 'I2: raises Errors::Forbidden when iss claim is absent' do
-      payload = valid_payload.reject { |k, _| k == :iss }
+      payload = valid_payload.except(:iss)
       raw_jws = sign_kyc(payload)
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
     it 'I2: raises Errors::Forbidden when sub claim is absent' do
-      payload = valid_payload.reject { |k, _| k == :sub }
+      payload = valid_payload.except(:sub)
       raw_jws = sign_kyc(payload)
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)

@@ -1418,7 +1418,7 @@ spec_held_by_fragments = lambda do |name, rel|
 end
 spec_shared = spec_unit_sources.select { |_name, byfile| byfile.size >= 2 }
 spec_delegated_names = spec_shared.select { |name, byfile| byfile.keys.all? { |rel| spec_held_by_fragments.call(name, rel) } }.keys
-spec_owned = spec_shared.reject { |name, _| spec_delegated_names.include?(name) }
+spec_owned = spec_shared.except(*spec_delegated_names)
 spec_compared = 0
 
 spec_owned.each do |name, byfile|

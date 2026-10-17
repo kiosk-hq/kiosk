@@ -77,7 +77,7 @@ module Kiosk
         require_schemer!
         payload = normalize(arguments)
         exempt  = ArgumentDecoder::RESERVED.keys - declared_property_names(input_schema)
-        payload = payload.reject { |name, _| exempt.include?(name) }
+        payload = payload.except(*exempt)
 
         errors = JSONSchemer.schema(normalize(input_schema)).validate(payload).to_a
         return if errors.empty?

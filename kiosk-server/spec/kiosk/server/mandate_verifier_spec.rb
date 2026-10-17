@@ -105,7 +105,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     end
 
     it 'rejects a mandate with no exp claim' do
-      no_exp = intent_payload.reject { |k, _| k == :exp }
+      no_exp = intent_payload.except(:exp)
       expect_missing_required_claim do
         described_class.verify_intent(raw_jws: sign(no_exp), identity: identity)
       end
@@ -115,14 +115,14 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # fully valid (correct key, iss, principal, exp) — they passed the old
     # exp-only check and must now be rejected on presence alone.
     it 'rejects a mandate with no id claim' do
-      no_id = intent_payload.reject { |k, _| k == :id }
+      no_id = intent_payload.except(:id)
       expect_missing_required_claim do
         described_class.verify_intent(raw_jws: sign(no_id), identity: identity)
       end
     end
 
     it 'rejects a mandate with no iat claim' do
-      no_iat = intent_payload.reject { |k, _| k == :iat }
+      no_iat = intent_payload.except(:iat)
       expect_missing_required_claim do
         described_class.verify_intent(raw_jws: sign(no_iat), identity: identity)
       end
@@ -132,7 +132,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # claims, so it must name the ones the decode actually requires and not a
     # hand-kept second list beside them.
     it 'publishes the claims the decode enforces, not a copy of them' do
-      no_exp = intent_payload.reject { |k, _| k == :exp }
+      no_exp = intent_payload.except(:exp)
       expect { described_class.verify_intent(raw_jws: sign(no_exp), identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
           expect(e.hint).to eq("a mandate carries #{described_class::REQUIRED_CLAIMS.join(', ')}")
@@ -149,7 +149,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # nil-coerce to 0 in the verify_cart cap comparison, making it vacuous — an
     # absent cap must be rejected on presence, before any .to_i.
     it 'rejects an intent missing cap_amount_cents (absent, not 0)' do
-      no_cap = intent_payload.reject { |k, _| k == :cap_amount_cents }
+      no_cap = intent_payload.except(:cap_amount_cents)
       expect { described_class.verify_intent(raw_jws: sign(no_cap), identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /cap_amount_cents/)
     end
@@ -159,7 +159,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # verify_payment match (nil == nil) pass vacuously, then a NOT NULL currency
     # column 500s after partial persist — reject on presence instead.
     it 'rejects an intent missing currency (absent)' do
-      no_cur = intent_payload.reject { |k, _| k == :currency }
+      no_cur = intent_payload.except(:currency)
       expect { described_class.verify_intent(raw_jws: sign(no_cur), identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
@@ -439,14 +439,14 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # persisting a 0-cent cart row. It must be rejected on presence, before the
     # .to_i — an absent total is NOT a valid within-cap cart.
     it 'rejects a cart missing total_amount_cents (absent, not 0)' do
-      no_total = cart_payload.reject { |k, _| k == :total_amount_cents }
+      no_total = cart_payload.except(:total_amount_cents)
       expect { described_class.verify_cart(raw_jws: sign(no_total), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /total_amount_cents/)
     end
 
     # Absent currency on the cart (see the intent-side rationale).
     it 'rejects a cart missing currency (absent)' do
-      no_cur = cart_payload.reject { |k, _| k == :currency }
+      no_cur = cart_payload.except(:currency)
       expect { described_class.verify_cart(raw_jws: sign(no_cur), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
@@ -475,7 +475,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # trail with no error raised anywhere. Required now, in the spec table, in
     # the JSON Schema, and here.
     it 'rejects a cart missing line_items (absent)' do
-      no_items = cart_payload.reject { |k, _| k == :line_items }
+      no_items = cart_payload.except(:line_items)
       expect { described_class.verify_cart(raw_jws: sign(no_items), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /line_items/)
     end
@@ -517,7 +517,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     end
 
     it 'applies the shared decode checks (missing exp rejected)' do
-      no_exp = cart_payload.reject { |k, _| k == :exp }
+      no_exp = cart_payload.except(:exp)
       expect { described_class.verify_cart(raw_jws: sign(no_exp), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
           # `/exp/i` here was the JWT gem's `Missing required claim exp`
@@ -657,7 +657,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # the provider's PSP resolves the principal's on-file card at capture time.
     # payment_method is therefore OPTIONAL in the mandate.
     it 'accepts a payment with a nil/absent payment_method (SetupIntent model: on-file card)' do
-      no_pm = payment_payload.reject { |k, _| k == :payment_method }
+      no_pm = payment_payload.except(:payment_method)
       pm = described_class.verify_payment(raw_jws: sign(no_pm), identity: identity, cart: cart_mandate)
       expect(pm).to be_a(Kiosk::Mandate::PaymentMandate)
       expect(pm.payment_method).to be_nil
@@ -674,7 +674,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # total it would "match" and persist a 0-cent payment row. Reject on
     # presence, before the .to_i — an absent amount is not a valid payment.
     it 'rejects a payment missing amount_cents (absent, not 0)' do
-      no_amount = payment_payload.reject { |k, _| k == :amount_cents }
+      no_amount = payment_payload.except(:amount_cents)
       expect { described_class.verify_payment(raw_jws: sign(no_amount), identity: identity, cart: cart_mandate) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /amount_cents/)
     end
@@ -692,7 +692,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     end
 
     it 'applies the shared decode checks (missing exp rejected)' do
-      no_exp = payment_payload.reject { |k, _| k == :exp }
+      no_exp = payment_payload.except(:exp)
       expect { described_class.verify_payment(raw_jws: sign(no_exp), identity: identity, cart: cart_mandate) }
         .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
           expect(e.message).to eq('mandate missing a required claim')

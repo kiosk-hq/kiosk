@@ -528,7 +528,7 @@ if check || reheader
     exit 1
   end
 
-  by_ref = rows.map { |r| r[2] }.tally.reject { |r, _| UNVERIFIABLE.include?(r) }
+  by_ref = rows.map { |r| r[2] }.tally.except(*UNVERIFIABLE)
   puts "check-conformance-drift --check: OK — #{rows.length} row(s), last recorded #{stamp} at #{head}" \
        "#{" -- #{label}" if label}"
   puts "  #{verified_rows} of #{rows.length} fingerprint(s) re-measure at their own ref, across #{by_ref.size} commit(s)"

@@ -36,7 +36,10 @@ Kiosk.configure do |c|
 
   c.user_idp     = Kiosk::UserIdentityProviders::Devise.new
   c.sign_in_path = '/users/sign_in'
+end
 
+# Payments: the card setup, the capture, and what follows it.
+Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     Kiosk::PaymentProviders::Stripe.new(
       api_key: ENV.fetch('STRIPE_SECRET_KEY'),
@@ -48,7 +51,10 @@ Kiosk.configure do |c|
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(booking_id) { Booking.captured!(booking_id) }
   c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
+end
 
+# The proof-of-work toll.
+Kiosk.configure do |c|
   c.pow_secret         = ENV.fetch('KIOSK_POW_SECRET')
   c.pow_ttl            = 300
   c.reputation_policy  = HotelingBrowsePolicy.new(EQUIHASH_PARAMS)

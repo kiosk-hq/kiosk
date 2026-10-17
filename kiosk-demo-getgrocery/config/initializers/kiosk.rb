@@ -34,7 +34,10 @@ Kiosk.configure do |c|
 
   c.user_idp     = Kiosk::UserIdentityProviders::Devise.new
   c.sign_in_path = '/users/sign_in'
+end
 
+# Payments: the card setup, the capture, and what follows it.
+Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     Kiosk::PaymentProviders::Stripe.new(
       api_key: ENV.fetch('STRIPE_SECRET_KEY'),
@@ -45,7 +48,10 @@ Kiosk.configure do |c|
   )
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(order_id) { CourierDispatchJob.arm!(order_id) }
+end
 
+# KYC: the broker that checks the customer, and the claims this origin asks for.
+Kiosk.configure do |c|
   c.kyc_provider = Kiosk::KycProviders::Prove.new(
     operator_id: 'getgrocery',
     intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'),
@@ -55,7 +61,10 @@ Kiosk.configure do |c|
   c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
   c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
   c.kyc_audience   = 'getgrocery'
+end
 
+# The proof-of-work toll.
+Kiosk.configure do |c|
   c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
   c.pow_ttl                 = 300
   c.reputation_policy       = CatalogTollPolicy.new(Kiosk::Pow::Equihash.params(**EQUIHASH_PARAMS))

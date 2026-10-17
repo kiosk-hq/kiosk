@@ -20,7 +20,17 @@ Kiosk.configure do |c|
   c.signing_key       = Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64'))
   c.roles             = %i[customer]
   c.registration_role = :customer
-  c.owner             = {
+
+  c.validate_requests  = true
+  c.validate_responses = true
+
+  c.user_idp     = Kiosk::UserIdentityProviders::Devise.new
+  c.sign_in_path = '/users/sign_in'
+end
+
+# What discovery tells an assistant about this origin.
+Kiosk.configure do |c|
+  c.owner = {
     name: 'atablefor',
     support: 'demo@kiosk.tech',
     pow_difficulty: 'high',
@@ -32,19 +42,18 @@ Kiosk.configure do |c|
   }
   c.skill_url    = 'https://kiosk.tech/skill-v0.5.13.md'
   c.skill_sha256 = '786041de6e738cb55311eb852162509f23115227be9ab1c6837b9741840e990b'
+end
 
-  c.validate_requests  = true
-  c.validate_responses = true
-
-  c.user_idp     = Kiosk::UserIdentityProviders::Devise.new
-  c.sign_in_path = '/users/sign_in'
-
+# The proof-of-work toll.
+Kiosk.configure do |c|
   c.pow_secret              = ENV.fetch('KIOSK_POW_SECRET')
   c.pow_ttl                 = 300
   c.registration_pow_count  = 1
   c.registration_pow_params = EQUIHASH_PARAMS
+end
 
-  # 0 confirmed bookings: 2 proofs · 1: 1 proof · 2+: free.
+# 0 confirmed bookings: 2 proofs · 1: 1 proof · 2+: free.
+Kiosk.configure do |c|
   c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new(
     proven_purchases_threshold: 2,
     low_rate_threshold: 100,

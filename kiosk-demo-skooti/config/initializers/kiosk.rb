@@ -36,7 +36,10 @@ Kiosk.configure do |c|
 
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
   c.sign_in_path = '/users/sign_in'
+end
 
+# Payments: the card setup, the capture, and what follows it.
+Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     Kiosk::PaymentProviders::Stripe.new(
       api_key: ENV.fetch('STRIPE_SECRET_KEY'),
@@ -47,7 +50,10 @@ Kiosk.configure do |c|
   )
   c.cart_price_checker = PriceChecker
   c.after_payment      = ->(reservation_id) { Reservation.announce_payment(reservation_id) }
+end
 
+# KYC: the broker that checks the customer, and the claims this origin asks for.
+Kiosk.configure do |c|
   c.kyc_provider = Kiosk::KycProviders::Prove.new(
     operator_id: 'skooti',
     intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'),

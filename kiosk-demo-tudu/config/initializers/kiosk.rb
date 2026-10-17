@@ -30,11 +30,13 @@ Kiosk.configure do |c|
 
   c.user_idp     = Kiosk::UserIdentityProviders::Devise.new
   c.sign_in_path = '/users/sign_in'
+end
 
-  # An assistant registering with no human behind it gets a bare account; linking
-  # it later moves that account's lists and memberships to the human.
+# An assistant registering with no human behind it gets a bare account; linking
+# it later moves that account's lists and memberships to the human.
+Kiosk.configure do |c|
   c.assistant_creation = ->(_pubkey) { User.create!.id }
-  c.assistant_claimed = lambda { |agent:, from:, to:|
+  c.assistant_claimed = lambda { |from:, to:, **|
     from.lists.update_all(account_id: to.id)
     from.memberships.where.not(list: to.joined_lists).update_all(account_id: to.id)
     from.memberships.delete_all

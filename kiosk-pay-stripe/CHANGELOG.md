@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-17: **`test_autocard:` and `attach_test_card` are removed**; a suite saves a card through `payment_setup`, as production does.
+
 - 2026-10-17: `Stripe::ChargeLookup` is removed; nothing an operator runs used it.
 
 ## [0.5.13] — 2026-10-11

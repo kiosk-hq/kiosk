@@ -86,7 +86,8 @@ Test mode only for the PoC (`sk_test_…`).
 
 ### Test mode
 
-For automated suites, `test_autocard: true` + `attach_test_card` simulate a
-completed SetupIntent (auto-attaching a test card at capture) so drivers need
-no hosted card-entry step. Never enable `test_autocard` in production or the
-live demo.
+Automated suites point the Stripe SDK at `stripe-mock`
+(`Kiosk::TestHelpers::StripeMock` in `kiosk-test-support`) and take the same
+path as production: the assistant calls `payment_setup`, which creates and maps
+the Customer. stripe-mock lists a saved card for every Customer, so a later
+`pay` charges it.

@@ -72,19 +72,24 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, 'the subject itself', :integrati
   end
 end
 
-RSpec.describe Kiosk::PaymentProviders::Stripe, '#attach_test_card + #capture (full off_session round-trip)', :integration do
+RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url + #capture (full off_session round-trip)', :integration do
   include_context 'with a live Stripe test key'
 
-  it 'attaches a test card then captures a real test payment' do
-    # Simulate a completed SetupIntent programmatically (no human at hosted page).
-    cus_id = adapter.attach_test_card(user_id: user_id)
-    expect(cus_id).to start_with('cus_')
-    expect(customer_store[user_id]).to eq(cus_id)
+  # Saves a test card as the default of the Customer, as the hosted setup page does.
+  def save_test_card(cus_id)
+    setup = Stripe::SetupIntent.create(customer: cus_id, payment_method: 'pm_card_visa',
+                                       payment_method_types: ['card'], confirm: true, usage: 'off_session')
+    Stripe::Customer.update(cus_id, invoice_settings: { default_payment_method: setup.payment_method })
+  end
 
-    # saved_method? should now return true.
+  it 'charges the card the human saved through the setup page' do
+    adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+    cus_id = customer_store[user_id]
+    expect(cus_id).to start_with('cus_')
+    save_test_card(cus_id)
+
     expect(adapter.saved_method?(user_id: user_id)).to be true
 
-    # off_session capture against the saved card → real pi_…
     captured = adapter.capture(cart_mandate, payment_method: nil)
     expect(captured[:settled_amount_cents]).to eq(1599)
     expect(captured[:psp_reference]).to start_with('pi_')

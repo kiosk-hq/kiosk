@@ -31,12 +31,10 @@ module Kiosk
 
       # @param customer_resolver [#call] `(user_id) -> customer_id | nil`; {CustomerRecord.resolve} when omitted
       # @param customer_saver [#call] `(user_id, customer_id)`; {CustomerRecord.save} when omitted
-      # @param test_autocard [Boolean] TEST-ONLY: attach a test card at capture instead of hosted card entry
-      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, test_autocard: false)
+      def initialize(api_key:, customer_resolver: nil, customer_saver: nil)
         super()
         @customer_resolver = customer_resolver || customer_record_method(:resolve)
         @customer_saver    = customer_saver || customer_record_method(:save)
-        @test_autocard     = test_autocard
         require 'stripe'
         # Process-global: one adapter per process.
         ::Stripe.api_key = api_key
@@ -68,11 +66,7 @@ module Kiosk
         ::Stripe::Checkout::Session.retrieve(session_id).client_reference_id
       end
 
-      def setup_required?(user_id:)
-        return false if @test_autocard
-
-        !saved_method?(user_id: user_id)
-      end
+      def setup_required?(user_id:) = !saved_method?(user_id: user_id)
 
       def saved_method?(user_id:)
         customer = live_customer(user_id)
@@ -81,7 +75,8 @@ module Kiosk
 
       # Charges the principal's saved card off_session; the mandate's payment method is not used.
       def capture(cart_mandate, **)
-        customer, payment_method = customer_and_payment_method(cart_mandate.user_id)
+        customer = live_customer(cart_mandate.user_id)
+        payment_method = customer && saved_payment_method_for(customer)
         raise SetupRequired unless payment_method
 
         intent = charge(cart_mandate, customer, payment_method)

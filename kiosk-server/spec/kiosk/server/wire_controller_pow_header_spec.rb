@@ -11,8 +11,8 @@
 #   * the controller feeds the gate the METHOD and the PATH-SEGMENT verb, so a
 #     proof solved for `GET /kiosk/catalog?q=milk` is spendable there and on no
 #     other endpoint;
-#   * the reserved `GET <endpoint>/schema` is NEVER tolled — it went public in
-#     T-094, and a toll needs an identity to charge;
+#   * the reserved `GET <endpoint>/schema` is NEVER tolled — it is public, and
+#     a toll needs an identity to charge;
 #   * every accepted header form (single proof, JSON array, repeated
 #     `\n`-joined lines, proxy comma-combined) reaches the gate;
 #   * a proof placed in an action's BODY is not a proof — the gate re-challenges;
@@ -29,10 +29,14 @@ require 'json'
 require 'kiosk/pow'
 require 'kiosk/reputation'
 
-RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
-  # ── dispatch ───────────────────────────────────────────────────────────────
+module WireControllerPowHeaderSpec
+  # Challenges every verb with a fast argon2id toll.
+  class AlwaysArgon2idPolicy < Kiosk::Reputation::Policy
+    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+  end
+
   # A per-verb call is `VerbController#show` / `#create` with the verb name in
-  # `params[:kiosk_verb]`; `schema` is still a reserved WireController action.
+  # `params[:kiosk_verb]`; `schema` is a reserved WireController action.
 
   def dispatch_verb(action, name, env)
     env['action_dispatch.request.path_parameters'] =
@@ -106,38 +110,27 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
     ch = issue_challenge(command: 'query', method: 'GET', verb: 'catalog', body: { q: 'milk' })
     { challenge: ch, nonce: solve_nonce(ch) }
   end
+end
+
+RSpec.shared_context 'wire controller pow header spec: tolled origin' do
+  include WireControllerPowHeaderSpec
 
   let(:fake_identity) { build_identity(user_id: 'u-1', agent_id: 'a-1', role: 'customer') }
 
   before do
     Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
-    policy = Class.new(Kiosk::Reputation::Policy) do
-      def challenge_for(identity:, verb:, factors:)
-        { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
-      end
-    end.new
-
     Kiosk.configure do |c|
       c.signing_key       = Kiosk::Server::SigningKey.generate
       c.issuer            = 'https://demo.example'
       c.roles             = %i[customer]
       c.agent_idp         = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-      c.reputation_policy = policy
+      c.reputation_policy = WireControllerPowHeaderSpec::AlwaysArgon2idPolicy.new
       c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
-      # THE SHAPE CHECK IS ON — the K-1399 default — AND THAT IS THIS FILE'S
-      # OTHER ASSERTION (K-1410). These examples exercise the ADR-0022 header
-      # transport with a RETIRED backend: argon2id, whose solution is a decimal
-      # STRING, chosen because it solves in microseconds at d=4/m=8 where
-      # equihash does not. THE WIRE IS ALGORITHM-AGNOSTIC (ADR-0001 decision 3):
-      # a challenge carries {alg, params} so an operator may bring their own
-      # backend, and `pow.schema.json` types a proof's `nonce` CONDITIONALLY on
-      # `challenge.alg` — the Equihash object shape when and only when the
-      # challenge says equihash. So a valid argon2id proof passes the shape
-      # check with the flag at its default, and this file running green with
-      # validation ON is what says the schema is relative to the algorithm
-      # rather than closed around the one shipped backend. It used to set the
-      # flag `false`, because the schema WAS Equihash-only and refused every
-      # proof here 400 before the transport under test was reached.
+      # The shape check is on. These examples use argon2id, whose solution is
+      # a decimal string, because it solves fast at d=4/m=8. The wire is
+      # algorithm-agnostic: `pow.schema.json` types a proof's `nonce` on
+      # `challenge.alg`, so a valid argon2id proof passes the shape check, and
+      # this file running green with validation on shows that.
       c.validate_requests = true
     end
 
@@ -159,6 +152,10 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
     Kiosk::Reputation::Backends.reset!
     Kiosk.reset!
   end
+end
+
+RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
+  include_context 'wire controller pow header spec: tolled origin'
 
   # ── proof in the header → proceeds ─────────────────────────────────────────
   it 'accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)' do
@@ -190,6 +187,10 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
 
     expect(status).to eq(200)
   end
+end
+
+RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
+  include_context 'wire controller pow header spec: tolled origin'
 
   # ── the controller feeds METHOD and PATH SEGMENT to the fingerprint ────────
   #
@@ -224,23 +225,17 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
 
     expect(status).to eq(200)
   end
+end
 
-  # ── the reserved GET schema is PUBLIC AND FREE (T-094) ─────────────────────
+RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
+  include_context 'wire controller pow header spec: tolled origin'
+
+  # ── the reserved GET schema is public and free ─────────────────────────────
   #
-  # This pair asserted the OPPOSITE until 2026-08-19: `schema` was tolled as
-  # `:schema`, so one example proved a proof travelled in the header on a GET
-  # and the other proved a bare request was re-challenged. Both statements are
-  # now false OF `schema` — and NEITHER PROPERTY IS LOST, which is why they are
-  # replaced rather than deleted: the header-on-a-GET half is asserted at the
-  # top of this file on a per-verb query, and the re-challenge SHAPE is
-  # asserted immediately below on one. What goes in their place is the fact
-  # that made them false.
-  #
-  # The toll was the gate's one substantive warrant — enumerating the
-  # catalogue should cost something — and it died with the gate: the document
-  # is a cacheable static answer, so serving it costs the origin nothing, and
-  # a toll has no identity to charge. The policy in this file challenges EVERY
-  # verb, which is what makes the 200 below mean something.
+  # The schema document is a cacheable static answer, so serving it costs the
+  # origin nothing, and a toll has no identity to charge. The policy in this
+  # file challenges every verb, which is what makes the 200 below mean
+  # something.
   it 'never tolls GET /kiosk/schema, under a policy that challenges everything' do
     status, headers, body =
       dispatch_reserved(:schema, Rack::MockRequest.env_for('/kiosk/schema'))
@@ -262,16 +257,19 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
     expect(problem[:challenges]).to be_an(Array)
     expect(problem[:challenges]).not_to be_empty
   end
+end
+
+RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
+  include_context 'wire controller pow header spec: tolled origin'
 
   # ── a body-pow is NOT a proof ──────────────────────────────────────────────
   it "does NOT accept a proof placed in an action's BODY (the header is the channel)" do
     ch    = issue_challenge(command: 'run', method: 'POST', verb: 'place_order', body: {})
     proof = { challenge: ch, nonce: solve_nonce(ch) }
 
-    # Old shape: the proof travels in the body and no header is sent. The gate
-    # sees no proof and re-issues. (The body is also part of the fingerprint
-    # now, so the challenge could not have matched either — both roads lead
-    # away from a 200, which is the point.)
+    # The proof travels in the body and no header is sent. The gate sees no
+    # proof and re-issues. The body is also part of the fingerprint, so the
+    # challenge could not have matched either.
     status, _headers, problem = post_verb('place_order', { pow: { proofs: [proof] } })
 
     expect(status).to eq(402)

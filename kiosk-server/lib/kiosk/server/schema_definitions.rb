@@ -7,6 +7,7 @@ module Kiosk
     # The SQL of the migrations `kiosk:install` emits, one method per
     # migration, each creating its tables in their final shape. No database
     # connection; the host's migrations `execute` it.
+    # rubocop:disable-next Metrics/ModuleLength, Metrics/MethodLength -- each method returns one migration's DDL as one SQL heredoc
     module SchemaDefinitions
       module_function
 

@@ -5,8 +5,7 @@
 # requested-at), approve/deny, attempt-capped code entry.
 #
 # Dispatch goes through `ActionController::Metal.action(...)` — no Rails
-# host; the engine views under app/views are resolved via the controller's
-# append_view_path.
+# host; spec_helper puts the engine views under app/views on the view path.
 
 require 'rack/mock'
 require 'openssl'

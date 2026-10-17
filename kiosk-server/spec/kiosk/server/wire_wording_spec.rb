@@ -240,7 +240,7 @@ module WireWordingSpec
   RUBY_LEAKS = [/key not found/, /unexpected token/, /#</].freeze
   HOUSE_SENTENCES = ['missing field:', 'invalid JSON body'].freeze
   BUILDER_FILE    = 'lib/kiosk/server/errors.rb'
-  # Floors well below the counts in lib/ and well above zero, so a sweep that
+  # Floors well below the counts in app/ and lib/ and well above zero, so a sweep that
   # stops recognising sites cannot pass by judging nothing.
   MINIMUM_CONSTRUCTOR_SITES = 80
   MINIMUM_RENDER_SITES = 10
@@ -286,7 +286,7 @@ module WireWordingSpec
           .join
   end
 
-  # "rel:line: code" for every comment-free line of lib/ that holds a house
+  # "rel:line: code" for every comment-free line of app/ and lib/ that holds a house
   # sentence and matches the block.
   def house_sentence_lines(&)
     sources.flat_map do |path|
@@ -316,11 +316,11 @@ RSpec.shared_context 'wire wording spec: provider' do
   end
 end
 
-RSpec.shared_context 'wire wording spec: lib sources' do
+RSpec.shared_context 'wire wording spec: shipped sources' do
   include_context 'wire wording spec: provider'
 
   let(:gem_root) { File.expand_path('../../..', __dir__) }
-  let(:sources)  { Dir.glob("#{gem_root}/lib/**/*.rb").sort }
+  let(:sources)  { Dir.glob("#{gem_root}/{app,lib}/**/*.rb").sort }
 
   let(:census) do
     sources.each_with_object({ sites: 0, renders: 0, offences: [], owned: [] }) do |path, acc|
@@ -485,7 +485,7 @@ end
 # builders live, neither sentence appears at all, literal or interpolated.
 # Comments are stripped first, so quotations of the bad strings do not count.
 RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: lib sources'
+  include_context 'wire wording spec: shipped sources'
 
   describe "kiosk-server's source" do
     it 'has sources to sweep and a builder file among them (vacuity)' do
@@ -503,7 +503,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
 end
 
 RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: lib sources'
+  include_context 'wire wording spec: shipped sources'
 
   describe "kiosk-server's source" do
     it 'builds `missing field:` and `invalid JSON body` nowhere but errors.rb, literal or interpolated' do
@@ -521,7 +521,7 @@ end
 # No foreign message reaches a wire error. The rule and its blind spots are on
 # KioskWireErrorSweep at the top of this file.
 RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: lib sources'
+  include_context 'wire wording spec: shipped sources'
 
   describe "kiosk-server's wire errors" do
     it 'never lets an exception message this repository does not own reach a wire error' do
@@ -542,18 +542,18 @@ end
 
 # Vacuity: each way the sweep could stop seeing sites fails here.
 RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: lib sources'
+  include_context 'wire wording spec: shipped sources'
 
   describe "kiosk-server's wire errors" do
     it 'still recognises wire-error constructors in the shipped source (vacuity)' do
       expect(census[:sites]).to be >= WireWordingSpec::MINIMUM_CONSTRUCTOR_SITES,
-                                "the sweep found #{census[:sites]} constructor sites in lib/ — it has stopped " \
+                                "the sweep found #{census[:sites]} constructor sites in app/ and lib/ — it has stopped " \
                                 'recognising them, and an empty offence list means nothing until it does'
     end
 
     it 'still recognises `render` sites in the shipped source (vacuity)' do
       expect(census[:renders]).to be >= WireWordingSpec::MINIMUM_RENDER_SITES,
-                                  "the sweep found #{census[:renders]} render sites in lib/ — the render " \
+                                  "the sweep found #{census[:renders]} render sites in app/ and lib/ — the render " \
                                   'arm has stopped recognising them, and it covers the sub-dispatch envelope'
     end
 

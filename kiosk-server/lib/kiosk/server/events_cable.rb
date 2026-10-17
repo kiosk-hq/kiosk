@@ -2,8 +2,6 @@
 
 require 'action_cable'
 require 'json'
-require 'kiosk/server/errors'
-require 'kiosk/server/headers'
 require 'rack'
 
 module Kiosk

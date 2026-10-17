@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-
 module Kiosk
   module Server
     # The identity a wire request runs as. {#open} wraps the request in a

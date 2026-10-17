@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-require 'kiosk/server/argument_decoder'
-
 module Kiosk
   module Server
     # Validates requests against the vendored normative schemas: `Kiosk-PoW`

@@ -1,14 +1,6 @@
 # frozen_string_literal: true
 
 require 'action_controller'
-require 'kiosk/server/actions'
-require 'kiosk/server/argument_decoder'
-require 'kiosk/server/errors'
-require 'kiosk/server/kyc'
-require 'kiosk/server/payment_setup'
-require 'kiosk/server/queries'
-require 'kiosk/server/request_validation'
-require 'kiosk/server/wire_controller'
 
 module Kiosk
   module Server

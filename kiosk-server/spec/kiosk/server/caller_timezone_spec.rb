@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/caller_timezone'
-
 # ── THE CALLER'S DECLARED CLOCK ──────────────────────────────────────────────
 #
 # `Kiosk-Timezone` is the only thing on this wire that says which CALENDAR a

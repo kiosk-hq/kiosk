@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/action_event'
-
 module Kiosk
   module Server
     # Hands one {ActionEvent} per action invocation, success or failure, to the

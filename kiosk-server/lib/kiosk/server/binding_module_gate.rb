@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-require 'kiosk/server/headers'
-
 module Kiosk
   module Server
     # Answers `501 module_not_served` on every account-binding endpoint when

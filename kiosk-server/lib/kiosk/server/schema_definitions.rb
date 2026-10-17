@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/version'
-
 module Kiosk
   module Server
     # The SQL of the migrations `kiosk:install` emits, one method per

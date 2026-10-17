@@ -1,11 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/actions'
-require 'kiosk/server/errors'
-require 'kiosk/server/kyc'
-require 'kiosk/server/payment_setup'
-require 'kiosk/server/queries'
-
 module Kiosk
   module Server
     # Rebuilds the verb and topic registries from every class that includes

@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-
 module Kiosk
   module Server
     # A policy hook is asked about writes as `:run` (§13), never `:action`, and

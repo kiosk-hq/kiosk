@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/headers'
-
 module Kiosk
   module Server
     # Adds the Kiosk response headers to every response under the mount path.

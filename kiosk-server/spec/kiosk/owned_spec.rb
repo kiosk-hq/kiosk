@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/owned'
-
 RSpec.describe Kiosk::Owned do
   let(:model) do
     Class.new do

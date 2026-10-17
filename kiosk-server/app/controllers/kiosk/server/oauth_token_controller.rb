@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require 'action_controller'
-require 'kiosk/server/device_code_grant'
-require 'kiosk/server/headers'
 
 module Kiosk
   module Server

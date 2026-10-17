@@ -1,9 +1,6 @@
 # frozen_string_literal: true
 
 require 'action_controller'
-require 'kiosk/server/account_binding'
-require 'kiosk/server/link_code'
-require 'kiosk/server/linked_assistants'
 
 module Kiosk
   module Server
@@ -23,8 +20,6 @@ module Kiosk
       WRONG_DOOR_MESSAGE = "this is the account holder's browser page, not the Kiosk wire — " \
                            'it needs a signed-in session and a CSRF token from its own form'
 
-      # Host app view paths come first, so an operator's templates win.
-      append_view_path File.expand_path('../../../app/views', __dir__)
       layout false
 
       def show

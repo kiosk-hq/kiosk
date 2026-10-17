@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-require 'kiosk/server/verb_vocabulary'
-
 module Kiosk
   module Server
     # Server settings, added to {Kiosk::Configuration}.
@@ -341,5 +338,3 @@ module Kiosk
     end
   end
 end
-
-Kiosk::Configuration.include(Kiosk::Server::ConfigurationExtension)

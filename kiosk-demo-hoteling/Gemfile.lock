@@ -50,6 +50,7 @@ PATH
       kiosk-core (~> 0.5.0)
       railties (~> 8.1)
       solid_cable (~> 4.0)
+      zeitwerk (~> 2.6)
 
 PATH
   remote: ../kiosk-test-support

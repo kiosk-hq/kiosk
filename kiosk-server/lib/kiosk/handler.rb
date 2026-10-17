@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/handler_mixin'
-require 'kiosk/server/handler_registrations'
-
 module Kiosk
   # Include into any controller to declare verbs: a query (`GET <mount>/<name>`)
   # or an action (`POST <mount>/<name>`). Handlers live in app/controllers/kiosk.

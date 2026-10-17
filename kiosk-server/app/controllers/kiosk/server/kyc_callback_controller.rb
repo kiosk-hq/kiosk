@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/kyc'
-require 'kiosk/server/wire_controller'
-
 module Kiosk
   module Server
     # POST <endpoint>/kyc/callback — the KYC provider reports an approval.

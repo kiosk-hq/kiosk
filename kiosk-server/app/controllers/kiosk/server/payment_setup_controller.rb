@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/payment_setup'
-require 'kiosk/server/wire_controller'
-
 module Kiosk
   module Server
     # GET <endpoint>/payment_setup/return — the page a payment provider sends

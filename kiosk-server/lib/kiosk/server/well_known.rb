@@ -1,10 +1,6 @@
 # frozen_string_literal: true
 
 require 'json'
-require 'kiosk/server/actions'
-require 'kiosk/server/queries'
-require 'kiosk/server/pow_gate'
-require 'kiosk/server/schema_document'
 
 module Kiosk
   module Server

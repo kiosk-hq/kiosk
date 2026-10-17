@@ -18,6 +18,7 @@
 require 'bundler/setup'
 require 'json'
 require 'kiosk/server'
+require 'action_controller/railtie'
 require 'rack/mock'
 require_relative 'memory_revocation_store'
 

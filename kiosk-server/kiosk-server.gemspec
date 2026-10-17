@@ -48,14 +48,8 @@ Gem::Specification.new do |spec|
   spec.metadata['bug_tracker_uri']  = 'https://github.com/kiosk-hq/kiosk/issues'
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  # `app/` is NOT optional. Two controllers resolve their templates by path —
-  # `append_view_path File.expand_path("../../../app/views", __dir__)` in
-  # device_verify_controller.rb and assistants_controller.rb — so a gem
-  # built without app/views answers BOTH HTML pages of the account-binding
-  # ceremony with ActionView::MissingTemplate. It shipped that way because
-  # every consumer in this monorepo uses `path:`, which serves the working
-  # tree: no test here could have noticed, and only someone installing from
-  # RubyGems would have.
+  # `app/` holds the controllers, the events channel, the models and the
+  # binding ceremony's views.
   # `listen.py` is the pinned reference client for the event stream;
   # `requirements.txt` beside it declares its python dependency.
   spec.files = Dir.glob('app/**/*') + Dir.glob('lib/**/*') +
@@ -71,6 +65,8 @@ Gem::Specification.new do |spec|
   # result.rb and configuration_extension.rb; until now it arrived only by
   # accident, as a transitive dependency of jwt.
   spec.add_dependency 'base64'
+  # Loads the files under lib/kiosk.
+  spec.add_dependency 'zeitwerk', '~> 2.6'
   # json_schemer — a RUNTIME dependency, not an optional extra.
   #
   # §8.1 item 5 makes coerce-then-validate an OPERATOR OBLIGATION: every

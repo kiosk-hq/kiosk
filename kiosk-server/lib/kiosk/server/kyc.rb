@@ -2,12 +2,6 @@
 
 require 'json'
 require 'openssl'
-require 'kiosk/server/actions'
-require 'kiosk/server/current_request'
-require 'kiosk/server/errors'
-require 'kiosk/server/events'
-require 'kiosk/server/failure_log'
-require 'kiosk/server/kyc_verifier'
 
 module Kiosk
   module Server

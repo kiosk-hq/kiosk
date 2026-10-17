@@ -14,9 +14,6 @@ module SettlementSpecHelpers
     ActiveRecord::Base.connection.execute(
       Kiosk::Server::SchemaDefinitions.mandates_sql(schema: SCHEMA, user_id_type: :uuid)
     )
-    require 'kiosk/owned'
-    require_relative '../../app/models/kiosk/cart_mandate'
-    require_relative '../../app/models/kiosk/settlement'
   end
 
   def conn
@@ -75,6 +72,8 @@ RSpec.describe 'Kiosk::Settlement and Kiosk::CartMandate' do
   end
 
   after(:context) { SpecPostgres.drop_schema(SettlementSpecHelpers::SCHEMA) }
+
+  before { Kiosk.configure { |c| c.schema = SettlementSpecHelpers::SCHEMA } }
 
   let(:mine)  { SecureRandom.uuid }
   let(:other) { SecureRandom.uuid }

@@ -7,8 +7,8 @@ require_relative '../../support/postgres'
 # The operator's half: a catalog that prices every row at 500 cents, a record of
 # every row it was told is paid, and one payable row per example.
 module PaymentClaimSpecHelpers
-  # The receipt models fix their table when first loaded, so this shares the
-  # schema settlement_spec.rb loads them with.
+  # The receipt models bind their table on first use, so this shares the
+  # schema settlement_spec.rb uses.
   SCHEMA = 'kiosk_settlement_spec'
 
   # Every capture it was asked for, and what it was told to do on the next.
@@ -42,8 +42,6 @@ module PaymentClaimSpecHelpers
 
   def self.create_schema
     Kiosk.configure { |c| c.schema = SCHEMA }
-    require_relative '../../../app/models/kiosk/cart_mandate'
-    require_relative '../../../app/models/kiosk/settlement'
     defs = Kiosk::Server::SchemaDefinitions
     conn = ActiveRecord::Base.connection
     conn.execute(%(DROP SCHEMA IF EXISTS "#{SCHEMA}" CASCADE))
@@ -65,6 +63,7 @@ module PaymentClaimSpecHelpers
 
   def configure_operator
     Kiosk.configure do |c|
+      c.schema             = SCHEMA
       c.cart_price_checker = ->(id, lines) { (seen << [id, lines]) && price }
       c.after_payment      = ->(id) { paid << id }
     end

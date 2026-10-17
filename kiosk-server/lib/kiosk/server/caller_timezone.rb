@@ -2,7 +2,6 @@
 
 require 'active_support/core_ext/time/zones'
 require 'kiosk/protocol'
-require 'kiosk/server/errors'
 
 module Kiosk
   module Server

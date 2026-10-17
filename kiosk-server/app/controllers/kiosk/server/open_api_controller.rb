@@ -1,9 +1,6 @@
 # frozen_string_literal: true
 
 require 'action_controller'
-require 'kiosk/server/open_api'
-require 'kiosk/server/schema_document'
-require 'kiosk/server/verb_controller'
 
 module Kiosk
   module Server

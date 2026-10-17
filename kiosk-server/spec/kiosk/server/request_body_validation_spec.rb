@@ -115,8 +115,8 @@ RSpec.describe 'Reserved-plane request-body validation' do
   # endpoint wired up without a row fails this example instead of raising
   # KeyError at a caller.
   it 'carries every exchange the engine dials' do
-    lib    = File.expand_path('../../../lib', __dir__)
-    dialed = Dir[File.join(lib, '**', '*.rb')].flat_map do |path|
+    root   = File.expand_path('../../..', __dir__)
+    dialed = Dir[File.join(root, '{app,lib}', '**', '*.rb')].flat_map do |path|
       File.read(path).scan(/exchange:\s*'([^']+)'|parse_body!\('([^']+)'\)/).flatten.compact
     end.uniq
 

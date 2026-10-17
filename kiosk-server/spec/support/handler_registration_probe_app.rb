@@ -20,6 +20,7 @@ require 'json'
 require 'tmpdir'
 require 'active_job/railtie'
 require 'kiosk/server'
+require 'action_controller/railtie'
 
 SCENARIO = ARGV.fetch(0)
 ROOT     = Dir.mktmpdir('kiosk-handler-probe')

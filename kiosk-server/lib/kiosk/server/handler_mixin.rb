@@ -2,12 +2,6 @@
 
 require 'action_controller'
 require 'action_dispatch'
-require 'kiosk/server/actions'
-require 'kiosk/server/errors'
-require 'kiosk/server/failure_log'
-require 'kiosk/server/queries'
-require 'kiosk/server/handler_dispatch'
-require 'kiosk/server/request_validation'
 
 module Kiosk
   module Server

@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 require 'action_controller'
-require 'kiosk/server/device_verification'
-require 'kiosk/server/signing_key'
 
 module Kiosk
   module Server
@@ -27,8 +25,6 @@ module Kiosk
       # Failed code lookups per session before a 429, against 31^8 possible codes.
       MAX_CODE_ATTEMPTS = 10
 
-      # Host templates of the same name override these.
-      append_view_path File.expand_path('../../../app/views', __dir__)
       layout false
 
       def show

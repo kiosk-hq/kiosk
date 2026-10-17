@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-require 'kiosk/server/request_validation'
-
 module Kiosk
   module Server
     # With `c.validate_responses`, checks every verb's answer against its own

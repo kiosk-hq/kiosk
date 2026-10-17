@@ -2,10 +2,6 @@
 
 require 'digest'
 require 'json'
-require 'kiosk/server/actions'
-require 'kiosk/server/queries'
-require 'kiosk/server/schema_slots'
-require 'kiosk/server/version'
 
 module Kiosk
   module Server

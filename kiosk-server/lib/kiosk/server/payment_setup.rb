@@ -1,11 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/actions'
-require 'kiosk/server/current_request'
-require 'kiosk/server/errors'
-require 'kiosk/server/events'
-require 'kiosk/server/failure_log'
-
 module Kiosk
   module Server
     # `payment_setup`: can this principal pay now, or which page must their

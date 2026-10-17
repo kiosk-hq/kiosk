@@ -3,9 +3,6 @@
 require 'json'
 require 'stringio'
 require 'action_controller'
-require 'kiosk/server/current_request'
-require 'kiosk/server/errors'
-require 'kiosk/server/result'
 
 module Kiosk
   module Server

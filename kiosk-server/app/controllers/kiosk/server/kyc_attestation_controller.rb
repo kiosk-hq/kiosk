@@ -2,11 +2,6 @@
 
 require 'action_controller'
 require 'json'
-require 'kiosk/server/kyc'
-require 'kiosk/server/kyc_verifier'
-require 'kiosk/server/request_validation'
-require 'kiosk/server/errors'
-require 'kiosk/server/headers'
 
 module Kiosk
   module Server

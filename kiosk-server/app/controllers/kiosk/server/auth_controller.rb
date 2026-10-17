@@ -2,15 +2,6 @@
 
 require 'action_controller'
 require 'json'
-require 'kiosk/server/agent_registration'
-require 'kiosk/server/agent_login'
-require 'kiosk/server/auth_challenge'
-require 'kiosk/server/account_binding'
-require 'kiosk/server/link_code'
-require 'kiosk/server/errors'
-require 'kiosk/server/headers'
-require 'kiosk/server/pow_gate'
-require 'kiosk/server/request_validation'
 
 module Kiosk
   module Server

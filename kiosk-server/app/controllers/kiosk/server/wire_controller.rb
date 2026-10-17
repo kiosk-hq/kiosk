@@ -4,14 +4,6 @@ require 'action_controller'
 require 'action_dispatch/http/parameters'
 require 'cgi'
 require 'json'
-require 'kiosk/server/caller_timezone'
-require 'kiosk/server/current_request'
-require 'kiosk/server/executor'
-require 'kiosk/server/errors'
-require 'kiosk/server/headers'
-require 'kiosk/server/pow_gate'
-require 'kiosk/server/request_validation'
-require 'kiosk/server/schema_document'
 
 module Kiosk
   module Server

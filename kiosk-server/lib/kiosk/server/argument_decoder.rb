@@ -3,7 +3,6 @@
 require 'date'
 require 'time'
 require 'rack'
-require 'kiosk/server/errors'
 
 module Kiosk
   module Server

@@ -2,13 +2,6 @@
 
 require 'digest'
 require 'json'
-require 'kiosk/server/actions'
-require 'kiosk/server/argument_decoder'
-require 'kiosk/server/errors'
-require 'kiosk/server/handler_mixin'
-require 'kiosk/server/queries'
-require 'kiosk/server/schema_document'
-require 'kiosk/server/well_known'
 
 module Kiosk
   module Server

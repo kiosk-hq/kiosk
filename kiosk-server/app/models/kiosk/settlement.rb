@@ -5,7 +5,7 @@ module Kiosk
   class Settlement < ::ActiveRecord::Base
     include Kiosk::Owned
 
-    self.table_name = "#{Kiosk.configuration.schema}.settlements"
+    def self.table_name = "#{Kiosk.configuration.schema}.settlements"
 
     belongs_to :cart_mandate, class_name: 'Kiosk::CartMandate', inverse_of: :settlements
   end

@@ -1,6 +1,14 @@
 # frozen_string_literal: true
 
 require 'kiosk/server'
+require 'action_controller'
+
+# The engine's app/ directories, which a Rails host autoloads and puts on its view path.
+Zeitwerk::Loader.new.tap do |loader|
+  %w[channels controllers models].each { |dir| loader.push_dir(File.expand_path("../app/#{dir}", __dir__)) }
+  loader.setup
+end
+ActionController::Base.prepend_view_path(File.expand_path('../app/views', __dir__))
 
 # A DB-free spent-id store. The shipped default is the database table, which
 # only the examples that need it reach (pow_spent_stores_spec).

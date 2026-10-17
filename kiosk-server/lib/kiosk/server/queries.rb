@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/verb_registry'
-
 module Kiosk
   module Server
     # The query registry (`kind :query`); everything else is {VerbRegistry}.

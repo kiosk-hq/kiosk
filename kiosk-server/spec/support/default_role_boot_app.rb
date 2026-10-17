@@ -30,6 +30,7 @@ require 'fileutils'
 require 'json'
 require 'tmpdir'
 require 'kiosk/server'
+require 'action_controller/railtie'
 
 SCENARIO = ARGV.fetch(0)
 ROOT     = Dir.mktmpdir('kiosk-default-role-boot')

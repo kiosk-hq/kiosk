@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/signing_key'
-
 module Kiosk
   module Server
     # The rows behind the «Link an assistant» page: an account holder's live

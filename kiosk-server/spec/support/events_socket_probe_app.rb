@@ -20,6 +20,7 @@ require 'bundler/setup'
 require 'json'
 require 'socket'
 require 'kiosk/server'
+require 'action_controller/railtie'
 require 'kiosk/pow'
 require 'kiosk/reputation'
 require 'puma'
@@ -134,11 +135,6 @@ Kiosk.configure do |c|
   c.pow_secret = 'probe-pow-secret-of-at-least-32-bytes'
 end
 
-# The shipped re-authorisation period is thirty seconds. Shortened to one so a
-# scenario that waits for a tick finishes inside the suite; the registration
-# itself — `periodically :reauthorise!` — is the shipped one, untouched.
-KioskEvents.periodic_timers =
-  KioskEvents.periodic_timers.map { |callback, options| [callback, options.merge(every: 1)] }
 Kiosk::Server::EventsConnection.reauthorise_every = 1
 
 # Action Cable's three-second beat, shortened the same way so two pings arrive
@@ -149,6 +145,12 @@ ActionCable::Server::Connections.send(:remove_const, :BEAT_INTERVAL)
 ActionCable::Server::Connections.const_set(:BEAT_INTERVAL, PROBE_BEAT_INTERVAL)
 
 ProbeApp.initialize!
+
+# The shipped re-authorisation period is thirty seconds. Shortened to one so a
+# scenario that waits for a tick finishes inside the suite; the registration
+# itself — `periodically :reauthorise!` — is the shipped one, untouched.
+KioskEvents.periodic_timers =
+  KioskEvents.periodic_timers.map { |callback, options| [callback, options.merge(every: 1)] }
 ProbeApp.routes.draw do
   kiosk do
     queries :list_nothing

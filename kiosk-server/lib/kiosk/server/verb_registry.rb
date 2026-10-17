@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-require 'kiosk/server/schema_slots'
-
 module Kiosk
   module Server
     # A verb registry: name → handler plus the descriptor an origin publishes.

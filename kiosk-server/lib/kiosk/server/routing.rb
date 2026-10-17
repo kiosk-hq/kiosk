@@ -39,5 +39,3 @@ module Kiosk
     end
   end
 end
-
-ActionDispatch::Routing::Mapper.include(Kiosk::Server::Routing)

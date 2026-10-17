@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'kiosk/server/errors'
-require 'kiosk/server/failure_log'
 require 'kiosk/uuid_check'
 
 module Kiosk

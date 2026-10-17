@@ -190,7 +190,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
     include_context 'handler dispatch spec: templated handler'
 
     it 'leaves ActionController loading to the host, so a view library can set it up first' do
-      script = 'require "kiosk/server"; exit(ActionController.autoload?(:API) && ActionController.autoload?(:Base) ? 0 : 1)'
+      script = 'require "kiosk/server"; ' \
+               'exit($LOADED_FEATURES.grep(%r{/action_controller/(api|base)[.]rb\z}).empty? ? 0 : 1)'
       expect(system(RbConfig.ruby, '-e', script, chdir: File.expand_path('../../..', __dir__))).to be(true)
     end
 

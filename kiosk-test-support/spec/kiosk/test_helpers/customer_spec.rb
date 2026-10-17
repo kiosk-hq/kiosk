@@ -2,7 +2,8 @@
 
 require 'kiosk/test_helpers/customer'
 
-RSpec.describe Kiosk::TestHelpers::Customer do
+# A customer of one origin, with a signed credential for account u1.
+RSpec.shared_context 'with a customer' do
   subject(:customer) { shopper.new(assistant, principal) }
 
   let(:shopper)   { Class.new(described_class) }
@@ -19,28 +20,13 @@ RSpec.describe Kiosk::TestHelpers::Customer do
   end
 
   before { stub_request(:get, %r{/kiosk/auth/challenge}).to_return(json_return(200, 'challenge' => 'nonce-1')) }
+end
+
+RSpec.describe Kiosk::TestHelpers::Customer do
+  include_context 'with a customer'
 
   it 'reads whose account it acts for, and in which role, off its credential' do
     expect([customer.account, customer.role]).to eq(%w[u1 customer])
-  end
-
-  describe '#asks' do
-    let(:toll) { problem_return('pow_required', status: 402, challenges: [{ 'id' => 'c1' }]) }
-
-    it 'answers an unpaid toll instead of paying it' do
-      stub_request(:get, "#{origin}/kiosk/catalog").to_return(toll)
-
-      expect(customer.asks(:catalog, unpaid: true)).to be_refused(:pow_required)
-    end
-
-    it 'carries the proofs it was given, once' do
-      stub, sent = requests_to(:get, '/kiosk/catalog')
-      stub.to_return(toll)
-
-      customer.asks(:catalog, proofs: [{ challenge: 'c1', nonce: 7 }])
-
-      expect(sent.map { JSON.parse(it.headers['Kiosk-Pow']) }).to eq([[{ 'challenge' => 'c1', 'nonce' => 7 }]])
-    end
   end
 
   it 'does an action with headers of its own' do
@@ -50,6 +36,10 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     expect(customer.does(:add_todo, headers: { 'Kiosk-Timezone' => 'Europe/Istanbul' }, title: 'Tent')['todo_id']).to eq('t1')
     expect(sent.first.headers['Kiosk-Timezone']).to eq('Europe/Istanbul')
   end
+end
+
+RSpec.describe Kiosk::TestHelpers::Customer, '#pays' do
+  include_context 'with a customer'
 
   it 'pays a quote with an intent capped at the total and a cart that lists what it buys' do
     stub, sent = requests_to(:post, '/kiosk/pay')
@@ -64,100 +54,131 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     expect(cart).to include('intent_mandate_id' => intent['id'], 'total_amount_cents' => 450, 'line_items' => [{ 'order_id' => 'o1' }])
     expect(payment).to include('cart_mandate_id' => cart['id'], 'amount_cents' => 450)
   end
+end
 
-  describe 'a new credential' do
-    it 'holds the account the origin signed into it, as the same kind of customer' do
-      stub, sent = requests_to(:post, '/kiosk/auth/claim')
-      stub.to_return(json_return(201, 'access_token' => token('alice', agent: 'a1')))
+RSpec.describe Kiosk::TestHelpers::Customer, '#asks' do
+  include_context 'with a customer'
 
-      linked = customer.redeems('LINK-1')
+  let(:toll) { problem_return('pow_required', status: 402, challenges: [{ 'id' => 'c1' }]) }
 
-      expect(linked).to be_a(shopper)
-      expect(linked.principal).to have_attributes(user_id: 'alice', agent_id: 'a1', rsa_key: key)
-      expect(JSON.parse(sent.first.body)).to include('code' => 'LINK-1', 'public_key' => key.public_key.to_pem)
-    end
+  it 'answers an unpaid toll instead of paying it' do
+    stub_request(:get, "#{origin}/kiosk/catalog").to_return(toll)
 
-    it 'comes from signing back in with its own key' do
-      stub_request(:post, "#{origin}/kiosk/auth/login").to_return(json_return(200, 'access_token' => token('u1', role: 'owner')))
-
-      expect(customer.signs_back_in).to be_ok
-      expect(customer.with_a_fresh_credential.role).to eq('owner')
-    end
-
-    it 'is refused once the assistant is no longer known' do
-      stub_request(:post, "#{origin}/kiosk/auth/login").to_return(problem_return('not_found', status: 404))
-
-      expect(customer.signs_back_in).to be_refused(:not_found)
-      expect { customer.with_a_fresh_credential }.to raise_error(/issued no credential: 404/)
-    end
-
-    it 'is collected once the person approves the code the assistant showed' do
-      stub_request(:post, "#{origin}/kiosk/oauth/device_authorization").to_return(json_return(200, 'device_code' => 'd1', 'user_code' => 'U-1'))
-      polls = stub_request(:post, "#{origin}/kiosk/oauth/token").with(body: hash_including('device_code' => 'd1'))
-                                                                .to_return(json_return(400, 'error' => 'authorization_pending'),
-                                                                           json_return(200, 'access_token' => token('alice')))
-      request = customer.asks_to_be_linked
-
-      expect(customer.polls(request)).to be_refused(:authorization_pending)
-      expect(customer.collects(request).account).to eq('alice')
-      expect(polls).to have_been_requested.twice
-    end
+    expect(customer.asks(:catalog, unpaid: true)).to be_refused(:pow_required)
   end
 
-  describe 'an identity check' do
-    let(:news) { instance_double(Kiosk::TestHelpers::Assistant::Events, subscribe: nil) }
-    let(:published) do
-      { 'events' => [{ 'name' => 'kyc_verification', 'payload_schema' => { 'type' => 'object', 'required' => %w[status] } }] }
-    end
+  it 'carries the proofs it was given, once' do
+    stub, sent = requests_to(:get, '/kiosk/catalog')
+    stub.to_return(toll)
 
-    before do
-      allow(assistant).to receive(:events).and_return(news)
-      stub_request(:get, "#{origin}/kiosk/schema").to_return(json_return(200, published))
-      stub_request(:post, "#{origin}/kiosk/request_kyc").to_return(json_return(200, 'request_id' => 'r1'))
-    end
+    customer.asks(:catalog, proofs: [{ challenge: 'c1', nonce: 7 }])
 
-    def outcome(status) = allow(news).to receive(:await) { |&match| [{ 'topic' => 'kyc_verification', 'subject' => 'r1', 'data' => { 'status' => status } }].find(&match) }
+    expect(sent.map { JSON.parse(it.headers['Kiosk-Pow']) }).to eq([[{ 'challenge' => 'c1', 'nonce' => 7 }]])
+  end
+end
 
-    it 'listens for its outcome before asking for it' do
-      allow(news).to receive(:subscribe) { expect(a_request(:post, "#{origin}/kiosk/request_kyc")).not_to have_been_made }
+RSpec.describe Kiosk::TestHelpers::Customer, 'a new credential' do
+  include_context 'with a customer'
 
-      expect(customer.requests_verification['request_id']).to eq('r1')
-      expect(news).to have_received(:subscribe).with('kyc_verification')
-    end
+  it 'holds the account the origin signed into it, as the same kind of customer' do
+    stub, sent = requests_to(:post, '/kiosk/auth/claim')
+    stub.to_return(json_return(201, 'access_token' => token('alice', agent: 'a1')))
 
-    it 'is heard to pass when the origin reports that check approved, and not otherwise' do
-      customer.requests_verification
+    linked = customer.redeems('LINK-1')
 
-      outcome('approved')
-      expect(customer.hears_verification_passed).to be(true)
-      outcome('rejected')
-      expect(customer.hears_verification_passed).to be(false)
-    end
+    expect(linked).to be_a(shopper)
+    expect(linked.principal).to have_attributes(user_id: 'alice', agent_id: 'a1', rsa_key: key)
+    expect(JSON.parse(sent.first.body)).to include('code' => 'LINK-1', 'public_key' => key.public_key.to_pem)
   end
 
-  describe '#hears' do
-    let(:news) { instance_double(Kiosk::TestHelpers::Assistant::Events) }
-    let(:published) do
-      { 'events' => [{ 'name' => 'todo', 'payload_schema' => { 'type' => 'object', 'required' => %w[action],
-                                                               'properties' => { 'action' => { 'enum' => %w[added completed] } } } }] }
-    end
+  it 'comes from signing back in with its own key' do
+    stub_request(:post, "#{origin}/kiosk/auth/login").to_return(json_return(200, 'access_token' => token('u1', role: 'owner')))
 
-    before { stub_request(:get, "#{origin}/kiosk/schema").to_return(json_return(200, published)) }
+    expect(customer.signs_back_in).to be_ok
+    expect(customer.with_a_fresh_credential.role).to eq('owner')
+  end
 
-    def heard(*events) = allow(news).to receive(:await) { |&match| events.find(&match) }
+  it 'is refused once the assistant is no longer known' do
+    stub_request(:post, "#{origin}/kiosk/auth/login").to_return(problem_return('not_found', status: 404))
 
-    it 'answers the news that matches, in the shape the origin publishes' do
-      heard({ 'topic' => 'todo', 'subject' => 'l1', 'data' => { 'action' => 'added' } },
-            { 'topic' => 'todo', 'subject' => 'l1', 'data' => { 'action' => 'completed' } })
+    expect(customer.signs_back_in).to be_refused(:not_found)
+    expect { customer.with_a_fresh_credential }.to raise_error(/issued no credential: 404/)
+  end
+end
 
-      expect(customer.hears(:todo, about: 'l1', on: news, action: 'completed')).to eq('action' => 'completed')
-    end
+RSpec.describe Kiosk::TestHelpers::Customer, 'a new credential by device grant' do
+  include_context 'with a customer'
 
-    it 'refuses news off the published shape' do
-      heard({ 'topic' => 'todo', 'data' => { 'action' => 'deleted' } })
+  it 'is collected once the person approves the code the assistant showed' do
+    stub_request(:post, "#{origin}/kiosk/oauth/device_authorization").to_return(json_return(200, 'device_code' => 'd1', 'user_code' => 'U-1'))
+    polls = stub_request(:post, "#{origin}/kiosk/oauth/token").with(body: hash_including('device_code' => 'd1'))
+                                                              .to_return(json_return(400, 'error' => 'authorization_pending'),
+                                                                         json_return(200, 'access_token' => token('alice')))
+    request = customer.asks_to_be_linked
 
-      expect { customer.hears(:todo, on: news) }.to raise_error(Kiosk::TestHelpers::Assistant::Events::Error, /off its schema: todo: /)
-    end
+    expect(customer.polls(request)).to be_refused(:authorization_pending)
+    expect(customer.collects(request).account).to eq('alice')
+    expect(polls).to have_been_requested.twice
+  end
+end
+
+RSpec.describe Kiosk::TestHelpers::Customer, 'an identity check' do
+  include_context 'with a customer'
+
+  let(:news) { instance_double(Kiosk::TestHelpers::Assistant::Events, subscribe: nil) }
+  let(:published) do
+    { 'events' => [{ 'name' => 'kyc_verification', 'payload_schema' => { 'type' => 'object', 'required' => %w[status] } }] }
+  end
+
+  before do
+    allow(assistant).to receive(:events).and_return(news)
+    stub_request(:get, "#{origin}/kiosk/schema").to_return(json_return(200, published))
+    stub_request(:post, "#{origin}/kiosk/request_kyc").to_return(json_return(200, 'request_id' => 'r1'))
+  end
+
+  def outcome(status) = allow(news).to receive(:await) { |&match| [{ 'topic' => 'kyc_verification', 'subject' => 'r1', 'data' => { 'status' => status } }].find(&match) }
+
+  it 'listens for its outcome before asking for it' do
+    allow(news).to receive(:subscribe) { expect(a_request(:post, "#{origin}/kiosk/request_kyc")).not_to have_been_made }
+
+    expect(customer.requests_verification['request_id']).to eq('r1')
+    expect(news).to have_received(:subscribe).with('kyc_verification')
+  end
+
+  it 'is heard to pass when the origin reports that check approved, and not otherwise' do
+    customer.requests_verification
+
+    outcome('approved')
+    expect(customer.hears_verification_passed).to be(true)
+    outcome('rejected')
+    expect(customer.hears_verification_passed).to be(false)
+  end
+end
+
+RSpec.describe Kiosk::TestHelpers::Customer, '#hears' do
+  include_context 'with a customer'
+
+  let(:news) { instance_double(Kiosk::TestHelpers::Assistant::Events) }
+  let(:published) do
+    { 'events' => [{ 'name' => 'todo', 'payload_schema' => { 'type' => 'object', 'required' => %w[action],
+                                                             'properties' => { 'action' => { 'enum' => %w[added completed] } } } }] }
+  end
+
+  before { stub_request(:get, "#{origin}/kiosk/schema").to_return(json_return(200, published)) }
+
+  def heard(*events) = allow(news).to receive(:await) { |&match| events.find(&match) }
+
+  it 'answers the news that matches, in the shape the origin publishes' do
+    heard({ 'topic' => 'todo', 'subject' => 'l1', 'data' => { 'action' => 'added' } },
+          { 'topic' => 'todo', 'subject' => 'l1', 'data' => { 'action' => 'completed' } })
+
+    expect(customer.hears(:todo, about: 'l1', on: news, action: 'completed')).to eq('action' => 'completed')
+  end
+
+  it 'refuses news off the published shape' do
+    heard({ 'topic' => 'todo', 'data' => { 'action' => 'deleted' } })
+
+    expect { customer.hears(:todo, on: news) }.to raise_error(Kiosk::TestHelpers::Assistant::Events::Error, /off its schema: todo: /)
   end
 end
 

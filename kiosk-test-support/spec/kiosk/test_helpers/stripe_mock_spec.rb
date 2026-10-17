@@ -4,21 +4,26 @@ require 'json'
 require 'net/http'
 require 'kiosk/test_helpers/stripe_mock'
 
+# Form POSTs to a running stripe-mock, answered as parsed JSON.
+module StripeMockRequests
+  def post(path, form)
+    uri = URI("#{Kiosk::TestHelpers::StripeMock.start}#{path}")
+    req = Net::HTTP::Post.new(uri)
+    req.basic_auth('sk_test_mock', '')
+    req.set_form_data(form)
+    JSON.parse(Net::HTTP.start(uri.host, uri.port) { |http| http.request(req) }.body)
+  end
+end
+
 RSpec.describe Kiosk::TestHelpers::StripeMock do
+  include StripeMockRequests
+
   before do
     skip 'stripe-mock not installed (brew install stripe-mock)' unless system('command -v stripe-mock >/dev/null 2>&1')
     WebMock.allow_net_connect!
   end
 
   after { WebMock.disable_net_connect! }
-
-  def post(path, form)
-    uri = URI("#{described_class.start}#{path}")
-    req = Net::HTTP::Post.new(uri)
-    req.basic_auth('sk_test_mock', '')
-    req.set_form_data(form)
-    JSON.parse(Net::HTTP.start(uri.host, uri.port) { |http| http.request(req) }.body)
-  end
 
   it 'answers the base URL of a listening stripe-mock' do
     expect(described_class.start).to eq('http://127.0.0.1:12111')

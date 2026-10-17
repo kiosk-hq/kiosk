@@ -3,7 +3,8 @@
 require 'kiosk/test_helpers/customer'
 require 'kiosk/test_helpers/person'
 
-RSpec.describe Kiosk::TestHelpers::Person do
+# A person signed in to the site through its own form.
+RSpec.shared_context 'with a signed-in person' do
   subject(:alice) { described_class.new(origin, email: 'alice@example.com', password: 'secret') }
 
   let(:origin) { 'http://site.example.com' }
@@ -13,6 +14,10 @@ RSpec.describe Kiosk::TestHelpers::Person do
     stub_request(:get, "#{origin}/users/sign_in").to_return(status: 200, body: form, headers: { 'Set-Cookie' => '_session=s1' })
     stub_request(:post, "#{origin}/users/sign_in").to_return(status: 302, headers: { 'Set-Cookie' => '_session=s2' })
   end
+end
+
+RSpec.describe Kiosk::TestHelpers::Person do
+  include_context 'with a signed-in person'
 
   it "signs in through the site's own form" do
     alice
@@ -31,6 +36,19 @@ RSpec.describe Kiosk::TestHelpers::Person do
     expect(alice.links(customer)).to eq(:linked)
   end
 
+  it 'unlinks an assistant by its agent id' do
+    principal = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'alice', token: nil, rsa_key: nil)
+    unlink = stub_request(:post, "#{origin}/kiosk/auth/unlink").with(body: { agent_id: 'a1' }.to_json).to_return(status: 204)
+
+    alice.unlinks(Kiosk::TestHelpers::Customer.new(nil, principal))
+
+    expect(unlink).to have_been_requested
+  end
+end
+
+RSpec.describe Kiosk::TestHelpers::Person, 'on the verification page' do
+  include_context 'with a signed-in person'
+
   it "approves a code on the verification page, with the page's CSRF token" do
     stub_request(:get, "#{origin}/kiosk/oauth/device/verify?user_code=U-1").to_return(status: 200, body: form)
     approval = stub_request(:post, "#{origin}/kiosk/oauth/device/verify")
@@ -47,14 +65,5 @@ RSpec.describe Kiosk::TestHelpers::Person do
     stub_request(:post, "#{origin}/kiosk/oauth/device/verify").to_return(status: 422)
 
     expect { alice.approves('U-1') }.to raise_error(/did not approve U-1: 404, 422/)
-  end
-
-  it 'unlinks an assistant by its agent id' do
-    principal = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'alice', token: nil, rsa_key: nil)
-    unlink = stub_request(:post, "#{origin}/kiosk/auth/unlink").with(body: { agent_id: 'a1' }.to_json).to_return(status: 204)
-
-    alice.unlinks(Kiosk::TestHelpers::Customer.new(nil, principal))
-
-    expect(unlink).to have_been_requested
   end
 end

@@ -7,44 +7,66 @@ require 'spec_helper'
 # Same contract as spec/kiosk/server/event_store_spec.rb asserts against the
 # in-process implementation, plus the two properties only a table can have:
 # surviving the object that wrote the row, and a retention sweep on a clock.
-RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
-  # Run against a real Postgres: a throwaway schema built from the shipped
-  # `events_sql`, dropped afterwards. Connection comes from PG* env vars (CI's
-  # service) or the local default socket; no reachable server → skip (never
-  # fail) so DB-less machines stay green. Same shape as
-  # pow_spent_stores_spec.rb.
-  EVENTS_SPEC_SCHEMA = 'kiosk_event_store_spec'
+# Run against a real Postgres: a throwaway schema built from the shipped
+# `events_sql`, dropped afterwards. Connection comes from PG* env vars (CI's
+# service) or the local default socket; no reachable server → skip (never
+# fail) so DB-less machines stay green. Same shape as
+# pow_spent_stores_spec.rb.
+module EventStoresSpec
+  SCHEMA = 'kiosk_event_store_spec'
 
   def self.postgres_error
-    @postgres_error ||= begin
-      ActiveRecord::Base.establish_connection(
-        adapter: 'postgresql',
-        host: ENV.fetch('PGHOST', nil),
-        username: ENV.fetch('PGUSER', nil),
-        password: ENV.fetch('PGPASSWORD', nil),
-        database: ENV.fetch('PGDATABASE', 'postgres')
-      )
-      ActiveRecord::Base.connection.execute('SELECT 1')
-      [false]
-    rescue StandardError => e
-      ["#{e.class}: #{e.message}"]
-    end
+    @postgres_error ||= [connect_error]
     @postgres_error.first
   end
 
+  def self.connect_error
+    ActiveRecord::Base.establish_connection(connection_config)
+    ActiveRecord::Base.connection.execute('SELECT 1')
+    false
+  rescue StandardError => e
+    "#{e.class}: #{e.message}"
+  end
+
+  def self.connection_config
+    { adapter: 'postgresql',
+      host: ENV.fetch('PGHOST', nil),
+      username: ENV.fetch('PGUSER', nil),
+      password: ENV.fetch('PGPASSWORD', nil),
+      database: ENV.fetch('PGDATABASE', 'postgres') }
+  end
+
+  def event(topic: 'todo', subject: 'l1', data: { 'done' => true })
+    { 'topic' => topic, 'subject' => subject, 'data' => data,
+      'occurred_at' => '2026-09-25T10:00:00Z' }
+  end
+
+  def backdate(id_below:, hours:)
+    ActiveRecord::Base.connection.exec_query(
+      %(UPDATE "#{SCHEMA}".events
+           SET created_at = now() - ($1 || ' hours')::interval
+         WHERE id < $2),
+      'spec backdate', [hours.to_s, id_below]
+    )
+  end
+end
+
+RSpec.shared_context 'event stores spec: throwaway schema' do
+  include EventStoresSpec
+
   before(:context) do
-    skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error
+    skip "no local Postgres reachable (#{EventStoresSpec.postgres_error})" if EventStoresSpec.postgres_error
 
     conn = ActiveRecord::Base.connection
-    conn.execute(%(DROP SCHEMA IF EXISTS "#{EVENTS_SPEC_SCHEMA}" CASCADE))
-    conn.execute(%(CREATE SCHEMA "#{EVENTS_SPEC_SCHEMA}"))
-    conn.execute(Kiosk::Server::SchemaDefinitions.events_sql(schema: EVENTS_SPEC_SCHEMA))
+    conn.execute(%(DROP SCHEMA IF EXISTS "#{EventStoresSpec::SCHEMA}" CASCADE))
+    conn.execute(%(CREATE SCHEMA "#{EventStoresSpec::SCHEMA}"))
+    conn.execute(Kiosk::Server::SchemaDefinitions.events_sql(schema: EventStoresSpec::SCHEMA))
   end
 
   after(:context) do
-    unless self.class.postgres_error
+    unless EventStoresSpec.postgres_error
       ActiveRecord::Base.connection.execute(
-        %(DROP SCHEMA IF EXISTS "#{EVENTS_SPEC_SCHEMA}" CASCADE)
+        %(DROP SCHEMA IF EXISTS "#{EventStoresSpec::SCHEMA}" CASCADE)
       )
     end
   end
@@ -52,14 +74,13 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
   subject(:store) { described_class.new }
 
   before do
-    Kiosk.configure { |c| c.schema = EVENTS_SPEC_SCHEMA }
-    ActiveRecord::Base.connection.execute(%(DELETE FROM "#{EVENTS_SPEC_SCHEMA}".events))
+    Kiosk.configure { |c| c.schema = EventStoresSpec::SCHEMA }
+    ActiveRecord::Base.connection.execute(%(DELETE FROM "#{EventStoresSpec::SCHEMA}".events))
   end
+end
 
-  def event(topic: 'todo', subject: 'l1', data: { 'done' => true })
-    { 'topic' => topic, 'subject' => subject, 'data' => data,
-      'occurred_at' => '2026-09-25T10:00:00Z' }
-  end
+RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
+  include_context 'event stores spec: throwaway schema'
 
   # ── the contract, exactly as the in-process store answers it ──────────────
 
@@ -88,6 +109,10 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     expect(store.since('u1', 0).first.keys)
       .to contain_exactly('id', 'topic', 'subject', 'occurred_at', 'data')
   end
+end
+
+RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
+  include_context 'event stores spec: throwaway schema'
 
   it 'round-trips nested data through jsonb unchanged' do
     store.append('u1', event(data: { 'nested' => { 'k' => [1, 2] }, 's' => 'x' }))
@@ -117,6 +142,10 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
 
     expect(store.since('u2', 0)).to eq([])
   end
+end
+
+RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
+  include_context 'event stores spec: throwaway schema'
 
   # ── what only a table can do, and the whole reason this is the default ────
 
@@ -135,40 +164,46 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     seen = Thread.new { described_class.new.since('u1', 0).length }.value
     expect(seen).to eq(1)
   end
+end
 
-  describe 'retention' do
-    it 'sweeps rows past the window and reports truncated to a stale cursor' do
-      store.append('u1', event)
-      second = store.append('u1', event)
-      backdate(id_below: second, hours: 25)
-      store.prune!
+RSpec.describe Kiosk::Server::EventStores::ActiveRecord, 'retention' do
+  include_context 'event stores spec: throwaway schema'
 
-      expect(store.truncated?('u1', 0)).to be(true)
-      expect(store.truncated?('u1', second)).to be(false)
-    end
+  it 'sweeps rows past the window and reports truncated to a stale cursor' do
+    store.append('u1', event)
+    second = store.append('u1', event)
+    backdate(id_below: second, hours: 25)
+    store.prune!
 
-    it 'keeps rows inside the window' do
-      store.append('u1', event)
-      store.prune!
-
-      expect(store.since('u1', 0).length).to eq(1)
-    end
-
-    # An hour was the old floor, reasoned from one access-token lifetime. It is
-    # the right bound for a WAIT and the wrong one for a SUBSCRIPTION, which is
-    # what `delivery` and `todo` are.
-    it 'retains for 24 hours by default, not one' do
-      expect(described_class::DEFAULT_RETENTION_HOURS).to eq(24)
-    end
-
-    it 'honours a longer window an operator configures' do
-      store.append('u1', event)
-      backdate(id_below: store.head + 1, hours: 25)
-      described_class.new(retention_hours: 48).prune!
-
-      expect(store.since('u1', 0).length).to eq(1)
-    end
+    expect(store.truncated?('u1', 0)).to be(true)
+    expect(store.truncated?('u1', second)).to be(false)
   end
+
+  it 'keeps rows inside the window' do
+    store.append('u1', event)
+    store.prune!
+
+    expect(store.since('u1', 0).length).to eq(1)
+  end
+
+  # An hour was the old floor, reasoned from one access-token lifetime. It is
+  # the right bound for a WAIT and the wrong one for a SUBSCRIPTION, which is
+  # what `delivery` and `todo` are.
+  it 'retains for 24 hours by default, not one' do
+    expect(described_class::DEFAULT_RETENTION_HOURS).to eq(24)
+  end
+
+  it 'honours a longer window an operator configures' do
+    store.append('u1', event)
+    backdate(id_below: store.head + 1, hours: 25)
+    described_class.new(retention_hours: 48).prune!
+
+    expect(store.since('u1', 0).length).to eq(1)
+  end
+end
+
+RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
+  include_context 'event stores spec: throwaway schema'
 
   it 'is NOT truncated for a cursor at head' do
     id = store.append('u1', event)
@@ -192,14 +227,5 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
 
     expect(store.since('u1', first).map { |e| e['id'] }).to eq([second, third])
     expect(store.truncated?('u1', first)).to be(false)
-  end
-
-  def backdate(id_below:, hours:)
-    ActiveRecord::Base.connection.exec_query(
-      %(UPDATE "#{EVENTS_SPEC_SCHEMA}".events
-           SET created_at = now() - ($1 || ' hours')::interval
-         WHERE id < $2),
-      'spec backdate', [hours.to_s, id_below]
-    )
   end
 end

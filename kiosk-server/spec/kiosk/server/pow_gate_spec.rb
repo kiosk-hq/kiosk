@@ -351,7 +351,7 @@ RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params
     # pretend to know that — it issues the 402 exactly as before.
     configure_with_policy(
       Class.new(Kiosk::Reputation::Policy) do
-        def challenge_for(identity:, verb:, factors:)
+        def challenge_for(**)
           { alg: 'argon2id', params: { d: 0, m: 8 } }
         end
       end.new
@@ -467,6 +467,12 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
       )
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
+end
+
+RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a wrong nonce" do
+  include PowGateSpecHelpers
+
+  before { configure_with_policy(always_challenge_policy) }
 
   it 'calls on_bad_proof with the identity' do
     penalty_calls = []
@@ -812,7 +818,7 @@ RSpec.describe Kiosk::Server::PowGate, 'on_proof_verified hook after a verified 
     recorder = hook_calls
     declining = Class.new(Kiosk::Reputation::Policy) do
       define_method(:on_proof_verified) { |identity:| recorder << identity }
-      def challenge_for(identity:, verb:, factors:) = nil
+      def challenge_for(**) = nil
     end.new
     configure_with_policy(declining)
 

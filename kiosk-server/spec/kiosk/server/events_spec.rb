@@ -7,13 +7,22 @@
 # example declares a topic the way a demo will and then reads the registry the
 # catalogue reads. Nothing calls the mixin's internals.
 
-RSpec.describe Kiosk::Server::Events do
+RSpec.shared_context 'events spec: operator controller' do
   # An operator's own controller. `topic` needs no method of its own, but the
   # leak example below defines a verb, and that needs a real controller base.
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
 
+  def declare_in_controller(&)
+    controller.class_eval(&)
+    controller.kiosk_register!
+  end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
+
   it 'registers a topic declared with a block' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         reach :consented
         description 'A todo on a list you can reach changed.'
@@ -21,7 +30,6 @@ RSpec.describe Kiosk::Server::Events do
         subject_reachable ->(subject, identity) { subject == identity[:user_id] }
       end
     end
-    controller.kiosk_register!
 
     decl = described_class.fetch('todo')
     expect(decl[:reach]).to eq(:consented)
@@ -31,23 +39,26 @@ RSpec.describe Kiosk::Server::Events do
   end
 
   it 'defaults reach to :principal, exactly as a verb does' do
-    controller.class_eval do
+    declare_in_controller do
       topic :order_delivery do
         description 'Your order is on its way or at the door.'
         payload_schema type: 'object'
       end
     end
-    controller.kiosk_register!
 
     expect(described_class.fetch('order_delivery')[:reach]).to eq(:principal)
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   # THE REASON `topic` TAKES A BLOCK. `reach` and `description` write into
   # `kiosk_pending`, which `method_added` drains onto the NEXT method defined in
   # the class — so a flat `topic :todo` followed by bare macros would attach the
   # topic's reach and prose to whatever verb came after it, silently.
   it 'does NOT leak its declarations onto the next method defined' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         reach :consented
         description 'A topic.'
@@ -62,12 +73,15 @@ RSpec.describe Kiosk::Server::Events do
         render json: []
       end
     end
-    controller.kiosk_register!
 
     verb = Kiosk::Server::Queries.describe('my_verb')
     expect(verb[:reach]).to eq('principal')
     expect(verb[:description]).to eq('A verb.')
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   # ── RELOAD ───────────────────────────────────────────────────────────────
   #
@@ -78,13 +92,12 @@ RSpec.describe Kiosk::Server::Events do
   # on the class and `kiosk_register!` drains it, exactly as a verb does.
   it 'survives the class body being read twice, as every reload reads it' do
     declaring = lambda do
-      controller.class_eval do
+      declare_in_controller do
         topic :todo do
           description 'A todo on a list you can reach changed.'
           payload_schema type: 'object', properties: { done: { type: 'boolean' } }
         end
       end
-      controller.kiosk_register!
     end
 
     declaring.call
@@ -96,28 +109,30 @@ RSpec.describe Kiosk::Server::Events do
   # idempotent register: a registry that is only ever added to keeps serving a
   # topic whose declaration is gone.
   it 'drops a topic that is no longer declared, on the next rebuild' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         description 'A todo on a list you can reach changed.'
         payload_schema type: 'object'
       end
     end
-    controller.kiosk_register!
     expect(described_class.known).to eq(%w[todo])
 
     Kiosk::Server::HandlerRegistrations.clear!
 
     expect(described_class.known).to eq([])
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   it 're-registers its topics on a rebuild, with the class body never read again' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         description 'A todo on a list you can reach changed.'
         payload_schema type: 'object'
       end
     end
-    controller.kiosk_register!
     expect(described_class.known).to eq(%w[todo])
 
     Kiosk::Server::HandlerRegistrations.clear!
@@ -130,104 +145,116 @@ RSpec.describe Kiosk::Server::Events do
 
   it 'refuses a name that is not a legal wire name' do
     expect do
-      controller.class_eval do
+      declare_in_controller do
         topic 'Todo' do
           description 'x'
           payload_schema type: 'object'
         end
       end
-      controller.kiosk_register!
     end.to raise_error(ArgumentError, /not a legal Kiosk name/)
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   it 'refuses a name the engine itself draws' do
     expect do
-      controller.class_eval do
+      declare_in_controller do
         topic :schema do
           description 'x'
           payload_schema type: 'object'
         end
       end
-      controller.kiosk_register!
     end.to raise_error(ArgumentError, /reserved/)
   end
 
   it 'refuses a reach that is not one of the four' do
     expect do
-      controller.class_eval do
+      declare_in_controller do
         topic :todo do
           reach :everyone
           description 'x'
           payload_schema type: 'object'
         end
       end
-      controller.kiosk_register!
     end.to raise_error(ArgumentError, /not a Kiosk reach/)
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   # REQUIRED for the reason `output_schema` is required on a verb: without it a
   # message cannot be consumed without receiving one and observing what arrived.
   it 'requires payload_schema' do
     expect do
-      controller.class_eval do
+      declare_in_controller do
         topic :todo do
           description 'x'
         end
       end
-      controller.kiosk_register!
     end.to raise_error(ArgumentError, /payload_schema/)
   end
 
   it 'requires description' do
     expect do
-      controller.class_eval do
+      declare_in_controller do
         topic :todo do
           payload_schema type: 'object'
         end
       end
-      controller.kiosk_register!
     end.to raise_error(ArgumentError, /description/)
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   # Spec Section 8.5.1 types a topic's `description` as a string or null, on
   # the same terms as a verb's — and a verb's null is accepted. What is
   # required is the declaration, not a truthy value.
   it 'accepts a description declared null, and publishes it' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         description nil
         payload_schema type: 'object'
       end
     end
-    controller.kiosk_register!
 
     expect(described_class.catalog).to eq(
       [{ name: 'todo', description: nil, reach: 'principal', payload_schema: { type: 'object' } }]
     )
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   it 'refuses a second declaration of the same name' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         description 'x'
         payload_schema type: 'object'
       end
     end
-    controller.kiosk_register!
 
     expect do
-      controller.class_eval do
+      declare_in_controller do
         topic :todo do
           description 'y'
           payload_schema type: 'object'
         end
       end
-      controller.kiosk_register!
     end.to raise_error(ArgumentError, /already declared/)
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   it 'projects a catalogue sorted by name, keyed exactly as a verb descriptor is' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         description 'T.'
         payload_schema type: 'object'
@@ -238,15 +265,18 @@ RSpec.describe Kiosk::Server::Events do
         payload_schema type: 'object'
       end
     end
-    controller.kiosk_register!
 
     expect(described_class.catalog.map { |e| e[:name] }).to eq(%w[delivery todo])
     expect(described_class.catalog.first.keys)
       .to contain_exactly(:name, :description, :reach, :payload_schema)
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   it 'publishes each declared example, in the order declared' do
-    controller.class_eval do
+    declare_in_controller do
       topic :delivery do
         description 'D.'
         payload_schema type: 'object', properties: { status: { enum: %w[out delivered] } },
@@ -255,7 +285,6 @@ RSpec.describe Kiosk::Server::Events do
         example status: 'delivered'
       end
     end
-    controller.kiosk_register!
 
     expect(described_class.catalog.first[:examples])
       .to eq([{ status: 'out' }, { status: 'delivered' }])
@@ -272,25 +301,28 @@ RSpec.describe Kiosk::Server::Events do
       end
     end.to raise_error(ArgumentError, /example that does not satisfy its payload_schema/)
   end
+end
+
+RSpec.describe Kiosk::Server::Events do
+  include_context 'events spec: operator controller'
 
   # `subject_reachable` is the operator's authorisation rule, not a fact about
   # the wire. Publishing the predicate would tell a caller how to look for a gap
   # in it, and a subscriber cannot act on it either way.
   it 'keeps subject_reachable OUT of the published catalogue' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         description 'T.'
         payload_schema type: 'object'
         subject_reachable ->(_subject, _identity) { true }
       end
     end
-    controller.kiosk_register!
 
     expect(described_class.catalog.first).not_to have_key(:subject_reachable)
   end
 
   it 'knows the names it holds, sorted' do
-    controller.class_eval do
+    declare_in_controller do
       topic :todo do
         description 'T.'
         payload_schema type: 'object'
@@ -301,7 +333,6 @@ RSpec.describe Kiosk::Server::Events do
         payload_schema type: 'object'
       end
     end
-    controller.kiosk_register!
 
     expect(described_class.known).to eq(%w[delivery todo])
   end
@@ -310,7 +341,7 @@ end
 # `emit` — the one line an operator writes at the transition. The scope it takes is the OPERATOR's answer to "who may read this",
 # computed where the domain knows it; `reach` authorises a SUBSCRIPTION and is a
 # different question, answered at the socket.
-RSpec.describe 'Kiosk::Server::Events.emit' do
+RSpec.shared_context 'events spec: a declared delivery topic' do
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
   let(:store) { Kiosk::Server::EventStore.new }
 
@@ -324,6 +355,10 @@ RSpec.describe 'Kiosk::Server::Events.emit' do
     end
     controller.kiosk_register!
   end
+end
+
+RSpec.describe 'Kiosk::Server::Events.emit' do
+  include_context 'events spec: a declared delivery topic'
 
   it 'appends one event per identity in scope and returns the last id' do
     id = Kiosk::Server::Events.emit(
@@ -352,6 +387,10 @@ RSpec.describe 'Kiosk::Server::Events.emit' do
 
     expect(store.since('u1', 0).first['occurred_at']).to eq('2026-09-25T11:04:18Z')
   end
+end
+
+RSpec.describe 'Kiosk::Server::Events.emit' do
+  include_context 'events spec: a declared delivery topic'
 
   it 'carries the five closed members and no others' do
     Kiosk::Server::Events.emit(topic: :delivery, subject: 'ord_1', identity_scope: %w[u1], data: {})
@@ -387,7 +426,7 @@ end
 
 # The events surface as an operator and an assistant SEE it: a third catalogue
 # array, a fifth capability, and a discovery field.
-RSpec.describe 'the events surface in the catalogue and discovery' do
+RSpec.shared_context 'events spec: catalogue declarations' do
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
 
   def declare_topic!
@@ -412,73 +451,79 @@ RSpec.describe 'the events surface in the catalogue and discovery' do
     end
     controller.kiosk_register!
   end
+end
 
-  describe 'GET <endpoint>/schema' do
-    it 'publishes an events array beside queries and actions' do
-      declare_topic!
+RSpec.describe 'the events surface in the catalogue and discovery', 'GET <endpoint>/schema' do
+  include_context 'events spec: catalogue declarations'
 
-      document = Kiosk::Server::SchemaDocument.document
-      expect(document[:events].map { |e| e[:name] }).to eq(%w[todo])
-    end
+  it 'publishes an events array beside queries and actions' do
+    declare_topic!
 
-    it 'publishes an EMPTY events array on an origin that declares no topic' do
-      declare_verb!
-
-      document = Kiosk::Server::SchemaDocument.document
-      expect(document[:events]).to eq([])
-    end
-
-    # The catalogue is cacheable for a YEAR at its digest-bearing URL, so a
-    # topic that does not move the digest is a topic no cached client ever
-    # learns about.
-    it 'moves the digest when a topic is declared' do
-      declare_verb!
-      before_digest = Kiosk::Server::SchemaDocument.digest
-      declare_topic!
-      after_digest = Kiosk::Server::SchemaDocument.digest
-
-      expect(after_digest).not_to eq(before_digest)
-    end
+    document = Kiosk::Server::SchemaDocument.document
+    expect(document[:events].map { |e| e[:name] }).to eq(%w[todo])
   end
 
-  describe 'capabilities' do
-    it 'gains `events` when a topic is registered, last in the canonical order' do
-      declare_verb!
-      declare_topic!
+  it 'publishes an EMPTY events array on an origin that declares no topic' do
+    declare_verb!
 
-      expect(Kiosk.configuration.capabilities).to eq(%w[schema queries events])
-    end
-
-    it 'does NOT advertise events on an origin that declares no topic' do
-      declare_verb!
-
-      expect(Kiosk.configuration.capabilities).not_to include('events')
-    end
-
-    # An explicit list is returned verbatim — the override the accessor already
-    # documents, and a fifth member must not start overriding the override.
-    it "leaves an operator's explicit list alone" do
-      declare_topic!
-      Kiosk.configure { |c| c.capabilities = %w[schema queries] }
-
-      expect(Kiosk.configuration.capabilities).to eq(%w[schema queries])
-    end
+    document = Kiosk::Server::SchemaDocument.document
+    expect(document[:events]).to eq([])
   end
 
-  describe '/.well-known/kiosk.json' do
-    before { Kiosk.configure { |c| c.issuer = 'https://shop.example' } }
+  # The catalogue is cacheable for a YEAR at its digest-bearing URL, so a
+  # topic that does not move the digest is a topic no cached client ever
+  # learns about.
+  it 'moves the digest when a topic is declared' do
+    declare_verb!
+    before_digest = Kiosk::Server::SchemaDocument.digest
+    declare_topic!
+    after_digest = Kiosk::Server::SchemaDocument.digest
 
-    it 'carries events_url when a topic is registered' do
-      declare_topic!
+    expect(after_digest).not_to eq(before_digest)
+  end
+end
 
-      built = Kiosk::Server::WellKnown.build(base_url: 'https://shop.example')
-      expect(built[:kiosk][:events_url]).to eq('wss://shop.example/kiosk/events')
-    end
+RSpec.describe 'the events surface in the catalogue and discovery', 'capabilities' do
+  include_context 'events spec: catalogue declarations'
 
-    it 'omits events_url entirely when no topic is registered' do
-      built = Kiosk::Server::WellKnown.build(base_url: 'https://shop.example')
+  it 'gains `events` when a topic is registered, last in the canonical order' do
+    declare_verb!
+    declare_topic!
 
-      expect(built[:kiosk]).not_to have_key(:events_url)
-    end
+    expect(Kiosk.configuration.capabilities).to eq(%w[schema queries events])
+  end
+
+  it 'does NOT advertise events on an origin that declares no topic' do
+    declare_verb!
+
+    expect(Kiosk.configuration.capabilities).not_to include('events')
+  end
+
+  # An explicit list is returned verbatim — the override the accessor already
+  # documents, and a fifth member must not start overriding the override.
+  it "leaves an operator's explicit list alone" do
+    declare_topic!
+    Kiosk.configure { |c| c.capabilities = %w[schema queries] }
+
+    expect(Kiosk.configuration.capabilities).to eq(%w[schema queries])
+  end
+end
+
+RSpec.describe 'the events surface in the catalogue and discovery', '/.well-known/kiosk.json' do
+  include_context 'events spec: catalogue declarations'
+
+  before { Kiosk.configure { |c| c.issuer = 'https://shop.example' } }
+
+  it 'carries events_url when a topic is registered' do
+    declare_topic!
+
+    built = Kiosk::Server::WellKnown.build(base_url: 'https://shop.example')
+    expect(built[:kiosk][:events_url]).to eq('wss://shop.example/kiosk/events')
+  end
+
+  it 'omits events_url entirely when no topic is registered' do
+    built = Kiosk::Server::WellKnown.build(base_url: 'https://shop.example')
+
+    expect(built[:kiosk]).not_to have_key(:events_url)
   end
 end

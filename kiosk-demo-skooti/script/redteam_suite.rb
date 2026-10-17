@@ -82,6 +82,16 @@ def quoted_cents(price_per_min_cents)
   price.positive? ? price : 100
 end
 
+# The first licence-free vehicle no live reservation holds. A vehicle holds one
+# reservation at a time, so every rider here reserves its own.
+def free_scooter_code(client, customer)
+  fleet = client.query(customer, name: 'scooters_available').body
+  scooter = (fleet.is_a?(Array) ? fleet : []).find { |row| row['needs_licence'] == false }
+  raise 'redteam(skooti): no licence-free vehicle is free in scooters_available' unless scooter
+
+  scooter['code']
+end
+
 def body_field(resp, key)
   resp.body.is_a?(Hash) ? resp.body[key] : nil
 end
@@ -102,14 +112,9 @@ profile = Kiosk::Redteam::Profile.new(
   row_id_key: 'reservation_id',
   result_id_key: 'reservation_id',
 
-  # Reserves the first available scooter; reserve needs no KYC.
+  # Reserves a free licence-free scooter; reserve needs no KYC.
   create_owned: lambda { |client, customer|
-    fleet_resp = client.query(customer, name: 'scooters_available')
-    rows       = fleet_resp.body.is_a?(Array) ? fleet_resp.body : []
-    scooter    = rows.first
-    raise 'redteam(skooti): no available scooters in scooters_available' unless scooter
-
-    rsv_resp = client.run(customer, name: 'reserve', scooter_code: scooter['code'])
+    rsv_resp = client.run(customer, name: 'reserve', scooter_code: free_scooter_code(client, customer))
     raise "redteam(skooti): reserve failed (#{rsv_resp.status}): #{rsv_resp.body.inspect}" \
       unless rsv_resp.status == 200
 
@@ -121,14 +126,7 @@ profile = Kiosk::Redteam::Profile.new(
 
   # reserve declares only scooter_code, so an injected user_id is a typed 400.
   forge_action: 'reserve',
-  forge_args: lambda { |client, customer_a, _customer_b|
-    fleet_resp = client.query(customer_a, name: 'scooters_available')
-    rows       = fleet_resp.body.is_a?(Array) ? fleet_resp.body : []
-    scooter    = rows.first
-    raise 'redteam(skooti): no scooters for forge_args' unless scooter
-
-    { scooter_code: scooter['code'] }
-  },
+  forge_args: ->(client, customer_a, _customer_b) { { scooter_code: free_scooter_code(client, customer_a) } },
 
   gated_action: 'start_rental',
   gated_args: ->(ref) { { reservation_id: ref[:id] } },
@@ -330,10 +328,7 @@ module SkootiScenarios
 
     # Control: a real vehicle code still reserves.
     def check_reserve_control(client, customer)
-      fleet = client.query(customer, name: 'scooters_available').body
-      raise 'redteam(skooti): empty fleet' unless fleet.is_a?(Array) && fleet.any?
-
-      control = client.run(customer, name: 'reserve', scooter_code: fleet.first['code'])
+      control = client.run(customer, name: 'reserve', scooter_code: free_scooter_code(client, customer))
       return if control.status == 200
 
       @failures << "CONTROL well-formed reserve → HTTP #{control.status} " \
@@ -398,25 +393,28 @@ def new_customer
   [client, client.register!]
 end
 
-def require_motorcycle!(client, customer, beat)
-  fleet = client.query(customer, name: 'scooters_available')
-  return if Array(fleet.body).any? { |r| r['code'] == 'MC-001' }
-
-  raise "redteam(skooti): MC-001 not in fleet#{beat}"
-end
-
-# Reserves and pays for a vehicle, and answers its reservation_id. `priced` puts the quote on the cart line.
-def reserve_and_pay(client, customer, code, label: code, priced: true)
+# Reserves and pays for a vehicle, and answers its reservation_id.
+def reserve_and_pay(client, customer, code)
   rsv = client.run(customer, name: 'reserve', scooter_code: code)
-  raise "redteam(skooti): reserve #{label} failed (#{rsv.status})" unless rsv.status == 200
+  raise "redteam(skooti): reserve #{code} failed (#{rsv.status})" unless rsv.status == 200
 
   reservation_id = rsv.body['reservation_id']
   total          = quoted_cents(rsv.body['price_per_min_cents'])
-  line           = priced ? { qty: 1, price_cents: total, reservation_id: } : { qty: 1, reservation_id: }
+  line           = { qty: 1, price_cents: total, reservation_id: }
   pay_resp       = client.pay(customer, **mobility_mandates(customer, line, total, total + 100))
-  raise "redteam(skooti): pay #{label} failed (#{pay_resp.status})" unless pay_resp.status == 200
+  raise "redteam(skooti): pay #{code} failed (#{pay_resp.status})" unless pay_resp.status == 200
 
   reservation_id
+end
+
+# The rider, with no attestation, who holds MC-001 reserved and paid, so only the
+# KYC gate or the verb can block. MC-001 holds one reservation at a time, so
+# every motorcycle beat attacks this one.
+def motorcycle_rider
+  @motorcycle_rider ||= begin
+    client, a = new_customer
+    [client, a, reserve_and_pay(client, a, 'MC-001')]
+  end
 end
 
 def rent_refused?(rent)
@@ -433,10 +431,7 @@ end
 
 # MotorcycleForgedKyc: wrong-key licence attributes must not unlock rent_motorcycle.
 def motorcycle_forged_kyc
-  client, a = new_customer
-  # Reserve and pay first, so only the KYC-attribute gate can block.
-  require_motorcycle!(client, a, '')
-  reservation_id = reserve_and_pay(client, a, 'MC-001', priced: false)
+  client, a, reservation_id = motorcycle_rider
   kyc_resp = client.kyc(a, attestation_jws: forged_licence_jws(a))
   # Decisive: rent_motorcycle is still refused.
   rent = client.run(a, name: 'rent_motorcycle', reservation_id:)
@@ -455,14 +450,13 @@ def forged_kyc_verdict(kyc_resp, rent)
 end
 
 # MotorcycleViaStartRental: a paid MC-001 reservation cannot be activated with the scooter verb;
-# the same sequence on SK-001 is the control.
+# the same sequence on a licence-free scooter is the control.
 def motorcycle_via_start_rental
-  client, a = new_customer
-  require_motorcycle!(client, a, ' (verb-swap beat)')
+  client, a, reservation_id = motorcycle_rider
   # THE ATTACK — motorcycle reservation, scooter verb, no attestation anywhere.
-  attack = client.run(a, name: 'start_rental', reservation_id: reserve_and_pay(client, a, 'MC-001'))
+  attack = client.run(a, name: 'start_rental', reservation_id:)
   # THE CONTROL — same agent, same sequence, licence-free vehicle.
-  control = client.run(a, name: 'start_rental', reservation_id: reserve_and_pay(client, a, 'SK-001'))
+  control = client.run(a, name: 'start_rental', reservation_id: reserve_and_pay(client, a, free_scooter_code(client, a)))
   verb_swap_verdict(attack, control)
 end
 
@@ -472,13 +466,13 @@ def verb_swap_verdict(attack, control)
 
   unless control.status == 200 && !body_field(control, 'rental_token').to_s.empty?
     return { blocked: false,
-             detail: "CONTROL FAILED: start_rental on the licence-free SK-001 returned HTTP #{control.status} with no token — " \
+             detail: "CONTROL FAILED: start_rental on a licence-free scooter returned HTTP #{control.status} with no token — " \
                      'the MC-001 refusal proves nothing (the verb, the payment or the harness is broken)' }
   end
 
   { blocked: true,
     detail: "start_rental refuses the KYC-gated MC-001 (HTTP #{attack.status} #{body_field(attack, 'code').inspect}), no rental_token; " \
-            "control: the licence-free SK-001 still unlocks (HTTP #{control.status})" }
+            "control: a licence-free scooter still unlocks (HTTP #{control.status})" }
 end
 
 # Why the attack got through, or nil. A typed refusal must also name rent_motorcycle.
@@ -524,12 +518,9 @@ end
 
 # IssuedKycJwsTheft: B's broker-signed jws, submitted by A, must not unlock A's motorcycle.
 def kyc_jws_theft
-  client = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL)
+  # Attacker A holds its OWN paid motorcycle, so ONLY the KYC gate can block.
+  client, a, reservation_id = motorcycle_rider
   victim_jws = issued_victim_jws(client)
-  # Attacker A reserves + pays its OWN motorcycle so ONLY the KYC gate can block.
-  a = client.register!
-  require_motorcycle!(client, a, ' (theft beat)')
-  reservation_id = reserve_and_pay(client, a, 'MC-001', label: 'MC-001(A)', priced: false)
   # A submits B's issued jws — the subject-binding must reject it.
   kyc_resp = client.kyc(a, attestation_jws: victim_jws)
   theft_verdict(kyc_resp, client.run(a, name: 'rent_motorcycle', reservation_id:))

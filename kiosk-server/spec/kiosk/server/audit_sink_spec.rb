@@ -239,7 +239,7 @@ RSpec.describe Kiosk::Server::AuditSink do
     end
 
     it 'does NOT swallow a non-StandardError — that is the process dying, not a log bug' do
-      fatal = Class.new(Exception) # deliberately NOT a StandardError
+      fatal = Class.new(StandardError) # deliberately NOT a StandardError
       Kiosk.configure { |c| c.audit_sink = ->(_e) { raise fatal, 'out of memory' } }
 
       expect { described_class.emit(event) }.to raise_error(fatal)

@@ -8,13 +8,13 @@
 #
 # Dispatch via `ActionController::Metal.action(...)`.
 
-require "rack/mock"
-require "json"
+require 'rack/mock'
+require 'json'
 
-RSpec.describe "AuthController binding endpoints" do
+RSpec.describe 'AuthController binding endpoints' do
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:user_id) { "11111111-1111-1111-1111-111111111111" }
-  let(:human)   { build_identity(actor: "human", agent_id: nil, user_id: user_id) }
+  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
+  let(:human)   { build_identity(actor: 'human', agent_id: nil, user_id: user_id) }
 
   def wire_user_idp(identity)
     idp = Class.new do
@@ -26,7 +26,7 @@ RSpec.describe "AuthController binding endpoints" do
 
   before do
     Kiosk.configure do |c|
-      c.issuer                     = "https://provider.example"
+      c.issuer                     = 'https://provider.example'
       c.roles                      = %i[customer]
       c.device_authorization_store = store
     end
@@ -34,20 +34,20 @@ RSpec.describe "AuthController binding endpoints" do
   end
 
   def dispatch(action, body: nil)
-    opts = { method: "POST" }
+    opts = { method: 'POST' }
     if body
       opts[:input] = JSON.generate(body)
-      opts["CONTENT_TYPE"] = "application/json"
+      opts['CONTENT_TYPE'] = 'application/json'
     end
     env = Rack::MockRequest.env_for("https://provider.example/kiosk/auth/#{action}", **opts)
     status, headers, raw_body = Kiosk::Server::AuthController.action(action).call(env)
-    raw = +""
+    raw = +''
     raw_body.each { |chunk| raw << chunk }
     @last_headers = headers
     [status, raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)]
   end
 
-  def last_headers = @last_headers
+  attr_reader :last_headers
 
   # Every REFUSAL on this surface is an RFC 9457 problem document since the
   # 0.4 cutover — `application/problem+json`, a per-code `type` and `title`,
@@ -56,7 +56,7 @@ RSpec.describe "AuthController binding endpoints" do
   # `message` is `detail`. Successes are untouched: they were never enveloped.
   def expect_problem(status, body, http:, code:, detail: nil)
     expect(status).to eq(http)
-    expect(last_headers["Content-Type"]).to include("application/problem+json")
+    expect(last_headers['Content-Type']).to include('application/problem+json')
     expect(body[:type]).to   eq("https://kiosk.tech/problems/#{code}")
     expect(body[:title]).to  eq(Kiosk::Server::Errors::TITLES.fetch(code))
     expect(body[:status]).to eq(http)
@@ -64,8 +64,8 @@ RSpec.describe "AuthController binding endpoints" do
     expect(body[:detail]).to match(detail) if detail
   end
 
-  describe "POST /auth/link" do
-    it "mints a single-use link code for the signed-in account holder (201)" do
+  describe 'POST /auth/link' do
+    it 'mints a single-use link code for the signed-in account holder (201)' do
       status, body = dispatch(:link)
 
       expect(status).to eq(201)
@@ -73,17 +73,17 @@ RSpec.describe "AuthController binding endpoints" do
       expect(body[:expires_in]).to eq(Kiosk::Server::DeviceAuthorization::DEFAULT_EXPIRES_IN)
 
       row = store.find_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code]),
+        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code])
       )
       expect(row).to be_approved
       expect(row).to be_link
       expect(row.user_id).to eq(user_id)
     end
 
-    it "401s without a provider session — agent Bearer tokens do not open this door" do
+    it '401s without a provider session — agent Bearer tokens do not open this door' do
       wire_user_idp(nil)
       status, body = dispatch(:link)
-      expect_problem(status, body, http: 401, code: "unauthenticated")
+      expect_problem(status, body, http: 401, code: 'unauthenticated')
     end
 
     # roles-from-IdP (Path A): the human's role — as the provider's
@@ -91,52 +91,52 @@ RSpec.describe "AuthController binding endpoints" do
     # row, so the assistant that redeems it inherits the human's role.
     it "captures the human's user_idp role onto the link row (roles-from-IdP)" do
       Kiosk.configure { |c| c.roles = %i[customer owner] }
-      wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: "owner"))
+      wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: 'owner'))
 
       _status, body = dispatch(:link)
       row = store.find_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code]),
+        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code])
       )
-      expect(row.requested_role).to eq("owner")
+      expect(row.requested_role).to eq('owner')
     end
 
-    it "captures no role for a role-less human session (no regression)" do
-      wire_user_idp(build_identity(actor: "human", agent_id: nil, user_id: user_id, role: nil))
+    it 'captures no role for a role-less human session (no regression)' do
+      wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: nil))
 
       _status, body = dispatch(:link)
       row = store.find_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code]),
+        Kiosk::Server::DeviceAuthorization.hash_device_code(body[:link_code])
       )
       expect(row.requested_role).to be_nil
     end
   end
 
-  describe "POST /auth/claim" do
-    it "delegates to LinkCode.redeem and returns the register-shaped 201" do
+  describe 'POST /auth/claim' do
+    it 'delegates to LinkCode.redeem and returns the register-shaped 201' do
       allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-        { agent_id: "a-1", user_id: user_id, access_token: "kiosk-pop-jwt" },
+        { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt' }
       )
 
-      status, body = dispatch(:claim, body: { code: "c", public_key: "PEM", signed: "jws" })
+      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
       expect(status).to eq(201)
-      expect(body).to eq(agent_id: "a-1", user_id: user_id, access_token: "kiosk-pop-jwt")
+      expect(body).to eq(agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt')
       expect(Kiosk::Server::LinkCode).to have_received(:redeem).with(
-        code: "c", public_key_pem: "PEM", signed: "jws",
+        code: 'c', public_key_pem: 'PEM', signed: 'jws'
       )
     end
 
-    it "400s on a missing field (register-shaped body: code, public_key, signed)" do
-      status, body = dispatch(:claim, body: { code: "c", public_key: "PEM" })
-      expect_problem(status, body, http: 400, code: "bad_request", detail: /signed/)
+    it '400s on a missing field (register-shaped body: code, public_key, signed)' do
+      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM' })
+      expect_problem(status, body, http: 400, code: 'bad_request', detail: /signed/)
     end
 
-    it "maps a failed possession proof to the 401 problem document — code stays live" do
+    it 'maps a failed possession proof to the 401 problem document — code stays live' do
       allow(Kiosk::Server::LinkCode).to receive(:redeem)
-        .and_raise(Kiosk::Server::Errors::Unauthenticated.new("proof signature invalid"))
+        .and_raise(Kiosk::Server::Errors::Unauthenticated.new('proof signature invalid'))
 
-      status, body = dispatch(:claim, body: { code: "c", public_key: "PEM", signed: "bad" })
-      expect_problem(status, body, http: 401, code: "unauthenticated",
-                     detail: /proof signature invalid/)
+      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'bad' })
+      expect_problem(status, body, http: 401, code: 'unauthenticated',
+                                   detail: /proof signature invalid/)
     end
 
     # K-855. `AccountBinding.bind!` — which is what `redeem` returns — also
@@ -149,10 +149,10 @@ RSpec.describe "AuthController binding endpoints" do
     # This one stubs what the service actually returns.
     it "renders only the three fields §6.2 specifies — bind!'s `fresh` never reaches the wire" do
       allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-        { agent_id: "a-1", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: false },
+        { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: false }
       )
 
-      status, body = dispatch(:claim, body: { code: "c", public_key: "PEM", signed: "jws" })
+      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
       expect(status).to eq(201)
       expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
       expect(body).not_to have_key(:fresh)
@@ -162,55 +162,55 @@ RSpec.describe "AuthController binding endpoints" do
     # be indistinguishable from any other rebind (K-787); a `fresh` flag is the
     # field an assistant would reach for to distinguish binds at all, so it must
     # be absent whichever branch produced the result.
-    it "renders the same three fields for a fresh-key bind" do
+    it 'renders the same three fields for a fresh-key bind' do
       allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-        { agent_id: "a-2", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: true },
+        { agent_id: 'a-2', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
       )
 
-      _status, body = dispatch(:claim, body: { code: "c", public_key: "PEM", signed: "jws" })
+      _status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
       expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
     end
   end
 
-  describe "POST /auth/unlink" do
+  describe 'POST /auth/unlink' do
     # 204, EMPTY (K-870). This used to be `200 {ok: true}` — a body no published
     # surface documented, on an endpoint whose two siblings above ARE documented
     # in protocol.md §6.2. K-855 settled it the other way: withdraw the body
     # rather than specify it after the fact. §6.2 now states the 204, so the status IS
     # the contract and this example is what pins it.
     it "deactivates one of the holder's own bindings and answers 204 with no body" do
-      allow(Kiosk::Server::AccountBinding).to receive(:unlink!).and_return({ agent_id: "a-1" })
+      allow(Kiosk::Server::AccountBinding).to receive(:unlink!).and_return({ agent_id: 'a-1' })
 
-      status, body = dispatch(:unlink, body: { agent_id: "a-1" })
+      status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
       expect(status).to eq(204)
       expect(body).to eq({})
-      expect(last_headers["Content-Type"]).to be_nil
+      expect(last_headers['Content-Type']).to be_nil
       # The version handshake still rides on it — §3, point 6 is about every
       # mount-path response, empty ones included.
-      expect(last_headers["Kiosk-API-Version"]).to eq(Kiosk::Protocol::API_VERSION)
+      expect(last_headers['Kiosk-API-Version']).to eq(Kiosk::Protocol::API_VERSION)
       expect(Kiosk::Server::AccountBinding).to have_received(:unlink!).with(
-        agent_id: "a-1", user_id: user_id,
+        agent_id: 'a-1', user_id: user_id
       )
     end
 
-    it "401s without a provider session" do
+    it '401s without a provider session' do
       wire_user_idp(nil)
-      status, body = dispatch(:unlink, body: { agent_id: "a-1" })
-      expect_problem(status, body, http: 401, code: "unauthenticated")
+      status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
+      expect_problem(status, body, http: 401, code: 'unauthenticated')
     end
 
-    it "400s on a missing agent_id" do
+    it '400s on a missing agent_id' do
       status, body = dispatch(:unlink, body: {})
-      expect_problem(status, body, http: 400, code: "bad_request", detail: /agent_id/)
+      expect_problem(status, body, http: 400, code: 'bad_request', detail: /agent_id/)
     end
 
-    it "404s for an agent not bound to this holder" do
+    it '404s for an agent not bound to this holder' do
       allow(Kiosk::Server::AccountBinding).to receive(:unlink!)
-        .and_raise(Kiosk::Server::Errors::NotFound.new("no linked assistant account with this agent_id"))
+        .and_raise(Kiosk::Server::Errors::NotFound.new('no linked assistant account with this agent_id'))
 
-      status, body = dispatch(:unlink, body: { agent_id: "foreign" })
-      expect_problem(status, body, http: 404, code: "not_found",
-                     detail: /no linked assistant account/)
+      status, body = dispatch(:unlink, body: { agent_id: 'foreign' })
+      expect_problem(status, body, http: 404, code: 'not_found',
+                                   detail: /no linked assistant account/)
     end
   end
 end

@@ -16,7 +16,7 @@ module Kiosk
       def append(identity_key, event)
         @mutex.synchronize do
           @seq += 1
-          @by_key[identity_key.to_s] << event.merge("id" => @seq).freeze
+          @by_key[identity_key.to_s] << event.merge('id' => @seq).freeze
           @seq
         end
       end
@@ -24,7 +24,7 @@ module Kiosk
       # This identity's events after the cursor `id`, ascending.
       def since(identity_key, id)
         @mutex.synchronize do
-          @by_key[identity_key.to_s].select { |event| event["id"] > id.to_i }
+          @by_key[identity_key.to_s].select { |event| event['id'] > id.to_i }
         end
       end
 

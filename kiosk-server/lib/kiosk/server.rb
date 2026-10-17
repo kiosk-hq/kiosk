@@ -3,92 +3,92 @@
 # kiosk-server: the Rails engine, its wire, auth and discovery controllers, and
 # the install generator. See https://kiosk.tech.
 
-require "kiosk"
+require 'kiosk'
 
-require "active_record"
+require 'active_record'
 
-require "kiosk/server/version"
-require "kiosk/server/signing_key"
-require "kiosk/server/jwks"
-require "kiosk/server/jwt_issuer"
-require "kiosk/server/device_authorization"
-require "kiosk/server/device_authorization_stores"
-require "kiosk/server/device_code_grant"
-require "kiosk/server/device_verification"
-require "kiosk/server/account_binding"
-require "kiosk/server/link_code"
-require "kiosk/server/configuration_extension"
-require "kiosk/server/headers"
-require "kiosk/server/headers_middleware"
-require "kiosk/server/issuer_middleware"
-require "kiosk/server/well_known"
-require "kiosk/server/open_api"
-require "kiosk/server/schema_definitions"
-require "kiosk/server/errors"
-require "kiosk/server/failure_log"
-require "kiosk/server/result"
-require "kiosk/server/session_context"
-require "kiosk/owned"
-require "kiosk/server/schema_slots"
-require "kiosk/server/actions"
-require "kiosk/server/queries"
-require "kiosk/server/events"
-require "kiosk/server/event_store"
-require "kiosk/server/event_stores"
-require "kiosk/server/events_cable"
-require "kiosk/server/events_connection"
-require "kiosk/server/kiosk_events_channel"
-require "kiosk/server/action_event"
-require "kiosk/server/audit_sink"
-require "kiosk/server/schema_document"
-require "kiosk/server/current_request"
-require "kiosk/server/handler_dispatch"
-require "kiosk/server/handler_mixin"
-require "kiosk/server/handler_registrations"
-require "kiosk/handler"
-require "kiosk/server/executor"
-require "kiosk/server/column_spending_cap"
-require "kiosk/server/payment_claim"
-require "kiosk/server/agent_identity_providers/default_agent_idp"
-require "kiosk/server/identity_resolution"
-require "kiosk/server/pow_spent_stores"
-require "kiosk/server/pow_gate"
-require "kiosk/server/argument_decoder"
-require "kiosk/server/request_validation"
-require "kiosk/server/registration_pow"
-require "kiosk/server/agent_registration"
-require "kiosk/server/auth_challenge_store"
-require "kiosk/server/auth_challenge_stores"
-require "kiosk/server/revocation_store"
-require "kiosk/server/auth_challenge"
-require "kiosk/server/pop_verifier"
-require "kiosk/server/agent_login"
-require "kiosk/server/kyc_verifier"
-require "kiosk/server/mandate_verifier"
+require 'kiosk/server/version'
+require 'kiosk/server/signing_key'
+require 'kiosk/server/jwks'
+require 'kiosk/server/jwt_issuer'
+require 'kiosk/server/device_authorization'
+require 'kiosk/server/device_authorization_stores'
+require 'kiosk/server/device_code_grant'
+require 'kiosk/server/device_verification'
+require 'kiosk/server/account_binding'
+require 'kiosk/server/link_code'
+require 'kiosk/server/configuration_extension'
+require 'kiosk/server/headers'
+require 'kiosk/server/headers_middleware'
+require 'kiosk/server/issuer_middleware'
+require 'kiosk/server/well_known'
+require 'kiosk/server/open_api'
+require 'kiosk/server/schema_definitions'
+require 'kiosk/server/errors'
+require 'kiosk/server/failure_log'
+require 'kiosk/server/result'
+require 'kiosk/server/session_context'
+require 'kiosk/owned'
+require 'kiosk/server/schema_slots'
+require 'kiosk/server/actions'
+require 'kiosk/server/queries'
+require 'kiosk/server/events'
+require 'kiosk/server/event_store'
+require 'kiosk/server/event_stores'
+require 'kiosk/server/events_cable'
+require 'kiosk/server/events_connection'
+require 'kiosk/server/kiosk_events_channel'
+require 'kiosk/server/action_event'
+require 'kiosk/server/audit_sink'
+require 'kiosk/server/schema_document'
+require 'kiosk/server/current_request'
+require 'kiosk/server/handler_dispatch'
+require 'kiosk/server/handler_mixin'
+require 'kiosk/server/handler_registrations'
+require 'kiosk/handler'
+require 'kiosk/server/executor'
+require 'kiosk/server/column_spending_cap'
+require 'kiosk/server/payment_claim'
+require 'kiosk/server/agent_identity_providers/default_agent_idp'
+require 'kiosk/server/identity_resolution'
+require 'kiosk/server/pow_spent_stores'
+require 'kiosk/server/pow_gate'
+require 'kiosk/server/argument_decoder'
+require 'kiosk/server/request_validation'
+require 'kiosk/server/registration_pow'
+require 'kiosk/server/agent_registration'
+require 'kiosk/server/auth_challenge_store'
+require 'kiosk/server/auth_challenge_stores'
+require 'kiosk/server/revocation_store'
+require 'kiosk/server/auth_challenge'
+require 'kiosk/server/pop_verifier'
+require 'kiosk/server/agent_login'
+require 'kiosk/server/kyc_verifier'
+require 'kiosk/server/mandate_verifier'
 
-require "kiosk/server/engine"
-require "kiosk/server/routing"
+require 'kiosk/server/engine'
+require 'kiosk/server/routing'
 
-require "kiosk/server/binding_module_gate"
-require "kiosk/server/account_holder_gate"
+require 'kiosk/server/binding_module_gate'
+require 'kiosk/server/account_holder_gate'
 
 module Kiosk
   module Server
     # The controllers load on first use, after the host's initializers, so a view library such as
     # Jbuilder has set ActionController::API up by then.
-    autoload :WireController,                     "kiosk/server/wire_controller"
-    autoload :VerbController,                     "kiosk/server/verb_controller"
-    autoload :PaymentSetupController,             "kiosk/server/payment_setup_controller"
-    autoload :OpenApiController,                  "kiosk/server/open_api_controller"
-    autoload :DiscoveryController,                "kiosk/server/discovery_controller"
-    autoload :JwksController,                     "kiosk/server/jwks_controller"
-    autoload :OauthDeviceAuthorizationController, "kiosk/server/oauth_device_authorization_controller"
-    autoload :OauthTokenController,               "kiosk/server/oauth_token_controller"
-    autoload :DeviceVerifyController,             "kiosk/server/device_verify_controller"
-    autoload :AssistantsController,               "kiosk/server/assistants_controller"
-    autoload :AuthController,                     "kiosk/server/auth_controller"
-    autoload :KycAttestationController,           "kiosk/server/kyc_attestation_controller"
-    autoload :KycCallbackController,              "kiosk/server/kyc_callback_controller"
+    autoload :WireController,                     'kiosk/server/wire_controller'
+    autoload :VerbController,                     'kiosk/server/verb_controller'
+    autoload :PaymentSetupController,             'kiosk/server/payment_setup_controller'
+    autoload :OpenApiController,                  'kiosk/server/open_api_controller'
+    autoload :DiscoveryController,                'kiosk/server/discovery_controller'
+    autoload :JwksController,                     'kiosk/server/jwks_controller'
+    autoload :OauthDeviceAuthorizationController, 'kiosk/server/oauth_device_authorization_controller'
+    autoload :OauthTokenController,               'kiosk/server/oauth_token_controller'
+    autoload :DeviceVerifyController,             'kiosk/server/device_verify_controller'
+    autoload :AssistantsController,               'kiosk/server/assistants_controller'
+    autoload :AuthController,                     'kiosk/server/auth_controller'
+    autoload :KycAttestationController,           'kiosk/server/kyc_attestation_controller'
+    autoload :KycCallbackController,              'kiosk/server/kyc_callback_controller'
 
     # Pieces shipped in this gem:
     #

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "jwt"
+require 'jwt'
 
 RSpec.describe Kiosk::Server::JwtIssuer do
   # Cache one keypair per file — RSA generation is expensive.
@@ -12,8 +12,8 @@ RSpec.describe Kiosk::Server::JwtIssuer do
   let(:key)        { Kiosk::Server::SigningKey.new(@rsa1) }
   let(:other_key)  { Kiosk::Server::SigningKey.new(@rsa2) }
   let(:jwks)       { Kiosk::Server::Jwks.build(keys: [key]) }
-  let(:issuer)     { "https://combette.example/kiosk" }
-  let(:audience)   { "https://claude.ai/agent/alice" }
+  let(:issuer)     { 'https://combette.example/kiosk' }
+  let(:audience)   { 'https://claude.ai/agent/alice' }
 
   before do
     Kiosk.configure do |c|
@@ -22,24 +22,24 @@ RSpec.describe Kiosk::Server::JwtIssuer do
     end
   end
 
-  describe ".issue" do
-    it "produces a JWT carrying the supplied claims and the standard time bounds" do
+  describe '.issue' do
+    it 'produces a JWT carrying the supplied claims and the standard time bounds' do
       token = described_class.issue(
-        claims:   { sub: "user-1", role: "customer" },
-        audience: audience,
+        claims: { sub: 'user-1', role: 'customer' },
+        audience: audience
       )
-      payload, header = ::JWT.decode(token, key.rsa.public_key, true, algorithms: ["RS256"])
+      payload, header = JWT.decode(token, key.rsa.public_key, true, algorithms: ['RS256'])
 
-      expect(header["alg"]).to eq("RS256")
-      expect(header["kid"]).to eq(key.kid)
-      expect(header["typ"]).to eq("JWT")
-      expect(payload["sub"]).to eq("user-1")
-      expect(payload["role"]).to eq("customer")
-      expect(payload["iss"]).to eq(issuer)
-      expect(payload["aud"]).to eq(audience)
-      expect(payload["iat"]).to be_a(Integer)
-      expect(payload["exp"]).to be > payload["iat"]
-      expect(payload["jti"]).to match(/\A[0-9a-f-]+\z/) # UUID
+      expect(header['alg']).to eq('RS256')
+      expect(header['kid']).to eq(key.kid)
+      expect(header['typ']).to eq('JWT')
+      expect(payload['sub']).to eq('user-1')
+      expect(payload['role']).to eq('customer')
+      expect(payload['iss']).to eq(issuer)
+      expect(payload['aud']).to eq(audience)
+      expect(payload['iat']).to be_a(Integer)
+      expect(payload['exp']).to be > payload['iat']
+      expect(payload['jti']).to match(/\A[0-9a-f-]+\z/) # UUID
     end
 
     # SPEC-043 lists `nbf` among the claims every access token carries, and until
@@ -49,207 +49,207 @@ RSpec.describe Kiosk::Server::JwtIssuer do
     # `nbf` ahead of `iat` would open a window in which a token this issuer has
     # just minted is refused by this issuer's own verifier, and a presence check
     # cannot see that.
-    it "stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime" do
+    it 'stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime' do
       now   = Time.utc(2026, 6, 10, 12, 0, 0)
       token = described_class.issue(
-        claims:   { sub: "user-1" },
+        claims: { sub: 'user-1' },
         audience: audience,
-        now:      now,
+        now: now
       )
-      payload, = ::JWT.decode(token, key.rsa.public_key, true,
-                              algorithms: ["RS256"], verify_expiration: false)
+      payload, = JWT.decode(token, key.rsa.public_key, true,
+                            algorithms: ['RS256'], verify_expiration: false)
 
-      expect(payload["nbf"]).to be_a(Integer)
-      expect(payload["nbf"]).to eq(now.to_i)
-      expect(payload["nbf"]).to eq(payload["iat"])
-      expect(payload["nbf"]).to be < payload["exp"]
+      expect(payload['nbf']).to be_a(Integer)
+      expect(payload['nbf']).to eq(now.to_i)
+      expect(payload['nbf']).to eq(payload['iat'])
+      expect(payload['nbf']).to be < payload['exp']
     end
 
-    it "defaults to a one-hour lifetime" do
+    it 'defaults to a one-hour lifetime' do
       now = Time.utc(2026, 6, 10, 12, 0, 0)
       token = described_class.issue(
-        claims:   { sub: "user-1" },
+        claims: { sub: 'user-1' },
         audience: audience,
-        now:      now,
+        now: now
       )
-      payload, = ::JWT.decode(token, key.rsa.public_key, true,
-                              algorithms: ["RS256"], verify_expiration: false)
-      expect(payload["exp"] - payload["iat"]).to eq(3600)
+      payload, = JWT.decode(token, key.rsa.public_key, true,
+                            algorithms: ['RS256'], verify_expiration: false)
+      expect(payload['exp'] - payload['iat']).to eq(3600)
     end
 
-    it "honours an `expires_in` override" do
+    it 'honours an `expires_in` override' do
       token = described_class.issue(
-        claims:     { sub: "user-1" },
-        audience:   audience,
-        expires_in: 60,
-      )
-      payload, = ::JWT.decode(token, key.rsa.public_key, true, algorithms: ["RS256"])
-      expect(payload["exp"] - payload["iat"]).to eq(60)
-    end
-
-    it "lets caller-supplied jti pass through (idempotency keys etc.)" do
-      token = described_class.issue(
-        claims:   { sub: "user-1", jti: "fixed-id" },
+        claims: { sub: 'user-1' },
         audience: audience,
+        expires_in: 60
       )
-      payload, = ::JWT.decode(token, key.rsa.public_key, true, algorithms: ["RS256"])
-      expect(payload["jti"]).to eq("fixed-id")
+      payload, = JWT.decode(token, key.rsa.public_key, true, algorithms: ['RS256'])
+      expect(payload['exp'] - payload['iat']).to eq(60)
     end
 
-    it "raises when no issuer is configured" do
+    it 'lets caller-supplied jti pass through (idempotency keys etc.)' do
+      token = described_class.issue(
+        claims: { sub: 'user-1', jti: 'fixed-id' },
+        audience: audience
+      )
+      payload, = JWT.decode(token, key.rsa.public_key, true, algorithms: ['RS256'])
+      expect(payload['jti']).to eq('fixed-id')
+    end
+
+    it 'raises when no issuer is configured' do
       Kiosk.configure { |c| c.issuer = nil }
-      expect {
-        described_class.issue(claims: { sub: "u" }, audience: audience)
-      }.to raise_error(ArgumentError, /issuer is required/)
+      expect do
+        described_class.issue(claims: { sub: 'u' }, audience: audience)
+      end.to raise_error(ArgumentError, /issuer is required/)
     end
 
-    it "raises when the signing key is public-only" do
+    it 'raises when the signing key is public-only' do
       pub_only = Kiosk::Server::SigningKey.from_pem(key.rsa.public_key.to_pem)
       Kiosk.configure { |c| c.signing_key = pub_only }
-      expect {
-        described_class.issue(claims: { sub: "u" }, audience: audience)
-      }.to raise_error(ArgumentError, /private key/)
+      expect do
+        described_class.issue(claims: { sub: 'u' }, audience: audience)
+      end.to raise_error(ArgumentError, /private key/)
     end
   end
 
-  describe ".verify" do
-    let(:token) {
-      described_class.issue(claims: { sub: "user-1", role: "customer" }, audience: audience)
-    }
+  describe '.verify' do
+    let(:token) do
+      described_class.issue(claims: { sub: 'user-1', role: 'customer' }, audience: audience)
+    end
 
-    it "round-trips an issued token and returns symbol-keyed claims" do
+    it 'round-trips an issued token and returns symbol-keyed claims' do
       claims = described_class.verify(token: token, jwks: jwks, audience: audience)
       expect(claims).to include(
-        sub:  "user-1",
-        role: "customer",
-        iss:  issuer,
-        aud:  audience,
+        sub: 'user-1',
+        role: 'customer',
+        iss: issuer,
+        aud: audience
       )
       expect(claims[:exp]).to be > claims[:iat]
     end
 
-    it "accepts the issuer when supplied and matching" do
+    it 'accepts the issuer when supplied and matching' do
       claims = described_class.verify(
-        token: token, jwks: jwks, audience: audience, issuer: issuer,
+        token: token, jwks: jwks, audience: audience, issuer: issuer
       )
       expect(claims[:iss]).to eq(issuer)
     end
 
-    it "rejects a wrong audience" do
-      expect {
-        described_class.verify(token: token, jwks: jwks, audience: "https://wrong.example")
-      }.to raise_error(described_class::AudienceError)
+    it 'rejects a wrong audience' do
+      expect do
+        described_class.verify(token: token, jwks: jwks, audience: 'https://wrong.example')
+      end.to raise_error(described_class::AudienceError)
     end
 
-    it "rejects an expired token" do
+    it 'rejects an expired token' do
       old = described_class.issue(
-        claims:     { sub: "u" },
-        audience:   audience,
-        expires_in: -3600, # already expired
+        claims: { sub: 'u' },
+        audience: audience,
+        expires_in: -3600 # already expired
       )
-      expect {
+      expect do
         described_class.verify(token: old, jwks: jwks, audience: audience)
-      }.to raise_error(described_class::ExpiredError)
+      end.to raise_error(described_class::ExpiredError)
     end
 
-    it "rejects a token signed by a key not in the JWKS" do
+    it 'rejects a token signed by a key not in the JWKS' do
       Kiosk.configure { |c| c.signing_key = other_key }
-      foreign = described_class.issue(claims: { sub: "u" }, audience: audience)
-      expect {
+      foreign = described_class.issue(claims: { sub: 'u' }, audience: audience)
+      expect do
         described_class.verify(token: foreign, jwks: jwks, audience: audience)
-      }.to raise_error(described_class::SignatureError)
+      end.to raise_error(described_class::SignatureError)
     end
 
-    it "rejects a malformed token" do
-      expect {
-        described_class.verify(token: "not.a.jwt", jwks: jwks, audience: audience)
-      }.to raise_error(described_class::InvalidError)
+    it 'rejects a malformed token' do
+      expect do
+        described_class.verify(token: 'not.a.jwt', jwks: jwks, audience: audience)
+      end.to raise_error(described_class::InvalidError)
     end
 
-    it "rejects a tampered payload" do
-      header, payload, signature = token.split(".")
+    it 'rejects a tampered payload' do
+      header, payload, signature = token.split('.')
       tampered_payload = Base64.urlsafe_encode64(
-        JSON.generate(JSON.parse(Base64.urlsafe_decode64(payload + "=" * ((4 - payload.size % 4) % 4))).merge("role" => "admin")),
-        padding: false,
+        JSON.generate(JSON.parse(Base64.urlsafe_decode64(payload + ('=' * ((4 - (payload.size % 4)) % 4)))).merge('role' => 'admin')),
+        padding: false
       )
-      tampered = [header, tampered_payload, signature].join(".")
-      expect {
+      tampered = [header, tampered_payload, signature].join('.')
+      expect do
         described_class.verify(token: tampered, jwks: jwks, audience: audience)
-      }.to raise_error(described_class::SignatureError)
+      end.to raise_error(described_class::SignatureError)
     end
 
-    describe "revocation" do
-      let(:agent_token) {
-        described_class.issue(claims: { sub: "u", agent_id: "a-1" }, audience: audience)
-      }
+    describe 'revocation' do
+      let(:agent_token) do
+        described_class.issue(claims: { sub: 'u', agent_id: 'a-1' }, audience: audience)
+      end
 
-      it "rejects a token whose agent has been revoked as of now" do
+      it 'rejects a token whose agent has been revoked as of now' do
         store = Kiosk::Server::RevocationStore.new
         agent_token # issue first (iat = now)
-        store.revoke_all("a-1", at: Time.now.to_i + 120) # watermark ahead of iat
-        expect {
+        store.revoke_all('a-1', at: Time.now.to_i + 120) # watermark ahead of iat
+        expect do
           described_class.verify(token: agent_token, jwks: jwks, audience: audience, revocation_store: store)
-        }.to raise_error(described_class::RevokedError)
+        end.to raise_error(described_class::RevokedError)
       end
 
-      it "accepts a token issued after the revocation watermark (fresh login survives)" do
+      it 'accepts a token issued after the revocation watermark (fresh login survives)' do
         store = Kiosk::Server::RevocationStore.new
-        store.revoke_all("a-1", at: Time.now.to_i - 120) # watermark in the past
-        fresh = described_class.issue(claims: { sub: "u", agent_id: "a-1" }, audience: audience)
-        expect {
+        store.revoke_all('a-1', at: Time.now.to_i - 120) # watermark in the past
+        fresh = described_class.issue(claims: { sub: 'u', agent_id: 'a-1' }, audience: audience)
+        expect do
           described_class.verify(token: fresh, jwks: jwks, audience: audience, revocation_store: store)
-        }.not_to raise_error
+        end.not_to raise_error
       end
 
-      it "skips the check when revocation_store is nil" do
+      it 'skips the check when revocation_store is nil' do
         store = Kiosk::Server::RevocationStore.new
-        store.revoke_all("a-1", at: Time.now.to_i + 120)
-        expect {
+        store.revoke_all('a-1', at: Time.now.to_i + 120)
+        expect do
           described_class.verify(token: agent_token, jwks: jwks, audience: audience, revocation_store: nil)
-        }.not_to raise_error
+        end.not_to raise_error
       end
     end
 
-    it "respects clock skew leeway for slightly-in-the-future iat" do
+    it 'respects clock skew leeway for slightly-in-the-future iat' do
       future = described_class.issue(
-        claims:   { sub: "u" },
+        claims: { sub: 'u' },
         audience: audience,
-        now:      Time.now + 30, # 30s in the future
+        now: Time.now + 30 # 30s in the future
       )
       # Default leeway is 60s; should still accept.
-      expect {
+      expect do
         described_class.verify(token: future, jwks: jwks, audience: audience)
-      }.not_to raise_error
+      end.not_to raise_error
     end
   end
 
-  describe ".normalize_jwks input polymorphism" do
-    let(:token) {
-      described_class.issue(claims: { sub: "u" }, audience: audience)
-    }
+  describe '.normalize_jwks input polymorphism' do
+    let(:token) do
+      described_class.issue(claims: { sub: 'u' }, audience: audience)
+    end
 
-    it "accepts an Array<SigningKey>" do
-      expect {
+    it 'accepts an Array<SigningKey>' do
+      expect do
         described_class.verify(token: token, jwks: [key], audience: audience)
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
-    it "accepts a single SigningKey" do
-      expect {
+    it 'accepts a single SigningKey' do
+      expect do
         described_class.verify(token: token, jwks: key, audience: audience)
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
-    it "accepts a fully-formed JWKS Hash" do
-      expect {
+    it 'accepts a fully-formed JWKS Hash' do
+      expect do
         described_class.verify(token: token, jwks: { keys: [key.to_jwk] }, audience: audience)
-      }.not_to raise_error
+      end.not_to raise_error
     end
 
-    it "rejects an unsupported input type" do
-      expect {
+    it 'rejects an unsupported input type' do
+      expect do
         described_class.verify(token: token, jwks: 42, audience: audience)
-      }.to raise_error(ArgumentError, /jwks must be/)
+      end.to raise_error(ArgumentError, /jwks must be/)
     end
   end
 end

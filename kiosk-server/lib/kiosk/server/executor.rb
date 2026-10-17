@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
-require "kiosk/server/audit_sink"
-require "kiosk/server/errors"
-require "kiosk/server/failure_log"
-require "kiosk/server/response_validation"
-require "kiosk/server/result"
-require "kiosk/server/session_context"
-require "kiosk/server/actions"
-require "kiosk/server/queries"
+require 'kiosk/server/audit_sink'
+require 'kiosk/server/errors'
+require 'kiosk/server/failure_log'
+require 'kiosk/server/response_validation'
+require 'kiosk/server/result'
+require 'kiosk/server/session_context'
+require 'kiosk/server/actions'
+require 'kiosk/server/queries'
 
 module Kiosk
   module Server
@@ -27,7 +27,7 @@ module Kiosk
       attr_reader :connection, :identity
 
       def initialize(connection:, identity:)
-        raise Errors::Unauthenticated, "identity required" if identity.nil?
+        raise Errors::Unauthenticated, 'identity required' if identity.nil?
 
         @connection = connection
         @identity   = identity
@@ -38,7 +38,7 @@ module Kiosk
         unless VERBS.include?(verb)
           raise Errors::BadRequest.new(
             "Unknown verb: #{kind.inspect}",
-            hint: "Valid verbs: #{VERBS.inspect}",
+            hint: "Valid verbs: #{VERBS.inspect}"
           )
         end
 
@@ -83,7 +83,7 @@ module Kiosk
         # The args as the handler received them, with symbol keys.
         AuditSink.emit(
           ActionEvent.build(identity: identity, name: name.to_s, args: symbolize(args),
-                            status: status, error: error, invoked_at: invoked_at),
+                            status: status, error: error, invoked_at: invoked_at)
         )
       end
 
@@ -98,7 +98,7 @@ module Kiosk
       # A handler returns rows or a {Page}; the page facts become the `Link` and `X-Total-Count` headers (§8.2).
       def verb_query(args, name = nil)
         args = symbolize(args)
-        raise Errors::BadRequest, "query name required" if name.nil? || name.to_s.empty?
+        raise Errors::BadRequest, 'query name required' if name.nil? || name.to_s.empty?
 
         handler = Queries.fetch(name)
         begin
@@ -106,16 +106,16 @@ module Kiosk
         rescue Errors::Base
           raise
         rescue StandardError => e
-          report_handler_failure("Query", name, e)
+          report_handler_failure('Query', name, e)
           raise Errors::ActionFailed.new("Query #{name.inspect} failed",
-                                         hint: "See server logs for the backtrace.")
+                                         hint: 'See server logs for the backtrace.')
         end
 
         result = if returned.is_a?(Page)
-                   Result.new(kind:        :rows,
-                              payload:     returned.rows,
+                   Result.new(kind: :rows,
+                              payload: returned.rows,
                               next_cursor: returned.next_cursor,
-                              total:       returned.total)
+                              total: returned.total)
                  else
                    Result.new(kind: :rows, payload: returned)
                  end
@@ -124,7 +124,7 @@ module Kiosk
 
       def verb_run(args, name = nil)
         args = symbolize(args)
-        raise Errors::BadRequest, "action name required" if name.nil? || name.to_s.empty?
+        raise Errors::BadRequest, 'action name required' if name.nil? || name.to_s.empty?
 
         handler = Actions.fetch(name)
         begin
@@ -132,10 +132,10 @@ module Kiosk
         rescue Errors::Base
           raise
         rescue StandardError => e
-          report_handler_failure("Action", name, e)
+          report_handler_failure('Action', name, e)
           raise Errors::ActionFailed.new(
             "Action #{name.inspect} failed",
-            hint: "See server logs for the backtrace.",
+            hint: 'See server logs for the backtrace.'
           )
         end
 
@@ -149,8 +149,8 @@ module Kiosk
         ResponseValidation.validate_payload!(
           result.to_payload,
           output_schema: registry.describe(name)[:output_schema],
-          verb:          name.to_s,
-          kind:          kind,
+          verb: name.to_s,
+          kind: kind
         )
         result
       end
@@ -163,27 +163,23 @@ module Kiosk
         provider = Kiosk.configuration.payment_provider
         if provider.nil?
           raise Errors::ModuleNotServed.new(
-            "this operator does not serve the payment module",
-            hint: "`pay` is absent from this origin's capabilities; hand the transaction to your human",
+            'this operator does not serve the payment module',
+            hint: "`pay` is absent from this origin's capabilities; hand the transaction to your human"
           )
         end
 
         # Mandates are agent-signed, so a principal without an agent id cannot pay.
-        if identity.agent_id.nil?
-          raise Errors::Forbidden, "payment requires an agent identity (mandates are agent-signed)"
-        end
+        raise Errors::Forbidden, 'payment requires an agent identity (mandates are agent-signed)' if identity.agent_id.nil?
 
         raw_intent   = args[:intent_mandate_jws]
         raw_cart     = args[:cart_mandate_jws]
         raw_payment  = args[:payment_mandate_jws]
-        raise Errors::BadRequest, "args.intent_mandate_jws required"   if raw_intent.nil?  || raw_intent.to_s.empty?
-        raise Errors::BadRequest, "args.cart_mandate_jws required"     if raw_cart.nil?    || raw_cart.to_s.empty?
-        raise Errors::BadRequest, "args.payment_mandate_jws required"  if raw_payment.nil? || raw_payment.to_s.empty?
+        raise Errors::BadRequest, 'args.intent_mandate_jws required'   if raw_intent.nil?  || raw_intent.to_s.empty?
+        raise Errors::BadRequest, 'args.cart_mandate_jws required'     if raw_cart.nil?    || raw_cart.to_s.empty?
+        raise Errors::BadRequest, 'args.payment_mandate_jws required'  if raw_payment.nil? || raw_payment.to_s.empty?
 
         # Refused before phase 1 so the mandate ids are not burned on a charge that cannot succeed.
-        if provider.respond_to?(:setup_required?) && provider.setup_required?(user_id: identity.user_id)
-          raise Errors::PaymentSetupRequired
-        end
+        raise Errors::PaymentSetupRequired if provider.respond_to?(:setup_required?) && provider.setup_required?(user_id: identity.user_id)
 
         # Phase 1: verify and persist the mandate chain. A unique violation means the chain was presented before.
         intent  = nil
@@ -209,11 +205,11 @@ module Kiosk
           return replay if replay
 
           raise Errors::Conflict.new(
-            "mandate already processed",
-            hint: "this exact chain has no recorded settlement — it may still be in flight, or " \
-                  "its capture may never have run. Do NOT sign a fresh chain on the strength of " \
+            'mandate already processed',
+            hint: 'this exact chain has no recorded settlement — it may still be in flight, or ' \
+                  'its capture may never have run. Do NOT sign a fresh chain on the strength of ' \
                   "that: reconcile against the operator's own per-user query and re-sign only on " \
-                  "a positive, unambiguous \"not paid\".",
+                  'a positive, unambiguous "not paid".'
           )
         end
 
@@ -224,13 +220,13 @@ module Kiosk
           raise Errors::PaymentSetupRequired
         rescue Kiosk::PaymentProviders::PaymentFailed => e
           hint = if e.retryable?
-                   "the charge did not go through; no money moved. The human may need to " \
-                     "update the payment method (payment_setup), then retry pay."
+                   'the charge did not go through; no money moved. The human may need to ' \
+                     'update the payment method (payment_setup), then retry pay.'
                  else
-                   "the charge status is UNKNOWN (the processor did not confirm). Do NOT blindly " \
+                   'the charge status is UNKNOWN (the processor did not confirm). Do NOT blindly ' \
                      "retry — first check `query my_orders` for this order's paid flag, and retry " \
-                     "ONLY on a positive \"not paid\". A missing or pending record is not a \"not " \
-                     "paid\": if you cannot confirm either way, stop and tell your human."
+                     'ONLY on a positive "not paid". A missing or pending record is not a "not ' \
+                     'paid": if you cannot confirm either way, stop and tell your human.'
                  end
           raise Errors::PaymentFailed.new(e.message, hint: hint)
         end
@@ -242,11 +238,11 @@ module Kiosk
         end
 
         Result.new(kind: :value, payload: {
-          settlement_id:        settlement_id,
-          psp_reference:        settled[:psp_reference],
-          settled_amount_cents: settled[:settled_amount_cents],
-          currency:             cart.currency,
-        })
+                     settlement_id: settlement_id,
+                     psp_reference: settled[:psp_reference],
+                     settled_amount_cents: settled[:settled_amount_cents],
+                     currency: cart.currency
+                   })
       end
 
       # The settlement of an identical, already-settled chain, or nil. It writes nothing and runs
@@ -261,11 +257,11 @@ module Kiosk
         return nil if row.nil?
 
         Result.new(kind: :value, payload: {
-          settlement_id:        row.fetch("id"),
-          psp_reference:        row.fetch("psp_reference"),
-          settled_amount_cents: row.fetch("settled_amount_cents").to_i,
-          currency:             row.fetch("currency"),
-        })
+                     settlement_id: row.fetch('id'),
+                     psp_reference: row.fetch('psp_reference'),
+                     settled_amount_cents: row.fetch('settled_amount_cents').to_i,
+                     currency: row.fetch('currency')
+                   })
       end
 
       # Byte-identical chain, scoped to the acting principal on every mandate row.
@@ -284,9 +280,9 @@ module Kiosk
             AND p.raw_jws = $5
           LIMIT 1
         SQL
-        connection.exec_query(sql, "Kiosk settled replay lookup", [
-          identity.user_id, cart.id, cart.raw_jws, intent.raw_jws, payment.raw_jws,
-        ]).to_a.first
+        connection.exec_query(sql, 'Kiosk settled replay lookup', [
+                                identity.user_id, cart.id, cart.raw_jws, intent.raw_jws, payment.raw_jws
+                              ]).to_a.first
       end
 
       # The signed id goes to `mandate_id`; the row id is server-generated and returned.
@@ -299,10 +295,10 @@ module Kiosk
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
           RETURNING id
         SQL
-        insert_returning_id("Kiosk intent_mandate insert", sql, [
-          intent.id, intent.user_id, intent.agent_id, intent.issuer, intent.scope,
-          intent.cap_amount_cents.to_i, intent.currency, intent.expires_at, intent.raw_jws,
-        ])
+        insert_returning_id('Kiosk intent_mandate insert', sql, [
+                              intent.id, intent.user_id, intent.agent_id, intent.issuer, intent.scope,
+                              intent.cap_amount_cents.to_i, intent.currency, intent.expires_at, intent.raw_jws
+                            ])
       end
 
       # References the server intent id; the signed intent-cart binding is checked by MandateVerifier.
@@ -316,17 +312,17 @@ module Kiosk
           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, now(), $10)
           RETURNING id
         SQL
-        insert_returning_id("Kiosk cart_mandate insert", sql, [
-          cart.id, intent_row_id, cart.user_id, cart.agent_id, cart.issuer,
-          cart.line_items.to_json, cart.total_amount_cents.to_i, cart.currency,
-          cart.expires_at, cart.raw_jws,
-        ])
+        insert_returning_id('Kiosk cart_mandate insert', sql, [
+                              cart.id, intent_row_id, cart.user_id, cart.agent_id, cart.issuer,
+                              cart.line_items.to_json, cart.total_amount_cents.to_i, cart.currency,
+                              cart.expires_at, cart.raw_jws
+                            ])
       end
 
       def persist_payment_mandate(cart_row_id:, payment:)
         schema = Kiosk.configuration.schema
         # No presented payment method means the on-file card funded the charge.
-        pm_db = payment.payment_method.to_s.empty? ? "on_file" : payment.payment_method
+        pm_db = payment.payment_method.to_s.empty? ? 'on_file' : payment.payment_method
         sql = <<~SQL
           INSERT INTO #{schema}.payment_mandates
             (mandate_id, cart_mandate_id, user_id, agent_id, issuer,
@@ -334,11 +330,11 @@ module Kiosk
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10)
           RETURNING id
         SQL
-        insert_returning_id("Kiosk payment_mandate insert", sql, [
-          payment.id, cart_row_id, payment.user_id, payment.agent_id, payment.issuer,
-          pm_db, payment.amount_cents.to_i, payment.currency, payment.expires_at,
-          payment.raw_jws,
-        ])
+        insert_returning_id('Kiosk payment_mandate insert', sql, [
+                              payment.id, cart_row_id, payment.user_id, payment.agent_id, payment.issuer,
+                              pm_db, payment.amount_cents.to_i, payment.currency, payment.expires_at,
+                              payment.raw_jws
+                            ])
       end
 
       # Nobody signs a settlement, so it has no `mandate_id` or `raw_jws`; `UNIQUE (cart_mandate_id)` keeps it single.
@@ -351,10 +347,10 @@ module Kiosk
           VALUES ($1, $2, $3, $4, $5, $6, $7, now())
           RETURNING id
         SQL
-        insert_returning_id("Kiosk settlement insert", sql, [
-          cart_row_id, cart.user_id, cart.agent_id, cart.issuer,
-          settled[:psp_reference], settled[:settled_amount_cents].to_i, cart.currency,
-        ])
+        insert_returning_id('Kiosk settlement insert', sql, [
+                              cart_row_id, cart.user_id, cart.agent_id, cart.issuer,
+                              settled[:psp_reference], settled[:settled_amount_cents].to_i, cart.currency
+                            ])
       end
 
       # Matched by class name so neither ActiveRecord nor PG has to be loaded.
@@ -365,7 +361,7 @@ module Kiosk
       # Every value is a bind parameter; only the operator-set schema name is interpolated.
       # `exec_query`, because `exec_insert` would append a second `RETURNING`.
       def insert_returning_id(name, sql, binds)
-        connection.exec_query(sql, name, binds).to_a.first.fetch("id")
+        connection.exec_query(sql, name, binds).to_a.first.fetch('id')
       end
 
       # Best-effort at pay time. A nil seam or a nil cap means uncapped.
@@ -382,10 +378,10 @@ module Kiosk
                                     currency: cart.currency)
         return if spent + cart.total_amount_cents.to_i <= cap.to_i
 
-        window_note = window_days ? " in the last #{window_days.to_i} day(s)" : ""
+        window_note = window_days ? " in the last #{window_days.to_i} day(s)" : ''
         raise Errors::SpendingCapExceeded.new(
-          "assistant spending cap exceeded",
-          hint: "cap #{cap.to_i} cents; #{spent} already settled#{window_note}; this charge is #{cart.total_amount_cents.to_i}",
+          'assistant spending cap exceeded',
+          hint: "cap #{cap.to_i} cents; #{spent} already settled#{window_note}; this charge is #{cart.total_amount_cents.to_i}"
         )
       end
 
@@ -394,17 +390,17 @@ module Kiosk
         schema = Kiosk.configuration.schema
         binds  = [agent_id, MandateVerifier.canonical_currency(currency)]
         # No window means no predicate; the day count is still a bind.
-        window = ""
+        window = ''
         if window_days
           binds << window_days.to_i
-          window = "AND settled_at >= now() - make_interval(days => $3)"
+          window = 'AND settled_at >= now() - make_interval(days => $3)'
         end
         sql = <<~SQL
           SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
           FROM #{schema}.settlements
           WHERE agent_id = $1 AND lower(btrim(currency)) = $2 #{window}
         SQL
-        connection.exec_query(sql, "Kiosk settled total", binds).to_a.first.fetch("total").to_i
+        connection.exec_query(sql, 'Kiosk settled total', binds).to_a.first.fetch('total').to_i
       end
 
       # The handler's message goes to the operator's log, never onto the wire.

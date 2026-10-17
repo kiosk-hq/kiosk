@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
-require "action_controller"
-require "kiosk/server/actions"
-require "kiosk/server/argument_decoder"
-require "kiosk/server/errors"
-require "kiosk/server/kyc"
-require "kiosk/server/payment_setup"
-require "kiosk/server/queries"
-require "kiosk/server/request_validation"
-require "kiosk/server/wire_controller"
+require 'action_controller'
+require 'kiosk/server/actions'
+require 'kiosk/server/argument_decoder'
+require 'kiosk/server/errors'
+require 'kiosk/server/kyc'
+require 'kiosk/server/payment_setup'
+require 'kiosk/server/queries'
+require 'kiosk/server/request_validation'
+require 'kiosk/server/wire_controller'
 
 module Kiosk
   module Server
@@ -50,13 +50,12 @@ module Kiosk
         return registry.describe(name) if registry.known.include?(name)
 
         if other.known.include?(name)
-          wanted = command == :query ? "POST" : "GET"
+          wanted = command == :query ? 'POST' : 'GET'
           raise Errors::MethodNotAllowed.new(
-            command == :query ? "#{name.inspect} is an action, not a query"
-                              : "#{name.inspect} is a query, not an action",
+            command == :query ? "#{name.inspect} is an action, not a query" : "#{name.inspect} is a query, not an action",
             allow: wanted,
-            hint:  "call #{wanted} #{Kiosk.configuration.mount_path}/#{name} instead — " \
-                   "queries are GET, actions are POST.",
+            hint: "call #{wanted} #{Kiosk.configuration.mount_path}/#{name} instead — " \
+                  'queries are GET, actions are POST.'
           )
         end
 

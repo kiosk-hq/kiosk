@@ -7,6 +7,6 @@ module Kiosk
 
     self.table_name = "#{Kiosk.configuration.schema}.settlements"
 
-    belongs_to :cart_mandate, class_name: "Kiosk::CartMandate", inverse_of: :settlements
+    belongs_to :cart_mandate, class_name: 'Kiosk::CartMandate', inverse_of: :settlements
   end
 end

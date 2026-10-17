@@ -9,7 +9,7 @@ module Kiosk
       BACKTRACE_FRAMES = 20
 
       # One string to grep for refusals that kept their message off the wire.
-      PREFIX = "[kiosk-server]"
+      PREFIX = '[kiosk-server]'
 
       module_function
 

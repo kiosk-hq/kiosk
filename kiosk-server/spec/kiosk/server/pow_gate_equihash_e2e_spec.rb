@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "base64"
-require "kiosk/reputation"
-require "kiosk/pow/equihash"
-require_relative "../../support/equihash_kat"
+require 'base64'
+require 'kiosk/reputation'
+require 'kiosk/pow/equihash'
+require_relative '../../support/equihash_kat'
 
 # End-to-end proof that the DEFAULT backend (equihash) works through the REAL
 # N×PoW gate: real HMAC challenge binding + real request-fingerprint + the real
@@ -17,13 +17,13 @@ require_relative "../../support/equihash_kat"
 # concern. This spec proves the GATE ORCHESTRATION with the
 # real equihash crypto: N distinct challenges, verify-through-backend, the
 # all-or-re-challenge quota, spend semantics, and fingerprint binding.
-RSpec.describe "PowGate × equihash (real backend, real gate)" do
+RSpec.describe 'PowGate × equihash (real backend, real gate)' do
   before(:each) do
-    Kiosk::Reputation::Backends.register("equihash", Kiosk::Pow::Equihash)
+    Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
     Kiosk.configure do |c|
       c.reputation_policy = equihash_policy
       c.pow_secret        = secret
-      c.schema            = "kiosk"
+      c.schema            = 'kiosk'
     end
   end
 
@@ -33,7 +33,7 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
   end
 
   let(:identity) { build_identity }
-  let(:secret)   { "equihash-e2e-secret-of-at-least-32-bytes" }
+  let(:secret)   { 'equihash-e2e-secret-of-at-least-32-bytes' }
   let(:count)    { 1 }
 
   # Policy that demands `count` equihash proofs at the KAT params.
@@ -42,7 +42,7 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
     params   = EquihashKat::PARAMS
     Class.new(Kiosk::Reputation::Policy) do
       define_method(:challenge_for) do |identity:, verb:, factors:|
-        { alg: "equihash", params: params, count: demanded }
+        { alg: 'equihash', params: params, count: demanded }
       end
     end.new
   end
@@ -51,33 +51,33 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
   # `GET <endpoint>/catalog?q=milk`. `command:` is the gate/POLICY verb the
   # policy branches on; `method:`/`verb:` are the two halves the request
   # fingerprint binds to alongside the arguments.
-  ARGS = { q: "milk" }.freeze
+  ARGS = { q: 'milk' }.freeze
 
   # Drive the gate for that call. `command:` stays the POLICY verb; any of the
   # three fingerprint inputs can be overridden to build a MISMATCHED submission.
-  def gate(pow:, command: "query", method: "GET", verb: "catalog", body: ARGS)
+  def gate(pow:, command: 'query', method: 'GET', verb: 'catalog', body: ARGS)
     Kiosk::Server::PowGate.gate(
-      identity: identity, command: command, method: method, verb: verb, body: body, pow: pow,
+      identity: identity, command: command, method: method, verb: verb, body: body, pow: pow
     )
   end
 
   # Hand-mint a signed challenge bound to (method, verb, args) with salt=KAT so
   # the KAT nonce verifies through the real backend. This is exactly what the
   # gate itself emits (same Challenge.issue), but with a controlled salt + id.
-  def kat_challenge(id:, method: "GET", verb: "catalog", body: ARGS)
+  def kat_challenge(id:, method: 'GET', verb: 'catalog', body: ARGS)
     fp = Kiosk::Server::PowGate.request_fingerprint(method: method, verb: verb, body: body)
     Kiosk::Reputation::Challenge.issue(
-      alg:                 "equihash",
-      params:              EquihashKat::PARAMS,
+      alg: 'equihash',
+      params: EquihashKat::PARAMS,
       request_fingerprint: fp,
-      secret:              secret,
-      ttl:                 300,
-      salt:                EquihashKat::SALT.b,
-      id:                  id,
+      secret: secret,
+      ttl: 300,
+      salt: EquihashKat::SALT.b,
+      id: id
     )
   end
 
-  it "issues `count` equihash challenges on an unproven request (the 402 shape)" do
+  it 'issues `count` equihash challenges on an unproven request (the 402 shape)' do
     err = nil
     begin
       gate(pow: nil)
@@ -87,37 +87,37 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
 
     expect(err).not_to be_nil
     expect(err.challenges.length).to eq(count)
-    expect(err.challenges.first[:alg]).to eq("equihash")
+    expect(err.challenges.first[:alg]).to eq('equihash')
     expect(err.challenges.first[:params]).to eq(EquihashKat::PARAMS)
   end
 
-  it "proceeds when the real equihash verifier accepts the submitted proof (N=1)" do
-    proof = { challenge: kat_challenge(id: "c1"), nonce: EquihashKat::NONCE }
+  it 'proceeds when the real equihash verifier accepts the submitted proof (N=1)' do
+    proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
     expect(gate(pow: { proofs: [proof] })).to eq(:proceed)
   end
 
-  it "rejects a WRONG nonce through the real verifier (403 + penalty)" do
+  it 'rejects a WRONG nonce through the real verifier (403 + penalty)' do
     penalty = []
     Kiosk.configure { |c| c.on_bad_proof = ->(identity:) { penalty << identity } }
 
-    proof = { challenge: kat_challenge(id: "c1"), nonce: { indices: [3, 10] } } # not a valid solution
+    proof = { challenge: kat_challenge(id: 'c1'), nonce: { indices: [3, 10] } } # not a valid solution
 
-    expect {
+    expect do
       gate(pow: { proofs: [proof] })
-    }.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
+    end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
     expect(penalty).to eq([identity])
   end
 
-  context "N = 3 independent proofs" do
+  context 'N = 3 independent proofs' do
     let(:count) { 3 }
 
-    it "proceeds only when ALL three verify; a short set re-challenges" do
+    it 'proceeds only when ALL three verify; a short set re-challenges' do
       proofs = %w[c1 c2 c3].map { |id| { challenge: kat_challenge(id: id), nonce: EquihashKat::NONCE } }
 
-      expect {
+      expect do
         gate(pow: { proofs: proofs.first(2) })
-      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
       expect(gate(pow: { proofs: proofs })).to eq(:proceed)
     end
@@ -131,29 +131,29 @@ RSpec.describe "PowGate × equihash (real backend, real gate)" do
   # submits it against a request differing in exactly ONE of the three inputs;
   # the N=1 example above is the matching control that shows the proof itself
   # is good.
-  describe "a valid proof submitted against a DIFFERENT request" do
-    it "re-challenges when the ARGUMENTS differ" do
-      proof = { challenge: kat_challenge(id: "c1"), nonce: EquihashKat::NONCE }
+  describe 'a valid proof submitted against a DIFFERENT request' do
+    it 're-challenges when the ARGUMENTS differ' do
+      proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
-      expect {
-        gate(pow: { proofs: [proof] }, body: { q: "bread" })
-      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect do
+        gate(pow: { proofs: [proof] }, body: { q: 'bread' })
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
 
-    it "re-challenges when the METHOD differs (a GET catalog proof on POST catalog)" do
-      proof = { challenge: kat_challenge(id: "c1"), nonce: EquihashKat::NONCE }
+    it 're-challenges when the METHOD differs (a GET catalog proof on POST catalog)' do
+      proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
-      expect {
-        gate(pow: { proofs: [proof] }, command: "run", method: "POST")
-      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect do
+        gate(pow: { proofs: [proof] }, command: 'run', method: 'POST')
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
 
-    it "re-challenges when the VERB differs (a catalog proof is not an orders proof)" do
-      proof = { challenge: kat_challenge(id: "c1"), nonce: EquihashKat::NONCE }
+    it 're-challenges when the VERB differs (a catalog proof is not an orders proof)' do
+      proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
-      expect {
-        gate(pow: { proofs: [proof] }, verb: "orders")
-      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect do
+        gate(pow: { proofs: [proof] }, verb: 'orders')
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end
 end

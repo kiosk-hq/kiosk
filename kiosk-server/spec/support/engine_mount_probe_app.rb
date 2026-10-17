@@ -15,23 +15,23 @@
 # controller specs use. A subprocess is also the more faithful simulation:
 # a fresh adopter's app boots in its own process, exactly like this.
 
-require "bundler/setup"
-require "json"
-require "kiosk/server"
-require "rack/mock"
+require 'bundler/setup'
+require 'json'
+require 'kiosk/server'
+require 'rack/mock'
 
 class ProbeApp < Rails::Application
   config.eager_load = false
-  config.paths["config"] << File.expand_path("config", __dir__)
+  config.paths['config'] << File.expand_path('config', __dir__)
   config.hosts.clear
-  config.secret_key_base = "engine-mount-probe"
+  config.secret_key_base = 'engine-mount-probe'
   config.logger = Logger.new(IO::NULL)
 end
 Rails.application.initialize!
 
 Kiosk.configure do |c|
-  c.issuer      = "http://localhost"
-  c.user_model  = "User"
+  c.issuer      = 'http://localhost'
+  c.user_model  = 'User'
   c.signing_key = Kiosk::Server::SigningKey.generate
 end
 # One verb, so this origin has a live capability set for the discovery
@@ -43,8 +43,8 @@ class ProbeCatalogController < ActionController::API
   include Kiosk::Handler
 
   kind :query
-  description "probe query"
-  input_schema type: "object", additionalProperties: false, properties: {}, required: []
+  description 'probe query'
+  input_schema type: 'object', additionalProperties: false, properties: {}, required: []
   output_schema true
   def ping = render(json: [])
 end
@@ -53,7 +53,7 @@ end
 # of a double-draw is observable. `boom` is the operator's own 500 — scenario 4
 # drives it OUTSIDE the mount, where the Kiosk headers must NOT appear.
 class HandDrawnController < ActionController::API
-  def hand = render(plain: "HAND-DRAWN")
+  def hand = render(plain: 'HAND-DRAWN')
   def boom = raise("the operator's own code blew up")
 end
 
@@ -64,7 +64,7 @@ end
 # Rails itself. Scenario 4 uses it to produce an unhandled 500 UNDER the mount
 # through the engine's own controller — the second half of K-824.
 class BlowingUpIdp
-  def verify(_request) = raise("agent IdP adapter is broken")
+  def verify(_request) = raise('agent IdP adapter is broken')
 end
 
 # A Bearer token the bundled kiosk-pop IdP accepts: the probe configured the
@@ -73,50 +73,50 @@ end
 # `401`, which is the only way to tell "this path is the 0.3 wire" apart from
 # "this path is an unregistered verb name" through the real Rack stack.
 TOKEN = Kiosk::Server::JwtIssuer.issue(
-  claims:   { sub: "u-1", agent_id: "a-1", actor: "agent" },
-  audience: "http://localhost",
+  claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent' },
+  audience: 'http://localhost'
 ).freeze
 
-def request(method, path, auth: false, origin: "http://localhost")
+def request(method, path, auth: false, origin: 'http://localhost')
   env = Rack::MockRequest.env_for("#{origin}#{path}", method: method)
-  env["HTTP_AUTHORIZATION"] = "Bearer #{auth == true ? TOKEN : auth}" if auth
+  env['HTTP_AUTHORIZATION'] = "Bearer #{auth == true ? TOKEN : auth}" if auth
   status, headers, raw = Rails.application.call(env)
-  body = +""
+  body = +''
   raw.each { |chunk| body << chunk }
   raw.close if raw.respond_to?(:close)
   {
-    "status"  => status,
+    'status' => status,
     # Rack 3 downcases response header names; normalize anyway.
-    "headers" => headers.to_h.transform_keys(&:downcase),
-    "body"    => body,
+    'headers' => headers.to_h.transform_keys(&:downcase),
+    'body' => body
   }
 end
 
 SURFACE = [
-  ["GET",  "/agents.txt"],
-  ["GET",  "/agents.json"],
-  ["GET",  "/auth.md"],
-  ["GET",  "/.well-known/agent-configuration"],
-  ["GET",  "/.well-known/kiosk.json"],
-  ["GET",  "/.well-known/api-catalog"],
-  ["GET",  "/kiosk/schema"],
-  ["POST", "/kiosk/pay"],
-  ["GET",  "/kiosk/auth/challenge"],
-  ["POST", "/kiosk/auth/register"],
-  ["POST", "/kiosk/auth/login"],
-  ["POST", "/kiosk/auth/revoke"],
-  ["GET",  "/kiosk/.well-known/jwks.json"],
-  ["POST", "/kiosk/agents/kyc"],
-  ["POST", "/kiosk/oauth/device_authorization"],
-  ["POST", "/kiosk/oauth/token"],
-  ["GET",  "/kiosk/oauth/device/verify"],
-  ["POST", "/kiosk/auth/link"],
-  ["POST", "/kiosk/auth/claim"],
-  ["POST", "/kiosk/auth/unlink"],
-  ["GET",  "/kiosk/auth/assistants"],
-  ["POST", "/kiosk/auth/assistants/link"],
-  ["POST", "/kiosk/auth/assistants/update"],
-  ["POST", "/kiosk/auth/assistants/unlink"],
+  ['GET',  '/agents.txt'],
+  ['GET',  '/agents.json'],
+  ['GET',  '/auth.md'],
+  ['GET',  '/.well-known/agent-configuration'],
+  ['GET',  '/.well-known/kiosk.json'],
+  ['GET',  '/.well-known/api-catalog'],
+  ['GET',  '/kiosk/schema'],
+  ['POST', '/kiosk/pay'],
+  ['GET',  '/kiosk/auth/challenge'],
+  ['POST', '/kiosk/auth/register'],
+  ['POST', '/kiosk/auth/login'],
+  ['POST', '/kiosk/auth/revoke'],
+  ['GET',  '/kiosk/.well-known/jwks.json'],
+  ['POST', '/kiosk/agents/kyc'],
+  ['POST', '/kiosk/oauth/device_authorization'],
+  ['POST', '/kiosk/oauth/token'],
+  ['GET',  '/kiosk/oauth/device/verify'],
+  ['POST', '/kiosk/auth/link'],
+  ['POST', '/kiosk/auth/claim'],
+  ['POST', '/kiosk/auth/unlink'],
+  ['GET',  '/kiosk/auth/assistants'],
+  ['POST', '/kiosk/auth/assistants/link'],
+  ['POST', '/kiosk/auth/assistants/update'],
+  ['POST', '/kiosk/auth/assistants/unlink']
 ].freeze
 
 # Three single-segment paths under the mount that nothing draws a route for,
@@ -129,9 +129,9 @@ SURFACE = [
 # here — published in the catalogue two examples up — and it still has no
 # route, so a declaration alone reaches nothing.
 AUTHENTICATED = [
-  ["POST", "/kiosk/query"],
-  ["POST", "/kiosk/run"],
-  ["GET",  "/kiosk/ping"],
+  ['POST', '/kiosk/query'],
+  ['POST', '/kiosk/run'],
+  ['GET',  '/kiosk/ping']
 ].freeze
 
 def surface_snapshot
@@ -148,36 +148,36 @@ report = {}
 # RouteSet#draw clears and re-finalizes, re-running routes.append blocks —
 # the dev-mode reload semantics, so redrawing between scenarios is faithful.
 Rails.application.routes.draw do
-  mount Kiosk::Server::Engine => "/kiosk"
+  mount Kiosk::Server::Engine => '/kiosk'
 end
-report["mounted"] = surface_snapshot
-report["mounted"]["mounted_in?"] =
+report['mounted'] = surface_snapshot
+report['mounted']['mounted_in?'] =
   Kiosk::Server::Engine.mounted_in?(Rails.application.routes)
 
 # Scenario 2 — gem loaded but NOT mounted: must be inert. Bundling kiosk-server
 # is not a decision to serve a Kiosk wire; mounting it is.
 Rails.application.routes.draw {}
-report["unmounted"] = {
-  "GET /agents.txt"              => request("GET", "/agents.txt"),
-  "GET /.well-known/kiosk.json"  => request("GET", "/.well-known/kiosk.json"),
-  "GET /kiosk/schema"            => request("GET", "/kiosk/schema"),
-  "mounted_in?"                  =>
-    Kiosk::Server::Engine.mounted_in?(Rails.application.routes),
+report['unmounted'] = {
+  'GET /agents.txt' => request('GET', '/agents.txt'),
+  'GET /.well-known/kiosk.json' => request('GET', '/.well-known/kiosk.json'),
+  'GET /kiosk/schema' => request('GET', '/kiosk/schema'),
+  'mounted_in?' =>
+    Kiosk::Server::Engine.mounted_in?(Rails.application.routes)
 }
 
 # Scenario 3 — a host line drawn ABOVE the mount at a path the engine draws:
 # the host's line must win, everything else must still resolve through the
 # mount. This is the first-match fact the mount-goes-first rule rests on.
 Rails.application.routes.draw do
-  get "/agents.txt",   to: "hand_drawn#hand"
-  get "/kiosk/schema", to: "hand_drawn#hand"
-  mount Kiosk::Server::Engine => "/kiosk"
+  get '/agents.txt',   to: 'hand_drawn#hand'
+  get '/kiosk/schema', to: 'hand_drawn#hand'
+  mount Kiosk::Server::Engine => '/kiosk'
 end
-report["double_draw"] = {
-  "GET /agents.txt"                    => request("GET", "/agents.txt"),
-  "GET /kiosk/schema"                  => request("GET", "/kiosk/schema"),
-  "GET /agents.json"                   => request("GET", "/agents.json"),
-  "GET /kiosk/.well-known/jwks.json"   => request("GET", "/kiosk/.well-known/jwks.json"),
+report['double_draw'] = {
+  'GET /agents.txt' => request('GET', '/agents.txt'),
+  'GET /kiosk/schema' => request('GET', '/kiosk/schema'),
+  'GET /agents.json' => request('GET', '/agents.json'),
+  'GET /kiosk/.well-known/jwks.json' => request('GET', '/kiosk/.well-known/jwks.json')
 }
 
 # Scenario 4 — THE RESPONSES RAILS COMPOSES ITSELF (K-824). §3.6 binds every
@@ -192,26 +192,26 @@ report["double_draw"] = {
 # inside somebody else's application, and neither that application's working
 # pages nor its own 500s may be stamped with Kiosk headers.
 Rails.application.routes.draw do
-  get "/outside",      to: "hand_drawn#hand"
-  get "/outside/boom", to: "hand_drawn#boom"
-  mount Kiosk::Server::Engine => "/kiosk"
+  get '/outside',      to: 'hand_drawn#hand'
+  get '/outside/boom', to: 'hand_drawn#boom'
+  mount Kiosk::Server::Engine => '/kiosk'
 end
 
 previous_idp = Kiosk.configuration.agent_idp
-report["exceptions"] = {
+report['exceptions'] = {
   # No engine route matches — two segments cannot be a verb name, so this
   # never reaches VerbController and stays a Rails routing 404.
-  "GET /kiosk/nope/nope"  => request("GET", "/kiosk/nope/nope"),
+  'GET /kiosk/nope/nope' => request('GET', '/kiosk/nope/nope'),
   # The host's own 200 and the host's own 500, both outside the mount.
-  "GET /outside"          => request("GET", "/outside"),
-  "GET /outside/boom"     => request("GET", "/outside/boom"),
+  'GET /outside' => request('GET', '/outside'),
+  'GET /outside/boom' => request('GET', '/outside/boom'),
   # A root-level routing 404: outside the mount, so bare like the rest.
-  "GET /nope"             => request("GET", "/nope"),
+  'GET /nope' => request('GET', '/nope')
 }
 Kiosk.configure { |c| c.agent_idp = BlowingUpIdp.new }
 begin
   # 500 UNDER the mount, raised inside the engine's own controller.
-  report["exceptions"]["POST /kiosk/pay"] = request("POST", "/kiosk/pay")
+  report['exceptions']['POST /kiosk/pay'] = request('POST', '/kiosk/pay')
 ensure
   Kiosk.configure { |c| c.agent_idp = previous_idp }
 end
@@ -243,13 +243,13 @@ end
 # wire and nothing else could have produced it. (A clean `GET /kiosk/ping`
 # would reach the handler and need a database, which this probe deliberately
 # does not have.)
-report["operator_verbs"] = {
-  "GET /kiosk/ping?zzz=1"  => request("GET",  "/kiosk/ping?zzz=1", auth: true),
-  "POST /kiosk/ping"       => request("POST", "/kiosk/ping",   auth: true),
-  "GET /kiosk/frobnicate"  => request("GET",  "/kiosk/frobnicate", auth: true),
-  "GET /kiosk/schema"      => request("GET",  "/kiosk/schema"),
-  "GET /kiosk/Catalog"     => request("GET",  "/kiosk/Catalog", auth: true),
-  "GET /kiosk/9lives"      => request("GET",  "/kiosk/9lives",  auth: true),
+report['operator_verbs'] = {
+  'GET /kiosk/ping?zzz=1' => request('GET', '/kiosk/ping?zzz=1', auth: true),
+  'POST /kiosk/ping' => request('POST', '/kiosk/ping', auth: true),
+  'GET /kiosk/frobnicate' => request('GET', '/kiosk/frobnicate', auth: true),
+  'GET /kiosk/schema' => request('GET', '/kiosk/schema'),
+  'GET /kiosk/Catalog' => request('GET', '/kiosk/Catalog', auth: true),
+  'GET /kiosk/9lives' => request('GET', '/kiosk/9lives', auth: true)
 }
 
 # Scenario 6 — THE DECLINED-BINDING PROFILE (§16.1 item 7). The same one-line
@@ -263,41 +263,41 @@ report["operator_verbs"] = {
 # is as much about what does NOT move: all six auth URLs stay published and
 # `capabilities` gains no binding member.
 Rails.application.routes.draw do
-  mount Kiosk::Server::Engine => "/kiosk"
+  mount Kiosk::Server::Engine => '/kiosk'
 end
 Kiosk.configure { |c| c.serve_account_binding = false }
-report["binding_declined"] = {
-  "GET /.well-known/kiosk.json"        => request("GET",  "/.well-known/kiosk.json"),
-  "POST /kiosk/oauth/device_authorization" =>
-    request("POST", "/kiosk/oauth/device_authorization"),
-  "POST /kiosk/auth/claim"             => request("POST", "/kiosk/auth/claim"),
-  "POST /kiosk/oauth/token"            => request("POST", "/kiosk/oauth/token"),
-  "GET /kiosk/oauth/device/verify"     => request("GET",  "/kiosk/oauth/device/verify"),
-  "POST /kiosk/auth/link"              => request("POST", "/kiosk/auth/link"),
-  "POST /kiosk/auth/unlink"            => request("POST", "/kiosk/auth/unlink"),
-  "GET /kiosk/auth/assistants"         => request("GET",  "/kiosk/auth/assistants"),
+report['binding_declined'] = {
+  'GET /.well-known/kiosk.json' => request('GET', '/.well-known/kiosk.json'),
+  'POST /kiosk/oauth/device_authorization' =>
+    request('POST', '/kiosk/oauth/device_authorization'),
+  'POST /kiosk/auth/claim' => request('POST', '/kiosk/auth/claim'),
+  'POST /kiosk/oauth/token' => request('POST', '/kiosk/oauth/token'),
+  'GET /kiosk/oauth/device/verify' => request('GET', '/kiosk/oauth/device/verify'),
+  'POST /kiosk/auth/link' => request('POST', '/kiosk/auth/link'),
+  'POST /kiosk/auth/unlink' => request('POST', '/kiosk/auth/unlink'),
+  'GET /kiosk/auth/assistants' => request('GET', '/kiosk/auth/assistants'),
   # The core stays served: an origin declining binding is still a conformant
   # operator, and an assistant registers plainly instead.
-  "GET /kiosk/auth/challenge"          => request("GET",  "/kiosk/auth/challenge"),
-  "GET /kiosk/schema"                  => request("GET",  "/kiosk/schema"),
+  'GET /kiosk/auth/challenge' => request('GET', '/kiosk/auth/challenge'),
+  'GET /kiosk/schema' => request('GET', '/kiosk/schema')
 }
 
 # Scenario 7 — TWO ORIGINS ON ONE DEPLOYMENT (ADR-0040). The engine's issuer
 # middleware is what makes each request answer for its own origin, so this is
 # measured through the booted stack: discovery per origin, and a token minted
 # on one origin presented on the other.
-Kiosk.configure { |c| c.additional_origins = ["http://buymilk.example"] }
-SECOND_TOKEN = Kiosk.with_issuer("http://buymilk.example") do
-  Kiosk::Server::JwtIssuer.issue(claims: { sub: "u-1", agent_id: "a-1", actor: "agent" },
-                                 audience: "http://buymilk.example")
+Kiosk.configure { |c| c.additional_origins = ['http://buymilk.example'] }
+SECOND_TOKEN = Kiosk.with_issuer('http://buymilk.example') do
+  Kiosk::Server::JwtIssuer.issue(claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent' },
+                                 audience: 'http://buymilk.example')
 end
-report["two_origins"] = {
-  "localhost kiosk.json" => request("GET", "/.well-known/kiosk.json"),
-  "buymilk kiosk.json"   => request("GET", "/.well-known/kiosk.json", origin: "http://buymilk.example"),
-  "buymilk token on localhost" => request("POST", "/kiosk/pay", auth: SECOND_TOKEN),
-  "localhost token on buymilk" => request("POST", "/kiosk/pay", auth: true, origin: "http://buymilk.example"),
-  "buymilk token on buymilk" =>
-    request("POST", "/kiosk/pay", auth: SECOND_TOKEN, origin: "http://buymilk.example"),
+report['two_origins'] = {
+  'localhost kiosk.json' => request('GET', '/.well-known/kiosk.json'),
+  'buymilk kiosk.json' => request('GET', '/.well-known/kiosk.json', origin: 'http://buymilk.example'),
+  'buymilk token on localhost' => request('POST', '/kiosk/pay', auth: SECOND_TOKEN),
+  'localhost token on buymilk' => request('POST', '/kiosk/pay', auth: true, origin: 'http://buymilk.example'),
+  'buymilk token on buymilk' =>
+    request('POST', '/kiosk/pay', auth: SECOND_TOKEN, origin: 'http://buymilk.example')
 }
 
 puts JSON.generate(report)

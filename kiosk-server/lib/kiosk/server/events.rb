@@ -18,7 +18,7 @@ module Kiosk
             description: description,
             payload_schema: payload_schema,
             examples: examples,
-            subject_reachable: subject_reachable,
+            subject_reachable: subject_reachable
           }.freeze
 
           # The same declaration again (a reload) is a no-op.
@@ -26,9 +26,9 @@ module Kiosk
 
           if registry.key?(name)
             raise ArgumentError,
-              "topic #{name.inspect} is already declared on this origin. A topic name is one " \
-              "wire name and one payload shape; declare it once, on the controller that owns " \
-              "the transition it reports."
+                  "topic #{name.inspect} is already declared on this origin. A topic name is one " \
+                  'wire name and one payload shape; declare it once, on the controller that owns ' \
+                  'the transition it reports.'
           end
 
           registry[name] = declaration
@@ -48,7 +48,7 @@ module Kiosk
               name: declaration[:name],
               description: declaration[:description],
               reach: declaration[:reach].to_s,
-              payload_schema: declaration[:payload_schema],
+              payload_schema: declaration[:payload_schema]
             }
             entry[:examples] = declaration[:examples] if declaration[:examples].any?
             entry
@@ -63,24 +63,24 @@ module Kiosk
           name = topic.to_s
           unless fetch(name)
             raise ArgumentError,
-              "#{name.inspect} is not a declared topic on this origin. Declare it with " \
-              "`topic #{name.to_sym.inspect} do … end` on the controller that owns the " \
-              "transition it reports; known topics: " \
-              "#{known.empty? ? "(none)" : known.join(", ")}."
+                  "#{name.inspect} is not a declared topic on this origin. Declare it with " \
+                  "`topic #{name.to_sym.inspect} do … end` on the controller that owns the " \
+                  'transition it reports; known topics: ' \
+                  "#{known.empty? ? '(none)' : known.join(', ')}."
           end
 
           event = {
-            "topic" => name,
-            "subject" => subject,
-            "occurred_at" => (occurred_at || Time.now).utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "data" => data,
+            'topic' => name,
+            'subject' => subject,
+            'occurred_at' => (occurred_at || Time.now).utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'data' => data
           }
 
           store = Kiosk.configuration.event_store
           Array(identity_scope).map do |identity_key|
             id = store.append(identity_key, event)
             # Append before broadcast, so every pushed id can be resumed from.
-            EventsCable.broadcast(identity_key, event.merge("id" => id))
+            EventsCable.broadcast(identity_key, event.merge('id' => id))
             id
           end.last
         end

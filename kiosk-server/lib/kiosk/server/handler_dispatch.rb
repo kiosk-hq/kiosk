@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-require "json"
-require "stringio"
-require "action_controller"
-require "kiosk/server/current_request"
-require "kiosk/server/errors"
-require "kiosk/server/result"
+require 'json'
+require 'stringio'
+require 'action_controller'
+require 'kiosk/server/current_request'
+require 'kiosk/server/errors'
+require 'kiosk/server/result'
 
 module Kiosk
   module Server
@@ -13,11 +13,11 @@ module Kiosk
     # `Controller.action(name).call(env)` and turns its render into a return value or a wire error.
     class HandlerDispatch
       # Rack env keys set on the sub-request only; DISPATCH_KEY marks a dispatch through the wire.
-      IDENTITY_KEY = "kiosk.identity"
-      DISPATCH_KEY = "kiosk.dispatch"
-      PAGE_KEY     = "kiosk.page"
+      IDENTITY_KEY = 'kiosk.identity'
+      DISPATCH_KEY = 'kiosk.dispatch'
+      PAGE_KEY     = 'kiosk.page'
       # The exception `kiosk_rescue_to_wire` handled, raised here as the wire error's `cause`.
-      RESCUED_KEY  = "kiosk.rescued"
+      RESCUED_KEY  = 'kiosk.rescued'
 
       # Copied from the wire request; `parameter_filter` keeps the handler's params log line filtered.
       SEEDED_KEYS = %w[
@@ -83,7 +83,7 @@ module Kiosk
         # `verb_not_found`: nothing was addressed, and the caller should stop calling this name.
         raise Errors::VerbNotFound.new(
           "#{@kind} #{@wire_name.inspect} is registered to #{@controller}, which is not loaded",
-          hint: "the handler class was renamed or removed; restart the server after moving it",
+          hint: 'the handler class was renamed or removed; restart the server after moving it'
         )
       end
 
@@ -94,7 +94,7 @@ module Kiosk
 
         raise Errors::VerbNotFound.new(
           "#{@kind} #{@wire_name.inspect} is no longer dispatchable",
-          hint: "#{controller_name || controller}##{@method_name} is not a public controller action",
+          hint: "#{controller_name || controller}##{@method_name} is not a public controller action"
         )
       end
 
@@ -104,42 +104,42 @@ module Kiosk
         env   = base_env
         if outer
           SEEDED_KEYS.each { |key| env[key] = outer[key] if outer.key?(key) }
-          outer.each { |key, value| env[key] = value if key.is_a?(String) && key.start_with?("HTTP_") }
+          outer.each { |key, value| env[key] = value if key.is_a?(String) && key.start_with?('HTTP_') }
         end
 
         # `dup` so the handler cannot mutate the Executor's args.
-        env["action_dispatch.request.request_parameters"] = args.is_a?(Hash) ? args.dup : {}
-        env["action_dispatch.request.query_parameters"]   = {}
-        env["action_dispatch.request.path_parameters"]    = {
+        env['action_dispatch.request.request_parameters'] = args.is_a?(Hash) ? args.dup : {}
+        env['action_dispatch.request.query_parameters']   = {}
+        env['action_dispatch.request.path_parameters']    = {
           controller: controller.respond_to?(:controller_path) ? controller.controller_path : nil,
-          action:     @method_name,
+          action: @method_name
         }
         env[IDENTITY_KEY] = CurrentRequest.identity
         env[DISPATCH_KEY] = @wire_name
         # The wire answers JSON whatever the caller's `Accept`, so a handler's template is its `.json` one.
-        env["action_dispatch.request.formats"] = [Mime[:json]]
+        env['action_dispatch.request.formats'] = [Mime[:json]]
         env
       end
 
       def base_env
         {
-          "REQUEST_METHOD"  => "POST",
-          "SCRIPT_NAME"     => "",
-          "PATH_INFO"       => "/#{@kind}/#{@wire_name}",
-          "QUERY_STRING"    => "",
-          "SERVER_NAME"     => "localhost",
-          "SERVER_PORT"     => "80",
-          "SERVER_PROTOCOL" => "HTTP/1.1",
-          "CONTENT_TYPE"    => "application/json",
-          "CONTENT_LENGTH"  => "0",
-          "rack.url_scheme" => "http",
-          "rack.input"      => StringIO.new(+""),
-          "rack.errors"     => $stderr,
+          'REQUEST_METHOD' => 'POST',
+          'SCRIPT_NAME' => '',
+          'PATH_INFO' => "/#{@kind}/#{@wire_name}",
+          'QUERY_STRING' => '',
+          'SERVER_NAME' => 'localhost',
+          'SERVER_PORT' => '80',
+          'SERVER_PROTOCOL' => 'HTTP/1.1',
+          'CONTENT_TYPE' => 'application/json',
+          'CONTENT_LENGTH' => '0',
+          'rack.url_scheme' => 'http',
+          'rack.input' => StringIO.new(+''),
+          'rack.errors' => $stderr
         }
       end
 
       def read_body(body)
-        raw = +""
+        raw = +''
         body.each { |chunk| raw << chunk }
         raw
       ensure
@@ -162,18 +162,16 @@ module Kiosk
       # A body code travels only when it is in the vocabulary and matches the status; otherwise
       # the status's lone code decides, and with none it is `action_failed`.
       def wire_error(status, parsed)
-        error_obj = parsed.is_a?(Hash) && parsed["error"].is_a?(Hash) ? parsed["error"] : nil
-        rendered  = error_obj && error_obj["code"].to_s
+        error_obj = parsed.is_a?(Hash) && parsed['error'].is_a?(Hash) ? parsed['error'] : nil
+        rendered  = error_obj && error_obj['code'].to_s
         code      = if rendered && Errors::CODES[rendered] == status
                       rendered
                     else
                       Errors::STATUS_CODES[status]
                     end
-        if code.nil?
-          return Errors::ActionFailed.new(error_message(parsed, status), hint: error_hint(parsed))
-        end
+        return Errors::ActionFailed.new(error_message(parsed, status), hint: error_hint(parsed)) if code.nil?
 
-        extra = error_obj && error_obj.except("code", "message", "hint").transform_keys(&:to_sym)
+        extra = error_obj && error_obj.except('code', 'message', 'hint').transform_keys(&:to_sym)
         Errors::WireError.new(error_message(parsed, status),
                               code: code, hint: error_hint(parsed), extra: extra)
       end
@@ -185,15 +183,15 @@ module Kiosk
       rescue JSON::ParserError
         raise Errors::ActionFailed.new(
           "#{@kind} #{@wire_name.inspect} rendered a non-JSON body",
-          hint: "a Kiosk handler answers with `render json:` — HTML, redirects and " \
-                "`send_file` have no place on the wire",
+          hint: 'a Kiosk handler answers with `render json:` — HTML, redirects and ' \
+                '`send_file` have no place on the wire'
         )
       end
 
       # The operator's own message reaches the agent when the body carries one.
       def error_message(parsed, status)
-        from_body = parsed.is_a?(Hash) ? (parsed["error"] || parsed["message"]) : nil
-        from_body = from_body["message"] if from_body.is_a?(Hash)
+        from_body = parsed.is_a?(Hash) ? (parsed['error'] || parsed['message']) : nil
+        from_body = from_body['message'] if from_body.is_a?(Hash)
         return from_body.to_s unless from_body.nil? || from_body.to_s.empty?
 
         "#{@kind} #{@wire_name.inspect} answered #{status}"
@@ -202,7 +200,7 @@ module Kiosk
       def error_hint(parsed)
         return nil unless parsed.is_a?(Hash)
 
-        hint = parsed["hint"] || (parsed["error"].is_a?(Hash) ? parsed["error"]["hint"] : nil)
+        hint = parsed['hint'] || (parsed['error'].is_a?(Hash) ? parsed['error']['hint'] : nil)
         hint&.to_s
       end
 
@@ -212,7 +210,7 @@ module Kiosk
           raise Errors::ActionFailed.new(
             "query #{@wire_name.inspect} answered a page that is not an array of rows",
             hint: "render_kiosk_page renders the rows it is given, or the action's template; " \
-                  "either must be a JSON array",
+                  'either must be a JSON array'
           )
         end
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server"
+require 'kiosk/server'
 
 # A DB-free spent-id store. The shipped default is the database table, which
 # only the examples that need it reach (pow_spent_stores_spec).
@@ -13,7 +13,14 @@ class MemoryPowSpentStore
   def claim(id, exp)
     return false if id.nil?
 
-    @mutex.synchronize { @ids.key?(id) ? false : (@ids[id] = exp; true) }
+    @mutex.synchronize do
+      if @ids.key?(id)
+        false
+      else
+        (@ids[id] = exp
+         true)
+      end
+    end
   end
 
   def release(id) = @mutex.synchronize { @ids.delete(id) }
@@ -34,7 +41,7 @@ RSpec.configure do |config|
   end
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
-  config.example_status_persistence_file_path = ".rspec_status"
+  config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false
 
@@ -113,8 +120,8 @@ end
 # input contract declares its own closed schema, which is where the refusals
 # are asserted.
 DEFAULT_REQUIRED_MACROS = {
-  input_schema:  { type: "object" },
-  output_schema: true,
+  input_schema: { type: 'object' },
+  output_schema: true
 }.freeze
 
 def declare_verb(verb_kind, name, macros, body)
@@ -123,6 +130,7 @@ def declare_verb(verb_kind, name, macros, body)
 
   Class.new(ApplicationController) do
     include Kiosk::Handler
+
     kind verb_kind
     macros.each { |macro, value| public_send(macro, value) }
     define_method(name.to_s, &body)
@@ -146,7 +154,7 @@ class FakeConnection
   attr_reader :executed_sql, :exec_queries
   attr_accessor :next_result, :next_exec_result
 
-  def initialize(next_result: [], next_exec_result: [{ "id" => "row-1" }])
+  def initialize(next_result: [], next_exec_result: [{ 'id' => 'row-1' }])
     @executed_sql      = []
     @exec_queries      = []
     @next_result       = next_result
@@ -166,7 +174,7 @@ class FakeConnection
     @next_result
   end
 
-  def exec_query(sql, name = "SQL", binds = [])
+  def exec_query(sql, name = 'SQL', binds = [])
     @exec_queries << [sql, name, binds]
     @next_exec_result
   end
@@ -175,7 +183,7 @@ class FakeConnection
     "'#{value}'"
   end
 
-  def quote_table_name(name) = name.split(".").map { |part| %("#{part}") }.join(".")
+  def quote_table_name(name) = name.split('.').map { |part| %("#{part}") }.join('.')
 
   def in_transaction? = @transaction_depth > 0
 
@@ -201,7 +209,7 @@ end
 # @yieldparam binds [Array]
 # @yieldreturn [Array<Hash>] rows; production code calls `.to_a.first` on it
 def route_exec_query(con, &router)
-  allow(con).to receive(:exec_query) do |sql, name = "SQL", binds = []|
+  allow(con).to receive(:exec_query) do |sql, name = 'SQL', binds = []|
     con.exec_queries << [sql, name, binds]
     router.call(sql, binds)
   end
@@ -209,15 +217,15 @@ end
 
 # Build a valid Kiosk::Identity for testing. Defaults to an agent so the
 # four GUCs are exercised; pass `actor:` to switch.
-def build_identity(actor: "agent", **overrides)
+def build_identity(actor: 'agent', **overrides)
   defaults = {
-    user_id:  "u-1",
-    role:     "customer",
-    actor:    actor,
-    agent_id: actor == "agent" ? "a-1" : nil,
-    claims:   {},
+    user_id: 'u-1',
+    role: 'customer',
+    actor: actor,
+    agent_id: actor == 'agent' ? 'a-1' : nil,
+    claims: {}
   }
-  Kiosk::Identity.new(**defaults.merge(overrides))
+  Kiosk::Identity.new(**defaults, **overrides)
 end
 
 # ── Forced interleaving at the lazy-store seam (K-1610) ──────────────────────
@@ -240,7 +248,7 @@ module SlowStoreAllocation
     Kiosk::Server::PowSpentStores::ActiveRecord,
     Kiosk::Server::AuthChallengeStore,
     Kiosk::Server::RevocationStore,
-    Kiosk::Server::DeviceAuthorizationStores::ActiveRecord,
+    Kiosk::Server::DeviceAuthorizationStores::ActiveRecord
   ].freeze
 
   # Mutable because the prepend below is permanent (a module cannot be
@@ -248,7 +256,7 @@ module SlowStoreAllocation
   DELAY = { seconds: 0.0 }
 
   module SlowNew
-    def new(*args, **kwargs, &blk)
+    def new(*args, **kwargs, &)
       seconds = SlowStoreAllocation::DELAY[:seconds]
       sleep(seconds) if seconds > 0
       super
@@ -273,7 +281,12 @@ end
 # them race: without it the first thread finishes before the last is spawned.
 def race(n, &block)
   latch   = Queue.new
-  threads = Array.new(n) { Thread.new { latch.pop; block.call } }
+  threads = Array.new(n) do
+    Thread.new do
+      latch.pop
+      block.call
+    end
+  end
   n.times { latch.push(:go) }
   threads.map(&:value)
 end

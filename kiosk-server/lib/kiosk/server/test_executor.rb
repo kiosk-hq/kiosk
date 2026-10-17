@@ -3,12 +3,12 @@
 # Test-time only; required explicitly:
 #   Kiosk::TestHelpers.executor = Kiosk::Server::TestExecutor.new
 
-require "date"
-require "active_record"
-require "kiosk/server/current_request"
-require "kiosk/server/queries"
-require "kiosk/server/result"
-require "kiosk/test_helpers/errors"
+require 'date'
+require 'active_record'
+require 'kiosk/server/current_request'
+require 'kiosk/server/queries'
+require 'kiosk/server/result'
+require 'kiosk/test_helpers/errors'
 
 module Kiosk
   module Server
@@ -21,7 +21,7 @@ module Kiosk
       # Aborts the transaction, also on a connection double that ignores `ActiveRecord::Rollback`.
       class RollbackMarker < StandardError; end
 
-      attr_reader :connection, :system_connection
+      attr_reader :connection, :system_connection, :current_identity
 
       # `system_connection` seeds irrespective of RLS; it defaults to `connection`.
       def initialize(connection: nil, system_connection: nil)
@@ -31,13 +31,11 @@ module Kiosk
         @scope_depth       = 0
       end
 
-      def current_identity = @current_identity
-
       def in_scope? = @scope_depth.positive?
 
       def with_identity(identity, &block)
         # Before touching scope state, so a rescued blockless call leaves it intact.
-        raise ArgumentError, "block required" unless block
+        raise ArgumentError, 'block required' unless block
 
         previous_identity = @current_identity
         @current_identity = identity
@@ -61,6 +59,7 @@ module Kiosk
           end
 
           raise caught if caught
+
           result
         ensure
           @current_identity = previous_identity
@@ -100,15 +99,15 @@ module Kiosk
       # Settlement captures against a PSP, which an always-rolled-back scope cannot host.
       def pay_action(_name, _args)
         require_scope!
-        raise NotImplementedError, "pay is not exercised through the RLS journey DSL; " \
-                                   "settlement runs via Executor#verb_pay + a kiosk-pay-* provider"
+        raise NotImplementedError, 'pay is not exercised through the RLS journey DSL; ' \
+                                   'settlement runs via Executor#verb_pay + a kiosk-pay-* provider'
       end
 
       def seed(table, attrs, count:)
         cols = attrs.keys
         count.times.map do
-          values_sql = cols.map { |c| quote_value(attrs[c]) }.join(", ")
-          col_sql    = cols.map { |c| quote_ident(c.to_s) }.join(", ")
+          values_sql = cols.map { |c| quote_value(attrs[c]) }.join(', ')
+          col_sql    = cols.map { |c| quote_ident(c.to_s) }.join(', ')
           sql = %(INSERT INTO #{quote_ident(table.to_s)} (#{col_sql}) ) +
                 %(VALUES (#{values_sql}) RETURNING *)
           normalize_rows(system_connection.execute(sql)).first
@@ -123,13 +122,13 @@ module Kiosk
         return if in_scope?
 
         raise NoScopeError,
-          "call from inside as_user / as_agent / as_anonymous block (default-deny)"
+              'call from inside as_user / as_agent / as_anonymous block (default-deny)'
       end
 
       def apply_gucs(identity)
         SessionContext.new(connection: connection, identity: identity)
                       .guc_statements
-                      .each { |sql, binds| connection.exec_query(sql, "Kiosk GUC", binds) }
+                      .each { |sql, binds| connection.exec_query(sql, 'Kiosk GUC', binds) }
       end
 
       def normalize_rows(result)
@@ -144,6 +143,7 @@ module Kiosk
         yield
       rescue StandardError => e
         raise Kiosk::TestHelpers::Errors::RLSDenied, e.message if rls_denial?(e)
+
         raise
       end
 
@@ -156,17 +156,18 @@ module Kiosk
 
       def message_matches_rls?(message)
         return false if message.nil?
+
         message = message.to_s
-        message.include?("row-level security") ||
-          message.include?("violates row-level") ||
-          message.include?("permission denied for table")
+        message.include?('row-level security') ||
+          message.include?('violates row-level') ||
+          message.include?('permission denied for table')
       end
 
       def quote_value(value)
         case value
-        when nil                  then "NULL"
-        when true                 then "TRUE"
-        when false                then "FALSE"
+        when nil                  then 'NULL'
+        when true                 then 'TRUE'
+        when false                then 'FALSE'
         when Numeric              then value.to_s
         # `getutc`: `Time#utc` mutates and `DateTime#utc` needs ActiveSupport.
         when Time, DateTime       then "'#{value.to_time.getutc.iso8601}'"
@@ -177,7 +178,7 @@ module Kiosk
       end
 
       def quote_ident(name)
-        name.to_s.split(".").map { |part| %("#{part.gsub('"', '""')}") }.join(".")
+        name.to_s.split('.').map { |part| %("#{part.gsub('"', '""')}") }.join('.')
       end
     end
   end

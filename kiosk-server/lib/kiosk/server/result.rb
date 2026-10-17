@@ -7,7 +7,7 @@ module Kiosk
     # count. The wire sends the last two as `Link` and `X-Total-Count` headers.
     Page = Data.define(:rows, :next_cursor, :total) do
       def initialize(rows:, next_cursor: nil, total: nil)
-        super(rows: rows, next_cursor: next_cursor, total: total)
+        super
       end
     end
 
@@ -30,8 +30,8 @@ module Kiosk
         unless raw.match?(OFFSET_RE)
           raise Errors::BadRequest.new(
             "cursor #{raw.inspect} is not a cursor this endpoint issued",
-            hint: "do not build a cursor: fetch the `Link: <…>; rel=\"next\"` target verbatim, " \
-                  "or copy its `cursor` parameter byte for byte. Omit `cursor` for the first page.",
+            hint: 'do not build a cursor: fetch the `Link: <…>; rel="next"` target verbatim, ' \
+                  'or copy its `cursor` parameter byte for byte. Omit `cursor` for the first page.'
           )
         end
 
@@ -46,17 +46,11 @@ module Kiosk
 
       def initialize(kind:, payload:, next_cursor: nil, total: nil)
         kind = kind.to_sym
-        unless KINDS.include?(kind)
-          raise ArgumentError, "kind must be one of #{KINDS.inspect}, got #{kind.inspect}"
-        end
-        if next_cursor && kind != :rows
-          raise ArgumentError, "next_cursor is only valid on a :rows result (got #{kind.inspect})"
-        end
-        if total && kind != :rows
-          raise ArgumentError, "total is only valid on a :rows result (got #{kind.inspect})"
-        end
+        raise ArgumentError, "kind must be one of #{KINDS.inspect}, got #{kind.inspect}" unless KINDS.include?(kind)
+        raise ArgumentError, "next_cursor is only valid on a :rows result (got #{kind.inspect})" if next_cursor && kind != :rows
+        raise ArgumentError, "total is only valid on a :rows result (got #{kind.inspect})" if total && kind != :rows
 
-        super(kind: kind, payload: payload, next_cursor: next_cursor, total: total)
+        super
       end
 
       def http_status = 200

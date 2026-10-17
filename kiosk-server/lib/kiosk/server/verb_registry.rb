@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "kiosk/server/errors"
-require "kiosk/server/schema_slots"
+require 'kiosk/server/errors'
+require 'kiosk/server/schema_slots'
 
 module Kiosk
   module Server
@@ -18,12 +18,12 @@ module Kiosk
                   example_row: nil)
         SchemaSlots.note_declaration(
           input_schema: input_schema, output_schema: output_schema,
-          example_params: example_params, example_row: example_row,
+          example_params: example_params, example_row: example_row
         )
         registry[name.to_s] = Entry.new(
           handler: handler, reach: reach, description: description,
           input_schema: input_schema, output_schema: output_schema,
-          example_params: example_params, example_row: example_row,
+          example_params: example_params, example_row: example_row
         )
       end
 
@@ -68,7 +68,7 @@ module Kiosk
         registry.fetch(name.to_s) do
           raise Errors::VerbNotFound.new(
             "Unknown #{self::SCOPE}: #{name.inspect}",
-            hint: Errors.unknown_name_hint(name, self::SCOPE.to_s, registry.keys.sort),
+            hint: Errors.unknown_name_hint(name, self::SCOPE.to_s, registry.keys.sort)
           )
         end
       end

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "kiosk/server/errors"
-require "kiosk/server/headers"
+require 'kiosk/server/errors'
+require 'kiosk/server/headers'
 
 module Kiosk
   module Server
@@ -9,7 +9,7 @@ module Kiosk
     # `c.serve_account_binding` is false. Runs before the request is read; on
     # `/oauth/*` it is the one problem document served instead of an OAuth error.
     module BindingModuleGate
-      DETAIL = "this operator does not serve the account binding module"
+      DETAIL = 'this operator does not serve the account binding module'
       HINT   = "register a fresh assistant account at this origin's register_url instead"
 
       private

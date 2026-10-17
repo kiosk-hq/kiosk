@@ -3,10 +3,10 @@
 RSpec.describe Kiosk::Server::SessionContext do
   let(:connection) { FakeConnection.new }
 
-  describe ".open with agent identity" do
-    it "opens a transaction and yields self" do
+  describe '.open with agent identity' do
+    it 'opens a transaction and yields self' do
       yielded = nil
-      described_class.open(connection: connection, identity: build_identity(actor: "agent")) do |s|
+      described_class.open(connection: connection, identity: build_identity(actor: 'agent')) do |s|
         yielded = s
         expect(connection.in_transaction?).to be(true)
       end
@@ -19,87 +19,87 @@ RSpec.describe Kiosk::Server::SessionContext do
     # text is one frozen constant for all four, which is the property that
     # makes a forgotten escape impossible rather than merely absent — so these
     # assert on the BINDS, and on the text staying free of every value.
-    it "sets all four GUCs through set_config binds (agent path)" do
+    it 'sets all four GUCs through set_config binds (agent path)' do
       described_class.open(
         connection: connection,
-        identity:   build_identity(actor: "agent", user_id: "u-1", role: "customer", agent_id: "a-1"),
-      ) { }
+        identity: build_identity(actor: 'agent', user_id: 'u-1', role: 'customer', agent_id: 'a-1')
+      ) {}
 
       expect(connection.bound(/set_config/)).to eq([
-        ["SELECT set_config($1, $2, true)", ["app.current_user_id",  "u-1"]],
-        ["SELECT set_config($1, $2, true)", ["app.current_role",     "customer"]],
-        ["SELECT set_config($1, $2, true)", ["app.current_actor",    "agent"]],
-        ["SELECT set_config($1, $2, true)", ["app.current_agent_id", "a-1"]],
-      ])
+                                                     ['SELECT set_config($1, $2, true)', ['app.current_user_id', 'u-1']],
+                                                     ['SELECT set_config($1, $2, true)', ['app.current_role',     'customer']],
+                                                     ['SELECT set_config($1, $2, true)', ['app.current_actor',    'agent']],
+                                                     ['SELECT set_config($1, $2, true)', ['app.current_agent_id', 'a-1']]
+                                                   ])
       # Nothing reaches the connection through `#execute` any more.
       expect(connection.executed_sql).to be_empty
     end
 
-    it "skips the agent_id GUC for human/service actors (agent_id nil)" do
+    it 'skips the agent_id GUC for human/service actors (agent_id nil)' do
       described_class.open(
         connection: connection,
-        identity:   build_identity(actor: "human", agent_id: nil),
-      ) { }
+        identity: build_identity(actor: 'human', agent_id: nil)
+      ) {}
 
       expect(connection.bound(/set_config/).map { |_sql, binds| binds.first })
         .to eq(%w[app.current_user_id app.current_role app.current_actor])
     end
 
-    it "skips the role GUC for a role-less identity" do
+    it 'skips the role GUC for a role-less identity' do
       described_class.open(
         connection: connection,
-        identity:   build_identity(actor: "agent", role: nil),
-      ) { }
+        identity: build_identity(actor: 'agent', role: nil)
+      ) {}
 
       expect(connection.bound(/set_config/).map { |_sql, binds| binds.first })
         .to eq(%w[app.current_user_id app.current_actor app.current_agent_id])
     end
 
-    it "uses the configured GUC namespace" do
-      Kiosk.configure { |c| c.guc_namespace = "kiosk" }
+    it 'uses the configured GUC namespace' do
+      Kiosk.configure { |c| c.guc_namespace = 'kiosk' }
       described_class.open(
         connection: connection,
-        identity:   build_identity(actor: "agent"),
-      ) { }
+        identity: build_identity(actor: 'agent')
+      ) {}
 
-      expect(connection.bound(/set_config/).first.last).to eq(["kiosk.current_user_id", "u-1"])
+      expect(connection.bound(/set_config/).first.last).to eq(['kiosk.current_user_id', 'u-1'])
     end
 
     # The shape that used to end a spliced literal early is now a value that
     # needs no escaping at all — nothing is spliced, so nothing can be closed.
-    it "passes a quote-bearing identity value straight through as a bind" do
+    it 'passes a quote-bearing identity value straight through as a bind' do
       described_class.open(
         connection: connection,
-        identity:   build_identity(actor: "human", agent_id: nil, user_id: "it's-u"),
-      ) { }
+        identity: build_identity(actor: 'human', agent_id: nil, user_id: "it's-u")
+      ) {}
 
-      expect(connection.bound(/set_config/).first.last).to eq(["app.current_user_id", "it's-u"])
+      expect(connection.bound(/set_config/).first.last).to eq(['app.current_user_id', "it's-u"])
       expect(connection.all_sql).not_to include("it's-u")
     end
   end
 
-  describe "#guc_statements" do
-    it "returns [sql, binds] pairs without executing" do
-      ctx = described_class.new(connection: connection, identity: build_identity(actor: "agent"))
+  describe '#guc_statements' do
+    it 'returns [sql, binds] pairs without executing' do
+      ctx = described_class.new(connection: connection, identity: build_identity(actor: 'agent'))
       stmts = ctx.guc_statements
 
       expect(stmts.size).to eq(4)
-      expect(stmts.first).to eq(["SELECT set_config($1, $2, true)", ["app.current_user_id", "u-1"]])
+      expect(stmts.first).to eq(['SELECT set_config($1, $2, true)', ['app.current_user_id', 'u-1']])
       expect(connection.executed_sql).to be_empty
       expect(connection.exec_queries).to be_empty
     end
   end
 
-  describe "#guc_statements enforce_db_role" do
+  describe '#guc_statements enforce_db_role' do
     before { Kiosk.reset! }
 
-    context "when enforce_db_role is unset (default false)" do
-      it "contains no SET LOCAL ROLE statement — exactly the 4 GUC statements as today" do
-        ctx = described_class.new(connection: connection, identity: build_identity(actor: "agent"))
+    context 'when enforce_db_role is unset (default false)' do
+      it 'contains no SET LOCAL ROLE statement — exactly the 4 GUC statements as today' do
+        ctx = described_class.new(connection: connection, identity: build_identity(actor: 'agent'))
         stmts = ctx.guc_statements
 
         expect(stmts.size).to eq(4)
-        expect(stmts.none? { |sql, _binds| sql.include?("ROLE") }).to be(true)
+        expect(stmts.none? { |sql, _binds| sql.include?('ROLE') }).to be(true)
       end
     end
 
@@ -107,59 +107,59 @@ RSpec.describe Kiosk::Server::SessionContext do
       before do
         Kiosk.configure do |c|
           c.enforce_db_role = true
-          c.app_role        = "kiosk_app"
+          c.app_role        = 'kiosk_app'
         end
       end
 
       # The role is an IDENTIFIER, which no bind can carry — so this one
       # statement keeps `quote_ident` and carries no binds at all.
-      it "appends SET LOCAL ROLE as the last element, after the GUC statements" do
-        ctx = described_class.new(connection: connection, identity: build_identity(actor: "agent"))
+      it 'appends SET LOCAL ROLE as the last element, after the GUC statements' do
+        ctx = described_class.new(connection: connection, identity: build_identity(actor: 'agent'))
         stmts = ctx.guc_statements
 
         expect(stmts.last).to eq([%(SET LOCAL ROLE "kiosk_app"), []])
-        expect(stmts[-2].last.first).to eq("app.current_agent_id")
+        expect(stmts[-2].last.first).to eq('app.current_agent_id')
       end
     end
   end
 
-  describe ".identity" do
-    it "raises unauthenticated outside a session" do
+  describe '.identity' do
+    it 'raises unauthenticated outside a session' do
       expect { described_class.identity }
         .to raise_error(Kiosk::Server::Errors::Unauthenticated, /no Kiosk session is open/) { |e|
           expect(e.http_status).to eq(401)
         }
     end
 
-    it "answers the principal inside a session" do
-      described_class.open(connection: connection, identity: build_identity(user_id: "u-7")) do
-        expect(described_class.identity.user_id).to eq("u-7")
+    it 'answers the principal inside a session' do
+      described_class.open(connection: connection, identity: build_identity(user_id: 'u-7')) do
+        expect(described_class.identity.user_id).to eq('u-7')
       end
     end
 
-    it "exposes the open session itself, so a caller can read its identity" do
-      identity = build_identity(user_id: "u-7")
+    it 'exposes the open session itself, so a caller can read its identity' do
+      identity = build_identity(user_id: 'u-7')
       described_class.open(connection: connection, identity: identity) do |ctx|
         expect(described_class.current).to be(ctx)
-        expect(described_class.current.identity.user_id).to eq("u-7")
+        expect(described_class.current.identity.user_id).to eq('u-7')
       end
     end
 
-    it "clears on the way out, and on the way out of a raise" do
-      described_class.open(connection: connection, identity: build_identity) { }
+    it 'clears on the way out, and on the way out of a raise' do
+      described_class.open(connection: connection, identity: build_identity) {}
       expect(described_class.current).to be_nil
 
       expect do
-        described_class.open(connection: connection, identity: build_identity) { raise "boom" }
-      end.to raise_error("boom")
+        described_class.open(connection: connection, identity: build_identity) { raise 'boom' }
+      end.to raise_error('boom')
       expect(described_class.current).to be_nil
     end
 
-    it "nests without the inner exit blanking the outer session" do
+    it 'nests without the inner exit blanking the outer session' do
       outer_seen = nil
-      described_class.open(connection: connection, identity: build_identity(user_id: "u-out")) do |outer|
-        described_class.open(connection: connection, identity: build_identity(user_id: "u-in")) do
-          expect(described_class.current.identity.user_id).to eq("u-in")
+      described_class.open(connection: connection, identity: build_identity(user_id: 'u-out')) do |outer|
+        described_class.open(connection: connection, identity: build_identity(user_id: 'u-in')) do
+          expect(described_class.current.identity.user_id).to eq('u-in')
         end
         outer_seen = described_class.current
         expect(outer_seen).to be(outer)
@@ -177,17 +177,17 @@ RSpec.describe Kiosk::Server::SessionContext do
   # `app.current_user_id` makes every `kiosk.current_user_id()` predicate and
   # every RLS policy see NULL, and a leaked one makes them see the PREVIOUS
   # request's principal. Same skip contract as the other real-Postgres files.
-  describe "against a real Postgres" do
+  describe 'against a real Postgres' do
     def self.postgres_error
       @postgres_error ||= begin
-        ::ActiveRecord::Base.establish_connection(
-          adapter:  "postgresql",
-          host:     ENV["PGHOST"],
-          username: ENV["PGUSER"],
-          password: ENV["PGPASSWORD"],
-          database: ENV.fetch("PGDATABASE", "postgres"),
+        ActiveRecord::Base.establish_connection(
+          adapter: 'postgresql',
+          host: ENV.fetch('PGHOST', nil),
+          username: ENV.fetch('PGUSER', nil),
+          password: ENV.fetch('PGPASSWORD', nil),
+          database: ENV.fetch('PGDATABASE', 'postgres')
         )
-        ::ActiveRecord::Base.connection.execute("SELECT 1")
+        ActiveRecord::Base.connection.execute('SELECT 1')
         [false]
       rescue StandardError => e
         ["#{e.class}: #{e.message}"]
@@ -197,15 +197,15 @@ RSpec.describe Kiosk::Server::SessionContext do
 
     before { skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error }
 
-    let(:real) { ::ActiveRecord::Base.connection }
+    let(:real) { ActiveRecord::Base.connection }
 
     def current(name) = real.select_value("SELECT current_setting('#{name}', true)")
 
-    it "lands the four GUCs on the connection the block then uses" do
+    it 'lands the four GUCs on the connection the block then uses' do
       seen = {}
       described_class.open(
         connection: real,
-        identity:   build_identity(actor: "agent", user_id: "u-real", role: "customer", agent_id: "a-real"),
+        identity: build_identity(actor: 'agent', user_id: 'u-real', role: 'customer', agent_id: 'a-real')
       ) do
         %w[current_user_id current_role current_actor current_agent_id].each do |g|
           seen[g] = current("app.#{g}")
@@ -213,51 +213,51 @@ RSpec.describe Kiosk::Server::SessionContext do
       end
 
       expect(seen).to eq(
-        "current_user_id" => "u-real", "current_role" => "customer",
-        "current_actor" => "agent", "current_agent_id" => "a-real",
+        'current_user_id' => 'u-real', 'current_role' => 'customer',
+        'current_actor' => 'agent', 'current_agent_id' => 'a-real'
       )
     end
 
     # `true` IS `LOCAL`. If it ever stopped being, the value would survive the
     # COMMIT and the NEXT request on this pooled connection would run as the
     # previous principal.
-    it "is transaction-LOCAL: the values are gone after COMMIT" do
-      described_class.open(connection: real, identity: build_identity(actor: "agent", user_id: "u-commit")) { }
+    it 'is transaction-LOCAL: the values are gone after COMMIT' do
+      described_class.open(connection: real, identity: build_identity(actor: 'agent', user_id: 'u-commit')) {}
 
-      expect(current("app.current_user_id")).to eq("")
-      expect(current("app.current_agent_id")).to eq("")
+      expect(current('app.current_user_id')).to eq('')
+      expect(current('app.current_agent_id')).to eq('')
     end
 
-    it "is transaction-LOCAL: the values are gone after ROLLBACK" do
+    it 'is transaction-LOCAL: the values are gone after ROLLBACK' do
       begin
-        described_class.open(connection: real, identity: build_identity(actor: "agent", user_id: "u-rollback")) do
-          raise ::ActiveRecord::Rollback
+        described_class.open(connection: real, identity: build_identity(actor: 'agent', user_id: 'u-rollback')) do
+          raise ActiveRecord::Rollback
         end
-      rescue ::ActiveRecord::Rollback
+      rescue ActiveRecord::Rollback
         nil
       end
 
-      expect(current("app.current_user_id")).to eq("")
+      expect(current('app.current_user_id')).to eq('')
     end
 
     # The reserved-keyword collision that forced `quote_ident` on GUC NAMES:
     # `SET LOCAL app.current_role = …` is a syntax error unquoted, while
     # set_config takes the name as data and never parses it as SQL.
-    it "sets app.current_role, a name SET could not parse unquoted" do
+    it 'sets app.current_role, a name SET could not parse unquoted' do
       value = nil
-      described_class.open(connection: real, identity: build_identity(actor: "agent", role: "owner")) do
-        value = current("app.current_role")
+      described_class.open(connection: real, identity: build_identity(actor: 'agent', role: 'owner')) do
+        value = current('app.current_role')
       end
-      expect(value).to eq("owner")
+      expect(value).to eq('owner')
     end
 
     # The whole point of the row: a value that would have ended a spliced
     # literal early is simply a value.
-    it "stores a quote-bearing principal verbatim, executing nothing" do
+    it 'stores a quote-bearing principal verbatim, executing nothing' do
       hostile = "u-1'; SET app.current_user_id = 'admin"
       value   = nil
-      described_class.open(connection: real, identity: build_identity(actor: "human", agent_id: nil, user_id: hostile)) do
-        value = current("app.current_user_id")
+      described_class.open(connection: real, identity: build_identity(actor: 'human', agent_id: nil, user_id: hostile)) do
+        value = current('app.current_user_id')
       end
       expect(value).to eq(hostile)
     end

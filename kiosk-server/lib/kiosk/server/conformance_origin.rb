@@ -4,17 +4,17 @@
 #   require "kiosk/server/conformance_origin"
 #   require "kiosk/test_helpers/conformance/rspec"     # or .../minitest
 #   Kiosk::TestHelpers::Conformance.origin = Kiosk::Server::ConformanceOrigin.new
-require "securerandom"
+require 'securerandom'
 
-require "kiosk/server/actions"
-require "kiosk/server/current_request"
-require "kiosk/server/errors"
-require "kiosk/server/queries"
-require "kiosk/server/request_validation"
-require "kiosk/server/response_validation"
-require "kiosk/server/result"
-require "kiosk/server/session_context"
-require "kiosk/test_helpers/conformance"
+require 'kiosk/server/actions'
+require 'kiosk/server/current_request'
+require 'kiosk/server/errors'
+require 'kiosk/server/queries'
+require 'kiosk/server/request_validation'
+require 'kiosk/server/response_validation'
+require 'kiosk/server/result'
+require 'kiosk/server/session_context'
+require 'kiosk/test_helpers/conformance'
 
 module Kiosk
   module Server
@@ -27,7 +27,7 @@ module Kiosk
       # @param connection [#exec_query, #transaction] defaults to `ActiveRecord::Base.lease_connection`
       # @param routes [#recognize_path] defaults to `Rails.application.routes`
       # @param actor [String] "agent", "human" or "service"
-      def initialize(connection: nil, routes: nil, actor: "agent")
+      def initialize(connection: nil, routes: nil, actor: 'agent')
         @connection = connection
         @routes     = routes
         @actor      = actor.to_s
@@ -45,8 +45,8 @@ module Kiosk
         recognized = route_set.recognize_path(path, method: method.to_s.downcase.to_sym)
         {
           controller: recognized[:controller],
-          action:     recognized[:action],
-          kiosk_verb: recognized[:kiosk_verb],
+          action: recognized[:action],
+          kiosk_verb: recognized[:kiosk_verb]
         }
       rescue StandardError
         nil
@@ -70,11 +70,11 @@ module Kiosk
 
       # Uses the wire's own validators, so reserved `limit`/`cursor` pass as they do on the wire.
       def schema_errors(payload, schema:, verb:, kind:, slot:)
-        if slot.to_s == "input_schema"
+        if slot.to_s == 'input_schema'
           RequestValidation.validate_arguments!(payload, input_schema: schema, verb: verb)
         else
           ResponseValidation.validate_payload!(payload, output_schema: schema, verb: verb,
-                                               kind: kind)
+                                                        kind: kind)
         end
         []
       rescue Errors::Base => e
@@ -85,16 +85,16 @@ module Kiosk
       def identity_for(subject, role: nil)
         if subject.nil?
           raise ArgumentError,
-                "a conformance call needs a principal — pass `as:` a record or a principal id. " \
-                "Every verb is served behind authentication, so there is no anonymous call " \
-                "to make."
+                'a conformance call needs a principal — pass `as:` a record or a principal id. ' \
+                'Every verb is served behind authentication, so there is no anonymous call ' \
+                'to make.'
         end
 
         Kiosk::Identity.new(
-          user_id:  subject.respond_to?(:id) ? subject.id : subject,
-          role:     resolve_role(subject, role),
-          actor:    @actor,
-          agent_id: @actor == "agent" ? SecureRandom.uuid : nil,
+          user_id: subject.respond_to?(:id) ? subject.id : subject,
+          role: resolve_role(subject, role),
+          actor: @actor,
+          agent_id: @actor == 'agent' ? SecureRandom.uuid : nil
         )
       end
 
@@ -103,12 +103,12 @@ module Kiosk
       def descriptors(registry, kind)
         registry.catalog.map do |descriptor|
           Kiosk::TestHelpers::Conformance::Verb.new(
-            name:           descriptor[:name],
-            kind:           kind,
-            reach:          descriptor[:reach],
-            input_schema:   descriptor[:input_schema],
-            output_schema:  descriptor[:output_schema],
-            example_params: descriptor[:example_params],
+            name: descriptor[:name],
+            kind: kind,
+            reach: descriptor[:reach],
+            input_schema: descriptor[:input_schema],
+            output_schema: descriptor[:output_schema],
+            example_params: descriptor[:example_params]
           )
         end
       end

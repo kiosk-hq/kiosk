@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "openssl"
+require 'openssl'
 
 module Kiosk
   module Server
@@ -18,14 +18,14 @@ module Kiosk
         @store       = {}
         @mutex       = Mutex.new
         @max_entries = Integer(max_entries)
-        raise ArgumentError, "max_entries must be positive" if @max_entries < 1
+        raise ArgumentError, 'max_entries must be positive' if @max_entries < 1
       end
 
       # Replaces any earlier challenge for the key; evicts the oldest at capacity.
       def put(public_key_pem, nonce, exp)
         prune!
         @mutex.synchronize do
-          @store.delete(public_key_pem)          # move-to-newest on re-issue
+          @store.delete(public_key_pem) # move-to-newest on re-issue
           @store.shift while @store.size >= @max_entries # evict oldest at capacity
           @store[public_key_pem] = [nonce, exp]
         end

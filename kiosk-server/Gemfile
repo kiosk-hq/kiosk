@@ -1,17 +1,17 @@
-source "https://rubygems.org"
+source 'https://rubygems.org'
 
 gemspec
 
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
-gem "kiosk-core",         path: "../kiosk-core"
-gem "kiosk-test-support", path: "../kiosk-test-support"
+gem 'kiosk-core',         path: '../kiosk-core'
+gem 'kiosk-test-support', path: '../kiosk-test-support'
 
 # PoW-gate path deps — available in specs; NOT hard-required in lib code.
 # The host that wires a reputation_policy will have these loaded transitively.
 # kiosk-pow (argon2id) is the legacy backend; kiosk-pow-equihash is the default.
-gem "kiosk-pow",          path: "../kiosk-pow"
-gem "kiosk-pow-equihash", path: "../kiosk-pow-equihash"
-gem "kiosk-reputation",   path: "../kiosk-reputation"
+gem 'kiosk-pow',          path: '../kiosk-pow'
+gem 'kiosk-pow-equihash', path: '../kiosk-pow-equihash'
+gem 'kiosk-reputation',   path: '../kiosk-reputation'
 
 # `json_schemer` is a RUNTIME dependency of this gem, so `gemspec` above already
 # brings it and this line is redundant — kept only so the development bundle
@@ -20,7 +20,7 @@ gem "kiosk-reputation",   path: "../kiosk-reputation"
 # flag at all. A host does NOT add it to enable anything; it is still required
 # lazily in lib so a checkout without it gets a ConfigurationError naming the
 # gem rather than a LoadError at boot.
-gem "json_schemer"
+gem 'json_schemer'
 
 # THE CONFORMANCE TEST for the derived OpenAPI document (T-068 slice 4,
 # T-071 = C). A THIRD-PARTY OpenAPI 3.1 implementation, so `open_api_spec.rb`
@@ -28,10 +28,10 @@ gem "json_schemer"
 # eyes: it parses `/kiosk/openapi.json`, then validates real Kiosk requests and
 # real Kiosk answers against it. Test-only, and it goes when the provisional
 # renderer goes.
-gem "openapi_first"
+gem 'openapi_first'
 
 # ActiveRecord is a RUNTIME dependency of the gem (see the gemspec); only the
 # database DRIVER is test-side here. The durable-store contract spec
 # (DeviceAuthorizationStores::ActiveRecord) SKIPS its ActiveRecord context when
 # no local Postgres is reachable, so the suite stays green on DB-less machines.
-gem "pg", "~> 1.5"
+gem 'pg', '~> 1.5'

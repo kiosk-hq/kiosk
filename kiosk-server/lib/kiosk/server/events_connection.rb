@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "action_cable"
-require "json"
-require "rack"
+require 'action_cable'
+require 'json'
+require 'rack'
 
 module Kiosk
   module Server
@@ -18,7 +18,7 @@ module Kiosk
       BEATS_PER_PING = 10
 
       # The one channel a frame here may name; see {KioskEvents}.
-      CHANNEL = "KioskEvents"
+      CHANNEL = 'KioskEvents'
 
       # A subscriber never publishes (spec Section 8.5.5), so no `message`.
       COMMANDS = %w[subscribe unsubscribe].freeze
@@ -54,8 +54,8 @@ module Kiosk
       # Every frame is answered (§8.5.4, §8.5.7); a repeated `subscribe` is confirmed again, not replayed.
       def dispatch_websocket_message(websocket_message)
         frame = parse_object(websocket_message) || {}
-        command = frame["command"]
-        identifier = frame["identifier"]
+        command = frame['command']
+        identifier = frame['identifier']
 
         unless COMMANDS.include?(command) && identifier.is_a?(::String)
           return close(reason: ::ActionCable::INTERNAL[:disconnect_reasons][:invalid_request],
@@ -63,7 +63,7 @@ module Kiosk
         end
 
         live = subscriptions.identifiers.include?(identifier)
-        return transmit_about(identifier, :confirmation) if command == "subscribe" && live
+        return transmit_about(identifier, :confirmation) if command == 'subscribe' && live
         return transmit_about(identifier, :rejection) unless actionable?(command, identifier, live)
 
         super
@@ -74,9 +74,9 @@ module Kiosk
         return true if resolve_identity
 
         if kiosk_credential_expired?
-          close(reason: "token_expired", reconnect: true)
+          close(reason: 'token_expired', reconnect: true)
         else
-          close(reason: "revoked", reconnect: false)
+          close(reason: 'revoked', reconnect: false)
         end
         false
       end
@@ -109,19 +109,19 @@ module Kiosk
       # An `unsubscribe` must name a live subscription by its exact string; a
       # `subscribe` must name this channel, and {KioskEvents} judges the rest.
       def actionable?(command, identifier, live)
-        return live if command == "unsubscribe"
+        return live if command == 'unsubscribe'
 
-        parse_object(identifier)&.dig("channel") == CHANNEL
+        parse_object(identifier)&.dig('channel') == CHANNEL
       end
 
       def auto_subscribe!
         since = requested_since
         requested_topics.each do |topic, subject|
-          identifier = { "channel" => CHANNEL, "topic" => topic }
-          identifier["subject"] = subject if subject
-          identifier["since"] = since if since
+          identifier = { 'channel' => CHANNEL, 'topic' => topic }
+          identifier['subject'] = subject if subject
+          identifier['since'] = since if since
           subscriptions.execute_command(
-            "command" => "subscribe", "identifier" => ::JSON.generate(identifier)
+            'command' => 'subscribe', 'identifier' => ::JSON.generate(identifier)
           )
         end
       end
@@ -130,17 +130,17 @@ module Kiosk
       # a colon (a topic name cannot hold one). `Rack::Utils.parse_query`
       # because Rails keeps only the last of a repeated key.
       def requested_topics
-        raw = ::Rack::Utils.parse_query(request.query_string)["topic"]
-        Array(raw).flat_map { |value| value.to_s.split(",") }
+        raw = ::Rack::Utils.parse_query(request.query_string)['topic']
+        Array(raw).flat_map { |value| value.to_s.split(',') }
                   .map(&:strip).reject(&:empty?)
-                  .map { |value| value.split(":", 2) }
+                  .map { |value| value.split(':', 2) }
                   .map { |topic, subject| [topic, (subject unless subject.to_s.empty?)] }
       end
 
       # Digits become an Integer; anything else passes through for
       # {KioskEvents} to refuse.
       def requested_since
-        value = ::Rack::Utils.parse_query(request.query_string)["since"]
+        value = ::Rack::Utils.parse_query(request.query_string)['since']
         value = value.last if value.is_a?(Array)
         return nil if value.nil? || value.empty?
 

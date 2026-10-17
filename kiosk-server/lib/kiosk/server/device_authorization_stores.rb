@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "time"
+require 'time'
 
 module Kiosk
   module Server
@@ -14,11 +14,11 @@ module Kiosk
       # An adapter must make {#claim_consume} one atomic operation (never a read
       # then {#update}), and {#find_by_user_code_hash} must answer only pending rows.
       class Base
-        def create(_device_authorization);        raise NotImplementedError; end
-        def update(_device_authorization);        raise NotImplementedError; end
-        def find_by_device_code_hash(_hash);      raise NotImplementedError; end
-        def find_by_user_code_hash(_hash);        raise NotImplementedError; end
-        def claim_consume(_device_authorization, now: Time.now); raise NotImplementedError; end
+        def create(_device_authorization) = raise(NotImplementedError)
+        def update(_device_authorization) = raise(NotImplementedError)
+        def find_by_device_code_hash(_hash) = raise(NotImplementedError)
+        def find_by_user_code_hash(_hash) = raise(NotImplementedError)
+        def claim_consume(_device_authorization, now: Time.now) = raise(NotImplementedError)
       end
 
       class InMemory < Base
@@ -29,13 +29,12 @@ module Kiosk
 
         def create(da)
           @mutex.synchronize do
-            if @by_id.values.any? { |x| x.device_code_hash == da.device_code_hash }
-              raise UniqueConstraintError, "device_code_hash already exists"
-            end
+            raise UniqueConstraintError, 'device_code_hash already exists' if @by_id.values.any? { |x| x.device_code_hash == da.device_code_hash }
             if da.pending? &&
                @by_id.values.any? { |x| x.pending? && x.user_code_hash == da.user_code_hash }
-              raise UniqueConstraintError, "user_code_hash already exists among pending rows"
+              raise UniqueConstraintError, 'user_code_hash already exists among pending rows'
             end
+
             @by_id[da.id] = da
           end
           da
@@ -43,9 +42,8 @@ module Kiosk
 
         def update(da)
           @mutex.synchronize do
-            unless @by_id.key?(da.id)
-              raise NotFoundError, "device_authorization #{da.id} not found"
-            end
+            raise NotFoundError, "device_authorization #{da.id} not found" unless @by_id.key?(da.id)
+
             @by_id[da.id] = da
           end
           da
@@ -91,11 +89,11 @@ module Kiosk
                                   expires_at, consumed_at, created_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
           SQL
-          connection.exec_query(sql, "Kiosk device_authorization insert", [
-            da.id, da.device_code_hash, da.user_code_hash, da.public_key_pem,
-            da.kind.to_s, da.client_id, da.requested_role, da.status.to_s,
-            da.user_id, da.expires_at, da.consumed_at, da.created_at,
-          ])
+          connection.exec_query(sql, 'Kiosk device_authorization insert', [
+                                  da.id, da.device_code_hash, da.user_code_hash, da.public_key_pem,
+                                  da.kind.to_s, da.client_id, da.requested_role, da.status.to_s,
+                                  da.user_id, da.expires_at, da.consumed_at, da.created_at
+                                ])
           da
         rescue ::ActiveRecord::RecordNotUnique => e
           raise UniqueConstraintError, e.message
@@ -112,13 +110,11 @@ module Kiosk
             WHERE id = $6
             RETURNING id
           SQL
-          updated = connection.exec_query(sql, "Kiosk device_authorization update", [
-            da.public_key_pem, da.status.to_s, da.user_id, da.consumed_at,
-            da.requested_role, da.id,
-          ]).to_a
-          if updated.empty?
-            raise NotFoundError, "device_authorization #{da.id} not found"
-          end
+          updated = connection.exec_query(sql, 'Kiosk device_authorization update', [
+                                            da.public_key_pem, da.status.to_s, da.user_id, da.consumed_at,
+                                            da.requested_role, da.id
+                                          ]).to_a
+          raise NotFoundError, "device_authorization #{da.id} not found" if updated.empty?
 
           da
         end
@@ -131,7 +127,7 @@ module Kiosk
             WHERE id = $2 AND status = 'approved'
             RETURNING id
           SQL
-          updated = connection.exec_query(sql, "Kiosk device_authorization claim", [now, da.id]).to_a
+          updated = connection.exec_query(sql, 'Kiosk device_authorization claim', [now, da.id]).to_a
           return nil if updated.empty?
 
           da.consume(now: now)
@@ -143,7 +139,7 @@ module Kiosk
             WHERE device_code_hash = $1
             LIMIT 1
           SQL
-          row = connection.exec_query(sql, "Kiosk device_authorization by device code", [hash]).to_a.first
+          row = connection.exec_query(sql, 'Kiosk device_authorization by device code', [hash]).to_a.first
           row && row_to_authorization(row)
         end
 
@@ -153,7 +149,7 @@ module Kiosk
             WHERE user_code_hash = $1 AND status = 'pending'
             LIMIT 1
           SQL
-          row = connection.exec_query(sql, "Kiosk device_authorization by user code", [hash]).to_a.first
+          row = connection.exec_query(sql, 'Kiosk device_authorization by user code', [hash]).to_a.first
           row && row_to_authorization(row)
         end
 
@@ -164,18 +160,18 @@ module Kiosk
 
         def row_to_authorization(row)
           DeviceAuthorization.new(
-            id:               row.fetch("id"),
-            device_code_hash: row.fetch("device_code_hash"),
-            user_code_hash:   row.fetch("user_code_hash"),
-            public_key_pem:   row.fetch("public_key_pem"),
-            kind:             row.fetch("kind").to_sym,
-            client_id:        row.fetch("client_id"),
-            requested_role:   row.fetch("requested_role"),
-            status:           row.fetch("status").to_sym,
-            user_id:          row.fetch("user_id"),
-            expires_at:       to_time(row.fetch("expires_at")),
-            consumed_at:      to_time(row.fetch("consumed_at")),
-            created_at:       to_time(row.fetch("created_at")),
+            id: row.fetch('id'),
+            device_code_hash: row.fetch('device_code_hash'),
+            user_code_hash: row.fetch('user_code_hash'),
+            public_key_pem: row.fetch('public_key_pem'),
+            kind: row.fetch('kind').to_sym,
+            client_id: row.fetch('client_id'),
+            requested_role: row.fetch('requested_role'),
+            status: row.fetch('status').to_sym,
+            user_id: row.fetch('user_id'),
+            expires_at: to_time(row.fetch('expires_at')),
+            consumed_at: to_time(row.fetch('consumed_at')),
+            created_at: to_time(row.fetch('created_at'))
           )
         end
 

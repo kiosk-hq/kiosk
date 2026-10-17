@@ -31,7 +31,7 @@ module Kiosk
             ON CONFLICT (public_key) DO UPDATE
               SET nonce = EXCLUDED.nonce, expires_at = EXCLUDED.expires_at
           SQL
-          connection.exec_query(sql, "Kiosk auth_challenge put", [public_key_pem, nonce, exp.to_i])
+          connection.exec_query(sql, 'Kiosk auth_challenge put', [public_key_pem, nonce, exp.to_i])
           nil
         end
 
@@ -45,14 +45,14 @@ module Kiosk
             RETURNING public_key
           SQL
           rows = connection.exec_query(
-            sql, "Kiosk auth_challenge take", [public_key_pem, nonce]
+            sql, 'Kiosk auth_challenge take', [public_key_pem, nonce]
           ).to_a
           !rows.empty?
         end
 
         def prune!
           connection.exec_query(%(DELETE FROM #{table} WHERE expires_at <= now()),
-                                "Kiosk auth_challenge prune")
+                                'Kiosk auth_challenge prune')
           nil
         end
 

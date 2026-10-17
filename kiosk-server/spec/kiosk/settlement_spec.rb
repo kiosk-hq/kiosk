@@ -1,23 +1,23 @@
 # frozen_string_literal: true
 
-require "active_record"
-require "securerandom"
+require 'active_record'
+require 'securerandom'
 
 # The read models over the engine's own payment receipts, against a real
 # Postgres; no reachable server skips, as the other persistence specs do.
-RSpec.describe "Kiosk::Settlement and Kiosk::CartMandate" do
-  SETTLEMENT_SPEC_SCHEMA = "kiosk_settlement_spec"
+RSpec.describe 'Kiosk::Settlement and Kiosk::CartMandate' do
+  SETTLEMENT_SPEC_SCHEMA = 'kiosk_settlement_spec'
 
   def self.postgres_error
     @postgres_error ||= begin
-      ::ActiveRecord::Base.establish_connection(
-        adapter:  "postgresql",
-        host:     ENV["PGHOST"],
-        username: ENV["PGUSER"],
-        password: ENV["PGPASSWORD"],
-        database: ENV.fetch("PGDATABASE", "postgres"),
+      ActiveRecord::Base.establish_connection(
+        adapter: 'postgresql',
+        host: ENV.fetch('PGHOST', nil),
+        username: ENV.fetch('PGUSER', nil),
+        password: ENV.fetch('PGPASSWORD', nil),
+        database: ENV.fetch('PGDATABASE', 'postgres')
       )
-      ::ActiveRecord::Base.connection.execute("SELECT 1")
+      ActiveRecord::Base.connection.execute('SELECT 1')
       [false]
     rescue StandardError => e
       ["#{e.class}: #{e.message}"]
@@ -30,22 +30,20 @@ RSpec.describe "Kiosk::Settlement and Kiosk::CartMandate" do
 
     Kiosk.configure { |c| c.schema = SETTLEMENT_SPEC_SCHEMA }
     defs = Kiosk::Server::SchemaDefinitions
-    conn = ::ActiveRecord::Base.connection
+    conn = ActiveRecord::Base.connection
     conn.execute(%(DROP SCHEMA IF EXISTS "#{SETTLEMENT_SPEC_SCHEMA}" CASCADE))
     conn.execute(%(CREATE SCHEMA "#{SETTLEMENT_SPEC_SCHEMA}"))
     conn.execute(defs.mandates_sql(schema: SETTLEMENT_SPEC_SCHEMA, user_id_type: :uuid))
-    require "kiosk/owned"
-    require_relative "../../app/models/kiosk/cart_mandate"
-    require_relative "../../app/models/kiosk/settlement"
+    require 'kiosk/owned'
+    require_relative '../../app/models/kiosk/cart_mandate'
+    require_relative '../../app/models/kiosk/settlement'
   end
 
   after(:context) do
-    unless self.class.postgres_error
-      ::ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{SETTLEMENT_SPEC_SCHEMA}" CASCADE))
-    end
+    ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{SETTLEMENT_SPEC_SCHEMA}" CASCADE)) unless self.class.postgres_error
   end
 
-  let(:conn)  { ::ActiveRecord::Base.connection }
+  let(:conn)  { ActiveRecord::Base.connection }
   let(:mine)  { SecureRandom.uuid }
   let(:other) { SecureRandom.uuid }
 
@@ -74,26 +72,26 @@ RSpec.describe "Kiosk::Settlement and Kiosk::CartMandate" do
     SQL
   end
 
-  def as(user_id, &block)
-    Kiosk::Server::SessionContext.open(connection: conn, identity: build_identity(user_id: user_id), &block)
+  def as(user_id, &)
+    Kiosk::Server::SessionContext.open(connection: conn, identity: build_identity(user_id: user_id), &)
   end
 
   it "reads the settlements of the principal the wire resolved, and no one else's" do
-    own = settle(mine, [{ booking_id: "b-1" }])
-    settle(other, [{ booking_id: "b-2" }])
+    own = settle(mine, [{ booking_id: 'b-1' }])
+    settle(other, [{ booking_id: 'b-2' }])
 
     expect(as(mine) { Kiosk::Settlement.own.pluck(:id) }).to eq([own])
   end
 
-  it "refuses to answer off the wire rather than answer nothing" do
+  it 'refuses to answer off the wire rather than answer nothing' do
     expect { Kiosk::Settlement.own.to_a }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
   end
 
   it "finds the settlement whose cart names a line item by the operator's own key" do
-    paid = settle(mine, [{ order_id: "o-1", qty: 2 }])
-    settle(mine, [{ order_id: "o-2" }])
+    paid = settle(mine, [{ order_id: 'o-1', qty: 2 }])
+    settle(mine, [{ order_id: 'o-2' }])
 
-    expect(Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: "o-1")).pluck(:id))
+    expect(Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: 'o-1')).pluck(:id))
       .to eq([paid])
   end
 end

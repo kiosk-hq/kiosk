@@ -33,25 +33,25 @@
 #   no_topic              a handler with verbs and no topic at all, on the
 #                         in-process default — which MUST boot exactly as before.
 
-ENV["RAILS_ENV"] = "production"
+ENV['RAILS_ENV'] = 'production'
 
-require "bundler/setup"
-require "fileutils"
-require "json"
-require "tmpdir"
-require "kiosk/server"
-require "action_controller/railtie"
+require 'bundler/setup'
+require 'fileutils'
+require 'json'
+require 'tmpdir'
+require 'kiosk/server'
+require 'action_controller/railtie'
 
 SCENARIO = ARGV.fetch(0)
-ROOT     = Dir.mktmpdir("kiosk-ephemeral-event-store-boot")
+ROOT     = Dir.mktmpdir('kiosk-ephemeral-event-store-boot')
 at_exit { FileUtils.remove_entry(ROOT) if File.directory?(ROOT) }
 
 app = Class.new(Rails::Application) do
   config.root             = ROOT
   config.eager_load       = false
-  config.paths["config"] << File.expand_path("config", __dir__)
+  config.paths['config'] << File.expand_path('config', __dir__)
   config.enable_reloading = false
-  config.secret_key_base  = "ephemeral-event-store-boot"
+  config.secret_key_base  = 'ephemeral-event-store-boot'
   config.logger           = Logger.new(IO::NULL)
   config.hosts.clear
 end
@@ -64,19 +64,19 @@ Object.const_set(:EphemeralEventStoreBootApp, app)
 class BootHandlerController < ActionController::API
   include Kiosk::Handler
 
-  if SCENARIO != "no_topic"
+  if SCENARIO != 'no_topic'
     topic :delivery do
-      description "Your order is on its way, or has arrived."
-      payload_schema type: "object", additionalProperties: false,
-                     properties: { order_id: { type: "string" } },
+      description 'Your order is on its way, or has arrived.'
+      payload_schema type: 'object', additionalProperties: false,
+                     properties: { order_id: { type: 'string' } },
                      required: %w[order_id]
     end
   end
 
   kind :query
-  description "Everything this origin sells."
-  input_schema type: "object", additionalProperties: false, properties: {}
-  output_schema type: "array", items: { type: "object" }
+  description 'Everything this origin sells.'
+  input_schema type: 'object', additionalProperties: false, properties: {}
+  output_schema type: 'array', items: { type: 'object' }
   def catalog
     render json: []
   end
@@ -93,14 +93,14 @@ class DurableBootStore
 end
 
 Kiosk.configure do |c|
-  c.issuer      = "http://localhost"
-  c.user_model  = "User"
+  c.issuer      = 'http://localhost'
+  c.user_model  = 'User'
   c.signing_key = Kiosk::Server::SigningKey.generate
 
   case SCENARIO
-  when "topic_without_store", "no_topic"
+  when 'topic_without_store', 'no_topic'
     nil # the default: `event_store` lazily becomes the in-process EventStore
-  when "topic_with_store"
+  when 'topic_with_store'
     c.event_store = DurableBootStore.new
   else
     raise ArgumentError, "unknown scenario #{SCENARIO.inspect}"
@@ -111,12 +111,12 @@ report =
   begin
     Rails.application.initialize!
     {
-      "booted" => true,
-      "topics" => Kiosk::Server::Events.known,
-      "store_class" => Kiosk.configuration.event_store.class.name,
+      'booted' => true,
+      'topics' => Kiosk::Server::Events.known,
+      'store_class' => Kiosk.configuration.event_store.class.name
     }
   rescue StandardError => e
-    { "booted" => false, "error_class" => e.class.name, "message" => e.message }
+    { 'booted' => false, 'error_class' => e.class.name, 'message' => e.message }
   end
 
 puts JSON.generate(report)

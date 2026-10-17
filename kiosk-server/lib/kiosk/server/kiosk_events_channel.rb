@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "action_cable"
+require 'action_cable'
 
 # Top level, unsuffixed, because Action Cable constantizes the channel named
 # in a subscribe frame: this class name IS the wire's channel name.
@@ -17,7 +17,7 @@ class KioskEvents < ActionCable::Channel::Base
 
   # A cursor is a non-negative integer JSON carries exactly (spec Section
   # 8.5.4, RFC 7493 Section 2.2).
-  MAX_CURSOR = 2**53 - 1
+  MAX_CURSOR = (2**53) - 1
 
   def subscribed
     return reject unless connection.kiosk_credential_holds?
@@ -66,11 +66,11 @@ class KioskEvents < ActionCable::Channel::Base
   # its `since` were pruned, so it re-reads state once through the verb.
   def subscribed_frame
     {
-      "type" => "subscribed",
-      "topic" => @topic,
-      "subject" => @subject,
-      "head" => @head,
-      "truncated" => since ? store.truncated?(identity_key, since) : false,
+      'type' => 'subscribed',
+      'topic' => @topic,
+      'subject' => @subject,
+      'head' => @head,
+      'truncated' => since ? store.truncated?(identity_key, since) : false
     }
   end
 
@@ -90,10 +90,10 @@ class KioskEvents < ActionCable::Channel::Base
   # Its own topic (the replayed tail holds every topic) and, when named, its
   # own subject (a stream name carries none).
   def for_this_subscription?(event)
-    return false unless event["topic"] == @topic
+    return false unless event['topic'] == @topic
     return true if @subject.nil?
 
-    event["subject"].to_s == @subject.to_s
+    event['subject'].to_s == @subject.to_s
   end
 
   # Spec Sections 8.5.4 and 8.5.6. No subject, or a `published` topic, is
@@ -120,7 +120,7 @@ class KioskEvents < ActionCable::Channel::Base
 
     @declaration = nil
     # Braces required: bare pairs would be read as `transmit`'s keywords.
-    transmit({ "type" => "unsubscribed", "topic" => @topic, "reason" => "reach_revoked" })
+    transmit({ 'type' => 'unsubscribed', 'topic' => @topic, 'reason' => 'reach_revoked' })
     stop_all_streams
   rescue StandardError => e
     logger&.error("[kiosk] events re-authorisation failed: #{e.class}: #{e.message}")

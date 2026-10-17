@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/errors"
+require 'kiosk/server/errors'
 
 module Kiosk
   module Server
@@ -9,12 +9,12 @@ module Kiosk
     # operators who opt into RLS.
     class SessionContext
       # `SET LOCAL` with bound values; the third argument `true` is LOCAL.
-      SET_GUC_SQL = "SELECT set_config($1, $2, true)"
+      SET_GUC_SQL = 'SELECT set_config($1, $2, true)'
 
       KEY = :kiosk_server_session_context
 
-      def self.open(connection:, identity:, &block)
-        new(connection: connection, identity: identity).open(&block)
+      def self.open(connection:, identity:, &)
+        new(connection: connection, identity: identity).open(&)
       end
 
       def self.current = Thread.current[KEY]
@@ -27,8 +27,8 @@ module Kiosk
         return current.identity if open?
 
         raise Errors::Unauthenticated,
-              "no Kiosk session is open. Wrap the call in " \
-              "Kiosk::Server::SessionContext.open(connection:, identity:), or pass the principal in."
+              'no Kiosk session is open. Wrap the call in ' \
+              'Kiosk::Server::SessionContext.open(connection:, identity:), or pass the principal in.'
       end
 
       attr_reader :connection, :identity
@@ -57,7 +57,7 @@ module Kiosk
           guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::USER_ID),  identity.user_id),
           (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ROLE),    identity.role) if identity.role),
           guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::ACTOR),    identity.actor),
-          (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::AGENT_ID), identity.agent_id) if identity.agent_id),
+          (guc_sql(Kiosk::GUC.for(ns, Kiosk::GUC::AGENT_ID), identity.agent_id) if identity.agent_id)
         ].compact
 
         if Kiosk.configuration.enforce_db_role
@@ -70,7 +70,7 @@ module Kiosk
       private
 
       def apply_gucs
-        guc_statements.each { |sql, binds| connection.exec_query(sql, "Kiosk GUC", binds) }
+        guc_statements.each { |sql, binds| connection.exec_query(sql, 'Kiosk GUC', binds) }
       end
 
       def guc_sql(name, value)
@@ -78,7 +78,7 @@ module Kiosk
       end
 
       def quote_ident(name)
-        name.to_s.split(".").map { |part| %("#{part.gsub('"', '""')}") }.join(".")
+        name.to_s.split('.').map { |part| %("#{part.gsub('"', '""')}") }.join('.')
       end
     end
   end

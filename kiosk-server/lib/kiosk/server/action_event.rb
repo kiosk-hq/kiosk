@@ -8,24 +8,24 @@ module Kiosk
     class ActionEvent < Data.define(:action, :user_id, :agent_id, :role, :actor, :args,
                                     :status, :error_class, :error_message,
                                     :cause_class, :cause_message, :invoked_at)
-      OK    = "ok"
-      ERROR = "error"
+      OK    = 'ok'
+      ERROR = 'error'
 
       def self.build(identity:, name:, args:, status:, error: nil, invoked_at: Time.now)
         cause = cause_of(error)
         new(
-          action:        name.to_s,
-          user_id:       identity.user_id,
-          agent_id:      identity.agent_id,
-          role:          identity.role,
-          actor:         identity.actor,
-          args:          args.is_a?(Hash) ? args : {},
-          status:        status.to_s,
-          error_class:   error && error.class.name,
+          action: name.to_s,
+          user_id: identity.user_id,
+          agent_id: identity.agent_id,
+          role: identity.role,
+          actor: identity.actor,
+          args: args.is_a?(Hash) ? args : {},
+          status: status.to_s,
+          error_class: error && error.class.name,
           error_message: error && error.message.to_s,
-          cause_class:   cause && cause.class.name,
+          cause_class: cause && cause.class.name,
           cause_message: cause && cause.message.to_s,
-          invoked_at:    invoked_at,
+          invoked_at: invoked_at
         )
       end
 
@@ -51,13 +51,13 @@ module Kiosk
 
       def self.json_type(value)
         case value
-        when nil            then "null"
-        when true, false    then "boolean"
-        when Integer        then "integer"
-        when Float, Numeric then "number"
-        when Array          then "array"
-        when Hash           then "object"
-        else "string"
+        when nil            then 'null'
+        when true, false    then 'boolean'
+        when Integer        then 'integer'
+        when Float, Numeric then 'number'
+        when Array          then 'array'
+        when Hash           then 'object'
+        else 'string'
         end
       end
     end

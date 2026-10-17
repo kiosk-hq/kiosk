@@ -25,39 +25,39 @@
 #   no_roles               no role vocabulary at all — ADR-0011's protected
 #                          operator, which MUST boot exactly as before.
 
-require "bundler/setup"
-require "fileutils"
-require "json"
-require "tmpdir"
-require "kiosk/server"
+require 'bundler/setup'
+require 'fileutils'
+require 'json'
+require 'tmpdir'
+require 'kiosk/server'
 
 SCENARIO = ARGV.fetch(0)
-ROOT     = Dir.mktmpdir("kiosk-default-role-boot")
+ROOT     = Dir.mktmpdir('kiosk-default-role-boot')
 at_exit { FileUtils.remove_entry(ROOT) if File.directory?(ROOT) }
 
 app = Class.new(Rails::Application) do
   config.root             = ROOT
   config.eager_load       = false
-  config.paths["config"] << File.expand_path("config", __dir__)
+  config.paths['config'] << File.expand_path('config', __dir__)
   config.enable_reloading = false
-  config.secret_key_base  = "default-role-boot"
+  config.secret_key_base  = 'default-role-boot'
   config.logger           = Logger.new(IO::NULL)
   config.hosts.clear
 end
 Object.const_set(:DefaultRoleBootApp, app)
 
 Kiosk.configure do |c|
-  c.issuer      = "http://localhost"
-  c.user_model  = "User"
+  c.issuer      = 'http://localhost'
+  c.user_model  = 'User'
   c.signing_key = Kiosk::Server::SigningKey.generate
 
   case SCENARIO
-  when "roles_without_default"
+  when 'roles_without_default'
     c.roles = %i[customer owner]
-  when "roles_with_default"
+  when 'roles_with_default'
     c.roles             = %i[customer owner]
     c.registration_role = :customer
-  when "no_roles"
+  when 'no_roles'
     nil # the default: `roles` is [] and `registration_role` is unset
   else
     raise ArgumentError, "unknown scenario #{SCENARIO.inspect}"
@@ -68,12 +68,12 @@ report =
   begin
     Rails.application.initialize!
     {
-      "booted" => true,
-      "roles" => Kiosk.configuration.roles.map(&:to_s),
-      "registration_role" => Kiosk.configuration.registration_role&.to_s,
+      'booted' => true,
+      'roles' => Kiosk.configuration.roles.map(&:to_s),
+      'registration_role' => Kiosk.configuration.registration_role&.to_s
     }
   rescue StandardError => e
-    { "booted" => false, "error_class" => e.class.name, "message" => e.message }
+    { 'booted' => false, 'error_class' => e.class.name, 'message' => e.message }
   end
 
 puts JSON.generate(report)

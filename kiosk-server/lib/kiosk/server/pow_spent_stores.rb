@@ -30,14 +30,14 @@ module Kiosk
               WHERE s.expires_at <= now()
             RETURNING s.id
           SQL
-          rows = connection.exec_query(sql, "Kiosk pow_spent claim", [id, exp.to_i]).to_a
+          rows = connection.exec_query(sql, 'Kiosk pow_spent claim', [id, exp.to_i]).to_a
           !rows.empty?
         end
 
         def release(id)
           return if id.nil?
 
-          connection.exec_query(%(DELETE FROM #{table} WHERE id = $1), "Kiosk pow_spent release", [id])
+          connection.exec_query(%(DELETE FROM #{table} WHERE id = $1), 'Kiosk pow_spent release', [id])
           nil
         end
 
@@ -49,7 +49,7 @@ module Kiosk
             WHERE id = $1 AND expires_at > now()
             LIMIT 1
           SQL
-          row = connection.exec_query(sql, "Kiosk pow_spent lookup", [id]).to_a.first
+          row = connection.exec_query(sql, 'Kiosk pow_spent lookup', [id]).to_a.first
           !row.nil?
         end
 
@@ -61,12 +61,12 @@ module Kiosk
             VALUES ($1, to_timestamp($2))
             ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at
           SQL
-          connection.exec_query(sql, "Kiosk pow_spent mark", [id, exp.to_i])
+          connection.exec_query(sql, 'Kiosk pow_spent mark', [id, exp.to_i])
           nil
         end
 
         def prune!
-          connection.exec_query(%(DELETE FROM #{table} WHERE expires_at <= now()), "Kiosk pow_spent prune")
+          connection.exec_query(%(DELETE FROM #{table} WHERE expires_at <= now()), 'Kiosk pow_spent prune')
           nil
         end
 

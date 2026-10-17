@@ -6,7 +6,7 @@
 # file naming its own would redefine the other's, and the suite would say so on
 # every run to nobody.
 module EquihashKat
-  SALT   = "kat"
+  SALT   = 'kat'
   PARAMS = { n: 8, k: 1 }.freeze
   NONCE  = { indices: [2, 10] }.freeze
 end

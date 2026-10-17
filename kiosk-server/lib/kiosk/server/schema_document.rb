@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-require "digest"
-require "json"
-require "kiosk/server/actions"
-require "kiosk/server/queries"
-require "kiosk/server/schema_slots"
-require "kiosk/server/version"
+require 'digest'
+require 'json'
+require 'kiosk/server/actions'
+require 'kiosk/server/queries'
+require 'kiosk/server/schema_slots'
+require 'kiosk/server/version'
 
 module Kiosk
   module Server
@@ -43,11 +43,11 @@ module Kiosk
         def derive!(config: Kiosk.configuration)
           MUTEX.synchronize { @memo = build(config) }
           self
-        rescue StandardError => error
+        rescue StandardError => e
           raise unless SchemaSlots.dynamic_declarations?
 
           @memo = nil
-          deferred_derivation_warning(error)
+          deferred_derivation_warning(e)
           self
         end
 
@@ -91,10 +91,10 @@ module Kiosk
 
         def deferred_derivation_warning(error)
           message =
-            "[kiosk-server] the schema catalog could not be derived at boot " \
+            '[kiosk-server] the schema catalog could not be derived at boot ' \
             "(#{error.class}: #{error.message}). A descriptor slot on this origin is " \
-            "data-derived (a proc), and the data was not reachable — normal during " \
-            "db:create, db:migrate and assets:precompile. It will be derived on first read."
+            'data-derived (a proc), and the data was not reachable — normal during ' \
+            'db:create, db:migrate and assets:precompile. It will be derived on first read.'
           logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
           logger ? logger.info(message) : warn(message)
         end
@@ -102,15 +102,15 @@ module Kiosk
         # Every input of `/schema` and `/openapi.json`, and nothing else.
         def digest_inputs(config, document)
           {
-            gem_version:      Kiosk::Server::VERSION,
+            gem_version: Kiosk::Server::VERSION,
             protocol_version: Kiosk::Protocol::API_VERSION,
-            origins:          config.origins,
-            mount_path:       config.mount_path.to_s,
-            capabilities:     Array(config.capabilities),
-            min_client:       config.min_client.to_s,
-            owner:            config.owner,
-            skill:            [config.skill_url.to_s, config.skill_sha256.to_s],
-            document:         document,
+            origins: config.origins,
+            mount_path: config.mount_path.to_s,
+            capabilities: Array(config.capabilities),
+            min_client: config.min_client.to_s,
+            owner: config.owner,
+            skill: [config.skill_url.to_s, config.skill_sha256.to_s],
+            document: document
           }
         end
       end

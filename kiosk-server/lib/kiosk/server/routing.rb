@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "action_dispatch/routing"
+require 'action_dispatch/routing'
 
 module Kiosk
   module Server
@@ -24,8 +24,8 @@ module Kiosk
           @mapper = mapper
         end
 
-        def queries(*names) = draw(:get, "show", names)
-        def actions(*names) = draw(:post, "create", names)
+        def queries(*names) = draw(:get, 'show', names)
+        def actions(*names) = draw(:post, 'create', names)
 
         private
 

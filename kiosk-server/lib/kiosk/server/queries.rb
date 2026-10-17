@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/verb_registry"
+require 'kiosk/server/verb_registry'
 
 module Kiosk
   module Server

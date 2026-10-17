@@ -1,17 +1,17 @@
 # frozen_string_literal: true
 
-require "action_controller"
-require "action_dispatch/http/parameters"
-require "cgi"
-require "json"
-require "kiosk/server/caller_timezone"
-require "kiosk/server/current_request"
-require "kiosk/server/executor"
-require "kiosk/server/errors"
-require "kiosk/server/headers"
-require "kiosk/server/pow_gate"
-require "kiosk/server/request_validation"
-require "kiosk/server/schema_document"
+require 'action_controller'
+require 'action_dispatch/http/parameters'
+require 'cgi'
+require 'json'
+require 'kiosk/server/caller_timezone'
+require 'kiosk/server/current_request'
+require 'kiosk/server/executor'
+require 'kiosk/server/errors'
+require 'kiosk/server/headers'
+require 'kiosk/server/pow_gate'
+require 'kiosk/server/request_validation'
+require 'kiosk/server/schema_document'
 
 module Kiosk
   module Server
@@ -27,8 +27,8 @@ module Kiosk
         render_wire_error(
           Errors.malformed_json(
             hint: "an action's arguments are a JSON object in the request body; " \
-                  "a query's are in the query string.",
-          ),
+                  "a query's are in the query string."
+          )
         )
       end
 
@@ -45,9 +45,9 @@ module Kiosk
         identity = resolve_identity!
 
         # After identity: 401 before 400.
-        RequestValidation.validate_body!(body, exchange: "POST <endpoint>/pay")
+        RequestValidation.validate_body!(body, exchange: 'POST <endpoint>/pay')
 
-        execute_wire(command: :pay, args: body, identity: identity, name: "pay")
+        execute_wire(command: :pay, args: body, identity: identity, name: 'pay')
       end
 
       private
@@ -68,16 +68,16 @@ module Kiosk
         end
 
         # Last: Rails stamps `Vary: Accept` at render time.
-        response.headers.delete("Vary")
+        response.headers.delete('Vary')
       end
 
       # RFC 9110 §13.1.2; not `fresh_when`, which hashes the validator it is given.
       def if_none_match?(etag)
-        raw = request.get_header("HTTP_IF_NONE_MATCH").to_s
+        raw = request.get_header('HTTP_IF_NONE_MATCH').to_s
         return false if raw.empty?
-        return true  if raw.strip == "*"
+        return true  if raw.strip == '*'
 
-        raw.split(",").any? { |tag| tag.strip.delete_prefix("W/") == etag }
+        raw.split(',').any? { |tag| tag.strip.delete_prefix('W/') == etag }
       end
 
       # `command` is the policy verb ({Executor::VERBS}); `name` the wire name.
@@ -92,11 +92,11 @@ module Kiosk
                                      handler_headers: handler_headers,
                                      timezone: timezone) do
           Executor.call(
-            kind:       command,
-            args:       args,
-            identity:   identity,
+            kind: command,
+            args: args,
+            identity: identity,
             connection: connection_for(identity),
-            name:       name,
+            name: name
           )
         end
         handler_headers.each { |header, value| response.headers[header] = value }
@@ -105,12 +105,10 @@ module Kiosk
       end
 
       def toll!(identity:, command:, name:, body:)
-        pow = PowGate.proofs_from_header(request.get_header("HTTP_KIOSK_POW"))
+        pow = PowGate.proofs_from_header(request.get_header('HTTP_KIOSK_POW'))
 
         # A malformed proof is a 400, not a silent fresh 402.
-        if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
-          RequestValidation.validate_proofs!(pow)
-        end
+        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
 
         PowGate.gate(
           identity: identity, command: command, method: request.request_method,
@@ -135,36 +133,36 @@ module Kiosk
         total = result.total
         total = result.payload.length if total.nil? && result.next_cursor.nil? &&
                                          result.payload.is_a?(::Array)
-        response.headers["X-Total-Count"] = total.to_s unless total.nil?
+        response.headers['X-Total-Count'] = total.to_s unless total.nil?
       end
 
       def add_link_header(value)
-        existing = response.headers["Link"].to_s
-        response.headers["Link"] = existing.empty? ? value : "#{existing}, #{value}"
+        existing = response.headers['Link'].to_s
+        response.headers['Link'] = existing.empty? ? value : "#{existing}, #{value}"
       end
 
       # Edits the raw query string, so the caller's bracket spellings survive.
       def next_page_link(cursor)
-        pairs = request.query_string.to_s.split("&").reject do |pair|
-          pair.split("=", 2).first == "cursor"
+        pairs = request.query_string.to_s.split('&').reject do |pair|
+          pair.split('=', 2).first == 'cursor'
         end
         pairs << "cursor=#{CGI.escape(cursor.to_s)}"
 
-        %(<#{request.base_url}#{request.path}?#{pairs.join("&")}>; rel="next")
+        %(<#{request.base_url}#{request.path}?#{pairs.join('&')}>; rel="next")
       end
 
       def render_wire_error(error)
         render_wire_body(
           error.to_problem,
-          status:       error.http_status,
-          error:        error,
-          content_type: Errors::PROBLEM_CONTENT_TYPE,
+          status: error.http_status,
+          error: error,
+          content_type: Errors::PROBLEM_CONTENT_TYPE
         )
       end
 
       def resolve_identity!
         identity = IdentityResolution.resolve(request)
-        raise Errors::Unauthenticated, "no identity resolved from request" if identity.nil?
+        raise Errors::Unauthenticated, 'no identity resolved from request' if identity.nil?
 
         identity
       end
@@ -174,15 +172,13 @@ module Kiosk
         return {} if raw.nil? || raw.empty?
 
         parsed = JSON.parse(raw, symbolize_names: true)
-        unless parsed.is_a?(Hash)
-          raise Errors::BadRequest, "request body must be a JSON object"
-        end
+        raise Errors::BadRequest, 'request body must be a JSON object' unless parsed.is_a?(Hash)
 
         parsed
       rescue JSON::ParserError
         raise Errors.malformed_json(
           hint: "an action's arguments are a JSON object in the request body; " \
-                "a query's are in the query string.",
+                "a query's are in the query string."
         )
       end
 
@@ -199,7 +195,7 @@ module Kiosk
         if error
           error.response_headers.each { |name, value| response.set_header(name, value) }
           if (challenge = www_authenticate_for(error))
-            response.set_header("WWW-Authenticate", challenge)
+            response.set_header('WWW-Authenticate', challenge)
           end
         end
         options = { json: body, status: status }
@@ -211,9 +207,9 @@ module Kiosk
       def www_authenticate_for(error)
         issuer = Kiosk.current_issuer
         case error.code
-        when "pow_required"
+        when 'pow_required'
           %(Kiosk-PoW realm="#{issuer}")
-        when "payment_setup_required"
+        when 'payment_setup_required'
           %(Payment realm="#{issuer}", method="ap2")
         end
       end

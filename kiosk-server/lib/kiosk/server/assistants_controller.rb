@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "action_controller"
-require "kiosk/server/account_binding"
-require "kiosk/server/link_code"
-require "kiosk/server/signing_key"
+require 'action_controller'
+require 'kiosk/server/account_binding'
+require 'kiosk/server/link_code'
+require 'kiosk/server/signing_key'
 
 module Kiosk
   module Server
@@ -13,13 +13,14 @@ module Kiosk
     class AssistantsController < ::ActionController::Base
       include AccountHolderGate
       include BindingModuleGate
+
       prepend_before_action :refuse_unserved_binding
 
-      SIGN_IN_PROMPT = "Sign in to your account first to manage linked assistants."
-      SIGN_IN_ALERT  = "Please sign in to manage your linked assistants."
+      SIGN_IN_PROMPT = 'Sign in to your account first to manage linked assistants.'
+      SIGN_IN_ALERT  = 'Please sign in to manage your linked assistants.'
 
       # Host app view paths come first, so an operator's templates win.
-      append_view_path File.expand_path("../../../app/views", __dir__)
+      append_view_path File.expand_path('../../../app/views', __dir__)
       layout false
 
       # A JSON caller without a CSRF token is an assistant at the wrong door:
@@ -51,7 +52,7 @@ module Kiosk
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
         AccountBinding.unlink!(agent_id: params[:agent_id].to_s, user_id: @identity.user_id)
-        @notice = "Assistant unlinked — its key no longer signs in."
+        @notice = 'Assistant unlinked — its key no longer signs in.'
         render_page
       rescue Errors::Base => e
         @error = e.message
@@ -76,10 +77,10 @@ module Kiosk
         if params.key?(:spending_cap_cents)
           raw = params[:spending_cap_cents].to_s
           if raw.strip.empty?
-            assignments << "spending_cap_cents = NULL"
+            assignments << 'spending_cap_cents = NULL'
           else
             cents = Integer(raw, exception: false)
-            raise Errors::BadRequest, "spending_cap_cents must be an integer" if cents.nil?
+            raise Errors::BadRequest, 'spending_cap_cents must be an integer' if cents.nil?
 
             binds << cents
             assignments << "spending_cap_cents = $#{binds.size}"
@@ -89,9 +90,9 @@ module Kiosk
         if assignments.any?
           # The ownership predicate is the security boundary: `agent_id` from the caller, `user_id` from the session.
           binds.concat([params[:agent_id].to_s, @identity.user_id, Kiosk.current_issuer])
-          conn.exec_query(<<~SQL, "Kiosk assistant update", binds)
+          conn.exec_query(<<~SQL, 'Kiosk assistant update', binds)
             UPDATE #{Kiosk.configuration.schema}.agents
-            SET #{assignments.join(", ")}
+            SET #{assignments.join(', ')}
             WHERE id = $#{binds.size - 2}
               AND user_id = $#{binds.size - 1}
               AND issuer = $#{binds.size}
@@ -99,7 +100,7 @@ module Kiosk
           SQL
         end
 
-        @notice = "Assistant settings saved."
+        @notice = 'Assistant settings saved.'
         render_page
       rescue Errors::Base => e
         @error = e.message
@@ -112,7 +113,7 @@ module Kiosk
         @assistants = bound_assistants
         # Without a `config.spending_cap` seam the saved cap binds nothing; the page says so.
         @spending_cap_enforced = !Kiosk.configuration.spending_cap.nil?
-        @page_path = request.path.sub(%r{/(link|unlink|update)\z}, "")
+        @page_path = request.path.sub(%r{/(link|unlink|update)\z}, '')
         render :show, status: status
       end
 
@@ -128,15 +129,15 @@ module Kiosk
       # Not a problem document: this page is not a wire endpoint.
       def wrong_door_envelope
         {
-          ok:    false,
+          ok: false,
           error: {
-            code:    "invalid_authenticity_token",
+            code: 'invalid_authenticity_token',
             message: "this is the account holder's browser page, not the Kiosk wire — " \
-                     "it needs a signed-in session and a CSRF token from its own form",
-            hint:    "assistants use the wire: GET #{request.base_url}/.well-known/kiosk.json " \
-                     "for the register/login endpoints, then GET <endpoint>/schema " \
-                     "(public) for the verbs this origin serves",
-          },
+                     'it needs a signed-in session and a CSRF token from its own form',
+            hint: "assistants use the wire: GET #{request.base_url}/.well-known/kiosk.json " \
+                  'for the register/login endpoints, then GET <endpoint>/schema ' \
+                  '(public) for the verbs this origin serves'
+          }
         }
       end
 
@@ -148,19 +149,19 @@ module Kiosk
         rows =
           begin
             sql, binds = bound_assistants_query(config, settled_spend: true)
-            conn.exec_query(sql, "Kiosk bound assistants", binds)
+            conn.exec_query(sql, 'Kiosk bound assistants', binds)
           rescue ::ActiveRecord::StatementInvalid => e
             raise unless missing_table?(e)
 
             sql, binds = bound_assistants_query(config, settled_spend: false)
-            conn.exec_query(sql, "Kiosk bound assistants", binds)
+            conn.exec_query(sql, 'Kiosk bound assistants', binds)
           end
         rows.to_a.map { |row| present(row) }
       end
 
       # By class name, so this file does not load `PG`.
       def missing_table?(error)
-        error.cause&.class&.name == "PG::UndefinedTable"
+        error.cause&.class&.name == 'PG::UndefinedTable'
       end
 
       # Returns `[sql, binds]` together: the two branches take different bind counts.
@@ -178,9 +179,9 @@ module Kiosk
 
       # This agent's settled spend, within `spending_cap_window_days` when set.
       def settled_cents_expr(config, settled_spend:)
-        return "0" unless settled_spend
+        return '0' unless settled_spend
 
-        window = config.spending_cap_window_days ? "AND settled_at >= now() - make_interval(days => $3)" : ""
+        window = config.spending_cap_window_days ? 'AND settled_at >= now() - make_interval(days => $3)' : ''
         <<~SQL.strip
           (SELECT COALESCE(SUM(settled_amount_cents), 0)
            FROM #{config.schema}.settlements
@@ -189,23 +190,23 @@ module Kiosk
       end
 
       def present(row)
-        cap = row.fetch("spending_cap_cents", nil)
+        cap = row.fetch('spending_cap_cents', nil)
         {
-          agent_id:           row.fetch("id"),
-          fingerprint:        fingerprint(row.fetch("public_key")),
-          created_at:         row.fetch("created_at"),
-          human_label:        row.fetch("human_label", nil),
+          agent_id: row.fetch('id'),
+          fingerprint: fingerprint(row.fetch('public_key')),
+          created_at: row.fetch('created_at'),
+          human_label: row.fetch('human_label', nil),
           spending_cap_cents: cap.nil? ? nil : cap.to_i,
-          settled_cents:      row.fetch("settled_cents", 0).to_i,
+          settled_cents: row.fetch('settled_cents', 0).to_i
         }
       end
 
       def fingerprint(pem)
-        return "(no key)" if pem.nil? || pem.empty?
+        return '(no key)' if pem.nil? || pem.empty?
 
         SigningKey.from_pem(pem).kid
       rescue StandardError
-        "(unreadable key)"
+        '(unreadable key)'
       end
     end
   end

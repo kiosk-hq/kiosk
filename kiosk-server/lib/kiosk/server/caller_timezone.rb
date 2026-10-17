@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "active_support/core_ext/time/zones"
-require "kiosk/protocol"
-require "kiosk/server/errors"
+require 'active_support/core_ext/time/zones'
+require 'kiosk/protocol'
+require 'kiosk/server/errors'
 
 module Kiosk
   module Server
@@ -10,15 +10,15 @@ module Kiosk
     # bare `YYYY-MM-DD` argument is read. It never decides how an answer is rendered.
     module CallerTimezone
       HEADER  = Kiosk::Protocol::HEADER_TIMEZONE
-      ENV_KEY = "HTTP_KIOSK_TIMEZONE"
+      ENV_KEY = 'HTTP_KIOSK_TIMEZONE'
 
       # An IANA `Area/Location` name or `UTC` only: no offsets (no DST), no Rails
       # friendly names, no legacy ids like `EST`.
       SHAPE = %r{\A(?:UTC|[A-Za-z][A-Za-z0-9_+-]*(?:/[A-Za-z0-9_+-]+)+)\z}
 
-      HINT = "send an IANA zone name — Area/Location (e.g. Europe/Dublin) or the literal UTC. " \
-             "A UTC offset (+03:00) is not accepted: it cannot carry a DST transition. " \
-             "Take the zone from the human you are acting for, never from the machine you run on."
+      HINT = 'send an IANA zone name — Area/Location (e.g. Europe/Dublin) or the literal UTC. ' \
+             'A UTC offset (+03:00) is not accepted: it cannot carry a DST transition. ' \
+             'Take the zone from the human you are acting for, never from the machine you run on.'
 
       module_function
 
@@ -42,7 +42,7 @@ module Kiosk
       def refuse(raw)
         raise Errors::BadRequest.new(
           "invalid #{HEADER}: #{raw.to_s.strip.inspect}",
-          hint: HINT,
+          hint: HINT
         )
       end
     end

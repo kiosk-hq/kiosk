@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "stringio"
+require 'stringio'
 
 # The binding product of the ceremony: fresh key → linked
 # assistant account under the holder's user_id; known key → rebind with
@@ -10,35 +10,35 @@ require "stringio"
 # default_agent_idp_spec.rb.
 RSpec.describe Kiosk::Server::AccountBinding do
   let(:pem)     { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
-  let(:user_id) { "11111111-1111-1111-1111-111111111111" }
+  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
   let(:con)     { FakeConnection.new }
 
   before do
     Kiosk.configure do |c|
       c.roles  = %i[customer]
-      c.schema = "kiosk"
+      c.schema = 'kiosk'
     end
-    ar_base = class_double("ActiveRecord::Base").as_stubbed_const
+    ar_base = class_double('ActiveRecord::Base').as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
     allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_return("kiosk-pop-jwt")
+      .to receive(:issue).and_return('kiosk-pop-jwt')
   end
 
-  describe ".bind! — fresh key" do
+  describe '.bind! — fresh key' do
     before do
       # SELECT finds no live agent; INSERT returns the new id.
-      route_exec_query(con) { |sql, _binds| sql =~ /INSERT/i ? [{ "id" => "agent-new" }] : [] }
+      route_exec_query(con) { |sql, _binds| sql =~ /INSERT/i ? [{ 'id' => 'agent-new' }] : [] }
     end
 
     it "registers a linked assistant account under the holder's user_id" do
       result = described_class.bind!(public_key_pem: pem, user_id: user_id)
 
       expect(result).to eq(
-        agent_id: "agent-new", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: true,
+        agent_id: 'agent-new', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true
       )
       sql, binds = con.bound(/INSERT/i).first
-      expect(sql).to include("kiosk.agents")
+      expect(sql).to include('kiosk.agents')
       # K-782: the principal is `$1`, the key `$2`, the origin `$3` — and none
       # appears in the statement text, which is the property that makes a
       # forgotten `quote` impossible rather than merely absent.
@@ -49,25 +49,25 @@ RSpec.describe Kiosk::Server::AccountBinding do
     end
 
     # The lookup that decides fresh-vs-known takes the CALLER's key verbatim.
-    it "looks the key up through a bind, so a quote-bearing PEM is just a value" do
+    it 'looks the key up through a bind, so a quote-bearing PEM is just a value' do
       hostile = "-----BEGIN PUBLIC KEY-----\n' OR '1'='1 --\n-----END PUBLIC KEY-----"
       described_class.bind!(public_key_pem: hostile, user_id: user_id)
 
       sql, binds = con.bound(/SELECT/i).first
-      expect(sql).to include("public_key = $1 AND issuer = $2")
+      expect(sql).to include('public_key = $1 AND issuer = $2')
       expect(binds).to eq([hostile, Kiosk.current_issuer])
       expect(con.all_sql).not_to include("OR '1'='1")
     end
 
-    it "never invokes the assistant_creation factory (the principal already exists)" do
-      factory = ->(_pubkey) { raise "assistant_creation must not run during binding" }
+    it 'never invokes the assistant_creation factory (the principal already exists)' do
+      factory = ->(_pubkey) { raise 'assistant_creation must not run during binding' }
       Kiosk.configure { |c| c.assistant_creation = factory }
 
       expect { described_class.bind!(public_key_pem: pem, user_id: user_id) }
         .not_to raise_error
     end
 
-    it "does not fire assistant_claimed for a fresh key (nothing was re-bound)" do
+    it 'does not fire assistant_claimed for a fresh key (nothing was re-bound)' do
       fired = false
       Kiosk.configure { |c| c.assistant_claimed = ->(**) { fired = true } }
 
@@ -76,17 +76,17 @@ RSpec.describe Kiosk::Server::AccountBinding do
     end
 
     it "pins the ceremony's requested_role into allowed_roles" do
-      described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "customer")
+      described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: 'customer')
       sql, binds = con.bound(/INSERT/i).first
       # `ARRAY[$4]::text[]` and not `$4::text[]`: the cast alone would ask
       # Postgres to parse the role as an ARRAY LITERAL — proven in
       # auth_plane_persistence_spec.rb by removing the ARRAY[] and watching
       # `malformed array literal: "customer"`.
-      expect(sql).to include("ARRAY[$4]::text[]")
-      expect(binds).to eq([user_id, pem, Kiosk.current_issuer, "customer"])
+      expect(sql).to include('ARRAY[$4]::text[]')
+      expect(binds).to eq([user_id, pem, Kiosk.current_issuer, 'customer'])
     end
 
-    it "falls back to registration_role, and the empty role set when neither is set" do
+    it 'falls back to registration_role, and the empty role set when neither is set' do
       # THE EMPTY-SET HALF IS AN ORIGIN THAT DECLARES NO ROLES, and the
       # vocabulary is set here rather than inherited (T-225): an origin that
       # declares roles and configures no default is refused at BOOT now, so
@@ -100,51 +100,54 @@ RSpec.describe Kiosk::Server::AccountBinding do
       # `NOT NULL` rejected on every role-less fresh-key bind (K-788) — a fake
       # cannot see that, so the real proof is in auth_plane_persistence_spec.rb.
       expect(sql).to include("'{}'::text[]")
-      expect(sql).not_to include("NULL")
+      expect(sql).not_to include('NULL')
       expect(binds).to eq([user_id, pem, Kiosk.current_issuer])
 
-      Kiosk.configure { |c| c.roles = %i[customer]; c.registration_role = :customer }
+      Kiosk.configure do |c|
+        c.roles = %i[customer]
+        c.registration_role = :customer
+      end
       described_class.bind!(public_key_pem: pem, user_id: user_id)
       sql, binds = con.bound(/INSERT/i).last
-      expect(sql).to include("ARRAY[$4]::text[]")
-      expect(binds).to eq([user_id, pem, Kiosk.current_issuer, "customer"])
+      expect(sql).to include('ARRAY[$4]::text[]')
+      expect(binds).to eq([user_id, pem, Kiosk.current_issuer, 'customer'])
     end
 
-    it "raises ConfigurationError for a role outside the declared set" do
-      expect {
-        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "root")
-      }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /root/)
+    it 'raises ConfigurationError for a role outside the declared set' do
+      expect do
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: 'root')
+      end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /root/)
     end
 
-    it "requires a user_id (binding without a principal is meaningless)" do
+    it 'requires a user_id (binding without a principal is meaningless)' do
       expect { described_class.bind!(public_key_pem: pem, user_id: nil) }
         .to raise_error(ArgumentError, /user_id/)
     end
   end
 
-  describe ".bind! — known key (rebind, scenario TWO)" do
-    let(:previous_user) { "22222222-2222-2222-2222-222222222222" }
+  describe '.bind! — known key (rebind, scenario TWO)' do
+    let(:previous_user) { '22222222-2222-2222-2222-222222222222' }
 
     before do
       route_exec_query(con) do |sql, _binds|
         if sql =~ /SELECT/i
-          [{ "id" => "agent-known", "user_id" => previous_user, "allowed_roles" => "{customer}" }]
+          [{ 'id' => 'agent-known', 'user_id' => previous_user, 'allowed_roles' => '{customer}' }]
         else
           []
         end
       end
     end
 
-    it "remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched" do
+    it 'remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched' do
       result = described_class.bind!(public_key_pem: pem, user_id: user_id)
 
       expect(result).to eq(
-        agent_id: "agent-known", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: false,
+        agent_id: 'agent-known', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: false
       )
       sql, binds = con.bound(/UPDATE/i).first
-      expect(sql).to include("SET user_id = $1")
-      expect(sql).to include("WHERE id = $2")
-      expect(binds).to eq([user_id, "agent-known"])
+      expect(sql).to include('SET user_id = $1')
+      expect(sql).to include('WHERE id = $2')
+      expect(binds).to eq([user_id, 'agent-known'])
       expect(con.bound(/INSERT/i)).to be_empty
       # Reputation carry-over = the binding touches the agents row and nothing
       # else. Reputation is keyed on `agent_id`, which is what stays stable
@@ -153,75 +156,75 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(con).not_to have_received(:quote)
     end
 
-    it "fires assistant_claimed(agent:, from:, to:) with both accounts" do
-      stub_const("Account", Class.new { def self.find(id) = "account #{id}" })
+    it 'fires assistant_claimed(agent:, from:, to:) with both accounts' do
+      stub_const('Account', Class.new { def self.find(id) = "account #{id}" })
       received = nil
       Kiosk.configure do |c|
-        c.user_model = "Account"
+        c.user_model = 'Account'
         c.assistant_claimed = ->(**accounts) { received = accounts }
       end
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
-      expect(received).to eq(agent: "agent-known", from: "account #{previous_user}", to: "account #{user_id}")
+      expect(received).to eq(agent: 'agent-known', from: "account #{previous_user}", to: "account #{user_id}")
     end
 
-    it "runs the hook inside the rebind transaction (a raising hook aborts the rebind)" do
-      stub_const("Account", Class.new { def self.find(id) = id })
+    it 'runs the hook inside the rebind transaction (a raising hook aborts the rebind)' do
+      stub_const('Account', Class.new { def self.find(id) = id })
       Kiosk.configure do |c|
-        c.user_model = "Account"
-        c.assistant_claimed = ->(**) { raise "vertical migration failed" }
+        c.user_model = 'Account'
+        c.assistant_claimed = ->(**) { raise 'vertical migration failed' }
       end
 
       expect { described_class.bind!(public_key_pem: pem, user_id: user_id) }
         .to raise_error(RuntimeError, /vertical migration failed/)
     end
 
-    it "mints the token with the role the ceremony resolves, not the pre-link one" do
+    it 'mints the token with the role the ceremony resolves, not the pre-link one' do
       Kiosk.configure { |c| c.registration_role = :customer }
       idp    = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
       issued = nil
       allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
         issued = { agent_id: agent_id, role: role }
-        "kiosk-pop-jwt"
+        'kiosk-pop-jwt'
       end
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
-      expect(issued).to eq(agent_id: "agent-known", role: "customer")
+      expect(issued).to eq(agent_id: 'agent-known', role: 'customer')
     end
 
     # roles-from-IdP (Path A): a rebind carrying the NEW human's role
     # remaps allowed_roles in the same UPDATE and mints the token with it —
     # the agent adopts the role of the principal it is now bound to.
-    context "when the ceremony carries a requested_role (roles-from-IdP)" do
+    context 'when the ceremony carries a requested_role (roles-from-IdP)' do
       before { Kiosk.configure { |c| c.roles = %i[customer stylist owner] } }
 
       it "remaps allowed_roles to the new human's role in the rebind UPDATE" do
-        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "owner")
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: 'owner')
 
         sql, binds = con.bound(/UPDATE/i).first
-        expect(sql).to include("SET user_id = $1")
-        expect(sql).to include("allowed_roles = ARRAY[$3]::text[]")
-        expect(binds).to eq([user_id, "agent-known", "owner"])
+        expect(sql).to include('SET user_id = $1')
+        expect(sql).to include('allowed_roles = ARRAY[$3]::text[]')
+        expect(binds).to eq([user_id, 'agent-known', 'owner'])
         expect(con.bound(/INSERT/i)).to be_empty # still a rebind
       end
 
-      it "mints the token with the ADOPTED role, not the pre-link one" do
+      it 'mints the token with the ADOPTED role, not the pre-link one' do
         idp    = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
         issued = nil
         allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
           issued = { agent_id: agent_id, role: role }
-          "kiosk-pop-jwt"
+          'kiosk-pop-jwt'
         end
 
-        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "stylist")
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: 'stylist')
         # adopted, not the pre-link "customer"
-        expect(issued).to eq(agent_id: "agent-known", role: "stylist")
+        expect(issued).to eq(agent_id: 'agent-known', role: 'stylist')
       end
 
-      it "rejects a role outside the declared set on rebind (no scope widening)" do
-        expect {
-          described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "root")
-        }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /root/)
+      it 'rejects a role outside the declared set on rebind (no scope widening)' do
+        expect do
+          described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: 'root')
+        end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /root/)
       end
     end
 
@@ -236,8 +239,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
       described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
 
       sql, binds = con.bound(/UPDATE/i).first
-      expect(sql).to include("allowed_roles = ARRAY[$3]::text[]")
-      expect(binds).to eq([user_id, "agent-known", "customer"])
+      expect(sql).to include('allowed_roles = ARRAY[$3]::text[]')
+      expect(binds).to eq([user_id, 'agent-known', 'customer'])
     end
 
     # The one shape that cannot resolve a role: an operator that assigns none.
@@ -245,14 +248,17 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # gets too — never the role the key happens to be carrying. That operator
     # declares no role VOCABULARY either: since T-225 the two go together, and a
     # declared vocabulary with no default is refused at boot.
-    it "writes the EMPTY role set when the operator assigns no role at all" do
-      Kiosk.configure { |c| c.roles = []; c.registration_role = nil }
+    it 'writes the EMPTY role set when the operator assigns no role at all' do
+      Kiosk.configure do |c|
+        c.roles = []
+        c.registration_role = nil
+      end
       described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
 
       sql, binds = con.bound(/UPDATE/i).first
       expect(sql).to include("allowed_roles = '{}'::text[]")
-      expect(sql).not_to include("NULL")
-      expect(binds).to eq([user_id, "agent-known"])
+      expect(sql).not_to include('NULL')
+      expect(binds).to eq([user_id, 'agent-known'])
     end
 
     # ── The escalation this resolution exists to make impossible (K-1791,
@@ -264,17 +270,24 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # privilege while `sub` became that human's. There is always a default
     # role and never a nil, which closes it at the one place that can:
     # resolution does not read the agent's current row (K-1791).
-    it "RESETS a privileged role across a change of principal when the ceremony carries none" do
-      Kiosk.configure { |c| c.roles = %i[customer owner]; c.registration_role = :customer }
+    it 'RESETS a privileged role across a change of principal when the ceremony carries none' do
+      Kiosk.configure do |c|
+        c.roles = %i[customer owner]
+        c.registration_role = :customer
+      end
       route_exec_query(con) do |sql, _binds|
-        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
-                              "allowed_roles" => "{owner}" }] : []
+        if sql =~ /SELECT/i
+          [{ 'id' => 'agent-known', 'user_id' => previous_user,
+             'allowed_roles' => '{owner}' }]
+        else
+          []
+        end
       end
       idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp
       minted = nil
       allow_any_instance_of(idp).to receive(:issue) do |_instance, agent_id:, role:|
         minted = [agent_id, role]
-        "kiosk-pop-jwt"
+        'kiosk-pop-jwt'
       end
 
       result = described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
@@ -283,9 +296,9 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(result[:user_id]).to eq(user_id)
       # ...and the role moved with it, down to what registration would assign.
       sql, binds = con.bound(/UPDATE/i).first
-      expect(sql).to include("allowed_roles = ARRAY[$3]::text[]")
-      expect(binds).to eq([user_id, "agent-known", "customer"])
-      expect(minted).to eq(["agent-known", "customer"])
+      expect(sql).to include('allowed_roles = ARRAY[$3]::text[]')
+      expect(binds).to eq([user_id, 'agent-known', 'customer'])
+      expect(minted).to eq(%w[agent-known customer])
     end
 
     # ── THE MISCONFIGURATION WARNING (T-165, on K-1134) ──────────────────────
@@ -310,84 +323,106 @@ RSpec.describe Kiosk::Server::AccountBinding do
       $stderr = original
     end
 
-    it "warns the operator when a role-less ceremony lands on a multi-role origin" do
+    it 'warns the operator when a role-less ceremony lands on a multi-role origin' do
       # A declared vocabulary comes with a default since ADR-0036 — an origin
       # without one does not boot — so the warning has exactly one landing to
       # name, and names it.
-      Kiosk.configure { |c| c.roles = %i[customer owner]; c.registration_role = :customer }
+      Kiosk.configure do |c|
+        c.roles = %i[customer owner]
+        c.registration_role = :customer
+      end
       route_exec_query(con) do |sql, _binds|
-        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
-                              "allowed_roles" => "{owner}" }] : []
+        if sql =~ /SELECT/i
+          [{ 'id' => 'agent-known', 'user_id' => previous_user,
+             'allowed_roles' => '{owner}' }]
+        else
+          []
+        end
       end
 
       output = capture_operator_log do
         described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
       end
 
-      expect(output).to include("resolved NO role for the approving human")
-      expect(output).to include("must be TOTAL")
-      expect(output).to include("kiosk_role")
+      expect(output).to include('resolved NO role for the approving human')
+      expect(output).to include('must be TOTAL')
+      expect(output).to include('kiosk_role')
       # It says where the binding LANDS, which is the half that names who is
       # hurt: a member of staff gets an assistant at the customer default.
-      expect(output).to include("lands on :customer")
+      expect(output).to include('lands on :customer')
       # It names the vocabulary, so the operator can see which origin this is.
-      expect(output).to include("customer")
-      expect(output).to include("owner")
+      expect(output).to include('customer')
+      expect(output).to include('owner')
     end
 
-    it "prefers Rails.logger for that warning when a Rails logger is present" do
-      Kiosk.configure { |c| c.roles = %i[customer owner]; c.registration_role = :customer }
+    it 'prefers Rails.logger for that warning when a Rails logger is present' do
+      Kiosk.configure do |c|
+        c.roles = %i[customer owner]
+        c.registration_role = :customer
+      end
       route_exec_query(con) do |sql, _binds|
-        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
-                              "allowed_roles" => "{owner}" }] : []
+        if sql =~ /SELECT/i
+          [{ 'id' => 'agent-known', 'user_id' => previous_user,
+             'allowed_roles' => '{owner}' }]
+        else
+          []
+        end
       end
       logged = []
-      logger = double("logger")
+      logger = double('logger')
       allow(logger).to receive(:warn) { |m| logged << m }
-      stub_const("Rails", double("Rails", logger: logger))
+      stub_const('Rails', double('Rails', logger: logger))
 
       described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
 
       expect(logged.size).to eq(1)
-      expect(logged.first).to include("resolved NO role for the approving human")
+      expect(logged.first).to include('resolved NO role for the approving human')
     end
 
     # A single-role origin cannot exhibit the defect — retaining and resetting
     # are the same value there — so warning about it would be noise on a correct
     # configuration, and a warning an operator learns to ignore is not a warning.
-    it "stays silent on a single-role origin, where retain and reset are the same value" do
+    it 'stays silent on a single-role origin, where retain and reset are the same value' do
       Kiosk.configure { |c| c.roles = %i[customer] }
       route_exec_query(con) do |sql, _binds|
-        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
-                              "allowed_roles" => "{customer}" }] : []
+        if sql =~ /SELECT/i
+          [{ 'id' => 'agent-known', 'user_id' => previous_user,
+             'allowed_roles' => '{customer}' }]
+        else
+          []
+        end
       end
 
       output = capture_operator_log do
         described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
       end
 
-      expect(output).to eq("")
+      expect(output).to eq('')
     end
 
-    it "stays silent on a multi-role origin when the ceremony DOES carry a role" do
+    it 'stays silent on a multi-role origin when the ceremony DOES carry a role' do
       Kiosk.configure { |c| c.roles = %i[customer owner] }
       route_exec_query(con) do |sql, _binds|
-        sql =~ /SELECT/i ? [{ "id" => "agent-known", "user_id" => previous_user,
-                              "allowed_roles" => "{owner}" }] : []
+        if sql =~ /SELECT/i
+          [{ 'id' => 'agent-known', 'user_id' => previous_user,
+             'allowed_roles' => '{owner}' }]
+        else
+          []
+        end
       end
 
       output = capture_operator_log do
-        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "customer")
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: 'customer')
       end
 
-      expect(output).to eq("")
+      expect(output).to eq('')
     end
 
     # A rebind is a principal change, so — like
     # unlink! — it watermark-revokes the key's pre-link tokens.
     it "watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)" do
       expect(Kiosk.configuration.revocation_store)
-        .to receive(:revoke_all).with("agent-known", hash_including(:at))
+        .to receive(:revoke_all).with('agent-known', hash_including(:at))
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
     end
@@ -411,18 +446,18 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # bound to is idempotent — it still succeeds, still re-issues, and the
     # previous tokens still stop verifying — so the revocation below is a
     # conformance assertion, not an implementation detail.
-    context "when the key is ALREADY bound to this same human (re-link, K-783)" do
+    context 'when the key is ALREADY bound to this same human (re-link, K-783)' do
       before do
         route_exec_query(con) do |sql, _binds|
           if sql =~ /SELECT/i
-            [{ "id" => "agent-known", "user_id" => user_id, "allowed_roles" => "{customer}" }]
+            [{ 'id' => 'agent-known', 'user_id' => user_id, 'allowed_roles' => '{customer}' }]
           else
             []
           end
         end
       end
 
-      it "does NOT fire assistant_claimed (nothing transitioned)" do
+      it 'does NOT fire assistant_claimed (nothing transitioned)' do
         fired = false
         Kiosk.configure { |c| c.assistant_claimed = ->(**) { fired = true } }
 
@@ -433,7 +468,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       # A string/uuid-object mismatch must not defeat the comparison — the
       # incoming user_id comes off a device-authorization row, the existing one
       # off the agents SELECT, and the two need not be the same class.
-      it "compares by value, not identity (a non-String user_id still counts as the same holder)" do
+      it 'compares by value, not identity (a non-String user_id still counts as the same holder)' do
         fired = false
         Kiosk.configure { |c| c.assistant_claimed = ->(**) { fired = true } }
 
@@ -451,30 +486,30 @@ RSpec.describe Kiosk::Server::AccountBinding do
       # path would leave every other assertion in this context green.
       it "STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)" do
         expect(Kiosk.configuration.revocation_store)
-          .to receive(:revoke_all).with("agent-known", hash_including(:at))
+          .to receive(:revoke_all).with('agent-known', hash_including(:at))
 
         result = described_class.bind!(public_key_pem: pem, user_id: user_id)
-        expect(result[:access_token]).to eq("kiosk-pop-jwt")
+        expect(result[:access_token]).to eq('kiosk-pop-jwt')
       end
 
-      it "still answers the caller exactly as a rebind does (no new wire semantics)" do
+      it 'still answers the caller exactly as a rebind does (no new wire semantics)' do
         result = described_class.bind!(public_key_pem: pem, user_id: user_id)
 
         expect(result).to eq(
-          agent_id: "agent-known", user_id: user_id, access_token: "kiosk-pop-jwt", fresh: false,
+          agent_id: 'agent-known', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: false
         )
         expect(con.bound(/INSERT/i)).to be_empty
       end
 
       # roles-from-IdP: the human's role can change under a stable binding, so
       # the same-principal ceremony is NOT a blanket no-op — the remap lands.
-      it "still remaps allowed_roles when the ceremony carries a new role" do
+      it 'still remaps allowed_roles when the ceremony carries a new role' do
         Kiosk.configure { |c| c.roles = %i[customer owner] }
 
-        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: "owner")
+        described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: 'owner')
         sql, binds = con.bound(/UPDATE/i).first
-        expect(sql).to include("allowed_roles = ARRAY[$3]::text[]")
-        expect(binds).to eq([user_id, "agent-known", "owner"])
+        expect(sql).to include('allowed_roles = ARRAY[$3]::text[]')
+        expect(binds).to eq([user_id, 'agent-known', 'owner'])
       end
     end
   end
@@ -483,17 +518,17 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # a token minted BEFORE the rebind must stop verifying, while the fresh token
   # bind! returns must still verify. Proves the strict `iat < watermark` check
   # keeps the replacement token alive.
-  describe ".bind! — known key rebind watermark ordering (real issuer)" do
-    let(:agent_id)      { "agent-known" }
-    let(:previous_user) { "22222222-2222-2222-2222-222222222222" }
+  describe '.bind! — known key rebind watermark ordering (real issuer)' do
+    let(:agent_id)      { 'agent-known' }
+    let(:previous_user) { '22222222-2222-2222-2222-222222222222' }
 
     before do
       Kiosk.reset!
       Kiosk.configure do |c|
         c.signing_key = Kiosk::Server::SigningKey.generate
-        c.issuer      = "https://demo.example"
+        c.issuer      = 'https://demo.example'
         c.roles       = %i[customer]
-        c.schema      = "kiosk"
+        c.schema      = 'kiosk'
       end
       # Un-stub issue (the outer before stubs it to a fixed string) so bind!
       # mints a REAL JWT; lookup_user_id (called inside issue) resolves the
@@ -504,30 +539,30 @@ RSpec.describe Kiosk::Server::AccountBinding do
         .to receive(:lookup_user_id).and_return(user_id)
       route_exec_query(con) do |sql, _binds|
         if sql =~ /SELECT/i
-          [{ "id" => agent_id, "user_id" => previous_user, "allowed_roles" => "{customer}" }]
+          [{ 'id' => agent_id, 'user_id' => previous_user, 'allowed_roles' => '{customer}' }]
         else
           []
         end
       end
-      ar_base = class_double("ActiveRecord::Base").as_stubbed_const
+      ar_base = class_double('ActiveRecord::Base').as_stubbed_const
       allow(ar_base).to receive(:lease_connection).and_return(con)
     end
 
     def verify(token)
       Kiosk::Server::JwtIssuer.verify(
-        token:    token,
-        jwks:     Kiosk::Server::Jwks.build(keys: [Kiosk.configuration.signing_key]),
-        audience: "https://demo.example",
-        issuer:   "https://demo.example",
+        token: token,
+        jwks: Kiosk::Server::Jwks.build(keys: [Kiosk.configuration.signing_key]),
+        audience: 'https://demo.example',
+        issuer: 'https://demo.example'
       )
     end
 
-    it "revokes a pre-rebind token but leaves the fresh bind! token verifiable" do
+    it 'revokes a pre-rebind token but leaves the fresh bind! token verifiable' do
       # A token minted BEFORE the rebind (iat in the past ⇒ strictly < watermark).
       prelink = Kiosk::Server::JwtIssuer.issue(
-        claims:   { sub: previous_user, agent_id: agent_id, role: "customer", actor: "agent" },
-        audience: "https://demo.example",
-        now:      Time.now - 10,
+        claims: { sub: previous_user, agent_id: agent_id, role: 'customer', actor: 'agent' },
+        audience: 'https://demo.example',
+        now: Time.now - 10
       )
       expect { verify(prelink) }.not_to raise_error # valid before the rebind
 
@@ -550,13 +585,13 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # (measured 3/3 on a booted philslist). Unlike unlink, this caller returns a
     # replacement token, which is why it cannot just pass `+1` and stop: the
     # replacement is minted AT the watermark so it survives its own revocation.
-    it "revokes a pre-link token minted in the SAME wall-clock second as the rebind" do
+    it 'revokes a pre-link token minted in the SAME wall-clock second as the rebind' do
       frozen = Time.at(Time.now.to_i)
       allow(Time).to receive(:now).and_return(frozen)
 
       prelink = Kiosk::Server::JwtIssuer.issue(
-        claims:   { sub: previous_user, agent_id: agent_id, role: "customer", actor: "agent" },
-        audience: "https://demo.example",
+        claims: { sub: previous_user, agent_id: agent_id, role: 'customer', actor: 'agent' },
+        audience: 'https://demo.example'
       )
       expect { verify(prelink) }.not_to raise_error # valid before the rebind
 
@@ -569,7 +604,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(verify(fresh)[:sub]).to eq(user_id)
     end
 
-    it "stamps the watermark at the NEXT second and dates the replacement token at it" do
+    it 'stamps the watermark at the NEXT second and dates the replacement token at it' do
       now = Time.now.to_i
       allow(Time).to receive(:now).and_return(Time.at(now))
 
@@ -585,63 +620,63 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # killed that login token for the rest of the same second (traded one
     # broken MUST for another), which is why the clamp lives in the IdP and not
     # in this caller: a token minted AFTER a revocation is never born revoked.
-    it "leaves a /auth/login token minted in that same second alive" do
+    it 'leaves a /auth/login token minted in that same second alive' do
       now = Time.now.to_i
       allow(Time).to receive(:now).and_return(Time.at(now))
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
       relogin = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-                                                                     .issue(agent_id: agent_id, role: "customer")
+                                                                      .issue(agent_id: agent_id, role: 'customer')
 
       expect { verify(relogin) }.not_to raise_error
       expect(verify(relogin)[:iat]).to eq(now + 1)
     end
   end
 
-  describe ".unlink!" do
-    it "deactivates the binding (revoked_at) and watermark-revokes outstanding tokens" do
-      route_exec_query(con) { [{ "id" => "agent-1" }] }
+  describe '.unlink!' do
+    it 'deactivates the binding (revoked_at) and watermark-revokes outstanding tokens' do
+      route_exec_query(con) { [{ 'id' => 'agent-1' }] }
       expect(Kiosk.configuration.revocation_store)
-        .to receive(:revoke_all).with("agent-1", hash_including(:at))
+        .to receive(:revoke_all).with('agent-1', hash_including(:at))
 
-      result = described_class.unlink!(agent_id: "agent-1", user_id: user_id)
-      expect(result).to eq(agent_id: "agent-1")
+      result = described_class.unlink!(agent_id: 'agent-1', user_id: user_id)
+      expect(result).to eq(agent_id: 'agent-1')
 
       sql, binds = con.bound(/UPDATE/i).first
-      expect(sql).to include("SET revoked_at = now()")
+      expect(sql).to include('SET revoked_at = now()')
       # The ownership predicate is this action's whole security story, and both
       # halves of it are binds: the caller supplies the agent id, the session
       # supplies the holder.
-      expect(sql).to include("WHERE id = $1")
-      expect(sql).to include("AND user_id = $2")
-      expect(sql).to include("AND issuer = $3")
-      expect(sql).to include("revoked_at IS NULL")
-      expect(binds).to eq(["agent-1", user_id, Kiosk.current_issuer])
+      expect(sql).to include('WHERE id = $1')
+      expect(sql).to include('AND user_id = $2')
+      expect(sql).to include('AND issuer = $3')
+      expect(sql).to include('revoked_at IS NULL')
+      expect(binds).to eq(['agent-1', user_id, Kiosk.current_issuer])
       expect(con).not_to have_received(:quote)
     end
 
-    it "fires assistant_unlinked(agent:, account:) with the account" do
-      route_exec_query(con) { [{ "id" => "agent-1" }] }
-      stub_const("Account", Class.new { def self.find(id) = "account #{id}" })
+    it 'fires assistant_unlinked(agent:, account:) with the account' do
+      route_exec_query(con) { [{ 'id' => 'agent-1' }] }
+      stub_const('Account', Class.new { def self.find(id) = "account #{id}" })
       received = nil
       Kiosk.configure do |c|
-        c.user_model = "Account"
+        c.user_model = 'Account'
         c.assistant_unlinked = ->(**unlinked) { received = unlinked }
       end
 
-      described_class.unlink!(agent_id: "agent-1", user_id: user_id)
-      expect(received).to eq(agent: "agent-1", account: "account #{user_id}")
+      described_class.unlink!(agent_id: 'agent-1', user_id: user_id)
+      expect(received).to eq(agent: 'agent-1', account: "account #{user_id}")
     end
 
-    it "raises NotFound when the agent is not bound to this holder (or already unlinked)" do
+    it 'raises NotFound when the agent is not bound to this holder (or already unlinked)' do
       route_exec_query(con) { [] }
-      expect {
-        described_class.unlink!(agent_id: "someone-elses", user_id: user_id)
-      }.to raise_error(Kiosk::Server::Errors::NotFound, /linked assistant account/)
+      expect do
+        described_class.unlink!(agent_id: 'someone-elses', user_id: user_id)
+      end.to raise_error(Kiosk::Server::Errors::NotFound, /linked assistant account/)
     end
 
-    it "rejects a blank agent_id" do
-      expect { described_class.unlink!(agent_id: "", user_id: user_id) }
+    it 'rejects a blank agent_id' do
+      expect { described_class.unlink!(agent_id: '', user_id: user_id) }
         .to raise_error(Kiosk::Server::Errors::BadRequest, /agent_id/)
     end
 
@@ -657,29 +692,29 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # returns a replacement, so it dates that token AT the watermark rather than
     # leaning on the strict `<`. `/auth/revoke` alone keeps `Time.now.to_i`, and
     # the reason is on RevocationStore: the caller holds the private key there.
-    it "stamps the watermark at the NEXT second, so a same-second token is covered too" do
-      route_exec_query(con) { [{ "id" => "agent-1" }] }
+    it 'stamps the watermark at the NEXT second, so a same-second token is covered too' do
+      route_exec_query(con) { [{ 'id' => 'agent-1' }] }
       now = Time.now.to_i
       allow(Time).to receive(:now).and_return(Time.at(now))
       stamped = nil
       allow(Kiosk.configuration.revocation_store)
         .to receive(:revoke_all) { |_agent, at:| stamped = at }
 
-      described_class.unlink!(agent_id: "agent-1", user_id: user_id)
+      described_class.unlink!(agent_id: 'agent-1', user_id: user_id)
 
       expect(stamped).to eq(now + 1)
     end
 
-    it "revokes a token minted in the same wall-clock second as the unlink" do
-      route_exec_query(con) { [{ "id" => "agent-1" }] }
+    it 'revokes a token minted in the same wall-clock second as the unlink' do
+      route_exec_query(con) { [{ 'id' => 'agent-1' }] }
       store = Kiosk::Server::RevocationStore.new
       Kiosk.configure { |c| c.revocation_store = store }
       now = Time.now.to_i
 
       # The token the assistant is holding when the human clicks unlink.
-      expect(store.revoked?(agent_id: "agent-1", iat: now)).to be(false)
-      described_class.unlink!(agent_id: "agent-1", user_id: user_id)
-      expect(store.revoked?(agent_id: "agent-1", iat: now)).to be(true)
+      expect(store.revoked?(agent_id: 'agent-1', iat: now)).to be(false)
+      described_class.unlink!(agent_id: 'agent-1', user_id: user_id)
+      expect(store.revoked?(agent_id: 'agent-1', iat: now)).to be(true)
     end
   end
 end

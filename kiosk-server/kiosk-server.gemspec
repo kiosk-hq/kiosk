@@ -1,12 +1,12 @@
-require_relative "lib/kiosk/server/version"
+require_relative 'lib/kiosk/server/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "kiosk-server"
+  spec.name          = 'kiosk-server'
   spec.version       = Kiosk::Server::VERSION
-  spec.authors       = ["Phil Pirozhkov"]
-  spec.email         = ["hello@fili.pp.ru"]
+  spec.authors       = ['Phil Pirozhkov']
+  spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Rails engine + Rack middleware + pure-Ruby helpers for the Kiosk framework"
+  spec.summary       = 'Rails engine + Rack middleware + pure-Ruby helpers for the Kiosk framework'
   spec.description   = <<~DESC
     kiosk-server is the host-side surface for Kiosk. The full surface ships:
 
@@ -36,14 +36,15 @@ Gem::Specification.new do |spec|
     into the host — then one route per query and action the block names. It
     also auto-injects the headers middleware.
   DESC
-  spec.homepage      = "https://kiosk.tech"
-  spec.license       = "Apache-2.0"
-  spec.required_ruby_version = ">= 4.0"
+  spec.homepage      = 'https://kiosk.tech'
+  spec.license       = 'Apache-2.0'
+  spec.required_ruby_version = '>= 4.0'
 
-  spec.metadata["homepage_uri"]     = spec.homepage
-  spec.metadata["source_code_uri"]  = "https://github.com/kiosk-hq/kiosk"
-  spec.metadata["changelog_uri"]    = "https://github.com/kiosk-hq/kiosk/blob/main/kiosk-server/CHANGELOG.md"
-  spec.metadata["bug_tracker_uri"]  = "https://github.com/kiosk-hq/kiosk/issues"
+  spec.metadata['homepage_uri']     = spec.homepage
+  spec.metadata['source_code_uri']  = 'https://github.com/kiosk-hq/kiosk'
+  spec.metadata['changelog_uri']    = 'https://github.com/kiosk-hq/kiosk/blob/main/kiosk-server/CHANGELOG.md'
+  spec.metadata['bug_tracker_uri']  = 'https://github.com/kiosk-hq/kiosk/issues'
+  spec.metadata['rubygems_mfa_required'] = 'true'
 
   # `app/` is NOT optional. Two controllers resolve their templates by path —
   # `append_view_path File.expand_path("../../../app/views", __dir__)` in
@@ -55,19 +56,19 @@ Gem::Specification.new do |spec|
   # RubyGems would have.
   # `listen.py` is the pinned reference client for the event stream;
   # `requirements.txt` beside it declares its python dependency.
-  spec.files = Dir.glob("app/**/*") + Dir.glob("lib/**/*") +
+  spec.files = Dir.glob('app/**/*') + Dir.glob('lib/**/*') +
                %w[listen.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
-  spec.require_paths = ["lib"]
+  spec.require_paths = ['lib']
 
-  spec.add_dependency "kiosk-core", "~> 0.5.0"
+  spec.add_dependency 'kiosk-core', '~> 0.5.0'
   # JWT issue/verify for the OAuth surface and access tokens.
   # ruby-jwt is the de-facto Ruby JOSE library — small, MIT, no transitive deps.
-  spec.add_dependency "jwt", ">= 2.8", "< 4.0"
+  spec.add_dependency 'jwt', '>= 2.8', '< 4.0'
   # base64 was a default gem through Ruby 3.3 but became a BUNDLED gem in 3.4,
   # so it has to be declared. Required at load time by signing_key.rb,
   # result.rb and configuration_extension.rb; until now it arrived only by
   # accident, as a transitive dependency of jwt.
-  spec.add_dependency "base64"
+  spec.add_dependency 'base64'
   # json_schemer — a RUNTIME dependency, not an optional extra.
   #
   # §8.1 item 5 makes coerce-then-validate an OPERATOR OBLIGATION: every
@@ -90,7 +91,7 @@ Gem::Specification.new do |spec|
   # It stays LAZILY REQUIRED in the code — the ConfigurationError naming the
   # gem is still there — because a host may vendor a checkout without it, and
   # a clear message beats a LoadError at boot.
-  spec.add_dependency "json_schemer", ">= 2.3", "< 3.0"
+  spec.add_dependency 'json_schemer', '>= 2.3', '< 3.0'
 
   # ── Rails ──────────────────────────────────────────────────────────────
   # kiosk-server IS a Rails gem: it ships an engine, the wire/auth/discovery
@@ -118,40 +119,40 @@ Gem::Specification.new do |spec|
   #
   # railties      — Kiosk::Server::Engine, Rails::Generators::{Base,Migration},
   #                 Rails.logger.
-  spec.add_dependency "railties",      "~> 8.1"
+  spec.add_dependency 'railties',      '~> 8.1'
   # actionpack    — ActionController::{API,Base,InvalidAuthenticityToken}.
-  spec.add_dependency "actionpack",    "~> 8.1"
+  spec.add_dependency 'actionpack',    '~> 8.1'
   # actioncable   — the event stream: ActionCable::Server::{Base,Configuration},
   #                 Connection::Base and Channel::Base, mounted at
   #                 `<endpoint>/events`. The engine builds its OWN server rather
   #                 than using `ActionCable.server`, so a host that already runs
   #                 channels of its own keeps its connection class and its
   #                 forgery protection untouched.
-  spec.add_dependency "actioncable",   "~> 8.1"
+  spec.add_dependency 'actioncable',   '~> 8.1'
   # solid_cable   — carries the event stream between Puma workers and hosts.
-  spec.add_dependency "solid_cable",   "~> 4.0"
+  spec.add_dependency 'solid_cable',   '~> 4.0'
   # activerecord  — ActiveRecord::Base.lease_connection is how the auth plane,
   #                 the wire and the durable stores reach the database (NOT
   #                 `.connection`, which Rails 8.1 soft-deprecates and which
   #                 RAISES under permanent_connection_checkout = :disallowed),
   #                 plus ActiveRecord::{RecordNotUnique,StatementInvalid,Migration}.
-  spec.add_dependency "activerecord",  "~> 8.1"
+  spec.add_dependency 'activerecord',  '~> 8.1'
   # activesupport — String#constantize (agent_registration) and String#classify
   #                 (generator template).
-  spec.add_dependency "activesupport", "~> 8.1"
+  spec.add_dependency 'activesupport', '~> 8.1'
 
-  spec.add_development_dependency "rspec",    "~> 3.13"
-  spec.add_development_dependency "rake",     "~> 13.2"
-  spec.add_development_dependency "rack",     "~> 3.0"
+  spec.add_development_dependency 'rack',     '~> 3.0'
+  spec.add_development_dependency 'rake',     '~> 13.2'
+  spec.add_development_dependency 'rspec',    '~> 3.13'
   # puma — the events socket cannot be exercised without a server that supports
   # `rack.hijack`: Action Cable's connection takes the socket away from Rack,
   # and a handler that cannot give it up answers the upgrade with an ordinary
   # HTTP response. So the one spec that drives a real WebSocket boots Puma in a
   # subprocess. Development only; nothing at runtime depends on a server.
-  spec.add_development_dependency "puma",     "~> 6.0"
+  spec.add_development_dependency 'puma',     '~> 6.0'
   # TestExecutor (lib/kiosk/server/test_executor.rb) implements the
   # Kiosk::TestHelpers::Journey contract; we need the error classes
   # at test time. Host apps depending on TestExecutor will have
   # kiosk-test-support loaded transitively via kiosk-rls-{rspec,minitest}.
-  spec.add_development_dependency "kiosk-test-support", "~> 0.5.0"
+  spec.add_development_dependency 'kiosk-test-support', '~> 0.5.0'
 end

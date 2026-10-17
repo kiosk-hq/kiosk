@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "jwt"
+require 'jwt'
 
 module Kiosk
   module Server
@@ -17,64 +17,64 @@ module Kiosk
         config = Kiosk.configuration
         key    = config.kyc_public_key
 
-        raise Errors::ModuleNotServed.new(
-          "this operator does not serve the KYC module",
-          hint: "no KYC attestation is accepted at this origin; retrying will not help. " \
-                "An operator that means to serve KYC sets Kiosk.configuration.kyc_public_key.",
-        ) if key.nil?
+        if key.nil?
+          raise Errors::ModuleNotServed.new(
+            'this operator does not serve the KYC module',
+            hint: 'no KYC attestation is accepted at this origin; retrying will not help. ' \
+                  'An operator that means to serve KYC sets Kiosk.configuration.kyc_public_key.'
+          )
+        end
 
         payload, = ::JWT.decode(
           raw_jws, key, true,
-          algorithms:       ["RS256"],
+          algorithms: ['RS256'],
           verify_expiration: true,
-          required_claims:  REQUIRED_CLAIMS,
+          required_claims: REQUIRED_CLAIMS
         )
-        payload  = payload.transform_keys(&:to_sym)
+        payload = payload.transform_keys(&:to_sym)
 
         if payload[:iss] != config.kyc_issuer
           raise Errors::Forbidden.new(
-            "KYC attestation issuer mismatch",
-            hint: "expected #{config.kyc_issuer.inspect}, got #{payload[:iss].inspect}",
+            'KYC attestation issuer mismatch',
+            hint: "expected #{config.kyc_issuer.inspect}, got #{payload[:iss].inspect}"
           )
         end
 
         # Binds the attestation to this operator.
         if payload[:aud].to_s != config.kyc_audience.to_s
           raise Errors::Forbidden.new(
-            "KYC attestation audience mismatch",
+            'KYC attestation audience mismatch',
             hint: "aud must equal this operator's kyc_audience " \
-                  "(expected #{config.kyc_audience.inspect}, got #{payload[:aud].inspect})",
+                  "(expected #{config.kyc_audience.inspect}, got #{payload[:aud].inspect})"
           )
         end
 
         # A bigint-PK host's subject is an Integer.
         unless payload[:sub].to_s == subject.to_s
           raise Errors::Forbidden.new(
-            "KYC attestation subject mismatch",
+            'KYC attestation subject mismatch',
             hint: "sub must name the principal: the caller's at POST <endpoint>/agents/kyc, " \
-                  "the open verification's at the callback",
+                  "the open verification's at the callback"
           )
         end
 
-        unless payload[:level] == "verified"
-          raise Errors::Forbidden.new("kyc level not verified")
-        end
+        raise Errors::Forbidden.new('kyc level not verified') unless payload[:level] == 'verified'
 
         payload[:attributes] = verified_attributes(payload[:attributes])
 
         payload
       rescue ::JWT::ExpiredSignature
-        raise Errors::Forbidden.new("KYC attestation expired")
+        raise Errors::Forbidden.new('KYC attestation expired')
       rescue ::JWT::MissingRequiredClaim
         raise Errors::Forbidden.new(
-          "KYC attestation missing a required claim",
-          hint: "an attestation carries #{REQUIRED_CLAIMS.join(", ")}",
+          'KYC attestation missing a required claim',
+          hint: "an attestation carries #{REQUIRED_CLAIMS.join(', ')}"
         )
       rescue ::JWT::DecodeError
         raise Errors::Forbidden.new(
-          "KYC attestation signature invalid",
-          hint: "an attestation is a compact RS256 JWS signed by the issuer this origin " \
-                "is configured to trust",
+          'KYC attestation signature invalid',
+          hint: 'an attestation is a compact RS256 JWS signed by the issuer this origin ' \
+                'is configured to trust'
         )
       end
 
@@ -85,7 +85,7 @@ module Kiosk
 
         unless raw.is_a?(Hash)
           raise Errors::Forbidden.new(
-            "KYC attestation attributes must be an object of {name: true} booleans",
+            'KYC attestation attributes must be an object of {name: true} booleans'
           )
         end
 

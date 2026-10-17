@@ -27,13 +27,13 @@ module Kiosk
 
       def sign_in_directions(sign_in_path)
         "Sign in at #{request.base_url}#{sign_in_path} — or open #{request.original_url} " \
-          "in a browser, which goes there and comes back here."
+          'in a browser, which goes there and comes back here.'
       end
 
       def html_request?
         return true if request.format.html?
 
-        request.headers["Accept"].to_s.include?("text/html")
+        request.headers['Accept'].to_s.include?('text/html')
       rescue StandardError
         false
       end
@@ -47,7 +47,7 @@ module Kiosk
 
       # Devise's return-to key.
       def store_return_location
-        session["user_return_to"] = request.fullpath
+        session['user_return_to'] = request.fullpath
       rescue StandardError
         nil
       end

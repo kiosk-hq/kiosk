@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/action_event"
+require 'kiosk/server/action_event'
 
 module Kiosk
   module Server
@@ -31,7 +31,7 @@ module Kiosk
         private
 
         def report(event, error)
-          message = "[kiosk-server] audit_sink raised for action " \
+          message = '[kiosk-server] audit_sink raised for action ' \
                     "#{event.action.inspect}: #{error.class}: #{error.message}"
           logger = defined?(::Rails) && ::Rails.respond_to?(:logger) ? ::Rails.logger : nil
           logger ? logger.error(message) : warn(message)

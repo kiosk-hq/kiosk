@@ -16,20 +16,20 @@ module Kiosk
         AuthChallenge.consume!(public_key_pem: pem, nonce: payload.fetch(:nonce))
 
         conn = ::ActiveRecord::Base.lease_connection
-        row  = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [pem, Kiosk.current_issuer]).to_a.first
+        row  = conn.exec_query(<<~SQL, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
           SELECT id, user_id, allowed_roles FROM #{config.schema}.agents
           WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
           LIMIT 1
         SQL
         if row.nil?
           raise Errors::NotFound.new(
-            "no agent registered for this public key",
-            hint: "POST /auth/register to create an identity for a new key",
+            'no agent registered for this public key',
+            hint: 'POST /auth/register to create an identity for a new key'
           )
         end
 
-        agent_id = row.fetch("id")
-        role     = primary_role(row.fetch("allowed_roles"))
+        agent_id = row.fetch('id')
+        role     = primary_role(row.fetch('allowed_roles'))
         token    = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: agent_id, role: role)
         { access_token: token }
       end
@@ -38,7 +38,7 @@ module Kiosk
       def primary_role(allowed_roles)
         case allowed_roles
         when Array then allowed_roles.first
-        else allowed_roles.to_s.delete("{}").split(",").first
+        else allowed_roles.to_s.delete('{}').split(',').first
         end
       end
       private_class_method :primary_role

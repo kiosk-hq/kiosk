@@ -15,13 +15,13 @@ module Kiosk
       def bind!(public_key_pem:, user_id:, requested_role: nil)
         config = Kiosk.configuration
         pem    = public_key_pem.to_s.strip
-        raise ArgumentError, "user_id required" if user_id.nil? || user_id.to_s.empty?
+        raise ArgumentError, 'user_id required' if user_id.nil? || user_id.to_s.empty?
 
         warn_role_resolution_not_total(config, requested_role)
 
         # `lease_connection`: the operator's hooks must share this transaction.
         conn = ::ActiveRecord::Base.lease_connection
-        existing = conn.exec_query(<<~SQL, "Kiosk agent lookup by key", [pem, Kiosk.current_issuer]).to_a.first
+        existing = conn.exec_query(<<~SQL, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
           SELECT id, user_id FROM #{config.schema}.agents
           WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
           LIMIT 1
@@ -40,11 +40,11 @@ module Kiosk
       # @raise [Errors::NotFound] when no live agent row matches the pair.
       def unlink!(agent_id:, user_id:)
         config = Kiosk.configuration
-        raise Errors::BadRequest.new("agent_id required") if agent_id.nil? || agent_id.to_s.empty?
+        raise Errors::BadRequest.new('agent_id required') if agent_id.nil? || agent_id.to_s.empty?
 
         # The ownership predicate is the security boundary: both values are binds.
         conn = ::ActiveRecord::Base.lease_connection
-        row = conn.exec_query(<<~SQL, "Kiosk agent unlink", [agent_id, user_id, Kiosk.current_issuer]).to_a.first
+        row = conn.exec_query(<<~SQL, 'Kiosk agent unlink', [agent_id, user_id, Kiosk.current_issuer]).to_a.first
           UPDATE #{config.schema}.agents
           SET revoked_at = now()
           WHERE id = $1
@@ -55,8 +55,8 @@ module Kiosk
         SQL
         if row.nil?
           raise Errors::NotFound.new(
-            "no linked assistant account with this agent_id",
-            hint: "only assistant accounts bound to the signed-in account can be unlinked",
+            'no linked assistant account with this agent_id',
+            hint: 'only assistant accounts bound to the signed-in account can be unlinked'
           )
         end
 
@@ -72,17 +72,17 @@ module Kiosk
         # Known key: remap the holder and role, keep agent_id and reputation.
         # The role is never read from the row: it belonged to the previous holder.
         def rebind(conn, config, existing, user_id, requested_role = nil)
-          agent_id = existing.fetch("id")
-          previous = existing.fetch("user_id")
+          agent_id = existing.fetch('id')
+          previous = existing.fetch('user_id')
           role     = resolved_role(config, requested_role)
 
           # The same holder still gets the role remap and revocation; only the hook is skipped.
           transition = previous.to_s != user_id.to_s
           # An empty array cannot travel as a bind, so "no role" is a different statement.
           role_set, role_binds =
-            role ? [", allowed_roles = ARRAY[$3]::text[]", [role]] : [", allowed_roles = '{}'::text[]", []]
+            role ? [', allowed_roles = ARRAY[$3]::text[]', [role]] : [", allowed_roles = '{}'::text[]", []]
           conn.transaction do
-            conn.exec_query(<<~SQL, "Kiosk agent rebind", [user_id, agent_id, *role_binds])
+            conn.exec_query(<<~SQL, 'Kiosk agent rebind', [user_id, agent_id, *role_binds])
               UPDATE #{config.schema}.agents
               SET user_id = $1#{role_set}
               WHERE id = $2
@@ -107,15 +107,15 @@ module Kiosk
 
           # The column is NOT NULL: no role is `'{}'`, never NULL.
           allowed_roles_sql, role_binds =
-            role ? ["ARRAY[$4]::text[]", [role]] : ["'{}'::text[]", []]
+            role ? ['ARRAY[$4]::text[]', [role]] : ["'{}'::text[]", []]
           sql = <<~SQL
             INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key, issuer)
             VALUES ($1, #{allowed_roles_sql}, $2, $3)
             RETURNING id
           SQL
           agent_id = conn.transaction do
-            conn.exec_query(sql, "Kiosk linked agent insert", [user_id, pem, Kiosk.current_issuer, *role_binds])
-                .to_a.first.fetch("id")
+            conn.exec_query(sql, 'Kiosk linked agent insert', [user_id, pem, Kiosk.current_issuer, *role_binds])
+                .to_a.first.fetch('id')
           end
 
           token = issue_token(agent_id, role)
@@ -145,17 +145,17 @@ module Kiosk
 
           landing =
             "this binding lands on #{config.registration_role.inspect}, the role " \
-            "registration would assign"
+            'registration would assign'
           message =
-            "[kiosk-server] an account-binding ceremony resolved NO role for the approving " \
-            "human, and this origin declares more than one role " \
+            '[kiosk-server] an account-binding ceremony resolved NO role for the approving ' \
+            'human, and this origin declares more than one role ' \
             "(#{config.roles.inspect}). Role resolution must be TOTAL: an operator that " \
-            "assigns roles at all assigns one to EVERY human who can approve a binding. A " \
-            "role for staff and nothing for customers is not a supported configuration — " \
+            'assigns roles at all assigns one to EVERY human who can approve a binding. A ' \
+            'role for staff and nothing for customers is not a supported configuration — ' \
             "#{landing}, so a human who should hold a privileged one gets an assistant " \
-            "that cannot act for them. Fix the identity system, not the ceremony: a " \
-            "`#kiosk_role` that can answer nil is the usual cause, and returning the " \
-            "least-privileged declared role instead makes it total."
+            'that cannot act for them. Fix the identity system, not the ceremony: a ' \
+            '`#kiosk_role` that can answer nil is the usual cause, and returning the ' \
+            'least-privileged declared role instead makes it total.'
           # Rails.logger is nil before the host app boots.
           logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
           logger ? logger.warn(message) : Kernel.warn(message)

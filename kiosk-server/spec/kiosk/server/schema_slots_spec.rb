@@ -17,18 +17,21 @@
 #      answers inside one window.
 
 RSpec.describe Kiosk::Server::SchemaSlots do
-  before { Kiosk.configure { |c| c.issuer = "https://demo.example" } }
+  before { Kiosk.configure { |c| c.issuer = 'https://demo.example' } }
 
-  describe "declaration time" do
-    it "does NOT call a proc slot while the class body is read" do
+  describe 'declaration time' do
+    it 'does NOT call a proc slot while the class body is read' do
       called = false
 
-      expect {
-        declare_query("board", input_schema: {
-                        type: "object",
-                        properties: { category: { enum: -> { called = true; %w[a] } } },
+      expect do
+        declare_query('board', input_schema: {
+                        type: 'object',
+                        properties: { category: { enum: lambda {
+                          called = true
+                          %w[a]
+                        } } }
                       })
-      }.not_to raise_error
+      end.not_to raise_error
 
       expect(called).to be(false)
     end
@@ -36,31 +39,31 @@ RSpec.describe Kiosk::Server::SchemaSlots do
     # The failure this is really about: a class body is read by `db:create`,
     # long before any table exists. A proc that raises there must not stop the
     # declaration from registering.
-    it "registers a verb whose proc would RAISE if it were called now" do
-      declare_query("board", input_schema: {
-                      type: "object",
-                      properties: { category: { enum: -> { raise "no database yet" } } },
+    it 'registers a verb whose proc would RAISE if it were called now' do
+      declare_query('board', input_schema: {
+                      type: 'object',
+                      properties: { category: { enum: -> { raise 'no database yet' } } }
                     })
 
-      expect(Kiosk::Server::Queries.known).to include("board")
+      expect(Kiosk::Server::Queries.known).to include('board')
     end
 
-    it "leaves an origin with no proc anywhere entirely alone" do
-      declare_query("menu")
+    it 'leaves an origin with no proc anywhere entirely alone' do
+      declare_query('menu')
 
       expect(described_class.dynamic_declarations?).to be(false)
       expect(described_class.epoch).to eq(0)
     end
   end
 
-  describe ".descriptor resolution" do
-    it "resolves an `enum` proc when the descriptor is READ, not when it is declared" do
-      declare_query("board", input_schema: {
-                      type: "object",
-                      properties: { category: { type: "string", enum: -> { %w[bikes free] } } },
+  describe '.descriptor resolution' do
+    it 'resolves an `enum` proc when the descriptor is READ, not when it is declared' do
+      declare_query('board', input_schema: {
+                      type: 'object',
+                      properties: { category: { type: 'string', enum: -> { %w[bikes free] } } }
                     })
 
-      descriptor = Kiosk::Server::Queries.describe("board")
+      descriptor = Kiosk::Server::Queries.describe('board')
 
       expect(descriptor[:input_schema][:properties][:category][:enum]).to eq(%w[bikes free])
     end
@@ -69,38 +72,41 @@ RSpec.describe Kiosk::Server::SchemaSlots do
     # `maximum` read from a configured cap or an `example_row` built from a
     # real row works the same way. Restricting it to `enum` would have been an
     # arbitrary carve-out.
-    it "resolves a proc in output_schema, example_params and example_row too" do
-      declare_action("post", input_schema: { type: "object" },
-                             output_schema: { type: "object", properties: { n: { maximum: -> { 7 } } } },
-                             example_params: { category: -> { "bikes" } },
-                             example_row: { id: -> { "row-1" } })
+    it 'resolves a proc in output_schema, example_params and example_row too' do
+      declare_action('post', input_schema: { type: 'object' },
+                             output_schema: { type: 'object', properties: { n: { maximum: -> { 7 } } } },
+                             example_params: { category: -> { 'bikes' } },
+                             example_row: { id: -> { 'row-1' } })
 
-      descriptor = Kiosk::Server::Actions.describe("post")
+      descriptor = Kiosk::Server::Actions.describe('post')
 
       expect(descriptor[:output_schema][:properties][:n][:maximum]).to eq(7)
-      expect(descriptor[:example_params][:category]).to eq("bikes")
-      expect(descriptor[:example_row][:id]).to eq("row-1")
+      expect(descriptor[:example_params][:category]).to eq('bikes')
+      expect(descriptor[:example_row][:id]).to eq('row-1')
     end
 
-    it "reaches the catalog, and therefore the served document" do
-      declare_query("board", input_schema: {
-                      type: "object",
-                      properties: { category: { enum: -> { %w[bikes] } } },
+    it 'reaches the catalog, and therefore the served document' do
+      declare_query('board', input_schema: {
+                      type: 'object',
+                      properties: { category: { enum: -> { %w[bikes] } } }
                     })
 
       expect(Kiosk::Server::SchemaDocument.json).to include('"enum":["bikes"]')
     end
   end
 
-  describe "the memo, and its lifetime" do
-    it "calls the proc ONCE across many reads inside one window" do
+  describe 'the memo, and its lifetime' do
+    it 'calls the proc ONCE across many reads inside one window' do
       calls = 0
       described_class.refresh_seconds = 3600
-      declare_query("board", input_schema: {
-                      type: "object", properties: { category: { enum: -> { calls += 1; %w[bikes] } } },
+      declare_query('board', input_schema: {
+                      type: 'object', properties: { category: { enum: lambda {
+                                        calls += 1
+                                        %w[bikes]
+                                      } } }
                     })
 
-      10.times { Kiosk::Server::Queries.describe("board") }
+      10.times { Kiosk::Server::Queries.describe('board') }
 
       expect(calls).to eq(1)
     end
@@ -108,70 +114,73 @@ RSpec.describe Kiosk::Server::SchemaSlots do
     # THE HALF THAT IS NOT "cache on first call": a memo with no expiry means
     # an operator who adds a category has to restart the process to publish
     # it, which is exactly the deploy dependency this decision removes.
-    it "re-resolves after the window, with no reset, no reload and no restart" do
+    it 're-resolves after the window, with no reset, no reload and no restart' do
       slugs = %w[bikes]
       described_class.refresh_seconds = 0
-      declare_query("board", input_schema: {
-                      type: "object", properties: { category: { enum: -> { slugs } } },
+      declare_query('board', input_schema: {
+                      type: 'object', properties: { category: { enum: -> { slugs } } }
                     })
 
-      expect(Kiosk::Server::Queries.describe("board")[:input_schema][:properties][:category][:enum])
+      expect(Kiosk::Server::Queries.describe('board')[:input_schema][:properties][:category][:enum])
         .to eq(%w[bikes])
 
       slugs = %w[bikes free] # the operator adds a category
 
-      expect(Kiosk::Server::Queries.describe("board")[:input_schema][:properties][:category][:enum])
+      expect(Kiosk::Server::Queries.describe('board')[:input_schema][:properties][:category][:enum])
         .to eq(%w[bikes free])
     end
 
-    it "holds the previous value for the rest of the window" do
+    it 'holds the previous value for the rest of the window' do
       slugs = %w[bikes]
       described_class.refresh_seconds = 3600
-      declare_query("board", input_schema: {
-                      type: "object", properties: { category: { enum: -> { slugs } } },
+      declare_query('board', input_schema: {
+                      type: 'object', properties: { category: { enum: -> { slugs } } }
                     })
 
-      Kiosk::Server::Queries.describe("board")
+      Kiosk::Server::Queries.describe('board')
       slugs = %w[bikes free]
 
-      expect(Kiosk::Server::Queries.describe("board")[:input_schema][:properties][:category][:enum])
+      expect(Kiosk::Server::Queries.describe('board')[:input_schema][:properties][:category][:enum])
         .to eq(%w[bikes])
     end
 
     # A code reload replaces the registry Entry. The memo is keyed on that
     # object's IDENTITY, so it invalidates without anyone remembering to.
-    it "invalidates when the verb is re-declared" do
+    it 'invalidates when the verb is re-declared' do
       described_class.refresh_seconds = 3600
-      declare_query("board", input_schema: {
-                      type: "object", properties: { category: { enum: -> { %w[bikes] } } },
+      declare_query('board', input_schema: {
+                      type: 'object', properties: { category: { enum: -> { %w[bikes] } } }
                     })
-      Kiosk::Server::Queries.describe("board")
+      Kiosk::Server::Queries.describe('board')
 
-      declare_query("board", input_schema: {
-                     type: "object", properties: { category: { enum: -> { %w[housing] } } },
-                   })
+      declare_query('board', input_schema: {
+                      type: 'object', properties: { category: { enum: -> { %w[housing] } } }
+                    })
 
-      expect(Kiosk::Server::Queries.describe("board")[:input_schema][:properties][:category][:enum])
+      expect(Kiosk::Server::Queries.describe('board')[:input_schema][:properties][:category][:enum])
         .to eq(%w[housing])
     end
   end
 
-  describe "SPEC-278: reuse bound and caller independence" do
+  describe 'SPEC-278: reuse bound and caller independence' do
     it "reuses a derived value no longer than the discovery document's freshness lifetime" do
       described_class.refresh_seconds = nil
       expect(described_class.refresh_seconds).to be <= Kiosk::Server::Headers::SHORT_MAX_AGE
     end
 
-    it "answers every caller with one descriptor, resolved once" do
+    it 'answers every caller with one descriptor, resolved once' do
       described_class.refresh_seconds = 3600
       calls = 0
-      declare_query("board", input_schema: {
-                      type: "object", properties: { category: { enum: -> { calls += 1; %w[bikes] } } },
+      declare_query('board', input_schema: {
+                      type: 'object', properties: { category: { enum: lambda {
+                                        calls += 1
+                                        %w[bikes]
+                                      } } }
                     })
 
       seen = %w[u-1 u-2].map do |user_id|
         Kiosk::Server::CurrentRequest.with(identity: build_identity(user_id: user_id)) do
-          Kiosk::Server::Queries.describe("board")
+          Kiosk::Server::Queries.describe('board')
         end
       end
 
@@ -188,32 +197,32 @@ RSpec.describe Kiosk::Server::SchemaSlots do
   # the barrier releases every thread into the empty memo at once and the proc
   # is deliberately SLOW, so an unlocked implementation runs it once per
   # thread and publishes as many different answers.
-  describe "concurrent first fill" do
+  describe 'concurrent first fill' do
     let(:thread_count) { 8 }
 
-    it "calls the proc exactly once and hands every thread the SAME value" do
+    it 'calls the proc exactly once and hands every thread the SAME value' do
       described_class.refresh_seconds = 3600
       calls    = 0
       lock     = Mutex.new
       released = Queue.new
 
-      declare_query("board", input_schema: {
-                      type: "object",
+      declare_query('board', input_schema: {
+                      type: 'object',
                       properties: {
                         category: {
                           enum: lambda {
                             nth = lock.synchronize { calls += 1 }
                             sleep 0.05 # widen the window an unlocked memo loses
                             ["slug-#{nth}"]
-                          },
-                        },
-                      },
+                          }
+                        }
+                      }
                     })
 
       threads = Array.new(thread_count) do
         Thread.new do
           released.pop # all threads wait here
-          Kiosk::Server::Queries.describe("board")[:input_schema][:properties][:category][:enum]
+          Kiosk::Server::Queries.describe('board')[:input_schema][:properties][:category][:enum]
         end
       end
       thread_count.times { released << :go }
@@ -224,16 +233,22 @@ RSpec.describe Kiosk::Server::SchemaSlots do
       expect(answers.first).to eq(%w[slug-1])
     end
 
-    it "hands every thread the SAME frozen object, so nobody can tear it" do
+    it 'hands every thread the SAME frozen object, so nobody can tear it' do
       described_class.refresh_seconds = 3600
       released = Queue.new
-      declare_query("board", input_schema: {
-                      type: "object",
-                      properties: { category: { enum: -> { sleep 0.05; %w[bikes] } } },
+      declare_query('board', input_schema: {
+                      type: 'object',
+                      properties: { category: { enum: lambda {
+                        sleep 0.05
+                        %w[bikes]
+                      } } }
                     })
 
       threads = Array.new(thread_count) do
-        Thread.new { released.pop; Kiosk::Server::Queries.describe("board") }
+        Thread.new do
+          released.pop
+          Kiosk::Server::Queries.describe('board')
+        end
       end
       thread_count.times { released << :go }
       descriptors = threads.map(&:value)
@@ -243,8 +258,8 @@ RSpec.describe Kiosk::Server::SchemaSlots do
     end
   end
 
-  describe ".resolve" do
-    it "refuses a proc chain deeper than MAX_DEPTH rather than looping" do
+  describe '.resolve' do
+    it 'refuses a proc chain deeper than MAX_DEPTH rather than looping' do
       looping = nil
       looping = -> { looping }
 
@@ -252,8 +267,8 @@ RSpec.describe Kiosk::Server::SchemaSlots do
         .to raise_error(ArgumentError, /nests procs more than/)
     end
 
-    it "returns a literal container unchanged rather than copying it" do
-      literal = { type: "string", enum: %w[a b] }
+    it 'returns a literal container unchanged rather than copying it' do
+      literal = { type: 'string', enum: %w[a b] }
 
       expect(described_class.resolve(literal)).to equal(literal)
     end

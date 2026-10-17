@@ -1,18 +1,18 @@
 # frozen_string_literal: true
 
-require "base64"
-require "kiosk/reputation"
-require "kiosk/pow/equihash"
-require_relative "../../support/equihash_kat"
+require 'base64'
+require 'kiosk/reputation'
+require 'kiosk/pow/equihash'
+require_relative '../../support/equihash_kat'
 
 # Registration PoW gate — the SAME equihash machinery as the reputation gate,
 # applied at /auth/register to price fresh identity minting. Driven with the
 # kiosk-pow-equihash known-answer proof (n=8, k=1) so it is fast and real.
 RSpec.describe Kiosk::Server::RegistrationPow do
-  PEM        = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
+  PEM = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
 
   before(:each) do
-    Kiosk::Reputation::Backends.register("equihash", Kiosk::Pow::Equihash)
+    Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
   end
 
   after(:each) do
@@ -20,7 +20,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     Kiosk.reset!
   end
 
-  let(:secret) { "registration-pow-secret-at-least-32-bytes" }
+  let(:secret) { 'registration-pow-secret-at-least-32-bytes' }
 
   def configure(count:)
     Kiosk.configure do |c|
@@ -35,82 +35,82 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   # SHA256("<METHOD> <verb>\n<canonical args>") — here `POST auth/register`
   # over the public key being registered.
   def kat_challenge(id:, pem: PEM)
-    fp = Kiosk::Server::PowGate.request_fingerprint(method: "POST", verb: "auth/register",
+    fp = Kiosk::Server::PowGate.request_fingerprint(method: 'POST', verb: 'auth/register',
                                                     body: { public_key: pem })
     Kiosk::Reputation::Challenge.issue(
-      alg: "equihash", params: EquihashKat::PARAMS, request_fingerprint: fp,
-      secret: secret, ttl: 300, salt: "kat".b, id: id,
+      alg: 'equihash', params: EquihashKat::PARAMS, request_fingerprint: fp,
+      secret: secret, ttl: 300, salt: 'kat'.b, id: id
     )
   end
 
-  it "is a no-op when registration_pow_count is 0 (default)" do
+  it 'is a no-op when registration_pow_count is 0 (default)' do
     expect(Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)).to be_nil
   end
 
-  it "demands `count` challenges (402) when no proof is submitted" do
+  it 'demands `count` challenges (402) when no proof is submitted' do
     configure(count: 1)
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
-    }.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
+    end.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
       expect(e.challenges.length).to eq(1)
-      expect(e.challenges.first[:alg]).to eq("equihash")
+      expect(e.challenges.first[:alg]).to eq('equihash')
     }
   end
 
-  it "proceeds when the real verifier accepts the proof" do
+  it 'proceeds when the real verifier accepts the proof' do
     configure(count: 1)
-    proof = { challenge: kat_challenge(id: "r1"), nonce: EquihashKat::NONCE }
+    proof = { challenge: kat_challenge(id: 'r1'), nonce: EquihashKat::NONCE }
     expect(
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [proof] }),
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [proof] })
     ).to be_nil
   end
 
-  it "rejects a WRONG nonce (403), with no principal to penalise" do
+  it 'rejects a WRONG nonce (403), with no principal to penalise' do
     configure(count: 1)
-    proof = { challenge: kat_challenge(id: "r1"), nonce: { indices: [3, 10] } }
-    expect {
+    proof = { challenge: kat_challenge(id: 'r1'), nonce: { indices: [3, 10] } }
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [proof] })
-    }.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
+    end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
 
-  it "binds proofs to the public key (a proof for another key re-challenges)" do
+  it 'binds proofs to the public key (a proof for another key re-challenges)' do
     configure(count: 1)
-    other = { challenge: kat_challenge(id: "r1", pem: "-----BEGIN PUBLIC KEY-----\nOTHER\n-----END PUBLIC KEY-----"),
+    other = { challenge: kat_challenge(id: 'r1', pem: "-----BEGIN PUBLIC KEY-----\nOTHER\n-----END PUBLIC KEY-----"),
               nonce: EquihashKat::NONCE }
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [other] })
-    }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 
   # The request fingerprint binds the toll to the CALL, not only to its
   # arguments: the registration challenge is minted for `POST auth/register`,
   # so a challenge carrying the same public key under any other method/verb
   # pair is not spendable here even though its HMAC is genuinely ours.
-  it "binds proofs to POST auth/register (the same key under another call re-challenges)" do
+  it 'binds proofs to POST auth/register (the same key under another call re-challenges)' do
     configure(count: 1)
     elsewhere_fp = Kiosk::Server::PowGate.request_fingerprint(
-      method: "GET", verb: "auth/register", body: { public_key: PEM },
+      method: 'GET', verb: 'auth/register', body: { public_key: PEM }
     )
     elsewhere = Kiosk::Reputation::Challenge.issue(
-      alg: "equihash", params: EquihashKat::PARAMS, request_fingerprint: elsewhere_fp,
-      secret: secret, ttl: 300, salt: "kat".b, id: "r-elsewhere",
+      alg: 'equihash', params: EquihashKat::PARAMS, request_fingerprint: elsewhere_fp,
+      secret: secret, ttl: 300, salt: 'kat'.b, id: 'r-elsewhere'
     )
 
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(
-        public_key_pem: PEM, pow: { proofs: [{ challenge: elsewhere, nonce: EquihashKat::NONCE }] },
+        public_key_pem: PEM, pow: { proofs: [{ challenge: elsewhere, nonce: EquihashKat::NONCE }] }
       )
-    }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 
-  it "raises ConfigurationError when count > 0 but pow_secret is missing" do
+  it 'raises ConfigurationError when count > 0 but pow_secret is missing' do
     Kiosk.configure do |c|
       c.registration_pow_count  = 1
       c.registration_pow_params = EquihashKat::PARAMS
     end
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
-    }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
+    end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
   end
 
   # ── K-843: refuse to MINT a challenge no proof could satisfy ───────────────
@@ -123,9 +123,9 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   # asks the backend first, and a difficulty it refuses is a ConfigurationError
   # naming the setting — exactly the way a missing pow_secret already is.
   {
-    "n = 0 (every leaf is the integer 0)" => { n: 0, k: 7 },
-    "negative k (the solution disappears)" => { n: 168, k: -5 },
-    "zero bits per level"                  => { n: 8, k: 8 },
+    'n = 0 (every leaf is the integer 0)' => { n: 0, k: 7 },
+    'negative k (the solution disappears)' => { n: 168, k: -5 },
+    'zero bits per level' => { n: 8, k: 8 }
   }.each do |label, bad_params|
     it "raises ConfigurationError instead of minting a challenge at #{label}" do
       Kiosk.configure do |c|
@@ -133,25 +133,25 @@ RSpec.describe Kiosk::Server::RegistrationPow do
         c.registration_pow_params = bad_params
         c.pow_secret              = secret
       end
-      expect {
+      expect do
         Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
-      }.to raise_error(Kiosk::Server::Errors::ConfigurationError,
-                       /registration_pow_params/)
+      end.to raise_error(Kiosk::Server::Errors::ConfigurationError,
+                         /registration_pow_params/)
     end
   end
 
-  it "names the algorithm and the offending parameters in the message" do
+  it 'names the algorithm and the offending parameters in the message' do
     Kiosk.configure do |c|
       c.registration_pow_count  = 1
       c.registration_pow_params = { n: 0, k: 7 }
       c.pow_secret              = secret
     end
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
-    }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /equihash.*n.*0/m)
+    end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /equihash.*n.*0/m)
   end
 
-  it "does not mint anything — the raise replaces the 402, it does not follow it" do
+  it 'does not mint anything — the raise replaces the 402, it does not follow it' do
     # The point of moving the check to mint time: the client never receives a
     # challenge it cannot use. PowRequired carries the challenges, so if one
     # were issued this would raise PowRequired rather than ConfigurationError.
@@ -161,16 +161,16 @@ RSpec.describe Kiosk::Server::RegistrationPow do
       c.pow_secret              = secret
     end
     expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
-    }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
   end
 
-  it "still accepts the shipped default parameters — the accepted set is unchanged" do
+  it 'still accepts the shipped default parameters — the accepted set is unchanged' do
     configure(count: 1)
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: nil)
-    }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 
   # K-540: /auth/register runs this gate UNAUTHENTICATED, BEFORE PopVerifier, so
@@ -178,9 +178,9 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   # verifies. The atomic claim (K-542) consumes the challenge id BEFORE the
   # verify, so a replay of the same id is turned away with a re-challenge (402)
   # and never reaches the expensive equihash verify a second time.
-  it "consumes the challenge id on a bad proof so a replay does not re-verify" do
+  it 'consumes the challenge id on a bad proof so a replay does not re-verify' do
     configure(count: 1)
-    bad = { challenge: kat_challenge(id: "r1"), nonce: { indices: [3, 10] } }
+    bad = { challenge: kat_challenge(id: 'r1'), nonce: { indices: [3, 10] } }
 
     verify_calls = 0
     allow(Kiosk::Reputation::Challenge).to receive(:verify).and_wrap_original do |orig, **kw|
@@ -189,15 +189,15 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     end
 
     # First bad submission → a real 403; the id is now consumed.
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [bad] })
-    }.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
+    end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
 
     # Replay of the SAME challenge id → re-challenge (402), NOT another 403, and
     # NO second verify (the claim short-circuits before the hash loop).
-    expect {
+    expect do
       Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [bad] })
-    }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
     expect(verify_calls).to eq(1)
   end
@@ -207,7 +207,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   # server currently demands. The two examples below submit the SAME proof —
   # real secret, real register fingerprint, live exp, and a nonce that genuinely
   # solves it at n=8 k=1 — against two server configs. Only the params differ.
-  describe "server-side parameter re-derivation (K-541)" do
+  describe 'server-side parameter re-derivation (K-541)' do
     def trivial_proof(id:)
       { challenge: kat_challenge(id: id), nonce: EquihashKat::NONCE }
     end
@@ -220,50 +220,50 @@ RSpec.describe Kiosk::Server::RegistrationPow do
       end
     end
 
-    it "accepts the trivial proof while the server itself demands n=8 k=1" do
+    it 'accepts the trivial proof while the server itself demands n=8 k=1' do
       configure_at(EquihashKat::PARAMS)
       expect(
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-ok")] }),
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: 'k541-ok')] })
       ).to be_nil
     end
 
-    it "REJECTS that same proof once the server demands harder params" do
+    it 'REJECTS that same proof once the server demands harder params' do
       configure_at({ n: 96, k: 5 })
 
       # Before K-541 this returned :proceed: the sig was ours, so the challenge
       # was honoured at whatever difficulty it named — a leaked pow_secret (or
       # a challenge outliving a difficulty raise) turned the toll off silently.
-      expect {
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-stale")] })
-      }.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
+      expect do
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: 'k541-stale')] })
+      end.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
         # Re-challenged at the CURRENT difficulty, not the one it asked for.
         expect(e.challenges.first[:params]).to eq({ n: 96, k: 5 })
       }
     end
 
-    it "is a re-challenge, not bad faith: the off-spec id is released, not burnt" do
+    it 'is a re-challenge, not bad faith: the off-spec id is released, not burnt' do
       configure_at({ n: 96, k: 5 })
-      expect {
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-rel")] })
-      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect do
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: 'k541-rel')] })
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
       # An honest client holding a pre-raise challenge must not have its id
       # burnt (and a forger must not be able to poison the spent store).
-      expect(Kiosk.configuration.pow_spent_store.spent?("k541-rel")).to be(false)
+      expect(Kiosk.configuration.pow_spent_store.spent?('k541-rel')).to be(false)
     end
 
-    it "never spends a backend eval on an off-spec challenge" do
+    it 'never spends a backend eval on an off-spec challenge' do
       configure_at({ n: 96, k: 5 })
       expect(Kiosk::Pow::Equihash).not_to receive(:verify)
-      expect {
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: "k541-nohash")] })
-      }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect do
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: PEM, pow: { proofs: [trivial_proof(id: 'k541-nohash')] })
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end
 
-  it "rejects the removed SHA256 registration_difficulty knob" do
-    expect {
+  it 'rejects the removed SHA256 registration_difficulty knob' do
+    expect do
       Kiosk.configure { |c| c.registration_difficulty = 20 }
-    }.to raise_error(ArgumentError, /Equihash/)
+    end.to raise_error(ArgumentError, /Equihash/)
   end
 end

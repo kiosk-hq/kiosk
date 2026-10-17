@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/test_executor"
+require 'kiosk/server/test_executor'
 
 RSpec.describe Kiosk::Server::TestExecutor do
   # Test connection that can pretend to be either a real AR connection
@@ -8,9 +8,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
   # too minimal — we extend it here so tests can stage queued results
   # and queued errors.
   class TestableConnection
-    attr_reader :executed_sql, :transactions_opened
-
-    attr_reader :exec_queries
+    attr_reader :executed_sql, :transactions_opened, :exec_queries
 
     def initialize
       @executed_sql        = []
@@ -36,7 +34,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
     # The identity GUCs travel as bind parameters (K-789), so they arrive
     # here and NOT through `#execute`. They are housekeeping — they must not
     # consume from the queue, which is staged for the SQL under test.
-    def exec_query(sql, name = "SQL", binds = [])
+    def exec_query(sql, name = 'SQL', binds = [])
       @exec_queries << [sql, name, binds]
       []
     end
@@ -49,34 +47,34 @@ RSpec.describe Kiosk::Server::TestExecutor do
   let(:connection)        { TestableConnection.new }
   let(:system_connection) { TestableConnection.new }
   let(:executor)          { described_class.new(connection: connection, system_connection: system_connection) }
-  let(:identity)          { build_identity(actor: "agent") }
+  let(:identity)          { build_identity(actor: 'agent') }
 
-  describe "#with_identity" do
-    it "opens exactly one transaction" do
+  describe '#with_identity' do
+    it 'opens exactly one transaction' do
       executor.with_identity(identity) { :inside }
       expect(connection.transactions_opened).to eq(1)
     end
 
-    it "sets the four canonical GUCs before yielding" do
+    it 'sets the four canonical GUCs before yielding' do
       executor.with_identity(identity) { :inside }
-      gucs = connection.exec_queries.select { |sql, _name, _binds| sql.include?("set_config") }
+      gucs = connection.exec_queries.select { |sql, _name, _binds| sql.include?('set_config') }
       expect(gucs.size).to eq(4)
       expect(gucs.map { |_sql, _name, binds| binds.first })
         .to match_array(%w[app.current_user_id app.current_role app.current_actor app.current_agent_id])
     end
 
-    it "exposes the identity inside the block (#current_identity)" do
+    it 'exposes the identity inside the block (#current_identity)' do
       observed = nil
       executor.with_identity(identity) { observed = executor.current_identity }
       expect(observed).to eq(identity)
     end
 
-    it "clears identity after the block returns" do
+    it 'clears identity after the block returns' do
       executor.with_identity(identity) { :inside }
       expect(executor.current_identity).to be_nil
     end
 
-    it "rolls back unconditionally by raising the marker (always swallowed)" do
+    it 'rolls back unconditionally by raising the marker (always swallowed)' do
       expect { executor.with_identity(identity) { :inside } }.not_to raise_error
     end
 
@@ -85,24 +83,24 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(value).to eq(42)
     end
 
-    it "propagates a block exception after the rollback" do
-      expect {
-        executor.with_identity(identity) { raise "boom" }
-      }.to raise_error(RuntimeError, "boom")
+    it 'propagates a block exception after the rollback' do
+      expect do
+        executor.with_identity(identity) { raise 'boom' }
+      end.to raise_error(RuntimeError, 'boom')
       # Identity was still cleaned up even after the raise.
       expect(executor.current_identity).to be_nil
     end
 
-    it "skips GUC setup when identity is nil (as_anonymous semantics)" do
+    it 'skips GUC setup when identity is nil (as_anonymous semantics)' do
       executor.with_identity(nil) { :inside }
-      expect(connection.exec_queries.select { |sql, _n, _b| sql.include?("set_config") }).to be_empty
+      expect(connection.exec_queries.select { |sql, _n, _b| sql.include?('set_config') }).to be_empty
     end
 
-    it "requires a block" do
+    it 'requires a block' do
       expect { executor.with_identity(identity) }.to raise_error(ArgumentError, /block required/)
     end
 
-    it "leaves an enclosing scope intact when a blockless call is rescued inside it" do
+    it 'leaves an enclosing scope intact when a blockless call is rescued inside it' do
       preserved = nil
       executor.with_identity(nil) do
         begin
@@ -116,7 +114,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(preserved).to be(true)
     end
 
-    it "keeps current_identity from an enclosing scope after a rescued blockless call" do
+    it 'keeps current_identity from an enclosing scope after a rescued blockless call' do
       observed = nil
       executor.with_identity(identity) do
         begin
@@ -128,7 +126,7 @@ RSpec.describe Kiosk::Server::TestExecutor do
       expect(observed).to eq(identity)
     end
 
-    it "marks in_scope? for the duration of the block" do
+    it 'marks in_scope? for the duration of the block' do
       seen = false
       executor.with_identity(identity) { seen = executor.in_scope? }
       expect(seen).to be(true)
@@ -136,179 +134,179 @@ RSpec.describe Kiosk::Server::TestExecutor do
     end
   end
 
-  describe "#query (default-deny enforcement)" do
-    it "raises NoScopeError when called outside any with_identity scope" do
-      expect { executor.query("SELECT 1") }
+  describe '#query (default-deny enforcement)' do
+    it 'raises NoScopeError when called outside any with_identity scope' do
+      expect { executor.query('SELECT 1') }
         .to raise_error(described_class::NoScopeError, /default-deny/)
     end
 
-    it "executes the SQL through the app connection inside scope" do
-      connection.queue_result([{ "n" => 1 }])
-      result = executor.with_identity(identity) { executor.query("SELECT 1 AS n") }
-      expect(connection.executed_sql).to include("SELECT 1 AS n")
+    it 'executes the SQL through the app connection inside scope' do
+      connection.queue_result([{ 'n' => 1 }])
+      result = executor.with_identity(identity) { executor.query('SELECT 1 AS n') }
+      expect(connection.executed_sql).to include('SELECT 1 AS n')
       expect(result).to eq([{ n: 1 }])
     end
 
-    it "returns rows with symbolised keys (Journey DSL convention)" do
-      connection.queue_result([{ "id" => 1, "name" => "alice" }])
-      rows = executor.with_identity(identity) { executor.query("SELECT id,name FROM users") }
+    it 'returns rows with symbolised keys (Journey DSL convention)' do
+      connection.queue_result([{ 'id' => 1, 'name' => 'alice' }])
+      rows = executor.with_identity(identity) { executor.query('SELECT id,name FROM users') }
       expect(rows.first.keys).to all(be_a(Symbol))
     end
 
-    it "translates RLS denial (PG message) to Kiosk::TestHelpers::Errors::RLSDenied" do
-      connection.queue_error(StandardError, "ERROR: new row violates row-level security policy")
-      expect {
-        executor.with_identity(identity) { executor.query("INSERT INTO x DEFAULT VALUES") }
-      }.to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
+    it 'translates RLS denial (PG message) to Kiosk::TestHelpers::Errors::RLSDenied' do
+      connection.queue_error(StandardError, 'ERROR: new row violates row-level security policy')
+      expect do
+        executor.with_identity(identity) { executor.query('INSERT INTO x DEFAULT VALUES') }
+      end.to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
     end
 
-    it "translates `permission denied for table` to RLSDenied as well" do
-      connection.queue_error(StandardError, "ERROR:  permission denied for table appointments")
-      expect {
-        executor.with_identity(identity) { executor.query("SELECT * FROM appointments") }
-      }.to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
+    it 'translates `permission denied for table` to RLSDenied as well' do
+      connection.queue_error(StandardError, 'ERROR:  permission denied for table appointments')
+      expect do
+        executor.with_identity(identity) { executor.query('SELECT * FROM appointments') }
+      end.to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
     end
 
-    it "lets non-RLS errors propagate unchanged" do
+    it 'lets non-RLS errors propagate unchanged' do
       connection.queue_error(ArgumentError, "syntax near 'WAT'")
-      expect {
-        executor.with_identity(identity) { executor.query("WAT") }
-      }.to raise_error(ArgumentError, /syntax/)
+      expect do
+        executor.with_identity(identity) { executor.query('WAT') }
+      end.to raise_error(ArgumentError, /syntax/)
     end
   end
 
-  describe "#run_action" do
-    it "raises NoScopeError outside scope" do
+  describe '#run_action' do
+    it 'raises NoScopeError outside scope' do
       expect { executor.run_action(:foo, {}) }.to raise_error(described_class::NoScopeError)
     end
 
-    it "fetches the action from the registry and calls it with args" do
-      declare_action("ping") { render json: { pong: params[:msg] } }
-      result = executor.with_identity(identity) { executor.run_action(:ping, msg: "hi") }
+    it 'fetches the action from the registry and calls it with args' do
+      declare_action('ping') { render json: { pong: params[:msg] } }
+      result = executor.with_identity(identity) { executor.run_action(:ping, msg: 'hi') }
       # String keys: the handler renders, so the value makes a JSON round trip.
-      expect(result).to eq("pong" => "hi")
+      expect(result).to eq('pong' => 'hi')
     end
 
-    it "raises Errors::VerbNotFound for an unregistered action (via Actions.fetch)" do
-      expect {
+    it 'raises Errors::VerbNotFound for an unregistered action (via Actions.fetch)' do
+      expect do
         executor.with_identity(identity) { executor.run_action(:missing, {}) }
-      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+      end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
   end
 
-  describe "#run_query" do
+  describe '#run_query' do
     # The read-side twin of #run_action. Before it existed, a `kind :query`
     # declaration was reachable through nothing at all — `query` takes SQL and
     # `run_action` resolves against the Action registry — so half of every
     # origin's wire had no seam in this DSL.
-    it "raises NoScopeError outside scope" do
+    it 'raises NoScopeError outside scope' do
       expect { executor.run_query(:foo, {}) }.to raise_error(described_class::NoScopeError)
     end
 
-    it "fetches the query from the registry and calls it with args" do
-      declare_query("menu") { render json: [{ item: params[:only] }] }
-      result = executor.with_identity(identity) { executor.run_query(:menu, only: "soup") }
-      expect(result).to eq([{ "item" => "soup" }])
+    it 'fetches the query from the registry and calls it with args' do
+      declare_query('menu') { render json: [{ item: params[:only] }] }
+      result = executor.with_identity(identity) { executor.run_query(:menu, only: 'soup') }
+      expect(result).to eq([{ 'item' => 'soup' }])
     end
 
     it "makes the scope's identity visible to the handler" do
-      declare_query("mine") { render json: [{ user: kiosk_identity.user_id }] }
+      declare_query('mine') { render json: [{ user: kiosk_identity.user_id }] }
       result = executor.with_identity(identity) { executor.run_query(:mine, {}) }
-      expect(result).to eq([{ "user" => identity.user_id }])
+      expect(result).to eq([{ 'user' => identity.user_id }])
     end
 
-    it "answers a paginated query with its rows — what a caller receives" do
-      declare_query("paged") { render_kiosk_page([{ id: 1 }], next_cursor: "opaque") }
+    it 'answers a paginated query with its rows — what a caller receives' do
+      declare_query('paged') { render_kiosk_page([{ id: 1 }], next_cursor: 'opaque') }
       result = executor.with_identity(identity) { executor.run_query(:paged, {}) }
-      expect(result).to eq([{ "id" => 1 }])
+      expect(result).to eq([{ 'id' => 1 }])
     end
 
-    it "raises Errors::VerbNotFound for an unregistered query" do
-      expect {
+    it 'raises Errors::VerbNotFound for an unregistered query' do
+      expect do
         executor.with_identity(identity) { executor.run_query(:missing, {}) }
-      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+      end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
 
-    it "does not resolve an ACTION name — the two registries stay separate" do
-      declare_action("order")
-      expect {
+    it 'does not resolve an ACTION name — the two registries stay separate' do
+      declare_action('order')
+      expect do
         executor.with_identity(identity) { executor.run_query(:order, {}) }
-      }.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+      end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
     end
   end
 
-  describe "#pay_action" do
-    it "raises NotImplementedError — pay is not exercised through the journey DSL" do
-      expect {
+  describe '#pay_action' do
+    it 'raises NotImplementedError — pay is not exercised through the journey DSL' do
+      expect do
         executor.with_identity(identity) { executor.pay_action(:foo, {}) }
-      }.to raise_error(NotImplementedError, /not exercised through the RLS journey DSL/)
+      end.to raise_error(NotImplementedError, /not exercised through the RLS journey DSL/)
     end
   end
 
-  describe "#seed" do
-    let(:row) { { "id" => 42, "user_id" => "u-1", "salon_id" => 1 } }
+  describe '#seed' do
+    let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
 
-    it "uses the system connection (RLS bypass)" do
+    it 'uses the system connection (RLS bypass)' do
       system_connection.queue_result([row])
-      executor.seed(:appointments, { user_id: "u-1", salon_id: 1 }, count: 1)
+      executor.seed(:appointments, { user_id: 'u-1', salon_id: 1 }, count: 1)
       expect(system_connection.executed_sql).not_to be_empty
       expect(connection.executed_sql).to be_empty
     end
 
-    it "issues `count` INSERTs with RETURNING *" do
+    it 'issues `count` INSERTs with RETURNING *' do
       3.times { system_connection.queue_result([row]) }
-      executor.seed(:appointments, { user_id: "u-1", salon_id: 1 }, count: 3)
-      inserts = system_connection.executed_sql.select { |s| s.start_with?("INSERT INTO") }
+      executor.seed(:appointments, { user_id: 'u-1', salon_id: 1 }, count: 3)
+      inserts = system_connection.executed_sql.select { |s| s.start_with?('INSERT INTO') }
       expect(inserts.size).to eq(3)
-      expect(inserts.first).to include("RETURNING *")
+      expect(inserts.first).to include('RETURNING *')
     end
 
-    it "quotes column names + table to defang reserved words / casing" do
+    it 'quotes column names + table to defang reserved words / casing' do
       system_connection.queue_result([row])
-      executor.seed("public.events", { kind: "click" }, count: 1)
+      executor.seed('public.events', { kind: 'click' }, count: 1)
       expect(system_connection.executed_sql.first).to include(%("public"."events"))
       expect(system_connection.executed_sql.first).to include(%("kind"))
     end
 
-    it "quotes string values with single-quote escape" do
+    it 'quotes string values with single-quote escape' do
       system_connection.queue_result([row])
       executor.seed(:notes, { body: "alice's note" }, count: 1)
       expect(system_connection.executed_sql.first).to include("'alice''s note'")
     end
 
-    it "renders numeric values without quotes" do
+    it 'renders numeric values without quotes' do
       system_connection.queue_result([row])
       executor.seed(:t, { amount_cents: 5_000 }, count: 1)
-      expect(system_connection.executed_sql.first).to include("VALUES (5000)")
+      expect(system_connection.executed_sql.first).to include('VALUES (5000)')
     end
 
-    it "renders NULL for nil and TRUE/FALSE for booleans" do
+    it 'renders NULL for nil and TRUE/FALSE for booleans' do
       system_connection.queue_result([row])
       executor.seed(:t, { archived: false, deleted_at: nil }, count: 1)
       sql = system_connection.executed_sql.first
-      expect(sql).to include("FALSE")
-      expect(sql).to include("NULL")
+      expect(sql).to include('FALSE')
+      expect(sql).to include('NULL')
     end
 
-    it "returns the inserted rows with symbol keys" do
+    it 'returns the inserted rows with symbol keys' do
       system_connection.queue_result([row])
-      result = executor.seed(:appointments, { user_id: "u-1", salon_id: 1 }, count: 1)
-      expect(result.first).to include(id: 42, user_id: "u-1", salon_id: 1)
+      result = executor.seed(:appointments, { user_id: 'u-1', salon_id: 1 }, count: 1)
+      expect(result.first).to include(id: 42, user_id: 'u-1', salon_id: 1)
     end
 
     it "renders a Time as a UTC ISO-8601 literal without mutating the caller's object" do
       system_connection.queue_result([row])
-      t = Time.new(2026, 7, 14, 12, 0, 0, "+03:00")
+      t = Time.new(2026, 7, 14, 12, 0, 0, '+03:00')
       executor.seed(:t, { at: t }, count: 1)
       expect(system_connection.executed_sql.first).to include("'2026-07-14T09:00:00Z'")
       # `Time#utc` would have mutated `t` to UTC in place; `to_time.getutc` must not.
       expect(t.utc_offset).to eq(3 * 3600)
     end
 
-    it "renders a plain DateTime without raising NoMethodError" do
-      require "date"
+    it 'renders a plain DateTime without raising NoMethodError' do
+      require 'date'
       system_connection.queue_result([row])
-      d = DateTime.new(2026, 7, 14, 12, 0, 0, "+03:00")
+      d = DateTime.new(2026, 7, 14, 12, 0, 0, '+03:00')
       expect { executor.seed(:t, { at: d }, count: 1) }.not_to raise_error
       expect(system_connection.executed_sql.first).to include("'2026-07-14T09:00:00Z'")
     end

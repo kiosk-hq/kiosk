@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/headers"
+require 'kiosk/server/headers'
 
 module Kiosk
   module Server
@@ -14,7 +14,7 @@ module Kiosk
 
       # Read before the call: ShowExceptions rewrites PATH_INFO on an error.
       def call(env)
-        kiosk = kiosk_path?(env["PATH_INFO"])
+        kiosk = kiosk_path?(env['PATH_INFO'])
         status, headers, body = @app.call(env)
         Headers.add_to(headers) if kiosk
         [status, headers, body]

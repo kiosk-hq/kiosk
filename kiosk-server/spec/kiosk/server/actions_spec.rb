@@ -8,7 +8,7 @@ RSpec.describe Kiosk::Server::Actions do
   # That last sentence, held rather than asserted in prose (K-1853): each
   # registry is `VerbRegistry` plus its `SCOPE`, and neither carries a method of
   # its own, so the behaviour below has exactly one home.
-  it "and Queries ARE VerbRegistry — neither defines any behaviour of its own" do
+  it 'and Queries ARE VerbRegistry — neither defines any behaviour of its own' do
     [described_class, Kiosk::Server::Queries].each do |registry|
       expect(registry.singleton_class.ancestors).to include(Kiosk::Server::VerbRegistry)
       expect(registry.singleton_methods(false)).to be_empty
@@ -17,31 +17,31 @@ RSpec.describe Kiosk::Server::Actions do
     expect([described_class::SCOPE, Kiosk::Server::Queries::SCOPE]).to eq(%i[action query])
   end
 
-  describe ".fetch" do
-    it "returns the registered handler" do
-      declare_action("ping")
+  describe '.fetch' do
+    it 'returns the registered handler' do
+      declare_action('ping')
 
-      expect(described_class.fetch("ping")).to be_a(Kiosk::Server::HandlerDispatch)
+      expect(described_class.fetch('ping')).to be_a(Kiosk::Server::HandlerDispatch)
     end
 
-    it "accepts a symbol name (registry keys are strings)" do
-      declare_action("ping")
+    it 'accepts a symbol name (registry keys are strings)' do
+      declare_action('ping')
 
-      expect(described_class.fetch(:ping)).to eq(described_class.fetch("ping"))
+      expect(described_class.fetch(:ping)).to eq(described_class.fetch('ping'))
     end
   end
 
-  describe ".fetch unknown name" do
-    it "raises NotFound whose hint names the available actions and points at the schema" do
-      declare_action("place_order")
-      declare_action("cancel_order")
+  describe '.fetch unknown name' do
+    it 'raises NotFound whose hint names the available actions and points at the schema' do
+      declare_action('place_order')
+      declare_action('cancel_order')
 
-      expect { described_class.fetch("order") }
+      expect { described_class.fetch('order') }
         .to raise_error(Kiosk::Server::Errors::VerbNotFound) { |e|
-          expect(e.message).to include("order")
+          expect(e.message).to include('order')
           # names an available action so a near-miss typo is recoverable...
-          expect(e.hint).to include("place_order")
-          expect(e.hint).to include("cancel_order")
+          expect(e.hint).to include('place_order')
+          expect(e.hint).to include('cancel_order')
           # ...WITHOUT first fetching the schema, but still points there.
           expect(e.hint).to match(/schema/)
           expect(e.hint).to include("unknown action 'order'")
@@ -49,99 +49,99 @@ RSpec.describe Kiosk::Server::Actions do
     end
   end
 
-  describe ".known" do
-    it "lists registered action names" do
-      declare_action("a")
-      declare_action("b")
-      expect(described_class.known).to contain_exactly("a", "b")
+  describe '.known' do
+    it 'lists registered action names' do
+      declare_action('a')
+      declare_action('b')
+      expect(described_class.known).to contain_exactly('a', 'b')
     end
 
-    it "is empty after reset!" do
-      declare_action("a")
+    it 'is empty after reset!' do
+      declare_action('a')
       described_class.reset!
       expect(described_class.known).to be_empty
     end
   end
 
-  describe ".describe" do
-    it "carries the declared description into the descriptor" do
-      declare_action("place_order", description: "Place an order")
+  describe '.describe' do
+    it 'carries the declared description into the descriptor' do
+      declare_action('place_order', description: 'Place an order')
 
-      descriptor = described_class.describe("place_order")
-      expect(descriptor[:name]).to        eq("place_order")
-      expect(descriptor[:description]).to eq("Place an order")
+      descriptor = described_class.describe('place_order')
+      expect(descriptor[:name]).to        eq('place_order')
+      expect(descriptor[:description]).to eq('Place an order')
     end
 
     # ADR-0023 retired the free-text `params` hint and the mixin has no macro
     # for it; T-085 then took the KEY off the wire too (spec §8.3: a descriptor
     # MUST NOT publish it). Asserted as ABSENCE of the key — a nil-value
     # assertion passes either way, which is the difference this row is about.
-    it "does not publish params at all — the slot left the wire (T-085)" do
-      declare_action("place_order", description: "Place an order")
+    it 'does not publish params at all — the slot left the wire (T-085)' do
+      declare_action('place_order', description: 'Place an order')
 
-      expect(described_class.describe("place_order")).not_to have_key(:params)
+      expect(described_class.describe('place_order')).not_to have_key(:params)
     end
 
-    it "leaves description nil when the verb opted in with another macro" do
-      declare_action("bare", input_schema: { type: "object" })
+    it 'leaves description nil when the verb opted in with another macro' do
+      declare_action('bare', input_schema: { type: 'object' })
 
-      descriptor = described_class.describe("bare")
+      descriptor = described_class.describe('bare')
       expect(descriptor[:description]).to be_nil
       expect(descriptor).not_to have_key(:params)
     end
 
-    it "fetch returns the handler, not the Entry" do
-      declare_action("go", description: "Go action") { render json: { ok: true } }
+    it 'fetch returns the handler, not the Entry' do
+      declare_action('go', description: 'Go action') { render json: { ok: true } }
 
-      fetched = described_class.fetch("go")
+      fetched = described_class.fetch('go')
       expect(fetched).not_to be_a(described_class::Entry)
       expect(fetched).to respond_to(:call)
     end
   end
 
-  describe ".catalog" do
-    it "returns all descriptors sorted by name" do
-      declare_action("zebra", description: "Last")
-      declare_action("apple", description: "First")
+  describe '.catalog' do
+    it 'returns all descriptors sorted by name' do
+      declare_action('zebra', description: 'Last')
+      declare_action('apple', description: 'First')
 
       cat = described_class.catalog
       expect(cat.map { |d| d[:name] }).to eq(%w[apple zebra])
-      expect(cat.first[:description]).to  eq("First")
-      expect(cat.last[:description]).to   eq("Last")
+      expect(cat.first[:description]).to  eq('First')
+      expect(cat.last[:description]).to   eq('Last')
     end
 
-    it "is empty after reset!" do
-      declare_action("a")
+    it 'is empty after reset!' do
+      declare_action('a')
       described_class.reset!
       expect(described_class.catalog).to be_empty
     end
 
-    it "leaves known returning names only" do
-      declare_action("x", description: "Something")
-      expect(described_class.known).to eq(["x"])
+    it 'leaves known returning names only' do
+      declare_action('x', description: 'Something')
+      expect(described_class.known).to eq(['x'])
     end
   end
 
-  describe "machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)" do
+  describe 'machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)' do
     let(:input_schema) do
       {
-        type: "object",
-        required: ["items"],
-        properties: { items: { type: "array", items: { type: "string" } } },
+        type: 'object',
+        required: ['items'],
+        properties: { items: { type: 'array', items: { type: 'string' } } }
       }
     end
 
-    it "carries the declared schemas and examples into the descriptor" do
-      declare_action("place_order",
-        description: "Place an order",
-        input_schema: input_schema,
-        example_params: { items: ["milk-1l"] },
-        example_row: { order_id: "abc", status: "placed" })
+    it 'carries the declared schemas and examples into the descriptor' do
+      declare_action('place_order',
+                     description: 'Place an order',
+                     input_schema: input_schema,
+                     example_params: { items: ['milk-1l'] },
+                     example_row: { order_id: 'abc', status: 'placed' })
 
-      d = described_class.describe("place_order")
+      d = described_class.describe('place_order')
       expect(d[:input_schema]).to   eq(input_schema)
-      expect(d[:example_params]).to eq({ items: ["milk-1l"] })
-      expect(d[:example_row]).to    eq({ order_id: "abc", status: "placed" })
+      expect(d[:example_params]).to eq({ items: ['milk-1l'] })
+      expect(d[:example_row]).to    eq({ order_id: 'abc', status: 'placed' })
     end
 
     # Through `declare` rather than the mixin: T-073 = A makes both schemas
@@ -149,11 +149,11 @@ RSpec.describe Kiosk::Server::Actions do
     # operator can produce one. The omission behaviour is this REGISTRY's, and
     # it still matters for `example_params`/`example_row`, which stay optional —
     # an absent extension is absent, never a null an assistant has to interpret.
-    it "OMITS the extension keys entirely when they are not declared" do
-      described_class.declare("plain", ->(_args) { {} }, description: "Do")
+    it 'OMITS the extension keys entirely when they are not declared' do
+      described_class.declare('plain', ->(_args) { {} }, description: 'Do')
 
-      d = described_class.describe("plain")
-      expect(d).to eq({ name: "plain", description: "Do", reach: "principal" })
+      d = described_class.describe('plain')
+      expect(d).to eq({ name: 'plain', description: 'Do', reach: 'principal' })
       expect(d).not_to have_key(:input_schema)
       expect(d).not_to have_key(:output_schema)
       expect(d).not_to have_key(:example_params)

@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "action_controller"
-require "kiosk/server/open_api"
-require "kiosk/server/schema_document"
-require "kiosk/server/verb_controller"
+require 'action_controller'
+require 'kiosk/server/open_api'
+require 'kiosk/server/schema_document'
+require 'kiosk/server/verb_controller'
 
 module Kiosk
   module Server
@@ -13,9 +13,9 @@ module Kiosk
       def show
         render_public_document(
           OpenApi.json(base_url: request.base_url),
-          version:      SchemaDocument.digest,
-          etag:         OpenApi.etag(base_url: request.base_url),
-          content_type: OpenApi::CONTENT_TYPE,
+          version: SchemaDocument.digest,
+          etag: OpenApi.etag(base_url: request.base_url),
+          content_type: OpenApi::CONTENT_TYPE
         )
       end
     end

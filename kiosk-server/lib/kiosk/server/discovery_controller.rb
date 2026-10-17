@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "action_controller"
-require "kiosk/server/headers"
-require "kiosk/server/well_known"
+require 'action_controller'
+require 'kiosk/server/headers'
+require 'kiosk/server/well_known'
 
 module Kiosk
   module Server
@@ -16,7 +16,7 @@ module Kiosk
       def agents_txt
         allow_cors
         render plain: WellKnown.agents_txt(base_url: request.base_url),
-               content_type: "text/plain; charset=utf-8"
+               content_type: 'text/plain; charset=utf-8'
       end
 
       def agents_json
@@ -45,23 +45,23 @@ module Kiosk
       def auth_md
         allow_cors
         render plain: WellKnown.auth_md(base_url: request.base_url),
-               content_type: "text/markdown; charset=utf-8"
+               content_type: 'text/markdown; charset=utf-8'
       end
 
       private
 
       # agents.txt v1.0 requires `Access-Control-Allow-Origin: *`.
       def allow_cors
-        response.set_header("Access-Control-Allow-Origin", "*")
+        response.set_header('Access-Control-Allow-Origin', '*')
       end
 
       # These carry the `?v=<digest>` schema link, so they must expire soon after a deploy.
       def short_ttl
-        response.set_header("Cache-Control", Headers::PUBLIC_SHORT)
+        response.set_header('Cache-Control', Headers::PUBLIC_SHORT)
       end
 
       def drop_vary
-        response.headers.delete("Vary")
+        response.headers.delete('Vary')
       end
     end
   end

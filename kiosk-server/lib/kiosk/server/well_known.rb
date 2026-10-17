@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require "json"
-require "kiosk/server/actions"
-require "kiosk/server/queries"
-require "kiosk/server/pow_gate"
-require "kiosk/server/schema_document"
+require 'json'
+require 'kiosk/server/actions'
+require 'kiosk/server/queries'
+require 'kiosk/server/pow_gate'
+require 'kiosk/server/schema_document'
 
 module Kiosk
   module Server
@@ -12,77 +12,73 @@ module Kiosk
     # agent-configuration, api-catalog and auth.md — rendered as pure functions
     # of one configuration and the request's base URL, so they cannot drift.
     module WellKnown
-      DOCUMENT_VERSION = "1.0"
+      DOCUMENT_VERSION = '1.0'
 
-      AGENTS_VERSION  = "1.0"
-      AGENTS_STANDARD = "https://agents-txt.com/standard"
+      AGENTS_VERSION  = '1.0'
+      AGENTS_STANDARD = 'https://agents-txt.com/standard'
 
       # Modules with one fixed endpoint; the catalog links every verb separately.
-      MODULE_ENDPOINTS = { "pay" => "pay" }.freeze
+      MODULE_ENDPOINTS = { 'pay' => 'pay' }.freeze
 
       # `/.well-known/kiosk.json`.
       def self.build(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
 
-        base = base_url.to_s.chomp("/")
+        base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
 
         kiosk = {
-          version:  DOCUMENT_VERSION,
+          version: DOCUMENT_VERSION,
           endpoint: endpoint,
           auth: {
-            kind:          "kiosk-pop",
+            kind: 'kiosk-pop',
             challenge_url: auth_urls(endpoint)[:challenge],
-            register_url:  auth_urls(endpoint)[:register],
-            login_url:     auth_urls(endpoint)[:login],
-            revoke_url:    auth_urls(endpoint)[:revoke],
+            register_url: auth_urls(endpoint)[:register],
+            login_url: auth_urls(endpoint)[:login],
+            revoke_url: auth_urls(endpoint)[:revoke],
             # Additive: a client that ignores binding still has register/login.
             device_authorization_url: "#{endpoint}/oauth/device_authorization",
-            claim_url:                "#{endpoint}/auth/claim",
+            claim_url: "#{endpoint}/auth/claim"
           },
           # The modules served, not the verb names; published here only.
           capabilities: Array(config.capabilities),
           # Versioned, so the catalog may be cached for a year at this URL.
-          schema_url:   "#{endpoint}/schema?v=#{SchemaDocument.digest(config: config)}",
-          min_client:   config.min_client,
-          issuer:       Kiosk.current_issuer,
-          owner:        config.owner,
+          schema_url: "#{endpoint}/schema?v=#{SchemaDocument.digest(config: config)}",
+          min_client: config.min_client,
+          issuer: Kiosk.current_issuer,
+          owner: config.owner
         }
         # Only when a topic is registered: advertise what is served.
-        if Kiosk::Server::Events.known.any?
-          kiosk[:events_url] = "#{endpoint.sub(/\Ahttp/, "ws")}/events"
-        end
+        kiosk[:events_url] = "#{endpoint.sub(/\Ahttp/, 'ws')}/events" if Kiosk::Server::Events.known.any?
 
-        if config.skill_sha256
-          kiosk[:skill] = { url: config.skill_url, sha256: config.skill_sha256 }
-        end
+        kiosk[:skill] = { url: config.skill_url, sha256: config.skill_sha256 } if config.skill_sha256
 
         { kiosk: kiosk }
       end
 
-      def self.build_json(**kwargs)
-        JSON.generate(build(**kwargs))
+      def self.build_json(**)
+        JSON.generate(build(**))
       end
 
       # agents.txt v1.0 (agents-txt.com).
       def self.agents_txt(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
-        base = base_url.to_s.chomp("/")
+        base = base_url.to_s.chomp('/')
 
         lines = [
-          "# agents.txt — https://agents-txt.com",
-          "# JSON: #{base}/agents.json",
+          '# agents.txt — https://agents-txt.com',
+          "# JSON: #{base}/agents.json"
         ]
         if pay_served?(config)
-          lines << ""
-          lines << "Protocols: ap2"
-          lines << "Payments: required"
+          lines << ''
+          lines << 'Protocols: ap2'
+          lines << 'Payments: required'
         end
-        lines << ""
-        lines << "Authorization: agent-auth auth-md"
-        lines << "Identity: required"
+        lines << ''
+        lines << 'Authorization: agent-auth auth-md'
+        lines << 'Identity: required'
         if config.skill_url && !config.skill_url.to_s.empty?
-          lines << ""
+          lines << ''
           lines << "Skills: #{config.skill_url}"
         end
 
@@ -92,31 +88,31 @@ module Kiosk
       # agents.json v1.0; Kiosk's pointers ride the `x-kiosk` extension.
       def self.agents_json(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
-        base = base_url.to_s.chomp("/")
+        base = base_url.to_s.chomp('/')
 
         doc = {
-          version:  AGENTS_VERSION,
+          version: AGENTS_VERSION,
           standard: AGENTS_STANDARD,
-          site:     { name: site_name(config), url: base },
+          site: { name: site_name(config), url: base }
         }
         if pay_served?(config)
           doc[:payments] = {
-            ap2:      { description: "Mandate-trust layer with VC presentations" },
-            required: true,
+            ap2: { description: 'Mandate-trust layer with VC presentations' },
+            required: true
           }
         end
         doc[:authorization] = {
-          protocols: ["agent-auth", "auth-md"],
-          discovery: "/.well-known/agent-configuration",
-          identity:  "required",
+          protocols: %w[agent-auth auth-md],
+          discovery: '/.well-known/agent-configuration',
+          identity: 'required'
         }
         doc[:skills] = skills_list(config)
         # Pointers, never a copy of `kiosk.json`'s facts.
-        doc[:"x-kiosk"] = {
-          schema:      "#{config.mount_path}/schema?v=#{SchemaDocument.digest(config: config)}",
-          api_catalog: "/.well-known/api-catalog",
-          mount_path:  config.mount_path,
-          api_version: Kiosk::Protocol::API_VERSION,
+        doc[:'x-kiosk'] = {
+          schema: "#{config.mount_path}/schema?v=#{SchemaDocument.digest(config: config)}",
+          api_catalog: '/.well-known/api-catalog',
+          mount_path: config.mount_path,
+          api_version: Kiosk::Protocol::API_VERSION
         }
 
         doc
@@ -125,15 +121,15 @@ module Kiosk
       # `/.well-known/agent-configuration`: the kiosk-pop auth endpoints.
       def self.agent_configuration(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
-        base = base_url.to_s.chomp("/")
+        base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
 
         {
-          issuer:     Kiosk.current_issuer,
-          endpoints:  auth_urls(endpoint),
-          jwks_uri:   "#{endpoint}/.well-known/jwks.json",
-          auth_modes: ["kiosk-pop", "user-claimed", "link-code"],
-          auth_md:    "#{base}/auth.md",
+          issuer: Kiosk.current_issuer,
+          endpoints: auth_urls(endpoint),
+          jwks_uri: "#{endpoint}/.well-known/jwks.json",
+          auth_modes: %w[kiosk-pop user-claimed link-code],
+          auth_md: "#{base}/auth.md"
         }
       end
 
@@ -142,41 +138,41 @@ module Kiosk
       # Composed from configuration and the registries only, never a query.
       def self.api_catalog(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
-        base = base_url.to_s.chomp("/")
+        base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
         modules = Array(config.capabilities)
 
         items = []
-        if modules.include?("schema")
+        if modules.include?('schema')
           # Versioned links: this pointer is short-lived, its targets are immutable.
           version = SchemaDocument.digest(config: config)
-          items << { href: "#{endpoint}/schema?v=#{version}", rel: "service-desc" }
+          items << { href: "#{endpoint}/schema?v=#{version}", rel: 'service-desc' }
           # The only place the derived OpenAPI document is advertised.
-          items << { href: "#{endpoint}/openapi.json?v=#{version}", rel: "service-desc" }
+          items << { href: "#{endpoint}/openapi.json?v=#{version}", rel: 'service-desc' }
         end
         # Sorted, so the document is byte-stable across boots.
         Queries.known.sort.each do |name|
-          items << verb_item(endpoint, name, "GET")
+          items << verb_item(endpoint, name, 'GET')
         end
         Actions.known.sort.each do |name|
-          items << verb_item(endpoint, name, "POST")
+          items << verb_item(endpoint, name, 'POST')
         end
         MODULE_ENDPOINTS.each do |mod, path|
-          items << { href: "#{endpoint}/#{path}", rel: "item" } if modules.include?(mod)
+          items << { href: "#{endpoint}/#{path}", rel: 'item' } if modules.include?(mod)
         end
-        items << { href: "#{base}/agents.json", rel: "item" }
+        items << { href: "#{base}/agents.json", rel: 'item' }
 
         {
           linkset: [
-            { anchor: "#{base}/.well-known/api-catalog", item: items },
-          ],
+            { anchor: "#{base}/.well-known/api-catalog", item: items }
+          ]
         }
       end
 
       # `/auth.md`: the auth methods in auth.md's vocabulary and section order.
       def self.auth_md(base_url:, config: Kiosk.configuration)
         validate_issuer!(config)
-        base = base_url.to_s.chomp("/")
+        base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
         urls = auth_urls(endpoint)
 
@@ -347,22 +343,22 @@ module Kiosk
 
       # RFC 9264 §4.2.4.3: an extension attribute is an array of strings.
       def self.verb_item(endpoint, name, method)
-        { href: "#{endpoint}/#{name}", rel: "item", "kiosk-method": [method] }
+        { href: "#{endpoint}/#{name}", rel: 'item', 'kiosk-method': [method] }
       end
       private_class_method :verb_item
 
       def self.auth_urls(endpoint)
         {
           challenge: "#{endpoint}/auth/challenge",
-          register:  "#{endpoint}/auth/register",
-          login:     "#{endpoint}/auth/login",
-          revoke:    "#{endpoint}/auth/revoke",
+          register: "#{endpoint}/auth/register",
+          login: "#{endpoint}/auth/login",
+          revoke: "#{endpoint}/auth/revoke"
         }
       end
       private_class_method :auth_urls
 
       def self.pay_served?(config)
-        Array(config.capabilities).map(&:to_s).include?("pay")
+        Array(config.capabilities).map(&:to_s).include?('pay')
       end
       private_class_method :pay_served?
 
@@ -375,7 +371,7 @@ module Kiosk
       end
 
       def self.host_of(issuer)
-        require "uri"
+        require 'uri'
         URI.parse(issuer.to_s).host || issuer.to_s
       rescue URI::InvalidURIError
         issuer.to_s
@@ -384,7 +380,7 @@ module Kiosk
 
       def self.skill_discover_line(config)
         url = config.skill_url
-        return "" if url.nil? || url.to_s.empty?
+        return '' if url.nil? || url.to_s.empty?
 
         sha = config.skill_sha256
         line = "- Wire skill for AI assistants: `#{url}`"
@@ -396,7 +392,7 @@ module Kiosk
       def self.skills_list(config)
         return [] if config.skill_url.nil? || config.skill_url.to_s.empty?
 
-        [{ url: config.skill_url, description: "Kiosk wire skill" }]
+        [{ url: config.skill_url, description: 'Kiosk wire skill' }]
       end
       private_class_method :skills_list
 
@@ -404,9 +400,9 @@ module Kiosk
         return if config.issuer && !config.issuer.to_s.empty?
 
         raise ArgumentError,
-              "Kiosk.configuration.issuer must be set before serving " \
-              "/.well-known/kiosk.json — the issuer " \
-              "is the AP2 mandate `iss` anchor"
+              'Kiosk.configuration.issuer must be set before serving ' \
+              '/.well-known/kiosk.json — the issuer ' \
+              'is the AP2 mandate `iss` anchor'
       end
     end
   end

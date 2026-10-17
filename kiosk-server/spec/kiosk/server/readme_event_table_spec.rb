@@ -21,7 +21,7 @@
 # README's solve/verify lever the same way. A guard would need a CI job of its
 # own to be a gate at all.
 RSpec.describe "the kiosk-server README's event-field table" do
-  readme = File.read(File.expand_path("../../../README.md", __dir__))
+  readme = File.read(File.expand_path('../../../README.md', __dir__))
 
   # The first column of every row under the heading, as the names it carries.
   # A cell may pair two fields (`user_id` / `agent_id`), which is prose the
@@ -38,24 +38,24 @@ RSpec.describe "the kiosk-server README's event-field table" do
            .uniq
   end
 
-  it "names every member of ActionEvent, and nothing that is not one" do
+  it 'names every member of ActionEvent, and nothing that is not one' do
     listed = self.class.table_fields(readme)
     expect(listed).not_to be_nil,
-                          "kiosk-server/README.md has no `### What the event carries` section. " \
-                          "That table is where an operator reads what `c.audit_sink` receives; " \
-                          "if the heading moved, move this example with it."
+                          'kiosk-server/README.md has no `### What the event carries` section. ' \
+                          'That table is where an operator reads what `c.audit_sink` receives; ' \
+                          'if the heading moved, move this example with it.'
 
     members = Kiosk::Server::ActionEvent.members.map(&:to_s)
     expect(listed).not_to be_empty,
-                          "the `What the event carries` table lists no field at all — a table " \
-                          "with no backticked names holds nothing, however green this reads."
+                          'the `What the event carries` table lists no field at all — a table ' \
+                          'with no backticked names holds nothing, however green this reads.'
 
     expect(listed.sort).to eq(members.sort),
                            "the README's event table and ActionEvent disagree. " \
                            "Missing from the table: #{(members - listed).sort.inspect}. " \
                            "In the table and not in the event: #{(listed - members).sort.inspect}. " \
-                           "An operator columns their audit row from this table, so a member it " \
-                           "omits is a column their insert does not have — and a name it invents " \
-                           "is a column nothing will ever fill."
+                           'An operator columns their audit row from this table, so a member it ' \
+                           'omits is a column their insert does not have — and a name it invents ' \
+                           'is a column nothing will ever fill.'
   end
 end

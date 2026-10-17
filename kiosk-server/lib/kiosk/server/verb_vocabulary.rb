@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/errors"
+require 'kiosk/server/errors'
 
 module Kiosk
   module Server
@@ -31,7 +31,7 @@ module Kiosk
               "Kiosk::Server::Executor::VERBS — #{Executor::VERBS.map(&:inspect).join(', ')} — in which a " \
               "handler declared `kind :#{DECLARATION_ALIAS}` arrives as :#{WRITE_KIND}. Branch on " \
               ":#{WRITE_KIND}. (Protocol Section 13, Reputation.) A branch on :#{DECLARATION_ALIAS} " \
-              "would match nothing and silently decline to toll every write."
+              'would match nothing and silently decline to toll every write.'
       end
 
       def self.source_location_for(target, method_name)
@@ -82,7 +82,7 @@ module Kiosk
 
         @parsed[key] =
           begin
-            require "prism"
+            require 'prism'
             result = Prism.parse_file(file)
             result.success? ? result.value : nil
           rescue LoadError, StandardError

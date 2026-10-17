@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "active_record"
-require "securerandom"
+require 'active_record'
+require 'securerandom'
 
 # The four `persist_*` helpers — plus `settled_total_cents` — against a REAL
 # Postgres.
@@ -28,22 +28,22 @@ require "securerandom"
 # reachable server → skip, never fail, so DB-less machines stay green (the same
 # contract as `device_authorization_stores_spec.rb` and `pow_spent_stores_spec.rb`).
 RSpec.describe Kiosk::Server::Executor do
-  describe "mandate persistence (real Postgres)" do
+  describe 'mandate persistence (real Postgres)' do
     # Deliberately NOT named SPEC_SCHEMA: `device_authorization_stores_spec.rb`
     # already defines a top-level constant by that name, and a second one would
     # silently overwrite it for whichever file loads later.
-    PERSIST_SPEC_SCHEMA = "kiosk_executor_persist_spec"
+    PERSIST_SPEC_SCHEMA = 'kiosk_executor_persist_spec'
 
     def self.postgres_error
       @postgres_error ||= begin
-        ::ActiveRecord::Base.establish_connection(
-          adapter:  "postgresql",
-          host:     ENV["PGHOST"],
-          username: ENV["PGUSER"],
-          password: ENV["PGPASSWORD"],
-          database: ENV.fetch("PGDATABASE", "postgres"),
+        ActiveRecord::Base.establish_connection(
+          adapter: 'postgresql',
+          host: ENV.fetch('PGHOST', nil),
+          username: ENV.fetch('PGUSER', nil),
+          password: ENV.fetch('PGPASSWORD', nil),
+          database: ENV.fetch('PGDATABASE', 'postgres')
         )
-        ::ActiveRecord::Base.connection.execute("SELECT 1")
+        ActiveRecord::Base.connection.execute('SELECT 1')
         [false]
       rescue StandardError => e
         ["#{e.class}: #{e.message}"]
@@ -54,7 +54,7 @@ RSpec.describe Kiosk::Server::Executor do
     before(:context) do
       skip "no local Postgres reachable (#{self.class.postgres_error})" if self.class.postgres_error
 
-      conn = ::ActiveRecord::Base.connection
+      conn = ActiveRecord::Base.connection
       conn.execute(%(DROP SCHEMA IF EXISTS "#{PERSIST_SPEC_SCHEMA}" CASCADE))
       conn.execute(%(CREATE SCHEMA "#{PERSIST_SPEC_SCHEMA}"))
       # The SHIPPED migration SQL, not a hand-written table: the point of the
@@ -62,18 +62,16 @@ RSpec.describe Kiosk::Server::Executor do
       # operators actually install.
       conn.execute(
         Kiosk::Server::SchemaDefinitions.mandates_sql(
-          schema: PERSIST_SPEC_SCHEMA, user_id_type: :uuid,
-        ),
+          schema: PERSIST_SPEC_SCHEMA, user_id_type: :uuid
+        )
       )
     end
 
     after(:context) do
-      unless self.class.postgres_error
-        ::ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{PERSIST_SPEC_SCHEMA}" CASCADE))
-      end
+      ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{PERSIST_SPEC_SCHEMA}" CASCADE)) unless self.class.postgres_error
     end
 
-    let(:connection) { ::ActiveRecord::Base.connection }
+    let(:connection) { ActiveRecord::Base.connection }
     let(:user_uuid)  { SecureRandom.uuid }
     let(:agent_uuid) { SecureRandom.uuid }
     let(:identity)   { build_identity(user_id: user_uuid, agent_id: agent_uuid) }
@@ -85,33 +83,33 @@ RSpec.describe Kiosk::Server::Executor do
     # coercion that forgets to convert first lands 5h30m away and the epoch
     # assertion fails. (`MandateVerifier` builds these with `Time.at`, whose
     # zone is the server's, so "already UTC" must never be assumed.)
-    let(:expires_at) { Time.at(1_800_000_071).localtime("+05:30") }
+    let(:expires_at) { Time.at(1_800_000_071).localtime('+05:30') }
 
     let(:intent) do
       Kiosk::Mandate::IntentMandate.new(
         id: "intent-#{SecureRandom.hex(6)}", user_id: user_uuid, agent_id: agent_uuid,
-        issuer: "https://demo.example", scope: "groceries", cap_amount_cents: 5000,
-        currency: "eur", expires_at: expires_at, created_at: expires_at, raw_jws: "intent-jws"
+        issuer: 'https://demo.example', scope: 'groceries', cap_amount_cents: 5000,
+        currency: 'eur', expires_at: expires_at, created_at: expires_at, raw_jws: 'intent-jws'
       )
     end
 
-    let(:line_items) { [{ "sku" => "pizza", "qty" => 2 }, { "sku" => "cola", "qty" => 1 }] }
+    let(:line_items) { [{ 'sku' => 'pizza', 'qty' => 2 }, { 'sku' => 'cola', 'qty' => 1 }] }
 
     let(:cart) do
       Kiosk::Mandate::CartMandate.new(
         id: "cart-#{SecureRandom.hex(6)}", intent_mandate_id: intent.id, user_id: user_uuid,
-        agent_id: agent_uuid, issuer: "https://demo.example", line_items: line_items,
-        total_amount_cents: 1599, currency: "eur", expires_at: expires_at,
-        created_at: expires_at, raw_jws: "cart-jws"
+        agent_id: agent_uuid, issuer: 'https://demo.example', line_items: line_items,
+        total_amount_cents: 1599, currency: 'eur', expires_at: expires_at,
+        created_at: expires_at, raw_jws: 'cart-jws'
       )
     end
 
     let(:payment) do
       Kiosk::Mandate::PaymentMandate.new(
         id: "pay-#{SecureRandom.hex(6)}", cart_mandate_id: cart.id, user_id: user_uuid,
-        agent_id: agent_uuid, issuer: "https://demo.example", payment_method: "pm_card_visa",
-        amount_cents: 1599, currency: "eur", expires_at: expires_at,
-        created_at: expires_at, raw_jws: "payment-jws"
+        agent_id: agent_uuid, issuer: 'https://demo.example', payment_method: 'pm_card_visa',
+        amount_cents: 1599, currency: 'eur', expires_at: expires_at,
+        created_at: expires_at, raw_jws: 'payment-jws'
       )
     end
 
@@ -120,7 +118,7 @@ RSpec.describe Kiosk::Server::Executor do
     before do
       Kiosk.configure do |c|
         c.schema = PERSIST_SPEC_SCHEMA
-        c.issuer = "https://demo.example"
+        c.issuer = 'https://demo.example'
       end
       # CASCADE reaches cart_mandates → payment_mandates → settlements.
       connection.execute(%(TRUNCATE #{table('intent_mandates')} CASCADE))
@@ -131,7 +129,7 @@ RSpec.describe Kiosk::Server::Executor do
     # Bind-parameterised read helper, so the spec's own queries can never be
     # the thing that proves a type.
     def one(sql, binds = [])
-      connection.exec_query(sql, "persist spec", binds).to_a.first
+      connection.exec_query(sql, 'persist spec', binds).to_a.first
     end
 
     def value(sql, binds = [])
@@ -148,23 +146,23 @@ RSpec.describe Kiosk::Server::Executor do
 
     # The helpers are private — they are the Executor's own persistence, not a
     # public seam — so the spec reaches them the only way there is.
-    describe "#persist_intent_mandate" do
-      it "returns the SERVER-generated uuid PK and persists every signed field" do
+    describe '#persist_intent_mandate' do
+      it 'returns the SERVER-generated uuid PK and persists every signed field' do
         id  = executor.send(:persist_intent_mandate, intent)
         row = one("SELECT * FROM #{table('intent_mandates')} WHERE id = $1", [id])
 
         expect(id).to match(/\A\h{8}-\h{4}-\h{4}-\h{4}-\h{12}\z/)
-        expect(row["mandate_id"]).to       eq(intent.id)
-        expect(row["user_id"]).to          eq(user_uuid)
-        expect(row["agent_id"]).to         eq(agent_uuid)
-        expect(row["issuer"]).to           eq("https://demo.example")
-        expect(row["scope"]).to            eq("groceries")
-        expect(row["cap_amount_cents"]).to eq(5000)
-        expect(row["currency"]).to         eq("eur")
-        expect(row["raw_jws"]).to          eq("intent-jws")
+        expect(row['mandate_id']).to       eq(intent.id)
+        expect(row['user_id']).to          eq(user_uuid)
+        expect(row['agent_id']).to         eq(agent_uuid)
+        expect(row['issuer']).to           eq('https://demo.example')
+        expect(row['scope']).to            eq('groceries')
+        expect(row['cap_amount_cents']).to eq(5000)
+        expect(row['currency']).to         eq('eur')
+        expect(row['raw_jws']).to          eq('intent-jws')
       end
 
-      it "stores expires_at as the EXACT instant (a zone-dropping coercion lands on another second)" do
+      it 'stores expires_at as the EXACT instant (a zone-dropping coercion lands on another second)' do
         id = executor.send(:persist_intent_mandate, intent)
         epoch = value("SELECT extract(epoch FROM expires_at)::bigint FROM #{table('intent_mandates')} WHERE id = $1", [id])
         expect(epoch.to_i).to eq(expires_at.to_i)
@@ -175,7 +173,7 @@ RSpec.describe Kiosk::Server::Executor do
       # lower-cased — which a text column, or a value that reached a text
       # column, would not do. And a bind carrying an explicit TEXT type would
       # not reach the row at all: Postgres rejects `uuid = text` outright.
-      it "stores agent_id as a real uuid (canonicalised on input, matchable as ::uuid)" do
+      it 'stores agent_id as a real uuid (canonicalised on input, matchable as ::uuid)' do
         shouted = Kiosk::Mandate::IntentMandate.new(**intent.to_h, agent_id: agent_uuid.upcase)
         id = executor.send(:persist_intent_mandate, shouted)
 
@@ -185,43 +183,43 @@ RSpec.describe Kiosk::Server::Executor do
           .to eq(1)
       end
 
-      it "rejects a non-uuid agent_id at the database rather than storing it as text" do
-        bogus = Kiosk::Mandate::IntentMandate.new(**intent.to_h, agent_id: "not-a-uuid")
+      it 'rejects a non-uuid agent_id at the database rather than storing it as text' do
+        bogus = Kiosk::Mandate::IntentMandate.new(**intent.to_h, agent_id: 'not-a-uuid')
         expect { executor.send(:persist_intent_mandate, bogus) }
-          .to raise_error(::ActiveRecord::StatementInvalid)
+          .to raise_error(ActiveRecord::StatementInvalid)
       end
 
       # The whole point of the row (K-654): values are DATA, never SQL. This
       # passes under `connection.quote` too — that is what makes it the
       # regression guard rather than the proof of the conversion.
-      it "round-trips a SQL-injection payload verbatim and leaves the table standing" do
+      it 'round-trips a SQL-injection payload verbatim and leaves the table standing' do
         payload = "'); DROP TABLE #{table('intent_mandates')}; --"
         hostile = Kiosk::Mandate::IntentMandate.new(**intent.to_h, scope: payload, raw_jws: payload)
         id = executor.send(:persist_intent_mandate, hostile)
         row = one("SELECT scope, raw_jws FROM #{table('intent_mandates')} WHERE id = $1", [id])
 
-        expect(row["scope"]).to   eq(payload)
-        expect(row["raw_jws"]).to eq(payload)
+        expect(row['scope']).to   eq(payload)
+        expect(row['raw_jws']).to eq(payload)
         expect(value("SELECT count(*) FROM #{table('intent_mandates')}").to_i).to eq(1)
       end
 
-      it "raises the unique violation the Executor maps to 409 when the same mandate id is replayed" do
+      it 'raises the unique violation the Executor maps to 409 when the same mandate id is replayed' do
         executor.send(:persist_intent_mandate, intent)
         expect { executor.send(:persist_intent_mandate, intent) }
-          .to raise_error(::ActiveRecord::RecordNotUnique)
+          .to raise_error(ActiveRecord::RecordNotUnique)
       end
     end
 
-    describe "#persist_cart_mandate" do
-      it "persists the cart against the SERVER intent id and returns its own server id" do
+    describe '#persist_cart_mandate' do
+      it 'persists the cart against the SERVER intent id and returns its own server id' do
         intent_row = executor.send(:persist_intent_mandate, intent)
         cart_row   = executor.send(:persist_cart_mandate, cart, intent_row_id: intent_row)
         row = one("SELECT * FROM #{table('cart_mandates')} WHERE id = $1", [cart_row])
 
-        expect(row["intent_mandate_id"]).to  eq(intent_row)
-        expect(row["mandate_id"]).to         eq(cart.id)
-        expect(row["total_amount_cents"]).to eq(1599)
-        expect(row["currency"]).to           eq("eur")
+        expect(row['intent_mandate_id']).to  eq(intent_row)
+        expect(row['mandate_id']).to         eq(cart.id)
+        expect(row['total_amount_cents']).to eq(1599)
+        expect(row['currency']).to           eq('eur')
       end
 
       # ── THE TYPE ASSERTION THIS FILE EXISTS FOR ──────────────────────────
@@ -236,51 +234,51 @@ RSpec.describe Kiosk::Server::Executor do
       # one is the shape the demos' replace-guard (K-544) and the K-545
       # pay-race fix are written against, so it is asserted here directly even
       # though no containment predicate lives in kiosk-server itself.
-      it "stores line_items as a jsonb ARRAY that satisfies @> containment (NOT a json string)" do
+      it 'stores line_items as a jsonb ARRAY that satisfies @> containment (NOT a json string)' do
         _intent_row, cart_row = persist_trail
 
         expect(value("SELECT jsonb_typeof(line_items) FROM #{table('cart_mandates')} WHERE id = $1", [cart_row]))
-          .to eq("array")
+          .to eq('array')
         expect(value("SELECT line_items -> 0 ->> 'sku' FROM #{table('cart_mandates')} WHERE id = $1", [cart_row]))
-          .to eq("pizza")
+          .to eq('pizza')
         expect(value(
           "SELECT count(*) FROM #{table('cart_mandates')} WHERE id = $1 AND line_items @> $2::jsonb",
-          [cart_row, [{ "sku" => "pizza", "qty" => 2 }].to_json],
+          [cart_row, [{ 'sku' => 'pizza', 'qty' => 2 }].to_json]
         ).to_i).to eq(1)
         expect(value(
           "SELECT count(*) FROM #{table('cart_mandates')} WHERE id = $1 AND line_items @> $2::jsonb",
-          [cart_row, [{ "sku" => "caviar" }].to_json],
+          [cart_row, [{ 'sku' => 'caviar' }].to_json]
         ).to_i).to eq(0)
       end
 
-      it "refuses a cart whose intent_mandate_id is not a live intent row (FK, not a pre-check)" do
+      it 'refuses a cart whose intent_mandate_id is not a live intent row (FK, not a pre-check)' do
         expect { executor.send(:persist_cart_mandate, cart, intent_row_id: SecureRandom.uuid) }
-          .to raise_error(::ActiveRecord::InvalidForeignKey)
+          .to raise_error(ActiveRecord::InvalidForeignKey)
       end
     end
 
-    describe "#persist_payment_mandate" do
-      it "persists the signed payment mandate against the SERVER cart id" do
+    describe '#persist_payment_mandate' do
+      it 'persists the signed payment mandate against the SERVER cart id' do
         _intent_row, cart_row = persist_trail
         row = one("SELECT * FROM #{table('payment_mandates')} WHERE cart_mandate_id = $1", [cart_row])
 
-        expect(row["mandate_id"]).to     eq(payment.id)
-        expect(row["payment_method"]).to eq("pm_card_visa")
-        expect(row["amount_cents"]).to   eq(1599)
-        expect(row["raw_jws"]).to        eq("payment-jws")
+        expect(row['mandate_id']).to     eq(payment.id)
+        expect(row['payment_method']).to eq('pm_card_visa')
+        expect(row['amount_cents']).to   eq(1599)
+        expect(row['raw_jws']).to        eq('payment-jws')
       end
 
       it "persists the 'on_file' sentinel when the mandate presents no payment_method" do
         intent_row = executor.send(:persist_intent_mandate, intent)
         cart_row   = executor.send(:persist_cart_mandate, cart, intent_row_id: intent_row)
-        on_file    = Kiosk::Mandate::PaymentMandate.new(**payment.to_h, payment_method: "")
+        on_file    = Kiosk::Mandate::PaymentMandate.new(**payment.to_h, payment_method: '')
         executor.send(:persist_payment_mandate, cart_row_id: cart_row, payment: on_file)
 
         expect(value("SELECT payment_method FROM #{table('payment_mandates')} WHERE cart_mandate_id = $1", [cart_row]))
-          .to eq("on_file")
+          .to eq('on_file')
       end
 
-      it "persists a NULL expires_at when the mandate carries none (the column is nullable here)" do
+      it 'persists a NULL expires_at when the mandate carries none (the column is nullable here)' do
         intent_row = executor.send(:persist_intent_mandate, intent)
         cart_row   = executor.send(:persist_cart_mandate, cart, intent_row_id: intent_row)
         undated    = Kiosk::Mandate::PaymentMandate.new(**payment.to_h, expires_at: nil)
@@ -291,66 +289,66 @@ RSpec.describe Kiosk::Server::Executor do
       end
     end
 
-    describe "#persist_settlement" do
-      it "records the receipt against the SERVER cart id and returns its server id" do
+    describe '#persist_settlement' do
+      it 'records the receipt against the SERVER cart id and returns its server id' do
         _intent_row, cart_row = persist_trail
         settlement_id = executor.send(:persist_settlement, cart_row_id: cart_row, cart: cart, settled: settled)
         row = one("SELECT * FROM #{table('settlements')} WHERE id = $1", [settlement_id])
 
-        expect(row["cart_mandate_id"]).to      eq(cart_row)
-        expect(row["user_id"]).to              eq(user_uuid)
-        expect(row["agent_id"]).to             eq(agent_uuid)
-        expect(row["psp_reference"]).to        eq(settled[:psp_reference])
-        expect(row["settled_amount_cents"]).to eq(1599)
-        expect(row["currency"]).to             eq("eur")
-        expect(row["settled_at"]).not_to be_nil
+        expect(row['cart_mandate_id']).to      eq(cart_row)
+        expect(row['user_id']).to              eq(user_uuid)
+        expect(row['agent_id']).to             eq(agent_uuid)
+        expect(row['psp_reference']).to        eq(settled[:psp_reference])
+        expect(row['settled_amount_cents']).to eq(1599)
+        expect(row['currency']).to             eq('eur')
+        expect(row['settled_at']).not_to be_nil
         # Server-minted receipt: no agent JWS to carry, so the table has no
         # column to carry one in (K-948). Asserted on the ROW's keys rather
         # than on a value, because the previous shape of this assertion —
         # `row["raw_jws"] == ""` — is exactly what a dropped column would also
         # satisfy if it were read as a missing key coerced to nil.
-        expect(row.keys).not_to include("raw_jws")
+        expect(row.keys).not_to include('raw_jws')
       end
 
-      it "enforces one settlement per cart (UNIQUE (cart_mandate_id))" do
+      it 'enforces one settlement per cart (UNIQUE (cart_mandate_id))' do
         _intent_row, cart_row = persist_trail
         executor.send(:persist_settlement, cart_row_id: cart_row, cart: cart, settled: settled)
         expect { executor.send(:persist_settlement, cart_row_id: cart_row, cart: cart, settled: settled) }
-          .to raise_error(::ActiveRecord::RecordNotUnique)
+          .to raise_error(ActiveRecord::RecordNotUnique)
       end
     end
 
-    describe "#settled_total_cents" do
+    describe '#settled_total_cents' do
       before do
         _intent_row, cart_row = persist_trail
         executor.send(:persist_settlement, cart_row_id: cart_row, cart: cart, settled: settled)
       end
 
       it "sums this agent's settlements in the given currency" do
-        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil, currency: "eur"))
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil, currency: 'eur'))
           .to eq(1599)
       end
 
-      it "is currency-scoped (K-551): a different currency tallies zero" do
-        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil, currency: "usd"))
+      it 'is currency-scoped (K-551): a different currency tallies zero' do
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil, currency: 'usd'))
           .to eq(0)
       end
 
       it "is agent-scoped: another assistant's spend is not counted" do
-        expect(executor.send(:settled_total_cents, agent_id: SecureRandom.uuid, window_days: nil, currency: "eur"))
+        expect(executor.send(:settled_total_cents, agent_id: SecureRandom.uuid, window_days: nil, currency: 'eur'))
           .to eq(0)
       end
 
-      it "counts a settlement inside the rolling window" do
-        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: 7, currency: "eur"))
+      it 'counts a settlement inside the rolling window' do
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: 7, currency: 'eur'))
           .to eq(1599)
       end
 
-      it "excludes a settlement older than the rolling window" do
+      it 'excludes a settlement older than the rolling window' do
         connection.exec_query(
-          "UPDATE #{table('settlements')} SET settled_at = now() - INTERVAL '9 days'", "persist spec",
+          "UPDATE #{table('settlements')} SET settled_at = now() - INTERVAL '9 days'", 'persist spec'
         )
-        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: 7, currency: "eur"))
+        expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: 7, currency: 'eur'))
           .to eq(0)
       end
     end
@@ -369,7 +367,7 @@ RSpec.describe Kiosk::Server::Executor do
     # are written with the non-canonical spelling ON PURPOSE — a row already in
     # the table from before the boundary canonicalised its input is exactly the
     # case the query-side fold exists for.
-    describe "spelling is not identity (K-1251)" do
+    describe 'spelling is not identity (K-1251)' do
       # A whole trail of its own, so two settlements can coexist under
       # `UNIQUE (cart_mandate_id)`.
       def settle(currency:, cents:)
@@ -379,67 +377,67 @@ RSpec.describe Kiosk::Server::Executor do
         intent_row = executor.send(:persist_intent_mandate, i)
         cart_row   = executor.send(:persist_cart_mandate, c, intent_row_id: intent_row)
         executor.send(:persist_settlement, cart_row_id: cart_row, cart: c,
-                      settled: { psp_reference: "pi_#{SecureRandom.hex(4)}",
-                                 settled_amount_cents: cents })
+                                           settled: { psp_reference: "pi_#{SecureRandom.hex(4)}",
+                                                      settled_amount_cents: cents })
         c
       end
 
-      it "tallies an EUR settlement under eur" do
-        settle(currency: "EUR", cents: 2500)
+      it 'tallies an EUR settlement under eur' do
+        settle(currency: 'EUR', cents: 2500)
         expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
-                                                   currency: "eur")).to eq(2500)
+                                                   currency: 'eur')).to eq(2500)
       end
 
       it "tallies a padded ' EUR ' settlement under eur" do
-        settle(currency: " EUR ", cents: 700)
+        settle(currency: ' EUR ', cents: 700)
         expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
-                                                   currency: "eur")).to eq(700)
+                                                   currency: 'eur')).to eq(700)
       end
 
-      it "sums both spellings into ONE tally" do
-        settle(currency: "eur", cents: 3000)
-        settle(currency: "EUR", cents: 2500)
+      it 'sums both spellings into ONE tally' do
+        settle(currency: 'eur', cents: 3000)
+        settle(currency: 'EUR', cents: 2500)
         expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
-                                                   currency: "eur")).to eq(5500)
+                                                   currency: 'eur')).to eq(5500)
       end
 
-      it "canonicalises the ASKED currency too, so an EUR cart reads the eur history" do
-        settle(currency: "eur", cents: 3000)
+      it 'canonicalises the ASKED currency too, so an EUR cart reads the eur history' do
+        settle(currency: 'eur', cents: 3000)
         expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
-                                                   currency: "EUR")).to eq(3000)
+                                                   currency: 'EUR')).to eq(3000)
       end
 
       # The positive control: folding CASE must not fold two different codes.
-      it "still keeps usd out of the eur tally" do
-        settle(currency: "eur", cents: 3000)
-        settle(currency: "USD", cents: 4000)
+      it 'still keeps usd out of the eur tally' do
+        settle(currency: 'eur', cents: 3000)
+        settle(currency: 'USD', cents: 4000)
         expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
-                                                   currency: "eur")).to eq(3000)
+                                                   currency: 'eur')).to eq(3000)
         expect(executor.send(:settled_total_cents, agent_id: agent_uuid, window_days: nil,
-                                                   currency: "usd")).to eq(4000)
+                                                   currency: 'usd')).to eq(4000)
       end
 
       # THE ONE THE ROW IS ABOUT: spend under one spelling, then the other,
       # against a single configured cap. Pre-fix the second charge saw a tally
       # of 3000 against a 5000 cap and went through; the assistant had spent
       # 5500 under a cap of 5000.
-      it "hits ONE cap across both spellings" do
+      it 'hits ONE cap across both spellings' do
         Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
-        settle(currency: "eur", cents: 3000)
-        settle(currency: "EUR", cents: 2500)
+        settle(currency: 'eur', cents: 3000)
+        settle(currency: 'EUR', cents: 2500)
 
-        over = cart.with(id: "cart-#{SecureRandom.hex(6)}", currency: "eur",
+        over = cart.with(id: "cart-#{SecureRandom.hex(6)}", currency: 'eur',
                          total_amount_cents: 1)
         expect { executor.send(:enforce_spending_cap!, over) }
           .to raise_error(Kiosk::Server::Errors::SpendingCapExceeded)
       end
 
-      it "still admits a charge that fits under the combined tally" do
+      it 'still admits a charge that fits under the combined tally' do
         Kiosk.configuration.spending_cap = ->(agent_id:) { 5000 }
-        settle(currency: "eur", cents: 3000)
-        settle(currency: "EUR", cents: 1000)
+        settle(currency: 'eur', cents: 3000)
+        settle(currency: 'EUR', cents: 1000)
 
-        ok = cart.with(id: "cart-#{SecureRandom.hex(6)}", currency: "EUR",
+        ok = cart.with(id: "cart-#{SecureRandom.hex(6)}", currency: 'EUR',
                        total_amount_cents: 900)
         expect { executor.send(:enforce_spending_cap!, ok) }.not_to raise_error
       end
@@ -460,10 +458,10 @@ RSpec.describe Kiosk::Server::Executor do
     # already-SETTLED cart is IDEMPOTENT — it returns the settlement the first
     # call returned. A re-presented chain that was never captured, or whose
     # capture is still in flight, keeps `409 conflict` before any capture.
-    describe "a replayed pay (K-850)" do
+    describe 'a replayed pay (K-850)' do
       let(:captures) { [] }
       let(:provider) do
-        psp = instance_double("PSP")
+        psp = instance_double('PSP')
         allow(psp).to receive(:setup_required?).and_return(false)
         allow(psp).to receive(:capture) do |charged, **_kwargs|
           captures << charged.id
@@ -473,8 +471,8 @@ RSpec.describe Kiosk::Server::Executor do
       end
 
       let(:args) do
-        { intent_mandate_jws:  intent.raw_jws,
-          cart_mandate_jws:    cart.raw_jws,
+        { intent_mandate_jws: intent.raw_jws,
+          cart_mandate_jws: cart.raw_jws,
           payment_mandate_jws: payment.raw_jws }
       end
 
@@ -495,25 +493,25 @@ RSpec.describe Kiosk::Server::Executor do
 
       # THE PIN THE DECISION ASKED FOR: one capture, one settlement row, and
       # the SECOND call returns the FIRST call's answer field for field.
-      it "answers the identical chain with the ORIGINAL settlement, and captures exactly once" do
+      it 'answers the identical chain with the ORIGINAL settlement, and captures exactly once' do
         first = pay
         second = pay
 
         expect(second.kind).to eq(:value)
         expect(second.payload).to eq(first.payload)
-        expect(second.payload[:psp_reference]).to eq("pi_capture_1")
+        expect(second.payload[:psp_reference]).to eq('pi_capture_1')
         expect(captures).to eq([cart.id])   # NOT charged a second time
         expect(settlement_count).to eq(1)   # NO second settlement minted
       end
 
       # The replay is answered from the STORED row, so the settlement id it
       # hands back is the one the settlements table holds — not a fresh one.
-      it "returns the stored settlement row, not a reconstruction" do
+      it 'returns the stored settlement row, not a reconstruction' do
         first = pay
         stored = one("SELECT * FROM #{table('settlements')}")
 
-        expect(first.payload[:settlement_id]).to eq(stored["id"])
-        expect(pay.payload[:settlement_id]).to  eq(stored["id"])
+        expect(first.payload[:settlement_id]).to eq(stored['id'])
+        expect(pay.payload[:settlement_id]).to eq(stored['id'])
       end
 
       # THE BOUNDARY THAT DOES NOT MOVE. The trail is persisted and NOTHING was
@@ -521,14 +519,14 @@ RSpec.describe Kiosk::Server::Executor do
       # capture). There is no settlement to hand back, and re-running the
       # capture on a re-presented chain is exactly the double charge §11.6
       # exists to prevent — so this stays `409`, raised before any capture.
-      it "still answers 409 conflict for a re-presented chain that was never captured" do
+      it 'still answers 409 conflict for a re-presented chain that was never captured' do
         intent_row = executor.send(:persist_intent_mandate, intent)
         cart_row   = executor.send(:persist_cart_mandate, cart, intent_row_id: intent_row)
         executor.send(:persist_payment_mandate, cart_row_id: cart_row, payment: payment)
 
         expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
           expect(e.http_status).to eq(409)
-          expect(e.code).to eq("conflict")
+          expect(e.code).to eq('conflict')
         }
         expect(captures).to be_empty
         expect(settlement_count).to eq(0)
@@ -537,9 +535,9 @@ RSpec.describe Kiosk::Server::Executor do
       # Same idea one phase later: the capture RETURNED but phase 3 never
       # committed. That is K-851's window, and the answer there is unchanged —
       # the engine has no settlement, so it must not pretend it has one.
-      it "still answers 409 conflict when the capture happened but phase 3 never landed" do
+      it 'still answers 409 conflict when the capture happened but phase 3 never landed' do
         allow_any_instance_of(described_class).to receive(:persist_settlement)
-          .and_raise(StandardError, "connection reset during settlement insert")
+          .and_raise(StandardError, 'connection reset during settlement insert')
         expect { pay }.to raise_error(StandardError, /connection reset/)
         expect(captures).to eq([cart.id])
         expect(settlement_count).to eq(0)
@@ -553,9 +551,9 @@ RSpec.describe Kiosk::Server::Executor do
       # `id` is the settled one, the signed bytes are not — so the settlement
       # this principal already has must NOT be handed to it as the answer to a
       # different request. The `raw_jws` equality in the lookup is what says so.
-      it "refuses to hand the settlement to a chain whose bytes differ (same id, new content)" do
+      it 'refuses to hand the settlement to a chain whose bytes differ (same id, new content)' do
         pay
-        forged = Kiosk::Mandate::CartMandate.new(**cart.to_h, raw_jws: "cart-jws-TAMPERED")
+        forged = Kiosk::Mandate::CartMandate.new(**cart.to_h, raw_jws: 'cart-jws-TAMPERED')
         allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(forged)
 
         expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/)
@@ -570,7 +568,7 @@ RSpec.describe Kiosk::Server::Executor do
         stranger = build_identity(user_id: SecureRandom.uuid, agent_id: SecureRandom.uuid)
         expect(
           described_class.new(connection: connection, identity: stranger)
-                         .send(:settlement_for_chain, intent: intent, cart: cart, payment: payment),
+                         .send(:settlement_for_chain, intent: intent, cart: cart, payment: payment)
         ).to be_nil
       end
     end

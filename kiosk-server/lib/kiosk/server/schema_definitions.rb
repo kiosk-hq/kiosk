@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "kiosk/server/version"
+require 'kiosk/server/version'
 
 module Kiosk
   module Server
@@ -12,7 +12,7 @@ module Kiosk
 
       # 001: the schema and the `current_*()` GUC readers.
       def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
-        schema       ||= Kiosk.configuration.schema
+        schema ||= Kiosk.configuration.schema
         guc_namespace ||= Kiosk.configuration.guc_namespace
         user_id_type  ||= Kiosk.configuration.user_id_type
         cast = user_id_cast(user_id_type)
@@ -40,8 +40,8 @@ module Kiosk
 
       # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled),
       # `agent_tokens`, `agent_mappings`.
-      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: "users")
-        schema      ||= Kiosk.configuration.schema
+      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
+        schema ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
         col_type = user_id_cast(user_id_type)
 
@@ -87,7 +87,7 @@ module Kiosk
 
       # 003: TTL rows holding inventory while the mandate chain completes.
       def reservations_sql(schema: nil, user_id_type: nil)
-        schema      ||= Kiosk.configuration.schema
+        schema ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
         col_type = user_id_cast(user_id_type)
 
@@ -114,7 +114,7 @@ module Kiosk
       # 004: account-binding requests; codes are stored hashed only.
       # `requested_role` is the approving human's role, never a client's.
       def device_authorizations_sql(schema: nil, user_id_type: nil)
-        schema      ||= Kiosk.configuration.schema
+        schema ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
         col_type = user_id_cast(user_id_type)
 
@@ -317,9 +317,9 @@ module Kiosk
 
       def user_id_cast(user_id_type)
         case user_id_type.to_sym
-        when :uuid               then "uuid"
+        when :uuid               then 'uuid'
         when :bigint, :integer   then user_id_type.to_s
-        when :text               then "text"
+        when :text               then 'text'
         else
           raise ArgumentError,
                 "user_id_type must be one of :uuid, :bigint, :integer, :text — got #{user_id_type.inspect}"

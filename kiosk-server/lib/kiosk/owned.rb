@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "active_support/concern"
-require "kiosk/server/session_context"
+require 'active_support/concern'
+require 'kiosk/server/session_context'
 
 module Kiosk
   # The user id and role of the principal the wire resolved.

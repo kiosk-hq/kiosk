@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require "kiosk/server/errors"
-require "kiosk/server/failure_log"
-require "kiosk/uuid_check"
+require 'kiosk/server/errors'
+require 'kiosk/server/failure_log'
+require 'kiosk/uuid_check'
 
 module Kiosk
   module Server
@@ -10,14 +10,14 @@ module Kiosk
     # paying` before the capture, checks the cart against the operator's price,
     # and flips the row to `paid` once the capture returns.
     class PaymentClaim
-      PAYING = "paying"
-      PAID   = "paid"
+      PAYING = 'paying'
+      PAID   = 'paid'
 
       # @param table [String] the payable table, with `id uuid` and `updated_at`
       # @param reference [String] the cart line-item key naming the row, e.g. "order_id"
       # @param query [String] the per-user query that publishes the row's payment state
-      def initialize(psp, currency:, table:, reference:, query:, status_column: "payment_status",
-                     unpaid: "unpaid", owner_column: "user_id")
+      def initialize(psp, currency:, table:, reference:, query:, status_column: 'payment_status',
+                     unpaid: 'unpaid', owner_column: 'user_id')
         @psp           = psp
         @currency      = currency.to_s.downcase
         @table         = table
@@ -77,9 +77,7 @@ module Kiosk
       private
 
       def claim!(cart)
-        unless cart.currency.to_s.downcase == @currency
-          deny "cart currency #{cart.currency.inspect} rejected — this operator prices in #{@currency.upcase}"
-        end
+        deny "cart currency #{cart.currency.inspect} rejected — this operator prices in #{@currency.upcase}" unless cart.currency.to_s.downcase == @currency
         refs = Array(cart.line_items).filter_map { |li| li[@reference] }.map(&:to_s).uniq
         deny "cart line_items must reference exactly one #{@reference}" unless refs.size == 1
         id = refs.first
@@ -101,12 +99,12 @@ module Kiosk
       def check_price!(cart, id)
         total = cart.total_amount_cents.to_i
         lines = Array(cart.line_items).reject { |li| li[@reference] }
-        priced = lines.select { |li| li["price_cents"] }
+        priced = lines.select { |li| li['price_cents'] }
         unless priced.empty?
           sum = priced.sum do |li|
-            qty = li["qty"].to_i
-            price = li["price_cents"].to_i
-            deny "each priced line needs a positive qty and price_cents" if qty <= 0 || price <= 0
+            qty = li['qty'].to_i
+            price = li['price_cents'].to_i
+            deny 'each priced line needs a positive qty and price_cents' if qty <= 0 || price <= 0
             qty * price
           end
           deny "cart total #{total} does not equal the sum of its line items #{sum}" unless total == sum
@@ -117,7 +115,7 @@ module Kiosk
         return if total == price
 
         deny "cart total #{total} does not equal this operator's price #{price} for #{noun} #{id} — " \
-             "re-read the pay_hint of the action that created it"
+             're-read the pay_hint of the action that created it'
       end
 
       def checker
@@ -129,15 +127,15 @@ module Kiosk
         connection.exec_query(
           "UPDATE #{table} SET #{column(@status_column)} = $1, updated_at = now() " \
           "WHERE id = $2::uuid AND #{column(@status_column)} = $3 AND #{column(@owner_column)} = $4::uuid " \
-          "RETURNING id",
-          "Kiosk payment claim", [PAYING, id, @unpaid, payer]
+          'RETURNING id',
+          'Kiosk payment claim', [PAYING, id, @unpaid, payer]
         ).rows.any?
       end
 
       def refuse_unclaimable!(id, payer)
         status = connection.exec_query(
           "SELECT #{column(@status_column)} FROM #{table} WHERE id = $1::uuid AND #{column(@owner_column)} = $2::uuid",
-          "Kiosk payment claim", [id, payer]
+          'Kiosk payment claim', [id, payer]
         ).rows.first&.first
 
         deny "#{noun} not found or not yours" if status.nil?
@@ -147,8 +145,8 @@ module Kiosk
         end
         if status == PAYING
           deny "#{noun} #{id} has a payment in progress — re-read GET <endpoint>/#{@query}: while its " \
-               "payment_state is `pending` the charge may already have gone through, so do NOT sign a " \
-               "fresh mandate chain; only a `paid` or `unpaid` answer is actionable"
+               'payment_state is `pending` the charge may already have gone through, so do NOT sign a ' \
+               'fresh mandate chain; only a `paid` or `unpaid` answer is actionable'
         end
         deny "#{noun} #{id} is already paid (#{status}) — do not pay it again"
       end
@@ -157,11 +155,11 @@ module Kiosk
         connection.exec_update(
           "UPDATE #{table} SET #{column(@status_column)} = $1, updated_at = now() " \
           "WHERE id = $2::uuid AND #{column(@status_column)} = $3",
-          "Kiosk payment claim", [to, id.to_s, PAYING]
+          'Kiosk payment claim', [to, id.to_s, PAYING]
         )
       end
 
-      def noun = @reference.delete_suffix("_id")
+      def noun = @reference.delete_suffix('_id')
 
       def table = connection.quote_table_name(@table)
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-require "kiosk/server/errors"
-require "kiosk/server/request_validation"
+require 'kiosk/server/errors'
+require 'kiosk/server/request_validation'
 
 module Kiosk
   module Server
@@ -23,9 +23,9 @@ module Kiosk
           "#{kind} #{verb.inspect} rendered a payload its own output_schema rejects: " \
           "#{summarise(errors)}",
           hint: "the descriptor and the handler disagree — `#{verb}` publishes an " \
-                "output_schema that its rendered answer does not satisfy. Fix whichever " \
-                "is wrong; a published schema an assistant cannot rely on is worse than " \
-                "none. (Kiosk.configuration.validate_responses is on.)",
+                'output_schema that its rendered answer does not satisfy. Fix whichever ' \
+                'is wrong; a published schema an assistant cannot rely on is worse than ' \
+                'none. (Kiosk.configuration.validate_responses is on.)'
         )
       end
 
@@ -33,11 +33,11 @@ module Kiosk
 
       def summarise(errors)
         reported = errors.first(MAX_REPORTED).map do |error|
-          pointer = error["data_pointer"].to_s
-          "#{pointer.empty? ? "(root)" : pointer}: #{error["error"]}"
+          pointer = error['data_pointer'].to_s
+          "#{pointer.empty? ? '(root)' : pointer}: #{error['error']}"
         end
         reported << "(#{errors.length - MAX_REPORTED} more)" if errors.length > MAX_REPORTED
-        reported.join("; ")
+        reported.join('; ')
       end
     end
   end

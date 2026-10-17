@@ -74,7 +74,7 @@ module Kiosk
 
             value = resolve(yield).freeze
             @cache = cache.merge(
-              key => { value: value, entry: entry, epoch: now_epoch }.freeze,
+              key => { value: value, entry: entry, epoch: now_epoch }.freeze
             ).freeze
             value
           end

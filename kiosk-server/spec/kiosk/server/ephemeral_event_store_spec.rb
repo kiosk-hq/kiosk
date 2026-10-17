@@ -17,10 +17,10 @@
 # states the whole shape of the origin it is describing. That the engine's
 # `after_initialize` block turns the condition into a refused boot is proven
 # separately, against a real boot, in ephemeral_event_store_boot_spec.rb.
-RSpec.describe Kiosk::Server::Engine, ".ephemeral_event_store_error" do
+RSpec.describe Kiosk::Server::Engine, '.ephemeral_event_store_error' do
   def error(production: true, topics: %w[delivery])
     described_class.ephemeral_event_store_error(
-      config: Kiosk.configuration, production: production, topics: topics,
+      config: Kiosk.configuration, production: production, topics: topics
     )
   end
 
@@ -37,34 +37,34 @@ RSpec.describe Kiosk::Server::Engine, ".ephemeral_event_store_error" do
     end.new
   end
 
-  context "when a topic is declared and the store is the in-process default" do
-    it "refuses in production" do
-      expect(error).to include("`event_store` is the IN-PROCESS default")
+  context 'when a topic is declared and the store is the in-process default' do
+    it 'refuses in production' do
+      expect(error).to include('`event_store` is the IN-PROCESS default')
     end
 
-    it "names the topics, so the operator knows what is affected" do
-      expect(error(topics: %w[todo delivery])).to include("(delivery, todo)")
+    it 'names the topics, so the operator knows what is affected' do
+      expect(error(topics: %w[todo delivery])).to include('(delivery, todo)')
     end
 
     # The whole reason this is a refusal and not a log line: the operator
     # cannot discover it by watching their own system.
-    it "says WHY it matters — a restart loses events inside the retention window, silently" do
-      expect(error).to include("no error, no metric and no log line")
-      expect(error).to include("keeps every event for 24 hours")
-      expect(error).to include("a restart or deploy loses every event inside that window")
+    it 'says WHY it matters — a restart loses events inside the retention window, silently' do
+      expect(error).to include('no error, no metric and no log line')
+      expect(error).to include('keeps every event for 24 hours')
+      expect(error).to include('a restart or deploy loses every event inside that window')
     end
 
-    it "names the shipped durable store so the fix needs no search" do
-      expect(error).to include("c.event_store = Kiosk::Server::EventStores::ActiveRecord.new")
+    it 'names the shipped durable store so the fix needs no search' do
+      expect(error).to include('c.event_store = Kiosk::Server::EventStores::ActiveRecord.new')
     end
 
     # The in-process store is the CORRECT store for the suite and for a
     # one-process development boot, which is what it exists for.
-    it "stays quiet outside production" do
+    it 'stays quiet outside production' do
       expect(error(production: false)).to be_nil
     end
 
-    it "stays quiet once a durable store is configured" do
+    it 'stays quiet once a durable store is configured' do
       Kiosk.configure { |c| c.event_store = durable_store }
       expect(error).to be_nil
     end
@@ -73,11 +73,11 @@ RSpec.describe Kiosk::Server::Engine, ".ephemeral_event_store_error" do
   # An origin that declares no topic never emits, never serves `events` in its
   # catalogue and never advertises an `events_url`. Its store is an object
   # nothing calls, and refusing to boot it would be a false accusation.
-  it "does NOT refuse an origin that declares no topic at all" do
+  it 'does NOT refuse an origin that declares no topic at all' do
     expect(error(topics: [])).to be_nil
   end
 
-  it "treats a whitespace-only topic name as no topic, rather than as a declaration" do
-    expect(error(topics: ["", "  "])).to be_nil
+  it 'treats a whitespace-only topic name as no topic, rather than as a declaration' do
+    expect(error(topics: ['', '  '])).to be_nil
   end
 end

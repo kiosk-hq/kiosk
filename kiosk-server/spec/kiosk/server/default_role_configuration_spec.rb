@@ -19,31 +19,31 @@
 # The condition lives on the engine class so it is unit-testable without a
 # boot; that the `after_initialize` block RAISES on it is proven against a real
 # boot in default_role_boot_spec.rb.
-RSpec.describe Kiosk::Server::Engine, ".default_role_configuration_error" do
+RSpec.describe Kiosk::Server::Engine, '.default_role_configuration_error' do
   def error(config: Kiosk.configuration)
     described_class.default_role_configuration_error(config: config)
   end
 
-  context "when the origin declares a role vocabulary" do
+  context 'when the origin declares a role vocabulary' do
     before { Kiosk.configure { |c| c.roles = %i[customer owner] } }
 
-    it "refuses a configuration that names no default role" do
-      expect(error).to include("registration_role")
+    it 'refuses a configuration that names no default role' do
+      expect(error).to include('registration_role')
     end
 
-    it "names the setting to add and a value it would accept" do
-      expect(error).to include("c.registration_role = :customer")
+    it 'names the setting to add and a value it would accept' do
+      expect(error).to include('c.registration_role = :customer')
     end
 
-    it "names the other supported shape, so the operator has both exits" do
-      expect(error).to include("c.roles = []")
+    it 'names the other supported shape, so the operator has both exits' do
+      expect(error).to include('c.roles = []')
     end
 
-    it "says what the misconfigured origin would DO, not merely that it is wrong" do
-      expect(error).to include("role claim")
+    it 'says what the misconfigured origin would DO, not merely that it is wrong' do
+      expect(error).to include('role claim')
     end
 
-    it "is silent once a default role is configured" do
+    it 'is silent once a default role is configured' do
       Kiosk.configure { |c| c.registration_role = :customer }
       expect(error).to be_nil
     end
@@ -52,13 +52,13 @@ RSpec.describe Kiosk::Server::Engine, ".default_role_configuration_error" do
     # consumed (agent_registration.rb, account_binding.rb), so an empty string
     # means UNSET there. It has to mean unset here too, or the engine boots an
     # origin whose every resolution then lands on the empty role set.
-    it "treats an empty-string default as unset — the reading every consumer makes" do
-      Kiosk.configure { |c| c.registration_role = "  " }
-      expect(error).to include("registration_role")
+    it 'treats an empty-string default as unset — the reading every consumer makes' do
+      Kiosk.configure { |c| c.registration_role = '  ' }
+      expect(error).to include('registration_role')
     end
 
-    it "accepts a default spelled as a String" do
-      Kiosk.configure { |c| c.registration_role = "customer" }
+    it 'accepts a default spelled as a String' do
+      Kiosk.configure { |c| c.registration_role = 'customer' }
       expect(error).to be_nil
     end
   end
@@ -66,13 +66,13 @@ RSpec.describe Kiosk::Server::Engine, ".default_role_configuration_error" do
   # ADR-0011's protected operator: roles are hook-or-absent, and «registration
   # MUST NOT fail when [registration_role] is unset». This is the arm that keeps
   # that true — the amendment narrows the decision, it does not repeal it.
-  context "when the origin declares NO role vocabulary" do
-    it "is silent with no default role configured — nothing has changed for it" do
+  context 'when the origin declares NO role vocabulary' do
+    it 'is silent with no default role configured — nothing has changed for it' do
       expect(Kiosk.configuration.roles).to eq([])
       expect(error).to be_nil
     end
 
-    it "is silent whether the vocabulary is empty or never set at all" do
+    it 'is silent whether the vocabulary is empty or never set at all' do
       Kiosk.configure { |c| c.roles = [] }
       expect(error).to be_nil
     end
@@ -83,9 +83,12 @@ RSpec.describe Kiosk::Server::Engine, ".default_role_configuration_error" do
   # check must not silently accept it as «a default is present», nor duplicate
   # the message: it reports the same misconfiguration at BOOT instead of at the
   # first registration, which is the whole point of moving the question earlier.
-  it "refuses a default that is not one of the declared roles" do
-    Kiosk.configure { |c| c.roles = %i[customer]; c.registration_role = :admin }
-    expect(error).to include("admin")
-    expect(error).to include("registration_role")
+  it 'refuses a default that is not one of the declared roles' do
+    Kiosk.configure do |c|
+      c.roles = %i[customer]
+      c.registration_role = :admin
+    end
+    expect(error).to include('admin')
+    expect(error).to include('registration_role')
   end
 end

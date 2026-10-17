@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "securerandom"
+require 'securerandom'
 
 module Kiosk
   module Server
@@ -23,9 +23,9 @@ module Kiosk
         return true if ok
 
         raise Errors::Unauthenticated.new(
-          "no matching auth challenge",
-          hint: "GET /auth/challenge?public_key=… first, then sign the returned nonce; " \
-                "challenges are single-use and short-lived",
+          'no matching auth challenge',
+          hint: 'GET /auth/challenge?public_key=… first, then sign the returned nonce; ' \
+                'challenges are single-use and short-lived'
         )
       end
     end

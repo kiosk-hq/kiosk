@@ -1,25 +1,25 @@
 # frozen_string_literal: true
 
-require "action_cable"
-require "json"
-require "kiosk/server/errors"
-require "kiosk/server/headers"
-require "rack"
+require 'action_cable'
+require 'json'
+require 'kiosk/server/errors'
+require 'kiosk/server/headers'
+require 'rack'
 
 module Kiosk
   module Server
     # The engine's own Action Cable server, so the host's connection class and forgery setting stay
     # the host's. One stream per (identity, topic); the channel filters by subject.
     module EventsCable
-      STREAM_PREFIX = "kiosk:events"
+      STREAM_PREFIX = 'kiosk:events'
 
       # A lambda, so the server is built on first request, once the host's
       # `config/cable.yml` can be read.
       RACK_APP = ->(env) { Kiosk::Server::EventsCable.serve(env) }
 
-      UNSERVED_DETAIL = "this operator does not serve the events module"
+      UNSERVED_DETAIL = 'this operator does not serve the events module'
       UNSERVED_HINT   = "`events` is absent from this origin's capabilities and it publishes no " \
-                        "events_url; there is nothing to subscribe to here"
+                        'events_url; there is nothing to subscribe to here'
 
       class << self
         # An origin that declares no topic answers `501 module_not_served`
@@ -40,7 +40,7 @@ module Kiosk
 
         # Called by {Events.emit} after the append, so the event carries its id.
         def broadcast(identity_key, event)
-          server.broadcast(stream_name(identity_key, event["topic"]), event)
+          server.broadcast(stream_name(identity_key, event['topic']), event)
         end
 
         def configuration
@@ -58,7 +58,7 @@ module Kiosk
         def unserved_module
           error   = Errors::ModuleNotServed.new(UNSERVED_DETAIL, hint: UNSERVED_HINT)
           headers = ::Rack::Headers.new
-          headers["content-type"] = Errors::PROBLEM_CONTENT_TYPE
+          headers['content-type'] = Errors::PROBLEM_CONTENT_TYPE
           Headers.add_to(headers)
           Headers.add_cache_policy(headers, status: error.http_status)
           [error.http_status, headers, [::JSON.generate(error.to_problem)]]
@@ -67,16 +67,16 @@ module Kiosk
         # The host's `config/cable.yml`, else `async` (one process only):
         # Action Cable's own fallback is Redis, which no host here bundles.
         def cable_config
-          return { "adapter" => "async" } unless rails_app_with_cable_yml?
+          return { 'adapter' => 'async' } unless rails_app_with_cable_yml?
 
           ::Rails.application.config_for(:cable).to_h.transform_keys(&:to_s)
         rescue StandardError
-          { "adapter" => "async" }
+          { 'adapter' => 'async' }
         end
 
         def rails_app_with_cable_yml?
           defined?(::Rails) && ::Rails.respond_to?(:application) && ::Rails.application &&
-            ::Rails.root && ::File.exist?(::Rails.root.join("config", "cable.yml"))
+            ::Rails.root && ::File.exist?(::Rails.root.join('config', 'cable.yml'))
         end
 
         def resolved_logger

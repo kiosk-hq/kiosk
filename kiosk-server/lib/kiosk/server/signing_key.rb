@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "openssl"
-require "base64"
-require "digest"
-require "json"
+require 'openssl'
+require 'base64'
+require 'digest'
+require 'json'
 
 module Kiosk
   module Server
@@ -11,17 +11,15 @@ module Kiosk
     class SigningKey
       MIN_KEY_BITS = 2048
 
-      ALGORITHM = "RS256"
+      ALGORITHM = 'RS256'
 
       attr_reader :rsa
 
       def initialize(rsa)
-        unless rsa.is_a?(OpenSSL::PKey::RSA)
-          raise ArgumentError, "expected OpenSSL::PKey::RSA, got #{rsa.class}"
-        end
+        raise ArgumentError, "expected OpenSSL::PKey::RSA, got #{rsa.class}" unless rsa.is_a?(OpenSSL::PKey::RSA)
         if rsa.n.num_bits < MIN_KEY_BITS
           raise ArgumentError,
-            "RSA key is #{rsa.n.num_bits} bits; minimum is #{MIN_KEY_BITS}"
+                "RSA key is #{rsa.n.num_bits} bits; minimum is #{MIN_KEY_BITS}"
         end
         @rsa = rsa
       end
@@ -44,7 +42,8 @@ module Kiosk
       end
 
       def to_pem
-        raise "cannot export PEM: signing key is public-only" unless private?
+        raise 'cannot export PEM: signing key is public-only' unless private?
+
         rsa.to_pem
       end
 
@@ -56,12 +55,12 @@ module Kiosk
       # RFC 7517 §4; never the private parameters.
       def to_jwk
         {
-          kty: "RSA",
-          use: "sig",
+          kty: 'RSA',
+          use: 'sig',
           alg: ALGORITHM,
           kid: kid,
-          n:   b64url(rsa.n.to_s(2)),
-          e:   b64url(rsa.e.to_s(2)),
+          n: b64url(rsa.n.to_s(2)),
+          e: b64url(rsa.e.to_s(2))
         }
       end
 
@@ -71,10 +70,10 @@ module Kiosk
         # RFC 7638 §3.2: the required members, in alphabetical order.
         canonical = JSON.generate(
           {
-            e:   b64url(rsa.e.to_s(2)),
-            kty: "RSA",
-            n:   b64url(rsa.n.to_s(2)),
-          },
+            e: b64url(rsa.e.to_s(2)),
+            kty: 'RSA',
+            n: b64url(rsa.n.to_s(2))
+          }
         )
         b64url(Digest::SHA256.digest(canonical))
       end

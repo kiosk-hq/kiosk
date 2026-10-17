@@ -32,11 +32,11 @@ module Kiosk
             RETURNING id
           SQL
           rows = connection.exec_query(
-            sql, "Kiosk events append",
-            [identity_key.to_s, event["topic"], event["subject"],
-             event["occurred_at"], JSON.generate(event["data"])],
+            sql, 'Kiosk events append',
+            [identity_key.to_s, event['topic'], event['subject'],
+             event['occurred_at'], JSON.generate(event['data'])]
           ).to_a
-          rows.first["id"].to_i
+          rows.first['id'].to_i
         end
 
         # This identity's events after the cursor `id`, ascending.
@@ -47,16 +47,16 @@ module Kiosk
             WHERE identity_key = $1 AND id > $2
             ORDER BY id ASC
           SQL
-          connection.exec_query(sql, "Kiosk events since", [identity_key.to_s, id.to_i])
+          connection.exec_query(sql, 'Kiosk events since', [identity_key.to_s, id.to_i])
                     .to_a.map { |row| to_event(row) }
         end
 
         # The origin's maximum id, 0 when empty.
         def head
           row = connection.exec_query(
-            %(SELECT COALESCE(MAX(id), 0) AS head FROM #{table}), "Kiosk events head"
+            %(SELECT COALESCE(MAX(id), 0) AS head FROM #{table}), 'Kiosk events head'
           ).to_a.first
-          row["head"].to_i
+          row['head'].to_i
         end
 
         # True when rows after the caller's cursor were swept; a cursor at or
@@ -64,11 +64,11 @@ module Kiosk
         def truncated?(_identity_key, id)
           row = connection.exec_query(
             %(SELECT COALESCE(MIN(id), 0) AS floor, COALESCE(MAX(id), 0) AS head FROM #{table}),
-            "Kiosk events floor",
+            'Kiosk events floor'
           ).to_a.first
-          return false if row["head"].to_i <= id.to_i
+          return false if row['head'].to_i <= id.to_i
 
-          row["floor"].to_i > id.to_i + 1
+          row['floor'].to_i > id.to_i + 1
         end
 
         # Deletes everything older than the retention window; {#append} calls
@@ -76,7 +76,7 @@ module Kiosk
         def prune!
           connection.exec_query(
             %(DELETE FROM #{table} WHERE created_at < now() - ($1 || ' hours')::interval),
-            "Kiosk events prune", [@retention_hours.to_s],
+            'Kiosk events prune', [@retention_hours.to_s]
           )
           nil
         end
@@ -86,19 +86,19 @@ module Kiosk
         # The wire's five event members, string-keyed, as {EventStore} gives them.
         def to_event(row)
           {
-            "id" => row["id"].to_i,
-            "topic" => row["topic"],
-            "subject" => row["subject"],
-            "occurred_at" => as_iso8601(row["occurred_at"]),
-            "data" => row["data"].is_a?(String) ? JSON.parse(row["data"]) : row["data"],
+            'id' => row['id'].to_i,
+            'topic' => row['topic'],
+            'subject' => row['subject'],
+            'occurred_at' => as_iso8601(row['occurred_at']),
+            'data' => row['data'].is_a?(String) ? JSON.parse(row['data']) : row['data']
           }
         end
 
         # The adapter may return a Time or a String.
         def as_iso8601(value)
-          return value.utc.strftime("%Y-%m-%dT%H:%M:%SZ") if value.respond_to?(:utc)
+          return value.utc.strftime('%Y-%m-%dT%H:%M:%SZ') if value.respond_to?(:utc)
 
-          Time.parse(value.to_s).utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+          Time.parse(value.to_s).utc.strftime('%Y-%m-%dT%H:%M:%SZ')
         end
 
         def prune_if_due!

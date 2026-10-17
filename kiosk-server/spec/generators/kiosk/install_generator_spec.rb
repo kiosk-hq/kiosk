@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
-require "tmpdir"
-require "fileutils"
-require "rails/generators"
-require_relative "../../../lib/generators/kiosk/install/install_generator"
+require 'tmpdir'
+require 'fileutils'
+require 'rails/generators'
+require_relative '../../../lib/generators/kiosk/install/install_generator'
 
 RSpec.describe Kiosk::Generators::InstallGenerator do
   # A host Rails app, reduced to the files the generator writes INTO:
@@ -24,9 +24,9 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   around do |example|
     Dir.mktmpdir do |dir|
       @destination = dir
-      FileUtils.mkdir_p(File.join(dir, "config"))
-      File.write(File.join(dir, "config/routes.rb"), HOST_ROUTES)
-      File.write(File.join(dir, "config/application.rb"), HOST_APPLICATION)
+      FileUtils.mkdir_p(File.join(dir, 'config'))
+      File.write(File.join(dir, 'config/routes.rb'), HOST_ROUTES)
+      File.write(File.join(dir, 'config/application.rb'), HOST_APPLICATION)
       example.run
     end
   end
@@ -47,75 +47,75 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   def migrations
-    Dir[File.join(@destination, "db/migrate/*.rb")].sort
+    Dir[File.join(@destination, 'db/migrate/*.rb')].sort
   end
 
-  describe "initializer" do
-    it "creates config/initializers/kiosk.rb" do
+  describe 'initializer' do
+    it 'creates config/initializers/kiosk.rb' do
       invoke!
-      expect(File).to exist(File.join(@destination, "config/initializers/kiosk.rb"))
+      expect(File).to exist(File.join(@destination, 'config/initializers/kiosk.rb'))
     end
 
-    it "wraps the configuration in a Kiosk.configure block" do
+    it 'wraps the configuration in a Kiosk.configure block' do
       invoke!
-      expect(read("config/initializers/kiosk.rb")).to include("Kiosk.configure do |c|")
+      expect(read('config/initializers/kiosk.rb')).to include('Kiosk.configure do |c|')
     end
 
-    it "wires the default user model (singularised classified table name)" do
+    it 'wires the default user model (singularised classified table name)' do
       invoke!
-      expect(read("config/initializers/kiosk.rb")).to include('c.user_model     = "User"')
+      expect(read('config/initializers/kiosk.rb')).to include('c.user_model     = "User"')
     end
 
-    it "wires the default user_id_type (:uuid)" do
+    it 'wires the default user_id_type (:uuid)' do
       invoke!
-      expect(read("config/initializers/kiosk.rb")).to include("c.user_id_type   = :uuid")
+      expect(read('config/initializers/kiosk.rb')).to include('c.user_id_type   = :uuid')
     end
 
-    it "honours --user-table by classifying it" do
+    it 'honours --user-table by classifying it' do
       invoke!(%w[--user-table=members])
-      expect(read("config/initializers/kiosk.rb")).to include('c.user_model     = "Member"')
+      expect(read('config/initializers/kiosk.rb')).to include('c.user_model     = "Member"')
     end
 
-    it "honours --user-id-type" do
+    it 'honours --user-id-type' do
       invoke!(%w[--user-id-type=bigint])
-      expect(read("config/initializers/kiosk.rb")).to include("c.user_id_type   = :bigint")
+      expect(read('config/initializers/kiosk.rb')).to include('c.user_id_type   = :bigint')
     end
 
-    it "comments overrideable Postgres settings with the chosen defaults" do
+    it 'comments overrideable Postgres settings with the chosen defaults' do
       invoke!(%w[--schema=ksk --guc-namespace=kiosk-all])
-      body = read("config/initializers/kiosk.rb")
+      body = read('config/initializers/kiosk.rb')
       expect(body).to include('# c.guc_namespace = "kiosk-all"')
       expect(body).to include('# c.schema = "ksk"')
     end
 
-    it "documents pluggable IdP adapters" do
+    it 'documents pluggable IdP adapters' do
       invoke!
-      body = read("config/initializers/kiosk.rb")
-      expect(body).to include("# c.user_idp")
-      expect(body).to include("# c.agent_idp")
+      body = read('config/initializers/kiosk.rb')
+      expect(body).to include('# c.user_idp')
+      expect(body).to include('# c.agent_idp')
     end
 
     # A generated app checks request shapes, and its own responses outside production.
-    describe "validation flags" do
+    describe 'validation flags' do
       # Line-anchored, not `include`: the same bytes appear in the explanatory
       # comment above the setting, so a substring match would pass on a
       # commented-out line — which is exactly the shape the arm below refuses.
-      it "turns the PoW-shape check on, so a malformed proof is a 400 and not a silent 402 loop" do
+      it 'turns the PoW-shape check on, so a malformed proof is a 400 and not a silent 402 loop' do
         invoke!
-        expect(read("config/initializers/kiosk.rb"))
+        expect(read('config/initializers/kiosk.rb'))
           .to match(/^\s*c\.validate_requests\s*=\s*true\s*$/)
       end
 
       it "gates response validation off production — the engine's own hazard, in a fresh app" do
         invoke!
-        body = read("config/initializers/kiosk.rb")
+        body = read('config/initializers/kiosk.rb')
         expect(body).to match(/^\s*c\.validate_responses\s*=\s*!Rails\.env\.production\?\s*$/)
         expect(body).not_to match(/^\s*c\.validate_responses\s*=\s*true\s*$/)
       end
 
-      it "writes both as ACTIVE lines — a commented posture is not a posture" do
+      it 'writes both as ACTIVE lines — a commented posture is not a posture' do
         invoke!
-        body = read("config/initializers/kiosk.rb")
+        body = read('config/initializers/kiosk.rb')
         expect(body).not_to match(/^\s*#\s*c\.validate_requests\s*=/)
         expect(body).not_to match(/^\s*#\s*c\.validate_responses\s*=/)
       end
@@ -125,72 +125,72 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       # above with no explanation could reasonably conclude the obligation was
       # one of them. K-1336 is that conflation, made by a reader of the
       # gemspec; the generated file is where the next one would make it.
-      it "says outright that per-verb input validation is NOT one of these flags" do
+      it 'says outright that per-verb input validation is NOT one of these flags' do
         invoke!
-        body = read("config/initializers/kiosk.rb")
-        expect(body).to include("coerce-then-validate on the per-verb wire is UNCONDITIONAL")
-        expect(body).to include("input_schema")
+        body = read('config/initializers/kiosk.rb')
+        expect(body).to include('coerce-then-validate on the per-verb wire is UNCONDITIONAL')
+        expect(body).to include('input_schema')
       end
     end
   end
 
   # Bundling kiosk-server draws no route: the engine installs its surface only
   # when it is mounted, so the generator writes the `kiosk` block that mounts it.
-  describe "wire routes" do
+  describe 'wire routes' do
     def routes_code
-      read("config/routes.rb").lines.map(&:strip).reject { |l| l.empty? || l.start_with?("#") }
+      read('config/routes.rb').lines.map(&:strip).reject { |l| l.empty? || l.start_with?('#') }
     end
 
-    it "writes a `kiosk` block FIRST inside the routes block, so the protocol plane wins by first match" do
+    it 'writes a `kiosk` block FIRST inside the routes block, so the protocol plane wins by first match' do
       invoke!
-      expect(routes_code[1]).to eq("kiosk do")
-      expect(routes_code[2]).to eq("end")
+      expect(routes_code[1]).to eq('kiosk do')
+      expect(routes_code[2]).to eq('end')
     end
 
-    it "draws no verb of its own — a fresh app declares none" do
+    it 'draws no verb of its own — a fresh app declares none' do
       invoke!
       expect(routes_code.grep(/\A(queries|actions)\b/)).to be_empty
     end
 
-    it "shows where queries and actions go" do
+    it 'shows where queries and actions go' do
       invoke!
-      body = read("config/routes.rb")
-      expect(body).to include("# queries :catalog")
-      expect(body).to include("# actions :place_order")
+      body = read('config/routes.rb')
+      expect(body).to include('# queries :catalog')
+      expect(body).to include('# actions :place_order')
     end
 
     it "leaves the host's own routes alone" do
       invoke!
-      expect(read("config/routes.rb")).to include('root "home#index"')
+      expect(read('config/routes.rb')).to include('root "home#index"')
     end
 
-    it "writes no separate routes file" do
+    it 'writes no separate routes file' do
       invoke!
-      expect(Dir[File.join(@destination, "config/routes/*")]).to be_empty
+      expect(Dir[File.join(@destination, 'config/routes/*')]).to be_empty
     end
   end
 
-  describe "config/application.rb" do
-    it "dumps every schema, so schema.rb carries the kiosk tables" do
+  describe 'config/application.rb' do
+    it 'dumps every schema, so schema.rb carries the kiosk tables' do
       invoke!
-      expect(read("config/application.rb")).to include(%(config.active_record.dump_schemas = "public,kiosk"))
+      expect(read('config/application.rb')).to include(%(config.active_record.dump_schemas = "public,kiosk"))
     end
   end
 
-  describe "migrations" do
-    it "creates exactly the eight canonical migrations (001-008)" do
+  describe 'migrations' do
+    it 'creates exactly the eight canonical migrations (001-008)' do
       invoke!
       expect(migrations.size).to eq(8)
       basenames = migrations.map { |p| File.basename(p) }
       expect(basenames).to include(
-        a_string_ending_with("_create_kiosk_schema.rb"),
-        a_string_ending_with("_create_kiosk_identity_tables.rb"),
-        a_string_ending_with("_create_kiosk_reservations.rb"),
-        a_string_ending_with("_create_kiosk_device_authorizations.rb"),
-        a_string_ending_with("_create_kiosk_mandates.rb"),
-        a_string_ending_with("_create_kiosk_kyc_attributes.rb"),
-        a_string_ending_with("_create_kiosk_events.rb"),
-        a_string_ending_with("_create_kiosk_pow_spent.rb"),
+        a_string_ending_with('_create_kiosk_schema.rb'),
+        a_string_ending_with('_create_kiosk_identity_tables.rb'),
+        a_string_ending_with('_create_kiosk_reservations.rb'),
+        a_string_ending_with('_create_kiosk_device_authorizations.rb'),
+        a_string_ending_with('_create_kiosk_mandates.rb'),
+        a_string_ending_with('_create_kiosk_kyc_attributes.rb'),
+        a_string_ending_with('_create_kiosk_events.rb'),
+        a_string_ending_with('_create_kiosk_pow_spent.rb')
       )
     end
 
@@ -200,73 +200,73 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
     # amendments of a table created two files before THAT, so a fresh adopter
     # ran a history to reach a schema these six state outright. A new amendment
     # migration is how that grows back, and this is what refuses it.
-    it "emits nothing but `create_` migrations — no rebuilds, no amendments" do
+    it 'emits nothing but `create_` migrations — no rebuilds, no amendments' do
       invoke!
-      basenames = migrations.map { |p| File.basename(p).sub(/\A\d+_/, "") }
-      expect(basenames).to all(start_with("create_kiosk_"))
-      expect(basenames).not_to include(a_string_starting_with("rebuild_"), a_string_starting_with("add_"))
+      basenames = migrations.map { |p| File.basename(p).sub(/\A\d+_/, '') }
+      expect(basenames).to all(start_with('create_kiosk_'))
+      expect(basenames).not_to include(a_string_starting_with('rebuild_'), a_string_starting_with('add_'))
     end
 
-    it "orders the migration timestamps in 001 → 008 sequence" do
+    it 'orders the migration timestamps in 001 → 008 sequence' do
       invoke!
-      timestamps = migrations.map { |p| File.basename(p).split("_").first.to_i }
+      timestamps = migrations.map { |p| File.basename(p).split('_').first.to_i }
       expect(timestamps).to eq(timestamps.sort)
       expect(timestamps.uniq.size).to eq(8) # strictly ascending, no collisions
     end
 
-    describe "008 create_kiosk_pow_spent" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_pow_spent.rb") } }
+    describe '008 create_kiosk_pow_spent' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_pow_spent.rb') } }
 
-      it "calls SchemaDefinitions.pow_spent_sql with the configured schema" do
+      it 'calls SchemaDefinitions.pow_spent_sql with the configured schema' do
         invoke!(%w[--schema=ksk])
-        expect(File.read(file)).to include("Kiosk::Server::SchemaDefinitions.pow_spent_sql")
+        expect(File.read(file)).to include('Kiosk::Server::SchemaDefinitions.pow_spent_sql')
         expect(File.read(file)).to include(%(schema: "ksk"))
       end
 
-      it "drops the table on down" do
+      it 'drops the table on down' do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".pow_spent))
       end
     end
 
-    describe "007 create_kiosk_events" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_events.rb") } }
+    describe '007 create_kiosk_events' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_events.rb') } }
 
-      it "is generated" do
+      it 'is generated' do
         invoke!
         expect(file).not_to be_nil
       end
 
-      it "calls SchemaDefinitions.events_sql with the configured schema" do
+      it 'calls SchemaDefinitions.events_sql with the configured schema' do
         invoke!(%w[--schema=ksk])
-        expect(File.read(file)).to include("Kiosk::Server::SchemaDefinitions.events_sql")
+        expect(File.read(file)).to include('Kiosk::Server::SchemaDefinitions.events_sql')
         expect(File.read(file)).to include(%(schema: "ksk"))
       end
 
-      it "drops the table on down" do
+      it 'drops the table on down' do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".events))
       end
     end
 
-    describe "001 create_kiosk_schema" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_schema.rb") } }
+    describe '001 create_kiosk_schema' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_schema.rb') } }
 
-      it "is generated" do
+      it 'is generated' do
         invoke!
         expect(file).not_to be_nil
       end
 
-      it "calls SchemaDefinitions.helper_functions_sql with the configured args" do
+      it 'calls SchemaDefinitions.helper_functions_sql with the configured args' do
         invoke!(%w[--schema=ksk --guc-namespace=kiosk-all --user-id-type=bigint])
         body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.helper_functions_sql(")
+        expect(body).to include('Kiosk::Server::SchemaDefinitions.helper_functions_sql(')
         expect(body).to include('schema:        "ksk"')
         expect(body).to include('guc_namespace: "kiosk-all"')
-        expect(body).to include("user_id_type:  :bigint")
+        expect(body).to include('user_id_type:  :bigint')
       end
 
-      it "is reversible — drops the schema CASCADE" do
+      it 'is reversible — drops the schema CASCADE' do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include('DROP SCHEMA IF EXISTS "ksk" CASCADE')
       end
@@ -274,23 +274,23 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       it "subclasses ActiveRecord::Migration with the host's current version" do
         invoke!
         expect(File.read(file))
-          .to include("ActiveRecord::Migration[ActiveRecord::Migration.current_version]")
+          .to include('ActiveRecord::Migration[ActiveRecord::Migration.current_version]')
       end
     end
 
-    describe "002 create_kiosk_identity_tables" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_identity_tables.rb") } }
+    describe '002 create_kiosk_identity_tables' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_identity_tables.rb') } }
 
-      it "calls SchemaDefinitions.identity_tables_sql with schema, user_id_type, user_table" do
+      it 'calls SchemaDefinitions.identity_tables_sql with schema, user_id_type, user_table' do
         invoke!(%w[--user-table=members --user-id-type=bigint --schema=ksk])
         body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.identity_tables_sql(")
+        expect(body).to include('Kiosk::Server::SchemaDefinitions.identity_tables_sql(')
         expect(body).to include('schema:       "ksk"')
-        expect(body).to include("user_id_type: :bigint")
+        expect(body).to include('user_id_type: :bigint')
         expect(body).to include('user_table:   "members"')
       end
 
-      it "drops the three tables in reverse-FK order in #down" do
+      it 'drops the three tables in reverse-FK order in #down' do
         invoke!(%w[--schema=ksk])
         body = File.read(file)
         mappings_idx = body.index('DROP TABLE IF EXISTS "ksk".agent_mappings')
@@ -301,52 +301,52 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       end
     end
 
-    describe "003 create_kiosk_reservations" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_reservations.rb") } }
+    describe '003 create_kiosk_reservations' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_reservations.rb') } }
 
-      it "calls SchemaDefinitions.reservations_sql with the configured args" do
+      it 'calls SchemaDefinitions.reservations_sql with the configured args' do
         invoke!(%w[--schema=ksk --user-id-type=bigint])
         body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.reservations_sql(")
+        expect(body).to include('Kiosk::Server::SchemaDefinitions.reservations_sql(')
         expect(body).to include('schema:       "ksk"')
-        expect(body).to include("user_id_type: :bigint")
+        expect(body).to include('user_id_type: :bigint')
       end
 
-      it "drops the reservations table in #down" do
+      it 'drops the reservations table in #down' do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".reservations')
       end
     end
 
-    describe "004 create_kiosk_device_authorizations" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_device_authorizations.rb") } }
+    describe '004 create_kiosk_device_authorizations' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_device_authorizations.rb') } }
 
-      it "calls SchemaDefinitions.device_authorizations_sql with the configured args" do
+      it 'calls SchemaDefinitions.device_authorizations_sql with the configured args' do
         invoke!(%w[--schema=ksk --user-id-type=bigint])
         body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.device_authorizations_sql(")
+        expect(body).to include('Kiosk::Server::SchemaDefinitions.device_authorizations_sql(')
         expect(body).to include('schema:       "ksk"')
-        expect(body).to include("user_id_type: :bigint")
+        expect(body).to include('user_id_type: :bigint')
       end
 
-      it "drops the device_authorizations table in #down" do
+      it 'drops the device_authorizations table in #down' do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".device_authorizations')
       end
     end
 
-    describe "005 create_kiosk_mandates" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_mandates.rb") } }
+    describe '005 create_kiosk_mandates' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_mandates.rb') } }
 
-      it "calls SchemaDefinitions.mandates_sql with the configured args" do
+      it 'calls SchemaDefinitions.mandates_sql with the configured args' do
         invoke!(%w[--schema=ksk --user-id-type=bigint])
         body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.mandates_sql(")
+        expect(body).to include('Kiosk::Server::SchemaDefinitions.mandates_sql(')
         expect(body).to include('schema:       "ksk"')
-        expect(body).to include("user_id_type: :bigint")
+        expect(body).to include('user_id_type: :bigint')
       end
 
-      it "drops all four mandate tables — including settlements — in reverse-FK order in #down" do
+      it 'drops all four mandate tables — including settlements — in reverse-FK order in #down' do
         invoke!(%w[--schema=ksk])
         body = File.read(file)
         payment_idx     = body.index('DROP TABLE IF EXISTS "ksk".payment_mandates')
@@ -365,38 +365,38 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       end
     end
 
-    describe "006 create_kiosk_kyc_attributes" do
-      let(:file) { migrations.find { |p| p.end_with?("_create_kiosk_kyc_attributes.rb") } }
+    describe '006 create_kiosk_kyc_attributes' do
+      let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_kyc_attributes.rb') } }
 
-      it "calls SchemaDefinitions.kyc_attributes_sql with the configured schema" do
+      it 'calls SchemaDefinitions.kyc_attributes_sql with the configured schema' do
         invoke!(%w[--schema=ksk])
         body = File.read(file)
-        expect(body).to include("Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(")
+        expect(body).to include('Kiosk::Server::SchemaDefinitions.kyc_attributes_sql(')
         expect(body).to include('schema: "ksk"')
       end
 
-      it "sorts after 002 (the agents table its rows reference)" do
+      it 'sorts after 002 (the agents table its rows reference)' do
         invoke!
-        identity_idx   = migrations.index { |p| p.end_with?("_create_kiosk_identity_tables.rb") }
-        attributes_idx = migrations.index { |p| p.end_with?("_create_kiosk_kyc_attributes.rb") }
+        identity_idx   = migrations.index { |p| p.end_with?('_create_kiosk_identity_tables.rb') }
+        attributes_idx = migrations.index { |p| p.end_with?('_create_kiosk_kyc_attributes.rb') }
         expect(attributes_idx).to be > identity_idx
       end
 
-      it "drops the TABLE in #down" do
+      it 'drops the TABLE in #down' do
         invoke!(%w[--schema=ksk])
         expect(File.read(file)).to include('DROP TABLE IF EXISTS "ksk".kyc_attributes')
       end
     end
   end
 
-  describe "default options" do
+  describe 'default options' do
     it "uses :uuid, schema 'kiosk', guc 'app', table 'users' when no flags are passed" do
       invoke!
-      schema_migration = migrations.find { |p| p.end_with?("_create_kiosk_schema.rb") }
+      schema_migration = migrations.find { |p| p.end_with?('_create_kiosk_schema.rb') }
       body = File.read(schema_migration)
       expect(body).to include('schema:        "kiosk"')
       expect(body).to include('guc_namespace: "app"')
-      expect(body).to include("user_id_type:  :uuid")
+      expect(body).to include('user_id_type:  :uuid')
     end
   end
 end

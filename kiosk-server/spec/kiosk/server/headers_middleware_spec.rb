@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require "rack/mock"
+require 'rack/mock'
 
 RSpec.describe Kiosk::Server::HeadersMiddleware do
   let(:downstream_app) do
-    ->(_env) { [200, { "Content-Type" => "text/plain" }, ["ok"]] }
+    ->(_env) { [200, { 'Content-Type' => 'text/plain' }, ['ok']] }
   end
 
   subject(:middleware) { described_class.new(downstream_app) }
@@ -14,25 +14,25 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
     middleware.call(env)
   end
 
-  describe "kiosk paths" do
-    it "injects the three Kiosk headers on /kiosk root" do
-      _, headers, _ = call("/kiosk")
+  describe 'kiosk paths' do
+    it 'injects the three Kiosk headers on /kiosk root' do
+      _, headers, = call('/kiosk')
       expect(headers[Kiosk::Protocol::HEADER_SERVER_VERSION]).to eq(Kiosk::Server::VERSION)
       expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to    eq(Kiosk::Protocol::API_VERSION)
       expect(headers[Kiosk::Protocol::HEADER_MIN_CLIENT]).to     eq(Kiosk::Protocol::MIN_CLIENT)
     end
 
-    it "injects the headers on any /kiosk/* sub-path" do
+    it 'injects the headers on any /kiosk/* sub-path' do
       # Any path under the mount — the middleware matches on the PREFIX and
       # never consults the route table, which is the whole point: it stamps a
       # 404 from a mistyped verb as readily as a 200 from a real one.
-      _, headers, _ = call("/kiosk/catalog")
+      _, headers, = call('/kiosk/catalog')
       expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to eq(Kiosk::Protocol::API_VERSION)
     end
 
-    it "respects an overridden mount_path" do
-      Kiosk.configure { |c| c.mount_path = "/agent-surface" }
-      _, headers, _ = call("/agent-surface/exec")
+    it 'respects an overridden mount_path' do
+      Kiosk.configure { |c| c.mount_path = '/agent-surface' }
+      _, headers, = call('/agent-surface/exec')
       expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to eq(Kiosk::Protocol::API_VERSION)
     end
   end
@@ -47,44 +47,44 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
   describe "when a downstream layer rewrites PATH_INFO (Rails' exception apps)" do
     let(:downstream_app) do
       lambda do |env|
-        env["PATH_INFO"] = "/500"
-        [500, { "Content-Type" => "text/plain" }, ["boom"]]
+        env['PATH_INFO'] = '/500'
+        [500, { 'Content-Type' => 'text/plain' }, ['boom']]
       end
     end
 
     it "still stamps: the request's identity was decided before the app ran" do
-      _, headers, _ = call("/kiosk/salons")
+      _, headers, = call('/kiosk/salons')
       expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to eq(Kiosk::Protocol::API_VERSION)
     end
 
-    context "and the rewrite points INTO the mount path" do
+    context 'and the rewrite points INTO the mount path' do
       # The mirror: a non-Kiosk request whose path is rewritten to look like a
       # Kiosk one must stay bare, or the guard would be a coin toss rather than
       # a question about the caller.
       let(:downstream_app) do
         lambda do |env|
-          env["PATH_INFO"] = "/kiosk/500"
-          [500, { "Content-Type" => "text/plain" }, ["boom"]]
+          env['PATH_INFO'] = '/kiosk/500'
+          [500, { 'Content-Type' => 'text/plain' }, ['boom']]
         end
       end
 
-      it "does not earn a stamp" do
-        _, headers, _ = call("/unrelated")
+      it 'does not earn a stamp' do
+        _, headers, = call('/unrelated')
         expect(headers).not_to have_key(Kiosk::Protocol::HEADER_API_VERSION)
       end
     end
   end
 
-  describe "non-kiosk paths" do
-    it "passes downstream headers through unchanged on /unrelated" do
-      _, headers, _ = call("/unrelated")
+  describe 'non-kiosk paths' do
+    it 'passes downstream headers through unchanged on /unrelated' do
+      _, headers, = call('/unrelated')
       expect(headers).not_to have_key(Kiosk::Protocol::HEADER_API_VERSION)
-      expect(headers["Content-Type"]).to eq("text/plain")
+      expect(headers['Content-Type']).to eq('text/plain')
     end
 
-    it "does NOT match a path that merely shares the mount-path prefix as a substring" do
+    it 'does NOT match a path that merely shares the mount-path prefix as a substring' do
       # /kiosk-news should not be treated as /kiosk + /news
-      _, headers, _ = call("/kiosk-news")
+      _, headers, = call('/kiosk-news')
       expect(headers).not_to have_key(Kiosk::Protocol::HEADER_API_VERSION)
     end
   end

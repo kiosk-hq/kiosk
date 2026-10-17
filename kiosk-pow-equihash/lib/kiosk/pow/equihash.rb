@@ -128,7 +128,7 @@ module Kiosk
         return false if n.nil?
 
         return false if k.negative?
-        return false unless n >= MIN_N && n <= MAX_N
+        return false unless n.between?(MIN_N, MAX_N)
 
         (n / (k + 1)).positive?
       end

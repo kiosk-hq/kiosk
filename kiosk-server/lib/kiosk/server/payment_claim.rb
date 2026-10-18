@@ -6,12 +6,17 @@ module Kiosk
   module Server
     # §11.6 over a PSP adapter: claims the operator's payable row `unpaid →
     # paying` before the capture, checks the cart against the operator's price,
-    # and flips the row to `paid` once the capture returns.
+    # flips the row to `paid` once the capture returns, and tells its owner on
+    # the `payment` topic.
     class PaymentClaim
       PAYING = 'paying'
       PAID   = 'paid'
+      TOPIC  = 'payment'
+      EXAMPLE_ID = '5f0c2a8e-3b1d-4c6f-9a7e-2d8b4e1f6c03'
 
-      # @param model [String] the payable model's name, e.g. "Order"; it includes Kiosk::Owned
+      attr_reader :currency, :reference, :status_column
+
+      # @param model [String] the payable model's name, e.g. "Order"; it includes Kiosk::Owned and Kiosk::Payable
       # @param reference [String] the cart line-item key naming the row, e.g. "order_id"
       # @param query [String] the per-user query that publishes the row's payment state
       def initialize(psp, currency:, model:, reference:, query:, status_column: :payment_status, unpaid: 'unpaid') # rubocop:disable Metrics/ParameterLists -- the public constructor the operator initializers call
@@ -20,6 +25,7 @@ module Kiosk
         @reference = reference
         @query     = query
         @unpaid    = unpaid
+        @status_column = status_column
         @row       = Row.new(model:, status_column:)
         @options   = { currency:, model:, reference:, query:, status_column:, unpaid: }
         extend SetupReturn if psp.respond_to?(:setup_return_user_id)
@@ -36,17 +42,18 @@ module Kiosk
 
       def refund(psp_reference:, amount_cents:) = @psp.refund(psp_reference: psp_reference, amount_cents: amount_cents)
 
-      # True iff the engine holds a settlement whose cart names this row.
-      def settled?(id)
-        Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(@reference => id)).exists?
-      end
+      # The settlements whose cart names this row.
+      def settlements(id) = Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(@reference => id))
 
-      # `paying → paid`, then `c.after_payment`, once: only the call that moved
-      # the row runs the hook. A failure here never surfaces: the charge has
-      # happened and the settlement row records it.
+      def settled?(id) = settlements(id).exists?
+
+      # `paying → paid`, the `payment` event, then `c.after_payment`, once:
+      # only the call that moved the row runs them. A failure here never
+      # surfaces: the charge has happened and the settlement row records it.
       def mark_paid!(id)
         return unless @row.flip(id, from: PAYING, to: PAID).positive?
 
+        announce(id, PAID)
         Kiosk.configuration.after_payment&.call(id)
       rescue StandardError => e
         FailureLog.report("#{self.class} could not mark #{id} paid", e)
@@ -103,7 +110,7 @@ module Kiosk
         return if total == price
 
         deny "cart total #{total} does not equal this operator's price #{price} for #{noun} #{id} — " \
-             're-read the pay_hint of the action that created it'
+             'sign the `cart` that the action which created it returned'
       end
 
       def checker
@@ -194,6 +201,29 @@ module Kiosk
       end
       include Resume
 
+      # The `payment` topic, which the engine serves beside `payment_setup`, and
+      # its events: where the money for one row stands.
+      module Topic
+        # Tells the row's owner where its money stands: `paid` or `refunded`.
+        def announce(id, payment_state)
+          Events.emit(topic: TOPIC, subject: id, identity_scope: [@row.owner(id)],
+                      data: { @reference => id, 'payment_state' => payment_state })
+        end
+
+        def topic
+          @topic ||= { name: TOPIC, reach: :principal,
+                       description: "The money for one #{noun} of yours moved. `paid`: the charge went through. " \
+                                    '`refunded`: the charge went back to the card.',
+                       payload_schema: { type: 'object', additionalProperties: false,
+                                         properties: { @reference => { type: 'string', format: 'uuid' },
+                                                       'payment_state' => { enum: [PAID, Kiosk::Payable::REFUNDED] } },
+                                         required: [@reference, 'payment_state'] },
+                       examples: [PAID, Kiosk::Payable::REFUNDED].map { { @reference => EXAMPLE_ID, 'payment_state' => it } },
+                       subject_reachable: ->(id, identity) { !@row.status(id, identity.user_id.to_s).nil? } }.freeze
+        end
+      end
+      include Topic
+
       # The PSP names whose human came back from the setup page; the engine
       # serves the `payment_setup` topic only for a provider that has this method.
       module SetupReturn
@@ -211,6 +241,8 @@ module Kiosk
         def take(id, payer, from:, to:) = move(model.owned_by(payer).where(id:), from:, to:)
 
         def status(id, payer) = model.owned_by(payer).where(id:).pick(@status_column)
+
+        def owner(id) = model.where(id:).pick(:user_id)
 
         def flip(id, from:, to:) = move(model.where(id:), from:, to:)
 

@@ -65,6 +65,11 @@ module Kiosk
         Answer.new(@assistant.pay(principal, **@assistant.mandates(principal, total:, scope:, line_items:, currency:)))
       end
 
+      # Signs the `cart` an action answered with, unchanged, and pays.
+      def pays_cart(cart, scope:, currency: cart['currency'])
+        pays(total: cart['total_amount_cents'], scope:, line_items: cart['line_items'], currency:)
+      end
+
       # The answer says whether a card is on file, or carries the page where the person saves one.
       def sets_up_payment = does(:payment_setup)
 

@@ -2,6 +2,7 @@
 
 require 'active_record'
 require 'securerandom'
+require 'json_schemer'
 require_relative '../../support/postgres'
 
 # The operator's half: a catalog that prices every row at 500 cents, a record of
@@ -32,6 +33,7 @@ module PaymentClaimSpecHelpers
   class Payable < ApplicationRecord
     self.table_name = "#{SCHEMA}.payables"
     include Kiosk::Owned
+    include Kiosk::Payable
   end
 
   # A payable model with no `updated_at`.
@@ -75,7 +77,20 @@ module PaymentClaimSpecHelpers
       c.cart_price_checker = ->(id, lines) { (seen << [id, lines]) && price }
       c.after_payment      = ->(id) { paid << id }
     end
+    serve_topic
   end
+
+  # The claim is the payment provider, and the engine serves its topic.
+  def serve_topic
+    Kiosk.configure do |c|
+      c.payment_provider = claim
+      c.event_store      = events
+    end
+    Kiosk::Server::Events.unregister(Kiosk::Server::PaymentClaim::TOPIC)
+    Kiosk::Server::Events.register(**claim.topic)
+  end
+
+  def events = @events ||= MemoryEventStore.new
 
   def paid = @paid ||= []
   def seen = @seen ||= []
@@ -361,5 +376,78 @@ RSpec.describe Kiosk::Server::PaymentClaim, '#resume refusals' do
 
     expect { claim.resume(cart) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
     expect(psp.captures).to be_empty
+  end
+end
+
+# The `payment` topic: the owner hears once that the row was paid.
+RSpec.describe Kiosk::Server::PaymentClaim, '#topic' do
+  include PaymentClaimSpecHelpers
+
+  it 'pushes one payment event to the owner when the capture returns' do
+    claim.capture(cart_for(row))
+    claim.mark_paid!(row)
+
+    expect(events.since(owner, 0).map { it.slice('topic', 'subject', 'data') })
+      .to eq([{ 'topic' => 'payment', 'subject' => row, 'data' => { 'booking_id' => row, 'payment_state' => 'paid' } }])
+  end
+
+  it 'pushes data that satisfies the payload_schema the origin serves for the topic' do
+    claim.capture(cart_for(row))
+    claim.announce(row, 'refunded')
+
+    served = JSON.parse(Kiosk::Server::SchemaDocument.json).fetch('events').find { it['name'] == 'payment' }
+    schema = JSONSchemer.schema(served['payload_schema'])
+    expect(events.since(owner, 0).flat_map { schema.validate(it['data']).to_a }).to be_empty
+  end
+
+  it "reaches the row's owner and nobody else" do
+    reachable = claim.topic[:subject_reachable]
+    identity = ->(user_id) { Struct.new(:user_id).new(user_id) }
+
+    expect([reachable.call(row, identity.call(owner)), reachable.call(row, identity.call(SecureRandom.uuid))])
+      .to eq([true, false])
+  end
+end
+
+# Kiosk::Payable: what the payable row publishes about its money, and the cart
+# that pays for it.
+RSpec.describe Kiosk::Payable do
+  include PaymentClaimSpecHelpers
+
+  def read(id = row) = PaymentClaimSpecHelpers::Payable.with_settlement(Kiosk::Settlement.all).find(id)
+
+  it 'reads unpaid, pending while the capture runs, paid after it, and refunded' do
+    states = [read.payment_state]
+    psp.during = ->(_) { states << read.payment_state }
+    claim.capture(cart_for(row))
+    states << read.payment_state
+    put_status('refunded')
+
+    expect(states << read.payment_state).to eq(%w[unpaid pending paid refunded])
+  end
+
+  it 'reads paid on a settlement whose row still says paying, with or without with_settlement' do
+    put_status('paying')
+    settle(row)
+
+    expect([read.payment_state, PaymentClaimSpecHelpers::Payable.find(row).payment_state]).to eq(%w[paid paid])
+    expect(read.settled_currency).to eq('EUR')
+  end
+
+  it "finds the settlement that paid the row, and no other row's" do
+    settle(row)
+    other = conn.select_value(%(INSERT INTO "#{schema}".payables (user_id) VALUES ('#{owner}') RETURNING id))
+
+    expect([read.settlement&.currency, read(other).settlement, read(other).settled_currency]).to eq(['EUR', nil, nil])
+  end
+
+  it 'builds the cart a PaymentClaim accepts: a line naming the row, then the priced lines' do
+    cart = read.cart([{ sku: 'room', qty: 2, price_cents: 250 }])
+
+    expect(cart).to eq(currency: 'eur', total_amount_cents: 500,
+                       line_items: [{ 'booking_id' => row }, { sku: 'room', qty: 2, price_cents: 250 }])
+    signed = cart_for(row, total: cart[:total_amount_cents], items: [cart[:line_items].last.stringify_keys])
+    claim.capture(signed)
+    expect(status).to eq('paid')
   end
 end

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Payable` gives a payable model `payment_state`, `with_settlement`, `cart` and `settlement`; `PaymentClaim` pushes the `payment` topic when a capture returns.
+
 - 2026-10-18: A device authorization store answers `lookup_by_device_code_hash` and `lookup_by_user_code_hash`; a custom store renames its two `find_by_*` methods.
 
 ## [0.5.14] — 2026-10-18

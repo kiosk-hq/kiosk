@@ -61,12 +61,13 @@ module Kiosk
           )
         end
 
-        # Publishes the action, and the topic when the provider can say whose
-        # human came back from the setup page.
+        # Publishes the action; the topic when the provider can say whose human
+        # came back from the setup page; and a PaymentClaim's `payment` topic.
         def register!
           Actions.declare(NAME, method(:call), description: DESCRIPTION,
                                                input_schema: INPUT_SCHEMA, output_schema: OUTPUT_SCHEMA)
           Events.register(**TOPIC) if provider.respond_to?(:setup_return_user_id)
+          Events.register(**provider.topic) if provider.respond_to?(:topic)
         end
 
         def call(_args)

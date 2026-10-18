@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::TestHelpers::Customer#pays_cart(cart, scope:)` signs the `cart` an action answered with and pays.
+
 - 2026-10-18: `Kiosk::StoryTest#assert_refused(answer, code)` asserts a wire refusal and prints the answer when it fails.
 
 - 2026-10-18: Declares `puma`, which the live server helper requires; a RubyGems install no longer fails to load it.

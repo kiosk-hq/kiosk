@@ -118,8 +118,20 @@ end
 `model` names your payable model; it includes `Kiosk::Owned`, so the claim
 takes only the payer's own row. The status lives in `status_column:`
 (`payment_status` unless you say otherwise), and `unpaid:` names its unpaid value.
-Your per-user query publishes that status — `paying` as *pending* — so a
-capture in flight never reads as *not paid*.
+
+The model also includes `Kiosk::Payable`, which gives each row:
+
+- `payment_state`: `unpaid`, `pending` while a capture is in flight, `paid`, or
+  `refunded`. Your per-user query publishes it, so a capture in flight never
+  reads as *not paid*. `Order.own.with_settlement(Kiosk::Settlement.own)` reads
+  it for many rows in one query.
+- `cart(lines)`: the cart your action returns for the assistant to sign, a line
+  that names the row and then your priced lines.
+- `settlement`: the receipt of the capture that paid the row.
+
+When the capture returns, the engine pushes `{"order_id": "…", "payment_state":
+"paid"}` to the row's owner on the `payment` topic. After you refund a row, call
+`announce(id, "refunded")` on the claim to push the same topic.
 
 A repeat of a chain whose capture did not complete runs the capture again under
 the same key, the cart mandate id, so your PSP adapter must key its charge by

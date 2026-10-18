@@ -4,7 +4,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 
 ## What it verifies
 
-- The `kiosk:install` Rails generator produces working migrations
+- The `kiosk:install` and `kiosk:pay_stripe:install` Rails generators produce working migrations
 - `kiosk-server` Rails engine boots inside a fresh app
 - `/.well-known/kiosk.json` discovery endpoint returns a valid document
 - Response headers (`Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client`) are injected on `/kiosk/*`
@@ -77,7 +77,7 @@ The script:
 2. Patches the Gemfile to point at sibling kiosk gem paths
 3. `bundle install`
 4. Stages the `User` model migration (UUID PK)
-5. Runs `bin/rails g kiosk:install --user-id-type=uuid` (the kiosk-server generator)
+5. Runs `bin/rails g kiosk:install --user-id-type=uuid` (the kiosk-server generator) and `bin/rails g kiosk:pay_stripe:install --user-id-type=uuid` (the kiosk-pay-stripe generator)
 6. Stages the demo migration (`salons` + `appointments`; RLS not used — app-layer isolation via named queries)
 7. Stages models, handler controllers, seeds, app services, initializer, routes (no agent IdP — the engine's own `DefaultAgentIdp` authenticates assistants, with nothing configured)
 8. `rails db:create db:migrate db:seed`
@@ -116,7 +116,6 @@ e2e/
     ├── user.rb, salon.rb, appointment.rb   # ActiveRecord models
     ├── seeds.rb                            # 2 users (Alice + Bob) with Devise credentials, 1 salon
     ├── bind_assistants.rb                  # mints the suite's two agent principals by ceremony: the human's link code → claim (no agent IdP is staged — the engine's own DefaultAgentIdp verifies the tokens it mints)
-    ├── create_kiosk_pay_stripe_customers.rb # the principal → Stripe Customer table kiosk-pay-stripe keeps
     ├── demo_audit_sink.rb                  # the OPERATOR's `c.audit_sink` callable — Kiosk stores no audit trail, so the harness writes the one an adopter would
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb

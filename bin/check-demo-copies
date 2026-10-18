@@ -220,8 +220,8 @@ if ARGV.include?('--self-test')
       expect: %r{e2e/fixtures/probe_helper\.rb: exists but is not declared in E2E_FIXTURES} },
     { id: 'e2e-fixture-diverges', rule: 'e2e fixtures',
       what: 'the harness copy and the demo copy of one file stop agreeing',
-      ops: [[:edit, 'e2e/fixtures/create_kiosk_pay_stripe_customers.rb', /\nend\n\z/, "\n  # probe\nend\n"]],
-      expect: %r{e2e/fixtures/create_kiosk_pay_stripe_customers\.rb: declared `:identical`} },
+      ops: [[:edit, 'e2e/fixtures/devise_initializer.rb', 'Devise.setup do |_config|', 'Devise.setup do |config|']],
+      expect: %r{e2e/fixtures/devise_initializer\.rb: declared `:code`} },
     { id: 'lockfile-platforms-drift', rule: 'lockfile platforms',
       what: 'one lockfile loses a platform',
       ops: [[:edit, 'kiosk-demo-philslist/Gemfile.lock', "\n  x86_64-linux\n", "\n"]],
@@ -696,7 +696,7 @@ COPIES = {
   'db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb' => {
     rule: :identical,
     ships: %w[getgrocery hoteling skooti],
-    why: "kiosk-pay-stripe's stripe_customers table, in the three demos that take money."
+    why: 'kiosk:pay_stripe:install — the stripe_customers table, in the three demos that take money.'
   },
   'db/migrate/20261018100014_create_solid_queue_tables.rb' => {
     rule: :identical,
@@ -1807,10 +1807,6 @@ E2E_FIXTURES = {
   'create_users.rb' => {
     rule: :per_demo,
     why: 'Three demos add a column of their own to the users table.'
-  },
-  'create_kiosk_pay_stripe_customers.rb' => {
-    rule: :identical,
-    why: 'The harness pays through the same kiosk-pay-stripe table the demos do.'
   },
   'create_salons_and_appointments.rb' => {
     rule: :per_demo,

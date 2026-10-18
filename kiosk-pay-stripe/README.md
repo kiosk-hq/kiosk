@@ -33,13 +33,13 @@ account as a Customer + PaymentMethod (keyed to the synthetic principal /
 never presents a card.
 
 The `principal → Stripe Customer` mapping lives in the host's `stripe_customers`
-table, through `Kiosk::PaymentProviders::Stripe::CustomerRecord`. One migration
-creates it, its `user_id` typed as `c.user_id_type`:
+table, through `Kiosk::PaymentProviders::Stripe::CustomerRecord`. The install
+generator writes the migration that creates this table. Give it the same
+`--user-id-type` that you gave `kiosk:install`:
 
-```ruby
-class CreateStripeCustomers < ActiveRecord::Migration[8.1]
-  def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
-end
+```sh
+bin/rails generate kiosk:pay_stripe:install --user-id-type=uuid
+bin/rails db:migrate
 ```
 
 ```ruby

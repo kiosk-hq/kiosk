@@ -264,13 +264,11 @@ FIXTURES="$KIOSK_OSS/e2e/fixtures"
 mkdir -p db/migrate
 ts1="20260101000000"
 cp "$FIXTURES/create_users.rb" "db/migrate/${ts1}_create_users.rb"
-# 1b) The principal → Stripe Customer mapping kiosk-pay-stripe keeps. Its
-# timestamp sorts before the generator's, which use Time.now.
-ts1c="20260101000001"
-cp "$FIXTURES/create_kiosk_pay_stripe_customers.rb" "db/migrate/${ts1c}_create_kiosk_pay_stripe_customers.rb"
 
-# 2) Generator-produced migrations.
+# 2) Generator-produced migrations: the kiosk tables, and the principal → Stripe
+# Customer mapping kiosk-pay-stripe keeps.
 bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null
+bundle exec rails g kiosk:pay_stripe:install --user-id-type=uuid >/dev/null
 
 # 3) Demo schema (salons + appointments). Timestamp = now + 60s —
 # enough to run after the kiosk:install migrations (which use Time.now)

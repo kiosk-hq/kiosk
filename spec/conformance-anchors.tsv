@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1900 anchors.
+# 1902 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -81,7 +81,7 @@ e2e/README.md	## Run locally
 e2e/README.md	- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model.
 e2e/README.md	- **Multi-agent revocation** flows.
 e2e/README.md	- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface.
-e2e/README.md	- The `kiosk:install` Rails generator produces working migrations
+e2e/README.md	- The `kiosk:install` and `kiosk:pay_stripe:install` Rails generators produce working migrations
 e2e/README.md	- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, runs `payment_setup` (the setup page, then `ready`), signs intent → cart → payment mandates (JWS)
 e2e/README.md	./e2e/run.sh
 e2e/README.md	Path C removes raw SQL entirely
@@ -261,6 +261,7 @@ e2e/fixtures/register_pow_flow.rb	challenge_params = Array(reg_noproof[
 e2e/run.sh	  fail "a SECOND live agent row with the same public_key was accepted (unique index missing)"
 e2e/run.sh	bundle exec rails db:create db:migrate db:seed RAILS_ENV=development \
 e2e/run.sh	bundle exec rails g kiosk:install --user-id-type=uuid >/dev/null
+e2e/run.sh	bundle exec rails g kiosk:pay_stripe:install --user-id-type=uuid >/dev/null
 e2e/run.sh	cp "$FIXTURES/routes.rb"             config/routes.rb
 e2e/run.sh	export KIOSK_AUDIT_SINK_REDACTED_FILE="$AUDIT_EVENTS_REDACTED"
 e2e/run.sh	log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
@@ -468,7 +469,7 @@ kiosk-demo-hoteling/before-after.md	`spec/stories/booking_spec.rb` runs the erra
 kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
-kiosk-demo-hoteling/db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb	def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
+kiosk-demo-hoteling/db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb	t.column :user_id, :uuid, null: false
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new # → BLOCKED (register PoW ON)
 kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,       # → SKIP (no action waits on a payment)
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	echoes a calendar day back byte-identical
@@ -728,6 +729,8 @@ kiosk-demo-tudu/test/stories/privacy_test.rb	only queries the catalog says reach
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	CLAIM_IDS = { 'licence_a' => 'licence_category:A' }.freeze
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
+kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	class_option :user_id_type, type: :string, default: 'uuid'
+kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/templates/create_kiosk_pay_stripe_customers.rb.tt	t.column :user_id, :<%= options[:user_id_type] %>, null: false
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key:, customer_resolver: nil, customer_saver: nil)
@@ -751,8 +754,7 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	idempotency_key: 
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	off_session: true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	when 'authentication_required' then 'the payment method needs authentication an off-session charge cannot complete'
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customer_record.rb	def self.create_table(migration)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customer_record.rb	t.column :user_id,     Kiosk.configuration.user_id_type, null: false
+kiosk-pay-stripe/spec/generators/kiosk/pay_stripe/install_generator_spec.rb	types user_id as --user-id-type says
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	'#capture' do
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	charges the customer's default saved card off_session, keyed by the cart mandate id
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	maps authentication_required to a distinct human-safe message (still retryable)

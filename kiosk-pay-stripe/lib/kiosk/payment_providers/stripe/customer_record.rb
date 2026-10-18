@@ -6,20 +6,10 @@ module Kiosk
   module PaymentProviders
     class Stripe < Base
       # The principal → Stripe Customer mapping, one row per principal, in the
-      # host's `stripe_customers` table. The adapter's default resolver and saver.
+      # host's `stripe_customers` table (`bin/rails g kiosk:pay_stripe:install`).
+      # The adapter's default resolver and saver.
       class CustomerRecord < ::ActiveRecord::Base
         self.table_name = 'stripe_customers'
-
-        # From a host migration:
-        #   def change = Kiosk::PaymentProviders::Stripe::CustomerRecord.create_table(self)
-        def self.create_table(migration)
-          migration.create_table :stripe_customers do |t|
-            t.column :user_id,     Kiosk.configuration.user_id_type, null: false
-            t.string :customer_id, null: false
-            t.timestamps
-          end
-          migration.add_index :stripe_customers, :user_id, unique: true
-        end
 
         def self.resolve(user_id) = find_by(user_id: user_id)&.customer_id
 

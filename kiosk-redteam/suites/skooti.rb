@@ -18,7 +18,7 @@ require_relative '../support/prove_test_issuer'
 
 BASE_URL = ENV.fetch('SERVER_URL')
 ISSUER   = BASE_URL
-# The KYC broker as config/environments/development.rb points this origin at it.
+# The KYC broker as the demo's development and test environments point this origin at it.
 BROKER_URL     = 'http://127.0.0.1:3020'
 TRUSTED_ISSUER = ProveTestIssuer.issuer
 # The seeded rider (db/seeds.rb).
@@ -673,7 +673,7 @@ def token_forgery_verdict(forgeries, control_status)
 
   { blocked: true,
     detail: "self-asserted `agent:u-…:r-owner` bearer resolves to NO identity — #{lines} — in the " \
-            'SAME (development) env the drivers run in, with no environment condition in the ' \
+            'SAME local env the drivers run in, with no environment condition in the ' \
             "assertion; the real registered token answers the same verb #{control_status}, so " \
             'the refusal is not vacuous' }
 end

@@ -219,13 +219,16 @@ jobs:
         working-directory: ${{ matrix.demo }}
         env:
           KIOSK_ISSUER: http://127.0.0.1:3000
+          # The test environment loads small Equihash params, so each proof costs well under a second.
+          RAILS_ENV: test
         run: |
           if [ -n "${{ matrix.stripe_mock }}" ]; then
             ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::TestHelpers::StripeMock.start; sleep' &
             export STRIPE_MOCK_URL=http://127.0.0.1:12111
           fi
           if [ -n "${{ matrix.prove_broker }}" ]; then
-            (cd ../kiosk-demo-prove && bin/rails db:reset && bin/rails server -p 3020 -d)
+            # The broker runs in development: its intake secrets are the ones the demos' test environment sends.
+            (cd ../kiosk-demo-prove && export RAILS_ENV=development && bin/rails db:reset && bin/rails server -p 3020 -d)
           fi
           bin/rails db:reset
           bin/rails server -p 3000 -d

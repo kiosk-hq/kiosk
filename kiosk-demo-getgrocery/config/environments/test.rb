@@ -2,6 +2,7 @@
 
 require 'base64'
 require 'openssl'
+require 'kiosk/test_helpers/small_equihash'
 require 'kiosk/test_helpers/stripe_mock'
 
 ENV['KIOSK_ISSUER']               ||= "http://localhost:#{ENV.fetch('PORT', '3000')}"

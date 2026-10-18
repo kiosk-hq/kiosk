@@ -3,7 +3,6 @@
 ENV['RAILS_ENV'] ||= 'test'
 
 require_relative '../config/environment'
-require 'kiosk/test_helpers/small_equihash'
 require 'rails/test_help'
 require 'kiosk/story_test'
 require 'kiosk/test_helpers/stripe_mock'

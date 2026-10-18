@@ -138,7 +138,7 @@ rc_auth_ctl, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.bear
 BATTERY.record('SelfAssertedTokenForgery',
                self_asserted.all? { |ok, _| ok } && rc_auth_ctl == 200,
                "self-asserted `agent:u-…:r-owner` bearer: #{self_asserted.map(&:last).join(', ')} " \
-               '(want 401 each, unconditionally — this IS a development server); ' \
+               '(want 401 each, unconditionally — this IS a local-environment server); ' \
                "CONTROL the earned token → #{rc_auth_ctl} (want 200)")
 
 rc, = WIRE.get_json('/kiosk/frobnicate', {}, WIRE.bearer(TOKEN_A))

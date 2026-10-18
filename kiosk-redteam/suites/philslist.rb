@@ -192,7 +192,8 @@ rc_log, _log_post = WIRE.post_json('/kiosk/post_listing',
                                      title: "Redteam #{title_sentinel}",
                                      body: "Call me on #{body_sentinel}" },
                                    WIRE.bearer(ALICE.token))
-request_log  = File.expand_path('log/development.log') # the demo's own log: the suite runs in the demo
+# The demo's own log: the suite runs in the demo directory, in the server's RAILS_ENV.
+request_log  = File.expand_path("log/#{ENV.fetch('RAILS_ENV', 'development')}.log")
 log_text     = File.exist?(request_log) ? File.read(request_log, encoding: 'UTF-8', invalid: :replace, undef: :replace) : ''
 param_lines  = log_text.each_line.select { |line| line.include?('Parameters:') }
 body_logged  = param_lines.any? { |line| line.include?(body_sentinel) }

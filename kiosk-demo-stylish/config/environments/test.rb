@@ -2,6 +2,7 @@
 
 require 'base64'
 require 'openssl'
+require 'kiosk/test_helpers/small_equihash'
 
 ENV['KIOSK_ISSUER']          ||= "http://localhost:#{ENV.fetch('PORT', '3000')}"
 ENV['KIOSK_SIGNING_KEY_B64'] ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)

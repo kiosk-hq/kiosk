@@ -29,7 +29,7 @@ class PropertyDecisionJob < ApplicationJob
   # A booking with no settlement was never charged: cancelled, nothing refunded.
   def decline!(booking)
     charge  = booking.settlement&.psp_reference
-    receipt = charge && claim.refund(psp_reference: charge, amount_cents: booking.total_cents)
+    receipt = charge && claim.refund(psp_reference: charge, amount_cents: booking.total_cents, key: booking.id)
     cancel!(booking, receipt)
 
     claim.announce(booking.id, 'refunded') if receipt

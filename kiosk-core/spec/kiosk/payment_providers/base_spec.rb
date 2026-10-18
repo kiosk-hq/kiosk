@@ -27,7 +27,7 @@ RSpec.describe Kiosk::PaymentProviders::Base do
 
   describe '#refund' do
     it 'raises NotImplementedError — an adapter whose operator refunds must implement it' do
-      expect { adapter.refund(psp_reference: 'pi_1', amount_cents: 100) }
+      expect { adapter.refund(psp_reference: 'pi_1', amount_cents: 100, key: 'order-1') }
         .to raise_error(NotImplementedError, /refund must be implemented/)
     end
   end

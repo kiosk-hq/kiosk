@@ -36,9 +36,11 @@ module Kiosk
         raise NotImplementedError, "#{self.class}#capture must be implemented by the adapter"
       end
 
-      # Returns `amount_cents` of the charge `psp_reference` to the card.
+      # Returns `amount_cents` of the charge `psp_reference` to the card. `key`
+      # names this refund among the refunds of that charge: a repeat with the
+      # same key is the same refund, so a retry cannot refund twice.
       # @return [Hash] `psp_reference` (of the refund), `refunded_psp_reference`, `refunded_amount_cents`, `refunded_at`
-      def refund(psp_reference:, amount_cents:)
+      def refund(psp_reference:, amount_cents:, key:)
         raise NotImplementedError, "#{self.class}#refund must be implemented by an adapter whose operator refunds"
       end
 

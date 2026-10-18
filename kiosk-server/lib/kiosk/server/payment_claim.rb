@@ -198,9 +198,10 @@ module Kiosk
       module Refund
         # Returns `amount_cents` of the charge `psp_reference` to the card and
         # records the refund against its settlement, so recent spend leaves it
-        # out. A repeat of one PSP refund records it once. The PSP's receipt.
-        def refund(psp_reference:, amount_cents:)
-          receipt = @psp.refund(psp_reference:, amount_cents:)
+        # out. `key` names this refund among the refunds of the charge: a repeat
+        # with the same key is the same refund, and is recorded once. The PSP's receipt.
+        def refund(psp_reference:, amount_cents:, key:)
+          receipt = @psp.refund(psp_reference:, amount_cents:, key:)
           binds = receipt.values_at(:psp_reference, :refunded_amount_cents, :refunded_at, :refunded_psp_reference)
           ::ActiveRecord::Base.lease_connection.exec_query(format(INSERT_SQL, schema: Kiosk.configuration.schema), 'Kiosk refund', binds)
           receipt

@@ -43,7 +43,7 @@ end
 
 # A PSP that refunds every request, as the Stripe adapter answers.
 class RefundingPsp < Kiosk::PaymentProviders::Base
-  def refund(psp_reference:, amount_cents:)
+  def refund(psp_reference:, amount_cents:, **)
     { psp_reference: "re_#{SecureRandom.hex(4)}", refunded_psp_reference: psp_reference,
       refunded_amount_cents: amount_cents, refunded_at: Time.now.utc }
   end
@@ -76,24 +76,24 @@ RSpec.describe Kiosk::Server::ReputationFactors do
 
   it 'leaves out the part of a settlement the operator refunded' do
     claim = Kiosk::Server::PaymentClaim.new(RefundingPsp.new, currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders')
-    claim.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 15_00)
+    claim.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 15_00, key: 'order-1')
 
     expect([factors.settled_purchases_count, factors.settled_purchases_cents]).to eq([1, 25_00])
   end
 
   it 'records a repeated PSP refund once' do
     psp = RefundingPsp.new
-    receipt = psp.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 15_00)
+    receipt = psp.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 15_00, key: 'order-1')
     allow(psp).to receive(:refund).and_return(receipt)
     claim = Kiosk::Server::PaymentClaim.new(psp, currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders')
-    2.times { claim.refund(psp_reference: receipt[:refunded_psp_reference], amount_cents: 15_00) }
+    2.times { claim.refund(psp_reference: receipt[:refunded_psp_reference], amount_cents: 15_00, key: 'order-1') }
 
     expect(factors.settled_purchases_cents).to eq(25_00)
   end
 
   it 'counts no purchase that the operator refunded in full' do
     claim = Kiosk::Server::PaymentClaim.new(RefundingPsp.new, currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders')
-    claim.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 40_00)
+    claim.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 40_00, key: 'order-1')
     Kiosk::Visit.record!(user_id: user, value_cents: 0)
 
     expect([factors.settled_purchases_count, factors.settled_purchases_cents]).to eq([1, 0])

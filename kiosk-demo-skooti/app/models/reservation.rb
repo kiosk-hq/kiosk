@@ -40,7 +40,7 @@ class Reservation < ApplicationRecord
       next unless charge
 
       claim = Kiosk.configuration.payment_provider
-      claim.refund(psp_reference: charge.psp_reference, amount_cents: charge.settled_amount_cents)
+      claim.refund(psp_reference: charge.psp_reference, amount_cents: charge.settled_amount_cents, key: reservation.id)
       reservation.refunded!
       claim.announce(reservation.id, 'refunded')
     end

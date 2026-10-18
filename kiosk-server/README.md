@@ -132,11 +132,12 @@ The model also includes `Kiosk::Payable`, which gives each row:
 
 When the capture returns, the engine pushes `{"order_id": "…", "payment_state":
 "paid"}` to the row's owner on the `payment` topic. Refund through the claim,
-`refund(psp_reference:, amount_cents:)`: it records the refund in
-`kiosk.refunds`, and recent spend leaves the refunded cents out. When the
-refund returns the whole charge, set the row's status column to `refunded`,
-which is where `payment_state` reads it. Then call `announce(id, "refunded")`
-on the claim to push the same topic.
+`refund(psp_reference:, amount_cents:, key:)`: `key` names this refund among
+the refunds of the charge, so a retry with the same key refunds once. It
+records the refund in `kiosk.refunds`, and recent spend leaves the refunded
+cents out. When the refund returns the whole charge, set the row's status
+column to `refunded`, which is where `payment_state` reads it. Then call
+`announce(id, "refunded")` on the claim to push the same topic.
 
 A repeat of a chain whose capture did not complete runs the capture again under
 the same key, the cart mandate id, so your PSP adapter must key its charge by

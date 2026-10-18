@@ -709,7 +709,7 @@ kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/templates/create_kiosk_
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def refund(psp_reference:, amount_cents:)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def refund(psp_reference:, amount_cents:, key:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_return_user_id(params)

@@ -79,8 +79,10 @@ Card-setup handshake (see the Payment section of the spec):
   `payment_setup` event once `setup_required?` answers false.
 - `saved_method?(user_id:)` — true once the resolved Customer has a usable
   saved card.
-- `refund(psp_reference:, amount_cents:)` — reverses a capture by its
+- `refund(psp_reference:, amount_cents:, key:)` — reverses a capture by its
   PaymentIntent, back to the card it came from; answers the `re_…` reference.
+  The Stripe request is keyed by the charge and `key`, so each refund of one
+  charge is its own, and a retry with the same key refunds once.
 
 Test mode only for the PoC (`sk_test_…`).
 

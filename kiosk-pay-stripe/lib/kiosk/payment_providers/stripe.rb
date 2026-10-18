@@ -85,10 +85,10 @@ module Kiosk
         }
       end
 
-      def refund(psp_reference:, amount_cents:)
+      def refund(psp_reference:, amount_cents:, key:)
         refund = @stripe.refunds.create(
           { payment_intent: psp_reference, amount: amount_cents },
-          { idempotency_key: "#{psp_reference}-refund" }
+          { idempotency_key: "#{psp_reference}-refund-#{key}" }
         )
         { psp_reference: refund.id, refunded_psp_reference: psp_reference,
           refunded_amount_cents: amount_cents, refunded_at: Time.at(refund.created).utc }

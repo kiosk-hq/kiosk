@@ -68,7 +68,7 @@ class Order < ApplicationRecord
   def refund!(lines)
     amount = lines.sum { it.price_cents * it.qty }
     claim = Kiosk.configuration.payment_provider
-    claim.refund(psp_reference: settlement.psp_reference, amount_cents: amount)
+    claim.refund(psp_reference: settlement.psp_reference, amount_cents: amount, key: id)
     update!(refunded_cents: amount)
     return unless amount == total_cents
 

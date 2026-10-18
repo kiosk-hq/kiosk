@@ -80,7 +80,7 @@ end
 RSpec.describe Kiosk::Redteam::Scenario, '#verdict_from — HTTP 402 is never a pass on the permissive path (K-736)' do
   include_context 'scenario setup'
 
-  # A skip would be invisible to Runner#all_blocked?, so a consumer without
+  # A skip would not fail Battery#report! without expected_skips, so a consumer without
   # the demos' expected-skip assertion would go green while the scenario had
   # quietly stopped testing. The stall must fail the battery.
   it 'is a breach-shaped verdict, not a skip — the battery cannot go green on it' do

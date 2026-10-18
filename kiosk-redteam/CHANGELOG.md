@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Redteam::Runner#all_blocked?`, `#breaches` and `#blocked` are removed; `Battery#report!` is the exit status.
 - 2026-10-18: kiosk-redteam reads a query answer only as a bare array; ForgedUserId scores BREACH when the owner's query answers no rows array.
 ## [0.5.15] — 2026-10-18
 

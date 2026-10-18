@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Redteam::Runner#all_blocked?`, `#breaches` and `#blocked` are removed; `Battery#report!` is the exit status.
 - 2026-10-18: kiosk-redteam reads a query answer only as a bare array; ForgedUserId scores BREACH when the owner's query answers no rows array.
 - 2026-10-18: `Kiosk::Server::ActionEvent#ok?` and `#error?` are removed; read `status`.
 - 2026-10-18: `Kiosk::UuidCheck::JSON_SCHEMA_PATTERN` is removed.

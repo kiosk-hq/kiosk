@@ -8,7 +8,7 @@ attack is correctly blocked.
 
 A scenario registers its own principals over the wire, stages whatever state the
 attack needs, then performs the attack and returns a `Verdict`. A scenario that
-finds a real breach fails loudly: `Runner#all_blocked?` answers false and the
+finds a real breach fails loudly: `Battery#report!` answers 1 and the
 caller exits non-zero. Fix the provider, keep the scenario as a permanent
 regression.
 
@@ -37,7 +37,7 @@ run it against something you are willing to have written to.
 | **skipped** | the profile lacks the surface this scenario needs | `SKIP    — <name> (<reason>)` |
 
 A skip is a distinct third state, **not** a pass: it does not count towards the
-blocked total, and `Runner#all_blocked?` refuses to go green on a battery that
+blocked total, and `Battery#report!` refuses to go green on a battery that
 produced no proofs at all, so a profile that skips everything cannot exit 0.
 
 What counts as a refusal is deliberately narrow. HTTP 401/403 count, and so do
@@ -96,21 +96,18 @@ profile = Kiosk::Redteam::Profile.new(
   forge_args:     ->(_client, _a, _b) { { items: [{ sku: "SKU-1", qty: 1 }] } },
 )
 
-runner = Kiosk::Redteam::Runner.new(base_url: SERVER, profile:)
-runner.run([
+runner  = Kiosk::Redteam::Runner.new(base_url: SERVER, profile:)
+battery = Kiosk::Redteam::Battery.new
+battery.absorb(runner.run([
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-])
+]))
 
-exit 1 unless runner.all_blocked?
+exit battery.report!
 ```
-
-Use `exit 1 unless runner.all_blocked?`, **not** `exit 1 if runner.breaches.any?`
-— `breaches` answers `[]` for a battery that never ran, so the second form exits
-0 on a gate that did nothing.
 
 Every field of `Profile` is optional; a scenario whose field is `nil` skips
 itself rather than inventing a surface. That is what lets one battery cover a

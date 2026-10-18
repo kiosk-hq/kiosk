@@ -74,7 +74,7 @@ end
 #
 # The tolled-verb case, demonstrated on a stub transport before the fix: the
 # gated action answered 402 and the runner printed
-# "BLOCKED ✓ UnpaidGatedAction (HTTP 402)" with all_blocked? true — a pass for
+# "BLOCKED ✓ UnpaidGatedAction (HTTP 402)" and the battery went green — a pass for
 # an attack that never executed, because #run had no 402 retry (the harness
 # solved PoW only in Client#register_raw). Latent in the shipped demos, which
 # answer 403 here; armed the day an operator prices a real verb.
@@ -107,11 +107,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction, '#call — a 402 on
 
   it 'keeps the battery from going green on it' do
     stub_toll('pow_required')
-    runner = Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile: profile)
-    runner.run([scenario])
+    battery = Kiosk::Redteam::Battery.new(io: StringIO.new)
+    battery.absorb(Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile: profile).run([scenario]))
 
-    expect(runner.all_blocked?).to be(false)
-    expect(runner.breaches.size).to eq(1)
+    expect(battery.report!).to eq(1)
+    expect(battery.breaches.size).to eq(1)
   end
 end
 

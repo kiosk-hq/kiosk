@@ -837,7 +837,7 @@ kiosk-pow-equihash/spec/readme_lever_spec.rb	README's own benchmarks give, or st
 kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk.tech) providers — it
 kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
-kiosk-redteam/README.md	finds a real breach fails loudly: `Runner#all_blocked?` answers false and the
+kiosk-redteam/README.md	finds a real breach fails loudly: `Battery#report!` answers 1 and the
 kiosk-redteam/lib/kiosk/redteam/battery.rb	#{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked.
 kiosk-redteam/lib/kiosk/redteam/runner.rb	        @client  = Kiosk::TestHelpers::Assistant.new(base_url:)
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario

@@ -518,7 +518,7 @@ kiosk-demo-prove/README.md	bin/rails test         # the broker's own suite; CI r
 kiosk-demo-prove/README.md	operator → broker (server-to-server)
 kiosk-demo-prove/README.md	public verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake
 kiosk-demo-prove/README.md	required in production; development and test set `https://kyc.test.local`. The
-kiosk-demo-prove/README.md	| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", expires_at}` |
+kiosk-demo-prove/README.md	| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle, audience?}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", nonce, expires_at}` |
 kiosk-demo-prove/app/controllers/verifications_controller.rb	        # The callback echoes it, so the operator can tell it from a replay.
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    # The audience is the registered operator's, never the body's.
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    audience = operator[:audience].to_s

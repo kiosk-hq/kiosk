@@ -531,7 +531,7 @@ kiosk-demo-prove/app/models/operator_registry.rb	  def callback_allowed?(operato
 kiosk-demo-prove/app/models/operator_registry.rb	# The operators this broker serves: each authenticates with its own secret,
 kiosk-demo-prove/app/models/operator_registry.rb	# and the broker posts its callbacks to that operator's registered host only.
 kiosk-demo-prove/app/models/operator_registry.rb	def callback_allowed?(operator, callback_url)
-kiosk-demo-prove/app/models/operator_registry.rb	uri.host == operator[:callback_host]
+kiosk-demo-prove/app/models/operator_registry.rb	uri.hostname == operator[:callback_host]
 kiosk-demo-prove/app/models/prove_request.rb	def confirmable? = pending? && !expired?
 kiosk-demo-prove/app/services/prove_key.rb	def mint(prove_request, attributes)
 kiosk-demo-prove/app/services/prove_key.rb	keypair, 'RS256'

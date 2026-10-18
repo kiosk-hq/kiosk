@@ -206,4 +206,8 @@ class CallbackAllowListTest < ActiveSupport::TestCase
   test 'accepts plain http to a loopback host, for development and test' do
     assert OperatorRegistry.callback_allowed?({ callback_host: '127.0.0.1' }, 'http://127.0.0.1:3004/kyc/callback')
   end
+
+  test 'accepts plain http to the IPv6 loopback' do
+    assert OperatorRegistry.callback_allowed?({ callback_host: '::1' }, 'http://[::1]:3004/kyc/callback')
+  end
 end

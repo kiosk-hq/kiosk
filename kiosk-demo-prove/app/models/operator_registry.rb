@@ -19,8 +19,8 @@ module OperatorRegistry
 
   def callback_allowed?(operator, callback_url)
     uri = URI.parse(callback_url.to_s)
-    secure = uri.scheme == 'https' || (uri.scheme == 'http' && LOOPBACK_HOSTS.include?(uri.host))
-    secure && uri.host.present? && uri.host == operator[:callback_host]
+    secure = uri.scheme == 'https' || (uri.scheme == 'http' && LOOPBACK_HOSTS.include?(uri.hostname))
+    secure && uri.hostname.present? && uri.hostname == operator[:callback_host]
   rescue URI::InvalidURIError
     false
   end

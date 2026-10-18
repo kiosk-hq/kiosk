@@ -6,7 +6,7 @@ module Kiosk
   # actor is an agent and must be a uuid (the schema types it so, with no knob).
   Identity = Data.define(:user_id, :role, :actor, :agent_id, :claims)
 
-  # Validation and the actor predicates.
+  # Validates user_id, actor and agent_id on construction.
   class Identity
     VALID_ACTORS = %w[agent human service].freeze
 
@@ -16,10 +16,6 @@ module Kiosk
       role = role.to_s
       super(user_id:, role: (role unless role.empty?), actor:, agent_id:, claims: claims || {})
     end
-
-    def agent?   = actor == 'agent'
-    def human?   = actor == 'human'
-    def service? = actor == 'service'
 
     private
 

@@ -90,13 +90,13 @@ RSpec.describe Kiosk::Identity do
   describe '.new' do
     it 'allows human actor with no agent_id' do
       identity = described_class.new(**valid_args, actor: 'human', agent_id: nil)
-      expect(identity).to be_human
+      expect(identity.actor).to eq('human')
       expect(identity.agent_id).to be_nil
     end
 
     it 'allows service actor with no agent_id' do
       identity = described_class.new(**valid_args, actor: 'service', agent_id: nil)
-      expect(identity).to be_service
+      expect(identity.actor).to eq('service')
     end
 
     it 'defaults claims to empty hash' do
@@ -107,25 +107,6 @@ RSpec.describe Kiosk::Identity do
     it 'normalizes an explicit claims: nil to empty hash' do
       identity = described_class.new(**valid_args, claims: nil)
       expect(identity.claims).to eq({})
-    end
-  end
-end
-
-RSpec.describe Kiosk::Identity do
-  include IdentitySpecArgs
-
-  describe 'predicates' do
-    it '#agent? returns true only for agent' do
-      expect(described_class.new(**valid_args)).to be_agent
-      expect(described_class.new(**valid_args, actor: 'human', agent_id: nil)).not_to be_agent
-    end
-
-    it '#human? returns true only for human' do
-      expect(described_class.new(**valid_args, actor: 'human', agent_id: nil)).to be_human
-    end
-
-    it '#service? returns true only for service' do
-      expect(described_class.new(**valid_args, actor: 'service', agent_id: nil)).to be_service
     end
   end
 end

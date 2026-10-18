@@ -109,13 +109,13 @@ RSpec.describe 'the cross-app require shapes it forbids, and the shapes it does 
   end
 
   it 'FORBIDS an in-process require_relative into another demo' do
-    rel = source('kiosk-demo-skooti/script/prove_test_issuer.rb',
+    rel = source('kiosk-demo-skooti/script/rental_flow.rb',
                  %(require_relative "../../kiosk-demo-prove/app/services/prove_key"\n))
     expect(CrossAppRequires.violations([rel]).first).to include('kiosk-demo-skooti', 'kiosk-demo-prove')
   end
 
   it 'ALLOWS a data-file path read — a PEM is bytes, not code' do
-    rel = source('kiosk-demo-skooti/script/prove_test_issuer.rb', %(DEV_KEY_PATH = "../kiosk-demo-prove/config/dev_key.pem"\n))
+    rel = source('kiosk-demo-skooti/script/rental_flow.rb', %(DEV_KEY_PATH = "../kiosk-demo-prove/config/dev_key.pem"\n))
     expect(CrossAppRequires.violations([rel])).to be_empty
   end
 

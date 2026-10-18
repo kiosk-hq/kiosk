@@ -69,18 +69,18 @@ module Kiosk
 
       # Also the key bounds of account binding.
       def load_public_key(pem)
-        rsa  = OpenSSL::PKey::RSA.new(pem)
-        bits = rsa.n.num_bits
-        raise Errors::BadRequest, "public key too small (#{bits} bits; minimum #{SigningKey::MIN_KEY_BITS})" if bits < SigningKey::MIN_KEY_BITS
-        raise Errors::BadRequest, "public key too large (#{bits} bits; maximum #{MAX_KEY_BITS})" if bits > MAX_KEY_BITS
-
-        rsa
+        OpenSSL::PKey::RSA.new(pem).tap { require_key_size!(it.n.num_bits) }
       rescue OpenSSL::PKey::PKeyError
         raise Errors::BadRequest.new(
           'invalid public key',
           hint: "send a PEM-encoded RSA public key of #{SigningKey::MIN_KEY_BITS} to #{MAX_KEY_BITS} bits " \
                 '(-----BEGIN PUBLIC KEY----- …)'
         )
+      end
+
+      def require_key_size!(bits)
+        raise Errors::BadRequest, "public key too small (#{bits} bits; minimum #{SigningKey::MIN_KEY_BITS})" if bits < SigningKey::MIN_KEY_BITS
+        raise Errors::BadRequest, "public key too large (#{bits} bits; maximum #{MAX_KEY_BITS})" if bits > MAX_KEY_BITS
       end
     end
   end

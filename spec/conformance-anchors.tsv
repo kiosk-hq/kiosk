@@ -354,7 +354,7 @@ kiosk-demo-getgrocery/README.md	local stripe-mock; export `STRIPE_MOCK_URL=http:
 kiosk-demo-getgrocery/README.md	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
 kiosk-demo-getgrocery/app/controllers/kiosk/catalog_controller.rb	def catalog
-kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	caller_zone: Kiosk::Server::CurrentRequest.timezone)
+kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	caller_zone: Kiosk.reader_zone)
 kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def create_order
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def my_orders

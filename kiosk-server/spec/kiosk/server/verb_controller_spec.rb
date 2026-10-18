@@ -160,18 +160,25 @@ RSpec.describe Kiosk::Server::VerbController do
     # answer is RENDERED — that zone is the serviced RESOURCE's, and the engine
     # holds none of an operator's data.
     it "hands the handler the caller's declared timezone" do
-      declare_query('clock') { render json: [{ zone: Kiosk::Server::CurrentRequest.timezone&.name }] }
+      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone&.name }] }
 
       _, body = call_verb(:get, 'clock', timezone: 'Australia/Sydney')
       expect(body).to eq([{ zone: 'Australia/Sydney' }])
     end
 
     it 'hands the handler nil when the caller declared none — silence is not an error' do
-      declare_query('clock') { render json: [{ zone: Kiosk::Server::CurrentRequest.timezone&.name }] }
+      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone&.name }] }
 
       status, body = call_verb(:get, 'clock')
       expect(status).to eq(200)
       expect(body).to eq([{ zone: nil }])
+    end
+
+    it 'hands the handler its own default when the caller declared none' do
+      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone(Time.find_zone!('Europe/Lisbon')).name }] }
+
+      _, body = call_verb(:get, 'clock')
+      expect(body).to eq([{ zone: 'Europe/Lisbon' }])
     end
   end
 end

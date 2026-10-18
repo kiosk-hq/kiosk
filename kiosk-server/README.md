@@ -531,6 +531,8 @@ the one rendered whatever `Accept` the caller sent. On top of that:
 - `include Kiosk::Owned` — gives a model with a `user_id` column the scope
   `own`, the current principal's rows. `Kiosk.current_user_id` is the same id,
   for a column with another name.
+- `Kiosk.reader_zone(default = nil)` — the zone the caller declared in
+  `Kiosk-Timezone`, else `default`.
 - `Kiosk::Settlement` and `Kiosk::CartMandate` — read models over the receipts
   `pay` records. `Kiosk::Settlement.own` is the caller's own;
   `Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: id))`

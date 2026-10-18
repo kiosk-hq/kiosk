@@ -12,7 +12,7 @@ module BoardClock
   end
 
   def zone
-    Kiosk::Server::CurrentRequest.timezone || default_zone
+    Kiosk.reader_zone(default_zone)
   end
 
   # A String, so the published bytes do not depend on the JSON encoder's

@@ -18,6 +18,9 @@ module Kiosk
   # The user id and role of the principal the wire resolved.
   def self.current_user_id = Server::SessionContext.identity.user_id
   def self.current_role    = Server::SessionContext.identity.role
+
+  # The zone the caller declared in `Kiosk-Timezone`, else `default`.
+  def self.reader_zone(default = nil) = Server::CurrentRequest.timezone || default
 end
 
 Kiosk::Configuration.include(Kiosk::Server::ConfigurationExtension)

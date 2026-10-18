@@ -9,7 +9,7 @@ module ReaderClock
 
   def default_zone = Time.find_zone!(DEFAULT_ZONE_NAME)
 
-  def zone = Kiosk::Server::CurrentRequest.timezone || default_zone
+  def zone = Kiosk.reader_zone(default_zone)
 
   def publish(time, in_zone = zone) = time&.in_time_zone(in_zone)&.iso8601
 

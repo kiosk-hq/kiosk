@@ -39,7 +39,7 @@ module Kiosk
                   timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: 'D02' })
     def delivery_slots
       @search = SlotSearch.new(delivery_address: params[:delivery_address], date: params[:date],
-                               caller_zone: Kiosk::Server::CurrentRequest.timezone)
+                               caller_zone: Kiosk.reader_zone)
       @search.validate!
     end
   end

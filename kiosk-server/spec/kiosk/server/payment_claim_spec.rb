@@ -279,6 +279,20 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     expect(status).to eq('paying')
   end
 
+  it 'releases the claim when the PSP asks for payment setup first' do
+    psp.during = ->(_) { raise Kiosk::PaymentProviders::SetupRequired }
+    expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
+    expect(status).to eq('unpaid')
+  end
+
+  it 'answers the capture and logs when the paid event cannot be sent' do
+    allow(Kiosk::Server::Events).to receive(:emit).and_raise('event store down')
+
+    expect { expect(claim.capture(cart_for(row))).to include(settled_amount_cents: 500) }
+      .to output(/could not mark #{row} paid: event store down/).to_stderr
+    expect(status).to eq('paid')
+  end
+
   it 'refuses a cart in another currency, a cart naming no single row, and an unknown row' do
     expect { claim.capture(cart_for(row, currency: 'USD')) }.to raise_error(Kiosk::Server::Errors::Forbidden, /EUR/)
     two = cart_for(row).tap { |c| c.line_items += [{ 'booking_id' => SecureRandom.uuid }] }

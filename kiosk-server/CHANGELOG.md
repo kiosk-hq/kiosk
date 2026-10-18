@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The kiosk-server README tells the operator to set the status column to `refunded` after a full refund, before the announcement.
 - 2026-10-18: A `reputation_policy` toll with string keys is a `ConfigurationError`; the toll reads `alg`, `params` and `count` as symbols, as the policy contract states.
 - 2026-10-18: The `on_proof_verified` policy hook of `PowGate` is removed.
 - 2026-10-18: `KycVerifier.verify` asks the configured `kyc_provider#accepts?`, so `POST /kiosk/agents/kyc` refuses with 403 what the provider does not accept.

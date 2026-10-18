@@ -8,6 +8,7 @@ module Kiosk
     # paying` before the capture, checks the cart against the operator's price,
     # flips the row to `paid` once the capture returns, tells its owner on the
     # `payment` topic, and runs `c.after_payment` once the settlement is recorded.
+    # A refund through it is recorded against the settlement.
     class PaymentClaim
       PAYING = 'paying'
       PAID   = 'paid'
@@ -36,7 +37,7 @@ module Kiosk
 
       def capture(cart_mandate, payment_method: nil) = charge_row(claim!(cart_mandate), cart_mandate, payment_method)
 
-      delegate :setup_required?, :setup_url, :refund, to: :@psp
+      delegate :setup_required?, :setup_url, to: :@psp
 
       # The settlements whose cart names this row.
       def settlements(id) = Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(@reference => id))
@@ -193,6 +194,26 @@ module Kiosk
         end
       end
       include Resume
+
+      # Money the operator gives back, recorded against its settlement.
+      module Refund
+        # Returns `amount_cents` of the charge `psp_reference` to the card and
+        # records the refund against its settlement, so recent spend leaves it
+        # out. A repeat of one PSP refund records it once. The PSP's receipt.
+        def refund(psp_reference:, amount_cents:)
+          receipt = @psp.refund(psp_reference:, amount_cents:)
+          binds = receipt.values_at(:psp_reference, :refunded_amount_cents, :refunded_at, :refunded_psp_reference)
+          ::ActiveRecord::Base.lease_connection.exec_query(format(INSERT_SQL, schema: Kiosk.configuration.schema), 'Kiosk refund', binds)
+          receipt
+        end
+
+        INSERT_SQL = <<~SQL.squish
+          INSERT INTO "%<schema>s".refunds (settlement_id, psp_reference, refunded_amount_cents, refunded_at)
+          SELECT id, $1, $2, $3 FROM "%<schema>s".settlements WHERE psp_reference = $4
+          ON CONFLICT (psp_reference) DO NOTHING
+        SQL
+      end
+      include Refund
 
       # The operator's work after a payment, which reads the settlement.
       module AfterPayment

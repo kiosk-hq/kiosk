@@ -254,6 +254,7 @@ the token's `iat` selects its span. So every call made with one token, and every
 new token issued to the customer in the same span, meets the same outcome.
 An operator that takes no payment records each fulfilled visit with
 `Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
+A refund through `Kiosk::Server::PaymentClaim#refund` is not spend.
 
 ### `Policies::RateAndReputation` — EXAMPLE (providers replace this)
 

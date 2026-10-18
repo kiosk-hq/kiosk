@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `PaymentClaim#refund` records the refund in the new `kiosk.refunds` table, and recent spend leaves the refunded cents out. Run the `create_kiosk_refunds` migration.
+
 ## [0.5.16] — 2026-10-18
 
 - 2026-10-18: `Kiosk::Server::ActionEvent#ok?` and `#error?` are removed; read `status`.

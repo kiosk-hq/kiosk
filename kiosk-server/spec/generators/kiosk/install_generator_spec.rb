@@ -188,9 +188,9 @@ end
 RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations' do
   include_context 'install generator spec: host app'
 
-  it 'creates exactly the ten canonical migrations' do
+  it 'creates exactly the eleven canonical migrations' do
     invoke!
-    expect(migrations.size).to eq(10)
+    expect(migrations.size).to eq(11)
     basenames = migrations.map { |p| File.basename(p) }
     expect(basenames).to include(
       a_string_ending_with('_create_kiosk_schema.rb'),
@@ -202,7 +202,8 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations' do
       a_string_ending_with('_create_kiosk_pow_spent.rb'),
       a_string_ending_with('_create_kiosk_revocations.rb'),
       a_string_ending_with('_create_kiosk_auth_challenges.rb'),
-      a_string_ending_with('_create_kiosk_visits.rb')
+      a_string_ending_with('_create_kiosk_visits.rb'),
+      a_string_ending_with('_create_kiosk_refunds.rb')
     )
   end
 end
@@ -210,12 +211,8 @@ end
 RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations shape and order' do
   include_context 'install generator spec: host app'
 
-  # THE SHAPE, not merely the count (K-646). Every canonical migration is a
-  # `create_`: the set that shipped until 2026-08-20 also carried a `rebuild_`
-  # of a table it had created two files earlier and three `add_*_to_*`
-  # amendments of a table created two files before THAT, so a fresh adopter
-  # ran a history to reach a schema these six state outright. A new amendment
-  # migration is how that grows back, and this is what refuses it.
+  # The shape, not merely the count: every canonical migration creates its
+  # tables in their final shape, so a fresh install replays no history.
   it 'emits nothing but `create_` migrations — no rebuilds, no amendments' do
     invoke!
     basenames = migrations.map { |p| File.basename(p).sub(/\A\d+_/, '') }
@@ -223,11 +220,27 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations shape and order'
     expect(basenames).not_to include(a_string_starting_with('rebuild_'), a_string_starting_with('add_'))
   end
 
-  it 'orders the migration timestamps in 001 → 011 sequence' do
+  it 'orders the migration timestamps in 001 → 012 sequence' do
     invoke!
     timestamps = migrations.map { |p| File.basename(p).split('_').first.to_i }
     expect(timestamps).to eq(timestamps.sort)
-    expect(timestamps.uniq.size).to eq(10) # strictly ascending, no collisions
+    expect(timestamps.uniq.size).to eq(11) # strictly ascending, no collisions
+  end
+end
+
+RSpec.describe Kiosk::Generators::InstallGenerator, 'migrations 012 create_kiosk_refunds' do
+  include_context 'install generator spec: host app'
+
+  let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_refunds.rb') } }
+
+  it "writes refunds_sql's DDL for the configured schema" do
+    invoke!(%w[--schema=ksk])
+    expect(ddl_of(file)).to eq("#{Kiosk::Server::SchemaDefinitions.refunds_sql(schema: 'ksk')}\n")
+  end
+
+  it 'drops the table on down' do
+    invoke!(%w[--schema=ksk])
+    expect(File.read(file)).to include(%(DROP TABLE IF EXISTS "ksk".refunds))
   end
 end
 

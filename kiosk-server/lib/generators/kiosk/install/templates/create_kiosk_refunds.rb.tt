@@ -1,0 +1,16 @@
+# frozen_string_literal: true
+
+# Migration 012 — create kiosk.refunds.
+# The refunds of settled charges (Kiosk::Server::PaymentClaim#refund), which
+# recent spend leaves out of the proof-of-work toll.
+class CreateKioskRefunds < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
+  def up
+    execute <<~'SQL'
+<%= ddl(:refunds) %>
+    SQL
+  end
+
+  def down
+    execute %(DROP TABLE IF EXISTS "<%= options[:schema] %>".refunds)
+  end
+end

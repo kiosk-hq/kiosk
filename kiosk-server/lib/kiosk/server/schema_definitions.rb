@@ -298,6 +298,23 @@ module Kiosk
         DDL
       end
 
+      # 012: the refunds of settled charges, one row per PSP refund; recent
+      # spend counts a settlement less what was refunded of it.
+      def refunds_sql(schema: nil)
+        schema ||= Kiosk.configuration.schema
+
+        <<~DDL.strip
+          CREATE TABLE IF NOT EXISTS "#{schema}".refunds (
+            id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            settlement_id         uuid NOT NULL REFERENCES "#{schema}".settlements(id) ON DELETE CASCADE,
+            psp_reference         text NOT NULL UNIQUE,
+            refunded_amount_cents bigint NOT NULL CHECK (refunded_amount_cents > 0),
+            refunded_at           timestamptz NOT NULL
+          );
+          CREATE INDEX IF NOT EXISTS idx_refunds_settlement_id ON "#{schema}".refunds (settlement_id);
+        DDL
+      end
+
       # 010: each public key's outstanding auth challenge; the primary key keeps it single.
       def auth_challenge_sql(schema: nil)
         schema ||= Kiosk.configuration.schema

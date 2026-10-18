@@ -9,17 +9,21 @@ module ReputationFactorsSpecHelpers
   def create_tables
     Kiosk.configure { |c| c.schema = schema }
     SpecPostgres.recreate_schema(schema)
-    conn.execute(Kiosk::Server::SchemaDefinitions.mandates_sql(schema: schema, user_id_type: :uuid))
-    conn.execute(Kiosk::Server::SchemaDefinitions.visits_sql(schema: schema, user_id_type: :uuid))
+    defs = Kiosk::Server::SchemaDefinitions
+    [defs.mandates_sql(schema:, user_id_type: :uuid), defs.visits_sql(schema:, user_id_type: :uuid),
+     defs.refunds_sql(schema:)].each { conn.execute(it) }
   end
 
+  # The settlement's PSP reference.
   def settle(cents, at:)
     agent = SecureRandom.uuid
     cart  = insert_cart(agent, insert_intent(agent, cents), cents)
+    reference = "pi_#{SecureRandom.hex(4)}"
     conn.execute(<<~SQL.squish)
       INSERT INTO "#{schema}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
-      VALUES ('#{cart}', '#{user}', '#{agent}', 'i', 'pi', #{cents}, 'eur', '#{at.utc.iso8601}')
+      VALUES ('#{cart}', '#{user}', '#{agent}', 'i', '#{reference}', #{cents}, 'eur', '#{at.utc.iso8601}')
     SQL
+    reference
   end
 
   def insert_intent(agent, cents)
@@ -37,8 +41,16 @@ module ReputationFactorsSpecHelpers
   end
 end
 
+# A PSP that refunds every request, as the Stripe adapter answers.
+class RefundingPsp < Kiosk::PaymentProviders::Base
+  def refund(psp_reference:, amount_cents:)
+    { psp_reference: "re_#{SecureRandom.hex(4)}", refunded_psp_reference: psp_reference,
+      refunded_amount_cents: amount_cents, refunded_at: Time.now.utc }
+  end
+end
+
 # The engine's own reputation inputs, against a real Postgres: a customer's
-# settlements and recorded visits inside the policy's window.
+# settlements, net of refunds, and recorded visits inside the policy's window.
 RSpec.describe Kiosk::Server::ReputationFactors do
   include ReputationFactorsSpecHelpers
 
@@ -60,6 +72,31 @@ RSpec.describe Kiosk::Server::ReputationFactors do
     settle(99_00, at: Time.current - (8 * 86_400))
 
     expect([factors.settled_purchases_count, factors.settled_purchases_cents]).to eq([2, 65_00])
+  end
+
+  it 'leaves out the part of a settlement the operator refunded' do
+    claim = Kiosk::Server::PaymentClaim.new(RefundingPsp.new, currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders')
+    claim.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 15_00)
+
+    expect([factors.settled_purchases_count, factors.settled_purchases_cents]).to eq([1, 25_00])
+  end
+
+  it 'records a repeated PSP refund once' do
+    psp = RefundingPsp.new
+    receipt = psp.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 15_00)
+    allow(psp).to receive(:refund).and_return(receipt)
+    claim = Kiosk::Server::PaymentClaim.new(psp, currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders')
+    2.times { claim.refund(psp_reference: receipt[:refunded_psp_reference], amount_cents: 15_00) }
+
+    expect(factors.settled_purchases_cents).to eq(25_00)
+  end
+
+  it 'counts no purchase that the operator refunded in full' do
+    claim = Kiosk::Server::PaymentClaim.new(RefundingPsp.new, currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders')
+    claim.refund(psp_reference: settle(40_00, at: Time.current - 3600), amount_cents: 40_00)
+    Kiosk::Visit.record!(user_id: user, value_cents: 0)
+
+    expect([factors.settled_purchases_count, factors.settled_purchases_cents]).to eq([1, 0])
   end
 
   it "counts no one else's spend" do

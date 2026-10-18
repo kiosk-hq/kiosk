@@ -115,6 +115,11 @@ module Kiosk
         migration_template 'create_kiosk_visits.rb.tt',
                            'db/migrate/create_kiosk_visits.rb'
       end
+
+      def create_refunds_migration
+        migration_template 'create_kiosk_refunds.rb.tt',
+                           'db/migrate/create_kiosk_refunds.rb'
+      end
     end
   end
 end

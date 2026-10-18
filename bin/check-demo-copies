@@ -674,6 +674,9 @@ COPIES = {
   'db/migrate/20261018100011_create_kiosk_visits.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk.visits, the fulfilled visits that lower the toll.'
   },
+  'db/migrate/20261018100016_create_kiosk_refunds.rb' => {
+    rule: :identical, why: 'kiosk:install — kiosk.refunds, the refunds that recent spend leaves out.'
+  },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },
@@ -744,7 +747,8 @@ GENERATOR_TEMPLATES = {
   'create_kiosk_pow_spent.rb.tt' => { emits: 'create_kiosk_pow_spent.rb' },
   'create_kiosk_revocations.rb.tt' => { emits: 'create_kiosk_revocations.rb' },
   'create_kiosk_auth_challenges.rb.tt' => { emits: 'create_kiosk_auth_challenges.rb' },
-  'create_kiosk_visits.rb.tt' => { emits: 'create_kiosk_visits.rb' }
+  'create_kiosk_visits.rb.tt' => { emits: 'create_kiosk_visits.rb' },
+  'create_kiosk_refunds.rb.tt' => { emits: 'create_kiosk_refunds.rb' }
 }.freeze
 
 # Hand-written migrations shipped by several demos at their own timestamps, by

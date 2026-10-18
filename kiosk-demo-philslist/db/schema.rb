@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_18_100015) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_18_100016) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -197,6 +197,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_100015) do
     t.index ["expires_at"], name: "idx_pow_spent_expires_at"
   end
 
+  create_table "kiosk.refunds", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "settlement_id", null: false
+    t.text "psp_reference", null: false
+    t.bigint "refunded_amount_cents", null: false
+    t.timestamptz "refunded_at", null: false
+    t.index ["settlement_id"], name: "idx_refunds_settlement_id"
+    t.check_constraint "refunded_amount_cents > 0", name: "refunds_refunded_amount_cents_check"
+    t.unique_constraint ["psp_reference"], name: "refunds_psp_reference_key"
+  end
+
   create_table "kiosk.revocations", primary_key: "agent_id", id: :uuid, default: nil, force: :cascade do |t|
     t.timestamptz "revoked_before", null: false
   end
@@ -230,6 +240,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_100015) do
   add_foreign_key "kiosk.kyc_attributes", "public.users", name: "kyc_attributes_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.kyc_requests", "public.users", name: "kyc_requests_user_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.payment_mandates", "kiosk.cart_mandates", name: "payment_mandates_cart_mandate_id_fkey", on_delete: :cascade
+  add_foreign_key "kiosk.refunds", "kiosk.settlements", name: "refunds_settlement_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.revocations", "kiosk.agents", name: "revocations_agent_id_fkey", on_delete: :cascade
   add_foreign_key "kiosk.settlements", "kiosk.cart_mandates", name: "settlements_cart_mandate_id_fkey", on_delete: :cascade
 end

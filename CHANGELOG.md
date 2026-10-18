@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: Recent spend counts a settlement less what the operator refunded of it. `kiosk:install` emits `create_kiosk_refunds`; every demo ships it.
 - 2026-10-18: The recent-spend policy draws once for each customer in each token lifetime: a new access token does not draw again.
 - 2026-10-18: The recent-spend policy draws once per access token: a session pays the toll with the chance its recent spend sets.
 

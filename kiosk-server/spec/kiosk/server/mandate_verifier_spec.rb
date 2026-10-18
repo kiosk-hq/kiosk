@@ -223,11 +223,8 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # the §9.1 mandate carve-out, so a silent move to `BadRequest` must redden here
     # (SPEC-184/SPEC-185 draw that boundary and neither 400 check is this one).
     #
-    # WHAT IS DELIBERATELY NOT ASSERTED is the domain — "US" and "Euro" are still
-    # accepted, because no document states an allow-list and inventing one in the
-    # verifier would be writing wire rather than enforcing it (T-153, K-1251). The
-    # last example below pins that on purpose, so a later allow-list is a decision
-    # someone takes rather than a silent tightening.
+    # The currency domain is the next group: an ISO 4217 alpha-3 shape. The
+    # verifier refuses "US" and "Euro", and it accepts "xyz".
     describe 'malformed currency (K-1250)' do
       it 'rejects an intent whose currency is an EMPTY string' do
         empty = intent_payload.merge(currency: '')

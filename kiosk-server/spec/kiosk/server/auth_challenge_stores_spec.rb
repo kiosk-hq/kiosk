@@ -100,9 +100,8 @@ RSpec.describe Kiosk::Server::AuthChallengeStores::ActiveRecord, '#take' do
     store.put('PEM', 'nonce-1', live)
 
     expect(store.take('PEM', 'guessed')).to be(false)
-    # Identical to the in-process store: a wrong guess must not burn the
-    # challenge, or a third party who knows only the public key could deny
-    # its holder every handshake.
+    # A wrong guess must not burn the challenge, or a third party who knows
+    # only the public key could deny its holder every handshake.
     expect(store.take('PEM', 'nonce-1')).to be(true)
   end
 

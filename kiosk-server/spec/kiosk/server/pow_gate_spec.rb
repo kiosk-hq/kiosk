@@ -1011,7 +1011,7 @@ RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
     # memory-hard proofs one after another spends real time on each, and a
     # flat TTL would expire challenge #1 while it is still working on #3 —
     # the batch could then never be completed at all, at any speed short of
-    # parallel solving. Implemented at `PowGate.issue_challenges`.
+    # parallel solving. `PowToll#pow_required` sets this TTL.
     #
     # A DISTINCTIVE ttl (100, not the 300 default) so the assertion reads a
     # value that could only have come from configuration, and BOTH arms are

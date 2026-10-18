@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: kiosk-server drops its `solid_cable` dependency; each demo's Gemfile declares `solid_cable` for its `config/cable.yml`.
 - 2026-10-18: The payment provider port declares `refund`, which the Stripe adapter and `PaymentClaim` already answer.
 - 2026-10-18: kiosk-server's boot, declaration and currency refusal messages are one or two sentences: the fault and the fix.
 - 2026-10-18: hoteling drops the unread `bookings.decision_due_at` and `refunded_at` columns; the property answers 180 seconds after the capture.

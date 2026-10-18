@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: kiosk-server no longer depends on `solid_cable`; the host bundles the Action Cable adapter its `config/cable.yml` names.
 - 2026-10-18: Boot, declaration and currency refusal messages state the fault and the fix in one or two sentences, with no specification section numbers.
 - 2026-10-18: `Kiosk.reader_zone(default = nil)` answers the zone the caller declared in `Kiosk-Timezone`, else `default`.
 - 2026-10-18: `c.after_payment` runs after the engine records the settlement, through `PaymentClaim#settled`, so the hook reads the row's `settlement`.

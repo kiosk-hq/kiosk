@@ -232,7 +232,8 @@ presentations wins.
 Events live in `c.event_store`, by default `Kiosk::Server::EventStores::ActiveRecord`:
 the `kiosk.events` table from `bin/rails g kiosk:install`. The event stream runs
 on the Action Cable adapter that `config/cable.yml` names for the environment. In
-production that adapter must be one every process shares, such as `solid_cable`;
+production that adapter must be one every process shares, such as `solid_cable`
+in the host's Gemfile;
 a production origin that serves events with no adapter there does not boot.
 
 

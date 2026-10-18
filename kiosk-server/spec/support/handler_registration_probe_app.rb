@@ -18,7 +18,6 @@ require 'bundler/setup'
 require 'fileutils'
 require 'json'
 require 'tmpdir'
-require 'active_job/railtie'
 require 'kiosk/server'
 require 'action_controller/railtie'
 

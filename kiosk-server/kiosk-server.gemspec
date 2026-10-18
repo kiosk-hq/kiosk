@@ -73,8 +73,6 @@ Gem::Specification.new do |spec|
   spec.add_dependency 'actionpack',    '~> 8.1'
   # actioncable: the event stream at `<endpoint>/events`, on the engine's own server.
   spec.add_dependency 'actioncable',   '~> 8.1'
-  # solid_cable: carries the event stream between Puma workers and hosts.
-  spec.add_dependency 'solid_cable',   '~> 4.0'
   # activerecord: the durable stores and the engine's models.
   spec.add_dependency 'activerecord',  '~> 8.1'
   # activesupport: the core extensions the code uses.

@@ -5,7 +5,6 @@
 # `rails` first: rails/engine needs its core_ext.
 require 'rails'
 require 'rails/engine'
-require 'solid_cable'
 
 module Kiosk
   module Server

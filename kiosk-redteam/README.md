@@ -205,6 +205,10 @@ Pass `on_skip: :breach` for a scenario whose surface this origin definitely
 has: there, a skip is a defect of the harness rather than a property of the
 provider, and a quiet skip is how a beat that stopped running goes unnoticed.
 
+Pass `untested: true` to `record` when a setup step of your beat failed. The
+attack did not reach its gate, so the beat is UNTESTED and the run fails with
+no BREACH.
+
 ### Writing your own
 
 Subclass `Scenario`, name what you are attacking, and return a `Verdict` that

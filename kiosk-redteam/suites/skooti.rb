@@ -77,6 +77,13 @@ def mobility_mandates(customer, line_item, total, cap)
             total_amount_cents: total, currency: 'eur', exp: now + 600, iat: now } }
 end
 
+# Raises SkootiScenarios::SetupFailed unless the setup step answered 200.
+def setup!(step, resp)
+  raise SkootiScenarios::SetupFailed, "SETUP FAILED: #{step} returned HTTP #{resp.status} #{resp.body.inspect}" unless resp.status == 200
+
+  resp
+end
+
 # The quoted price of a reservation, or 100 when the quote is not positive.
 def quoted_cents(price_per_min_cents)
   price = price_per_min_cents.to_i
@@ -88,7 +95,7 @@ end
 def free_scooter_code(client, customer)
   fleet = client.query(customer, name: 'scooters_available').body
   scooter = (fleet.is_a?(Array) ? fleet : []).find { |row| row['needs_licence'] == false }
-  raise 'redteam(skooti): no licence-free vehicle is free in scooters_available' unless scooter
+  raise SkootiScenarios::SetupFailed, 'SETUP FAILED: no licence-free vehicle is free in scooters_available' unless scooter
 
   scooter['code']
 end
@@ -145,6 +152,9 @@ profile = Kiosk::Redteam::Profile.new(
 
 # skooti's own scenarios, run by the registry beside the library ones.
 module SkootiScenarios
+  # A setup step a local beat needs failed, so its attack never reached its gate.
+  class SetupFailed < StandardError; end
+
   # A fresh customer, the reservation it owns, and the mandates that pay for it.
   def self.paid_reservation(client, profile)
     customer = client.register!
@@ -385,26 +395,29 @@ end
 
 # Reserves and pays for a vehicle, and answers its reservation_id.
 def reserve_and_pay(client, customer, code)
-  rsv = client.run(customer, name: 'reserve', scooter_code: code)
-  raise "redteam(skooti): reserve #{code} failed (#{rsv.status})" unless rsv.status == 200
+  rsv = setup!("reserve #{code}", client.run(customer, name: 'reserve', scooter_code: code))
 
   reservation_id = rsv.body['reservation_id']
   total          = quoted_cents(rsv.body['price_per_min_cents'])
   line           = { qty: 1, price_cents: total, reservation_id: }
-  pay_resp       = client.pay(customer, **mobility_mandates(customer, line, total, total + 100))
-  raise "redteam(skooti): pay #{code} failed (#{pay_resp.status})" unless pay_resp.status == 200
+  setup!("pay #{code}", client.pay(customer, **mobility_mandates(customer, line, total, total + 100)))
 
   reservation_id
 end
 
 # The rider, with no attestation, who holds MC-001 reserved and paid, so only the
 # KYC gate or the verb can block. MC-001 holds one reservation at a time, so
-# every motorcycle beat attacks this one.
+# every motorcycle beat attacks this one, and a failed setup fails them all.
 def motorcycle_rider
   @motorcycle_rider ||= begin
     client, a = new_customer
     [client, a, reserve_and_pay(client, a, 'MC-001')]
+  rescue SkootiScenarios::SetupFailed => e
+    e
   end
+  raise @motorcycle_rider if @motorcycle_rider.is_a?(SkootiScenarios::SetupFailed)
+
+  @motorcycle_rider
 end
 
 def rent_refused?(rent)
@@ -486,10 +499,7 @@ def refusal_breach(attack)
 end
 
 def request_kyc!(client, customer, tag)
-  req = client.run(customer, name: 'request_kyc')
-  raise "redteam(skooti): request_kyc(#{tag}) failed (#{req.status})" unless req.status == 200
-
-  req.body['request_id']
+  setup!("request_kyc(#{tag})", client.run(customer, name: 'request_kyc')).body['request_id']
 end
 
 # Victim B gets a real broker-signed jws through request_kyc and the broker page.
@@ -499,11 +509,11 @@ def issued_victim_jws(client)
   stream_b.subscribe('kyc_verification')
   request_id = request_kyc!(client, b, 'B')
   approve_rc = broker_approve(request_id)
-  raise "redteam(skooti): approve(B) on broker failed (#{approve_rc})" unless approve_rc == 200
+  raise SkootiScenarios::SetupFailed, "SETUP FAILED: approve(B) on the broker returned HTTP #{approve_rc}" unless approve_rc == 200
 
   victim_jws = stream_b.await { |e| e.dig('data', 'request_id') == request_id }.dig('data', 'kyc_jws')
   stream_b.close
-  victim_jws.to_s.empty? ? raise("redteam(skooti): B's kyc_verification event carried no jws") : victim_jws
+  victim_jws.to_s.empty? ? raise(SkootiScenarios::SetupFailed, "SETUP FAILED: B's kyc_verification event carried no jws") : victim_jws
 end
 
 # IssuedKycJwsTheft: B's broker-signed jws, submitted by A, must not unlock A's motorcycle.
@@ -713,12 +723,19 @@ def user_bearer_verdict(rc_forged, rc_real)
             "a link code (#{rc_real}), so the refusal is not vacuous" }
 end
 
+# Runs one beat. A failed setup step leaves its attack untested.
+def run_beat
+  yield
+rescue SkootiScenarios::SetupFailed => e
+  { blocked: false, untested: true, detail: e.message }
+end
+
 beats = {
-  'MotorcycleForgedKyc' => motorcycle_forged_kyc,
-  'MotorcycleViaStartRental' => motorcycle_via_start_rental,
-  'IssuedKycJwsTheft' => kyc_jws_theft,
-  'CrossOperatorClaimReplay' => cross_operator_replay,
-  'ForgedCallbackNoSig' => forged_callback_no_sig
+  'MotorcycleForgedKyc' => run_beat { motorcycle_forged_kyc },
+  'MotorcycleViaStartRental' => run_beat { motorcycle_via_start_rental },
+  'IssuedKycJwsTheft' => run_beat { kyc_jws_theft },
+  'CrossOperatorClaimReplay' => run_beat { cross_operator_replay },
+  'ForgedCallbackNoSig' => run_beat { forged_callback_no_sig }
 }
 
 # The wire-shape beats share one customer; neither touches the fleet.
@@ -730,7 +747,7 @@ beats['SelfAssertedUserBearerForgery'] = self_asserted_user_bearer_forgery
 
 battery = Kiosk::Redteam::Battery.new
 battery.absorb(results)
-beats.each { |name, beat| battery.record(name, beat[:blocked], beat[:detail]) }
+beats.each { |name, beat| battery.record(name, beat[:blocked], beat[:detail], untested: beat[:untested]) }
 
 # Exit 0 only when attacks ran and all were blocked; 2 when the skips are not EXPECTED_SKIP_NAMES.
 exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)

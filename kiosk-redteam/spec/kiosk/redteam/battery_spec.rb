@@ -46,6 +46,15 @@ RSpec.describe Kiosk::Redteam::Battery, '#record' do
     expect(battery.breaches.map(&:name)).to eq(%w[CrossOwnerEdit])
     expect(output).to include("BREACH  ✗ CrossOwnerEdit — Bob edit Alice's listing → 200 (want 403)")
   end
+
+  # A beat whose setup step failed never reached its gate.
+  it 'files and prints an untested beat, with no breach' do
+    battery.record('MotorcycleForgedKyc', false, 'SETUP FAILED: pay MC-001 returned HTTP 402', untested: true)
+
+    expect(battery.untested.map(&:name)).to eq(%w[MotorcycleForgedKyc])
+    expect(battery.breaches).to be_empty
+    expect(output).to include('UNTESTED ! MotorcycleForgedKyc — SETUP FAILED: pay MC-001 returned HTTP 402')
+  end
 end
 
 RSpec.describe Kiosk::Redteam::Battery, '#scenario' do

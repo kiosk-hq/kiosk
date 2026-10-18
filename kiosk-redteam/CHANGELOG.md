@@ -13,6 +13,7 @@ already written is edited.
 ## [Unreleased]
 
 - 2026-10-18: A failed setup step, or a 402 the origin answers before it reads the attack, is UNTESTED: the battery fails, with no BREACH. The JSON line lists `untested`.
+- 2026-10-18: `Battery#record` takes `untested:` for a hand-written beat whose setup step failed. The skooti battery finishes without a stripe-mock.
 
 ## [0.5.16] — 2026-10-18
 

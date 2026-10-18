@@ -17,8 +17,10 @@ module Kiosk
         @entries = []
       end
 
-      def record(name, blocked, detail = '')
-        file(Entry.new(name: name.to_s, state: blocked ? :blocked : :breach, detail: detail.to_s))
+      # untested: a setup step failed, so the attack never reached its gate.
+      def record(name, blocked, detail = '', untested: false)
+        state = blocked ? :blocked : :breach
+        file(Entry.new(name: name.to_s, state: untested ? :untested : state, detail: detail.to_s))
       end
 
       # on_skip: :breach when this origin has the surface, so a skip is a harness defect.

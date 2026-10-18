@@ -36,6 +36,10 @@ port ENV.fetch('PORT', 3000)
 # Allow puma to be restarted by `bin/rails restart` command.
 plugin :tmp_restart
 
+# Runs the job queue (config/queue.yml) in threads of this process, so the one process systemd starts runs the jobs too.
+plugin :solid_queue
+solid_queue_mode :async
+
 # Specify the PID file. Defaults to tmp/pids/server.pid in development.
 # In other environments, only set the PID file if requested.
 pidfile ENV['PIDFILE'] if ENV['PIDFILE']

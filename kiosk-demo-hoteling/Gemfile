@@ -18,6 +18,9 @@ gem 'bootsnap', require: false
 # The answers to the Kiosk queries and actions are app/views/kiosk/**/*.json.jbuilder.
 gem 'jbuilder'
 
+# The job queue, on the primary database: the property's decision on a paid booking, and the lapse of an unpaid hold.
+gem 'solid_queue'
+
 # Human guests sign in with real Devise sessions; the Kiosk account-binding
 # surfaces (device verify page, link mint, unlink) authenticate that Warden
 # session through the kiosk-user-idp-devise adapter below.

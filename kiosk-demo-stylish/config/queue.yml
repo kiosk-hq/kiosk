@@ -1,0 +1,6 @@
+# One dispatcher and one single-threaded worker, run inside Puma (config/puma.rb).
+dispatchers:
+  - polling_interval: 1
+workers:
+  - threads: 1
+    polling_interval: 1

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: hoteling, atablefor and stylish run their jobs on Solid Queue inside Puma, so a scheduled job survives a restart.
+
 - 2026-10-18: `RecentSpend.new(within:, cap:)` tolls a session by chance: 1 with no recent spend, falling linearly to 0 at `cap` whole currency units. Every demo sets `cap: 100`.
 
 - 2026-10-18: The kiosk-user-idp-devise README names the human-side gate and the link endpoints as the adapter's callers; the kiosk-reputation README says kiosk-pow-equihash registers itself.

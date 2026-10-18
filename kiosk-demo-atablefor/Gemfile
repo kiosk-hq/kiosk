@@ -18,6 +18,9 @@ gem 'bootsnap', require: false
 # The answers to the Kiosk queries and actions are app/views/kiosk/**/*.json.jbuilder.
 gem 'jbuilder'
 
+# The job queue, on the primary database: at its seating time, a confirmed booking counts as a visit.
+gem 'solid_queue'
+
 # Human diner accounts sign in with real Devise sessions; the Kiosk
 # account-binding surfaces (link mint, verify page, unlink) authenticate
 # that Warden session through the kiosk-user-idp-devise adapter below, so a

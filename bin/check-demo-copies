@@ -50,7 +50,7 @@ if ARGV.include?('--self-test')
       expect: %r{app/services/price_checker\.rb: `ships:` names skooti, which no longer ships} },
     { id: 'except-has-converged', rule: 'copy comparison',
       what: 'the excepted copy converges on its siblings',
-      ops: [[:copy, 'kiosk-demo-tudu/config/puma.rb', 'kiosk-demo-prove/config/puma.rb']],
+      ops: [[:copy, 'kiosk-demo-getgrocery/config/puma.rb', 'kiosk-demo-prove/config/puma.rb']],
       expect: %r{config/puma\.rb: `except:` for prove is stale} },
     { id: 'new-copy-undeclared', rule: 'undeclared and stale entries',
       what: 'a helper lands in two demos with no manifest entry',
@@ -581,8 +581,8 @@ COPIES = {
   'config/puma.rb' => {
     rule: :identical,
     except: { 'prove' => PROVE_SKELETON,
-              'getgrocery' => 'adds `plugin :solid_queue`, which runs its job queue.',
-              'skooti' => 'adds `plugin :solid_queue`, which runs its job queue.' },
+              'philslist' => 'has no jobs, so it runs no `plugin :solid_queue`.',
+              'tudu' => 'has no jobs, so it runs no `plugin :solid_queue`.' },
     why: 'Port and concurrency come from the environment, so nothing in it is per-demo.'
   },
   'config/initializers/filter_parameter_logging.rb' => {
@@ -700,8 +700,8 @@ COPIES = {
   },
   'db/migrate/20261018100014_create_solid_queue_tables.rb' => {
     rule: :identical,
-    ships: %w[getgrocery skooti],
-    why: "Solid Queue's tables, in the two demos whose jobs run on it."
+    ships: %w[atablefor getgrocery hoteling skooti stylish],
+    why: "Solid Queue's tables, in the five demos whose jobs run on it."
   },
   'script/redteam_suite.rb' => {
     rule: :per_demo, why: "That demo's attack battery, against its own verbs."

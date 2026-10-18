@@ -1,7 +1,8 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5) %>
+  # Puma's threads, plus the job queue's worker, dispatcher and scheduler (config/queue.yml).
+  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 5).to_i + 5 %>
   host: <%= ENV.fetch("PGHOST", "localhost") %>
 
 development:

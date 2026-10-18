@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: atablefor runs its jobs on Solid Queue inside Puma, so a booking seated after a restart still counts as a visit.
+
 - 2026-10-17: atablefor tolls registration only, at the Equihash default: the reputation search toll and the discovery `pow_notice` are removed.
 
 - `availability` rows no longer carry `deposit_eur`: a reservation takes no money. `book_table`'s `time` is one of the seating times, and `party_size` is at most 20.

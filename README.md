@@ -146,7 +146,7 @@ holds the one CI pipeline, `workflows/ci.yml` — the gems matrix, the demos
 matrix and `e2e/run.sh`, on every push and pull request.
 
 Each demo's tests drive it over HTTP the way an assistant does; CI runs them
-with `bin/rails test` (`bundle exec rspec` in hoteling and kiosk-demo-prove).
+with `bin/rails test` (`bundle exec rspec` in hoteling).
 
 **Four of the demos — `atablefor`, `getgrocery`, `hoteling`, `skooti` — also
 carry a `before-after.md`**: a contrast between what an AI assistant can do at

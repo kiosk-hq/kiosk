@@ -503,7 +503,6 @@ SCAN_ROOTS = ['lib', 'app', 'script', 'db/migrate'].freeze
 # Paths outside SCAN_ROOTS that are compared anyway.
 EXTRA_SCANNED = [
   '.gitignore',
-  'spec/spec_helper.rb',
   'test/test_helper.rb',
   'test/stories/discovery_test.rb',
   'test/stories/household_test.rb',
@@ -529,14 +528,9 @@ PROVE_SKELETON = 'prove is a smaller API-only Rails app generated on its own'
 # rule: :identical | :code | :per_demo. `ships:` pins which demos carry the file;
 # `except:` excuses one copy with a reason; `agree:` declares :per_demo subsets that agree.
 COPIES = {
-  'spec/spec_helper.rb' => {
-    rule: :per_demo,
-    ships: %w[hoteling prove],
-    why: "Each demo's own RSpec setup."
-  },
   'test/test_helper.rb' => {
     rule: :per_demo,
-    ships: %w[atablefor getgrocery philslist skooti stylish tudu],
+    ships: %w[atablefor getgrocery philslist prove skooti stylish tudu],
     why: "Each demo's own Minitest setup."
   },
   'test/stories/discovery_test.rb' => {
@@ -1203,7 +1197,6 @@ FRAGMENT_PATHS = %w[
 ].freeze
 
 FRAGMENT_EXCLUDED = {
-  'spec/spec_helper.rb' => "Each demo's own test setup.",
   'test/test_helper.rb' => "Each demo's own test setup.",
   'test/stories/discovery_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'test/stories/household_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',

@@ -530,7 +530,7 @@ kiosk-demo-prove/README.md	## The three legs
 kiosk-demo-prove/README.md	- **Bound, single-use, TTL'd claim.** The claim binds to (subject + operator +
 kiosk-demo-prove/README.md	- **No replay across operators.** The claim carries `operator`/`aud`; the
 kiosk-demo-prove/README.md	The broker mounts **no** Kiosk wire at all — neither of the two reserved
-kiosk-demo-prove/README.md	bundle exec rspec      # the broker's own suite; CI runs exactly this
+kiosk-demo-prove/README.md	bin/rails test         # the broker's own suite; CI runs exactly this
 kiosk-demo-prove/README.md	operator → broker (server-to-server)
 kiosk-demo-prove/README.md	public verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake
 kiosk-demo-prove/README.md	required in production; development and test set `https://kyc.test.local`. The
@@ -555,12 +555,12 @@ kiosk-demo-prove/config/environments/development.rb	ENV['KIOSK_PROVE_ISSUER']   
 kiosk-demo-prove/config/initializers/prove.rb	Rails.configuration.x.prove.issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-prove/config/initializers/prove.rb	operators = %w[skooti getgrocery].to_h do |operator|
 kiosk-demo-prove/config/initializers/prove.rb	prove.public_url = ENV.fetch('PROVE_PUBLIC_URL', nil)
-kiosk-demo-prove/spec/requests/verifications_spec.rb	is single-use: a second approve on a confirmed request is rejected (no re-mint)
-kiosk-demo-prove/spec/requests/verifications_spec.rb	is un-confirmable once past its TTL
-kiosk-demo-prove/spec/requests/verifications_spec.rb	mints an attestation valid for one year
-kiosk-demo-prove/spec/requests/verifications_spec.rb	records a decline without minting
-kiosk-demo-prove/spec/requests/verifications_spec.rb	rejects a callback_url whose host is NOT allow-listed (SSRF/open-relay guard, 403)
-kiosk-demo-prove/spec/requests/verifications_spec.rb	rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)
+kiosk-demo-prove/test/verifications_test.rb	is single-use: a second approve on a confirmed request is rejected (no re-mint)
+kiosk-demo-prove/test/verifications_test.rb	is un-confirmable once past its TTL
+kiosk-demo-prove/test/verifications_test.rb	mints an attestation valid for one year
+kiosk-demo-prove/test/verifications_test.rb	records a decline without minting
+kiosk-demo-prove/test/verifications_test.rb	rejects a callback_url whose host is NOT allow-listed (SSRF/open-relay guard, 403)
+kiosk-demo-prove/test/verifications_test.rb	rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)
 kiosk-demo-skooti/README.md	**What this KYC proves, and what it deliberately does not (honest scope).** The
 kiosk-demo-skooti/README.md	Hold a vehicle for 3 minutes and quote the first minute to pay
 kiosk-demo-skooti/README.md	Scooter rental demo operator for Kiosk.

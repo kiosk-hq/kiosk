@@ -27,21 +27,23 @@ module BrokerRequests
   # Opens a request and returns its request_id.
   def open_request(overrides = {})
     intake(valid_intake_body(overrides))
-    JSON.parse(response.body)['request_id']
-  end
-
-  # Stubs the callback and returns the hash its last call receives.
-  def capture_delivery
-    delivered = {}
-    allow(CallbackPoster).to receive(:deliver) do |args|
-      delivered.replace(args)
-      200
-    end
-    delivered
+    response.parsed_body['request_id']
   end
 
   def approve(request_id)
     post '/verify', params: { request: request_id, decision: 'approve' }
+  end
+
+  # Approves with the callback stubbed. Returns what the callback received.
+  def approve_capturing(request_id)
+    delivered = {}
+    CallbackPoster.stub(:deliver, ->(**args) { delivered.replace(args) && 200 }) { approve(request_id) }
+    delivered
+  end
+
+  # Runs the block; the test fails if the block posts a callback.
+  def posting_no_callback(&)
+    CallbackPoster.stub(:deliver, ->(**) { flunk 'the broker posted a callback' }, &)
   end
 
   def decode(jws)
@@ -50,4 +52,4 @@ module BrokerRequests
   end
 end
 
-RSpec.configure { |config| config.include BrokerRequests, type: :request }
+ActiveSupport.on_load(:action_dispatch_integration_test) { include BrokerRequests }

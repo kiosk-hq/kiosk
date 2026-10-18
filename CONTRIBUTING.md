@@ -66,7 +66,7 @@ own README; read that README first. Then:
 ```bash
 cd kiosk-demo-hoteling
 bin/rails db:reset           # drops the development database, loads the schema, seeds it
-bin/rails test               # its tests (hoteling and kiosk-demo-prove: bundle exec rspec)
+bin/rails test               # its tests (hoteling: bundle exec rspec)
 ```
 
 **The whole wire.** `./e2e/run.sh` builds a throwaway Rails app, installs the

@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::UuidCheck::JSON_SCHEMA_PATTERN` is removed.
 - 2026-10-18: `Kiosk::Identity#agent?`, `#human?` and `#service?` are removed; read `actor`.
 - 2026-10-18: `bin/check-solver-pin` refuses every argument with exit 2; it has no self-test.
 - 2026-10-18: Each demo's red-team battery moves from `script/redteam_suite.rb` to `kiosk-redteam/suites/<demo>.rb`; CI runs it in the demo with the demo's bundle.

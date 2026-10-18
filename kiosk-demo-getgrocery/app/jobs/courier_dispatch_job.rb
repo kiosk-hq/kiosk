@@ -17,7 +17,7 @@ class CourierDispatchJob < ApplicationJob
   def perform(order_id)
     order = Order.awaiting_courier.find_by(id: order_id)
     return unless order&.dispatch_at
-    return self.class.enqueue_for(order) if order.dispatch_at > Time.current
+    return self.class.enqueue_for(order) if order.dispatch_at.future?
     # Two runs can both get here after a reschedule; one hands the basket over.
     return unless order.hand_to_courier!
 

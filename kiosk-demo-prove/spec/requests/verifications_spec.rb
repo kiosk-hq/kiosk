@@ -22,7 +22,7 @@ RSpec.describe 'KYC broker: POST /verifications (intake)' do
     expect(row.subject_handle).to eq('user-uuid-123')
     expect(row.status).to eq('pending')
     expect(row.nonce).to be_present
-    expect(row.expires_at).to be > Time.current
+    expect(row.expires_at).to be_future
   end
 end
 

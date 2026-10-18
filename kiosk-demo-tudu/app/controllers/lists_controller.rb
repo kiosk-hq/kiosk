@@ -18,13 +18,13 @@ class ListsController < ApplicationController
 
   def index
     @lists = kiosk_as_human { List.reachable.to_a } if user_signed_in?
-    @housemate_board = housemate_board unless user_signed_in?
+    @housemate_board = Membership.board_of(HOUSEMATE_ID) unless user_signed_in?
     @activity = { lists: List.count, todos: Todo.count, done: Todo.where(done: true).count,
                   members: Membership.count }
   end
 
   def shared
-    @housemate_board = housemate_board
+    @housemate_board = Membership.board_of(HOUSEMATE_ID)
   end
 
   def show
@@ -46,25 +46,5 @@ class ListsController < ApplicationController
     code = kiosk_as_human { |identity| InviteOperation.call(member_id: identity.user_id, list_id: params[:id]) }
     redirect_to list_path(params[:id]),
                 notice: "Invite code (share it, expires in #{InviteOperation::TTL.in_minutes.to_i} min): #{code}"
-  end
-
-  private
-
-  # Every list Bob is on, newest first, with who shared it and its tasks.
-  def housemate_board
-    Membership.where(account_id: HOUSEMATE_ID)
-              .includes(list: [:todos, { memberships: :account }])
-              .sort_by { [-it.list.created_at.to_f, it.list_id] }
-              .map { board_row(it) }
-  end
-
-  def board_row(membership)
-    list  = membership.list
-    owner = list.memberships.find(&:owner?).account
-    { 'list_id' => list.id,
-      'title' => list.title,
-      'my_role' => membership.role,
-      'owner_name' => owner.public_name,
-      'tasks' => list.todos.sort_by { [it.created_at, it.id] } }
   end
 end

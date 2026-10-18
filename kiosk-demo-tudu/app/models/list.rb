@@ -10,6 +10,11 @@ class List < ApplicationRecord
 
   validates :title, presence: true
 
+  def owner = memberships.find(&:owner?).account
+
+  # Oldest first, from the loaded todos.
+  def tasks = todos.sort_by { [it.created_at, it.id] }
+
   # The signed-in member's lists, newest first, each carrying the member's `role` on it.
   scope :reachable, lambda {
     joins(:memberships).merge(Membership.own)

@@ -16,6 +16,12 @@ class Membership < ApplicationRecord
   # Outside a request, where `own` has no signed-in member: the event stream asks this.
   def self.readable_by?(list_id, account_id) = exists?(list_id: list_id, account_id: account_id)
 
+  # Every list one account is on, newest first, with its members and tasks.
+  scope :board_of, lambda { |account_id|
+    where(account_id:).joins(:list).includes(list: [:todos, { memberships: :account }])
+                      .order(List.arel_table[:created_at].desc, :list_id)
+  }
+
   # Who is on a list, owners first.
   scope :roster, ->(list_id) { where(list_id: list_id).includes(:account).in_order_of(:role, %w[owner member]).order(:created_at) }
 

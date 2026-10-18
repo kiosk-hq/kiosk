@@ -210,3 +210,13 @@ RSpec.describe Kiosk::Server::PaymentSetup, 'the return page, with a provider th
     expect(store.head).to eq(0)
   end
 end
+
+RSpec.describe Kiosk::Server::PaymentSetup, 'the payment_setup topic' do
+  it 'reaches the principal it names and nobody else' do
+    reachable = described_class::TOPIC[:subject_reachable]
+    identity = ->(user_id) { Struct.new(:user_id).new(user_id) }
+
+    expect([reachable.call('u-1', identity.call('u-1')), reachable.call('u-1', identity.call('u-2'))])
+      .to eq([true, false])
+  end
+end

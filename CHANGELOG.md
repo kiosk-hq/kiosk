@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: kiosk-redteam scores an attack that a failed setup step or an unreachable payment processor kept from its gate as UNTESTED, not BREACH. The run still fails.
 - 2026-10-18: `refund` takes `key:`, which names the refund among the refunds of its charge; kiosk-pay-stripe keys the Stripe request by the charge and that key.
 - 2026-10-18: A `kyc_provider` with empty `kyc_claims` raises `ConfigurationError` at boot: no verification could grant a gated action.
 - 2026-10-18: `PaymentClaim` takes no `status_column:` or `unpaid:` (the column is `payment_status`), and `ColumnSpendingCap.new` takes no arguments.

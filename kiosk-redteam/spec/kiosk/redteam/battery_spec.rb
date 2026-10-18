@@ -20,6 +20,11 @@ RSpec.shared_context 'battery setup' do
 
   def breach_verdict(detail: '200') = Kiosk::Redteam::Verdict.new(blocked: false, skipped: false, status: 200, detail: detail)
 
+  def untested_verdict
+    Kiosk::Redteam::Verdict.new(blocked: false, skipped: false, status: 500,
+                                detail: 'SETUP FAILED: pay returned HTTP 500', untested: true)
+  end
+
   def skip_verdict(reason: 'no per_user_query')
     Kiosk::Redteam::Verdict.new(blocked: false, skipped: true, status: 0, detail: "SKIP — #{reason}")
   end
@@ -117,7 +122,7 @@ RSpec.describe Kiosk::Redteam::Battery, '#report!' do
     battery.record('B', false, 'settled at 200')
 
     expect(battery.report!).to eq(1)
-    expect(output).to include('1 BLOCKED, 0 SKIPPED, 1 BREACH — FIX REQUIRED')
+    expect(output).to include('1 BLOCKED, 0 SKIPPED, 0 UNTESTED, 1 BREACH — FIX REQUIRED')
     expect(output).to include('BREACH  ✗ B — settled at 200')
   end
 
@@ -133,6 +138,17 @@ RSpec.describe Kiosk::Redteam::Battery, '#report!' do
 
   it 'answers 1 for a battery that recorded nothing whatsoever' do
     expect(battery.report!).to eq(1)
+  end
+
+  # An environment failure is neither a hole in the provider nor a pass.
+  it 'answers 1 and names the untested attack, with no breach' do
+    battery.record('A', true, '')
+    battery.scenario(scenario_double('B', untested_verdict), client: :c, profile: :p)
+
+    expect(battery.report!).to eq(1)
+    expect(battery.breaches).to be_empty
+    expect(output).to include('UNTESTED ! B — SETUP FAILED: pay returned HTTP 500')
+    expect(output).to include('1 BLOCKED, 0 SKIPPED, 1 UNTESTED, 0 BREACH — NOT A PASS')
   end
 end
 
@@ -183,6 +199,6 @@ RSpec.describe Kiosk::Redteam::Battery, '#report!' do
 
     json = JSON.parse(output.lines.grep(/^\{/).last)
     expect(json).to eq('scenarios' => 2, 'blocked' => 1, 'skipped' => [],
-                       'breaches' => %w[B], 'exit' => status)
+                       'breaches' => %w[B], 'untested' => [], 'exit' => status)
   end
 end

@@ -100,7 +100,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction, '#call — a 402 on
       expect(verdict.blocked).to be(false)
       expect(verdict.skipped).to be(false)
       expect(verdict.status).to eq(402)
-      expect(verdict.detail).to include('COULD NOT TEST')
+      # payment_failed comes after every gate said yes; the other two come before the attack is read.
+      expect(verdict.untested).to be(code != 'payment_failed')
+      expect(verdict.detail).to include(code == 'payment_failed' ? 'No gate refused the attack.' : 'COULD NOT TEST')
       expect(verdict.detail).to include(code.inspect)
     end
   end
@@ -111,7 +113,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction, '#call — a 402 on
     battery.absorb(Kiosk::Redteam::Runner.new(base_url: BASE_URL, profile: profile).run([scenario]))
 
     expect(battery.report!).to eq(1)
-    expect(battery.breaches.size).to eq(1)
+    expect(battery.untested.size).to eq(1)
   end
 end
 

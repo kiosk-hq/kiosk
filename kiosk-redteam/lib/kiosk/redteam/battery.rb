@@ -6,9 +6,10 @@ module Kiosk
   module Redteam
     # One ledger and one exit status for a red-team run, filing hand-written
     # beats and library Scenarios alike. #report! answers 0 only when at least one
-    # attack was blocked, none breached, and the skips are exactly the expected ones.
+    # attack was blocked, none breached, every attack was tested, and the skips are
+    # exactly the expected ones.
     class Battery
-      # state is :blocked, :breach or :skipped.
+      # state is :blocked, :breach, :untested or :skipped.
       Entry = Data.define(:name, :state, :detail)
 
       def initialize(io: $stdout)
@@ -39,7 +40,9 @@ module Kiosk
 
       def skipped = @entries.select { |e| e.state == :skipped }
 
-      # Returns the exit status: 0 green, 1 breach or no proof, 2 skip set differs from expected_skips.
+      def untested = @entries.select { |e| e.state == :untested }
+
+      # Returns the exit status: 0 green, 1 breach, untested attack or no proof, 2 skip set differs from expected_skips.
       def report!(expected_skips: [])
         actual   = skipped.map(&:name).sort
         expected = Array(expected_skips).map(&:to_s).sort
@@ -55,20 +58,34 @@ module Kiosk
 
       def print_summary
         @io.puts "\n── Summary ──"
-        blocked.each  { |e| @io.puts "  BLOCKED ✓ #{e.name}" }
-        skipped.each  { |e| @io.puts "  SKIP    — #{e.name} (#{e.detail})" }
-        breaches.each { |e| @io.puts "  BREACH  ✗ #{e.name} — #{e.detail}" }
+        @io.puts(*[blocked, skipped, untested, breaches].flatten.map { line(it, summary: true) })
         @io.puts ''
+      end
+
+      def line(entry, summary: false)
+        case entry.state
+        when :blocked  then "  BLOCKED ✓ #{entry.name}#{" — #{entry.detail}" unless summary || entry.detail.empty?}"
+        when :skipped  then "  SKIP    — #{entry.name} (#{entry.detail})"
+        when :untested then "  UNTESTED ! #{entry.name} — #{entry.detail}"
+        else                "  BREACH  ✗ #{entry.name} — #{entry.detail}"
+        end
       end
 
       # Prints the tally line and answers 0 when every attack was blocked, else 1.
       def outcome_status
         return tally(1, "  #{@entries.size} scenarios, 0 BLOCKED — this run proved NOTHING, which is not a pass.") if blocked.empty?
-        return tally(0, all_blocked_line) if breaches.empty?
+        unless breaches.empty?
+          return tally(1, "#{counts} #{breaches.size} BREACH — FIX REQUIRED",
+                       '  BREACH means a real hole in the provider — fix the app, not the scenario.')
+        end
+        return tally(0, all_blocked_line) if untested.empty?
 
-        tally(1, "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, #{breaches.size} BREACH — FIX REQUIRED",
-              '  BREACH means a real hole in the provider — fix the app, not the scenario.')
+        tally(1, "#{counts} 0 BREACH — NOT A PASS",
+              '  UNTESTED means a setup step or the environment failed, and the attack never reached its gate. ' \
+              'Fix the step it names, then run again.')
       end
+
+      def counts = "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, #{untested.size} UNTESTED,"
 
       def all_blocked_line
         "  #{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked."
@@ -92,13 +109,8 @@ module Kiosk
       end
 
       def print_json(actual, status)
-        @io.puts JSON.generate(
-          scenarios: @entries.size,
-          blocked: blocked.size,
-          skipped: actual,
-          breaches: breaches.map(&:name),
-          exit: status
-        )
+        @io.puts JSON.generate(scenarios: @entries.size, blocked: blocked.size, skipped: actual,
+                               breaches: breaches.map(&:name), untested: untested.map(&:name), exit: status)
       end
 
       def absorb_verdict(name, verdict, on_skip:, echo: true)
@@ -112,6 +124,7 @@ module Kiosk
       def entry_for(name, verdict, on_skip)
         return skip_entry(name, verdict, on_skip) if verdict.skipped
         return Entry.new(name: name, state: :blocked, detail: "HTTP #{verdict.status}") if verdict.blocked
+        return Entry.new(name: name, state: :untested, detail: verdict.detail.to_s) if verdict.untested
 
         Entry.new(name: name, state: :breach, detail: verdict.detail.to_s)
       end
@@ -125,11 +138,7 @@ module Kiosk
 
       def file(entry)
         @entries << entry
-        case entry.state
-        when :blocked then @io.puts "  BLOCKED ✓ #{entry.name}#{" — #{entry.detail}" unless entry.detail.empty?}"
-        when :skipped then @io.puts "  SKIP    — #{entry.name} (#{entry.detail})"
-        else               @io.puts "  BREACH  ✗ #{entry.name} — #{entry.detail}"
-        end
+        @io.puts line(entry)
         entry
       end
     end

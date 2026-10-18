@@ -28,25 +28,31 @@ profile. Point it at a deployment you do not own and remember what a battery
 is: scenarios REGISTER principals and STAGE the state their attack needs, so
 run it against something you are willing to have written to.
 
-### Blocked, breached, skipped — the three states
+### Blocked, breached, untested, skipped — the four states
 
 | Verdict | Means | Printed |
 |---|---|---|
 | **blocked** | the provider refused this attack | `BLOCKED ✓ <name> (HTTP <status>)` |
 | **breach** | the attack was NOT refused — a real finding | `BREACH  ✗ <name> — <detail>` |
+| **untested** | a setup step or the environment failed, so the attack never reached its gate | `UNTESTED ! <name> — <detail>` |
 | **skipped** | the profile lacks the surface this scenario needs | `SKIP    — <name> (<reason>)` |
 
-A skip is a distinct third state, **not** a pass: it does not count towards the
-blocked total, and `Battery#report!` refuses to go green on a battery that
-produced no proofs at all, so a profile that skips everything cannot exit 0.
+An untested attack is **not** a pass and **not** a breach: `Battery#report!`
+answers 1, and the detail names the step that failed. A payment processor the
+origin cannot reach gives this state: the origin answers `payment_setup_required`
+before it reads the mandates. A skip does not count towards the blocked total,
+and `Battery#report!` refuses to go green on a battery that produced no proofs
+at all, so a profile that skips everything cannot exit 0.
 
 What counts as a refusal is deliberately narrow. HTTP 401/403 count, and so do
 the problem document `code`s `forbidden` / `unauthenticated` / `rls_denied`.
 **5xx never counts** — a crash must not masquerade as an enforcement gate. Nor
 does **402**: `kiosk-server` maps three codes onto that status
-(`pow_required`, `payment_setup_required`, `payment_failed`) and two of them are
-not refusals of anything, so a 402 yields a "could not test" verdict unless the
-scenario named the code it accepts. A scenario that knows which gate must fire
+(`pow_required`, `payment_setup_required`, `payment_failed`) and none of them is
+a refusal of the attack. The origin answers `pow_required` and
+`payment_setup_required` before it evaluates the request, so they give an
+untested verdict unless the scenario named the code it accepts. A
+`payment_failed` comes after every gate said yes, so it is a breach. A scenario that knows which gate must fire
 says so with `expect:` / `expect_code:` rather than leaning on the permissive
 default.
 
@@ -114,7 +120,9 @@ itself rather than inventing a surface. That is what lets one battery cover a
 commerce provider and a non-commerce one. `suites/` holds one battery per
 operator demo in this repo, built on this API — read one of those for a worked,
 running profile against a real origin. Each runs in its demo's directory, with
-that demo's bundle.
+that demo's bundle. A demo that takes payments charges a stripe-mock: start the
+demo's server with `STRIPE_MOCK_URL` set to the URL of a running stripe-mock.
+When the server cannot reach it, the payment attacks are untested.
 
 ## The scenario library
 
@@ -188,15 +196,14 @@ exit battery.report!(expected_skips: %w[MissingKyc ExpiredKyc])
 
 `report!` prints the summary, returns the process exit status and never lets a
 run that proved nothing read as green: **0** when at least one attack ran and
-every attack that ran was blocked, **1** on a breach or on a battery with no
-proofs at all, **2** when the set of skips is not `expected_skips` — a profile
-key that silently went `nil` disables a gate scenario, and that must not pass
-as a clean run.
+every attack that ran was blocked, **1** on a breach, on an untested attack or
+on a battery with no proofs at all, **2** when the set of skips is not
+`expected_skips` — a profile key that silently went `nil` disables a gate
+scenario, and that must not pass as a clean run.
 
 Pass `on_skip: :breach` for a scenario whose surface this origin definitely
-has: there, "could not test" is a defect of the harness rather than a property
-of the provider, and a quiet third state is how a beat that stopped running
-goes unnoticed.
+has: there, a skip is a defect of the harness rather than a property of the
+provider, and a quiet skip is how a beat that stopped running goes unnoticed.
 
 ### Writing your own
 

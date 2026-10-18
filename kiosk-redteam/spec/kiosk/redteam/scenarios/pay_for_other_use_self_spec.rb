@@ -170,11 +170,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf, '#call — the use
   end
 
   # B paid; a payment gate answering here is a different bug, not this one.
-  it 'does not block on a 402 at use time' do
+  it 'scores a 402 payment_setup_required at use time as untested' do
     stub_flow(gated_status: 402, gated_code: 'payment_setup_required')
     verdict = scenario.call(client, profile)
     expect(verdict.blocked).to be(false)
-    expect(verdict.detail).to include('want status 403')
+    expect(verdict.untested).to be(true)
   end
 
   it 'does not block on a 403 kyc_required at use time' do

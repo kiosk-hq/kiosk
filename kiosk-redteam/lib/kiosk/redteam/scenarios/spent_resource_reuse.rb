@@ -8,6 +8,7 @@ module Kiosk
       class SpentResourceReuse < Scenario
         KYC_BECAUSE = 'The first, legitimate use below would then fail for want of KYC, and ' \
                       'the re-use this scenario tests would never be reached.'
+        REUSE_BECAUSE = 'The resource is then not spent, so the re-use this scenario tests would never be reached.'
 
         def initialize
           super(name: 'SpentResourceReuse')
@@ -28,14 +29,10 @@ module Kiosk
           return failure if failure
 
           owned_ref = profile.create_owned.call(client, a)
-          pay_for_owned(client, a, profile, owned_ref)
-          first_use_failure(run_gated(client, a, profile, owned_ref)) || reuse(client, a, profile, owned_ref)
-        end
-
-        def first_use_failure(first_resp)
-          return nil if first_resp.status == 200
-
-          breach_verdict(first_resp.status, "first gated_action failed (#{first_resp.status}); cannot test C3")
+          stage_payment(client, a, profile, owned_ref, because: REUSE_BECAUSE) ||
+            setup_failure(run_gated(client, a, profile, owned_ref),
+                          step: 'the first, legitimate gated_action', because: REUSE_BECAUSE) ||
+            reuse(client, a, profile, owned_ref)
         end
 
         # Only the resource-state gate's 403 counts: A paid, and the first use succeeded.

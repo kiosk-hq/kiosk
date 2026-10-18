@@ -47,6 +47,9 @@ module Kiosk
         'authorization gate the request passed through said yes; a declined card is not a gate'
     }.freeze
 
+    # The 402 codes kiosk-server answers before it evaluates the request.
+    UNEVALUATED_CODES = %w[pow_required payment_setup_required].freeze
+
     # A validation error (bad_request) is not evidence of an authorization gate.
     BLOCKED_ERROR_CODES = %w[forbidden unauthenticated rls_denied].freeze
 
@@ -74,6 +77,10 @@ module Kiosk
 
       ' [the harness already solved every issued challenge and re-sent the identical request once]'
     end
+
+    # True when the origin answered before it evaluated the request: a toll it
+    # demands, or a payment refused before the mandates are read.
+    def self.unevaluated?(response) = UNEVALUATED_CODES.include?(error_code(response))
 
     def self.blocked?(response)
       # Status first: a crash whose body carries `forbidden` is not a block. 0 is a connection error.

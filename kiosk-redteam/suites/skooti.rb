@@ -202,13 +202,13 @@ module SkootiScenarios
 
     def call(client, _profile)
       a = licensed_customer(client)
-      @failures = []
-      @statuses = []
+      @failures    = []
+      @unevaluated = []
+      @statuses    = []
       MALFORMED.each { |junk| probe(client, a, junk) }
       check_control(client, a)
 
-      Kiosk::Redteam::Verdict.new(blocked: @failures.empty?, skipped: false,
-                                  status: @statuses.find { |s| s != 400 } || 400, detail: @failures.join(' | '))
+      probes_verdict(@statuses.find { |s| s != 400 } || 400, @failures, @unevaluated)
     end
 
     private
@@ -235,6 +235,7 @@ module SkootiScenarios
     def check_control(client, customer)
       control = pay_with_ref(client, customer, '00000000-0000-4000-8000-000000000000')
       return if control.status == 403
+      return @unevaluated << "CONTROL → HTTP #{control.status} code=#{body_field(control, 'code').inspect}" if Kiosk::Redteam.unevaluated?(control)
 
       @failures << "CONTROL well-formed-but-unknown reservation_id → HTTP #{control.status} " \
                    "(want the cashier's 403; a 400 here means the malformed-uuid probes never reached the cashier)"
@@ -243,11 +244,13 @@ module SkootiScenarios
     # supplied: the probe's own bytes, so an echoed value is not reported as a leak.
     def check(label, resp, supplied: nil)
       @statuses << resp.status
-      scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
-      code = body_field(resp, 'code')
-      return if resp.status == 400 && code == 'bad_request' && !scan.leak?
+      answer = "#{label} → HTTP #{resp.status} code=#{body_field(resp, 'code').inspect}"
+      return @unevaluated << answer if Kiosk::Redteam.unevaluated?(resp)
 
-      @failures << "#{label} → HTTP #{resp.status} code=#{code.inspect}#{leak_note(scan)}"
+      scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
+      return if resp.status == 400 && body_field(resp, 'code') == 'bad_request' && !scan.leak?
+
+      @failures << "#{answer}#{leak_note(scan)}"
     end
 
     # Reserves nothing: the shape check runs before the cashier, so the shared fleet is untouched.

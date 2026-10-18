@@ -116,7 +116,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering, '#call — only a 401 
                  headers: { 'Content-Type' => 'application/json' })
   end
 
-  { 403 => 'forbidden', 402 => 'pow_required' }.each do |status, code|
+  { 403 => 'forbidden', 402 => 'payment_failed' }.each do |status, code|
     it "returns blocked: false when the tampered token is answered #{status}" do
       stub_register_with_real_jwt
       stub_query('ping', status: status, code: code)

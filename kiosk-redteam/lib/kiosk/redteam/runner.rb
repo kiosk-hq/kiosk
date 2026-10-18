@@ -2,7 +2,7 @@
 
 module Kiosk
   module Redteam
-    # Runs scenarios, prints a BLOCKED / SKIP / BREACH line for each and returns
+    # Runs scenarios, prints a BLOCKED / SKIP / UNTESTED / BREACH line for each and returns
     # the `{ scenario:, verdict: }` results; `Battery#absorb` scores them.
     class Runner
       def initialize(base_url:, profile:)
@@ -26,6 +26,8 @@ module Kiosk
         elsif verdict.blocked
           # The status says which gate answered.
           puts "  BLOCKED ✓ #{scenario.name} (HTTP #{verdict.status})"
+        elsif verdict.untested
+          puts "  UNTESTED ! #{scenario.name} — #{verdict.detail}"
         else
           puts "  BREACH  ✗ #{scenario.name} — #{verdict.detail}"
         end

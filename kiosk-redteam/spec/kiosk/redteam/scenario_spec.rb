@@ -13,7 +13,7 @@ RSpec.shared_context 'scenario setup' do
         super(name: 'Probe')
       end
 
-      public :verdict_from, :skip_verdict, :error_code, :rows_from
+      public :verdict_from, :skip_verdict, :error_code, :rows_from, :probes_verdict
     end.new
   end
 
@@ -55,19 +55,27 @@ RSpec.describe Kiosk::Redteam::Scenario, '#verdict_from — HTTP 402 is never a 
 
   {
     'pow_required' => 'a toll was DEMANDED',
-    'payment_setup_required' => 'no payment instrument on file',
-    'payment_failed' => 'the payment rail declined'
+    'payment_setup_required' => 'no payment instrument on file'
   }.each do |code, phrase|
-    it "does not block a 402 #{code}, and says which one answered" do
+    it "scores a 402 #{code} as untested, and says which one answered" do
       v = scenario.verdict_from(response(402, problem(code)),
                                 detail: 'the gated action succeeded')
       expect(v.blocked).to be(false)
       expect(v.skipped).to be(false)
+      expect(v.untested).to be(true)
       expect(v.status).to eq(402)
       expect(v.detail).to include('COULD NOT TEST')
       expect(v.detail).to include(code.inspect)
       expect(v.detail).to include(phrase)
     end
+  end
+
+  it 'scores a 402 payment_failed as a breach: every gate said yes' do
+    v = scenario.verdict_from(response(402, problem('payment_failed')))
+    expect(v.blocked).to be(false)
+    expect(v.untested).to be(false)
+    expect(v.detail).to include('the payment rail declined')
+    expect(v.detail).to include('No gate refused the attack.')
   end
 
   it 'does not block a bare 402 that names no code' do
@@ -115,8 +123,9 @@ RSpec.describe Kiosk::Redteam::Scenario, '#verdict_from with expect:' do
   # K-736: `expect: 402` demands nothing on its own — three codes ride that
   # status and two of them are not refusals. Naming it costs an expect_code.
   it 'refuses a 402 the caller demanded by status alone' do
-    v = scenario.verdict_from(response(402, problem('pow_required')), expect: [402, 403])
+    v = scenario.verdict_from(response(402, problem('payment_failed')), expect: [402, 403])
     expect(v.blocked).to be(false)
+    expect(v.untested).to be(false)
     expect(v.detail).to include('HTTP 402 is conclusive only with an explicit expect_code')
     expect(v.detail).to include('pow_required/payment_setup_required/payment_failed')
   end
@@ -133,10 +142,26 @@ RSpec.describe Kiosk::Redteam::Scenario, '#verdict_from with expect:' do
   include_context 'scenario setup'
 
   it 'still refuses a named 402 whose code is one of the other two' do
-    v = scenario.verdict_from(response(402, problem('pow_required')),
-                              expect: 402, expect_code: 'payment_failed')
+    v = scenario.verdict_from(response(402, problem('payment_failed')),
+                              expect: 402, expect_code: 'pow_required')
     expect(v.blocked).to be(false)
-    expect(v.detail).to include('want error.code "payment_failed"')
+    expect(v.detail).to include('want error.code "pow_required"')
+  end
+
+  # The origin answers these two before it reads the attack, so they prove nothing either way.
+  %w[pow_required payment_setup_required].each do |code|
+    it "scores a 402 #{code} the caller did not name as untested, not as a breach" do
+      v = scenario.verdict_from(response(402, problem(code)), expect: 403, expect_code: 'forbidden')
+      expect(v.blocked).to be(false)
+      expect(v.untested).to be(true)
+      expect(v.detail).to include('COULD NOT TEST')
+    end
+  end
+
+  it 'scores a 402 payment_failed the caller did not name as a breach: every gate said yes' do
+    v = scenario.verdict_from(response(402, problem('payment_failed')), expect: 403, expect_code: 'forbidden')
+    expect(v.untested).to be(false)
+    expect(v.detail).to include('want status 403')
   end
 
   # The headline: a refusal from an UNRELATED gate is no longer a pass.
@@ -275,5 +300,25 @@ RSpec.describe Kiosk::Redteam::Scenario, '#skip_verdict' do
     expect(v.blocked).to be(false)
     expect(v.status).to eq(0)
     expect(v.detail).to eq('SKIP — no per_user_query')
+  end
+end
+
+RSpec.describe Kiosk::Redteam::Scenario, '#probes_verdict' do
+  include_context 'scenario setup'
+
+  it 'blocks when no probe failed and every probe was evaluated' do
+    expect(scenario.probes_verdict(400, [], []).blocked).to be(true)
+  end
+
+  it 'is untested when no probe failed but one was not evaluated' do
+    v = scenario.probes_verdict(402, [], ['pay → HTTP 402 code="payment_setup_required"'])
+    expect([v.blocked, v.untested]).to eq([false, true])
+    expect(v.detail).to eq('COULD NOT TEST: pay → HTTP 402 code="payment_setup_required"')
+  end
+
+  it 'is a breach when a probe failed, whatever else was not evaluated' do
+    v = scenario.probes_verdict(500, ['run → HTTP 500'], ['pay → HTTP 402'])
+    expect([v.blocked, v.untested]).to eq([false, false])
+    expect(v.detail).to eq('run → HTTP 500')
   end
 end

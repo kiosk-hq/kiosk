@@ -69,7 +69,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedKyc, '#call — a 402 at /kyc is
       expect(verdict.blocked).to be(false)
       expect(verdict.skipped).to be(false)
       expect(verdict.status).to eq(402)
-      expect(verdict.detail).to include('COULD NOT TEST')
+      # payment_failed comes after every gate said yes; the other two come before the attack is read.
+      expect(verdict.untested).to be(code != 'payment_failed')
+      expect(verdict.detail).to include(code == 'payment_failed' ? 'No gate refused the attack.' : 'COULD NOT TEST')
       expect(verdict.detail).to include(code.inspect)
       expect(verdict.detail).to include('the forged attestation this scenario submits to /kyc')
       expect(pay_stub).not_to have_been_requested

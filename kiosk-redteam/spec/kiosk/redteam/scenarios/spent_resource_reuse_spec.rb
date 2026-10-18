@@ -62,16 +62,16 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse, '#call — non-vac
   include_context 'spent_resource_reuse setup'
 
   context 'when the first gated action itself fails' do
-    it 'returns breach: false with diagnostic detail' do
+    it 'scores the scenario as untested and names the step' do
       stub_registers('a')
       stub_pay(status: 200)
       stub_action('start_rental', status: 403, code: 'forbidden')
 
       verdict = scenario.call(client, profile)
 
-      # First call failed — surface as a different kind of failure
       expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to include('first gated_action failed')
+      expect(verdict.untested).to be(true)
+      expect(verdict.detail).to include('SETUP FAILED: the first, legitimate gated_action returned HTTP 403')
     end
   end
 end
@@ -125,11 +125,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse, '#call — only a 
     expect(scenario.call(client, profile).blocked).to be(true)
   end
 
-  it 'does not block when the second use is answered 402' do
+  it 'scores the scenario as untested when the second use is answered 402 payment_setup_required' do
     stub_second_use(402, 'payment_setup_required')
     verdict = scenario.call(client, profile)
     expect(verdict.blocked).to be(false)
-    expect(verdict.detail).to include('want status 403')
+    expect(verdict.untested).to be(true)
   end
 
   it 'does not block when the second use is answered 401' do

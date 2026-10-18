@@ -178,12 +178,12 @@ module HotelingScenarios
     def call(client, _profile)
       @client    = client
       @principal = client.register!
-      @failures  = []
-      @statuses  = []
+      @failures    = []
+      @unevaluated = []
+      @statuses    = []
       MALFORMED.each { |junk| probe(junk) }
       control
-      Kiosk::Redteam::Verdict.new(blocked: @failures.empty?, skipped: false,
-                                  status: @statuses.find { |s| s != 400 } || 400, detail: @failures.join(' | '))
+      probes_verdict(@statuses.find { |s| s != 400 } || 400, @failures, @unevaluated)
     end
 
     private
@@ -196,6 +196,7 @@ module HotelingScenarios
     def control
       resp = pay_with_ref('00000000-0000-4000-8000-000000000000')
       return if resp.status == 403
+      return @unevaluated << "CONTROL → HTTP #{resp.status} code=#{error_code(resp).inspect}" if Kiosk::Redteam.unevaluated?(resp)
 
       @failures << "CONTROL well-formed-but-unknown booking_id → HTTP #{resp.status} " \
                    "(want the cashier's 403; a 400 here means the malformed-uuid probes never reached the cashier)"
@@ -204,10 +205,13 @@ module HotelingScenarios
     # `supplied:` discounts the probe's own echoed bytes from the leak scan.
     def check(label, resp, supplied: nil)
       @statuses << resp.status
+      answer = "#{label} → HTTP #{resp.status} code=#{error_code(resp).inspect}"
+      return @unevaluated << answer if Kiosk::Redteam.unevaluated?(resp)
+
       scan = Kiosk::Redteam::LeakScan.scan(resp.body, SQL_INTERNALS, supplied: supplied)
       return if resp.status == 400 && error_code(resp) == 'bad_request' && !scan.leak?
 
-      @failures << "#{label} → HTTP #{resp.status} code=#{error_code(resp).inspect}#{leaks(scan)}"
+      @failures << "#{answer}#{leaks(scan)}"
     end
 
     def leaks(scan) = "#{" LEAKS #{scan.leak.inspect}" if scan.leak}#{scan.note}"

@@ -624,6 +624,7 @@ COPIES = {
   },
   'app/controllers/application_controller.rb' => {
     rule: :code,
+    except: { 'prove' => 'prove has no Devise, so it has no wire signpost to include.' },
     why: "Standard Rails ApplicationController plus the Devise adapter's wire signpost."
   },
   'app/controllers/home_controller.rb' => {

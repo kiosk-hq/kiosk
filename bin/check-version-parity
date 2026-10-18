@@ -96,6 +96,12 @@ ACCESSOR = 'Kiosk.configuration.skill_url'
 LITERAL  = %r{https://kiosk\.tech/skill[-.][^"'\s)>]*}
 SIGNAL   = /rel=("|&quot;)kiosk\1/
 EMITS    = /href\s*=|set_header/
+# A page controller sends the header through the engine's concern.
+INCLUDES = /\binclude Kiosk::SkillLink\b/
+SKILL_LINK = File.expand_path('../kiosk-server/lib/kiosk/skill_link.rb', __dir__)
+unless File.readlines(SKILL_LINK).any? { it.match?(SIGNAL) && it.match?(EMITS) && it.include?(ACCESSOR) }
+  errors << "#{rel(SKILL_LINK)}: does not emit rel=\"kiosk\" from #{ACCESSOR}"
+end
 
 initializers.map { File.expand_path('../../..', it) }.each do |dir|
   demo  = File.basename(dir)
@@ -104,6 +110,7 @@ initializers.map { File.expand_path('../../..', it) }.each do |dir|
   Dir[File.join(dir, 'app', '**', '*.{rb,erb}')].each do |path|
     File.readlines(path).each.with_index(1) do |line, n|
       errors << "#{rel(path)}:#{n}: hardcodes #{line[LITERAL]}; read #{ACCESSOR}" if line.match?(LITERAL)
+      forms[:controller] += 1 if path.include?('/app/controllers/') && line.match?(INCLUDES)
       next unless line.match?(SIGNAL) && line.match?(EMITS)
 
       if line.include?(ACCESSOR)

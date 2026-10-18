@@ -194,7 +194,7 @@ RSpec.describe Kiosk::Reputation::Challenge, '.verify answers :bad_params' do
     expect(verify_challenge(expect: { alg: 'equihash', params: { n: 168, k: 7, rounds: 3 } })).to eq(:bad_params)
   end
 
-  it 'keeps the pre-K-541 behaviour when expect: is omitted (opt-in check)' do
+  it 'skips the params check when expect: is omitted' do
     expect(verify_challenge(challenge: issue_challenge(params: { n: 8, k: 1 }))).to eq(:ok)
   end
 end

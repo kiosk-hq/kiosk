@@ -128,7 +128,7 @@ Two things this buys: a challenge minted just before a difficulty raise stops
 being solvable at the old cheap parameters for the rest of its TTL, and a leaked
 HMAC secret cannot let a self-signed `{n: 8, k: 1}` challenge turn the toll
 off — the toll degrades rather than vanishing. `kiosk-server`'s gate always
-passes `expect:`; it is optional here so an existing embedder keeps working.
+passes `expect:`; `Challenge.verify` skips the check when it is omitted.
 
 Comparison uses the same canonical `k=v` rendering the sig covers, so key order,
 Symbol-vs-String keys and `168` vs `"168"` are all equal — it rejects a different

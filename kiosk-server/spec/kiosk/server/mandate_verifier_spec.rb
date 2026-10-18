@@ -9,21 +9,11 @@ module MandateVerifierSpec
     { iss: issuer, agent_id: 'agent-1', user_id: 'u-1', exp: future, iat: Time.now.to_i }.merge(over)
   end
 
-  # THE THREE PRESENCE EXAMPLES, AND WHAT CHANGED UNDER THEM (K-1307).
-  #
-  # They used to match `/exp/i`, `/id/i`, `/iat/i`, and the word each looked
-  # for came from the JWT GEM: `Missing required claim exp`, spliced into the
-  # refusal. So three examples about THIS protocol's required claims were in
-  # fact holding a third-party library's sentence onto the wire — on the
-  # payment path, where the refusal is read by whatever signed the mandate.
-  #
-  # Each still proves the same behaviour and proves it the same way: an
-  # otherwise fully valid payload (correct key, iss, principal, exp) minus
-  # exactly ONE claim must be refused, so only the presence check can be
-  # refusing it. What they assert about the WORDS is now inverted — the
-  # published sentence, the published hint spelling out the required claims
-  # from OUR OWN list (so the hint cannot drift from what the decode
-  # enforces), and no byte of the gem's wording anywhere in either.
+  # The three presence examples. Each sends an otherwise valid payload
+  # (correct key, iss, principal, exp) minus exactly ONE claim, so only the
+  # presence check can refuse it. Each asserts the published sentence, a hint
+  # that lists the required claims from our own list, and no byte of the JWT
+  # gem's own wording.
   def expect_missing_required_claim(&)
     expect(&)
       .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
@@ -141,8 +131,8 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     end
 
     # id and iat are spec-MUST claims. The payloads below are otherwise
-    # fully valid (correct key, iss, principal, exp) — they passed the old
-    # exp-only check and must now be rejected on presence alone.
+    # fully valid (correct key, iss, principal, exp), so only the presence
+    # check can refuse them.
     it 'rejects a mandate with no id claim' do
       no_id = intent_payload.except(:id)
       expect_missing_required_claim do
@@ -163,7 +153,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       end
     end
 
-    # The hint is not decoration: it is the ONLY place the wire now names the
+    # The hint is not decoration: it is the ONLY place the wire names the
     # claims, so it must name the ones the decode actually requires and not a
     # hand-kept second list beside them.
     it 'publishes the claims the decode enforces, not a copy of them' do
@@ -211,13 +201,11 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    # K-1250. Presence was the WHOLE check until 2026-08-30, and presence is not
-    # the constraint: §11.2 compares the three mandates' currencies to EACH OTHER
-    # and never to a domain, so `""` on intent, cart and payment is internally
-    # consistent all the way through the chain, reaches the PSP as the currency of
-    # a real charge, and becomes the key the spending-cap tally is scoped by
-    # (Executor#settled_total_cents). A non-String does the same and additionally
-    # binds a type the NOT NULL currency column is not.
+    # Presence is not enough: §11.2 compares the three mandates' currencies to
+    # EACH OTHER and never to a domain, so `""` on intent, cart and payment is
+    # consistent all the way through the chain, reaches the PSP as the currency
+    # of a real charge, and becomes the key of the spending-cap tally. A
+    # non-String does the same and binds a type the NOT NULL currency column is not.
     #
     # `Forbidden` BY CLASS, not by message: `currency` is one of the seven limbs of
     # the §9.1 mandate carve-out, so a silent move to `BadRequest` must redden here
@@ -225,7 +213,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     #
     # The currency domain is the next group: an ISO 4217 alpha-3 shape. The
     # verifier refuses "US" and "Euro", and it accepts "xyz".
-    describe 'malformed currency (K-1250)' do
+    describe 'malformed currency' do
       it 'rejects an intent whose currency is an EMPTY string' do
         empty = intent_payload.merge(currency: '')
         expect { described_class.verify_intent(raw_jws: sign(empty), identity: identity) }
@@ -257,7 +245,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    describe 'malformed currency (K-1250)' do
+    describe 'malformed currency' do
       # The positive control: the guard is not a blanket refuser.
       it 'accepts a well-formed currency' do
         m = described_class.verify_intent(raw_jws: sign(intent_payload), identity: identity)
@@ -271,32 +259,21 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    describe 'malformed currency (K-1250)' do
-      # ── THE DOMAIN IS NOW CLOSED, AND THIS IS THE EXAMPLE THAT SAYS WHERE ──
+    describe 'malformed currency' do
+      # ── The currency domain: an ISO 4217 alpha-3 shape ──
       #
-      # This example is the REWRITE of the one that used to pin the looseness on
-      # purpose («still accepts a string outside ISO 4217, canonicalised — the
-      # domain is K-1252, not this guard»). It was written so a later tightening
-      # could not happen by accident; the tightening has now happened ON PURPOSE
-      # — K-1252 settled on 2026-08-31 as «accept iso codes» — so the
-      # example asserts the NEW boundary instead of being deleted with the old one.
-      #
-      # WHAT IT PINS, and each clause is a place a regression would land:
-      #   * "Euro" is a NAME, not a code, and is now REFUSED where it used to be
-      #     accepted as "euro". This is the exact input the old example asserted
-      #     the opposite of, kept deliberately so the diff reads as a decision.
+      # Each clause is a place a regression would land:
+      #   * "Euro" is a NAME, not a code, and is refused.
       #   * The status is 403, not 400: `currency` is one of the seven limbs of
-      #     the §9.1 mandate carve-out that T-150 published on 2026-08-30, and a
-      #     domain refusal that answered 400 would contradict that list on the
-      #     day after it shipped.
+      #     the §9.1 mandate carve-out.
       #   * The refusal is on the SHAPE, so `"xyz"` still passes — stated here
       #     rather than left to be discovered, because it is the operator's
       #     MINIMUM refusal and not the whole domain (§11.1). The PSP refuses the
       #     rest one call later, and no list in this repository could do better:
       #     the vendored Stripe client documents a server-side supported set and
       #     enumerates nothing.
-      describe 'the currency domain is closed on ISO 4217 alpha-3 (T-159, K-1252)' do
-        it 'refuses a currency NAME: Euro was accepted as euro until T-159' do
+      describe 'the currency domain is ISO 4217 alpha-3' do
+        it 'refuses a currency NAME such as Euro' do
           odd = intent_payload.merge(currency: 'Euro')
           expect { described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
             .to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
@@ -328,21 +305,18 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    describe 'malformed currency (K-1250)' do
-      describe 'the currency domain is closed on ISO 4217 alpha-3 (T-159, K-1252)' do
-        it 'answers 403, not 400 — a domain refusal joins the §9.1 mandate carve-out (T-150)' do
+    describe 'malformed currency' do
+      describe 'the currency domain is ISO 4217 alpha-3' do
+        it 'answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out' do
           expect do
             described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: 'Euro')),
                                           identity: identity)
           end.to(raise_error { |e| expect(e.class::HTTP_STATUS).to eq(403) })
         end
 
-        # THE CONTROL, and it is not decoration: a code this repository spells
-        # somewhere must still settle. The four are a dated reading, not a
-        # standing claim — `git grep -c -w <code>` over the tracked tree of
-        # `reference` (BRE plus -w) on 2026-09-29 answers eur in 52 files, EUR in
-        # 63, usd in 16, USD in 9, gbp in 3, jpy in 1; gbp is getgrocery's glyph
-        # map and jpy is kiosk-redteam's WrongCurrencyCart ALTERNATIVES.
+        # The control: every code this repository spells must still settle.
+        # gbp is getgrocery's glyph map and jpy is kiosk-redteam's
+        # WrongCurrencyCart ALTERNATIVES.
         it 'settles eur, usd, gbp and jpy — either case, and padded' do
           { 'eur' => 'eur', 'EUR' => 'eur', 'usd' => 'usd', 'USD' => 'usd',
             'gbp' => 'gbp', 'jpy' => 'jpy', '  eur ' => 'eur' }.each do |sent, canonical|
@@ -361,11 +335,9 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    describe 'malformed currency (K-1250)' do
-      describe 'the currency domain is closed on ISO 4217 alpha-3 (T-159, K-1252)' do
-        # The shape is the MINIMUM refusal and this says so, so that a later wave
-        # that adds a real allow-list finds an example telling it what changed
-        # rather than a silent pass.
+    describe 'malformed currency' do
+      describe 'the currency domain is ISO 4217 alpha-3' do
+        # The shape is the MINIMUM refusal; an allow-list would change this example.
         it 'accepts three letters that name no currency — the shape is the minimum, not the domain' do
           m = described_class.verify_intent(
             raw_jws: sign(intent_payload.merge(currency: 'xyz')), identity: identity
@@ -381,16 +353,12 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    # ── Case and whitespace are NOT identity (K-1251) ────────────────────
+    # ── Case and whitespace are NOT identity ─────────────────────────────
     #
-    # THE DEFECT THIS BLOCK PINS. The spending-cap tally of §11.5 is keyed on
-    # the currency string, so before the boundary canonicalised it an assistant
-    # that alternated `"eur"` and `"EUR"` between chains got a FRESH cap for
-    # each spelling — the cap the operator published was not the cap it
-    # enforced. Both spellings are live in this repository, so the input was
-    # never hypothetical. The domain stays open (T-153); what closed is the
-    # question of whether two spellings of ONE code are one currency.
-    describe 'currency is canonicalised at the boundary (K-1251)' do
+    # The spending-cap tally of §11.5 is keyed on the currency string. Without
+    # canonicalisation, an assistant that alternated `"eur"` and `"EUR"`
+    # between chains would get a FRESH cap for each spelling.
+    describe 'currency is canonicalised at the boundary' do
       it 'downcases an intent currency' do
         m = described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: 'EUR')),
                                           identity: identity)
@@ -422,7 +390,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    describe 'currency is canonicalised at the boundary (K-1251)' do
+    describe 'currency is canonicalised at the boundary' do
       # The §11.2 comparisons run on the canonical values, so a chain that
       # spells one code two ways is ONE currency rather than a 403. The spec
       # leaves case-sensitivity to the operator (§11.1); this is the operator's
@@ -445,8 +413,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       end
 
       # The positive control the two examples above need: folding CASE must not
-      # fold two genuinely different codes together. K-551's cross-currency
-      # guard still holds.
+      # fold two genuinely different codes together.
       it 'still rejects a usd cart under an eur intent cap' do
         usd = cart_payload.merge(currency: 'usd')
         expect { described_class.verify_cart(raw_jws: sign(usd), identity: identity, intent: intent) }
@@ -460,7 +427,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_intent' do
-    describe 'currency is canonicalised at the boundary (K-1251)' do
+    describe 'currency is canonicalised at the boundary' do
       it 'still rejects a USD payment against an eur cart' do
         usd = payment_payload.merge(currency: 'USD')
         expect do
@@ -575,8 +542,8 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /currency/)
     end
 
-    # K-1250 on the CART limb, and the cart is where the vacuity is easiest to
-    # see: `cart.currency != intent.currency` is the only currency check §11.2
+    # The malformed-currency guard on the CART limb, where the vacuity is easiest
+    # to see: `cart.currency != intent.currency` is the only currency check §11.2
     # performs, and `"" != "eur"` is TRUE, so an empty cart currency is caught by
     # the guard rather than by the binding rule. The intent here is well-formed
     # ("eur"), so nothing but `require_currency!` can be what refuses this.
@@ -598,12 +565,9 @@ RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
   describe '.verify_cart' do
-    # K-741 / LINE-ITEMS-REQUIRED (2026-08-16). `line_items` was optional
-    # while the settlement path already depended on it: an assistant could omit
-    # it, pay successfully, and leave the operator holding a settlement it
-    # cannot match to any domain object — a degraded audit and reconciliation
-    # trail with no error raised anywhere. Required now, in the spec table, in
-    # the JSON Schema, and here.
+    # `line_items` is required: without it an assistant could pay and leave the
+    # operator holding a settlement it cannot match to any domain object. The
+    # spec table, the JSON Schema and the verifier require it.
     it 'rejects a cart missing line_items (absent)' do
       no_items = cart_payload.except(:line_items)
       expect { described_class.verify_cart(raw_jws: sign(no_items), identity: identity, intent: intent) }
@@ -628,12 +592,11 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /line_items must be an array/)
     end
 
-    # K-857 — the question K-741 left open, settled: presence is not the
-    # constraint. `[]` satisfies `required` and every check above while carrying
-    # exactly as much reconciliation value as omission did, and a positive
+    # Presence is not enough. `[]` satisfies `required` and every check above
+    # while carrying as much reconciliation value as omission, and a positive
     # `total_amount_cents` with nothing itemised under it is an unitemised
-    # charge. §11.2 and `mandates.schema.json` (`minItems: 1`) now say so; this
-    # pins that the verifier refuses the same set they do.
+    # charge. §11.2 and `mandates.schema.json` (`minItems: 1`) refuse it; this
+    # pins that the verifier refuses the same set.
     it 'rejects a cart whose line_items array is EMPTY' do
       empty = cart_payload.merge(line_items: [])
       expect { described_class.verify_cart(raw_jws: sign(empty), identity: identity, intent: intent) }
@@ -656,8 +619,6 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       no_exp = cart_payload.except(:exp)
       expect { described_class.verify_cart(raw_jws: sign(no_exp), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
-          # `/exp/i` here was the JWT gem's `Missing required claim exp`
-          # reaching the wire (K-1307), not anything this file writes.
           expect(e.message).to eq('mandate missing a required claim')
           expect(e.hint).to include('exp')
           expect("#{e.message} #{e.hint}").not_to include('Missing required claim')
@@ -675,7 +636,7 @@ end
 RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
-  # ─── K-551: robustness — a clean 4xx, never a 500 ────────────────────
+  # ─── robustness — a clean 4xx, never a 500 ───────────────────────────
   # A malformed input must not crash the verifier. A numeric-STRING exp slips
   # past JWT's expiry check (it coerces via to_i) then blows up in
   # `Time.at(String)`; a string iat blows up the same way (iat is not verified
@@ -710,7 +671,7 @@ end
 RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
-  # ─── K-543: non-positive amounts launder the spending cap ────────────
+  # ─── non-positive amounts launder the spending cap ───────────────────
   # A negative cart total slips under the cap (−100000 <= 5000), matches a
   # negative payment, settles, and drives the settlements SUM negative —
   # permanently RAISING the agent's effective cap by that amount. Zero is

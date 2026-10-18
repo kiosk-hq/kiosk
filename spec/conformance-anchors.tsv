@@ -1575,12 +1575,12 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on a fai
 kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses to redeem a claim-flow device_code (kinds do not cross)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	accepts three letters that name no currency — the shape is the minimum, not the domain
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — a domain refusal joins the §9.1 mandate carve-out (T-150)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	applies the shared decode checks (expired mandate rejected)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	canonicalises a cart currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	non-positive amounts launder the spending cap
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a currency NAME: Euro was accepted as euro until T-159
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a currency NAME such as Euro
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a two-letter country code: US is not a currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses the NUMERIC-3 spelling ISO 4217 also publishes
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects (403, not 500) when the agent has no registered payment key

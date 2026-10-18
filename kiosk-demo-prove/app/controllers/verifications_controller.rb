@@ -35,8 +35,8 @@ class VerificationsController < ApplicationController
     return render_unconfirmable unless @request&.confirmable?
 
     case params[:decision].to_s
-    when 'approve' then claim!(@request, 'confirmed') ? approve!(@request) : lost_race_response
-    when 'decline' then claim!(@request, 'declined') ? decline! : lost_race_response
+    when 'approve' then claim!(@request, :confirmed) ? approve!(@request) : render_unconfirmable
+    when 'decline' then claim!(@request, :declined) ? decline! : render_unconfirmable
     else render plain: 'decision must be approve or decline', status: :bad_request
     end
   end
@@ -100,18 +100,10 @@ class VerificationsController < ApplicationController
     render :decided
   end
 
-  # Claims the row before minting: of concurrent decisions, exactly one wins.
-  def claim!(prove_request, new_status)
-    claimed = ProveRequest
-              .pending.where(request_id: prove_request.request_id)
-              .update_all(status: new_status, updated_at: Time.current) == 1
-    prove_request.status = new_status if claimed
-    claimed
-  end
-
-  def lost_race_response
-    @request.reload
-    render_unconfirmable
+  # Claims the row before minting. The row lock makes concurrent decisions take
+  # turns: the first moves it out of `pending`, and the others find it decided.
+  def claim!(prove_request, decision)
+    prove_request.with_lock { prove_request.pending? && prove_request.update!(status: decision) }
   end
 
   def render_unconfirmable

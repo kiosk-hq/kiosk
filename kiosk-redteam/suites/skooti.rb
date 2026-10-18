@@ -14,7 +14,7 @@ require 'uri'
 require 'json'
 
 # KYC attestations: valid/expired signed with the broker's key, forged with a wrong key under the trusted issuer.
-require_relative 'prove_test_issuer'
+require_relative '../support/prove_test_issuer'
 
 BASE_URL = ENV.fetch('SERVER_URL')
 ISSUER   = BASE_URL

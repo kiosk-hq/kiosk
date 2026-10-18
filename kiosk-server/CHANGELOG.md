@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Server::ActionEvent#ok?` and `#error?` are removed; read `status`.
 - 2026-10-18: `include Kiosk::SkillLink` in a page controller sends `Link: <skill_url>; rel="kiosk"` on every answer.
 - 2026-10-18: A public key over 4096 bits is refused with `400 bad_request`; `pay` resolves the caller before it reads the body, so a bad token is 401 first.
 - 2026-10-18: kiosk-server no longer depends on `solid_cable`; the host bundles the Action Cable adapter its `config/cable.yml` names.

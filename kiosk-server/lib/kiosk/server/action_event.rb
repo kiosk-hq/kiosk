@@ -35,9 +35,6 @@ module Kiosk
         cause.is_a?(::Exception) && !cause.equal?(error) ? cause : nil
       end
 
-      def ok?    = status == OK
-      def error? = status == ERROR
-
       # `{"salon_id" => "integer", "slot" => "string"}`, in JSON Schema type names.
       def arg_types
         args.to_h { |key, value| [key.to_s, self.class.json_type(value)] }

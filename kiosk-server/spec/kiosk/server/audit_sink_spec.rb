@@ -164,7 +164,7 @@ RSpec.describe Kiosk::Server::AuditSink do
                                      status: described_class::ERROR,
                                      error: ArgumentError.new(long))
 
-      expect(failed).to be_error
+      expect(failed.status).to eq('error')
       expect(failed.error_class).to eq('ArgumentError')
       expect(failed.error_message.length).to eq(5_000)
     end
@@ -404,7 +404,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         run!
 
         expect(events.size).to eq(1)
-        expect(events.first).to be_ok
+        expect(events.first.status).to eq('ok')
         expect(events.first.action).to eq('place_order')
         expect(events.first.agent_id).to eq('a-1')
         expect(events.first.args).to eq(sku: 'ABC', slot: '2026-06-15T14:00:00Z')
@@ -436,7 +436,7 @@ RSpec.describe Kiosk::Server::AuditSink do
           .to_stderr
 
         expect(events.size).to eq(1)
-        expect(events.first).to be_error
+        expect(events.first.status).to eq('error')
         expect(events.first.error_class).to eq('Kiosk::Server::Errors::ActionFailed')
         expect(events.first.error_message).to eq('Action "place_order" failed')
         expect(events.first.error_message).not_to include('inventory exploded')
@@ -681,7 +681,7 @@ RSpec.describe Kiosk::Server::AuditSink do
 
       expect(widget_count).to eq(0)  # the action really rolled back …
       expect(events.size).to eq(1)   # … and the event was emitted anyway
-      expect(events.first).to be_error
+      expect(events.first.status).to eq('error')
     end
   end
 end

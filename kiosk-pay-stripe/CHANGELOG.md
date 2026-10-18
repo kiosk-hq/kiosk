@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: kiosk-pay-stripe keys a capture by the Stripe customer and the cart mandate id, so the carts of two customers cannot share an idempotency key.
 - 2026-10-18: `refund` takes `key:`, which names the refund among the refunds of its charge; kiosk-pay-stripe keys the Stripe request by the charge and that key.
 - 2026-10-18: `PaymentFailed` takes no `reason:`; the engine reads only its message and `retryable?`.
 

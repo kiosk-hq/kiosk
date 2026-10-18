@@ -10,7 +10,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture' do
                             created: 1_700_000_000)
   end
 
-  it "charges the customer's saved card off_session, keyed by the cart mandate id" do
+  it "charges the customer's saved card off_session, keyed by the Stripe customer and the cart mandate id" do
     stub_cards('pm_default_visa')
     expect(stripe.payment_intents).to receive(:create).with(
       {
@@ -23,7 +23,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture' do
         confirm: true,
         metadata: { cart_mandate_id: 'cart-1' }
       },
-      { idempotency_key: 'cart-1-capture' }
+      { idempotency_key: 'cus_existing-cart-1-capture' }
     ).and_return(pi)
 
     result = adapter.capture(cart_mandate, payment_method: nil)

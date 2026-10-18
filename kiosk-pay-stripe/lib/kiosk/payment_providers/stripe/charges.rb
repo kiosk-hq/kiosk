@@ -10,7 +10,7 @@ module Kiosk
         def charge(cart_mandate, customer_id, payment_method)
           @stripe.payment_intents.create(
             intent_params(cart_mandate, customer_id, payment_method),
-            { idempotency_key: "#{cart_mandate.id}-capture" }
+            { idempotency_key: "#{customer_id}-#{cart_mandate.id}-capture" }
           )
         rescue ::Stripe::CardError => e
           # A definitive decline: nothing was charged, so a retry is safe.

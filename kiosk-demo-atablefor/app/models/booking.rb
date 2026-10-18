@@ -29,14 +29,13 @@ class Booking < ApplicationRecord
   }
 
   # Records the visit of a confirmed booking whose seating has passed, once:
-  # only the call that stamps `visit_recorded_at` records it.
+  # the row lock makes two calls take turns, and the second finds it stamped.
   def self.honour!(booking_id)
     transaction do
-      stamped = confirmed.where(id: booking_id, visit_recorded_at: nil, seating_at: ..Time.current)
-                         .update_all(visit_recorded_at: Time.current)
-      next unless stamped == 1
+      booking = confirmed.where(visit_recorded_at: nil, seating_at: ..Time.current).lock.find_by(id: booking_id)
+      next unless booking
 
-      booking = includes(:restaurant).find(booking_id)
+      booking.update!(visit_recorded_at: Time.current)
       Kiosk::Visit.record!(user_id: booking.user_id, value_cents: booking.restaurant.average_spend_cents * booking.party_size)
     end
   end

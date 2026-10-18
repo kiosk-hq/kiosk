@@ -81,7 +81,7 @@ module RentalTokenIssuer
       [message, sig] if sig.bytesize == 64
     end
 
-    def envelope?(token) = !token.empty? && token.bytesize <= TOKEN_MAX_BYTES && token.exclude?(NUL_BYTE)
+    def envelope?(token) = !token.empty? && token.bytesize <= TOKEN_MAX_BYTES && !token.include?(NUL_BYTE)
 
     def signature_text?(sig_b64) = sig_b64.bytesize <= SIG_B64_MAX && sig_b64.match?(SIG_B64_FORMAT)
 

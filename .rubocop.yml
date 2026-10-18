@@ -44,7 +44,8 @@ Style/OneClassPerFile:
     - "**/test/**/*"
 
 # The Rails cops read the code that runs inside a Rails app. Excluded: the
-# plain Ruby gems and the scripts that run outside an app, under bare `ruby`.
+# plain Ruby gems, the scripts that run outside an app under bare `ruby`, and
+# the app file the firmware crosscheck loads under bare `ruby`.
 Rails:
   Exclude: &plain_ruby
     - "bin/**/*"
@@ -59,6 +60,7 @@ Rails:
     - "e2e/fixtures/register_pow_flow.rb"
     - "kiosk-demo-*/script/**/*"
     - "kiosk-demo-skooti/firmware/**/*"
+    - "kiosk-demo-skooti/app/services/rental_token_issuer.rb"
     - "kiosk-core/**/*"
     - "kiosk-kyc-prove/**/*"
     - "kiosk-pow/**/*"

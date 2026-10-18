@@ -301,13 +301,17 @@ escalating for high rate, zero purchases, and bad-faith history (bad_proof_count
 is multiplied by `bad_proof_count_factor` to escalate fast), clamped to
 `[count_min, count_max]`.
 
+Behind the `kiosk-server` gate this policy gets `Factors.empty`, because it
+answers no `#within`. So there it asks `base_count + unproven_count_bonus`
+proofs of every access token.
+
 ## Reputation hit on bad proof
 
 When `Challenge.verify` returns `:bad_proof` (well-formed, unexpired,
 correctly-bound proof but wrong nonce), `kiosk-server` calls the
-`on_bad_proof` callback. The host increments the principal's `bad_proof_count`
-there. The example policy then escalates difficulty fast on subsequent requests
-from the same principal.
+`on_bad_proof` callback with the caller's `Kiosk::Identity`. The engine keeps
+no count of wrong proofs and gives none to the policy. A host that uses the
+signal records it in a store it owns.
 
 This is the intended signal: a correct solver never submits a wrong nonce.
 A `:bad_sig` (forged or wrong-request proof), `:expired` or `:bad_params`
@@ -324,15 +328,14 @@ The server gate (`Kiosk::Server::PowGate`) reads these config slots:
 | `reputation_policy` | `Kiosk::Reputation::Policy` instance (or duck type) | `nil` | Policy that decides when and how hard to challenge. `nil` = never challenge (zero overhead). |
 | `pow_secret` | String | required when policy is set | HMAC key for challenge signing. Load from env: `ENV.fetch("KIOSK_POW_SECRET")`. |
 | `pow_ttl` | Integer (seconds) | `300` | Challenge validity window. |
-| `on_bad_proof` | `(identity:) → void` callable | no-op | Called when a submitted proof has a wrong nonce. Increment `bad_proof_count` here. |
+| `on_bad_proof` | `(identity:) → void` callable | no-op | Called with the caller's `Kiosk::Identity` when a submitted proof has a wrong nonce. Record it in a store you own. |
 | `pow_spent_store` | `#claim`/`#release`/`#spent?`/`#mark_spent` | `Kiosk::Server::PowSpentStores::ActiveRecord` (the `kiosk.pow_spent` table) | Tracks spent challenge ids so a proof is accepted once, across every process and deploy. See kiosk-server's README, "Multi-process deployments". |
 
 ```ruby
 Kiosk.configure do |c|
-  c.reputation_policy = Kiosk::Reputation::Policies::RateAndReputation.new
+  c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
   c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET")
   c.pow_ttl           = 300
-  c.on_bad_proof      = ->(identity:) { identity.increment!(:bad_proof_count) }
 end
 ```
 
@@ -349,8 +352,8 @@ default 3600 seconds).
 
 - **PoW is economic friction, not a wall.** A determined ASIC attacker still
   gets in at some cost; the point is to make free-riding cost more than buying.
-  Combine with the cheap-for-genuine-buyers path (proven principals pass through
-  unchallenged when rate is low).
+  Combine it with a cheap path for genuine buyers: `RecentSpend` tolls a
+  customer less often as their recent spend grows.
 - **Reputation = a sum of factors the host supplies.** We ship tools and an
   example policy, not a mandated curve. Providers are expected to write
   domain-specific policies that reflect their actual trust signals.

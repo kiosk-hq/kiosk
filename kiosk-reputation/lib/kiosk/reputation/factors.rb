@@ -2,9 +2,10 @@
 
 module Kiosk
   module Reputation
-    # Reputation inputs per request. The engine fills the two purchase fields
-    # from its own settlements and recorded visits; every field may be nil, so
-    # a policy reads them through `.to_i`.
+    # Reputation inputs per request. For a policy that answers `#within`, the
+    # engine fills the two purchase fields from its own settlements and
+    # recorded visits; it fills no other field. Every field may be nil, so a
+    # policy reads them through `.to_i`.
     Factors = Data.define(
       :kyc_level,
       :settled_purchases_count,

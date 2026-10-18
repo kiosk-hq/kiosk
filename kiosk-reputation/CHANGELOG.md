@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Policies::RateAndReputation` is removed; `Factors` keeps only `settled_purchases_count` and `settled_purchases_cents`.
 - 2026-10-18: The README configures `RecentSpend`; `RateAndReputation` gets no factors behind the gate, and `on_bad_proof` records into a store the host owns.
 - 2026-10-18: `Policies::Backoff` and `BackoffStore` are removed.
 - 2026-10-18: `RecentSpend` draws once for each customer in each token lifetime, so a new access token in the same lifetime meets the same outcome.

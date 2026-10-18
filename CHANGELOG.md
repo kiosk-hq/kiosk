@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Reputation::Policies::RateAndReputation` is removed; `Factors` keeps only the two purchase fields the engine fills.
 - 2026-10-18: The kiosk-reputation README configures `RecentSpend` and states that the engine gives `RateAndReputation` no factors and keeps no count of wrong proofs.
 - 2026-10-18: `Kiosk::Reputation::Policies::Backoff`, `BackoffStore` and the gate's `on_proof_verified` policy hook are removed.
 - 2026-10-18: `POST /kiosk/agents/kyc` refuses with 403 an attestation the configured `kyc_provider` does not accept, as the provider callback does.

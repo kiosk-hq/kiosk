@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1933 anchors.
+# 1904 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -771,6 +771,7 @@ kiosk-pow-equihash/README.md	- The seed = `salt ‖ LE32(header_nonce)` is hashe
 kiosk-pow-equihash/README.md	- The sorted nonce table must be rebuilt from scratch
 kiosk-pow-equihash/README.md	192/7 measures ~155 s and ~5.4 GiB on the reference numpy
 kiosk-pow-equihash/README.md	2^k leaf hashes where **sibling XORs cancel** one n_div-bit block per level.
+kiosk-pow-equihash/README.md	A policy picks the count for each client, for example:
 kiosk-pow-equihash/README.md	Abuser:
 kiosk-pow-equihash/README.md	Buffer reuse: yes. Work reuse: no
 kiosk-pow-equihash/README.md	Checks performed (in order):
@@ -811,6 +812,7 @@ kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_K = 7
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      DEFAULT_N = 168
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	      def self.params(n: 168, k: 7)
 kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	    # The solver finds 2^k nonces whose BLAKE2b-256(seed ‖ nonce) outputs
+kiosk-pow-equihash/lib/kiosk/pow/equihash.rb	def self.params(n: 168, k: 7)
 kiosk-pow-equihash/lib/kiosk/pow/equihash/railtie.rb	Kiosk::Reputation::Backends.register(NAME, Equihash)
 kiosk-pow-equihash/lib/kiosk/pow/equihash/railtie.rb	initializer 'kiosk_pow_equihash.register_backend' do
 kiosk-pow-equihash/lib/kiosk/pow/equihash/solver.rb	Needs python3 + numpy on PATH (see README, "Solver (Python + numpy)").
@@ -880,10 +882,9 @@ kiosk-redteam/suites/tudu.rb	BATTERY.record('NoLoginAddressOnTheRoster',
 kiosk-redteam/suites/tudu.rb	BATTERY.record('PreLinkTokenAfterLink', rc == 401,
 kiosk-reputation/README.md	      "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
 kiosk-reputation/README.md	  is the shipped default; `argon2id` is legacy.
-kiosk-reputation/README.md	  unproven_count_bonus:       1,    # extra proofs for principals with 0 purchases
 kiosk-reputation/README.md	## Anti-DoS invariant: cheap checks before the expensive backend eval
 kiosk-reputation/README.md	### Proof — client re-sends the same request, proof(s) in the `Kiosk-PoW` header
-kiosk-reputation/README.md	### `Policies::RateAndReputation` — EXAMPLE (providers replace this)
+kiosk-reputation/README.md	### `Policies::RecentSpend` — one toll per session, by a chance that recent spend lowers
 kiosk-reputation/README.md	**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** A PoW backend registers
 kiosk-reputation/README.md	- `alg` + `params` are **mandated** — no client negotiation field. `equihash`
 kiosk-reputation/README.md	A single proof may be sent bare (`Kiosk-PoW: {"challenge":{…},"nonce":{…}}`), as a
@@ -894,7 +895,6 @@ kiosk-reputation/README.md	[Installation](#installation)). This gem is backend-a
 kiosk-reputation/README.md	`WWW-Authenticate: Kiosk-PoW realm="<issuer>"`) whose flat top-level `code` is
 kiosk-reputation/README.md	`kiosk-reputation` decides *when* and *how hard* to challenge a request with a
 kiosk-reputation/README.md	burning a backend eval. This is not optional; it is tested.
-kiosk-reputation/README.md	count: 9 }
 kiosk-reputation/README.md	pluggable reputation policy interface.
 kiosk-reputation/README.md	proof-of-work, issues and verifies the signed wire challenge, and provides a
 kiosk-reputation/README.md	provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
@@ -919,39 +919,17 @@ kiosk-reputation/lib/kiosk/reputation/challenge.rb	return :bad_sig unless consta
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	return :expired unless fields.exp.to_i > now.to_i
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	sig: compute_sig(secret, fields) }
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	{ id:, alg:, params:, salt: fields.salt, exp: fields.exp,
-kiosk-reputation/lib/kiosk/reputation/factors.rb	      :bad_proof_count
-kiosk-reputation/lib/kiosk/reputation/factors.rb	:account_age_seconds,
-kiosk-reputation/lib/kiosk/reputation/factors.rb	:bad_proof_count
-kiosk-reputation/lib/kiosk/reputation/factors.rb	:dispute_count,
-kiosk-reputation/lib/kiosk/reputation/factors.rb	:kyc_level,
-kiosk-reputation/lib/kiosk/reputation/factors.rb	:request_rate_per_min,
-kiosk-reputation/lib/kiosk/reputation/factors.rb	:settled_purchases_cents,
-kiosk-reputation/lib/kiosk/reputation/factors.rb	:settled_purchases_count,
-kiosk-reputation/lib/kiosk/reputation/factors.rb	Factors = Data.define(
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	            alg: 'equihash',
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	            count: compute_count(purchases, rate, bad_proofs)
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	            params: @equihash_params,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          base_count:                 1,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          count_min:                  1,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          proven_purchases_threshold: 5,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          rate_count_step:            1,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          unproven_count_bonus:       1,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	        def initialize(
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	alg: 'equihash',
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	bad_proof_count_factor:     3,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	count += bad_proofs * @bad_proof_count_factor
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	count_max:                  10,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def challenge_for(factors:, **)
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def initialize(
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_k:                 7
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_n:                 168,
+kiosk-reputation/lib/kiosk/reputation/factors.rb	Factors = Data.define(:settled_purchases_count, :settled_purchases_cents) do
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	#{identity.user_id}:#{span}
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	Digest::SHA256.digest("#{identity.user_id}:#{span}").unpack1('Q>').fdiv(2**64)
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def chance(cents) = [(@cap_cents - cents).fdiv(@cap_cents), 0].max
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(within:, cap:)
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	{ alg: 'equihash', params: equihash_params, count: 1 }
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	{ alg: 'equihash', params: equihash_params, count: 1 } if draw(identity) < chance(
+kiosk-reputation/lib/kiosk/reputation/policy.rb	@return [Hash{alg: String, params: Hash, count: Integer}, nil]
 kiosk-reputation/lib/kiosk/reputation/policy.rb	coarse CALL KIND: :query, :run or :pay
+kiosk-reputation/lib/kiosk/reputation/policy.rb	def challenge_for(**)
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	  it 'does not invoke the backend when sig is wrong (uses spy backend)' do
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	'.verify cheap checks run before the backend' do
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	does not invoke the backend for an expired challenge (uses spy backend)
@@ -960,15 +938,6 @@ kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when p
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when salt is tampered
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when the sig field itself is corrupted
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	sets exp = now + ttl
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	adds the unproven bonus ONLY at zero purchases, not merely below the proven threshold
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	caps count at count_max (10) even with extreme inputs
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	carries equihash (n, k) params
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	demands base_count + unproven bonus when rate is low
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	escalates count as bad_proof_count increases
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	escalates count as rate increases (proven principal, no bad proofs)
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	floors count at count_min (1)
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	issues an :equihash challenge (argon2id is legacy)
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	returns nil for a proven, low-rate, clean principal
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	draws once per access token, so each call made with one token meets the same outcome
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	gives every token minted for one customer within one token lifetime the same outcome
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	reads the cap in whole currency units and the spend in cents
@@ -1169,6 +1138,7 @@ kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.current_issuer
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def extract_proofs(pow)
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	# One proof, a JSON array, repeated header lines (Rack joins them with
+kiosk-server/lib/kiosk/server/pow_gate.rb	def bad_proof_hook(config, identity) = -> { config.on_bad_proof.call(identity: identity) }
 kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
 kiosk-server/lib/kiosk/server/pow_toll.rb	# Not bad faith (clock skew, a difficulty change): release the claim
@@ -1733,6 +1703,7 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	re-challenges when the VERB diff
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	renders the documented forbidden problem document, carrying the hint
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	scales the challenge TTL by `count`, so a sequential solver does not lose the first
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	still issues a 402 at the shipped equihash default — accepted set unchanged
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	tolls a new token again
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	verifies for the identical method + verb + args (the control)
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	is idempotent and visible to a second instance

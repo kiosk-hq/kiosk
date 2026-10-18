@@ -123,7 +123,7 @@ This is a deliberate design property: honest clients doing occasional PoWs pay t
 
 ## Anti-abuse strategy: N×PoW
 
-Equihash has discrete difficulty — only via (n, k) parameter changes. Instead of a continuous difficulty dial, the protocol uses **proof count**:
+Equihash has discrete difficulty — only via (n, k) parameter changes. Instead of a continuous difficulty dial, the protocol uses **proof count**. A policy picks the count for each client, for example:
 
 ```
 Normal client:   solve 1 PoW   (1× memory, 1× work)

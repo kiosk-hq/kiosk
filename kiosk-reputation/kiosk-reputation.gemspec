@@ -24,10 +24,8 @@ Gem::Specification.new do |spec|
     BEFORE the one expensive backend eval, so floods of forged/expired proofs are
     rejected without running a proof check.
 
-    Ships two policies. Policies::RecentSpend asks one proof of a session, by a
-    chance that the customer's recent spend lowers. Policies::RateAndReputation
-    is an example that escalates by PROOF COUNT on the factors it is given;
-    behind the kiosk-server gate it is given none.
+    Ships one policy, Policies::RecentSpend: it asks one proof of a session,
+    by a chance that the customer's recent spend lowers.
   DESC
   spec.homepage      = 'https://kiosk.tech'
   spec.license       = 'Apache-2.0'

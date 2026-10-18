@@ -5,7 +5,6 @@ require 'kiosk/reputation/backends'
 require 'kiosk/reputation/challenge'
 require 'kiosk/reputation/factors'
 require 'kiosk/reputation/policy'
-require 'kiosk/reputation/policies/rate_and_reputation'
 require 'kiosk/reputation/policies/recent_spend'
 
 module Kiosk

@@ -3,29 +3,10 @@
 module Kiosk
   module Reputation
     # Reputation inputs per request. For a policy that answers `#within`, the
-    # engine fills the two purchase fields from its own settlements and
-    # recorded visits; it fills no other field. Every field may be nil, so a
-    # policy reads them through `.to_i`.
-    Factors = Data.define(
-      :kyc_level,
-      :settled_purchases_count,
-      :settled_purchases_cents,
-      :request_rate_per_min,
-      :account_age_seconds,
-      :dispute_count,
-      :bad_proof_count
-    ) do
-      def self.empty
-        new(
-          kyc_level: nil,
-          settled_purchases_count: nil,
-          settled_purchases_cents: nil,
-          request_rate_per_min: nil,
-          account_age_seconds: nil,
-          dispute_count: nil,
-          bad_proof_count: nil
-        )
-      end
+    # engine fills both fields from its own settlements and recorded visits.
+    # Each field may be nil, so a policy reads them through `.to_i`.
+    Factors = Data.define(:settled_purchases_count, :settled_purchases_cents) do
+      def self.empty = new(settled_purchases_count: nil, settled_purchases_cents: nil)
     end
   end
 end

@@ -27,7 +27,7 @@ document (`application/problem+json`, accompanied by
 `WWW-Authenticate: Kiosk-PoW realm="<issuer>"`) whose flat top-level `code` is
 `pow_required` and which carries a **`challenges` array** (plural) as an
 extension member — the policy demands `count` independent proofs (N×PoW). A
-normal request gets one challenge; a suspicious one gets several:
+policy that asks for more than one proof gets one challenge per proof:
 
 ```json
 {
@@ -186,27 +186,16 @@ result = Kiosk::Reputation::Challenge.verify(
 
 ### `Factors`
 
-Immutable bundle of reputation inputs the host populates per request. All
-fields are nullable — the provider decides which ones to track.
+Immutable bundle of reputation inputs per request. Both fields may be nil.
 
 ```ruby
-factors = Kiosk::Reputation::Factors.new(
-  kyc_level:               nil,          # nil | :basic | :verified
-  settled_purchases_count: 0,            # number of completed purchases
-  settled_purchases_cents: nil,          # total purchase value in cents
-  request_rate_per_min:    120,          # recent request rate (req/min)
-  account_age_seconds:     nil,          # seconds since account creation
-  dispute_count:           nil,          # disputes filed
-  bad_proof_count:         2             # invalid PoW proofs submitted (bad-faith signal)
+Kiosk::Reputation::Factors.new(
+  settled_purchases_count: 3,            # settlements and visits in the window
+  settled_purchases_cents: 65_00         # their value in cents, less refunds
 )
 
-Kiosk::Reputation::Factors.empty         # all-nil convenience constructor
+Kiosk::Reputation::Factors.empty         # both fields nil
 ```
-
-The `request_rate_per_min` field is supplied by the host (which owns its own
-rate accounting); `kiosk-reputation` does not mandate a rate store, only
-consumes the number. The `bad_proof_count` field is a clear bad-faith signal —
-an honest client solver never submits a wrong proof.
 
 ### `Policy` (base)
 
@@ -255,55 +244,6 @@ new token issued to the customer in the same span, meets the same outcome.
 An operator that takes no payment records each fulfilled visit with
 `Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
 A refund through `Kiosk::Server::PaymentClaim#refund` is not spend.
-
-### `Policies::RateAndReputation` — EXAMPLE (providers replace this)
-
-This is the shipped illustrative policy for the "scrape-vs-buy" pattern.
-Providers are expected to **replace it wholesale** with a domain-specific policy.
-
-Equihash has no continuous difficulty dial, so this policy escalates by **proof
-count** (N×PoW), not a `d` knob. It returns `{alg:, params:, count:}`; the
-`kiosk-server` gate turns `count` into that many independent challenges.
-
-```ruby
-policy = Kiosk::Reputation::Policies::RateAndReputation.new(
-  proven_purchases_threshold: 5,    # settled purchases to be "proven"
-  low_rate_threshold:         10,   # max req/min considered low-rate
-  base_count:                 1,    # proofs demanded when challenging at all
-  rate_count_step:            1,    # proof increment per rate_step req/min above threshold
-  rate_step:                  10,   # req/min bucket size for rate escalation
-  unproven_count_bonus:       1,    # extra proofs for principals with 0 purchases
-  bad_proof_count_factor:     3,    # count += bad_proof_count * this factor
-  count_min:                  1,
-  count_max:                  10,
-  equihash_n:                 168,  # matches Kiosk::Pow::Equihash defaults
-  equihash_k:                 7
-)
-
-policy.challenge_for(
-  identity: current_user,
-  verb: :query,
-  factors: Kiosk::Reputation::Factors.new(
-    settled_purchases_count: 0,
-    request_rate_per_min: 80,
-    bad_proof_count: 0,
-    # other fields nil
-    kyc_level: nil, settled_purchases_cents: nil,
-    account_age_seconds: nil, dispute_count: nil
-  )
-)
-# => { alg: "equihash", params: { n: 168, k: 7 }, count: 9 }
-```
-
-Logic: serve without challenge only when ALL of — settled purchases ≥ threshold,
-rate ≤ threshold, and bad_proof_count == 0. Otherwise compute `count` by
-escalating for high rate, zero purchases, and bad-faith history (bad_proof_count
-is multiplied by `bad_proof_count_factor` to escalate fast), clamped to
-`[count_min, count_max]`.
-
-Behind the `kiosk-server` gate this policy gets `Factors.empty`, because it
-answers no `#within`. So there it asks `base_count + unproven_count_bonus`
-proofs of every access token.
 
 ## Reputation hit on bad proof
 
@@ -354,8 +294,8 @@ default 3600 seconds).
   gets in at some cost; the point is to make free-riding cost more than buying.
   Combine it with a cheap path for genuine buyers: `RecentSpend` tolls a
   customer less often as their recent spend grows.
-- **Reputation = a sum of factors the host supplies.** We ship tools and an
-  example policy, not a mandated curve. Providers are expected to write
+- **Reputation = a sum of factors the host supplies.** We ship tools and one
+  policy, not a mandated curve. Providers are expected to write
   domain-specific policies that reflect their actual trust signals.
 - **The provider mandates the algorithm.** Clients comply or are denied — do
   not add a negotiation path.
@@ -367,9 +307,6 @@ default 3600 seconds).
   200/9's real footprint fell to ~144 MB), so the gate can check every request
   — only *challenge* on suspicion/rate, since each challenge costs the client a
   real solve.
-- **`Policies::RateAndReputation` is an example.** Its thresholds and
-  proof-count curve are opinionated defaults, not recommendations. Providers
-  replace it with a domain-specific policy.
 
 ## Installation
 

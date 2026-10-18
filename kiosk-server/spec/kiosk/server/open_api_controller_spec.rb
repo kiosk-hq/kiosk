@@ -94,9 +94,8 @@ RSpec.describe Kiosk::Server::OpenApiController do
   include_context 'open api controller spec: demo origin'
 
   it 'is NOT tolled — a toll needs an identity, and there is none here' do
-    # The shipped RateAndReputation policy ignores `verb:` and prices every
-    # wire call it is asked about. This endpoint no longer asks: the gate that
-    # would have charged `:schema` is gone with the identity it charged.
+    # The policy below tolls every call it is asked about. The gate never asks
+    # it here, because the document is served without an identity.
     Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     seen   = []
     policy = Class.new(Kiosk::Reputation::Policy) do
@@ -116,7 +115,7 @@ RSpec.describe Kiosk::Server::OpenApiController do
     expect(seen).to be_empty
   end
 
-  # ─── the cache policy, which came in the gate's place ────────────────────
+  # ─── the cache policy ───────────────────────────────────────────────────
   it 'carries the PUBLIC cache policy and a strong ETag' do
     _status, _body, headers = get_document
 

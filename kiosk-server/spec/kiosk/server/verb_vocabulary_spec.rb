@@ -107,7 +107,7 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
   it 'reads the SHIPPED policies as clean' do
     expect(described_class.assert!(Kiosk::Reputation::Policy.new, :challenge_for, 'base')).to eq(:clean)
     expect(
-      described_class.assert!(Kiosk::Reputation::Policies::RateAndReputation.new, :challenge_for, 'rate')
+      described_class.assert!(Kiosk::Reputation::Policies::RecentSpend.new(within: 3600, cap: 100), :challenge_for, 'spend')
     ).to eq(:clean)
   end
 end

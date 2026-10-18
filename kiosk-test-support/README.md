@@ -37,7 +37,7 @@ as_agent_of(alice) do
 end
 
 as_user(alice) do
-  expect(query("select item from orders")).to contain_exactly("bread")
+  expect(query("select item from orders")).to contain_exactly({ item: "bread" })
 end
 
 as_anonymous do
@@ -61,7 +61,7 @@ For unit-shaped tests where you only care about call ordering, use the bundled `
 
 ```ruby
 Kiosk::TestHelpers.executor = Kiosk::TestHelpers::NullExecutor.new.tap do |e|
-  e.enqueue_query [{ "item" => "bread" }]
+  e.enqueue_query [{ item: "bread" }]
 end
 ```
 

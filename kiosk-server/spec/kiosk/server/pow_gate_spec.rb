@@ -810,7 +810,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
 end
 
 # ─── a valid proof is single-use even under concurrency ──────────────────
-# The gate claims the id atomically BEFORE the ~18 ms verify, so a single
+# The gate claims the id atomically BEFORE the ~22 ms verify, so a single
 # proof id is accepted exactly once across N racing submissions.
 RSpec.describe Kiosk::Server::PowGate, 'concurrent submission of one valid proof (spent-store TOCTOU)' do
   include PowGateSpecHelpers

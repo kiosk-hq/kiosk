@@ -55,7 +55,7 @@ RSpec.describe "orders flow", type: :kiosk_journey do
     as_agent_of(bob)   { run_action :create_order, items: ["bread"]   }
 
     as_agent_of(alice) do
-      expect(query("select item from orders")).to contain_exactly("oranges")
+      expect(query("select item from orders")).to contain_exactly({ item: "oranges" })
     end
   end
 

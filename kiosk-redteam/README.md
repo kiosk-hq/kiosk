@@ -127,8 +127,9 @@ When the server cannot reach it, the payment attacks are untested.
 ## The scenario library
 
 The classes under `Kiosk::Redteam::Scenarios`, each parameterised entirely by
-the profile — this is the whole library, `lib/kiosk/redteam/scenarios/` has one
-file per row:
+the profile — this is the whole library. `lib/kiosk/redteam/scenarios/` has one
+file per row, plus `kyc_attack.rb`, the `KycAttack` module that the KYC
+scenarios share:
 
 | Scenario | Asserts |
 |---|---|
@@ -197,8 +198,8 @@ exit battery.report!(expected_skips: %w[MissingKyc ExpiredKyc])
 `report!` prints the summary, returns the process exit status and never lets a
 run that proved nothing read as green: **0** when at least one attack ran and
 every attack that ran was blocked, **1** on a breach, on an untested attack or
-on a battery with no proofs at all, **2** when the set of skips is not
-`expected_skips` — a profile key that silently went `nil` disables a gate
+on a battery with no proofs at all, **2** when every attack that ran was
+blocked but the set of skips is not `expected_skips` — a profile key that silently went `nil` disables a gate
 scenario, and that must not pass as a clean run.
 
 Pass `on_skip: :breach` for a scenario whose surface this origin definitely

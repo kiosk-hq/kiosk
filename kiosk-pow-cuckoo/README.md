@@ -115,9 +115,10 @@ Unlike `kiosk-pow-argon2id` (Argon2id, scalar nonce), Cuckatoo proofs are compos
 }
 ```
 
-`kiosk-reputation`'s `Challenge.verify` passes the entire `nonce` field through
-to the backend's `.verify(salt:, params:, nonce:)` unchanged.  Confirm: it uses
-`nonce = pow[:nonce] || pow["nonce"]` and does NOT assume `nonce` is a String.
+`kiosk-server`'s PoW gate passes the proof's `nonce` object unchanged to
+`kiosk-reputation`'s `Challenge.verify`. `Challenge.verify` passes it unchanged
+to the backend's `.verify(salt:, params:, nonce:)`. So `nonce` is an object,
+not a String.
 
 ## Solver
 

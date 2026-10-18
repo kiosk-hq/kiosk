@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The gemspec and README give the verify cost as measured: ~22 ms for a valid proof at n=168 k=7 in pure Ruby, ~15 ms with YJIT.
 ## [0.5.16] — 2026-10-18
 
 - 2026-10-18: `Kiosk::Pow::Equihash.solver_path` is removed; a client solves with `Kiosk::Pow::Equihash.solve`.

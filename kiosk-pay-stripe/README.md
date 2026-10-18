@@ -15,10 +15,10 @@ payments means adding this one yourself:
 gem "kiosk-pay-stripe", github: "kiosk-hq/kiosk"
 ```
 
-Bundler brings the two runtime dependencies with it: `kiosk-core` and Stripe's
-own `stripe` gem. Nothing loads until you require the adapter, and the adapter
-does nothing until it is assigned to `payment_provider` — both in the block
-below.
+Bundler brings the three runtime dependencies with it: `activerecord`,
+`kiosk-core` and Stripe's own `stripe` gem. In a Rails app `Bundler.require`
+loads the adapter. The adapter does nothing until you assign it to
+`payment_provider`, as the block below shows.
 
 You also need a secret key for the **provider's own** Stripe account
 (`sk_test_…` for the PoC; test mode only, see below). The buyer's card is

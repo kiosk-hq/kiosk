@@ -75,7 +75,7 @@ end
 | `NAME` | Yes | The `alg` string of the wire challenge. |
 | `.params(**)` | Yes | Returns the `params` Hash of a challenge. The host calls it when it writes its policy. |
 | `.verify(salt:, params:, nonce:)` | Yes | Returns `true` when `nonce` is a valid proof for `salt` and `params`. Returns `false` for all other input. |
-| `.valid_params?(params)` | No | Returns `false` when no proof can verify at `params`. `kiosk-reputation` calls it before it mints a challenge. A wrong configuration then fails at once. |
+| `.valid_params?(params)` | No | Returns `false` when no proof can verify at `params`. `kiosk-server`'s PoW toll calls it through `Kiosk::Reputation::Backends.valid_params?` before it mints a challenge. A wrong configuration then fails at once. |
 
 ### 4. Read the inputs of `.verify` correctly
 

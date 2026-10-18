@@ -42,7 +42,8 @@ Same machine, same tool, same 5 samples, against n=96 k=5:
 | **168** | **7** | **21** | **5/5** | **9.1** | **18.2** | **1383** |
 
 Reproduce with `python3 bench/bench.py --grid 96,5 168,7 --samples 5 --markdown`.
-Two orders of magnitude separate the levels, in time and in memory both. The
+The levels differ by ~45× in p50 time (9.1 s / 0.2 s) and ~31× in peak memory
+(1383 MB / 44 MB). The
 168/7 p95 above is noisier than the grid's ~10.3 s (one sample in five ran long
 on a busy laptop); the p50 is the figure the gem README quotes.
 

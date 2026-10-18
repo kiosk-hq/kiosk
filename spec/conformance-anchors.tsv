@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1904 anchors.
+# 1901 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -80,16 +80,16 @@ e2e/README.md	## File layout
 e2e/README.md	## Run locally
 e2e/README.md	- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model.
 e2e/README.md	- **Multi-agent revocation** flows.
-e2e/README.md	- **RLS.** Path C removes raw SQL entirely — there is no arbitrary-SQL surface.
+e2e/README.md	- **RLS.** The wire carries no SQL: there is no arbitrary-SQL surface.
 e2e/README.md	- The `kiosk:install` and `kiosk:pay_stripe:install` Rails generators produce working migrations
 e2e/README.md	- The `pay` verb settles a full AP2 mandate trail: `pay_flow.rb` self-registers a synthetic principal, runs `payment_setup` (the setup page, then `ready`), signs intent → cart → payment mandates (JWS)
 e2e/README.md	./e2e/run.sh
-e2e/README.md	Path C removes raw SQL entirely
 e2e/README.md	RLS is optional and not used here.
 e2e/README.md	Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) runs locally and in CI.
 e2e/README.md	That a page's cursor rides in an RFC 8288 `Link` header is asserted only as an OpenAPI DECLARATION here
 e2e/README.md	The pay flow charges stripe-mock, Stripe's fixture server; no real Stripe call is made.
 e2e/README.md	The principal flows into handlers: the `book_appointment` Action reads `Kiosk.current_user_id`
+e2e/README.md	The wire carries no SQL: there is no arbitrary-SQL surface.
 e2e/README.md	`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup.
 e2e/README.md	└── fixtures/                               # files copied into the generated app
 e2e/assistant.sh	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
@@ -349,7 +349,7 @@ kiosk-demo-getgrocery/README.md	(the cart must be EUR, mirror the order at the p
 kiosk-demo-getgrocery/README.md	**Honest scope:** the operator validates **format and zone only**.
 kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
 kiosk-demo-getgrocery/README.md	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
-kiosk-demo-getgrocery/README.md	local stripe-mock; export `STRIPE_MOCK_URL=http://localhost:12111` to boot the
+kiosk-demo-getgrocery/README.md	local stripe-mock; `export STRIPE_MOCK_URL=http://localhost:12111` sends the
 kiosk-demo-getgrocery/README.md	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	include Kiosk::SkillLink
 kiosk-demo-getgrocery/app/controllers/kiosk/catalog_controller.rb	def catalog
@@ -662,7 +662,7 @@ kiosk-demo-tudu/README.md	access**, **AI-assistant→AI-assistant collaboration 
 kiosk-demo-tudu/README.md	critics claim GUC-style patterns can't handle: **membership-based many-to-many
 kiosk-demo-tudu/README.md	the **W5 account-link rebind** that migrates an assistant's work to a human.
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list`
-kiosk-demo-tudu/README.md	| `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `invite`, `accept_invite`, `remove_member`
+kiosk-demo-tudu/README.md	| `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `remove_member` and the `list_membership` topic
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/todos_controller.rb` | `list_todos`, `add_todo`, `complete_todo` and the `todo` topic |
 kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	# Runs domain code as the signed-in human, under the same session the wire opens
 kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
@@ -725,13 +725,13 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:, return_url:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	mode: 'setup',
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	confirm: true,
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	idempotency_key: "#{cart_mandate.id}-capture"
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	idempotency_key: "#{customer_id}-#{cart_mandate.id}-capture"
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	off_session: true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	raise PaymentFailed.new(card_decline_message(e), retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	when 'authentication_required' then 'the payment method needs authentication an off-session charge cannot complete'
 kiosk-pay-stripe/spec/generators/kiosk/pay_stripe/install_generator_spec.rb	types user_id as --user-id-type says
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	'#capture' do
-kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	charges the customer's saved card off_session, keyed by the cart mandate id
+kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	charges the customer's saved card off_session, keyed by the Stripe customer and the cart mandate id
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	maps authentication_required to a distinct human-safe message (still retryable)
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	translates a Stripe::CardError (declined) into a RETRYABLE PaymentFailed with a safe message
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	translates a non-card Stripe error (timeout/connectivity) into a NON-retryable PaymentFailed (unknown outcome)
@@ -759,14 +759,14 @@ kiosk-pow-cuckoo/Rakefile	task :solve_parity do
 kiosk-pow-cuckoo/lib/kiosk/pow/cuckoo.rb	      NAME = 'cuckatoo'
 kiosk-pow-cuckoo/spec/kiosk/pow/cuckoo_spec.rb	the unique valid 42-cycle for that header, from Grin's test suite.
 kiosk-pow-equihash/README.md	## Solver (Python + numpy)
-kiosk-pow-equihash/README.md	(0.30 ms), against 18.7 ms for a complete one. That gap is the point, because
+kiosk-pow-equihash/README.md	(0.30 ms), against ~22 ms for a complete one. That gap is the point, because
 kiosk-pow-equihash/README.md	(PoW = metered pricing, not a hardware wall).
 kiosk-pow-equihash/README.md	(`BUCKET_CAP`) to keep work and memory bounded — the real solution comes from
-kiosk-pow-equihash/README.md	(~9.6 s, *Performance* below) over a valid proof's verify (~18 ms, *Verify* above);
+kiosk-pow-equihash/README.md	(~9.6 s, *Performance* below) over a valid proof's verify (~22 ms, *Verify* above);
 kiosk-pow-equihash/README.md	**A wrong proof costs far less, deliberately.** The list above is also the
 kiosk-pow-equihash/README.md	**Performance (measured, reference numpy solver, one M-series laptop core):**
-kiosk-pow-equihash/README.md	**~530×** (9.6 s / 18 ms)
-kiosk-pow-equihash/README.md	- **Asymmetric verify.** A few KB (and ~18 ms, pure Ruby — far less for a
+kiosk-pow-equihash/README.md	**~440×** (9.6 s / 22 ms)
+kiosk-pow-equihash/README.md	- **Asymmetric verify.** A few KB (and ~22 ms, pure Ruby — far less for a
 kiosk-pow-equihash/README.md	- The seed = `salt ‖ LE32(header_nonce)` is hashed with each nonce
 kiosk-pow-equihash/README.md	- The sorted nonce table must be rebuilt from scratch
 kiosk-pow-equihash/README.md	192/7 measures ~155 s and ~5.4 GiB on the reference numpy
@@ -780,28 +780,25 @@ kiosk-pow-equihash/README.md	Its job is a **cheap-to-verify metered toll**, not 
 kiosk-pow-equihash/README.md	Memory-hard proof-of-work for Kiosk. Default PoW backend.
 kiosk-pow-equihash/README.md	No hardware-parity claim is made — none of Argon2id, Cuckatoo, or Equihash
 kiosk-pow-equihash/README.md	Normal client:   solve 1 PoW   (1× memory, 1× work)
-kiosk-pow-equihash/README.md	Python path is an order of magnitude slower. These numbers are the honest-client
-kiosk-pow-equihash/README.md	Ruby, a few KB; measured median at n=168 k=7). A native verifier would be
 kiosk-pow-equihash/README.md	Suspicious:
-kiosk-pow-equihash/README.md	Verification cost: **~18 ms for a valid proof**
-kiosk-pow-equihash/README.md	Verification cost: **~18 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
-kiosk-pow-equihash/README.md	`spec/kiosk/pow/equihash_spec.rb` now carries k=2 and k=3 KATs.
+kiosk-pow-equihash/README.md	Verification cost: **~22 ms for a valid proof**
+kiosk-pow-equihash/README.md	Verification cost: **~22 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
+kiosk-pow-equihash/README.md	With YJIT, which a Rails app enables, it is ~15 ms. A native verifier would be
+kiosk-pow-equihash/README.md	`solve.py` refuses to run (exit 3). These numbers are the honest-client
 kiosk-pow-equihash/README.md	consumer-laptop budget (p95 ~10 s on one M-series laptop core — the only
 kiosk-pow-equihash/README.md	data). However, the _computational work_ cannot be reused:
 kiosk-pow-equihash/README.md	global sort rejects every genuine k≥2 solution. We use Zcash "algorithm
 kiosk-pow-equihash/README.md	hardware the seconds have ever been measured on; the ~1.3 GiB peak is THIS
-kiosk-pow-equihash/README.md	memory-bandwidth-bound). What it buys the provider is a few-KB, ~18 ms
-kiosk-pow-equihash/README.md	never accepted a real proof
+kiosk-pow-equihash/README.md	memory-bandwidth-bound). What it buys the provider is a few-KB, ~22 ms
 kiosk-pow-equihash/README.md	no amortization
 kiosk-pow-equihash/README.md	not cancel. Rubbish indices are rejected without a single hash (0.012 ms
 kiosk-pow-equihash/README.md	pip install numpy          # REQUIRED — see performance note below
 kiosk-pow-equihash/README.md	prices _throughput_, not latency
-kiosk-pow-equihash/README.md	so the bug was latent, and equihash never accepted a real proof at the
 kiosk-pow-equihash/README.md	tree order. Every hot step is vectorised in numpy: leaf hashes are packed into
 kiosk-pow-equihash/README.md	unique `salt`
 kiosk-pow-equihash/README.md	| **n=168, k=7 (default)** | ~9.6 s | ~10.3 s | ~1.3 GiB |
 kiosk-pow-equihash/README.md	| Reference solve (numpy, one M-series laptop core) | **~10 s, ~1.3 GiB** | ~155 s, ~5.4 GiB | — | instant |
-kiosk-pow-equihash/README.md	| Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~18 ms valid / 0.3 ms wrong (Ruby)** |
+kiosk-pow-equihash/README.md	| Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~22 ms valid / 0.3 ms wrong (Ruby)** |
 kiosk-pow-equihash/README.md	| n_div = n/(k+1) | **21** | 24 | 20 | 6 |
 kiosk-pow-equihash/bench/README.md	## Measured grid (Apple M-series laptop, numpy 2.5, k=7)
 kiosk-pow-equihash/bench/README.md	**Chosen: n=168, k=7** — the largest params fully inside the ≤30 s / 1–2 GiB

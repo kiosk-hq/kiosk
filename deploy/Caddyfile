@@ -83,17 +83,14 @@
 # app bounds the request RATE.
 #
 # ── The arithmetic that says the edge bound is not needed by default ─────────
-# The app-side half of that exposure is priced and measured (n=168 k=7, one
-# box): one
-# issued challenge drives at most one verify, and the verifier checks
-# cheapest-first and hashes lazily, so a garbage proof costs 0.30 ms — or
-# 0.012 ms if the attacker did not even order the indices — instead of the
-# 18.7 ms it cost when every proof paid the full 128-hash loop. A real proof
-# still costs ~18 ms. Worker saturation on this path moved from ~54 req/s to
-# ~3.3k req/s. A proof verifies in 4.46 ms at the params this fleet runs, one
-# worker completes a full registration 60 times a second and a plain read 1075
-# times a second — and the snippet below is ONE request a second (60 events a
-# minute), keyed per-IP in a single zone every vhost imports, so enabling it as
+# The app-side half of that exposure is priced and measured (n=168 k=7, pure
+# Ruby on one Apple M3 core): one issued challenge drives at most one verify,
+# and the verifier checks cheapest-first and hashes lazily, so a garbage proof
+# costs 0.30 ms — or 0.012 ms if the attacker did not even order the indices —
+# against ~22 ms for a real proof (~15 ms with YJIT). One worker saturates at
+# ~3.3k garbage proofs a second, against ~45 real ones, and completes a plain
+# read 1075 times a second. The snippet below is ONE request a second (60 events
+# a minute), keyed per-IP in a single zone every vhost imports, so enabling it as
 # written makes bursting one demo refuse the other seven. That is a
 # self-inflicted outage on the traffic these demos exist to receive, which is
 # the other half of why it is not a default.

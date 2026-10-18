@@ -19,12 +19,12 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
 - **`IssuerMiddleware`** — answers `Kiosk.current_issuer` for each request: its origin when that is `c.issuer` or one of `c.additional_origins`, else `c.issuer`. Every origin served is its own operator.
 - **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. Kiosk stores nothing itself: default is no sink and no emission. See [The audit sink](#the-audit-sink).
-- **`Kiosk::Server::SchemaDefinitions`** — SQL generators for the canonical migrations (schema + helpers, identity tables, device authorizations, mandates).
+- **`Kiosk::Server::SchemaDefinitions`** — SQL generators for every table and helper that `bin/rails g kiosk:install` creates.
 - **`Kiosk::Server::Engine`** — the Rails engine: `kiosk` in `config/routes.rb` mounts it, drawing the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding), then one route per verb its block names — installs the root discovery routes when mounted, and auto-injects the headers and issuer middleware (see [Draw the routes](#draw-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer, the migrations and the `kiosk` block in `config/routes.rb` that mounts the engine.
 
-kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
+kiosk-server is a Rails gem: it depends on railties, actionpack, actioncable, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
 
 ## Install
 
@@ -32,9 +32,10 @@ kiosk-server is a Rails gem: it depends on railties, actionpack, activerecord an
 
 ### Preconditions
 
-**Rails `~> 8.1`.** This gemspec pins `railties`, `actionpack`, `activerecord`
-and `activesupport` at `~> 8.1`, and it is the only Kiosk gemspec that names
-Rails at all. **Rails 7.x and 8.0.x are excluded** — bundler refuses to resolve
+**Rails `~> 8.1`.** This gemspec pins `railties`, `actionpack`, `actioncable`,
+`activerecord` and `activesupport` at `~> 8.1`. The only other Kiosk gemspec
+that names a Rails gem is `kiosk-pay-stripe`, which pins `activerecord` at
+`~> 8.1`. **Rails 7.x and 8.0.x are excluded** — bundler refuses to resolve
 against an app on either, so for most "add Kiosk to an existing Rails app" this
 is the first thing to check, not a footnote. Older Rails lines are untested
 here, so they are not claimed; widening the floor means adding a CI leg first.
@@ -61,14 +62,27 @@ gem "kiosk-all", github: "kiosk-hq/kiosk"
 ```ruby
 # config/initializers/kiosk.rb
 Kiosk.configure do |c|
-  c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
+  c.issuer        = "https://api.acme.example"
+  # Further origins this deployment serves, each a separate operator with its
+  # own discovery document and assistant accounts. Redirect an alias of the
+  # same business to `c.issuer` instead.
+  # c.additional_origins = ["https://shop.acme.example"]
+  c.user_model    = "User"
+  c.user_id_type  = :uuid
+  c.roles         = %i[customer master support]
+  # The default role. The engine refuses to boot when `c.roles` is set and
+  # this is not one of them. An assistant admitted with no role of its own (a
+  # self-registration, or a binding whose approving human resolves none) gets
+  # this one. Name your least-privileged role. An origin that assigns roles to
+  # nobody sets neither line, and then no token carries a `role` claim.
+  c.registration_role = :customer
+  c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
+  # c.mount_path  = "/kiosk"   # default
+  # Optional: one event per action invocation. See "The audit sink".
+  # c.audit_sink  = ->(event) { AuditRow.create!(**event.to_h) }
+  # c.capabilities = %w[schema queries actions pay] # computed from what is registered by default
 end
 ```
-
-**The default is no sink**: nothing is emitted, nothing is built, and Kiosk
-writes nothing to any table of its own. It keeps no audit table of its own at
-all, and will not grow one: an audit trail the framework keeps is a retention
-policy the framework decided for your customers' data.
 
 ### KYC
 
@@ -192,10 +206,11 @@ upgrade edits it.
 - **Every new setting ships a working default**, so an initializer you never
   touch keeps working across an upgrade. The generated file is documentation of
   what can be set, not the source of truth for what is set.
-- **A setting that cannot have a safe default fails closed at boot, naming
-  itself** — `c.pow_secret` with the toll enabled is the worked example. You get
-  a `Kiosk::Server::Errors::ConfigurationError` that says which setting is
-  missing, at boot, not a wrong answer later.
+- **A setting that cannot have a safe default fails closed, naming itself**,
+  with a `Kiosk::Server::Errors::ConfigurationError`. `c.roles` with no
+  `c.registration_role` among them stops the boot. `Kiosk.configure` refuses a
+  `c.pow_secret` shorter than 32 bytes. With the toll enabled and no
+  `c.pow_secret`, the first tolled request is refused.
 - **An unknown, removed or renamed setting is a `NoMethodError` on
   `Kiosk::Configuration`**, which names the key you typed, so an initializer
   carrying an old name stops the boot instead of being silently ignored.
@@ -241,18 +256,6 @@ production that adapter must be one every process shares, such as `solid_cable`
 in the host's Gemfile;
 a production origin that serves events with no adapter there does not boot.
 
-
-# config/initializers/kiosk.rb
-Kiosk.configure do |c|
-  c.audit_sink = ->(event) { AuditRow.create!(**event.to_h) }
-end
-```
-
-**The default is no sink**: nothing is emitted, nothing is built, and Kiosk
-writes nothing to any table of its own. It keeps no audit table of its own at
-all, and will not grow one: an audit trail the framework keeps is a retention
-policy the framework decided for your customers' data.
-
 ## The audit sink
 
 **Kiosk does not keep an audit trail. It hands you one and gets out of the way.**
@@ -268,9 +271,9 @@ end
 ```
 
 **The default is no sink**: nothing is emitted, nothing is built, and Kiosk
-writes nothing to any table of its own. It keeps no audit table of its own at
-all, and will not grow one: an audit trail the framework keeps is a retention
-policy the framework decided for your customers' data.
+writes no audit record to any table of its own. It keeps no audit table, and
+will not grow one: an audit trail the framework keeps is a retention policy the
+framework decided for your customers' data.
 
 ### What the event carries
 

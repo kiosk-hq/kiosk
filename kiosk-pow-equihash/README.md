@@ -5,7 +5,7 @@ Memory-hard proof-of-work for Kiosk. Default PoW backend.
 Its job is a **cheap-to-verify metered toll**, not a hardware equaliser.
 Equihash is not ASIC- or GPU-proof — it was ASIC'd on Zcash (Antminer Z9/Z15)
 and GPUs solve it well (the Wagner sort/collide parallelises, and it is
-memory-bandwidth-bound). What it buys the provider is a few-KB, ~18 ms
+memory-bandwidth-bound). What it buys the provider is a few-KB, ~22 ms
 `verify` against a solve that costs the client real time and memory, plus an
 `N×PoW` count knob. Abuse resistance comes from reputation and caps
 (PoW = metered pricing, not a hardware wall).
@@ -49,26 +49,26 @@ parameters cost real time and memory to solve.
 |  | Argon2id | Cuckatoo29 | **Equihash (default)** |
 |---|---|---|---|
 | Verify memory | 64 MiB ⚠️ | ~KB | **~KB** |
-| Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~18 ms valid / 0.3 ms wrong (Ruby)** |
-| Lever (solve/verify) | tens× | unbenched | **~530×** (9.6 s / 18 ms) |
+| Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~22 ms valid / 0.3 ms wrong (Ruby)** |
+| Lever (solve/verify) | tens× | unbenched | **~440×** (9.6 s / 22 ms) |
 | Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (kiosk-pow only)** |
 | Difficulty tuning | D=0..256 (smooth) | edgebits | **N×PoW (discrete)** |
 
-**The lever is measured, not asserted.** `~530×` is this README's own two
+**The lever is measured, not asserted.** `~440×` is this README's own two
 numbers divided: the p50 reference-solver solve at the shipped n=168 k=7
-(~9.6 s, *Performance* below) over a valid proof's verify (~18 ms, *Verify* above);
-p95 solve gives ~570×. It is a cross-language ratio — a numpy solver against a
+(~9.6 s, *Performance* below) over a valid proof's verify (~22 ms, *Verify* above);
+p95 solve gives ~470×. With YJIT (~15 ms verify) the p50 lever is ~640×. It is a cross-language ratio — a numpy solver against a
 pure-Ruby verifier — so read it as the order of magnitude a provider actually
 buys, and note that it moves the WRONG way with a faster solver and the right way
 with a native verifier. It is not millions at any tuning in the tables below
-(192/7, at ~155 s of solve, gives ~8600×), and the number matters
+(192/7, at ~155 s of solve, gives ~7000×), and the number matters
 because the lever IS the economic argument for a metered toll — a price on
 abuse, not a hardware wall. Cuckatoo29's column says `unbenched` for the same
 reason its verify row does: no measurement of it exists here.
 
 The one property that actually matters for a gateway is **cheap verify**:
 
-- **Asymmetric verify.** A few KB (and ~18 ms, pure Ruby — far less for a
+- **Asymmetric verify.** A few KB (and ~22 ms, pure Ruby — far less for a
   wrong proof, see below) to check — the
   memory footprint is the point: Argon2id needs 64 MiB to _verify_, so a flood
   of bad proofs is a DoS on the verifier itself — unacceptable for a
@@ -189,10 +189,11 @@ Checks performed (in order):
    - has its **XOR cancel** the top (j+1)×n_div bits (Wagner cancellation)
 3. Global XOR of all 2^k leaf hashes = 0 on n bits
 
-Verification cost: **~18 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
-Ruby, a few KB; measured median at n=168 k=7). A native verifier would be
+Verification cost: **~22 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
+Ruby, a few KB; measured median at n=168 k=7 on one Apple M3 core, Ruby 4.0.1).
+With YJIT, which a Rails app enables, it is ~15 ms. A native verifier would be
 sub-millisecond. Verify scales with 2^k, not with n: at n=96 k=5 a valid proof
-costs ~4.6 ms (32 hashes, same machine) — cheaper to verify, but cheaper to
+costs ~5.6 ms (32 hashes, same machine) — cheaper to verify, but cheaper to
 solve by far more.
 
 **A wrong proof costs far less, deliberately.** The list above is also the
@@ -200,7 +201,7 @@ evaluation ORDER, cheapest first, and the leaf hashes are computed one at a
 time as the tree folds — so verification stops at the first tree node that does
 not cancel. Rubbish indices are rejected without a single hash (0.012 ms
 measured); rubbish that is at least well-ordered stops after two hashes
-(0.30 ms), against 18.7 ms for a complete one. That gap is the point, because
+(0.30 ms), against ~22 ms for a complete one. That gap is the point, because
 `verify` is reachable unauthenticated on `POST /auth/register`: an attacker who
 wants the whole hash loop has to hand over an almost-complete solution, against
 a salt that is fresh per challenge.
@@ -221,13 +222,6 @@ zero on that block. Two consequences the verifier must respect:
   not ascending (pair (a,b)+(c,d) may interleave when flattened). Requiring a
   global sort rejects every genuine k≥2 solution. We use Zcash "algorithm
   binding": at each node the left subtree's first index precedes the right's.
-
-> **History.** Before this fix the verifier checked leaf-prefix *equality* plus
-> a global ascending sort. Both are invisible at k=1 (one pair: tree order ==
-> sorted, and XOR-cancel == equal), which is all the KATs and demos exercised —
-> so the bug was latent, and equihash never accepted a real proof at the
-> production parameters (k=7). Fixed to the Zcash-canonical contract above;
-> `spec/kiosk/pow/equihash_spec.rb` now carries k=2 and k=3 KATs.
 
 ## Solver (Python + numpy)
 
@@ -274,12 +268,12 @@ the healthy small buckets, and unsolved seeds retry with the next
 
 Full grid in [bench/README.md](bench/README.md). This is a REFERENCE
 implementation — correct and dependency-light, not a miner. **numpy is not
-optional** — the Wagner sort/collide steps are vectorised; without it the pure
-Python path is an order of magnitude slower. These numbers are the honest-client
+optional**: the Wagner sort/collide steps are vectorised, and without numpy
+`solve.py` refuses to run (exit 3). These numbers are the honest-client
 *floor* (slowest participant): a native or GPU solver is faster, since Equihash
 parallelises well — which is exactly why the security story is verify-asymmetry
 + reputation, not hardware parity. A provider that needs faster
-honest solves lowers `n`; the Ruby verifier stays ~18 ms either way.
+honest solves lowers `n`; the Ruby verifier stays ~22 ms either way.
 
 See `solve.py` for the implementation.
 

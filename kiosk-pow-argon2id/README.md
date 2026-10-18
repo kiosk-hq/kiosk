@@ -20,8 +20,9 @@ lever is exactly `2^d`.
 Providers can demand this PoW on any query or action endpoint
 (`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) — and, as an optional
 registration toll, on `/kiosk/auth/register` — at their discretion, via
-`kiosk-reputation`'s policy layer. `pay`'s 402 is `payment_setup_required`, not
-PoW. `kiosk-pow-argon2id` ships both sides:
+`kiosk-reputation`'s policy layer. `pay` is tolled the same way, so it may
+answer `402 pow_required`; it answers `402 payment_setup_required` when the
+customer has no saved card. `kiosk-pow-argon2id` ships both sides:
 
 - **Ruby verify** (`Kiosk::Pow::Argon2id.verify`) — one Argon2id eval, no loop.
 - **Python solver** (`solve.py`) — an assistant runs this in its sandbox when

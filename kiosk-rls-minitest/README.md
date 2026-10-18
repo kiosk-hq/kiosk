@@ -55,7 +55,7 @@ class OrdersFlowTest < Minitest::Test
     as_agent_of(bob)   { run_action :create_order, items: ["bread"]   }
 
     as_agent_of(alice) do
-      assert_equal [{ "item" => "oranges" }], query("select item from orders")
+      assert_equal [{ item: "oranges" }], query("select item from orders")
     end
   end
 

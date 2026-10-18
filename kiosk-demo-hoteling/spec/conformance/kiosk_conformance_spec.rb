@@ -21,7 +21,7 @@ RSpec.shared_context 'two guests with a booking each' do
   def book_for(user, room_type)
     Booking.create!(user_id: user.id, property_id: property.id, room_type_id: room_type.id,
                     check_in: check_in, check_out: check_out,
-                    total_cents: room_type.nightly_price_cents * 2, status: 'reserved')
+                    total_cents: room_type.nightly_price_cents * 2, status: :reserved)
   end
 
   before do

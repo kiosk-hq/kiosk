@@ -459,7 +459,7 @@ kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	@property = Prope
 kiosk-demo-hoteling/app/controllers/kiosk/room_types_controller.rb	@search = RoomSearch.new(property: Property.find(params[:property_id]),
 kiosk-demo-hoteling/app/jobs/property_decision_job.rb	booking = Booking.lock.reserved.paid.find_by(id: booking_id)
 kiosk-demo-hoteling/app/models/booking.rb	PAY_WINDOW = 15.minutes
-kiosk-demo-hoteling/app/models/booking.rb	return unless reserved.lapsed.where(id: booking_id).update_all(status: 'cancelled', updated_at: Time.current) == 1
+kiosk-demo-hoteling/app/models/booking.rb	booking = reserved.lapsed.lock.find_by(id: booking_id)
 kiosk-demo-hoteling/app/models/booking.rb	scope :lapsed, -> { unpaid.where(created_at: ..PAY_WINDOW.ago) }
 kiosk-demo-hoteling/app/models/property.rb	# One hotel, sold on its own clock (`timezone`).
 kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	held.reserved.lapsed.ids.each { Booking.cancel_lapsed!(it) }

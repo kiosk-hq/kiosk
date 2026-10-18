@@ -61,21 +61,25 @@ class Booking < ApplicationRecord
   def self.captured!(booking_id)
     announce_payment(booking_id)
     wait = Rails.configuration.x.hoteling.decision_delay_seconds.to_i
-    where(id: booking_id).update_all(decision_due_at: Time.current + wait)
+    find(booking_id).update!(decision_due_at: wait.seconds.from_now)
     return PropertyDecisionJob.new.perform(booking_id) if wait.zero?
 
     PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)
   end
 
   # Cancels a hold left unpaid past its pay-by time and tells its owner, once:
-  # only the call that moves the row announces it.
+  # the row lock makes two calls take turns, and the second finds no lapsed hold.
   def self.cancel_lapsed!(booking_id)
-    return unless reserved.lapsed.where(id: booking_id).update_all(status: 'cancelled', updated_at: Time.current) == 1
+    transaction do
+      booking = reserved.lapsed.lock.find_by(id: booking_id)
+      next unless booking
 
-    Kiosk::Server::Events.emit(
-      topic: :booking_confirmation, subject: booking_id, identity_scope: [where(id: booking_id).pick(:user_id)],
-      data: { 'booking_id' => booking_id, 'status' => 'cancelled', 'reason' => 'hold_lapsed' }
-    )
+      booking.cancelled!
+      Kiosk::Server::Events.emit(
+        topic: :booking_confirmation, subject: booking.id, identity_scope: [booking.user_id],
+        data: { 'booking_id' => booking.id, 'status' => 'cancelled', 'reason' => 'hold_lapsed' }
+      )
+    end
   end
 
   def self.announce_payment(booking_id)

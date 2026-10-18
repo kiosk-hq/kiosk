@@ -59,6 +59,7 @@ module Kiosk
         end
 
         def register!
+          claims_declared!
           Actions.declare(NAME, method(:call), description: description,
                                                input_schema: INPUT_SCHEMA, output_schema: OUTPUT_SCHEMA)
           Events.register(
@@ -68,6 +69,14 @@ module Kiosk
             payload_schema: EVENT_SCHEMA,
             subject_reachable: ->(request_id, identity) { owner_of(request_id) == identity.user_id.to_s }
           )
+        end
+
+        def claims_declared!
+          return unless claims.empty?
+
+          raise Errors::ConfigurationError,
+                'Kiosk::Server: kyc_provider is set but kyc_claims is empty, so no verification can grant ' \
+                'a gated action. Set: Kiosk.configure { |c| c.kyc_claims = %w[age_over_18] }'
         end
 
         def description

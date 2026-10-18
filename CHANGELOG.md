@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: A `kyc_provider` with empty `kyc_claims` raises `ConfigurationError` at boot: no verification could grant a gated action.
 - 2026-10-18: `PaymentClaim` takes no `status_column:` or `unpaid:` (the column is `payment_status`), and `ColumnSpendingCap.new` takes no arguments.
 - 2026-10-18: The kiosk-server README tells the operator to set the status column to `refunded` after a full refund, before the announcement.
 - 2026-10-18: A broker answer that is not HTTP raises `Unavailable`, so `request_kyc` answers `action_failed`, not 500.

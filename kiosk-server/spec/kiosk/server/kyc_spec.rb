@@ -379,3 +379,14 @@ RSpec.describe Kiosk::Server::Kyc do
     end
   end
 end
+
+RSpec.describe Kiosk::Server::Kyc, '.register!' do
+  it 'refuses a kyc_provider with no kyc_claims, which no verification could satisfy' do
+    Kiosk.configure do |c|
+      c.kyc_provider = Kiosk::KycProviders::Base.new
+      c.kyc_claims   = []
+    end
+
+    expect { described_class.register! }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /kyc_claims/)
+  end
+end

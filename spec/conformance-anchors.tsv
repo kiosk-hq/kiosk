@@ -841,8 +841,8 @@ kiosk-redteam/README.md	finds a real breach fails loudly: `Battery#report!` answ
 kiosk-redteam/lib/kiosk/redteam/battery.rb	#{blocked.size} BLOCKED, #{skipped.size} SKIPPED, 0 BREACH — all attacks blocked.
 kiosk-redteam/lib/kiosk/redteam/runner.rb	        @client  = Kiosk::TestHelpers::Assistant.new(base_url:)
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
-kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	            name: 'WrongCurrencyCart',
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	class WrongCurrencyCart < Scenario
+kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	super(name: 'WrongCurrencyCart')
 kiosk-redteam/suites/atablefor.rb	BATTERY.record('WholeValuedFloatBody',
 kiosk-redteam/suites/getgrocery.rb	  # No KYC here — these must SKIP.
 kiosk-redteam/suites/getgrocery.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,

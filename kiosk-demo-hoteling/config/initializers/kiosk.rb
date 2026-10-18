@@ -39,7 +39,7 @@ end
 Kiosk.configure do |c|
   c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
   c.registration_pow_count = 1
-  c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 1.week)
+  c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 end
 
 # The closed vocabularies behind the search_hotels enums and the seeds. A

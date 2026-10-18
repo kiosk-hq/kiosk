@@ -237,17 +237,17 @@ end
 
 The base `Policy` class returns `nil` for every request (never challenge).
 
-### `Policies::RecentSpend` — one toll per session, lowered by recent spend
+### `Policies::RecentSpend` — one toll per session, by a chance that recent spend lowers
 
 ```ruby
-c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 1.week)
+c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 ```
 
-Trust is 1.0 when the customer spent `trusted_at` cents or more within
-`within`, and falls logarithmically to 0 at no spend. The toll asks for
-`round(count * (1 - trust))` proofs (`count:` defaults to 1), at the Equihash
-gem's default params, so a trusted customer pays nothing. An operator that
-takes no payment records each fulfilled visit with
+A session pays one proof at the Equihash gem's default params, with the chance
+`max(0, (cap - spend) / cap)`. `spend` is what the customer spent here within
+`within`, and `cap` is in whole currency units. So a customer with no spend
+pays in every session, and a customer who spent `cap` or more pays in none.
+An operator that takes no payment records each fulfilled visit with
 `Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
 
 ### `Policies::RateAndReputation` — EXAMPLE (providers replace this)

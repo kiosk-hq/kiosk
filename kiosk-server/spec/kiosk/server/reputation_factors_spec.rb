@@ -45,7 +45,7 @@ RSpec.describe Kiosk::Server::ReputationFactors do
   let(:schema) { 'kiosk_reputation_factors_spec' }
   let(:conn)   { ActiveRecord::Base.connection }
   let(:user)   { SecureRandom.uuid }
-  let(:policy) { Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 7 * 86_400) }
+  let(:policy) { Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100) }
 
   before(:context) { skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error }
   after(:context) { SpecPostgres.drop_schema('kiosk_reputation_factors_spec') }

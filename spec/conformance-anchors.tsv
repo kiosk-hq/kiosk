@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1897 anchors.
+# 1900 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -396,7 +396,7 @@ kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stri
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.payment_provider = Kiosk::Server::PaymentClaim.new(
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.registration_pow_count = 1
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 1.week)
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.signing_key       = Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64'))
 kiosk-demo-getgrocery/config/routes.rb	actions :create_order, :reschedule_delivery
 kiosk-demo-getgrocery/config/routes.rb	kiosk do
@@ -592,7 +592,7 @@ kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience   = 'skooti'
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count = 1
-kiosk-demo-skooti/config/initializers/kiosk.rb	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 1.week)
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 kiosk-demo-skooti/config/routes.rb	kiosk do
 kiosk-demo-skooti/script/lock_sim.rb	  def unlock(token:, now:)
 kiosk-demo-skooti/test/payment_window_test.rb	a capture in flight reads pending, and a returned capture reads paid before its settlement row
@@ -941,8 +941,10 @@ kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def initia
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_k:                 7
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_n:                 168,
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	return nil if proven?(purchases) && low_rate?(rate) && bad_proofs.zero?
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def chance(cents) = [(@cap_cents - cents).fdiv(@cap_cents), 0].max
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(trusted_at:, within:, count: 1)
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(within:, cap:, random: Random)
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	{ alg: 'equihash', params: equihash_params, count: 1 } if @random.rand < chance(
 kiosk-reputation/lib/kiosk/reputation/policy.rb	coarse CALL KIND: :query, :run or :pay
 kiosk-reputation/spec/kiosk/reputation/backoff_store_spec.rb	consuming one key does not affect another
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	  it 'does not invoke the backend when sig is wrong (uses spy backend)' do
@@ -967,9 +969,10 @@ kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	esca
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	floors count at count_min (1)
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	issues an :equihash challenge (argon2id is legacy)
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	returns nil for a proven, low-rate, clean principal
-kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	asks nothing of a customer at or above trusted_at
-kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	asks the full count of a customer with no recent spend
-kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	lowers the count logarithmically with recent spend
+kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	reads the cap in whole currency units and the spend in cents
+kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	tolls a session with a chance that falls linearly from 1 to 0 as spend reaches the cap
+kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	tolls every session of a customer with no recent spend
+kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	tolls no session of a customer who spent the cap or more
 kiosk-rls-minitest/README.md	- A convenience include — `include Kiosk::TestHelpers` mixes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, 
 kiosk-rls-minitest/README.md	- Assertions: `assert_rls_denied { block }`, `assert_quota_exceeded { block }`, plus `refute_*` negative forms.
 kiosk-rls-minitest/README.md	- Spec-DSL: `proc { ... }.must_raise_rls_denied`, etc.

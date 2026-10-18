@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- `Policies::RecentSpend.new(within:, cap:)` tolls a session with the chance `max(0, (cap - spend) / cap)`, `cap` in whole currency units; `trusted_at:` and `count:` are gone.
+
 - The README says that `kiosk-pow-equihash` registers itself at Rails boot, and that the host registers any other backend.
 
 ## [0.5.14] — 2026-10-18

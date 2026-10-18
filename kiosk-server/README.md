@@ -131,12 +131,13 @@ that chain answers `409 conflict`.
 
 Set a policy and the engine tolls the first call of each access token; the
 token then calls freely until it expires (`access_token_ttl`, 3600 seconds by
-default). The ready-made policy lowers the toll by what the customer spent here:
+default). With the ready-made policy, the more the customer spent here, the
+smaller the chance that a session pays the toll:
 
 ```ruby
 Kiosk.configure do |c|
   c.pow_secret        = ENV.fetch("KIOSK_POW_SECRET")
-  c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(trusted_at: 100_00, within: 1.week)
+  c.reputation_policy = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 end
 ```
 

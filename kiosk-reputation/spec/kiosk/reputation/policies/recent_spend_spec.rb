@@ -1,26 +1,33 @@
 # frozen_string_literal: true
 
 RSpec.describe Kiosk::Reputation::Policies::RecentSpend do
-  subject(:policy) { described_class.new(trusted_at: 100_00, within: 7 * 86_400, count: 4) }
+  # A random source that always draws `draw`, so each example decides the toll.
+  def drawing(draw) = Struct.new(:draw) { def rand = draw }.new(draw)
 
-  def toll(cents)
+  def toll(cents, draw:)
+    policy = described_class.new(within: 7 * 86_400, cap: 100, random: drawing(draw))
     factors = Kiosk::Reputation::Factors.empty.with(settled_purchases_cents: cents)
     policy.challenge_for(identity: nil, verb: :query, factors:)
   end
 
-  it 'asks the full count of a customer with no recent spend' do
-    expect(toll(nil)).to eq(alg: 'equihash', params: { n: 168, k: 7 }, count: 4)
+  it 'tolls every session of a customer with no recent spend' do
+    expect(toll(nil, draw: 0.999)).to eq(alg: 'equihash', params: { n: 168, k: 7 }, count: 1)
   end
 
-  it 'asks nothing of a customer at or above trusted_at' do
-    expect([toll(100_00), toll(250_00)]).to eq([nil, nil])
+  it 'tolls no session of a customer who spent the cap or more' do
+    expect([toll(100_00, draw: 0.0), toll(250_00, draw: 0.0)]).to eq([nil, nil])
   end
 
-  it 'lowers the count logarithmically with recent spend' do
-    expect([toll(10), toll(100), toll(10_00)].map { it&.fetch(:count) }).to eq([3, 2, 1])
+  it 'tolls a session with a chance that falls linearly from 1 to 0 as spend reaches the cap' do
+    expect([toll(25_00, draw: 0.749), toll(25_00, draw: 0.75)]).to eq([toll(nil, draw: 0.0), nil])
+  end
+
+  it 'reads the cap in whole currency units and the spend in cents' do
+    policy = described_class.new(within: 7 * 86_400, cap: 100)
+    expect([0, 50_00, 100_00, 150_00].map { policy.chance(it) }).to eq([1, 0.5, 0, 0])
   end
 
   it 'publishes its window for the engine to count spend in' do
-    expect(policy.within).to eq(7 * 86_400)
+    expect(described_class.new(within: 7 * 86_400, cap: 100).within).to eq(7 * 86_400)
   end
 end

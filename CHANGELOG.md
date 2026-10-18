@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.15] — 2026-10-18
+
+- 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.15, matching skill 0.5.15.**
+
+- 2026-10-18: **Every demo and the engine default pin `skill-v0.5.15.md`**, which signs the `cart` an action answers and reads `payment_state`.
+
 - 2026-10-18: `Kiosk::Payable` gives a payable model `payment_state`, `cart` and `settlement`, and the engine pushes the `payment` topic; getgrocery, hoteling and skooti use them.
 
 - 2026-10-18: An action that creates a payable row answers `cart`, the cart to sign, in place of the prose `pay_hint`.

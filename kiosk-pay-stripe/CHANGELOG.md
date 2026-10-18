@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.15] — 2026-10-18
+
 - 2026-10-18: `bin/rails g kiosk:pay_stripe:install` writes the `stripe_customers` migration with its DDL in the file. `CustomerRecord.create_table` is removed.
 
 ## [0.5.14] — 2026-10-18

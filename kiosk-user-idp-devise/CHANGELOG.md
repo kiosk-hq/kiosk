@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.15] — 2026-10-18
+
 - The README names the human-side page gate and the link endpoints as the callers of the adapter.
 
 ## [0.5.14] — 2026-10-18

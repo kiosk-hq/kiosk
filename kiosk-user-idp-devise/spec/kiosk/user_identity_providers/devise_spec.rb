@@ -26,7 +26,6 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise, '#verify when current_user 
 
     expect(identity.actor).to    eq('human')
     expect(identity.agent_id).to be_nil
-    expect(identity).to          be_human
   end
 
   it 'passes through an empty claims hash (Devise has no extra claims)' do
@@ -146,7 +145,7 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise, '#verify shipped wire — A
 
     expect(identity).to be_a(Kiosk::Identity)
     expect(identity.user_id).to eq(user_id)
-    expect(identity).to be_human
+    expect(identity.actor).to eq('human')
   end
 
   it 'returns nil when the request carries a Warden proxy with no signed-in user' do

@@ -83,7 +83,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     expect(identity.user_id).to  eq('user-1')
     expect(identity.agent_id).to eq('agent-1')
     expect(identity.role).to     eq('customer')
-    expect(identity).to be_agent
+    expect(identity.actor).to eq('agent')
   end
 
   it 'returns nil when there is no Authorization header' do

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1902 anchors.
+# 1904 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -455,8 +455,8 @@ kiosk-demo-hoteling/README.md	customer, for 15 minutes; a hold left unpaid past 
 kiosk-demo-hoteling/README.md	this origin serves, never the registered verb names. That is a MODELLING rule,
 kiosk-demo-hoteling/app/controllers/kiosk/hotel_search_controller.rb	def search_hotels
 kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	  def hotel_detail
-kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	@property = Property.find(params[:property_id])
-kiosk-demo-hoteling/app/controllers/kiosk/room_types_controller.rb	@search = RoomSearch.new(property: Property.find(params[:property_id]),
+kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	@property = Property.find(params.expect(:property_id))
+kiosk-demo-hoteling/app/controllers/kiosk/room_types_controller.rb	@search = RoomSearch.new(property: Property.find(params.expect(:property_id)),
 kiosk-demo-hoteling/app/jobs/property_decision_job.rb	booking = Booking.lock.reserved.paid.find_by(id: booking_id)
 kiosk-demo-hoteling/app/models/booking.rb	PAY_WINDOW = 15.minutes
 kiosk-demo-hoteling/app/models/booking.rb	booking = reserved.lapsed.lock.find_by(id: booking_id)
@@ -510,14 +510,14 @@ kiosk-demo-philslist/test/stories/discovery_test.rb	assert_no_match(/^Payments:|
 kiosk-demo-philslist/test/stories/discovery_test.rb	assert_not agents_json.key?('payments')
 kiosk-demo-philslist/test/stories/discovery_test.rb	schema = published('/kiosk/schema')
 kiosk-demo-philslist/test/stories/discovery_test.rb	the board tells every agent it takes no money
-kiosk-demo-philslist/test/stories/household_test.rb	    assert his.edits(bookshelf, price_text: '€140').ok?
 kiosk-demo-philslist/test/stories/household_test.rb	    assert same_second.asks(:my_listings).refused?(:unauthenticated)
+kiosk-demo-philslist/test/stories/household_test.rb	    assert_predicate his.edits(bookshelf, price_text: '€140'), :ok?
 kiosk-demo-philslist/test/stories/household_test.rb	  test "a couple's two assistants share one board presence, and unlinking one shuts out only that one" do
 kiosk-demo-philslist/test/stories/household_test.rb	Alice approves a new assistant on the board's site, and it posts as her
 kiosk-demo-philslist/test/stories/joining_test.rb	an assistant that will not pay the registration toll cannot join, one that does posts at once
 kiosk-demo-philslist/test/stories/privacy_test.rb	a listing belongs to the seller whose assistant posted it, whoever the arguments name
-kiosk-demo-philslist/test/stories/privacy_test.rb	assert forged.refused?(:bad_request), forged
 kiosk-demo-philslist/test/stories/privacy_test.rb	assert_includes forged['detail'], 'owner_id'
+kiosk-demo-philslist/test/stories/privacy_test.rb	assert_refused forged, :bad_request
 kiosk-demo-philslist/test/stories/privacy_test.rb	one seller can neither edit nor close another's listing
 kiosk-demo-philslist/test/stories/privacy_test.rb	only the board is public; every question about the seller's own listings shows nothing of anyone else's
 kiosk-demo-philslist/test/stories/privacy_test.rb	test "one seller can neither edit nor close another's listing" do
@@ -596,7 +596,9 @@ kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 kiosk-demo-skooti/config/routes.rb	kiosk do
 kiosk-demo-skooti/script/lock_sim.rb	  def unlock(token:, now:)
-kiosk-demo-skooti/test/payment_window_test.rb	a capture in flight reads pending, and a returned capture reads paid before its settlement row
+kiosk-demo-skooti/test/payment_window_test.rb	a capture in flight reads pending and does not start
+kiosk-demo-skooti/test/payment_window_test.rb	a returned capture publishes one booking_payment event the schema describes
+kiosk-demo-skooti/test/payment_window_test.rb	a returned capture reads paid before its settlement row, and starts
 kiosk-demo-skooti/test/payment_window_test.rb	an untouched reservation reads unpaid and does not start
 kiosk-demo-skooti/test/rental_token_issuer_test.rb	a token carries its scooter, reservation, lifetime and a fresh jti
 kiosk-demo-skooti/test/rental_token_issuer_test.rb	test 'the known answer' do
@@ -658,10 +660,10 @@ kiosk-demo-stylish/test/stories/linking_test.rb	  test 'Alice approves the code 
 kiosk-demo-stylish/test/stories/linking_test.rb	'spending_cap_cents' => '12345')
 kiosk-demo-stylish/test/stories/linking_test.rb	Alice approves the code her assistant shows her, and it books in her name
 kiosk-demo-stylish/test/stories/linking_test.rb	assert first.signs_back_in.refused?(:not_found)
-kiosk-demo-stylish/test/stories/linking_test.rb	assert second.signs_back_in.ok?
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal [booked], second.appointments
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_includes page.body, 'cap: 12345 cents'
+kiosk-demo-stylish/test/stories/linking_test.rb	assert_predicate second.signs_back_in, :ok?
 kiosk-demo-stylish/test/stories/linking_test.rb	signs_in(:alice).approves(request['user_code'])
 kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	test 'Alice approves the code her assistant shows her, and it books in her name' do
@@ -1012,7 +1014,7 @@ kiosk-server/README.md	- **Account binding** — the claim/link ceremonies bind 
 kiosk-server/README.md	A block-less `kiosk` only mounts.
 kiosk-server/README.md	The full host-side surface is shipped and covered by the gem's own suite
 kiosk-server/README.md	in this directory runs it and prints how many examples that is
-kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	class AssistantsController < ::ActionController::Base
+kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	class AssistantsController < ApplicationController
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def link
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def register

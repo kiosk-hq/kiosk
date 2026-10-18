@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::StoryTest#assert_refused(answer, code)` asserts a wire refusal and prints the answer when it fails.
+
+- 2026-10-18: A device authorization store answers `lookup_by_device_code_hash` and `lookup_by_user_code_hash`; a custom store renames its two `find_by_*` methods.
+
+- 2026-10-18: RuboCop also runs the Rails, Minitest and RSpec Rails plugins, new cops included, and the tree has no offense.
+
 - 2026-10-18: kiosk-test-support declares `puma`; `e2e/run.sh` makes `KIOSK_PYTHON` absolute; kiosk-demo-prove applies its layout.
 
 - 2026-10-18: `bin/rails g kiosk:pay_stripe:install` writes the `stripe_customers` migration with its DDL in the file; `CustomerRecord.create_table` is removed.

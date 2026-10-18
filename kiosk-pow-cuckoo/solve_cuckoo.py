@@ -74,16 +74,15 @@ import numpy as np
 # ---------------------------------------------------------------------------
 # HARD memory guard (safety-critical).
 #
-# The vectorized siphash keeps ~10-12 live uint64 arrays of N = 2^edgebits
-# elements (8 bytes each), so peak ≈ ~96 * 2^edgebits bytes; the cycle-finder
-# adds Python-object overhead on top. An uncapped high-edgebits run once ate
+# The measured peak (ru_maxrss, build and trim) is 104, 119 and 118 bytes per
+# edge at edgebits 20, 22 and 24. An uncapped high-edgebits run once ate
 # ~524 GB of swap and killed the machine. macOS ignores `ulimit -v`, so we
 # self-limit: predict the peak from edgebits and REFUSE before allocating.
 #
 # Cap is configurable via KIOSK_POW_MAX_BYTES (default 1.5 GiB). This makes the
 # solver safe to invoke at ANY edgebits regardless of how it's called.
 # ---------------------------------------------------------------------------
-_BYTES_PER_EDGE_PEAK = 96          # generous upper bound for the numpy peak
+_BYTES_PER_EDGE_PEAK = 120         # measured numpy peak, rounded up
 _DEFAULT_MAX_BYTES = 1536 * 1024 * 1024   # 1.5 GiB
 
 

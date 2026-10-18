@@ -2,6 +2,8 @@
 
 require 'spec_helper'
 require 'base64'
+require 'json'
+require 'open3'
 
 # Known-answer vectors and short calls into the verifier.
 module CuckooVectors
@@ -336,5 +338,17 @@ RSpec.describe Kiosk::Pow::Cuckoo, '.verify with a difficulty target' do
 
   it 'rejects when target is 0 (nothing passes)' do
     expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: 0 })).to be(false)
+  end
+end
+
+RSpec.describe 'solve_cuckoo.py memory guard' do
+  # The solver peaks at about 118 bytes per edge, so edgebits 24 needs 1888 MiB.
+  it 'refuses edgebits 24 under the default 1.5 GiB cap' do
+    solver = File.expand_path('../../../solve_cuckoo.py', __dir__)
+    challenge = JSON.generate(salt: Base64.strict_encode64('salt'), params: { edgebits: 24 })
+    out, status = Open3.capture2({ 'KIOSK_POW_MAX_BYTES' => nil }, 'python3', solver, challenge)
+
+    expect(status.exitstatus).to eq(2)
+    expect(JSON.parse(out)).to include('error' => 'edgebits_too_large')
   end
 end

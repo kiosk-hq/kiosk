@@ -35,15 +35,10 @@ module Kiosk
         client.run(principal, name: profile.gated_action, **gated_args)
       end
 
-      # A query answers a bare Array (§8.2); the `rows` envelope is read too so an
-      # older origin's rows are not mistaken for an empty, unleaked list.
+      # A query answers a bare Array (§8.2); any other body reads as no rows.
       def rows_from(response)
         body = response.body
-        return body if body.is_a?(Array)
-        return [] unless body.is_a?(Hash)
-
-        rows = body['rows']
-        rows.is_a?(Array) ? rows : []
+        body.is_a?(Array) ? body : []
       end
     end
   end

@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: kiosk-redteam reads a query answer only as a bare array; ForgedUserId scores BREACH when the owner's query answers no rows array.
 ## [0.5.15] — 2026-10-18
 
 - 2026-10-18: Version 0.5.15, the tree cut that matches skill 0.5.15.

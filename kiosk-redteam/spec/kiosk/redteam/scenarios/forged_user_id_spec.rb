@@ -85,6 +85,19 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId, '#call — non-vacuity' 
       expect(verdict.detail).to include('result_id_key')
     end
   end
+
+  context "when A's query does not answer a rows array (indeterminate — BREACH)" do
+    it 'returns blocked: false rather than reading the answer as no rows' do
+      stub_registers('a', 'b')
+      stub_action('reserve', status: 200, body: forge_result('res-forged'))
+      stub_query('my_reservations', body: { 'rows' => [{ 'id' => 'res-forged' }] })
+
+      verdict = scenario.call(client, profile)
+
+      expect(verdict.blocked).to be(false)
+      expect(verdict.detail).to include('without a rows array')
+    end
+  end
 end
 
 RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId, '#call — non-vacuity' do

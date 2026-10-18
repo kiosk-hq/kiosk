@@ -72,11 +72,20 @@ module Kiosk
         end
 
         def leak_verdict(client, owner, resp, profile, new_id)
-          rows = rows_from(client.query(owner, name: profile.per_user_query))
-          return blocked_verdict(resp.status) if rows.none? { |r| r[profile.row_id_key].to_s == new_id.to_s }
+          answer = client.query(owner, name: profile.per_user_query)
+          return unreadable(answer, profile) unless rows_answer?(answer)
+          return blocked_verdict(resp.status) if rows_from(answer).none? { |r| r[profile.row_id_key].to_s == new_id.to_s }
 
           breach_verdict(resp.status,
                          "forged user_id=#{owner.user_id} was honoured; resource id=#{new_id} visible in A's rows")
+        end
+
+        # An error or another shape would read as no rows, which proves nothing.
+        def rows_answer?(answer) = answer.status == 200 && answer.body.is_a?(Array)
+
+        def unreadable(answer, profile)
+          breach_verdict(answer.status, "A's #{profile.per_user_query} answered HTTP #{answer.status} " \
+                                        'without a rows array; cannot confirm ownership was enforced')
         end
 
         def refusal_names?(response, key)

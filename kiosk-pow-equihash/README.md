@@ -190,7 +190,9 @@ Checks performed (in order):
 3. Global XOR of all 2^k leaf hashes = 0 on n bits
 
 Verification cost: **~22 ms for a valid proof** (128 BLAKE2b-256 hashes, pure
-Ruby, a few KB; measured median at n=168 k=7 on one Apple M3 core, Ruby 4.0.1).
+Ruby; measured median at n=168 k=7 on one Apple M3 core, Ruby 4.0.1). Live
+memory stays under 3 KB: 1.8 KB at most inside one hash, 0.8 KB between hashes.
+The hashes allocate ~16 MB of short-lived objects, and the GC frees them.
 With YJIT, which a Rails app enables, it is ~15 ms. A native verifier would be
 sub-millisecond. Verify scales with 2^k, not with n: at n=96 k=5 a valid proof
 costs ~5.6 ms (32 hashes, same machine) — cheaper to verify, but cheaper to

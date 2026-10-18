@@ -103,7 +103,7 @@ settled the `alpha` engine underneath it is.
 |---|---|---|---|
 | `kiosk-pow-equihash` | Equihash (n=168, k=7) | ~1.3 GiB | ✅ |
 | `kiosk-pow-argon2id` | Argon2id (D=0..256) | 64 MiB | legacy |
-| `kiosk-pow-cuckoo` | Cuckatoo29 | ~4 GiB | no |
+| `kiosk-pow-cuckoo` | Cuckatoo29 | not measured | no |
 
 Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
 `kiosk-pow/README.md` tells how to add a backend. See

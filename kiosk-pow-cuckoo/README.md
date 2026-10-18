@@ -4,8 +4,8 @@ Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 
 > **Shelved / optional.** The shipped default PoW backend is
 > [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash) — one PoW backend, Equihash.
-> Cuckatoo meets the asymmetric-verify bar, but needs
-> ~4 GiB solves and heavier solver tooling (this gem ships only a toy solver),
+> Cuckatoo meets the asymmetric-verify bar, but its production parameters need
+> a native solver (this gem ships only a toy solver),
 > so it is not the default. It stays in the repo as an opt-in backend and may
 > return as a first-class extension; no demo, harness or deploy runbook wires it.
 
@@ -145,8 +145,10 @@ exist and the bundled `solve_cuckoo.py` finds them. At edgebits ≥ 14,
 12-cycles essentially vanish.
 
 **Cannot solve production Cuckatoo** (L=42, edgebits≥29). Pure Python cannot
-allocate or search the required ~1 GB+ graph in usable time. Production requires
-a native solver (C/C++ like Tromp's `lean`/`mean` miner).
+hold the graph: the bundled solver uses ~118 bytes per edge (peak RSS at
+edgebits 22 and 24, one Apple M3 core), so edgebits=29 needs ~59 GiB, and its
+memory guard refuses it. Production requires a native solver (C/C++ like
+Tromp's `lean`/`mean` miner). No native solver's memory is measured here.
 
 ### Cross-impl parity gate
 

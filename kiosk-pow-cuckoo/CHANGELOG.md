@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The README gives the bundled solver's memory as measured, ~118 bytes per edge (~59 GiB at edgebits=29), and names no native-solver figure.
+
 ## [0.5.16] — 2026-10-18
 
 - 2026-10-18: Built on kiosk-pow: BLAKE2b-256 is `Kiosk::Pow::Blake2b.digest256`, and `Cuckoo.blake2b256` is gone. Verify results are byte-for-byte the same.

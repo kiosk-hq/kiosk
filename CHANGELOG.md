@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The PoW READMEs give measured memory: an Equihash verify holds under 3 KB live, and the bundled Cuckatoo solver needs ~59 GiB at edgebits=29.
 - 2026-10-18: The verify cost reads as measured: ~22 ms for a valid Equihash proof at n=168 k=7 in pure Ruby, ~15 ms with YJIT; the deploy runbook's figures follow it.
 - 2026-10-18: The kiosk-server README renders again, and its Configure example names every core key; the gem READMEs say what the code does (K-2145..K-2161).
 - 2026-10-18: The demo READMEs give the toll per access token, start stripe-mock before a payment by hand, and name the controller that holds each verb.

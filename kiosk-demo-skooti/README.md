@@ -9,7 +9,7 @@ human's and no sign-in anywhere, and comes away with a short-lived signed
 token that opens that one vehicle. The last step is the human's, because it is
 physical: they present the token at the scooter — a tap on its NFC tag or a
 scan of its QR opens the App Clip, which writes the token to the lock over
-Bluetooth. Payment is kiosk-pay-stripe in Stripe test mode; the tasks and CI
+Bluetooth. Payment is kiosk-pay-stripe in Stripe test mode; the tests and CI
 charge a local stripe-mock. The lock verifies the offline
 Ed25519 token by itself, with no server round-trip; here it is a software
 simulation of the firmware in `firmware/`.
@@ -46,7 +46,9 @@ nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. Registration is priced
 with one Equihash proof-of-work at the gem's default n=168 k=7 — the "I'm not a
-fly-by bot" cost. Renting the motorcycle
+fly-by bot" cost. After that, each access token (one hour) pays one more proof
+by chance: 1 with no recent spend, 0 from 100 euros paid here in the past week.
+Renting the motorcycle
 additionally demands a signed KYC attestation carrying the required boolean
 attributes; the operator records only the booleans, never the underlying
 documents.
@@ -109,6 +111,14 @@ over BLE from a laptop. Both are documented in `firmware/README.md`;
 `bin/ble-unlock` is UNVERIFIED until it is run against a real board.
 
 ### Watch it work
+
+Payment goes to stripe-mock, a local copy of the Stripe API. Before `bin/setup`,
+start `stripe-mock` in a second terminal (it listens on port 12111). Then, in the
+terminal where you run `bin/setup`, run
+`export STRIPE_MOCK_URL=http://localhost:12111`. Without this variable the app
+sends each payment to the real Stripe API with a placeholder key, and the
+payment fails. `docker compose up` does not start stripe-mock, so payment fails
+there too.
 
 `bin/setup` seeds this demo and leaves the origin running on
 <http://localhost:3000>. Then say this to your AI assistant:

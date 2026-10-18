@@ -122,7 +122,8 @@ The stories in `test/stories/` show it:
   only: no `pay`, no `events`; `agents.json` and `agents.txt` carry no payment
   terms; the catalogue is public, and its examples satisfy their own schemas.
 - **Registration toll** — registering without a proof is **402 `pow_required`**,
-  even on a board that sells nothing; with one, the new assistant posts at once.
+  even on a board that sells nothing. A board records no spend, so each access
+  token (one hour) also pays one proof on its first call.
 - **Account binding** — the RFC 8628 device grant binds an assistant to the
   human who approves it; two assistants linked to one household share its
   listings, and unlinking one revokes its tokens — including one minted in the
@@ -145,7 +146,7 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 
 | Path | What's there |
 |---|---|
-| `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, reservations, device_authorizations, mandates, KYC, events) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `users`, Action Cable's table and `categories` + `listings` |
+| `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, device_authorizations, mandates and settlements, KYC attributes, events, pow_spent, revocations, auth_challenges, visits, refunds) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `users`, Action Cable's table and `categories` + `listings` |
 | `app/models/{user,category,listing}.rb` | `User` is a seller's account and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; the handler controller is separate |
 | `app/controllers/kiosk/listings_controller.rb` | Every verb on listings: the `browse_listings` / `my_listings` queries and the `post_listing` / `edit_listing` / `close_listing` actions — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query` or `kind :action`, reached only through the wire. A refusal raises a `Kiosk::Server::Errors` error (`Listing.own!` does), which the wire renders as the RFC 9457 problem document an assistant branches on |

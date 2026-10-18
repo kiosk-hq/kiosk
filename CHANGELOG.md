@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The demo READMEs give the toll per access token, start stripe-mock before a payment by hand, and name the controller that holds each verb.
 - 2026-10-18: kiosk-pay-stripe keys a capture by the Stripe customer and the cart mandate id, so the carts of two customers cannot share an idempotency key.
 - 2026-10-18: The `kyc_required` hint names the attributes it asks for, as the specification says.
 - 2026-10-18: The skooti red-team battery scores a local beat whose setup step failed as UNTESTED and prints its summary, with or without a stripe-mock.

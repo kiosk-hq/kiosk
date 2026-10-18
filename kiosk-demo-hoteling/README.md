@@ -6,7 +6,7 @@ Hotel booking demo operator for Kiosk.
 over the Kiosk wire — the "book me a room for those dates" story, completed
 by an AI assistant with no human present, and gated on payment (a booking is
 only confirmed once it is paid for). Payment is kiosk-pay-stripe in Stripe test
-mode — the tasks and CI charge a local stripe-mock — and a booking the property
+mode — the tests and CI charge a local stripe-mock — and a booking the property
 declines is refunded to the card that paid.
 
 ## Wire surface
@@ -46,7 +46,9 @@ nothing to withhold — this document is a POINTER and the catalog is the
 CONTRACT, and a second copy of the verb list would be a second source of truth
 for it. **Registration is
 always gated by Equihash proof-of-work** (`registration_pow_count = 1`) — every
-new agent key pays one solve to register: a metered toll, not a wall.
+new agent key pays one solve to register. After that, each access token (one
+hour) pays one more solve by chance: 1 with no recent spend, 0 from 100 euros
+paid here in the past week.
 
 ## The human channel
 
@@ -89,6 +91,14 @@ wire to an app of your own; `kiosk-demo-getgrocery` is the same surface in
 Minitest.
 
 ### Watch it work
+
+Payment goes to stripe-mock, a local copy of the Stripe API. Before `bin/setup`,
+start `stripe-mock` in a second terminal (it listens on port 12111). Then, in the
+terminal where you run `bin/setup`, run
+`export STRIPE_MOCK_URL=http://localhost:12111`. Without this variable the app
+sends each payment to the real Stripe API with a placeholder key, and the
+payment fails. `docker compose up` does not start stripe-mock, so payment fails
+there too.
 
 `bin/setup` seeds this demo and leaves the origin running on
 <http://localhost:3000>. Then say this to your AI assistant:

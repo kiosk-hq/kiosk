@@ -32,8 +32,11 @@ drive it rather than a script, see "Watch it work" in `README.md`.
 A table operator's fear is not fraud but reservation-scalping: scripts that
 mass-claim prime-time two-tops to resell. Kiosk prices that at the door:
 every new assistant pays an Equihash proof-of-work to register. One diner's
-assistant pays once; a script that rents a fresh identity for each claim pays
-every time. A toll, not a hardware wall.
+assistant pays that once. After that, each access token (one hour) pays one
+more proof by chance: 1 with no recent spend, 0 from 100 euros spent here in
+the past week. A booking the diner keeps counts as spend at its seating time.
+A script that rents a fresh identity for each claim has no spend, so it pays to
+register and in every session.
 
 An assistant sees and cancels only its own bookings: `test/stories/privacy_test.rb`
 and `../kiosk-redteam/suites/atablefor.rb` assert that a cross-tenant read, a cross-owner cancel and

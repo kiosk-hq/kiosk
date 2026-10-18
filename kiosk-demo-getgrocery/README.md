@@ -7,7 +7,7 @@ Single implicit store (getgrocery IS the store): `catalog` / `delivery_slots` /
 `request_kyc` actions (delivery slot + address are part of
 `create_order`; `request_kyc` starts the 18+ anonymized check the alcohol gate
 needs, and the `kyc_verification` event carries its signed outcome), real Stripe SetupIntent
-card-on-file payments (stripe-mock when no key is set) behind a cashier check
+card-on-file payments (stripe-mock in the tests) behind a cashier check
 (the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
 and the claim-rebind half of the account-binding ceremony.
 
@@ -42,6 +42,14 @@ origin, asserted with the matchers `kiosk-test-support` ships.
 `kiosk-demo-hoteling` is the same surface written in RSpec.
 
 ### Watch it work
+
+Payment goes to stripe-mock, a local copy of the Stripe API. Before `bin/setup`,
+start `stripe-mock` in a second terminal (it listens on port 12111). Then, in the
+terminal where you run `bin/setup`, run
+`export STRIPE_MOCK_URL=http://localhost:12111`. Without this variable the app
+sends each payment to the real Stripe API with a placeholder key, and the
+payment fails. `docker compose up` does not start stripe-mock, so payment fails
+there too.
 
 `bin/setup` seeds this demo and leaves the origin running on
 <http://localhost:3000>. Then say this to your AI assistant:
@@ -164,11 +172,10 @@ This age-gate is the **proper home** of anonymized KYC: a low-liability
 fact (over 18) without identifying the person — so it does **not** confer
 accountability, which is exactly why it is used here (eligibility) and NOT for
 high-liability actions where the operator needs to know *who* is on the hook.
-(getgrocery is a second broker operator; deploy allow-listing is a follow-up.)
 
 Payments need `STRIPE_SECRET_KEY` (sk_test_…, real test-mode charge) or a
-local stripe-mock; export `STRIPE_MOCK_URL=http://localhost:12111` to boot the
-app secret-free in development. stripe-mock lists a saved card for every
+local stripe-mock; `export STRIPE_MOCK_URL=http://localhost:12111` sends the
+payments of development to a stripe-mock on this machine. stripe-mock lists a saved card for every
 Customer, so `payment_setup` answers `ready` once it has mapped one. The tests
 always run against stripe-mock.
 

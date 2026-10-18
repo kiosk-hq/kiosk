@@ -304,7 +304,7 @@ RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params
   end
 
   it 'raises on a SUBMITTED proof too — not only on the first, unproven request' do
-    # The check sits at the top of `enforce`, which both entry points share,
+    # The check sits at the top of `PowToll#collect!`, which both entry points share,
     # so a client that already holds a challenge minted before the misconfig
     # gets the same operator-facing error rather than a 403 blaming its proof.
     configure_with_policy(policy_returning({ n: 0, k: 7 }))

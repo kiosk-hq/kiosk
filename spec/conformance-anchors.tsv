@@ -703,6 +703,7 @@ kiosk-demo-tudu/test/stories/privacy_test.rb	only queries the catalog says reach
 kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	CLAIM_IDS = { 'licence_a' => 'licence_category:A' }.freeze
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
+kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	Generate the migration for the stripe_customers table of kiosk-pay-stripe.
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	class_option :user_id_type, type: :string, default: 'uuid'
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/templates/create_kiosk_pay_stripe_customers.rb.tt	t.column :user_id, :<%= options[:user_id_type] %>, null: false
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
@@ -932,7 +933,6 @@ kiosk-reputation/lib/kiosk/reputation/policies/backoff.rb	        def identity_k
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	            alg: 'equihash',
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	            count: compute_count(purchases, rate, bad_proofs)
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	            params: @equihash_params,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          # Free pass: proven principal, low traffic, no bad-proof history.
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          base_count:                 1,
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          count_min:                  1,
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          proven_purchases_threshold: 5,
@@ -947,7 +947,6 @@ kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def challe
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def initialize(
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_k:                 7
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_n:                 168,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	return nil if proven?(purchases) && low_rate?(rate) && bad_proofs.zero?
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def chance(cents) = [(@cap_cents - cents).fdiv(@cap_cents), 0].max
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(within:, cap:, random: Random)
@@ -1173,6 +1172,7 @@ kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	# One proof, a JSON array, repeated header lines (Rack joins them with
 kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
+kiosk-server/lib/kiosk/server/pow_gate.rb	return :proceed if spec.nil?
 kiosk-server/lib/kiosk/server/pow_toll.rb	# Not bad faith (clock skew, a difficulty change): release the claim
 kiosk-server/lib/kiosk/server/pow_toll.rb	# The cheap checks first, so only a live challenge this origin signed
 kiosk-server/lib/kiosk/server/pow_toll.rb	A lost claim is a replay: skipped, not penalised.

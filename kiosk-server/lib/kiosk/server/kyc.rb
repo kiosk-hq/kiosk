@@ -15,10 +15,10 @@ module Kiosk
       MAX_OPEN      = 3
       OPEN_WINDOW   = 15 * 60
 
-      REQUEST_HINT = "call `#{NAME}` to verify them: subscribe to the #{TOPIC} topic first, relay the " \
+      REQUEST_HINT = "call `#{NAME}` to verify %<claims>s: subscribe to the #{TOPIC} topic first, relay the " \
                      'verification_url it returns to your human, and retry once the event arrives'.freeze
-      ATTEST_HINT  = 'submit a KYC attestation carrying them to POST <endpoint>/agents/kyc, then retry'
-      CLOSED_HINT  = 'verification is not available at this origin and retrying will not help'
+      ATTEST_HINT  = 'submit a KYC attestation carrying %<claims>s to POST <endpoint>/agents/kyc, then retry'
+      CLOSED_HINT  = 'verification of %<claims>s is not available at this origin and retrying will not help'
 
       INPUT_SCHEMA = { type: 'object', additionalProperties: false, properties: {}, required: [] }.freeze
 
@@ -106,10 +106,9 @@ module Kiosk
         def require!
           return if Store.granted?(CurrentRequest.identity.user_id, claims.uniq)
 
-          raise Errors::KycRequired.new(
-            "this action requires the verified attributes #{claims.join(', ')}",
-            hint: gate_hint
-          )
+          names = claims.join(', ')
+          raise Errors::KycRequired.new("this action requires the verified attributes #{names}",
+                                        hint: format(gate_hint, claims: names))
         end
 
         private

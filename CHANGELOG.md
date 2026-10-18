@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The `kyc_required` hint names the attributes it asks for, as the specification says.
 - 2026-10-18: The skooti red-team battery scores a local beat whose setup step failed as UNTESTED and prints its summary, with or without a stripe-mock.
 - 2026-10-18: kiosk-redteam scores an attack that a failed setup step or an unreachable payment processor kept from its gate as UNTESTED, not BREACH. The run still fails.
 - 2026-10-18: `refund` takes `key:`, which names the refund among the refunds of its charge; kiosk-pay-stripe keys the Stripe request by the charge and that key.

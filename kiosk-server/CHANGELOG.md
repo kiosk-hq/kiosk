@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The `kyc_required` hint names the attributes it asks for, as the specification says.
 - 2026-10-18: `refund` takes `key:`, which names the refund among the refunds of its charge; kiosk-pay-stripe keys the Stripe request by the charge and that key.
 - 2026-10-18: A `kyc_provider` with empty `kyc_claims` raises `ConfigurationError` at boot: no verification could grant a gated action.
 - 2026-10-18: `PaymentClaim` takes no `status_column:` or `unpaid:` (the column is `payment_status`), and `ColumnSpendingCap.new` takes no arguments.

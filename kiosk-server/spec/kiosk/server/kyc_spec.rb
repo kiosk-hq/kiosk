@@ -193,6 +193,7 @@ RSpec.describe Kiosk::Server::Kyc do
       expect { as('u-1', 'a-1') { described_class.require! } }
         .to raise_error(Kiosk::Server::Errors::KycRequired) { |e|
           expect(e.hint).to include('agents/kyc')
+          expect(e.hint).to include('age_over_18, licence_a')
           expect(e.hint).not_to include('request_kyc')
         }
     end

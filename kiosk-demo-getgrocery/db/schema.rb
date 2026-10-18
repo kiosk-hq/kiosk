@@ -30,7 +30,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_100015) do
 
   create_table "public.orders", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.uuid "user_id", null: false
-    t.string "status", default: "created", null: false
+    t.string "status", default: "placed", null: false
+    t.string "payment_status", default: "unpaid", null: false
     t.integer "total_cents", default: 0, null: false
     t.integer "refunded_cents", default: 0, null: false
     t.timestamptz "slot_at", null: false

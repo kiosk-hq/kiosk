@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: getgrocery keeps the money in `orders.payment_status` and the basket in `status`; a full refund reads `refunded` and is announced on the `payment` topic.
 - 2026-10-18: skooti derives `needs_licence` from `kind`: a motorcycle needs a licence. The `scooters.needs_licence` column goes; the wire field stays.
 - 2026-10-18: `Kiosk::SkillLink` sends the `rel="kiosk"` Link header; the seven demos include it in place of three hand-written spellings.
 - 2026-10-18: The KYC broker demo posts a callback over https, or over http only to a loopback host; its intake answer carries the stored `expires_at`.

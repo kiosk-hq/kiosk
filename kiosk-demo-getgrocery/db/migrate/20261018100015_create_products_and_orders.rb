@@ -16,7 +16,8 @@ class CreateProductsAndOrders < ActiveRecord::Migration[ActiveRecord::Migration.
 
     create_table :orders, id: :uuid do |t|
       t.references  :user, null: false, foreign_key: true, type: :uuid
-      t.string      :status,      null: false, default: "created"
+      t.string      :status,      null: false, default: "placed" # the basket
+      t.string      :payment_status, null: false, default: "unpaid" # the money
       t.integer     :total_cents, null: false, default: 0
       # What went back to the card for lines a concurrent payment emptied the shelf of.
       t.integer     :refunded_cents, null: false, default: 0

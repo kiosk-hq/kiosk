@@ -53,7 +53,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
   end
 
   def payment_state(order_id) = as_shopper { Kiosk::Server::Queries.fetch('my_orders').call({}) }.find { it['order_id'] == order_id }['payment_state']
-  def status(order_id) = Order.uncached { Order.find(order_id).status }
+  def status(order_id) = Order.uncached { Order.find(order_id).payment_status }
 
   def capture(psp, order)
     total = order['total_cents']

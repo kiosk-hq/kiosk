@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
-# One basket, its delivery window and address. `timezone` is the clock of the
-# delivery district the window was quoted on.
+# One basket, its delivery window and address. `status` is the basket,
+# `payment_status` the money. `timezone` is the clock of the delivery district
+# the window was quoted on.
 class Order < ApplicationRecord
   include Kiosk::Owned
   include Kiosk::Payable
@@ -9,14 +10,13 @@ class Order < ApplicationRecord
   MAX_ITEMS = 50
 
   enum :status, {
-    created: 'created',
-    paying: 'paying',
-    paid: 'paid',
+    placed: 'placed',
     rescheduled: 'rescheduled',
     out_for_delivery: 'out_for_delivery',
     delivered: 'delivered',
     cancelled: 'cancelled'
   }
+  enum :payment_status, { unpaid: 'unpaid', paying: 'paying', paid: 'paid', refunded: 'refunded' }
 
   belongs_to :user
   has_many :order_items, dependent: :destroy, autosave: true
@@ -28,9 +28,9 @@ class Order < ApplicationRecord
   validate :window_bookable, on: %i[place reschedule]
 
   # Paid and not yet with the courier.
-  scope :awaiting_courier, -> { paid.or(rescheduled) }
+  scope :awaiting_courier, -> { paid.where(status: %i[placed rescheduled]) }
   # One move per order, and none once the courier has the basket.
-  scope :reschedulable,    -> { not_rescheduled.not_out_for_delivery.not_delivered.not_cancelled }
+  scope :reschedulable,    -> { placed }
 
   def self.readable_by?(order_id, user_id) = exists?(id: order_id, user_id: user_id)
 
@@ -64,14 +64,20 @@ class Order < ApplicationRecord
     end
   end
 
+  # A refund of every line cancels the order and tells its owner on both topics.
   def refund!(lines)
     amount = lines.sum { it.price_cents * it.qty }
-    Kiosk.configuration.payment_provider.refund(psp_reference: settlement.psp_reference, amount_cents: amount)
-    update!(refunded_cents: amount, status: amount == total_cents ? :cancelled : status)
-    announce_cancelled if cancelled?
+    claim = Kiosk.configuration.payment_provider
+    claim.refund(psp_reference: settlement.psp_reference, amount_cents: amount)
+    update!(refunded_cents: amount)
+    return unless amount == total_cents
+
+    update!(status: :cancelled, payment_status: :refunded)
+    announce_cancelled
+    claim.announce(id, Kiosk::Payable::REFUNDED)
   end
 
-  def awaiting_courier? = paid? || rescheduled?
+  def awaiting_courier? = paid? && (placed? || rescheduled?)
 
   # Moves the basket from the shop to the courier. The row lock makes two runs
   # take turns; false for the run that finds the courier already has it.

@@ -6,8 +6,8 @@ require 'test_helper'
 class HomePageTest < ActionDispatch::IntegrationTest
   test 'deliveries scheduled counts every paid order still waiting for the courier' do
     shopper = User.create!(email: 'home@example.test', password: 'conformance-fixture-password')
-    %w[created paid rescheduled delivered].each do |status|
-      Order.create!(user: shopper, status:, total_cents: 449, slot_at: Time.current,
+    [%w[placed unpaid], %w[placed paid], %w[rescheduled paid], %w[delivered paid]].each do |status, payment_status|
+      Order.create!(user: shopper, status:, payment_status:, total_cents: 449, slot_at: Time.current,
                     address: '1 Dame Street, Dublin 2', timezone: DeliverySlots::DEFAULT_ZONE_NAME)
     end
 

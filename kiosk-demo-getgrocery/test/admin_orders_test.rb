@@ -60,7 +60,7 @@ class AdminOrdersTest < ActionDispatch::IntegrationTest
   private
 
   def show_order_with_basket
-    order = order_in('created')
+    order = order_in('placed')
     { 'Pears' => 349, 'Apples' => 199 }.each do |name, price_cents|
       product = Product.create!(sku: "admin-#{name}", name: name, price_cents: price_cents)
       order.order_items.create!(product: product, qty: 2, price_cents: price_cents)

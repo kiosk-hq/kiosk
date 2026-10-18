@@ -9,7 +9,7 @@ class CourierStatesTest < ActiveSupport::TestCase
   end
 
   def paid_order(window)
-    Order.create!(user: @shopper, status: :paid, total_cents: 449, slot_at: window,
+    Order.create!(user: @shopper, payment_status: :paid, total_cents: 449, slot_at: window,
                   address: '1 Dame Street, Dublin 2', timezone: DeliverySlots::DEFAULT_ZONE_NAME)
   end
 
@@ -80,7 +80,7 @@ class CourierStatesTest < ActiveSupport::TestCase
     assert_equal window, order.reload.dispatch_at
 
     assert_empty(emitted_by { CourierDispatchJob.new.perform(order.id) })
-    assert_predicate order.reload, :paid?
+    assert_predicate order.reload, :placed?
   end
 
   test 'of two runs that read the order before either hands it over, one sends the courier' do

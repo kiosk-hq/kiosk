@@ -53,11 +53,11 @@ class OrderTest < ActiveSupport::TestCase
     end
   end
 
-  test 'a reschedule checks the new window, and a status change checks nothing' do
+  test 'a reschedule checks the new window, and a payment checks nothing' do
     placed = travel_to(SHOP.local(2026, 9, 7, 12)) { order.tap { it.save!(context: :place) } }
 
     travel_to SHOP.local(2026, 9, 9, 12) do
-      assert placed.update!(status: :paid)
+      assert placed.update!(payment_status: :paid)
       placed.slot_at = DeliverySlots.starts(Date.new(2026, 9, 8), SHOP)[2]
 
       assert_match(/no longer bookable/, errors(placed, :reschedule).sole)
@@ -66,7 +66,7 @@ class OrderTest < ActiveSupport::TestCase
 
   test 'a payment reported twice takes the basket off the shelf and books the courier once' do
     placed = order(date: Date.tomorrow, items: [['sourdough-bread', 3]])
-    placed.update!(status: :paid)
+    placed.update!(payment_status: :paid)
 
     Order.fulfil!(placed.id)
     dispatch_at = placed.reload.dispatch_at

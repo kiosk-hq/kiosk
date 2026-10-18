@@ -67,7 +67,7 @@ class ShelfStory < StoryTest
     placed = shopper.orders_placed.sole
 
     assert_equal 349, placed['refunded_cents']
-    assert_equal 'paid', placed['status']
+    assert_equal %w[placed paid], placed.values_at('status', 'payment_state')
     assert_equal({ 'butter-250g' => 0, 'banana' => Product::DAILY_STOCK - 1 }, shelf('butter-250g', 'banana'))
   end
 
@@ -79,8 +79,8 @@ class ShelfStory < StoryTest
     assert_predicate another_payment_takes('butter-250g') { shopper.pays_for(order) }, :ok?
     assert_equal({ 'order_id' => order['order_id'], 'status' => 'cancelled' },
                  shopper.hears(:order_delivery, about: order['order_id']))
-    assert_equal({ 'status' => 'cancelled', 'refunded_cents' => 349 },
-                 shopper.orders_placed.sole.slice('status', 'refunded_cents'))
+    assert_equal({ 'status' => 'cancelled', 'payment_state' => 'refunded', 'refunded_cents' => 349 },
+                 shopper.orders_placed.sole.slice('status', 'payment_state', 'refunded_cents'))
   end
 
   test 'every morning the shelves are full again' do

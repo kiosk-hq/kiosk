@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `KycVerifier.verify` asks the configured `kyc_provider#accepts?`, so `POST /kiosk/agents/kyc` refuses with 403 what the provider does not accept.
 - 2026-10-18: `PaymentClaim#refund` records the refund in the new `kiosk.refunds` table, and recent spend leaves the refunded cents out. Run the `create_kiosk_refunds` migration.
 
 ## [0.5.16] — 2026-10-18

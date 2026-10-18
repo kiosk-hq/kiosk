@@ -82,6 +82,14 @@ module KycSpec
     dispatch(Kiosk::Server::KycCallbackController, env)
   end
 
+  def submit(kyc_jws, user_id: 'u-1')
+    env = Rack::MockRequest.env_for('/kiosk/agents/kyc', method: 'POST', input: JSON.generate(kyc_jws: kyc_jws),
+                                                         'CONTENT_TYPE' => 'application/json',
+                                                         'HTTP_AUTHORIZATION' => "Bearer #{token(user_id: user_id)}")
+    env['action_dispatch.request.path_parameters'] = { controller: 'kiosk/server/kyc_attestation', action: 'create' }
+    dispatch(Kiosk::Server::KycAttestationController, env)
+  end
+
   def attestation(sub: 'u-1', operator: 'shop', attributes: { 'age_over_18' => true, 'licence_a' => true })
     now = Time.now.to_i
     JWT.encode({ sub: sub, level: 'verified', iss: 'https://kyc.example', aud: 'shop', operator: operator,
@@ -316,6 +324,25 @@ RSpec.describe Kiosk::Server::Kyc do
         expect([status, problem['code']]).to eq([400, 'bad_request'])
       end
       expect(store.head).to eq(0)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::Kyc do
+  include_context 'kyc spec: postgres'
+
+  describe 'POST <endpoint>/agents/kyc' do
+    before { configure(provider) }
+
+    it 'records an attestation the provider accepts' do
+      expect(submit(attestation).first).to eq(200)
+      expect(granted).to eq(%w[age_over_18 licence_a])
+    end
+
+    it 'refuses with 403 forbidden an attestation the provider does not accept' do
+      status, problem = submit(attestation(operator: 'other'))
+      expect([status, problem['code']]).to eq([403, 'forbidden'])
+      expect(granted).to eq([])
     end
   end
 end

@@ -131,19 +131,13 @@ module Kiosk
             request_id = required_field(body, 'request_id')
             kyc_jws    = required_field(body, 'kyc_jws')
             row = matching_request(request_id, body['nonce'].to_s)
-            Store.approve!(row, verified_claims(kyc_jws, row)[:attributes])
+            claims = KycVerifier.verify(raw_jws: kyc_jws, subject: row.fetch('user_id'))
+            Store.approve!(row, claims[:attributes])
             Events.emit(topic: TOPIC, subject: request_id, identity_scope: [row.fetch('user_id')],
                         data: { 'request_id' => request_id, 'status' => 'approved', 'kyc_jws' => kyc_jws })
           end
 
           private
-
-          def verified_claims(kyc_jws, row)
-            claims = KycVerifier.verify(raw_jws: kyc_jws, subject: row.fetch('user_id'))
-            raise Errors::Forbidden, "the KYC provider's attestation is addressed to another operator" unless Kyc.provider.accepts?(claims.transform_keys(&:to_s))
-
-            claims
-          end
 
           def open_verification(user_id)
             Kyc.provider.open_verification(subject: user_id, claims: Kyc.claims,

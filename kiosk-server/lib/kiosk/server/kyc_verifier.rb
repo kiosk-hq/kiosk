@@ -5,7 +5,8 @@ require 'jwt'
 module Kiosk
   module Server
     # Verifies a KYC attestation JWS against `kyc_public_key`: `iss`, `aud`,
-    # `sub` and `level: "verified"` must match; only attributes
+    # `sub` and `level: "verified"` must match, and the configured
+    # `kyc_provider` must accept it; only attributes
     # that are literally `true` are granted.
     module KycVerifier
       # Named once for the decode and the published hint.
@@ -28,9 +29,9 @@ module Kiosk
         end
 
         check_subject!(payload, subject)
+        check_provider!(payload, config)
 
-        payload[:attributes] = verified_attributes(payload[:attributes])
-        payload
+        payload.merge(attributes: verified_attributes(payload[:attributes]))
       end
 
       # The names granted as literal `true`; `{}` when absent; a non-object
@@ -91,7 +92,15 @@ module Kiosk
         raise Errors::Forbidden, 'kyc level not verified' unless payload[:level] == 'verified'
       end
 
-      private_class_method :decode, :public_key!, :check_issuer!, :audience_hint, :check_subject!
+      # The provider's own checks ({Kiosk::KycProviders::Base#accepts?}).
+      def check_provider!(payload, config)
+        provider = config.kyc_provider
+        return if provider.nil? || provider.accepts?(payload.transform_keys(&:to_s))
+
+        raise Errors::Forbidden, 'the KYC provider does not accept this attestation at this operator'
+      end
+
+      private_class_method :decode, :public_key!, :check_issuer!, :audience_hint, :check_subject!, :check_provider!
     end
   end
 end

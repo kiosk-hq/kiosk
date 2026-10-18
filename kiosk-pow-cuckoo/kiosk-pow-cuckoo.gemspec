@@ -21,7 +21,7 @@ Gem::Specification.new do |spec|
 
     The implementation is clean-room from Tromp's public-domain algorithm
     spec (doc/spec, doc/mathspec) — no GPL/FAIR-MINING code is included.
-    BLAKE2b-256 is pure Ruby from the public-domain BLAKE2 spec.
+    BLAKE2b-256 comes from kiosk-pow, the base of every Kiosk PoW backend.
     SipHash-2-4 is pure Ruby from the public-domain SipHash spec with
     Cuckatoo's non-standard initialization (keys feed directly into v0..v3
     without XOR-ing the 0x736f6d65... magic constants).
@@ -48,5 +48,5 @@ Gem::Specification.new do |spec|
                        %w[solve_cuckoo.py requirements.txt]
   spec.require_paths = ['lib']
 
-  # No runtime dependencies — pure Ruby, no native extensions.
+  spec.add_dependency 'kiosk-pow', '~> 0.5.0'
 end

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
+require 'kiosk/pow'
 require 'kiosk/pow/cuckoo/version'
-require 'kiosk/pow/cuckoo/blake2b'
 require 'kiosk/pow/cuckoo/sip_hash'
 
 module Kiosk
@@ -11,10 +11,6 @@ module Kiosk
     # the solver is `solve_cuckoo.py`, packaged beside this file.
     module Cuckoo
       NAME = 'cuckatoo'
-
-      def self.blake2b256(input)
-        Blake2b.digest256(input)
-      end
 
       def self.siphash(key0, key1, key2, key3, nonce)
         SipHash.digest([key0, key1, key2, key3], nonce)
@@ -38,7 +34,7 @@ module Kiosk
         return false if proof.nil? || edgebits.nil?
 
         header_nonce, cycle = proof
-        keys = blake2b256(salt.b + [header_nonce].pack('V')).unpack('Q<4')
+        keys = Blake2b.digest256(salt.b + [header_nonce].pack('V')).unpack('Q<4')
         verify_cycle(keys:, edgebits:, cycle:, proofsize:) && below_target?(cycle, target)
       end
 
@@ -85,8 +81,8 @@ module Kiosk
       def self.coerce_proof(nonce)
         return nil unless nonce.is_a?(Hash)
 
-        header_nonce = param(nonce, :header_nonce)
-        cycle = param(nonce, :cycle)
+        header_nonce = Pow.param(nonce, :header_nonce)
+        cycle = Pow.param(nonce, :cycle)
         return nil if header_nonce.nil? || !cycle.is_a?(Array)
 
         [Integer(header_nonce), cycle]
@@ -98,22 +94,20 @@ module Kiosk
       def self.coerce_params(params)
         return [nil, nil, nil] unless params.is_a?(Hash)
 
-        target = param(params, :target)
-        [Integer(param(params, :edgebits)), Integer(param(params, :proofsize) || 42), target && Integer(target)]
+        target = Pow.param(params, :target)
+        [Integer(Pow.param(params, :edgebits)), Integer(Pow.param(params, :proofsize) || 42), target && Integer(target)]
       rescue ArgumentError, TypeError
         [nil, nil, nil]
       end
 
-      def self.param(hash, key) = hash[key] || hash[key.to_s]
-
       # The sorted cycle's BLAKE2b-256, read as a big-endian integer, must be
       # below `target`. A nil target accepts any cycle.
       def self.below_target?(cycle, target)
-        target.nil? || blake2b256(cycle.sort.pack('Q<*')).unpack1('H*').to_i(16) < target
+        target.nil? || Blake2b.digest256(cycle.sort.pack('Q<*')).unpack1('H*').to_i(16) < target
       end
 
       private_class_method :endpoints, :ascending_edges?, :closed_walk_length, :partner,
-                           :coerce_proof, :coerce_params, :param, :below_target?
+                           :coerce_proof, :coerce_params, :below_target?
     end
   end
 end

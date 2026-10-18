@@ -181,10 +181,12 @@ cat >> Gemfile <<'RUBY'
 # kiosk-reputation + kiosk-pow-equihash back the register-time Equihash PoW
 # gate (registration_pow_count=1 in the initializer); neither is a transitive
 # dep of kiosk-all, so both must be path-overridden explicitly (same as demos).
+# kiosk-pow-equihash is built on kiosk-pow, so kiosk-pow is path-overridden too.
 gem "kiosk-all",           path: "@KIOSK_OSS@/kiosk-all"
 gem "kiosk-core",          path: "@KIOSK_OSS@/kiosk-core"
 gem "kiosk-server",        path: "@KIOSK_OSS@/kiosk-server"
 gem "kiosk-reputation",    path: "@KIOSK_OSS@/kiosk-reputation"
+gem "kiosk-pow",           path: "@KIOSK_OSS@/kiosk-pow"
 gem "kiosk-pow-equihash",  path: "@KIOSK_OSS@/kiosk-pow-equihash"
 gem "kiosk-user-idp-devise", path: "@KIOSK_OSS@/kiosk-user-idp-devise"
 # The payment provider: Stripe, against the local stripe-mock this script starts.

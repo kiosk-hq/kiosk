@@ -8,29 +8,15 @@ Gem::Specification.new do |spec|
   spec.authors       = ['Phil Pirozhkov']
   spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = 'Argon2id memory-hard proof-of-work backend for Kiosk (legacy)'
+  spec.summary       = 'The base of the Kiosk proof-of-work backends: BLAKE2b-256 and the backend contract'
   spec.description   = <<~DESC
-    kiosk-pow is the legacy/retired PoW backend for the Kiosk framework: an
-    Argon2id search-form proof-of-work that providers can demand on any verb to
-    conserve their own compute against scraping and flooding. The shipped
-    default is now Equihash (kiosk-pow-equihash); Argon2id remains as
-    a legacy backend because its 64 MiB verify is unacceptable for a gateway.
+    kiosk-pow is the base of every Kiosk proof-of-work backend:
+    kiosk-pow-equihash (the shipped default), kiosk-pow-cuckoo and
+    kiosk-pow-argon2id. It holds the one pure-Ruby BLAKE2b-256 that the
+    backends hash with, and the reader for wire parameters. Its README tells
+    how to add a backend.
 
-    Ships the provider-side Ruby verify (one Argon2id eval, no loop) and a
-    portable Python solver (solve.py / argon2-cffi) that an assistant runs in
-    its sandbox when a `pow_required` challenge is received.  The Ruby verify
-    and the Python solver produce byte-identical Argon2id digests, checked by
-    this REPOSITORY's `rake parity` task. That task is a Rakefile task run by
-    hand; the Rakefile is deliberately not packaged (it needs spec/ and the
-    development bundle, neither of which ships), so it is not in this gem.
-    What CI runs on every push is this gem's own `:parity` spec examples,
-    which assert the same digest agreement and a solve.py roundtrip; spec/
-    is not packaged either, so neither check ships inside the gem.
-
-    Reached through kiosk-reputation's backend registry when a HOST registers
-    it under "argon2id" — no PoW gem self-registers, and nothing in this
-    repository registers this one outside kiosk-server's own specs.
-    Does not depend on kiosk-core or Rails — pure Ruby + libargon2 FFI.
+    Pure Ruby, no runtime dependencies. Does not depend on kiosk-core or Rails.
   DESC
   spec.homepage      = 'https://kiosk.tech'
   spec.license       = 'Apache-2.0'
@@ -42,12 +28,6 @@ Gem::Specification.new do |spec|
   spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files = Dir.glob('lib/**/*') + %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
+  spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ['lib']
-
-  # Raw Argon2id FFI bindings — provides Argon2::Ext.argon2id_hash_raw.
-  # We call the low-level FFI method directly to pass the exact KiB value for
-  # m_cost (the high-level Password API uses a power-of-two exponent instead).
-  spec.add_dependency 'argon2', '~> 2.3'
-  spec.add_dependency 'ffi',    '~> 1.0'
 end

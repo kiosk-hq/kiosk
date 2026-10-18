@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: kiosk-pow is the base of the PoW backends: one shared BLAKE2b-256 and a guide to add a backend. The Argon2id backend moves to kiosk-pow-argon2id.
 - 2026-10-18: `c.after_payment` runs after the engine records the settlement, so getgrocery refunds a sold-out line against the charge; the test Stripe front refuses a refund with no charge.
 
 ## [0.5.15] — 2026-10-18

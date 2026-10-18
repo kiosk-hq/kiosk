@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: kiosk-pow is the base of the PoW backends: `Kiosk::Pow::Blake2b`, `Kiosk::Pow.param` and a guide to add a backend. The Argon2id backend moves to kiosk-pow-argon2id.
+
 ## [0.5.15] — 2026-10-18
 
 - 2026-10-18: Version 0.5.15, the tree cut that matches skill 0.5.15.

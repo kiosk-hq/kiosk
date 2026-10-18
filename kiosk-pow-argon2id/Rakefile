@@ -30,7 +30,7 @@ PY
 #   bundle exec rake parity
 #   PYTHON=/path/to/python3 bundle exec rake parity
 task :parity do
-  require 'kiosk/pow'
+  require 'kiosk/pow/argon2id'
 
   python = find_python_with_argon2
   unless python
@@ -45,8 +45,8 @@ end
 
 # Fixed inputs with a small m, so the check is fast.
 def check_digest_parity(python)
-  params   = Kiosk::Pow.params(d: 6, m: 8_192, t: 1, p: 1)
-  ruby_hex = Kiosk::Pow.digest(salt: PARITY_SALT, params:, nonce: '42').unpack1('H*')
+  params   = Kiosk::Pow::Argon2id.params(d: 6, m: 8_192, t: 1, p: 1)
+  ruby_hex = Kiosk::Pow::Argon2id.digest(salt: PARITY_SALT, params:, nonce: '42').unpack1('H*')
   puts "Ruby   digest: #{ruby_hex}"
 
   python_hex = python_parity_hex(python)
@@ -70,8 +70,8 @@ def check_solver_parity(python)
   found_nonce = solve_py_nonce(python)
   puts "solve.py found nonce: #{found_nonce}"
 
-  params = Kiosk::Pow.params(d: 8, m: 8_192, t: 1, p: 1)
-  abort "E2E PARITY: FAIL — Ruby verify rejected nonce #{found_nonce.inspect}." unless Kiosk::Pow.verify(salt: PARITY_SALT, params:, nonce: found_nonce)
+  params = Kiosk::Pow::Argon2id.params(d: 8, m: 8_192, t: 1, p: 1)
+  abort "E2E PARITY: FAIL — Ruby verify rejected nonce #{found_nonce.inspect}." unless Kiosk::Pow::Argon2id.verify(salt: PARITY_SALT, params:, nonce: found_nonce)
 
   puts 'E2E PARITY: OK — Ruby verify accepts the Python-produced nonce.'
 end

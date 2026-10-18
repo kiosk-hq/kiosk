@@ -102,10 +102,12 @@ settled the `alpha` engine underneath it is.
 | Gem | Algorithm | Solver memory | Default? |
 |---|---|---|---|
 | `kiosk-pow-equihash` | Equihash (n=168, k=7) | ~1.3 GiB | ✅ |
-| `kiosk-pow` | Argon2id (D=0..256) | 64 MiB | legacy |
+| `kiosk-pow-argon2id` | Argon2id (D=0..256) | 64 MiB | legacy |
 | `kiosk-pow-cuckoo` | Cuckatoo29 | ~4 GiB | no |
 
-See `kiosk-pow-equihash/README.md` for the full comparison and rationale.
+Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
+`kiosk-pow/README.md` tells how to add a backend. See
+`kiosk-pow-equihash/README.md` for the full comparison and rationale.
 
 ### Reputation & security
 

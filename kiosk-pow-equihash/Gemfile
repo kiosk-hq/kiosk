@@ -5,4 +5,5 @@ source 'https://rubygems.org'
 gemspec
 
 gem 'base64'
+gem 'kiosk-pow', path: '../kiosk-pow'
 gem 'rspec', '~> 3.13'

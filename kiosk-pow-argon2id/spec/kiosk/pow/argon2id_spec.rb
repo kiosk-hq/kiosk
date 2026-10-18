@@ -1,0 +1,251 @@
+# frozen_string_literal: true
+
+require 'spec_helper'
+require_relative '../../support/python_parity'
+
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe 'NAME' do
+    it "is 'argon2id'" do
+      expect(described_class::NAME).to eq('argon2id')
+    end
+  end
+
+  describe '.params' do
+    it 'returns a hash with all four keys' do
+      result = described_class.params(d: 6)
+      expect(result).to include(m: 65_536, t: 1, p: 1, d: 6)
+    end
+
+    it 'accepts custom m, t, p' do
+      result = described_class.params(d: 8, m: 8_192, t: 2, p: 2)
+      expect(result).to eq({ m: 8_192, t: 2, p: 2, d: 8 })
+    end
+
+    it 'd: 0 is a valid (no-challenge) difficulty' do
+      result = described_class.params(d: 0)
+      expect(result[:d]).to eq(0)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe '.leading_zero_bits' do
+    it 'returns 0 for an empty string' do
+      expect(described_class.leading_zero_bits('')).to eq(0)
+    end
+
+    it 'counts 0 leading zeros for 0x80 (MSB set)' do
+      expect(described_class.leading_zero_bits("\x80")).to eq(0)
+    end
+
+    it 'counts 1 leading zero for 0x40' do
+      expect(described_class.leading_zero_bits("\x40")).to eq(1)
+    end
+
+    it 'counts 6 leading zeros for 0x02' do
+      expect(described_class.leading_zero_bits("\x02")).to eq(6)
+    end
+
+    it 'counts 7 leading zeros for 0x01' do
+      expect(described_class.leading_zero_bits("\x01")).to eq(7)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe '.leading_zero_bits' do
+    it 'counts 8 leading zeros for a zero byte and stops at the next non-zero byte' do
+      # 0x00 0x80 → 8 + 0 = 8
+      expect(described_class.leading_zero_bits("\x00\x80")).to eq(8)
+    end
+
+    it 'spans across multiple zero bytes' do
+      # 0x00 0x00 0x40 → 8 + 8 + 1 = 17
+      expect(described_class.leading_zero_bits("\x00\x00\x40")).to eq(17)
+    end
+
+    it 'returns 8 * byte_count for an all-zero input' do
+      expect(described_class.leading_zero_bits("\x00\x00\x00\x00")).to eq(32)
+    end
+
+    it 'ignores bytes after the first non-zero byte' do
+      # 0x40 0x00 → 1 (zero bytes after the non-zero byte don't add to count)
+      expect(described_class.leading_zero_bits("\x40\x00")).to eq(1)
+    end
+  end
+end
+
+# .digest known-answer vector. Update it only if the Argon2id params change.
+#   salt    = "testsalt12345678"  (16 raw ASCII bytes)
+#   nonce   = "42"               (decimal ASCII string)
+#   m       = 8_192 KiB
+#   t       = 1
+#   p       = 1
+#   version = 0x13 (19)
+#   → digest (hex) = 020b766a76b5149e772a60e06b0c26975b07fc6073fa107650bdeab15cb95118
+#   → leading_zero_bits = 6
+#
+# Python argon2-cffi gives the same digest for the same inputs:
+#   argon2.low_level.hash_secret_raw(secret=b"42", salt=b"testsalt12345678",
+#     time_cost=1, memory_cost=8192, parallelism=1, hash_len=32,
+#     type=Type.ID, version=19)
+# The parity examples below and `bundle exec rake parity` check this.
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe '.digest' do
+    let(:salt)   { 'testsalt12345678' }
+    let(:params) { described_class.params(d: 6, m: 8_192, t: 1, p: 1) }
+
+    it 'returns 32 raw bytes' do
+      result = described_class.digest(salt:, params:, nonce: '42')
+      expect(result.bytesize).to eq(32)
+    end
+
+    it 'is deterministic (known-answer vector)' do
+      result = described_class.digest(salt:, params:, nonce: '42')
+      expect(result.unpack1('H*')).to eq(
+        '020b766a76b5149e772a60e06b0c26975b07fc6073fa107650bdeab15cb95118'
+      )
+    end
+
+    it 'accepts an integer nonce (converts to decimal string)' do
+      result_int = described_class.digest(salt:, params:, nonce: 42)
+      result_str = described_class.digest(salt:, params:, nonce: '42')
+      expect(result_int).to eq(result_str)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe '.digest' do
+    let(:salt)   { 'testsalt12345678' }
+    let(:params) { described_class.params(d: 6, m: 8_192, t: 1, p: 1) }
+
+    it 'changes with a different nonce' do
+      d1 = described_class.digest(salt:, params:, nonce: '42')
+      d2 = described_class.digest(salt:, params:, nonce: '43')
+      expect(d1).not_to eq(d2)
+    end
+
+    it 'changes with a different salt' do
+      d1 = described_class.digest(salt: 'testsalt12345678', params:, nonce: '42')
+      d2 = described_class.digest(salt: 'differentsalt678', params:, nonce: '42')
+      expect(d1).not_to eq(d2)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe '.verify' do
+    let(:salt) { 'testsalt12345678' }
+
+    # Known-good: nonce "42" → 6 leading zero bits with m=8_192
+    it 'returns true when the nonce satisfies d' do
+      params = described_class.params(d: 6, m: 8_192, t: 1, p: 1)
+      expect(described_class.verify(salt:, params:, nonce: '42')).to be(true)
+    end
+
+    it 'returns false when d exceeds the actual leading zero bits' do
+      params = described_class.params(d: 7, m: 8_192, t: 1, p: 1)
+      expect(described_class.verify(salt:, params:, nonce: '42')).to be(false)
+    end
+
+    it 'returns true for d: 0 (any nonce is valid)' do
+      params = described_class.params(d: 0, m: 8_192, t: 1, p: 1)
+      expect(described_class.verify(salt:, params:, nonce: '999')).to be(true)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe '.verify' do
+    let(:salt) { 'testsalt12345678' }
+
+    it 'returns false for a wrong nonce with realistic d' do
+      # nonce "1" has a different digest; we check it against d=6
+      params = described_class.params(d: 6, m: 8_192, t: 1, p: 1)
+      # The known-good nonce is "42"; a random other nonce is almost certainly wrong
+      d1  = described_class.digest(salt:, params:, nonce: '1')
+      lzb = described_class.leading_zero_bits(d1)
+      # Only run this assertion when the nonce genuinely fails (expected probability ~99%)
+      if lzb < 6
+        expect(described_class.verify(salt:, params:, nonce: '1')).to be(false)
+      else
+        # In the astronomically unlikely case nonce "1" also has ≥6 LZB, skip.
+        skip "nonce '1' happens to also satisfy d=6 (lzb=#{lzb})"
+      end
+    end
+
+    it 'computes exactly one digest (no iteration)' do
+      params = described_class.params(d: 6, m: 8_192, t: 1, p: 1)
+      call_count = 0
+      allow(described_class).to receive(:digest).and_wrap_original do |m, **kwargs|
+        call_count += 1
+        m.call(**kwargs)
+      end
+      described_class.verify(salt:, params:, nonce: '42')
+      expect(call_count).to eq(1)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe '.verify' do
+    let(:salt) { 'testsalt12345678' }
+
+    # Non-ASCII / binary nonce must NOT raise — it should simply fail the
+    # leading-zero-bits check and return false (junk proof → :bad_proof in gate).
+    it 'returns false (not raise) for a non-ASCII nonce containing byte >127' do
+      params = described_class.params(d: 1, m: 8_192, t: 1, p: 1)
+      expect do
+        result = described_class.verify(salt:, params:, nonce: "abc\xFF")
+        # result may be true or false — the point is no exception is raised
+        expect(result).to be(true).or be(false)
+      end.not_to raise_error
+    end
+
+    it 'returns false for a nonce with embedded non-ASCII bytes against a realistic d' do
+      # At d=6 the probability of any specific nonce passing is ~1.6%; a junk
+      # non-ASCII nonce is not expected to pass, but we only care that it does
+      # NOT raise. We assert no-raise (see above) and separately check the
+      # return type for type safety.
+      params = described_class.params(d: 6, m: 8_192, t: 1, p: 1)
+      result = nil
+      expect { result = described_class.verify(salt:, params:, nonce: "abc\xFF") }.not_to raise_error
+      expect(result).to be(true).or be(false)
+    end
+  end
+end
+
+# Cross-implementation parity. Shells out to Python. Without a python3 that has
+# argon2-cffi the examples skip, unless `KIOSK_REQUIRE_PARITY=1` makes them fail.
+# Run `bundle exec rake parity` for the full interactive parity report.
+RSpec.describe Kiosk::Pow::Argon2id do
+  describe 'Python solver cross-implementation parity', :parity do
+    include PythonParity
+
+    let(:salt)     { 'testsalt12345678' }
+    let(:python)   { find_python_with_argon2 }
+    let(:solve_py) { File.join(__dir__, '../../../solve.py') }
+
+    before { require_python! unless python }
+
+    it 'Python argon2-cffi produces the same digest as Ruby for the known vector' do
+      python_hex = python_digest_hex
+      ruby_hex = described_class.digest(
+        salt:, params: described_class.params(d: 6, m: 8_192, t: 1, p: 1), nonce: '42'
+      ).unpack1('H*')
+
+      expect(python_hex).to eq(ruby_hex),
+                            "Digest mismatch!\n  Ruby:   #{ruby_hex}\n  Python: #{python_hex}"
+    end
+
+    it 'Ruby verify accepts a nonce produced by solve.py (end-to-end parity)' do
+      skip 'solve.py not found' unless File.exist?(solve_py)
+
+      found_nonce = solve_py_nonce({ 'm' => 8_192, 't' => 1, 'p' => 1, 'd' => 8 })
+      params = described_class.params(d: 8, m: 8_192, t: 1, p: 1)
+      expect(described_class.verify(salt:, params:, nonce: found_nonce)).to be(true),
+                                                                            "Ruby verify rejected solve.py nonce #{found_nonce.inspect}"
+    end
+  end
+end

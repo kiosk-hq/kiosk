@@ -53,7 +53,7 @@ module EquihashKats
 
   # The first byte of the leaf hash for `index` under `salt` and header_nonce 0.
   def leaf_byte(salt, index)
-    Kiosk::Pow::Equihash.blake2b256(salt + [0].pack('V') + [index].pack('Q<')).getbyte(0)
+    Kiosk::Pow::Blake2b.digest256(salt + [0].pack('V') + [index].pack('Q<')).getbyte(0)
   end
 end
 
@@ -82,31 +82,6 @@ RSpec.describe Kiosk::Pow::Equihash do
     expect(path).to eq(File.expand_path(path))
     expect(File.file?(path)).to be(true)
     expect(path).to eq(File.join(File.expand_path('../../..', __dir__), 'solve.py'))
-  end
-end
-
-# Cross-referenced with Python hashlib.blake2b(…, digest_size=32).
-RSpec.describe Kiosk::Pow::Equihash, '.blake2b256' do
-  it 'matches Python hashlib for empty input' do
-    expect(described_class.blake2b256(''.b).unpack1('H*'))
-      .to eq('0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8')
-  end
-
-  it "matches Python hashlib for 'hello'" do
-    expect(described_class.blake2b256('hello').unpack1('H*'))
-      .to eq('324dcf027dd4a30a932c441f365a25e86b173defa4b8e58948253471b81b72cf')
-  end
-
-  it 'returns 32 bytes' do
-    expect(described_class.blake2b256('x').bytesize).to eq(32)
-  end
-
-  it 'is deterministic' do
-    expect(described_class.blake2b256('abc')).to eq(described_class.blake2b256('abc'))
-  end
-
-  it 'changes with input' do
-    expect(described_class.blake2b256('a')).not_to eq(described_class.blake2b256('b'))
   end
 end
 
@@ -396,7 +371,7 @@ end
 module EquihashHashCount
   def verify_counting(indices, params: Kiosk::Pow::Equihash.params, salt: EquihashKats::MULTI_SALT, extra: {})
     count = 0
-    allow(Kiosk::Pow::Equihash).to receive(:blake2b256).and_wrap_original do |original, data|
+    allow(Kiosk::Pow::Blake2b).to receive(:digest256).and_wrap_original do |original, data|
       count += 1
       original.call(data)
     end
@@ -523,7 +498,7 @@ RSpec.describe Kiosk::Pow::Equihash, 'Python solver parity', :parity do
              'print(hashlib.blake2b(b"kat" + struct.pack("<I", 0) + struct.pack("<Q", 2), digest_size=32).hexdigest())'
     py_hex = IO.popen([python, '-c', script], &:read).strip
 
-    expect(py_hex).to eq(described_class.blake2b256("kat\0\0\0\0#{[2].pack('Q<')}".b).unpack1('H*'))
+    expect(py_hex).to eq(Kiosk::Pow::Blake2b.digest256("kat\0\0\0\0#{[2].pack('Q<')}".b).unpack1('H*'))
   end
 
   it 'Ruby verify accepts a toy (n=8,k=1) proof from Python solver' do

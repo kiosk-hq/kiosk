@@ -33,8 +33,9 @@ it for you.
 gem "kiosk-pow-cuckoo", github: "kiosk-hq/kiosk"
 ```
 
-The verifier is pure Ruby with **no runtime dependencies** — not `kiosk-core`,
-not Rails, no native extension. Requiring it defines the backend; registering
+The verifier is pure Ruby. Its one runtime dependency is `kiosk-pow`, the
+pure-Ruby base that holds BLAKE2b-256. It needs no `kiosk-core`, no Rails and no
+native extension. Requiring it defines the backend; registering
 it is a separate, explicit step, because no PoW gem self-registers on require.
 The registry lives in `kiosk-reputation`, which an origin adds to its Gemfile
 the same way:
@@ -66,7 +67,7 @@ SipHash spec).
 
 ## Implementation
 
-- **BLAKE2b-256**: pure Ruby from the public-domain [BLAKE2 spec](https://www.blake2.net/blake2.pdf).
+- **BLAKE2b-256**: `Kiosk::Pow::Blake2b` from `kiosk-pow`, pure Ruby from the public-domain [BLAKE2 spec](https://www.blake2.net/blake2.pdf).
 - **SipHash-2-4**: pure Ruby from the [public-domain SipHash spec](https://131002.net/siphash/siphash.pdf),
   with Cuckatoo's non-standard init.
 - No native extensions, no GPL code, no Tromp repository code.
@@ -88,7 +89,7 @@ params = Kiosk::Pow::Cuckoo.params(edgebits: 29, proofsize: 42)
 # => { edgebits: 29, proofsize: 42, target: nil }
 
 # Verify a proof (composite nonce: header_nonce + cycle)
-# -- This is the ONE deviation from kiosk-pow's scalar nonce: --
+# -- This is the ONE deviation from kiosk-pow-argon2id's scalar nonce: --
 # The wire proof is { header_nonce: <u32>, cycle: [proofsize ints, ascending] }
 # kiosk-reputation passes this composite object unchanged to .verify.
 Kiosk::Pow::Cuckoo.verify(
@@ -99,13 +100,13 @@ Kiosk::Pow::Cuckoo.verify(
 # => true / false
 
 # Lower-level: verify cycle with pre-derived keys
-keys = Kiosk::Pow::Cuckoo.blake2b256(header).unpack("Q<4")
+keys = Kiosk::Pow::Blake2b.digest256(header).unpack("Q<4")
 Kiosk::Pow::Cuckoo.verify_cycle(keys: keys, edgebits: 29, cycle: cycle, proofsize: 42)
 ```
 
 ## Wire interface: composite nonce
 
-Unlike `kiosk-pow` (Argon2id, scalar nonce), Cuckatoo proofs are composite:
+Unlike `kiosk-pow-argon2id` (Argon2id, scalar nonce), Cuckatoo proofs are composite:
 
 ```json
 {
@@ -202,7 +203,7 @@ proof.
   provider mandates it; clients that cannot solve are denied. This is
   intentional: it raises the cost of abuse.
 - **Equihash** (`kiosk-pow-equihash`) is the shipped default.
-  Argon2id (`kiosk-pow`) remains as a legacy backend. Use Cuckatoo only when the
+  Argon2id (`kiosk-pow-argon2id`) remains as a legacy backend. Use Cuckatoo only when the
   extreme solve:verify asymmetry (GB-RAM solver vs. a few-hash verifier) is
   specifically required.
 - `proofsize < 42` is a deviation from production Cuckatoo (L=42 per Grin/Tromp

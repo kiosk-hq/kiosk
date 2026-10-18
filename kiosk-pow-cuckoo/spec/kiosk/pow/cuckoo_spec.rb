@@ -30,7 +30,7 @@ module CuckooVectors
     0x1c05d5b0,  0x1c0b9caa
   ].freeze
   KAT_BLAKE2B_HEX = '770129fe760558276ee7f431209beaf98f8607868c3063160e0d18fab03988b8'
-  KAT_KEYS = Kiosk::Pow::Cuckoo.blake2b256(KAT_SALT + [KAT_NONCE].pack('V')).unpack('Q<4').freeze
+  KAT_KEYS = Kiosk::Pow::Blake2b.digest256(KAT_SALT + [KAT_NONCE].pack('V')).unpack('Q<4').freeze
 
   # Toy vector: proofsize 12 at edgebits 10, not production difficulty. The
   # Python solver (solve_cuckoo.py) made it from salt "parity!" and header nonce 1.
@@ -65,7 +65,7 @@ module CuckooVectors
   end
 
   def kat_cycle_hash
-    Kiosk::Pow::Cuckoo.blake2b256(KAT_CYCLE.sort.pack('Q<*')).unpack('C*').reduce(0) { |acc, byte| (acc << 8) | byte }
+    Kiosk::Pow::Blake2b.digest256(KAT_CYCLE.sort.pack('Q<*')).unpack('C*').reduce(0) { |acc, byte| (acc << 8) | byte }
   end
 end
 
@@ -88,28 +88,11 @@ RSpec.describe Kiosk::Pow::Cuckoo do
   end
 end
 
-# Cross-referenced against Python hashlib.blake2b(…, digest_size=32).
-RSpec.describe Kiosk::Pow::Cuckoo, '.blake2b256' do
-  it 'matches Python hashlib.blake2b for empty input' do
-    expect(described_class.blake2b256(''.b).unpack1('H*'))
-      .to eq('0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8')
-  end
-
+# The KAT keys come from the shared BLAKE2b-256, cross-checked against Python hashlib.
+RSpec.describe Kiosk::Pow::Cuckoo, 'KAT header hash' do
   it 'matches Python hashlib.blake2b for the KAT header (76 zeros + LE32(20))' do
     header = CuckooVectors::KAT_SALT + [CuckooVectors::KAT_NONCE].pack('V')
-    expect(described_class.blake2b256(header).unpack1('H*')).to eq(CuckooVectors::KAT_BLAKE2B_HEX)
-  end
-
-  it 'returns 32 raw bytes' do
-    expect(described_class.blake2b256('hello').bytesize).to eq(32)
-  end
-
-  it 'is deterministic' do
-    expect(described_class.blake2b256('abc')).to eq(described_class.blake2b256('abc'))
-  end
-
-  it 'changes with input' do
-    expect(described_class.blake2b256('a')).not_to eq(described_class.blake2b256('b'))
+    expect(Kiosk::Pow::Blake2b.digest256(header).unpack1('H*')).to eq(CuckooVectors::KAT_BLAKE2B_HEX)
   end
 end
 
@@ -312,7 +295,7 @@ RSpec.describe Kiosk::Pow::Cuckoo, '.verify on the toy proofsize-12 vector (edge
   end
 
   it 'accepts via .verify_cycle with pre-derived keys' do
-    keys = described_class.blake2b256(CuckooVectors::TOY_SALT + [CuckooVectors::TOY_HN].pack('V')).unpack('Q<4')
+    keys = Kiosk::Pow::Blake2b.digest256(CuckooVectors::TOY_SALT + [CuckooVectors::TOY_HN].pack('V')).unpack('Q<4')
     expect(described_class.verify_cycle(keys:, edgebits: CuckooVectors::TOY_EDGEBITS,
                                         cycle: CuckooVectors::TOY_CYCLE, proofsize: CuckooVectors::TOY_PROOFSIZE))
       .to be(true)

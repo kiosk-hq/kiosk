@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
+require 'kiosk/pow'
 require_relative 'equihash/version'
-require_relative 'equihash/blake2b'
 
 module Kiosk
   module Pow
@@ -27,10 +27,6 @@ module Kiosk
         File.expand_path('../../../solve.py', __dir__)
       end
 
-      def self.blake2b256(input)
-        Blake2b.digest256(input)
-      end
-
       # n must be a multiple of 8 and n / (k + 1) at most 24; bench/ holds the measured grid.
       def self.params(n: 168, k: 7) # rubocop:disable Naming/MethodParameterName -- n and k are the Equihash parameters and the wire params keys.
         { n:, k: }
@@ -50,8 +46,7 @@ module Kiosk
       def self.coerce_params(params)
         return [nil, nil] unless params.is_a?(Hash)
 
-        [Integer(params[:n] || params['n'] || DEFAULT_N),
-         Integer(params[:k] || params['k'] || DEFAULT_K)]
+        [Integer(Pow.param(params, :n) || DEFAULT_N), Integer(Pow.param(params, :k) || DEFAULT_K)]
       rescue ArgumentError, TypeError
         [nil, nil]
       end
@@ -74,7 +69,7 @@ module Kiosk
       def self.proof_indices(nonce)
         return unless nonce.is_a?(Hash)
 
-        indices = nonce[:indices] || nonce['indices']
+        indices = Pow.param(nonce, :indices)
         indices if indices.is_a?(Array)
       end
       private_class_method :proof_indices
@@ -98,7 +93,7 @@ module Kiosk
       private_class_method :canonical_order?
 
       def self.coerce_header_nonce(nonce)
-        value = Integer(nonce[:header_nonce] || nonce['header_nonce'] || 0)
+        value = Integer(Pow.param(nonce, :header_nonce) || 0)
         value if value >= 0 && value < MAX_HEADER_NONCE
       rescue ArgumentError, TypeError
         nil
@@ -133,8 +128,8 @@ module Kiosk
 
       # BLAKE2b-256(seed ‖ LE64(index)), first `n_bytes` read as a big-endian integer.
       def self.leaf_hash(seed, index, n_bytes)
-        blake2b256(seed + [index].pack('Q<'))
-          .byteslice(0, n_bytes).unpack('C*').reduce(0) { |acc, b| (acc << 8) | b }
+        digest = Blake2b.digest256(seed + [index].pack('Q<'))
+        digest.byteslice(0, n_bytes).unpack('C*').reduce(0) { |acc, b| (acc << 8) | b }
       end
       private_class_method :leaf_hash
     end

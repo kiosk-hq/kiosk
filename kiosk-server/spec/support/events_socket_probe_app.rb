@@ -21,7 +21,7 @@ require 'json'
 require 'socket'
 require 'kiosk/server'
 require 'action_controller/railtie'
-require 'kiosk/pow'
+require 'kiosk/pow/argon2id'
 require 'kiosk/reputation'
 require 'puma'
 require 'puma/configuration'
@@ -113,9 +113,9 @@ class ProbeController < ApplicationController
   end
 end
 
-Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
 TOLL_EVERY_VERB = Class.new(Kiosk::Reputation::Policy) do
-  def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+  def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
 end.new
 
 class ProbeApp < Rails::Application

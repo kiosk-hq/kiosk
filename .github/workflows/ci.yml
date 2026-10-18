@@ -27,6 +27,7 @@ jobs:
           - kiosk-kyc-prove
           - kiosk-pay-stripe
           - kiosk-pow
+          - kiosk-pow-argon2id
           - kiosk-pow-cuckoo
           - kiosk-pow-equihash
           - kiosk-redteam
@@ -76,13 +77,13 @@ jobs:
       # params to prove the solver and Ruby verifier agree end-to-end (T-013);
       # both go through the bundled numpy-vectorised solve.py, which errors
       # "this solver requires numpy" (redteam) or skips the roundtrips
-      # (pow-equihash) without it. kiosk-pow is the third and numpy does it no
+      # (pow-equihash) without it. kiosk-pow-argon2id is the third and numpy does it no
       # good: its packaged solve.py imports argon2.low_level and nothing else,
       # so its two :parity examples -- the only thing anywhere comparing that
       # shipped solver with the Ruby verifier beside it -- were pending in every
       # CI run this file has ever produced (K-1687).
       - name: Set up Python (PoW solvers)
-        if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-test-support' || matrix.gem == 'kiosk-pow-equihash' || matrix.gem == 'kiosk-pow'
+        if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-test-support' || matrix.gem == 'kiosk-pow-equihash' || matrix.gem == 'kiosk-pow-argon2id'
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"
@@ -90,7 +91,7 @@ jobs:
         if: matrix.gem == 'kiosk-redteam' || matrix.gem == 'kiosk-test-support' || matrix.gem == 'kiosk-pow-equihash'
         run: python -m pip install numpy
       - name: Install argon2-cffi (Argon2id solver)
-        if: matrix.gem == 'kiosk-pow'
+        if: matrix.gem == 'kiosk-pow-argon2id'
         run: python -m pip install argon2-cffi
 
       # kiosk-pay-stripe's K-492 setup-reuse spec has THREE coverage layers, and
@@ -123,7 +124,7 @@ jobs:
           # until something sets this, and nothing did until K-1687. Every other
           # matrix entry gets the empty string, because no other gem has a
           # :parity group to promise anything about.
-          KIOSK_REQUIRE_PARITY: ${{ (matrix.gem == 'kiosk-pow' || matrix.gem == 'kiosk-pow-equihash') && '1' || '' }}
+          KIOSK_REQUIRE_PARITY: ${{ (matrix.gem == 'kiosk-pow-argon2id' || matrix.gem == 'kiosk-pow-equihash') && '1' || '' }}
         run: ${{ matrix.cmd }}
 
   demos:

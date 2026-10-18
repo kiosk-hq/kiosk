@@ -26,13 +26,13 @@
 require 'rack/mock'
 require 'base64'
 require 'json'
-require 'kiosk/pow'
+require 'kiosk/pow/argon2id'
 require 'kiosk/reputation'
 
 module WireControllerPowHeaderSpec
   # Challenges every verb with a fast argon2id toll.
   class AlwaysArgon2idPolicy < Kiosk::Reputation::Policy
-    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
   end
 
   # A per-verb call is `VerbController#show` / `#create` with the verb name in
@@ -92,7 +92,7 @@ module WireControllerPowHeaderSpec
     salt   = Base64.strict_decode64(challenge[:salt])
     params = (challenge[:params] || {}).transform_keys(&:to_sym)
     nonce  = 0
-    nonce += 1 until Kiosk::Pow.verify(salt: salt, params: params, nonce: nonce)
+    nonce += 1 until Kiosk::Pow::Argon2id.verify(salt: salt, params: params, nonce: nonce)
     nonce.to_s
   end
 
@@ -118,7 +118,7 @@ RSpec.shared_context 'wire controller pow header spec: tolled origin' do
   let(:fake_identity) { build_identity(user_id: 'u-1', agent_id: 'a-1', role: 'customer') }
 
   before do
-    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     Kiosk.configure do |c|
       c.signing_key       = Kiosk::Server::SigningKey.generate
       c.issuer            = 'https://demo.example'

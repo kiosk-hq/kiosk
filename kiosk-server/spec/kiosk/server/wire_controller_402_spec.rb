@@ -16,13 +16,13 @@
 
 require 'rack/mock'
 require 'json'
-require 'kiosk/pow'
+require 'kiosk/pow/argon2id'
 require 'kiosk/reputation'
 
 module WireController402Spec
   # Challenges every verb with a fast argon2id toll.
   class AlwaysChallengePolicy < Kiosk::Reputation::Policy
-    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
   end
 
   def dispatch(action, env)
@@ -76,7 +76,7 @@ end
 
 RSpec.shared_context 'wire controller 402 spec: pow gate' do
   before do
-    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     Kiosk.configure do |c|
       c.reputation_policy = WireController402Spec::AlwaysChallengePolicy.new
       c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'

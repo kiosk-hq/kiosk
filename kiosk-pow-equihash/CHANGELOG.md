@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: Built on kiosk-pow: BLAKE2b-256 is `Kiosk::Pow::Blake2b.digest256`, and `Equihash.blake2b256` is gone. Verify results are byte-for-byte the same.
+
 ## [0.5.15] — 2026-10-18
 
 - 2026-10-18: Version 0.5.15, the tree cut that matches skill 0.5.15.

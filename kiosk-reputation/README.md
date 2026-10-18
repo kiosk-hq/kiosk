@@ -12,9 +12,10 @@ pluggable reputation policy interface.
 with `Kiosk::Reputation::Backends.register`. In a Rails app `kiosk-pow-equihash`
 registers itself at boot; the host registers any other backend (see
 [Installation](#installation)). This gem is backend-agnostic:
-the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow`
+the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow-argon2id`
 provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
-Cuckatoo Cycle (opt-in, registers as `cuckatoo`).
+Cuckatoo Cycle (opt-in, registers as `cuckatoo`). Each backend is built on
+`kiosk-pow`, whose README tells how to add a backend.
 
 ## Wire protocol
 
@@ -425,7 +426,7 @@ default 3600 seconds).
 ```ruby
 gem "kiosk-reputation",   github: "kiosk-hq/kiosk"
 gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"   # default backend
-# gem "kiosk-pow",        github: "kiosk-hq/kiosk"   # legacy Argon2id backend, if you specifically want it
+# gem "kiosk-pow-argon2id", github: "kiosk-hq/kiosk" # legacy Argon2id backend, if you specifically want it
 ```
 
 In a Rails app `kiosk-pow-equihash` registers itself as the `equihash`

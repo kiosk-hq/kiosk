@@ -10,7 +10,7 @@
 
 require 'json'
 require 'rack/mock'
-require 'kiosk/pow'
+require 'kiosk/pow/argon2id'
 require 'kiosk/reputation'
 
 module OpenApiControllerSpecHelpers
@@ -97,12 +97,12 @@ RSpec.describe Kiosk::Server::OpenApiController do
     # The shipped RateAndReputation policy ignores `verb:` and prices every
     # wire call it is asked about. This endpoint no longer asks: the gate that
     # would have charged `:schema` is gone with the identity it charged.
-    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     seen   = []
     policy = Class.new(Kiosk::Reputation::Policy) do
       define_method(:challenge_for) do |verb:, **|
         seen << verb
-        { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+        { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
       end
     end.new
     Kiosk.configure do |c|

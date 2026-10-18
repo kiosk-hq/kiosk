@@ -11,9 +11,8 @@ Gem::Specification.new do |spec|
   spec.description = <<~DESC
     kiosk-pow-equihash is the shipped default proof-of-work backend for the
     Kiosk framework: a pure-Ruby Equihash (Biryukov & Khovratovich birthday-
-    collision PoW) VERIFIER with no runtime dependencies — BLAKE2b-256 is
-    clean-room pure Ruby from the public-domain BLAKE2 spec, and the gem
-    depends on neither kiosk-core nor Rails.
+    collision PoW) VERIFIER built on kiosk-pow, which holds the pure-Ruby
+    BLAKE2b-256. The gem depends on neither kiosk-core nor Rails.
 
     `Kiosk::Pow::Equihash.verify(salt:, params:, nonce:)` recomputes the 2^k
     BLAKE2b-256 hashes named by the proof's indices, checks that they XOR to
@@ -63,4 +62,6 @@ Gem::Specification.new do |spec|
   spec.files = Dir.glob('lib/**/*') + Dir.glob('bench/**/*') +
                %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ['lib']
+
+  spec.add_dependency 'kiosk-pow', '~> 0.5.0'
 end

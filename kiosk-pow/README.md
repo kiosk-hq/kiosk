@@ -1,166 +1,154 @@
 # kiosk-pow
 
-Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk.tech) framework.
+The base of the proof-of-work backends of the [Kiosk](https://kiosk.tech) framework.
 
-> **Retired / optional.** The shipped default PoW backend is
-> [`kiosk-pow-equihash`](https://github.com/kiosk-hq/kiosk/tree/main/kiosk-pow-equihash) — one PoW backend, Equihash.
-> Argon2id's `verify` costs one `m`-sized eval (~64 MiB),
-> so a flood of bad proofs is a DoS on the *verifier* — the exact failure the
-> asymmetric-verify goal exists to prevent. This gem stays in the repo as an
-> opt-in backend and reference; no demo, harness or deploy runbook wires it.
+A backend verifies one proof of work for one algorithm. kiosk-pow holds the code
+that the backends share:
 
-## What it is
+- `Kiosk::Pow::Blake2b.digest256(input)` returns the BLAKE2b-256 digest of
+  `input` (RFC 7693, no key, 32 raw bytes). It is pure Ruby. Its spec compares it
+  with Python's `hashlib.blake2b(data, digest_size=32)`, on inputs at both sides
+  of the 128-byte block.
+- `Kiosk::Pow.param(hash, key)` reads one key of a wire object. Parsed JSON has
+  String keys and Ruby callers use Symbols; it reads both.
 
-`kiosk-pow` implements a
-**search-form Argon2id PoW**: a client finds the smallest nonce `n ≥ 0` such
-that `Argon2id(password=str(n), salt=raw_salt, ...)` has ≥ `d` leading zero
-bits. The provider verifies by computing **one** Argon2id eval — the solve:verify
-lever is exactly `2^d`.
+kiosk-pow is pure Ruby. It has no runtime dependencies, and it does not need
+`kiosk-core` or Rails.
 
-Providers can demand this PoW on any query or action endpoint
-(`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) — and, as an optional
-registration toll, on `/kiosk/auth/register` — at their discretion, via
-`kiosk-reputation`'s policy layer. `pay`'s 402 is `payment_setup_required`, not
-PoW. `kiosk-pow` ships both sides:
+## The backends
 
-- **Ruby verify** (`Kiosk::Pow.verify`) — one Argon2id eval, no loop.
-- **Python solver** (`solve.py`) — an assistant runs this in its sandbox when
-  it receives a `pow_required` challenge. Pure `argon2-cffi`, no exotic deps.
+| Gem | `alg` | Status |
+|-----|-------|--------|
+| `kiosk-pow-equihash` | `equihash` | The shipped default. Registers itself in a Rails app. |
+| `kiosk-pow-cuckoo` | `cuckatoo` | Opt-in. The host registers it. |
+| `kiosk-pow-argon2id` | `argon2id` | Legacy. The host registers it. |
 
-Both sides produce byte-identical Argon2id digests (verified by `rake parity`).
+`kiosk-reputation` holds the registry. It mints and signs each challenge, and it
+checks the signature and the expiry before it calls a backend.
 
-## Ruby API
+## How to add a backend
+
+A backend is a Ruby module. It verifies one proof against one challenge.
+`kiosk-reputation` does all the other work.
+
+### 1. Make the gem
+
+Name the gem `kiosk-pow-<algorithm>`. Make it depend on `kiosk-pow`:
 
 ```ruby
-# Challenge params for a difficulty tier:
-Kiosk::Pow.params(d: 8)
-# => { m: 65_536, t: 1, p: 1, d: 8 }
-
-# Check one proof (one Argon2id eval — no loop):
-Kiosk::Pow.verify(salt: raw_bytes, params: { m: 65_536, t: 1, p: 1, d: 8 }, nonce: "73821")
-# => true / false
-
-# Raw 32-byte digest:
-Kiosk::Pow.digest(salt: raw_bytes, params: { m: 65_536, t: 1, p: 1, d: 8 }, nonce: "0")
+spec.add_dependency 'kiosk-pow', '~> 0.5.0'
 ```
 
-### Constants and defaults
+### 2. Define the module
 
-| Symbol | Value | Meaning |
-|--------|-------|---------|
-| `Kiosk::Pow::NAME` | `"argon2id"` | Algorithm name advertised in the wire challenge |
-| `m` default | `65_536` KiB (64 MiB) | ASIC-resistance knob; sets verify cost and solve cost equally |
-| `t` default | `1` | Iterations |
-| `p` default | `1` | Parallelism |
-| `d` | provider-chosen | Required leading zero bits; escalation knob; solve ≈ `2^d` evals |
+Require `kiosk/pow`. Define the module under `Kiosk::Pow`:
 
-## The canonical PoW computation
+```ruby
+require 'kiosk/pow'
 
-Both the Ruby verifier and the Python solver compute the same primitive:
+module Kiosk
+  module Pow
+    module Example
+      NAME = 'example'
 
-```
-Argon2id(
-  password = str(nonce),       # decimal ASCII string, e.g. "0", "73821"
-  salt     = raw_salt_bytes,   # ≥ 8 raw bytes; wire base64 decoded upstream
-  m_cost   = params[:m],       # memory in KiB (default 65 536 = 64 MiB)
-  t_cost   = params[:t],       # iterations (default 1)
-  p        = params[:p],       # parallelism (default 1)
-  version  = 0x13,             # ARGON2_VERSION_13 (19) — hardcoded both sides
-  hash_len = 32                # 32-byte output
-)
-```
+      def self.params(bits: 20) = { bits: }
 
-A nonce is valid iff `leading_zero_bits(digest) >= params[:d]`.
+      def self.verify(salt:, params:, nonce:)
+        bits  = Integer(Pow.param(params, :bits))
+        value = Pow.param(nonce, :value)
+        return false unless value.is_a?(Integer) && value.between?(0, (1 << 64) - 1)
 
-Ruby uses `Argon2::Ext.argon2id_hash_raw` (libargon2, always version `0x13`).
-Python uses `argon2.low_level.hash_secret_raw(..., version=19)` (`argon2-cffi`).
-Version `19` decimal == `0x13` hex — byte-identical output.
-
-## Wire challenge params
-
-The `params` object in the challenge carries exactly four integer keys:
-
-| Key | Type | Meaning |
-|-----|------|---------|
-| `m` | Integer | Memory in KiB |
-| `t` | Integer | Iterations |
-| `p` | Integer | Parallelism |
-| `d` | Integer | Required leading zero bits |
-
-## Python solver
-
-```bash
-pip install argon2-cffi
-
-python3 solve.py '{"salt":"<base64>","params":{"m":65536,"t":1,"p":1,"d":8}}'
-# stdout: {"nonce": "73821"}
+        digest = Blake2b.digest256(salt + [value].pack('Q<'))
+        digest.unpack1('B*').start_with?('0' * bits)
+      rescue ArgumentError, TypeError
+        false
+      end
+    end
+  end
+end
 ```
 
-`solve.py` accepts the challenge JSON as `sys.argv[1]` or reads it from stdin.
-It only reads `"salt"` and `"params"` from the challenge — the other fields
-(`id`, `alg`, `exp`, `sig`) are ignored, so the full challenge object is safe
-to pass directly.
+### 3. Give the module these members
 
-Agent-facing guidance is **not** duplicated in this gem. The canonical skill is
-[kiosk.tech/skill.md](https://kiosk.tech/skill.md); it teaches the `402
-pow_required` retry — the same request body, unchanged, with the proof(s) in a
-`Kiosk-PoW` request header as raw JSON — and it teaches it for the
-shipped Equihash default, not for this legacy backend. An operator that opts
-back into Argon2id is off that path: it must tell its own assistants to run the
-`solve.py` above and echo the challenge verbatim in the `Kiosk-PoW` header.
+| Member | Required | What it does |
+|--------|----------|--------------|
+| `NAME` | Yes | The `alg` string of the wire challenge. |
+| `.params(**)` | Yes | Returns the `params` Hash of a challenge. The host calls it when it writes its policy. |
+| `.verify(salt:, params:, nonce:)` | Yes | Returns `true` when `nonce` is a valid proof for `salt` and `params`. Returns `false` for all other input. |
+| `.valid_params?(params)` | No | Returns `false` when no proof can verify at `params`. `kiosk-reputation` calls it before it mints a challenge. A wrong configuration then fails at once. |
 
-## Difficulty tiers (guidance)
+### 4. Read the inputs of `.verify` correctly
 
-Solve time depends on `m` and the assistant's hardware. Defaults: `m = 65 536`
-KiB (64 MiB), `t = 1`, `p = 1`.
+- `salt` is raw bytes. `kiosk-reputation` decodes the base64 of the wire.
+- `params` is the signed `params` of the challenge, with Symbol keys.
+- `nonce` is the `nonce` of the proof, as the `Kiosk-PoW` header carries it. It
+  is parsed JSON, so its keys are Strings. Read it with `Kiosk::Pow.param`.
+- Each key and each value of `params` must not contain `|`, `,` or `=`. These
+  characters separate the fields of the signed string, and `kiosk-reputation`
+  refuses such a challenge.
 
-| `d` | Expected solve time | Typical use |
-|----:|:-------------------:|:------------|
-| 0   | instant             | no challenge (policy returns nil) |
-| 5–6 | 2–4 s               | light friction for unproven principals |
-| 8   | 20–40 s             | medium throttle |
-| 11  | 3–6 min             | hard throttle for high-suspicion/high-rate |
+### 5. Make a wrong proof cheap to refuse
 
-These are guidance on server-class compute; actual times vary.
+`.verify` runs before authentication on `POST /kiosk/auth/register`. Anyone can
+send it a proof. So:
 
-## Cross-implementation parity check
+- Check the shape and the bounds of the proof first. Compute hashes last.
+- Return `false` at the first check that fails.
+- Do not raise an exception for any input. Return `false`.
+- Keep the memory and the time of one verify small.
 
-```bash
-bundle exec rake parity
+### 6. Hash with the shared BLAKE2b
+
+When the algorithm uses BLAKE2b-256, call `Kiosk::Pow::Blake2b.digest256`. Do not
+add a second BLAKE2b implementation.
+
+### 7. Register the backend
+
+Register the module under its `NAME`:
+
+```ruby
+Kiosk::Reputation::Backends.register(Kiosk::Pow::Example::NAME, Kiosk::Pow::Example)
 ```
 
-Computes the same Argon2id digest in Ruby and Python, asserts hex-equal, then
-runs `solve.py` on a small challenge and asserts Ruby `verify` accepts the
-result. Run this after any change to either implementation.
+A Rails app can do this at boot. `kiosk-pow-equihash` does it with a Railtie:
+
+```ruby
+class Railtie < Rails::Railtie
+  initializer 'kiosk_pow_example.register_backend' do
+    require 'kiosk/reputation/backends'
+    Kiosk::Reputation::Backends.register(NAME, Example)
+  end
+end
+```
+
+The policy then names the algorithm in each challenge:
+`{ alg: 'example', params: Kiosk::Pow::Example.params }`.
+
+### 8. Tell the assistants how to solve it
+
+The specification lets an operator serve an `alg` that it does not define. The
+backend brings its own `nonce` encoding. The Kiosk skill teaches assistants to
+solve Equihash only. If you serve another `alg`, give the assistants a solver and
+tell them the `nonce` encoding yourself.
+
+### 9. Test the backend
+
+- Write known-answer tests at the parameters that you ship. A test at small
+  parameters only does not prove the shipped parameters.
+- Take one known answer from an independent implementation.
+- When you ship a solver, run it in a test and verify its proof in Ruby.
+- Test that each malformed proof returns `false` and does not raise.
 
 ## Installation
 
 > **Not on RubyGems yet** — so every `gem` line below carries `github: "kiosk-hq/kiosk"`, which is what makes it copy-pasteable today. Publication status and the canonical install are stated once, in the monorepo README's [Install](https://github.com/kiosk-hq/kiosk#install) section.
 
+A backend gem brings `kiosk-pow` with it. Add it yourself only when you write a
+backend in your own app:
+
 ```ruby
 gem "kiosk-pow", github: "kiosk-hq/kiosk"
 ```
-
-```ruby
-require "kiosk/pow"
-
-# Register with kiosk-reputation (if using the policy layer):
-Kiosk::Reputation::Backends.register("argon2id", Kiosk::Pow)
-```
-
-## Honesty / guardrails
-
-- **PoW is economic friction, not a wall.** A determined ASIC attacker still
-  gets in; the point is to make free-riding cost more than buying. Combine with
-  `kiosk-reputation` for the full picture.
-- **The provider mandates `alg` + `params`.** Clients comply or are denied.
-  There is no negotiation path — do not add one.
-- **Default verify costs `m` KiB of memory** — one full Argon2id eval.
-  Only challenge on suspicion/rate, not on every cheap call. The challenge
-  should protect a value worth more than the verify cost.
-- **`m` is the ASIC-resistance knob; `d` is the difficulty knob.** Raising `m`
-  raises solve and verify equally (lever unchanged). Raising `d` raises solve
-  exponentially while verify stays one eval.
 
 ## License
 

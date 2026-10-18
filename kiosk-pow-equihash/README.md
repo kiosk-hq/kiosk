@@ -21,8 +21,9 @@ on a PoW backend, so an origin that gates on PoW adds this gem itself.
 gem "kiosk-pow-equihash", github: "kiosk-hq/kiosk"
 ```
 
-The verifier is pure Ruby with **no runtime dependencies** — not `kiosk-core`,
-not Rails, no native extension. In a Rails app the gem registers itself as the
+The verifier is pure Ruby. Its one runtime dependency is `kiosk-pow`, the
+pure-Ruby base that holds BLAKE2b-256. It needs no `kiosk-core`, no Rails and no
+native extension. In a Rails app the gem registers itself as the
 `equihash` backend when the app boots. The registry lives in `kiosk-reputation`,
 which an origin adds to its Gemfile the same way. Outside Rails, register it
 yourself:
@@ -50,7 +51,7 @@ parameters cost real time and memory to solve.
 | Verify memory | 64 MiB ⚠️ | ~KB | **~KB** |
 | Verify time | ~ms (1 Argon2id) | 42 SipHash + walk (unbenched) | **~18 ms valid / 0.3 ms wrong (Ruby)** |
 | Lever (solve/verify) | tens× | unbenched | **~530×** (9.6 s / 18 ms) |
-| Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (0 deps)** |
+| Dependencies | argon2 gem (C-ext) | Pure Ruby | **Pure Ruby (kiosk-pow only)** |
 | Difficulty tuning | D=0..256 (smooth) | edgebits | **N×PoW (discrete)** |
 
 **The lever is measured, not asserted.** `~530×` is this README's own two
@@ -72,13 +73,13 @@ The one property that actually matters for a gateway is **cheap verify**:
   memory footprint is the point: Argon2id needs 64 MiB to _verify_, so a flood
   of bad proofs is a DoS on the verifier itself — unacceptable for a
   high-throughput endpoint.
-- **Zero dependencies.** Pure Ruby BLAKE2b-256. Argon2id needs a C extension.
+- **No native code.** Pure Ruby BLAKE2b-256 from `kiosk-pow`. Argon2id needs a C extension.
 - **Progressive difficulty via N×PoW.** Instead of a continuous dial the policy
   asks for _N independent proofs_: "1 normally, 10 if you're scraping." Prices
   throughput, not latency (a solver with enough memory runs them in parallel).
 
 No hardware-parity claim is made — none of Argon2id, Cuckatoo, or Equihash
-delivers it. Equihash wins on verify cost + zero deps, which is what a
+delivers it. Equihash wins on verify cost + no native code, which is what a
 provider's own machine pays on every request.
 
 ## Parameters

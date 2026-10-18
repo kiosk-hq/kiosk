@@ -30,6 +30,7 @@ gem 'devise'
 # rubygems-published versions.
 gem 'kiosk-all',                path: '../kiosk-all'
 gem 'kiosk-core',               path: '../kiosk-core'
+gem 'kiosk-pow',                path: '../kiosk-pow'
 gem 'kiosk-pow-equihash',       path: '../kiosk-pow-equihash'
 gem 'kiosk-reputation',         path: '../kiosk-reputation'
 gem 'kiosk-server',             path: '../kiosk-server'

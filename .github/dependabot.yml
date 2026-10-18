@@ -18,6 +18,7 @@ updates:
     - "/kiosk-kyc-prove"
     - "/kiosk-pay-stripe"
     - "/kiosk-pow"
+    - "/kiosk-pow-argon2id"
     - "/kiosk-pow-cuckoo"
     - "/kiosk-pow-equihash"
     - "/kiosk-redteam"

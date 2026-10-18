@@ -16,7 +16,7 @@
 
 require 'rack/mock'
 require 'json'
-require 'kiosk/pow'
+require 'kiosk/pow/argon2id'
 require 'kiosk/reputation'
 
 module VerbControllerSpec
@@ -85,7 +85,7 @@ module VerbControllerSpec
   # A solved argon2id proof for `challenge`, as the `Kiosk-PoW` header carries it.
   def proof_for(challenge)
     salt  = Base64.strict_decode64(challenge[:salt])
-    nonce = (0..).find { Kiosk::Pow.verify(salt: salt, params: challenge[:params], nonce: it.to_s) }
+    nonce = (0..).find { Kiosk::Pow::Argon2id.verify(salt: salt, params: challenge[:params], nonce: it.to_s) }
     JSON.generate(challenge: challenge, nonce: nonce.to_s)
   end
 
@@ -93,7 +93,7 @@ module VerbControllerSpec
   def tolling_policy
     Class.new(Kiosk::Reputation::Policy) do
       def challenge_for(**)
-        { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+        { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
       end
     end.new
   end
@@ -207,7 +207,7 @@ RSpec.describe Kiosk::Server::VerbController do
     # toll: a caller does not pay for a proof to learn its header is unreadable.
     context 'when the verb is tolled' do
       before do
-        Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+        Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
         Kiosk.configure do |c|
           c.reputation_policy = tolling_policy
           c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
@@ -910,7 +910,7 @@ RSpec.describe Kiosk::Server::VerbController, 'the session toll' do
   include_context 'verb controller spec: authenticated origin'
 
   before do
-    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     Kiosk.configure do |c|
       c.reputation_policy = tolling_policy
       c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'

@@ -22,14 +22,14 @@
 
 require 'rack/mock'
 require 'json'
-require 'kiosk/pow'
+require 'kiosk/pow/argon2id'
 require 'kiosk/reputation'
 
 module WireControllerValidationSpec
   # Challenges every verb, so a request that clears validation reaches the
   # gate (402 pow_required) rather than Executor.
   class AlwaysChallengePolicy < Kiosk::Reputation::Policy
-    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+    def challenge_for(**) = { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
   end
 
   def dispatch_verb(name, env)
@@ -90,7 +90,7 @@ RSpec.shared_context 'wire controller validation spec: gated origin' do
   include WireControllerValidationSpec
 
   before do
-    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow)
+    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     Kiosk.configure do |c|
       c.signing_key       = Kiosk::Server::SigningKey.generate
       c.issuer            = 'https://demo.example'

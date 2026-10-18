@@ -64,6 +64,7 @@ Rails:
     - "kiosk-core/**/*"
     - "kiosk-kyc-prove/**/*"
     - "kiosk-pow/**/*"
+    - "kiosk-pow-argon2id/**/*"
     - "kiosk-pow-cuckoo/**/*"
     - "kiosk-pow-equihash/**/*"
     - "kiosk-redteam/**/*"

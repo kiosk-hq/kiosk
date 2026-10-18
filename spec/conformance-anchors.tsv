@@ -770,6 +770,11 @@ kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	return
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	returns true when the resolver returns nil (principal has no Customer yet)
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	'#setup_url' do
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	creates a Checkout Session in setup mode for an existing customer and returns the url
+kiosk-pow-argon2id/README.md	## Cross-implementation parity check
+kiosk-pow-argon2id/README.md	> **Retired / optional.** The shipped default PoW backend is
+kiosk-pow-argon2id/README.md	Both sides produce byte-identical Argon2id digests (verified by `rake parity`).
+kiosk-pow-argon2id/README.md	Computes the same Argon2id digest in Ruby and Python, asserts hex-equal, then
+kiosk-pow-argon2id/Rakefile	task :parity do
 kiosk-pow-cuckoo/README.md	**Cannot solve production Cuckatoo** (L=42, edgebits≥29). Pure Python cannot
 kiosk-pow-cuckoo/README.md	**TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.**
 kiosk-pow-cuckoo/README.md	**This gem ships the VERIFIER only.**  The verifier is production-correct,
@@ -859,11 +864,6 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	production params (n=168, k=7
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	rejects a valid solution with 2**64 added to an index, without hashing
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	returns n:168, k:7 by default
 kiosk-pow-equihash/spec/readme_lever_spec.rb	README's own benchmarks give, or state that it is unbenched.
-kiosk-pow/README.md	## Cross-implementation parity check
-kiosk-pow/README.md	> **Retired / optional.** The shipped default PoW backend is
-kiosk-pow/README.md	Both sides produce byte-identical Argon2id digests (verified by `rake parity`).
-kiosk-pow/README.md	Computes the same Argon2id digest in Ruby and Python, asserts hex-equal, then
-kiosk-pow/Rakefile	task :parity do
 kiosk-redteam/README.md	Adversarial regression harness for [Kiosk](https://kiosk.tech) providers — it
 kiosk-redteam/README.md	attack is correctly blocked.
 kiosk-redteam/README.md	drives hostile HTTP scenarios against a running Kiosk origin and asserts each
@@ -895,7 +895,7 @@ kiosk-reputation/README.md	proof-of-work, issues and verifies the signed wire ch
 kiosk-reputation/README.md	provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
 kiosk-reputation/README.md	registers itself at boot; the host registers any other backend (see
 kiosk-reputation/README.md	same path, same query string, same body — with the proof(s) in a **`Kiosk-PoW`
-kiosk-reputation/README.md	the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow`
+kiosk-reputation/README.md	the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow-argon2id`
 kiosk-reputation/lib/kiosk/reputation/backends.rb	        def register(alg_name, backend)
 kiosk-reputation/lib/kiosk/reputation/backends.rb	# kiosk-pow-equihash registers `equihash` itself at boot.
 kiosk-reputation/lib/kiosk/reputation/backends.rb	def fetch(alg_name)

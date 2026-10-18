@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 require 'base64'
-require 'kiosk/pow'
+require 'kiosk/pow/argon2id'
 require 'kiosk/pow/equihash'
 require 'kiosk/reputation'
 
 # Integration tests for the PoW challenge-response gate.
 #
-# These tests use the REAL Argon2id backend (kiosk-pow) registered at d=4, m=8
+# These tests use the REAL Argon2id backend (kiosk-pow-argon2id) registered at d=4, m=8
 # (minimum libargon2 memory — keeps solve time well under 1 s).
 # The nil-policy path (the regression guard) is exercised first and runs with
 # ZERO kiosk-reputation involvement — that's the make-or-break invariant.
@@ -18,7 +18,7 @@ module PowGateSpecHelpers
   # A policy that ALWAYS demands an argon2id challenge.
   class AlwaysChallengePolicy < Kiosk::Reputation::Policy
     def challenge_for(**)
-      { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+      { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
     end
   end
 
@@ -27,7 +27,7 @@ module PowGateSpecHelpers
     def challenge_for(verb:, **)
       return nil if verb == :run
 
-      { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8) }
+      { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8) }
     end
   end
 
@@ -58,7 +58,7 @@ module PowGateSpecHelpers
     end
 
     def challenge_for(**)
-      { alg: 'argon2id', params: Kiosk::Pow.params(d: 4, m: 8), count: @count }
+      { alg: 'argon2id', params: Kiosk::Pow::Argon2id.params(d: 4, m: 8), count: @count }
     end
   end
 
@@ -96,7 +96,7 @@ module PowGateSpecHelpers
   # Register the real Argon2id backend before each example so challenge.verify
   # can dispatch to it. Use d=4, m=8 throughout so solving is fast.
   def self.included(group)
-    group.before { Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow) }
+    group.before { Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id) }
     group.after { Kiosk::Reputation::Backends.reset! }
   end
 
@@ -121,7 +121,7 @@ module PowGateSpecHelpers
     salt   = Base64.strict_decode64(challenge[:salt])
     params = (challenge[:params] || {}).transform_keys(&:to_sym)
     nonce  = 0
-    nonce += 1 until Kiosk::Pow.verify(salt: salt, params: params, nonce: nonce)
+    nonce += 1 until Kiosk::Pow::Argon2id.verify(salt: salt, params: params, nonce: nonce)
     nonce.to_s
   end
 
@@ -132,7 +132,7 @@ module PowGateSpecHelpers
     params = (challenge[:params] || {}).transform_keys(&:to_sym)
     (0..1000).each do |n|
       candidate = "BAD-NONCE-#{n}"
-      return candidate unless Kiosk::Pow.verify(salt: salt, params: params, nonce: candidate)
+      return candidate unless Kiosk::Pow::Argon2id.verify(salt: salt, params: params, nonce: candidate)
     end
     raise 'Could not find a failing nonce in 1000 tries (very unlikely at d=4)'
   end
@@ -298,7 +298,7 @@ end
 # who wrote the policy is the one who hears about it.
 #
 # Driven with the REAL equihash backend, because the seam is duck-typed:
-# kiosk-pow (argon2id) does not implement `.valid_params?` and is therefore
+# kiosk-pow-argon2id does not implement `.valid_params?` and is therefore
 # unconstrained, which the last example here pins deliberately.
 RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params are unsatisfiable (K-843)" do
   include PowGateSpecHelpers
@@ -346,7 +346,7 @@ RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params
   end
 
   it 'leaves a backend with no .valid_params? unconstrained (argon2id)' do
-    # kiosk-pow answers nothing about its parameters, so the seam must not
+    # kiosk-pow-argon2id answers nothing about its parameters, so the seam must not
     # answer for it. `{d: 0}` is nonsense to argon2id and this gate does not
     # pretend to know that — it issues the 402 exactly as before.
     configure_with_policy(

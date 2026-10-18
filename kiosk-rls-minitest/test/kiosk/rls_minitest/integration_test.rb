@@ -18,26 +18,27 @@ class IntegrationJourneyTest < Minitest::Test
     helpers = %i[as_agent_of as_user as_agent as_anonymous
                  query run_query run_action pay_action kiosk_seed]
 
-    # The list is hand-kept, so hold it to the MODULE rather than to itself.
-    # It was short by `run_query` for as long as that method existed, and an
-    # assert_respond_to roll-call over a short list passes whether or not the
-    # missing helper is mixed in at all — the one thing this test exists to
-    # catch.
+    # The list is hand-kept, so hold it to the module first: a roll-call over a
+    # short list passes whether or not the missing helper is mixed in.
     assert_equal Kiosk::TestHelpers::Journey.public_instance_methods(false).sort, helpers.sort
 
     helpers.each { |helper| assert_respond_to self, helper }
   end
 
-  def test_assertions_are_available
+  def test_rls_assertions_are_available
     assert_respond_to self, :assert_rls_denied
-    assert_respond_to self, :assert_quota_exceeded
     assert_respond_to self, :refute_rls_denied
+  end
+
+  def test_quota_assertions_are_available
+    assert_respond_to self, :assert_quota_exceeded
     assert_respond_to self, :refute_quota_exceeded
   end
 
   def test_as_agent_of_scopes_identity
     observed = nil
     as_agent_of(@alice) { observed = Kiosk::TestHelpers.executor.current_identity }
+
     assert_equal 'agent',   observed.actor
     assert_equal 'u-alice', observed.user_id
   end
@@ -45,6 +46,7 @@ class IntegrationJourneyTest < Minitest::Test
   def test_as_user_scopes_identity_without_agent_id
     as_user(@alice) do
       ident = Kiosk::TestHelpers.executor.current_identity
+
       assert_equal 'human', ident.actor
       assert_nil   ident.agent_id
     end
@@ -53,12 +55,14 @@ class IntegrationJourneyTest < Minitest::Test
   def test_query_delegates_to_executor
     Kiosk::TestHelpers.executor.enqueue_query([{ 'n' => 1 }])
     result = as_user(@alice) { query('select 1') }
+
     assert_equal [{ 'n' => 1 }], result
   end
 
   def test_kiosk_seed_expands_owner_to_user_id
     kiosk_seed(:rentals, owner: @alice)
     call = Kiosk::TestHelpers.executor.calls_of(:seed).first
+
     assert_equal({ user_id: 'u-alice' }, call.args[:attrs])
   end
 

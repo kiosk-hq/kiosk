@@ -39,6 +39,12 @@ module Kiosk
         raise NotImplementedError, "#{self.class}#capture must be implemented by the adapter"
       end
 
+      # Returns `amount_cents` of the charge `psp_reference` to the card.
+      # @return [Hash] `psp_reference` (of the refund), `refunded_psp_reference`, `refunded_amount_cents`, `refunded_at`
+      def refund(psp_reference:, amount_cents:)
+        raise NotImplementedError, "#{self.class}#refund must be implemented by an adapter whose operator refunds"
+      end
+
       # A repeat of a chain whose capture did not complete. The adapter keys its
       # capture by the cart mandate id, so a second capture cannot charge twice.
       def resume(cart_mandate, payment_method:) = capture(cart_mandate, payment_method:)

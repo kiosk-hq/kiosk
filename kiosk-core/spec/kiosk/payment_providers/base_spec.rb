@@ -24,6 +24,13 @@ RSpec.describe Kiosk::PaymentProviders::Base do
       end.to raise_error(NotImplementedError, /capture must be implemented/)
     end
   end
+
+  describe '#refund' do
+    it 'raises NotImplementedError — an adapter whose operator refunds must implement it' do
+      expect { adapter.refund(psp_reference: 'pi_1', amount_cents: 100) }
+        .to raise_error(NotImplementedError, /refund must be implemented/)
+    end
+  end
 end
 
 RSpec.describe Kiosk::PaymentProviders::Base, '#resume' do

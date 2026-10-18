@@ -35,7 +35,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_100015) do
     t.string "code", null: false
     t.string "name", null: false
     t.string "kind", default: "scooter", null: false
-    t.boolean "needs_licence", default: false, null: false
     t.string "dock", null: false
     t.decimal "lat", precision: 10, scale: 6, null: false
     t.decimal "lng", precision: 10, scale: 6, null: false

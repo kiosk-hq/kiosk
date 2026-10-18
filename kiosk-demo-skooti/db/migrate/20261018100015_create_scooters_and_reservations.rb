@@ -10,9 +10,8 @@ class CreateScootersAndReservations < ActiveRecord::Migration[ActiveRecord::Migr
     create_table :scooters do |t|
       t.string  :code,   null: false
       t.string  :name,   null: false
+      # A motorcycle needs the rider's `age_over_18` and `licence_a` attestations.
       t.string  :kind,   null: false, default: "scooter" # scooter | motorcycle
-      # Renting it needs the rider's `age_over_18` and `licence_a` attestations.
-      t.boolean :needs_licence, null: false, default: false
       t.string  :dock,   null: false
       t.decimal :lat, precision: 10, scale: 6, null: false
       t.decimal :lng, precision: 10, scale: 6, null: false

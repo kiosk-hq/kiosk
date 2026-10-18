@@ -28,12 +28,12 @@ scooters = [
   { code: 'SK-011', name: 'Dapper Dash',   dock: 'Oosterpark Corner',  lat: 52.3603, lng: 4.9198 },
   { code: 'SK-012', name: 'Muiden Mover',  dock: 'Oosterpark Corner',  lat: 52.3605, lng: 4.9200 }
 ].map do |scooter|
-  Scooter.create_with(scooter.merge(kind: 'scooter', needs_licence: false, price_per_min_cents: 15))
+  Scooter.create_with(scooter.merge(kind: 'scooter', price_per_min_cents: 15))
          .find_or_create_by!(code: scooter[:code])
 end
 
 motorcycle = Scooter.create_with(name: 'Amstel Cruiser', dock: 'Amstel Garage', kind: 'motorcycle',
-                                 needs_licence: true, lat: 52.3600, lng: 4.9020, price_per_min_cents: 40)
+                                 lat: 52.3600, lng: 4.9020, price_per_min_cents: 40)
                     .find_or_create_by!(code: 'MC-001')
 
 Rails.logger.info "Seeded: #{riders.size} riders, #{scooters.size} licence-free scooters and the KYC-gated #{motorcycle.name}"

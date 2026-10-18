@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-18
+
 - 2026-10-18: `Kiosk::UuidCheck::JSON_SCHEMA_PATTERN` is removed.
 - 2026-10-18: `Kiosk::Identity#agent?`, `#human?` and `#service?` are removed; read `actor`.
 - 2026-10-18: `Kiosk::PaymentProviders::Base#refund(psp_reference:, amount_cents:)` is part of the port; the base raises `NotImplementedError`.

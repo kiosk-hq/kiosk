@@ -12,4 +12,6 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-18
+
 - 2026-10-18: The Argon2id backend moves here from kiosk-pow, as `Kiosk::Pow::Argon2id`. It is built on kiosk-pow.

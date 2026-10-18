@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-18
+
 - 2026-10-18: `Kiosk::Pow::Equihash.solver_path` is removed; a client solves with `Kiosk::Pow::Equihash.solve`.
 - 2026-10-18: Built on kiosk-pow: BLAKE2b-256 is `Kiosk::Pow::Blake2b.digest256`, and `Equihash.blake2b256` is gone. Verify results are byte-for-byte the same.
 

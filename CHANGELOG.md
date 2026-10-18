@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-18
+
+- 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.16, matching skill 0.5.16.**
+
+- 2026-10-18: **Every demo and the engine default pin `skill-v0.5.16.md`**, which lists a topic's text among the operator-written strings an assistant reads as data.
+
 - 2026-10-18: `Kiosk::UserIdentityProviders::DeviseSession#sign_out!` is removed.
 - 2026-10-18: `Kiosk::Pow::Equihash.solver_path` is removed; a client solves with `Kiosk::Pow::Equihash.solve`.
 - 2026-10-18: `Kiosk::Redteam::Scenario.new` takes only `name:`; `category` and `description` are removed.

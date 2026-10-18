@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-18
+
 - 2026-10-18: `Kiosk::Server::ActionEvent#ok?` and `#error?` are removed; read `status`.
 - 2026-10-18: `include Kiosk::SkillLink` in a page controller sends `Link: <skill_url>; rel="kiosk"` on every answer.
 - 2026-10-18: A public key over 4096 bits is refused with `400 bad_request`; `pay` resolves the caller before it reads the body, so a bad token is 401 first.

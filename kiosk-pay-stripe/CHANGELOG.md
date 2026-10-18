@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-18
+
 - 2026-10-18: Each adapter has its own Stripe client; `api_base:` names another API URL, e.g. stripe-mock. The adapter no longer sets `Stripe.api_key`.
 - 2026-10-18: A saved-card check is one Stripe call: the newest card on the Customer. A `pay` makes three calls, not five.
 

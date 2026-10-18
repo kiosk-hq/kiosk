@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.16] — 2026-10-18
+
 - 2026-10-18: `Kiosk::UserIdentityProviders::DeviseSession#sign_out!` is removed.
 ## [0.5.15] — 2026-10-18
 

@@ -80,7 +80,8 @@ universal agent skill is `skill.md` on the same site.
 - Demos: `bin/rails db:reset` prepares one, `bin/rails test` (hoteling and
   kiosk-demo-prove: `bundle exec rspec`) tests it, and CI also runs its
   `script/redteam_suite.rb` against a started server. Postgres required.
-- Lint: `bin/lint` from the root bundle — RuboCop with the default cops (only
+- Lint: `bin/lint` from the root bundle — RuboCop with the default cops and the
+  Rails, Minitest and RSpec Rails plugins, new cops on (only
   `Layout/LineLength` and `Style/Documentation` off) over the whole tree,
   bundler-audit over every tracked `Gemfile.lock`, Brakeman over every demo app;
   CI's `lint` job runs it. Fix an offense, do not disable the cop; a rare inline

@@ -1,7 +1,14 @@
+plugins:
+  - rubocop-minitest
+  - rubocop-rails
+  - rubocop-rspec
+  - rubocop-rspec_rails
+
 AllCops:
   TargetRubyVersion: 4.0
   NewCops: enable
   SuggestExtensions: false
+  TargetRailsVersion: 8.1
   Exclude:
     - "**/db/schema.rb"
     - "**/db/migrate/**/*"
@@ -35,3 +42,39 @@ Style/OneClassPerFile:
   Exclude:
     - "**/spec/**/*"
     - "**/test/**/*"
+
+# The Rails cops read the code that runs inside a Rails app. Excluded: the
+# plain Ruby gems and the scripts that run outside an app, under bare `ruby`.
+Rails:
+  Exclude: &plain_ruby
+    - "bin/**/*"
+    - "deploy/**/*"
+    - "spec/**/*"
+    - "e2e/schema_conformance.rb"
+    - "e2e/fixtures/auth_wire_capture.rb"
+    - "e2e/fixtures/bind_assistants.rb"
+    - "e2e/fixtures/claim_flow.rb"
+    - "e2e/fixtures/equihash_register.rb"
+    - "e2e/fixtures/pay_flow.rb"
+    - "e2e/fixtures/register_pow_flow.rb"
+    - "kiosk-demo-*/script/**/*"
+    - "kiosk-demo-skooti/firmware/**/*"
+    - "kiosk-core/**/*"
+    - "kiosk-kyc-prove/**/*"
+    - "kiosk-pow/**/*"
+    - "kiosk-pow-cuckoo/**/*"
+    - "kiosk-pow-equihash/**/*"
+    - "kiosk-redteam/**/*"
+    - "kiosk-reputation/**/*"
+    - "kiosk-rls/**/*"
+    - "kiosk-rls-minitest/**/*"
+    - "kiosk-rls-rspec/**/*"
+    - "kiosk-test-support/**/*"
+
+RSpecRails:
+  Exclude: *plain_ruby
+
+# rubocop-rspec_rails runs on the code of rubocop-rspec, so the plugin list
+# loads both; the RSpec cops of rubocop-rspec are not part of this setup.
+RSpec:
+  Enabled: false

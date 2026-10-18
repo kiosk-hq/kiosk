@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::UserIdentityProviders::DeviseSession#sign_out!` is removed.
 ## [0.5.15] — 2026-10-18
 
 - The README names the human-side page gate and the link endpoints as the callers of the adapter.

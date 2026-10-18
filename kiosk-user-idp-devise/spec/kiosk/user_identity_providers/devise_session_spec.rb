@@ -57,36 +57,3 @@ RSpec.describe Kiosk::UserIdentityProviders::DeviseSession, '#sign_in! when Devi
       .to raise_error(described_class::SignInError, 'sign-in failed: 200')
   end
 end
-
-RSpec.describe Kiosk::UserIdentityProviders::DeviseSession, '#sign_out!' do
-  include_context 'with a stub Devise app'
-
-  let(:responder) do
-    lambda do |request|
-      case request.verb
-      when 'GET' then [200, ['Set-Cookie: _demo_session=first; path=/'], sign_in_form]
-      when 'POST' then [302, ['Location: /'], '']
-      else [303, ['Location: /', 'Set-Cookie: _demo_session=; path=/'], '']
-      end
-    end
-  end
-
-  it "sends Devise's DELETE with the human's jar attached" do
-    session.sign_in!(email: 'alice@example.com', password: 's3cret')
-
-    response = session.sign_out!
-
-    expect(response.code).to eq('303')
-    delete = app.requests.last
-    expect([delete.verb, delete.path]).to eq(['DELETE', '/users/sign_out'])
-    expect(delete.headers['cookie']).to include('_demo_session=first')
-  end
-
-  it 'sends no Cookie header when the jar is empty' do
-    # Control: the header above is the jar's doing, not something every
-    # request carries.
-    session.sign_out!
-
-    expect(app.requests.last.headers).not_to have_key('cookie')
-  end
-end

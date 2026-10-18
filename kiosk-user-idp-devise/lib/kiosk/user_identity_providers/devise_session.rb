@@ -35,13 +35,6 @@ module Kiosk
         self
       end
 
-      # End the session the way the browser does (Devise's DELETE /users/sign_out).
-      def sign_out!
-        req = Net::HTTP::Delete.new(uri_for('/users/sign_out'))
-        req['Cookie'] = cookie_header unless @cookies.empty?
-        request(req)
-      end
-
       # GET an HTML page over the session (cookies attached — this is the human).
       def get_html(path)
         req = Net::HTTP::Get.new(uri_for(path))

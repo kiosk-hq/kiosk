@@ -79,7 +79,7 @@ if ARGV.include?('--self-test')
       what: "a helper is copied into a second demo's test",
       ops: [[:edit, 'kiosk-demo-stylish/test/book_appointment_test.rb',
              "require 'test_helper'\n", "require 'test_helper'\n\ndef probe_shared_helper = :ok\n"],
-            [:edit, 'kiosk-demo-skooti/test/licence_flag_test.rb',
+            [:edit, 'kiosk-demo-skooti/test/licence_gate_test.rb',
              "require 'test_helper'\n", "require 'test_helper'\n\ndef probe_shared_helper = :ok\n"]],
       expect: %r{probe_shared_helper: defined in 2 demo spec/test file\(s\).*declared NOWHERE} },
     { id: 'vacuity-spec-harness-corpus', rule: 'spec units',

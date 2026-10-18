@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-18 at 83a75eb4 -- T-138 agent-side walk and release 0.5.17: 4 anchors judged against their rows
+# recorded: 2026-10-18 at eb53a3be -- release 0.5.18: the skill default and API_VERSION judged against their rows
 # 1910 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
@@ -298,7 +298,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	b1d0a419	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	3509e124dce01fd7	b1d0a419	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	b1d0a419	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	b1d0a419	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	a78f30af87856202	83a75eb4	API_VERSION = '0.5.17'
+kiosk-core/lib/kiosk/protocol.rb	4b98a8cd85bc60dd	eb53a3be	API_VERSION = '0.5.18'
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	b1d0a419	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	b1d0a419	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	90d2d7b9f9107588	b1d0a419	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -1036,12 +1036,12 @@ kiosk-server/lib/kiosk/server/caller_timezone.rb	e107b50d34992866	b1d0a419	def f
 kiosk-server/lib/kiosk/server/caller_timezone.rb	4ffc4626532791da	b1d0a419	def from_value(raw)
 kiosk-server/lib/kiosk/server/caller_timezone.rb	ce4dee21ef86a2da	b1d0a419	refuse(raw) unless SHAPE.match?(value)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	650f3fdeca57d5b0	b1d0a419	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6aa9577f482561a4	83a75eb4	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	83a75eb4	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	83a75eb4	      attr_accessor :spending_cap_window_days
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	83a75eb4	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	2fe4bb03b7d5660a	83a75eb4	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	9f042d0496c5ecdb	83a75eb4	c.signing_key is not set. Generate one with
+kiosk-server/lib/kiosk/server/configuration_extension.rb	57dc79b256a531f1	eb53a3be	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	eb53a3be	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	eb53a3be	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	eb53a3be	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	2fe4bb03b7d5660a	eb53a3be	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	9f042d0496c5ecdb	eb53a3be	c.signing_key is not set. Generate one with
 kiosk-server/lib/kiosk/server/device_code_grant.rb	387d172b4ac2440e	b1d0a419	device_code parameter required
 kiosk-server/lib/kiosk/server/engine.rb	75c5116a84e0fd3c	b1d0a419	          get '/.well-known/agent-configuration', to: 'kiosk/server/discovery#agent_configuration'
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	b1d0a419	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'

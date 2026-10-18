@@ -99,9 +99,7 @@ EMITS    = /href\s*=|set_header/
 # A page controller sends the header through the engine's concern.
 INCLUDES = /\binclude Kiosk::SkillLink\b/
 SKILL_LINK = File.expand_path('../kiosk-server/lib/kiosk/skill_link.rb', __dir__)
-unless File.readlines(SKILL_LINK).any? { it.match?(SIGNAL) && it.match?(EMITS) && it.include?(ACCESSOR) }
-  errors << "#{rel(SKILL_LINK)}: does not emit rel=\"kiosk\" from #{ACCESSOR}"
-end
+errors << "#{rel(SKILL_LINK)}: does not emit rel=\"kiosk\" from #{ACCESSOR}" unless File.readlines(SKILL_LINK).any? { it.match?(SIGNAL) && it.match?(EMITS) && it.include?(ACCESSOR) }
 
 initializers.map { File.expand_path('../../..', it) }.each do |dir|
   demo  = File.basename(dir)

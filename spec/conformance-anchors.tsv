@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1908 anchors.
+# 1910 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -233,6 +233,7 @@ e2e/assistant.sh	…and the boot digest IS the ETag
 e2e/assistant.sh	…and the module set lives in kiosk.json alone
 e2e/assistant.sh	…and the route loop actually ran
 e2e/assistant.sh	…and the write never ran
+e2e/assistant.sh	…and with --token-command it mints a fresh one and carries on
 e2e/assistant.sh	…by \$ref into components.headers
 e2e/assistant.sh	…code is module_not_served
 e2e/assistant.sh	…detail names the module
@@ -316,7 +317,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.16'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.17'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -1874,6 +1875,7 @@ kiosk-test-support/README.md	The `NullExecutor` is the zero-dependency fallback 
 kiosk-test-support/README.md	stripe-mock lists a saved card for every Customer, so once `payment_setup` has mapped one, `pay` settles.
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	    class Assistant
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	# Customer that `payment_setup` maps already lists a card, so that answer settles.
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	def setup_required?(answer)
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	def sign_mandate(principal, payload) = JWT.encode(payload, principal.rsa_key, 'RS256')
 kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	iss: base_url, currency:, iat: now, exp: now + 600 }

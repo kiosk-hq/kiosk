@@ -1,0 +1,45 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# check-vendored-schemas — every JSON Schema this tree vendors from kiosk.tech is
+# the published schema: equal as parsed JSON once the top-level `$comment` is
+# removed from both. A vendored copy names its source in that `$comment`. Reads
+# ../kiosk.tech; without it prints SKIP and exits 0, unless
+# KIOSK_REQUIRE_SITE_SIBLING=1.
+
+require 'json'
+
+unless ARGV.empty?
+  warn 'check-vendored-schemas: takes no arguments'
+  exit 2
+end
+
+ROOT   = File.expand_path('..', __dir__)
+SITE   = File.expand_path('../kiosk.tech', ROOT)
+SOURCE = %r{\AVENDORED copy of the normative kiosk\.tech schema at (spec/schemas/[\w.-]+\.json)\b}
+
+unless File.directory?(SITE)
+  if ENV['KIOSK_REQUIRE_SITE_SIBLING'] == '1'
+    warn "x vendored schemas: KIOSK_REQUIRE_SITE_SIBLING=1 but no kiosk.tech checkout at #{SITE}"
+    exit 1
+  end
+  puts "SKIP vendored schemas: no kiosk.tech checkout at #{SITE}; nothing to compare"
+  exit 0
+end
+
+def body(path) = JSON.parse(File.read(path)).except('$comment')
+
+copies = Dir.chdir(ROOT) { `git ls-files -z -- '*.schema.json'`.split("\0") }.filter_map do |path|
+  source = JSON.parse(File.read(File.join(ROOT, path)))['$comment'].to_s[SOURCE, 1]
+  [path, source] if source
+end
+abort 'x vendored schemas: no file names a kiosk.tech source in its $comment' if copies.empty?
+
+failures = copies.reject do |path, source|
+  published = File.join(SITE, source)
+  File.file?(published) && body(File.join(ROOT, path)) == body(published)
+end
+failures.each { |path, source| puts "  FAIL: #{path} is not kiosk.tech/#{source}; copy the published file and keep its $comment" }
+abort "x vendored schemas: #{failures.size} of #{copies.size} copies differ" if failures.any?
+
+puts "vendored schemas: OK — #{copies.size} copies equal their kiosk.tech source"

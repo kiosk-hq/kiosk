@@ -640,6 +640,12 @@ jobs:
           KIOSK_REQUIRE_SITE_SIBLING: "1"
         run: ./bin/check-solver-pin
 
+      - name: Every vendored schema is the published schema
+        working-directory: reference
+        env:
+          KIOSK_REQUIRE_SITE_SIBLING: "1"
+        run: ./bin/check-vendored-schemas
+
   # RuboCop over the whole tree, bundler-audit over every tracked lockfile and
   # Brakeman over every Rails app; the root Gemfile holds the three tools.
   lint:

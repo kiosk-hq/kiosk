@@ -130,10 +130,11 @@ end
 # own frames are wrapped, the connection's are not.
 RSpec.describe 'the Kiosk event stream over a real socket', 'the actioncable-v1-json framing' do
   let(:report) { EventsSocketSpec.report }
+  # The identifier is compared, never parsed, so the echo is held byte for byte.
   it "wraps a subscription's own frames, echoing the identifier it was given" do
     expect(report['subscribed_envelope'].keys).to contain_exactly('identifier', 'message')
-    expect(JSON.parse(report['subscribed_envelope']['identifier']))
-      .to eq('channel' => 'KioskEvents', 'topic' => 'order_delivery')
+    expect(report['subscribed_envelope']['identifier'])
+      .to eq('{"channel":"KioskEvents","topic":"order_delivery"}')
   end
 
   it 'confirms a live subscription at top level, with the identifier and no message' do

@@ -3,7 +3,7 @@
     <span class="order-id">#<%= order.id.first(8) %></span>
     <%= order_badge(order) %>
     <div class="order-meta">
-      <span><span class="label">Total:</span> <%= order_money(order, order.total_cents) %></span>
+      <span><span class="label">Total:</span> <%= order_money(order.total_cents) %></span>
       <span><span class="label">Address:</span> <%= masked_address(order.address) %></span>
       <span><span class="label">Slot:</span> <%= order_slot(order) %></span>
       <span class="order-placed">Ordered <%= order_placed_at(order) %></span>

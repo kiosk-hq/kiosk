@@ -27,9 +27,9 @@ module Rental
 
   def activate!(reservation)
     scooter = reservation.scooter
-    now     = Time.now.to_i
+    now     = Time.current.to_i
     token   = RentalTokenIssuer.issue(scooter_code: scooter.code, reservation_id: reservation.id, now: now)
-    exp     = RentalTokenIssuer.verify(token: token, now: now).fetch(:exp)
+    exp     = now + RentalTokenIssuer::TTL
     hold_until!(reservation, Time.zone.at(exp))
 
     Unlock.new(scooter_code: scooter.code,

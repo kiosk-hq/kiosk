@@ -162,7 +162,7 @@ end
 # Real threads on separate connections race one committed row, so Postgres,
 # not an in-process mock, decides which claim wins. Every reader is held
 # between its read and its claim, so all of them see the row as pending and
-# the refusals come from the conditional UPDATE, not from the pre-check.
+# the refusals come from the claim under the row lock (`claim!`), not from the pre-check.
 class ConcurrentApprovalTest < ActionDispatch::IntegrationTest
   include ApprovalRace
 

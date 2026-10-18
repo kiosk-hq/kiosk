@@ -13,7 +13,7 @@ unless ARGV.empty?
   exit 2
 end
 
-ROOT  = File.expand_path('..', __dir__)
+ROOT   = File.expand_path('..', __dir__)
 SOLVER = File.join(ROOT, 'kiosk-pow-equihash', 'solve.py')
 SITE   = File.expand_path('../kiosk.tech', ROOT)
 PIN    = %r{https://kiosk\.tech/pow/(solve-(\h{12})\.py)\b.*?\b(\h{64})\b}m

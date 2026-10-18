@@ -17,6 +17,8 @@ module Kiosk
 
       PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
 
+      MAX_KEY_BITS = 4096
+
       PROOF_CLAIMS_HINT =
         "a proof's payload carries #{PROOF_REQUIRED_CLAIMS.join(', ')} — `aud` is the origin " \
         'you connected to, `nonce` the value GET /auth/challenge just issued for this key, ' \
@@ -65,17 +67,19 @@ module Kiosk
         logger ? logger.warn(message) : warn(message)
       end
 
-      # Also the key floor of account binding.
+      # Also the key bounds of account binding.
       def load_public_key(pem)
-        rsa = OpenSSL::PKey::RSA.new(pem)
-        raise Errors::BadRequest, "public key too small (#{rsa.n.num_bits} bits; minimum #{SigningKey::MIN_KEY_BITS})" if rsa.n.num_bits < SigningKey::MIN_KEY_BITS
+        rsa  = OpenSSL::PKey::RSA.new(pem)
+        bits = rsa.n.num_bits
+        raise Errors::BadRequest, "public key too small (#{bits} bits; minimum #{SigningKey::MIN_KEY_BITS})" if bits < SigningKey::MIN_KEY_BITS
+        raise Errors::BadRequest, "public key too large (#{bits} bits; maximum #{MAX_KEY_BITS})" if bits > MAX_KEY_BITS
 
         rsa
       rescue OpenSSL::PKey::PKeyError
         raise Errors::BadRequest.new(
           'invalid public key',
-          hint: 'send a PEM-encoded RSA public key of at least ' \
-                "#{SigningKey::MIN_KEY_BITS} bits (-----BEGIN PUBLIC KEY----- …)"
+          hint: "send a PEM-encoded RSA public key of #{SigningKey::MIN_KEY_BITS} to #{MAX_KEY_BITS} bits " \
+                '(-----BEGIN PUBLIC KEY----- …)'
         )
       end
     end

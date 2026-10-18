@@ -179,6 +179,13 @@ RSpec.describe Kiosk::Server::PopVerifier do
     end.to raise_error(Kiosk::Server::Errors::BadRequest, /too small|bits/)
   end
 
+  it 'rejects a public key above the 4096-bit cap' do
+    large = OpenSSL::PKey::RSA.generate(4160)
+    expect do
+      described_class.verify!(public_key_pem: large.public_key.to_pem, signed: 'x.y.z')
+    end.to raise_error(Kiosk::Server::Errors::BadRequest, /too large \(4160 bits; maximum 4096\)/)
+  end
+
   it 'rejects a malformed public key with a clear client error' do
     expect do
       described_class.verify!(public_key_pem: 'not a pem', signed: 'x.y.z')

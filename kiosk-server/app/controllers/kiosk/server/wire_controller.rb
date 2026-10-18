@@ -141,10 +141,8 @@ module Kiosk
       end
 
       def pay
-        body     = parse_body!
         identity = resolve_identity!
-
-        # After identity: 401 before 400.
+        body     = parse_body!
         RequestValidation.validate_body!(body, exchange: 'POST <endpoint>/pay')
 
         execute_wire(command: :pay, args: body, identity: identity, name: 'pay')

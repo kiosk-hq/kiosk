@@ -328,6 +328,14 @@ RSpec.describe 'wire-surface controller auth', 'WireController with the bare Def
     expect_problem(status, body, http: 400, code: 'bad_request', detail: 'invalid JSON')
   end
 
+  it 'answers 401 before it reads the body, so an unauthenticated pay with invalid JSON is not a 400' do
+    status, body = dispatch(Kiosk::Server::WireController, :pay,
+                            bearer_env('/kiosk/pay', 'not-a-token', method: 'POST',
+                                                                    input: '{not valid json',
+                                                                    'CONTENT_TYPE' => 'application/json'))
+    expect_problem(status, body, http: 401, code: 'unauthenticated')
+  end
+
   it 'returns 400 bad_request (not 500) for a non-object JSON body on a wire POST' do
     declare_action('place_order') { render json: {} }
     status, body = post_verb('place_order', '[1, 2, 3]')

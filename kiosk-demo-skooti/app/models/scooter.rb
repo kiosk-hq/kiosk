@@ -11,12 +11,6 @@ class Scooter < ApplicationRecord
   # The vehicles no live reservation holds.
   scope :available, -> { where.not(id: Reservation.live.select(:scooter_id)) }
 
-  # Fail-closed in both directions: a flag that does not cast to a literal
-  # boolean opens neither rental verb.
-  def licence_free?     = licence_flag == false
-  def licence_required? = licence_flag == true
-
-  private
-
-  def licence_flag = ActiveRecord::Type::Boolean.new.cast(needs_licence)
+  def licence_required? = needs_licence?
+  def licence_free?     = !needs_licence?
 end

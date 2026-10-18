@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `RecentSpend` draws once per access token: the token's `jti` fixes the draw, so every call made with the token meets one outcome. `random:` is removed.
+
 ## [0.5.16] — 2026-10-18
 
 - 2026-10-18: The README names kiosk-pow-argon2id for the Argon2id backend and points to kiosk-pow's guide to add a backend.

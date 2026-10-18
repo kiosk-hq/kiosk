@@ -1248,3 +1248,35 @@ RSpec.describe Kiosk::Server::PowGate, 'the session toll' do
     expect(issue_challenge_via_gate).to include(:id, :sig)
   end
 end
+
+# The recent-spend policy draws once per access token: every call made with one
+# token meets the outcome of its first call.
+RSpec.describe Kiosk::Server::PowGate, 'the recent-spend draw' do
+  include PowGateSpecHelpers
+
+  def outcome(jti)
+    identity = build_identity(claims: { jti: jti, exp: Time.now.to_i + 3600 })
+    described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+  rescue Kiosk::Server::Errors::PowRequired
+    :owes
+  end
+
+  before do
+    Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
+    configure_with_policy(Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100))
+    spend = Kiosk::Reputation::Factors.empty.with(settled_purchases_cents: 25_00)
+    allow(Kiosk::Server::ReputationFactors).to receive(:for).and_return(spend)
+  end
+
+  it 'keeps the outcome of a token for every later call made with it' do
+    tokens = Array.new(100) { |i| "t-#{i}" }
+
+    expect(tokens.map { |jti| Array.new(3) { outcome(jti) }.uniq.size }.uniq).to eq([1])
+  end
+
+  it 'excuses a token and keeps it excused' do
+    excused = Array.new(100) { |i| "t-#{i}" }.find { outcome(it) == :proceed }
+
+    expect(Array.new(5) { outcome(excused) }).to all(eq(:proceed))
+  end
+end

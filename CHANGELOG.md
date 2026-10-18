@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The recent-spend policy draws once per access token: a session pays the toll with the chance its recent spend sets.
+
 ## [0.5.16] — 2026-10-18
 
 - 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.16, matching skill 0.5.16.**

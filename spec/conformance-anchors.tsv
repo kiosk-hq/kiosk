@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1935 anchors.
+# 1936 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -949,8 +949,9 @@ kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_k
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_n:                 168,
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def chance(cents) = [(@cap_cents - cents).fdiv(@cap_cents), 0].max
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(within:, cap:, random: Random)
-kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	{ alg: 'equihash', params: equihash_params, count: 1 } if @random.rand < chance(
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(within:, cap:)
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	jti ? Digest::SHA256.digest(jti.to_s).unpack1('Q>').fdiv(2**64) : rand
+kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	{ alg: 'equihash', params: equihash_params, count: 1 } if draw(identity) < chance(
 kiosk-reputation/lib/kiosk/reputation/policy.rb	coarse CALL KIND: :query, :run or :pay
 kiosk-reputation/spec/kiosk/reputation/backoff_store_spec.rb	consuming one key does not affect another
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	  it 'does not invoke the backend when sig is wrong (uses spy backend)' do
@@ -973,6 +974,7 @@ kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	esca
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	floors count at count_min (1)
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	issues an :equihash challenge (argon2id is legacy)
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	returns nil for a proven, low-rate, clean principal
+kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	draws once per access token, so each call made with one token meets the same outcome
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	reads the cap in whole currency units and the spend in cents
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	tolls a session with a chance that falls linearly from 1 to 0 as spend reaches the cap
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	tolls every session of a customer with no recent spend
@@ -1172,7 +1174,6 @@ kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	# One proof, a JSON array, repeated header lines (Rack joins them with
 kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
-kiosk-server/lib/kiosk/server/pow_gate.rb	return :proceed if spec.nil?
 kiosk-server/lib/kiosk/server/pow_toll.rb	# Not bad faith (clock skew, a difficulty change): release the claim
 kiosk-server/lib/kiosk/server/pow_toll.rb	# The cheap checks first, so only a live challenge this origin signed
 kiosk-server/lib/kiosk/server/pow_toll.rb	A lost claim is a replay: skipped, not penalised.

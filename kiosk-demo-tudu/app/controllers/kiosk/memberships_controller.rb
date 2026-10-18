@@ -2,7 +2,7 @@
 
 # Who is on a list: the members, and the caller's own membership identity.
 module Kiosk
-  class MembershipsController < ApplicationController
+  class MembershipsController < ActionController::API
     include Kiosk::Handler
 
     topic :list_membership do

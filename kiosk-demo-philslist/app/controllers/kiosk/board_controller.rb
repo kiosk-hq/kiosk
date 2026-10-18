@@ -2,7 +2,7 @@
 
 # The public board of open classified listings, across all sellers.
 module Kiosk
-  class BoardController < ApplicationController
+  class BoardController < ActionController::API
     include Kiosk::Handler
 
     kind :query

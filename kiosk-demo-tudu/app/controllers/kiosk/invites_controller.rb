@@ -2,7 +2,7 @@
 
 # The single-use invites that add a member to a list.
 module Kiosk
-  class InvitesController < ApplicationController
+  class InvitesController < ActionController::API
     include Kiosk::Handler
 
     kind :action

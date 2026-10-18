@@ -2,7 +2,7 @@
 
 # The salons this front desk books for.
 module Kiosk
-  class SalonsController < ApplicationController
+  class SalonsController < ActionController::API
     include Kiosk::Handler
 
     kind :query

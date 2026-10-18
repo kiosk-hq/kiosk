@@ -2,7 +2,7 @@
 
 # The signed-in customer's table bookings.
 module Kiosk
-  class BookingsController < ApplicationController
+  class BookingsController < ActionController::API
     include Kiosk::Handler
 
     BOOKING_ROW = {

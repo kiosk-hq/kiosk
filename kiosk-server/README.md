@@ -409,7 +409,7 @@ controller. Split when your domain splits.
 
 ```ruby
 # app/controllers/kiosk/catalog_controller.rb
-class Kiosk::CatalogController < ApplicationController   # your base class, your call
+class Kiosk::CatalogController < ActionController::API
   include Kiosk::Handler
 
   kind :query
@@ -430,7 +430,7 @@ end
 
 ```ruby
 # app/controllers/kiosk/orders_controller.rb
-class Kiosk::OrdersController < ApplicationController
+class Kiosk::OrdersController < ActionController::API
   include Kiosk::Handler
 
   kind :action

@@ -2,7 +2,7 @@
 
 # Todo lists.
 module Kiosk
-  class ListsController < ApplicationController
+  class ListsController < ActionController::API
     include Kiosk::Handler
 
     kind :query

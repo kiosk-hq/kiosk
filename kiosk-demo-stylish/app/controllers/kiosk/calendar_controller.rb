@@ -2,7 +2,7 @@
 
 # The salon's book: every booking for the owner, a customer's own for anyone else.
 module Kiosk
-  class CalendarController < ApplicationController
+  class CalendarController < ActionController::API
     include Kiosk::Handler
 
     kind :query

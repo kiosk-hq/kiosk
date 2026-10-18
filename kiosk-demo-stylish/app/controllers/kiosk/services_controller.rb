@@ -2,7 +2,7 @@
 
 # The salon's service menu.
 module Kiosk
-  class ServicesController < ApplicationController
+  class ServicesController < ActionController::API
     include Kiosk::Handler
 
     kind :query

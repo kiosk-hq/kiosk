@@ -2,7 +2,7 @@
 
 # Open restaurant tables.
 module Kiosk
-  class TablesController < ApplicationController
+  class TablesController < ActionController::API
     include Kiosk::Handler
 
     kind :query

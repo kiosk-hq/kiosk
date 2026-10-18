@@ -2,7 +2,7 @@
 
 # Appointments at the salon.
 module Kiosk
-  class AppointmentsController < ApplicationController
+  class AppointmentsController < ActionController::API
     include Kiosk::Handler
 
     SLOT     = { type: 'string', description: "Appointment time, on the salon's clock." }.freeze

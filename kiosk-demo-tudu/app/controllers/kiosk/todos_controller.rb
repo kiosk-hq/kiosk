@@ -2,7 +2,7 @@
 
 # The todos on a list.
 module Kiosk
-  class TodosController < ApplicationController
+  class TodosController < ActionController::API
     include Kiosk::Handler
 
     topic :todo do

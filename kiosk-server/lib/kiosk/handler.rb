@@ -4,7 +4,7 @@ module Kiosk
   # Include into any controller to declare verbs: a query (`GET <mount>/<name>`)
   # or an action (`POST <mount>/<name>`). Handlers live in app/controllers/kiosk.
   #
-  #   class Kiosk::BoardController < ApplicationController   # your base class
+  #   class Kiosk::BoardController < ActionController::API
   #     include Kiosk::Handler
   #
   #     kind :query

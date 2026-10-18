@@ -2,7 +2,7 @@
 
 # Each seller's own classified listings: posting, editing and closing them.
 module Kiosk
-  class ListingsController < ApplicationController
+  class ListingsController < ActionController::API
     include Kiosk::Handler
 
     PRICE_TEXT = { type: %w[string null], description: 'Display price, e.g. "€300" or "Free"; null when none.' }.freeze

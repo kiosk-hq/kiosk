@@ -727,7 +727,7 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	mode: 'setup',
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	confirm: true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	idempotency_key: "#{cart_mandate.id}-capture"
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	off_session: true,
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	raise PaymentFailed.new(card_decline_message(e), retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	when 'authentication_required' then 'the payment method needs authentication an off-session charge cannot complete'
 kiosk-pay-stripe/spec/generators/kiosk/pay_stripe/install_generator_spec.rb	types user_id as --user-id-type says
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	'#capture' do

@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `PaymentFailed` takes no `reason:`; the engine reads only its message and `retryable?`.
+
 ## [0.5.16] — 2026-10-18
 
 - 2026-10-18: Each adapter has its own Stripe client; `api_base:` names another API URL, e.g. stripe-mock. The adapter no longer sets `Stripe.api_key`.

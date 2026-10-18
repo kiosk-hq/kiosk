@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `PaymentFailed` takes no `reason:`; the engine reads only its message and `retryable?`.
 - 2026-10-18: `AgentIdentityProviders::Base` declares only `verify`; the engine never called `issue` or `agent_payment_key` on a configured `c.agent_idp`.
 
 ## [0.5.16] — 2026-10-18

@@ -14,7 +14,7 @@ module Kiosk
           )
         rescue ::Stripe::CardError => e
           # A definitive decline: nothing was charged, so a retry is safe.
-          raise PaymentFailed.new(card_decline_message(e), reason: :card_declined, retryable: true)
+          raise PaymentFailed.new(card_decline_message(e), retryable: true)
         rescue ::Stripe::StripeError
           # The outcome is unknown: a blind retry could double-charge.
           raise unknown_outcome('could not confirm the charge')
@@ -36,15 +36,14 @@ module Kiosk
         def ensure_paid!(intent)
           return if intent.status == PAID
 
-          raise PaymentFailed.new('the payment method was declined', reason: :card_declined, retryable: true) if
+          raise PaymentFailed.new('the payment method was declined', retryable: true) if
             NOT_CHARGED.include?(intent.status)
 
           raise unknown_outcome('has not completed the charge')
         end
 
         def unknown_outcome(what)
-          PaymentFailed.new("the payment processor #{what}; its status is unknown",
-                            reason: :processor_unavailable, retryable: false)
+          PaymentFailed.new("the payment processor #{what}; its status is unknown", retryable: false)
         end
 
         # Keyed on Stripe's stable error code: Stripe's own message can carry request ids.

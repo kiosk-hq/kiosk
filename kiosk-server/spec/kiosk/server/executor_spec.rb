@@ -816,7 +816,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay capture failure' do
   # persisted; the message is the adapter's human-safe string (no PSP
   # internals) and the hint tells the agent it is safe to retry.
   it 'maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)' do
-    fail_capture('the payment method was declined', reason: :card_declined, retryable: true)
+    fail_capture('the payment method was declined', retryable: true)
 
     expect do
       pay
@@ -833,7 +833,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay capture failure' do
   # operator charges at most once.
   it 'maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same chain again' do
     fail_capture('the payment processor could not confirm the charge; its status is unknown',
-                 reason: :processor_unavailable, retryable: false)
+                 retryable: false)
 
     expect do
       pay

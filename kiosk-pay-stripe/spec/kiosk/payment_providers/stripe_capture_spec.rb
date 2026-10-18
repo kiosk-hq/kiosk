@@ -106,7 +106,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the intent did no
       expect { adapter.capture(cart_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
           expect(e).to be_retryable
-          expect(e.reason).to eq(:card_declined)
         }
     end
   end
@@ -118,7 +117,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the intent did no
       expect { adapter.capture(cart_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
           expect(e).not_to be_retryable
-          expect(e.reason).to eq(:processor_unavailable)
         }
     end
   end
@@ -138,7 +136,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the charge fails 
     expect { adapter.capture(cart_mandate) }
       .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
         expect(e).to be_retryable
-        expect(e.reason).to eq(:card_declined)
         expect(e.message).to eq('the payment method was declined')
         # No raw Stripe text leaks through.
         expect(e.message).not_to match(/Your card was declined/)
@@ -169,7 +166,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when Stripe cannot con
     expect { adapter.capture(cart_mandate) }
       .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
         expect(e).not_to be_retryable
-        expect(e.reason).to eq(:processor_unavailable)
         expect(e.message).to match(/unknown/i)
         expect(e.message).not_to match(/timed out/)
       }

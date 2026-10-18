@@ -9,11 +9,8 @@ module Kiosk
     # A charge failed at the processor. `retryable?` is true only when nothing
     # was charged; false means the outcome is unknown, so reconcile, do not retry.
     class PaymentFailed < StandardError
-      attr_reader :reason
-
-      def initialize(message = 'payment failed', reason: :error, retryable: false)
+      def initialize(message = 'payment failed', retryable: false)
         super(message)
-        @reason    = reason
         @retryable = retryable
       end
 

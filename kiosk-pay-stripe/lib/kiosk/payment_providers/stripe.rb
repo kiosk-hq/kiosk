@@ -93,7 +93,7 @@ module Kiosk
         { psp_reference: refund.id, refunded_psp_reference: psp_reference,
           refunded_amount_cents: amount_cents, refunded_at: Time.at(refund.created).utc }
       rescue ::Stripe::StripeError
-        raise PaymentFailed.new('the payment processor did not refund the charge', reason: :refund_failed)
+        raise PaymentFailed, 'the payment processor did not refund the charge'
       end
 
       private

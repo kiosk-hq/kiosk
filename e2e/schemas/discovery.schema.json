@@ -34,7 +34,7 @@
         },
         "capabilities": {
           "type": "array",
-          "description": "The MODULES this endpoint serves, from the canonical set, in canonical order. Never the origin's registered verb NAMES -- this document is a POINTER, not a copy of the contract, and the names are published once, in the catalog at `schema_url`. This is also the ONLY place the module set appears: no other surface on this wire publishes it, and the catalog carries no copy of it.",
+          "description": "The modules this endpoint serves, from the canonical set, in canonical order. Only this list publishes the modules; the verb names are in the catalog at `schema_url`.",
           "items": {
             "enum": [
               "schema",
@@ -48,7 +48,7 @@
         },
         "schema_url": {
           "type": "string",
-          "description": "Where to fetch the catalog. It MUST resolve to the same document as GET <endpoint>/schema, which is UNAUTHENTICATED. It MAY carry a cache-busting version parameter; when it does, the operator MUST change it whenever the catalog changes, and MAY then serve that URL immutable for a long time. The bare <endpoint>/schema is a fixed URL whose bytes change, so it may not be cached for longer than this document is."
+          "description": "Where to fetch the catalog: the same document as the unauthenticated GET <endpoint>/schema. It MAY carry a version parameter; then the operator MUST change it when the catalog changes, and MAY serve that URL as immutable."
         },
         "min_client": {
           "type": "string",

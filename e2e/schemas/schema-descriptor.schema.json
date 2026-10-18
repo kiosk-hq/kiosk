@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/schema-descriptor.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/schema-descriptor.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk schema descriptor",
-  "description": "The body returned by GET <endpoint>/schema. UNAUTHENTICATED: the catalog is public. It carries the origin's verbs and their contracts and nothing else -- the MODULE set lives in `capabilities` in /.well-known/kiosk.json, which is where an AI assistant reads it. The root is CLOSED: a document carrying `verbs`, or any other key this schema does not declare, is not a conformant catalog.",
+  "description": "The body of the unauthenticated GET <endpoint>/schema: the origin's verbs and their contracts. The root is CLOSED. The module set is in `capabilities` in /.well-known/kiosk.json.",
   "type": "object",
   "required": [
     "queries",
@@ -37,7 +37,7 @@
   "$defs": {
     "descriptor": {
       "type": "object",
-      "description": "One verb's description. CLOSED (Section 8.3): a descriptor carries the members named here and no others, so a key this specification does not declare at this level -- `x_internal_sla`, `ttl`, an operator's internal owner -- makes the catalog non-conformant. An operator that wants a field on a verb proposes it for the protocol rather than publishing it: a name taken privately is a name a later revision can no longer claim. This closes the DESCRIPTOR and nothing else; a problem document still carries its RFC 9457 extension members, which is that object's own rule.",
+      "description": "One verb's description. CLOSED (Section 8.3): a descriptor carries the members named here and no others. An operator that needs another member proposes it for the protocol.",
       "additionalProperties": false,
       "required": [
         "name",
@@ -67,24 +67,24 @@
             "consented",
             "role"
           ],
-          "description": "Whose rows this verb may touch (Section 7.2). `principal` is the DEFAULT and the norm: this verb touches only the calling principal's own rows, or rows that belong to no principal at all (a catalogue, a price list). The other three are DECLARED DEPARTURES, each naming what authorises the wider reach -- `published`, the operator publishes these owner-carrying rows to every principal by intent (a classifieds board); `consented`, a principal shared them and the operator can point at the artefact that says so (an invite that became a membership) -- the stronger of the two sharing claims; `role`, the reach follows the caller's operator-ASSIGNED `role` claim, which is never client-requested (Section 5.4). Declaring a reach does not make it correct, it makes it reviewable: an UNDECLARED cross-principal read is a defect whether or not the operator intended it. An AI assistant that meets a descriptor with no `reach` MUST read the verb as `principal` and MUST NOT take the absence as licence to assume anything wider."
+          "description": "Whose rows this verb may touch (Section 7.2). `principal`, the default: the caller's own rows and rows that belong to no principal. `published`: rows the operator shows to every principal. `consented`: rows a principal shared. `role`: rows the caller's operator-assigned role reaches. An AI assistant MUST read a missing `reach` as `principal`."
         },
         "input_schema": {
           "type": [
             "object",
             "boolean"
           ],
-          "description": "JSON Schema (draft 2020-12) for THIS verb's inputs: names, required/optional, types, enums, ranges. The AUTHORITATIVE input contract -- the only place a parameter name is declared -- and it wins over any `description` sentence that disagrees. The operator validates a request's arguments against it before the handler runs and answers 400 bad_request naming the offending parameter otherwise. A verb that takes nothing declares the closed empty object."
+          "description": "JSON Schema (draft 2020-12) for this verb's inputs, and the only place a parameter is declared. The operator validates the arguments against it and answers 400 bad_request otherwise. A verb that takes nothing declares the closed empty object."
         },
         "output_schema": {
           "type": [
             "object",
             "boolean"
           ],
-          "description": "JSON Schema (draft 2020-12) for what this verb RETURNS. With no response envelope, this is the ONLY machine-readable statement of the result shape: what a query's rows look like, or what an action's object contains. A query's is an ARRAY schema whether or not the verb paginates -- a paginated page carries its cursor in an RFC 8288 Link header, not in the body -- so a paginating verb declares one shape, not a two-branch union. It must describe what the verb actually renders -- a success body that does not satisfy it is an operator-side defect, not a permitted variation."
+          "description": "JSON Schema (draft 2020-12) for what this verb returns. A query's is an array schema, also when it paginates: the cursor is in an RFC 8288 Link header. A success body that does not satisfy it is an operator defect."
         },
         "params": {
-          "description": "FORBIDDEN. `false` refuses the key outright: a conformant descriptor does not carry `params`, and a `null` is a value like any other (Section 8.3). It carries its own declaration even though the object around it is closed, and the redundancy is only apparent: `additionalProperties` does not reach a key `properties` names, so a descriptor publishing `params` is refused by THIS declaration, which names the key, rather than by the generic unknown-member refusal every other stray key gets. A verb's inputs are declared in `input_schema` and nowhere else. Contrast the ROOT, closed for the same reason and saying so above.",
+          "description": "FORBIDDEN. `false` refuses the key outright; `null` is a value too (Section 8.3). A verb declares its inputs in `input_schema`.",
           "not": {}
         },
         "example_params": {
@@ -97,7 +97,7 @@
     },
     "topic": {
       "type": "object",
-      "description": "One event topic this origin publishes. CLOSED, exactly as a verb descriptor is: a descriptor carrying any other member is not conformant. The operator's rule for deciding whether a particular SUBJECT is readable by a particular subscriber is deliberately absent -- it runs on every subscribe and again while the subscription stands, and publishing it would describe where to look for a gap in it while telling a conformant subscriber nothing it can act on.",
+      "description": "One event topic this origin publishes. CLOSED, as a verb descriptor is.",
       "required": [
         "name",
         "description",

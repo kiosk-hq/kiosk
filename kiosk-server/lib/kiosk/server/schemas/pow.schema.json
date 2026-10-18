@@ -34,7 +34,7 @@
         "challenge": { "$ref": "#/$defs/challenge" },
         "nonce": {
           "$comment": "NO `type` HERE, AND THAT IS THE POINT. Typing `nonce` as the Equihash solution object outright would contradict the decision `alg` is open for: the challenge carries {alg, params} so that an operator may bring a backend of their own, and a backend brings its own solution encoding with it. A schema that admits one algorithm's `alg` string and only that algorithm's nonce shape refuses every other backend's valid proof before any verifier sees it. So the shape is stated CONDITIONALLY, in the `allOf` beside this property, keyed on `challenge.alg`.",
-          "description": "The solution to the challenge. Its shape belongs to the ALGORITHM named in `challenge.alg`, not to this protocol: `alg` is an open string, so an operator serving a backend of their own encodes that backend's solution however the backend defines it, and a verifier that does not know the `alg` refuses the proof rather than the shape. For `equihash` -- the one backend the reference implementation ships -- the shape is #/$defs/equihashNonce, and the conditional below requires exactly that."
+          "description": "The solution to the challenge, in the shape of the algorithm that `challenge.alg` names. A verifier refuses a proof whose `alg` it does not know. For `equihash` the shape is #/$defs/equihashNonce."
         }
       },
       "allOf": [
@@ -80,7 +80,7 @@
       }
     },
     "powHeader": {
-      "description": "The value of the Kiosk-PoW request header, as raw JSON. Either a single proof object, or a JSON array of proofs for the N-proof case. A server also accepts repeated Kiosk-PoW header lines (one proof each) and a proxy comma-combined value; those presentations flatten to the same proofs list and are not expressed here (they are a transport concern).",
+      "description": "The value of the Kiosk-PoW request header as raw JSON: one proof object, or an array of proofs. Repeated header lines and a comma-joined value give the same list and are not shown here.",
       "oneOf": [
         { "$ref": "#/$defs/proof" },
         {

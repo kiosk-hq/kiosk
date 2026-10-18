@@ -3,11 +3,11 @@
   "$id": "https://kiosk.tech/spec/schemas/binding.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk account binding -- claim and link",
-  "description": "The wire objects of Section 6, the one-time ceremonies that bind an AI assistant to a human's EXISTING operator account. Two directions: claim, which the assistant starts (an RFC 8628 device grant), and link, a Kiosk extension the human starts. Both require BOTH human approval AND a valid possession proof; a failed proof binds nothing (Section 15.8). WHAT IS NOT HERE, and Section 17 says the same thing: the two /oauth/* REQUESTS are form-encoded rather than JSON, so a JSON Schema is not the oracle for them. The /oauth/* error RESPONSE is here -- it was not until 2026-08-30, because the vocabulary Section 6.1 stated was short of the one its own step 1 requires, and an enum written from an incomplete list refuses conforming answers.",
+  "description": "The wire objects of Section 6, the one-time ceremonies that bind an AI assistant to an existing operator account: claim, an RFC 8628 device grant, and link. Both need the human's approval and a valid possession proof. The two /oauth/* requests are form-encoded and have no schema here; their error answer has one.",
   "$defs": {
     "deviceAuthorization": {
       "type": "object",
-      "description": "Section 6.1 step 1 -- the answer to POST <endpoint>/oauth/device_authorization. The REQUEST is form-encoded (`client_id` and `public_key`, and NOTHING ELSE that speaks to authorisation) and so has no schema here. All six members are REQUIRED because Section 6.1 enumerates all six as returned; note that RFC 8628 itself makes `verification_uri_complete` and `interval` optional, so this is the narrower of the two contracts and an operator porting an existing device-grant answer must widen it.",
+      "description": "Section 6.1 step 1: the answer to POST <endpoint>/oauth/device_authorization. All six members are required, also the two that RFC 8628 makes optional.",
       "required": [
         "device_code",
         "user_code",
@@ -47,7 +47,7 @@
     },
     "deviceTokenResponse": {
       "type": "object",
-      "description": "Section 6.1 step 3 -- the success answer to POST <endpoint>/oauth/token. The REQUEST is form-encoded and so has no schema here; note also that `signed` is REQUIRED only on the poll that COMPLETES the ceremony, which is a state-dependent rule no JSON Schema can carry. The bound principal (`user_id`, `agent_id`) rides in the access token's claims, not in this body.",
+      "description": "Section 6.1 step 3: the success answer to POST <endpoint>/oauth/token. The bound principal (`user_id`, `agent_id`) is in the access token's claims.",
       "required": ["access_token", "token_type", "expires_in"],
       "properties": {
         "access_token": {
@@ -64,13 +64,13 @@
         },
         "scope": {
           "type": "string",
-          "description": "Present when -- and ONLY when -- the binding carries a role, and the type is the rule: it is omitted rather than null when there is none, so `null` is not a permitted value here. This is RFC 6749 Section 5.1's scope actually GRANTED, which here is the approving human's role and NEVER an echo of a requested one, since no role may be requested (Section 6.1 step 1). An operator whose identity system reports no role for that human omits the member, and an AI assistant MUST NOT treat its absence as an error."
+          "description": "The approving human's role, as the scope that RFC 6749 Section 5.1 grants. It is present only when the binding carries a role, and never null. An AI assistant MUST NOT treat its absence as an error."
         }
       }
     },
     "oauthError": {
       "type": "object",
-      "description": "Section 6.1 -- the error answer of BOTH /oauth/* endpoints, and the one place on this wire that is not an RFC 9457 problem document. The vocabulary is CLOSED at eight: six ceremony-state codes from RFC 8628 Section 3.5 and two request-level codes from RFC 6749 Section 5.2. The two request-level ones are not decoration -- Section 6.1 step 1 REQUIRES `invalid_request` for a `scope` or `role` parameter on the device-authorization request, which is why this schema could not exist while the section's own closing list named only six. The STATUS is 400 for every code except `invalid_client`, which is 401; no schema can carry that, so it is stated in Section 6.1 and here.",
+      "description": "Section 6.1: the error answer of both /oauth/* endpoints, the one error on this wire that is not an RFC 9457 problem document. The status is 400 for every code except `invalid_client`, which is 401.",
       "required": ["error"],
       "properties": {
         "error": {
@@ -128,7 +128,7 @@
     },
     "claimResponse": {
       "$ref": "https://kiosk.tech/spec/schemas/auth.schema.json#/$defs/registration",
-      "description": "Section 6.2 -- the 201 answer to POST <endpoint>/auth/claim. Byte-for-byte the register answer's shape, which is why it refers to it rather than restating it: a key the operator has never seen becomes a linked assistant account, a key that already had one is rebound, and the response is deliberately INDISTINGUISHABLE between those cases and from an idempotent re-bind (Section 6.3)."
+      "description": "Section 6.2: the 201 answer to POST <endpoint>/auth/claim, in the shape of the register answer. A new key, a rebound key and a repeated bind give answers that cannot be told apart (Section 6.3)."
     },
     "unlinkRequest": {
       "type": "object",

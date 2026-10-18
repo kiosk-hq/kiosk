@@ -24,7 +24,7 @@
     },
     "status": {
       "type": "integer",
-      "description": "RFC 9457 status: the HTTP status code, restated in the body. The status is a CONSTANT OF THE CODE, never a per-incident choice: the `allOf` below binds each of the seventeen vocabulary entries to exactly one status, so a document whose `code` and `status` disagree is invalid here and not merely unusual. That mapping is the one the specification's error-vocabulary table publishes, and it is the machine-readable copy an implementation's own code table is derived from -- before this existed the table lived in hand-kept copies on both sides of the repository boundary with nothing comparing them. Four codes share 403, three share 402 and two share 404, which is why `code` and not the status is the field to branch on.",
+      "description": "The HTTP status, restated in the body. Each code has exactly one status: the `allOf` below binds them, as the specification's error table does.",
       "minimum": 100,
       "maximum": 599
     },
@@ -33,7 +33,7 @@
       "description": "RFC 9457 detail: the human-readable, incident-specific message. Dropped when there is nothing to say."
     },
     "code": {
-      "description": "Extension member, and THE CONTRACT: the closed, stable error vocabulary. An AI assistant branches on this, never on the HTTP status alone (four codes share 403, three share 402, and two share 404) and never on the presence of a response header. The two 404s are the split of Section 9: verb_not_found means no verb by that NAME is registered here (re-read the catalogue), not_found means the verb exists and an argument ADDRESSED something absent (stop and say so). module_not_served is the third of that family and is 501, because the published path is correct and the whole capability is absent.",
+      "description": "The closed error vocabulary. An AI assistant branches on this member, not on the HTTP status, because some codes share a status. `verb_not_found`: no verb has this name here. `not_found`: an argument names something absent. `module_not_served` (501): the whole module is absent.",
       "enum": [
         "bad_request",
         "unauthenticated",

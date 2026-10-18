@@ -47,7 +47,7 @@
     },
     "attributes": {
       "type": "object",
-      "description": "OPTIONAL named ANONYMIZED boolean attributes the KYC provider vouches for (e.g. age_over_18, licence_a). Anonymized: the provider learns only these booleans -- never the underlying DOB, licence number, or document. Additive: a bare attestation with no attributes still verifies as binary. Only values that are literally true are honoured; a downstream Action MAY gate on required attribute names and reject with kyc_required (403) when they are not all present-and-true.",
+      "description": "Optional named boolean attributes that the KYC provider vouches for, e.g. age_over_18. Only a value that is literally true counts; an action MAY require named attributes and refuse with kyc_required (403).",
       "additionalProperties": {
         "type": "boolean"
       }

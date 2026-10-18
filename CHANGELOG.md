@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The vendored JSON Schemas carry kiosk.tech's shortened `description`s.
 - 2026-10-18: `bin/check-vendored-schemas` holds each JSON Schema copied from kiosk.tech equal to the published file; CI runs it beside kiosk.tech.
 - 2026-10-18: The Stripe adapter keeps its key and URL in its own client; the demos pass stripe-mock as `api_base:`. A `pay` makes three Stripe calls, not five.
 - 2026-10-18: The KYC broker demo reads the intake from the request parameters; a body that is not JSON is a 400.

@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/event.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/event.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk event",
-  "description": "One message the operator pushes on the event stream at <endpoint>/events. The root is CLOSED: an event carries the five members declared here and no others. `data` is typed by the topic's own `payload_schema`, published in the catalog's `events` array, and this schema deliberately does not constrain it -- the shape is the operator's to declare, per topic.",
+  "description": "One message the operator pushes on the event stream at <endpoint>/events. The root is CLOSED: an event carries the five members declared here. The topic's `payload_schema` in the catalog gives the shape of `data`.",
   "type": "object",
   "required": [
     "id",
@@ -18,7 +18,7 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 9007199254740991,
-      "description": "A PER-ORIGIN monotonic integer, at most 2^53 - 1 -- the range JSON carries exactly (RFC 7493 Section 2.2), and the range of the cursor a subscriber presents as `since`. Not per topic and not per subscriber. One integer therefore resumes every subscription a socket holds, and a subscriber compares integers instead of keeping a cursor per topic. It names one event in ONE identity's stream, not the change behind it: a change told to two identities is two events with two ids, so ids are never compared across identities. A subscriber MUST ignore an id it has already seen: delivery is at-least-once."
+      "description": "A per-origin monotonic integer, at most 2^53 - 1, which a subscriber presents as `since`. It names one event in ONE identity's stream, not the change behind it. Delivery is at-least-once: a subscriber MUST ignore an id it has already seen."
     },
     "topic": {
       "type": "string",

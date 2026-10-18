@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The README intake shape names the optional `audience` of the request and the `nonce` of the answer.
 - 2026-10-18: The broker connects to an IPv6 loopback callback by its bare address, so a `http://[::1]:…` callback is delivered.
 - 2026-10-18: `prove_requests.audience` is NOT NULL; a row without one takes its operator_id, the `aud` its claim carried.
 - 2026-10-18: A callback to the IPv6 loopback (`http://[::1]:…`) is accepted over plain http, as the other loopback hosts are.

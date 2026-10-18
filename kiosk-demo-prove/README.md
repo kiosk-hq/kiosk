@@ -29,7 +29,7 @@ surface. It depends on **no** kiosk gem.
 
 | Route | Who → who | Shape |
 |-------|-----------|-------|
-| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", expires_at}` |
+| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle, audience?}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", nonce, expires_at}` |
 | `GET /verify?request=<id>` | broker → human | the yes/no page (the token is the only credential — no sign-in) |
 | `POST /verify` | human → broker | `{request, decision:"approve"\|"decline"}` — on approve mints the claim and POSTs it to `callback_url` |
 

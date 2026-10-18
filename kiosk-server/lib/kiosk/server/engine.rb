@@ -75,20 +75,14 @@ module Kiosk
           'Kiosk.configure { |c| c.issuer = "https://api.example.com" }.'
 
         ISSUER_LOOPBACK =
-          '[kiosk-server] The served origin %<origin>s is a loopback origin outside ' \
-          'development and test; no assistant can reach it, so every authenticated request is ' \
-          'refused with "proof audience mismatch". Set `c.issuer` to the public origin and ' \
-          'list a second business in `c.additional_origins`.'
+          '[kiosk-server] The served origin %<origin>s is a loopback origin; no assistant can ' \
+          'reach it outside development and test. Set `c.issuer` and `c.additional_origins` ' \
+          'to public origins.'
 
         DEFAULT_ROLE =
-          'There is always a default role: an AI assistant admitted with no role of its own ' \
-          '— a self-registration, or a binding whose approving human resolves none — lands on the ' \
-          'EMPTY role set and gets a token with NO role claim, at an origin whose verbs branch on ' \
-          'one. Configure the default, naming the least-privileged role you declare: ' \
-          'Kiosk.configure { |c| c.registration_role = :%<first>s }. Or assign roles to ' \
-          'nobody — `c.roles = []` — which is the other supported shape: then no binding carries a ' \
-          'role and no token has one. Both are total; the mixture is what is refused ' \
-          '(kiosk.tech protocol.md Section 6.3).'
+          'An assistant admitted without a role would get a token with no role claim. ' \
+          'Set the least-privileged declared role as the default ' \
+          '(Kiosk.configure { |c| c.registration_role = :%<first>s }), or declare no roles (`c.roles = []`).'
 
         def issuer_warning(config:, local:)
           issuer = config.issuer.to_s.strip
@@ -101,7 +95,7 @@ module Kiosk
         end
 
         # An origin that declares roles must configure a `registration_role` among
-        # them (protocol.md §6.3); an origin with no roles needs none.
+        # them; an origin with no roles needs none.
         def default_role_configuration_error(config:)
           declared = Array(config.roles).map(&:to_s).reject(&:empty?)
           return nil if declared.empty?

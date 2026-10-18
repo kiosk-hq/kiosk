@@ -104,60 +104,40 @@ module Kiosk
         end
 
         def missing_kind(where, name)
-          "#{where} declares the Kiosk verb #{name.inspect} without a `kind`. Every " \
-            'declaration says which verb reaches it: `kind :query` is served at ' \
-            "GET #{mount_path}/#{name}, `kind :action` at " \
-            "POST #{mount_path}/#{name}. One controller may declare " \
-            'both — the kind belongs to the declaration, not to the class — so there is ' \
-            'no default to fall back on.'
+          "#{where} declares the Kiosk verb #{name.inspect} without a `kind`. " \
+            "Add `kind :query` (GET #{mount_path}/#{name}) or `kind :action` (POST #{mount_path}/#{name})."
         end
 
         # One name declared twice in one class body; the cross-class case is {HandlerRegistrations}.
         def name_clash(where, name, declaration, clash)
-          return same_name(where, name, declaration, clash) if clash[:kind] == declaration[:kind]
+          return same_name(where, name, clash) if clash[:kind] == declaration[:kind]
 
           "#{where} declares #{name.inspect} as a#{'n' if declaration[:kind] == :action} " \
             "#{declaration[:kind]}, but ##{clash[:method_name]} on this class already " \
-            "declares it as a#{'n' if clash[:kind] == :action} #{clash[:kind]}. A verb " \
-            'name is one path segment and one kind: ' \
-            "GET #{mount_path}/#{name} and " \
-            "POST #{mount_path}/#{name} cannot reach different handlers. " \
+            "declares it as a#{'n' if clash[:kind] == :action} #{clash[:kind]}. " \
             'Rename one, or give it a `wire_name` of its own.'
         end
 
-        def same_name(where, name, declaration, clash)
+        def same_name(where, name, clash)
           "#{where} declares the Kiosk verb #{name.inspect}, which ##{clash[:method_name]} " \
-            'on this class already declares. A verb name is ONE path segment reaching ONE ' \
-            'method: storing the second would replace the first, ' \
-            "#{mount_path}/#{name} would reach " \
-            "##{declaration[:method_name]}, and ##{clash[:method_name]} would be off the wire " \
-            'with nothing to say so. Rename one of the methods, or give one of them a ' \
+            'on this class already declares. Rename one of the methods, or give one of them a ' \
             '`wire_name` of its own.'
         end
 
         def illegal_name(where, name)
           "#{where} declares the Kiosk verb #{name.inspect}, which is not a legal verb " \
-            "name. A verb is ONE path segment matching #{NAME_PATTERN.source} " \
-            '(spec §8.1) — lower case, starting with a letter, digits and underscores after ' \
-            'that. Rename the method, or give it a legal `wire_name`.'
+            "name (#{NAME_PATTERN.source}). Rename the method, or give it a legal `wire_name`."
         end
 
         def reserved_name(where, name)
-          "#{where} declares the Kiosk verb #{name.inspect}, which is RESERVED: the engine " \
-            "draws #{mount_path}/#{name} itself, and the mount is drawn " \
-            'before your own routes, so that route wins by first-match — the verb would never ' \
-            'be reached. Reserved: ' \
-            "#{RESERVED_NAMES.join(', ')}. Give it a `wire_name` of its own."
+          "#{where} declares the Kiosk verb #{name.inspect}, which the engine reserves " \
+            "(#{RESERVED_NAMES.join(', ')}). Give it a `wire_name` of its own."
         end
 
         def missing_schemas(where, name, missing)
           "#{where} declares the Kiosk verb #{name.inspect} without #{missing.join(' and ')}. " \
-            'Both are REQUIRED on every verb: `input_schema` is the contract the wire ' \
-            'coerces and validates arguments against, and `output_schema` is the only ' \
-            'machine-readable statement of what the call returns now that the response ' \
-            'envelope is gone. A verb that takes nothing still declares ' \
-            '`input_schema type: "object", additionalProperties: false, properties: {}, ' \
-            'required: []`.'
+            'Declare both; a verb that takes nothing declares ' \
+            '`input_schema type: "object", additionalProperties: false, properties: {}`.'
         end
       end
 

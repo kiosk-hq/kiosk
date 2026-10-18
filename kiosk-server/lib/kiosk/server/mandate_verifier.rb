@@ -96,14 +96,12 @@ module Kiosk
 
         raise Errors::Forbidden.new(
           'mandate currency is not an ISO 4217 alpha-3 code',
-          hint: "currency was #{value.inspect} — send the three-letter code, not a name or a " \
-                'number (spec §11.1: `"eur"`, `"usd"`; `"Euro"`, `"US"` and `"978"` are refused)'
+          hint: "currency was #{value.inspect} — send a three-letter currency code, such as \"eur\""
         )
       end
 
       def blank_currency_hint(value)
-        "currency was #{value.inspect} — send the currency code this mandate is " \
-          'denominated in (spec §11.1: an ISO 4217 alpha-3 code)'
+        "currency was #{value.inspect} — send the three-letter currency code of this mandate, such as \"eur\""
       end
 
       # Public: an operator reading `settlements.currency` needs the same fold.

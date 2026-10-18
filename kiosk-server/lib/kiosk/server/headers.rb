@@ -54,14 +54,8 @@ module Kiosk
       end
 
       SHARED_CACHE_RULE =
-        'Spec §3.7.3 forbids `public`, ' \
-        '`s-maxage` and `must-revalidate` on a verb response — RFC 9111 ' \
-        '§3.5 makes those three the directives that let a shared cache ' \
-        'reuse an answer to an authenticated request, and the payload is ' \
-        'scoped to one identity, so any of them would hand it to another ' \
-        'caller. ' \
-        'Sent `private, no-store` instead; `private, max-age=N` is the ' \
-        'relaxation §3.7.4 allows.'
+        'A verb response is for one caller, so a shared cache must not keep it. ' \
+        'Sent `private, no-store` instead; send `private, max-age=N` to let the caller cache it.'
 
       def self.refuse_shared_cache(value)
         message = '[kiosk-server] refused a shared-cache policy on a wire response: ' \

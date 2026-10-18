@@ -1113,7 +1113,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
           output_schema true
           def schema = render(json: [])
         end
-      end.to raise_error(ArgumentError, /RESERVED/)
+      end.to raise_error(ArgumentError, /the engine reserves/)
     end
   end
 end

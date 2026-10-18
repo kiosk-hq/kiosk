@@ -2,11 +2,13 @@
 
 require 'base64'
 require 'openssl'
+require 'kiosk/test_helpers/stripe_mock'
 
 ENV['KIOSK_ISSUER']                 ||= "http://localhost:#{ENV.fetch('PORT', '3000')}"
 ENV['KIOSK_SIGNING_KEY_B64']        ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
 ENV['KIOSK_POW_SECRET']             ||= 'skooti-local-pow-secret-not-a-secret'
 ENV['STRIPE_SECRET_KEY']            ||= 'sk_test_mock'
+ENV['STRIPE_MOCK_URL']              ||= Kiosk::TestHelpers::StripeMock::URL
 # The KYC broker kiosk-demo-prove runs locally: its URL, issuer, intake secret and signing key.
 ENV['KIOSK_PROVE_BROKER_URL']       ||= 'http://127.0.0.1:3020'
 ENV['KIOSK_PROVE_ISSUER']           ||= 'https://kyc.test.local'

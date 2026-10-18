@@ -7,9 +7,9 @@ module Kiosk
       module Charges
         private
 
-        def charge(cart_mandate, customer, payment_method)
-          ::Stripe::PaymentIntent.create(
-            intent_params(cart_mandate, customer, payment_method),
+        def charge(cart_mandate, customer_id, payment_method)
+          @stripe.payment_intents.create(
+            intent_params(cart_mandate, customer_id, payment_method),
             { idempotency_key: "#{cart_mandate.id}-capture" }
           )
         rescue ::Stripe::CardError => e
@@ -20,11 +20,11 @@ module Kiosk
           raise unknown_outcome('could not confirm the charge')
         end
 
-        def intent_params(cart_mandate, customer, payment_method)
+        def intent_params(cart_mandate, customer_id, payment_method)
           {
             amount: cart_mandate.total_amount_cents,
             currency: cart_mandate.currency,
-            customer: customer.id,
+            customer: customer_id,
             payment_method: payment_method,
             payment_method_types: ['card'],
             off_session: true,

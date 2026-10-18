@@ -14,12 +14,6 @@ ENV['KIOSK_PROVE_INTAKE_SECRET']  ||= 'prove-getgrocery-demo-shared-secret'
 ENV['KIOSK_PROVE_PUBLIC_KEY_PEM'] ||=
   OpenSSL::PKey.read(File.read(File.expand_path('../../../kiosk-demo-prove/config/dev_prove_key.pem', __dir__))).public_to_pem
 
-# A local stripe-mock stands in for Stripe when STRIPE_MOCK_URL names one.
-if (stripe_mock = ENV.fetch('STRIPE_MOCK_URL', nil))
-  require 'stripe'
-  Stripe.api_base = stripe_mock
-end
-
 Rails.application.configure do
   config.enable_reloading = true
   config.eager_load = false

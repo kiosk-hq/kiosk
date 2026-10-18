@@ -388,12 +388,13 @@ kiosk-demo-getgrocery/before-after.md	Both flagship consumer-commerce connectors
 kiosk-demo-getgrocery/before-after.md	ChatGPT-Agent food orders take 6–20 minutes, two to three times a human, and
 kiosk-demo-getgrocery/before-after.md	`test/stories/shop_test.rb` runs the errand end to end:
 kiosk-demo-getgrocery/config/environments/development.rb	ENV['STRIPE_SECRET_KEY']          ||= 'sk_test_mock'
-kiosk-demo-getgrocery/config/environments/development.rb	if (stripe_mock = ENV.fetch('STRIPE_MOCK_URL', nil))
+kiosk-demo-getgrocery/config/environments/test.rb	||= Kiosk::TestHelpers::StripeMock::URL
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY')),
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY'),
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	api_base: ENV.fetch('STRIPE_MOCK_URL', nil)
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.payment_provider = Kiosk::Server::PaymentClaim.new(
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	c.registration_pow_count = 1
@@ -443,8 +444,7 @@ kiosk-demo-getgrocery/test/stories/shop_test.rb	a paid order is not charged agai
 kiosk-demo-getgrocery/test/stories/shop_test.rb	a shopper with no account orders groceries for tomorrow morning and pays
 kiosk-demo-getgrocery/test/stories/shop_test.rb	assert_equal '08:00–10:00 (Europe/Dublin)', window['label']
 kiosk-demo-getgrocery/test/stories/shop_test.rb	assert_equal ['paid', '08:00–10:00 (Europe/Dublin)'], placed.values_at('payment_state', 'slot_label')
-kiosk-demo-getgrocery/test/test_helper.rb	  setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
-kiosk-demo-getgrocery/test/test_helper.rb	setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
+kiosk-demo-getgrocery/test/test_helper.rb	setup { Kiosk::TestHelpers::StripeMock.start }
 kiosk-demo-hoteling/README.md	- `POST /kiosk/payment_setup` — check whether the customer has a saved payment method
 kiosk-demo-hoteling/README.md	Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
 kiosk-demo-hoteling/README.md	Hotel booking demo operator for Kiosk.
@@ -734,18 +734,18 @@ kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	cl
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/templates/create_kiosk_pay_stripe_customers.rb.tt	t.column :user_id, :<%= options[:user_id_type] %>, null: false
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	        outstanding_setup_session(cus_id, success_url: success_url)&.url ||
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      # A hosted Checkout page in `mode: "setup"`. An open setup session for the
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key:, customer_resolver: nil, customer_saver: nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def refund(psp_reference:, amount_cents:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_return_user_id(params)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	      def setup_url(user_id:, return_url:)
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	::Stripe.api_key = api_key
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	@customer_resolver = customer_resolver || customer_record_method(:resolve)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	@stripe = ::Stripe::StripeClient.new(api_key, api_base:).v1
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	The SetupIntent the page creates
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def capture(cart_mandate, **)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key:
-kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key:, customer_resolver: nil, customer_saver: nil)
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def saved_method?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_required?(user_id:)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe.rb	def setup_url(user_id:, return_url:)
@@ -757,7 +757,7 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	raise PaymentFail
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	when 'authentication_required' then 'the payment method needs authentication an off-session charge cannot complete'
 kiosk-pay-stripe/spec/generators/kiosk/pay_stripe/install_generator_spec.rb	types user_id as --user-id-type says
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	'#capture' do
-kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	charges the customer's default saved card off_session, keyed by the cart mandate id
+kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	charges the customer's saved card off_session, keyed by the cart mandate id
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	maps authentication_required to a distinct human-safe message (still retryable)
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	translates a Stripe::CardError (declined) into a RETRYABLE PaymentFailed with a safe message
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	translates a non-card Stripe error (timeout/connectivity) into a NON-retryable PaymentFailed (unknown outcome)
@@ -765,7 +765,7 @@ kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_integration_spec.rb	# Real 
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_integration_spec.rb	charges the card the human saved through the setup page
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_outstanding_session_spec.rb	returns the OPEN setup session's url and mints NOTHING when one is outstanding
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	'#setup_required?' do
-kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	returns false when the Customer has a saved default payment method
+kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	returns false when the Customer has a saved card
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	returns true when the Customer exists but has no saved cards
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_saved_method_spec.rb	returns true when the resolver returns nil (principal has no Customer yet)
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_spec.rb	'#setup_url' do

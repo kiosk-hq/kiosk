@@ -24,10 +24,12 @@ RSpec.describe Kiosk::PaymentProviders::Stripe::CustomerRecord do
   end
 
   it 'is what the adapter uses when no resolver and saver are given' do
+    services = Stripe::StripeClient.new('sk_test_dummy').v1
+    allow(Stripe::StripeClient).to receive(:new).and_return(instance_double(Stripe::StripeClient, v1: services))
+    allow(services.payment_methods).to receive(:list).with(customer: 'cus_two', type: 'card', limit: 1)
+                                                     .and_return(double('PMList', data: [double('PM', id: 'pm_1')]))
     adapter = Kiosk::PaymentProviders::Stripe.new(api_key: 'sk_test_dummy')
     described_class.save('user-2', 'cus_two')
-    allow(Stripe::Customer).to receive(:retrieve).with('cus_two')
-                                                 .and_return(double('Customer', id: 'cus_two', invoice_settings: double(default_payment_method: 'pm_1')))
 
     expect(adapter.saved_method?(user_id: 'user-2')).to be(true)
   end

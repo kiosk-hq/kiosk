@@ -40,9 +40,12 @@ RSpec.shared_context 'with a live Stripe test key' do
   # In-memory principal→customer store (replaces the app's stripe_customers table).
   let(:customer_store) { {} }
 
+  # The test-mode API the examples set the scene on.
+  let(:stripe_api) { Stripe::StripeClient.new(ENV.fetch('STRIPE_SECRET_KEY')).v1 }
+
   subject(:adapter) do
     described_class.new(
-      api_key: ENV.fetch('STRIPE_SECRET_KEY', nil),
+      api_key: ENV.fetch('STRIPE_SECRET_KEY', 'sk_test_unset'),
       customer_resolver: ->(uid) { customer_store[uid] },
       customer_saver: ->(uid, cid) { customer_store[uid] = cid }
     )
@@ -75,11 +78,10 @@ end
 RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url + #capture (full off_session round-trip)', :integration do
   include_context 'with a live Stripe test key'
 
-  # Saves a test card as the default of the Customer, as the hosted setup page does.
+  # Attaches a test card to the Customer, as the hosted setup page does.
   def save_test_card(cus_id)
-    setup = Stripe::SetupIntent.create(customer: cus_id, payment_method: 'pm_card_visa',
-                                       payment_method_types: ['card'], confirm: true, usage: 'off_session')
-    Stripe::Customer.update(cus_id, invoice_settings: { default_payment_method: setup.payment_method })
+    stripe_api.setup_intents.create(customer: cus_id, payment_method: 'pm_card_visa',
+                                    payment_method_types: ['card'], confirm: true, usage: 'off_session')
   end
 
   it 'charges the card the human saved through the setup page' do
@@ -118,9 +120,9 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url', :integration do
     expect(second).to eq(first)
 
     cus_id     = customer_store[user_id]
-    open_setup = Stripe::Checkout::Session
-                 .list(customer: cus_id, status: 'open', limit: 10)
-                 .data.select { |s| s.mode == 'setup' }
+    open_setup = stripe_api.checkout.sessions
+                           .list(customer: cus_id, status: 'open', limit: 10)
+                           .data.select { |s| s.mode == 'setup' }
     expect(open_setup.map(&:url)).to eq([first])
   end
 end

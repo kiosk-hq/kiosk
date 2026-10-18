@@ -8,10 +8,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url reuse of an outstand
   include_context 'with a Stripe adapter'
 
   it "returns the OPEN setup session's url and mints NOTHING when one is outstanding" do
-    expect(Stripe::Checkout::Session).to receive(:list).with(
+    expect(stripe.checkout.sessions).to receive(:list).with(
       customer: 'cus_existing', status: 'open', limit: 10
     ).and_return(double('SessionList', data: [listed_session]))
-    expect(Stripe::Checkout::Session).not_to receive(:create)
+    expect(stripe.checkout.sessions).not_to receive(:create)
 
     expect(adapter.setup_url(user_id: 'user-1', return_url: return_url))
       .to eq('https://checkout.stripe.com/setup/OUTSTANDING')
@@ -19,12 +19,12 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url reuse of an outstand
 
   it 'returns the SAME url across repeated polls (the poll is side-effect-free)' do
     stub_listed_sessions(listed_session)
-    allow(Stripe::Checkout::Session).to receive(:create)
+    allow(stripe.checkout.sessions).to receive(:create)
 
     urls = Array.new(5) { adapter.setup_url(user_id: 'user-1', return_url: return_url) }
 
     expect(urls.uniq.size).to eq(1)
-    expect(Stripe::Checkout::Session).not_to have_received(:create)
+    expect(stripe.checkout.sessions).not_to have_received(:create)
   end
 end
 
@@ -56,7 +56,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url when the outstanding
   include_context 'with a Stripe adapter'
 
   before do
-    allow(Stripe::Checkout::Session).to receive(:list)
+    allow(stripe.checkout.sessions).to receive(:list)
       .and_raise(Stripe::APIConnectionError.new('list timed out'))
   end
 

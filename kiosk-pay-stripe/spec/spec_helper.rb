@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Must precede the adapter require so verify_partial_doubles can see ::Stripe::PaymentIntent at stub time.
+# Must precede the adapter require so verify_partial_doubles can see the SDK's services at stub time.
 require 'stripe'
 require 'kiosk/payment_providers/stripe'
 
@@ -11,14 +11,4 @@ RSpec.configure do |config|
   config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false
-
-  # The adapter sets `::Stripe.api_key` process-globally in its constructor
-  # (stripe.rb). That is the only global state these specs mutate, so restore
-  # it around each example to keep leakage between examples out.
-  config.around(:each) do |example|
-    saved_key = Stripe.api_key
-    example.run
-  ensure
-    Stripe.api_key = saved_key
-  end
 end

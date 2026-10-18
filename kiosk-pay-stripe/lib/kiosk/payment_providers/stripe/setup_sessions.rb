@@ -9,7 +9,7 @@ module Kiosk
 
         def outstanding_setup_session(cus_id, success_url:)
           open_sessions = Array(
-            ::Stripe::Checkout::Session.list(customer: cus_id, status: 'open', limit: SETUP_SESSION_LIST_LIMIT)&.data
+            @stripe.checkout.sessions.list(customer: cus_id, status: 'open', limit: SETUP_SESSION_LIST_LIMIT)&.data
           )
           match = open_sessions.find { |s| reusable_session?(s, success_url) }
           warn_full_page(open_sessions.size) if match.nil? && open_sessions.size >= SETUP_SESSION_LIST_LIMIT

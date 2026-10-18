@@ -19,17 +19,10 @@ module StripeAdapterHelpers
     build_adapter(resolver: ->(_uid) {})
   end
 
-  def customer_double(id: 'cus_existing', default_pm: nil)
-    double('Customer', id: id, invoice_settings: double('InvoiceSettings', default_payment_method: default_pm))
-  end
-
-  # Stubs the mapped Customer. With `listed`, also stubs the cards Stripe lists for it.
-  def stub_customer(default_pm: nil, listed: nil)
-    allow(Stripe::Customer).to receive(:retrieve).with('cus_existing').and_return(customer_double(default_pm: default_pm))
-    return if listed.nil?
-
-    allow(Stripe::PaymentMethod).to receive(:list).with(customer: 'cus_existing', type: 'card')
-                                                  .and_return(double('PMList', data: listed.map { |id| double('PM', id: id) }))
+  # Stubs the cards Stripe lists for the mapped Customer, newest first.
+  def stub_cards(*ids)
+    allow(stripe.payment_methods).to receive(:list).with(customer: 'cus_existing', type: 'card', limit: 1)
+                                                   .and_return(double('PMList', data: ids.first(1).map { |id| double('PM', id: id) }))
   end
 
   # A listed Checkout Session as the SDK would return it.
@@ -37,15 +30,8 @@ module StripeAdapterHelpers
     double('ListedSession', mode: mode, success_url: success_url, url: url)
   end
 
-  def expect_default_set(customer_id, payment_method)
-    expect(Stripe::Customer).to receive(:update).with(
-      customer_id,
-      { invoice_settings: { default_payment_method: payment_method } }
-    ).and_return(double('Customer'))
-  end
-
   def stub_listed_sessions(*sessions)
-    allow(Stripe::Checkout::Session).to receive(:list).and_return(double('SessionList', data: sessions))
+    allow(stripe.checkout.sessions).to receive(:list).and_return(double('SessionList', data: sessions))
   end
 
   def stub_no_outstanding_session
@@ -53,23 +39,23 @@ module StripeAdapterHelpers
   end
 
   def stub_fresh_session
-    allow(Stripe::Checkout::Session).to receive(:create).and_return(double('CheckoutSession', url: FRESH_URL))
+    allow(stripe.checkout.sessions).to receive(:create).and_return(double('CheckoutSession', url: FRESH_URL))
   end
 
   def expect_fresh_session
-    expect(Stripe::Checkout::Session).to receive(:create).and_return(double('CheckoutSession', url: FRESH_URL))
+    expect(stripe.checkout.sessions).to receive(:create).and_return(double('CheckoutSession', url: FRESH_URL))
   end
 
-  # Points the SDK at stripe-mock for the block. Skips when stripe-mock is not installed.
+  # The SDK services of every adapter an example builds; the examples stub them.
+  def stripe = @stripe ||= Stripe::StripeClient.new('sk_test_dummy').v1
+
+  # Yields an adapter on stripe-mock. Skips when stripe-mock is not installed.
   def with_stripe_mock
     url = StripeMock.start
     skip 'stripe-mock not installed (brew install stripe-mock)' unless url
 
-    saved_base = Stripe.api_base
-    Stripe.api_base = url
-    yield
-  ensure
-    Stripe.api_base = saved_base if saved_base
+    allow(Stripe::StripeClient).to receive(:new).and_call_original
+    yield build_adapter(api_base: url)
   end
 end
 
@@ -91,9 +77,10 @@ RSpec.shared_context 'with a Stripe adapter' do
     )
   end
 
-  # The mapped customer exists at Stripe unless an example says otherwise.
+  # Each adapter calls `stripe`; the mapped customer exists at Stripe unless an example says otherwise.
   before do
-    allow(Stripe::Customer).to receive(:retrieve).with('cus_existing')
-                                                 .and_return(double('Customer', id: 'cus_existing'))
+    services = stripe
+    allow(Stripe::StripeClient).to receive(:new).and_return(instance_double(Stripe::StripeClient, v1: services))
+    allow(stripe.customers).to receive(:retrieve).with('cus_existing').and_return(double('Customer', id: 'cus_existing'))
   end
 end

@@ -8,12 +8,6 @@ ENV['KIOSK_SIGNING_KEY_B64'] ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2
 ENV['KIOSK_POW_SECRET']      ||= 'hoteling-local-pow-secret-not-a-secret'
 ENV['STRIPE_SECRET_KEY']     ||= 'sk_test_mock'
 
-# A local stripe-mock stands in for Stripe when STRIPE_MOCK_URL names one.
-if (stripe_mock = ENV.fetch('STRIPE_MOCK_URL', nil))
-  require 'stripe'
-  Stripe.api_base = stripe_mock
-end
-
 Rails.application.configure do
   config.enable_reloading = true
   config.eager_load = false

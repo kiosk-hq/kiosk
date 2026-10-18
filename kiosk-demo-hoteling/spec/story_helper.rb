@@ -43,5 +43,5 @@ end
 
 RSpec.configure do |config|
   config.include HotelStory, type: :story
-  config.before(:each, type: :story) { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
+  config.before(:each, type: :story) { Kiosk::TestHelpers::StripeMock.start }
 end

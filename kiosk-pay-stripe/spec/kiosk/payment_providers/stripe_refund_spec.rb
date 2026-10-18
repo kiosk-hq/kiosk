@@ -7,7 +7,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#refund' do
 
   it 'reverses the named PaymentIntent for the amount, keyed by the charge it undoes' do
     refund = double('Refund', id: 're_123', amount: 1599, created: 1_700_000_100)
-    expect(Stripe::Refund).to receive(:create).with(
+    expect(stripe.refunds).to receive(:create).with(
       { payment_intent: 'pi_123', amount: 1599 },
       { idempotency_key: 'pi_123-refund' }
     ).and_return(refund)
@@ -21,7 +21,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#refund' do
   end
 
   it "answers PaymentFailed when Stripe cannot refund, without Stripe's text" do
-    allow(Stripe::Refund).to receive(:create)
+    allow(stripe.refunds).to receive(:create)
       .and_raise(Stripe::InvalidRequestError.new('Charge ch_1 has already been refunded.', nil))
 
     expect { adapter.refund(psp_reference: 'pi_123', amount_cents: 1599) }
@@ -36,8 +36,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#refund against stripe-mock' do
   include_context 'with a Stripe adapter'
 
   it 'refunds a charge against stripe-mock' do
-    with_stripe_mock do
-      receipt = adapter.refund(psp_reference: 'pi_123', amount_cents: 1599)
+    with_stripe_mock do |mocked|
+      receipt = mocked.refund(psp_reference: 'pi_123', amount_cents: 1599)
       expect(receipt[:psp_reference]).to start_with('re_')
       expect(receipt[:refunded_psp_reference]).to eq('pi_123')
     end

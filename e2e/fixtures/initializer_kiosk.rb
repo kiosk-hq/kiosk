@@ -5,8 +5,6 @@ require 'stripe'
 require 'kiosk/payment_providers/stripe'
 require 'kiosk/user_identity_providers/devise'
 
-Stripe.api_base = ENV.fetch('STRIPE_MOCK_URL')
-
 Kiosk.configure do |c|
   c.user_model = 'User'
 
@@ -22,7 +20,7 @@ Kiosk.configure do |c|
 
   c.user_idp = Kiosk::UserIdentityProviders::Devise.new
 
-  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: 'sk_test_mock')
+  c.payment_provider = Kiosk::PaymentProviders::Stripe.new(api_key: 'sk_test_mock', api_base: ENV.fetch('STRIPE_MOCK_URL'))
 
   c.validate_responses = true
 

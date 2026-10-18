@@ -2,11 +2,13 @@
 
 require 'base64'
 require 'openssl'
+require 'kiosk/test_helpers/stripe_mock'
 
 ENV['KIOSK_ISSUER']          ||= "http://localhost:#{ENV.fetch('PORT', '3000')}"
 ENV['KIOSK_SIGNING_KEY_B64'] ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
 ENV['KIOSK_POW_SECRET']      ||= 'hoteling-local-pow-secret-not-a-secret'
 ENV['STRIPE_SECRET_KEY']     ||= 'sk_test_mock'
+ENV['STRIPE_MOCK_URL']       ||= Kiosk::TestHelpers::StripeMock::URL
 
 Rails.application.configure do
   config.enable_reloading = false

@@ -31,13 +31,14 @@ module Kiosk
 
       # @param customer_resolver [#call] `(user_id) -> customer_id | nil`; {CustomerRecord.resolve} when omitted
       # @param customer_saver [#call] `(user_id, customer_id)`; {CustomerRecord.save} when omitted
-      def initialize(api_key:, customer_resolver: nil, customer_saver: nil)
+      # @param api_base [String, nil] the Stripe API URL, e.g. a local stripe-mock; Stripe's own when nil
+      def initialize(api_key:, customer_resolver: nil, customer_saver: nil, api_base: nil)
         super()
         @customer_resolver = customer_resolver || customer_record_method(:resolve)
         @customer_saver    = customer_saver || customer_record_method(:save)
         require 'stripe'
-        # Process-global: one adapter per process.
-        ::Stripe.api_key = api_key
+        # This adapter's own client: the key and the URL are not process-global.
+        @stripe = ::Stripe::StripeClient.new(api_key, api_base:).v1
       end
 
       # A hosted Checkout page in `mode: "setup"`. An open setup session for the
@@ -49,7 +50,7 @@ module Kiosk
         cus_id      = ensure_customer(user_id)
 
         outstanding_setup_session(cus_id, success_url: success_url)&.url ||
-          ::Stripe::Checkout::Session.create(
+          @stripe.checkout.sessions.create(
             mode: 'setup',
             customer: cus_id,
             client_reference_id: user_id,
@@ -63,23 +64,19 @@ module Kiosk
         session_id = params['session_id'].to_s
         return nil if session_id.empty?
 
-        ::Stripe::Checkout::Session.retrieve(session_id).client_reference_id
+        @stripe.checkout.sessions.retrieve(session_id).client_reference_id
       end
 
       def setup_required?(user_id:) = !saved_method?(user_id: user_id)
 
-      def saved_method?(user_id:)
-        customer = live_customer(user_id)
-        !customer.nil? && !saved_payment_method_for(customer).nil?
-      end
+      def saved_method?(user_id:) = !saved_card(user_id).nil?
 
       # Charges the principal's saved card off_session; the mandate's payment method is not used.
       def capture(cart_mandate, **)
-        customer = live_customer(cart_mandate.user_id)
-        payment_method = customer && saved_payment_method_for(customer)
+        customer_id, payment_method = saved_card(cart_mandate.user_id)
         raise SetupRequired unless payment_method
 
-        intent = charge(cart_mandate, customer, payment_method)
+        intent = charge(cart_mandate, customer_id, payment_method)
         ensure_paid!(intent)
         {
           psp_reference: intent.id,
@@ -89,7 +86,7 @@ module Kiosk
       end
 
       def refund(psp_reference:, amount_cents:)
-        refund = ::Stripe::Refund.create(
+        refund = @stripe.refunds.create(
           { payment_intent: psp_reference, amount: amount_cents },
           { idempotency_key: "#{psp_reference}-refund" }
         )

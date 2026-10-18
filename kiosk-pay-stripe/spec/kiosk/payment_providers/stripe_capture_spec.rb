@@ -10,9 +10,9 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture' do
                             created: 1_700_000_000)
   end
 
-  it "charges the customer's default saved card off_session, keyed by the cart mandate id" do
-    stub_customer(default_pm: 'pm_default_visa')
-    expect(Stripe::PaymentIntent).to receive(:create).with(
+  it "charges the customer's saved card off_session, keyed by the cart mandate id" do
+    stub_cards('pm_default_visa')
+    expect(stripe.payment_intents).to receive(:create).with(
       {
         amount: 1599,
         currency: 'eur',
@@ -32,18 +32,18 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture' do
   end
 end
 
-RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture with no default card' do
+RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture, counted in Stripe calls' do
   include_context 'with a Stripe adapter'
 
-  it 'falls back to the first listed card when no default PM is set' do
-    stub_customer(listed: ['pm_listed_visa'])
+  it 'lists the cards once and creates the intent, and reads no Customer' do
+    stub_cards('pm_listed_visa')
+    allow(stripe.payment_intents).to receive(:create)
+      .and_return(double('PaymentIntent', id: 'pi_123', status: 'succeeded', amount_received: 1599, created: 0))
 
-    expect(Stripe::PaymentIntent).to receive(:create).with(
-      hash_including(customer: 'cus_existing', payment_method: 'pm_listed_visa'),
-      anything
-    ).and_return(double('PaymentIntent', id: 'pi_123', status: 'succeeded', amount_received: 1599, created: 0))
+    adapter.capture(cart_mandate)
 
-    adapter.capture(cart_mandate, payment_method: nil)
+    expect(stripe.payment_methods).to have_received(:list).once
+    expect(stripe.customers).not_to have_received(:retrieve)
   end
 end
 
@@ -51,7 +51,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture without a saved card' 
   include_context 'with a Stripe adapter'
 
   it 'raises SetupRequired when the customer has no saved card' do
-    stub_customer(listed: [])
+    stub_cards
 
     expect do
       adapter.capture(cart_mandate, payment_method: nil)
@@ -68,12 +68,12 @@ end
 RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture of the saved card' do
   include_context 'with a Stripe adapter'
 
-  before { stub_customer(default_pm: 'pm_default_visa') }
+  before { stub_cards('pm_default_visa') }
 
   it 'ignores an explicitly presented pm and charges the on-file card when a resolver is configured' do
     # The assistant authorizes and never presents a card, so a presented pm is
     # ignored and the saved card is charged.
-    expect(Stripe::PaymentIntent).to receive(:create).with(
+    expect(stripe.payment_intents).to receive(:create).with(
       hash_including(customer: 'cus_existing', payment_method: 'pm_default_visa'),
       anything
     ).and_return(double('PaymentIntent', id: 'pi_123', status: 'succeeded', amount_received: 1599, created: 0))
@@ -82,7 +82,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture of the saved card' do
   end
 
   it 'settles what the intent received, not what it asked for' do
-    allow(Stripe::PaymentIntent).to receive(:create)
+    allow(stripe.payment_intents).to receive(:create)
       .and_return(double('PaymentIntent', id: 'pi_part', status: 'succeeded', amount: 1599,
                                           amount_received: 1500, created: 0))
 
@@ -92,9 +92,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture of the saved card' do
   # stripe-mock answers every confirmed intent `requires_payment_method` with
   # `amount_received: 0`: Stripe's shape for a declined off_session confirm.
   it "refuses stripe-mock's unpaid intent as a retryable decline" do
-    with_stripe_mock do
-      allow(Stripe::Customer).to receive(:retrieve).and_call_original
-      expect { adapter.capture(cart_mandate) }
+    with_stripe_mock do |mocked|
+      expect { mocked.capture(cart_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
           expect(e).to be_retryable
           expect(e.reason).to eq(:card_declined)
@@ -106,7 +105,7 @@ end
 RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the intent did not succeed' do
   include_context 'with a Stripe adapter'
 
-  before { stub_customer(default_pm: 'pm_default_visa') }
+  before { stub_cards('pm_default_visa') }
 
   def intent(status)
     double('PaymentIntent', id: "pi_#{status}", status: status, amount: 1599, amount_received: 0, created: 0)
@@ -114,7 +113,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the intent did no
 
   %w[requires_payment_method canceled].each do |status|
     it "treats #{status} as a retryable decline: nothing was collected" do
-      allow(Stripe::PaymentIntent).to receive(:create).and_return(intent(status))
+      allow(stripe.payment_intents).to receive(:create).and_return(intent(status))
 
       expect { adapter.capture(cart_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
@@ -126,7 +125,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the intent did no
 
   %w[processing requires_action requires_confirmation requires_capture].each do |status|
     it "treats #{status} as an unknown outcome that must not be retried" do
-      allow(Stripe::PaymentIntent).to receive(:create).and_return(intent(status))
+      allow(stripe.payment_intents).to receive(:create).and_return(intent(status))
 
       expect { adapter.capture(cart_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
@@ -142,10 +141,10 @@ end
 RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the charge fails at Stripe' do
   include_context 'with a Stripe adapter'
 
-  before { stub_customer(default_pm: 'pm_default_visa') }
+  before { stub_cards('pm_default_visa') }
 
   it 'translates a Stripe::CardError (declined) into a RETRYABLE PaymentFailed with a safe message' do
-    allow(Stripe::PaymentIntent).to receive(:create)
+    allow(stripe.payment_intents).to receive(:create)
       .and_raise(Stripe::CardError.new('Your card was declined.', nil, code: 'card_declined'))
 
     expect { adapter.capture(cart_mandate) }
@@ -159,7 +158,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the charge fails 
   end
 
   it 'maps authentication_required to a distinct human-safe message (still retryable)' do
-    allow(Stripe::PaymentIntent).to receive(:create)
+    allow(stripe.payment_intents).to receive(:create)
       .and_raise(Stripe::CardError.new('auth', nil, code: 'authentication_required'))
 
     expect { adapter.capture(cart_mandate) }
@@ -173,10 +172,10 @@ end
 RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when Stripe cannot confirm the charge' do
   include_context 'with a Stripe adapter'
 
-  before { stub_customer(default_pm: 'pm_default_visa') }
+  before { stub_cards('pm_default_visa') }
 
   it 'translates a non-card Stripe error (timeout/connectivity) into a NON-retryable PaymentFailed (unknown outcome)' do
-    allow(Stripe::PaymentIntent).to receive(:create)
+    allow(stripe.payment_intents).to receive(:create)
       .and_raise(Stripe::APIConnectionError.new('timed out'))
 
     expect { adapter.capture(cart_mandate) }

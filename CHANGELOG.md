@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The Stripe adapter keeps its key and URL in its own client; the demos pass stripe-mock as `api_base:`. A `pay` makes three Stripe calls, not five.
 - 2026-10-18: The KYC broker demo reads the intake from the request parameters; a body that is not JSON is a 400.
 - 2026-10-18: getgrocery keeps the money in `orders.payment_status` and the basket in `status`; a full refund reads `refunded` and is announced on the `payment` topic.
 - 2026-10-18: skooti derives `needs_licence` from `kind`: a motorcycle needs a licence. The `scooters.needs_licence` column goes; the wire field stays.

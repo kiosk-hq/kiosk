@@ -26,7 +26,9 @@ end
 # Payments: the card setup, the capture, and what follows it.
 Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
-    Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY')),
+    # STRIPE_MOCK_URL names a local stripe-mock in development and test.
+    Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY'),
+                                        api_base: ENV.fetch('STRIPE_MOCK_URL', nil)),
     currency: 'eur', model: 'Booking', reference: 'booking_id',
     query: 'my_bookings'
   )

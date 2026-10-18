@@ -42,20 +42,18 @@ RSpec.shared_context 'with a stateful local Stripe API' do
 
   subject(:adapter) do
     described_class.new(
-      api_key: 'sk_test_fake',
+      api_key: 'sk_test_fake', api_base: fake.base_url,
       customer_resolver: ->(uid) { customer_store[uid] },
       customer_saver: ->(uid, cid) { customer_store[uid] = cid }
     )
   end
 
+  # The local API answers at once; a retry would only hide a wrong answer.
   around do |example|
-    saved_base    = Stripe.api_base
     saved_retries = Stripe.max_network_retries
-    Stripe.api_base            = fake.base_url
     Stripe.max_network_retries = 0
     example.run
   ensure
-    Stripe.api_base            = saved_base
     Stripe.max_network_retries = saved_retries
     fake.stop
   end
@@ -139,7 +137,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe,
   it 'reads mode/success_url/url off a genuinely deserialized listed session' do
     adapter.setup_url(user_id: 'user-1', return_url: return_url)
 
-    listed = Stripe::Checkout::Session.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
+    sessions = Stripe::StripeClient.new('sk_test_fake', api_base: fake.base_url).v1.checkout.sessions
+    listed = sessions.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
     expect(listed).to be_a(Stripe::Checkout::Session)
     %i[mode success_url url].each do |name|
       expect(listed.respond_to?(name)).to be(true), "StripeObject no longer exposes ##{name}; `field` would read nil"
@@ -168,26 +167,15 @@ RSpec.shared_context 'with stripe-mock' do
 
   subject(:adapter) do
     described_class.new(
-      api_key: 'sk_test_mock',
+      api_key: 'sk_test_mock', api_base: mock_url,
       customer_resolver: ->(uid) { customer_store[uid] },
       customer_saver: ->(uid, cid) { customer_store[uid] = cid }
     )
   end
 
-  around do |example|
-    saved_base = Stripe.api_base
-    example.run
-  ensure
-    Stripe.api_base = saved_base
-  end
+  let(:sessions) { Stripe::StripeClient.new('sk_test_mock', api_base: mock_url).v1.checkout.sessions }
 
-  before do
-    skip 'stripe-mock not installed (brew install stripe-mock)' unless mock_url
-
-    Stripe.api_base = mock_url
-    # spec_helper restores api_key around every example.
-    Stripe.api_key = 'sk_test_mock'
-  end
+  before { skip 'stripe-mock not installed (brew install stripe-mock)' unless mock_url }
 end
 
 RSpec.describe Kiosk::PaymentProviders::Stripe,
@@ -195,7 +183,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe,
   include_context 'with stripe-mock'
 
   it 'serves a list fixture that CANNOT stand in for an outstanding setup session' do
-    listed = Stripe::Checkout::Session.list(customer: 'cus_whatever', status: 'open', limit: 10).data.first
+    listed = sessions.list(customer: 'cus_whatever', status: 'open', limit: 10).data.first
 
     expect(listed.status).to eq('open')
     # …but neither of the two things the adapter requires:
@@ -211,7 +199,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe,
     # its list, which still serves the canned payment-mode fixture. That is
     # the assertion — the mint above cannot have been a reuse of anything the
     # list served, because the list has not changed.
-    listed_after_mint = Stripe::Checkout::Session.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
+    listed_after_mint = sessions.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
     expect(listed_after_mint.mode).to eq('payment'), 'stripe-mock became stateful — extend the reuse group above to it'
   end
 end

@@ -22,7 +22,7 @@ class Rider < Kiosk::TestHelpers::Customer
 end
 
 class StoryTest < Kiosk::StoryTest
-  setup { Stripe.api_base = Kiosk::TestHelpers::StripeMock.start }
+  setup { Kiosk::TestHelpers::StripeMock.start }
 
   def a_rider = a_customer(as: Rider)
 

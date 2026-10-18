@@ -22,7 +22,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url' do
   it 'creates a Checkout Session in setup mode for an existing customer and returns the url' do
     # success_url is the engine's return page plus Stripe's session-id
     # placeholder; client_reference_id is how that page learns whose human it is.
-    expect(Stripe::Checkout::Session).to receive(:create).with(
+    expect(stripe.checkout.sessions).to receive(:create).with(
       mode: 'setup',
       customer: 'cus_existing',
       client_reference_id: 'user-1',
@@ -39,7 +39,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url' do
   it 'always pins explicit payment_method_types so setup mode needs no currency (K-473)' do
     session = double('CheckoutSession', url: 'https://checkout.stripe.com/setup/abc')
 
-    expect(Stripe::Checkout::Session).to receive(:create) do |params|
+    expect(stripe.checkout.sessions).to receive(:create) do |params|
       expect(params[:mode]).to eq('setup')
       expect(params[:payment_method_types]).to eq(['card']),
                                                'setup-mode session must pin payment_method_types or Stripe requires `currency`'
@@ -60,9 +60,9 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url for a new principal'
     saved         = {}
     fresh_adapter = build_adapter(resolver: ->(_uid) {}, saver: ->(uid, cid) { saved[uid] = cid })
 
-    expect(Stripe::Customer).to receive(:create).with({ name: 'principal-user-2' })
+    expect(stripe.customers).to receive(:create).with({ name: 'principal-user-2' })
                                                 .and_return(double('Customer', id: 'cus_new'))
-    expect(Stripe::Checkout::Session).to receive(:create).with(
+    expect(stripe.checkout.sessions).to receive(:create).with(
       hash_including(customer: 'cus_new', mode: 'setup', success_url: success_url)
     ).and_return(double('CheckoutSession', url: 'https://checkout.stripe.com/setup/xyz'))
 
@@ -76,13 +76,13 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_return_user_id' do
   include_context 'with a Stripe adapter'
 
   it 'answers the principal Stripe says the returned session was minted for' do
-    allow(Stripe::Checkout::Session).to receive(:retrieve).with('cs_1')
-                                                          .and_return(double('CheckoutSession', client_reference_id: 'user-1'))
+    allow(stripe.checkout.sessions).to receive(:retrieve).with('cs_1')
+                                                         .and_return(double('CheckoutSession', client_reference_id: 'user-1'))
     expect(adapter.setup_return_user_id({ 'session_id' => 'cs_1' })).to eq('user-1')
   end
 
   it 'answers nil without asking Stripe when the request names no session' do
-    expect(Stripe::Checkout::Session).not_to receive(:retrieve)
+    expect(stripe.checkout.sessions).not_to receive(:retrieve)
     expect(adapter.setup_return_user_id({})).to be_nil
   end
 end

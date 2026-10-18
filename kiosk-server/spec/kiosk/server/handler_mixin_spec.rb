@@ -604,6 +604,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
             expect(e.message).to eq('verb "vetoed" refused the request')
             expect(e.hint).to eq(Kiosk::Server::Errors::RESCUED_HINTS.fetch('forbidden'))
             expect(e.message).not_to include('policy said no')
+            expect(e.cause).to be_a(SpecVetoError)
           }
       end.to output(/\[kiosk-server\] verb "vetoed" answered forbidden for SpecVetoError: policy said no/)
         .to_stderr

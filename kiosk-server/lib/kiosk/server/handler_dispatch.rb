@@ -13,8 +13,6 @@ module Kiosk
       IDENTITY_KEY = 'kiosk.identity'
       DISPATCH_KEY = 'kiosk.dispatch'
       PAGE_KEY     = 'kiosk.page'
-      # The exception `kiosk_rescue_to_wire` handled, raised here as the wire error's `cause`.
-      RESCUED_KEY  = 'kiosk.rescued'
 
       # Copied from the wire request; `parameter_filter` keeps the handler's params log line filtered.
       SEEDED_KEYS = %w[
@@ -48,7 +46,7 @@ module Kiosk
         status, headers, body = controller.action(@method_name).call(env)
         publish_headers(status, headers)
         answer  = Answer.new(@kind, @wire_name)
-        payload = answer.decode(status, read_body(body), rescued: env[RESCUED_KEY])
+        payload = answer.decode(status, read_body(body))
 
         env[PAGE_KEY] ? answer.paginate(payload, **env[PAGE_KEY]) : payload
       end
@@ -164,8 +162,8 @@ module Kiosk
           @wire_name = wire_name
         end
 
-        # 2xx → the rendered JSON; otherwise the wire error, with `rescued` as its `cause`.
-        def decode(status, raw, rescued: nil)
+        # 2xx → the rendered JSON; otherwise the wire error it means.
+        def decode(status, raw)
           return parse_json(raw) if status >= 200 && status < 300
 
           parsed = begin
@@ -173,8 +171,7 @@ module Kiosk
           rescue Errors::Base
             nil
           end
-          error = wire_error(status, parsed)
-          rescued.is_a?(::Exception) ? raise(error, cause: rescued) : raise(error)
+          raise wire_error(status, parsed)
         end
 
         # The {Page} of `render_kiosk_page`: the rendered rows plus the page facts it recorded.

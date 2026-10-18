@@ -156,7 +156,7 @@ module Kiosk
       RESCUED_DETAILS = Rescued::DETAILS
       RESCUED_HINTS = Rescued::HINTS
 
-      # @return [Hash] `{code:, message:, hint:}` for the handler sub-dispatch envelope
+      # @return [Hash] `{code:, message:, hint:}` of the wire error a rescued exception becomes
       def self.rescued_wire(code, verb: nil) = Rescued.wire(code, verb)
 
       class Base < StandardError

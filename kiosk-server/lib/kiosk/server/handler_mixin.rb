@@ -403,13 +403,9 @@ module Kiosk
             "verb #{kiosk_wire_name.inspect} answered #{code} for #{exception.class}", exception
           )
 
-          # Reaches the audit sink as `cause`; never part of the problem document.
-          request.env[HandlerDispatch::RESCUED_KEY] = exception
-
-          render json: {
-            ok: false,
-            error: Kiosk::Server::Errors.rescued_wire(code, verb: kiosk_wire_name)
-          }, status: Kiosk::Server::Errors::CODES.fetch(code)
+          # Raised inside the rescue, so the exception reaches the audit sink as `cause`.
+          wire = Kiosk::Server::Errors.rescued_wire(code, verb: kiosk_wire_name)
+          raise Kiosk::Server::Errors::WireError.new(wire[:message], code: code, hint: wire[:hint])
         end
 
         # A failed model validation is an argument outside its domain: 400, in the model's own words.

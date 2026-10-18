@@ -145,11 +145,7 @@ module GetgroceryScenarios
   # A below-catalog line price, with total and cap kept chain-consistent.
   class TamperedPriceCart < Kiosk::Redteam::Scenario
     def initialize
-      super(
-        name: 'TamperedPriceCart',
-        category: 'payment',
-        description: 'A cart whose line price differs from the catalog must be rejected at capture',
-      )
+      super(name: 'TamperedPriceCart')
     end
 
     def call(client, profile)
@@ -174,13 +170,10 @@ module GetgroceryScenarios
     end
   end
 
+  # A cart whose total exceeds the sum of its lines must be rejected at capture.
   class InflatedTotalCart < Kiosk::Redteam::Scenario
     def initialize
-      super(
-        name: 'InflatedTotalCart',
-        category: 'payment',
-        description: 'A cart whose total exceeds the sum of its lines must be rejected at capture',
-      )
+      super(name: 'InflatedTotalCart')
     end
 
     def call(client, profile)
@@ -193,6 +186,7 @@ module GetgroceryScenarios
     end
   end
 
+  # A non-array (or non-object-element) `items` must be a typed 400, never a 500.
   class MalformedItemsCart < Kiosk::Redteam::Scenario
     ADDRESS = '1 Redteam St, Dublin 1'
     RUBY_INTERNALS = ['NoMethodError', 'TypeError', 'undefined method', 'no implicit conversion'].freeze
@@ -209,11 +203,7 @@ module GetgroceryScenarios
     ].freeze
 
     def initialize
-      super(
-        name: 'MalformedItemsCart',
-        category: 'input',
-        description: 'A non-array (or non-object-element) `items` must be a typed 400, never a 500',
-      )
+      super(name: 'MalformedItemsCart')
     end
 
     def call(client, _profile)
@@ -268,11 +258,7 @@ module GetgroceryScenarios
     ADDRESSES = ['', '   ', '1 Main St, Cork', 'Dublin 99', 'somewhere'].freeze
 
     def initialize
-      super(
-        name: 'HostileArgShapes',
-        category: 'input',
-        description: 'Boolean/array/object/junk values on items[].qty, slot_at, delivery_address and order_id are a typed 400 — never a 500',
-      )
+      super(name: 'HostileArgShapes')
     end
 
     def call(client, _profile)
@@ -353,12 +339,7 @@ module GetgroceryScenarios
     UNREGISTERED = %w[query run].freeze
 
     def initialize
-      super(
-        name: 'UnregisteredVerbIsOrdinaryRefusal',
-        category: 'surface',
-        description: 'POST /kiosk/query and POST /kiosk/run name no registered verb and no ' \
-                     'route — the ordinary 404 any undrawn path gets, bearer or not',
-      )
+      super(name: 'UnregisteredVerbIsOrdinaryRefusal')
     end
 
     def call(client, _profile)
@@ -396,12 +377,7 @@ module GetgroceryScenarios
   # The wrong method never reaches the action and carries no `Allow` header mapping the surface.
   class MethodMismatch < Kiosk::Redteam::Scenario
     def initialize
-      super(
-        name: 'MethodMismatch',
-        category: 'surface',
-        description: "A GET at an action's path draws no route: a plain 404, and the write " \
-                     'never runs',
-      )
+      super(name: 'MethodMismatch')
     end
 
     def call(client, _profile)
@@ -430,11 +406,7 @@ module GetgroceryScenarios
     ADDRESS = '1 Redteam St, Dublin 1'
 
     def initialize
-      super(
-        name: 'PastDeliveryDate',
-        category: 'surface',
-        description: 'A delivery date before today is a typed 400 on BOTH delivery_slots and create_order — never 200 [], never an order',
-      )
+      super(name: 'PastDeliveryDate')
     end
 
     def call(client, _profile)
@@ -513,11 +485,7 @@ module GetgroceryScenarios
                   'True-Client-IP' => '202.9.20.1' }.freeze
 
     def initialize
-      super(
-        name: 'CallerZoneIsNotInferred',
-        category: 'surface',
-        description: 'With no Kiosk-Timezone the answer is the same whatever locale or geolocation hint the request also carries — while the header itself still moves it',
-      )
+      super(name: 'CallerZoneIsNotInferred')
     end
 
     UNREADABLE = '+03:00'
@@ -584,11 +552,7 @@ module GetgroceryScenarios
     RENDERING = %w[slot_at label timezone].freeze
 
     def initialize
-      super(
-        name: 'OneRenderingPerRow',
-        category: 'surface',
-        description: "Two callers on clocks 25 hours apart get byte-identical windows, and neither answer names the caller's own zone",
-      )
+      super(name: 'OneRenderingPerRow')
     end
 
     def call(client, _profile)
@@ -651,11 +615,7 @@ module GetgroceryScenarios
     TOLERANCE_SECONDS = 60
 
     def initialize
-      super(
-        name: 'MachineTimestampsIgnoreTheCallerClock',
-        category: 'surface',
-        description: "An auth challenge's exp is an instant, not a service time: it does not move with the caller's declared clock",
-      )
+      super(name: 'MachineTimestampsIgnoreTheCallerClock')
     end
 
     def call(_client, _profile)

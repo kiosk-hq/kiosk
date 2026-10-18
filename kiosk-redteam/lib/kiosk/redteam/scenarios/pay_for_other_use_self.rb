@@ -10,11 +10,7 @@ module Kiosk
                       'credit that refusal to the ownership gate it exists to prove.'
 
         def initialize
-          super(
-            name: 'PayForOtherUseSelf',
-            category: 'authorization',
-            description: "B pays for A's resource then tries to use it (C2 ownership gate)",
-          )
+          super(name: 'PayForOtherUseSelf')
         end
 
         def call(client, profile)

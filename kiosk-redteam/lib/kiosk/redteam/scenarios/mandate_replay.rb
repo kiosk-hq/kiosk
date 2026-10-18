@@ -6,11 +6,7 @@ module Kiosk
       # B re-submits A's already-used mandate JWS under B's token: must be refused.
       class MandateReplay < Scenario
         def initialize
-          super(
-            name: 'MandateReplay',
-            category: 'mandate',
-            description: "Mandate non-transferability: B re-submits A's signed mandate JWS under B's token; provider must reject",
-          )
+          super(name: 'MandateReplay')
         end
 
         def call(client, profile)

@@ -122,23 +122,23 @@ The classes under `Kiosk::Redteam::Scenarios`, each parameterised entirely by
 the profile — this is the whole library, `lib/kiosk/redteam/scenarios/` has one
 file per row:
 
-| Scenario | Category | Asserts |
-|---|---|---|
-| `CrossTenantRead` | authorization | B's per-user query must not return rows owned by A |
-| `ForgedUserId` | authorization | a caller-supplied `user_id` never decides ownership |
-| `PrivilegeSelfSelection` | authorization | a client-chosen registration role is ignored — the role is server-pinned |
-| `DeviceGrantRoleSelfSelection` | authorization | the claim ceremony's unauthenticated opening request refuses `role`/`scope`, at a DECLARED value as well as an invented one |
-| `SpentResourceReuse` | authorization | a consumed resource cannot be re-activated |
-| `PayForOtherUseSelf` | authorization | B paying for A's resource does not let B use it |
-| `TokenTampering` | authentication | a JWT with a flipped claim and the original signature is 401 |
-| `RegistrationWithoutPow` | registration | a missing or bad proof is rejected when the origin charges a toll |
-| `MandatePrincipalSwap` | mandate | B signing a mandate that carries A's identity is rejected |
-| `MandateReplay` | mandate | A's signed mandate JWS re-submitted under B's token is rejected |
-| `UnpaidGatedAction` | payment | the gated action without a prior settled payment is denied |
-| `WrongCurrencyCart` | payment | a chain-consistent cart denominated in a currency the operator does not price in is refused at capture |
-| `MissingKyc` | kyc | the gated action after payment but without an attestation is denied |
-| `ExpiredKyc` | kyc | an attestation whose `exp` has passed is rejected |
-| `ForgedKyc` | kyc | an attestation with a wrong issuer or a bad signature is rejected |
+| Scenario | Asserts |
+|---|---|
+| `CrossTenantRead` | B's per-user query must not return rows owned by A |
+| `ForgedUserId` | a caller-supplied `user_id` never decides ownership |
+| `PrivilegeSelfSelection` | a client-chosen registration role is ignored — the role is server-pinned |
+| `DeviceGrantRoleSelfSelection` | the claim ceremony's unauthenticated opening request refuses `role`/`scope`, at a DECLARED value as well as an invented one |
+| `SpentResourceReuse` | a consumed resource cannot be re-activated |
+| `PayForOtherUseSelf` | B paying for A's resource does not let B use it |
+| `TokenTampering` | a JWT with a flipped claim and the original signature is 401 |
+| `RegistrationWithoutPow` | a missing or bad proof is rejected when the origin charges a toll |
+| `MandatePrincipalSwap` | B signing a mandate that carries A's identity is rejected |
+| `MandateReplay` | A's signed mandate JWS re-submitted under B's token is rejected |
+| `UnpaidGatedAction` | the gated action without a prior settled payment is denied |
+| `WrongCurrencyCart` | a chain-consistent cart denominated in a currency the operator does not price in is refused at capture |
+| `MissingKyc` | the gated action after payment but without an attestation is denied |
+| `ExpiredKyc` | an attestation whose `exp` has passed is rejected |
+| `ForgedKyc` | an attestation with a wrong issuer or a bad signature is rejected |
 
 Beside them the gem ships `Profile`, `Scenario`, `Verdict`, `Runner`,
 `Battery` and `LeakScan`, which decides whether a refusal leaked the runtime's
@@ -206,9 +206,7 @@ says which gate you demanded:
 ```ruby
 class UnknownVerbIs404 < Kiosk::Redteam::Scenario
   def initialize
-    super(name:        "UnknownVerbIs404",
-          category:    "dispatch",
-          description: "an unregistered verb name is a 404, never a 500")
+    super(name: "UnknownVerbIs404")
   end
 
   def call(client, profile)

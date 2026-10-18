@@ -10,11 +10,7 @@ module Kiosk
         include KycAttack
 
         def initialize
-          super(
-            name: 'ExpiredKyc',
-            category: 'kyc',
-            description: 'Expired KYC attestation must be rejected (at kyc or gated action)',
-          )
+          super(name: 'ExpiredKyc')
         end
 
         def call(client, profile)

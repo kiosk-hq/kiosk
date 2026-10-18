@@ -17,12 +17,7 @@ module Kiosk
         USER_CODE = /\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/
 
         def initialize
-          super(
-            name: 'DeviceGrantRoleSelfSelection',
-            category: 'authorization',
-            description: "The claim ceremony's unauthenticated opening request must refuse a " \
-                         'client-chosen role — at a DECLARED value, under either spelling',
-          )
+          super(name: 'DeviceGrantRoleSelfSelection')
         end
 
         def call(client, profile)

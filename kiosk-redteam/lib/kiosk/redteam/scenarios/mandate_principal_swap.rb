@@ -6,11 +6,7 @@ module Kiosk
       # B pays, under its own token and key, mandates claiming A's identity: must be refused.
       class MandatePrincipalSwap < Scenario
         def initialize
-          super(
-            name: 'MandatePrincipalSwap',
-            category: 'mandate',
-            description: "B signs a mandate carrying A's identity; provider must reject",
-          )
+          super(name: 'MandatePrincipalSwap')
         end
 
         def call(client, profile)

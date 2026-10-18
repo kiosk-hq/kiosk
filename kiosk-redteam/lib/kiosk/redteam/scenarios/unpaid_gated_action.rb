@@ -6,11 +6,7 @@ module Kiosk
       # The gated action must be refused when nothing was paid for the resource.
       class UnpaidGatedAction < Scenario
         def initialize
-          super(
-            name: 'UnpaidGatedAction',
-            category: 'payment',
-            description: 'Gated action without prior payment must be denied',
-          )
+          super(name: 'UnpaidGatedAction')
         end
 
         def call(client, profile)

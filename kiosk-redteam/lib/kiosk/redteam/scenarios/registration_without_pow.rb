@@ -7,11 +7,7 @@ module Kiosk
       # (not a 201, no token, not a crash), while a solved control registration succeeds.
       class RegistrationWithoutPow < Scenario
         def initialize
-          super(
-            name: 'RegistrationWithoutPow',
-            category: 'registration',
-            description: 'Missing / bad PoW must be rejected when pow_difficulty > 0',
-          )
+          super(name: 'RegistrationWithoutPow')
         end
 
         def call(client, profile)

@@ -10,7 +10,7 @@ RSpec.shared_context 'scenario setup' do
   let(:scenario) do
     Class.new(described_class) do
       def initialize
-        super(name: 'Probe', category: 'test', description: 'exposes the helpers')
+        super(name: 'Probe')
       end
 
       public :verdict_from, :skip_verdict, :error_code, :rows_from

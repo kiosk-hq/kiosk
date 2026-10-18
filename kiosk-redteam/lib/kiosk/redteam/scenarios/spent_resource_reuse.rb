@@ -10,11 +10,7 @@ module Kiosk
                       'the re-use this scenario tests would never be reached.'
 
         def initialize
-          super(
-            name: 'SpentResourceReuse',
-            category: 'authorization',
-            description: 'A consumed resource must not be re-activated (C3)',
-          )
+          super(name: 'SpentResourceReuse')
         end
 
         def call(client, profile)

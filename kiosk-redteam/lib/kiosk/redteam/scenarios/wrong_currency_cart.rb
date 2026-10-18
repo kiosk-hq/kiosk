@@ -9,12 +9,7 @@ module Kiosk
         ALTERNATIVES = %w[usd eur gbp jpy].freeze
 
         def initialize
-          super(
-            name: 'WrongCurrencyCart',
-            category: 'payment',
-            description: 'A chain-consistent cart denominated in a currency the operator does not ' \
-                         'price in must be rejected at capture',
-          )
+          super(name: 'WrongCurrencyCart')
         end
 
         def call(client, profile)

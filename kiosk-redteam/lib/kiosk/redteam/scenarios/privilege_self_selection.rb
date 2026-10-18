@@ -9,11 +9,7 @@ module Kiosk
         ESCALATED_ROLE = 'master'
 
         def initialize
-          super(
-            name: 'PrivilegeSelfSelection',
-            category: 'authorization',
-            description: 'A client-chosen registration role must be ignored (role is server-pinned)',
-          )
+          super(name: 'PrivilegeSelfSelection')
         end
 
         def call(client, _profile)

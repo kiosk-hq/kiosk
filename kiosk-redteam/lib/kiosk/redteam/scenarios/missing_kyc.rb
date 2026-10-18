@@ -6,11 +6,7 @@ module Kiosk
       # The gated action must be refused, after payment, when no KYC was submitted.
       class MissingKyc < Scenario
         def initialize
-          super(
-            name: 'MissingKyc',
-            category: 'kyc',
-            description: 'Gated action without KYC (but after payment) must be denied',
-          )
+          super(name: 'MissingKyc')
         end
 
         def call(client, profile)

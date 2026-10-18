@@ -10,13 +10,7 @@ module Kiosk
         FORGED_ARG = 'user_id'
 
         def initialize
-          super(
-            name: 'ForgedUserId',
-            category: 'authorization',
-            description: 'An agent-supplied user_id must never decide ownership: the server ' \
-                         'either refuses the argument outright or ignores it and takes the ' \
-                         'principal from the access token',
-          )
+          super(name: 'ForgedUserId')
         end
 
         def call(client, profile)

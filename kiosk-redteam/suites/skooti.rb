@@ -154,13 +154,10 @@ module SkootiScenarios
 
   # Cashier checks on the agent's own reservation: the operator prices what lands on the counter.
 
+  # A cart whose total is below the operator's quoted rental price must be rejected at capture.
   class TamperedPriceCart < Kiosk::Redteam::Scenario
     def initialize
-      super(
-        name: 'TamperedPriceCart',
-        category: 'payment',
-        description: "A cart whose total is below the operator's quoted rental price must be rejected at capture",
-      )
+      super(name: 'TamperedPriceCart')
     end
 
     def call(client, profile)
@@ -177,13 +174,10 @@ module SkootiScenarios
     end
   end
 
+  # A cart whose total exceeds the sum of its line items must be rejected at capture.
   class InflatedTotalCart < Kiosk::Redteam::Scenario
     def initialize
-      super(
-        name: 'InflatedTotalCart',
-        category: 'payment',
-        description: 'A cart whose total exceeds the sum of its line items must be rejected at capture',
-      )
+      super(name: 'InflatedTotalCart')
     end
 
     def call(client, profile)
@@ -203,11 +197,7 @@ module SkootiScenarios
     SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
 
     def initialize
-      super(
-        name: 'MalformedUuidArg',
-        category: 'input',
-        description: 'A malformed reservation_id — as a start_rental/rent_motorcycle arg AND inside a signed cart — must be a typed 400, never a 500',
-      )
+      super(name: 'MalformedUuidArg')
     end
 
     def call(client, _profile)
@@ -278,11 +268,7 @@ module SkootiScenarios
     ECHO_CONTROL = 'PG:: 22P02 invalid input syntax'
 
     def initialize
-      super(
-        name: 'HostileArgShapes',
-        category: 'input',
-        description: 'Boolean/array/object/number arguments on scooter_code and reservation_id are a typed 400 — never a 500',
-      )
+      super(name: 'HostileArgShapes')
     end
 
     def call(client, _profile)

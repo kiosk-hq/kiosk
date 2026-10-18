@@ -14,7 +14,7 @@ RSpec.describe Kiosk::Redteam::Runner, 'against an https origin' do
         Kiosk::Redteam::Verdict.new(blocked: Kiosk::Redteam.blocked?(response), skipped: false,
                                     status: response.status, detail: '')
       end
-    end.new(name: 'reaches the origin', category: 'wire', description: 'the battery can dial a TLS deployment')
+    end.new(name: 'reaches the origin')
 
     runner = described_class.new(base_url: 'https://provider.test', profile: Kiosk::Redteam::Profile.new)
     results = runner.run([reached])

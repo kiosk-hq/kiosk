@@ -7,11 +7,7 @@ module Kiosk
       # must return it: without that control, an empty answer proves nothing.
       class CrossTenantRead < Scenario
         def initialize
-          super(
-            name: 'CrossTenantRead',
-            category: 'authorization',
-            description: "B's per-user query must not return rows owned by A",
-          )
+          super(name: 'CrossTenantRead')
         end
 
         def call(client, profile)

@@ -120,13 +120,10 @@ profile = Kiosk::Redteam::Profile.new(
 
 # hoteling's own attacks, beside the shared ones in Kiosk::Redteam::Scenarios.
 module HotelingScenarios
+  # A cart whose total is below the operator's quoted booking price must be rejected at capture.
   class TamperedPriceCart < Kiosk::Redteam::Scenario
     def initialize
-      super(
-        name: 'TamperedPriceCart',
-        category: 'payment',
-        description: "A cart whose total is below the operator's quoted booking price must be rejected at capture",
-      )
+      super(name: 'TamperedPriceCart')
     end
 
     def call(client, profile)
@@ -151,13 +148,10 @@ module HotelingScenarios
     end
   end
 
+  # A cart whose total exceeds the sum of its line items must be rejected at capture.
   class InflatedTotalCart < Kiosk::Redteam::Scenario
     def initialize
-      super(
-        name: 'InflatedTotalCart',
-        category: 'payment',
-        description: 'A cart whose total exceeds the sum of its line items must be rejected at capture',
-      )
+      super(name: 'InflatedTotalCart')
     end
 
     def call(client, profile)
@@ -178,11 +172,7 @@ module HotelingScenarios
     SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
 
     def initialize
-      super(
-        name: 'MalformedUuidArg',
-        category: 'input',
-        description: 'A malformed booking_id inside a signed cart must be a typed 400, never a 500',
-      )
+      super(name: 'MalformedUuidArg')
     end
 
     def call(client, _profile)
@@ -240,11 +230,7 @@ module HotelingScenarios
     DBL_OUT_ADJ  = (Date.today + 66).to_s.freeze   # DBL_OUT..DBL_OUT_ADJ abuts, no overlap
 
     def initialize
-      super(
-        name: 'DoubleBookedRoom',
-        category: 'inventory',
-        description: 'A room-night already held must not be reservable again — same or overlapping dates, same or another customer',
-      )
+      super(name: 'DoubleBookedRoom')
     end
 
     def call(client, _profile)
@@ -423,11 +409,7 @@ module HotelingScenarios
     BEYOND_INT4 = 2_147_483_648 # one past PostgreSQL `integer`
 
     def initialize
-      super(
-        name: 'HostileArgShapes',
-        category: 'input',
-        description: "Boolean/array/object/junk-integer/unparseable-date values on reserve_room's three arguments, availability's three and search_hotels' four filters are a typed 400 — never a 500, never a wrong answer served as 200",
-      )
+      super(name: 'HostileArgShapes')
     end
 
     def call(client, _profile)
@@ -542,13 +524,7 @@ module HotelingScenarios
     include RawWire
 
     def initialize
-      super(
-        name: 'UnregisteredVerbIsOrdinaryRefusal',
-        category: 'wire',
-        description: 'POST /kiosk/query and POST /kiosk/run name no registered verb and no ' \
-                     'route, so both must be the ordinary 404 any undrawn path gets — bearer ' \
-                     'or not — never a privileged surface',
-      )
+      super(name: 'UnregisteredVerbIsOrdinaryRefusal')
     end
 
     def call(client, _profile)
@@ -573,6 +549,8 @@ module HotelingScenarios
     end
   end
 
+  # The wrong HTTP method on a registered verb draws no route: a plain 404 with no Allow, and the
+  # verb never runs.
   class MethodMismatch < Kiosk::Redteam::Scenario
     include RawWire
 
@@ -582,12 +560,7 @@ module HotelingScenarios
     ].freeze
 
     def initialize
-      super(
-        name: 'MethodMismatch',
-        category: 'wire',
-        description: 'The wrong HTTP method on a registered verb draws no route: a plain 404 ' \
-                     'with no Allow, and the verb never runs',
-      )
+      super(name: 'MethodMismatch')
     end
 
     def call(client, _profile)
@@ -619,11 +592,7 @@ module HotelingScenarios
     CTL_OUT = (Date.today + 93).to_s.freeze
 
     def initialize
-      super(
-        name: 'PastStay',
-        category: 'surface',
-        description: 'A check_in before today is a typed 400 on BOTH availability and reserve_room — never rooms, never a hold',
-      )
+      super(name: 'PastStay')
     end
 
     def call(client, _profile)

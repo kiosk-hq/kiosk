@@ -7,11 +7,7 @@ module Kiosk
       # The probe dials per_user_query: an unrouted verb answers 404 before any credential is read.
       class TokenTampering < Scenario
         def initialize
-          super(
-            name: 'TokenTampering',
-            category: 'authentication',
-            description: 'Altered JWT (claim flipped, signature unchanged) must be rejected 401',
-          )
+          super(name: 'TokenTampering')
         end
 
         NO_ROUTED_VERB = 'this profile declares no `per_user_query`, so there is no verb this ' \

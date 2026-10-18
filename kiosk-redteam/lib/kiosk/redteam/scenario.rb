@@ -13,12 +13,10 @@ module Kiosk
       include Verdicts
       include Staging
 
-      attr_reader :name, :category, :description
+      attr_reader :name
 
-      def initialize(name:, category:, description:)
-        @name        = name
-        @category    = category
-        @description = description
+      def initialize(name:)
+        @name = name
       end
 
       def call(client, profile)

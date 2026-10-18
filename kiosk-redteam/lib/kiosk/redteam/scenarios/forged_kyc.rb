@@ -10,11 +10,7 @@ module Kiosk
         include KycAttack
 
         def initialize
-          super(
-            name: 'ForgedKyc',
-            category: 'kyc',
-            description: 'KYC attestation with wrong issuer/signature must be rejected',
-          )
+          super(name: 'ForgedKyc')
         end
 
         def call(client, profile)

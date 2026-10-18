@@ -48,7 +48,6 @@ class Booking < ApplicationRecord
   # The capture returned: let the property decide. A zero wait decides inline.
   def self.captured!(booking_id)
     wait = Rails.configuration.x.hoteling.decision_delay_seconds.to_i
-    find(booking_id).update!(decision_due_at: wait.seconds.from_now)
     return PropertyDecisionJob.new.perform(booking_id) if wait.zero?
 
     PropertyDecisionJob.set(wait: wait.seconds).perform_later(booking_id)

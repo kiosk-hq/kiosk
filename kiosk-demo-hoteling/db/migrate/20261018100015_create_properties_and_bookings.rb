@@ -39,8 +39,6 @@ class CreatePropertiesAndBookings < ActiveRecord::Migration[ActiveRecord::Migrat
       t.string  :payment_status,  null: false, default: "unpaid"
       # The property answers minutes after the money arrives; a decline is
       # refunded, and the refund's PSP reference is the receipt.
-      t.datetime :decision_due_at
-      t.datetime :refunded_at
       t.string   :refund_psp_reference
       t.timestamps
 

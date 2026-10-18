@@ -20,7 +20,7 @@ class PropertyDecisionJob < ApplicationJob
   private
 
   def accept!(booking)
-    code = booking.confirmation_code.presence || SecureRandom.uuid
+    code = SecureRandom.uuid
     booking.update!(status: :confirmed, confirmation_code: code)
 
     emit(booking, 'confirmed', { 'confirmation_code' => code })
@@ -40,7 +40,6 @@ class PropertyDecisionJob < ApplicationJob
     booking.status = :cancelled
     if receipt
       booking.payment_status       = :refunded
-      booking.refunded_at          = Time.current
       booking.refund_psp_reference = receipt[:psp_reference]
     end
     booking.save!

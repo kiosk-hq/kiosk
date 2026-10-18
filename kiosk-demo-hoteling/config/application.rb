@@ -28,6 +28,6 @@ module KioskDemoHoteling
 
     # The property's own decision: how often it declines, and how long it takes.
     config.x.hoteling.decline_rate           = 0.2
-    config.x.hoteling.decision_delay_seconds = rand(120..300)
+    config.x.hoteling.decision_delay_seconds = 180
   end
 end

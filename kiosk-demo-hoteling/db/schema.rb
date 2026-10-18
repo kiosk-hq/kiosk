@@ -28,8 +28,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_18_100015) do
     t.string "status", default: "reserved", null: false
     t.string "confirmation_code"
     t.string "payment_status", default: "unpaid", null: false
-    t.datetime "decision_due_at"
-    t.datetime "refunded_at"
     t.string "refund_psp_reference"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false

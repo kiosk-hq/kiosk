@@ -38,12 +38,7 @@ Gem::Specification.new do |spec|
   spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  # Ship the reference Python solver alongside the Ruby verifier (README calls
-  # it "included"; the repo's parity check runs it). Listed UNGUARDED on
-  # purpose: the previous `.select { File.exist?(f) }` made packaging fail OPEN,
-  # so renaming or losing the solver would have produced a green build and a gem
-  # whose README points at a file that is not in it. A missing solver must break
-  # the build.
+  # The reference Python solver ships beside the verifier; a missing file breaks the build.
   spec.files         = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md] +
                        %w[solve_cuckoo.py requirements.txt]
   spec.require_paths = ['lib']

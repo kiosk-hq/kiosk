@@ -57,85 +57,26 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'kiosk-core', '~> 0.5.0'
-  # JWT issue/verify for the OAuth surface and access tokens.
-  # ruby-jwt is the de-facto Ruby JOSE library — small, MIT, no transitive deps.
+  # Access tokens and the OAuth surface.
   spec.add_dependency 'jwt', '>= 2.8', '< 4.0'
-  # base64 was a default gem through Ruby 3.3 but became a BUNDLED gem in 3.4,
-  # so it has to be declared. Required at load time by signing_key.rb,
-  # result.rb and configuration_extension.rb; until now it arrived only by
-  # accident, as a transitive dependency of jwt.
+  # A bundled gem since Ruby 3.4; signing_key.rb and configuration_extension.rb require it.
   spec.add_dependency 'base64'
   # Loads the files under lib/kiosk.
   spec.add_dependency 'zeitwerk', '~> 2.6'
-  # json_schemer — a RUNTIME dependency, not an optional extra.
-  #
-  # §8.1 item 5 makes coerce-then-validate an OPERATOR OBLIGATION: every
-  # per-verb call is checked against the verb's declared `input_schema` before
-  # the handler sees an argument, unconditionally. An origin that could not
-  # load a JSON Schema validator could not serve a conformant wire at all,
-  # so declaring it optional and failing on the first request would be an
-  # install-time lie paid for at request time. `validate_responses` (the
-  # development/CI output check) uses the same validator.
-  #
-  # «UNCONDITIONALLY» IS LITERAL AND IS NOT ABOUT THE TWO CONFIG FLAGS. The
-  # obligation is enforced in `VerbController#arguments_for`, which calls
-  # `RequestValidation.validate_arguments!` behind no flag at all, so a freshly
-  # generated app carries it with an empty initializer — `validate_requests` is
-  # the separate opt-in PoW-SHAPE check in front of the gate, and
-  # `validate_responses` polices the OPERATOR's own output. Both are written by
-  # `bin/rails g kiosk:install` as a starting posture; neither can switch the
-  # sentence above off.
-  #
-  # It stays LAZILY REQUIRED in the code — the ConfigurationError naming the
-  # gem is still there — because a host may vendor a checkout without it, and
-  # a clear message beats a LoadError at boot.
+  # Every verb call is validated against its `input_schema`; `validate_responses` uses it too.
   spec.add_dependency 'json_schemer', '>= 2.3', '< 3.0'
 
-  # ── Rails ──────────────────────────────────────────────────────────────
-  # kiosk-server IS a Rails gem: it ships an engine, the wire/auth/discovery
-  # controllers, an install generator and the canonical ActiveRecord migration
-  # templates (lib/generators/kiosk/install/templates). Until
-  # 2026-08-11 that dependency was undeclared and satisfied only by accident,
-  # because every consumer happens to be a Rails app.
-  #
-  # We depend on the Rails components we actually reference, not on the
-  # `rails` meta-gem: nothing here touches Action Mailer, Active Job, Active
-  # Storage, Action Text or Action Mailbox, so requiring a host to install them
-  # would be a false claim.
-  #
-  # **ACTION CABLE JOINED THAT LIST and the sentence above used to exclude it.** It is not an optional extra any more: the engine draws
-  # a WebSocket route under the mount, so an operator who bundles this gem gets
-  # Action Cable whether or not they ever declare a topic, exactly as they get
-  # the `pay` route whether or not they configure a payment provider. Declaring
-  # it is the honest reading of that; leaving it undeclared would be the same
-  # accident the Rails dependency itself was until 2026-08-11 — satisfied only
-  # because every consumer happens to be a Rails app.
-  #
-  # `~> 8.1` is the version the demos, the e2e fixture and CI actually run
-  # (Rails 8.1.3 on Ruby 4.0.1). Older Rails lines are untested, so they are
-  # not claimed; widening the floor means adding a CI matrix leg first.
-  #
-  # railties      — Kiosk::Server::Engine, Rails::Generators::{Base,Migration},
-  #                 Rails.logger.
+  # The Rails components the engine uses; `~> 8.1` is what CI runs.
+  # railties: the engine, the install generator, Rails.logger.
   spec.add_dependency 'railties',      '~> 8.1'
-  # actionpack    — ActionController::{API,Base,InvalidAuthenticityToken}.
+  # actionpack: the wire, auth and discovery controllers.
   spec.add_dependency 'actionpack',    '~> 8.1'
-  # actioncable   — the event stream: ActionCable::Server::{Base,Configuration},
-  #                 Connection::Base and Channel::Base, mounted at
-  #                 `<endpoint>/events`. The engine builds its OWN server rather
-  #                 than using `ActionCable.server`, so a host that already runs
-  #                 channels of its own keeps its connection class and its
-  #                 forgery protection untouched.
+  # actioncable: the event stream at `<endpoint>/events`, on the engine's own server.
   spec.add_dependency 'actioncable',   '~> 8.1'
-  # solid_cable   — carries the event stream between Puma workers and hosts.
+  # solid_cable: carries the event stream between Puma workers and hosts.
   spec.add_dependency 'solid_cable',   '~> 4.0'
-  # activerecord  — ActiveRecord::Base.lease_connection is how the auth plane,
-  #                 the wire and the durable stores reach the database (NOT
-  #                 `.connection`, which Rails 8.1 soft-deprecates and which
-  #                 RAISES under permanent_connection_checkout = :disallowed),
-  #                 plus ActiveRecord::{RecordNotUnique,StatementInvalid,Migration}.
+  # activerecord: the durable stores and the engine's models.
   spec.add_dependency 'activerecord',  '~> 8.1'
-  # activesupport — String#constantize (agent_registration) and String#classify
-  #                 (generator template).
+  # activesupport: the core extensions the code uses.
   spec.add_dependency 'activesupport', '~> 8.1'
 end

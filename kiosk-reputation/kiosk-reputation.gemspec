@@ -44,7 +44,6 @@ Gem::Specification.new do |spec|
   spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ['lib']
 
-  # base64 was a default gem through Ruby 3.3 but must be explicitly required
-  # from Ruby 3.4+ (it became a bundled gem, no longer auto-loaded).
+  # A bundled gem since Ruby 3.4.
   spec.add_dependency 'base64'
 end

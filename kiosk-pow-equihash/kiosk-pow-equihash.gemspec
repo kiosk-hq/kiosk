@@ -46,19 +46,7 @@ Gem::Specification.new do |spec|
   spec.metadata['bug_tracker_uri'] = 'https://github.com/kiosk-hq/kiosk/issues'
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  # `lib/**/*` rather than `lib/**/*.rb`: a `*.rb`-shaped glob silently drops the
-  # first data file anyone puts under lib/ (a KAT vector, a JSON Schema), which
-  # is how kiosk-server lost its app/views. Nothing under lib/ is non-Ruby today,
-  # so this changes no byte of the current package — it removes the trap.
-  #
-  # `bench/` ships because README.md links bench/README.md twice as the evidence
-  # for the n=168, k=7 default; without it the shipped README has dead links.
-  #
-  # Every entry is listed UNGUARDED, CHANGELOG.md included: a file this gemspec
-  # names and cannot find must break the build, not go quiet. A
-  # `File.exist?("CHANGELOG.md") ? … : []` guard fails OPEN — it tells the
-  # truth only by accident, and ships a package silently missing a file the
-  # gemspec promises.
+  # `bench/` holds the evidence for the n=168, k=7 default that README.md links.
   spec.files = Dir.glob('lib/**/*') + Dir.glob('bench/**/*') +
                %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ['lib']

@@ -8,16 +8,6 @@ module Kiosk
 
     BOOKING_ID = '0b6f3a52-4c1e-4d7a-9a3e-6f2d8c1b5e70'
 
-    topic :booking_payment do
-      description "A booking was charged. The hotel's answer follows on `booking_confirmation`."
-      payload_schema type: 'object', additionalProperties: false,
-                     properties: { booking_id: { type: 'string', format: 'uuid' },
-                                   payment_state: { enum: %w[paid] } },
-                     required: %w[booking_id payment_state]
-      example booking_id: BOOKING_ID, payment_state: 'paid'
-      subject_reachable ->(booking_id, identity) { Booking.readable_by?(booking_id, identity.user_id) }
-    end
-
     topic :booking_confirmation do
       description '`confirmed`, with the code the guest gives at the desk, or `cancelled` with its `reason`: ' \
                   '`property_declined` (the hotel declined a paid booking; `refund` goes to the card that paid) ' \
@@ -59,10 +49,7 @@ module Kiosk
                       status: { type: 'string', enum: %w[reserved confirmed cancelled],
                                 description: 'The stay: held, confirmed by the hotel, or cancelled (declined by ' \
                                              'the hotel, or held unpaid past its pay-by time).' },
-                      payment_state: { type: 'string', enum: %w[unpaid pending paid refunded],
-                                       description: '`paid`: charged. `pending`: a charge is in progress; wait and ' \
-                                                    're-read, do not pay again. `unpaid`: nothing charged. ' \
-                                                    '`refunded`: the hotel declined and the charge was returned.' },
+                      payment_state: Kiosk::Payable::STATE_SCHEMA,
                       confirmation_code: { type: %w[string null],
                                            description: 'The reference the guest gives at the desk; null until confirmed.' }
                     },
@@ -74,8 +61,8 @@ module Kiosk
     end
 
     kind :action
-    description "Hold a room type for a stay for #{Booking::PAY_WINDOW.inspect}. Nothing is charged: pay the " \
-                'quoted total with a cart naming the booking; the hotel answers on `booking_confirmation`, and ' \
+    description "Hold a room type for a stay for #{Booking::PAY_WINDOW.inspect}. Nothing is charged: pay with the " \
+                '`cart` it returns; the hotel answers on `booking_confirmation`, and ' \
                 '`my_bookings` shows the answer and its confirmation code. A hold left unpaid ' \
                 'past that time is cancelled, `booking_confirmation` says so, and its room is free for other guests.'
     input_schema type: 'object',
@@ -91,16 +78,14 @@ module Kiosk
     output_schema type: 'object',
                   additionalProperties: false,
                   properties: {
-                    booking_id: { type: 'string',
-                                  description: "Name it in the cart's line item; my_bookings lists it." },
-                    total_cents: { type: 'integer',
-                                   description: 'Price of the whole stay, in cents; sign the cart at exactly this.' },
-                    currency: { type: 'string', description: 'Sign the cart in this currency.' },
+                    booking_id: { type: 'string', description: '`my_bookings` lists it.' },
+                    total_cents: { type: 'integer', description: 'Price of the whole stay, in cents.' },
+                    currency: { type: 'string' },
                     nights: { type: 'integer' },
                     nightly_price_cents: { type: 'integer', description: 'Price per night, in cents.' },
-                    pay_hint: { type: 'string', description: 'The cart this hold expects, in words.' }
+                    cart: Kiosk::Payable::CART_SCHEMA
                   },
-                  required: %w[booking_id total_cents currency nights nightly_price_cents pay_hint]
+                  required: %w[booking_id total_cents currency nights nightly_price_cents cart]
     def reserve_room
       @booking = ReserveRoomOperation.call(
         customer_id: kiosk_identity.user_id,

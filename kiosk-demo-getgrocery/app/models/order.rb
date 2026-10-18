@@ -4,6 +4,7 @@
 # delivery district the window was quoted on.
 class Order < ApplicationRecord
   include Kiosk::Owned
+  include Kiosk::Payable
 
   MAX_ITEMS = 50
 
@@ -31,30 +32,7 @@ class Order < ApplicationRecord
   # One move per order, and none once the courier has the basket.
   scope :reschedulable,    -> { not_rescheduled.not_out_for_delivery.not_delivered.not_cancelled }
 
-  # A settlement whose cart names this order (`line_items @> [{order_id}]`).
-  SETTLEMENT_FOR_ROW = Arel.sql(
-    "kiosk.cart_mandates.line_items @> json_build_array(json_build_object('order_id', orders.id::text))::jsonb"
-  ).freeze
-
-  # Adds `settled` and `settled_currency`, read from the given settlements: the
-  # caller's own on the wire, all of them in the back office.
-  scope :with_settlement, lambda { |settlements|
-    settlement = settlements.joins(:cart_mandate).where(SETTLEMENT_FOR_ROW)
-    select(arel_table[Arel.star],
-           Arel::Nodes::Exists.new(settlement.select(Arel.sql('1')).arel).as('settled'),
-           Arel::Nodes::Grouping.new(settlement.select(:currency).limit(1).arel).as('settled_currency'))
-  }
-
   def self.readable_by?(order_id, user_id) = exists?(id: order_id, user_id: user_id)
-
-  # What `my_orders` publishes about the money. `pending` means a capture is in
-  # flight: the caller must reconcile, not sign a new mandate.
-  def payment_state
-    return 'paid'    if paid? || settled
-    return 'pending' if paying?
-
-    'unpaid'
-  end
 
   def zone = Time.find_zone!(timezone)
 
@@ -88,7 +66,7 @@ class Order < ApplicationRecord
 
   def refund!(lines)
     amount = lines.sum { it.price_cents * it.qty }
-    Kiosk.configuration.payment_provider.refund(psp_reference: settled_reference, amount_cents: amount)
+    Kiosk.configuration.payment_provider.refund(psp_reference: settlement&.psp_reference, amount_cents: amount)
     update!(refunded_cents: amount, status: amount == total_cents ? :cancelled : status)
     announce_cancelled if cancelled?
   end
@@ -102,10 +80,6 @@ class Order < ApplicationRecord
   end
 
   private
-
-  def settled_reference
-    Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: id)).pick(:psp_reference)
-  end
 
   def announce_cancelled
     Kiosk::Server::Events.emit(

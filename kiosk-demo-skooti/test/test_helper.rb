@@ -18,11 +18,7 @@ class Rider < Kiosk::TestHelpers::Customer
   def rides(reservation) = does(:start_rental, reservation_id: reservation['reservation_id'])
   def rides_motorcycle(reservation) = does(:rent_motorcycle, reservation_id: reservation['reservation_id'])
 
-  # Signs a cart for the quoted upfront minute of `reservation`.
-  def pays_for(reservation)
-    price = reservation['price_per_min_cents']
-    pays(total: price, scope: 'mobility', line_items: [{ qty: 1, price_cents: price, reservation_id: reservation['reservation_id'] }])
-  end
+  def pays_for(reservation) = pays_cart(reservation['cart'], scope: 'mobility')
 end
 
 class StoryTest < Kiosk::StoryTest

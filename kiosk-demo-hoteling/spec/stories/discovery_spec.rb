@@ -10,7 +10,7 @@ RSpec.describe 'Discovering the hotel', type: :story do
 
     expect(kiosk['capabilities']).to include('schema', 'queries', 'actions', 'pay', 'events')
     expect(kiosk['events_url']).to match(%r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z})
-    expect(schema['events'].pluck('name').sort).to eq(%w[booking_confirmation booking_payment payment_setup])
+    expect(schema['events'].pluck('name').sort).to eq(%w[booking_confirmation payment payment_setup])
 
     queries = schema['queries'].index_by { it['name'] }
     actions = schema['actions'].index_by { it['name'] }

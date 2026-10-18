@@ -99,7 +99,7 @@ profile = Kiosk::Redteam::Profile.new(
     }
   },
 
-  # scope=lodging, one line per booking, as reserve_room's pay_hint asks.
+  # scope=lodging, the cart reserve_room returns: a line naming the booking, then the nights.
   pay_for: lambda { |_client, principal, owned_ref|
     total_cents   = owned_ref[:total_cents].to_i
     nights        = owned_ref[:nights].to_i.nonzero? || NIGHTS
@@ -107,7 +107,7 @@ profile = Kiosk::Redteam::Profile.new(
 
     lodging_mandates(principal,
                      cap_amount_cents: total_cents + 100,
-                     line_items: [{ qty: nights, price_cents: nightly_price, booking_id: owned_ref[:id] }],
+                     line_items: [{ booking_id: owned_ref[:id] }, { qty: nights, price_cents: nightly_price }],
                      total_amount_cents: total_cents)
   },
 

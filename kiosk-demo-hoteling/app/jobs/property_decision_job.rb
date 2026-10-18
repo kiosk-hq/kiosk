@@ -28,10 +28,11 @@ class PropertyDecisionJob < ApplicationJob
 
   # A booking with no settlement was never charged: cancelled, nothing refunded.
   def decline!(booking)
-    charge  = settled_reference(booking)
-    receipt = charge && refund!(charge, booking.total_cents)
+    charge  = booking.settlement&.psp_reference
+    receipt = charge && claim.refund(psp_reference: charge, amount_cents: booking.total_cents)
     cancel!(booking, receipt)
 
+    claim.announce(booking.id, 'refunded') if receipt
     emit(booking, 'cancelled', { 'reason' => 'property_declined', **refund_news(booking, receipt, charge) })
   end
 
@@ -54,15 +55,7 @@ class PropertyDecisionJob < ApplicationJob
                     'reverses' => charge } }
   end
 
-  def settled_reference(booking)
-    Kiosk::Settlement.joins(:cart_mandate)
-                     .merge(Kiosk::CartMandate.referencing(booking_id: booking.id))
-                     .order(:created_at).pick(:psp_reference)
-  end
-
-  def refund!(psp_reference, amount_cents)
-    Kiosk.configuration.payment_provider.refund(psp_reference: psp_reference, amount_cents: amount_cents)
-  end
+  def claim = Kiosk.configuration.payment_provider
 
   def emit(booking, status, extra)
     Kiosk::Server::Events.emit(

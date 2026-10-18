@@ -33,7 +33,6 @@ Kiosk.configure do |c|
     query: 'my_reservations'
   )
   c.cart_price_checker = PriceChecker
-  c.after_payment      = ->(reservation_id) { Reservation.announce_payment(reservation_id) }
 end
 
 # KYC: the broker that checks the customer, and the claims this origin asks for.

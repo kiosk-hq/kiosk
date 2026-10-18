@@ -9,7 +9,7 @@ module PriceChecker
     return 'each item line needs sku, qty, and price_cents (the price it was ordered at)' unless presented.all? { well_formed?(*it) }
 
     order = Order.includes(order_items: :product).find(order_id)
-    return "cart items do not mirror the order at the prices it was ordered at — follow create_order's pay_hint" \
+    return 'cart items do not mirror the order at the prices it was ordered at — sign the cart create_order returned' \
       unless presented.sort == ordered(order)
 
     short = order.shortfall

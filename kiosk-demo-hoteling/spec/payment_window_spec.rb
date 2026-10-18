@@ -107,7 +107,7 @@ RSpec.describe 'the window between a capture and its settlement' do
     expect(payment_state(id)).to eq('paid')
     expect(booking_row(id)).to include('status' => 'confirmed', 'confirmation_code' => be_present)
 
-    events = Kiosk.configuration.event_store.since(guest.id, 0).select { it['topic'] == 'booking_payment' }
+    events = Kiosk.configuration.event_store.since(guest.id, 0).select { it['topic'] == 'payment' }
     expect(events.pluck('subject')).to eq([id])
     expect(Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)).to be_empty
   end

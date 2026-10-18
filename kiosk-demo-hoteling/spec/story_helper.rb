@@ -21,10 +21,8 @@ class Guest < Kiosk::TestHelpers::Customer
     does(:reserve_room, **a_free_room(check_in:, check_out:), **extra)
   end
 
-  # Signs a cart for every night of the booking at its nightly price.
-  def pays_for(booking, currency: 'eur')
-    pays(total: booking['total_cents'], scope: 'lodging', currency:,
-         line_items: [{ qty: booking['nights'], price_cents: booking['nightly_price_cents'], booking_id: booking['booking_id'] }])
+  def pays_for(booking, currency: booking['cart']['currency'])
+    pays_cart(booking['cart'], scope: 'lodging', currency:)
   end
 
   def a_free_room(check_in:, check_out:)

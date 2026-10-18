@@ -10,9 +10,9 @@ class DiscoveryStory < StoryTest
 
     assert_empty %w[schema queries actions pay events] - kiosk['capabilities']
     assert_match %r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z}, kiosk['events_url']
-    assert_equal %w[booking_payment kyc_verification payment_setup], schema['events'].pluck('name').sort
+    assert_equal %w[kyc_verification payment payment_setup], schema['events'].pluck('name').sort
     assert_equal %w[paid refunded],
-                 schema['events'].find { it['name'] == 'booking_payment' }['examples'].pluck('payment_state')
+                 schema['events'].find { it['name'] == 'payment' }['examples'].pluck('payment_state')
 
     actions = schema['actions'].index_by { it['name'] }
 

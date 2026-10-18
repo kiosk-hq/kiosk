@@ -23,9 +23,7 @@ module Kiosk
                       slot_at: { type: 'string', description: "The delivery window's start." },
                       slot_label: { type: 'string', description: 'The window as a human reads it.' },
                       address: { type: 'string' },
-                      payment_state: { type: 'string', enum: %w[unpaid pending paid],
-                                       description: '`pending`: a charge is under way, so wait and ' \
-                                                    'read again. Pay again only on `unpaid`.' },
+                      payment_state: Kiosk::Payable::STATE_SCHEMA,
                       refunded_cents: { type: 'integer',
                                         description: 'EUR cents returned to the card for items that sold out ' \
                                                      'before the basket was packed; all of it on a `cancelled` order.' }
@@ -63,16 +61,16 @@ module Kiosk
                   description: 'The order, priced.',
                   additionalProperties: false,
                   properties: {
-                    order_id: { type: 'string', description: 'Put it in the cart you sign, as `pay_hint` says.' },
-                    total_cents: { type: 'integer', description: 'EUR cents; sign the cart at exactly this total.' },
+                    order_id: { type: 'string', description: '`my_orders` lists it.' },
+                    total_cents: { type: 'integer', description: 'EUR cents.' },
                     total_eur: { type: 'string', description: 'The total as a human reads it.' },
                     currency: { type: 'string' },
                     slot_at: { type: 'string', description: "The delivery window's start." },
                     slot_label: { type: 'string', description: 'The window as a human reads it.' },
                     timezone: { type: 'string', description: "The delivery address's IANA zone." },
-                    pay_hint: { type: 'string', description: 'How to pay for this order.' }
+                    cart: Kiosk::Payable::CART_SCHEMA
                   },
-                  required: %w[order_id total_cents total_eur currency slot_at slot_label timezone pay_hint]
+                  required: %w[order_id total_cents total_eur currency slot_at slot_label timezone cart]
     example_params({
                      items: [{ sku: 'sourdough-bread', qty: 2 }, { sku: 'greek-yogurt', qty: 1 }],
                      slot_at: -> { DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601 },
@@ -83,7 +81,9 @@ module Kiosk
                   slot_at: -> { DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601 },
                   slot_label: "12:00–14:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                   timezone: DeliverySlots::DEFAULT_ZONE_NAME,
-                  pay_hint: 'Call `pay` in EUR with a cart mandate (a signed cart) for exactly this order …'
+                  cart: { currency: 'eur', total_amount_cents: 1287,
+                          line_items: [{ order_id: ORDER_ID }, { sku: 'sourdough-bread', qty: 2, price_cents: 449 },
+                                       { sku: 'greek-yogurt', qty: 1, price_cents: 389 }] }
                 })
     def create_order
       @order = CreateOrderOperation.call(

@@ -10,7 +10,7 @@ class UnstartedRideStory < StoryTest
 
   def refund_notices
     ActiveRecord::Base.connection.select_value(
-      "SELECT count(*) FROM kiosk.events WHERE topic = 'booking_payment' AND data->>'payment_state' = 'refunded'"
+      "SELECT count(*) FROM kiosk.events WHERE topic = 'payment' AND data->>'payment_state' = 'refunded'"
     )
   end
 
@@ -19,12 +19,12 @@ class UnstartedRideStory < StoryTest
     scooter = rider.reserves('SK-001')
 
     assert_predicate rider.pays_for(scooter), :ok?
-    rider.listens_for(:booking_payment)
+    rider.listens_for(:payment)
 
     the_hold_runs_out(scooter)
     2.times { RefundUnstartedJob.perform_now }
 
-    news = rider.hears(:booking_payment, about: scooter['reservation_id'], payment_state: 'refunded')
+    news = rider.hears(:payment, about: scooter['reservation_id'], payment_state: 'refunded')
 
     assert_equal({ 'reservation_id' => scooter['reservation_id'], 'payment_state' => 'refunded' }, news)
     assert_equal 'refunded', rider.reservations.sole['payment_state']

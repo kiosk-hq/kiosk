@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Payable` gives a payable model `payment_state`, `cart` and `settlement`, and the engine pushes the `payment` topic; getgrocery, hoteling and skooti use them.
+
+- 2026-10-18: An action that creates a payable row answers `cart`, the cart to sign, in place of the prose `pay_hint`.
+
 - 2026-10-18: `Kiosk::StoryTest#assert_refused(answer, code)` asserts a wire refusal and prints the answer when it fails.
 
 - 2026-10-18: A device authorization store answers `lookup_by_device_code_hash` and `lookup_by_user_code_hash`; a custom store renames its two `find_by_*` methods.

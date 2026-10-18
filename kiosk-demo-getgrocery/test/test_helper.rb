@@ -38,18 +38,11 @@ class Shopper < Kiosk::TestHelpers::Customer
   def delivery_windows(address: HOME, **) = asks(:delivery_slots, delivery_address: address, **)
   def orders_placed = asks(:my_orders).rows
 
-  # Keeps each line at the catalog price the shopper ordered it at.
   def orders(*skus, address: HOME, slot_at: window_start(1, Date.current + 1, address), **extra)
-    lines = skus.map { { sku: it, qty: 1, price_cents: Product.find_by(sku: it)&.price_cents } }
     does(:create_order, items: skus.map { { sku: it, qty: 1 } }, slot_at:, delivery_address: address, **extra)
-      .tap { (@baskets ||= {})[it['order_id']] = lines }
   end
 
-  # Signs a cart that names the order and every item in it at the price it was ordered at.
-  def pays_for(order)
-    pays(total: order['total_cents'], scope: 'grocery',
-         line_items: [{ order_id: order['order_id'] }] + @baskets.fetch(order['order_id']))
-  end
+  def pays_for(order) = pays_cart(order['cart'], scope: 'grocery')
 
   def moves(order, to_window:, on: Date.current + 1)
     does(:reschedule_delivery, order_id: order['order_id'], slot_at: window_start(to_window, on, HOME))

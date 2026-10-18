@@ -158,8 +158,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId, '#call — against the s
   include_context 'forged_user_id setup'
 
   # An action's payload reaches the wire VERBATIM, so skooti's `reserve`
-  # answers {reservation_id, scooter_code, price_per_min_cents, currency,
-  # pay_hint} — a bare object. extract_id looks under `body["value"]`, the
+  # answers {reservation_id, price_per_min_cents, currency, cart} — a bare
+  # object. extract_id looks under `body["value"]`, the
   # envelope the cutover deleted; reading only that shape would find nothing
   # on ANY real origin, and every run of this scenario would end "cannot
   # confirm ownership was enforced" — an indeterminate verdict for a wire

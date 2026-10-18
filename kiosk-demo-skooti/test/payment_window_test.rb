@@ -103,10 +103,10 @@ class PaymentWindowTest < ActiveSupport::TestCase
     assert_predicate start_rental(id)['rental_token'], :present?
   end
 
-  test 'a returned capture publishes one booking_payment event the schema describes' do
+  test 'a returned capture publishes one payment event the schema describes' do
     id = reserve
     pay_through_a_held_capture(id)
-    events = Kiosk.configuration.event_store.since(@rider.id, 0).select { it['topic'] == 'booking_payment' }
+    events = Kiosk.configuration.event_store.since(@rider.id, 0).select { it['topic'] == 'payment' }
 
     assert_equal([id], events.pluck('subject'))
     assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)

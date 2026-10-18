@@ -80,7 +80,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     configure(count: 1)
     proof = { challenge: kat_challenge(id: 'r1'), nonce: EquihashKat::NONCE }
     expect(
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [proof] })
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [proof])
     ).to be_nil
   end
 end
@@ -92,7 +92,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     configure(count: 1)
     proof = { challenge: kat_challenge(id: 'r1'), nonce: { indices: [3, 10] } }
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [proof] })
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [proof])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
 end
@@ -105,7 +105,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     other = { challenge: kat_challenge(id: 'r1', pem: "-----BEGIN PUBLIC KEY-----\nOTHER\n-----END PUBLIC KEY-----"),
               nonce: EquihashKat::NONCE }
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [other] })
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [other])
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 
@@ -125,7 +125,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
 
     expect do
       Kiosk::Server::RegistrationPow.gate(
-        public_key_pem: pem, pow: { proofs: [{ challenge: elsewhere, nonce: EquihashKat::NONCE }] }
+        public_key_pem: pem, pow: [{ challenge: elsewhere, nonce: EquihashKat::NONCE }]
       )
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
@@ -191,13 +191,13 @@ RSpec.describe Kiosk::Server::RegistrationPow do
 
     # First bad submission → a real 403; the id is now consumed.
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [bad] })
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [bad])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
 
     # Replay of the SAME challenge id → re-challenge (402), NOT another 403, and
     # NO second verify (the claim short-circuits before the hash loop).
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [bad] })
+      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [bad])
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
     expect(verify_calls).to eq(1)
@@ -216,7 +216,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     it 'accepts the trivial proof while the server itself demands n=8 k=1' do
       configure_at(EquihashKat::PARAMS)
       expect(
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [trivial_proof(id: 'k541-ok')] })
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-ok')])
       ).to be_nil
     end
   end
@@ -231,7 +231,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
 
       # A valid signature alone must not set the difficulty.
       expect do
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [trivial_proof(id: 'k541-stale')] })
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-stale')])
       end.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
         # Re-challenged at the CURRENT difficulty, not the one it asked for.
         expect(e.challenges.first[:params]).to eq({ n: 96, k: 5 })
@@ -241,7 +241,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     it 'is a re-challenge, not bad faith: the off-spec id is released, not burnt' do
       configure_at({ n: 96, k: 5 })
       expect do
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [trivial_proof(id: 'k541-rel')] })
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-rel')])
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
       # An honest client holding a pre-raise challenge must not have its id
@@ -259,7 +259,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
       configure_at({ n: 96, k: 5 })
       expect(Kiosk::Pow::Equihash).not_to receive(:verify)
       expect do
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: { proofs: [trivial_proof(id: 'k541-nohash')] })
+        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-nohash')])
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end

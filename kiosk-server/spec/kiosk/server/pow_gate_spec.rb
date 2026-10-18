@@ -135,11 +135,11 @@ module PowGateSpecHelpers
   end
 
   # `GET catalog?q=milk`, the call the different-request examples mint their proof for.
-  def catalog_proof(body: { q: 'milk' })
+  def catalog_pow(body: { q: 'milk' })
     challenge = issue_challenge_via_gate(
       command: 'query', method: 'GET', verb: 'catalog', body: body
     )
-    { challenge: challenge, nonce: solve_nonce(challenge) }
+    [{ challenge: challenge, nonce: solve_nonce(challenge) }]
   end
 
   def issue_n_challenges(command: 'query', body: { name: 'menu' })
@@ -253,7 +253,7 @@ RSpec.describe Kiosk::Server::PowGate, 'nil reputation_policy (the default)' do
   it 'returns :proceed even when a pow field is present' do
     result = described_class.gate(
       identity: identity, command: 'query', body: { name: 'menu' },
-      pow: { 'challenge' => {}, 'nonce' => '123' }
+      pow: [{ challenge: {}, nonce: '123' }]
     )
     expect(result).to eq(:proceed)
   end
@@ -310,8 +310,7 @@ RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params
     configure_with_policy(policy_returning({ n: 0, k: 7 }))
     expect do
       described_class.gate(identity: identity, command: 'query', body: {},
-                           pow: { 'challenge' => { 'id' => 'x', 'params' => { 'n' => 0, 'k' => 7 } },
-                                  'nonce' => { 'indices' => [] } })
+                           pow: [{ challenge: { id: 'x', params: { n: 0, k: 7 } }, nonce: { indices: [] } }])
     end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
   end
 end
@@ -326,6 +325,17 @@ RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params
     expect do
       described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
+  end
+
+  it 'raises ConfigurationError for a policy that returns string keys' do
+    configure_with_policy(
+      Class.new(Kiosk::Reputation::Policy) do
+        def challenge_for(**) = { 'alg' => 'equihash', 'params' => Kiosk::Pow::Equihash.params }
+      end.new
+    )
+    expect do
+      described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+    end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
   end
 
   it 'leaves a backend with no .valid_params? unconstrained (argon2id)' do
@@ -428,7 +438,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
       identity: identity,
       command: 'query',
       body: { name: 'menu' },
-      pow: { challenge: challenge, nonce: nonce }
+      pow: [{ challenge: challenge, nonce: nonce }]
     )
     expect(result).to eq(:proceed)
   end
@@ -446,7 +456,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
     expect do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { challenge: challenge, nonce: bad_nonce }
+        pow: [{ challenge: challenge, nonce: bad_nonce }]
       )
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
@@ -467,7 +477,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
     begin
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { challenge: challenge, nonce: bad_nonce }
+        pow: [{ challenge: challenge, nonce: bad_nonce }]
       )
     rescue Kiosk::Server::Errors::Forbidden
       nil
@@ -495,7 +505,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
     error = catch_error(Kiosk::Server::Errors::Forbidden) do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { challenge: challenge, nonce: bad_nonce }
+        pow: [{ challenge: challenge, nonce: bad_nonce }]
       )
     end
 
@@ -524,7 +534,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
     error = catch_error(Kiosk::Server::Errors::Forbidden) do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { challenge: challenge, nonce: bad_nonce }
+        pow: [{ challenge: challenge, nonce: bad_nonce }]
       )
     end
 
@@ -554,7 +564,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
     error = catch_error(Kiosk::Server::Errors::Forbidden) do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { challenge: challenge, nonce: bad_nonce }
+        pow: [{ challenge: challenge, nonce: bad_nonce }]
       )
     end
 
@@ -580,13 +590,13 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   it 'verifies for the identical method + verb + args (the control)' do
     result = described_class.gate(
       identity: identity, command: 'query', method: 'GET', verb: 'catalog',
-      body: { q: 'milk' }, pow: catalog_proof
+      body: { q: 'milk' }, pow: catalog_pow
     )
     expect(result).to eq(:proceed)
   end
 
   it 're-challenges when the ARGUMENTS differ' do
-    proof = catalog_proof(body: { q: 'milk' })
+    proof = catalog_pow(body: { q: 'milk' })
 
     expect do
       described_class.gate(
@@ -604,7 +614,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   before { configure_with_policy(always_challenge_policy) }
 
   it 're-challenges when the METHOD differs (a GET catalog proof on POST catalog)' do
-    proof = catalog_proof(body: {})
+    proof = catalog_pow(body: {})
 
     expect do
       described_class.gate(
@@ -615,7 +625,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   end
 
   it 're-challenges when the VERB differs (a catalog proof is not an orders proof)' do
-    proof = catalog_proof(body: {})
+    proof = catalog_pow(body: {})
 
     expect do
       described_class.gate(
@@ -640,7 +650,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   it 're-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden' do
     challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
     nonce     = solve_nonce(challenge)
-    pow       = { challenge: challenge, nonce: nonce }
+    pow       = [{ challenge: challenge, nonce: nonce }]
 
     # First submission → accepted
     result = described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
@@ -661,7 +671,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   it 're-challenge carries a well-formed NEW challenge (different id from the spent one)' do
     challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
     nonce     = solve_nonce(challenge)
-    pow       = { challenge: challenge, nonce: nonce }
+    pow       = [{ challenge: challenge, nonce: nonce }]
 
     described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
 
@@ -688,7 +698,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
 
     challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
     nonce     = solve_nonce(challenge)
-    pow       = { challenge: challenge, nonce: nonce }
+    pow       = [{ challenge: challenge, nonce: nonce }]
 
     described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
 
@@ -717,7 +727,7 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
     expect do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { challenge: malformed, nonce: '1' }
+        pow: [{ challenge: malformed, nonce: '1' }]
       )
     end.to raise_error(Kiosk::Server::Errors::BadRequest, /params/)
   end
@@ -751,14 +761,14 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
     challenge = issue_challenge_via_gate
     moved = challenge.merge(exp: challenge[:exp] + 86_400)
 
-    expect(gate_with({ challenge: moved, nonce: solve_nonce(challenge) })).to eq(:pow_required)
+    expect(gate_with([{ challenge: moved, nonce: solve_nonce(challenge) }])).to eq(:pow_required)
     expect(claims).to be_empty
   end
 
   it 'claims the id at the exp the challenge was signed with' do
     challenge = issue_challenge_via_gate
 
-    expect(gate_with({ challenge: challenge, nonce: solve_nonce(challenge) })).to eq(:proceed)
+    expect(gate_with([{ challenge: challenge, nonce: solve_nonce(challenge) }])).to eq(:proceed)
     expect(claims).to eq([[challenge[:id], challenge[:exp]]])
   end
 end
@@ -799,11 +809,8 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   end
 end
 
-# ─── K-542: a valid proof is single-use even under concurrency ─────────────
-# pow_gate.rb used to `spent?` then (after the ~18 ms verify) `mark_spent`,
-# with no atomic claim in between: M parallel submissions of ONE valid proof
-# all passed `spent?` before any `mark_spent` and all proceeded (a probe saw
-# 20/20). The gate now claims the id atomically BEFORE the verify, so a single
+# ─── a valid proof is single-use even under concurrency ──────────────────
+# The gate claims the id atomically BEFORE the ~18 ms verify, so a single
 # proof id is accepted exactly once across N racing submissions.
 RSpec.describe Kiosk::Server::PowGate, 'concurrent submission of one valid proof (spent-store TOCTOU)' do
   include PowGateSpecHelpers
@@ -815,7 +822,7 @@ RSpec.describe Kiosk::Server::PowGate, 'concurrent submission of one valid proof
 
   it 'accepts one proof id exactly once across N racing submissions' do
     challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    pow       = { challenge: challenge, nonce: 'n' }
+    pow       = [{ challenge: challenge, nonce: 'n' }]
     n         = 20
     latch     = Queue.new
 
@@ -950,7 +957,7 @@ RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
   it 'proceeds only when ALL `count` proofs are valid' do
     result = described_class.gate(
       identity: identity, command: 'query', body: { name: 'menu' },
-      pow: { proofs: solve_all(issue_n_challenges) }
+      pow: solve_all(issue_n_challenges)
     )
     expect(result).to eq(:proceed)
   end
@@ -960,7 +967,7 @@ RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
     expect do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { proofs: proofs.first(count - 1) }
+        pow: proofs.first(count - 1)
       )
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
@@ -979,13 +986,13 @@ RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
     catch_error(Kiosk::Server::Errors::PowRequired) do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { proofs: proofs.first(count - 1) }
+        pow: proofs.first(count - 1)
       )
     end
 
     result = described_class.gate(
       identity: identity, command: 'query', body: { name: 'menu' },
-      pow: { proofs: proofs }
+      pow: proofs
     )
     expect(result).to eq(:proceed)
   end
@@ -1006,7 +1013,7 @@ RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
     expect do
       described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
-        pow: { proofs: proofs }
+        pow: proofs
       )
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
@@ -1120,7 +1127,7 @@ RSpec.describe Kiosk::Server::PowGate, 'the session toll' do
   def pay_once
     challenge = issue_challenge_via_gate
     described_class.gate(identity: identity, command: 'query', body: { name: 'menu' },
-                         pow: { challenge: challenge, nonce: solve_nonce(challenge) })
+                         pow: [{ challenge: challenge, nonce: solve_nonce(challenge) }])
   end
 
   before { configure_with_policy(always_challenge_policy) }

@@ -171,7 +171,7 @@ module Kiosk
         pow = PowGate.proofs_from_header(request.get_header('HTTP_KIOSK_POW'))
 
         # A malformed proof is a 400, not a silent fresh 402.
-        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
+        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && pow
 
         PowGate.gate(
           identity: identity, command: command, method: request.request_method,

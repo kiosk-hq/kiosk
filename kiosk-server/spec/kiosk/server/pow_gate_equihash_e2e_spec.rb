@@ -95,7 +95,7 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
   it 'proceeds when the real equihash verifier accepts the submitted proof (N=1)' do
     proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
-    expect(gate(pow: { proofs: [proof] })).to eq(:proceed)
+    expect(gate(pow: [proof])).to eq(:proceed)
   end
 
   it 'rejects a WRONG nonce through the real verifier (403 + penalty)' do
@@ -105,7 +105,7 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
     proof = { challenge: kat_challenge(id: 'c1'), nonce: { indices: [3, 10] } } # not a valid solution
 
     expect do
-      gate(pow: { proofs: [proof] })
+      gate(pow: [proof])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
     expect(penalty).to eq([identity])
   end
@@ -121,10 +121,10 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       proofs = %w[c1 c2 c3].map { |id| { challenge: kat_challenge(id: id), nonce: EquihashKat::NONCE } }
 
       expect do
-        gate(pow: { proofs: proofs.first(2) })
+        gate(pow: proofs.first(2))
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
-      expect(gate(pow: { proofs: proofs })).to eq(:proceed)
+      expect(gate(pow: proofs)).to eq(:proceed)
     end
   end
 end
@@ -145,7 +145,7 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
       expect do
-        gate(pow: { proofs: [proof] }, body: { q: 'bread' })
+        gate(pow: [proof], body: { q: 'bread' })
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
 
@@ -153,7 +153,7 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
       expect do
-        gate(pow: { proofs: [proof] }, command: 'run', method: 'POST')
+        gate(pow: [proof], command: 'run', method: 'POST')
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
 
@@ -161,7 +161,7 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
       expect do
-        gate(pow: { proofs: [proof] }, verb: 'orders')
+        gate(pow: [proof], verb: 'orders')
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end

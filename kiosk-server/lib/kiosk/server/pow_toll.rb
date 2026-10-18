@@ -17,7 +17,7 @@ module Kiosk
       # Returns `:proceed`, or raises PowRequired (402), BadRequest or Forbidden.
       def collect!(pow)
         validate_spec_params!
-        submitted = PowGate.extract_proofs(pow)
+        submitted = Array(pow)
         raise pow_required if submitted.empty?
 
         accepted = accept_all(submitted)
@@ -37,10 +37,10 @@ module Kiosk
       end
 
       def accept(proof, accepted)
-        challenge = symbolize_keys(proof[:challenge] || proof['challenge'] || {})
+        challenge = proof[:challenge].is_a?(Hash) ? proof[:challenge] : {}
         return unless claimed?(challenge, accepted)
 
-        settle(verify(challenge, proof[:nonce] || proof['nonce']), challenge, accepted)
+        settle(verify(challenge, proof[:nonce]), challenge, accepted)
       end
 
       # The cheap checks first, so only a live challenge this origin signed
@@ -114,7 +114,7 @@ module Kiosk
 
       # Equihash has no difficulty dial: escalation is by proof count.
       def count
-        [(@spec[:count] || @spec['count'] || 1).to_i, 1].max
+        [(@spec[:count] || 1).to_i, 1].max
       end
 
       # TTL scales with `count`, so the first expires no sooner than the last is solved.
@@ -125,20 +125,14 @@ module Kiosk
 
       def issue_challenge(ttl)
         ::Kiosk::Reputation::Challenge.issue(
-          alg: @spec[:alg], params: @spec[:params], request_fingerprint: @fingerprint,
+          alg: alg, params: params, request_fingerprint: @fingerprint,
           secret: @secret, ttl: ttl, now: Time.now.to_i
         )
       end
 
-      def alg    = @spec[:alg] || @spec['alg']
-      def params = @spec[:params] || @spec['params']
+      def alg    = @spec[:alg]
+      def params = @spec[:params]
       def spent_store = @config.pow_spent_store
-
-      def symbolize_keys(hash)
-        return {} unless hash.is_a?(Hash)
-
-        hash.transform_keys(&:to_sym)
-      end
     end
   end
 end

@@ -106,25 +106,6 @@ module Kiosk
         "solve with the reference solver at #{POW_SOLVER_URL} — " \
         'a hand-written Equihash solver will not match this verifier'.freeze
 
-      def blank?(obj)
-        obj.nil? || (obj.respond_to?(:empty?) && obj.empty?)
-      end
-
-      def extract_proofs(pow)
-        return [] if blank?(pow)
-        return pow if pow.is_a?(Array)
-        return [] unless pow.is_a?(Hash)
-
-        proofs_of(pow)
-      end
-
-      def proofs_of(hash)
-        list = hash[:proofs] || hash['proofs']
-        return Array(list) if list
-
-        hash[:challenge] || hash['challenge'] ? [hash] : []
-      end
-
       def canonical_json(obj)
         case obj
         when Hash

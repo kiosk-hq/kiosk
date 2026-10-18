@@ -133,7 +133,7 @@ module Kiosk
       private
 
       def validate_proofs!(pow)
-        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && !PowGate.blank?(pow)
+        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && pow
       end
 
       # Auth endpoints always mint through the bundled DefaultAgentIdp.

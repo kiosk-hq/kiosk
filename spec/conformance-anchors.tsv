@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1905 anchors.
+# 1897 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -876,20 +876,21 @@ kiosk-reputation/README.md	  unproven_count_bonus:       1,    # extra proofs fo
 kiosk-reputation/README.md	## Anti-DoS invariant: cheap checks before the expensive backend eval
 kiosk-reputation/README.md	### Proof — client re-sends the same request, proof(s) in the `Kiosk-PoW` header
 kiosk-reputation/README.md	### `Policies::RateAndReputation` — EXAMPLE (providers replace this)
-kiosk-reputation/README.md	**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** The host registers a
+kiosk-reputation/README.md	**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** A PoW backend registers
 kiosk-reputation/README.md	- `alg` + `params` are **mandated** — no client negotiation field. `equihash`
 kiosk-reputation/README.md	A single proof may be sent bare (`Kiosk-PoW: {"challenge":{…},"nonce":{…}}`), as a
 kiosk-reputation/README.md	Cuckatoo Cycle (opt-in, registers as `cuckatoo`).
 kiosk-reputation/README.md	In a Rails app `kiosk-pow-equihash` registers itself as the `equihash`
 kiosk-reputation/README.md	JSON array of N proofs, or as repeated `Kiosk-PoW` header lines (one proof each) —
+kiosk-reputation/README.md	[Installation](#installation)). This gem is backend-agnostic:
 kiosk-reputation/README.md	`WWW-Authenticate: Kiosk-PoW realm="<issuer>"`) whose flat top-level `code` is
 kiosk-reputation/README.md	`kiosk-reputation` decides *when* and *how hard* to challenge a request with a
 kiosk-reputation/README.md	burning a backend eval. This is not optional; it is tested.
 kiosk-reputation/README.md	count: 9 }
-kiosk-reputation/README.md	on require — see [Installation](#installation)). This gem is backend-agnostic:
 kiosk-reputation/README.md	pluggable reputation policy interface.
 kiosk-reputation/README.md	proof-of-work, issues and verifies the signed wire challenge, and provides a
 kiosk-reputation/README.md	provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
+kiosk-reputation/README.md	registers itself at boot; the host registers any other backend (see
 kiosk-reputation/README.md	same path, same query string, same body — with the proof(s) in a **`Kiosk-PoW`
 kiosk-reputation/README.md	the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow`
 kiosk-reputation/lib/kiosk/reputation/backends.rb	        def register(alg_name, backend)
@@ -933,23 +934,13 @@ kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	          
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	        def initialize(
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	alg: 'equihash',
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	bad_proof_count_factor:     3,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	bad_proofs  = factors.bad_proof_count.to_i
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	base_count:                 1,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	count += @unproven_count_bonus if purchases.zero?
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	count += bad_proofs * @bad_proof_count_factor
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	count.clamp(@count_range)
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	count_max:                  10,
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def challenge_for(factors:, **)
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def compute_count(purchases, rate, bad_proofs)
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	def initialize(
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_k:                 7
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	equihash_n:                 168,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	low_rate_threshold:         10,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	proven_purchases_threshold: 5,
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	purchases   = factors.settled_purchases_count.to_i
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	rate        = factors.request_rate_per_min.to_i
 kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	return nil if proven?(purchases) && low_rate?(rate) && bad_proofs.zero?
-kiosk-reputation/lib/kiosk/reputation/policies/rate_and_reputation.rb	unproven_count_bonus:       1,
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def equihash_params = defined?(::Kiosk::Pow::Equihash) ? ::Kiosk::Pow::Equihash.params : { n: 168, k: 7 }
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	def initialize(trusted_at:, within:, count: 1)
 kiosk-reputation/lib/kiosk/reputation/policy.rb	coarse CALL KIND: :query, :run or :pay
@@ -970,7 +961,6 @@ kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	caps
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	carries equihash (n, k) params
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	challenges a proven principal whose rate exceeds low_rate_threshold
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	challenges even a proven, low-rate principal when bad_proof_count > 0
-kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	combines rate escalation with the unproven bonus
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	demands base_count + unproven bonus when rate is low
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	escalates count as bad_proof_count increases
 kiosk-reputation/spec/kiosk/reputation/policies/rate_and_reputation_spec.rb	escalates count as rate increases (proven principal, no bad proofs)
@@ -1021,6 +1011,7 @@ kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	class Assista
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def link
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def register
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	identity = Kiosk.configuration.user_idp&.verify(request)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	pow    = PowGate.proofs_from_header(
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	respond({ access_token: token }, :ok)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	result = AgentRegistration.call(
@@ -1088,6 +1079,7 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= 
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :spending_cap_window_days
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
 kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. Generate one with
 kiosk-server/lib/kiosk/server/device_code_grant.rb	device_code parameter required
 kiosk-server/lib/kiosk/server/engine.rb	          get '/.well-known/agent-configuration', to: 'kiosk/server/discovery#agent_configuration'
@@ -1187,6 +1179,7 @@ kiosk-server/lib/kiosk/server/queries.rb	convention the provider upholds (the re
 kiosk-server/lib/kiosk/server/queries.rb	module Queries
 kiosk-server/lib/kiosk/server/registration_pow.rb	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/registration_pow.rb	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: count }
+kiosk-server/lib/kiosk/server/reputation_factors.rb	# Settlements and visits of this customer since `since`: their count and their cents.
 kiosk-server/lib/kiosk/server/request_validation.rb	RESERVED-PLANE REQUEST BODY => the published object that types it.
 kiosk-server/lib/kiosk/server/request_validation.rb	raise Errors.missing_field(absent, hint: body_hint(pointer)) if absent
 kiosk-server/lib/kiosk/server/routing.rb	def actions(*names) = draw(:post, 'create', names)
@@ -1692,7 +1685,6 @@ kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	rejects a WRONG non
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired carries a well-formed challenge
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired has HTTP status 402
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired#to_problem renders a pow_required 402 problem document
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	calls on_bad_proof with the identity
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	carries a hint steering to the shipped reference solver
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	does NOT call on_bad_proof (replaying a valid proof is not a wrong proof)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	does not disclose the construction, the parameters, or which check failed
@@ -1918,7 +1910,7 @@ kiosk-user-idp-devise/README.md	Add the adapter explicitly — the `kiosk-all` m
 kiosk-user-idp-devise/README.md	Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces
 kiosk-user-idp-devise/README.md	The Devise user-IdP adapter for [Kiosk](https://kiosk.tech) — for Rails providers that authenticate principals through D
 kiosk-user-idp-devise/README.md	The adapter is **agnostic about how the user logged in**: Devise's `database_authenticatable` and `omniauthable` modules
-kiosk-user-idp-devise/README.md	The shipped wire passes an `ActionDispatch::Request` (kiosk-server's `IdentityResolution.resolve(request)`). The adapter
+kiosk-user-idp-devise/README.md	kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	        Kiosk::Identity.new(
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def current_user_from(request)
 kiosk-user-idp-devise/lib/kiosk/user_identity_providers/devise.rb	      def rack_env_for(request)

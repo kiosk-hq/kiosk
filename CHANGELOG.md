@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The kiosk-user-idp-devise README names the human-side gate and the link endpoints as the adapter's callers; the kiosk-reputation README says kiosk-pow-equihash registers itself.
+
 - 2026-10-18: atablefor and stylish record a kept booking as a `Kiosk::Visit` once its time has passed, so a returning customer's toll falls without any payment.
 
 ## [0.5.14] — 2026-10-18

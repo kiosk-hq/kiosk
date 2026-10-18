@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- The README names the human-side page gate and the link endpoints as the callers of the adapter.
+
 ## [0.5.14] — 2026-10-18
 
 - 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.

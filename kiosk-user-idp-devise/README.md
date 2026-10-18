@@ -89,7 +89,7 @@ end
 
 ## Request shape
 
-The shipped wire passes an `ActionDispatch::Request` (kiosk-server's `IdentityResolution.resolve(request)`). The adapter reads the signed-in user from that request's Warden proxy — `request.env["warden"].user` — which is how Devise exposes the principal to Rack-level components once its middleware has run. A controller-shaped object exposing `#current_user`, and a bare Rack `env` Hash carrying `env["warden"]`, are also accepted for hosts that pass either directly.
+kiosk-server calls the adapter with an `ActionDispatch::Request` from the human-side page gate and from the link endpoints. The adapter reads the signed-in user from the Warden proxy of that request, `request.env["warden"].user`. Devise sets this proxy when its middleware has run. The adapter also accepts an object that has `#current_user`, such as a controller, and a bare Rack `env` Hash that has `env["warden"]`.
 
 ## Status
 

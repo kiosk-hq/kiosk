@@ -8,9 +8,10 @@ Policy and wire-challenge layer for Kiosk's proof-of-work system.
 proof-of-work, issues and verifies the signed wire challenge, and provides a
 pluggable reputation policy interface.
 
-**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** The host registers a
-PoW backend via `Kiosk::Reputation::Backends.register` (no PoW gem self-registers
-on require — see [Installation](#installation)). This gem is backend-agnostic:
+**Pure Ruby — no dependency on kiosk-pow or kiosk-core.** A PoW backend registers
+with `Kiosk::Reputation::Backends.register`. In a Rails app `kiosk-pow-equihash`
+registers itself at boot; the host registers any other backend (see
+[Installation](#installation)). This gem is backend-agnostic:
 the shipped default is **equihash** (`kiosk-pow-equihash`); `kiosk-pow`
 provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
 Cuckatoo Cycle (opt-in, registers as `cuckatoo`).

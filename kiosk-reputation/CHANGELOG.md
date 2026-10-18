@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- The README says that `kiosk-pow-equihash` registers itself at Rails boot, and that the host registers any other backend.
+
 ## [0.5.14] — 2026-10-18
 
 - 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.

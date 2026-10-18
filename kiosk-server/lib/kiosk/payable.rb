@@ -63,7 +63,7 @@ module Kiosk
     # not sign a new mandate. A row read without `with_settlement` asks the
     # settlements itself.
     def payment_state
-      status = self[self.class.payment_claim.status_column]
+      status = self[:payment_status]
       return REFUNDED if status == REFUNDED
       return PAID     if status == PAID || settled?
       return PENDING  if status == Kiosk::Server::PaymentClaim::PAYING

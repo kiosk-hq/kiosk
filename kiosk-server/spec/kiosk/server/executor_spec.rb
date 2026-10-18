@@ -581,7 +581,7 @@ RSpec.shared_context 'executor spec: verb :pay' do
     # threads them through the FK chain.
     { persist_intent_mandate: 'intent-row', persist_cart_mandate: 'cart-row',
       persist_payment_mandate: 'pay-row', persist_settlement: 's-1',
-      in_flight_total_cents: 0, lock_assistant_payments!: nil, cart_recorded?: false }.each do |helper, value|
+      lock_assistant_payments!: nil, cart_recorded?: false }.each do |helper, value|
       allow_any_instance_of(described_class).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double('PSP', capture: settlement, setup_required?: false)
@@ -1210,42 +1210,41 @@ RSpec.describe Kiosk::Server::Executor, 'pay-path persistence (bind parameters)'
   end
 end
 
-RSpec.describe Kiosk::Server::Executor, 'pay-path #settled_total_cents' do
+RSpec.describe Kiosk::Server::Executor, 'pay-path #spent_in_window' do
   include_context 'executor spec: pay-path persistence (bind parameters)'
 
   before { connection.next_exec_result = [{ 'total' => 0 }] }
 
+  def spent(currency, window_days) = executor.send(:spent_in_window, Struct.new(:currency).new(currency), window_days)
+
   it 'binds the agent and the currency, with no window predicate when uncapped by time' do
-    executor.send(:settled_total_cents, agent_id: 'a-1', window_days: nil, currency: 'eur')
+    spent('eur', nil)
     sql, name, binds = last_statement
 
-    expect(name).to eq('Kiosk settled total')
-    # K-1251: the predicate folds the COLUMN, for settlement rows written
-    # before the mandate boundary canonicalised what fills it.
+    expect(name).to eq('Kiosk spent total')
+    # The predicate folds the COLUMN, for settlement rows written before the
+    # mandate boundary canonicalised what fills it.
     expect(sql).to  include('WHERE agent_id = $1 AND lower(btrim(currency)) = $2')
     expect(sql).not_to include('settled_at')
-    expect(binds).to eq(%w[a-1 eur])
+    expect(binds).to eq([identity.agent_id, 'eur'])
   end
 
-  # The window used to be `#{window_days.to_i} * INTERVAL '1 day'` — the
-  # last interpolation in the file, and the one the third-party review
-  # missed. It is a bind now.
   it 'binds the window length rather than interpolating the day count' do
-    executor.send(:settled_total_cents, agent_id: 'a-1', window_days: 7, currency: 'eur')
+    spent('eur', 7)
     sql, _name, binds = last_statement
 
     expect(sql).to include('AND settled_at >= now() - make_interval(days => $3)')
     expect(sql).not_to include('7')
-    expect(binds).to eq(['a-1', 'eur', 7])
+    expect(binds).to eq([identity.agent_id, 'eur', 7])
   end
 
-  # K-1251: the BIND is folded too, so a caller that hands over a cart the
-  # verifier never canonicalised still reads the same tally.
+  # The BIND is folded too, so a caller that hands over a cart the verifier
+  # never canonicalised still reads the same tally.
   it 'canonicalises the currency it binds' do
-    executor.send(:settled_total_cents, agent_id: 'a-1', window_days: nil, currency: ' EUR ')
+    spent(' EUR ', nil)
     _sql, _name, binds = last_statement
 
-    expect(binds).to eq(%w[a-1 eur])
+    expect(binds).to eq([identity.agent_id, 'eur'])
   end
 end
 

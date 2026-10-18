@@ -2,7 +2,12 @@
 
 RSpec.shared_context 'column spending cap spec: seam' do
   let(:conn) { FakeConnection.new }
-  subject(:seam) { described_class.new(schema: 'kiosk', connection: conn) }
+  subject(:seam) { described_class.new }
+
+  before do
+    Kiosk.configure { |c| c.schema = 'kiosk' }
+    allow(ActiveRecord::Base).to receive(:lease_connection).and_return(conn)
+  end
 end
 
 RSpec.describe Kiosk::Server::ColumnSpendingCap, 'reading the cap' do
@@ -15,7 +20,7 @@ RSpec.describe Kiosk::Server::ColumnSpendingCap, 'reading the cap' do
     expect(sql).to include('spending_cap_cents')
     expect(sql).to include('"kiosk".agents')
     expect(sql).to include('revoked_at IS NULL')
-    # K-782: the agent id is `$1`, not a quoted literal. Only the SCHEMA is
+    # The agent id is `$1`, not a quoted literal. Only the SCHEMA is
     # interpolated — an operator-set identifier Postgres cannot bind.
     expect(sql).to include('WHERE id = $1')
     expect(binds).to eq(['a-1'])

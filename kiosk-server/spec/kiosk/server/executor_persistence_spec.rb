@@ -3,7 +3,7 @@
 require 'active_record'
 require 'securerandom'
 
-# The four `persist_*` helpers — plus `settled_total_cents` — against a REAL
+# The four `persist_*` helpers — plus `spent_in_window` — against a REAL
 # Postgres.
 #
 # WHY THIS FILE EXISTS. Everywhere else the Executor is driven through
@@ -89,8 +89,10 @@ module ExecutorPersistenceSpec
       [intent_row, cart_row]
     end
 
+    # What the cap counts for this assistant: settled plus in flight.
     def settled_total(currency:, agent_id: agent_uuid, window_days: nil)
-      executor.send(:settled_total_cents, agent_id: agent_id, window_days: window_days, currency: currency)
+      spender = described_class.new(connection: connection, identity: build_identity(user_id: user_uuid, agent_id: agent_id))
+      spender.send(:spent_in_window, Struct.new(:currency).new(currency), window_days)
     end
   end
 
@@ -379,7 +381,7 @@ RSpec.describe Kiosk::Server::Executor, '#persist_settlement' do
   end
 end
 
-RSpec.describe Kiosk::Server::Executor, '#settled_total_cents' do
+RSpec.describe Kiosk::Server::Executor, '#spent_in_window over settlements' do
   include_context 'executor persistence spec: payment'
 
   before do
@@ -413,12 +415,10 @@ end
 
 # ── Two spellings of one code are ONE tally and ONE cap (K-1251) ───────
 #
-# THE BUG, STATED AS THE TEST. `settled_total_cents` keyed the sum on the
-# RAW currency bytes, and `currency` is a column the ASSISTANT populates
-# from its own signed mandate. So `"eur"` and `"EUR"` were two tallies for
-# one currency, and an assistant that alternated the spelling between
-# chains collected the cap TWICE. K-551 scoped a currency-BLIND sum by the
-# currency string; a string is not a currency, and this is that residue.
+# `currency` is a column the ASSISTANT populates from its own signed
+# mandate. A tally keyed on the raw bytes would make `"eur"` and `"EUR"` two
+# tallies for one currency, and an assistant that alternated the spelling
+# between chains would collect the cap TWICE.
 #
 # Driven against a REAL Postgres because the fold is in the SQL: a
 # FakeConnection would assert the text and not the answer. The rows here
@@ -589,8 +589,9 @@ RSpec.describe Kiosk::Server::Executor, 'concurrent pays with declines under one
   it 'never settles past the cap, and leaves no declined cart in flight' do
     results = chains.map { |chain| pay_in_a_thread(*chain) }.map(&:value)
 
-    expect(value("SELECT COALESCE(SUM(settled_amount_cents), 0) FROM #{table('settlements')}").to_i).to be <= 2000
-    expect(executor.send(:in_flight_total_cents, agent_id: agent_uuid, currency: 'eur')).to eq(0)
+    settled = value("SELECT COALESCE(SUM(settled_amount_cents), 0) FROM #{table('settlements')}").to_i
+    expect(settled).to be <= 2000
+    expect(settled_total(currency: 'eur')).to eq(settled) # nothing in flight
     expect(value("SELECT count(*) FROM #{table('cart_mandates')} WHERE declined_at IS NOT NULL").to_i)
       .to eq(results.count(:declined))
   end

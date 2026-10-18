@@ -10,25 +10,24 @@ module Kiosk
     # `payment` topic, and runs `c.after_payment` once the settlement is recorded.
     # A refund through it is recorded against the settlement.
     class PaymentClaim
+      UNPAID = 'unpaid'
       PAYING = 'paying'
       PAID   = 'paid'
       TOPIC  = 'payment'
       EXAMPLE_ID = '5f0c2a8e-3b1d-4c6f-9a7e-2d8b4e1f6c03'
 
-      attr_reader :currency, :reference, :status_column
+      attr_reader :currency, :reference
 
       # @param model [String] the payable model's name, e.g. "Order"; it includes Kiosk::Owned and Kiosk::Payable
       # @param reference [String] the cart line-item key naming the row, e.g. "order_id"
       # @param query [String] the per-user query that publishes the row's payment state
-      def initialize(psp, currency:, model:, reference:, query:, status_column: :payment_status, unpaid: 'unpaid') # rubocop:disable Metrics/ParameterLists -- the public constructor the operator initializers call
+      def initialize(psp, currency:, model:, reference:, query:)
         @psp       = psp
         @currency  = currency.to_s.downcase
         @reference = reference
         @query     = query
-        @unpaid    = unpaid
-        @status_column = status_column
-        @row       = Row.new(model:, status_column:)
-        @options   = { currency:, model:, reference:, query:, status_column:, unpaid: }
+        @row       = Row.new(model)
+        @options   = { currency:, model:, reference:, query: }
         extend SetupReturn if psp.respond_to?(:setup_return_user_id)
       end
 
@@ -55,7 +54,7 @@ module Kiosk
       end
 
       # `paying → unpaid`, for a claim under which no money moved.
-      def release!(id) = @row.flip(id, from: PAYING, to: @unpaid)
+      def release!(id) = @row.flip(id, from: PAYING, to: UNPAID)
 
       private
 
@@ -78,7 +77,7 @@ module Kiosk
 
       def claim!(cart)
         id = referenced_id(cart)
-        refuse_unclaimable!(id, cart.user_id.to_s) unless @row.take(id, cart.user_id.to_s, from: @unpaid, to: PAYING).positive?
+        refuse_unclaimable!(id, cart.user_id.to_s) unless @row.take(id, cart.user_id.to_s, from: UNPAID, to: PAYING).positive?
         begin
           check_price!(cart, id)
         rescue StandardError
@@ -181,7 +180,7 @@ module Kiosk
           id = referenced_id(cart)
           payer = cart.user_id.to_s
           status = @row.status(id, payer)
-          return claim!(cart) if status == @unpaid
+          return claim!(cart) if status == UNPAID
           return id if [PAYING, PAID].include?(status) && !settled?(id) && unfinished_chain(id, payer) == cart.id
 
           refuse_unclaimable!(id, payer)
@@ -261,15 +260,14 @@ module Kiosk
 
       # The operator's payable rows: the status moves under a compare-and-set.
       class Row
-        def initialize(model:, status_column:)
-          @model         = model
-          @status_column = status_column
+        def initialize(model)
+          @model = model
         end
 
         # Moves this payer's row `from → to`; the count of rows moved, 0 or 1.
         def take(id, payer, from:, to:) = move(model.owned_by(payer).where(id:), from:, to:)
 
-        def status(id, payer) = model.owned_by(payer).where(id:).pick(@status_column)
+        def status(id, payer) = model.owned_by(payer).where(id:).pick(:payment_status)
 
         def owner(id) = model.where(id:).pick(:user_id)
 
@@ -279,7 +277,7 @@ module Kiosk
 
         def move(rows, from:, to:)
           # One conditional UPDATE is the atomic compare-and-set: the row count says which caller won.
-          rows.where(@status_column => from).update_all({ @status_column => to }.merge(timestamps)) # rubocop:disable Rails/SkipsModelValidations -- a per-row save cannot move a row atomically
+          rows.where(payment_status: from).update_all({ payment_status: to }.merge(timestamps)) # rubocop:disable Rails/SkipsModelValidations -- a per-row save cannot move a row atomically
         end
 
         def timestamps

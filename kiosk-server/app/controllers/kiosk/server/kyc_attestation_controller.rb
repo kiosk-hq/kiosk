@@ -30,7 +30,7 @@ module Kiosk
 
       def render_granted(attributes)
         Kiosk::Server::Headers.add_to(response.headers)
-        render json: { kyc_verified: true, attributes: attributes || {} }, status: :ok
+        render json: { kyc_verified: true, attributes: attributes }, status: :ok
       end
 
       # A JSON object held to the shape §17 publishes for `exchange`, else 400.

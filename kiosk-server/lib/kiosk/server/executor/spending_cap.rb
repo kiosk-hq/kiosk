@@ -41,16 +41,6 @@ module Kiosk
             "this charge is #{cart.total_amount_cents.to_i}"
         end
 
-        def settled_total_cents(agent_id:, window_days:, currency:)
-          connection.exec_query(settled_sql(window_days), 'Kiosk settled total', spent_binds(agent_id, currency, window_days))
-                    .to_a.first.fetch('total').to_i
-        end
-
-        def in_flight_total_cents(agent_id:, currency:)
-          connection.exec_query(in_flight_sql, 'Kiosk in-flight total', spent_binds(agent_id, currency, nil))
-                    .to_a.first.fetch('total').to_i
-        end
-
         # Settled cents for this agent in one currency, case-folded on both sides
         # so `eur` and `EUR` are one tally. No window means no predicate; the day count is a bind.
         def settled_sql(window_days)

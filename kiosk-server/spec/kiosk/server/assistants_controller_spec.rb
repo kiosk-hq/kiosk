@@ -315,7 +315,7 @@ RSpec.describe 'AssistantsController', 'spending-cap window' do
   include_context 'assistants controller spec: signed-in holder'
 
   # The rolling window is a VALUE, so it is `$3` through `make_interval` — the
-  # same treatment executor.rb#settled_total_cents gives the same expression.
+  # same treatment Executor#spent_in_window gives the same expression.
   it 'binds the spending-cap window rather than splicing the day count' do
     Kiosk.configure { |c| c.spending_cap_window_days = 30 }
     con.next_exec_result = [

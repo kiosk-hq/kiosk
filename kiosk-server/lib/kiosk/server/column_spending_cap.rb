@@ -7,20 +7,13 @@ module Kiosk
     #
     #   Kiosk.configure { |c| c.spending_cap = Kiosk::Server::ColumnSpendingCap.new }
     class ColumnSpendingCap
-      def initialize(schema: nil, connection: nil)
-        @schema     = schema
-        @connection = connection
-      end
-
       def call(agent_id:)
         return nil if agent_id.nil?
 
-        schema = @schema || Kiosk.configuration.schema
         # The leased connection: the cap is read inside the transaction that charges.
-        conn   = @connection || ::ActiveRecord::Base.lease_connection
-        row = conn.exec_query(<<~SQL.squish, 'Kiosk spending cap', [agent_id]).to_a.first
+        row = ::ActiveRecord::Base.lease_connection.exec_query(<<~SQL.squish, 'Kiosk spending cap', [agent_id]).to_a.first
           SELECT spending_cap_cents
-          FROM "#{schema}".agents
+          FROM "#{Kiosk.configuration.schema}".agents
           WHERE id = $1 AND revoked_at IS NULL
         SQL
         cap = row && row['spending_cap_cents']

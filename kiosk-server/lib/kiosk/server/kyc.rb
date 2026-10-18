@@ -238,7 +238,7 @@ module Kiosk
             execute("DELETE FROM #{table('kyc_attributes')} WHERE user_id = $1", user_id.to_s)
             execute("INSERT INTO #{table('kyc_attributes')} (user_id, name) " \
                     "SELECT $2, key FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb",
-                    JSON.generate(attributes || {}), user_id.to_s)
+                    JSON.generate(attributes), user_id.to_s)
           end
 
           def table(name) = connection.quote_table_name("#{Kiosk.configuration.schema}.#{name}")

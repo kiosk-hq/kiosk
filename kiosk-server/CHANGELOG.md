@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `PaymentClaim` takes no `status_column:` or `unpaid:` (the column is `payment_status`), and `ColumnSpendingCap.new` takes no arguments.
 - 2026-10-18: The kiosk-server README tells the operator to set the status column to `refunded` after a full refund, before the announcement.
 - 2026-10-18: A `reputation_policy` toll with string keys is a `ConfigurationError`; the toll reads `alg`, `params` and `count` as symbols, as the policy contract states.
 - 2026-10-18: The `on_proof_verified` policy hook of `PowGate` is removed.

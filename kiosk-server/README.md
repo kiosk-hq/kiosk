@@ -116,8 +116,8 @@ end
 ```
 
 `model` names your payable model; it includes `Kiosk::Owned`, so the claim
-takes only the payer's own row. The status lives in `status_column:`
-(`payment_status` unless you say otherwise), and `unpaid:` names its unpaid value.
+takes only the payer's own row. The status lives in its `payment_status` column,
+whose unpaid value is `unpaid`.
 
 The model also includes `Kiosk::Payable`, which gives each row:
 

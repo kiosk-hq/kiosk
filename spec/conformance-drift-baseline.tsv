@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-18 at eb53a3be -- release 0.5.18: the skill default and API_VERSION judged against their rows
-# 1910 anchors.
+# recorded: 2026-10-18 at 8f516de9 -- T-138 mixed-status and event-stream walk: SPEC-210 and SPEC-102 judged
+# 1911 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -1257,20 +1257,19 @@ kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	7bd7d5221093af1b	b1d0a419
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	f499e2b768b27640	b1d0a419	reads the per-assistant cap from agents.spending_cap_cents (live rows only)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	704f2d34bd2aa0ce	b1d0a419	returns nil for an unknown or revoked key (no row)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	b7351e992647f161	b1d0a419	returns nil when the assistant row has no cap set (unlimited)
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	0d1efe762842492b	b1d0a419	answers 304 to If-None-Match on the current digest
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	486c4e0cf18638a0	b1d0a419	does NOT fall back to user_idp — KYC is an agent-only surface
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	81ac5225e4110a66	b1d0a419	emits no Vary even when the request negotiates content
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	032a892b6f804bed	b1d0a419	records the named anonymized attributes an attestation carries
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	ce3729eeb9c77931	b1d0a419	returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	105b1e65513c18d4	b1d0a419	returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	512d348055e7abfd	b1d0a419	returns 400 BadRequest for a valid JSON object missing the kyc_jws field
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	4101d084bfbedad3	b1d0a419	returns 400 bad_request (not 500) for INVALID JSON on a wire POST
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	41e5d91859d82feb	b1d0a419	returns 400 bad_request (not 500) for a non-object JSON body on a wire POST
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	c02ea78484718ecb	b1d0a419	returns 401 Unauthenticated (not 500) for an EXPIRED token
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	8d5be2c8f56093f9	b1d0a419	returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	72932c3c5aac89b4	b1d0a419	serves ?v=<digest> immutable, and a stale ?v= short-lived
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	7d971946e7c179be	b1d0a419	serves GET /kiosk/schema with no credential whatsoever
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	2ff81bd776365827	b1d0a419	…and a token it cannot verify changes nothing, because it is not read
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	0d1efe762842492b	8f516de9	answers 304 to If-None-Match on the current digest
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	486c4e0cf18638a0	8f516de9	does NOT fall back to user_idp — KYC is an agent-only surface
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	81ac5225e4110a66	8f516de9	emits no Vary even when the request negotiates content
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	032a892b6f804bed	8f516de9	records the named anonymized attributes an attestation carries
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	ce3729eeb9c77931	8f516de9	returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	105b1e65513c18d4	8f516de9	returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	512d348055e7abfd	8f516de9	returns 400 BadRequest for a valid JSON object missing the kyc_jws field
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	4101d084bfbedad3	8f516de9	returns 400 bad_request (not 500) for INVALID JSON on a wire POST
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	41e5d91859d82feb	8f516de9	returns 400 bad_request (not 500) for a non-object JSON body on a wire POST
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	8d5be2c8f56093f9	8f516de9	returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	72932c3c5aac89b4	8f516de9	serves ?v=<digest> immutable, and a stale ?v= short-lived
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	7d971946e7c179be	8f516de9	serves GET /kiosk/schema with no credential whatsoever
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	2ff81bd776365827	8f516de9	…and a token it cannot verify changes nothing, because it is not read
 kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	15c51157b8b94f05	b1d0a419	boots with no role vocabulary and no default — nothing was made mandatory
 kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	615d74fad617c7e7	b1d0a419	boots — this is what all seven demos and the e2e fixture configure
 kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	7ed8d27b407cb30b	b1d0a419	does not come up at all
@@ -1364,57 +1363,57 @@ kiosk-server/spec/kiosk/server/event_stores_spec.rb	0aad5e85b68b8098	b1d0a419	re
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	e9987ad95498a10e	b1d0a419	sweeps rows past the window and reports truncated to a stale cursor
 kiosk-server/spec/kiosk/server/events_connection_spec.rb	9978f7c806e48eea	b1d0a419	logs a re-authorisation that raises rather than losing it to the worker pool
 kiosk-server/spec/kiosk/server/events_connection_spec.rb	037cc7ff750e111d	b1d0a419	ships re-authorisation periods of at most 60 seconds
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	634fa8c10d018ecb	b1d0a419	CLOSES with reconnect false on
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	74c817938605fdfd	b1d0a419	CONFIRMS it again, and says nothing else
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	e4c551792f031f90	b1d0a419	REFUSES when the operator's own subject rule raises, and logs what raised
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	814e552a91dd36d8	b1d0a419	REJECTS a URL subscription whose since is
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	4fe41f35805e0aba	b1d0a419	REJECTS a consented topic whose subject the operator says is unreachable
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	61fb1a8108b8a7de	b1d0a419	REJECTS a subscribe naming a channel that is not KioskEvents, echoing it
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	1e6c1b3e44d40d7d	b1d0a419	REJECTS a subscribe whose identifier is not a JSON document, echoing it
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	424334f7642abe77	b1d0a419	REJECTS a subscribe whose since is not a cursor
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	7f7641ea61a2fcf1	b1d0a419	REJECTS a subscribe whose subject is a
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	b10fe71a79cee49f	b1d0a419	REJECTS a topic this origin does not declare, rather than streaming it empty
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	12458b00b129118a	b1d0a419	REJECTS an unsubscribe naming a subscription this socket never opened
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	cf21f9a24fd148e9	b1d0a419	REJECTS an unsubscribe whose identifier was re-serialised rather than echoed
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	3474c94bbb273df4	b1d0a419	accepts a caller the ordinary identity chain resolves, and welcomes it
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	b3f5966acad11ed2	b1d0a419	accepts an upgrade that carries NO Origin header
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	4095de549ff8b804	b1d0a419	accepts an upgrade whose Origin names somewhere else entirely
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	698e1e63d5b8bb54	b1d0a419	accepts the largest cursor
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	11dc44e85e46d1b4	b1d0a419	accepts the same topic for a subject the operator says IS reachable
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	aaa24ab8735eab67	b1d0a419	answers a WebSocket upgrade the same way, at the HTTP layer
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	c7f8e8abd11afac8	b1d0a419	answers a plain request with the module_not_served problem document
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	bde906d734b58d14	b1d0a419	answers an upgrade carrying no credential identically
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	c68718e3cc600972	b1d0a419	answers each of the five literal strings the finding drove, none with silence
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	ed676cbd2e92a28e	b1d0a419	closes a socket holding NO subscription when its credential is revoked
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	a736b34ce9867ea3	b1d0a419	closes the connection with reconnect false when the credential stops resolving
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	47dd65871c716ee5	b1d0a419	confirms a declared topic with head and truncated
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	86f2ac67db788c3b	b1d0a419	confirms a live subscription at top level, with the identifier and no message
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	b4b5374ac0cad749	b1d0a419	delivers an event emitted between the subscribed frame and a live stream
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	90b48c3c4c837214	b1d0a419	does NOT deliver another subject's event to a subject-scoped subscription
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	0c0e709002e0aa35	b1d0a419	does NOT replay another TOPIC's event to a subscription that named one
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	cb3638fda446f972	b1d0a419	drops it, answers nothing, and delivers nothing emitted after it
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	522a9134ef7a226b	b1d0a419	goes on serving a well-formed subscribe on the same socket
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	ab722f3106f29e22	b1d0a419	leaves a real client with no socket and no frame
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	d1bf55c981095efa	b1d0a419	leaves a subscription whose reach and credential still hold alone
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	9c1dc4bd75090edd	b1d0a419	leaves it delivering, with no second subscribed and no second replay
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	6e4913da0c7aae32	b1d0a419	negotiates the actioncable-v1-json subprotocol
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	005bd09d1efdc77a	b1d0a419	opens no subscription on a revoked credential, and closes instead
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	23775d2628813f41	b1d0a419	opens, subscribes and delivers without a proof on an origin that tolls every verb
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	9d515071506a39c5	b1d0a419	pings no more often than every 30 seconds
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	d2f89e4974144296	b1d0a419	pings with the unix time
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	c1ca8e7f139cf4be	b1d0a419	pushes an emitted event carrying the five closed members and no others
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	57bd12223bc6c947	b1d0a419	refuses a VALID token presented only in the query string
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	43a52db5036c5a4a	b1d0a419	refuses a caller presenting a token the IdP does not know
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	6a89fd06c1bbdf3d	b1d0a419	refuses a caller presenting no Authorization header
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	9ec1cd318de05350	b1d0a419	replays only what the cursor had not seen
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	94d16bdec10a61a1	b1d0a419	reports head on the resumed subscription
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	afa7252d6c8cb3c2	b1d0a419	says truncated when the cursor predates what the store still holds
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	cbadb4c0e959b693	b1d0a419	stops delivering and says why when the subject's reach is withdrawn
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	0ffa8ecf332f139b	b1d0a419	subscribes to every topic in the query string without the client sending a frame
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	9b1c87a1b5f88190	b1d0a419	tells a client whose access token merely aged out to come back
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	7438e0bf11e294c4	b1d0a419	tells a refused upgrade so, and says nothing else
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	596fef80c03d61e8	b1d0a419	welcomes a socket whose topics arrive only in the query string
-kiosk-server/spec/kiosk/server/events_socket_spec.rb	0bfca7ca633dcd3b	b1d0a419	wraps a subscription's own frames, echoing the identifier it was given
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	634fa8c10d018ecb	8f516de9	CLOSES with reconnect false on
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	74c817938605fdfd	8f516de9	CONFIRMS it again, and says nothing else
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	e4c551792f031f90	8f516de9	REFUSES when the operator's own subject rule raises, and logs what raised
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	814e552a91dd36d8	8f516de9	REJECTS a URL subscription whose since is
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	4fe41f35805e0aba	8f516de9	REJECTS a consented topic whose subject the operator says is unreachable
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	61fb1a8108b8a7de	8f516de9	REJECTS a subscribe naming a channel that is not KioskEvents, echoing it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	1e6c1b3e44d40d7d	8f516de9	REJECTS a subscribe whose identifier is not a JSON document, echoing it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	424334f7642abe77	8f516de9	REJECTS a subscribe whose since is not a cursor
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	7f7641ea61a2fcf1	8f516de9	REJECTS a subscribe whose subject is a
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	b10fe71a79cee49f	8f516de9	REJECTS a topic this origin does not declare, rather than streaming it empty
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	12458b00b129118a	8f516de9	REJECTS an unsubscribe naming a subscription this socket never opened
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	cf21f9a24fd148e9	8f516de9	REJECTS an unsubscribe whose identifier was re-serialised rather than echoed
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	3474c94bbb273df4	8f516de9	accepts a caller the ordinary identity chain resolves, and welcomes it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	b3f5966acad11ed2	8f516de9	accepts an upgrade that carries NO Origin header
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	4095de549ff8b804	8f516de9	accepts an upgrade whose Origin names somewhere else entirely
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	698e1e63d5b8bb54	8f516de9	accepts the largest cursor
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	11dc44e85e46d1b4	8f516de9	accepts the same topic for a subject the operator says IS reachable
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	aaa24ab8735eab67	8f516de9	answers a WebSocket upgrade the same way, at the HTTP layer
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	c7f8e8abd11afac8	8f516de9	answers a plain request with the module_not_served problem document
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	bde906d734b58d14	8f516de9	answers an upgrade carrying no credential identically
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	c68718e3cc600972	8f516de9	answers each of the five literal strings the finding drove, none with silence
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	ed676cbd2e92a28e	8f516de9	closes a socket holding NO subscription when its credential is revoked
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	a736b34ce9867ea3	8f516de9	closes the connection with reconnect false when the credential stops resolving
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	47dd65871c716ee5	8f516de9	confirms a declared topic with head and truncated
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	86f2ac67db788c3b	8f516de9	confirms a live subscription at top level, with the identifier and no message
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	b4b5374ac0cad749	8f516de9	delivers an event emitted between the subscribed frame and a live stream
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	90b48c3c4c837214	8f516de9	does NOT deliver another subject's event to a subject-scoped subscription
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	0c0e709002e0aa35	8f516de9	does NOT replay another TOPIC's event to a subscription that named one
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	cb3638fda446f972	8f516de9	drops it, answers nothing, and delivers nothing emitted after it
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	522a9134ef7a226b	8f516de9	goes on serving a well-formed subscribe on the same socket
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	ab722f3106f29e22	8f516de9	leaves a real client with no socket and no frame
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	d1bf55c981095efa	8f516de9	leaves a subscription whose reach and credential still hold alone
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	9c1dc4bd75090edd	8f516de9	leaves it delivering, with no second subscribed and no second replay
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	6e4913da0c7aae32	8f516de9	negotiates the actioncable-v1-json subprotocol
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	005bd09d1efdc77a	8f516de9	opens no subscription on a revoked credential, and closes instead
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	23775d2628813f41	8f516de9	opens, subscribes and delivers without a proof on an origin that tolls every verb
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	9d515071506a39c5	8f516de9	pings no more often than every 30 seconds
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	d2f89e4974144296	8f516de9	pings with the unix time
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	c1ca8e7f139cf4be	8f516de9	pushes an emitted event carrying the five closed members and no others
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	57bd12223bc6c947	8f516de9	refuses a VALID token presented only in the query string
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	43a52db5036c5a4a	8f516de9	refuses a caller presenting a token the IdP does not know
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	6a89fd06c1bbdf3d	8f516de9	refuses a caller presenting no Authorization header
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	9ec1cd318de05350	8f516de9	replays only what the cursor had not seen
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	94d16bdec10a61a1	8f516de9	reports head on the resumed subscription
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	afa7252d6c8cb3c2	8f516de9	says truncated when the cursor predates what the store still holds
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	cbadb4c0e959b693	8f516de9	stops delivering and says why when the subject's reach is withdrawn
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	0ffa8ecf332f139b	8f516de9	subscribes to every topic in the query string without the client sending a frame
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	9b1c87a1b5f88190	8f516de9	tells a client whose access token merely aged out to come back
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	7438e0bf11e294c4	8f516de9	tells a refused upgrade so, and says nothing else
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	596fef80c03d61e8	8f516de9	welcomes a socket whose topics arrive only in the query string
+kiosk-server/spec/kiosk/server/events_socket_spec.rb	6f19071b0911089c	8f516de9	wraps a subscription's own frames, echoing the identifier it was given
 kiosk-server/spec/kiosk/server/events_spec.rb	a440c553a1580bd1	b1d0a419	accepts a description declared null, and publishes it
 kiosk-server/spec/kiosk/server/events_spec.rb	400ecf5abf61fa3d	b1d0a419	accepts a nil subject — a topic with no subject says so
 kiosk-server/spec/kiosk/server/events_spec.rb	5515374950b09ad7	b1d0a419	appends one event per identity in scope and returns the last id
@@ -1605,10 +1604,12 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9fa81667e287f9d0	b1d0a41
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	34df3b360d4056b1	b1d0a419	returns a PaymentMandate for a valid signed JWS bound to the cart
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d332beb23702e3ce	b1d0a419	returns an IntentMandate for a valid agent-signed JWS
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	86cbc08521d8760d	b1d0a419	settles eur, usd, gbp and jpy — either case, and padded
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	e564953be3a19610	b1d0a419	forwards the APPROVING human's role to bind! and echoes it as the granted scope
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	65588b99e6d8e725	b1d0a419	refuses a client-supplied role — even one this provider declares
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	c0f5214d9f24e127	b1d0a419	refuses an undeclared role the same way — the value is never consulted
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	277834dfd9adc8c4	b1d0a419	refuses the OAuth-standard `scope` spelling too
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	e564953be3a19610	8f516de9	forwards the APPROVING human's role to bind! and echoes it as the granted scope
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	65588b99e6d8e725	8f516de9	refuses a client-supplied role — even one this provider declares
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	c0f5214d9f24e127	8f516de9	refuses an undeclared role the same way — the value is never consulted
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	277834dfd9adc8c4	8f516de9	refuses the OAuth-standard `scope` spelling too
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	2f39c3f0c1364f4b	8f516de9	requires a grant_type
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	c5029b40ab58d900	8f516de9	requires public_key — the ceremony is key-bound (invalid_request)
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	5cbac393068e295d	b1d0a419	answers 304 to If-None-Match on its own ETag
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	ca55c6b2547a6fb8	b1d0a419	answers the derived document to a caller with NO credential
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	4122c79775d3c63d	b1d0a419	carries the PUBLIC cache policy and a strong ETag

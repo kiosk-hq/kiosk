@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Reputation::Policies::Backoff`, `BackoffStore` and the gate's `on_proof_verified` policy hook are removed.
 - 2026-10-18: `POST /kiosk/agents/kyc` refuses with 403 an attestation the configured `kyc_provider` does not accept, as the provider callback does.
 - 2026-10-18: getgrocery's back office shows a cancelled, refunded order as REFUNDED: the badge reads the order's `payment_state`.
 - 2026-10-18: Recent spend counts a settlement less what the operator refunded of it. `kiosk:install` emits `create_kiosk_refunds`; every demo ships it.

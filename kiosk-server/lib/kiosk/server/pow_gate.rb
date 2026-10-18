@@ -34,7 +34,7 @@ module Kiosk
 
         fp = request_fingerprint(method: method, verb: verb || command, body: body)
         PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config, on_bad_proof: bad_proof_hook(config, identity))
-               .collect!(pow).tap { paid(policy, config, identity) }
+               .collect!(pow).tap { paid(config, identity) }
       end
 
       def session_paid?(config, identity)
@@ -42,11 +42,10 @@ module Kiosk
         !session.nil? && config.pow_spent_store.spent?(session)
       end
 
-      # The token's session is paid; the optional policy hook is reached only after a real solve.
-      def paid(policy, config, identity)
+      # Records the token's session as paid.
+      def paid(config, identity)
         session = session_id(identity)
         config.pow_spent_store.mark_spent(session, identity.claims[:exp]) if session
-        policy.on_proof_verified(identity: identity) if policy.respond_to?(:on_proof_verified)
       end
 
       # The access token a toll pays for, by its `jti`, or nil for a caller without one.

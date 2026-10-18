@@ -7,14 +7,11 @@ require 'uri'
 
 module Kiosk
   module TestHelpers
-    # A local stripe-mock for demo suites. A front on {PORT} relays to it and
+    # A local stripe-mock for demo suites. A front on {url} relays to it and
     # answers two calls as Stripe does where stripe-mock does not: a confirmed
     # PaymentIntent create with a test card is `succeeded`, fully received, and
     # a refund that names no charge is a 400.
     module StripeMock
-      PORT          = 12_111
-      UPSTREAM_PORT = 12_112
-      URL           = "http://127.0.0.1:#{PORT}".freeze
       LOG           = '/tmp/stripe-mock.log'
       DROPPED       = %w[accept-encoding connection content-length host transfer-encoding].freeze
       NO_CHARGE_BODY = JSON.generate(error: {
@@ -27,25 +24,34 @@ module Kiosk
 
       module_function
 
-      # Reuses a front already listening; otherwise spawns stripe-mock and the
-      # front, stopped at exit.
+      # The front's base URL: STRIPE_MOCK_URL when set, else a free port held
+      # for the life of this process. A suite that spawns its front stops it at
+      # exit, so each concurrent suite runs its own.
+      def url = @url ||= ENV.fetch('STRIPE_MOCK_URL') { "http://127.0.0.1:#{free_port}" }
+
+      # Reuses a front already listening on {url}; otherwise spawns stripe-mock
+      # and the front, stopped at exit.
       #
       # @return [String] the front's base URL
       def start
-        return URL if listening?
+        return url if listening?(port)
 
         abort 'stripe-mock not found. Install it: brew install stripe-mock' unless system('command -v stripe-mock >/dev/null 2>&1')
 
-        pids = spawn_processes
+        upstream = free_port
+        pids = spawn_processes(upstream)
         at_exit { pids.each { stop(it) } }
-        await_ready
+        await_ready(upstream)
       end
 
-      def spawn_processes
-        pids = []
-        pids << spawn('stripe-mock', '-http-port', UPSTREAM_PORT.to_s, out: LOG, err: LOG) unless listening?(UPSTREAM_PORT)
-        pids << spawn(RbConfig.ruby, '-I', File.expand_path('../..', __dir__), '-rkiosk/test_helpers/stripe_mock',
-                      '-e', 'Kiosk::TestHelpers::StripeMock.serve', out: LOG, err: LOG)
+      def port = URI(url).port
+
+      def free_port = TCPServer.open('127.0.0.1', 0) { it.addr[1] }
+
+      def spawn_processes(upstream)
+        [spawn('stripe-mock', '-http-port', upstream.to_s, out: LOG, err: LOG),
+         spawn(RbConfig.ruby, '-I', File.expand_path('../..', __dir__), '-rkiosk/test_helpers/stripe_mock',
+               '-e', "Kiosk::TestHelpers::StripeMock.serve(#{port}, #{upstream})", out: LOG, err: LOG)]
       end
 
       def stop(pid)
@@ -55,16 +61,16 @@ module Kiosk
         nil
       end
 
-      def await_ready
+      def await_ready(upstream)
         30.times do
-          return URL if listening? && listening?(UPSTREAM_PORT)
+          return url if listening?(port) && listening?(upstream)
 
           sleep 0.3
         end
-        abort "stripe-mock did not become ready on #{URL} — see #{LOG}"
+        abort "stripe-mock did not become ready on #{url} — see #{LOG}"
       end
 
-      def listening?(port = PORT)
+      def listening?(port)
         TCPSocket.new('127.0.0.1', port).close
         true
       rescue StandardError
@@ -72,8 +78,9 @@ module Kiosk
       end
 
       # Runs the front until killed.
-      def serve
-        server = TCPServer.new('127.0.0.1', PORT)
+      def serve(port, upstream)
+        @upstream = upstream
+        server = TCPServer.new('127.0.0.1', port)
         loop { Thread.new(server.accept) { |client| relay(client) } }
       end
 
@@ -103,7 +110,7 @@ module Kiosk
       end
 
       def forward(method, path, body, headers)
-        Net::HTTP.start('127.0.0.1', UPSTREAM_PORT) do |http|
+        Net::HTTP.start('127.0.0.1', @upstream) do |http|
           http.send_request(method, path, body, headers.except(*DROPPED))
         end
       end

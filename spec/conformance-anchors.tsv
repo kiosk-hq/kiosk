@@ -387,7 +387,7 @@ kiosk-demo-getgrocery/before-after.md	Both flagship consumer-commerce connectors
 kiosk-demo-getgrocery/before-after.md	ChatGPT-Agent food orders take 6–20 minutes, two to three times a human, and
 kiosk-demo-getgrocery/before-after.md	`test/stories/shop_test.rb` runs the errand end to end:
 kiosk-demo-getgrocery/config/environments/development.rb	ENV['STRIPE_SECRET_KEY']          ||= 'sk_test_mock'
-kiosk-demo-getgrocery/config/environments/test.rb	||= Kiosk::TestHelpers::StripeMock::URL
+kiosk-demo-getgrocery/config/environments/test.rb	||= Kiosk::TestHelpers::StripeMock.url
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18]
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-getgrocery/config/initializers/kiosk.rb	  c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')

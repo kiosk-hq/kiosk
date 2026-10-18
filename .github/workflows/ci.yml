@@ -223,8 +223,8 @@ jobs:
           RAILS_ENV: test
         run: |
           if [ -n "${{ matrix.stripe_mock }}" ]; then
-            ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::TestHelpers::StripeMock.start; sleep' &
             export STRIPE_MOCK_URL=http://127.0.0.1:12111
+            ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::TestHelpers::StripeMock.start; sleep' &
           fi
           if [ -n "${{ matrix.prove_broker }}" ]; then
             # The broker runs in development: its intake secrets are the ones the demos' test environment sends.

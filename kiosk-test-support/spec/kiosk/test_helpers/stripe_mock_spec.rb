@@ -26,8 +26,15 @@ RSpec.describe Kiosk::TestHelpers::StripeMock do
   after { WebMock.disable_net_connect! }
 
   it 'answers the base URL of a listening stripe-mock' do
-    expect(described_class.start).to eq('http://127.0.0.1:12111')
-    expect(described_class.listening?).to be(true)
+    expect(described_class.start).to eq(described_class.url)
+    expect(described_class.listening?(described_class.port)).to be(true)
+  end
+
+  it 'serves each process that spawns stripe-mock on its own port' do
+    other = `#{RbConfig.ruby} -I #{File.expand_path('../../../lib', __dir__)} -rkiosk/test_helpers/stripe_mock \
+             -e 'ENV.delete("STRIPE_MOCK_URL"); print Kiosk::TestHelpers::StripeMock.start'`
+    expect(other).to match(%r{\Ahttp://127\.0\.0\.1:\d+\z})
+    expect(other).not_to eq(described_class.start)
   end
 
   it 'answers a confirmed PaymentIntent as Stripe does for a test card: succeeded, whole amount received' do

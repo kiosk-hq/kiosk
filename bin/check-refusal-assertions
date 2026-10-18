@@ -2,8 +2,9 @@
 # frozen_string_literal: true
 
 # check-refusal-assertions — a demo red-team beat (`<battery>.record(label, predicate)` in
-# `kiosk-demo-*/script/*.rb`) whose label claims a 400 refusal of an input property the demo's
-# descriptors constrain must have a predicate that reads the refusal's words, not only status and code.
+# `kiosk-redteam/suites/<demo>.rb` or `kiosk-demo-*/script/*.rb`) whose label claims a 400
+# refusal of an input property the demo's descriptors constrain must have a predicate that
+# reads the refusal's words, not only status and code.
 # Beats whose label is not a literal are counted, not read.
 # Usage: bin/check-refusal-assertions [--self-test]
 
@@ -259,11 +260,17 @@ end
 def check_demo(report, root, demo_dir)
   fields = constrained_input_fields(demo_dir)
   report.stats[:fields] += fields.length
-  Dir.glob(File.join(demo_dir, 'script/*.rb')).each do |f|
+  beat_files(root, demo_dir).each do |f|
     src = File.read(f)
     ctx = { demo: File.basename(demo_dir), rel: f.delete_prefix("#{root}/"), fields: fields, src: src }
     call_sites(src, RECEIVER).each { |line, body| check_beat(report, ctx, line, body) }
   end
+end
+
+# The demo's red-team suite in kiosk-redteam/suites, and the demo's own scripts.
+def beat_files(root, demo_dir)
+  suite = File.join(root, 'kiosk-redteam', 'suites', "#{File.basename(demo_dir).delete_prefix('kiosk-demo-')}.rb")
+  Dir.glob(File.join(demo_dir, 'script/*.rb')) + Dir.glob(suite)
 end
 
 def check_beat(report, ctx, line, body)
@@ -300,7 +307,7 @@ end
 
 # ── vacuity ────────────────────────────────────────────────────────────────
 def vacuity_failures(stats)
-  [("[RA-V1] no readable beat was found in any demo's `script/*.rb`; fix the beat extractor" if stats[:assertions].zero?),
+  [("[RA-V1] no readable beat was found in any demo's suite or script; fix the beat extractor" if stats[:assertions].zero?),
    ('[RA-V2] no constrained input property was found in any demo; fix the field extractor' if stats[:fields].zero?),
    ('[RA-V3] no beat claims a `400`/`bad_request` refusal; fix REFUSAL_CLAIM' if stats[:refusal_claims].zero?),
    ("[RA-V4] no beat in scope reads a refusal's words; fix EVIDENCE" if stats[:evidenced].zero? && stats[:named].positive?)]
@@ -316,10 +323,8 @@ end
 
 # ── --self-test: plants in a throwaway copy of the real demos, each answered by its own tag ──
 
-CORPUS_GLOBS = [
-  'kiosk-demo-*/script/*.rb',
-  'kiosk-demo-*/app/**/*.rb'
-].freeze
+BEAT_GLOBS = ['kiosk-redteam/suites/*.rb', 'kiosk-demo-*/script/*.rb'].freeze
+CORPUS_GLOBS = [*BEAT_GLOBS, 'kiosk-demo-*/app/**/*.rb'].freeze
 
 def fixture_root(dir)
   CORPUS_GLOBS.each do |g|
@@ -339,8 +344,8 @@ def edit(path, from, to)
   File.write(path, s.sub(from, to))
 end
 
-PHILSLIST_SUITE = 'kiosk-demo-philslist/script/redteam_suite.rb'
-TUDU_SUITE      = 'kiosk-demo-tudu/script/redteam_suite.rb'
+PHILSLIST_SUITE = 'kiosk-redteam/suites/philslist.rb'
+TUDU_SUITE      = 'kiosk-redteam/suites/tudu.rb'
 
 # [name, the tag it must redden with (nil: stays green), edits [[file, from, to]] or a bulk-rewrite method].
 ARMS = [
@@ -370,11 +375,11 @@ ARMS = [
   ["RA-V4 — no predicate reads a refusal's words any more", 'RA-V4', :drop_evidence]
 ].freeze
 
-def rewrite_scripts(root, glob)
-  Dir.glob(File.join(root, glob)).each { |p| File.write(p, yield(File.read(p))) }
+def rewrite_scripts(root, globs)
+  Dir.glob(Array(globs).map { File.join(root, it) }).each { |p| File.write(p, yield(File.read(p))) }
 end
 
-def hide_beats(root) = rewrite_scripts(root, 'kiosk-demo-*/script/*.rb') { it.gsub('.record(', '.noop(') }
+def hide_beats(root) = rewrite_scripts(root, BEAT_GLOBS) { it.gsub('.record(', '.noop(') }
 
 def drop_constraints(root)
   rewrite_scripts(root, 'kiosk-demo-*/app/**/*.rb') do |s|
@@ -383,11 +388,11 @@ def drop_constraints(root)
 end
 
 def drop_refusal_claims(root)
-  rewrite_scripts(root, 'kiosk-demo-*/script/*.rb') { it.gsub('400', '4oo').gsub('bad_request', 'bad_req') }
+  rewrite_scripts(root, BEAT_GLOBS) { it.gsub('400', '4oo').gsub('bad_request', 'bad_req') }
 end
 
 def drop_evidence(root)
-  rewrite_scripts(root, 'kiosk-demo-*/script/*.rb') { |s| s.gsub(EVIDENCE) { |m| m.chars.join('-') } }
+  rewrite_scripts(root, BEAT_GLOBS) { |s| s.gsub(EVIDENCE) { |m| m.chars.join('-') } }
 end
 
 def apply_plant(root, setup)

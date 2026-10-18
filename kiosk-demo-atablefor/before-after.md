@@ -36,7 +36,7 @@ assistant pays once; a script that rents a fresh identity for each claim pays
 every time. A toll, not a hardware wall.
 
 An assistant sees and cancels only its own bookings: `test/stories/privacy_test.rb`
-and `script/redteam_suite.rb` assert that a cross-tenant read, a cross-owner cancel and
+and `../kiosk-redteam/suites/atablefor.rb` assert that a cross-tenant read, a cross-owner cancel and
 a forged `user_id` are each refused.
 
 ## What an operator adds

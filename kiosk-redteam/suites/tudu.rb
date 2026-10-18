@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Red-team battery for tudu: attacks a running server and asserts every attack is refused.
-# Usage: SERVER_URL=http://127.0.0.1:3007 bundle exec ruby script/redteam_suite.rb
+# Usage, in kiosk-demo-tudu with its bundle:
+#   SERVER_URL=http://127.0.0.1:3007 bundle exec ruby ../kiosk-redteam/suites/tudu.rb
 
 require 'json'
 require 'jwt'

@@ -230,7 +230,9 @@ jobs:
           bin/rails db:reset
           bin/rails server -p 3000 -d
           curl -sf --retry 30 --retry-delay 1 --retry-connrefused http://127.0.0.1:3000/kiosk/schema >/dev/null
-          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
+          # The demo's battery lives in kiosk-redteam/suites and runs with the demo's bundle.
+          demo='${{ matrix.demo }}'
+          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 
   # THE SKOOTI LOCK FIRMWARE'S TEST TARGETS RAN IN NO CI JOB AT ALL UNTIL THIS
   # ONE (K-1599).

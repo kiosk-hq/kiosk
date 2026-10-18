@@ -231,7 +231,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder, 'rule (6) — a value that will n
   # which may legitimately be fractional must DECLARE itself
   # `number` instead. Both halves are pinned so neither can drift back into
   # the other: the body half is kiosk-demo-atablefor's
-  # `WHOLE-VALUED FLOAT BODY` probe in `script/redteam_suite.rb`.
+  # `WHOLE-VALUED FLOAT BODY` probe in `kiosk-redteam/suites/atablefor.rb`.
   it 'refuses a WHOLE-VALUED float where an integer is declared — 2.0 is not an integer LITERAL' do
     e = refusal('party_size=2.0', schema(party_size: { type: 'integer' }))
     expect(e.message).to include('party_size')

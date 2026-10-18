@@ -48,7 +48,7 @@ group :test do
   gem 'kiosk-test-support', path: '../kiosk-test-support'
 end
 
-# The attack battery: script/redteam_suite.rb.
+# The attack battery, ../kiosk-redteam/suites/tudu.rb, runs with this bundle.
 group :development do
   gem 'kiosk-redteam', path: '../kiosk-redteam', require: false
 end

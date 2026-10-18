@@ -46,7 +46,7 @@ skill is `skill.md` on the same site.
   (`kiosk-rls-minitest`: `bundle exec rake test`).
 - Demos: `bin/rails db:reset` prepares one, `bin/rails test` tests it
   (hoteling: `bundle exec rspec`). CI also runs its
-  `script/redteam_suite.rb` against a started server. Postgres is required.
+  `kiosk-redteam/suites/<demo>.rb` against a started server. Postgres is required.
 - Lint: `bin/lint` from the root bundle runs RuboCop (default cops plus the
   Rails, Minitest and RSpec Rails plugins), bundler-audit over every tracked
   `Gemfile.lock`, and Brakeman over every demo. CI's `lint` job runs it. Fix

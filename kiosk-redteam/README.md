@@ -114,9 +114,10 @@ Use `exit 1 unless runner.all_blocked?`, **not** `exit 1 if runner.breaches.any?
 
 Every field of `Profile` is optional; a scenario whose field is `nil` skips
 itself rather than inventing a surface. That is what lets one battery cover a
-commerce provider and a non-commerce one. Every operator demo in this repo ships
-a `script/redteam_suite.rb` built on this API — read one of those for a worked,
-running profile against a real origin.
+commerce provider and a non-commerce one. `suites/` holds one battery per
+operator demo in this repo, built on this API — read one of those for a worked,
+running profile against a real origin. Each runs in its demo's directory, with
+that demo's bundle.
 
 ## The scenario library
 

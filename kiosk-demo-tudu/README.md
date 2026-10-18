@@ -114,7 +114,7 @@ in the DB; used/garbage invite codes → 403. A genuine member is the positive
 control (she DOES see and read the list), and after `remove_member` her next
 read → 403.
 
-### Adversarial battery (`script/redteam_suite.rb`)
+### Adversarial battery (`../kiosk-redteam/suites/tudu.rb`)
 
 Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 (the forged `account_id` is refused `400`, not accepted-and-ignored),
@@ -198,7 +198,6 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `invite`, `accept_invite`, `remove_member` and the `list_membership` topic. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the wire renders as a problem document |
 | `app/models/membership.rb`, `app/operations/list_access.rb` | Who may reach a list: `Membership.own` is the signed-in member's memberships, `ListAccess` the 403 a stranger gets |
 | `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, calling the same Operations as the wire; a refusal becomes a flash |
-| `script/redteam_suite.rb` | The adversarial battery, runnable against any tudu origin |
 | `test/` | `bin/rails test`; `test/stories/` tells each household story against a live origin over HTTP |
 
 ## Make it real

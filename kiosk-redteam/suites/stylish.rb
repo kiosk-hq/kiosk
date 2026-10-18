@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Red-team battery for stylish: attacks a running server and asserts every attack is refused.
-# Usage: SERVER_URL=http://127.0.0.1:3005 bundle exec ruby script/redteam_suite.rb
+# Usage, in kiosk-demo-stylish with its bundle:
+#   SERVER_URL=http://127.0.0.1:3005 bundle exec ruby ../kiosk-redteam/suites/stylish.rb
 
 require 'date'
 require 'json'

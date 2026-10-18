@@ -110,7 +110,7 @@ The stories in `test/stories/` show it:
   listing's owner and posting assistant come from the token. `browse_listings`
   publishes `reach: published`, and every query that claims `principal` reach
   answers only the caller's rows.
-- **Red team** — `script/redteam_suite.rb` attacks the live origin and every
+- **Red team** — `../kiosk-redteam/suites/philslist.rb` attacks the live origin and every
   scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
   `CrossOwnerClose`, `MalformedUuidArg`, `MissingAuth`, `GarbageToken`,
   `SelfAssertedTokenForgery`, `UnknownQuery`, `UnknownAction`,
@@ -150,7 +150,6 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; the handler controller is separate |
 | `app/controllers/kiosk/listings_controller.rb` | Every verb on listings: the `browse_listings` / `my_listings` queries and the `post_listing` / `edit_listing` / `close_listing` actions — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query` or `kind :action`, reached only through the wire. A refusal raises a `Kiosk::Server::Errors` error (`Listing.own!` does), which the wire renders as the RFC 9457 problem document an assistant branches on |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the kiosk-pop JWT this engine minted at `/kiosk/auth/register`, `/kiosk/auth/login` or the binding ceremony, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only identity shape: an identity here is a verified JWT or it is nothing |
-| `script/redteam_suite.rb` | The adversarial battery, run against a live origin |
 | `test/` | Minitest tests, run by `bin/rails test`; `test/stories/` drives the origin over HTTP as sellers' assistants |
 
 ## Make it real

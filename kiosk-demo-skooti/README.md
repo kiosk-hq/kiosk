@@ -100,7 +100,7 @@ bin/rails test         # the tests; CI runs exactly this
 
 `bin/setup` does the first two. The tests drive the origin over HTTP the way an
 assistant does; the KYC tests stand in for the broker with
-`Kiosk::TestHelpers::Kyc`. CI's red-team battery (`script/redteam_suite.rb`)
+`Kiosk::TestHelpers::Kyc`. CI's red-team battery (`../kiosk-redteam/suites/skooti.rb`)
 runs against the live broker in `kiosk-demo-prove`.
 
 Two more entry points are hardware-side: `bin/make-qr` renders the scooter QR

@@ -27,10 +27,10 @@
 # it is rated stay where the matrices live.
 #
 # 1906 anchors.
-.github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
+.github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
-.github/workflows/ci.yml	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
+.github/workflows/ci.yml	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
@@ -335,7 +335,6 @@ kiosk-demo-atablefor/before-after.md	rails g kiosk:install
 kiosk-demo-atablefor/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-atablefor/db/seeds.rb	# A few Lisbon restaurants with named tables, and two diners who sign in with a
 kiosk-demo-atablefor/db/seeds.rb	# clock (Restaurant#upcoming_seatings), so nothing here goes stale.
-kiosk-demo-atablefor/script/redteam_suite.rb	BATTERY.record('WholeValuedFloatBody',
 kiosk-demo-atablefor/test/restaurant_test.rb	the upcoming seatings roll forward on each restaurant's clock
 kiosk-demo-atablefor/test/stories/booking_test.rb	Time.iso8601(it['seating_at']).hour == 20
 kiosk-demo-atablefor/test/stories/booking_test.rb	a diner with no account books a table for two at eight and finds it among their bookings
@@ -405,20 +404,6 @@ kiosk-demo-getgrocery/config/routes.rb	kiosk do
 kiosk-demo-getgrocery/config/routes.rb	queries :catalog, :delivery_slots, :my_orders
 kiosk-demo-getgrocery/db/migrate/20261018100015_create_products_and_orders.rb	      t.text        :address, null: false
 kiosk-demo-getgrocery/db/schema.rb	t.boolean "age_restricted", default: false, null: false
-kiosk-demo-getgrocery/script/redteam_suite.rb	  # No KYC here — these must SKIP.
-kiosk-demo-getgrocery/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
-kiosk-demo-getgrocery/script/redteam_suite.rb	  pow_difficulty: 1,
-kiosk-demo-getgrocery/script/redteam_suite.rb	# Red-team battery for getgrocery: attacks a running server and asserts every attack is refused.
-kiosk-demo-getgrocery/script/redteam_suite.rb	EXPECTED_SKIP_NAMES = %w[
-kiosk-demo-getgrocery/script/redteam_suite.rb	MachineTimestampsIgnoreTheCallerClock.new,
-kiosk-demo-getgrocery/script/redteam_suite.rb	PastDeliveryDate.new,
-kiosk-demo-getgrocery/script/redteam_suite.rb	TOLERANCE_SECONDS = 60
-kiosk-demo-getgrocery/script/redteam_suite.rb	bytes.none? { |b| b.include?(CLOCK_WEST) || b.include?(CLOCK_EAST) }
-kiosk-demo-getgrocery/script/redteam_suite.rb	class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
-kiosk-demo-getgrocery/script/redteam_suite.rb	class OneRenderingPerRow < Kiosk::Redteam::Scenario
-kiosk-demo-getgrocery/script/redteam_suite.rb	exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)
-kiosk-demo-getgrocery/script/redteam_suite.rb	refused_naming?(@ended, @day)
-kiosk-demo-getgrocery/script/redteam_suite.rb	the two clocks are 90000s apart
 kiosk-demo-getgrocery/test/courier_states_test.rb	for an open window the courier leaves 20–30 minutes after payment and arrives five minutes later
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	a window takes orders until picking and the drive no longer fit before it ends
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	assert_equal 0, DeliverySlots.starts(Date.new(2026, 1, 15)).first.utc_offset
@@ -470,8 +455,6 @@ kiosk-demo-hoteling/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-hoteling/config/initializers/kiosk.rb	c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
 kiosk-demo-hoteling/db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb	t.column :user_id, :uuid, null: false
-kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new # → BLOCKED (register PoW ON)
-kiosk-demo-hoteling/script/redteam_suite.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,       # → SKIP (no action waits on a payment)
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	echoes a calendar day back byte-identical
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	sells the 15th at one property and refuses it as past at the other, at the same instant
@@ -494,7 +477,7 @@ kiosk-demo-philslist/README.md	  shared `DeviceGrantRoleSelfSelection`.
 kiosk-demo-philslist/README.md	  the caller's; editing or closing another seller's listing is **403**; a forged
 kiosk-demo-philslist/README.md	# philslist — Kiosk reference demo (NON-COMMERCE)
 kiosk-demo-philslist/README.md	**not only for commerce**: it exercises the full query + action + `schema` +
-kiosk-demo-philslist/README.md	- **Red team** — `script/redteam_suite.rb` attacks the live origin and every
+kiosk-demo-philslist/README.md	- **Red team** — `../kiosk-redteam/suites/philslist.rb` attacks the live origin and every
 kiosk-demo-philslist/README.md	The AP2 mandate and settlement TABLES are present and empty, and that is the
 kiosk-demo-philslist/README.md	identity-binding surface with **no money on the wire at all** — no `pay` verb,
 kiosk-demo-philslist/app/controllers/kiosk/board_controller.rb	reach :published
@@ -502,7 +485,6 @@ kiosk-demo-philslist/app/views/home/index.html.erb	      <div class="sec-k">🤖
 kiosk-demo-philslist/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist
 kiosk-demo-philslist/config/initializers/kiosk.rb	# A classifieds board takes no money: no payment_provider, so `pay` is absent from discovery.
 kiosk-demo-philslist/config/initializers/kiosk.rb	c.registration_pow_count = 1
-kiosk-demo-philslist/script/redteam_suite.rb	BATTERY.record('NoSellerPiiOnTheOpenBoard',
 kiosk-demo-philslist/test/stories/discovery_test.rb	    assert_equal %w[actions queries schema], kiosk['capabilities'].sort
 kiosk-demo-philslist/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the board offers and how to post
 kiosk-demo-philslist/test/stories/discovery_test.rb	assert_equal %w[actions queries schema], kiosk['capabilities'].sort
@@ -641,15 +623,6 @@ kiosk-demo-stylish/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-stylish/config/routes.rb	actions :book_appointment
 kiosk-demo-stylish/config/routes.rb	kiosk do
 kiosk-demo-stylish/config/routes.rb	queries :my_appointments, :salon_calendar, :salons, :service_menu
-kiosk-demo-stylish/script/redteam_suite.rb	  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('CustomerCalendarStaysOwnScoped',
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('CustomerLinkCannotCarryOwnerRole',
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('DeviceGrantCannotSelfSelectRole',
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('DeviceGrantRebindCannotEscalate',
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('DeviceGrantRoleComesFromTheApprover',
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('DeviceGrantVerifyPageNamesTheAccess',
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('OwnerLinkIgnoresForgedClaimBody',
-kiosk-demo-stylish/script/redteam_suite.rb	BATTERY.record('SelfAssertedTokenForgery',
 kiosk-demo-stylish/test/book_appointment_test.rb	a slot without an offset names no instant and is refused
 kiosk-demo-stylish/test/book_appointment_test.rb	one instant in any spelling is one booking, answered on the salon's clock
 kiosk-demo-stylish/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
@@ -678,7 +651,7 @@ kiosk-demo-stylish/test/stories/salon_book_test.rb	class SalonBookStory < StoryT
 kiosk-demo-stylish/test/stories/salon_book_test.rb	test "the owner's assistant sees every booking and what they will bring in" do
 kiosk-demo-stylish/test/test_helper.rb	def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'combette-demo-password')
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
-kiosk-demo-tudu/README.md	### Adversarial battery (`script/redteam_suite.rb`)
+kiosk-demo-tudu/README.md	### Adversarial battery (`../kiosk-redteam/suites/tudu.rb`)
 kiosk-demo-tudu/README.md	Asserts every attack is BLOCKED (0 BREACH): `CrossTenantRead`, `ForgedUserId`
 kiosk-demo-tudu/README.md	The human web UI, calling the same Operations as the wire; a refusal becomes a flash
 kiosk-demo-tudu/README.md	`PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRoster` (an assistant bound
@@ -711,9 +684,6 @@ kiosk-demo-tudu/config/initializers/kiosk.rb	# Linking an assistant's bare accou
 kiosk-demo-tudu/config/initializers/kiosk.rb	# No payment_provider: tudu takes no money, so discovery advertises no `pay`.
 kiosk-demo-tudu/config/initializers/kiosk.rb	c.assistant_claimed = lambda { |from:, to:, **|
 kiosk-demo-tudu/config/initializers/kiosk.rb	c.registration_pow_count = 1
-kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record('ChosenNameNeverTheAddress',
-kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record('NoLoginAddressOnTheRoster',
-kiosk-demo-tudu/script/redteam_suite.rb	BATTERY.record('PreLinkTokenAfterLink', rc == 401,
 kiosk-demo-tudu/test/stories/discovery_test.rb	    assert_equal %w[actions events queries schema], kiosk['capabilities'].sort
 kiosk-demo-tudu/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the household lists offer and how to use them
 kiosk-demo-tudu/test/stories/discovery_test.rb	assert_equal %w[actions events queries schema], kiosk['capabilities'].sort
@@ -873,6 +843,36 @@ kiosk-redteam/lib/kiosk/redteam/runner.rb	        @client  = Kiosk::TestHelpers:
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	            name: 'WrongCurrencyCart',
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	class WrongCurrencyCart < Scenario
+kiosk-redteam/suites/atablefor.rb	BATTERY.record('WholeValuedFloatBody',
+kiosk-redteam/suites/getgrocery.rb	  # No KYC here — these must SKIP.
+kiosk-redteam/suites/getgrocery.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
+kiosk-redteam/suites/getgrocery.rb	  pow_difficulty: 1,
+kiosk-redteam/suites/getgrocery.rb	# Red-team battery for getgrocery: attacks a running server and asserts every attack is refused.
+kiosk-redteam/suites/getgrocery.rb	EXPECTED_SKIP_NAMES = %w[
+kiosk-redteam/suites/getgrocery.rb	MachineTimestampsIgnoreTheCallerClock.new,
+kiosk-redteam/suites/getgrocery.rb	PastDeliveryDate.new,
+kiosk-redteam/suites/getgrocery.rb	TOLERANCE_SECONDS = 60
+kiosk-redteam/suites/getgrocery.rb	bytes.none? { |b| b.include?(CLOCK_WEST) || b.include?(CLOCK_EAST) }
+kiosk-redteam/suites/getgrocery.rb	class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
+kiosk-redteam/suites/getgrocery.rb	class OneRenderingPerRow < Kiosk::Redteam::Scenario
+kiosk-redteam/suites/getgrocery.rb	exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)
+kiosk-redteam/suites/getgrocery.rb	refused_naming?(@ended, @day)
+kiosk-redteam/suites/getgrocery.rb	the two clocks are 90000s apart
+kiosk-redteam/suites/hoteling.rb	Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new # → BLOCKED (register PoW ON)
+kiosk-redteam/suites/hoteling.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,       # → SKIP (no action waits on a payment)
+kiosk-redteam/suites/philslist.rb	BATTERY.record('NoSellerPiiOnTheOpenBoard',
+kiosk-redteam/suites/stylish.rb	  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
+kiosk-redteam/suites/stylish.rb	BATTERY.record('CustomerCalendarStaysOwnScoped',
+kiosk-redteam/suites/stylish.rb	BATTERY.record('CustomerLinkCannotCarryOwnerRole',
+kiosk-redteam/suites/stylish.rb	BATTERY.record('DeviceGrantCannotSelfSelectRole',
+kiosk-redteam/suites/stylish.rb	BATTERY.record('DeviceGrantRebindCannotEscalate',
+kiosk-redteam/suites/stylish.rb	BATTERY.record('DeviceGrantRoleComesFromTheApprover',
+kiosk-redteam/suites/stylish.rb	BATTERY.record('DeviceGrantVerifyPageNamesTheAccess',
+kiosk-redteam/suites/stylish.rb	BATTERY.record('OwnerLinkIgnoresForgedClaimBody',
+kiosk-redteam/suites/stylish.rb	BATTERY.record('SelfAssertedTokenForgery',
+kiosk-redteam/suites/tudu.rb	BATTERY.record('ChosenNameNeverTheAddress',
+kiosk-redteam/suites/tudu.rb	BATTERY.record('NoLoginAddressOnTheRoster',
+kiosk-redteam/suites/tudu.rb	BATTERY.record('PreLinkTokenAfterLink', rc == 401,
 kiosk-reputation/README.md	      "salt":   "<base64 of 16 raw bytes, fresh per challenge>",
 kiosk-reputation/README.md	  is the shipped default; `argon2id` is legacy.
 kiosk-reputation/README.md	  unproven_count_bonus:       1,    # extra proofs for principals with 0 purchases

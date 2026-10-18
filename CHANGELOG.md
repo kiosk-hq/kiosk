@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: Each demo's red-team battery moves from `script/redteam_suite.rb` to `kiosk-redteam/suites/<demo>.rb`; CI runs it in the demo with the demo's bundle.
 - 2026-10-18: The KYC broker demo's tests run on Minitest (`bin/rails test`), as six of the other demos' do.
 - 2026-10-18: The vendored JSON Schemas carry kiosk.tech's shortened `description`s.
 - 2026-10-18: `bin/check-vendored-schemas` holds each JSON Schema copied from kiosk.tech equal to the published file; CI runs it beside kiosk.tech.

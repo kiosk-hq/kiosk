@@ -57,7 +57,7 @@ group :test do
   gem 'rspec-rails', '~> 7.0'
 end
 
-# The attack battery: script/redteam_suite.rb.
+# The attack battery, ../kiosk-redteam/suites/hoteling.rb, runs with this bundle.
 group :development do
   gem 'kiosk-redteam', path: '../kiosk-redteam', require: false
 end

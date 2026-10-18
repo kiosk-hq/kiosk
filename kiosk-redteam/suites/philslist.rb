@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Red-team battery for philslist: attacks a running server and asserts every attack is refused.
-# Usage: SERVER_URL=http://127.0.0.1:3006 bundle exec ruby script/redteam_suite.rb
+# Usage, in kiosk-demo-philslist with its bundle:
+#   SERVER_URL=http://127.0.0.1:3006 bundle exec ruby ../kiosk-redteam/suites/philslist.rb
 
 require 'json'
 require 'securerandom'
@@ -191,7 +192,7 @@ rc_log, _log_post = WIRE.post_json('/kiosk/post_listing',
                                      title: "Redteam #{title_sentinel}",
                                      body: "Call me on #{body_sentinel}" },
                                    WIRE.bearer(ALICE.token))
-request_log  = File.expand_path('../log/development.log', __dir__)
+request_log  = File.expand_path('log/development.log') # the demo's own log: the suite runs in the demo
 log_text     = File.exist?(request_log) ? File.read(request_log, encoding: 'UTF-8', invalid: :replace, undef: :replace) : ''
 param_lines  = log_text.each_line.select { |line| line.include?('Parameters:') }
 body_logged  = param_lines.any? { |line| line.include?(body_sentinel) }

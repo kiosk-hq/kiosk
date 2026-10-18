@@ -25,7 +25,7 @@ if ARGV.include?('--self-test')
   SELF_TEST_DISCOVERY_SHIPS =
     "    ships: %w[atablefor getgrocery philslist skooti stylish tudu],\n    " \
     "why: \"Each origin's own capabilities, verbs and pages, read without a credential.\"\n"
-  SELF_TEST_EXCLUSION_RE = %r{^  'script/redteam_suite\.rb' => ".*",\n}
+  SELF_TEST_EXCLUSION_RE = %r{^  'test/test_helper\.rb' => ".*",\n}
   SELF_TEST_DSL_LINE     = "    dsl_names.each { |name| fragment_dsl_ids[\"\#{rel}#\#{name}\"] = true }\n"
 
   # `ops:` are applied to one fixture tree; the run must exit 1 and print `expect:`.
@@ -131,7 +131,7 @@ if ARGV.include?('--self-test')
     { id: 'per-demo-path-in-neither-list', rule: 'fragments',
       what: 'a `:per_demo` path drops out of FRAGMENT_EXCLUDED without joining FRAGMENT_PATHS',
       ops: [[:edit, 'bin/check-demo-copies', SELF_TEST_EXCLUSION_RE, '']],
-      expect: %r{script/redteam_suite\.rb: declared `:per_demo` in COPIES but named neither} },
+      expect: %r{test/test_helper\.rb: declared `:per_demo` in COPIES but named neither} },
     { id: 'vacuity-fragment-comparisons', rule: 'fragments',
       what: 'the fragment rule stops comparing anything',
       ops: [[:edit, 'bin/check-demo-copies', "  fragment_comparisons += held.size\n", '']],
@@ -195,10 +195,10 @@ if ARGV.include?('--self-test')
       expect: /the framework-patch rule scanned NO initializers/ },
     { id: 'driver-env-defaulted-server-url', rule: 'driver env',
       what: 'a red-team suite regrows a hard-coded SERVER_URL default',
-      ops: [[:edit, 'kiosk-demo-hoteling/script/redteam_suite.rb',
+      ops: [[:edit, 'kiosk-redteam/suites/hoteling.rb',
              "BASE_URL = ENV.fetch('SERVER_URL')",
              "BASE_URL = ENV.fetch('SERVER_URL', 'http://127.0.0.1:3003')"]],
-      expect: %r{hoteling: script/redteam_suite\.rb:\d+ fetches SERVER_URL WITH a default} },
+      expect: %r{hoteling: kiosk-redteam/suites/hoteling\.rb:\d+ fetches SERVER_URL WITH a default} },
     { id: 'driver-env-single-demo', rule: 'driver env',
       what: 'a single-demo driver regrows it',
       ops: [[:edit, 'kiosk-demo-skooti/script/rental_flow.rb',
@@ -695,9 +695,6 @@ COPIES = {
     rule: :identical,
     ships: %w[atablefor getgrocery hoteling skooti stylish],
     why: "Solid Queue's tables, in the five demos whose jobs run on it."
-  },
-  'script/redteam_suite.rb' => {
-    rule: :per_demo, why: "That demo's attack battery, against its own verbs."
   }
 }.freeze
 
@@ -1202,7 +1199,6 @@ FRAGMENT_EXCLUDED = {
   'test/stories/household_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'test/stories/link_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'test/stories/privacy_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
-  'script/redteam_suite.rb' => "The shared harness is kiosk-redteam's; the scenario bodies differ by design.",
   'app/services/price_checker.rb' => "The one shared unit is `self.call`, whose body is each operator's own catalog.",
   'app/controllers/kiosk/bookings_controller.rb' => "Two domains' booking verbs, sharing only their wire names."
 }.freeze
@@ -1742,7 +1738,7 @@ else
   errors << "check-demo-copies: #{E2E_RUN_SH} does not exist."
 end
 
-# ── Driver env: demo scripts fetch these names with NO default ──
+# ── Driver env: demo scripts and each demo's red-team suite fetch these names with NO default ──
 DRIVER_NO_DEFAULT_VARS = {
   'SERVER_URL' => 'the origin every request in the file is sent to'
 }.freeze
@@ -1751,8 +1747,9 @@ driver_env_held    = DRIVER_NO_DEFAULT_VARS.keys.to_h { |var| [var, 0] }
 driver_env_scripts = 0
 
 operator_demos.each do |demo|
-  Dir[File.join(ROOT, demo, 'script', '*.rb')].each do |path|
-    rel = path.delete_prefix("#{File.join(ROOT, demo)}/")
+  suite = File.join(ROOT, 'kiosk-redteam', 'suites', "#{short.call(demo)}.rb")
+  (Dir[File.join(ROOT, demo, 'script', '*.rb')] + Dir[suite]).each do |path|
+    rel = path.delete_prefix("#{File.join(ROOT, demo)}/").delete_prefix("#{ROOT}/")
     driver_env_scripts += 1
     File.read(path).each_line.with_index(1) do |line, lineno|
       next if line.lstrip.start_with?('#')

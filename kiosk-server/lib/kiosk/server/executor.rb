@@ -163,7 +163,7 @@ module Kiosk
           chain = persist_chain(raws)
           return chain if chain.is_a?(Result)
 
-          settle(chain, capture(provider, chain))
+          settle(provider, chain, capture(provider, chain))
         end
 
         def payment_provider!
@@ -244,18 +244,25 @@ module Kiosk
           provider.public_send(method, chain.cart, payment_method: chain.payment.payment_method)
         end
 
-        # Phase 3: record the settlement. A concurrent call that settled the same cart first answers with its settlement.
-        def settle(chain, settled)
-          settlement_id = nil
-          SessionContext.open(connection: connection, identity: identity) do
-            settlement_id = persist_settlement(cart_row_id: chain.cart_row, cart: chain.cart, settled: settled)
-          end
+        # Phase 3: record the settlement, then tell the provider, so the
+        # operator's work after the payment reads the settlement. A concurrent
+        # call that settled the same cart first answers with its settlement.
+        def settle(provider, chain, settled)
+          settlement_id = record_settlement(chain, settled)
+          provider.settled(chain.cart) if provider.respond_to?(:settled)
           settlement_result(settlement_id, settled[:psp_reference], settled[:settled_amount_cents], chain.cart.currency)
         rescue StandardError => e
           row = unique_violation?(e) && recorded_chain(chain)
           raise unless row && row['settlement_id']
 
           stored_settlement(row)
+        end
+
+        # The settlement row's id.
+        def record_settlement(chain, settled)
+          SessionContext.open(connection: connection, identity: identity) do
+            persist_settlement(cart_row_id: chain.cart_row, cart: chain.cart, settled: settled)
+          end
         end
 
         def settlement_result(settlement_id, psp_reference, settled_amount_cents, currency)

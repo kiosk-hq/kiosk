@@ -81,8 +81,8 @@ RSpec.shared_context 'a capture in a second thread' do
   end
 end
 
-# A booking reads `paid` from the moment the PSP captures, not from the moment
-# the settlement row lands.
+# A booking reads `paid` from the moment the PSP captures. The property
+# answers it once the settlement row lands.
 RSpec.describe 'the window between a capture and its settlement' do
   include_context 'a guest with a room to pay for'
   include_context 'a capture in a second thread'
@@ -105,7 +105,7 @@ RSpec.describe 'the window between a capture and its settlement' do
     ActiveSupport::Dependencies.interlock.permit_concurrent_loads { paying.join }
     expect(settled?(id)).to be(false)
     expect(payment_state(id)).to eq('paid')
-    expect(booking_row(id)).to include('status' => 'confirmed', 'confirmation_code' => be_present)
+    expect(booking_row(id)).to include('status' => 'reserved', 'confirmation_code' => nil)
 
     events = Kiosk.configuration.event_store.since(guest.id, 0).select { it['topic'] == 'payment' }
     expect(events.pluck('subject')).to eq([id])

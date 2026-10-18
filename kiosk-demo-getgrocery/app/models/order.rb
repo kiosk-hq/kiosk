@@ -66,7 +66,7 @@ class Order < ApplicationRecord
 
   def refund!(lines)
     amount = lines.sum { it.price_cents * it.qty }
-    Kiosk.configuration.payment_provider.refund(psp_reference: settlement&.psp_reference, amount_cents: amount)
+    Kiosk.configuration.payment_provider.refund(psp_reference: settlement.psp_reference, amount_cents: amount)
     update!(refunded_cents: amount, status: amount == total_cents ? :cancelled : status)
     announce_cancelled if cancelled?
   end

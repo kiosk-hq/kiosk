@@ -6,8 +6,8 @@ module Kiosk
   module Server
     # §11.6 over a PSP adapter: claims the operator's payable row `unpaid →
     # paying` before the capture, checks the cart against the operator's price,
-    # flips the row to `paid` once the capture returns, and tells its owner on
-    # the `payment` topic.
+    # flips the row to `paid` once the capture returns, tells its owner on the
+    # `payment` topic, and runs `c.after_payment` once the settlement is recorded.
     class PaymentClaim
       PAYING = 'paying'
       PAID   = 'paid'
@@ -36,25 +36,18 @@ module Kiosk
 
       def capture(cart_mandate, payment_method: nil) = charge_row(claim!(cart_mandate), cart_mandate, payment_method)
 
-      def setup_required?(user_id:) = @psp.setup_required?(user_id: user_id)
-
-      def setup_url(user_id:, return_url:) = @psp.setup_url(user_id: user_id, return_url: return_url)
-
-      def refund(psp_reference:, amount_cents:) = @psp.refund(psp_reference: psp_reference, amount_cents: amount_cents)
+      delegate :setup_required?, :setup_url, :refund, to: :@psp
 
       # The settlements whose cart names this row.
       def settlements(id) = Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(@reference => id))
 
       def settled?(id) = settlements(id).exists?
 
-      # `paying → paid`, the `payment` event, then `c.after_payment`, once:
-      # only the call that moved the row runs them. A failure here never
-      # surfaces: the charge has happened and the settlement row records it.
+      # `paying → paid`, then the `payment` event, once: only the call that
+      # moved the row announces it. A failure here never surfaces: the charge
+      # has happened and the settlement row records it.
       def mark_paid!(id)
-        return unless @row.flip(id, from: PAYING, to: PAID).positive?
-
-        announce(id, PAID)
-        Kiosk.configuration.after_payment&.call(id)
+        announce(id, PAID) if @row.flip(id, from: PAYING, to: PAID).positive?
       rescue StandardError => e
         FailureLog.report("#{self.class} could not mark #{id} paid", e)
         nil
@@ -200,6 +193,21 @@ module Kiosk
         end
       end
       include Resume
+
+      # The operator's work after a payment, which reads the settlement.
+      module AfterPayment
+        # The executor calls this once, after it records the settlement of
+        # `cart_mandate`, so `c.after_payment` reads the row's `settlement`. A
+        # failure here never surfaces on the wire: the log carries it.
+        def settled(cart_mandate)
+          id = Lines.reference(cart_mandate.line_items, @reference)
+          Kiosk.configuration.after_payment&.call(id)
+        rescue StandardError => e
+          FailureLog.report("#{self.class} after_payment failed for #{id}", e)
+          nil
+        end
+      end
+      include AfterPayment
 
       # The `payment` topic, which the engine serves beside `payment_setup`, and
       # its events: where the money for one row stands.

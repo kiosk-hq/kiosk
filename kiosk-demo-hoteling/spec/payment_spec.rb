@@ -42,7 +42,9 @@ RSpec.describe 'paying for a booking' do
   end
 
   it "takes the owner's payment, and the property confirms the paid booking" do
-    cashier.capture(cart(ada))
+    paid = cart(ada)
+    cashier.capture(paid)
+    cashier.settled(paid)
 
     expect(booking.reload).to be_paid.and be_confirmed
     expect(booking.confirmation_code).to be_present

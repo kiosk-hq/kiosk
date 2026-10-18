@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `c.after_payment` runs after the engine records the settlement, through `PaymentClaim#settled`, so the hook reads the row's `settlement`.
+
 ## [0.5.15] — 2026-10-18
 
 - 2026-10-18: `Kiosk::Payable` gives a payable model `payment_state`, `with_settlement`, `cart` and `settlement`; `PaymentClaim` pushes the `payment` topic when a capture returns.

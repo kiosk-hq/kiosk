@@ -707,6 +707,17 @@ RSpec.describe Kiosk::Server::Executor, 'a replayed pay of a settled chain' do
     expect(settlement_count).to eq(1)   # NO second settlement minted
   end
 
+  # The operator's work after the payment reads the settlement, so the
+  # provider hears of it only once the row exists, and once.
+  it 'tells the provider the cart is settled after the settlement row is written, and not on the replay' do
+    seen = []
+    allow(provider).to receive(:settled) { |settled_cart| seen << [settled_cart.id, settlement_count] }
+
+    2.times { pay }
+
+    expect(seen).to eq([[cart.id, 1]])
+  end
+
   # The replay is answered from the STORED row, so the settlement id it
   # hands back is the one the settlements table holds — not a fresh one.
   it 'returns the stored settlement row, not a reconstruction' do

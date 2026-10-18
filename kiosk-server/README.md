@@ -127,7 +127,8 @@ The model also includes `Kiosk::Payable`, which gives each row:
   it for many rows in one query.
 - `cart(lines)`: the cart your action returns for the assistant to sign, a line
   that names the row and then your priced lines.
-- `settlement`: the receipt of the capture that paid the row.
+- `settlement`: the receipt of the capture that paid the row. `c.after_payment`
+  runs once this receipt is recorded, so it can refund against it.
 
 When the capture returns, the engine pushes `{"order_id": "…", "payment_state":
 "paid"}` to the row's owner on the `payment` topic. After you refund a row, call

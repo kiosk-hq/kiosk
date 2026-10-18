@@ -157,14 +157,22 @@ module PaymentClaimSpecHelpers
   def put_status(value) = conn.execute(%(UPDATE "#{schema}".payables SET payment_status = '#{value}' WHERE id = '#{row}'))
 end
 
-RSpec.describe Kiosk::Server::PaymentClaim, '#mark_paid!' do
+RSpec.describe Kiosk::Server::PaymentClaim, '#settled' do
   include PaymentClaimSpecHelpers
 
-  it 'runs after_payment once when two callers mark one row paid' do
-    claim.capture(cart_for(row))
-    claim.mark_paid!(row)
+  it 'runs after_payment for the row the settled cart names, and the capture alone does not' do
+    cart = cart_for(row)
+    claim.capture(cart)
+    expect(paid).to be_empty
 
+    claim.settled(cart)
     expect(paid).to eq([row])
+  end
+
+  it 'logs a failing after_payment and answers nil' do
+    Kiosk.configuration.after_payment = ->(_) { raise 'refund refused' }
+
+    expect { expect(claim.settled(cart_for(row))).to be_nil }.to output(/after_payment failed for #{row}: refund refused/).to_stderr
   end
 end
 
@@ -179,7 +187,6 @@ RSpec.describe Kiosk::Server::PaymentClaim do
 
     expect(psp.captures.size).to eq(1)
     expect(status).to eq('paid')
-    expect(paid).to eq([row])
   end
 
   it 'publishes the row as paying while its capture is outstanding' do
@@ -340,7 +347,7 @@ RSpec.describe Kiosk::Server::PaymentClaim, '#resume' do
     put_status('paying')
     claim.resume(record(cart_for(row)))
 
-    expect([psp.captures.size, status, paid]).to eq([1, 'paid', [row]])
+    expect([psp.captures.size, status]).to eq([1, 'paid'])
   end
 
   it 'claims a row the first call never reached' do
@@ -349,11 +356,11 @@ RSpec.describe Kiosk::Server::PaymentClaim, '#resume' do
     expect([psp.captures.size, status]).to eq([1, 'paid'])
   end
 
-  it 'charges again a row flipped to paid whose settlement was never written, without a second after_payment' do
+  it 'charges again a row flipped to paid whose settlement was never written' do
     put_status('paid')
     claim.resume(record(cart_for(row)))
 
-    expect([psp.captures.size, status, paid]).to eq([1, 'paid', []])
+    expect([psp.captures.size, status]).to eq([1, 'paid'])
   end
 end
 

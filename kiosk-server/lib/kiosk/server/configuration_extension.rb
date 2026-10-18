@@ -262,7 +262,7 @@ module Kiosk
       # `call(id, lines) → cents | String`: the payable row's price, or why the cart is refused.
       attr_accessor :cart_price_checker
 
-      # Optional `call(id)`, run once the capture for row `id` has returned.
+      # Optional `call(id)`, run once the settlement that paid row `id` is recorded.
       attr_accessor :after_payment
 
       # Default true. Malformed `Kiosk-PoW` and reserved-endpoint bodies are a 400

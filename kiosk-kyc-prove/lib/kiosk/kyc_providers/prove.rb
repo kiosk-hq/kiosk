@@ -51,7 +51,7 @@ module Kiosk
         raise Unavailable, "the KYC broker answered #{response.code}" unless response.code.to_i == 201
 
         parse(response.body)
-      rescue Timeout::Error, SocketError, SystemCallError, IOError, OpenSSL::SSL::SSLError => e
+      rescue Timeout::Error, SocketError, SystemCallError, IOError, OpenSSL::SSL::SSLError, Net::HTTPBadResponse => e
         raise Unavailable, "the KYC broker could not be reached (#{e.class})"
       end
 

@@ -2,6 +2,7 @@
 
 require 'json'
 require 'net/http'
+require 'socket'
 
 RSpec.shared_context 'with a Prove broker client' do
   subject(:prove) { described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: 'https://broker.example/') }
@@ -65,5 +66,18 @@ RSpec.describe Kiosk::KycProviders::Prove, '#open_verification' do
   it 'raises Unavailable when the broker cannot be reached' do
     allow_any_instance_of(Net::HTTP).to receive(:request).and_raise(Errno::ECONNREFUSED)
     expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
+  end
+
+  it 'raises Unavailable when the broker answers bytes that are not HTTP' do
+    server = TCPServer.new('127.0.0.1', 0)
+    listener = Thread.new { server.accept.then { |peer| peer.readpartial(4096) && peer.write("garbage\r\n") && peer.close } }
+    broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: "http://127.0.0.1:#{server.addr[1]}/")
+
+    expect do
+      broker.open_verification(subject: 'u-1', claims: %w[age_over_18], audience: 'shop', callback_url: 'https://shop.example/cb')
+    end.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
+  ensure
+    listener&.join(1)
+    server&.close
   end
 end

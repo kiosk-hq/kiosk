@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: A broker answer that is not HTTP raises `Unavailable`, so `request_kyc` answers `action_failed`, not 500.
+
 ## [0.5.16] — 2026-10-18
 
 - 2026-10-18: Version 0.5.16, the tree cut that matches skill 0.5.16.

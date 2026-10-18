@@ -346,14 +346,20 @@ assert "the descriptor's description travels verbatim" \
   "$(echo "$schema_doc" | jq -r '.queries[] | select(.name == "salons") | .description')"
 
 # `style` and `explode` EXPLICIT on every parameter (Prism ignores the
-# defaults), and `limit`/`cursor` INJECTED because no input_schema declares
-# them (a strict validator 400s the pagination the contract invites).
+# defaults). `my_appointments` declares `salon_id`, so the list is not empty.
+# `limit`/`cursor` are INJECTED into every query because no input_schema
+# declares them (a strict validator 400s the pagination the contract invites).
+assert "my_appointments declares salon_id as a query parameter" \
+  "$(echo "$oa" | jq -r '[.paths."/my_appointments".get.parameters[] | select(has("$ref") | not) | .name] | join(",")')" \
+  "salon_id"
 assert "every parameter writes style and explode" \
-  "$(echo "$oa" | jq -r '[.paths[][] | .parameters // [] | .[] | select(has("$ref") | not)] | map(has("style") and has("explode")) | all')" \
+  "$(echo "$oa" | jq -r '[.paths[][] | .parameters // [] | .[] | select(has("$ref") | not)] | length > 0 and (map(has("style") and has("explode")) | all)')" \
   "true"
 assert "limit and cursor are injected into a query" \
-  "$(echo "$oa" | jq -r '[.paths."/salons".get.parameters[]."$ref"] | join(",")')" \
+  "$(echo "$oa" | jq -r '[.paths[].get // empty | select(.tags == ["queries"]) | [.parameters[]."$ref" // empty] | join(",")] | unique | join(" ")')" \
   "#/components/parameters/limit,#/components/parameters/cursor"
+assert "…into each of the two queries" \
+  "$(echo "$oa" | jq -r '[.paths[].get // empty | select(.tags == ["queries"])] | length')" "2"
 assert "the reserved parameters are form/explode:true" \
   "$(echo "$oa" | jq -r '[.components.parameters[] | .style == "form" and .explode == true] | all')" "true"
 assert "an action gets no query parameters" \
@@ -731,6 +737,12 @@ bob_appts=$(query_call "$BOB_AGENT_TOKEN" "my_appointments")
 assert "bob: 1 appointment exists"    "$(echo "$bob_appts" | jq -r 'length')"                                   "1"
 assert "bob: sees his own row"        "$(echo "$bob_appts" | jq -r --arg id "$bob_appt_id"   '[.[].id] | index($id) != null')" "true"
 assert "bob: does NOT see alice's row" "$(echo "$bob_appts" | jq -r --arg id "$alice_appt_id" '[.[].id] | index($id) == null')" "true"
+
+# The declared `salon_id` narrows the principal's own rows and never widens them.
+assert "alice at her salon: her one row" \
+  "$(query_call "$ALICE_AGENT_TOKEN" "my_appointments" "salon_id=$salon_id" | jq -r '[.[].id] | join(",")')" "$alice_appt_id"
+assert "alice at another salon: no row" \
+  "$(query_call "$ALICE_AGENT_TOKEN" "my_appointments" "salon_id=$((salon_id + 1))" | jq -r 'length')" "0"
 
 # ─── problem documents (RFC 9457) ───────────────────────────────────────
 

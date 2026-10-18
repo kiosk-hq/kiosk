@@ -64,13 +64,19 @@ module Kiosk
       }
     end
 
-    # my_appointments — the principal's own appointments; the caller supplies no filter.
+    # my_appointments — the principal's own appointments. The optional `salon_id`
+    # narrows them; it cannot widen them.
     kind :query
     description 'List the appointments belonging to the authenticated principal. ' \
                 "The caller cannot widen this: the scope is the provider's, taken " \
                 "from the authenticated session, so another principal's bookings " \
                 'are never returned. Returns the complete set (not paginated).'
-    input_schema type: 'object', additionalProperties: false, properties: {}, required: []
+    input_schema type: 'object', additionalProperties: false,
+                 properties: {
+                   salon_id: { type: 'integer',
+                               description: 'Only the appointments at this salon: the `id` of a row from salons.' }
+                 },
+                 required: []
     output_schema type: 'array',
                   description: "The principal's own appointments, complete and not paginated.",
                   items: {
@@ -93,7 +99,9 @@ module Kiosk
     example_row({ id: '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f', salon_id: 1,
                   slot: -> { example_slot } })
     def my_appointments
-      render json: Appointment.own.order(:id).map { { 'id' => it.id, 'salon_id' => it.salon_id, 'slot' => it.slot.iso8601 } }
+      appointments = Appointment.own.order(:id)
+      appointments = appointments.where(salon_id: params[:salon_id]) if params.key?(:salon_id)
+      render json: appointments.map { { 'id' => it.id, 'salon_id' => it.salon_id, 'slot' => it.slot.iso8601 } }
     end
 
     # book_appointment — reserves a slot for the CALLING principal. The owner is

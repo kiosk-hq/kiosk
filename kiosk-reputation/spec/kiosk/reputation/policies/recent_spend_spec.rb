@@ -45,6 +45,12 @@ RSpec.describe Kiosk::Reputation::Policies::RecentSpend do
     expect(outcomes.count(&:nil?).fdiv(outcomes.size)).to be_within(0.08).of(0.5)
   end
 
+  it 'tolls every call of a caller whose token carries no iat or exp' do
+    bare = Struct.new(:user_id, :claims).new('customer', {})
+
+    expect(Array.new(200) { toll(99_00, bare) }).to all(be_truthy)
+  end
+
   it 'reads the cap in whole currency units and the spend in cents' do
     expect([0, 50_00, 100_00, 150_00].map { policy.chance(it) }).to eq([1, 0.5, 0, 0])
   end

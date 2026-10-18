@@ -31,10 +31,11 @@ module Kiosk
 
         # A number in [0, 1), set by the customer and the token lifetime that holds
         # the token's `iat`: lifetimes are consecutive spans of `exp - iat` seconds
-        # from the Unix epoch. A caller without a token draws anew.
+        # from the Unix epoch. A caller whose token has no `iat` or `exp` draws 0,
+        # so it pays whenever its spend leaves a chance above 0.
         def draw(identity)
           claims = identity&.claims || {}
-          return rand unless claims[:iat] && claims[:exp]
+          return 0 unless claims[:iat] && claims[:exp]
 
           span = claims[:iat].div(claims[:exp] - claims[:iat])
           Digest::SHA256.digest("#{identity.user_id}:#{span}").unpack1('Q>').fdiv(2**64)

@@ -10,7 +10,6 @@ Rails.application.configure do
   config.log_tags = [:request_id]
   config.logger   = ActiveSupport::TaggedLogging.logger($stdout)
   config.log_level = ENV.fetch('RAILS_LOG_LEVEL', 'info')
-  config.silence_healthcheck_path = '/up'
   config.active_support.report_deprecations = false
   config.i18n.fallbacks = true
   config.active_record.dump_schema_after_migration = false

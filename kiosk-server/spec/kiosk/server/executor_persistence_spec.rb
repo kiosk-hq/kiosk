@@ -762,7 +762,7 @@ RSpec.describe Kiosk::Server::Executor, 'a repeated pay of an unfinished chain, 
       end
     end.map(&:value)
 
-    expect(results.map { it[:settlement_id] }.uniq.size).to eq(1)
+    expect(results.pluck(:settlement_id).uniq.size).to eq(1)
     expect(settlement_count).to eq(1)
   end
 

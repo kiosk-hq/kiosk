@@ -36,7 +36,7 @@ module Kiosk
         def spent?(id)
           return false if id.nil?
 
-          sql = <<~SQL
+          sql = <<~SQL.squish
             SELECT 1 FROM #{table}
             WHERE id = $1 AND expires_at > now()
             LIMIT 1
@@ -48,7 +48,7 @@ module Kiosk
         def mark_spent(id, exp)
           return if id.nil?
 
-          sql = <<~SQL
+          sql = <<~SQL.squish
             INSERT INTO #{table} (id, expires_at)
             VALUES ($1, to_timestamp($2))
             ON CONFLICT (id) DO UPDATE SET expires_at = EXCLUDED.expires_at
@@ -65,7 +65,7 @@ module Kiosk
         private
 
         def claim_sql
-          <<~SQL
+          <<~SQL.squish
             INSERT INTO #{table} AS s (id, expires_at)
             VALUES ($1, to_timestamp($2))
             ON CONFLICT (id) DO UPDATE

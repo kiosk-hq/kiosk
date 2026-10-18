@@ -57,7 +57,7 @@ module AuthControllerBindingSpecHelpers
   end
 
   def link_row(link_code)
-    store.find_by_device_code_hash(
+    store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(link_code)
     )
   end

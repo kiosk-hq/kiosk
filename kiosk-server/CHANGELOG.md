@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: A device authorization store answers `lookup_by_device_code_hash` and `lookup_by_user_code_hash`; a custom store renames its two `find_by_*` methods.
+
 ## [0.5.14] — 2026-10-18
 
 - 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.

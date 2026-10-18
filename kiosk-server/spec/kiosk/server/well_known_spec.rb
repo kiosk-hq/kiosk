@@ -813,7 +813,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       declare_action('checkout')
       Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      hrefs = member(d)[:item].map { |i| i[:href] }
+      hrefs = member(d)[:item].pluck(:href)
       # Every module is live here — schema, queries, actions AND pay. The two
       # `service-desc` members come first; then one `item` per registered
       # verb, at the endpoint the verb answers on.
@@ -840,7 +840,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       # module is absent, so its endpoint is not catalogued.
       declare_query('catalog')
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      hrefs = member(d)[:item].map { |i| i[:href] }
+      hrefs = member(d)[:item].pluck(:href)
       expect(hrefs).to include("https://api.acme.example/kiosk/schema#{v}")
       expect(hrefs).not_to include('https://api.acme.example/kiosk/pay')
     end
@@ -910,7 +910,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     it 'keeps both service-desc members — the operations are added, not swapped in' do
       declare_query('catalog')
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      descs = member(d)[:item].select { |i| i[:rel] == 'service-desc' }.map { |i| i[:href] }
+      descs = member(d)[:item].select { |i| i[:rel] == 'service-desc' }.pluck(:href)
       expect(descs).to eq(["https://api.acme.example/kiosk/schema#{v}",
                            "https://api.acme.example/kiosk/openapi.json#{v}"])
     end
@@ -937,7 +937,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     it 'links no wire endpoints when nothing is registered (schema module absent)' do
       # Bare config registers no queries/actions → capabilities = []; only the
       # agents.json discovery companion is catalogued.
-      hrefs = member(doc)[:item].map { |i| i[:href] }
+      hrefs = member(doc)[:item].pluck(:href)
       expect(hrefs).to eq(['https://api.acme.example/agents.json'])
     end
 
@@ -964,14 +964,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       # the provisional surface.
       declare_query('catalog')
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      descs = member(d)[:item].select { |i| i[:rel] == 'service-desc' }.map { |i| i[:href] }
+      descs = member(d)[:item].select { |i| i[:rel] == 'service-desc' }.pluck(:href)
 
       expect(descs).to eq(["https://api.acme.example/kiosk/schema#{v}",
                            "https://api.acme.example/kiosk/openapi.json#{v}"])
     end
 
     it 'advertises no openapi.json when there is nothing to describe' do
-      hrefs = member(doc)[:item].map { |i| i[:href] }
+      hrefs = member(doc)[:item].pluck(:href)
       expect(hrefs.grep(%r{/kiosk/openapi\.json})).to be_empty
     end
   end
@@ -995,7 +995,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     it 'links the agents.json discovery companion' do
-      hrefs = member(doc)[:item].map { |i| i[:href] }
+      hrefs = member(doc)[:item].pluck(:href)
       expect(hrefs).to include('https://api.acme.example/agents.json')
     end
   end
@@ -1011,7 +1011,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       declare_query('catalog')
       Kiosk.configure { |c| c.mount_path = '/agent-surface' }
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      hrefs = d[:linkset].first[:item].map { |i| i[:href] }
+      hrefs = d[:linkset].first[:item].pluck(:href)
       expect(hrefs).to include("https://api.acme.example/agent-surface/schema#{v}")
     end
 

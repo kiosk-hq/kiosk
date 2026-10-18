@@ -40,7 +40,7 @@ module Kiosk
         private
 
         def settings_sql(assignments, bind_count)
-          <<~SQL
+          <<~SQL.squish
             UPDATE #{Kiosk.configuration.schema}.agents
             SET #{assignments.join(', ')}
             WHERE id = $#{bind_count - 2}
@@ -63,7 +63,7 @@ module Kiosk
         # Returns `[sql, binds]` together: the two branches take different bind counts.
         def list_query(config, user_id, settled_spend:)
           window_days = settled_spend ? config.spending_cap_window_days&.to_i : nil
-          sql = <<~SQL
+          sql = <<~SQL.squish
             SELECT id, public_key, created_at, human_label, spending_cap_cents,
                    #{settled_cents_expr(config, settled_spend: settled_spend)} AS settled_cents
             FROM #{config.schema}.agents
@@ -78,7 +78,7 @@ module Kiosk
           return '0' unless settled_spend
 
           window = config.spending_cap_window_days ? 'AND settled_at >= now() - make_interval(days => $3)' : ''
-          <<~SQL.strip
+          <<~SQL.squish
             (SELECT COALESCE(SUM(settled_amount_cents), 0)
              FROM #{config.schema}.settlements
              WHERE agent_id = agents.id #{window})
@@ -98,7 +98,7 @@ module Kiosk
         end
 
         def fingerprint(pem)
-          return '(no key)' if pem.nil? || pem.empty?
+          return '(no key)' if pem.blank?
 
           SigningKey.from_pem(pem).kid
         rescue StandardError

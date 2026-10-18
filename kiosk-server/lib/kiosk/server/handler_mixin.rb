@@ -295,7 +295,7 @@ module Kiosk
         def method_added(method_name)
           super
           pending = @kiosk_pending
-          return if pending.nil? || pending.empty?
+          return if pending.blank?
 
           @kiosk_pending = nil
           kiosk_declare(method_name, pending)
@@ -351,7 +351,7 @@ module Kiosk
             kind: declaration[:kind]
           )
           HandlerMixin.registry_for(declaration[:kind]).declare(
-            declaration[:wire_name], handler, **REGISTERED_KEYS.to_h { |key| [key, declaration[key]] }
+            declaration[:wire_name], handler, **REGISTERED_KEYS.index_with { |key| declaration[key] }
           )
         end
       end

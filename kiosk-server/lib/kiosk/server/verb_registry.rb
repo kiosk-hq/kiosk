@@ -23,7 +23,7 @@ module Kiosk
       # @api private — the {HandlerMixin} is the only caller.
       # `slots`: any of {SchemaSlots::RESOLVABLE_SLOTS}; an undeclared one is nil.
       def declare(name, handler, reach: HandlerMixin::DEFAULT_REACH, description: nil, **slots)
-        slots = SchemaSlots::RESOLVABLE_SLOTS.to_h { |slot| [slot, nil] }.merge(slots)
+        slots = SchemaSlots::RESOLVABLE_SLOTS.index_with(nil).merge(slots)
         entry = Entry.new(handler: handler, reach: reach, description: description, **slots)
         SchemaSlots.note_declaration(slots)
         registry[name.to_s] = entry

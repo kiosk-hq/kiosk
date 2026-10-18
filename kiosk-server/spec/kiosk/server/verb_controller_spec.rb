@@ -574,7 +574,7 @@ RSpec.describe Kiosk::Server::VerbController do
       # long freshness would otherwise make its own refusal cacheable.
       declare_query('salons') do
         response.headers['Cache-Control'] = 'private, max-age=600'
-        render json: { error: { code: 'forbidden', message: 'no' } }, status: 403
+        render json: { error: { code: 'forbidden', message: 'no' } }, status: :forbidden
       end
       expect(call_verb(:get, 'salons').first).to eq(403)
       expect(last_headers['Cache-Control']).to eq('private, no-store')

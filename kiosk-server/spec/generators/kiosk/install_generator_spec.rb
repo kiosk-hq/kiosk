@@ -443,6 +443,6 @@ RSpec.describe Kiosk::Generators::InstallGenerator, 'default options' do
 
   it "calls nothing at migrate time: every migration's DDL is written into it" do
     invoke!
-    expect(migrations.map { |p| File.read(p) }).to all(satisfy { |body| !body.include?('SchemaDefinitions') })
+    expect(migrations.map { |p| File.read(p) }).to all(satisfy { |body| body.exclude?('SchemaDefinitions') })
   end
 end

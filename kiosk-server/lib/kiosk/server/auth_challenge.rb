@@ -10,7 +10,7 @@ module Kiosk
       module_function
 
       # The agent signs `challenge` into its JWS; `exp` is the Unix expiry.
-      def issue(public_key_pem:, now: Time.now)
+      def issue(public_key_pem:, now: Time.current)
         config = Kiosk.configuration
         nonce  = SecureRandom.urlsafe_base64(32)
         exp    = now.to_i + config.auth_challenge_ttl

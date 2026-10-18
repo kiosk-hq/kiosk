@@ -54,7 +54,7 @@ module Kiosk
 
         present = normalize(body).keys
         errors.filter_map { |error| error['details']&.fetch('missing_keys', nil) }
-              .flatten.find { |name| !present.include?(name) }
+              .flatten.find { |name| present.exclude?(name) }
       end
 
       def body_hint(pointer)
@@ -82,7 +82,7 @@ module Kiosk
           'arguments must satisfy it. `limit` and `cursor` are always accepted.'
       end
 
-      def summary(errors) = errors.map { |error| error['error'] }.compact.join('; ')
+      def summary(errors) = errors.pluck('error').compact.join('; ')
 
       # What to send for each argument that failed its declared `format`.
       def format_spellings(errors)

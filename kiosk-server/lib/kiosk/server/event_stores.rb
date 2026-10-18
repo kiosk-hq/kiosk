@@ -33,7 +33,7 @@ module Kiosk
 
         # This identity's events after the cursor `id`, ascending.
         def since(identity_key, id)
-          sql = <<~SQL
+          sql = <<~SQL.squish
             SELECT id, topic, subject, occurred_at, data
             FROM #{table}
             WHERE identity_key = $1 AND id > $2
@@ -76,7 +76,7 @@ module Kiosk
         private
 
         def insert_sql
-          <<~SQL
+          <<~SQL.squish
             INSERT INTO #{table} (identity_key, topic, subject, occurred_at, data)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING id

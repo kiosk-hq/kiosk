@@ -96,7 +96,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.start codes' do
 
   it 'persists only hashes of both codes (not plain)' do
     result = described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
-    stored = store.find_by_device_code_hash(
+    stored = store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(result[:device_code])
     )
     expect(stored).to eq(result[:da])
@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.exchange slow_down (RFC 8628 §
 
   it 'tells a client polling faster than the interval to back off' do
     start_result
-    t0 = Time.now
+    t0 = Time.current
     first  = described_class.exchange(device_code: device_code, now: t0)
     second = described_class.exchange(device_code: device_code, now: t0 + 1)
     expect(first).to include(error: 'authorization_pending')
@@ -139,7 +139,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.exchange slow_down (RFC 8628 §
 
   it 'serves a client honouring the interval normally' do
     start_result
-    t0 = Time.now
+    t0 = Time.current
     described_class.exchange(device_code: device_code, now: t0)
     third = described_class.exchange(
       device_code: device_code,
@@ -174,7 +174,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.exchange state-machine outcomes
     expect(result).to include(ok: false, error: 'expired_token')
 
     # And the row was bumped to :expired so subsequent polls see it.
-    reloaded = store.find_by_device_code_hash(
+    reloaded = store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(device_code)
     )
     expect(reloaded).to be_expired
@@ -188,7 +188,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.exchange BIND-POP on an approve
     result = exchange
     expect(result).to include(ok: false, error: 'invalid_client')
 
-    reloaded = store.find_by_device_code_hash(
+    reloaded = store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(device_code)
     )
     expect(reloaded).to be_approved
@@ -222,7 +222,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.exchange BIND-POP on an approve
 
     result = exchange(signed: 'jws')
     expect(result).to include(ok: false, error: 'invalid_client')
-    reloaded = store.find_by_device_code_hash(
+    reloaded = store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(device_code)
     )
     expect(reloaded).to be_approved
@@ -270,7 +270,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.exchange BIND-POP with a valid 
   it 'mints for only ONE of two concurrent polls of the same device_code' do
     approved = start_result[:da].approve(user_id: user_id)
     store.update(approved)
-    allow(store).to receive(:find_by_device_code_hash).and_return(approved)
+    allow(store).to receive(:lookup_by_device_code_hash).and_return(approved)
 
     first  = exchange(signed: 'jws')
     second = exchange(signed: 'jws')

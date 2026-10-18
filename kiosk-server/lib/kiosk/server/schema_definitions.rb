@@ -16,7 +16,7 @@ module Kiosk
         user_id_type  ||= Kiosk.configuration.user_id_type
         cast = user_id_cast(user_id_type)
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE SCHEMA IF NOT EXISTS "#{schema}";
 
           CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
@@ -34,7 +34,7 @@ module Kiosk
           CREATE OR REPLACE FUNCTION "#{schema}".current_agent_id() RETURNS uuid LANGUAGE sql STABLE AS $$
             SELECT NULLIF(current_setting('#{guc_namespace}.current_agent_id', true), '')::uuid
           $$;
-        SQL
+        DDL
       end
 
       # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled),
@@ -44,7 +44,7 @@ module Kiosk
         user_id_type ||= Kiosk.configuration.user_id_type
         col_type = user_id_cast(user_id_type)
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".agents (
             id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id             #{col_type} NOT NULL REFERENCES "#{user_table}"(id) ON DELETE CASCADE,
@@ -81,7 +81,7 @@ module Kiosk
             agent_id     uuid NOT NULL REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
             PRIMARY KEY (provider, external_id)
           );
-        SQL
+        DDL
       end
 
       # 004: account-binding requests; codes are stored hashed only.
@@ -91,7 +91,7 @@ module Kiosk
         user_id_type ||= Kiosk.configuration.user_id_type
         col_type = user_id_cast(user_id_type)
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".device_authorizations (
             id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             device_code_hash text NOT NULL,
@@ -120,7 +120,7 @@ module Kiosk
           CREATE INDEX IF NOT EXISTS idx_device_authorizations_expiry
             ON "#{schema}".device_authorizations (expires_at)
             WHERE status IN ('pending', 'approved');
-        SQL
+        DDL
       end
 
       # 005: the AP2 trail. `id` is server-generated; the signed mandate id is
@@ -132,7 +132,7 @@ module Kiosk
         user_id_type ||= Kiosk.configuration.user_id_type
         col_type = user_id_cast(user_id_type)
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".intent_mandates (
             id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             mandate_id        text NOT NULL,
@@ -201,7 +201,7 @@ module Kiosk
           );
           CREATE INDEX IF NOT EXISTS idx_settlements_user_id ON "#{schema}".settlements (user_id);
           CREATE INDEX IF NOT EXISTS idx_settlements_cart    ON "#{schema}".settlements (cart_mandate_id);
-        SQL
+        DDL
       end
 
       # 006: KYC grants and open verifications, keyed on the person.
@@ -212,7 +212,7 @@ module Kiosk
         col_type = user_id_cast(user_id_type)
         person   = %(#{col_type} NOT NULL REFERENCES "#{user_table}"(id) ON DELETE CASCADE)
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".kyc_attributes (
             user_id    #{person},
             name       text NOT NULL,
@@ -228,14 +228,14 @@ module Kiosk
             created_at  timestamptz NOT NULL DEFAULT now()
           );
           CREATE INDEX IF NOT EXISTS idx_kyc_requests_user_id ON "#{schema}".kyc_requests (user_id, created_at);
-        SQL
+        DDL
       end
 
       # 007: the event tail; `id` is the origin's one monotonic cursor.
       def events_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".events (
             id           bigserial   PRIMARY KEY,
             identity_key text        NOT NULL,
@@ -251,14 +251,14 @@ module Kiosk
           -- The retention sweep only.
           CREATE INDEX IF NOT EXISTS idx_events_created_at
             ON "#{schema}".events (created_at);
-        SQL
+        DDL
       end
 
       # 008: spent proof-of-work challenge ids; the primary key is the single-use gate.
       def pow_spent_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".pow_spent (
             id         text        PRIMARY KEY,
             expires_at timestamptz NOT NULL
@@ -267,19 +267,19 @@ module Kiosk
           -- single-use.
           CREATE INDEX IF NOT EXISTS idx_pow_spent_expires_at
             ON "#{schema}".pow_spent (expires_at);
-        SQL
+        DDL
       end
 
       # 009: each agent's revocation watermark: a token issued before it stops verifying.
       def revocations_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".revocations (
             agent_id       uuid        PRIMARY KEY REFERENCES "#{schema}".agents(id) ON DELETE CASCADE,
             revoked_before timestamptz NOT NULL
           );
-        SQL
+        DDL
       end
 
       # 011: the visits an operator records as fulfilled; reputation counts their value.
@@ -287,7 +287,7 @@ module Kiosk
         schema ||= Kiosk.configuration.schema
         col_type = user_id_cast(user_id_type || Kiosk.configuration.user_id_type)
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".visits (
             id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id     #{col_type} NOT NULL,
@@ -295,14 +295,14 @@ module Kiosk
             visited_at  timestamptz NOT NULL DEFAULT now()
           );
           CREATE INDEX IF NOT EXISTS idx_visits_user_id ON "#{schema}".visits (user_id, visited_at);
-        SQL
+        DDL
       end
 
       # 010: each public key's outstanding auth challenge; the primary key keeps it single.
       def auth_challenge_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
-        <<~SQL.strip
+        <<~DDL.strip
           CREATE TABLE IF NOT EXISTS "#{schema}".auth_challenges (
             public_key text        PRIMARY KEY,
             nonce      text        NOT NULL,
@@ -311,7 +311,7 @@ module Kiosk
           -- Supports the TTL sweep only.
           CREATE INDEX IF NOT EXISTS idx_auth_challenges_expires_at
             ON "#{schema}".auth_challenges (expires_at);
-        SQL
+        DDL
       end
 
       def configured_user_table = Kiosk.configuration.user_model.to_s.constantize.table_name

@@ -33,13 +33,9 @@ module Kiosk
         new(OpenSSL::PKey::RSA.new(pem))
       end
 
-      def public_key
-        rsa.public_key
-      end
+      delegate :public_key, to: :rsa
 
-      def private?
-        rsa.private?
-      end
+      delegate :private?, to: :rsa
 
       def to_pem
         raise 'cannot export PEM: signing key is public-only' unless private?

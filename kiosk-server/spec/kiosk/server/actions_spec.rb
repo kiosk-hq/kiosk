@@ -113,7 +113,7 @@ RSpec.describe Kiosk::Server::Actions do
       declare_action('apple', description: 'First')
 
       cat = described_class.catalog
-      expect(cat.map { |d| d[:name] }).to eq(%w[apple zebra])
+      expect(cat.pluck(:name)).to eq(%w[apple zebra])
       expect(cat.first[:description]).to  eq('First')
       expect(cat.last[:description]).to   eq('Last')
     end

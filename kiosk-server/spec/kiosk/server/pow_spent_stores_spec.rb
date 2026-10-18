@@ -15,7 +15,7 @@ module PowSpentStoresSpec
   end
 
   def expiry_row(id)
-    ActiveRecord::Base.connection.exec_query(<<~SQL, 'spec types', [id]).to_a.first
+    ActiveRecord::Base.connection.exec_query(<<~SQL.squish, 'spec types', [id]).to_a.first
       SELECT pg_typeof(expires_at)::text AS at_type,
              extract(epoch FROM expires_at)::bigint AS at_epoch
       FROM "#{SCHEMA}".pow_spent

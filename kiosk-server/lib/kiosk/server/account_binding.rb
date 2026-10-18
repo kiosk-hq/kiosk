@@ -110,7 +110,7 @@ module Kiosk
         def validated_role(config, candidate)
           role = candidate&.to_s
           role = nil if role && role.empty?
-          if role && !config.roles.map(&:to_s).include?(role)
+          if role && config.roles.map(&:to_s).exclude?(role)
             raise Errors::ConfigurationError,
                   "binding role #{role.inspect} is not among configured roles #{config.roles.inspect}"
           end
@@ -141,7 +141,7 @@ module Kiosk
         module_function
 
         def live_by_key(conn, schema, pem)
-          conn.exec_query(<<~SQL, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
+          conn.exec_query(<<~SQL.squish, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
             SELECT id, user_id FROM #{schema}.agents
             WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
             LIMIT 1
@@ -149,7 +149,7 @@ module Kiosk
         end
 
         def revoke_owned(conn, schema, agent_id, user_id)
-          conn.exec_query(<<~SQL, 'Kiosk agent unlink', [agent_id, user_id, Kiosk.current_issuer]).to_a.first
+          conn.exec_query(<<~SQL.squish, 'Kiosk agent unlink', [agent_id, user_id, Kiosk.current_issuer]).to_a.first
             UPDATE #{schema}.agents
             SET revoked_at = now()
             WHERE id = $1
@@ -164,7 +164,7 @@ module Kiosk
         def rebind(conn, schema, agent_id, user_id, role)
           role_set, role_binds =
             role ? [', allowed_roles = ARRAY[$3]::text[]', [role]] : [", allowed_roles = '{}'::text[]", []]
-          conn.exec_query(<<~SQL, 'Kiosk agent rebind', [user_id, agent_id, *role_binds])
+          conn.exec_query(<<~SQL.squish, 'Kiosk agent rebind', [user_id, agent_id, *role_binds])
             UPDATE #{schema}.agents
             SET user_id = $1#{role_set}
             WHERE id = $2
@@ -174,7 +174,7 @@ module Kiosk
         # The column is NOT NULL: no role is `'{}'`, never NULL.
         def insert_linked(conn, schema, user_id, pem, role)
           allowed_roles_sql, role_binds = role ? ['ARRAY[$4]::text[]', [role]] : ["'{}'::text[]", []]
-          rows = conn.exec_query(<<~SQL, 'Kiosk linked agent insert', [user_id, pem, Kiosk.current_issuer, *role_binds])
+          rows = conn.exec_query(<<~SQL.squish, 'Kiosk linked agent insert', [user_id, pem, Kiosk.current_issuer, *role_binds])
             INSERT INTO #{schema}.agents (user_id, allowed_roles, public_key, issuer)
             VALUES ($1, #{allowed_roles_sql}, $2, $3)
             RETURNING id

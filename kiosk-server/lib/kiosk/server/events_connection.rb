@@ -55,7 +55,7 @@ module Kiosk
         # {KioskEvents} to refuse.
         def since(value)
           value = value.last if value.is_a?(Array)
-          return nil if value.nil? || value.empty?
+          return nil if value.blank?
 
           value.match?(/\A\d+\z/) ? value.to_i : value
         end

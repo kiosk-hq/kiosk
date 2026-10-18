@@ -45,7 +45,7 @@ module Kiosk
 
       # The plain codes exist only in this return value. `binding` takes `kind:`,
       # `public_key_pem:` and `requested_role:`.
-      def self.generate(client_id:, expires_in: DEFAULT_EXPIRES_IN, now: Time.now, **binding)
+      def self.generate(client_id:, expires_in: DEFAULT_EXPIRES_IN, now: Time.current, **binding)
         raise ArgumentError, 'expires_in must be > 0' unless expires_in.positive?
 
         plain_device_code = SecureRandom.urlsafe_base64(DEVICE_CODE_BYTES)
@@ -93,7 +93,7 @@ module Kiosk
       def link?  = kind == :link
 
       # Checked by the consuming endpoints; the stored status lags behind.
-      def expired_at_time?(now = Time.now)
+      def expired_at_time?(now = Time.current)
         now >= expires_at
       end
 
@@ -111,7 +111,7 @@ module Kiosk
         with(status: :denied)
       end
 
-      def consume(now: Time.now)
+      def consume(now: Time.current)
         raise StateError, "cannot consume a #{status} authorization" unless approved?
 
         with(status: :consumed, consumed_at: now)

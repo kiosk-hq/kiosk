@@ -73,7 +73,7 @@ module ExecutorSpecReplayHelpers
   end
 
   def record_decline(cart_row)
-    stored['cart_mandates'].find { |r| r['id'] == cart_row }['declined_at'] = Time.now
+    stored['cart_mandates'].find { |r| r['id'] == cart_row }['declined_at'] = Time.current
     []
   end
 
@@ -563,7 +563,7 @@ end
 RSpec.shared_context 'executor spec: verb :pay' do
   include_context 'executor spec: pay mandates'
 
-  let(:settlement) { { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.now } }
+  let(:settlement) { { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.current } }
   let(:valid_args) do
     { intent_mandate_jws: 'intent-jws', cart_mandate_jws: 'cart-jws', payment_mandate_jws: 'payment-jws' }
   end
@@ -1083,7 +1083,7 @@ end
 RSpec.shared_context 'executor spec: dated mandates' do
   include_context 'executor spec: fake connection'
 
-  let(:expires_at) { Time.at(1_800_000_071) }
+  let(:expires_at) { Time.at(1_800_000_071).utc }
   let(:intent) do
     Kiosk::Mandate::IntentMandate.new(
       id: 'intent-1', user_id: 'u-1', agent_id: 'a-1', issuer: 'https://demo.example',
@@ -1255,7 +1255,7 @@ RSpec.shared_context 'executor spec: really signed chain' do
   let(:agent_key)  { OpenSSL::PKey::RSA.generate(2048) }
   let(:issuer)     { 'https://demo.example' }
   let(:identity)   { build_identity(agent_id: 'agent-1', user_id: 'u-1') }
-  let(:future)     { (Time.now + 600).to_i }
+  let(:future)     { (Time.current + 600).to_i }
   let(:connection) { FakeConnection.new }
 
   before do
@@ -1270,7 +1270,7 @@ RSpec.shared_context 'executor spec: really signed chain' do
     end
     Kiosk.configuration.payment_provider = instance_double(
       'PSP',
-      capture: { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.now },
+      capture: { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.current },
       setup_required?: false
     )
   end

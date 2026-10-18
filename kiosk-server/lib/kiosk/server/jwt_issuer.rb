@@ -26,10 +26,10 @@ module Kiosk
       module_function
 
       # rubocop:disable-next Metrics/ParameterLists -- a keyword-only public API; callers pass each option by name
-      def issue(claims:, audience:, signing_key: nil, issuer: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.now)
+      def issue(claims:, audience:, signing_key: nil, issuer: nil, expires_in: DEFAULT_EXPIRES_IN, now: Time.current)
         signing_key ||= Kiosk.configuration.signing_key
         issuer      ||= Kiosk.current_issuer
-        raise ArgumentError, 'issuer is required (set Kiosk.configuration.issuer or pass :issuer)' if issuer.nil? || issuer.empty?
+        raise ArgumentError, 'issuer is required (set Kiosk.configuration.issuer or pass :issuer)' if issuer.blank?
         raise ArgumentError, 'signing_key must carry a private key for issuance' unless signing_key.private?
 
         payload = registered_claims(claims, issuer: issuer, audience: audience, issued_at: now.to_i, expires_in: expires_in)

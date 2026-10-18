@@ -76,7 +76,11 @@ class ProbeIdp
   end
 end
 
-class ProbeController < ActionController::Base
+# The host application's base controller.
+class ApplicationController < ActionController::Base
+end
+
+class ProbeController < ApplicationController
   include Kiosk::Handler
 
   unless NO_TOPICS
@@ -182,7 +186,7 @@ class ProbeSocket
     @driver.on(:open)    { @open = true }
     @driver.on(:message) do |e|
       frame = JSON.parse(e.data)
-      frame['type'] == 'ping' ? @pings << [Time.now, frame] : @frames << frame
+      frame['type'] == 'ping' ? @pings << [Time.current, frame] : @frames << frame
     end
     @driver.on(:close)   { @closed = true }
     @driver.on(:error)   { @closed = true }
@@ -190,14 +194,14 @@ class ProbeSocket
 
   attr_reader :url
 
-  def write(data) = @tcp.write(data)
+  delegate :write, to: :@tcp
 
   # Pump until the block is satisfied or the deadline passes. Returns whether
   # it was satisfied, so every assertion below is a fact about what ARRIVED
   # rather than about how long we happened to wait.
   def pump_until(seconds: 4)
-    deadline = Time.now + seconds
-    until Time.now > deadline
+    deadline = Time.current + seconds
+    until Time.current > deadline
       return true if yield
       break if @closed
 
@@ -216,7 +220,7 @@ class ProbeSocket
 
   def open? = @open
   # The subprotocol the server answered in `Sec-WebSocket-Protocol`, or nil.
-  def protocol = @driver.protocol
+  delegate :protocol, to: :@driver
   def closed? = @closed
 
   # A frame exactly as typed. Several scenarios below drive strings no client
@@ -313,9 +317,9 @@ end
 
 def read_response(socket)
   raw      = +''
-  deadline = Time.now + 15
+  deadline = Time.current + 15
   until response_complete?(raw)
-    remaining = deadline - Time.now
+    remaining = deadline - Time.current
     break unless remaining.positive? && socket.wait_readable(remaining)
 
     chunk = read_chunk(socket)
@@ -535,7 +539,7 @@ begin
   # The tail between the two cursors also holds the step-9 `todo` event, which
   # this subscription did not ask for. Replay reads the whole tail, so this is
   # the one path that can reach another topic at all.
-  report[:replayed_topics] = resumed.messages.select { |m| m['id'] }.map { |m| m['topic'] }.uniq
+  report[:replayed_topics] = resumed.messages.select { |m| m['id'] }.pluck('topic').uniq
   report[:resume_head] = resumed.messages.find { |m| m['type'] == 'subscribed' }
   resumed.close
 
@@ -557,7 +561,7 @@ begin
   urlsub.pump_until { urlsub.messages.count { |m| m['type'] == 'subscribed' } >= 2 }
   report[:url_welcomed] = urlsub.frames.any? { |f| f['type'] == 'welcome' }
   report[:url_subscribed_topics] =
-    urlsub.messages.select { |m| m['type'] == 'subscribed' }.map { |m| m['topic'] }.sort
+    urlsub.messages.select { |m| m['type'] == 'subscribed' }.pluck('topic').sort
 
   # DELIBERATELY emitting on the `subscribed` frame and NOT on Action Cable's
   # later `confirm_subscription`: an event emitted in that window still has to
@@ -631,7 +635,7 @@ begin
   sock.subscribe(identifier('order_delivery'))
   sock.pump_until { sock.messages.any? { |m| m['type'] == 'subscribed' } }
   report[:after_bad_frame_subscribed] =
-    sock.messages.select { |m| m['type'] == 'subscribed' }.map { |m| m['topic'] }
+    sock.messages.select { |m| m['type'] == 'subscribed' }.pluck('topic')
   sock.close
 
   # 15d — frames that name a subscription the origin cannot act on: one the

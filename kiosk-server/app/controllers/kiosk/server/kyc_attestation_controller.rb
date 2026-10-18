@@ -36,7 +36,7 @@ module Kiosk
       # A JSON object held to the shape §17 publishes for `exchange`, else 400.
       def parse_body!(exchange)
         raw = request.raw_post
-        raise Errors::BadRequest, 'request body must be a JSON object' if raw.nil? || raw.empty?
+        raise Errors::BadRequest, 'request body must be a JSON object' if raw.blank?
 
         parsed = JSON.parse(raw, symbolize_names: true)
         raise Errors::BadRequest, 'request body must be a JSON object' unless parsed.is_a?(Hash)

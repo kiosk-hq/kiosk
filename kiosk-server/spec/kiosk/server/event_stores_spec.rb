@@ -99,8 +99,8 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     store.append('u2', event(data: { 'n' => 2 }))
     third = store.append('u1', event(data: { 'n' => 3 }))
 
-    expect(store.since('u1', 0).map { |e| e['id'] }).to eq([first, third])
-    expect(store.since('u1', first).map { |e| e['id'] }).to eq([third])
+    expect(store.since('u1', 0).pluck('id')).to eq([first, third])
+    expect(store.since('u1', first).pluck('id')).to eq([third])
   end
 
   it 'carries the five closed members and no others' do
@@ -225,7 +225,7 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     backdate(id_below: second, hours: 25)
     store.prune!
 
-    expect(store.since('u1', first).map { |e| e['id'] }).to eq([second, third])
+    expect(store.since('u1', first).pluck('id')).to eq([second, third])
     expect(store.truncated?('u1', first)).to be(false)
   end
 end

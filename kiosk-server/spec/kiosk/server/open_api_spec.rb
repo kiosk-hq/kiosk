@@ -245,7 +245,7 @@ RSpec.describe Kiosk::Server::OpenApi, 'the reserved wire endpoints' do
   it "sorts its operations into three tags — the wire's own, then the two verb kinds" do
     declare_query('salons')
 
-    expect(document[:tags].map { |tag| tag[:name] }).to eq(%w[wire queries actions])
+    expect(document[:tags].pluck(:name)).to eq(%w[wire queries actions])
   end
 end
 
@@ -263,7 +263,7 @@ RSpec.describe Kiosk::Server::OpenApi, 'parameters — what the T-086 research m
     inline     = parameters.reject { |p| p.key?(:$ref) }
 
     expect(inline).to all(include(:style, :explode))
-    expect(inline.map { |p| p[:explode] }.uniq).to eq([true])
+    expect(inline.pluck(:explode).uniq).to eq([true])
     expect(document.dig(:components, :parameters).values)
       .to all(include(style: 'form', explode: true))
   end
@@ -277,7 +277,7 @@ RSpec.describe Kiosk::Server::OpenApi, 'parameters — what the T-086 research m
     # BECAUSE the schema declares one; the `amenity%5B%5D=` spelling the
     # skill teaches parses to the same arguments.
     expect(parameter('amenity')).to include(style: 'form', explode: true)
-    expect(document.dig(:paths, '/search_hotels', :get, :parameters).map { |p| p[:name] })
+    expect(document.dig(:paths, '/search_hotels', :get, :parameters).pluck(:name))
       .not_to include('amenity[]', 'amenity%5B%5D')
   end
 

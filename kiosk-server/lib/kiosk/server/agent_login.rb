@@ -22,7 +22,7 @@ module Kiosk
       end
 
       def registered_agent(pem)
-        row = ::ActiveRecord::Base.lease_connection.exec_query(<<~SQL, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
+        row = ::ActiveRecord::Base.lease_connection.exec_query(<<~SQL.squish, 'Kiosk agent lookup by key', [pem, Kiosk.current_issuer]).to_a.first
           SELECT id, user_id, allowed_roles FROM #{Kiosk.configuration.schema}.agents
           WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
           LIMIT 1

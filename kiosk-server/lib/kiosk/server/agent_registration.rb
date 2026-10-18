@@ -42,7 +42,7 @@ module Kiosk
       # The role is the server's choice, never the agent's.
       def registration_role(config)
         role = config.registration_role&.to_s
-        return if role.nil? || role.empty?
+        return if role.blank?
         return role if config.roles.map(&:to_s).include?(role)
 
         raise Errors::ConfigurationError,
@@ -52,7 +52,7 @@ module Kiosk
 
       # A known key logs in instead; it is never registered twice.
       def refuse_known_key!(conn, config, public_key_pem)
-        existing = conn.exec_query(<<~SQL, 'Kiosk agent lookup by key', [public_key_pem, Kiosk.current_issuer]).to_a.first
+        existing = conn.exec_query(<<~SQL.squish, 'Kiosk agent lookup by key', [public_key_pem, Kiosk.current_issuer]).to_a.first
           SELECT id FROM #{config.schema}.agents
           WHERE public_key = $1 AND issuer = $2 AND revoked_at IS NULL
           LIMIT 1
@@ -75,7 +75,7 @@ module Kiosk
       # No role is the empty array: `allowed_roles` is NOT NULL.
       def insert_agent(conn, config, binds, role)
         allowed_roles_sql, role_binds = role ? ['ARRAY[$4]::text[]', [role]] : ["'{}'::text[]", []]
-        rows = conn.exec_query(<<~SQL, 'Kiosk agent insert', [*binds, *role_binds])
+        rows = conn.exec_query(<<~SQL.squish, 'Kiosk agent insert', [*binds, *role_binds])
           INSERT INTO #{config.schema}.agents (user_id, allowed_roles, public_key, issuer)
           VALUES ($1, #{allowed_roles_sql}, $2, $3)
           RETURNING id

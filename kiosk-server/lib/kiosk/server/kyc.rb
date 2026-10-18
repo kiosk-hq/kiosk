@@ -90,9 +90,7 @@ module Kiosk
 
         # Replaces the person's grants with the names `attributes` holds as
         # JSON `true`.
-        def grant!(user_id, attributes)
-          Store.grant!(user_id, attributes)
-        end
+        delegate :grant!, to: :'Kiosk::Server::Kyc::Store'
 
         # The gate: raises `kyc_required` unless the calling principal holds
         # every one of `kyc_claims`.

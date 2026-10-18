@@ -197,7 +197,7 @@ module Kiosk
       # The PSP names whose human came back from the setup page; the engine
       # serves the `payment_setup` topic only for a provider that has this method.
       module SetupReturn
-        def setup_return_user_id(params) = @psp.setup_return_user_id(params)
+        delegate :setup_return_user_id, to: :@psp
       end
 
       # The operator's payable rows: the status moves under a compare-and-set.
@@ -217,7 +217,8 @@ module Kiosk
         private
 
         def move(rows, from:, to:)
-          rows.where(@status_column => from).update_all({ @status_column => to }.merge(timestamps))
+          # One conditional UPDATE is the atomic compare-and-set: the row count says which caller won.
+          rows.where(@status_column => from).update_all({ @status_column => to }.merge(timestamps)) # rubocop:disable Rails/SkipsModelValidations -- a per-row save cannot move a row atomically
         end
 
         def timestamps

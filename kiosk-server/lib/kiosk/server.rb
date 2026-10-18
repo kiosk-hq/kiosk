@@ -6,6 +6,7 @@
 require 'kiosk'
 require 'active_record'
 require 'action_dispatch/routing'
+require 'active_support/core_ext' # the core extensions a Rails host loads, which the engine's code uses
 require 'zeitwerk'
 
 Zeitwerk::Loader.for_gem_extension(Kiosk).setup

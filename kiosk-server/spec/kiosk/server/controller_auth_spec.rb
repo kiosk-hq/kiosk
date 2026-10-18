@@ -130,7 +130,7 @@ module ControllerAuthSpecKycHelpers
     # so the engine's operator-binding check passes.
     body = JSON.generate(kyc_jws: JWT.encode(
       { sub: 'u-kyc', level: 'verified', iss: kyc_issuer, aud: 'https://demo.example',
-        iat: (Time.now - 5).to_i, exp: (Time.now + 600).to_i, **claims },
+        iat: (Time.current - 5).to_i, exp: (Time.current + 600).to_i, **claims },
       kyc_key, 'RS256'
     ))
     kyc_env_with_body(body)
@@ -219,7 +219,7 @@ RSpec.describe 'wire-surface controller auth', 'WireController with the bare Def
 
     status, body = get_schema
     expect(status).to eq(200)
-    expect(body[:queries].map { |q| q[:name] }).to include('probe')
+    expect(body[:queries].pluck(:name)).to include('probe')
     expect(last_headers['Cache-Control']).to eq('max-age=60, public')
     expect(last_headers['ETag']).to match(/\A"[0-9a-f]{32}"\z/)
     # A public document that varied on a header it does not read would be
@@ -268,7 +268,7 @@ RSpec.describe 'wire-surface controller auth', 'WireController with the bare Def
 
     status, body = get_schema('/kiosk/schema?v=deadbeef')
     expect(status).to eq(200)
-    expect(body[:queries].map { |q| q[:name] }).to include('probe')
+    expect(body[:queries].pluck(:name)).to include('probe')
     expect(last_headers['Cache-Control']).to eq('max-age=60, public')
   end
 
@@ -289,7 +289,7 @@ RSpec.describe 'wire-surface controller auth', 'WireController with the bare Def
   include_context 'controller auth spec: bare DefaultAgentIdp'
 
   it 'returns 401 Unauthenticated (not 500) for an EXPIRED token' do
-    token = agent_token(now: Time.now - 7200)
+    token = agent_token(now: Time.current - 7200)
     status, body = wire_status_for(token)
     expect_problem(status, body, http: 401, code: 'unauthenticated')
   end
@@ -300,7 +300,7 @@ RSpec.describe 'wire-surface controller auth', 'WireController with the bare Def
   end
 
   it 'returns 401 Unauthenticated (not 500) for a REVOKED token' do
-    token = agent_token(agent_id: 'a-rev', now: Time.now - 10)
+    token = agent_token(agent_id: 'a-rev', now: Time.current - 10)
     Kiosk.configuration.revocation_store.revoke_all('a-rev', at: Time.now.to_i)
     status, body = wire_status_for(token)
     expect_problem(status, body, http: 401, code: 'unauthenticated')

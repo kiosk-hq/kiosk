@@ -45,7 +45,7 @@ module AssistantsControllerSpecHelpers
   end
 
   def minted_row(html)
-    store.find_by_device_code_hash(
+    store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(html[%r{<code>([^<]+)</code>}, 1])
     )
   end
@@ -186,7 +186,7 @@ RSpec.describe 'AssistantsController', 'link' do
 
     expect(status).to eq(200)
     expect(html).to include('Your link code')
-    row_hashes = store.find_by_device_code_hash(
+    row_hashes = store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(html[%r{<code>([^<]+)</code>}, 1])
     )
     expect(row_hashes).to be_approved

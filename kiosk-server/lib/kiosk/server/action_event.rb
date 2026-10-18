@@ -11,7 +11,7 @@ module Kiosk
       OK    = 'ok'
       ERROR = 'error'
 
-      def self.build(identity:, name:, args:, status:, error: nil, invoked_at: Time.now) # rubocop:disable Metrics/ParameterLists -- the public keyword API that the executor and audit sinks call
+      def self.build(identity:, name:, args:, status:, error: nil, invoked_at: Time.current) # rubocop:disable Metrics/ParameterLists -- the public keyword API that the executor and audit sinks call
         new(action: name.to_s, **principal(identity), args: args.is_a?(Hash) ? args : {},
             status: status.to_s, **failure(error), invoked_at: invoked_at)
       end

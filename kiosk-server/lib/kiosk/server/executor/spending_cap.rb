@@ -55,7 +55,7 @@ module Kiosk
         # so `eur` and `EUR` are one tally. No window means no predicate; the day count is a bind.
         def settled_sql(window_days)
           window = window_days ? 'AND settled_at >= now() - make_interval(days => $3)' : ''
-          <<~SQL
+          <<~SQL.squish
             SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
             FROM #{Kiosk.configuration.schema}.settlements
             WHERE agent_id = $1 AND lower(btrim(currency)) = $2 #{window}
@@ -66,7 +66,7 @@ module Kiosk
         # were not declined: a capture may still run for each.
         def in_flight_sql
           schema = Kiosk.configuration.schema
-          <<~SQL
+          <<~SQL.squish
             SELECT COALESCE(SUM(c.total_amount_cents), 0) AS total
             FROM #{schema}.cart_mandates c
             WHERE c.agent_id = $1 AND lower(btrim(c.currency)) = $2 AND c.expires_at > now()

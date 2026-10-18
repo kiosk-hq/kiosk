@@ -205,7 +205,7 @@ module Kiosk
             description: ArgumentDecoder.fetch(descriptor[:output_schema], :description) || "The verb's result.",
             content: Refs.json_content("#{descriptor[:name]}.response")
           }
-          ok[:headers] = Parameters::PAGINATION_HEADERS.keys.to_h { |h| [h, { '$ref': "#/components/headers/#{h}" }] } if kind == :query
+          ok[:headers] = Parameters::PAGINATION_HEADERS.keys.index_with { |h| { '$ref': "#/components/headers/#{h}" } } if kind == :query
           { '200' => ok }.merge(Wire.problem_refs)
         end
 

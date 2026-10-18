@@ -190,7 +190,7 @@ module Kiosk
 
       def parse_body!
         raw = request.raw_post
-        return {} if raw.nil? || raw.empty?
+        return {} if raw.to_s.empty?
 
         parsed = JSON.parse(raw, symbolize_names: true)
         raise Errors::BadRequest, 'request body must be a JSON object' unless parsed.is_a?(Hash)

@@ -6,7 +6,7 @@ module Kiosk
   module Server
     # The account holder's browser pages. A JSON caller without a CSRF token is
     # an assistant at the wrong door: the answer points it at the wire. Browser
-    # requests re-raise untouched. The including controller sets WRONG_DOOR_MESSAGE.
+    # requests re-raise untouched. Each page's controller sets WRONG_DOOR_MESSAGE.
     module WrongDoor
       extend ActiveSupport::Concern
 

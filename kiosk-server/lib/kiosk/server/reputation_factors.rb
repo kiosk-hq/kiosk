@@ -11,14 +11,14 @@ module Kiosk
       def for(identity:, policy:)
         return ::Kiosk::Reputation::Factors.empty unless policy.respond_to?(:within) && identity&.user_id
 
-        count, cents = recent_spend(identity.user_id, Time.now - policy.within.to_i)
+        count, cents = recent_spend(identity.user_id, Time.current - policy.within.to_i)
         ::Kiosk::Reputation::Factors.empty.with(settled_purchases_count: count, settled_purchases_cents: cents)
       end
 
       # Settlements and visits of this customer since `since`: their count and their cents.
       def recent_spend(user_id, since)
         schema = Kiosk.configuration.schema
-        sql = <<~SQL
+        sql = <<~SQL.squish
           SELECT count(*) AS count, COALESCE(SUM(cents), 0) AS cents FROM (
             SELECT settled_amount_cents AS cents FROM "#{schema}".settlements WHERE user_id = $1 AND settled_at >= $2
             UNION ALL

@@ -131,14 +131,14 @@ RSpec.describe Kiosk::Server::DeviceVerification, '.approve user and role' do
 
     # Read back through the store: the value the token poll will consult is
     # the persisted one, not the object this call happened to return.
-    reloaded = store.find_by_device_code_hash(da.device_code_hash)
+    reloaded = store.lookup_by_device_code_hash(da.device_code_hash)
     expect(reloaded.requested_role).to eq('owner')
   end
 
   it "leaves the row role-less when the provider's user_idp reports no role" do
     code, da = fresh
     described_class.approve(user_code: code, user_id: user_id, role: nil)
-    expect(store.find_by_device_code_hash(da.device_code_hash).requested_role).to be_nil
+    expect(store.lookup_by_device_code_hash(da.device_code_hash).requested_role).to be_nil
   end
 end
 
@@ -165,7 +165,7 @@ RSpec.describe Kiosk::Server::DeviceVerification, '.approve role keyword' do
     code, da = fresh
     expect { described_class.approve(user_code: code, user_id: user_id, role: nil) }
       .not_to raise_error
-    expect(store.find_by_device_code_hash(da.device_code_hash)).to be_approved
+    expect(store.lookup_by_device_code_hash(da.device_code_hash)).to be_approved
   end
 end
 

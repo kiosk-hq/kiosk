@@ -21,7 +21,7 @@ RSpec.shared_context 'schema document spec: fresh catalog' do
 
   after { described_class.reset! }
 
-  def digest = described_class.digest
+  delegate :digest, to: :described_class
 end
 
 RSpec.describe Kiosk::Server::SchemaDocument do
@@ -35,8 +35,8 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       document = described_class.document
 
       expect(document.keys).to eq(%i[queries actions events])
-      expect(document[:queries].map { |d| d[:name] }).to eq(%w[menu])
-      expect(document[:actions].map { |d| d[:name] }).to eq(%w[place_order])
+      expect(document[:queries].pluck(:name)).to eq(%w[menu])
+      expect(document[:actions].pluck(:name)).to eq(%w[place_order])
     end
 
     # The module set belongs to `/.well-known/kiosk.json` alone.
@@ -185,7 +185,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       declare_query('brunch')
 
       expect(digest).not_to eq(first)
-      expect(described_class.document[:queries].map { |d| d[:name] }).to eq(%w[brunch])
+      expect(described_class.document[:queries].pluck(:name)).to eq(%w[brunch])
     end
   end
 end

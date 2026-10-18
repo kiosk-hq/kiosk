@@ -43,7 +43,7 @@ module Kiosk
       def audited(name, args)
         return yield unless AuditSink.configured?
 
-        invoked_at = Time.now
+        invoked_at = Time.current
         begin
           result = yield
         rescue StandardError => e
@@ -267,7 +267,7 @@ module Kiosk
       # operator-set schema name is interpolated.
       module Ledger
         # Byte-identical chain, scoped to the acting principal on every mandate row, with its settlement if any.
-        CHAIN_SQL = <<~SQL
+        CHAIN_SQL = <<~SQL.squish
           SELECT c.id AS cart_row, c.declined_at,
                  s.id AS settlement_id, s.psp_reference, s.settled_amount_cents, s.currency
           FROM %<schema>s.cart_mandates c
@@ -283,7 +283,7 @@ module Kiosk
         SQL
 
         # The signed id goes to `mandate_id`; the row id is server-generated and returned.
-        INTENT_INSERT_SQL = <<~SQL
+        INTENT_INSERT_SQL = <<~SQL.squish
           INSERT INTO %<schema>s.intent_mandates
             (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
              currency, expires_at, created_at, raw_jws)
@@ -292,7 +292,7 @@ module Kiosk
         SQL
 
         # `line_items` arrives as JSON text; the cast stores a jsonb array rather than a string.
-        CART_INSERT_SQL = <<~SQL
+        CART_INSERT_SQL = <<~SQL.squish
           INSERT INTO %<schema>s.cart_mandates
             (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
              total_amount_cents, currency, expires_at, created_at, raw_jws)
@@ -300,7 +300,7 @@ module Kiosk
           RETURNING id
         SQL
 
-        PAYMENT_INSERT_SQL = <<~SQL
+        PAYMENT_INSERT_SQL = <<~SQL.squish
           INSERT INTO %<schema>s.payment_mandates
             (mandate_id, cart_mandate_id, user_id, agent_id, issuer,
              payment_method, amount_cents, currency, expires_at, created_at, raw_jws)
@@ -309,7 +309,7 @@ module Kiosk
         SQL
 
         # Nobody signs a settlement, so it has no `mandate_id` or `raw_jws`; `UNIQUE (cart_mandate_id)` keeps it single.
-        SETTLEMENT_INSERT_SQL = <<~SQL
+        SETTLEMENT_INSERT_SQL = <<~SQL.squish
           INSERT INTO %<schema>s.settlements
             (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
              settled_amount_cents, currency, settled_at)
@@ -317,7 +317,7 @@ module Kiosk
           RETURNING id
         SQL
 
-        DECLINE_SQL = <<~SQL
+        DECLINE_SQL = <<~SQL.squish
           UPDATE %<schema>s.cart_mandates SET declined_at = now() WHERE id = $1 AND declined_at IS NULL
         SQL
 

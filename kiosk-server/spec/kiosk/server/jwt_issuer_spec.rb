@@ -178,7 +178,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
     end
 
     it 'respects clock skew leeway for slightly-in-the-future iat' do
-      future = described_class.issue(claims: { sub: 'u' }, audience: audience, now: Time.now + 30)
+      future = described_class.issue(claims: { sub: 'u' }, audience: audience, now: Time.current + 30)
       # The default leeway is 60s, so a token 30s ahead is accepted.
       expect do
         described_class.verify(token: future, jwks: jwks, audience: audience)

@@ -79,7 +79,7 @@ module Kiosk
 
         def rails_app_with_cable_yml?
           defined?(::Rails) && ::Rails.respond_to?(:application) && ::Rails.application &&
-            ::Rails.root && ::File.exist?(::Rails.root.join('config', 'cable.yml'))
+            ::Rails.root&.join('config/cable.yml')&.exist?
         end
 
         def host_cable_config

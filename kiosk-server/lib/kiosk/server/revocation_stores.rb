@@ -15,7 +15,7 @@ module Kiosk
         def revoke_all(agent_id, at:)
           return if agent_id.nil?
 
-          connection.exec_query(<<~SQL, 'Kiosk revocation', [agent_id, at.to_i])
+          connection.exec_query(<<~SQL.squish, 'Kiosk revocation', [agent_id, at.to_i])
             INSERT INTO #{table('revocations')} AS r (agent_id, revoked_before)
             VALUES ($1, to_timestamp($2))
             ON CONFLICT (agent_id) DO UPDATE
@@ -27,7 +27,7 @@ module Kiosk
         def watermark_for(agent_id)
           return nil if agent_id.nil?
 
-          row = connection.exec_query(<<~SQL, 'Kiosk revocation watermark', [agent_id]).to_a.first
+          row = connection.exec_query(<<~SQL.squish, 'Kiosk revocation watermark', [agent_id]).to_a.first
             SELECT extract(epoch FROM revoked_before)::bigint AS at
             FROM #{table('revocations')} WHERE agent_id = $1
           SQL
@@ -37,7 +37,7 @@ module Kiosk
         def revoked?(agent_id:, iat:)
           return false if agent_id.nil? || iat.nil?
 
-          connection.exec_query(<<~SQL, 'Kiosk revocation check', [agent_id, iat.to_i]).to_a.empty?
+          connection.exec_query(<<~SQL.squish, 'Kiosk revocation check', [agent_id, iat.to_i]).to_a.empty?
             SELECT 1
             FROM #{table('agents')} a
             LEFT JOIN #{table('revocations')} r ON r.agent_id = a.id

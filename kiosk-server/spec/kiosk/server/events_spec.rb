@@ -266,7 +266,7 @@ RSpec.describe Kiosk::Server::Events do
       end
     end
 
-    expect(described_class.catalog.map { |e| e[:name] }).to eq(%w[delivery todo])
+    expect(described_class.catalog.pluck(:name)).to eq(%w[delivery todo])
     expect(described_class.catalog.first.keys)
       .to contain_exactly(:name, :description, :reach, :payload_schema)
   end
@@ -460,7 +460,7 @@ RSpec.describe 'the events surface in the catalogue and discovery', 'GET <endpoi
     declare_topic!
 
     document = Kiosk::Server::SchemaDocument.document
-    expect(document[:events].map { |e| e[:name] }).to eq(%w[todo])
+    expect(document[:events].pluck(:name)).to eq(%w[todo])
   end
 
   it 'publishes an EMPTY events array on an origin that declares no topic' do

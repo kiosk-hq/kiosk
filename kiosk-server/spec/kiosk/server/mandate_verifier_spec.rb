@@ -52,7 +52,7 @@ RSpec.shared_context 'mandate verifier spec: agent' do
   let(:agent_key) { OpenSSL::PKey::RSA.generate(2048) }
   let(:issuer)    { 'https://demo.example' }
   let(:identity)  { build_identity(agent_id: 'agent-1', user_id: 'u-1') }
-  let(:future)    { (Time.now + 600).to_i }
+  let(:future)    { (Time.current + 600).to_i }
 
   before do
     Kiosk.configure { |c| c.issuer = issuer }
@@ -842,7 +842,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     end
 
     it 'applies the shared decode checks (expired mandate rejected)' do
-      past = payment_payload.merge(exp: (Time.now - 60).to_i)
+      past = payment_payload.merge(exp: (Time.current - 60).to_i)
       expect { described_class.verify_payment(raw_jws: sign(past), identity: identity, cart: cart_mandate) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /expired/)
     end

@@ -311,8 +311,8 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
     it 'reaches the wire catalog the public `schema` endpoint serves' do
       document = Kiosk::Server::SchemaDocument.document
 
-      expect(document[:queries].map { |d| d[:name] }).to include('catalog')
-      expect(document[:actions].map { |d| d[:name] }).to include('create_order')
+      expect(document[:queries].pluck(:name)).to include('catalog')
+      expect(document[:actions].pluck(:name)).to include('create_order')
     end
 
     it "lets an operator's own base class carry the include, subclasses declare" do

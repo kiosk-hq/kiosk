@@ -10,7 +10,7 @@ module Kiosk
       class DefaultAgentIdp < Kiosk::AgentIdentityProviders::Base
         def verify(request)
           header = authorization_for(request)
-          return nil if header.nil? || header.empty?
+          return nil if header.blank?
 
           claims = verified_claims(header.sub(/\ABearer\s+/i, ''))
           Kiosk::Identity.new(
@@ -51,11 +51,11 @@ module Kiosk
         # Never earlier than the revocation watermark, so a token minted in the
         # second a rebind revoked (§6.3) still survives `iat < watermark`.
         def mint_instant(agent_id)
-          now       = Time.now
+          now       = Time.current
           watermark = Kiosk.configuration.revocation_store.watermark_for(agent_id)
           return now if watermark.nil? || watermark <= now.to_i
 
-          Time.at(watermark)
+          Time.at(watermark).utc
         end
 
         def lookup_user_id(agent_id)

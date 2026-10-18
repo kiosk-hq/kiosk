@@ -42,7 +42,7 @@ module Kiosk
           event = {
             'topic' => name,
             'subject' => subject,
-            'occurred_at' => (occurred_at || Time.now).utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
+            'occurred_at' => (occurred_at || Time.current).utc.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'data' => data
           }
           Array(identity_scope).map { |identity_key| append(identity_key, event) }.last

@@ -35,7 +35,7 @@ module Kiosk
                 public_key_pem:,
                 store: Kiosk.configuration.device_authorization_store,
                 expires_in: DeviceAuthorization::DEFAULT_EXPIRES_IN,
-                now: Time.now)
+                now: Time.current)
         plain_device_code, plain_user_code, da = DeviceAuthorization.generate(
           client_id: client_id, kind: :claim, public_key_pem: public_key_pem.to_s.strip,
           expires_in: expires_in, now: now
@@ -51,11 +51,11 @@ module Kiosk
                    signed: nil,
                    store: Kiosk.configuration.device_authorization_store,
                    interval: DEFAULT_POLL_INTERVAL,
-                   now: Time.now)
+                   now: Time.current)
         return failure(:invalid_request, 'device_code parameter required') if device_code.to_s.empty?
 
         hash = DeviceAuthorization.hash_device_code(device_code)
-        da   = store.find_by_device_code_hash(hash)
+        da   = store.lookup_by_device_code_hash(hash)
         return failure(:invalid_grant, 'unknown device_code') if da.nil?
         return failure(:slow_down, 'polling faster than the advertised interval') if polled_too_fast?(hash, interval, now)
 
@@ -92,7 +92,7 @@ module Kiosk
 
         def possession_refusal(public_key_pem, signed)
           return failure(:invalid_client, PROOF_REQUIRED) if signed.nil? || signed.to_s.empty?
-          return failure(:invalid_client, 'no public key bound to this authorization') if public_key_pem.nil? || public_key_pem.empty?
+          return failure(:invalid_client, 'no public key bound to this authorization') if public_key_pem.blank?
 
           payload = PopVerifier.verify!(public_key_pem: public_key_pem, signed: signed)
           AuthChallenge.consume!(public_key_pem: public_key_pem, nonce: payload.fetch(:nonce))

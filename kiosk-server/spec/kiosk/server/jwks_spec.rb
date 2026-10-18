@@ -12,7 +12,7 @@ RSpec.describe Kiosk::Server::Jwks do
 
     it 'preserves order for multi-key rotation overlap' do
       doc = described_class.build(keys: [key, key2])
-      expect(doc[:keys].map { |jwk| jwk[:kid] }).to eq([key.kid, key2.kid])
+      expect(doc[:keys].pluck(:kid)).to eq([key.kid, key2.kid])
     end
 
     it 'accepts a single key passed without an array (Array() upcasts)' do

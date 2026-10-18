@@ -299,7 +299,7 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       status, _headers, body = call_with_pow(proof)
       expect(status).to eq(402)
       expect(body[:code]).to eq('pow_required')
-      expect(body[:challenges].map { |c| c[:alg] }).to eq(['argon2id'])
+      expect(body[:challenges].pluck(:alg)).to eq(['argon2id'])
     end
   end
 end

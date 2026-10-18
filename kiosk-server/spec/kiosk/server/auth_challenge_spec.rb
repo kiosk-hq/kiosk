@@ -10,7 +10,7 @@ RSpec.describe Kiosk::Server::AuthChallenge, '.issue' do
   include_context 'auth challenge spec: key and ttl'
 
   it 'mints a nonce and records it with a TTL, consumable exactly once' do
-    now    = Time.now
+    now    = Time.current
     result = described_class.issue(public_key_pem: pem, now: now)
 
     expect(result[:challenge]).to be_a(String)

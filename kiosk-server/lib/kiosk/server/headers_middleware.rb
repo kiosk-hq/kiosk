@@ -21,7 +21,7 @@ module Kiosk
       private
 
       def kiosk_path?(path)
-        return false if path.nil? || path.empty?
+        return false if path.blank?
 
         mount = Kiosk.configuration.mount_path
         path == mount || path.start_with?("#{mount}/")

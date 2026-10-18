@@ -91,6 +91,12 @@ class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 end
 
+# Stand-in for the host application's base model, which the operator models in
+# these specs inherit.
+class ApplicationRecord < ActiveRecord::Base
+  self.abstract_class = true
+end
+
 # ── Declaring a verb, the one way there is (T-081) ──────────────────────────
 #
 # A verb reaches the Actions/Queries registry through a controller that

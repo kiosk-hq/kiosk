@@ -580,7 +580,7 @@ RSpec.describe Kiosk::Server::AccountBinding, '.bind! — known key rebind water
 
   it 'revokes a pre-rebind token but leaves the fresh bind! token verifiable' do
     # A token minted BEFORE the rebind (iat in the past ⇒ strictly < watermark).
-    prelink = mint_prelink(now: Time.now - 10)
+    prelink = mint_prelink(now: Time.current - 10)
     expect { verify(prelink) }.not_to raise_error # valid before the rebind
 
     result = described_class.bind!(public_key_pem: pem, user_id: user_id)
@@ -603,7 +603,7 @@ RSpec.describe Kiosk::Server::AccountBinding, '.bind! — known key rebind water
   # replacement token, which is why it cannot just pass `+1` and stop: the
   # replacement is minted AT the watermark so it survives its own revocation.
   it 'revokes a pre-link token minted in the SAME wall-clock second as the rebind' do
-    frozen = Time.at(Time.now.to_i)
+    frozen = Time.at(Time.current.to_i).utc
     allow(Time).to receive(:now).and_return(frozen)
 
     prelink = mint_prelink
@@ -624,7 +624,7 @@ RSpec.describe Kiosk::Server::AccountBinding, '.bind! — known key rebind water
 
   it 'stamps the watermark at the NEXT second and dates the replacement token at it' do
     now = Time.now.to_i
-    allow(Time).to receive(:now).and_return(Time.at(now))
+    allow(Time).to receive(:now).and_return(Time.at(now).utc)
 
     fresh = described_class.bind!(public_key_pem: pem, user_id: user_id).fetch(:access_token)
 
@@ -640,7 +640,7 @@ RSpec.describe Kiosk::Server::AccountBinding, '.bind! — known key rebind water
   # in this caller: a token minted AFTER a revocation is never born revoked.
   it 'leaves a /auth/login token minted in that same second alive' do
     now = Time.now.to_i
-    allow(Time).to receive(:now).and_return(Time.at(now))
+    allow(Time).to receive(:now).and_return(Time.at(now).utc)
 
     described_class.bind!(public_key_pem: pem, user_id: user_id)
     relogin = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
@@ -723,7 +723,7 @@ RSpec.describe Kiosk::Server::AccountBinding, '.unlink! watermark' do
   it 'stamps the watermark at the NEXT second, so a same-second token is covered too' do
     route_exec_query(con) { [{ 'id' => 'agent-1' }] }
     now = Time.now.to_i
-    allow(Time).to receive(:now).and_return(Time.at(now))
+    allow(Time).to receive(:now).and_return(Time.at(now).utc)
     stamped = nil
     allow(Kiosk.configuration.revocation_store)
       .to receive(:revoke_all) { |_agent, at:| stamped = at }

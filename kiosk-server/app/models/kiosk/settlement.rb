@@ -2,7 +2,7 @@
 
 module Kiosk
   # The receipt the engine writes after a successful `pay` capture.
-  class Settlement < ::ActiveRecord::Base
+  class Settlement < Server::ApplicationRecord
     include Kiosk::Owned
 
     def self.table_name = "#{Kiosk.configuration.schema}.settlements"

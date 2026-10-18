@@ -1,19 +1,11 @@
 # frozen_string_literal: true
 
-require 'action_controller'
-
 module Kiosk
   module Server
     # The verify page where a signed-in human approves or denies an assistant
     # link. The role the panel shows is the role the approval stamps: the
     # human's own, never one the assistant asked for.
-    class DeviceVerifyController < ::ActionController::Base
-      include AccountHolderGate
-      include BindingModuleGate
-      include WrongDoor
-
-      prepend_before_action :refuse_unserved_binding
-
+    class DeviceVerifyController < ApplicationController
       SIGN_IN_PROMPT = 'Sign in to your account first, then re-open this page to approve the assistant link.'
       SIGN_IN_ALERT  = 'Please sign in to approve the assistant link.'
 
@@ -69,7 +61,7 @@ module Kiosk
         record_failed_attempt
         @authorization = nil
         @error = CODE_NOT_RECOGNISED
-        render :show, status: :unprocessable_entity
+        render :show, status: :unprocessable_content
       end
 
       def decide(decision)

@@ -12,7 +12,7 @@ module KycVerifierSpec
   def valid_payload(**overrides)
     {
       sub: 'u-1', level: 'verified',
-      iss: kyc_issuer, aud: kyc_audience, iat: (Time.now - 5).to_i, exp: future
+      iss: kyc_issuer, aud: kyc_audience, iat: (Time.current - 5).to_i, exp: future
     }.merge(overrides)
   end
 end
@@ -23,8 +23,8 @@ RSpec.shared_context 'kyc verifier spec: configured' do
   let(:kyc_key)      { OpenSSL::PKey::RSA.generate(2048) }
   let(:kyc_issuer)   { 'https://kyc.example' }
   let(:kyc_audience) { 'acme-operator' }
-  let(:future)       { (Time.now + 600).to_i }
-  let(:past)         { (Time.now - 600).to_i }
+  let(:future)       { (Time.current + 600).to_i }
+  let(:past)         { (Time.current - 600).to_i }
 
   before do
     Kiosk.configure do |c|

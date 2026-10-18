@@ -1,19 +1,11 @@
 # frozen_string_literal: true
 
-require 'action_controller'
-
 module Kiosk
   module Server
     # «Link an assistant» page: a signed-in account holder lists, labels,
     # links and unlinks their assistants. Host views override
     # app/views/kiosk/server/assistants/show.html.erb.
-    class AssistantsController < ::ActionController::Base
-      include AccountHolderGate
-      include BindingModuleGate
-      include WrongDoor
-
-      prepend_before_action :refuse_unserved_binding
-
+    class AssistantsController < ApplicationController
       SIGN_IN_PROMPT = 'Sign in to your account first to manage linked assistants.'
       SIGN_IN_ALERT  = 'Please sign in to manage your linked assistants.'
 

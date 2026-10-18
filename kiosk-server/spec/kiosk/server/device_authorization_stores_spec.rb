@@ -27,7 +27,7 @@ RSpec.shared_examples 'device authorization stores spec: #create' do
     expect(store.create(da)).to eq(da)
     # Compare by id, not full equality: durable storage truncates
     # timestamps to microseconds.
-    expect(store.find_by_device_code_hash(da.device_code_hash).id).to eq(da.id)
+    expect(store.lookup_by_device_code_hash(da.device_code_hash).id).to eq(da.id)
   end
 
   it 'raises UniqueConstraintError on duplicate device_code_hash' do
@@ -61,7 +61,7 @@ RSpec.shared_examples 'device authorization stores spec: #create reuse' do
     link = build_authorization(kind: :link).approve(user_id: user_id)
     store.create(link)
 
-    found = store.find_by_device_code_hash(link.device_code_hash)
+    found = store.lookup_by_device_code_hash(link.device_code_hash)
     expect(found).to be_approved
     expect(found).to be_link
     expect(found.user_id.to_s).to eq(user_id)
@@ -74,7 +74,7 @@ RSpec.shared_examples 'device authorization stores spec: #update' do
     store.create(da)
     store.update(da.approve(user_id: user_id))
 
-    found = store.find_by_device_code_hash(da.device_code_hash)
+    found = store.lookup_by_device_code_hash(da.device_code_hash)
     expect(found).to be_approved
     expect(found.user_id.to_s).to eq(user_id)
   end
@@ -82,9 +82,9 @@ RSpec.shared_examples 'device authorization stores spec: #update' do
   it 'persists consumption (status + consumed_at)' do
     da = build_authorization
     store.create(da)
-    store.update(da.approve(user_id: user_id).consume(now: Time.now))
+    store.update(da.approve(user_id: user_id).consume(now: Time.current))
 
-    expect(store.find_by_device_code_hash(da.device_code_hash)).to be_consumed
+    expect(store.lookup_by_device_code_hash(da.device_code_hash)).to be_consumed
   end
 
   it 'raises NotFoundError when id has no row' do
@@ -105,7 +105,7 @@ RSpec.shared_examples 'device authorization stores spec: #update' do
     store.create(da)
     store.update(da.approve(user_id: user_id, role: 'owner'))
 
-    expect(store.find_by_device_code_hash(da.device_code_hash).requested_role).to eq('owner')
+    expect(store.lookup_by_device_code_hash(da.device_code_hash).requested_role).to eq('owner')
   end
 end
 
@@ -121,11 +121,11 @@ RSpec.shared_examples 'device authorization stores spec: #claim_consume' do
     store.create(da)
     store.update(da.approve(user_id: user_id))
 
-    claimed = store.claim_consume(da.approve(user_id: user_id), now: Time.now)
+    claimed = store.claim_consume(da.approve(user_id: user_id), now: Time.current)
 
     expect(claimed).not_to be_nil
     expect(claimed).to be_consumed
-    expect(store.find_by_device_code_hash(da.device_code_hash)).to be_consumed
+    expect(store.lookup_by_device_code_hash(da.device_code_hash)).to be_consumed
   end
 
   it 'returns nil for the SECOND claim of the same row, given the same pre-race snapshot' do
@@ -134,8 +134,8 @@ RSpec.shared_examples 'device authorization stores spec: #claim_consume' do
     approved = da.approve(user_id: user_id)
     store.update(approved)
 
-    first  = store.claim_consume(approved, now: Time.now)
-    second = store.claim_consume(approved, now: Time.now)
+    first  = store.claim_consume(approved, now: Time.current)
+    second = store.claim_consume(approved, now: Time.current)
 
     expect(first).not_to be_nil
     expect(second).to be_nil
@@ -148,24 +148,24 @@ RSpec.shared_examples 'device authorization stores spec: #claim_consume refusal'
     store.create(da)
     store.update(da.deny)
 
-    expect(store.claim_consume(da.approve(user_id: user_id), now: Time.now)).to be_nil
-    expect(store.find_by_device_code_hash(da.device_code_hash)).to be_denied
+    expect(store.claim_consume(da.approve(user_id: user_id), now: Time.current)).to be_nil
+    expect(store.lookup_by_device_code_hash(da.device_code_hash)).to be_denied
   end
 end
 
-RSpec.shared_examples 'device authorization stores spec: #find_by_device_code_hash' do
+RSpec.shared_examples 'device authorization stores spec: #lookup_by_device_code_hash' do
   it 'returns the row regardless of status (callers check expiry/state themselves)' do
     da = build_authorization
     store.create(da)
     store.update(da.approve(user_id: user_id))
 
-    expect(store.find_by_device_code_hash(da.device_code_hash)).to be_approved
+    expect(store.lookup_by_device_code_hash(da.device_code_hash)).to be_approved
   end
 
   it 'round-trips every ceremony field' do
     da = build_authorization
     store.create(da)
-    found = store.find_by_device_code_hash(da.device_code_hash)
+    found = store.lookup_by_device_code_hash(da.device_code_hash)
 
     expect(found.id).to             eq(da.id)
     expect(found.user_code_hash).to eq(da.user_code_hash)
@@ -180,26 +180,26 @@ RSpec.shared_examples 'device authorization stores spec: #find_by_device_code_ha
   end
 
   it 'returns nil when no row matches' do
-    expect(store.find_by_device_code_hash('nope')).to be_nil
+    expect(store.lookup_by_device_code_hash('nope')).to be_nil
   end
 end
 
-RSpec.shared_examples 'device authorization stores spec: #find_by_user_code_hash' do
+RSpec.shared_examples 'device authorization stores spec: #lookup_by_user_code_hash' do
   it 'returns the pending row' do
     da = build_authorization
     store.create(da)
-    expect(store.find_by_user_code_hash(da.user_code_hash).id).to eq(da.id)
+    expect(store.lookup_by_user_code_hash(da.user_code_hash).id).to eq(da.id)
   end
 
   it 'returns nil once the row leaves pending (approved/consumed/denied invisible)' do
     da = build_authorization
     store.create(da)
     store.update(da.approve(user_id: user_id))
-    expect(store.find_by_user_code_hash(da.user_code_hash)).to be_nil
+    expect(store.lookup_by_user_code_hash(da.user_code_hash)).to be_nil
   end
 
   it 'returns nil when no row matches' do
-    expect(store.find_by_user_code_hash('nope')).to be_nil
+    expect(store.lookup_by_user_code_hash('nope')).to be_nil
   end
 end
 
@@ -222,12 +222,12 @@ RSpec.shared_examples 'a device-authorization store' do
     include_examples 'device authorization stores spec: #claim_consume refusal'
   end
 
-  describe '#find_by_device_code_hash' do
-    include_examples 'device authorization stores spec: #find_by_device_code_hash'
+  describe '#lookup_by_device_code_hash' do
+    include_examples 'device authorization stores spec: #lookup_by_device_code_hash'
   end
 
-  describe '#find_by_user_code_hash' do
-    include_examples 'device authorization stores spec: #find_by_user_code_hash'
+  describe '#lookup_by_user_code_hash' do
+    include_examples 'device authorization stores spec: #lookup_by_user_code_hash'
   end
 end
 
@@ -303,9 +303,9 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores::Base do
       .to raise_error(NotImplementedError)
     expect { base.update(:x) }
       .to raise_error(NotImplementedError)
-    expect { base.find_by_device_code_hash('h') }
+    expect { base.lookup_by_device_code_hash('h') }
       .to raise_error(NotImplementedError)
-    expect { base.find_by_user_code_hash('h') }
+    expect { base.lookup_by_user_code_hash('h') }
       .to raise_error(NotImplementedError)
     expect { base.claim_consume(:x) }
       .to raise_error(NotImplementedError)
@@ -354,7 +354,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores::ActiveRecord, 'column t
     da = da.with(expires_at: moment, user_id: user, status: :approved)
     store.create(da)
 
-    row = ActiveRecord::Base.connection.exec_query(<<~SQL, 'spec types', [da.id]).to_a.first
+    row = ActiveRecord::Base.connection.exec_query(<<~SQL.squish, 'spec types', [da.id]).to_a.first
       SELECT pg_typeof(id)::text          AS id_type,
              pg_typeof(user_id)::text     AS user_type,
              pg_typeof(expires_at)::text  AS at_type,
@@ -365,7 +365,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores::ActiveRecord, 'column t
     expect(row.values_at('id_type', 'user_type', 'at_type'))
       .to eq(['uuid', 'uuid', 'timestamp with time zone'])
     expect(row.fetch('at_epoch')).to eq(1_800_000_071)
-    expect(store.find_by_device_code_hash(da.device_code_hash).user_id).to eq(user)
+    expect(store.lookup_by_device_code_hash(da.device_code_hash).user_id).to eq(user)
   end
 end
 

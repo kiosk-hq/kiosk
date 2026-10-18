@@ -993,8 +993,8 @@ RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
   it 'issues `count` challenges with distinct ids AND salts (no amortisation)' do
     challenges = issue_n_challenges
     expect(challenges.length).to eq(count)
-    expect(challenges.map { |c| c[:id] }.uniq.length).to eq(count)
-    expect(challenges.map { |c| c[:salt] }.uniq.length).to eq(count)
+    expect(challenges.pluck(:id).uniq.length).to eq(count)
+    expect(challenges.pluck(:salt).uniq.length).to eq(count)
   end
 end
 

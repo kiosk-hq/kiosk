@@ -103,7 +103,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
 
   it 'returns nil for an expired token' do
     # default 1h lifetime + 60s leeway long gone
-    token = agent_token(agent_id: 'a', now: Time.now - 7200)
+    token = agent_token(agent_id: 'a', now: Time.current - 7200)
     expect(idp.verify(bearer(token))).to be_nil
   end
 
@@ -112,7 +112,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   end
 
   it 'returns nil for a revoked token' do
-    token = agent_token(agent_id: 'agent-rev', now: Time.now - 10)
+    token = agent_token(agent_id: 'agent-rev', now: Time.current - 10)
     Kiosk.configuration.revocation_store.revoke_all('agent-rev', at: Time.now.to_i)
     expect(idp.verify(bearer(token))).to be_nil
   end

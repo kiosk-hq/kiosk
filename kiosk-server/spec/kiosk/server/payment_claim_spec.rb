@@ -29,13 +29,13 @@ module PaymentClaimSpecHelpers
   end
 
   # The operator's payable model.
-  class Payable < ActiveRecord::Base
+  class Payable < ApplicationRecord
     self.table_name = "#{SCHEMA}.payables"
     include Kiosk::Owned
   end
 
   # A payable model with no `updated_at`.
-  class Untimed < ActiveRecord::Base
+  class Untimed < ApplicationRecord
     self.table_name = "#{SCHEMA}.untimed_payables"
     include Kiosk::Owned
   end
@@ -106,7 +106,7 @@ module PaymentClaimSpecHelpers
     agent = SecureRandom.uuid
     intent = insert_intent(agent)
     cart = insert_cart(agent, intent, id)
-    conn.execute(<<~SQL)
+    conn.execute(<<~SQL.squish)
       INSERT INTO "#{schema}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
       VALUES ('#{cart}', '#{payer}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
@@ -114,7 +114,7 @@ module PaymentClaimSpecHelpers
   end
 
   def insert_intent(agent)
-    conn.select_value(<<~SQL)
+    conn.select_value(<<~SQL.squish)
       INSERT INTO "#{schema}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
         currency, expires_at, raw_jws)
       VALUES ('#{SecureRandom.uuid}', '#{payer}', '#{agent}', 'i', 's', 1000, 'EUR', now() + interval '1 day', 'j')
@@ -123,7 +123,7 @@ module PaymentClaimSpecHelpers
   end
 
   def insert_cart(agent, intent, id, mandate_id: SecureRandom.uuid)
-    conn.select_value(<<~SQL)
+    conn.select_value(<<~SQL.squish)
       INSERT INTO "#{schema}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
         total_amount_cents, currency, expires_at, raw_jws)
       VALUES ('#{mandate_id}', '#{intent}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',

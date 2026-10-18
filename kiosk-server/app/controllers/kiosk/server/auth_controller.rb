@@ -51,7 +51,7 @@ module Kiosk
       # Unauthenticated: the nonce is worthless without the matching private key.
       def challenge
         public_key = request.query_parameters['public_key']
-        raise Errors::BadRequest, 'missing public_key query parameter' if public_key.nil? || public_key.empty?
+        raise Errors::BadRequest, 'missing public_key query parameter' if public_key.blank?
 
         respond(AuthChallenge.issue(public_key_pem: public_key), :ok)
       rescue Errors::Base => e
@@ -162,7 +162,7 @@ module Kiosk
       # Schema-checked before any `fetch`, so a wrong-typed member is a 400 naming it (§17).
       def parse_body!(exchange)
         raw = request.raw_post
-        raise Errors::BadRequest, 'request body must be a JSON object' if raw.nil? || raw.empty?
+        raise Errors::BadRequest, 'request body must be a JSON object' if raw.blank?
 
         parsed = JSON.parse(raw, symbolize_names: true)
         raise Errors::BadRequest, 'request body must be a JSON object' unless parsed.is_a?(Hash)

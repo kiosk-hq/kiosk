@@ -253,7 +253,7 @@ module WireWordingSpec
     Kiosk.configure { |c| c.user_idp = idp.new(identity) }
   end
 
-  def post(action, raw_body)
+  def call_auth(action, raw_body)
     env = Rack::MockRequest.env_for(
       "https://provider.example/kiosk/auth/#{action}",
       method: 'POST', input: raw_body, 'CONTENT_TYPE' => 'application/json'
@@ -339,19 +339,19 @@ RSpec.describe 'the malformed-request sentences on the wire' do
   # The first call an assistant makes.
   describe 'POST /kiosk/auth/register' do
     it 'names the absent field and not the Ruby exception when public_key is omitted' do
-      status, headers, body = post(:register, JSON.generate(signed: 'x'))
+      status, headers, body = call_auth(:register, JSON.generate(signed: 'x'))
       expect_detail(status, headers, body, 'missing field: public_key')
       expect_no_ruby(body)
     end
 
     it 'names the absent field when signed is omitted' do
-      status, headers, body = post(:register, JSON.generate(public_key: 'x'))
+      status, headers, body = call_auth(:register, JSON.generate(public_key: 'x'))
       expect_detail(status, headers, body, 'missing field: signed')
       expect_no_ruby(body)
     end
 
     it "answers a body that is not JSON with this protocol's own sentence" do
-      status, headers, body = post(:register, 'notjson')
+      status, headers, body = call_auth(:register, 'notjson')
       expect_detail(status, headers, body, 'invalid JSON body')
       expect_no_ruby(body)
       expect(body[:hint]).to eq(Kiosk::Server::Errors::MALFORMED_JSON_HINT)
@@ -364,7 +364,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
 
   describe 'POST /kiosk/auth/login' do
     it 'names the absent field when signed is omitted' do
-      status, headers, body = post(:login, JSON.generate(public_key: 'x'))
+      status, headers, body = call_auth(:login, JSON.generate(public_key: 'x'))
       expect_detail(status, headers, body, 'missing field: signed')
       expect_no_ruby(body)
     end
@@ -373,7 +373,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
   # The register-shaped redeem.
   describe 'POST /kiosk/auth/claim' do
     it 'names the absent field when signed is omitted' do
-      status, headers, body = post(:claim, JSON.generate(code: 'c', public_key: 'PEM'))
+      status, headers, body = call_auth(:claim, JSON.generate(code: 'c', public_key: 'PEM'))
       expect_detail(status, headers, body, 'missing field: signed')
       expect_no_ruby(body)
     end
@@ -383,7 +383,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
   describe 'POST /kiosk/auth/unlink' do
     it 'names the absent field when agent_id is omitted' do
       wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id))
-      status, headers, body = post(:unlink, JSON.generate({}))
+      status, headers, body = call_auth(:unlink, JSON.generate({}))
       expect_detail(status, headers, body, 'missing field: agent_id')
       expect_no_ruby(body)
     end

@@ -155,11 +155,11 @@ module Kiosk
         # The attributes every mandate carries.
         def common(payload, raw_jws)
           { id: payload[:id], user_id: payload[:user_id], agent_id: payload[:agent_id], issuer: payload[:iss],
-            expires_at: Time.at(payload[:exp]), created_at: Time.at(payload[:iat]), raw_jws: raw_jws }
+            expires_at: Time.at(payload[:exp]).utc, created_at: Time.at(payload[:iat]).utc, raw_jws: raw_jws }
         end
 
         # The named claims, nil when absent.
-        def claims(payload, *names) = names.to_h { |name| [name, payload[name]] }
+        def claims(payload, *names) = names.index_with { |name| payload[name] }
 
         def decode_and_check(raw_jws, identity)
           payload = decode(raw_jws, identity)

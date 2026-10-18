@@ -28,7 +28,7 @@ module SettlementSpecHelpers
   end
 
   def insert_intent(user_id, agent)
-    conn.select_value(<<~SQL)
+    conn.select_value(<<~SQL.squish)
       INSERT INTO "#{SCHEMA}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
         currency, expires_at, raw_jws)
       VALUES ('#{SecureRandom.uuid}', '#{user_id}', '#{agent}', 'i', 's', 1000, 'EUR', now() + interval '1 day', 'j')
@@ -37,7 +37,7 @@ module SettlementSpecHelpers
   end
 
   def insert_cart(user_id, agent, intent, line_items)
-    conn.select_value(<<~SQL)
+    conn.select_value(<<~SQL.squish)
       INSERT INTO "#{SCHEMA}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
         total_amount_cents, currency, expires_at, raw_jws)
       VALUES ('#{SecureRandom.uuid}', '#{intent}', '#{user_id}', '#{agent}', 'i', '#{line_items.to_json}',
@@ -47,7 +47,7 @@ module SettlementSpecHelpers
   end
 
   def insert_settlement(user_id, agent, cart)
-    conn.select_value(<<~SQL)
+    conn.select_value(<<~SQL.squish)
       INSERT INTO "#{SCHEMA}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
       VALUES ('#{cart}', '#{user_id}', '#{agent}', 'i', 'psp', 500, 'EUR', now())

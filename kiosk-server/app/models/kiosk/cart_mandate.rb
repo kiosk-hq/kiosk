@@ -3,7 +3,7 @@
 module Kiosk
   # The signed cart the engine records when it settles a `pay`: the line items
   # the assistant agreed to pay for. Read-only for the operator.
-  class CartMandate < ::ActiveRecord::Base
+  class CartMandate < Server::ApplicationRecord
     def self.table_name = "#{Kiosk.configuration.schema}.cart_mandates"
 
     has_many :settlements, class_name: 'Kiosk::Settlement', dependent: nil, inverse_of: :cart_mandate

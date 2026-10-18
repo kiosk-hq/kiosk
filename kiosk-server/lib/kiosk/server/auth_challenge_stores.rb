@@ -20,7 +20,7 @@ module Kiosk
           return if public_key_pem.nil?
 
           prune_if_due!
-          sql = <<~SQL
+          sql = <<~SQL.squish
             INSERT INTO #{table} AS c (public_key, nonce, expires_at)
             VALUES ($1, $2, to_timestamp($3))
             ON CONFLICT (public_key) DO UPDATE
@@ -34,7 +34,7 @@ module Kiosk
         def take(public_key_pem, nonce) # rubocop:disable Naming/PredicateMethod -- `take` is the store contract `config.auth_challenge_store` names
           return false if public_key_pem.nil? || nonce.nil?
 
-          sql = <<~SQL
+          sql = <<~SQL.squish
             DELETE FROM #{table}
             WHERE public_key = $1 AND nonce = $2 AND expires_at > now()
             RETURNING public_key

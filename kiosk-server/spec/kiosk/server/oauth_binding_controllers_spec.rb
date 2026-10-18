@@ -172,7 +172,7 @@ RSpec.describe 'OAuth binding controllers' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem)
       expect(status).to eq(200)
 
-      row = store.find_by_device_code_hash(
+      row = store.lookup_by_device_code_hash(
         Kiosk::Server::DeviceAuthorization.hash_device_code(body[:device_code])
       )
       expect(row.requested_role).to be_nil

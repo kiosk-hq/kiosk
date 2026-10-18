@@ -199,7 +199,7 @@ RSpec.describe 'DeviceVerifyController', 'approve' do
 
     expect(status).to eq(200)
     expect(html).to include('Approved')
-    reloaded = store.find_by_device_code_hash(start[:da].device_code_hash)
+    reloaded = store.lookup_by_device_code_hash(start[:da].device_code_hash)
     expect(reloaded).to be_approved
     expect(reloaded.user_id).to eq(user_id)
   end
@@ -218,7 +218,7 @@ RSpec.describe 'DeviceVerifyController', 'approve' do
                params: { 'user_code' => start[:user_code], 'decision' => 'approve' }
     )
 
-    expect(store.find_by_device_code_hash(start[:da].device_code_hash).requested_role)
+    expect(store.lookup_by_device_code_hash(start[:da].device_code_hash).requested_role)
       .to eq('owner')
   end
 end
@@ -235,7 +235,7 @@ RSpec.describe 'DeviceVerifyController', 'approve without a role, and deny' do
                params: { 'user_code' => start[:user_code], 'decision' => 'approve' }
     )
 
-    expect(store.find_by_device_code_hash(start[:da].device_code_hash).requested_role).to be_nil
+    expect(store.lookup_by_device_code_hash(start[:da].device_code_hash).requested_role).to be_nil
   end
 
   it 'deny marks the row denied' do
@@ -247,7 +247,7 @@ RSpec.describe 'DeviceVerifyController', 'approve without a role, and deny' do
 
     expect(status).to eq(200)
     expect(html).to include('Denied')
-    expect(store.find_by_device_code_hash(start[:da].device_code_hash)).to be_denied
+    expect(store.lookup_by_device_code_hash(start[:da].device_code_hash)).to be_denied
   end
 end
 

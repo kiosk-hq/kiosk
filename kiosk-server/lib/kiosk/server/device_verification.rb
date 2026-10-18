@@ -15,7 +15,7 @@ module Kiosk
         normalized = normalize_user_code(user_code)
         return nil if normalized.empty?
 
-        store.find_by_user_code_hash(DeviceAuthorization.hash_user_code(normalized))
+        store.lookup_by_user_code_hash(DeviceAuthorization.hash_user_code(normalized))
       end
 
       # `role:` is the approving human's own role (`user_idp`'s `Identity#role`,

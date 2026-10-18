@@ -70,7 +70,7 @@ RSpec.describe Kiosk::Server::LinkCode do
 
     it 'persists only the hash of the link code' do
       result = described_class.mint(user_id: user_id)
-      stored = store.find_by_device_code_hash(
+      stored = store.lookup_by_device_code_hash(
         Kiosk::Server::DeviceAuthorization.hash_device_code(result[:link_code])
       )
       expect(stored).to eq(result[:da])
@@ -122,7 +122,7 @@ RSpec.describe Kiosk::Server::LinkCode do
     # ── K-887: single-use is decided by the ROW, not by a Ruby check ────────
     #
     # The `consumed?` check in `.redeem` reads the snapshot returned by
-    # `find_by_device_code_hash`. Two concurrent redemptions of ONE code both
+    # `lookup_by_device_code_hash`. Two concurrent redemptions of ONE code both
     # take that snapshot while it still says `:approved`, so before K-887 both
     # passed the check and both reached `AccountBinding.bind!` -- with two
     # DIFFERENT public keys, binding two assistants to the human's account.
@@ -137,11 +137,11 @@ RSpec.describe Kiosk::Server::LinkCode do
       proof_a = signed_proof
       pem_b, proof_b = second_key_proof
 
-      stale = store.find_by_device_code_hash(
+      stale = store.lookup_by_device_code_hash(
         Kiosk::Server::DeviceAuthorization.hash_device_code(code)
       )
       expect(stale).to be_approved
-      allow(store).to receive(:find_by_device_code_hash).and_return(stale)
+      allow(store).to receive(:lookup_by_device_code_hash).and_return(stale)
 
       described_class.redeem(code: code, public_key_pem: pem, signed: proof_a)
 
@@ -266,7 +266,7 @@ RSpec.describe Kiosk::Server::LinkCode do
         )
       end.to raise_error(Kiosk::Server::Errors::NotFound, /expired/)
       expect(
-        store.find_by_device_code_hash(minted[:da].device_code_hash)
+        store.lookup_by_device_code_hash(minted[:da].device_code_hash)
       ).to be_expired
     end
 

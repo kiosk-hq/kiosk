@@ -16,7 +16,7 @@ module Kiosk
                requested_role: nil,
                store: Kiosk.configuration.device_authorization_store,
                expires_in: DeviceAuthorization::DEFAULT_EXPIRES_IN,
-               now: Time.now)
+               now: Time.current)
         plain_device_code, _plain_user_code, da = DeviceAuthorization.generate(
           client_id: CLIENT_ID,
           kind: :link,
@@ -32,7 +32,7 @@ module Kiosk
 
       def redeem(code:, public_key_pem:, signed:,
                  store: Kiosk.configuration.device_authorization_store,
-                 now: Time.now)
+                 now: Time.current)
         raise Errors::BadRequest, 'code required' if code.to_s.empty?
 
         pem = public_key_pem.to_s.strip
@@ -61,7 +61,7 @@ module Kiosk
         end
 
         def live_link(store, code, now)
-          da = store.find_by_device_code_hash(DeviceAuthorization.hash_device_code(code))
+          da = store.lookup_by_device_code_hash(DeviceAuthorization.hash_device_code(code))
           unless da&.link?
             raise Errors::NotFound.new(
               'unknown link code',

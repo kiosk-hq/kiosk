@@ -88,7 +88,7 @@ RSpec.shared_context 'audit sink spec: event' do
                           status: described_class::OK, invoked_at: invoked_at)
   end
 
-  let(:invoked_at) { Time.now - 5 }
+  let(:invoked_at) { Time.current - 5 }
 end
 
 RSpec.shared_context 'audit sink spec: raising sink' do
@@ -408,7 +408,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.action).to eq('place_order')
         expect(events.first.agent_id).to eq('a-1')
         expect(events.first.args).to eq(sku: 'ABC', slot: '2026-06-15T14:00:00Z')
-        expect(events.first.invoked_at).to be_within(60).of(Time.now)
+        expect(events.first.invoked_at).to be_within(60).of(Time.current)
       end
     end
   end

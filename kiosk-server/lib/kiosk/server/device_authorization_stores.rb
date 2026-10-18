@@ -12,13 +12,13 @@ module Kiosk
       class NotFoundError < StandardError; end
 
       # An adapter must make {#claim_consume} one atomic operation (never a read
-      # then {#update}), and {#find_by_user_code_hash} must answer only pending rows.
+      # then {#update}), and {#lookup_by_user_code_hash} must answer only pending rows.
       class Base
         def create(_device_authorization) = raise(NotImplementedError)
         def update(_device_authorization) = raise(NotImplementedError)
-        def find_by_device_code_hash(_hash) = raise(NotImplementedError)
-        def find_by_user_code_hash(_hash) = raise(NotImplementedError)
-        def claim_consume(_device_authorization, now: Time.now) = raise(NotImplementedError)
+        def lookup_by_device_code_hash(_hash) = raise(NotImplementedError)
+        def lookup_by_user_code_hash(_hash) = raise(NotImplementedError)
+        def claim_consume(_device_authorization, now: Time.current) = raise(NotImplementedError)
       end
 
       class InMemory < Base
@@ -45,14 +45,14 @@ module Kiosk
           authorization
         end
 
-        def find_by_device_code_hash(hash)
+        def lookup_by_device_code_hash(hash)
           @mutex.synchronize do
             @by_id.values.find { |x| x.device_code_hash == hash }
           end
         end
 
         # nil when the row is no longer approved.
-        def claim_consume(authorization, now: Time.now)
+        def claim_consume(authorization, now: Time.current)
           @mutex.synchronize do
             current = @by_id[authorization.id]
             raise NotFoundError, "device_authorization #{authorization.id} not found" if current.nil?
@@ -62,7 +62,7 @@ module Kiosk
           end
         end
 
-        def find_by_user_code_hash(hash)
+        def lookup_by_user_code_hash(hash)
           @mutex.synchronize do
             @by_id.values.find { |x| x.user_code_hash == hash && x.pending? }
           end
@@ -111,8 +111,8 @@ module Kiosk
         end
 
         # nil when the row is no longer approved; the row, not Ruby, decides the race.
-        def claim_consume(authorization, now: Time.now)
-          sql = <<~SQL
+        def claim_consume(authorization, now: Time.current)
+          sql = <<~SQL.squish
             UPDATE #{table}
             SET status = 'consumed', consumed_at = $1
             WHERE id = $2 AND status = 'approved'
@@ -124,8 +124,8 @@ module Kiosk
           authorization.consume(now: now)
         end
 
-        def find_by_device_code_hash(hash)
-          sql = <<~SQL
+        def lookup_by_device_code_hash(hash)
+          sql = <<~SQL.squish
             SELECT * FROM #{table}
             WHERE device_code_hash = $1
             LIMIT 1
@@ -134,8 +134,8 @@ module Kiosk
           row && row_to_authorization(row)
         end
 
-        def find_by_user_code_hash(hash)
-          sql = <<~SQL
+        def lookup_by_user_code_hash(hash)
+          sql = <<~SQL.squish
             SELECT * FROM #{table}
             WHERE user_code_hash = $1 AND status = 'pending'
             LIMIT 1
@@ -155,7 +155,7 @@ module Kiosk
         end
 
         def update_sql
-          <<~SQL
+          <<~SQL.squish
             UPDATE #{table}
             SET public_key_pem = $1, status = $2, user_id = $3, consumed_at = $4, requested_role = $5
             WHERE id = $6
@@ -176,7 +176,7 @@ module Kiosk
         def to_time(value)
           return value if value.nil? || value.is_a?(Time)
 
-          Time.parse(value.to_s)
+          Time.parse(value.to_s).utc
         end
       end
     end

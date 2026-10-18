@@ -18,7 +18,7 @@ module Kiosk
         schema = @schema || Kiosk.configuration.schema
         # The leased connection: the cap is read inside the transaction that charges.
         conn   = @connection || ::ActiveRecord::Base.lease_connection
-        row = conn.exec_query(<<~SQL, 'Kiosk spending cap', [agent_id]).to_a.first
+        row = conn.exec_query(<<~SQL.squish, 'Kiosk spending cap', [agent_id]).to_a.first
           SELECT spending_cap_cents
           FROM "#{schema}".agents
           WHERE id = $1 AND revoked_at IS NULL

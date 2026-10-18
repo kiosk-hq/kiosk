@@ -88,7 +88,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization, '.generate role and expiry' d
   end
 
   it 'defaults expires_in to the canonical 900s (15 min)' do
-    now = Time.now
+    now = Time.current
     _plain, _user, da = described_class.generate(client_id: 'kiosk-cli', now: now)
     expect(da.expires_at - now).to be_within(1).of(described_class::DEFAULT_EXPIRES_IN)
   end
@@ -181,7 +181,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization, 'USER_CODE_ALPHABET in commen
     offenders = Dir.glob("#{root}/{lib,app}/**/*.{rb,erb}").flat_map do |path|
       File.readlines(path).each_with_index.filter_map do |line, idx|
         next unless line.match?(%r{32\^8|32\*\*8|no 0/O/1/I/L/U}) ||
-                    (line.include?('Crockford') && !line.include?('NOT Crockford'))
+                    (line.include?('Crockford') && line.exclude?('NOT Crockford'))
 
         "#{path.delete_prefix("#{root}/")}:#{idx + 1}"
       end
@@ -313,7 +313,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization, '#consume' do
 
   it 'transitions approved → consumed with consumed_at set' do
     approved = pending.approve(user_id: user_id)
-    now      = Time.now
+    now      = Time.current
     consumed = approved.consume(now: now)
     expect(consumed).to be_consumed
     expect(consumed.consumed_at).to eq(now)

@@ -143,7 +143,7 @@ RSpec.describe 'Kiosk::Server::Engine routes', 'the per-verb wire, which this ta
     paths = drawn_paths
 
     expect(paths).not_to be_empty
-    expect(paths.select { |path| path.match?(/[:*][a-z_]/) && !path.include?('(.:format)') }).to be_empty
+    expect(paths.select { |path| path.match?(/[:*][a-z_]/) && path.exclude?('(.:format)') }).to be_empty
     expect(paths.grep(/kiosk_verb/)).to be_empty
   end
 

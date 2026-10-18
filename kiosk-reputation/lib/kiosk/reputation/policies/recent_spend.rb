@@ -7,7 +7,8 @@ module Kiosk
     module Policies
       # One proof-of-work toll per session, by chance. The chance falls linearly
       # with what the customer spent here within `within` seconds: 1 with no
-      # spend, 0 at `cap` or more. The draw is made once per access token.
+      # spend, 0 at `cap` or more. The draw is made once per customer and token
+      # lifetime, so a new token minted in the same lifetime meets the same outcome.
       class RecentSpend < Policy
         attr_reader :within
 
@@ -28,11 +29,15 @@ module Kiosk
 
         private
 
-        # A number in [0, 1). The access token's `jti` sets it, so every call made
-        # with one token meets the same draw. A caller without a token draws anew.
+        # A number in [0, 1), set by the customer and the token lifetime that holds
+        # the token's `iat`: lifetimes are consecutive spans of `exp - iat` seconds
+        # from the Unix epoch. A caller without a token draws anew.
         def draw(identity)
-          jti = identity&.claims&.[](:jti)
-          jti ? Digest::SHA256.digest(jti.to_s).unpack1('Q>').fdiv(2**64) : rand
+          claims = identity&.claims || {}
+          return rand unless claims[:iat] && claims[:exp]
+
+          span = claims[:iat].div(claims[:exp] - claims[:iat])
+          Digest::SHA256.digest("#{identity.user_id}:#{span}").unpack1('Q>').fdiv(2**64)
         end
 
         # The Equihash gem's default params when it is loaded, so a test that shrinks them shrinks this toll too.

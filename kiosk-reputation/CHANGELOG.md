@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `RecentSpend` draws once for each customer in each token lifetime, so a new access token in the same lifetime meets the same outcome.
 - 2026-10-18: `RecentSpend` draws once per access token: the token's `jti` fixes the draw, so every call made with the token meets one outcome. `random:` is removed.
 
 ## [0.5.16] — 2026-10-18

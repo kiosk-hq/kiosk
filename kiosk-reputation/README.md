@@ -248,8 +248,10 @@ A session pays one proof at the Equihash gem's default params, with the chance
 `max(0, (cap - spend) / cap)`. `spend` is what the customer spent here within
 `within`, and `cap` is in whole currency units. So a customer with no spend
 pays in every session, and a customer who spent `cap` or more pays in none.
-The draw is made once per access token: the token's `jti` fixes it, so every
-call made with one token meets the same outcome.
+The draw is made once for each customer in each token lifetime. Token
+lifetimes are consecutive spans of `exp - iat` seconds from the Unix epoch, and
+the token's `iat` selects its span. So every call made with one token, and every
+new token issued to the customer in the same span, meets the same outcome.
 An operator that takes no payment records each fulfilled visit with
 `Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
 

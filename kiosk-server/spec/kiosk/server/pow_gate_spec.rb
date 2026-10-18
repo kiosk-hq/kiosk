@@ -1249,17 +1249,22 @@ RSpec.describe Kiosk::Server::PowGate, 'the session toll' do
   end
 end
 
-# The recent-spend policy draws once per access token: every call made with one
-# token meets the outcome of its first call.
+# The recent-spend policy draws once per customer and token lifetime: every call
+# made with one token, and every token minted again in that lifetime, meets the
+# outcome of the first call.
 RSpec.describe Kiosk::Server::PowGate, 'the recent-spend draw' do
   include PowGateSpecHelpers
 
-  def outcome(jti)
-    identity = build_identity(claims: { jti: jti, exp: Time.now.to_i + 3600 })
+  let(:hour) { Time.now.to_i - (Time.now.to_i % 3600) }
+
+  def outcome(user, jti: "#{user}-token", iat: hour)
+    identity = build_identity(user_id: user, claims: { jti: jti, iat: iat, exp: iat + 3600 })
     described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
   rescue Kiosk::Server::Errors::PowRequired
     :owes
   end
+
+  def customers = Array.new(100) { |i| "u-#{i}" }
 
   before do
     Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
@@ -1269,14 +1274,18 @@ RSpec.describe Kiosk::Server::PowGate, 'the recent-spend draw' do
   end
 
   it 'keeps the outcome of a token for every later call made with it' do
-    tokens = Array.new(100) { |i| "t-#{i}" }
-
-    expect(tokens.map { |jti| Array.new(3) { outcome(jti) }.uniq.size }.uniq).to eq([1])
+    expect(customers.map { |user| Array.new(3) { outcome(user) }.uniq.size }.uniq).to eq([1])
   end
 
   it 'excuses a token and keeps it excused' do
-    excused = Array.new(100) { |i| "t-#{i}" }.find { outcome(it) == :proceed }
+    excused = customers.find { outcome(it) == :proceed }
 
     expect(Array.new(5) { outcome(excused) }).to all(eq(:proceed))
+  end
+
+  it 'asks the toll of every token minted again in the lifetime of an owed token' do
+    owed = customers.find { outcome(it) == :owes }
+
+    expect(Array.new(20) { |i| outcome(owed, jti: "remint-#{i}", iat: hour + i) }).to all(eq(:owes))
   end
 end

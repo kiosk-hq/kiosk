@@ -3,8 +3,9 @@
 RSpec.describe Kiosk::Reputation::Policies::RecentSpend do
   subject(:policy) { described_class.new(within: 7 * 86_400, cap: 100) }
 
-  def token(jti) = Struct.new(:claims).new({ jti: jti })
-  def tokens(count) = Array.new(count) { |i| token("t-#{i}") }
+  # An access token minted for `user` at `iat`, an hour long.
+  def token(user, iat:, jti: "#{user}-#{iat}") = Struct.new(:user_id, :claims).new(user, { jti:, iat:, exp: iat + 3600 })
+  def tokens(count) = Array.new(count) { |i| token("customer-#{i}", iat: 1_800_000_000) }
 
   def toll(cents, identity)
     factors = Kiosk::Reputation::Factors.empty.with(settled_purchases_cents: cents)
@@ -27,6 +28,21 @@ RSpec.describe Kiosk::Reputation::Policies::RecentSpend do
 
   it 'draws once per access token, so each call made with one token meets the same outcome' do
     expect(tokens(1_000).map { |t| Array.new(3) { toll(25_00, t) }.uniq.size }.uniq).to eq([1])
+  end
+
+  it 'gives every token minted for one customer within one token lifetime the same outcome' do
+    window = 1_800_000_000 - (1_800_000_000 % 3600)
+    remints = tokens(200).map(&:user_id).map do |user|
+      Array.new(20) { |i| toll(50_00, token(user, iat: window + (i * 97), jti: "#{user}-remint-#{i}")) }.uniq.size
+    end
+
+    expect(remints.uniq).to eq([1])
+  end
+
+  it 'draws anew for the same customer in the next token lifetime' do
+    outcomes = Array.new(400) { |hour| toll(50_00, token('customer', iat: 1_800_000_000 + (hour * 3600))) }
+
+    expect(outcomes.count(&:nil?).fdiv(outcomes.size)).to be_within(0.08).of(0.5)
   end
 
   it 'reads the cap in whole currency units and the spend in cents' do

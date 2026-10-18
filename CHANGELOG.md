@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The recent-spend policy draws once for each customer in each token lifetime: a new access token does not draw again.
 - 2026-10-18: The recent-spend policy draws once per access token: a session pays the toll with the chance its recent spend sets.
 
 ## [0.5.16] — 2026-10-18

@@ -12,9 +12,10 @@ Gem::Specification.new do |spec|
   spec.description   = <<~DESC
     kiosk-core is the foundation for the Kiosk framework. It defines the value
     types (Identity, Mandate), the abstract base classes adapters extend
-    (AgentIdentityProviders, UserIdentityProviders, PaymentProviders), the
-    Postgres GUC namespace constants, the protocol-version surface, the
-    canonical-uuid shape guard (UuidCheck), and the Kiosk.configure block.
+    (AgentIdentityProviders, UserIdentityProviders, PaymentProviders,
+    KycProviders), the Postgres GUC namespace constants, the protocol-version
+    surface, the canonical-uuid shape guard (UuidCheck), and the Kiosk.configure
+    block.
 
     No Rails dependency. Loadable in any Ruby app; the heavier kiosk-server
     and kiosk-rls gems build on top of this.

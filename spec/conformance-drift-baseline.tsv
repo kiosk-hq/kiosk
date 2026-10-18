@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-18 at b1d0a419 -- T-250 dry run: 7 new claim anchors judged against their rows
-# 1908 anchors.
+# recorded: 2026-10-18 at 83a75eb4 -- T-138 agent-side walk and release 0.5.17: 4 anchors judged against their rows
+# 1910 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -74,161 +74,162 @@ e2e/README.md	051214e824541696	b1d0a419	The principal flows into handlers: the `
 e2e/README.md	eb5fa49eb3be9781	b1d0a419	The wire carries no SQL: there is no arbitrary-SQL surface.
 e2e/README.md	90f78e4898e2c41d	b1d0a419	`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup.
 e2e/README.md	e1db8ac210994324	b1d0a419	└── fixtures/                               # files copied into the generated app
-e2e/assistant.sh	7e10b403edbedbeb	b1d0a419	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	32ea9a773eca7bad	b1d0a419	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	f9dc523d4a428d91	b1d0a419	$public_doc is really being read (control token)
-e2e/assistant.sh	cd4eddd677e611ab	b1d0a419	$public_doc names no verb ($verb_name) — pointer, not copy
-e2e/assistant.sh	d41cd84579bfa314	b1d0a419	=== the event stream (pinned listener) ===
-e2e/assistant.sh	52a16a65def7b005	b1d0a419	?v=<digest> is immutable for a year
-e2e/assistant.sh	de71535d9f908166	b1d0a419	GET /kiosk/schema is unenveloped
-e2e/assistant.sh	be84dc69a52f0de8	b1d0a419	GET at an action's path → 404
-e2e/assistant.sh	0e42a2b846f5fe80	b1d0a419	If-None-Match on the digest → 304
-e2e/assistant.sh	fc5ed1c45af6f66d	b1d0a419	KYC at an origin that serves no KYC → 501
-e2e/assistant.sh	2cb1d4a638ff83d5	b1d0a419	Kiosk-API-Version is MAJOR.MINOR.PATCH
-e2e/assistant.sh	0c6e61a6e86b5b4a	b1d0a419	Kiosk-API-Version present
-e2e/assistant.sh	bc7d2b93abf90689	b1d0a419	Kiosk-Min-Client is a version, and it is advertised
-e2e/assistant.sh	a6b6c17e5d494b55	b1d0a419	Kiosk-Min-Client present
-e2e/assistant.sh	87deaf53b2cad295	b1d0a419	Kiosk-Server-Version present
-e2e/assistant.sh	cb17459ec2775ab4	b1d0a419	POST /kiosk/$undrawn unauthenticated → 404 too
-e2e/assistant.sh	a34c9ec317cae464	b1d0a419	POST /kiosk/$undrawn → 404
-e2e/assistant.sh	4bb3da33897158f5	b1d0a419	POST at a query's path → 404
-e2e/assistant.sh	6cf148d0f731b35e	b1d0a419	There is no name-dispatch endpoint: a verb
-e2e/assistant.sh	c59f5eadf745850a	b1d0a419	Vary names all three request headers
-e2e/assistant.sh	df0d94a1b986f270	b1d0a419	X-Total-Count is not dressed up as a standard
-e2e/assistant.sh	4cd879b78cb0c183	b1d0a419	a COMPLETE answer carries X-Total-Count
-e2e/assistant.sh	ef224c9cb44cbb95	b1d0a419	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
-e2e/assistant.sh	b76eae5f3c62353f	b1d0a419	a query's 200 declares Link and X-Total-Count as HEADERS
-e2e/assistant.sh	3f173be1e2e5e6d4	b1d0a419	a routing 404 UNDER the mount is a 404
-e2e/assistant.sh	043ce0f1b8f803fe	b1d0a419	agent-configuration → 200
-e2e/assistant.sh	a4869ee1251f12dd	b1d0a419	agents.json → 200
-e2e/assistant.sh	738da0416039b544	b1d0a419	agents.txt Protocols: ap2
-e2e/assistant.sh	4865e3df051b115e	b1d0a419	agents.txt → 200
-e2e/assistant.sh	27623ecc0e894ec5	b1d0a419	alice: 1 appointment exists
-e2e/assistant.sh	e78676291551400a	b1d0a419	alice: does NOT see bob's row
-e2e/assistant.sh	02b6ca6cf2c18c64	b1d0a419	alice: sees her own row
-e2e/assistant.sh	8828ef7892c3b853	b1d0a419	all three version headers on all 19 mount routes
-e2e/assistant.sh	cde0ddb3a718eb34	b1d0a419	an action declares no pagination headers
-e2e/assistant.sh	3414347124974678	b1d0a419	an ancient client is SERVED, not refused — the floor is advisory
-e2e/assistant.sh	495ef79de3304b32	b1d0a419	an unhandled 500 UNDER the mount is a 500
-e2e/assistant.sh	ed89efb6f3b589b6	b1d0a419	api-catalog advertises it as a service-desc
-e2e/assistant.sh	0a416c3fbc34fac4	b1d0a419	api-catalog hyperlinks $verb_name, unauthenticated
-e2e/assistant.sh	925c895ed1752035	b1d0a419	api-catalog → 200
-e2e/assistant.sh	e11c6988d2261b05	b1d0a419	appointment_id returned
-e2e/assistant.sh	92d4c091191b4943	b1d0a419	assert "no Authorization header → 200"  "$oa_anon" "200"
-e2e/assistant.sh	0e49e161b51f30b4	b1d0a419	assert "no Authorization header → 200"  "$sch_status" "200"
-e2e/assistant.sh	8162f19f3c75904b	b1d0a419	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
-e2e/assistant.sh	63296b35e0f9aa9f	b1d0a419	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
-e2e/assistant.sh	f5e466c5fafd1254	b1d0a419	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	6d1f2f3ec664cf33	b1d0a419	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	3c03c2f4e3a8fac4	b1d0a419	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
-e2e/assistant.sh	91e28281b119681d	b1d0a419	assert "…served public, one minute" \
-e2e/assistant.sh	8260833a5969c6bb	b1d0a419	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
-e2e/assistant.sh	0d0f836bd68acf3d	b1d0a419	binding: /auth.md served
-e2e/assistant.sh	2bbd0fc251be7c9b	b1d0a419	binding: device_authorization fields
-e2e/assistant.sh	ccb93f1a98523323	b1d0a419	binding: fast poll → slow_down
-e2e/assistant.sh	70635320f2eb5a70	b1d0a419	binding: held token dies at unlink
-e2e/assistant.sh	72f676ec402b4865	b1d0a419	binding: human approve → 200
-e2e/assistant.sh	a068223c610f6da1	b1d0a419	binding: link-code mint (session)
-e2e/assistant.sh	e42229805575dd27	b1d0a419	binding: link-code redeem → human
-e2e/assistant.sh	cbd9d7971a07e188	b1d0a419	binding: login after unlink → 404
-e2e/assistant.sh	54ad1edd79a08dfa	b1d0a419	binding: pending before approval
-e2e/assistant.sh	331bdc8120102cc0	b1d0a419	binding: poll without proof denied
-e2e/assistant.sh	0358f39ad1c38d12	b1d0a419	binding: role/scope refused on the opening request
-e2e/assistant.sh	d5b18fb08d192dac	b1d0a419	binding: same-second token dies too
-e2e/assistant.sh	2a1b3270ce906612	b1d0a419	binding: token bound to the human
-e2e/assistant.sh	5f5e9e3953bd6731	b1d0a419	binding: token role is the approver's
-e2e/assistant.sh	f3a3396abdde3394	b1d0a419	binding: unlink → 204 (no body)
-e2e/assistant.sh	4eb6f08faf943420	b1d0a419	binding: wire verb as bound account
-e2e/assistant.sh	d6dcf51d33158d14	b1d0a419	binding: …and the code is not_found
-e2e/assistant.sh	071974087eeebe97	b1d0a419	binding: …type names it
-e2e/assistant.sh	dc02931f1a65a16a	b1d0a419	bob: 1 appointment exists
-e2e/assistant.sh	35dbfa8f87dfa9b2	b1d0a419	bob: does NOT see alice's row
-e2e/assistant.sh	9531e3cc8978ad14	b1d0a419	db: 1 cart_mandate
-e2e/assistant.sh	d50ffe8fb3a8dd1b	b1d0a419	db: 1 intent_mandate
-e2e/assistant.sh	b594bfbf72a637c6	b1d0a419	db: 1 payment_mandate
-e2e/assistant.sh	1116b1c3811604ff	b1d0a419	db: settlement amount 1599
-e2e/assistant.sh	ed6b1367f15e3dc1	b1d0a419	declares OpenAPI 3.1
-e2e/assistant.sh	35f292ac2372b6d2	b1d0a419	every parameter writes style and explode
-e2e/assistant.sh	efe9e4d4b1d7260a	b1d0a419	exactly 1 salon
-e2e/assistant.sh	656b0c791b2e4775	b1d0a419	garbage token → 401
-e2e/assistant.sh	d518750461584001	b1d0a419	jwks: alg=RS256
-e2e/assistant.sh	9aeb0747055be8c8	b1d0a419	jwks: keys[] present
-e2e/assistant.sh	b2ee3e99d7568864	b1d0a419	jwks: no private d field
-e2e/assistant.sh	8112d41b031fd800	b1d0a419	jwks: no private p field
-e2e/assistant.sh	532fa3d4713fe001	b1d0a419	jwks: use=sig
-e2e/assistant.sh	d4c74e287d30eced	b1d0a419	kiosk.auth.challenge_url
-e2e/assistant.sh	b408203f37deb5bd	b1d0a419	kiosk.auth.kind kiosk-pop
-e2e/assistant.sh	6e3bcf018a1f61b9	b1d0a419	kiosk.capabilities[]
-e2e/assistant.sh	f9112efaabed8a59	b1d0a419	kiosk.endpoint correct
-e2e/assistant.sh	8eab52eaf2363e28	b1d0a419	kiosk.schema_url is digest-versioned
-e2e/assistant.sh	d579e23ce8062bcd	b1d0a419	kiosk.version present
-e2e/assistant.sh	e84d99154b561b20	b1d0a419	limit and cursor are injected into a query
-e2e/assistant.sh	038644421408493c	b1d0a419	my_appointments declares salon_id as a query parameter
-e2e/assistant.sh	44fb3eeebeb7d35e	b1d0a419	no auth → 401
-e2e/assistant.sh	fbcc8cc09baa8c03	b1d0a419	one path per verb the canonical catalog publishes
-e2e/assistant.sh	1e9077ac4f7c7830	b1d0a419	pay: a Stripe PaymentIntent
-e2e/assistant.sh	748f2225b621319d	b1d0a419	pay: http 200
-e2e/assistant.sh	bcb08892f428d28f	b1d0a419	pay: settled 1599
-e2e/assistant.sh	a857334f9cd8098d	b1d0a419	pay: settlement_id
-e2e/assistant.sh	852f48828eddcdd9	b1d0a419	pay: unenveloped
-e2e/assistant.sh	fb7c0573a8996caa	b1d0a419	payment_setup: once the card is saved → ready
-e2e/assistant.sh	85a0cd7c49a0afa4	b1d0a419	payment_setup: served by the engine → setup_required
-e2e/assistant.sh	ff614cf8e3579a06	b1d0a419	register-pow: 1 challenge issued
-e2e/assistant.sh	296cc8a8da7d3020	b1d0a419	register-pow: code pow_required
-e2e/assistant.sh	c85a037c585530c2	b1d0a419	register-pow: minted token wire → 200
-e2e/assistant.sh	83cb3cf0d792a0b7	b1d0a419	register-pow: no-proof → 402
-e2e/assistant.sh	eb77fdb8c475fee3	b1d0a419	register-pow: role pinned customer
-e2e/assistant.sh	6396f70927fa5f0d	b1d0a419	register-pow: served (n,k) IS the gem default
-e2e/assistant.sh	d6440cc5cecd3f3a	b1d0a419	register-pow: solve+proof → registered
-e2e/assistant.sh	f8d02d7f9e1e20bb	b1d0a419	register-pow: the expected (n,k) was READ from the gem
-e2e/assistant.sh	17550b6710f97372	b1d0a419	request_kyc at an origin that serves no KYC → 501
-e2e/assistant.sh	5227abc963e74bf4	b1d0a419	reserved limit/cursor accepted → 200
-e2e/assistant.sh	a8664229f3a352f9	b1d0a419	salon name is Combette
-e2e/assistant.sh	51e1c6d825c87950	b1d0a419	schema publishes {queries, actions, events} and nothing else
-e2e/assistant.sh	4dd6e4bdab26ea40	b1d0a419	status restates the HTTP status
-e2e/assistant.sh	5faf8b659059c918	b1d0a419	the OPERATOR's own 200 outside the mount carries none
-e2e/assistant.sh	bd4514200645ffd1	b1d0a419	the body is a bare array
-e2e/assistant.sh	62baa4b1702a1abb	b1d0a419	the body is the action's object
-e2e/assistant.sh	ca77b6e308979ec0	b1d0a419	the descriptor's description travels verbatim
-e2e/assistant.sh	0682d7fb66bc44a9	b1d0a419	the reserved parameters are form/explode:true
-e2e/assistant.sh	828e5b7ea2d416f5	b1d0a419	the two 'it is not here' answers are two DIFFERENT codes
-e2e/assistant.sh	a44e3a4f72bd6a57	b1d0a419	title is the code's, not the incident's
-e2e/assistant.sh	c6a9404addc1896a	b1d0a419	two origins: first's token on second → 401
-e2e/assistant.sh	e12539c452ad6da0	b1d0a419	two origins: issuer is the first origin
-e2e/assistant.sh	ec1172912739901f	b1d0a419	two origins: issuer is the second origin
-e2e/assistant.sh	70f5c7d56295ad58	b1d0a419	two origins: same key, second account
-e2e/assistant.sh	bdea24d4d4b02d2b	b1d0a419	type names the code
-e2e/assistant.sh	d5f2babc5f8abb49	b1d0a419	unknown query → 404
-e2e/assistant.sh	44966e689e87b8e5	b1d0a419	…a query is advertised GET
-e2e/assistant.sh	ba604e7462629406	b1d0a419	…a stale ?v= still answers the CURRENT catalogue, short-lived
-e2e/assistant.sh	2260fca65574498f	b1d0a419	…an action is advertised POST
-e2e/assistant.sh	89ed2eaaaec56fa7	b1d0a419	…and NO Link header, because there is no next page
-e2e/assistant.sh	ff53dce362c1da79	b1d0a419	…and NOT forbidden
-e2e/assistant.sh	2606ef3b71c72642	b1d0a419	…and is itself an RFC 9457 document
-e2e/assistant.sh	1aec2e6ba0769424	b1d0a419	…and kiosk.json itself expires quickly
-e2e/assistant.sh	29b59cbcac7e5cd4	b1d0a419	…and links the catalog at its versioned url
-e2e/assistant.sh	efb81ff034c053fb	b1d0a419	…and neither does the operator's own 500 — same exception path
-e2e/assistant.sh	69e443dba65ee078	b1d0a419	…and never a 402: the toll went with the gate
-e2e/assistant.sh	09918c8c250f4cf0	b1d0a419	…and the body is no envelope
-e2e/assistant.sh	22d22b6da7976dbb	b1d0a419	…and the boot digest IS the ETag
-e2e/assistant.sh	d81b8d1896d34fed	b1d0a419	…and the module set lives in kiosk.json alone
-e2e/assistant.sh	651f65938444bd59	b1d0a419	…and the route loop actually ran
-e2e/assistant.sh	4d1c6faa12f88aa5	b1d0a419	…and the write never ran
-e2e/assistant.sh	6bca2bfea6562cb2	b1d0a419	…by \$ref into components.headers
-e2e/assistant.sh	992754f67571b9b3	b1d0a419	…code is module_not_served
-e2e/assistant.sh	abe144a08e285d82	b1d0a419	…detail names the module
-e2e/assistant.sh	6bada86079f88c7e	b1d0a419	…into each of the two queries
-e2e/assistant.sh	52fa1c92a224dd15	b1d0a419	…not a problem document
-e2e/assistant.sh	ddd8021a01baccbc	b1d0a419	…public, one minute at the bare path
-e2e/assistant.sh	4dd6e4bdab26ea40	b1d0a419	…status restates the HTTP status
-e2e/assistant.sh	5fe2e13e122c3fec	b1d0a419	…the catalog is the body itself
-e2e/assistant.sh	17a6a3b925163d46	b1d0a419	…the events array carries this origin's topic and payment_setup
-e2e/assistant.sh	a44e3a4f72bd6a57	b1d0a419	…title is the code's, not the incident's
-e2e/assistant.sh	f616315f74fab8eb	b1d0a419	…while a ROOT discovery surface carries none of them
-e2e/assistant.sh	b993275ea6622f13	b1d0a419	…while an identity-scoped 200 keeps private, no-store
-e2e/assistant.sh	387cf424f11b420f	b1d0a419	…while the same request with a bad token is still 401
-e2e/assistant.sh	f1636056fbcf93c1	b1d0a419	…with no Allow on it
-e2e/assistant.sh	18d2cd878d48540b	b1d0a419	…with no code to branch on
+e2e/assistant.sh	7e10b403edbedbeb	83a75eb4	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	32ea9a773eca7bad	83a75eb4	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	f9dc523d4a428d91	83a75eb4	$public_doc is really being read (control token)
+e2e/assistant.sh	cd4eddd677e611ab	83a75eb4	$public_doc names no verb ($verb_name) — pointer, not copy
+e2e/assistant.sh	d41cd84579bfa314	83a75eb4	=== the event stream (pinned listener) ===
+e2e/assistant.sh	52a16a65def7b005	83a75eb4	?v=<digest> is immutable for a year
+e2e/assistant.sh	de71535d9f908166	83a75eb4	GET /kiosk/schema is unenveloped
+e2e/assistant.sh	be84dc69a52f0de8	83a75eb4	GET at an action's path → 404
+e2e/assistant.sh	0e42a2b846f5fe80	83a75eb4	If-None-Match on the digest → 304
+e2e/assistant.sh	fc5ed1c45af6f66d	83a75eb4	KYC at an origin that serves no KYC → 501
+e2e/assistant.sh	2cb1d4a638ff83d5	83a75eb4	Kiosk-API-Version is MAJOR.MINOR.PATCH
+e2e/assistant.sh	0c6e61a6e86b5b4a	83a75eb4	Kiosk-API-Version present
+e2e/assistant.sh	bc7d2b93abf90689	83a75eb4	Kiosk-Min-Client is a version, and it is advertised
+e2e/assistant.sh	a6b6c17e5d494b55	83a75eb4	Kiosk-Min-Client present
+e2e/assistant.sh	87deaf53b2cad295	83a75eb4	Kiosk-Server-Version present
+e2e/assistant.sh	cb17459ec2775ab4	83a75eb4	POST /kiosk/$undrawn unauthenticated → 404 too
+e2e/assistant.sh	a34c9ec317cae464	83a75eb4	POST /kiosk/$undrawn → 404
+e2e/assistant.sh	4bb3da33897158f5	83a75eb4	POST at a query's path → 404
+e2e/assistant.sh	6cf148d0f731b35e	83a75eb4	There is no name-dispatch endpoint: a verb
+e2e/assistant.sh	c59f5eadf745850a	83a75eb4	Vary names all three request headers
+e2e/assistant.sh	df0d94a1b986f270	83a75eb4	X-Total-Count is not dressed up as a standard
+e2e/assistant.sh	4cd879b78cb0c183	83a75eb4	a COMPLETE answer carries X-Total-Count
+e2e/assistant.sh	ef224c9cb44cbb95	83a75eb4	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
+e2e/assistant.sh	b76eae5f3c62353f	83a75eb4	a query's 200 declares Link and X-Total-Count as HEADERS
+e2e/assistant.sh	3f173be1e2e5e6d4	83a75eb4	a routing 404 UNDER the mount is a 404
+e2e/assistant.sh	043ce0f1b8f803fe	83a75eb4	agent-configuration → 200
+e2e/assistant.sh	a4869ee1251f12dd	83a75eb4	agents.json → 200
+e2e/assistant.sh	738da0416039b544	83a75eb4	agents.txt Protocols: ap2
+e2e/assistant.sh	4865e3df051b115e	83a75eb4	agents.txt → 200
+e2e/assistant.sh	27623ecc0e894ec5	83a75eb4	alice: 1 appointment exists
+e2e/assistant.sh	e78676291551400a	83a75eb4	alice: does NOT see bob's row
+e2e/assistant.sh	02b6ca6cf2c18c64	83a75eb4	alice: sees her own row
+e2e/assistant.sh	8828ef7892c3b853	83a75eb4	all three version headers on all 19 mount routes
+e2e/assistant.sh	cde0ddb3a718eb34	83a75eb4	an action declares no pagination headers
+e2e/assistant.sh	3414347124974678	83a75eb4	an ancient client is SERVED, not refused — the floor is advisory
+e2e/assistant.sh	495ef79de3304b32	83a75eb4	an unhandled 500 UNDER the mount is a 500
+e2e/assistant.sh	ed89efb6f3b589b6	83a75eb4	api-catalog advertises it as a service-desc
+e2e/assistant.sh	0a416c3fbc34fac4	83a75eb4	api-catalog hyperlinks $verb_name, unauthenticated
+e2e/assistant.sh	925c895ed1752035	83a75eb4	api-catalog → 200
+e2e/assistant.sh	e11c6988d2261b05	83a75eb4	appointment_id returned
+e2e/assistant.sh	92d4c091191b4943	83a75eb4	assert "no Authorization header → 200"  "$oa_anon" "200"
+e2e/assistant.sh	0e49e161b51f30b4	83a75eb4	assert "no Authorization header → 200"  "$sch_status" "200"
+e2e/assistant.sh	8162f19f3c75904b	83a75eb4	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
+e2e/assistant.sh	63296b35e0f9aa9f	83a75eb4	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
+e2e/assistant.sh	f5e466c5fafd1254	83a75eb4	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	6d1f2f3ec664cf33	83a75eb4	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	3c03c2f4e3a8fac4	83a75eb4	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
+e2e/assistant.sh	91e28281b119681d	83a75eb4	assert "…served public, one minute" \
+e2e/assistant.sh	8260833a5969c6bb	83a75eb4	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
+e2e/assistant.sh	0d0f836bd68acf3d	83a75eb4	binding: /auth.md served
+e2e/assistant.sh	2bbd0fc251be7c9b	83a75eb4	binding: device_authorization fields
+e2e/assistant.sh	ccb93f1a98523323	83a75eb4	binding: fast poll → slow_down
+e2e/assistant.sh	70635320f2eb5a70	83a75eb4	binding: held token dies at unlink
+e2e/assistant.sh	72f676ec402b4865	83a75eb4	binding: human approve → 200
+e2e/assistant.sh	a068223c610f6da1	83a75eb4	binding: link-code mint (session)
+e2e/assistant.sh	e42229805575dd27	83a75eb4	binding: link-code redeem → human
+e2e/assistant.sh	cbd9d7971a07e188	83a75eb4	binding: login after unlink → 404
+e2e/assistant.sh	54ad1edd79a08dfa	83a75eb4	binding: pending before approval
+e2e/assistant.sh	331bdc8120102cc0	83a75eb4	binding: poll without proof denied
+e2e/assistant.sh	0358f39ad1c38d12	83a75eb4	binding: role/scope refused on the opening request
+e2e/assistant.sh	d5b18fb08d192dac	83a75eb4	binding: same-second token dies too
+e2e/assistant.sh	2a1b3270ce906612	83a75eb4	binding: token bound to the human
+e2e/assistant.sh	5f5e9e3953bd6731	83a75eb4	binding: token role is the approver's
+e2e/assistant.sh	f3a3396abdde3394	83a75eb4	binding: unlink → 204 (no body)
+e2e/assistant.sh	4eb6f08faf943420	83a75eb4	binding: wire verb as bound account
+e2e/assistant.sh	d6dcf51d33158d14	83a75eb4	binding: …and the code is not_found
+e2e/assistant.sh	071974087eeebe97	83a75eb4	binding: …type names it
+e2e/assistant.sh	dc02931f1a65a16a	83a75eb4	bob: 1 appointment exists
+e2e/assistant.sh	35dbfa8f87dfa9b2	83a75eb4	bob: does NOT see alice's row
+e2e/assistant.sh	9531e3cc8978ad14	83a75eb4	db: 1 cart_mandate
+e2e/assistant.sh	d50ffe8fb3a8dd1b	83a75eb4	db: 1 intent_mandate
+e2e/assistant.sh	b594bfbf72a637c6	83a75eb4	db: 1 payment_mandate
+e2e/assistant.sh	1116b1c3811604ff	83a75eb4	db: settlement amount 1599
+e2e/assistant.sh	ed6b1367f15e3dc1	83a75eb4	declares OpenAPI 3.1
+e2e/assistant.sh	35f292ac2372b6d2	83a75eb4	every parameter writes style and explode
+e2e/assistant.sh	efe9e4d4b1d7260a	83a75eb4	exactly 1 salon
+e2e/assistant.sh	656b0c791b2e4775	83a75eb4	garbage token → 401
+e2e/assistant.sh	d518750461584001	83a75eb4	jwks: alg=RS256
+e2e/assistant.sh	9aeb0747055be8c8	83a75eb4	jwks: keys[] present
+e2e/assistant.sh	b2ee3e99d7568864	83a75eb4	jwks: no private d field
+e2e/assistant.sh	8112d41b031fd800	83a75eb4	jwks: no private p field
+e2e/assistant.sh	532fa3d4713fe001	83a75eb4	jwks: use=sig
+e2e/assistant.sh	d4c74e287d30eced	83a75eb4	kiosk.auth.challenge_url
+e2e/assistant.sh	b408203f37deb5bd	83a75eb4	kiosk.auth.kind kiosk-pop
+e2e/assistant.sh	6e3bcf018a1f61b9	83a75eb4	kiosk.capabilities[]
+e2e/assistant.sh	f9112efaabed8a59	83a75eb4	kiosk.endpoint correct
+e2e/assistant.sh	8eab52eaf2363e28	83a75eb4	kiosk.schema_url is digest-versioned
+e2e/assistant.sh	d579e23ce8062bcd	83a75eb4	kiosk.version present
+e2e/assistant.sh	e84d99154b561b20	83a75eb4	limit and cursor are injected into a query
+e2e/assistant.sh	038644421408493c	83a75eb4	my_appointments declares salon_id as a query parameter
+e2e/assistant.sh	44fb3eeebeb7d35e	83a75eb4	no auth → 401
+e2e/assistant.sh	fbcc8cc09baa8c03	83a75eb4	one path per verb the canonical catalog publishes
+e2e/assistant.sh	1e9077ac4f7c7830	83a75eb4	pay: a Stripe PaymentIntent
+e2e/assistant.sh	748f2225b621319d	83a75eb4	pay: http 200
+e2e/assistant.sh	bcb08892f428d28f	83a75eb4	pay: settled 1599
+e2e/assistant.sh	a857334f9cd8098d	83a75eb4	pay: settlement_id
+e2e/assistant.sh	852f48828eddcdd9	83a75eb4	pay: unenveloped
+e2e/assistant.sh	fb7c0573a8996caa	83a75eb4	payment_setup: once the card is saved → ready
+e2e/assistant.sh	85a0cd7c49a0afa4	83a75eb4	payment_setup: served by the engine → setup_required
+e2e/assistant.sh	ff614cf8e3579a06	83a75eb4	register-pow: 1 challenge issued
+e2e/assistant.sh	296cc8a8da7d3020	83a75eb4	register-pow: code pow_required
+e2e/assistant.sh	c85a037c585530c2	83a75eb4	register-pow: minted token wire → 200
+e2e/assistant.sh	83cb3cf0d792a0b7	83a75eb4	register-pow: no-proof → 402
+e2e/assistant.sh	eb77fdb8c475fee3	83a75eb4	register-pow: role pinned customer
+e2e/assistant.sh	6396f70927fa5f0d	83a75eb4	register-pow: served (n,k) IS the gem default
+e2e/assistant.sh	d6440cc5cecd3f3a	83a75eb4	register-pow: solve+proof → registered
+e2e/assistant.sh	f8d02d7f9e1e20bb	83a75eb4	register-pow: the expected (n,k) was READ from the gem
+e2e/assistant.sh	17550b6710f97372	83a75eb4	request_kyc at an origin that serves no KYC → 501
+e2e/assistant.sh	5227abc963e74bf4	83a75eb4	reserved limit/cursor accepted → 200
+e2e/assistant.sh	a8664229f3a352f9	83a75eb4	salon name is Combette
+e2e/assistant.sh	51e1c6d825c87950	83a75eb4	schema publishes {queries, actions, events} and nothing else
+e2e/assistant.sh	4dd6e4bdab26ea40	83a75eb4	status restates the HTTP status
+e2e/assistant.sh	5faf8b659059c918	83a75eb4	the OPERATOR's own 200 outside the mount carries none
+e2e/assistant.sh	bd4514200645ffd1	83a75eb4	the body is a bare array
+e2e/assistant.sh	62baa4b1702a1abb	83a75eb4	the body is the action's object
+e2e/assistant.sh	ca77b6e308979ec0	83a75eb4	the descriptor's description travels verbatim
+e2e/assistant.sh	0682d7fb66bc44a9	83a75eb4	the reserved parameters are form/explode:true
+e2e/assistant.sh	828e5b7ea2d416f5	83a75eb4	the two 'it is not here' answers are two DIFFERENT codes
+e2e/assistant.sh	a44e3a4f72bd6a57	83a75eb4	title is the code's, not the incident's
+e2e/assistant.sh	c6a9404addc1896a	83a75eb4	two origins: first's token on second → 401
+e2e/assistant.sh	e12539c452ad6da0	83a75eb4	two origins: issuer is the first origin
+e2e/assistant.sh	ec1172912739901f	83a75eb4	two origins: issuer is the second origin
+e2e/assistant.sh	70f5c7d56295ad58	83a75eb4	two origins: same key, second account
+e2e/assistant.sh	bdea24d4d4b02d2b	83a75eb4	type names the code
+e2e/assistant.sh	d5f2babc5f8abb49	83a75eb4	unknown query → 404
+e2e/assistant.sh	44966e689e87b8e5	83a75eb4	…a query is advertised GET
+e2e/assistant.sh	ba604e7462629406	83a75eb4	…a stale ?v= still answers the CURRENT catalogue, short-lived
+e2e/assistant.sh	2260fca65574498f	83a75eb4	…an action is advertised POST
+e2e/assistant.sh	89ed2eaaaec56fa7	83a75eb4	…and NO Link header, because there is no next page
+e2e/assistant.sh	ff53dce362c1da79	83a75eb4	…and NOT forbidden
+e2e/assistant.sh	2606ef3b71c72642	83a75eb4	…and is itself an RFC 9457 document
+e2e/assistant.sh	1aec2e6ba0769424	83a75eb4	…and kiosk.json itself expires quickly
+e2e/assistant.sh	29b59cbcac7e5cd4	83a75eb4	…and links the catalog at its versioned url
+e2e/assistant.sh	efb81ff034c053fb	83a75eb4	…and neither does the operator's own 500 — same exception path
+e2e/assistant.sh	69e443dba65ee078	83a75eb4	…and never a 402: the toll went with the gate
+e2e/assistant.sh	09918c8c250f4cf0	83a75eb4	…and the body is no envelope
+e2e/assistant.sh	22d22b6da7976dbb	83a75eb4	…and the boot digest IS the ETag
+e2e/assistant.sh	d81b8d1896d34fed	83a75eb4	…and the module set lives in kiosk.json alone
+e2e/assistant.sh	651f65938444bd59	83a75eb4	…and the route loop actually ran
+e2e/assistant.sh	4d1c6faa12f88aa5	83a75eb4	…and the write never ran
+e2e/assistant.sh	99e541f202237a2c	83a75eb4	…and with --token-command it mints a fresh one and carries on
+e2e/assistant.sh	6bca2bfea6562cb2	83a75eb4	…by \$ref into components.headers
+e2e/assistant.sh	992754f67571b9b3	83a75eb4	…code is module_not_served
+e2e/assistant.sh	abe144a08e285d82	83a75eb4	…detail names the module
+e2e/assistant.sh	6bada86079f88c7e	83a75eb4	…into each of the two queries
+e2e/assistant.sh	52fa1c92a224dd15	83a75eb4	…not a problem document
+e2e/assistant.sh	ddd8021a01baccbc	83a75eb4	…public, one minute at the bare path
+e2e/assistant.sh	4dd6e4bdab26ea40	83a75eb4	…status restates the HTTP status
+e2e/assistant.sh	5fe2e13e122c3fec	83a75eb4	…the catalog is the body itself
+e2e/assistant.sh	17a6a3b925163d46	83a75eb4	…the events array carries this origin's topic and payment_setup
+e2e/assistant.sh	a44e3a4f72bd6a57	83a75eb4	…title is the code's, not the incident's
+e2e/assistant.sh	f616315f74fab8eb	83a75eb4	…while a ROOT discovery surface carries none of them
+e2e/assistant.sh	b993275ea6622f13	83a75eb4	…while an identity-scoped 200 keeps private, no-store
+e2e/assistant.sh	387cf424f11b420f	83a75eb4	…while the same request with a bad token is still 401
+e2e/assistant.sh	f1636056fbcf93c1	83a75eb4	…with no Allow on it
+e2e/assistant.sh	18d2cd878d48540b	83a75eb4	…with no code to branch on
 e2e/fixtures/bookings_controller.rb	30ed27acbc6cfcd6	b1d0a419	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	55790f84c5e0843f	b1d0a419	# controller may declare BOTH kinds: `my_appointments` is a query
 e2e/fixtures/bookings_controller.rb	e36d833ef9bfe902	b1d0a419	Appointment.own.order(:id)
@@ -297,7 +298,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	b1d0a419	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	3509e124dce01fd7	b1d0a419	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	b1d0a419	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	b1d0a419	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	587e254dc32d0ab9	b1d0a419	API_VERSION = '0.5.16'
+kiosk-core/lib/kiosk/protocol.rb	a78f30af87856202	83a75eb4	API_VERSION = '0.5.17'
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	b1d0a419	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	b1d0a419	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	90d2d7b9f9107588	b1d0a419	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -1035,12 +1036,12 @@ kiosk-server/lib/kiosk/server/caller_timezone.rb	e107b50d34992866	b1d0a419	def f
 kiosk-server/lib/kiosk/server/caller_timezone.rb	4ffc4626532791da	b1d0a419	def from_value(raw)
 kiosk-server/lib/kiosk/server/caller_timezone.rb	ce4dee21ef86a2da	b1d0a419	refuse(raw) unless SHAPE.match?(value)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	650f3fdeca57d5b0	b1d0a419	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	ecc80201154e44b7	b1d0a419	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	b1d0a419	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	b1d0a419	      attr_accessor :spending_cap_window_days
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	b1d0a419	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	2fe4bb03b7d5660a	b1d0a419	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	9f042d0496c5ecdb	b1d0a419	c.signing_key is not set. Generate one with
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6aa9577f482561a4	83a75eb4	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	83a75eb4	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	83a75eb4	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	83a75eb4	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	2fe4bb03b7d5660a	83a75eb4	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	9f042d0496c5ecdb	83a75eb4	c.signing_key is not set. Generate one with
 kiosk-server/lib/kiosk/server/device_code_grant.rb	387d172b4ac2440e	b1d0a419	device_code parameter required
 kiosk-server/lib/kiosk/server/engine.rb	75c5116a84e0fd3c	b1d0a419	          get '/.well-known/agent-configuration', to: 'kiosk/server/discovery#agent_configuration'
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	b1d0a419	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -1853,12 +1854,13 @@ kiosk-test-support/README.md	6449265207831953	b1d0a419	Kiosk::TestHelpers.execut
 kiosk-test-support/README.md	8c4bc4e15dd5ea79	b1d0a419	The DSL is inert until you wire an executor. In production-shaped tests you wire `Kiosk::TestHelpers::InProcessExecutor`, which runs against `kiosk-server` in your Rails app:
 kiosk-test-support/README.md	1ab3f5829d6cb5c2	b1d0a419	The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::TestHelpers::InProcessExecutor` (above).
 kiosk-test-support/README.md	db06384a8b900e95	b1d0a419	stripe-mock lists a saved card for every Customer, so once `payment_setup` has mapped one, `pay` settles.
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	b9a141feb0373742	b1d0a419	    class Assistant
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	7fe9620c1df6121c	b1d0a419	# Customer that `payment_setup` maps already lists a card, so that answer settles.
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	ccde2dec6015e45b	b1d0a419	def setup_required?(answer)
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	9a0a64c9e0e35eec	b1d0a419	def sign_mandate(principal, payload) = JWT.encode(payload, principal.rsa_key, 'RS256')
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	a2c0fe1404564ab7	b1d0a419	iss: base_url, currency:, iat: now, exp: now + 600 }
-kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	524c5031b7e48e79	b1d0a419	key  = OpenSSL::PKey::RSA.generate(2048)
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	b9a141feb0373742	83a75eb4	    class Assistant
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	7fe9620c1df6121c	83a75eb4	# Customer that `payment_setup` maps already lists a card, so that answer settles.
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	f6029ac764edd61f	83a75eb4	On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	ccde2dec6015e45b	83a75eb4	def setup_required?(answer)
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	9a0a64c9e0e35eec	83a75eb4	def sign_mandate(principal, payload) = JWT.encode(payload, principal.rsa_key, 'RS256')
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	a2c0fe1404564ab7	83a75eb4	iss: base_url, currency:, iat: now, exp: now + 600 }
+kiosk-test-support/lib/kiosk/test_helpers/assistant.rb	524c5031b7e48e79	83a75eb4	key  = OpenSSL::PKey::RSA.generate(2048)
 kiosk-test-support/lib/kiosk/test_helpers/assistant/events.rb	be2c0ebd66d112fb	b1d0a419	def self.payload_errors(schema_document, events)
 kiosk-test-support/lib/kiosk/test_helpers/customer.rb	ea33616a172c8c76	b1d0a419	Answer.new(@assistant.pay(principal, **@assistant.mandates(principal, total:, scope:, line_items:, currency:)))
 kiosk-test-support/lib/kiosk/test_helpers/customer.rb	a09d894293c3dcd7	b1d0a419	def refused?(code)

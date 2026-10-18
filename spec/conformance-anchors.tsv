@@ -1135,7 +1135,6 @@ kiosk-server/lib/kiosk/server/payment_claim.rb	return if total == price
 kiosk-server/lib/kiosk/server/payment_claim.rb	unless cart.currency.to_s.downcase == @currency
 kiosk-server/lib/kiosk/server/pop_verifier.rb	PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
 kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.current_issuer
-kiosk-server/lib/kiosk/server/pow_gate.rb	      def extract_proofs(pow)
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	# One proof, a JSON array, repeated header lines (Rack joins them with
 kiosk-server/lib/kiosk/server/pow_gate.rb	def bad_proof_hook(config, identity) = -> { config.on_bad_proof.call(identity: identity) }
@@ -1150,6 +1149,7 @@ kiosk-server/lib/kiosk/server/pow_toll.rb	def collect!(pow)
 kiosk-server/lib/kiosk/server/pow_toll.rb	def issue_challenge(ttl)
 kiosk-server/lib/kiosk/server/pow_toll.rb	def validate_spec_params!
 kiosk-server/lib/kiosk/server/pow_toll.rb	secret: @secret, now: Time.now.to_i, expect: { alg: alg, params: params }
+kiosk-server/lib/kiosk/server/pow_toll.rb	submitted = Array(pow)
 kiosk-server/lib/kiosk/server/pow_toll.rb	ttl = @config.pow_ttl * count
 kiosk-server/lib/kiosk/server/pow_toll.rb	when :expired, :bad_sig, :bad_params
 kiosk-server/lib/kiosk/server/queries.rb	convention the provider upholds (the registry does not enforce it)

@@ -33,10 +33,14 @@ class DiscoveryStory < StoryTest
                                                     .dig('input_schema', 'properties', 'order_id')
 
     assert_equal 'uuid', order_id['format']
-    pattern = Regexp.new(order_id['pattern'])
+  end
 
-    assert_match pattern, SecureRandom.uuid
-    ['not-a-uuid', "'; DROP TABLE orders; --", SecureRandom.uuid.delete('-')].each { assert_no_match pattern, it }
+  test 'reschedule_delivery refuses an order_id that is not a uuid' do
+    slot_at = DeliverySlots.starts(Date.current + 1)[0].iso8601
+
+    ['not-a-uuid', SecureRandom.uuid.delete('-')].each do |order_id|
+      assert_refused a_shopper.does(:reschedule_delivery, order_id:, slot_at:), :bad_request
+    end
   end
 
   test 'the landing page advertises the skill this origin pins' do

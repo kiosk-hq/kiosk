@@ -41,15 +41,15 @@ originals = [
 
 # ── Seed-time vocabulary check ──────────────────────────────────────────────
 # The five originals above name their district as a literal, so a rename in
-# NEIGHBOURHOOD_POOL — or a typo here — would seed a property that the
+# Property::NEIGHBOURHOODS — or a typo here — would seed a property that the
 # search_hotels `neighbourhood` filter can never reach, silently. Fail the seed
 # instead: a demo whose data cannot be searched is worse than one that will not
 # load. Same for the amenities, which the originals also spell out by hand.
-stray_areas = originals.pluck(:neighbourhood) - NEIGHBOURHOOD_POOL
-raise "seeds: district(s) outside NEIGHBOURHOOD_POOL: #{stray_areas.inspect}" if stray_areas.any?
+stray_areas = originals.pluck(:neighbourhood) - Property::NEIGHBOURHOODS
+raise "seeds: district(s) outside Property::NEIGHBOURHOODS: #{stray_areas.inspect}" if stray_areas.any?
 
-stray_amenities = originals.flat_map { |h| h[:amenities] }.uniq - AMENITY_POOL
-raise "seeds: amenity(ies) outside AMENITY_POOL: #{stray_amenities.inspect}" if stray_amenities.any?
+stray_amenities = originals.flat_map { |h| h[:amenities] }.uniq - Property::AMENITIES
+raise "seeds: amenity(ies) outside Property::AMENITIES: #{stray_amenities.inspect}" if stray_amenities.any?
 
 originals.each do |h|
   prop = Property.find_or_create_by!(name: h[:name]) do |p|
@@ -67,7 +67,7 @@ end
 # pagination proof is stable. Names are coined (no real brands).
 rng = Random.new(4242)
 
-neighbourhoods = NEIGHBOURHOOD_POOL
+neighbourhoods = Property::NEIGHBOURHOODS
 
 descriptors = %w[Grand Blue Old City Marmara Golden Pearl Anatolia Levant
                  Meridian Crescent Palm Cedar Ivory Saffron Terrace Garden
@@ -100,7 +100,7 @@ while Property.count < target_total
 
   seen_names << name
   stars = rng.rand(2..5)
-  amenities = AMENITY_POOL.sample(rng.rand(2..5), random: rng).uniq
+  amenities = Property::AMENITIES.sample(rng.rand(2..5), random: rng).uniq
   address = "#{desc} Sk. #{rng.rand(1..120)}, #{nb}, Istanbul"
 
   prop = Property.create!(

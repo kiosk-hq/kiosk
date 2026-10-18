@@ -33,8 +33,7 @@ module Kiosk
     input_schema type: 'object',
                  additionalProperties: false,
                  properties: {
-                   order_id: { type: 'string', format: 'uuid',
-                               pattern: Kiosk::UuidCheck::JSON_SCHEMA_PATTERN },
+                   order_id: { type: 'string', format: 'uuid' },
                    slot_at: { type: 'string', format: 'date-time',
                               description: 'The `slot_at` of a delivery_slots row.' },
                    delivery_address: { type: 'string', description: "The new address; the order's own if omitted." }

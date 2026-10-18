@@ -23,11 +23,11 @@ module Kiosk
     input_schema type: 'object',
                  additionalProperties: false,
                  properties: {
-                   neighbourhood: { type: 'string', enum: NEIGHBOURHOOD_POOL, description: 'Istanbul area.' },
+                   neighbourhood: { type: 'string', enum: Property::NEIGHBOURHOODS, description: 'Istanbul area.' },
                    max_price_cents: { type: 'integer', minimum: 0, maximum: RoomType::MAX_NIGHTLY_PRICE_CENTS,
                                       description: 'Most the cheapest room may cost per night, in cents.' },
                    min_stars: { type: 'integer', minimum: 1, maximum: 5, description: 'Fewest stars.' },
-                   amenity: { type: 'string', enum: AMENITY_POOL, description: 'An amenity the hotel must offer.' }
+                   amenity: { type: 'string', enum: Property::AMENITIES, description: 'An amenity the hotel must offer.' }
                  },
                  required: []
     output_schema '$defs': {

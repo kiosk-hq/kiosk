@@ -41,10 +41,3 @@ Kiosk.configure do |c|
   c.registration_pow_count = 1
   c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
 end
-
-# The closed vocabularies behind the search_hotels enums and the seeds. A
-# constant, not a query over properties: an unserved district is a 400, not [].
-AMENITY_POOL = %w[wifi breakfast pool spa gym parking rooftop_bar
-                  airport_shuttle sea_view pet_friendly restaurant hammam].freeze
-NEIGHBOURHOOD_POOL = %w[Sultanahmet Beyoğlu Kadıköy Beşiktaş Şişli Fatih
-                        Üsküdar Galata Taksim Ortaköy Bakırköy Nişantaşı].freeze

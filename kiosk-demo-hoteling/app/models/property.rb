@@ -2,6 +2,13 @@
 
 # One hotel, sold on its own clock (`timezone`).
 class Property < ApplicationRecord
+  # The closed vocabularies behind the search_hotels enums and the seeds. A
+  # constant, not a query over properties: an unserved district is a 400, not [].
+  AMENITIES = %w[wifi breakfast pool spa gym parking rooftop_bar
+                 airport_shuttle sea_view pet_friendly restaurant hammam].freeze
+  NEIGHBOURHOODS = %w[Sultanahmet Beyoğlu Kadıköy Beşiktaş Şişli Fatih
+                      Üsküdar Galata Taksim Ortaköy Bakırköy Nişantaşı].freeze
+
   has_many :room_types, dependent: :destroy
   has_many :bookings, dependent: :destroy
 

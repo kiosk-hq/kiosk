@@ -42,6 +42,11 @@ RSpec.describe Kiosk::TestHelpers::StripeMock do
     expect(session.values_at('object', 'mode')).to eq(['checkout.session', 'setup'])
   end
 
+  it 'refuses a refund that names no charge, as Stripe does, and relays one that names its PaymentIntent' do
+    expect(post('/v1/refunds', amount: 349).dig('error', 'message')).to include('payment_intent or charge')
+    expect(post('/v1/refunds', payment_intent: 'pi_123', amount: 349)['object']).to eq('refund')
+  end
+
   it 'leaves an unconfirmed PaymentIntent as stripe-mock answers it' do
     intent = post('/v1/payment_intents', amount: 1599, currency: 'eur')
     expect(intent.values_at('status', 'amount_received')).to eq(['requires_payment_method', 0])

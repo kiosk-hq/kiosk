@@ -7,15 +7,23 @@ require 'uri'
 
 module Kiosk
   module TestHelpers
-    # A local stripe-mock for demo suites. stripe-mock leaves a confirmed
-    # PaymentIntent unpaid, so a front on {PORT} relays to it and answers a
-    # confirmed create as Stripe does for a test card: `succeeded`, fully received.
+    # A local stripe-mock for demo suites. A front on {PORT} relays to it and
+    # answers two calls as Stripe does where stripe-mock does not: a confirmed
+    # PaymentIntent create with a test card is `succeeded`, fully received, and
+    # a refund that names no charge is a 400.
     module StripeMock
       PORT          = 12_111
       UPSTREAM_PORT = 12_112
       URL           = "http://127.0.0.1:#{PORT}".freeze
       LOG           = '/tmp/stripe-mock.log'
       DROPPED       = %w[accept-encoding connection content-length host transfer-encoding].freeze
+      NO_CHARGE_BODY = JSON.generate(error: {
+                                       type: 'invalid_request_error',
+                                       message: 'One of the following params should be provided for this request: ' \
+                                                'payment_intent or charge.'
+                                     })
+      NO_CHARGE = "HTTP/1.1 400 Bad Request\r\ncontent-type: application/json\r\n" \
+                  "content-length: #{NO_CHARGE_BODY.bytesize}\r\nconnection: close\r\n\r\n#{NO_CHARGE_BODY}".freeze
 
       module_function
 
@@ -75,12 +83,23 @@ module Kiosk
 
         headers  = read_headers(client)
         body     = client.read(headers['content-length'].to_i)
+        return client.write(NO_CHARGE) if chargeless_refund?(method, path, body)
+
+        relay_upstream(client, method, path, body, headers)
+      ensure
+        client.close
+      end
+
+      def relay_upstream(client, method, path, body, headers)
         upstream = forward(method, path, body, headers)
         answer   = upstream.body.to_s
         answer = settled(answer) if confirmed_create?(method, path, body)
         respond(client, upstream, answer)
-      ensure
-        client.close
+      end
+
+      def chargeless_refund?(method, path, body)
+        params = URI.decode_www_form(body.to_s).to_h
+        method == 'POST' && path == '/v1/refunds' && params['payment_intent'].to_s.empty? && params['charge'].to_s.empty?
       end
 
       def forward(method, path, body, headers)

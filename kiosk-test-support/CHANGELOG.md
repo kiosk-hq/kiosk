@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The Stripe test front answers a refund that names no charge with a 400, as Stripe does.
+
 ## [0.5.15] — 2026-10-18
 
 - 2026-10-18: `Kiosk::TestHelpers::Customer#pays_cart(cart, scope:)` signs the `cart` an action answered with and pays.

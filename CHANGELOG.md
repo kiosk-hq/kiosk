@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `c.after_payment` runs after the engine records the settlement, so getgrocery refunds a sold-out line against the charge; the test Stripe front refuses a refund with no charge.
+
 ## [0.5.15] — 2026-10-18
 
 - 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.15, matching skill 0.5.15.**

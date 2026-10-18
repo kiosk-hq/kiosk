@@ -10,5 +10,5 @@ class ProveRequest < ApplicationRecord
   # Single use, and only within its time to live.
   def confirmable? = pending? && !expired?
 
-  def expired? = expires_at.nil? || Time.current > expires_at
+  def expired? = Time.current > expires_at
 end

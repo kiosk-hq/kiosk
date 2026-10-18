@@ -56,7 +56,7 @@ class VerificationsController < ApplicationController
     prove_request = ProveRequest.create!(
       request_id: request_id, operator_id: operator_id_param, callback_url: callback_url,
       requested_claims: requested_claims, subject_handle: subject_handle, nonce: nonce,
-      audience: audience_for(operator).presence, expires_at: Time.current + REQUEST_TTL
+      audience: audience_for(operator), expires_at: Time.current + REQUEST_TTL
     )
     render_intake_answer(prove_request)
   end

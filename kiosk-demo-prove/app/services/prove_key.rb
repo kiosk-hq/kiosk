@@ -21,7 +21,7 @@ module ProveKey
     operator = prove_request.operator_id.to_s
     JWT.encode(
       { sub: prove_request.subject_handle.to_s, level: 'verified', iss: issuer, operator: operator,
-        aud: prove_request.audience.presence || operator, request_id: prove_request.request_id.to_s,
+        aud: prove_request.audience, request_id: prove_request.request_id.to_s,
         nonce: prove_request.nonce.to_s, attributes: attributes, iat: now, exp: now + LIFETIME },
       keypair, 'RS256'
     )

@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `prove_requests.audience` is NOT NULL; a row without one takes its operator_id, the `aud` its claim carried.
 - 2026-10-18: A callback to the IPv6 loopback (`http://[::1]:…`) is accepted over plain http, as the other loopback hosts are.
 - 2026-10-06: **The KYC broker mints attestations valid for one year** instead of one hour, so one recovered from the event tail can still be submitted.
 

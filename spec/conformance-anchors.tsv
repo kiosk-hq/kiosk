@@ -692,13 +692,13 @@ kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	# Runs domain code
 kiosk-demo-tudu/app/controllers/concerns/kiosk_sessionable.rb	Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity) do
 kiosk-demo-tudu/app/controllers/kiosk/lists_controller.rb	  reach :consented
 kiosk-demo-tudu/app/controllers/kiosk/todos_controller.rb	The deadline, with its time-zone offset.
-kiosk-demo-tudu/app/controllers/lists_controller.rb	    Membership.where(account_id: HOUSEMATE_ID)
-kiosk-demo-tudu/app/controllers/lists_controller.rb	  def housemate_board
 kiosk-demo-tudu/app/controllers/lists_controller.rb	# Reads and writes go through the same projections and Operations the wire uses.
 kiosk-demo-tudu/app/controllers/lists_controller.rb	CreateListOperation.call(member_id: identity.user_id, title: title)
+kiosk-demo-tudu/app/controllers/lists_controller.rb	HOUSEMATE_ID    = '00000000-0000-0000-0000-000000000002'
 kiosk-demo-tudu/app/controllers/todos_controller.rb	AddTodoOperation.call(agent_id: identity.agent_id, list_id: params[:list_id], title: title)
 kiosk-demo-tudu/app/models/invite.rb	# A single-use collaboration code. Only its SHA-256 digest is stored; the
 kiosk-demo-tudu/app/models/invite.rb	scope :redeemable, -> { where(redeemed_at: nil, expires_at: Time.current..) }
+kiosk-demo-tudu/app/models/membership.rb	scope :board_of, lambda { |account_id|
 kiosk-demo-tudu/app/models/membership.rb	scope :own, -> { where(account_id: Kiosk.current_user_id) }
 kiosk-demo-tudu/app/operations/accept_invite_operation.rb	invite = Invite.redeemable.lock.find_by(code_digest: Invite.digest(code))
 kiosk-demo-tudu/app/operations/invite_operation.rb	TTL = 10.minutes

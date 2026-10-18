@@ -2,11 +2,11 @@
 
 # The salon's public page. It advertises the Kiosk skill to an assistant that reads it.
 class HomeController < ApplicationController
+  include Kiosk::SkillLink
+
   def index
     @services            = Service.count
     @appointments_booked = Appointment.count
     @forecast_eur        = Service.format_eur(Appointment.sum(:price_cents))
-
-    response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
   end
 end

@@ -1262,6 +1262,11 @@ FRAGMENTS = {
     ships: %w[atablefor philslist tudu],
     why: "The fallback handle uses each demo's own noun."
   },
+  'app/controllers/home_controller.rb#include' => {
+    rule: :code,
+    ships: %w[atablefor getgrocery hoteling philslist skooti stylish],
+    why: 'Every storefront landing page sends the engine\'s skill Link header.'
+  },
   'app/controllers/home_controller.rb#index' => {
     rule: :per_demo,
     ships: %w[atablefor getgrocery hoteling philslist prove skooti stylish],

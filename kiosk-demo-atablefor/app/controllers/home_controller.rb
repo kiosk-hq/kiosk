@@ -2,7 +2,7 @@
 
 # The landing page: how to point an assistant here, and the public reservations board.
 class HomeController < ApplicationController
-  before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
+  include Kiosk::SkillLink
 
   def index
     @tables_booked = Booking.confirmed.count

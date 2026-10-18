@@ -4,6 +4,7 @@
 # Reads and writes go through the same projections and Operations the wire uses.
 class ListsController < ApplicationController
   include KioskSessionable
+  include Kiosk::SkillLink
 
   # Bob, the seeded housemate whose lists the public board mirrors (db/seeds.rb).
   HOUSEMATE_ID    = '00000000-0000-0000-0000-000000000002'
@@ -20,12 +21,10 @@ class ListsController < ApplicationController
     @housemate_board = housemate_board unless user_signed_in?
     @activity = { lists: List.count, todos: Todo.count, done: Todo.where(done: true).count,
                   members: Membership.count }
-    advertise_kiosk_skill
   end
 
   def shared
     @housemate_board = housemate_board
-    advertise_kiosk_skill
   end
 
   def show
@@ -50,10 +49,6 @@ class ListsController < ApplicationController
   end
 
   private
-
-  def advertise_kiosk_skill
-    response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
-  end
 
   # Every list Bob is on, newest first, with who shared it and its tasks.
   def housemate_board

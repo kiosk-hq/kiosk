@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `AgentIdentityProviders::Base` declares only `verify`; the engine never called `issue` or `agent_payment_key` on a configured `c.agent_idp`.
 - 2026-10-18: A `reputation_policy` toll with string keys is a `ConfigurationError`; the toll reads `alg`, `params` and `count` as symbols, as the policy contract states.
 - 2026-10-18: `RecentSpend` tolls every call of a caller whose token has no `iat` or `exp`, so a retry cannot fish for a free draw.
 - 2026-10-18: `Kiosk::Reputation::Policies::RateAndReputation` is removed; `Factors` keeps only the two purchase fields the engine fills.

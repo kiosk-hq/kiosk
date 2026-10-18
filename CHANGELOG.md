@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: philslist and atablefor call their models straight from the controller where an operation was one line; the four wrapper classes are gone.
 - 2026-10-18: `Kiosk.reader_zone` answers the caller's `Kiosk-Timezone` zone; philslist, tudu and getgrocery read it there.
 - 2026-10-18: Every demo's wire handler controllers inherit `ActionController::API`, as the kiosk-server README examples now show.
 - 2026-10-18: kiosk-pow is the base of the PoW backends: one shared BLAKE2b-256 and a guide to add a backend. The Argon2id backend moves to kiosk-pow-argon2id.

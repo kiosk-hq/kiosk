@@ -80,7 +80,11 @@ module Kiosk
                   },
                   required: %w[booking_id status]
     def cancel_booking
-      @booking = CancelBookingOperation.call(booking_id: params[:booking_id])
+      @booking = Booking.own.confirmed.find_by(id: params[:booking_id])
+      # One answer for absent, foreign and already cancelled, so ids cannot be probed.
+      raise Kiosk::Server::Errors::Forbidden, 'booking not found, not yours, or already cancelled' unless @booking
+
+      @booking.cancelled!
     end
   end
 end

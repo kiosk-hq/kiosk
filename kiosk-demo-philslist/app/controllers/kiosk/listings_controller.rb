@@ -59,8 +59,9 @@ module Kiosk
                    })
     example_row({ listing_id: '9c1d2e3f-4a5b-4c6d-8e7f-0a1b2c3d4e5f', status: 'open' })
     def post_listing
-      @listing = PostListingOperation.call(seller: kiosk_identity, category_slug: params[:category_slug],
-                                           title: params[:title], body: params[:body], price_text: params[:price_text])
+      @listing = Listing.create!(owner_id: kiosk_identity.user_id, created_by_agent_id: kiosk_identity.agent_id,
+                                 category: Category.find_by!(slug: params.expect(:category_slug)),
+                                 title: params[:title], body: params[:body], price_text: params[:price_text])
     end
 
     kind :action
@@ -83,10 +84,8 @@ module Kiosk
                   },
                   required: %w[listing_id updated]
     def edit_listing
-      @listing = EditListingOperation.call(
-        listing_id: params[:listing_id],
-        changes: params.permit(:title, :body, :price_text).to_h
-      )
+      @listing = Listing.own!(params[:listing_id])
+      @listing.update!(params.permit(:title, :body, :price_text))
     end
 
     kind :action
@@ -104,7 +103,7 @@ module Kiosk
                   },
                   required: %w[listing_id status]
     def close_listing
-      @listing = CloseListingOperation.call(listing_id: params[:listing_id])
+      @listing = Listing.own!(params[:listing_id]).tap(&:closed!)
     end
   end
 end

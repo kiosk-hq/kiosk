@@ -40,7 +40,8 @@ def owner_session
                                                                 .sign_in!(email: OWNER_EMAIL, password: DEMO_PASSWORD)
 end
 
-WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
+# The assistants' calls; each pays the proof-of-work toll its access token owes.
+WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 def pop_proof(key, pem)
   _rc, ch = WIRE.get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")

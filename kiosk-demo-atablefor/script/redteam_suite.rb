@@ -23,7 +23,8 @@ DIEGO_UUID = DIEGO.user_id
 TOKEN_A    = DIEGO.token
 TOKEN_B    = BEA.token
 
-WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
+# The assistants' calls; each pays the proof-of-work toll its access token owes.
+WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 BATTERY = Kiosk::Redteam::Battery.new
 

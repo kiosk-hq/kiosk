@@ -16,7 +16,8 @@ ALICE_EMAIL = 'alice@example.com'
 BOB_EMAIL   = 'bob@example.com'
 PASSWORD    = 'philslist-demo-password'
 
-WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
+# The assistants' calls; each pays the proof-of-work toll its access token owes.
+WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 BATTERY = Kiosk::Redteam::Battery.new
 

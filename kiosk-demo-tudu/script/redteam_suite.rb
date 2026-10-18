@@ -19,14 +19,16 @@ PASSWORD = 'tudu-demo-password'
 
 require 'kiosk/user_identity_providers/devise_session'
 
-# WIRE carries an agent's Bearer call; SESSION is the human's browser, for the binding ceremony.
-WIRE    = Kiosk::TestHelpers::Wire.new(base_url: SERVER)
+# WIRE carries an assistant's call and pays the proof-of-work toll its access token owes.
+# SESSION is the human's browser, for the binding ceremony.
+WIRE    = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
-def request(req) = SESSION.request(req)
+# `session: true` in the headers sends the call from the human's browser.
+def client(headers) = headers.key?(:session) ? SESSION : WIRE
 
-def post_json(path, body, headers = {}) = SESSION.post_json(path, body, headers)
-def get_json(path, params = {}, headers = {}) = SESSION.get_json(path, params, headers)
+def post_json(path, body, headers = {}) = client(headers).post_json(path, body, headers)
+def get_json(path, params = {}, headers = {}) = client(headers).get_json(path, params, headers)
 
 def pop_proof(key, pem)
   rc, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")

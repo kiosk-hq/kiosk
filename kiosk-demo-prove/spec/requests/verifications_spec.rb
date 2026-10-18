@@ -23,6 +23,7 @@ RSpec.describe 'KYC broker: POST /verifications (intake)' do
     expect(row.status).to eq('pending')
     expect(row.nonce).to be_present
     expect(row.expires_at).to be_future
+    expect(json['expires_at']).to eq(row.expires_at.utc.iso8601)
   end
 end
 
@@ -216,5 +217,22 @@ RSpec.describe 'KYC broker: GET /prove_key.pem' do
     get '/prove_key.pem'
     expect(response).to have_http_status(:ok)
     expect(response.body).to include('PUBLIC KEY')
+  end
+end
+
+RSpec.describe OperatorRegistry, '.callback_allowed?' do
+  let(:operator) { { callback_host: 'shop.example' } }
+
+  it 'posts to the registered host over https' do
+    expect(described_class.callback_allowed?(operator, 'https://shop.example/kiosk/kyc/callback')).to be(true)
+  end
+
+  it 'refuses plain http to a host other than the machine itself' do
+    expect(described_class.callback_allowed?(operator, 'http://shop.example/kiosk/kyc/callback')).to be(false)
+  end
+
+  it 'accepts plain http to a loopback host, for development and test' do
+    loopback = { callback_host: '127.0.0.1' }
+    expect(described_class.callback_allowed?(loopback, 'http://127.0.0.1:3004/kyc/callback')).to be(true)
   end
 end

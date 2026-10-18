@@ -5,6 +5,9 @@ require 'uri'
 # The operators this broker serves: each authenticates with its own secret,
 # and the broker posts its callbacks to that operator's registered host only.
 module OperatorRegistry
+  # A callback travels over https; plain http only to the machine itself.
+  LOOPBACK_HOSTS = %w[127.0.0.1 localhost ::1].freeze
+
   module_function
 
   def registry = Rails.configuration.x.prove.operators
@@ -16,7 +19,8 @@ module OperatorRegistry
 
   def callback_allowed?(operator, callback_url)
     uri = URI.parse(callback_url.to_s)
-    %w[http https].include?(uri.scheme) && uri.host.present? && uri.host == operator[:callback_host]
+    secure = uri.scheme == 'https' || (uri.scheme == 'http' && LOOPBACK_HOSTS.include?(uri.host))
+    secure && uri.host.present? && uri.host == operator[:callback_host]
   rescue URI::InvalidURIError
     false
   end

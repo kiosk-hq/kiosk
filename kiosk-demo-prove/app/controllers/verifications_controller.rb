@@ -52,23 +52,23 @@ class VerificationsController < ApplicationController
     request_id = SecureRandom.urlsafe_base64(32) # 256 bits
     nonce      = SecureRandom.urlsafe_base64(32)
 
-    ProveRequest.create!(
+    prove_request = ProveRequest.create!(
       request_id: request_id, operator_id: operator_id_param, callback_url: callback_url,
       requested_claims: requested_claims, subject_handle: subject_handle, nonce: nonce,
       audience: audience_for(operator).presence, expires_at: Time.current + REQUEST_TTL
     )
-    render_intake_answer(request_id, nonce)
+    render_intake_answer(prove_request)
   end
 
-  def render_intake_answer(request_id, nonce)
+  def render_intake_answer(prove_request)
     render_json(
       {
-        request_id: request_id,
-        verification_url: verification_url_for(request_id),
+        request_id: prove_request.request_id,
+        verification_url: verification_url_for(prove_request.request_id),
         status: 'pending',
         # The callback echoes it, so the operator can tell it from a replay.
-        nonce: nonce,
-        expires_at: (Time.current + REQUEST_TTL).utc.iso8601
+        nonce: prove_request.nonce,
+        expires_at: prove_request.expires_at.utc.iso8601
       },
       :created
     )

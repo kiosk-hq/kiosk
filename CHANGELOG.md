@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: The KYC broker demo posts a callback over https, or over http only to a loopback host; its intake answer carries the stored `expires_at`.
 - 2026-10-18: kiosk-server refuses an RSA key over 4096 bits, and `pay` answers 401 before it reads the body.
 - 2026-10-18: kiosk-server drops its `solid_cable` dependency; each demo's Gemfile declares `solid_cable` for its `config/cable.yml`.
 - 2026-10-18: The payment provider port declares `refund`, which the Stripe adapter and `PaymentClaim` already answer.

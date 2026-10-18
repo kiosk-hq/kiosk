@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1905 anchors.
+# 1906 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby script/redteam_suite.rb
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -317,9 +317,9 @@ kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
 kiosk-demo-atablefor/README.md	rollingly on the restaurant's own clock; "tonight at 8" lands on an open 2-top at 20:00.
-kiosk-demo-atablefor/app/controllers/home_controller.rb	before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def index
 kiosk-demo-atablefor/app/controllers/home_controller.rb	def reservations
+kiosk-demo-atablefor/app/controllers/home_controller.rb	include Kiosk::SkillLink
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
 kiosk-demo-atablefor/app/models/restaurant.rb	def upcoming_seatings(days: 2)
@@ -352,7 +352,7 @@ kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
 kiosk-demo-getgrocery/README.md	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
 kiosk-demo-getgrocery/README.md	local stripe-mock; export `STRIPE_MOCK_URL=http://localhost:12111` to boot the
 kiosk-demo-getgrocery/README.md	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
-kiosk-demo-getgrocery/app/controllers/home_controller.rb	response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk"))
+kiosk-demo-getgrocery/app/controllers/home_controller.rb	include Kiosk::SkillLink
 kiosk-demo-getgrocery/app/controllers/kiosk/catalog_controller.rb	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	caller_zone: Kiosk.reader_zone)
 kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	def delivery_slots
@@ -1218,6 +1218,7 @@ kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_txt(base_url:, confi
 kiosk-server/lib/kiosk/server/well_known.rb	def self.api_catalog(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.auth_md(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.build(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/skill_link.rb	before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	draws no verb of its own — a fresh app declares none
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	so the protocol plane wins by first match
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	writes no separate routes file

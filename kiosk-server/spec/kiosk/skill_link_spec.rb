@@ -4,7 +4,7 @@ require 'rack/mock'
 
 RSpec.describe Kiosk::SkillLink do
   let(:page) do
-    Class.new(ActionController::Base) do
+    Class.new(ApplicationController) do
       include Kiosk::SkillLink
 
       def index = render(plain: 'ok')

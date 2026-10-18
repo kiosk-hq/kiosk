@@ -74,15 +74,6 @@ RSpec.describe Kiosk::Pow::Equihash do
   it 'accepts custom n and k' do
     expect(described_class.params(n: 200, k: 9)).to eq({ n: 200, k: 9 })
   end
-
-  # Consumers shell out to this path instead of reaching into the gem by a
-  # checkout-relative path, so it must name an existing file in the gem root.
-  it 'returns the absolute path of an existing solve.py inside the gem root' do
-    path = described_class.solver_path
-    expect(path).to eq(File.expand_path(path))
-    expect(File.file?(path)).to be(true)
-    expect(path).to eq(File.join(File.expand_path('../../..', __dir__), 'solve.py'))
-  end
 end
 
 RSpec.describe Kiosk::Pow::Equihash, '.verify on the (n=8, k=1) KAT' do

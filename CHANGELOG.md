@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: `Kiosk::Pow::Equihash.solver_path` is removed; a client solves with `Kiosk::Pow::Equihash.solve`.
 - 2026-10-18: `Kiosk::Redteam::Scenario.new` takes only `name:`; `category` and `description` are removed.
 - 2026-10-18: `Kiosk::Redteam::Runner#all_blocked?`, `#breaches` and `#blocked` are removed; `Battery#report!` is the exit status.
 - 2026-10-18: kiosk-redteam reads a query answer only as a bare array; ForgedUserId scores BREACH when the owner's query answers no rows array.

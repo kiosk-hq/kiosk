@@ -73,6 +73,12 @@ end
 RSpec.describe 'Kiosk::Pow::Equihash.solve' do
   before { require 'kiosk/pow/equihash/solver' }
 
+  it 'runs the solve.py at the gem root' do
+    path = Kiosk::Pow::Equihash.const_get(:SOLVE_PY)
+    expect(path).to eq(File.join(File.expand_path('../../../..', __dir__), 'solve.py'))
+    expect(File.file?(path)).to be(true)
+  end
+
   it 'raises SolverError, not an unhandled exception, when the solver refuses' do
     # `{}` has no `salt`/`params`, so solve.py exits non-zero. A driver aborts
     # on the message; nothing here may surface a Python traceback as a crash.

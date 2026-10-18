@@ -245,14 +245,13 @@ python3 solve.py '{"salt_b64":"...", "params":{"n":168,"k":7}}'
 # => {"indices": [...128 u64 in canonical tree order...], "header_nonce": 0}
 ```
 
-`solve.py` ships inside the gem package. From Ruby, ask the gem for its
-installed location instead of hardcoding a path — this is the public accessor
-consumers shell out to (the `kiosk-redteam` client uses it):
+`solve.py` ships inside the gem package. From Ruby, a client solves through it
+with one call; it raises `SolverError` when the solver refuses:
 
 ```ruby
-Kiosk::Pow::Equihash.solver_path
-# => "/.../gems/kiosk-pow-equihash-<installed version>/solve.py"
-Open3.capture2("python3", Kiosk::Pow::Equihash.solver_path, challenge_json)
+require "kiosk/pow/equihash/solver"
+Kiosk::Pow::Equihash.solve(challenge)
+# => {"indices" => [...], "header_nonce" => 0}
 ```
 
 The solver runs full Wagner's algorithm (all pairs within each collision

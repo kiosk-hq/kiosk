@@ -117,8 +117,8 @@ command -v stripe-mock >/dev/null || fail "stripe-mock not on PATH — the pay f
 # where `pip install` is refused system-wide.
 command -v python3  >/dev/null || fail "python3 not on PATH (needed by the Equihash register-PoW solver)"
 python3 -c "import numpy" 2>/dev/null || fail "python numpy missing — needed by the Equihash register-PoW solver. Install it: python3 -m pip install -r e2e/requirements.txt"
-KIOSK_PYTHON="${KIOSK_PYTHON:-python3}"
-command -v "$KIOSK_PYTHON" >/dev/null || fail "KIOSK_PYTHON=$KIOSK_PYTHON is not on PATH"
+KIOSK_PYTHON="$(command -v "${KIOSK_PYTHON:-python3}")" || fail "KIOSK_PYTHON=${KIOSK_PYTHON:-python3} is not on PATH"
+[[ "$KIOSK_PYTHON" = /* ]] || KIOSK_PYTHON="$PWD/$KIOSK_PYTHON" # later steps run it from other directories
 "$KIOSK_PYTHON" -c "import websockets" 2>/dev/null || fail "python websockets missing — needed by the pinned event-stream listener. Install it: $KIOSK_PYTHON -m pip install -r e2e/requirements.txt — or, where that is refused, point the harness at a venv: python3 -m venv .venv && .venv/bin/pip install -r e2e/requirements.txt && KIOSK_PYTHON=.venv/bin/python ./e2e/run.sh"
 
 pg_isready -q || fail "postgres not accepting connections (run: brew services start postgresql)"

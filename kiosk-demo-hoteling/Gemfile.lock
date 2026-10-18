@@ -60,6 +60,7 @@ PATH
       jwt (>= 2.0, < 4.0)
       kiosk-core (~> 0.5.0)
       kiosk-pow-equihash (~> 0.5.0)
+      puma (>= 5.0)
       websocket-driver (~> 0.7)
 
 PATH

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-18: Declares `puma`, which the live server helper requires; a RubyGems install no longer fails to load it.
+
 ## [0.5.14] — 2026-10-18
 
 - 2026-10-18: Version 0.5.14, the tree cut that matches skill 0.5.14.

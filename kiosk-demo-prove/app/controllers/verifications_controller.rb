@@ -7,7 +7,7 @@ require 'securerandom'
 # approval is signed as an anonymized claim and posted to the operator's
 # callback. No CSRF token: the intake authenticates with the secret, the page
 # with the unguessable request_id.
-class VerificationsController < ActionController::Base
+class VerificationsController < ApplicationController
   include OperatorIntake
 
   protect_from_forgery with: :null_session

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1910 anchors.
+# 1911 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1285,7 +1285,6 @@ kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest (n
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest for a valid JSON object missing the kyc_jws field
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 bad_request (not 500) for INVALID JSON on a wire POST
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 bad_request (not 500) for a non-object JSON body on a wire POST
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 401 Unauthenticated (not 500) for an EXPIRED token
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves ?v=<digest> immutable, and a stale ?v= short-lived
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves GET /kiosk/schema with no credential whatsoever
@@ -1628,6 +1627,8 @@ kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	forwards the AP
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses a client-supplied role — even one this provider declares
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses an undeclared role the same way — the value is never consulted
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses the OAuth-standard `scope` spelling too
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	requires a grant_type
+kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	requires public_key — the ceremony is key-bound (invalid_request)
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	answers 304 to If-None-Match on its own ETag
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	answers the derived document to a caller with NO credential
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	carries the PUBLIC cache policy and a strong ETag

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1901 anchors.
+# 1908 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -78,6 +78,7 @@ e2e/README.md	    ├── equihash_register.rb                # shared registe
 e2e/README.md	    ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
 e2e/README.md	## File layout
 e2e/README.md	## Run locally
+e2e/README.md	**A deployed event stream.**
 e2e/README.md	- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model.
 e2e/README.md	- **Multi-agent revocation** flows.
 e2e/README.md	- **RLS.** The wire carries no SQL: there is no arbitrary-SQL surface.
@@ -96,6 +97,7 @@ e2e/assistant.sh	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$S
 e2e/assistant.sh	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
 e2e/assistant.sh	$public_doc is really being read (control token)
 e2e/assistant.sh	$public_doc names no verb ($verb_name) — pointer, not copy
+e2e/assistant.sh	=== the event stream (pinned listener) ===
 e2e/assistant.sh	?v=<digest> is immutable for a year
 e2e/assistant.sh	GET /kiosk/schema is unenveloped
 e2e/assistant.sh	GET at an action's path → 404
@@ -322,6 +324,7 @@ kiosk-demo-atablefor/README.md	rollingly on the restaurant's own clock; "tonight
 kiosk-demo-atablefor/app/controllers/home_controller.rb	include Kiosk::SkillLink
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def book_table
 kiosk-demo-atablefor/app/controllers/kiosk/bookings_controller.rb	def cancel_booking
+kiosk-demo-atablefor/app/models/booking.rb	Kiosk::Visit.record!(user_id: booking.user_id, value_cents: booking.restaurant.average_spend_cents * booking.party_size)
 kiosk-demo-atablefor/app/models/restaurant.rb	def upcoming_seatings(days: 2)
 kiosk-demo-atablefor/app/models/table_search.rb	.where(restaurant_tables: { capacity: party_size.. })
 kiosk-demo-atablefor/app/views/home/index.html.erb	        <p>Give the one-line prompt to your AI assistant. Behind the scenes it:</p>
@@ -348,6 +351,7 @@ kiosk-demo-getgrocery/README.md	# kiosk-demo-getgrocery
 kiosk-demo-getgrocery/README.md	(the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
 kiosk-demo-getgrocery/README.md	**Honest scope:** the operator validates **format and zone only**.
 kiosk-demo-getgrocery/README.md	Grocery delivery demo operator for Kiosk.
+kiosk-demo-getgrocery/README.md	Without this variable the app
 kiosk-demo-getgrocery/README.md	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
 kiosk-demo-getgrocery/README.md	local stripe-mock; `export STRIPE_MOCK_URL=http://localhost:12111` sends the
 kiosk-demo-getgrocery/README.md	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
@@ -619,6 +623,7 @@ kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	  kind :acti
 kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	# Appointments at the salon.
 kiosk-demo-stylish/app/controllers/kiosk/appointments_controller.rb	Appointment time; must be in the future.
 kiosk-demo-stylish/app/controllers/kiosk/calendar_controller.rb	reach :role
+kiosk-demo-stylish/app/models/appointment.rb	Kiosk::Visit.record!(user_id: appointment.user_id, value_cents: appointment.price_cents.to_i)
 kiosk-demo-stylish/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-stylish/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish
 kiosk-demo-stylish/config/initializers/kiosk.rb	c.registration_pow_count = 1
@@ -661,6 +666,7 @@ kiosk-demo-tudu/README.md	`PreLinkTokenAfterLink` (401), `NoLoginAddressOnTheRos
 kiosk-demo-tudu/README.md	access**, **AI-assistant→AI-assistant collaboration expressed entirely at the app layer**, and
 kiosk-demo-tudu/README.md	critics claim GUC-style patterns can't handle: **membership-based many-to-many
 kiosk-demo-tudu/README.md	the **W5 account-link rebind** that migrates an assistant's work to a human.
+kiosk-demo-tudu/README.md	| `app/controllers/kiosk/invites_controller.rb` | `invite` and `accept_invite`
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list`
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `remove_member` and the `list_membership` topic
 kiosk-demo-tudu/README.md	| `app/controllers/kiosk/todos_controller.rb` | `list_todos`, `add_todo`, `complete_todo` and the `todo` topic |
@@ -1104,6 +1110,7 @@ kiosk-server/lib/kiosk/server/handler_mixin.rb	status = ::ActionDispatch::Except
 kiosk-server/lib/kiosk/server/handler_mixin.rb	when ::ActiveModel::ValidationError then exception.model
 kiosk-server/lib/kiosk/server/identity_resolution.rb	# the configured agent IdP or the bundled kiosk-pop one. A cookie session
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
+kiosk-server/lib/kiosk/server/jwt_issuer.rb	DEFAULT_EXPIRES_IN = 3600
 kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
 kiosk-server/lib/kiosk/server/kyc.rb	unless secure_equal?(row.fetch('nonce'), nonce)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        # Binds the attestation to this operator.

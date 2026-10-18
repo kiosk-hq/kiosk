@@ -49,6 +49,12 @@ RSpec.describe 'KYC broker: intake refusals' do
     intake(valid_intake_body(subject_handle: ''))
     expect(response).to have_http_status(:bad_request)
   end
+
+  it 'rejects a body that is not JSON (400)' do
+    post '/verifications', params: '{"operator_id":', headers: intake_headers
+    expect(response).to have_http_status(:bad_request)
+    expect(ProveRequest.count).to eq(0)
+  end
 end
 
 RSpec.describe 'KYC broker: intake audience' do

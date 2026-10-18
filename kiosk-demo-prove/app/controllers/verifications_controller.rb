@@ -11,6 +11,7 @@ class VerificationsController < ApplicationController
   include OperatorIntake
 
   protect_from_forgery with: :null_session
+  rescue_from(ActionDispatch::Http::Parameters::ParseError) { render_json({ error: 'the body is not JSON' }, :bad_request) }
 
   REQUEST_TTL = 15 * 60
 

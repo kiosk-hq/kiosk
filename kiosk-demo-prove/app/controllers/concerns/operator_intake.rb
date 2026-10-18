@@ -26,28 +26,17 @@ module OperatorIntake
   end
 
   def declared_audience_matches?(operator)
-    declared = intake_body['audience'].to_s
+    declared = params[:audience].to_s
     declared.empty? || declared == audience_for(operator)
   end
 
-  def operator_id_param = intake_body['operator_id'].to_s
-  def callback_url = intake_body['callback_url'].to_s
-  def subject_handle = intake_body['subject_handle'].to_s
-  def requested_claims = Array(intake_body['requested_claims']).map(&:to_s)
+  def operator_id_param = params[:operator_id].to_s
+  def callback_url = params[:callback_url].to_s
+  def subject_handle = params[:subject_handle].to_s
+  def requested_claims = Array(params[:requested_claims]).map(&:to_s)
 
   def bearer_token
     auth = request.headers['Authorization'].to_s
     auth.start_with?('Bearer ') ? auth.delete_prefix('Bearer ') : ''
-  end
-
-  def intake_body
-    @intake_body ||= parse_intake_body
-  end
-
-  def parse_intake_body
-    body = JSON.parse(request.raw_post.to_s)
-    body.is_a?(Hash) ? body : {}
-  rescue StandardError
-    {}
   end
 end

@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: The README gives a valid verify's memory as measured: under 3 KB live, and ~16 MB of short-lived objects that the GC frees.

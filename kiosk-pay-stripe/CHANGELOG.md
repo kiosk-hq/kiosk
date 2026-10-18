@@ -10,6 +10,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: kiosk-pay-stripe keys a capture by the Stripe customer and the cart mandate id, so the carts of two customers cannot share an idempotency key.

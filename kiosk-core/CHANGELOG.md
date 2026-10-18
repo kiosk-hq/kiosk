@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: `refund` takes `key:`, which names the refund among the refunds of its charge; kiosk-pay-stripe keys the Stripe request by the charge and that key.

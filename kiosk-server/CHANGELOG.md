@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: The `kyc_required` hint names the attributes it asks for, as the specification says.

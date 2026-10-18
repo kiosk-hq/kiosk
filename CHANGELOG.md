@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.18, matching skill 0.5.18.**
+
+- 2026-10-18: **Every demo and the engine default pin `skill-v0.5.18.md`**, which resolves a relative `next` link and does not guess the row order from a cursor.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.17, matching skill 0.5.17.**

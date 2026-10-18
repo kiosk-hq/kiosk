@@ -2,6 +2,6 @@
 
 module Kiosk
   module TestHelpers
-    VERSION = '0.5.17'
+    VERSION = '0.5.18'
   end
 end

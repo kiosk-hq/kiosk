@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: `RecentSpend` tolls every call of a caller whose token has no `iat` or `exp`, so a retry cannot fish for a free draw.

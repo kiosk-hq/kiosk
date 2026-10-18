@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: A failed setup step, or a 402 the origin answers before it reads the attack, is UNTESTED: the battery fails, with no BREACH. The JSON line lists `untested`.

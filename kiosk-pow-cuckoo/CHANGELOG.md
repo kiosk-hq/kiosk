@@ -10,6 +10,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: The README gives the bundled solver's memory as measured, ~118 bytes per edge (~59 GiB at edgebits=29), and names no native-solver figure.

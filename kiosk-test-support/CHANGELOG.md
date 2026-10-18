@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.18] — 2026-10-18
+
+- 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.
+
 ## [0.5.17] — 2026-10-18
 
 - 2026-10-18: `StripeMock` runs one stripe-mock per process on free ports unless `STRIPE_MOCK_URL` names one; `StripeMock.url` replaces `URL`.

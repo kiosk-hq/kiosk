@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.17] — 2026-10-18
+
 - 2026-10-18: `refund` takes `key:`, which names the refund among the refunds of its charge; kiosk-pay-stripe keys the Stripe request by the charge and that key.
 - 2026-10-18: `PaymentFailed` takes no `reason:`; the engine reads only its message and `retryable?`.
 - 2026-10-18: `AgentIdentityProviders::Base` declares only `verify`; the engine never called `issue` or `agent_payment_key` on a configured `c.agent_idp`.

@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.17] — 2026-10-18
+
+- 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.17, matching skill 0.5.17.**
+
+- 2026-10-18: **Every demo and the engine default pin `skill-v0.5.17.md`**, which polls `payment_setup` on its description's schedule and ignores unknown members in every answer.
+
 - 2026-10-18: The PoW READMEs give measured memory: an Equihash verify holds under 3 KB live, and the bundled Cuckatoo solver needs ~59 GiB at edgebits=29.
 - 2026-10-18: The verify cost reads as measured: ~22 ms for a valid Equihash proof at n=168 k=7 in pure Ruby, ~15 ms with YJIT; the deploy runbook's figures follow it.
 - 2026-10-18: The kiosk-server README renders again, and its Configure example names every core key; the gem READMEs say what the code does (K-2145..K-2161).

@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.17] — 2026-10-18
+
 - 2026-10-18: `RecentSpend` tolls every call of a caller whose token has no `iat` or `exp`, so a retry cannot fish for a free draw.
 - 2026-10-18: `Policies::RateAndReputation` is removed; `Factors` keeps only `settled_purchases_count` and `settled_purchases_cents`.
 - 2026-10-18: The README configures `RecentSpend`; `RateAndReputation` gets no factors behind the gate, and `on_bad_proof` records into a store the host owns.

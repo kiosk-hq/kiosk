@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.17] — 2026-10-18
+
 - 2026-10-18: The README gives the bundled solver's memory as measured, ~118 bytes per edge (~59 GiB at edgebits=29), and names no native-solver figure.
 - 2026-10-18: The solver's memory guard predicts the measured peak, 120 bytes per edge, so edgebits 24 is refused under the default 1.5 GiB cap.
 

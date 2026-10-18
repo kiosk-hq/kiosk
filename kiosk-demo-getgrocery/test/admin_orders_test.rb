@@ -8,8 +8,8 @@ class AdminOrdersTest < ActionDispatch::IntegrationTest
     @shopper = User.create!(email: 'admin@example.test', password: 'conformance-fixture-password')
   end
 
-  def order_in(status)
-    Order.create!(user: @shopper, status: status, total_cents: 449,
+  def order_in(status, payment_status: 'unpaid')
+    Order.create!(user: @shopper, status: status, payment_status: payment_status, total_cents: 449,
                   slot_at: Time.current, address: '1 Dame Street, Dublin 2',
                   timezone: DeliverySlots::DEFAULT_ZONE_NAME)
   end
@@ -26,6 +26,18 @@ class AdminOrdersTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select '.badge-out-for-delivery', text: 'OUT FOR DELIVERY', count: 1
     assert_select '.badge-delivered', text: 'DELIVERED', count: 1
+  end
+
+  # A cancelled order keeps its settlement row after the refund, so the badge
+  # reads the money's state, not the settlement.
+  test 'a paid order reads PAID, and a cancelled, refunded one reads REFUNDED' do
+    order_in('placed', payment_status: 'paid')
+    order_in('cancelled', payment_status: 'refunded')
+
+    get admin_orders_path
+
+    assert_select '.badge-paid', text: 'PAID', count: 1
+    assert_select '.badge-refunded', text: 'REFUNDED', count: 1
   end
 
   test 'an order shows its short id, its status and its total' do

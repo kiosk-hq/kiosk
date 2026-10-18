@@ -2,12 +2,15 @@
 
 module Admin
   module OrdersHelper
-    # The shop's own states outrank the settlement: a delivered basket is also paid.
+    # The basket's own states outrank the money: a delivered basket is also paid.
     STATUS_BADGES = { 'delivered' => 'delivered', 'out_for_delivery' => 'out-for-delivery',
                       'rescheduled' => 'scheduled' }.freeze
+    # Any other order wears the state of its money, its `payment_state`.
+    PAYMENT_BADGES = { Kiosk::Payable::UNPAID => 'created', Kiosk::Payable::PENDING => 'pending',
+                       Kiosk::Payable::PAID => 'paid', Kiosk::Payable::REFUNDED => 'refunded' }.freeze
 
     def order_badge(order)
-      badge = STATUS_BADGES.fetch(order.status) { order.settled_currency ? 'paid' : 'created' }
+      badge = STATUS_BADGES.fetch(order.status) { PAYMENT_BADGES.fetch(order.payment_state) }
       tag.span(badge.tr('-', ' ').upcase, class: "badge badge-#{badge}")
     end
 

@@ -27,10 +27,9 @@ class Order < ApplicationRecord
   validate :window_bookable, on: %i[place reschedule]
 
   # Paid and not yet with the courier.
-  AWAITING_COURIER = %w[paid rescheduled].freeze
-  scope :awaiting_courier, -> { where(status: AWAITING_COURIER) }
+  scope :awaiting_courier, -> { paid.or(rescheduled) }
   # One move per order, and none once the courier has the basket.
-  scope :reschedulable,    -> { where.not(status: %i[rescheduled out_for_delivery delivered cancelled]) }
+  scope :reschedulable,    -> { not_rescheduled.not_out_for_delivery.not_delivered.not_cancelled }
 
   # A settlement whose cart names this order (`line_items @> [{order_id}]`).
   SETTLEMENT_FOR_ROW = Arel.sql(
@@ -81,7 +80,7 @@ class Order < ApplicationRecord
       order = paid.where(dispatch_at: nil).lock.find_by(id: order_id)
       next unless order
 
-      missing = order.order_items.sort_by(&:product_id).reject { Product.take!(it.product_id, it.qty).positive? }
+      missing = order.order_items.sort_by(&:product_id).reject { Product.take!(it.product_id, it.qty) }
       order.refund!(missing) if missing.any?
       CourierDispatchJob.arm!(order) unless order.cancelled?
     end
@@ -94,11 +93,12 @@ class Order < ApplicationRecord
     announce_cancelled if cancelled?
   end
 
-  # The order, for the one caller that moves the basket from the shop to the
-  # courier; nil for any other.
-  def hand_to_courier
-    handed = self.class.where(id:, status: AWAITING_COURIER).update_all(status: 'out_for_delivery', updated_at: Time.current)
-    tap { it.status = 'out_for_delivery' } if handed == 1
+  def awaiting_courier? = paid? || rescheduled?
+
+  # Moves the basket from the shop to the courier. The row lock makes two runs
+  # take turns; false for the run that finds the courier already has it.
+  def hand_to_courier!
+    with_lock { awaiting_courier? && out_for_delivery! }
   end
 
   private

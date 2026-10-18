@@ -20,9 +20,12 @@ class Product < ApplicationRecord
 
   def sold_out? = stock.zero?
 
-  # Takes `qty` off the shelf when it holds that many; the count of shelves
-  # taken from, 0 or 1. One statement, so concurrent payments never take the same item twice.
-  def self.take!(id, qty) = where(id:, stock: qty..).update_all(['stock = stock - ?', qty])
+  # Takes `qty` off the shelf when it holds that many; false when it does not.
+  # The row lock makes concurrent payments take turns, so no item goes twice.
+  def self.take!(id, qty)
+    product = lock.find(id)
+    product.stock >= qty && product.update!(stock: product.stock - qty)
+  end
 
   # The morning delivery: every shelf back to DAILY_STOCK (RestockJob).
   def self.restock! = update_all(stock: DAILY_STOCK, updated_at: Time.current)

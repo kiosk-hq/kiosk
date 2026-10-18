@@ -9,7 +9,7 @@ class CourierStatesTest < ActiveSupport::TestCase
   end
 
   def paid_order(window)
-    Order.create!(user: @shopper, status: 'paid', total_cents: 449, slot_at: window,
+    Order.create!(user: @shopper, status: :paid, total_cents: 449, slot_at: window,
                   address: '1 Dame Street, Dublin 2', timezone: DeliverySlots::DEFAULT_ZONE_NAME)
   end
 
@@ -59,11 +59,11 @@ class CourierStatesTest < ActiveSupport::TestCase
 
   test 'of two runs that read the order before either hands it over, one sends the courier' do
     order = paid_order(1.hour.ago)
-    first  = Order.find(order.id)
-    second = Order.find(order.id)
+    first, second = Array.new(2) { Order.awaiting_courier.find(order.id) }
 
-    assert first.hand_to_courier
-    assert_nil second.hand_to_courier
-    assert_predicate order.reload, :out_for_delivery?
+    assert first.hand_to_courier!
+    assert_not second.hand_to_courier!
+    assert_predicate second, :out_for_delivery?, 'the second run reads the row the first one saved'
+    assert_not second.changed?
   end
 end

@@ -14,6 +14,7 @@ class DiscoveryStory < StoryTest
 
     queries = schema['queries'].index_by { it['name'] }
     actions = schema['actions'].index_by { it['name'] }
+
     assert_equal %w[browse_listings my_listings], queries.keys.sort
     assert_equal %w[close_listing edit_listing post_listing], actions.keys.sort
     queries.merge(actions).each_value { assert_predicate it['description'], :present?, it['name'] }
@@ -22,26 +23,31 @@ class DiscoveryStory < StoryTest
     end
 
     examples = Kiosk::TestHelpers::DescriptorExamples.of(schema)
+
     assert_operator examples.size, :>=, 4
     assert_empty examples.filter_map(&:violation)
   end
 
   test 'the board tells every agent it takes no money' do
     agents_json = published('/agents.json')
+
     assert_empty %w[version standard site] - agents_json.keys
     assert_not agents_json.key?('payments')
 
     agents_txt = Net::HTTP.get(URI("#{live_url}/agents.txt"))
+
     assert_match(/^Authorization: agent-auth auth-md$/, agents_txt)
     assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
   end
 
   test 'every page points an assistant at the skill this board pins' do
     pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
+
     assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
 
     %w[/ /listings].each do |path|
       page = Net::HTTP.get_response(URI("#{live_url}#{path}"))
+
       assert_equal pinned, page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1], path
       assert_equal pinned, page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1], path
     end

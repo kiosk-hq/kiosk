@@ -42,7 +42,7 @@ class Reservation < ApplicationRecord
     select(arel_table[Arel.star], Arel::Nodes::Exists.new(settlement.select(Arel.sql('1')).arel).as('settled'))
   }
 
-  def self.readable_by?(reservation_id, user_id) = where(id: reservation_id, user_id: user_id).exists?
+  def self.readable_by?(reservation_id, user_id) = exists?(id: reservation_id, user_id: user_id)
 
   def self.announce_payment(reservation_id, payment_state = 'paid')
     Kiosk::Server::Events.emit(

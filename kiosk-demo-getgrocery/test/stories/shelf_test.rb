@@ -20,7 +20,7 @@ class ShelfStory < StoryTest
     order = shopper.orders('banana')
     Product.find_by!(sku: 'banana').update!(price_cents: 199)
 
-    assert shopper.pays_for(order).ok?
+    assert_predicate shopper.pays_for(order), :ok?
     assert_equal 149, Kiosk::Settlement.sole.settled_amount_cents
   end
 
@@ -29,17 +29,20 @@ class ShelfStory < StoryTest
     sells_out('milk-1l')
 
     milk = shopper.browses.rows.find { it['sku'] == 'milk-1l' }
+
     assert_equal 'Sold out. Check back tomorrow.', milk['sold_out']
 
     refused = shopper.orders('banana', 'milk-1l')
-    assert refused.refused?(:conflict), refused
+
+    assert_refused refused, :conflict
     assert_includes refused.detail, 'milk-1l: Sold out. Check back tomorrow.'
     assert_equal 0, Order.count
   end
 
   test 'a paid order takes its items off the shelf' do
     shopper = a_shopper
-    assert shopper.pays_for(shopper.orders('banana', 'cheddar')).ok?
+
+    assert_predicate shopper.pays_for(shopper.orders('banana', 'cheddar')), :ok?
     assert_equal({ 'banana' => Product::DAILY_STOCK - 1, 'cheddar' => Product::DAILY_STOCK - 1 }, shelf('banana', 'cheddar'))
   end
 
@@ -49,7 +52,8 @@ class ShelfStory < StoryTest
     sells_out('butter-250g')
 
     refused = shopper.pays_for(order)
-    assert refused.refused?(:forbidden), refused
+
+    assert_refused refused, :forbidden
     assert_includes refused.detail, 'butter-250g: Sold out. Check back tomorrow.'
     assert_empty Kiosk::Settlement.all
   end
@@ -58,8 +62,10 @@ class ShelfStory < StoryTest
     shopper = a_shopper
     order = shopper.orders('butter-250g', 'banana')
     Product.find_by!(sku: 'butter-250g').update!(stock: 1)
-    assert another_payment_takes('butter-250g') { shopper.pays_for(order) }.ok?
+
+    assert_predicate another_payment_takes('butter-250g') { shopper.pays_for(order) }, :ok?
     placed = shopper.orders_placed.sole
+
     assert_equal 349, placed['refunded_cents']
     assert_equal 'paid', placed['status']
     assert_equal({ 'butter-250g' => 0, 'banana' => Product::DAILY_STOCK - 1 }, shelf('butter-250g', 'banana'))
@@ -69,7 +75,8 @@ class ShelfStory < StoryTest
     shopper = a_shopper
     order = shopper.orders('butter-250g')
     shopper.listens_for(:order_delivery)
-    assert another_payment_takes('butter-250g') { shopper.pays_for(order) }.ok?
+
+    assert_predicate another_payment_takes('butter-250g') { shopper.pays_for(order) }, :ok?
     assert_equal({ 'order_id' => order['order_id'], 'status' => 'cancelled' },
                  shopper.hears(:order_delivery, about: order['order_id']))
     assert_equal({ 'status' => 'cancelled', 'refunded_cents' => 349 },
@@ -79,7 +86,8 @@ class ShelfStory < StoryTest
   test 'every morning the shelves are full again' do
     shopper = a_shopper
     sells_out('milk-1l')
-    assert shopper.pays_for(shopper.orders('banana')).ok?
+
+    assert_predicate shopper.pays_for(shopper.orders('banana')), :ok?
 
     RestockJob.perform_now
 

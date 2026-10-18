@@ -10,20 +10,23 @@ class AgeCheckStory < StoryTest
     shopper = a_shopper
 
     refused = shopper.orders('table-red-wine')
-    assert refused.refused?(:kyc_required), refused
+
+    assert_refused refused, :kyc_required
     assert_includes refused.hint, 'request_kyc'
 
     shopper.requests_verification
     the_verification_service_confirms(shopper, 'age_over_18' => true)
+
     assert shopper.hears_verification_passed
 
     wine = shopper.orders('table-red-wine')
-    assert wine.ok?, wine
-    assert shopper.pays_for(wine).ok?
+
+    assert_predicate wine, :ok?, wine
+    assert_predicate shopper.pays_for(wine), :ok?
   end
 
   test 'groceries with no age restriction need no age check' do
-    assert a_shopper.orders('banana').ok?
+    assert_predicate a_shopper.orders('banana'), :ok?
   end
 
   test 'an attestation the verification service did not sign proves nothing' do
@@ -37,10 +40,11 @@ class AgeCheckStory < StoryTest
 
   test 'an attestation that spells the answer any other way than true proves nothing' do
     shopper = a_shopper
-    assert shopper.presents(kyc_attestation(shopper.principal, 'age_over_18' => true)).ok?
-    assert shopper.orders('table-red-wine').ok?
 
-    assert shopper.presents(kyc_attestation(shopper.principal, 'age_over_18' => 'true')).ok?
+    assert_predicate shopper.presents(kyc_attestation(shopper.principal, 'age_over_18' => true)), :ok?
+    assert_predicate shopper.orders('table-red-wine'), :ok?
+
+    assert_predicate shopper.presents(kyc_attestation(shopper.principal, 'age_over_18' => 'true')), :ok?
     assert shopper.orders('table-red-wine').refused?(:kyc_required)
   end
 end

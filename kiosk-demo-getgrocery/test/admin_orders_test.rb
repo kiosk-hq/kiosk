@@ -28,28 +28,44 @@ class AdminOrdersTest < ActionDispatch::IntegrationTest
     assert_select '.badge-delivered', text: 'DELIVERED', count: 1
   end
 
-  test 'an order lists its basket alphabetically and masks the address' do
-    order = order_in('created')
-    { 'Pears' => 349, 'Apples' => 199 }.each do |name, price_cents|
-      product = Product.create!(sku: "admin-#{name}", name: name, price_cents: price_cents)
-      order.order_items.create!(product: product, qty: 2, price_cents: price_cents)
-    end
-
-    get admin_orders_path
+  test 'an order shows its short id, its status and its total' do
+    order = show_order_with_basket
 
     assert_select '.order-id', text: "##{order.id.first(8)}"
     assert_select '.badge-created', text: 'CREATED'
     assert_select '.order-meta', text: /Total: €4\.49/
-    assert_select '.order-meta', text: /Address: 1 Da\*{16}n 2/
+  end
+
+  test 'an order lists its basket alphabetically, each line with its price' do
+    show_order_with_basket
+
     assert_select '.item .name' do |names|
       assert_equal %w[Apples Pears], names.map(&:text)
     end
     assert_select '.item .price', text: '€1.99'
   end
 
+  test 'an order masks the address' do
+    show_order_with_basket
+
+    assert_select '.order-meta', text: /Address: 1 Da\*{16}n 2/
+  end
+
   test 'an empty shop says so' do
     get admin_orders_path
 
     assert_select 'p.empty', text: /No orders yet/
+  end
+
+  private
+
+  def show_order_with_basket
+    order = order_in('created')
+    { 'Pears' => 349, 'Apples' => 199 }.each do |name, price_cents|
+      product = Product.create!(sku: "admin-#{name}", name: name, price_cents: price_cents)
+      order.order_items.create!(product: product, qty: 2, price_cents: price_cents)
+    end
+    get admin_orders_path
+    order
   end
 end

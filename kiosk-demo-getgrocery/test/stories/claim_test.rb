@@ -12,6 +12,7 @@ class ClaimStory < StoryTest
   test 'an assistant that started on its own is linked to Hana and pays with her saved card' do
     standalone = a_shopper
     left_behind = standalone.orders('banana')
+
     assert_equal 'setup_required', standalone.sets_up_payment['status']
 
     link = standalone.asks_to_be_linked(client_id: 'getgrocery-claim')
@@ -24,7 +25,8 @@ class ClaimStory < StoryTest
 
     assert_equal 'ready', hanas.sets_up_payment['status']
     groceries = hanas.orders('banana')
-    assert hanas.pays_for(groceries).ok?
+
+    assert_predicate hanas.pays_for(groceries), :ok?
     assert_equal [groceries['order_id']], hanas.orders_placed.pluck('order_id')
     assert_equal [[HANA, standalone.principal.agent_id]], Kiosk::Settlement.pluck(:user_id, :agent_id)
   end

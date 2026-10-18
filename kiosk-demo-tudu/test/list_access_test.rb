@@ -5,9 +5,12 @@ require 'test_helper'
 class ListAccessTest < ActiveSupport::TestCase
   setup { @alice, @bob, @list = household }
 
-  test 'a member reaches the list, and only its owner may manage it' do
+  test 'a member reaches the list' do
+    as(@bob) { assert_nil ListAccess.member!(@list.id) }
+  end
+
+  test 'only the list owner may manage it' do
     as(@bob) do
-      assert_nil ListAccess.member!(@list.id)
       error = assert_raises(Kiosk::Server::Errors::Forbidden) { ListAccess.owner!(@list.id) }
       assert_equal 'only the list owner may do this', error.message
     end

@@ -10,16 +10,19 @@ class HouseholdStory < StoryTest
   test "Alice approves a new assistant on the board's site, and it posts as her" do
     newcomer = a_newcomer(as: Seller)
     request  = newcomer.asks_to_be_linked(client_id: 'philslist-test')
+
     assert_empty %w[device_code user_code verification_uri expires_in interval] - request.rows.keys
     assert newcomer.polls(request).refused?(:authorization_pending)
 
     @alice.approves(request['user_code'])
     Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
     hers = newcomer.collects(request)
+
     assert_equal alices_account, hers.account
 
     desk = hers.posts
-    assert desk.ok?, desk
+
+    assert_predicate desk, :ok?, desk
     assert_equal alices_account, Listing.find(desk['listing_id']).owner_id
     assert_includes @alice.visits('/kiosk/auth/assistants').body, hers.principal.agent_id
   end
@@ -28,8 +31,9 @@ class HouseholdStory < StoryTest
     hers = @alice.links(a_newcomer(as: Seller))
     his = @alice.links(a_newcomer(as: Seller))
     bookshelf = hers.posts(price_text: '€150')
+
     assert_includes ids(his.own_listings), bookshelf['listing_id']
-    assert his.edits(bookshelf, price_text: '€140').ok?
+    assert_predicate his.edits(bookshelf, price_text: '€140'), :ok?
 
     sleep(1 - (Time.now.to_f % 1))
     same_second = hers.with_a_fresh_credential
@@ -40,8 +44,8 @@ class HouseholdStory < StoryTest
     assert same_second.edits(bookshelf, price_text: '€1').refused?(:unauthenticated)
     assert_equal '€140', Listing.find(bookshelf['listing_id']).price_text
 
-    assert his.asks(:my_listings).ok?
+    assert_predicate his.asks(:my_listings), :ok?
     assert hers.signs_back_in.refused?(:not_found)
-    assert his.signs_back_in.ok?
+    assert_predicate his.signs_back_in, :ok?
   end
 end

@@ -12,6 +12,7 @@ class PrivacyStory < StoryTest
     assert_predicate Booking.find(alices['booking_id']), :confirmed?
 
     bobs = bob.books
+
     assert_equal [bobs['booking_id']], bob.bookings
     assert_equal [alices['booking_id']], alice.bookings
     assert_equal bob.principal.user_id, Booking.find(bobs['booking_id']).user_id
@@ -22,6 +23,7 @@ class PrivacyStory < StoryTest
     bob = a_diner
 
     forged = bob.books(user_id: alice.principal.user_id)
+
     assert forged.refused?(:bad_request)
     assert_includes forged['detail'], 'user_id'
   end

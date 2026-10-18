@@ -14,6 +14,12 @@ class VerificationsController < ApplicationController
 
   REQUEST_TTL = 15 * 60
 
+  def show
+    @request = find_request
+    @entries = request_entries
+    render :show
+  end
+
   def create
     operator = authenticate_operator!
     return if performed?
@@ -22,12 +28,6 @@ class VerificationsController < ApplicationController
     return render_json({ error: error }, status) if error
 
     open_request!(operator)
-  end
-
-  def show
-    @request = find_request
-    @entries = request_entries
-    render :show
   end
 
   def decide
@@ -108,7 +108,7 @@ class VerificationsController < ApplicationController
 
   def render_unconfirmable
     @entries = request_entries
-    render(:show, status: :unprocessable_entity)
+    render(:show, status: :unprocessable_content)
   end
 
   def request_entries = @request ? ClaimCatalog.entries_for(@request.requested_claims) : []

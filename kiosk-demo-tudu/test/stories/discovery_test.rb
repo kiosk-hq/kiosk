@@ -6,6 +6,7 @@ require 'kiosk/test_helpers/descriptor_examples'
 class DiscoveryStory < StoryTest
   def get(path)
     response = Kiosk::TestHelpers::Wire.new(base_url: live_url).get(path)
+
     assert_equal 200, response.status, "GET #{path} with no credential"
     response
   end
@@ -28,26 +29,31 @@ class DiscoveryStory < StoryTest
     assert_equal %w[description examples name payload_schema reach], schema['events'].find { it['name'] == 'todo' }.keys.sort
 
     examples = Kiosk::TestHelpers::DescriptorExamples.of(schema)
+
     assert_operator examples.size, :>=, 4
     assert_empty examples.filter_map(&:violation)
   end
 
   test 'nothing the household lists publish for assistants asks for a payment' do
     agents_json = get('/agents.json').body
+
     assert_empty %w[version standard site] - agents_json.keys
     assert_not agents_json.key?('payments')
 
     agents_txt = get('/agents.txt').raw_body
+
     assert_match(/^Authorization: agent-auth auth-md$/, agents_txt)
     assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
   end
 
   test 'the landing page and the housemate board point an assistant at the skill this origin pins' do
     pinned = get('/.well-known/kiosk.json').body.dig('kiosk', 'skill', 'url')
+
     assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
 
     %w[/ /shared].each do |path|
       page = get(path)
+
       assert_equal pinned, page.raw_body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1], path
       assert_equal pinned, page.headers['link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1], path
     end

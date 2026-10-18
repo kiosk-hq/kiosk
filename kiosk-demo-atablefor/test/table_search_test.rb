@@ -32,6 +32,7 @@ class TableSearchTest < ActiveSupport::TestCase
 
     travel_to Time.find_zone!('Europe/Lisbon').local(2026, 9, 1, 12) do
       seatings = TableSearch.new(date: '2026-09-02', time: '20:00').seatings(restaurant)
+
       assert_equal ['2026-09-02T20:00:00+01:00'], seatings.map(&:iso8601)
       assert_equal 6, TableSearch.new.seatings(restaurant).size
     end

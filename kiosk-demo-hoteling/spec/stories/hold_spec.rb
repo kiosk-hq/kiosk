@@ -13,7 +13,7 @@ RSpec.describe 'A hold nobody pays for', type: :story do
 
     expect(ben.rooms_free(at: room.property_id, **stay).rows.pluck('room_type_id')).not_to include(room.id)
 
-    Booking.where(id: held['booking_id']).update_all(created_at: 16.minutes.ago)
+    Booking.find(held['booking_id']).update!(created_at: 16.minutes.ago)
     ada.listens_for(:booking_confirmation)
 
     expect(ben.rooms_free(at: room.property_id, **stay).rows.pluck('room_type_id')).to include(room.id)
@@ -41,7 +41,7 @@ RSpec.describe 'A hold nobody pays for', 'at its pay-by time', type: :story do
     HoldLapseJob.perform_now(held['booking_id'])
     expect(Booking.find(held['booking_id'])).to be_reserved
 
-    Booking.where(id: held['booking_id']).update_all(created_at: 16.minutes.ago)
+    Booking.find(held['booking_id']).update!(created_at: 16.minutes.ago)
     2.times { HoldLapseJob.perform_now(held['booking_id']) }
 
     expect(ada.hears(:booking_confirmation, about: held['booking_id']))
@@ -58,7 +58,7 @@ RSpec.describe 'A paid hold', 'at its pay-by time', type: :story do
     held = ada.reserves
     expect(ada.pays_for(held)).to be_ok
 
-    Booking.where(id: held['booking_id']).update_all(created_at: 16.minutes.ago)
+    Booking.find(held['booking_id']).update!(created_at: 16.minutes.ago)
     HoldLapseJob.perform_now(held['booking_id'])
 
     expect(Booking.find(held['booking_id'])).not_to be_cancelled

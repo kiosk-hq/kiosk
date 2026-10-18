@@ -36,7 +36,7 @@ module Kiosk
     #
     # @return [String] an ISO 8601 instant, always later than now
     def self.example_slot
-      (Time.current + 7.days).utc.change(hour: 14).iso8601
+      7.days.from_now.utc.change(hour: 14).iso8601
     end
 
     # ── WHAT THIS ORIGIN PUSHES ───────────────────────────────────────────────
@@ -60,7 +60,7 @@ module Kiosk
                                    slot: { type: 'string', format: 'date-time' } },
                      required: %w[appointment_id salon_id slot]
       subject_reachable lambda { |appointment_id, identity|
-        Appointment.where(id: appointment_id, user_id: identity.user_id).exists?
+        Appointment.exists?(id: appointment_id, user_id: identity.user_id)
       }
     end
 

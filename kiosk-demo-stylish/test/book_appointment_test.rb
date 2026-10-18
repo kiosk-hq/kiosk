@@ -53,6 +53,7 @@ class BookAppointmentTest < ActiveSupport::TestCase
   test "the published example is 14:00 on the origin's clock, a week ahead, across a change of clocks" do
     travel_to Time.utc(2026, 10, 18, 9) do
       example = Time.iso8601(BookAppointmentOperation.example_slot)
+
       assert_equal '2026-10-25T14:00:00+01:00', example.iso8601
       assert_equal 14, example.in_time_zone(PARIS).hour
     end
@@ -64,8 +65,12 @@ class BookAppointmentTest < ActiveSupport::TestCase
     assert_includes refusal.message, 'already passed'
   end
 
-  test 'an unknown salon or service is refused by name' do
+  test 'an unknown salon is refused by name' do
     assert_includes assert_kiosk_refused { book(salon_id: 999_999) }.message, 'salon_id 999999 is not a salon here'
+    assert_equal 0, Appointment.count
+  end
+
+  test 'an unknown service is refused with the services by name' do
     assert_includes assert_kiosk_refused { book(service_id: 999_999) }.message, "#{@colour.id} (Colour)"
     assert_equal 0, Appointment.count
   end

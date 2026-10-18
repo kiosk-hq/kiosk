@@ -40,7 +40,7 @@ class ListsController < ApplicationController
   def create
     title = params.require(:title)
     list  = kiosk_as_human { |identity| CreateListOperation.call(member_id: identity.user_id, title: title) }
-    redirect_to list_path(list), notice: 'List created.'
+    redirect_to list_path(list), notice: t('.notice')
   end
 
   def invite

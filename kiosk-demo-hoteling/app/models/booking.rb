@@ -54,7 +54,7 @@ class Booking < ApplicationRecord
            Arel::Nodes::Exists.new(settlement.select(Arel.sql('1')).arel).as('settled'))
   }
 
-  def self.readable_by?(booking_id, user_id) = where(id: booking_id, user_id: user_id).exists?
+  def self.readable_by?(booking_id, user_id) = exists?(id: booking_id, user_id: user_id)
 
   # The capture returned: tell the owner, and let the property decide. A zero
   # wait decides inline.

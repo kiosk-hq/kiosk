@@ -9,10 +9,11 @@ class PrivacyStory < StoryTest
     alices = alice.reserves('SK-001')
 
     assert bob.pays_for(alices).refused?(:forbidden)
-    assert alice.pays_for(alices).ok?
+    assert_predicate alice.pays_for(alices), :ok?
     assert bob.rides(alices).refused?(:forbidden)
 
     bobs = bob.reserves('SK-002')
+
     assert_equal [bobs['reservation_id']], bob.reservations.pluck('reservation_id')
     assert_equal bob.principal.user_id, Reservation.find(bobs['reservation_id']).user_id
   end
@@ -22,7 +23,8 @@ class PrivacyStory < StoryTest
     bob = a_rider
 
     forged = bob.reserves('SK-001', user_id: alice.principal.user_id)
-    assert forged.refused?(:bad_request), forged
+
+    assert_refused forged, :bad_request
     assert_includes forged['detail'], 'user_id'
   end
 end

@@ -14,7 +14,7 @@ class PrivacyStory < StoryTest
 
   test 'a housemate reads the list, and a stranger can neither read it, nor join it, nor see it exists' do
     assert_includes @housemate.list_ids, @list
-    assert @housemate.todos_on(@list).ok?
+    assert_predicate @housemate.todos_on(@list), :ok?
 
     assert_empty @stranger.lists
     assert @stranger.todos_on(@list).refused?(:forbidden)
@@ -24,19 +24,21 @@ class PrivacyStory < StoryTest
   end
 
   test 'a housemate the owner removes loses the list at once' do
-    assert @owner.removes(@housemate, from: @list).ok?
+    assert_predicate @owner.removes(@housemate, from: @list), :ok?
     assert @housemate.todos_on(@list).refused?(:forbidden)
   end
 
   test 'the owner cannot remove themselves, so the list keeps its owner' do
     refused = @owner.removes(@owner, from: @list)
-    assert refused.refused?(:forbidden), refused
+
+    assert_refused refused, :forbidden
     assert_equal 'owner', @owner.role_on(@list)
   end
 
   test 'a list belongs to whoever started it, whoever the arguments name' do
     forged = @stranger.does(:create_list, title: 'Forged', account_id: @owner.account)
-    assert forged.refused?(:bad_request), forged
+
+    assert_refused forged, :bad_request
     assert_includes forged['detail'], 'account_id'
 
     assert_equal @stranger.account, List.find(@stranger.starts_a_list).account_id
@@ -44,14 +46,17 @@ class PrivacyStory < StoryTest
 
   test "only queries the catalog says reach past the assistant's own account ever show a shared list" do
     queries = published('/kiosk/schema')['queries']
+
     assert_equal({ 'my_lists' => 'consented', 'list_todos' => 'consented', 'list_members' => 'consented', 'whoami' => 'principal' },
                  queries.to_h { [it['name'], it['reach']] }.slice('my_lists', 'list_todos', 'list_members', 'whoami'))
 
     own_account_only = queries.select { it['reach'] == 'principal' && it.dig('input_schema', 'required').blank? }.pluck('name')
+
     assert_includes own_account_only, 'whoami'
     own_account_only.each do |query|
       answer = @housemate.asks(query)
-      assert answer.ok?, query
+
+      assert_predicate answer, :ok?, query
       assert_not_includes answer.rows.to_json, @list, query
     end
   end

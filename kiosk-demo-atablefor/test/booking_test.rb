@@ -31,6 +31,7 @@ class BookingTest < ActiveSupport::TestCase
       assert_equal ['T1 seats 4; pick a larger table from availability'], errors(booking(party_size: 5))
 
       elsewhere = Restaurant.create!(name: 'Elsewhere', average_spend_cents: 2500).restaurant_tables.create!(label: 'E1', capacity: 8)
+
       assert_equal elsewhere.restaurant, booking(restaurant_table: elsewhere).tap(&:validate).restaurant
     end
   end

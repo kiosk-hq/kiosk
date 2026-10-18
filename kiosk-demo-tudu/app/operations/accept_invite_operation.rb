@@ -6,8 +6,7 @@ class AcceptInviteOperation
     Invite.transaction do
       invite = redeemable!(code)
       # An existing membership is left as it is: an owner redeeming her own code stays the owner.
-      Membership.insert_all([{ list_id: invite.list_id, account_id: member_id, role: :member }],
-                            unique_by: %i[list_id account_id])
+      Membership.find_or_create_by!(list_id: invite.list_id, account_id: member_id) { it.role = :member }
       invite.update!(redeemed_at: Time.current, redeemed_by_account_id: member_id)
       announce_join(invite.list_id, member_id)
       invite

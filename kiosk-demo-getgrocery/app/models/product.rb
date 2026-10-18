@@ -28,5 +28,5 @@ class Product < ApplicationRecord
   end
 
   # The morning delivery: every shelf back to DAILY_STOCK (RestockJob).
-  def self.restock! = update_all(stock: DAILY_STOCK, updated_at: Time.current)
+  def self.restock! = find_each { it.update!(stock: DAILY_STOCK) }
 end

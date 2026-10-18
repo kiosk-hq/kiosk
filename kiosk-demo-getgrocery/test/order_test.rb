@@ -32,9 +32,14 @@ class OrderTest < ActiveSupport::TestCase
                    errors(order(date: Date.new(2026, 9, 6))).sole)
       assert_match(%r{\Adelivery window 10:00–12:00 \(Europe/Dublin\) on 2026-09-07 is no longer bookable},
                    errors(order(date: Date.new(2026, 9, 7), slot: 2)).sole)
+      assert_empty errors(order(date: Date.new(2026, 9, 7), slot: 3))
+    end
+  end
+
+  test 'its window starts on the grid' do
+    travel_to SHOP.local(2026, 9, 7, 11, 30) do
       assert_equal ['delivery window must be the slot_at of a delivery_slots row'],
                    errors(order.tap { it.slot_at += 1.hour })
-      assert_empty errors(order(date: Date.new(2026, 9, 7), slot: 3))
     end
   end
 
@@ -54,6 +59,7 @@ class OrderTest < ActiveSupport::TestCase
     travel_to SHOP.local(2026, 9, 9, 12) do
       assert placed.update!(status: :paid)
       placed.slot_at = DeliverySlots.starts(Date.new(2026, 9, 8), SHOP)[2]
+
       assert_match(/no longer bookable/, errors(placed, :reschedule).sole)
     end
   end

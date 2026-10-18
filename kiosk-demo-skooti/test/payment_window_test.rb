@@ -66,30 +66,49 @@ class PaymentWindowTest < ActiveSupport::TestCase
     false
   end
 
+  # Runs the block while the PSP holds the capture, then lets the capture return.
+  def pay_through_a_held_capture(id)
+    psp = BlockingPsp.new
+    paying = Thread.new { capture(psp, id) }
+
+    assert(eventually? { payment_status(id) == 'paying' })
+    yield if block_given?
+    psp.release!
+    ActiveSupport::Dependencies.interlock.permit_concurrent_loads { paying.join }
+  end
+
   test 'an untouched reservation reads unpaid and does not start' do
     id = reserve
+
     assert_equal 'unpaid', payment_state(id)
     error = assert_raises(Kiosk::Server::Errors::Forbidden) { start_rental(id) }
     assert_includes error.message, 'this reservation is not paid'
   end
 
-  test 'a capture in flight reads pending, and a returned capture reads paid before its settlement row' do
-    id  = reserve
-    psp = BlockingPsp.new
-    paying = Thread.new { capture(psp, id) }
+  test 'a capture in flight reads pending and does not start' do
+    id = reserve
 
-    assert(eventually? { payment_status(id) == 'paying' })
-    assert_equal 'pending', payment_state(id)
-    error = assert_raises(Kiosk::Server::Errors::Forbidden) { start_rental(id) }
-    assert_includes error.message, 'in progress'
+    pay_through_a_held_capture(id) do
+      assert_equal 'pending', payment_state(id)
+      error = assert_raises(Kiosk::Server::Errors::Forbidden) { start_rental(id) }
+      assert_includes error.message, 'in progress'
+    end
+  end
 
-    psp.release!
-    ActiveSupport::Dependencies.interlock.permit_concurrent_loads { paying.join }
+  test 'a returned capture reads paid before its settlement row, and starts' do
+    id = reserve
+    pay_through_a_held_capture(id)
+
     assert_equal 'paid', payment_state(id)
     assert_predicate start_rental(id)['rental_token'], :present?
+  end
 
+  test 'a returned capture publishes one booking_payment event the schema describes' do
+    id = reserve
+    pay_through_a_held_capture(id)
     events = Kiosk.configuration.event_store.since(@rider.id, 0).select { it['topic'] == 'booking_payment' }
-    assert_equal([id], events.map { it['subject'] })
+
+    assert_equal([id], events.pluck('subject'))
     assert_empty Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)
   end
 

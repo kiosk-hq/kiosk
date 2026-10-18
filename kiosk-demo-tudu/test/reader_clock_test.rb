@@ -13,10 +13,16 @@ class ReaderClockTest < ActiveSupport::TestCase
     assert_equal ReaderClock::DEFAULT_ZONE_NAME, ReaderClock.zone.name
   end
 
-  test 'one instant reads two ways for two housemates, and names the clock' do
+  test 'one instant reads two ways for two housemates' do
     assert_equal '2026-09-14T21:00:00+09:00', ReaderClock.publish(NOON_UTC, TOKYO)
     assert_equal '2026-09-14T08:00:00-04:00', ReaderClock.publish(NOON_UTC, MONTREAL)
+  end
+
+  test 'a label names the clock' do
     assert_equal 'Mon 14 Sep, 21:00 (Asia/Tokyo)', ReaderClock.label(NOON_UTC, TOKYO)
+  end
+
+  test 'an absent deadline publishes and labels nil' do
     assert_nil ReaderClock.publish(nil)
     assert_nil ReaderClock.label(nil)
   end

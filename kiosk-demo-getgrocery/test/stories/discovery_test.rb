@@ -10,10 +10,11 @@ class DiscoveryStory < StoryTest
 
     assert_empty %w[schema queries actions pay events] - kiosk['capabilities']
     assert_match %r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z}, kiosk['events_url']
-    assert_equal %w[kyc_verification order_delivery payment_setup], schema['events'].map { it['name'] }.sort
+    assert_equal %w[kyc_verification order_delivery payment_setup], schema['events'].pluck('name').sort
 
     queries = schema['queries'].index_by { it['name'] }
     actions = schema['actions'].index_by { it['name'] }
+
     assert_equal %w[catalog delivery_slots my_orders], queries.keys.sort
     assert_equal %w[create_order payment_setup request_kyc reschedule_delivery], actions.keys.sort
     queries.merge(actions).each_value { assert_predicate it['description'], :present?, it['name'] }
@@ -22,6 +23,7 @@ class DiscoveryStory < StoryTest
     end
 
     examples = Kiosk::TestHelpers::DescriptorExamples.of(schema)
+
     assert_operator examples.size, :>=, 8
     assert_empty examples.filter_map(&:violation)
   end
@@ -29,17 +31,21 @@ class DiscoveryStory < StoryTest
   test 'reschedule_delivery publishes the uuid shape of the order it moves' do
     order_id = published('/kiosk/schema')['actions'].find { it['name'] == 'reschedule_delivery' }
                                                     .dig('input_schema', 'properties', 'order_id')
+
     assert_equal 'uuid', order_id['format']
     pattern = Regexp.new(order_id['pattern'])
+
     assert_match pattern, SecureRandom.uuid
     ['not-a-uuid', "'; DROP TABLE orders; --", SecureRandom.uuid.delete('-')].each { assert_no_match pattern, it }
   end
 
   test 'the landing page advertises the skill this origin pins' do
     pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
+
     assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
 
     page = Net::HTTP.get_response(URI("#{live_url}/"))
+
     assert_equal pinned, page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]
     assert_equal pinned, page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]
   end

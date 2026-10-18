@@ -7,6 +7,8 @@ class SlotSearchTest < ActiveSupport::TestCase
   LISBON_CALLER    = Time.find_zone!('Europe/Lisbon')
   BUCHAREST_CALLER = Time.find_zone!('Europe/Bucharest')
   ADDRESS          = '42 Camden Street, Dublin 2'
+  # 23:30 in Dublin and Lisbon, 01:30 on the 8th in Bucharest.
+  LATE_EVENING     = Time.utc(2026, 9, 7, 22, 30)
 
   def search(**arguments) = SlotSearch.new(delivery_address: ADDRESS, **arguments)
 
@@ -16,15 +18,18 @@ class SlotSearchTest < ActiveSupport::TestCase
                  search(delivery_address: 'Dublin 24').tap(&:validate).errors.full_messages.sole)
   end
 
-  # 22:30 UTC: 23:30 in Dublin and Lisbon, 01:30 on the 8th in Bucharest.
   test 'the day a caller names is read on its declared calendar' do
-    travel_to Time.utc(2026, 9, 7, 22, 30) do
+    travel_to LATE_EVENING do
       assert_equal Date.new(2026, 9, 8), search(date: '2026-09-07').day
       assert_equal Date.new(2026, 9, 8), search(date: '2026-09-07', caller_zone: LISBON_CALLER).day
+      assert_not search(date: '2026-09-07', caller_zone: BUCHAREST_CALLER).valid?
+    end
+  end
 
-      refused = search(date: '2026-09-07', caller_zone: BUCHAREST_CALLER)
-      assert_not refused.valid?
-      message = refused.errors.full_messages.sole
+  test "a day already past on the caller's calendar is refused in the caller's terms" do
+    travel_to LATE_EVENING do
+      message = search(date: '2026-09-07', caller_zone: BUCHAREST_CALLER).tap(&:validate).errors.full_messages.sole
+
       assert_includes message, 'date 2026-09-07 is in the past on the calendar it is read in (Europe/Bucharest)'
       assert_includes message, 'the earliest day you can ask for is 2026-09-08'
       assert_not_includes message, SHOP.name
@@ -39,6 +44,7 @@ class SlotSearchTest < ActiveSupport::TestCase
 
   test "a caller's zone is only what it declares" do
     hints = { 'HTTP_ACCEPT_LANGUAGE' => 'ro-RO', 'HTTP_CF_IPCOUNTRY' => 'RO', 'REMOTE_ADDR' => '5.2.0.1' }
+
     assert_nil Kiosk::Server::CallerTimezone.from_env(hints)
     assert_raises(Kiosk::Server::Errors::BadRequest) { Kiosk::Server::CallerTimezone.from_value('+03:00') }
   end

@@ -25,6 +25,7 @@ class WireSignpostTest < ActionDispatch::IntegrationTest
 
   def assert_signpost(code)
     error = response.parsed_body.fetch('error')
+
     assert_equal code, error['code']
     assert_includes error['hint'], "#{request.base_url}/.well-known/kiosk.json"
   end

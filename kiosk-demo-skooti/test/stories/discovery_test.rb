@@ -10,11 +10,12 @@ class DiscoveryStory < StoryTest
 
     assert_empty %w[schema queries actions pay events] - kiosk['capabilities']
     assert_match %r{\Aws://127\.0\.0\.1:\d+/kiosk/events\z}, kiosk['events_url']
-    assert_equal %w[booking_payment kyc_verification payment_setup], schema['events'].map { it['name'] }.sort
+    assert_equal %w[booking_payment kyc_verification payment_setup], schema['events'].pluck('name').sort
     assert_equal %w[paid refunded],
                  schema['events'].find { it['name'] == 'booking_payment' }['examples'].pluck('payment_state')
 
     actions = schema['actions'].index_by { it['name'] }
+
     %w[reserve start_rental rent_motorcycle payment_setup].each do |name|
       assert_predicate actions.dig(name, 'description'), :present?, name
     end
@@ -23,15 +24,18 @@ class DiscoveryStory < StoryTest
     end
 
     examples = Kiosk::TestHelpers::DescriptorExamples.of(schema)
+
     assert_operator examples.size, :>=, 4
     assert_empty examples.filter_map(&:violation)
   end
 
   test 'the landing page advertises the skill this origin pins' do
     pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
+
     assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
 
     page = Net::HTTP.get_response(URI("#{live_url}/"))
+
     assert_equal pinned, page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]
     assert_equal pinned, page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]
   end

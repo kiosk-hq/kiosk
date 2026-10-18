@@ -15,11 +15,11 @@ class TodosController < ApplicationController
     kiosk_as_human do |identity|
       AddTodoOperation.call(agent_id: identity.agent_id, list_id: params[:list_id], title: title)
     end
-    redirect_to list_path(params[:list_id]), notice: 'Todo added.'
+    redirect_to list_path(params[:list_id]), notice: t('.notice')
   end
 
   def complete
     kiosk_as_human { CompleteTodoOperation.call(todo_id: params[:id]) }
-    redirect_to list_path(params[:list_id]), notice: 'Todo completed.'
+    redirect_to list_path(params[:list_id]), notice: t('.notice')
   end
 end

@@ -34,14 +34,26 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
     assert_not_equal issue, issue
   end
 
-  test 'verify answers the claims, and only for an intact live token' do
+  test 'verify answers the claims of an intact live token' do
     token = issue
+
     assert_equal({ scooter_code: 'SK-001', reservation_id: 'resv-1', iat: NOW, exp: NOW + 900 }, verify(token).except(:jti))
     assert verify(token, now: NOW + 899)
-    assert_nil verify(token, now: NOW + 900)
+  end
+
+  test 'verify answers nil for an expired token' do
+    assert_nil verify(issue, now: NOW + 900)
+  end
+
+  test 'verify answers nil for a token with a changed signature, scooter or format version' do
+    token = issue
+
     assert_nil verify(token.sub(/.\z/) { it == 'A' ? 'B' : 'A' })
     assert_nil verify(token.sub('SK-001', 'SK-999'))
     assert_nil verify(token.sub('kiosk-rental-v1', 'kiosk-rental-v0'))
+  end
+
+  test 'verify answers nil for a string that is not a token' do
     assert_nil verify('garbage')
     assert_nil verify('')
   end
@@ -49,6 +61,7 @@ class RentalTokenIssuerTest < ActiveSupport::TestCase
   test 'the public key verifies the signature' do
     message, _, signature = issue.rpartition('.')
     public_key = OpenSSL::PKey.read(Rails.configuration.x.unlock_signing_key.public_to_pem)
+
     assert public_key.verify(nil, Base64.urlsafe_decode64(signature), message)
   end
 

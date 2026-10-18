@@ -32,7 +32,7 @@ module Kiosk
                     required: %w[room_type_id name nightly_price_cents currency]
                   }
     def availability
-      @search = RoomSearch.new(property: Property.find(params[:property_id]),
+      @search = RoomSearch.new(property: Property.find(params.expect(:property_id)),
                                check_in: params[:check_in], check_out: params[:check_out])
       @search.validate!
     end

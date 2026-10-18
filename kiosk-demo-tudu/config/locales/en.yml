@@ -1,0 +1,9 @@
+en:
+  lists:
+    create:
+      notice: List created.
+  todos:
+    create:
+      notice: Todo added.
+    complete:
+      notice: Todo completed.

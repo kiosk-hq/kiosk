@@ -7,8 +7,11 @@ class BoardClockTest < ActiveSupport::TestCase
   MONTREAL = Time.find_zone!('America/Toronto')
   NOON_UTC = Time.utc(2026, 9, 14, 12)
 
-  test "the reader's declared zone answers, and the board's own when none is declared" do
+  test "the board's own zone answers when the reader declares none" do
     assert_equal 'Europe/Lisbon', BoardClock.zone.name
+  end
+
+  test "the reader's declared zone answers for that request only" do
     Kiosk::Server::CurrentRequest.with(timezone: TOKYO) do
       assert_equal 'Asia/Tokyo', BoardClock.zone.name
       assert_equal '2026-09-14T21:00:00+09:00', BoardClock.publish(NOON_UTC)

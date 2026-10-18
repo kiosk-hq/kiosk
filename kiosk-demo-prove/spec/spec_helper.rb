@@ -9,6 +9,7 @@ load Rails.root.join('db/schema.rb') unless ActiveRecord::Base.connection.table_
 
 RSpec.configure do |config|
   config.expect_with(:rspec) { |c| c.syntax = :expect }
+  config.infer_spec_type_from_file_location!
 
   # Roll each example back so the shared prove_requests table stays clean.
   #

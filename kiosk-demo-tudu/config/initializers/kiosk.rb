@@ -25,8 +25,8 @@ end
 # Linking an assistant's bare account to a human moves its lists and memberships to the human.
 Kiosk.configure do |c|
   c.assistant_claimed = lambda { |from:, to:, **|
-    from.lists.update_all(account_id: to.id)
-    from.memberships.where.not(list: to.joined_lists).update_all(account_id: to.id)
+    from.lists.find_each { it.update!(account_id: to.id) }
+    from.memberships.where.not(list: to.joined_lists).find_each { it.update!(account_id: to.id) }
     from.memberships.delete_all
   }
 

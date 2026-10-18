@@ -66,31 +66,40 @@ class PaymentClaimTest < ActiveSupport::TestCase
     ActiveRecord::Base.connection_pool.with_connection { Kiosk.configuration.payment_provider.over(psp).capture(cart) }
   end
 
-  def eventually?
-    50.times do
-      return true if yield
-
-      ActiveSupport::Dependencies.interlock.permit_concurrent_loads { sleep 0.05 }
-    end
-    false
+  def paying?(order_id)
+    ActiveSupport::Dependencies.interlock.permit_concurrent_loads { sleep 0.05 }
+    status(order_id) == 'paying'
   end
 
-  test 'an order whose capture is in flight reads pending and keeps its total, then reads paid on the capture alone' do
-    order = place('banana')
-    psp   = BlockingPsp.new
+  # Holds a capture of `order` open while the block runs, and returns its processor.
+  def while_capture_in_flight(order)
+    psp = BlockingPsp.new
     paying = Thread.new { capture(psp, order) }
-    assert(eventually? { status(order['order_id']) == 'paying' })
-    assert_equal 'pending', payment_state(order['order_id'])
-
-    dear = place('olive-oil', qty: 10)
-    assert_not_equal order['order_id'], dear['order_id']
-    assert_equal order['total_cents'], Order.find(order['order_id']).total_cents
-
+    flunk 'the capture never claimed the order' unless 50.times.any? { paying?(order['order_id']) }
+    yield
+    psp
+  ensure
     psp.release!
     ActiveSupport::Dependencies.interlock.permit_concurrent_loads { paying.join }
-    assert_equal order['total_cents'], psp.charged_cents
+  end
+
+  test 'an order whose capture is in flight reads pending, then reads paid on the capture alone' do
+    order = place('banana')
+
+    while_capture_in_flight(order) { assert_equal 'pending', payment_state(order['order_id']) }
+
     assert_equal 'paid', payment_state(order['order_id'])
     assert_equal 0, Kiosk::Settlement.count
+  end
+
+  test 'an order whose capture is in flight keeps its total when the shopper orders again' do
+    order = place('banana')
+    psp = while_capture_in_flight(order) do
+      assert_not_equal order['order_id'], place('olive-oil', qty: 10)['order_id']
+      assert_equal order['total_cents'], Order.find(order['order_id']).total_cents
+    end
+
+    assert_equal order['total_cents'], psp.charged_cents
   end
 
   test 'racing pays charge an order once' do
@@ -136,8 +145,7 @@ class PaymentClaimTest < ActiveSupport::TestCase
     assert_raises(Kiosk::Server::Errors::Forbidden) { capture(CountingPsp.new, theirs) }
     error = assert_raises(Kiosk::Server::Errors::Forbidden) do
       as_shopper do
-        Kiosk::Server::Actions.fetch('reschedule_delivery').call(order_id: SecureRandom.uuid,
-                                                                 slot_at: DeliverySlots.starts(Date.current + 1)[3].iso8601)
+        Kiosk::Server::Actions.fetch('reschedule_delivery').call(order_id: SecureRandom.uuid, slot_at: DeliverySlots.starts(Date.current + 1)[3].iso8601)
       end
     end
     assert_equal 403, error.http_status

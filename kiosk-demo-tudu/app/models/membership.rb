@@ -5,7 +5,7 @@ class Membership < ApplicationRecord
   enum :role, { owner: 'owner', member: 'member' }, validate: true
 
   belongs_to :list
-  belongs_to :account, class_name: 'User', foreign_key: :account_id, inverse_of: :memberships
+  belongs_to :account, class_name: 'User', inverse_of: :memberships
 
   validates :account_id, uniqueness: { scope: :list_id }
 
@@ -14,7 +14,7 @@ class Membership < ApplicationRecord
   def self.account_ids_on(list_id) = where(list_id: list_id).pluck(:account_id)
 
   # Outside a request, where `own` has no signed-in member: the event stream asks this.
-  def self.readable_by?(list_id, account_id) = where(list_id: list_id, account_id: account_id).exists?
+  def self.readable_by?(list_id, account_id) = exists?(list_id: list_id, account_id: account_id)
 
   # Who is on a list, owners first.
   scope :roster, ->(list_id) { where(list_id: list_id).includes(:account).order(role: :desc, created_at: :asc) }

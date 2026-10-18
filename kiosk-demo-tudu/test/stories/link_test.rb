@@ -21,12 +21,14 @@ class LinkStory < StoryTest
     at_the_start_of_a_second
     issued_as_it_links = @on_its_own.with_a_fresh_credential
     linked = @on_its_own.redeems(code)
+
     assert_equal [ALICE, @on_its_own.principal.agent_id], [linked.account, linked.principal.agent_id]
 
     assert @on_its_own.asks(:my_lists).refused?(:unauthenticated)
     assert issued_as_it_links.asks(:my_lists).refused?(:unauthenticated)
 
     alices = @on_its_own.with_a_fresh_credential
+
     assert_equal ALICE, alices.account
     assert owns_the_hike?(alices)
     assert_equal ALICE, List.find(@hike).account_id
@@ -39,6 +41,7 @@ class LinkStory < StoryTest
   test "linking an assistant that is already Alice's again moves nothing and destroys nothing" do
     alice.links(@on_its_own)
     relinked = alice.links(@on_its_own)
+
     assert_equal [ALICE, @on_its_own.principal.agent_id], [relinked.account, relinked.principal.agent_id]
 
     assert owns_the_hike?(relinked)
@@ -48,19 +51,23 @@ class LinkStory < StoryTest
   test 'an assistant Alice unlinks stays locked out, on every worker and after a restart' do
     linked = alice.links(@on_its_own)
     alice.unlinks(linked)
+
     assert linked.asks(:my_lists).refused?(:unauthenticated)
 
     Kiosk.configuration.revocation_store = Kiosk.configuration.revocation_store.class.new
+
     assert linked.asks(:my_lists).refused?(:unauthenticated), 'a fresh store still knows the unlink'
   end
 
   test 'the list page shows Alice who is on her list, and turns her away from a list she is not on' do
     alice.links(@on_its_own)
     page = alice.visits("/lists/#{@hike}")
+
     assert_equal '200', page.code
     assert_includes page.body, 'Alice <span class="role">(owner)</span>'
 
     foreign = alice.visits("/lists/#{SecureRandom.uuid}")
+
     assert_includes %w[302 303], foreign.code
     assert_not_includes foreign.body, 'Members'
   end

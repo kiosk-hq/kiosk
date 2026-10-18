@@ -15,10 +15,10 @@ RSpec.shared_context 'a booking on the first of September in Istanbul' do
     booking.tap(&:validate).errors.full_messages
   end
 
-  around { |example| travel_to(Time.find_zone!('Europe/Istanbul').local(2026, 9, 1, 12)) { example.run } }
+  before { travel_to(Time.find_zone!('Europe/Istanbul').local(2026, 9, 1, 12)) }
 end
 
-RSpec.describe Booking, 'stay dates' do
+RSpec.describe Booking, 'stay dates', type: :model do
   include_context 'a booking on the first of September in Istanbul'
 
   it 'holds the checkout after the first night' do
@@ -40,7 +40,7 @@ RSpec.describe Booking, 'stay dates' do
   end
 end
 
-RSpec.describe Booking, 'room type' do
+RSpec.describe Booking, 'room type', type: :model do
   include_context 'a booking on the first of September in Istanbul'
 
   it 'books the hotel its room type belongs to' do

@@ -29,16 +29,20 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
     Product.create!(sku: 'sourdough-bread', name: 'Sourdough Bread', price_cents: 449, stock: 20)
   end
 
-  test 'an order_id argument is REFUSED by the published contract, and writes nothing' do
+  test 'an order_id argument is REFUSED by the published contract, by name' do
     placed = place
-
     refusal = assert_kiosk_refused { place(order_id: placed['order_id']) }
-    assert_equal 'bad_request', refusal.code
-    assert_equal 400, refusal.http_status
+
+    assert_equal [400, 'bad_request'], [refusal.http_status, refusal.code]
     assert_includes refusal.message, 'order_id',
                     'the refusal must name the argument, so an assistant can correct itself'
-    assert_equal 1, Order.where(user_id: @shopper.id).count,
-                 'a refused call writes nothing'
+  end
+
+  test 'a call refused for its order_id argument writes nothing' do
+    placed = place
+
+    assert_kiosk_refused { place(order_id: placed['order_id']) }
+    assert_equal 1, Order.where(user_id: @shopper.id).count
   end
 
   test 'a well-formed uuid naming nothing is refused in the same words' do
@@ -51,17 +55,20 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
     first  = place
     second = place(qty: 3)
 
-    refute_equal first['order_id'], second['order_id'], 'nothing is replaced in place'
+    assert_not_equal first['order_id'], second['order_id'], 'nothing is replaced in place'
     assert_equal 2, Order.where(user_id: @shopper.id).count
-    assert_equal 449,  first['total_cents']
-    assert_equal 1347, second['total_cents']
+    assert_equal [449, 1347], [first['total_cents'], second['total_cents']]
   end
 
   test 'slot_at must be the start of a delivery window' do
-    off_grid = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2] + 30.minutes
-    refusal = assert_kiosk_refused { place(slot_at: off_grid.iso8601) }
+    refusal = assert_kiosk_refused { place(slot_at: off_grid_slot) }
+
     assert_equal 'bad_request', refusal.code
     assert_includes refusal.message, 'slot_at of a delivery_slots row'
+  end
+
+  test 'a call refused for its slot_at writes nothing' do
+    assert_kiosk_refused { place(slot_at: off_grid_slot) }
     assert_equal 0, Order.where(user_id: @shopper.id).count
   end
 
@@ -75,6 +82,8 @@ class CreateOrderInputsTest < ActiveSupport::TestCase
   end
 
   private
+
+  def off_grid_slot = (DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2] + 30.minutes).iso8601
 
   def place(order_id: nil, qty: 1, slot_at: DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601)
     params = { items: [{ sku: 'sourdough-bread', qty: qty }],

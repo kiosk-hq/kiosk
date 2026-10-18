@@ -45,7 +45,7 @@ originals = [
 # search_hotels `neighbourhood` filter can never reach, silently. Fail the seed
 # instead: a demo whose data cannot be searched is worse than one that will not
 # load. Same for the amenities, which the originals also spell out by hand.
-stray_areas = originals.map { |h| h[:neighbourhood] } - NEIGHBOURHOOD_POOL
+stray_areas = originals.pluck(:neighbourhood) - NEIGHBOURHOOD_POOL
 raise "seeds: district(s) outside NEIGHBOURHOOD_POOL: #{stray_areas.inspect}" if stray_areas.any?
 
 stray_amenities = originals.flat_map { |h| h[:amenities] }.uniq - AMENITY_POOL

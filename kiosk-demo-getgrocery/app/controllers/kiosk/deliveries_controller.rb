@@ -5,7 +5,7 @@ module Kiosk
   class DeliveriesController < ActionController::API
     include Kiosk::Handler
 
-    ETA = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow).first + 40.minutes
+    eta = DeliverySlots.starts(DeliverySlots.default_zone.tomorrow).first + 40.minutes
 
     topic :order_delivery do
       description "The order is on its way (`out_for_delivery`, with the courier's ETA), at the " \
@@ -19,8 +19,8 @@ module Kiosk
                                    eta_label: { type: 'string', description: 'The ETA as a human reads it.' },
                                    timezone: { type: 'string', description: "The delivery address's IANA zone." } },
                      required: %w[order_id status]
-      example order_id: OrdersController::ORDER_ID, status: 'out_for_delivery', eta: ETA.utc.iso8601,
-              eta_label: DeliverySlots.clock_label(ETA, DeliverySlots.default_zone),
+      example order_id: OrdersController::ORDER_ID, status: 'out_for_delivery', eta: eta.utc.iso8601,
+              eta_label: DeliverySlots.clock_label(eta, DeliverySlots.default_zone),
               timezone: DeliverySlots::DEFAULT_ZONE_NAME
       example order_id: OrdersController::ORDER_ID, status: 'delivered'
       example order_id: OrdersController::ORDER_ID, status: 'cancelled'

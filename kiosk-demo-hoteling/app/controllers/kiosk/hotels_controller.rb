@@ -84,7 +84,7 @@ module Kiosk
                   ]
                 })
     def hotel_detail
-      @property = Property.find(params[:property_id])
+      @property = Property.find(params.expect(:property_id))
       @search   = RoomSearch.new(property: @property, check_in: params[:check_in], check_out: params[:check_out])
       @search.validate!
     end

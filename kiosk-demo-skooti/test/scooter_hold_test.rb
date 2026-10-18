@@ -19,6 +19,7 @@ class ScooterHoldTest < ActiveSupport::TestCase
   test 'a lapsed hold frees the vehicle' do
     lapsed = hold
     lapsed.update!(held_until: lapsed.created_at)
+
     assert hold
   end
 end

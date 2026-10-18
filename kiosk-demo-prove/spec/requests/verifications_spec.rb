@@ -5,11 +5,11 @@ require 'spec_helper'
 # The broker's security model over HTTP: intake auth and allow-list, the
 # unguessable capability, single use, TTL, the signed anonymized claim bound to
 # one request, operator and subject, and the callback allow-list.
-RSpec.describe 'KYC broker: POST /verifications (intake)', type: :request do
+RSpec.describe 'KYC broker: POST /verifications (intake)' do
   it 'creates a pending request and returns a verification_url carrying the token' do
     intake(valid_intake_body)
     expect(response).to have_http_status(:created)
-    json = JSON.parse(response.body)
+    json = response.parsed_body
     expect(json['status']).to eq('pending')
     expect(json['request_id']).to be_present
     expect(json['verification_url']).to include("/verify?request=#{json['request_id']}")
@@ -26,7 +26,7 @@ RSpec.describe 'KYC broker: POST /verifications (intake)', type: :request do
   end
 end
 
-RSpec.describe 'KYC broker: intake refusals', type: :request do
+RSpec.describe 'KYC broker: intake refusals' do
   it 'rejects an unknown operator / bad secret (401) — a stranger cannot open requests' do
     intake(valid_intake_body, headers: intake_headers('wrong'))
     expect(response).to have_http_status(:unauthorized)
@@ -50,7 +50,7 @@ RSpec.describe 'KYC broker: intake refusals', type: :request do
   end
 end
 
-RSpec.describe 'KYC broker: intake audience', type: :request do
+RSpec.describe 'KYC broker: intake audience' do
   # getgrocery authenticates with its own secret but asks for skooti's audience.
   # The broker takes `aud` from getgrocery's registration and refuses the body's value.
   it "rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)" do
@@ -65,12 +65,12 @@ RSpec.describe 'KYC broker: intake audience', type: :request do
       headers: intake_headers(OperatorRegistry.registry['getgrocery'][:secret])
     )
     expect(response).to have_http_status(:forbidden)
-    expect(JSON.parse(response.body)['error']).to match(/audience/)
+    expect(response.parsed_body['error']).to match(/audience/)
     expect(ProveRequest.count).to eq(0)
   end
 end
 
-RSpec.describe 'KYC broker: GET /verify (human page)', type: :request do
+RSpec.describe 'KYC broker: GET /verify (human page)' do
   it 'shows the yes/no questions for a live request' do
     rid = open_request
     get '/verify', params: { request: rid }
@@ -86,7 +86,7 @@ RSpec.describe 'KYC broker: GET /verify (human page)', type: :request do
   end
 end
 
-RSpec.describe 'KYC broker: POST /verify approve (the signed claim)', type: :request do
+RSpec.describe 'KYC broker: POST /verify approve (the signed claim)' do
   it 'mints a signed claim bound to (subject + operator + request) and echoes the nonce' do
     rid = open_request
     row = ProveRequest.find(rid)
@@ -111,7 +111,7 @@ RSpec.describe 'KYC broker: POST /verify approve (the signed claim)', type: :req
   end
 end
 
-RSpec.describe 'KYC broker: POST /verify approve (the audience)', type: :request do
+RSpec.describe 'KYC broker: POST /verify approve (the audience)' do
   # The broker checks a declared audience against the registration and stamps
   # the registered one, which the operator's KycVerifier compares against.
   it "binds aud to the operator's REGISTERED audience, accepting a matching body declaration" do
@@ -136,7 +136,7 @@ RSpec.describe 'KYC broker: POST /verify approve (the audience)', type: :request
   end
 end
 
-RSpec.describe 'KYC broker: POST /verify approve (lifetime and attributes)', type: :request do
+RSpec.describe 'KYC broker: POST /verify approve (lifetime and attributes)' do
   it 'mints an attestation valid for one year' do
     rid = open_request
     delivered = capture_delivery
@@ -154,7 +154,7 @@ RSpec.describe 'KYC broker: POST /verify approve (lifetime and attributes)', typ
   end
 end
 
-RSpec.describe 'KYC broker: POST /verify single use', type: :request do
+RSpec.describe 'KYC broker: POST /verify single use' do
   it 'is single-use: a second approve on a confirmed request is rejected (no re-mint)' do
     rid = open_request
     allow(CallbackPoster).to receive(:deliver).and_return(200)
@@ -163,7 +163,7 @@ RSpec.describe 'KYC broker: POST /verify single use', type: :request do
 
     expect(CallbackPoster).not_to receive(:deliver)
     approve(rid)
-    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response).to have_http_status(:unprocessable_content)
   end
 
   it 'is un-confirmable once past its TTL' do
@@ -171,11 +171,11 @@ RSpec.describe 'KYC broker: POST /verify single use', type: :request do
     ProveRequest.find(rid).update!(expires_at: 1.hour.ago)
     expect(CallbackPoster).not_to receive(:deliver)
     approve(rid)
-    expect(response).to have_http_status(:unprocessable_entity)
+    expect(response).to have_http_status(:unprocessable_content)
   end
 end
 
-RSpec.describe 'KYC broker: POST /verify decline', type: :request do
+RSpec.describe 'KYC broker: POST /verify decline' do
   it 'records a decline without minting' do
     rid = open_request
     expect(CallbackPoster).not_to receive(:deliver)
@@ -190,7 +190,7 @@ end
 # not an in-process mock, decides which claim wins. Every reader is held
 # between its read and its claim, so all of them see the row as pending and
 # the refusals come from the conditional UPDATE, not from the pre-check.
-RSpec.describe 'KYC broker: POST /verify under concurrency', type: :request do
+RSpec.describe 'KYC broker: POST /verify under concurrency' do
   # `:real_concurrency` commits the row (see spec_helper.rb), so the example deletes it.
   it 'is single-use under concurrency: N racing approvals mint exactly once', :real_concurrency do
     racers = 6
@@ -211,7 +211,7 @@ RSpec.describe 'KYC broker: POST /verify under concurrency', type: :request do
   end
 end
 
-RSpec.describe 'KYC broker: GET /prove_key.pem', type: :request do
+RSpec.describe 'KYC broker: GET /prove_key.pem' do
   it 'serves the ProveKey public PEM operators pin' do
     get '/prove_key.pem'
     expect(response).to have_http_status(:ok)

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The landing page: how to point an assistant here, and the public reservations board.
-class HomeController < ActionController::Base
+class HomeController < ApplicationController
   before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 
   def index

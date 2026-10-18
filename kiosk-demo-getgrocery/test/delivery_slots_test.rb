@@ -14,21 +14,25 @@ class DeliverySlotsTest < ActiveSupport::TestCase
   end
 
   test "a window start is one of the day's six starts on the address's clock" do
+    off_grid = [DUBLIN.local(2026, 8, 7, 13), DUBLIN.local(2026, 8, 7, 12, 30), DUBLIN.local(2026, 8, 7, 20)]
+
     assert DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 12), DUBLIN)
-    refute DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 13), DUBLIN)
-    refute DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 12, 30), DUBLIN)
-    refute DeliverySlots.start?(DUBLIN.local(2026, 8, 7, 20), DUBLIN)
+    assert_empty(off_grid.select { DeliverySlots.start?(it, DUBLIN) })
   end
 
   test 'a window takes orders until picking and the drive no longer fit before it ends' do
-    travel_to DUBLIN.local(2026, 8, 7, 11) do
-      assert_equal [10, 12, 14, 16, 18], hours(AUGUST_7TH, DUBLIN)
-      assert_equal [8, 10, 12, 14, 16, 18], hours(AUGUST_7TH + 1, DUBLIN)
-      assert_equal [18], hours(AUGUST_7TH, TOKYO)
-    end
+    travel_to(DUBLIN.local(2026, 8, 7, 11)) { assert_equal [10, 12, 14, 16, 18], hours(AUGUST_7TH, DUBLIN) }
     travel_to(DUBLIN.local(2026, 8, 7, 11, 25)) { assert_includes hours(AUGUST_7TH, DUBLIN), 10 }
     travel_to(DUBLIN.local(2026, 8, 7, 11, 26)) { assert_equal [12, 14, 16, 18], hours(AUGUST_7TH, DUBLIN) }
+  end
+
+  test 'all six windows take orders before the first one closes, and on a later day' do
     travel_to(DUBLIN.local(2026, 8, 7, 6)) { assert_equal [8, 10, 12, 14, 16, 18], hours(AUGUST_7TH, DUBLIN) }
+    travel_to(DUBLIN.local(2026, 8, 7, 11)) { assert_equal [8, 10, 12, 14, 16, 18], hours(AUGUST_7TH + 1, DUBLIN) }
+  end
+
+  test "a window closes on its own zone's clock" do
+    travel_to(DUBLIN.local(2026, 8, 7, 11)) { assert_equal [18], hours(AUGUST_7TH, TOKYO) }
   end
 
   test 'the soonest day steps over a day whose windows have all closed' do
@@ -46,16 +50,23 @@ class DeliverySlotsTest < ActiveSupport::TestCase
     assert_equal 'Europe/Dublin', DeliverySlots.zone_at('42 Camden Street, Dublin 2').name
   end
 
-  test 'an address is routed to a served district or refused with the served list' do
-    assert_equal 'D02', DublinZones.check('42 Camden Street, Dublin 2').district
-    assert_equal 'D04', DublinZones.check('5 Rock Rd, Dublin 4, D04 XY45').district
-    assert_equal :out_of_zone, DublinZones.check('Dublin 24').reason
-    assert_equal :no_district, DublinZones.check('123 Demo Street, Dublin').reason
-    assert_equal :not_dublin, DublinZones.check('10 Downing St, London').reason
-    assert_equal :not_dublin, DublinZones.check('D6W').reason
+  test 'an address is routed to its served district' do
+    addresses = ['42 Camden Street, Dublin 2', '5 Rock Rd, Dublin 4, D04 XY45']
 
+    assert_equal(%w[D02 D04], addresses.map { DublinZones.check(it).district })
+  end
+
+  test 'an address the shop cannot route is refused with its reason' do
+    reasons = { 'Dublin 24' => :out_of_zone, '123 Demo Street, Dublin' => :no_district,
+                '10 Downing St, London' => :not_dublin, 'D6W' => :not_dublin }
+
+    assert_equal(reasons, reasons.keys.index_with { DublinZones.check(it).reason })
+  end
+
+  test 'every refusal lists the served districts' do
     %i[no_district not_dublin out_of_zone].each do |reason|
       message = DublinZones.reject_message(DublinZones::Result.new(ok: false, district: 'D18', reason: reason))
+
       assert_equal DublinZones::SERVED.sort, message[/erved districts.*/].scan(/D\d\d/).uniq.sort
     end
   end

@@ -45,7 +45,7 @@ class Order < ApplicationRecord
            Arel::Nodes::Grouping.new(settlement.select(:currency).limit(1).arel).as('settled_currency'))
   }
 
-  def self.readable_by?(order_id, user_id) = where(id: order_id, user_id: user_id).exists?
+  def self.readable_by?(order_id, user_id) = exists?(id: order_id, user_id: user_id)
 
   # What `my_orders` publishes about the money. `pending` means a capture is in
   # flight: the caller must reconcile, not sign a new mandate.

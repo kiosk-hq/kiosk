@@ -7,10 +7,10 @@ class SellingStory < StoryTest
     seller  = a_seller
     listing = seller.posts(price_text: '€80')
 
-    assert seller.edits(listing, title: 'Pine bookshelf').ok?
+    assert_predicate seller.edits(listing, title: 'Pine bookshelf'), :ok?
     assert_equal '€80', seller.price_of(listing)
 
-    assert seller.edits(listing, price_text: nil).ok?
+    assert_predicate seller.edits(listing, price_text: nil), :ok?
     assert_nil seller.price_of(listing)
   end
 end

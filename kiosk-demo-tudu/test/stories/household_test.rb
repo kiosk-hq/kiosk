@@ -10,6 +10,7 @@ class HouseholdStory < StoryTest
     campsite = alice.adds('Book campsite', to: hike)['todo_id']
 
     joined = bob.joins(alice.invites_to(hike))
+
     assert_equal({ 'list_id' => hike, 'joined' => true }, joined.rows)
     tent = bob.adds('Bring tent', to: hike)['todo_id']
 
@@ -17,6 +18,7 @@ class HouseholdStory < StoryTest
     assert_equal 'member', bob.role_on(hike)
     assert_equal %w[member owner], alice.members_of(hike).rows.pluck('role').sort
     added_by = bob.todos_on(hike).rows.to_h { [it['todo_id'], it['created_by_agent_id']] }
+
     assert_equal({ campsite => alice.principal.agent_id, tent => bob.principal.agent_id }, added_by)
   end
 
@@ -30,6 +32,7 @@ class HouseholdStory < StoryTest
 
     in_istanbul = alice.todo(campsite, on: hike, clock: 'Europe/Istanbul')
     in_new_york = bob.todo(campsite, on: hike, clock: 'America/New_York')
+
     assert_equal ['Europe/Istanbul', 'America/New_York'], [in_istanbul['timezone'], in_new_york['timezone']]
     assert_equal Time.iso8601(tomorrow_at_two), Time.iso8601(in_istanbul['due_at'])
     assert_equal Time.iso8601(in_istanbul['due_at']), Time.iso8601(in_new_york['due_at'])
@@ -43,7 +46,8 @@ class HouseholdStory < StoryTest
   test 'a deadline with no offset is refused, because each housemate would read a different moment' do
     alice = a_member
     refused = alice.adds('Book campsite', to: alice.starts_a_list, due_at: '2026-09-08T14:00:00')
-    assert refused.refused?(:bad_request), refused
+
+    assert_refused refused, :bad_request
     assert_includes refused['detail'], 'due_at'
   end
 
@@ -56,6 +60,7 @@ class HouseholdStory < StoryTest
 
     campsite = alice.adds('Book campsite', to: hike)['todo_id']
     bob.joins(alice.invites_to(hike))
+
     assert_equal bob.account, alice.hears(:list_membership, on: watching, action: 'joined')['account_id']
     assert alice.hears(:todo, on: watching, todo_id: campsite)
     heard_up_to = watching.events.pluck('id').max
@@ -65,14 +70,15 @@ class HouseholdStory < StoryTest
     tent = bob.adds('Bring tent', to: hike)['todo_id']
 
     back = alice.follows(:todo, :list_membership, subject: hike, since: heard_up_to)
+
     assert_equal 'added', alice.hears(:todo, on: back, todo_id: tent)['action']
     assert(back.events.all? { it['id'] > heard_up_to })
     assert alice.hears(:todo, on: every_list, todo_id: tent)
 
-    assert bob.completes(campsite).ok?
+    assert_predicate bob.completes(campsite), :ok?
     assert_equal campsite, alice.hears(:todo, on: back, action: 'completed')['todo_id']
 
-    assert alice.removes(bob, from: hike).ok?
+    assert_predicate alice.removes(bob, from: hike), :ok?
     assert_equal bob.account, alice.hears(:list_membership, on: back, action: 'removed')['account_id']
     assert_equal({ 'type' => 'unsubscribed', 'topic' => 'todo', 'reason' => 'reach_revoked' },
                  bobs_view.await_message(timeout: 45) { it['type'] == 'unsubscribed' })

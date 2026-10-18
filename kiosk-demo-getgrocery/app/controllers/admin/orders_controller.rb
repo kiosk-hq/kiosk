@@ -2,7 +2,7 @@
 
 module Admin
   # The operator's recent orders. Public on this demo, so addresses are masked.
-  class OrdersController < ActionController::Base
+  class OrdersController < ApplicationController
     layout 'admin'
 
     def index

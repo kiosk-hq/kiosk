@@ -7,9 +7,11 @@ class SalonBookStory < StoryTest
     alices = assistant_of(:alice).books('Colour')['appointment_id']
     bobs   = assistant_of(:bob).books('Cut')['appointment_id']
     owner  = assistant_of(:owner)
+
     assert_equal 'owner', owner.role
 
     book = owner.the_book.rows
+
     assert_equal [alices, bobs].sort, book.pluck('id').sort
     assert_equal 12_500, book.pluck('price_cents').sum
     assert_equal ['eur'], book.pluck('currency').uniq
@@ -19,6 +21,7 @@ class SalonBookStory < StoryTest
     alice  = assistant_of(:alice)
     alices = alice.books['appointment_id']
     assistant_of(:bob).books
+
     assert_equal 'customer', alice.role
 
     assert_equal [alices], alice.the_book.rows.pluck('id')
@@ -27,7 +30,7 @@ class SalonBookStory < StoryTest
   test "a client's assistant reads its appointments oldest booking first" do
     alice  = assistant_of(:alice)
     booked = Array.new(3) { alice.books['appointment_id'] }
-    booked.sort.reverse.each_with_index { |id, age| Appointment.where(id:).update_all(created_at: (10 - age).minutes.ago) }
+    booked.sort.reverse.each_with_index { |id, age| Appointment.find(id).update!(created_at: (10 - age).minutes.ago) }
 
     assert_equal booked.sort.reverse, alice.appointments
   end

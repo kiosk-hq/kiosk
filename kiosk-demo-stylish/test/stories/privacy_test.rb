@@ -19,7 +19,8 @@ class PrivacyStory < StoryTest
     bob = assistant_of(:bob)
 
     forged = bob.books(user_id: alice.principal.user_id)
-    assert forged.refused?(:bad_request), forged
+
+    assert_refused forged, :bad_request
     assert_includes forged['detail'], 'user_id'
     assert_empty Appointment.all
   end

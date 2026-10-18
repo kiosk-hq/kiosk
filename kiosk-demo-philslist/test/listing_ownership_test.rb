@@ -10,25 +10,33 @@ class ListingOwnershipTest < ActiveSupport::TestCase
                                title: 'Road bike', body: '54cm', price_text: '€300')
   end
 
-  test 'the owner edits and closes their listing' do
+  test 'the owner edits their listing' do
     as(@alice) do
       assert_equal @listing, EditListingOperation.call(listing_id: @listing.id, changes: { 'price_text' => nil })
-      assert_equal @listing, CloseListingOperation.call(listing_id: @listing.id)
     end
     assert_nil @listing.reload.price_text
-    assert @listing.closed?
+  end
+
+  test 'the owner closes their listing' do
+    as(@alice) do
+      assert_equal @listing, CloseListingOperation.call(listing_id: @listing.id)
+    end
+    assert_predicate @listing.reload, :closed?
   end
 
   test 'a foreign listing and an absent one are refused alike' do
-    as(@bob) do
-      [@listing.id, SecureRandom.uuid].each do |id|
-        edit = assert_raises(Kiosk::Server::Errors::Forbidden) { EditListingOperation.call(listing_id: id, changes: { 'title' => 'x' }) }
-        close = assert_raises(Kiosk::Server::Errors::Forbidden) { CloseListingOperation.call(listing_id: id) }
-        assert_equal 'listing_id is not one of your listings.', edit.message
-        assert_equal [edit.message, edit.hint], [close.message, close.hint]
-      end
+    [@listing.id, SecureRandom.uuid].each do |id|
+      edit, close = bobs_refusals(id)
+
+      assert_equal 'listing_id is not one of your listings.', edit.message
+      assert_equal [edit.message, edit.hint], [close.message, close.hint]
     end
-    assert @listing.reload.open?
+  end
+
+  test 'a refused edit and close leave the listing as it was' do
+    bobs_refusals(@listing.id)
+
+    assert_predicate @listing.reload, :open?
     assert_equal 'Road bike', @listing.title
   end
 
@@ -39,5 +47,15 @@ class ListingOwnershipTest < ActiveSupport::TestCase
       end
     end
     assert_equal 'Road bike', @listing.reload.title
+  end
+
+  private
+
+  # Bob edits and closes a listing that is not his; answers both refusals.
+  def bobs_refusals(listing_id)
+    as(@bob) do
+      [assert_raises(Kiosk::Server::Errors::Forbidden) { EditListingOperation.call(listing_id:, changes: { 'title' => 'x' }) },
+       assert_raises(Kiosk::Server::Errors::Forbidden) { CloseListingOperation.call(listing_id:) }]
+    end
   end
 end

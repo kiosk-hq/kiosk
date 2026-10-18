@@ -11,7 +11,7 @@ module DublinZones
   # The clock of each served district.
   ZONES = %w[
     D01 D02 D03 D04 D05 D06 D07 D08 D09 D10 D11 D12 D13 D14 D15 D16 D17 D20
-  ].to_h { |district| [district, 'Europe/Dublin'] }.freeze
+  ].index_with('Europe/Dublin').freeze
 
   Result = Struct.new(:ok, :district, :reason, keyword_init: true) do
     def ok? = ok

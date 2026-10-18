@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../support/fake_stripe_api'
-require_relative '../../support/stripe_mock'
+require 'kiosk/test_helpers/stripe_mock'
 
 # K-492 setup-session reuse, exercised through the REAL Stripe SDK over REAL
 # HTTP instead of through doubles.
@@ -161,7 +161,7 @@ end
 # fixture shapes — and it pins the fixture, so if stripe-mock ever starts
 # serving a setup-mode session the reuse group above can be extended to it.
 RSpec.shared_context 'with stripe-mock' do
-  let(:mock_url) { StripeMock.start }
+  let(:mock_url) { Kiosk::TestHelpers::StripeMock.start }
   let(:return_url) { 'https://shop.example/kiosk/payment_setup/return' }
   let(:customer_store) { {} }
 
@@ -174,8 +174,6 @@ RSpec.shared_context 'with stripe-mock' do
   end
 
   let(:sessions) { Stripe::StripeClient.new('sk_test_mock', api_base: mock_url).v1.checkout.sessions }
-
-  before { skip 'stripe-mock not installed (brew install stripe-mock)' unless mock_url }
 end
 
 RSpec.describe Kiosk::PaymentProviders::Stripe,

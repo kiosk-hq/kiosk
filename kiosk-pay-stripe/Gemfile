@@ -11,3 +11,8 @@ gem 'sqlite3', '~> 2.9'
 
 # Local-development override — kiosk-core hasn't shipped to RubyGems yet.
 gem 'kiosk-core', path: '../kiosk-core'
+
+# The specs start stripe-mock through its launcher.
+gem 'kiosk-pow', path: '../kiosk-pow'
+gem 'kiosk-pow-equihash', path: '../kiosk-pow-equihash'
+gem 'kiosk-test-support', path: '../kiosk-test-support'

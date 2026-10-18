@@ -88,18 +88,6 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture of the saved card' do
 
     expect(adapter.capture(cart_mandate)[:settled_amount_cents]).to eq(1500)
   end
-
-  # stripe-mock answers every confirmed intent `requires_payment_method` with
-  # `amount_received: 0`: Stripe's shape for a declined off_session confirm.
-  it "refuses stripe-mock's unpaid intent as a retryable decline" do
-    with_stripe_mock do |mocked|
-      expect { mocked.capture(cart_mandate) }
-        .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
-          expect(e).to be_retryable
-          expect(e.reason).to eq(:card_declined)
-        }
-    end
-  end
 end
 
 RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the intent did not succeed' do

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require_relative 'stripe_mock'
+require 'kiosk/test_helpers/stripe_mock'
 
 # Adapters and SDK doubles that the Stripe adapter specs share.
 module StripeAdapterHelpers
@@ -49,10 +49,9 @@ module StripeAdapterHelpers
   # The SDK services of every adapter an example builds; the examples stub them.
   def stripe = @stripe ||= Stripe::StripeClient.new('sk_test_dummy').v1
 
-  # Yields an adapter on stripe-mock. Skips when stripe-mock is not installed.
+  # Yields an adapter on stripe-mock.
   def with_stripe_mock
-    url = StripeMock.start
-    skip 'stripe-mock not installed (brew install stripe-mock)' unless url
+    url = Kiosk::TestHelpers::StripeMock.start
 
     allow(Stripe::StripeClient).to receive(:new).and_call_original
     yield build_adapter(api_base: url)

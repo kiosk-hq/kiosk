@@ -69,7 +69,7 @@ class ListsController < ApplicationController
     { 'list_id' => list.id,
       'title' => list.title,
       'my_role' => membership.role,
-      'owner_name' => User.public_name(owner.display_name, owner.id),
+      'owner_name' => owner.public_name,
       'tasks' => list.todos.sort_by { [it.created_at, it.id] } }
   end
 end

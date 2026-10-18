@@ -17,8 +17,8 @@ class Membership < ApplicationRecord
   def self.readable_by?(list_id, account_id) = exists?(list_id: list_id, account_id: account_id)
 
   # Who is on a list, owners first.
-  scope :roster, ->(list_id) { where(list_id: list_id).includes(:account).order(role: :desc, created_at: :asc) }
+  scope :roster, ->(list_id) { where(list_id: list_id).includes(:account).in_order_of(:role, %w[owner member]).order(:created_at) }
 
   # The name other members see; never an email address.
-  def display_name = User.public_name(account.display_name, account_id)
+  def display_name = account.public_name
 end

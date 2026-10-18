@@ -13,9 +13,5 @@ class User < ApplicationRecord
   # never from the email, because the board publishes it to every reader and
   # an email hash falls to a wordlist. One per seller, so a household's
   # listings read under one name.
-  def self.public_handle(account_id)
-    "seller-#{Digest::SHA256.hexdigest(account_id.to_s)[0, 12]}"
-  end
-
-  def public_handle = self.class.public_handle(id)
+  def public_name = "seller-#{Digest::SHA256.hexdigest(id.to_s)[0, 12]}"
 end

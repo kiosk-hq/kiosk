@@ -14,7 +14,7 @@ class User < ApplicationRecord
   # The name other members of a list see: the one the account chose, else a
   # pseudonym derived from its id. Never the email address, nor anything derived
   # from it.
-  def self.public_name(display_name, account_id)
-    display_name.to_s.strip.presence || "member-#{Digest::SHA256.hexdigest(account_id.to_s)[0, 12]}"
+  def public_name
+    display_name.to_s.strip.presence || "member-#{Digest::SHA256.hexdigest(id.to_s)[0, 12]}"
   end
 end

@@ -36,6 +36,7 @@ module Kiosk
                   }
     def whoami
       @identity = kiosk_identity
+      @account  = User.find(@identity.user_id)
     end
 
     kind :query

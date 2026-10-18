@@ -4,7 +4,7 @@
 # --user-id-type=uuid choice. email and encrypted_password are Devise's login
 # columns; email stays NULLable because an assistant account registered over
 # the wire has no login. display_name is what a roster shows of another
-# person; NULL for an assistant-created account, which User.public_name
+# person; NULL for an assistant-created account, which User#public_name
 # answers with a pseudonym.
 class CreateUsers < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change

@@ -4,5 +4,5 @@
   <% if listing.price_text.present? %>
     <span class="lst-price"><%= listing.price_text %></span>
   <% end %>
-  <span class="lst-poster">by <%= listing.owner.public_handle %></span>
+  <span class="lst-poster">by <%= listing.owner.public_name %></span>
 </li>

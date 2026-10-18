@@ -1259,7 +1259,7 @@ FRAGMENTS = {
   },
   'app/models/user.rb#public_name' => {
     rule: :per_demo,
-    ships: %w[atablefor tudu],
+    ships: %w[atablefor philslist tudu],
     why: "The fallback handle uses each demo's own noun."
   },
   'app/controllers/home_controller.rb#index' => {

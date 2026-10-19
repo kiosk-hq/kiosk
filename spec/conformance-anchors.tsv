@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1954 anchors.
+# 1962 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1605,10 +1605,12 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on a fai
 kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses to redeem a claim-flow device_code (kinds do not cross)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	accepts a payment with a nil/absent payment_method (SetupIntent model: on-file card)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	accepts an intent without scope
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	accepts three letters that name no currency — the shape is the minimum, not the domain
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	applies the shared decode checks (expired mandate rejected)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	applies the shared decode checks (foreign signer rejected)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	applies the shared decode checks (wrong signer rejected)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	canonicalises a cart currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	non-positive amounts launder the spending cap
@@ -1629,14 +1631,20 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose lin
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart whose total exceeds the intent cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart with a NEGATIVE total_amount_cents (the launder vector)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a cart with a ZERO total_amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate signed with HS256 instead of RS256
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no agent_id claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no exp claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no iat claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no id claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no iss claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no user_id claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a numeric-string exp as bad_request instead of 500ing in Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment missing amount_cents (absent, not 0)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment missing currency (absent)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment not bound to the presented cart (wrong cart_mandate_id)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment whose amount_cents does not match the cart total
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment with a NEGATIVE amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment with a ZERO amount_cents
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment with a mismatched currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a string iat as bad_request instead of 500ing in Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a wrong issuer

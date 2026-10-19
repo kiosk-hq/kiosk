@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at 20b9c784 -- T-138 slice: §11 re-judge
-# 1954 anchors.
+# recorded: 2026-10-19 at ba8ef013
+# 1962 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -1585,55 +1585,63 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	58b937ad397ea0a0	b1d0a419	raise
 kiosk-server/spec/kiosk/server/link_code_spec.rb	09ae9aeb2acd9391	b1d0a419	raises Unauthenticated on a failed proof and does NOT consume the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	fbf5206bc73f807e	b1d0a419	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	86ae74b44bee4e6d	b1d0a419	refuses to redeem a claim-flow device_code (kinds do not cross)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d1c3ce65d88bf52f	20b9c784	accepts a payment with a nil/absent payment_method (SetupIntent model: on-file card)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	87836a70406ec521	20b9c784	accepts three letters that name no currency — the shape is the minimum, not the domain
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	17757c081c2c8488	20b9c784	answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	da750764e518370a	20b9c784	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bcafbb07e98fd941	20b9c784	applies the shared decode checks (expired mandate rejected)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	89c8aa2e476f274f	20b9c784	applies the shared decode checks (wrong signer rejected)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c7ea07073aaa7d49	20b9c784	canonicalises a cart currency
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e4394dd355f15d96	20b9c784	non-positive amounts launder the spending cap
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	149c27ca64a00188	20b9c784	refuses a currency NAME such as Euro
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	81186ddf56bdbbe0	20b9c784	refuses a two-letter country code: US is not a currency
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0adda96a4599a121	20b9c784	refuses the NUMERIC-3 spelling ISO 4217 also publishes
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c38f3a21a54b3da0	20b9c784	rejects (403, not 500) when the agent has no registered payment key
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	945208e746021001	20b9c784	rejects a JWS signed by an unknown key
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f270b0cd3f961bf1	20b9c784	rejects a cart missing currency (absent)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	7903e413550f943d	20b9c784	rejects a cart missing line_items (absent)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ef473d157c769e25	20b9c784	rejects a cart missing total_amount_cents (absent, not 0)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a02ec2bc7705288e	20b9c784	rejects a cart not bound to the intent
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	8838352b81587030	20b9c784	rejects a cart priced in a different currency than the intent cap (4999 USD vs 5000 EUR cap)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bf1c5b3bec47f2c0	20b9c784	rejects a cart whose currency is an EMPTY string
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bdf6cbff7b0d4938	20b9c784	rejects a cart whose line_items are explicitly null
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	be4ae9e9d6180d5d	20b9c784	rejects a cart whose line_items are not an array
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	569d3b064ac8b7c4	20b9c784	rejects a cart whose line_items array is EMPTY
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ca54b9121326d500	20b9c784	rejects a cart whose total exceeds the intent cap
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	7b61db8605eb5353	20b9c784	rejects a cart with a NEGATIVE total_amount_cents (the launder vector)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	732932539e02250e	20b9c784	rejects a cart with a ZERO total_amount_cents
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	b603100157faaf67	20b9c784	rejects a mandate with no exp claim
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	eae9b913920fe3c1	20b9c784	rejects a mandate with no iat claim
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0c8ef1545bd6609e	20b9c784	rejects a mandate with no id claim
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	96a392d467a29ef6	20b9c784	rejects a numeric-string exp as bad_request instead of 500ing in Time.at
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	28cdc808bc646433	20b9c784	rejects a payment missing amount_cents (absent, not 0)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	68a92668e45f090b	20b9c784	rejects a payment not bound to the presented cart (wrong cart_mandate_id)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9abb8e8441d88922	20b9c784	rejects a payment whose amount_cents does not match the cart total
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09c3b209f2419bde	20b9c784	rejects a payment with a NEGATIVE amount_cents
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ff426eb4bdae086d	20b9c784	rejects a payment with a mismatched currency
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	dfb56ca20e52f033	20b9c784	rejects a string iat as bad_request instead of 500ing in Time.at
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	5d1b4716294dc855	20b9c784	rejects a wrong issuer
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	3508801b1d6f5e1b	20b9c784	rejects an effectively non-expiring mandate (exp beyond the max lifetime)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d1fcd71c4d00fd4f	20b9c784	rejects an intent missing cap_amount_cents (absent, not 0)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9846c0162bbb7e6e	20b9c784	rejects an intent missing currency (absent)
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f71bf48a26d83f36	20b9c784	rejects an intent whose currency is NOT A STRING
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d0f70d4dfab332f1	20b9c784	rejects an intent whose currency is an EMPTY string
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	465a2e2afe38fc27	20b9c784	rejects an intent with a NEGATIVE cap_amount_cents
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	32aa4ac9c84a5296	20b9c784	rejects an intent with a ZERO cap_amount_cents
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a4a113075f9f24f0	20b9c784	rejects when agent_id in the payload does not match the authenticated identity
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	95c0bd9d175e591a	20b9c784	rejects when user_id in the payload does not match the authenticated identity
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9fa81667e287f9d0	20b9c784	returns a CartMandate bound to the intent with total within cap
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	34df3b360d4056b1	20b9c784	returns a PaymentMandate for a valid signed JWS bound to the cart
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d332beb23702e3ce	20b9c784	returns an IntentMandate for a valid agent-signed JWS
-kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	86cbc08521d8760d	20b9c784	settles eur, usd, gbp and jpy — either case, and padded
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d1c3ce65d88bf52f	ba8ef013	accepts a payment with a nil/absent payment_method (SetupIntent model: on-file card)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	27a8443a338501e0	ba8ef013	accepts an intent without scope
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	87836a70406ec521	ba8ef013	accepts three letters that name no currency — the shape is the minimum, not the domain
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	17757c081c2c8488	ba8ef013	answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	da750764e518370a	ba8ef013	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bcafbb07e98fd941	ba8ef013	applies the shared decode checks (expired mandate rejected)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	8b70fef832033fe0	ba8ef013	applies the shared decode checks (foreign signer rejected)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	89c8aa2e476f274f	ba8ef013	applies the shared decode checks (wrong signer rejected)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c7ea07073aaa7d49	ba8ef013	canonicalises a cart currency
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	e4394dd355f15d96	ba8ef013	non-positive amounts launder the spending cap
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	149c27ca64a00188	ba8ef013	refuses a currency NAME such as Euro
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	81186ddf56bdbbe0	ba8ef013	refuses a two-letter country code: US is not a currency
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0adda96a4599a121	ba8ef013	refuses the NUMERIC-3 spelling ISO 4217 also publishes
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	c38f3a21a54b3da0	ba8ef013	rejects (403, not 500) when the agent has no registered payment key
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	945208e746021001	ba8ef013	rejects a JWS signed by an unknown key
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f270b0cd3f961bf1	ba8ef013	rejects a cart missing currency (absent)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	7903e413550f943d	ba8ef013	rejects a cart missing line_items (absent)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ef473d157c769e25	ba8ef013	rejects a cart missing total_amount_cents (absent, not 0)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a02ec2bc7705288e	ba8ef013	rejects a cart not bound to the intent
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	8838352b81587030	ba8ef013	rejects a cart priced in a different currency than the intent cap (4999 USD vs 5000 EUR cap)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bf1c5b3bec47f2c0	ba8ef013	rejects a cart whose currency is an EMPTY string
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	bdf6cbff7b0d4938	ba8ef013	rejects a cart whose line_items are explicitly null
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	be4ae9e9d6180d5d	ba8ef013	rejects a cart whose line_items are not an array
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	569d3b064ac8b7c4	ba8ef013	rejects a cart whose line_items array is EMPTY
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ca54b9121326d500	ba8ef013	rejects a cart whose total exceeds the intent cap
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	7b61db8605eb5353	ba8ef013	rejects a cart with a NEGATIVE total_amount_cents (the launder vector)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	732932539e02250e	ba8ef013	rejects a cart with a ZERO total_amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f9f89da552a49b51	ba8ef013	rejects a mandate signed with HS256 instead of RS256
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	b7b7fc12d13a071c	ba8ef013	rejects a mandate with no agent_id claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	b603100157faaf67	ba8ef013	rejects a mandate with no exp claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	eae9b913920fe3c1	ba8ef013	rejects a mandate with no iat claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	0c8ef1545bd6609e	ba8ef013	rejects a mandate with no id claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	35783289e145735f	ba8ef013	rejects a mandate with no iss claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	88e0c4c8a450c129	ba8ef013	rejects a mandate with no user_id claim
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	96a392d467a29ef6	ba8ef013	rejects a numeric-string exp as bad_request instead of 500ing in Time.at
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	28cdc808bc646433	ba8ef013	rejects a payment missing amount_cents (absent, not 0)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	fe48abdf75e113db	ba8ef013	rejects a payment missing currency (absent)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	68a92668e45f090b	ba8ef013	rejects a payment not bound to the presented cart (wrong cart_mandate_id)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9abb8e8441d88922	ba8ef013	rejects a payment whose amount_cents does not match the cart total
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	09c3b209f2419bde	ba8ef013	rejects a payment with a NEGATIVE amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	305d5f8bc46f3955	ba8ef013	rejects a payment with a ZERO amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	ff426eb4bdae086d	ba8ef013	rejects a payment with a mismatched currency
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	dfb56ca20e52f033	ba8ef013	rejects a string iat as bad_request instead of 500ing in Time.at
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	5d1b4716294dc855	ba8ef013	rejects a wrong issuer
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	3508801b1d6f5e1b	ba8ef013	rejects an effectively non-expiring mandate (exp beyond the max lifetime)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d1fcd71c4d00fd4f	ba8ef013	rejects an intent missing cap_amount_cents (absent, not 0)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9846c0162bbb7e6e	ba8ef013	rejects an intent missing currency (absent)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	f71bf48a26d83f36	ba8ef013	rejects an intent whose currency is NOT A STRING
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d0f70d4dfab332f1	ba8ef013	rejects an intent whose currency is an EMPTY string
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	465a2e2afe38fc27	ba8ef013	rejects an intent with a NEGATIVE cap_amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	32aa4ac9c84a5296	ba8ef013	rejects an intent with a ZERO cap_amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	a4a113075f9f24f0	ba8ef013	rejects when agent_id in the payload does not match the authenticated identity
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	95c0bd9d175e591a	ba8ef013	rejects when user_id in the payload does not match the authenticated identity
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	9fa81667e287f9d0	ba8ef013	returns a CartMandate bound to the intent with total within cap
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	34df3b360d4056b1	ba8ef013	returns a PaymentMandate for a valid signed JWS bound to the cart
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	d332beb23702e3ce	ba8ef013	returns an IntentMandate for a valid agent-signed JWS
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	86cbc08521d8760d	ba8ef013	settles eur, usd, gbp and jpy — either case, and padded
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	e564953be3a19610	8f516de9	forwards the APPROVING human's role to bind! and echoes it as the granted scope
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	65588b99e6d8e725	8f516de9	refuses a client-supplied role — even one this provider declares
 kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	c0f5214d9f24e127	8f516de9	refuses an undeclared role the same way — the value is never consulted

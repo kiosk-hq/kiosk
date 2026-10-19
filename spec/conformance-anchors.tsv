@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1962 anchors.
+# 1965 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -583,6 +583,7 @@ kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.validate_responses = true
 kiosk-demo-skooti/config/routes.rb	kiosk do
 kiosk-demo-skooti/script/lock_sim.rb	  def unlock(token:, now:)
 kiosk-demo-skooti/test/payment_window_test.rb	a capture in flight reads pending and does not start
@@ -1372,6 +1373,7 @@ kiosk-server/spec/kiosk/server/engine_routes_spec.rb	still owns every reserved p
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	the per-verb wire, which this table deliberately does NOT draw
 kiosk-server/spec/kiosk/server/errors_spec.rb	#to_problem — the 0.4 error shape (RFC 9457)
 kiosk-server/spec/kiosk/server/errors_spec.rb	#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}
+kiosk-server/spec/kiosk/server/errors_spec.rb	Kiosk::Server::Errors::KycRequired => ['kyc_required', 403]
 kiosk-server/spec/kiosk/server/errors_spec.rb	carries a handler's own extra fields through
 kiosk-server/spec/kiosk/server/errors_spec.rb	carries the PoW challenges as a TOP-LEVEL extension member
 kiosk-server/spec/kiosk/server/errors_spec.rb	carries the method the verb DOES accept, as the header RFC 9110 makes mandatory
@@ -1502,6 +1504,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	scopes the settled-total tally t
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	treats a cap of 0 as disabled (any charge rejected)
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
+kiosk-server/spec/kiosk/server/filtered_parameters_spec.rb	'kyc_jws' => 'the KYC attestation (§12)'
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	carries the challenges a handler renders on pow_required
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	keeps type, title and status those of the code, and drops instance and challenges
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	refuses an empty next_cursor, whose next link would lead back to page one

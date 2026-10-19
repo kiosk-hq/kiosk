@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at ba8ef013
-# 1962 anchors.
+# recorded: 2026-10-19 at d96d6810
+# 1965 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -556,14 +556,15 @@ kiosk-demo-skooti/app/views/home/index.html.erb	9030591272c4c067	b1d0a419	      
 kiosk-demo-skooti/app/views/home/index.html.erb	fd5ede94ef196613	b1d0a419	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
 kiosk-demo-skooti/before-after.md	e5a7c6550352ee43	b1d0a419	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	6543a73a1ea54fca	b1d0a419	`test/stories/ride_test.rb` runs the errand with no human account and no sign-in:
-kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	b1d0a419	  c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	b1d0a419	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-kiosk-demo-skooti/config/initializers/kiosk.rb	fdbc265b29fbf0bb	b1d0a419	Kiosk::PaymentProviders::Stripe.new(
-kiosk-demo-skooti/config/initializers/kiosk.rb	bffa9a7e0b8d47ff	b1d0a419	c.kyc_audience   = 'skooti'
-kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	b1d0a419	c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	b1d0a419	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-kiosk-demo-skooti/config/initializers/kiosk.rb	822e8dd9dfcfa05d	b1d0a419	c.registration_pow_count = 1
-kiosk-demo-skooti/config/initializers/kiosk.rb	aba966214b08a8c7	b1d0a419	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
+kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	d96d6810	  c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	d96d6810	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
+kiosk-demo-skooti/config/initializers/kiosk.rb	fdbc265b29fbf0bb	d96d6810	Kiosk::PaymentProviders::Stripe.new(
+kiosk-demo-skooti/config/initializers/kiosk.rb	bffa9a7e0b8d47ff	d96d6810	c.kyc_audience   = 'skooti'
+kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	d96d6810	c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	d96d6810	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
+kiosk-demo-skooti/config/initializers/kiosk.rb	822e8dd9dfcfa05d	d96d6810	c.registration_pow_count = 1
+kiosk-demo-skooti/config/initializers/kiosk.rb	aba966214b08a8c7	d96d6810	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
+kiosk-demo-skooti/config/initializers/kiosk.rb	d1660d1bacbc7f54	d96d6810	c.validate_responses = true
 kiosk-demo-skooti/config/routes.rb	6b079e6bff56ba78	b1d0a419	kiosk do
 kiosk-demo-skooti/script/lock_sim.rb	14ec6a37eb152935	b1d0a419	  def unlock(token:, now:)
 kiosk-demo-skooti/test/payment_window_test.rb	89f0a676eff954e6	b1d0a419	a capture in flight reads pending and does not start
@@ -1351,25 +1352,26 @@ kiosk-server/spec/kiosk/server/engine_routes_spec.rb	784a5472a4fcb7e4	b1d0a419	d
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	cc6b3747d5cc6a84	b1d0a419	reserves exactly the first segments it draws — and `query`/`run` left both
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	49b3eb2c61c8a9d5	b1d0a419	still owns every reserved path, and the mount being drawn FIRST is why
 kiosk-server/spec/kiosk/server/engine_routes_spec.rb	8435ab1df0630cab	b1d0a419	the per-verb wire, which this table deliberately does NOT draw
-kiosk-server/spec/kiosk/server/errors_spec.rb	31a43f9bc91c60c4	b1d0a419	#to_problem — the 0.4 error shape (RFC 9457)
-kiosk-server/spec/kiosk/server/errors_spec.rb	8c65e49ed0629a69	b1d0a419	#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}
-kiosk-server/spec/kiosk/server/errors_spec.rb	cbfcd54c439c5e39	b1d0a419	carries a handler's own extra fields through
-kiosk-server/spec/kiosk/server/errors_spec.rb	bc8091fb25e3f9e5	b1d0a419	carries the PoW challenges as a TOP-LEVEL extension member
-kiosk-server/spec/kiosk/server/errors_spec.rb	28348bb4fd358651	b1d0a419	carries the method the verb DOES accept, as the header RFC 9110 makes mandatory
-kiosk-server/spec/kiosk/server/errors_spec.rb	1076adbfae3657d3	b1d0a419	carries the vocabulary code TWICE: as the type URI and as the branch point
-kiosk-server/spec/kiosk/server/errors_spec.rb	1fe1bfc00c860b50	b1d0a419	does not map 501 — module_not_served is not a status a handler raise can mean
-kiosk-server/spec/kiosk/server/errors_spec.rb	d7ea26fe7a9bee4f	b1d0a419	drops a nil hint and never emits `instance`
-kiosk-server/spec/kiosk/server/errors_spec.rb	08da4bfacb606be4	b1d0a419	each agrees with the CODES table on both code and status
-kiosk-server/spec/kiosk/server/errors_spec.rb	532f596ed2a79ba3	b1d0a419	every Kiosk::Server::Errors::* subclass rescues as Base
-kiosk-server/spec/kiosk/server/errors_spec.rb	83883bb644ffdf72	b1d0a419	is exactly the spec's closed `code` table
-kiosk-server/spec/kiosk/server/errors_spec.rb	762fa4a670ef1316	b1d0a419	maps every status to a vocabulary code
-kiosk-server/spec/kiosk/server/errors_spec.rb	414c0d94ee6ae7a3	b1d0a419	mints one problem type URI per code and nothing else
-kiosk-server/spec/kiosk/server/errors_spec.rb	52f3dad50f6ea223	b1d0a419	names every code in TITLES — a problem document without a title is not one
-kiosk-server/spec/kiosk/server/errors_spec.rb	5441d7333adb025d	b1d0a419	never guesses 402 (three codes share it) or 500 (action_failed vs internal_error)
-kiosk-server/spec/kiosk/server/errors_spec.rb	3a88c4271594dab5	b1d0a419	refuses a code outside the closed vocabulary
-kiosk-server/spec/kiosk/server/errors_spec.rb	ba3517c301b13f31	b1d0a419	refuses a plausible near-miss of a T-158 member
-kiosk-server/spec/kiosk/server/errors_spec.rb	a9899891ff99a33b	b1d0a419	refuses to exist without one — a 405 with no Allow is not a 405
-kiosk-server/spec/kiosk/server/errors_spec.rb	137e246237685629	b1d0a419	still maps 404 to not_found, the only 404 a handler raise can mean
+kiosk-server/spec/kiosk/server/errors_spec.rb	31a43f9bc91c60c4	d96d6810	#to_problem — the 0.4 error shape (RFC 9457)
+kiosk-server/spec/kiosk/server/errors_spec.rb	8c65e49ed0629a69	d96d6810	#{klass.name.split('::').last} → code=#{code.inspect} http=#{http_status}
+kiosk-server/spec/kiosk/server/errors_spec.rb	4c59799b8c1c48df	d96d6810	Kiosk::Server::Errors::KycRequired => ['kyc_required', 403]
+kiosk-server/spec/kiosk/server/errors_spec.rb	cbfcd54c439c5e39	d96d6810	carries a handler's own extra fields through
+kiosk-server/spec/kiosk/server/errors_spec.rb	bc8091fb25e3f9e5	d96d6810	carries the PoW challenges as a TOP-LEVEL extension member
+kiosk-server/spec/kiosk/server/errors_spec.rb	28348bb4fd358651	d96d6810	carries the method the verb DOES accept, as the header RFC 9110 makes mandatory
+kiosk-server/spec/kiosk/server/errors_spec.rb	1076adbfae3657d3	d96d6810	carries the vocabulary code TWICE: as the type URI and as the branch point
+kiosk-server/spec/kiosk/server/errors_spec.rb	1fe1bfc00c860b50	d96d6810	does not map 501 — module_not_served is not a status a handler raise can mean
+kiosk-server/spec/kiosk/server/errors_spec.rb	d7ea26fe7a9bee4f	d96d6810	drops a nil hint and never emits `instance`
+kiosk-server/spec/kiosk/server/errors_spec.rb	08da4bfacb606be4	d96d6810	each agrees with the CODES table on both code and status
+kiosk-server/spec/kiosk/server/errors_spec.rb	532f596ed2a79ba3	d96d6810	every Kiosk::Server::Errors::* subclass rescues as Base
+kiosk-server/spec/kiosk/server/errors_spec.rb	83883bb644ffdf72	d96d6810	is exactly the spec's closed `code` table
+kiosk-server/spec/kiosk/server/errors_spec.rb	762fa4a670ef1316	d96d6810	maps every status to a vocabulary code
+kiosk-server/spec/kiosk/server/errors_spec.rb	414c0d94ee6ae7a3	d96d6810	mints one problem type URI per code and nothing else
+kiosk-server/spec/kiosk/server/errors_spec.rb	52f3dad50f6ea223	d96d6810	names every code in TITLES — a problem document without a title is not one
+kiosk-server/spec/kiosk/server/errors_spec.rb	5441d7333adb025d	d96d6810	never guesses 402 (three codes share it) or 500 (action_failed vs internal_error)
+kiosk-server/spec/kiosk/server/errors_spec.rb	3a88c4271594dab5	d96d6810	refuses a code outside the closed vocabulary
+kiosk-server/spec/kiosk/server/errors_spec.rb	ba3517c301b13f31	d96d6810	refuses a plausible near-miss of a T-158 member
+kiosk-server/spec/kiosk/server/errors_spec.rb	a9899891ff99a33b	d96d6810	refuses to exist without one — a 405 with no Allow is not a 405
+kiosk-server/spec/kiosk/server/errors_spec.rb	137e246237685629	d96d6810	still maps 404 to not_found, the only 404 a handler raise can mean
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	fa744c7957b65d69	b1d0a419	assigns ids that are monotonic per ORIGIN, across identities and topics
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	5537717f6b50f931	b1d0a419	keeps identities apart
 kiosk-server/spec/kiosk/server/event_stores_spec.rb	4c095fa558fa59cb	b1d0a419	keeps rows inside the window
@@ -1483,6 +1485,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	b91fd4f8156e69cb	20b9c784	scopes
 kiosk-server/spec/kiosk/server/executor_spec.rb	39edff6b054a195a	20b9c784	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	ab0e022096bc3ffc	20b9c784	treats a cap of 0 as disabled (any charge rejected)
 kiosk-server/spec/kiosk/server/executor_spec.rb	06b1ad16d5206beb	20b9c784	verifies the trail, captures, and returns the full settlement payload
+kiosk-server/spec/kiosk/server/filtered_parameters_spec.rb	6442cc10f616dd17	d96d6810	'kyc_jws' => 'the KYC attestation (§12)'
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	0ad1deff6effa91d	500b5f1c	carries the challenges a handler renders on pow_required
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	f3e1db753dd233e8	500b5f1c	keeps type, title and status those of the code, and drops instance and challenges
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	d610fe37bd2ec5f4	500b5f1c	refuses an empty next_cursor, whose next link would lead back to page one

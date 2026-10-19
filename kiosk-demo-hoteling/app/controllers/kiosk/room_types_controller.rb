@@ -17,7 +17,8 @@ module Kiosk
                                description: "First night, on the hotel's own clock (`timezone` in hotel_detail). " \
                                             'Tonight is bookable.' },
                    check_out: { type: 'string', format: 'date',
-                                description: 'Checkout day; the next guest can check in that day.' }
+                                description: "Checkout day, on the hotel's own clock; the next guest can check in " \
+                                             'that day.' }
                  },
                  required: %w[property_id check_in check_out]
     output_schema type: 'array',

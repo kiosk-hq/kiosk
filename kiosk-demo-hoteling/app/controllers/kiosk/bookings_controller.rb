@@ -72,7 +72,8 @@ module Kiosk
                    check_in: { type: 'string', format: 'date',
                                description: "First night, on the hotel's own clock. Tonight is bookable." },
                    check_out: { type: 'string', format: 'date',
-                                description: "Checkout day; at most #{Booking::MAX_NIGHTS} nights after check_in." }
+                                description: "Checkout day, on the hotel's own clock; at most #{Booking::MAX_NIGHTS} " \
+                                             'nights after check_in.' }
                  },
                  required: %w[room_type_id check_in check_out]
     output_schema type: 'object',

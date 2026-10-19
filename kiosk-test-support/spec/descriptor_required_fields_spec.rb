@@ -60,6 +60,37 @@ module DescriptorRequiredFields
     end
   end
 
+  # A property's first line inside an input schema: `name: {`.
+  PROPERTY = /^[ \t]*([a-z_]+):[ \t]*\{/
+
+  # §3.8.8: a calendar-day argument says in its own description whose clock it is on.
+  NAMES_A_CLOCK = /\b(?:clock|calendar)\b/
+
+  # {verb:, property:, text:} per `format: 'date'` property of every input schema.
+  def date_arguments(paths)
+    paths.sort.flat_map do |path|
+      verbs_in(File.read(path)).flat_map do |verb|
+        properties(verb[:input_schema].to_s).filter_map do |name, text|
+          { verb: verb[:name], property: name, text: text } if text.match?(/format:[ \t]*'date'/)
+        end
+      end
+    end
+  end
+
+  # name => the property's lines, up to the next property.
+  def properties(input_schema)
+    input_schema.lines.slice_before(PROPERTY).filter_map do |chunk|
+      name = chunk.first[PROPERTY, 1]
+      [name, chunk.join] if name
+    end
+  end
+
+  def clockless_dates(origin, paths)
+    date_arguments(paths).filter_map do |argument|
+      "#{origin} #{argument[:verb]} #{argument[:property]}" unless argument[:text].match?(NAMES_A_CLOCK)
+    end
+  end
+
   # Handler controller paths per origin: each demo, and the e2e fixtures.
   def origins
     root = File.expand_path('../..', __dir__)
@@ -100,6 +131,12 @@ RSpec.describe 'descriptor required fields' do
     total = origins.values.sum { |paths| DescriptorRequiredFields.verbs_taking_nothing(paths).length }
     expect(total).to be >= 14, "the check found only #{total} verbs that take nothing"
   end
+
+  # Eight calendar-day arguments in the fleet; `>=` lets a new one pass.
+  it 'sees the calendar-day arguments (the clock check is not vacuous)' do
+    total = origins.values.sum { |paths| DescriptorRequiredFields.date_arguments(paths).length }
+    expect(total).to be >= 8, "the check found only #{total} format: 'date' arguments"
+  end
 end
 
 RSpec.describe 'descriptor required fields per origin' do
@@ -128,6 +165,18 @@ RSpec.describe 'descriptor required fields per origin' do
         #{open.join("\n")}
 
         Declare `input_schema type: 'object', additionalProperties: false, properties: {}`.
+      MSG
+    end
+
+    it "#{origin}: every calendar-day argument names its clock" do
+      clockless = DescriptorRequiredFields.clockless_dates(origin, paths)
+
+      expect(clockless).to be_empty, <<~MSG
+        #{clockless.size} format: 'date' argument(s) name no clock:
+
+        #{clockless.join("\n")}
+
+        Say in the argument's own description whose clock or calendar the day is on (§3.8.8).
       MSG
     end
   end

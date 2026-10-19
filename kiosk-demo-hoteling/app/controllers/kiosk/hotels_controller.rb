@@ -32,7 +32,8 @@ module Kiosk
                    property_id: { type: 'integer', description: 'From a search_hotels or properties row.' },
                    check_in: { type: 'string', format: 'date',
                                description: "First night, on the hotel's own clock (`timezone`). Pass with check_out." },
-                   check_out: { type: 'string', format: 'date', description: 'Checkout day. Pass with check_in.' }
+                   check_out: { type: 'string', format: 'date',
+                                description: "Checkout day, on the hotel's own clock. Pass with check_in." }
                  },
                  required: ['property_id']
     output_schema type: 'array',

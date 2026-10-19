@@ -75,9 +75,9 @@ import numpy as np
 # HARD memory guard (safety-critical).
 #
 # The measured peak (ru_maxrss, build and trim) is 104, 119 and 118 bytes per
-# edge at edgebits 20, 22 and 24. An uncapped high-edgebits run once ate
-# ~524 GB of swap and killed the machine. macOS ignores `ulimit -v`, so we
-# self-limit: predict the peak from edgebits and REFUSE before allocating.
+# edge at edgebits 20, 22 and 24. An uncapped run at high edgebits can exhaust
+# memory and swap. macOS ignores `ulimit -v`, so the solver limits itself: it
+# predicts the peak from edgebits and REFUSES before it allocates.
 #
 # Cap is configurable via KIOSK_POW_MAX_BYTES (default 1.5 GiB). This makes the
 # solver safe to invoke at ANY edgebits regardless of how it's called.

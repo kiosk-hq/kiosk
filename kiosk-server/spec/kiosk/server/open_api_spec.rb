@@ -462,11 +462,9 @@ RSpec.describe Kiosk::Server::OpenApi, 'responses' do
   include OpenApiSpecHelpers
 
   it 'publishes an OBJECT-answering query faithfully, §8.2 or not (K-794)' do
-    # hoteling's `hotel_detail` answers a bare object where §8.2 says a
-    # non-paginating query answers an array. Its `output_schema` declares
-    # the TRUTH, and this renderer republishes the truth: hiding the
-    # discrepancy behind a normalised array would make the derived document
-    # a place where a defect goes to be forgotten.
+    # §8.2 says a query answers an array, and the engine refuses a query
+    # answer that is not one. This renderer republishes the declared
+    # `output_schema` as it is: a normalised array would hide the defect.
     declare_query('hotel_detail', output_schema: { type: 'object',
                                                    properties: { property_id: { type: 'integer' } } })
 
@@ -582,6 +580,22 @@ RSpec.describe Kiosk::Server::OpenApi, 'conformance, judged by a third-party Ope
     # reading both is the check that the hand-written reserved components
     # are as well-formed as the derived ones.
     expect(definition.routes.map(&:path).sort).to eq(['/schema', '/search_hotels'])
+  end
+
+  it 'accepts the served catalog, events and all, as the `schema` 200' do
+    Class.new(ApplicationController) do
+      include Kiosk::Handler
+
+      topic :order_delivery do
+        description 'Your order is on its way or at the door.'
+        payload_schema type: 'object'
+        example({ state: 'at_door' })
+      end
+    end.kiosk_register!
+    catalog = JSON.parse(Kiosk::Server::SchemaDocument.json)
+    expect(catalog['events'].pluck('name')).to eq(['order_delivery'])
+
+    expect(definition.validate_response(request('GET', '/schema'), response(200, catalog))).to be_valid
   end
 
   it 'accepts a scalar query and coerces it to the declared type' do

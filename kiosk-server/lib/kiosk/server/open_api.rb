@@ -418,18 +418,31 @@ module Kiosk
           required: %w[name description reach input_schema output_schema]
         }.freeze
 
+        TOPIC = {
+          type: 'object', title: 'One event topic',
+          properties: {
+            name: DESCRIPTOR[:properties][:name],
+            description: { type: %w[string null], description: "The topic's SEMANTICS, in prose. Authoritative." },
+            reach: { type: 'string', enum: HandlerMixin::REACHES.map(&:to_s), description: 'Whose events a subscriber may read (spec §7.2).' },
+            payload_schema: { description: "JSON Schema (draft 2020-12) for the event's `data`." },
+            examples: { type: 'array', description: 'Example `data` objects. They ILLUSTRATE `payload_schema` and are not the contract.' }
+          },
+          required: %w[name description reach payload_schema]
+        }.freeze
+
         SCHEMA = {
           'schema.response' => {
-            type: 'object',
-            title: 'The `schema` catalog',
+            type: 'object', title: 'The `schema` catalog',
             properties: {
               queries: { type: 'array', items: { '$ref': '#/components/schemas/schema.descriptor' } },
-              actions: { type: 'array', items: { '$ref': '#/components/schemas/schema.descriptor' } }
+              actions: { type: 'array', items: { '$ref': '#/components/schemas/schema.descriptor' } },
+              events: { type: 'array', items: { '$ref': '#/components/schemas/schema.topic' } }
             },
-            required: %w[queries actions],
+            required: %w[queries actions events],
             additionalProperties: false
           },
-          'schema.descriptor' => DESCRIPTOR
+          'schema.descriptor' => DESCRIPTOR,
+          'schema.topic' => TOPIC
         }.freeze
 
         PAY = {

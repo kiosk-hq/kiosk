@@ -148,7 +148,13 @@ def surface_snapshot
   AUTHENTICATED.each do |method, path|
     snapshot["#{method} #{path} (bearer)"] = request(method, path, auth: true)
   end
+  snapshot['GET /kiosk/schema?v= (schema_url)'] = request('GET', URI(schema_url(snapshot)).request_uri)
   snapshot
+end
+
+# The `schema_url` that kiosk.json names, dialed as an assistant would dial it.
+def schema_url(snapshot)
+  JSON.parse(snapshot.fetch('GET /.well-known/kiosk.json').fetch('body')).dig('kiosk', 'schema_url')
 end
 
 report = {}

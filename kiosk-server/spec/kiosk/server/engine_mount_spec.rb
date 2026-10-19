@@ -94,6 +94,10 @@ RSpec.describe 'mount Kiosk::Server::Engine (the one-line surface)' do
       expect(served('GET /.well-known/api-catalog')['headers']['content-type']).to include('linkset+json')
       expect(served('GET /auth.md')['headers']['content-type']).to include('markdown')
     end
+
+    it 'answers the schema_url of kiosk.json with the same document as the bare GET schema' do
+      expect(served('GET /kiosk/schema?v= (schema_url)')['body']).to eq(served('GET /kiosk/schema')['body'])
+    end
   end
 end
 

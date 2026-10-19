@@ -76,6 +76,15 @@ RSpec.describe Kiosk::Server::AgentLogin do
       public_key_pem: pem, nonce: 'n'
     )
   end
+
+  it 'stops at a failed proof: no challenge burned, no lookup, no token' do
+    allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_raise(Kiosk::Server::Errors::Unauthenticated)
+    expect do
+      described_class.call(public_key_pem: pem, signed: 'forged')
+    end.to raise_error(Kiosk::Server::Errors::Unauthenticated)
+    expect(Kiosk::Server::AuthChallenge).not_to have_received(:consume!)
+    expect(con.all_sql).to be_empty
+  end
 end
 
 RSpec.describe Kiosk::Server::AgentLogin do

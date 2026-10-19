@@ -163,6 +163,21 @@ RSpec.describe Kiosk::Server::PopVerifier do
     end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /nonce|claim/)
   end
 
+  it 'rejects a proof missing the jti' do
+    no_jti = JWT.encode({ aud: issuer, nonce: 'nonce-1' }, PopVerifierSpec.rsa, 'RS256')
+    expect do
+      described_class.verify!(public_key_pem: pem, signed: no_jti)
+    end.to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof is missing a required claim')
+  end
+
+  # PS256 is the algorithm the presented key itself verifies, so only the RS256 list refuses it.
+  it 'rejects a proof signed with PS256 instead of RS256' do
+    pss = JWT.encode({ aud: issuer, nonce: 'nonce-1', jti: 'jti-1' }, PopVerifierSpec.rsa, 'PS256')
+    expect do
+      described_class.verify!(public_key_pem: pem, signed: pss)
+    end.to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof signature invalid')
+  end
+
   it 'rejects a proof whose `pub` thumbprint does not match the presented key' do
     expect do
       described_class.verify!(public_key_pem: pem, signed: sign(include_pub: 'not-the-thumbprint'))

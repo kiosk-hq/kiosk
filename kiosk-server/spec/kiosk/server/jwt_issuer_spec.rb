@@ -155,6 +155,15 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       end.to raise_error(described_class::SignatureError)
     end
 
+    # PS256 is the algorithm the JWKS key itself verifies, so only the RS256 list refuses it.
+    it 'rejects a bearer signed with PS256 instead of RS256' do
+      claims = JWT.decode(token, nil, false).first
+      pss = JWT.encode(claims, key.rsa, 'PS256', { kid: key.kid, typ: 'JWT' })
+      expect do
+        described_class.verify(token: pss, jwks: jwks, audience: audience)
+      end.to raise_error(described_class::SignatureError)
+    end
+
     it 'rejects a malformed token' do
       expect do
         described_class.verify(token: 'not.a.jwt', jwks: jwks, audience: audience)

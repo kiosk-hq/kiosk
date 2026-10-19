@@ -144,7 +144,7 @@ RSpec.describe 'AuthController#revoke (revoke-all-sessions)', 'happy path' do
 
     status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env(token))
     expect(status).to eq(200)
-    expect(body[:access_token]).to be_a(String)
+    expect(body).to match(access_token: a_kind_of(String))
 
     # The re-issued token must NOT itself be caught by the watermark it just
     # set: it verifies cleanly and resolves back to the same agent.

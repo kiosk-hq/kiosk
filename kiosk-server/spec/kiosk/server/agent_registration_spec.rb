@@ -120,6 +120,16 @@ RSpec.describe Kiosk::Server::AgentRegistration, 'provisioning (register-only; k
     )
   end
 
+  it 'stops at a failed proof: no challenge burned, no query, no account, no token' do
+    allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_raise(Kiosk::Server::Errors::Unauthenticated)
+    expect do
+      described_class.call(public_key_pem: pem, signed: 'forged')
+    end.to raise_error(Kiosk::Server::Errors::Unauthenticated)
+    expect(Kiosk::Server::AuthChallenge).not_to have_received(:consume!)
+    expect(con.all_sql).to be_empty
+    expect(Kiosk.configuration.user_model.constantize).not_to have_received(:create!)
+  end
+
   it 'raises Conflict on an already-registered public key (use /auth/login)' do
     # SELECT returns an existing agent row → register must refuse, not re-issue.
     route_exec_query(con) { [{ 'id' => 'agent-1' }] }

@@ -150,6 +150,39 @@ end
 RSpec.describe Kiosk::Server::VerbController do
   include_context 'verb controller spec: authenticated origin'
 
+  describe 'Vary on every verb response (§3.7.1)' do
+    before do
+      declare_query('salons', input_schema: { type: 'object', additionalProperties: false,
+                                              properties: {}, required: [] }) { render json: [] }
+      declare_action('book_appointment') { render json: { appointment_id: 7 } }
+    end
+
+    def pay_answer(auth:)
+      env = Rack::MockRequest.env_for('/kiosk/pay', method: 'POST', input: '{}', 'CONTENT_TYPE' => 'application/json',
+                                                    **header_env(auth: auth))
+      dispatch(Kiosk::Server::WireController, :pay, env)
+    end
+
+    it 'names all three request headers on an action 200, a pay answer, a 400 and a 401' do
+      answers = {
+        'action 200' => call_verb(:post, 'book_appointment', body: '{}'),
+        'query 400' => call_verb(:get, 'salons', query: 'nope=1'),
+        'query 401' => call_verb(:get, 'salons', auth: false),
+        'pay' => pay_answer(auth: true),
+        'pay 401' => pay_answer(auth: false)
+      }
+      expect(answers.transform_values(&:first)).to include('action 200' => 200, 'query 400' => 400,
+                                                           'query 401' => 401, 'pay 401' => 401)
+      answers.each do |answer, (_, _, headers)|
+        expect(headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone'), answer
+      end
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::VerbController do
+  include_context 'verb controller spec: authenticated origin'
+
   describe 'a query is a GET at its own path' do
     before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
 

@@ -191,8 +191,11 @@ module Kiosk
         end
       end
 
-      # A wire error named by its code rather than its class; `extra:` passes through to the document.
+      # A wire error named by its code rather than its class. `extra:` adds extension members;
+      # the members the code and message decide stay theirs, and `instance` is never emitted (§9).
       class WireError < Base
+        DECIDED = %i[type title status detail instance code hint].freeze
+
         def initialize(message = nil, code:, hint: nil, extra: nil)
           code = code.to_s
           unless CODES.key?(code)
@@ -202,12 +205,20 @@ module Kiosk
 
           super(message, hint: hint)
           @wire_code = code
-          @extra     = extra || {}
+          @extra     = extensions_for(code, extra || {})
         end
 
         def code        = @wire_code
         def http_status = CODES.fetch(@wire_code)
         def extensions  = @extra
+
+        private
+
+        # `challenges` appears only on `pow_required` (§9).
+        def extensions_for(code, extra)
+          extra = extra.except(*DECIDED)
+          code == 'pow_required' ? extra : extra.except(:challenges)
+        end
       end
 
       class BadRequest < Base

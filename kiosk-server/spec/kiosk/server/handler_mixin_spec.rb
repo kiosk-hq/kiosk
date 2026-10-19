@@ -57,8 +57,8 @@ class SpecCatalogController < SpecKioskBaseController
   input_schema type: 'object', additionalProperties: false, properties: {}, required: []
   output_schema true
   def whoami
-    render json: { user_id: kiosk_identity&.user_id, agent_id: kiosk_identity&.agent_id,
-                   wire_name: kiosk_wire_name, user_agent: request.headers['User-Agent'] }
+    render json: [{ user_id: kiosk_identity&.user_id, agent_id: kiosk_identity&.agent_id,
+                    wire_name: kiosk_wire_name, user_agent: request.headers['User-Agent'] }]
   end
 
   # No macros: a plain helper, NOT a wire verb.
@@ -404,8 +404,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
     it 'exposes the resolved identity as kiosk_identity' do
       result = execute(:query, { name: 'whoami' })
 
-      expect(result.payload['user_id']).to eq('u-1')
-      expect(result.payload['agent_id']).to eq('a-1')
+      expect(result.payload.first).to include('user_id' => 'u-1', 'agent_id' => 'a-1')
     end
 
     it 'carries the cursor of a paginated page onto the Result, not into the body' do
@@ -883,8 +882,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
     it "seeds the handler's request with the caller's headers" do
       _status, payload = get_wire('whoami', {}, 'HTTP_USER_AGENT' => 'kiosk-cli/1.0')
 
-      expect(payload['user_agent']).to eq('kiosk-cli/1.0')
-      expect(payload['wire_name']).to eq('whoami')
+      expect(payload.first).to include('user_agent' => 'kiosk-cli/1.0', 'wire_name' => 'whoami')
     end
   end
 end

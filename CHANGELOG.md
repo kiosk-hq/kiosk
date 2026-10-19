@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The engine refuses a query answer that is not a JSON array with `action_failed`, paginated or not.
 - 2026-10-19: The Prove KYC client, the Devise session client and the test-support wire and event clients connect to an IPv6 literal URL such as `http://[::1]:3004`.
 
 - 2026-10-19: The kiosk-server README says the engine keeps its own state in the `kiosk` schema and writes no audit record there; the audit sink is off by default.

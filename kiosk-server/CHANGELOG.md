@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The engine refuses a query answer that is not a JSON array with `action_failed`, paginated or not.
 - 2026-10-19: The README says the engine keeps its own state in the `kiosk` schema and writes no audit record there; the audit sink is off by default.
 
 ## [0.5.18] — 2026-10-18

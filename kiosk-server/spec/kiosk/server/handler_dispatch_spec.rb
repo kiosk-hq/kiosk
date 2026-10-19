@@ -180,6 +180,15 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       expect { execute(:query, { name: 'bad_page' }) }
         .to raise_error(Kiosk::Server::Errors::ActionFailed, /not an array of rows/)
     end
+
+    it 'rejects a query that answers an object, paginating or not' do
+      stub_handler('SpecObjectQueryController', :query, 'Answers one object.') do
+        def one_object = render(json: { id: 1 })
+      end
+
+      expect { execute(:query, { name: 'one_object' }) }
+        .to raise_error(Kiosk::Server::Errors::ActionFailed, /not an array of rows/)
+    end
   end
 end
 
@@ -218,12 +227,12 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
   describe 'outside a wire request' do
     it 'runs with no identity and no caller headers (the RLS journey case)' do
       stub_handler('SpecBareController', :query, 'Reports what it can see.') do
-        def bare = render(json: { identity: kiosk_identity, ua: request.headers['User-Agent'] })
+        def bare = render(json: [{ identity: kiosk_identity, ua: request.headers['User-Agent'] }])
       end
 
       result = Kiosk::Server::Queries.fetch('bare').call({})
 
-      expect(result).to eq('identity' => nil, 'ua' => nil)
+      expect(result).to eq([{ 'identity' => nil, 'ua' => nil }])
     end
   end
 

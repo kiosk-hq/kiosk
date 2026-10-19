@@ -47,8 +47,11 @@ module Kiosk
         publish_headers(status, headers)
         answer  = Answer.new(@kind, @wire_name)
         payload = answer.decode(status, read_body(body))
+        return payload unless @kind.to_sym == :query
 
-        env[PAGE_KEY] ? answer.paginate(payload, **env[PAGE_KEY]) : payload
+        answer.rows!(payload)
+        # `render_kiosk_page` recorded the page facts beside the rendered rows.
+        env[PAGE_KEY] ? Page.new(rows: payload, **env[PAGE_KEY]) : payload
       end
 
       # Handy in `p`/logs and in the specs that assert what got registered.
@@ -174,17 +177,14 @@ module Kiosk
           raise wire_error(status, parsed)
         end
 
-        # The {Page} of `render_kiosk_page`: the rendered rows plus the page facts it recorded.
-        def paginate(payload, next_cursor:, total:)
-          unless payload.is_a?(Array)
-            raise Errors::ActionFailed.new(
-              "query #{@wire_name.inspect} answered a page that is not an array of rows",
-              hint: "render_kiosk_page renders the rows it is given, or the action's template; " \
-                    'either must be a JSON array'
-            )
-          end
+        # A query answers an array of rows, paginated or not (§8.2).
+        def rows!(payload)
+          return if payload.is_a?(Array)
 
-          Page.new(rows: payload, next_cursor: next_cursor, total: total)
+          raise Errors::ActionFailed.new(
+            "query #{@wire_name.inspect} answered something that is not an array of rows",
+            hint: 'A query renders a JSON array of rows, paginated or not.'
+          )
         end
 
         private

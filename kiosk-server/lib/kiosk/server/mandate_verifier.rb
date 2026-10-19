@@ -104,9 +104,9 @@ module Kiosk
         "currency was #{value.inspect} — send the three-letter currency code of this mandate, such as \"eur\""
       end
 
-      # Public: an operator reading `settlements.currency` needs the same fold.
+      # Public: an operator reading `settlements.currency` needs the same lower-casing.
       def canonical_currency(value)
-        value.to_s.strip.downcase
+        value.to_s.downcase
       end
       private_class_method :require_amount!, :blank_currency_hint
 

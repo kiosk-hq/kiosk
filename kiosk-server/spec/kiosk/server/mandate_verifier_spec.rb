@@ -349,9 +349,9 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         # The control: every code this repository spells must still settle.
         # gbp is getgrocery's glyph map and jpy is kiosk-redteam's
         # WrongCurrencyCart ALTERNATIVES.
-        it 'settles eur, usd, gbp and jpy — either case, and padded' do
+        it 'settles eur, usd, gbp and jpy — either case' do
           { 'eur' => 'eur', 'EUR' => 'eur', 'usd' => 'usd', 'USD' => 'usd',
-            'gbp' => 'gbp', 'jpy' => 'jpy', '  eur ' => 'eur' }.each do |sent, canonical|
+            'gbp' => 'gbp', 'jpy' => 'jpy' }.each do |sent, canonical|
             m = described_class.verify_intent(
               raw_jws: sign(intent_payload.merge(currency: sent)), identity: identity
             )
@@ -397,10 +397,13 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         expect(m.currency).to eq('eur')
       end
 
-      it 'strips surrounding whitespace off an intent currency' do
-        m = described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: '  eur ')),
+      it 'refuses an intent currency with surrounding spaces' do
+        [' eur ', 'eur ', ' eur'].each do |padded|
+          expect do
+            described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: padded)),
                                           identity: identity)
-        expect(m.currency).to eq('eur')
+          end.to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/), "#{padded.inspect} should be refused"
+        end
       end
 
       it 'canonicalises a cart currency' do

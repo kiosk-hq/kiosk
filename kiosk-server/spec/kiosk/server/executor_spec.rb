@@ -1241,7 +1241,7 @@ RSpec.describe Kiosk::Server::Executor, 'pay-path #spent_in_window' do
   # The BIND is folded too, so a caller that hands over a cart the verifier
   # never canonicalised still reads the same tally.
   it 'canonicalises the currency it binds' do
-    spent(' EUR ', nil)
+    spent('EUR', nil)
     _sql, _name, binds = last_statement
 
     expect(binds).to eq([identity.agent_id, 'eur'])
@@ -1285,11 +1285,7 @@ RSpec.describe Kiosk::Server::Executor, 'the currency a `pay` answers with (§11
     expect(answered('EUR')).to eq('eur')
   end
 
-  it 'answers `eur` to a chain signed `  EUR ` throughout' do
-    expect(answered('  EUR ')).to eq('eur')
-  end
-
-  # The already-canonical case is here so the two above cannot be read as
+  # The already-canonical case is here so the example above cannot be read as
   # "the answer is always eur because the fixture says eur": this one is the
   # control, and it is the only one where the answer equals the input bytes.
   it 'answers `eur` to a chain already signed `eur`, which is the only case where the bytes match' do

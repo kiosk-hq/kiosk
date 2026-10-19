@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The mandate verifier refuses a currency with surrounding spaces, as §11.1 says. Upper case is still folded to lower case.
 - 2026-10-20: The README says a refund gives its amount back to the spending cap.
 - 2026-10-20: The spend the manage-assistants page shows is the settled part of what the spending cap counts. The cap also counts the carts in flight.
 - 2026-10-20: The derived OpenAPI document closes the verb and topic descriptors, as the spec does: a member the spec does not name fails validation.

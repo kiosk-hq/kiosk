@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1923 anchors.
+# 1934 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -474,6 +474,7 @@ kiosk-demo-hoteling/spec/stories/hold_spec.rb	an unpaid hold past its pay-by tim
 kiosk-demo-hoteling/spec/stories/hotel_answer_spec.rb	The hotel's answer to a paid booking
 kiosk-demo-hoteling/spec/stories/privacy_spec.rb	another guest can neither pay for nor see them
 kiosk-demo-hoteling/spec/stories/search_spec.rb	a guest reads one hotel's rooms, and is told when a hotel does not exist
+kiosk-demo-hoteling/spec/stories/search_spec.rb	a made-up cursor moves through the hotels the search matches, and reaches no other hotel
 kiosk-demo-hoteling/spec/stories/search_spec.rb	a search that matches nothing comes back empty, and a neighbourhood the city does not have is answered with the ones it does
 kiosk-demo-hoteling/spec/stories/search_spec.rb	def total(found) = found.header('x-total-count').to_i
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
@@ -1492,8 +1493,11 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	resumes a chain whose capture ra
 kiosk-server/spec/kiosk/server/executor_spec.rb	scopes the settled-total tally to the cart's currency (not currency-blind)
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	refuses an empty next_cursor, whose next link would lead back to page one
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a page whose rows are not an array
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a query that answers an object, paginating or not
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	404s a request that did not come through the Kiosk wire
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts the verb name #{name.inspect}
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	answers bad_request whose detail is the errors' full messages
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	carries a 403 code a bare status cannot name (rls_denied)
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names
@@ -1504,6 +1508,7 @@ kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a declaration with 
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a reach outside the four the spec names
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb name that is not one legal path segment
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb name the engine draws itself
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses the verb name #{name.inspect}
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	reserves every first path segment the engine draws under the mount
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	refuses a name declared as both a query and an action
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	registers the verbs of every handler, from an empty registry
@@ -1646,6 +1651,7 @@ kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	does not read a Beare
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	emits no Vary at all, negotiated or not
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	is NOT tolled — a toll needs an identity, and there is none here
 kiosk-server/spec/kiosk/server/open_api_spec.rb	HOISTS a `$defs` into components and follows every pointer to it
+kiosk-server/spec/kiosk/server/open_api_spec.rb	accepts the served catalog, events and all, as the `schema` 200
 kiosk-server/spec/kiosk/server/open_api_spec.rb	publishes the `output_schema` VERBATIM as the 200 body
 kiosk-server/spec/kiosk/server/open_api_spec.rb	references the `input_schema` component rather than inlining it
 kiosk-server/spec/kiosk/server/open_api_spec.rb	slot on the descriptor component (T-085)
@@ -1795,6 +1801,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers POST <endpoint>/q
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers POST <endpoint>/run the same way — one unregistered name among others
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers a GET at an ACTION's name 405, with Allow: POST
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers a POST at a QUERY's name 405, with Allow: GET
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers an action POST with no credential 401 unauthenticated
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers an unknown name a problem document, naming what IS registered
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers with the handler's object VERBATIM — no `value` wrapper
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	answers with the handler's payload VERBATIM — a bare array, no envelope
@@ -1802,6 +1809,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	asks a new token again
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	asks the first call for a proof and serves every later call of the token without one
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	carries the cache policy every wire response must carry
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	derives X-Total-Count from a COMPLETE array answer, paginating or not
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	does not read a body on a GET — a query's arguments are its query string
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	does not read a query string on a POST — an action's arguments are its body
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	draws no /query and no /run — the route table has no such paths
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	emits the handler's total on a truncated page
@@ -1877,6 +1885,7 @@ kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	does NOT accep
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	does NOT accept a catalog proof on another query's endpoint
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	does NOT accept a proof placed in an action's BODY (the header is the channel)
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	never tolls GET /kiosk/schema, under a policy that challenges everything
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	never tolls the JWKS document, under a policy that challenges everything
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	re-challenges a per-verb GET with a fresh 402 problem document when no header is sent
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	rejects a malformed Kiosk-PoW header with a 400 problem document + hint
 kiosk-server/spec/kiosk/server/wire_controller_validation_spec.rb	answers a proof for an algorithm it does not implement with a challenge for one it does, never a 400 on the nonce's shape
@@ -1920,6 +1929,8 @@ kiosk-test-support/lib/kiosk/test_helpers/stripe_mock.rb	stripe-mock not found. 
 kiosk-test-support/lib/kiosk/test_helpers/wire.rb	    class Wire
 kiosk-test-support/spec/descriptor_cross_reference_spec.rb	#{demo}: every verb description's cross-reference names params the target verb declares
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every verb declares #{DescriptorRequiredFields::MACROS.join(', ')}
+kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every verb that takes nothing declares the closed empty object
+kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the verbs that take nothing (the closed-object check is not vacuous)
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the whole fleet (the lint is not vacuous)
 kiosk-test-support/spec/kiosk/test_helpers/conformance/in_process_origin_spec.rb	runs the handler inside a GUC-scoped transaction as the named principal
 kiosk-test-support/spec/skill_pin_spec.rb	  it "is the same published cut in kiosk-server's default and in every demo" do

@@ -15,6 +15,10 @@ module EquihashKats
   # not share a prefix; each level's block cancels by XOR.
   MULTI_SALT = 'kiosk-eqx-kat-01'.b
 
+  # A (n=24, k=2) solution from solve.py for MULTI_SALT at header_nonce 1, whose
+  # little-endian and big-endian u32 encodings differ.
+  NONCE_ONE_INDICES = [122, 367, 284, 394].freeze
+
   # The frozen production-parameter solution (salt "kiosk-eqx-kat-01", n=168,
   # k=7, header_nonce 0) from solve.py, in canonical (subtree) order. It pins the
   # verifier at the shipped default parameters.
@@ -181,6 +185,15 @@ RSpec.describe Kiosk::Pow::Equihash, '.verify with a header_nonce' do
 
   it 'ACCEPT — header_nonce=0 same as default' do
     expect(verify_kat({ indices: [2, 10], header_nonce: 0 })).to be(true)
+  end
+
+  it 'ACCEPT — a proof solved at header_nonce 1, which is folded as a little-endian u32' do
+    nonce = { indices: EquihashKats::NONCE_ONE_INDICES, header_nonce: 1 }
+    expect(described_class.verify(salt: EquihashKats::MULTI_SALT, params: { n: 24, k: 2 }, nonce:)).to be(true)
+  end
+
+  it 'REJECT — the same proof without its header_nonce' do
+    expect(verify_multi(EquihashKats::NONCE_ONE_INDICES, { n: 24, k: 2 })).to be(false)
   end
 
   # 2**32 - 1 and 2**32 are one apart, and only the second is out of range.

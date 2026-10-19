@@ -75,8 +75,8 @@ skill is `skill.md` on the same site.
 - Every fenced block in a `kiosk-demo-*/before-after.md` derives from its
   demo, declared above the fence: `<!-- derived: generator | from: … -->`.
   When you edit one of these documents, run it.
-- Never edit a shipped migration; a change arrives as a new file. Renumbering
-  is editing. Before 1.0 a demo's migrations may be collapsed into a fresh
+- Never edit a shipped migration's code; a change arrives as a new file. A
+  comment in it may be corrected. Renumbering is editing. Before 1.0 a demo's migrations may be collapsed into a fresh
   install only together with rebuilding every deployed database
   (`deploy/CHECKLIST.md` §7b). At 1.0 `db/migrate/` becomes append-only.
 - Every consumer here uses `path:`, which reads the working tree. When a gem

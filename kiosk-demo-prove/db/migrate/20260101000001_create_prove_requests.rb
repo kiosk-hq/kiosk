@@ -15,9 +15,9 @@
 #                      intake (SSRF/open-relay guard) — never free-form-honoured.
 #   requested_claims — the anonymized claims asked for, e.g.
 #                      ["age_over_18","licence_category:A"].
-#   audience         — the value the minted claim's `aud` carries: the one the
-#                      operator's KycVerifier compares against. NULL when the
-#                      operator declares none; `aud` is then operator_id.
+#   audience         — the value the minted claim's `aud` carries, which the
+#                      operator's KycVerifier compares against: the
+#                      operator's registered audience, or its operator_id.
 #   subject_handle   — the operator's user_id for the requesting agent; the
 #                      minted claim's `sub`, so the operator's KycVerifier binds
 #                      it to the SAME agent (cross-subject theft defense).

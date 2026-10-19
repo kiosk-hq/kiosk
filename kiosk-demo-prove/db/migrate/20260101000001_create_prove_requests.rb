@@ -14,7 +14,7 @@
 #                      validated against the operator's allow-listed host at
 #                      intake (SSRF/open-relay guard) — never free-form-honoured.
 #   requested_claims — the anonymized claims asked for, e.g.
-#                      ["age_over_18","licence_category:A"].
+#                      ["age_over_18","licence_a1","licence_a"].
 #   audience         — the value the minted claim's `aud` carries, which the
 #                      operator's KycVerifier compares against: the
 #                      operator's registered audience, or its operator_id.

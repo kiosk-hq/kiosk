@@ -44,7 +44,8 @@ Kiosk.configure do |c|
     intake_secret: ENV.fetch('KIOSK_PROVE_INTAKE_SECRET'),
     url: ENV.fetch('KIOSK_PROVE_BROKER_URL')
   )
-  c.kyc_claims     = %w[age_over_18 licence_a]
+  # A vehicle needs age_over_18 and the licence attribute of its category (Scooter::LICENCE_CATEGORIES).
+  c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
   c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
   c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
   c.kyc_audience   = 'skooti'

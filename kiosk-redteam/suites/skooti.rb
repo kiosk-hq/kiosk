@@ -28,7 +28,7 @@ DEMO_PASSWORD = 'skooti-demo-password'
 # Wrong key, trusted issuer: only the signature is bad.
 FORGED_KYC_KEY = OpenSSL::PKey::RSA.generate(2048)
 
-# The attributes a motorcycle rental asks for, spelled as the attestation carries them.
+# The attributes MC-001 asks for, spelled as the attestation carries them.
 LICENCE_ATTRIBUTES = { 'age_over_18' => true, 'licence_a' => true }.freeze
 
 def attest_forged(user_id)
@@ -44,7 +44,7 @@ end
 def broker_approve(request_id)
   uri = URI("#{BROKER_URL}/verify")
   req = Net::HTTP::Post.new(uri, 'Content-Type' => 'application/x-www-form-urlencoded')
-  req.body = URI.encode_www_form(request: request_id, decision: 'approve')
+  req.body = URI.encode_www_form(request: request_id, decision: 'approve', licence_category: 'A')
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   res.code.to_i
 end
@@ -94,7 +94,7 @@ end
 # reservation at a time, so every rider here reserves its own.
 def free_scooter_code(client, customer)
   fleet = client.query(customer, name: 'scooters_available').body
-  scooter = (fleet.is_a?(Array) ? fleet : []).find { |row| row['needs_licence'] == false }
+  scooter = (fleet.is_a?(Array) ? fleet : []).find { |row| row.key?('licence_category') && row['licence_category'].nil? }
   raise SkootiScenarios::SetupFailed, 'SETUP FAILED: no licence-free vehicle is free in scooters_available' unless scooter
 
   scooter['code']

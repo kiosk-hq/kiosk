@@ -31,8 +31,7 @@ end
 kiosk-server then serves `request_kyc` and the broker's callback. The adapter:
 
 - opens a verification at `POST <broker>/verifications`, authenticated by the
-  intake secret, asking for the claims in the broker's vocabulary
-  (`licence_a` is `licence_category:A` there);
+  intake secret, asking for the attribute names in `kyc_claims`;
 - raises `Kiosk::KycProviders::Unavailable` when the broker refuses, cannot be
   reached, or answers without `request_id`, `verification_url` and `nonce`;
 - accepts only attestations whose `operator` claim is your operator id.

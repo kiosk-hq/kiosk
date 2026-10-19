@@ -26,12 +26,12 @@ is decided before any credential is read.
 
 | Endpoint | Verb | What it does |
 |---|---|---|
-| `GET /kiosk/scooters_available` | `scooters_available` | The vehicles no other rider holds (scooters and motorcycles); `needs_licence` marks the KYC-gated motorcycle |
+| `GET /kiosk/scooters_available` | `scooters_available` | The vehicles no other rider holds (scooters and motorcycles); `licence_category` names the licence a motorcycle needs, A1 or A |
 | `GET /kiosk/my_reservations` | `my_reservations` | The signed-in customer's reservations and where each one's payment stands |
 | `POST /kiosk/reserve` | `reserve(scooter_code)` | Hold a vehicle for 3 minutes and quote the first minute to pay; a paid hold whose ride has not started by then is released and refunded; a vehicle another rider holds is a `conflict` |
 | `POST /kiosk/payment_setup` | `payment_setup` | Whether the customer has a saved payment method (served by kiosk-server) |
 | `POST /kiosk/start_rental` | `start_rental(reservation_id)` | Start the rental of a paid, licence-free vehicle and issue its offline Ed25519 unlock token |
-| `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The same for the motorcycle, once the customer is attested `age_over_18` and `licence_a` |
+| `POST /kiosk/rent_motorcycle` | `rent_motorcycle(reservation_id)` | The same for a motorcycle, once the customer is attested `age_over_18` and the licence attribute of its category (`licence_a1` or `licence_a`) |
 | `POST /kiosk/request_kyc` | `request_kyc` | Hand back the broker link the human completes; the `kyc_verification` event then carries the signed attestation |
 
 Plus the two reserved endpoints every origin serves: `POST /kiosk/pay` —
@@ -48,14 +48,17 @@ for it. Registration is priced
 with one Equihash proof-of-work at the gem's default n=168 k=7 — the "I'm not a
 fly-by bot" cost. After that, each access token (one hour) pays one more proof
 by chance: 1 with no recent spend, 0 from 100 euros paid here in the past week.
-Renting the motorcycle
+Renting a motorcycle
 additionally demands a signed KYC attestation carrying the required boolean
 attributes; the operator records only the booleans, never the underlying
-documents.
+documents. The fleet has two motorcycles: MC-002 needs category A1 and MC-001
+needs category A. On the broker's page the human chooses a licence category: A1,
+A, B1, B or none. A licence of category A covers both motorcycles, one of
+category A1 covers only MC-002, and the other choices cover neither.
 
 **What this KYC proves, and what it deliberately does not (honest scope).** The
-attestation proves the assistant is *eligible* — that a valid category-A licence
-and 18+ age *exist* behind it, anonymized to two booleans. It does **not**
+attestation proves the assistant is *eligible* — that a valid licence of the
+motorcycle's category and 18+ age *exist* behind it, anonymized to booleans. It does **not**
 identify the rider or make anyone *accountable* for this rental: an anonymized
 eligibility claim is transferable (a friend who holds a licence could vouch), and
 the demo settles a nameless hold, not a deposit. Real high-value rental layers

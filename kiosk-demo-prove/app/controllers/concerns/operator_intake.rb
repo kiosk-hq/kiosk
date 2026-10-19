@@ -16,7 +16,7 @@ module OperatorIntake
     if subject_handle.empty?
       ['missing field: subject_handle', :bad_request]
     elsif !ClaimCatalog.all_known?(requested_claims)
-      ["unknown or empty requested_claims; broker can answer: #{ClaimCatalog::ENTRIES.keys.inspect}", :bad_request]
+      ["unknown or empty requested_claims; broker can answer: #{ClaimCatalog.known.inspect}", :bad_request]
     elsif !OperatorRegistry.callback_allowed?(operator, callback_url)
       # The broker posts only to the operator's registered host.
       ['callback_url host is not allow-listed for this operator', :forbidden]

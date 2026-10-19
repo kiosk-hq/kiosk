@@ -50,7 +50,7 @@ module ApprovalRace
     threads = Array.new(count) do
       Thread.new do
         session = ActionDispatch::Integration::Session.new(Rails.application)
-        session.post('/verify', params: { request: request_id, decision: 'approve' })
+        session.post('/verify', params: { request: request_id, decision: 'approve', licence_category: 'A' })
         session.response.status
       end
     end

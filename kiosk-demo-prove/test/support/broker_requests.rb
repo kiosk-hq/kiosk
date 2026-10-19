@@ -19,7 +19,7 @@ module BrokerRequests
     {
       operator_id: 'skooti',
       callback_url: callback_url,
-      requested_claims: ['age_over_18', 'licence_category:A'],
+      requested_claims: %w[age_over_18 licence_a1 licence_a],
       subject_handle: 'user-uuid-123'
     }.merge(overrides)
   end
@@ -30,14 +30,15 @@ module BrokerRequests
     response.parsed_body['request_id']
   end
 
-  def approve(request_id)
-    post '/verify', params: { request: request_id, decision: 'approve' }
+  # Approves as a human who holds a licence of `licence_category`.
+  def approve(request_id, licence_category: 'A')
+    post '/verify', params: { request: request_id, decision: 'approve', licence_category: }.compact
   end
 
   # Approves with the callback stubbed. Returns what the callback received.
-  def approve_capturing(request_id)
+  def approve_capturing(request_id, **)
     delivered = {}
-    CallbackPoster.stub(:deliver, ->(**args) { delivered.replace(args) && 200 }) { approve(request_id) }
+    CallbackPoster.stub(:deliver, ->(**args) { delivered.replace(args) && 200 }) { approve(request_id, **) }
     delivered
   end
 

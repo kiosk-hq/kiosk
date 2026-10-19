@@ -25,43 +25,62 @@
       birth, or licence number, only the answers below.
     </p>
 
+    <% if @licence_unanswered %>
+      <p role="alert">Choose your driving licence category, or none.</p>
+    <% end %>
+
     <form action="/verify" method="post">
       <input type="hidden" name="request" value="<%= @request.request_id %>">
       <ul class="claims">
-        <% @entries.each do |entry| %>
+        <% ClaimCatalog.questions_for(@request.requested_claims).each do |question| %>
           <li>
             <label>
               <input type="checkbox" class="claim-check">
-              <%= entry[:question] %>
+              <%= question %>
             </label>
           </li>
         <% end %>
       </ul>
+      <% if ClaimCatalog.asks_licence?(@request.requested_claims) %>
+        <fieldset>
+          <legend>Which driving licence category do you hold?
+            <strong><%= @request.operator_id %></strong> learns only which of the categories it
+            asks about your licence lets you ride.</legend>
+          <% ClaimCatalog::LICENCE_CATEGORIES.each_key do |category| %>
+            <label>
+              <input type="radio" class="licence-choice" name="licence_category" value="<%= category %>" required>
+              <%= category %>
+            </label>
+          <% end %>
+        </fieldset>
+      <% end %>
       <p>
         <button type="submit" name="decision" value="approve" id="approve-btn" disabled>Yes — confirm these</button>
-        <button type="submit" name="decision" value="decline">No</button>
+        <button type="submit" name="decision" value="decline" formnovalidate>No</button>
       </p>
     </form>
 
-    <%# "Yes" enables once every fact is ticked; the server reads only `decision`. %>
+    <%# "Yes" enables once every fact is ticked and a category is chosen; the
+        server reads `decision` and `licence_category`. %>
     <script>
       (function () {
-        var boxes = Array.prototype.slice.call(
-          document.querySelectorAll(".claim-check")
-        );
+        var boxes = Array.prototype.slice.call(document.querySelectorAll(".claim-check"));
+        var choices = Array.prototype.slice.call(document.querySelectorAll(".licence-choice"));
         var approve = document.getElementById("approve-btn");
-        if (!approve || boxes.length === 0) { return; }
+        if (!approve) { return; }
         function sync() {
-          approve.disabled = !boxes.every(function (b) { return b.checked; });
+          approve.disabled = !boxes.every(function (b) { return b.checked; }) ||
+            (choices.length > 0 && !choices.some(function (c) { return c.checked; }));
         }
-        boxes.forEach(function (b) { b.addEventListener("change", sync); });
+        boxes.concat(choices).forEach(function (b) { b.addEventListener("change", sync); });
         sync();
       })();
     </script>
 
     <p class="stub">
       <em>Demo stub — nothing is checked here.</em> You just self-assert these
-      facts; the boxes start empty and you confirm them yourself. The
+      facts; the boxes start empty, you tick them and choose the licence category
+      yourself. The
       <strong>real</strong> broker verifies you
       <strong>possess a government account</strong> (you log into a national
       eID or a mobile driving licence, mDL, and authorize the broker to read your

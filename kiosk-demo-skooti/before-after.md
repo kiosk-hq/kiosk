@@ -45,7 +45,8 @@ launches the App Clip, and the clip writes the token to the lock.
 
 A licence-free scooter needs no identity check at all. The signed KYC
 attestation gates `rent_motorcycle` instead (`test/stories/licence_check_test.rb`), where a licence
-is the point.
+is the point: each motorcycle names the licence category it needs, A1 or A, and
+a rider whose licence covers only A1 rides the A1 motorcycle and not the other.
 
 ## What an operator adds
 

@@ -55,13 +55,13 @@ class Reservation < ApplicationRecord
   end
 
   def licence_free
-    return if scooter.licence_free?
+    return unless scooter.needs_licence?
 
     errors.add(:base, "#{scooter.code} needs a licence — rent it with rent_motorcycle")
   end
 
   def licence_required
-    return if scooter.licence_required?
+    return if scooter.needs_licence?
 
     errors.add(:base, "#{scooter.code} needs no licence — rent it with start_rental")
   end

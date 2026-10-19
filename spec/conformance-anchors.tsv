@@ -519,7 +519,7 @@ kiosk-demo-philslist/test/stories/privacy_test.rb	test "one seller can neither e
 kiosk-demo-philslist/test/stories/selling_test.rb	a seller who retitles a listing keeps its price, and clears the price only by saying so
 kiosk-demo-prove/README.md	  `KycVerifier` **also** enforces this at the wire: every
 kiosk-demo-prove/README.md	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
-kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
+kiosk-demo-prove/README.md	"attributes": { "age_over_18": true, "licence_a1": true, "licence_a": true }, "iat": …, "exp": … }
 kiosk-demo-prove/README.md	# kiosk-demo-prove
 kiosk-demo-prove/README.md	## The three legs
 kiosk-demo-prove/README.md	- **Bound, single-use, TTL'd claim.** The claim binds to (subject + operator +
@@ -537,7 +537,7 @@ kiosk-demo-prove/app/controllers/verifications_controller.rb	    base = (Rails.c
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    nonce      = SecureRandom.urlsafe_base64(32)
 kiosk-demo-prove/app/controllers/verifications_controller.rb	    request_id = SecureRandom.urlsafe_base64(32) # 256 bits
 kiosk-demo-prove/app/controllers/verifications_controller.rb	  REQUEST_TTL = 15 * 60
-kiosk-demo-prove/app/controllers/verifications_controller.rb	attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
+kiosk-demo-prove/app/controllers/verifications_controller.rb	attributes = ClaimCatalog.attributes_for(prove_request.requested_claims, params[:licence_category])
 kiosk-demo-prove/app/models/operator_registry.rb	  def callback_allowed?(operator, callback_url)
 kiosk-demo-prove/app/models/operator_registry.rb	# The operators this broker serves: each authenticates with its own secret,
 kiosk-demo-prove/app/models/operator_registry.rb	# and the broker posts its callbacks to that operator's registered host only.
@@ -560,16 +560,16 @@ kiosk-demo-skooti/README.md	**What this KYC proves, and what it deliberately doe
 kiosk-demo-skooti/README.md	Hold a vehicle for 3 minutes and quote the first minute to pay
 kiosk-demo-skooti/README.md	Scooter rental demo operator for Kiosk.
 kiosk-demo-skooti/README.md	Start the rental of a paid, licence-free vehicle and issue its offline Ed25519 unlock token
-kiosk-demo-skooti/README.md	attestation proves the assistant is *eligible* — that a valid category-A licence
+kiosk-demo-skooti/README.md	attestation proves the assistant is *eligible* — that a valid licence of the
 kiosk-demo-skooti/README.md	bin/rails test         # the tests; CI runs exactly this
 kiosk-demo-skooti/README.md	with one Equihash proof-of-work at the gem's default n=168 k=7
 kiosk-demo-skooti/app/controllers/kiosk/reservations_controller.rb	@reservation = Reservation.create!(user_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])
 kiosk-demo-skooti/app/jobs/refund_unstarted_job.rb	Reservation.unstarted.ids.each { Reservation.refund_unstarted!(it) }
 kiosk-demo-skooti/app/models/reservation.rb	HOLD = 3.minutes
 kiosk-demo-skooti/app/models/reservation.rb	before_create { self.held_until = HOLD.from_now }
-kiosk-demo-skooti/app/models/reservation.rb	return if scooter.licence_free?
+kiosk-demo-skooti/app/models/reservation.rb	return unless scooter.needs_licence?
 kiosk-demo-skooti/app/models/reservation.rb	scope :live, -> { where(arel_table[:held_until].gt(Time.current)) }
-kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	# attested `age_over_18` and `licence_a`.
+kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	# attested `age_over_18` and the licence attribute of the vehicle's category.
 kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	Kiosk::Server::Kyc.require!
 kiosk-demo-skooti/app/operations/rental.rb	Reservation.own.reserved.find_by(id: reservation_id) or refuse
 kiosk-demo-skooti/app/operations/rental.rb	def require_paid!(reservation)
@@ -580,11 +580,11 @@ kiosk-demo-skooti/app/views/home/index.html.erb	      <div class="sec-k">🤖 Tr
 kiosk-demo-skooti/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
 kiosk-demo-skooti/before-after.md	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	`test/stories/ride_test.rb` runs the errand with no human account and no sign-in:
-kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-skooti/config/initializers/kiosk.rb	Kiosk::PaymentProviders::Stripe.new(
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_audience   = 'skooti'
-kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.registration_pow_count = 1
 kiosk-demo-skooti/config/initializers/kiosk.rb	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
@@ -715,7 +715,7 @@ kiosk-demo-tudu/test/stories/link_test.rb	Alice links an assistant that started 
 kiosk-demo-tudu/test/stories/link_test.rb	assert @on_its_own.asks(:my_lists).refused?(:unauthenticated)
 kiosk-demo-tudu/test/stories/privacy_test.rb	a housemate reads the list, and a stranger can neither read it, nor join it, nor see it exists
 kiosk-demo-tudu/test/stories/privacy_test.rb	only queries the catalog says reach past the assistant's own account ever show a shared list
-kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	CLAIM_IDS = { 'licence_a' => 'licence_category:A' }.freeze
+kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	requested_claims: claims,
 kiosk-pay-stripe/README.md	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	Generate the migration for the stripe_customers table of kiosk-pay-stripe.

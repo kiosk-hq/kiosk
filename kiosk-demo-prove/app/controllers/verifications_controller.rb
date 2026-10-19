@@ -3,7 +3,8 @@
 require 'securerandom'
 
 # An operator opens a verification (POST /verifications, with its bearer
-# secret); the human answers it on the page the request_id links to; an
+# secret); the human answers it on the page the request_id links to, and
+# chooses a licence category when the operator asks about a licence; an
 # approval is signed as an anonymized claim and posted to the operator's
 # callback. No CSRF token: the intake authenticates with the secret, the page
 # with the unguessable request_id.
@@ -17,7 +18,6 @@ class VerificationsController < ApplicationController
 
   def show
     @request = find_request
-    @entries = request_entries
     render :show
   end
 
@@ -36,7 +36,7 @@ class VerificationsController < ApplicationController
     return render_unconfirmable unless @request&.confirmable?
 
     case params[:decision].to_s
-    when 'approve' then claim!(@request, :confirmed) ? approve!(@request) : render_unconfirmable
+    when 'approve' then approve_answered!(@request)
     when 'decline' then claim!(@request, :declined) ? decline! : render_unconfirmable
     else render plain: 'decision must be approve or decline', status: :bad_request
     end
@@ -81,8 +81,19 @@ class VerificationsController < ApplicationController
     audience.empty? ? operator_id_param : audience
   end
 
+  def approve_answered!(prove_request)
+    return render_licence_unanswered unless licence_answered?(prove_request)
+
+    claim!(prove_request, :confirmed) ? approve!(prove_request) : render_unconfirmable
+  end
+
+  def licence_answered?(prove_request)
+    !ClaimCatalog.asks_licence?(prove_request.requested_claims) ||
+      ClaimCatalog::LICENCE_CATEGORIES.key?(params[:licence_category].to_s)
+  end
+
   def approve!(prove_request)
-    attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
+    attributes = ClaimCatalog.attributes_for(prove_request.requested_claims, params[:licence_category])
     delivery_status = deliver_claim(prove_request, ProveKey.mint(prove_request, attributes))
 
     @decision   = :approved
@@ -107,12 +118,12 @@ class VerificationsController < ApplicationController
     prove_request.with_lock { prove_request.pending? && prove_request.update!(status: decision) }
   end
 
-  def render_unconfirmable
-    @entries = request_entries
-    render(:show, status: :unprocessable_content)
-  end
+  def render_unconfirmable = render(:show, status: :unprocessable_content)
 
-  def request_entries = @request ? ClaimCatalog.entries_for(@request.requested_claims) : []
+  def render_licence_unanswered
+    @licence_unanswered = true
+    render_unconfirmable
+  end
 
   def find_request
     token = params[:request].to_s

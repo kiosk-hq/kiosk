@@ -211,9 +211,9 @@ Assistant (agent token → Kiosk API)
        │
        Gate 1:  reservation exists, belongs to this customer, status = 'reserved',
                 and its hold has not lapsed (else 409 conflict)
-       Gate 1b: the reserved vehicle is licence-FREE — a motorcycle
-                is refused here and goes through rent_motorcycle, whose Gate 0
-                is the KYC one. start_rental has NO KYC gate.
+       Gate 1b: the reserved vehicle names no licence_category — a motorcycle
+                is refused here and goes through rent_motorcycle, which also
+                checks the KYC attributes of its category. start_rental has NO KYC gate.
        Gate 2:  settled payment (settlement record) references THIS reservation_id
        │
        All gates pass →

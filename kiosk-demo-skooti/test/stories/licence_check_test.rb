@@ -33,6 +33,29 @@ class LicenceCheckStory < StoryTest
     assert the_lock_on('MC-001').unlock(token: rental['rental_token'], now: Time.now.to_i)
   end
 
+  test 'the fleet names the licence category each vehicle needs' do
+    needs = a_rider.vehicles_nearby.to_h { [it['code'], it['licence_category']] }
+
+    assert_equal [nil, 'A', 'A1'], needs.values_at('SK-001', 'MC-001', 'MC-002')
+  end
+
+  test 'a rider whose licence covers A1 rides the light motorcycle and not the category-A one' do
+    rider, light = a_rider_with_a_paid('MC-002')
+    rider.requests_verification
+    the_verification_service_confirms(rider, 'age_over_18' => true, 'licence_a1' => true)
+
+    assert_predicate rider.rides_motorcycle(light), :ok?
+
+    heavy = rider.reserves('MC-001')
+
+    assert_predicate rider.pays_for(heavy), :ok?
+    refused = rider.rides_motorcycle(heavy)
+
+    assert_refused refused, :kyc_required
+    assert_includes refused.detail, 'MC-001 needs a licence of category A'
+    assert_includes refused.detail, 'licence_category'
+  end
+
   test 'a rider confirmed as an adult but without a motorcycle licence gets no motorcycle' do
     rider, motorcycle = a_rider_with_a_paid('MC-001')
 
@@ -45,14 +68,18 @@ class LicenceCheckStory < StoryTest
   test 'an attestation that spells the answer any other way than true proves nothing' do
     rider, motorcycle = a_rider_with_a_paid('MC-001')
 
-    assert_predicate rider.presents(kyc_attestation(rider.principal, 'age_over_18' => true, 'licence_a' => true)), :ok?
+    good = kyc_attestation(rider.principal, 'age_over_18' => true, 'licence_a1' => true, 'licence_a' => true)
+
+    assert_predicate rider.presents(good), :ok?
     assert_predicate rider.rides_motorcycle(motorcycle), :ok?
 
-    spelled = rider.presents(kyc_attestation(rider.principal, 'age_over_18' => 'true', 'licence_a' => 1))
+    spelled = rider.presents(kyc_attestation(rider.principal, 'age_over_18' => 'true', 'licence_a1' => 1))
+    light = rider.reserves('MC-002')
 
     assert_predicate spelled, :ok?, spelled
     assert_equal({}, spelled['attributes'])
-    assert rider.rides_motorcycle(motorcycle).refused?(:kyc_required)
+    assert_predicate rider.pays_for(light), :ok?
+    assert rider.rides_motorcycle(light).refused?(:kyc_required)
   end
 
   test "another rider's licence opens no motorcycle" do

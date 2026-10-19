@@ -24,7 +24,7 @@ module Kiosk
     }.freeze
 
     kind :action
-    description 'Start the rental of a paid, licence-free vehicle and get its unlock link.'
+    description 'Start the rental of a paid vehicle that names no `licence_category`, and get its unlock link.'
     input_schema type: 'object', additionalProperties: false,
                  properties: { reservation_id: RESERVATION_ID }, required: ['reservation_id']
     output_schema(**RENTAL)
@@ -34,8 +34,9 @@ module Kiosk
     end
 
     kind :action
-    description 'Start the rental of a paid motorcycle and get its unlock link. Needs your verified ' \
-                '`age_over_18` and `licence_a`.'
+    description 'Start the rental of a paid vehicle that names a `licence_category`, and get its unlock link. ' \
+                'Needs your human verified as `age_over_18` and with the licence attribute of that category: ' \
+                '`licence_a1` for A1, `licence_a` for A.'
     input_schema type: 'object', additionalProperties: false,
                  properties: { reservation_id: RESERVATION_ID }, required: ['reservation_id']
     output_schema(**RENTAL)

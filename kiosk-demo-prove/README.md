@@ -31,7 +31,14 @@ surface. It depends on **no** kiosk gem.
 |-------|-----------|-------|
 | `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle, audience?}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", nonce, expires_at}` |
 | `GET /verify?request=<id>` | broker → human | the yes/no page (the token is the only credential — no sign-in) |
-| `POST /verify` | human → broker | `{request, decision:"approve"\|"decline"}` — on approve mints the claim and POSTs it to `callback_url` |
+| `POST /verify` | human → broker | `{request, decision:"approve"\|"decline", licence_category?}` — on approve mints the claim and POSTs it to `callback_url` |
+
+The broker answers `age_over_18` and the licence attributes `licence_a1`,
+`licence_a`, `licence_b1` and `licence_b`. When the operator asks for a licence
+attribute, the human chooses a category: A1, A, B1, B or none. The claim
+carries each requested attribute that the category lets its holder ride. A
+licence of category A lets its holder ride A1 and A; each other category lets
+its holder ride only that category. The table is `ClaimCatalog::LICENCE_CATEGORIES`.
 
 The callback body the broker POSTs to the operator:
 
@@ -44,7 +51,7 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
 ```json
 { "sub": "<operator user_id>", "iss": "https://kyc.demo.kiosk.tech", "level": "verified",
   "operator": "skooti", "aud": "skooti", "request_id": "…", "nonce": "…",
-  "attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
+  "attributes": { "age_over_18": true, "licence_a1": true, "licence_a": true }, "iat": …, "exp": … }
 ```
 
 `exp` is one year after `iat`.
@@ -83,7 +90,7 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
 
 ## Demo stub vs. production
 
-This demo **self-asserts** (the human clicks yes/no) and is clearly labelled as
+This demo **self-asserts** (the human clicks yes/no and chooses a licence category) and is clearly labelled as
 such on the page. It proves the *protocol* — per-request binding, no replay,
 anti-mass-confirm, signed anonymized callback — not that the human is actually
 over 18, and it makes **no liveness claim**. In production the verification page
@@ -96,9 +103,9 @@ government-IdP / mDL landscape), and later that **the account is
 actually theirs** — so a person cannot lend or share their account to vouch for
 other people's age or licence. The broker↔operator interface (intake → per-request binding → signed
 anonymized callback) is identical, which is why the stub is a faithful proof.
-This production path is **research-gated and provisional**: signed mDL issuance is
-Kiosk v0.5, not earlier; no named government service is claimed as integrated
-today, and no free/assurance claim beyond account-possession is made. Vendor KYC
+This production path is **research-gated and provisional**: the broker issues
+no attestation from an mDL, no named government service is integrated, and no
+assurance claim beyond account-possession is made. Vendor KYC
 (Sumsub/Veriff/Onfido) can return age + licence category but **not anonymized**
 (bundled with full PII) — which is precisely the gap the broker fills.
 

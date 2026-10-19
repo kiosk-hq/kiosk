@@ -67,12 +67,18 @@ class IntakeTest < ActionDispatch::IntegrationTest
 end
 
 class VerificationPageTest < ActionDispatch::IntegrationTest
-  test 'shows the yes/no questions for a live request' do
+  test 'asks the yes/no questions and the licence category for a live request' do
     get '/verify', params: { request: open_request }
 
     assert_response :ok
     assert_includes response.body, 'over 18'
-    assert_includes response.body, 'category A'
+    %w[A1 A B1 B none].each { assert_includes response.body, %(name="licence_category" value="#{it}") }
+  end
+
+  test 'asks no licence category when the operator asks for no licence' do
+    get '/verify', params: { request: open_request(requested_claims: ['age_over_18']) }
+
+    assert_not_includes response.body, 'licence_category'
   end
 
   test 'does not reveal anything for an unknown token' do
@@ -94,7 +100,7 @@ class ApprovalTest < ActionDispatch::IntegrationTest
     assert_includes response.body, 'Confirmed'
     assert_equal [{ 'sub' => row.subject_handle, 'iss' => ProveKey.issuer, 'level' => 'verified',
                     'operator' => 'skooti', 'aud' => 'skooti', 'request_id' => rid, 'nonce' => row.nonce,
-                    'attributes' => { 'age_over_18' => true, 'licence_a' => true } },
+                    'attributes' => { 'age_over_18' => true, 'licence_a1' => true, 'licence_a' => true } },
                   row.nonce, callback_url, 'confirmed'],
                  [payload.slice('sub', 'iss', 'level', 'operator', 'aud', 'request_id', 'nonce', 'attributes'),
                   *delivered.values_at(:nonce, :callback_url), row.reload.status]
@@ -125,9 +131,28 @@ class ApprovalTest < ActionDispatch::IntegrationTest
   end
 
   test 'grants ONLY the attributes the operator asked for (age_over_18 alone)' do
-    payload = decode(approve_capturing(open_request(requested_claims: ['age_over_18']))[:kyc_jws])
+    payload = decode(approve_capturing(open_request(requested_claims: ['age_over_18']), licence_category: nil)[:kyc_jws])
 
     assert_equal({ 'age_over_18' => true }, payload['attributes'])
+  end
+
+  test 'grants the licence attributes the chosen category covers, of those the operator asked for' do
+    granted = %w[A1 B1 B none].index_with do |category|
+      decode(approve_capturing(open_request, licence_category: category)[:kyc_jws])['attributes']
+    end
+
+    assert_equal({ 'A1' => { 'age_over_18' => true, 'licence_a1' => true },
+                   'B1' => { 'age_over_18' => true }, 'B' => { 'age_over_18' => true },
+                   'none' => { 'age_over_18' => true } }, granted)
+  end
+
+  test 'refuses an approval with no licence category, and the request stays open' do
+    rid = open_request
+    posting_no_callback { approve(rid, licence_category: nil) }
+
+    assert_response :unprocessable_content
+    assert_includes response.body, 'Choose your driving licence category'
+    assert_equal 'pending', ProveRequest.find(rid).status
   end
 
   test 'is single-use: a second approve on a confirmed request is rejected (no re-mint)' do

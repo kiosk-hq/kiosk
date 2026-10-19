@@ -16,9 +16,6 @@ module Kiosk
     class Prove < Base
       HOSTED = 'https://kyc.demo.kiosk.tech'
 
-      # The broker's claim id for an attribute name, where the two differ.
-      CLAIM_IDS = { 'licence_a' => 'licence_category:A' }.freeze
-
       attr_reader :operator_id
 
       def initialize(operator_id:, intake_secret:, url: HOSTED)
@@ -31,11 +28,8 @@ module Kiosk
       end
 
       def open_verification(subject:, claims:, audience:, callback_url:)
-        intake = post(
-          operator_id: operator_id, callback_url: callback_url,
-          requested_claims: claims.map { |name| CLAIM_IDS.fetch(name, name) },
-          subject_handle: subject, audience: audience
-        )
+        intake = post(operator_id: operator_id, callback_url: callback_url, requested_claims: claims,
+                      subject_handle: subject, audience: audience)
         fields = intake.values_at('request_id', 'verification_url', 'nonce').map(&:to_s)
         raise Unavailable, 'the KYC broker answered without request_id, verification_url and nonce' if fields.any?(&:empty?)
 

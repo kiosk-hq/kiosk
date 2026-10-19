@@ -43,7 +43,7 @@ end
 RSpec.describe Kiosk::KycProviders::Prove, '#open_verification' do
   include_context 'with a Prove broker client'
 
-  it "opens a verification at the broker's intake, in the broker's claim vocabulary" do
+  it "opens a verification at the broker's intake, asking for the attribute names" do
     answer(201, request_id: 'r-1', verification_url: 'https://broker.example/v/r-1', nonce: 'n-1')
 
     expect(open!).to eq(request_id: 'r-1', verification_url: 'https://broker.example/v/r-1', nonce: 'n-1')
@@ -52,7 +52,7 @@ RSpec.describe Kiosk::KycProviders::Prove, '#open_verification' do
     expect(req['Authorization']).to eq('Bearer s3cret')
     expect(JSON.parse(req.body)).to eq(
       'operator_id' => 'shop', 'callback_url' => 'https://shop.example/kiosk/kyc/callback',
-      'requested_claims' => ['age_over_18', 'licence_category:A'], 'subject_handle' => 'u-1', 'audience' => 'shop'
+      'requested_claims' => %w[age_over_18 licence_a], 'subject_handle' => 'u-1', 'audience' => 'shop'
     )
   end
 

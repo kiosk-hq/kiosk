@@ -32,8 +32,14 @@ scooters = [
          .find_or_create_by!(code: scooter[:code])
 end
 
-motorcycle = Scooter.create_with(name: 'Amstel Cruiser', dock: 'Amstel Garage', kind: 'motorcycle',
-                                 lat: 52.3600, lng: 4.9020, price_per_min_cents: 40)
-                    .find_or_create_by!(code: 'MC-001')
+# A licence of category A covers both motorcycles; one of category A1 covers only MC-002.
+motorcycles = [
+  { code: 'MC-001', name: 'Amstel Cruiser', licence_category: 'A',  lat: 52.3600, lng: 4.9020, price_per_min_cents: 40 },
+  { code: 'MC-002', name: 'Zuid Zipper',    licence_category: 'A1', lat: 52.3602, lng: 4.9022, price_per_min_cents: 25 }
+].map do |motorcycle|
+  Scooter.create_with(motorcycle.merge(kind: 'motorcycle', dock: 'Amstel Garage'))
+         .find_or_create_by!(code: motorcycle[:code])
+end
 
-Rails.logger.info "Seeded: #{riders.size} riders, #{scooters.size} licence-free scooters and the KYC-gated #{motorcycle.name}"
+Rails.logger.info "Seeded: #{riders.size} riders, #{scooters.size} licence-free scooters and " \
+                  "#{motorcycles.size} KYC-gated motorcycles"

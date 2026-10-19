@@ -11,7 +11,11 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: Each skooti motorcycle names the licence category it needs, A1 or A, and `rent_motorcycle` checks its attribute. The fleet adds the A1 motorcycle MC-002.
+- 2026-10-19: The prove broker asks the human for a licence category (A1, A, B1, B or none) and signs the requested `licence_*` attributes that category covers.
 - 2026-10-19: `Kyc.require!` takes the attribute names an action needs and an optional refusal `detail`.
+- 2026-10-19: The Prove adapter asks the broker for the `kyc_claims` names as they are.
+- 2026-10-19: The prove README says the broker issues no attestation from an mDL.
 - 2026-10-19: The `capabilities` configuration setting is removed. Discovery always derives the list from what is registered.
 - 2026-10-19: The spending cap counts each settled charge less what the operator refunded of it, so a refund gives its amount back to the cap.
 - 2026-10-19: The getgrocery and skooti READMEs say `request_kyc` answers 500 under `docker compose up`, because the app cannot reach the KYC broker from its container.

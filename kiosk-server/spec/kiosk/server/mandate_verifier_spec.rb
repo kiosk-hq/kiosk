@@ -175,6 +175,38 @@ end
 RSpec.describe Kiosk::Server::MandateVerifier do
   include_context 'mandate verifier spec: verifier'
 
+  # §11.1: the principal and issuer claims are refused for ABSENCE, before
+  # the principal and issuer comparisons read them.
+  describe '.verify_intent' do
+    it 'rejects a mandate with no user_id claim' do
+      expect_missing_required_claim do
+        described_class.verify_intent(raw_jws: sign(intent_payload.except(:user_id)), identity: identity)
+      end
+    end
+
+    it 'rejects a mandate with no agent_id claim' do
+      expect_missing_required_claim do
+        described_class.verify_intent(raw_jws: sign(intent_payload.except(:agent_id)), identity: identity)
+      end
+    end
+
+    it 'rejects a mandate with no iss claim' do
+      expect_missing_required_claim do
+        described_class.verify_intent(raw_jws: sign(intent_payload.except(:iss)), identity: identity)
+      end
+    end
+
+    it 'rejects a mandate signed with HS256 instead of RS256' do
+      hmac = JWT.encode(intent_payload, 'shared-secret', 'HS256')
+      expect { described_class.verify_intent(raw_jws: hmac, identity: identity) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, 'mandate signature invalid')
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::MandateVerifier do
+  include_context 'mandate verifier spec: verifier'
+
   describe '.verify_intent' do
     # cap_amount_cents is a REQUIRED intent field. ABSENT (nil) would
     # nil-coerce to 0 in the verify_cart cap comparison, making it vacuous — an
@@ -630,6 +662,12 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       expect { described_class.verify_cart(raw_jws: sign(bad), identity: identity, intent: intent) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /principal/)
     end
+
+    it 'applies the shared decode checks (foreign signer rejected)' do
+      forged = JWT.encode(cart_payload, OpenSSL::PKey::RSA.generate(2048), 'RS256')
+      expect { described_class.verify_cart(raw_jws: forged, identity: identity, intent: intent) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, 'mandate signature invalid')
+    end
   end
 end
 
@@ -711,6 +749,30 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       neg = payment_payload.merge(amount_cents: -1599)
       expect { described_class.verify_payment(raw_jws: sign(neg), identity: identity, cart: cart_mandate) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /positive/)
+    end
+
+    it 'rejects a payment with a ZERO amount_cents' do
+      zero = payment_payload.merge(amount_cents: 0)
+      expect { described_class.verify_payment(raw_jws: sign(zero), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /positive/)
+    end
+  end
+end
+
+RSpec.describe Kiosk::Server::MandateVerifier do
+  include_context 'mandate verifier spec: verifier'
+
+  # §11.1: `currency` is REQUIRED on the payment, `scope` is optional on the intent.
+  describe 'own fields' do
+    it 'rejects a payment missing currency (absent)' do
+      no_cur = payment_payload.except(:currency)
+      expect { described_class.verify_payment(raw_jws: sign(no_cur), identity: identity, cart: cart_mandate) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, 'mandate missing required currency field')
+    end
+
+    it 'accepts an intent without scope' do
+      m = described_class.verify_intent(raw_jws: sign(intent_payload.except(:scope)), identity: identity)
+      expect(m.scope).to be_nil
     end
   end
 end

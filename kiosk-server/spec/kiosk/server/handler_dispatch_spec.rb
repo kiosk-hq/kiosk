@@ -189,6 +189,17 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       expect { execute(:query, { name: 'one_object' }) }
         .to raise_error(Kiosk::Server::Errors::ActionFailed, /not an array of rows/)
     end
+
+    it 'refuses an empty next_cursor, whose next link would lead back to page one' do
+      stub_handler('SpecEmptyCursorController', :query, 'Pages with an empty cursor.') do
+        def empty_cursor = render_kiosk_page([{ id: 1 }], next_cursor: '')
+      end
+
+      expect(Kiosk::Server::FailureLog)
+        .to receive(:report).with(/raised ArgumentError/, having_attributes(message: /next_cursor is empty/))
+      expect { execute(:query, { name: 'empty_cursor' }) }
+        .to raise_error(Kiosk::Server::Errors::ActionFailed)
+    end
   end
 end
 

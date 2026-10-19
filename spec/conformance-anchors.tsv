@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1945 anchors.
+# 1954 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -601,6 +601,7 @@ kiosk-demo-skooti/test/stories/privacy_test.rb	one rider can neither pay for, ri
 kiosk-demo-skooti/test/stories/ride_test.rb	a rider with no account reserves a scooter nearby, pays for the first minute and unlocks it
 kiosk-demo-skooti/test/stories/ride_test.rb	assert_not lock.unlock(token:, now:), 'replayed'
 kiosk-demo-skooti/test/stories/ride_test.rb	the lock opens only this scooter, only before the rental expires, only with skooti's signature, and only once
+kiosk-demo-skooti/test/stories/unstarted_ride_test.rb	a paid hold whose ride never starts frees the vehicle and refunds the rider, once
 kiosk-demo-skooti/test/stories/unstarted_ride_test.rb	test 'a paid hold whose ride never starts frees the vehicle and refunds the rider, once' do
 kiosk-demo-skooti/test/stories/unstarted_ride_test.rb	test 'an unpaid hold holds the vehicle three minutes, and a lapsed one cannot be paid for' do
 kiosk-demo-skooti/test/test_helper.rb	def the_lock_on(vehicle) = LockSim.new(
@@ -1470,6 +1471,7 @@ kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	hits ONE cap across 
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	is currency-scoped (K-551): a different currency tallies zero
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	lets one through when each fits the cap alone and the two together do not
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	never settles past the cap, and leaves no declined cart in flight
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	raises the unique violation the Executor maps to 409 when the same mandate id is replayed
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	spelling is not identity (K-1251)
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	spending cap across spellings
 kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	still keeps usd out of the eur tally
@@ -1483,10 +1485,12 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	answers a payment-free origin wi
 kiosk-server/spec/kiosk/server/executor_spec.rb	charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)
 kiosk-server/spec/kiosk/server/executor_spec.rb	charges once and replays the ORIGINAL settlement the second time (K-850)
 kiosk-server/spec/kiosk/server/executor_spec.rb	does not answer a settled replay with an error at all (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	does not enforce when no spending_cap seam is configured (default)
 kiosk-server/spec/kiosk/server/executor_spec.rb	is gone from the vocabulary entirely — one list, not two
 kiosk-server/spec/kiosk/server/executor_spec.rb	maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same chain again
 kiosk-server/spec/kiosk/server/executor_spec.rb	maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)
 kiosk-server/spec/kiosk/server/executor_spec.rb	omits `next` when a paginating handler signals the last page (Page with nil cursor)
+kiosk-server/spec/kiosk/server/executor_spec.rb	proceeds when spent + cart total is within the cap
 kiosk-server/spec/kiosk/server/executor_spec.rb	puts module_not_served/501 on the wire for it, not a 403
 kiosk-server/spec/kiosk/server/executor_spec.rb	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
 kiosk-server/spec/kiosk/server/executor_spec.rb	raises Unauthenticated when identity is nil
@@ -1496,6 +1500,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	rejects with SpendingCapExceeded
 kiosk-server/spec/kiosk/server/executor_spec.rb	resumes a chain whose capture ran but whose settlement was never written
 kiosk-server/spec/kiosk/server/executor_spec.rb	scopes the settled-total tally to the cart's currency (not currency-blind)
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
+kiosk-server/spec/kiosk/server/executor_spec.rb	treats a cap of 0 as disabled (any charge rejected)
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	carries the challenges a handler renders on pow_required
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	keeps type, title and status those of the code, and drops instance and challenges
@@ -1599,10 +1604,12 @@ kiosk-server/spec/kiosk/server/link_code_spec.rb	raises NotFound for an unknown 
 kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on a failed proof and does NOT consume the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on an origin-mismatched proof (relay defense)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses to redeem a claim-flow device_code (kinds do not cross)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	accepts a payment with a nil/absent payment_method (SetupIntent model: on-file card)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	accepts three letters that name no currency — the shape is the minimum, not the domain
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 403, not 400 — currency is inside the §9.1 mandate carve-out
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	applies the shared decode checks (expired mandate rejected)
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	applies the shared decode checks (wrong signer rejected)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	canonicalises a cart currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	non-positive amounts launder the spending cap
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses a currency NAME such as Euro
@@ -1626,9 +1633,11 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with n
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no iat claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a mandate with no id claim
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a numeric-string exp as bad_request instead of 500ing in Time.at
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment missing amount_cents (absent, not 0)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment not bound to the presented cart (wrong cart_mandate_id)
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment whose amount_cents does not match the cart total
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment with a NEGATIVE amount_cents
+kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a payment with a mismatched currency
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a string iat as bad_request instead of 500ing in Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects a wrong issuer
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	rejects an effectively non-expiring mandate (exp beyond the max lifetime)

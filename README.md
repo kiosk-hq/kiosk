@@ -113,7 +113,7 @@ Each backend is built on `kiosk-pow`, which holds the shared BLAKE2b-256.
 
 | Gem | Purpose | API stability |
 |---|---|---|
-| `kiosk-reputation` | Customer reputation factors + bad-proof signal | alpha |
+| `kiosk-reputation` | Customer reputation factors | alpha |
 | `kiosk-redteam` | Red-team scenarios, adversarial test harness | alpha |
 
 ### Demo providers

@@ -6,12 +6,11 @@ module Kiosk
     # proofs, or the error that sends the caller back. Shared by
     # {PowGate.gate} and {RegistrationPow}.
     class PowToll
-      def initialize(spec:, fingerprint:, secret:, config:, on_bad_proof:)
+      def initialize(spec:, fingerprint:, secret:, config:)
         @spec         = spec
         @fingerprint  = fingerprint
         @secret       = secret
         @config       = config
-        @on_bad_proof = on_bad_proof
       end
 
       # Returns `:proceed`, or raises PowRequired (402), BadRequest or Forbidden.
@@ -83,7 +82,6 @@ module Kiosk
         when :ok
           accepted[challenge[:id]] = challenge[:exp].to_i
         when :bad_proof
-          @on_bad_proof.call
           # The id stays consumed, so one challenge drives at most one verify.
           raise Errors::Forbidden.new('invalid proof of work', hint: PowGate::POW_INVALID_HINT)
         when :expired, :bad_sig, :bad_params

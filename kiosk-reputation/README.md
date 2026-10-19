@@ -134,7 +134,7 @@ Comparison uses the same canonical `k=v` rendering the sig covers, so key order,
 Symbol-vs-String keys and `168` vs `"168"` are all equal — it rejects a different
 difficulty and nothing else. `:bad_params` means **re-challenge, not bad faith**:
 `kiosk-server` releases the challenge id and answers 402 at current params
-(never 403, never `on_bad_proof`).
+(never 403).
 
 ## Components
 
@@ -244,20 +244,6 @@ An operator that takes no payment records each fulfilled visit with
 `Kiosk::Visit.record!(user_id:, value_cents:)`, and the visit counts as spend.
 A refund through `Kiosk::Server::PaymentClaim#refund` is not spend.
 
-## Reputation hit on bad proof
-
-When `Challenge.verify` returns `:bad_proof` (well-formed, unexpired,
-correctly-bound proof but wrong nonce), `kiosk-server` calls the
-`on_bad_proof` callback with the caller's `Kiosk::Identity`. The engine keeps
-no count of wrong proofs and gives none to the policy. A host that uses the
-signal records it in a store it owns.
-
-This is the intended signal: a correct solver never submits a wrong nonce.
-A `:bad_sig` (forged or wrong-request proof), `:expired` or `:bad_params`
-(off-spec difficulty) does NOT trigger `on_bad_proof` — those can be honest
-clock skew, a retry, or a challenge that outlived a difficulty change; no
-evidence of bad faith.
-
 ## kiosk-server configuration
 
 The server gate (`Kiosk::Server::PowGate`) reads these config slots:
@@ -267,7 +253,6 @@ The server gate (`Kiosk::Server::PowGate`) reads these config slots:
 | `reputation_policy` | `Kiosk::Reputation::Policy` instance (or duck type) | `nil` | Policy that decides when and how hard to challenge. `nil` = never challenge (zero overhead). |
 | `pow_secret` | String | required when policy is set | HMAC key for challenge signing. Load from env: `ENV.fetch("KIOSK_POW_SECRET")`. |
 | `pow_ttl` | Integer (seconds) | `300` | Challenge validity window. |
-| `on_bad_proof` | `(identity:) → void` callable | no-op | Called with the caller's `Kiosk::Identity` when a submitted proof has a wrong nonce. Record it in a store you own. |
 | `pow_spent_store` | `#claim`/`#release`/`#spent?`/`#mark_spent` | `Kiosk::Server::PowSpentStores::ActiveRecord` (the `kiosk.pow_spent` table) | Tracks spent challenge ids so a proof is accepted once, across every process and deploy. See kiosk-server's README, "Multi-process deployments". |
 
 ```ruby

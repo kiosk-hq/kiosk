@@ -17,7 +17,7 @@ module Kiosk
         fp = PowGate.request_fingerprint(method: 'POST', verb: 'auth/register',
                                          body: { public_key: public_key_pem })
 
-        PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config, on_bad_proof: -> {}).collect!(pow)
+        PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config).collect!(pow)
         nil
       end
 

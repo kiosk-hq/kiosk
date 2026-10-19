@@ -467,31 +467,6 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
 
   before { configure_with_policy(always_challenge_policy) }
 
-  it 'calls on_bad_proof with the identity' do
-    penalty_calls = []
-    Kiosk.configure { |c| c.on_bad_proof = ->(identity:) { penalty_calls << identity } }
-
-    challenge  = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    bad_nonce  = find_bad_nonce(challenge)
-
-    begin
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: [{ challenge: challenge, nonce: bad_nonce }]
-      )
-    rescue Kiosk::Server::Errors::Forbidden
-      nil
-    end
-
-    expect(penalty_calls).to eq([identity])
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a wrong nonce" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
   # ── K-512: the 403 must be actionable ──────────────────────────────────
   # A bare "invalid proof of work" is a dead end: a live agent that
   # hand-rolled an Equihash solver got four independent construction
@@ -687,31 +662,6 @@ RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES}
   end
 end
 
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} replayed challenge id (spent proof — honest retry)" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'does NOT call on_bad_proof (replaying a valid proof is not a wrong proof)' do
-    penalty_calls = []
-    Kiosk.configure { |c| c.on_bad_proof = ->(identity:) { penalty_calls << identity } }
-
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    nonce     = solve_nonce(challenge)
-    pow       = [{ challenge: challenge, nonce: nonce }]
-
-    described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
-
-    begin
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
-    rescue Kiosk::Server::Errors::PowRequired
-      nil
-    end
-
-    expect(penalty_calls).to be_empty
-  end
-end
-
 # ── malformed proof: challenge missing a params object (K-551) ───────────
 # A challenge echoed back WITHOUT a `params` object would 500 inside the
 # challenge sig computation (`nil.sort_by`). The gate rejects it as a clean
@@ -858,12 +808,6 @@ RSpec.describe Kiosk::Server::PowGate, 'new config slots (defaults)' do
 
   it 'pow_ttl defaults to 300' do
     expect(Kiosk.configuration.pow_ttl).to eq(300)
-  end
-
-  it 'on_bad_proof default is a no-op callable' do
-    cb = Kiosk.configuration.on_bad_proof
-    expect(cb).to respond_to(:call)
-    expect { cb.call(identity: identity) }.not_to raise_error
   end
 end
 

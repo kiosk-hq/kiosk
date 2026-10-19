@@ -98,16 +98,12 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
     expect(gate(pow: [proof])).to eq(:proceed)
   end
 
-  it 'rejects a WRONG nonce through the real verifier (403 + penalty)' do
-    penalty = []
-    Kiosk.configure { |c| c.on_bad_proof = ->(identity:) { penalty << identity } }
-
+  it 'rejects a WRONG nonce through the real verifier (403)' do
     proof = { challenge: kat_challenge(id: 'c1'), nonce: { indices: [3, 10] } } # not a valid solution
 
     expect do
       gate(pow: [proof])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
-    expect(penalty).to eq([identity])
   end
 end
 

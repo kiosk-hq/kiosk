@@ -33,7 +33,7 @@ module Kiosk
         return :proceed if spec.nil?
 
         fp = request_fingerprint(method: method, verb: verb || command, body: body)
-        PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config, on_bad_proof: bad_proof_hook(config, identity))
+        PowToll.new(spec: spec, fingerprint: fp, secret: secret, config: config)
                .collect!(pow).tap { paid(config, identity) }
       end
 
@@ -53,8 +53,6 @@ module Kiosk
         claims = identity&.claims || {}
         "session:#{claims[:jti]}" if claims[:jti] && claims[:exp]
       end
-
-      def bad_proof_hook(config, identity) = -> { config.on_bad_proof.call(identity: identity) }
 
       # The policy's toll for this caller and verb, or nil for none.
       def toll_for(policy, identity, verb)

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2006 anchors.
+# 2003 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -38,7 +38,7 @@ CHANGELOG.md	surfaced by the first live Hermes run, which paid successfully but 
 CLAUDE.md	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
 README.md	Apache-2.0 for every gem in this repo.
 README.md	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation
-README.md	Customer reputation factors + bad-proof signal
+README.md	Customer reputation factors
 README.md	Equihash (n=168, k=7)
 README.md	Every Kiosk gem lives in this repo and under that licence: `ls */*.gemspec` is the whole list
 README.md	Meta-gem; `bundle add kiosk-all` installs core + server
@@ -929,7 +929,6 @@ kiosk-reputation/lib/kiosk/reputation/challenge.rb	Backends.fetch(fields.alg).ve
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	OpenSSL.fixed_length_secure_compare(expected, given)
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	def matches_expected?(expect, alg, params)
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil)
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	proof_valid?(fields_of(challenge, request_fingerprint), nonce) ? :ok : :bad_proof
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	return :bad_sig unless constant_time_compare(compute_sig(secret, fields), sig)
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	return :expired unless fields.exp.to_i > now.to_i
 kiosk-reputation/lib/kiosk/reputation/challenge.rb	sig: compute_sig(secret, fields) }
@@ -1155,7 +1154,6 @@ kiosk-server/lib/kiosk/server/pop_verifier.rb	PROOF_REQUIRED_CLAIMS = %w[aud non
 kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.current_issuer
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	# One proof, a JSON array, repeated header lines (Rack joins them with
-kiosk-server/lib/kiosk/server/pow_gate.rb	def bad_proof_hook(config, identity) = -> { config.on_bad_proof.call(identity: identity) }
 kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
 kiosk-server/lib/kiosk/server/pow_toll.rb	# Not bad faith (clock skew, a difficulty change): release the claim
@@ -1762,12 +1760,11 @@ kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	proceeds when the r
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	re-challenges when the ARGUMENTS differ
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	re-challenges when the VERB differs (a catalog proof is not an orders proof)
-kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	rejects a WRONG nonce through the real verifier (403 + penalty)
+kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	rejects a WRONG nonce through the real verifier (403)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired carries a well-formed challenge
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired has HTTP status 402
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	PowRequired#to_problem renders a pow_required 402 problem document
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	carries a hint steering to the shipped reference solver
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	does NOT call on_bad_proof (replaying a valid proof is not a wrong proof)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	does not disclose the construction, the parameters, or which check failed
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	expect(error).not_to respond_to(:to_envelope)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	flattens a proxy comma-combined value {A},{B} (RFC 7230)

@@ -103,13 +103,6 @@ module Kiosk
         def pow_ttl
           @pow_ttl ||= 300
         end
-
-        # `(identity:)`, called on a cryptographically invalid proof. Default: no-op.
-        attr_writer :on_bad_proof
-
-        def on_bad_proof
-          @on_bad_proof ||= ->(**) {}
-        end
       end
 
       # The anonymized-KYC attestation settings.

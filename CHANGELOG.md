@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The `on_bad_proof` setting is removed from kiosk-server.
 - 2026-10-20: The mandate verifier refuses a currency with surrounding spaces, as §11.1 says. Upper case is still folded to lower case.
 - 2026-10-20: skooti's `scooters_available` answers `licence_category` (A1, A or null) in place of `needs_licence`.
 - 2026-10-20: The kiosk-server README says a refund gives its amount back to the spending cap.

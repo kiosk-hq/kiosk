@@ -42,12 +42,17 @@ module Kiosk
         end
 
         # Settled cents for this agent in one currency, case-folded on both sides
-        # so `eur` and `EUR` are one tally. No window means no predicate; the day count is a bind.
+        # so `eur` and `EUR` are one tally. A settlement counts less what was
+        # refunded of it, and never below zero. No window means no predicate;
+        # the day count is a bind.
         def settled_sql(window_days)
+          schema = Kiosk.configuration.schema
           window = window_days ? 'AND settled_at >= now() - make_interval(days => $3)' : ''
           <<~SQL.squish
-            SELECT COALESCE(SUM(settled_amount_cents), 0) AS total
-            FROM #{Kiosk.configuration.schema}.settlements
+            SELECT COALESCE(SUM(GREATEST(settled_amount_cents - (
+              SELECT COALESCE(SUM(r.refunded_amount_cents), 0) FROM #{schema}.refunds r WHERE r.settlement_id = settlements.id
+            ), 0)), 0) AS total
+            FROM #{schema}.settlements
             WHERE agent_id = $1 AND lower(btrim(currency)) = $2 #{window}
           SQL
         end

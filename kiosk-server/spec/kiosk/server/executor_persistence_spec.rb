@@ -66,6 +66,7 @@ module ExecutorPersistenceSpec
         schema: PERSIST_SPEC_SCHEMA, user_id_type: :uuid
       )
     )
+    conn.execute(Kiosk::Server::SchemaDefinitions.refunds_sql(schema: PERSIST_SPEC_SCHEMA))
   end
 
   module Helpers
@@ -535,6 +536,42 @@ RSpec.describe Kiosk::Server::Executor, 'spending cap and carts in flight' do
   it 'does not count a repeat of a recorded cart a second time' do
     persist_trail
     expect { executor.send(:enforce_spending_cap!, cart) }.not_to raise_error
+  end
+end
+
+# A refund gives the cap back: the cap counts a settlement less what was refunded of it.
+RSpec.describe Kiosk::Server::Executor, 'spending cap and refunds' do
+  include_context 'executor persistence spec: payment'
+
+  before { Kiosk.configuration.spending_cap = ->(**) { 2000 } }
+
+  let(:settlement_id) do
+    _, cart_row = persist_trail
+    executor.send(:persist_settlement, cart_row_id: cart_row, cart: cart, settled: settled)
+  end
+
+  def refund(cents)
+    connection.exec_query(
+      "INSERT INTO #{table('refunds')} (settlement_id, psp_reference, refunded_amount_cents, refunded_at) " \
+      'VALUES ($1, $2, $3, now())', 'persist spec', [settlement_id, "re_#{SecureRandom.hex(4)}", cents]
+    )
+  end
+
+  def another_cart(cents) = cart.with(id: "cart-#{SecureRandom.hex(6)}", total_amount_cents: cents)
+
+  it 'counts a settlement less what was refunded of it' do
+    refund(600)
+    expect(settled_total(currency: 'eur')).to eq(999)
+  end
+
+  it 'admits a charge that fits only because of a refund' do
+    refund(1000)
+    expect { executor.send(:enforce_spending_cap!, another_cart(1000)) }.not_to raise_error
+  end
+
+  it 'counts a settlement refunded past its amount as zero' do
+    2.times { refund(1000) }
+    expect(settled_total(currency: 'eur')).to eq(0)
   end
 end
 

@@ -81,7 +81,7 @@ module Kiosk
       # Sends a request built by the caller, absorbing every Set-Cookie; TLS follows the target's scheme.
       def request(req)
         target = req.uri || @uri
-        http = Net::HTTP.new(target.host, target.port)
+        http = Net::HTTP.new(target.hostname, target.port)
         http.use_ssl = target.scheme == 'https'
         res = http.request(req)
         Array(res.get_fields('set-cookie')).each do |line|

@@ -35,7 +35,7 @@ module Kiosk
 
       # The scheme decides TLS.
       def self.http_for(uri, open_timeout: nil, read_timeout: nil)
-        http = Net::HTTP.new(uri.host, uri.port)
+        http = Net::HTTP.new(uri.hostname, uri.port)
         http.use_ssl      = uri.scheme == 'https'
         http.open_timeout = open_timeout if open_timeout
         http.read_timeout = read_timeout if read_timeout

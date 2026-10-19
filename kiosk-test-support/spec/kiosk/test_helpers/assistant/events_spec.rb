@@ -26,3 +26,12 @@ RSpec.describe 'Kiosk::TestHelpers::Assistant::Events.payload_errors' do
     expect(errors({}, topic: 'nope')).to eq(['nope: this origin serves no such topic'])
   end
 end
+
+RSpec.describe Kiosk::TestHelpers::Assistant::Events, '.new' do
+  it 'dials an IPv6 literal by its bare address' do
+    allow(TCPSocket).to receive(:new).and_raise(Errno::ECONNREFUSED)
+
+    expect { described_class.new(base_url: 'http://[::1]:3001', token: 't') }.to raise_error(Errno::ECONNREFUSED)
+    expect(TCPSocket).to have_received(:new).with('::1', 3001)
+  end
+end

@@ -39,7 +39,7 @@ module Kiosk
           uri  = URI(base_url)
           tls  = uri.scheme == 'https'
           @url = "#{tls ? 'wss' : 'ws'}://#{uri.host}:#{uri.port}#{path}"
-          @io  = open_socket(uri.host, uri.port, tls)
+          @io  = open_socket(uri.hostname, uri.port, tls)
           @frames = []
           @closed = false
           @driver = start_driver(token)

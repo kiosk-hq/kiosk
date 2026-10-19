@@ -63,6 +63,15 @@ RSpec.describe Kiosk::KycProviders::Prove, '#open_verification' do
     end
   end
 
+  it 'dials an IPv6 literal intake by its bare address' do
+    answer(201, request_id: 'r-1', verification_url: 'http://[::1]:3004/v/r-1', nonce: 'n-1')
+    broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: 'http://[::1]:3004/')
+    broker.open_verification(subject: 'u-1', claims: %w[age_over_18], audience: 'shop', callback_url: 'https://shop.example/cb')
+
+    http, = sent.first
+    expect([http.address, http.port]).to eq(['::1', 3004])
+  end
+
   it 'raises Unavailable when the broker cannot be reached' do
     allow_any_instance_of(Net::HTTP).to receive(:request).and_raise(Errno::ECONNREFUSED)
     expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)

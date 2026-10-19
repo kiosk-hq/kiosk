@@ -9,6 +9,10 @@ RSpec.describe Kiosk::TestHelpers::Wire, '.http_for' do
     expect(described_class.http_for(URI('http://provider.test:3001/x'))).to have_attributes(use_ssl?: false, port: 3001)
   end
 
+  it 'dials an IPv6 literal by its bare address' do
+    expect(described_class.http_for(URI('http://[::1]:3001/x'))).to have_attributes(address: '::1', port: 3001)
+  end
+
   it 'sets timeouts only when asked' do
     expect(described_class.http_for(URI('https://provider.test'))).to have_attributes(open_timeout: 60, read_timeout: 60)
     expect(described_class.http_for(URI('https://provider.test'), open_timeout: 3, read_timeout: 7))

@@ -57,3 +57,15 @@ RSpec.describe Kiosk::UserIdentityProviders::DeviseSession, '#sign_in! when Devi
       .to raise_error(described_class::SignInError, 'sign-in failed: 200')
   end
 end
+
+RSpec.describe Kiosk::UserIdentityProviders::DeviseSession, '#request' do
+  it 'dials an IPv6 literal origin by its bare address' do
+    dialed = []
+    response = Net::HTTPOK.new('1.1', '200', 'OK')
+    allow_any_instance_of(Net::HTTP).to receive(:request) { |http, _req| (dialed << http) && response }
+
+    described_class.new('http://[::1]:3000').request(Net::HTTP::Get.new(URI('http://[::1]:3000/users/sign_in')))
+
+    expect([dialed.first.address, dialed.first.port]).to eq(['::1', 3000])
+  end
+end

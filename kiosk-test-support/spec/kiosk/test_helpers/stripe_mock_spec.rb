@@ -11,7 +11,7 @@ module StripeMockRequests
     req = Net::HTTP::Post.new(uri)
     req.basic_auth('sk_test_mock', '')
     req.set_form_data(form)
-    JSON.parse(Net::HTTP.start(uri.host, uri.port) { |http| http.request(req) }.body)
+    JSON.parse(Net::HTTP.start(uri.hostname, uri.port) { |http| http.request(req) }.body)
   end
 end
 

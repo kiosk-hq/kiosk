@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The broker client connects to an intake URL that names an IPv6 literal, such as `http://[::1]:3004/`.
+
 ## [0.5.18] — 2026-10-18
 
 - 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.

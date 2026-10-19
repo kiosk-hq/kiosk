@@ -63,7 +63,7 @@ module Kiosk
       end
 
       def http_client
-        http = Net::HTTP.new(@intake.host, @intake.port)
+        http = Net::HTTP.new(@intake.hostname, @intake.port)
         http.use_ssl = @intake.scheme == 'https'
         http.open_timeout = http.read_timeout = 5
         http

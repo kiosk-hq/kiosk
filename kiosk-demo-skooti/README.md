@@ -115,12 +115,22 @@ over BLE from a laptop. Both are documented in `firmware/README.md`;
 
 ### Watch it work
 
-Payment goes to stripe-mock, a local copy of the Stripe API. Before `bin/setup`,
-start `stripe-mock` in a second terminal (it listens on port 12111). Then, in the
-terminal where you run `bin/setup`, run
-`export STRIPE_MOCK_URL=http://localhost:12111`. Without this variable the app
-sends each payment to the real Stripe API with a placeholder key, and the
-payment fails. `docker compose up` does not start stripe-mock, so payment fails
+Payment goes to stripe-mock, a local copy of the Stripe API. stripe-mock alone
+answers each charge with the status `requires_payment_method`, and the app reads
+that as a declined payment. The relay in `kiosk-test-support` answers a
+confirmed charge as `succeeded` and passes every other call to stripe-mock. The
+tests use the same relay. Before `bin/setup`, start the relay in a second
+terminal, from this directory:
+
+```
+export STRIPE_MOCK_URL=http://localhost:12111
+ruby -I ../kiosk-test-support/lib -rkiosk/test_helpers/stripe_mock -e 'Kiosk::TestHelpers::StripeMock.start; sleep'
+```
+
+It starts stripe-mock and listens on port 12111. Then, in the terminal where you
+run `bin/setup`, run `export STRIPE_MOCK_URL=http://localhost:12111`.
+Without this variable the app sends each payment to the real Stripe API with a
+placeholder key, and the payment fails. `docker compose up` does not start stripe-mock, so payment fails
 there too. Under `docker compose up`, `request_kyc` fails as well and answers 500
 `action_failed`. The app looks for the KYC broker at `http://127.0.0.1:3020`, and
 inside the container that address is the container itself.

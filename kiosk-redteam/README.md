@@ -121,8 +121,10 @@ commerce provider and a non-commerce one. `suites/` holds one battery per
 operator demo in this repo, built on this API — read one of those for a worked,
 running profile against a real origin. Each runs in its demo's directory, with
 that demo's bundle. A demo that takes payments charges a stripe-mock: start the
-demo's server with `STRIPE_MOCK_URL` set to the URL of a running stripe-mock.
-When the server cannot reach it, the payment attacks are untested.
+demo's server with `STRIPE_MOCK_URL` set to the URL of a running
+`Kiosk::TestHelpers::StripeMock` relay, as CI does. stripe-mock alone answers
+each charge as unpaid. When the server cannot reach the relay, the payment
+attacks are untested.
 
 ## The scenario library
 

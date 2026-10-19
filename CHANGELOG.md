@@ -12,6 +12,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 ## [Unreleased]
 
 - 2026-10-19: The prove broker's development callback host for skooti and getgrocery is `localhost`, the host of their development issuer, so `request_kyc` works under `bin/dev`.
+- 2026-10-19: The getgrocery, skooti and hoteling READMEs start stripe-mock behind the `Kiosk::TestHelpers::StripeMock` relay, because stripe-mock alone answers each charge as unpaid.
 - 2026-10-19: Each skooti motorcycle names the licence category it needs, A1 or A, and `rent_motorcycle` checks its attribute. The fleet adds the A1 motorcycle MC-002.
 - 2026-10-19: The prove broker asks the human for a licence category (A1, A, B1, B or none) and signs the requested `licence_*` attributes that category covers.
 - 2026-10-19: `Kyc.require!` takes the attribute names an action needs and an optional refusal `detail`.

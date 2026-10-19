@@ -36,6 +36,16 @@ class SlotSearchTest < ActiveSupport::TestCase
     end
   end
 
+  # 00:30 on the 8th in Dublin, still the 7th in UTC and in Reykjavik.
+  test "a caller that declares no zone is read on the shop's clock" do
+    travel_to Time.utc(2026, 9, 7, 23, 30) do
+      message = search(date: '2026-09-07').tap(&:validate).errors.full_messages.sole
+
+      assert_includes message, "date 2026-09-07 is in the past on the calendar it is read in (#{SHOP.name})"
+      assert_predicate search(date: '2026-09-07', caller_zone: Time.find_zone!('Atlantic/Reykjavik')), :valid?
+    end
+  end
+
   test 'no date is the soonest day the shop delivers' do
     travel_to SHOP.local(2026, 9, 7, 21) do
       assert_equal Date.new(2026, 9, 8), search.day

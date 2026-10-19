@@ -5,6 +5,7 @@
 # AccountBinding. Same Metal-dispatch harness as the other controller specs.
 
 require 'rack/mock'
+require 'jwt'
 require 'openssl'
 
 module AssistantsControllerSpecHelpers
@@ -75,6 +76,8 @@ RSpec.shared_context 'assistants controller spec: signed-in holder' do
   # handing it to this page's listing SELECT would present a row with no
   # public_key.
   let(:con)     { FakeConnection.new(next_exec_result: []) }
+  # The rows of the spend statement: `agent_id`, `currency`, `cents`.
+  let(:spend_rows) { [] }
   let(:session) { {} }
 
   before do
@@ -87,6 +90,7 @@ RSpec.shared_context 'assistants controller spec: signed-in holder' do
     ar_base = class_double('ActiveRecord::Base').as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
+    route_exec_query(con) { |sql, _binds| sql.include?('settlements') ? spend_rows : con.next_exec_result }
   end
 end
 
@@ -287,27 +291,28 @@ end
 RSpec.describe 'AssistantsController', 'governance columns' do
   include_context 'assistants controller spec: signed-in holder'
 
-  it 'surfaces the label, settled spend, and cap for each bound assistant (show)' do
+  it 'surfaces the label, the spend per currency, and the cap for each bound assistant (show)' do
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Alice shopper', 'spending_cap_cents' => 5000, 'settled_cents' => 1200 }
+        'human_label' => 'Alice shopper', 'spending_cap_cents' => 5000 }
     ]
+    spend_rows.push({ 'agent_id' => 'agent-1', 'currency' => 'eur', 'cents' => 1200 },
+                    { 'agent_id' => 'agent-1', 'currency' => 'usd', 'cents' => 300 })
     status, html = dispatch(:show, method: 'GET')
 
     expect(status).to eq(200)
     expect(html).to include('Alice shopper')
-    expect(html).to include('spent: 1200 cents')
+    expect(html).to include('spent: 1200 cents in EUR, 300 cents in USD —')
     expect(html).to include('cap: 5000 cents')
-    # The SELECT reaches for the new governance columns + the settled-spend subquery.
-    select, binds = con.bound(/SELECT/i).first
-    expect(select).to include('human_label')
-    expect(select).to include('spending_cap_cents')
-    expect(select).to include('settled_amount_cents')
+    agents, spend = con.bound(/SELECT/i)
+    expect(agents.first).to include('human_label')
+    expect(agents.first).to include('spending_cap_cents')
+    expect(spend.first).to include('refunded_amount_cents')
     # No window configured → the statement declares TWO parameters and is sent
     # TWO arguments. Postgres rejects a mismatch, which is why the statement and
-    # its binds are built together (see #bound_assistants_query).
-    expect(select).not_to include('$3')
-    expect(binds).to eq([user_id, 'https://provider.example'])
+    # its binds are built together.
+    expect(spend.first).not_to include('$3')
+    expect(spend.last).to eq([user_id, 'https://provider.example'])
   end
 end
 
@@ -320,11 +325,11 @@ RSpec.describe 'AssistantsController', 'spending-cap window' do
     Kiosk.configure { |c| c.spending_cap_window_days = 30 }
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => nil, 'spending_cap_cents' => nil, 'settled_cents' => 0 }
+        'human_label' => nil, 'spending_cap_cents' => nil }
     ]
     dispatch(:show, method: 'GET')
 
-    select, binds = con.bound(/SELECT/i).first
+    select, binds = con.bound(/settlements/).first
     expect(select).to include('make_interval(days => $3)')
     expect(select).not_to include("INTERVAL '1 day'")
     expect(binds).to eq([user_id, 'https://provider.example', 30])
@@ -337,7 +342,7 @@ RSpec.describe 'AssistantsController', 'unset and disabled caps' do
   it 'shows «(unnamed)» / «cap: none» when the label and cap are unset' do
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => nil, 'spending_cap_cents' => nil, 'settled_cents' => 0 }
+        'human_label' => nil, 'spending_cap_cents' => nil }
     ]
     _status, html = dispatch(:show, method: 'GET')
 
@@ -348,7 +353,7 @@ RSpec.describe 'AssistantsController', 'unset and disabled caps' do
   it 'shows «cap: disabled» when the cap is zero' do
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Bot', 'spending_cap_cents' => 0, 'settled_cents' => 0 }
+        'human_label' => 'Bot', 'spending_cap_cents' => 0 }
     ]
     _status, html = dispatch(:show, method: 'GET')
 
@@ -369,7 +374,7 @@ RSpec.describe 'AssistantsController', 'spending_cap seam note' do
     Kiosk.configure { |c| c.spending_cap = nil }
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Bot', 'spending_cap_cents' => 5000, 'settled_cents' => 0 }
+        'human_label' => 'Bot', 'spending_cap_cents' => 5000 }
     ]
     _status, html = dispatch(:show, method: 'GET')
 
@@ -386,7 +391,7 @@ RSpec.describe 'AssistantsController', 'spending_cap seam note' do
     Kiosk.configure { |c| c.spending_cap = ->(**) { 5000 } }
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Bot', 'spending_cap_cents' => 5000, 'settled_cents' => 0 }
+        'human_label' => 'Bot', 'spending_cap_cents' => 5000 }
     ]
     _status, html = dispatch(:show, method: 'GET')
 

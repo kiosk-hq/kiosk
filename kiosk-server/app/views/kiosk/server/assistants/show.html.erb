@@ -51,7 +51,10 @@
             <code><%= assistant[:fingerprint] %></code>
             — linked <%= assistant[:created_at] %>
             <p>
-              spent: <%= assistant[:settled_cents] %> cents —
+              <%
+                spent = assistant[:spent_cents].map { |currency, cents| "#{cents} cents in #{currency.upcase}" }
+              %>
+              spent: <%= spent.empty? ? "0 cents" : spent.join(", ") %> —
               <%
                 cap = assistant[:spending_cap_cents]
                 cap_label = if cap.nil?

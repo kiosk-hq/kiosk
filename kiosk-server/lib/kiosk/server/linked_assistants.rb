@@ -7,18 +7,12 @@ module Kiosk
     module LinkedAssistants
       module_function
 
-      # The holder's live agents with their settled spend. Without a settlements
-      # table (no payment surface) the spend falls back to 0.
+      # The holder's live agents, each with its spend per currency. Without the
+      # payment tables (no payment surface) an agent has no spend.
       def list(user_id)
-        rows =
-          begin
-            query(user_id, settled_spend: true)
-          rescue ::ActiveRecord::StatementInvalid => e
-            raise unless missing_table?(e)
-
-            query(user_id, settled_spend: false)
-          end
-        rows.to_a.map { |row| present(row) }
+        agents = run(agents_sql, 'Kiosk bound assistants', [user_id, Kiosk.current_issuer]).to_a
+        spend = spend_by_agent(user_id)
+        agents.map { |row| present(row, spend.fetch(row.fetch('id'), {})) }
       end
 
       # Column names are literals; every value, above all the free-text label, is a bind.
@@ -32,8 +26,7 @@ module Kiosk
         end
         # The ownership predicate is the security boundary: `agent_id` from the caller, `user_id` from the session.
         binds.push(agent_id, user_id, Kiosk.current_issuer)
-        ::ActiveRecord::Base.lease_connection.exec_query(settings_sql(assignments, binds.size),
-                                                         'Kiosk assistant update', binds)
+        run(settings_sql(assignments, binds.size), 'Kiosk assistant update', binds)
       end
 
       class << self
@@ -50,9 +43,46 @@ module Kiosk
           SQL
         end
 
-        def query(user_id, settled_spend:)
-          sql, binds = list_query(Kiosk.configuration, user_id, settled_spend: settled_spend)
-          ::ActiveRecord::Base.lease_connection.exec_query(sql, 'Kiosk bound assistants', binds)
+        def run(sql, name, binds) = ::ActiveRecord::Base.lease_connection.exec_query(sql, name, binds)
+
+        def agents_sql
+          <<~SQL.squish
+            SELECT id, public_key, created_at, human_label, spending_cap_cents
+            FROM #{Kiosk.configuration.schema}.agents
+            WHERE user_id = $1 AND issuer = $2 AND revoked_at IS NULL
+            ORDER BY created_at
+          SQL
+        end
+
+        # `{ agent_id => { currency => cents } }`: the figure the spending cap
+        # counts, within `spending_cap_window_days` when set.
+        def spend_by_agent(user_id)
+          window_days = Kiosk.configuration.spending_cap_window_days&.to_i
+          tally(run(spend_sql(window_days), 'Kiosk assistant spend', [user_id, Kiosk.current_issuer, *window_days]))
+        rescue ::ActiveRecord::StatementInvalid => e
+          raise unless missing_table?(e)
+
+          {}
+        end
+
+        def tally(rows)
+          rows.to_a.group_by { |row| row.fetch('agent_id') }.transform_values do |agent_rows|
+            agent_rows.to_h { |row| [row.fetch('currency'), row.fetch('cents').to_i] }
+          end
+        end
+
+        # The day count, when set, is the third bind.
+        def spend_sql(window_days)
+          schema = Kiosk.configuration.schema
+          window = window_days ? 'AND settlements.settled_at >= now() - make_interval(days => $3)' : ''
+          <<~SQL.squish
+            SELECT settlements.agent_id, lower(btrim(settlements.currency)) AS currency,
+                   SUM(#{SettledSpend.net_cents_sql(schema)}) AS cents
+            FROM #{schema}.settlements
+            JOIN #{schema}.agents ON agents.id = settlements.agent_id
+            WHERE agents.user_id = $1 AND agents.issuer = $2 AND agents.revoked_at IS NULL #{window}
+            GROUP BY 1, 2 ORDER BY 2
+          SQL
         end
 
         # By class name, so this file does not load `PG`.
@@ -60,32 +90,7 @@ module Kiosk
           error.cause&.class&.name == 'PG::UndefinedTable'
         end
 
-        # Returns `[sql, binds]` together: the two branches take different bind counts.
-        def list_query(config, user_id, settled_spend:)
-          window_days = settled_spend ? config.spending_cap_window_days&.to_i : nil
-          sql = <<~SQL.squish
-            SELECT id, public_key, created_at, human_label, spending_cap_cents,
-                   #{settled_cents_expr(config, settled_spend: settled_spend)} AS settled_cents
-            FROM #{config.schema}.agents
-            WHERE user_id = $1 AND issuer = $2 AND revoked_at IS NULL
-            ORDER BY created_at
-          SQL
-          [sql, [user_id, Kiosk.current_issuer, *Array(window_days)]]
-        end
-
-        # This agent's settled spend, within `spending_cap_window_days` when set.
-        def settled_cents_expr(config, settled_spend:)
-          return '0' unless settled_spend
-
-          window = config.spending_cap_window_days ? 'AND settled_at >= now() - make_interval(days => $3)' : ''
-          <<~SQL.squish
-            (SELECT COALESCE(SUM(settled_amount_cents), 0)
-             FROM #{config.schema}.settlements
-             WHERE agent_id = agents.id #{window})
-          SQL
-        end
-
-        def present(row)
+        def present(row, spent_cents)
           cap = row.fetch('spending_cap_cents', nil)
           {
             agent_id: row.fetch('id'),
@@ -93,7 +98,7 @@ module Kiosk
             created_at: row.fetch('created_at'),
             human_label: row.fetch('human_label', nil),
             spending_cap_cents: cap&.to_i,
-            settled_cents: row.fetch('settled_cents', 0).to_i
+            spent_cents: spent_cents
           }
         end
 

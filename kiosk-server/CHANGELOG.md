@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The manage-assistants page shows the spend of each assistant per currency, less refunds and never below zero, as the spending cap counts it.
 - 2026-10-19: `Kyc.require!` takes the attribute names an action needs and an optional refusal `detail`; with none it requires every one of `kyc_claims`.
 - 2026-10-19: The `capabilities` configuration setting is removed. Discovery always derives the list from what is registered.
 - 2026-10-19: The spending cap subtracts the `kiosk.refunds` rows of each settlement, never below zero. It needs the `create_kiosk_refunds` migration.

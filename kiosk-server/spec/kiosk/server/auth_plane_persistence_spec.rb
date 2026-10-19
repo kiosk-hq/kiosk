@@ -67,6 +67,7 @@ module AuthPlanePersistenceSpec
     defs = Kiosk::Server::SchemaDefinitions
     conn.execute(defs.identity_tables_sql(schema: SCHEMA, user_id_type: :uuid, user_table: USERS))
     conn.execute(defs.mandates_sql(schema: SCHEMA, user_id_type: :uuid))
+    conn.execute(defs.refunds_sql(schema: SCHEMA))
   end
 
   def self.drop_schema(conn)
@@ -128,16 +129,18 @@ module AuthPlanePersistenceSpec
     [status, raw]
   end
 
-  # A settled receipt for this agent, `days_ago` old. The chain is what the
-  # shipped schema requires: a settlement hangs off a cart mandate, which hangs
-  # off an intent. Every value travels as a bind, including the timestamp.
-  def settle!(cents:, days_ago:)
+  # A settled receipt for this agent, `days_ago` old; returns its id. The chain
+  # is what the shipped schema requires: a settlement hangs off a cart mandate,
+  # which hangs off an intent. Every value travels as a bind, including the
+  # timestamp.
+  def settle!(cents:, days_ago:, currency: 'eur')
     cart = insert_cart(insert_intent, cents)
-    connection.exec_query(%(
+    value(%(
       INSERT INTO #{table('settlements')}
         (cart_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
-      VALUES ($1, $2, $3, 'https://provider.example', $4, $5, 'eur', $6)
-    ), 'spec seed', [cart, holder, agent_id, SecureRandom.hex(8), cents, Time.now.utc - (days_ago * 86_400)])
+      VALUES ($1, $2, $3, 'https://provider.example', $4, $5, $6, $7)
+      RETURNING id
+    ), [cart, holder, agent_id, SecureRandom.hex(8), cents, currency, Time.now.utc - (days_ago * 86_400)])
   end
 
   def insert_intent
@@ -245,6 +248,13 @@ RSpec.shared_context 'auth plane persistence spec: manage page' do
     end
     # The controller pulls its own connection; point it at the real one.
     allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
+  end
+
+  def refund!(settlement_id, cents)
+    connection.exec_query(%(
+      INSERT INTO #{table('refunds')} (settlement_id, psp_reference, refunded_amount_cents, refunded_at)
+      VALUES ($1, $2, $3, now())
+    ), 'spec seed', [settlement_id, "re_#{SecureRandom.hex(4)}", cents])
   end
 end
 
@@ -605,7 +615,7 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(body).to include(agent_id[0, 8])
       # The 60-day-old receipt is outside the window, so the bind reached
       # `make_interval` as a day count.
-      expect(body).to include('spent: 2500 cents')
+      expect(body).to include('spent: 2500 cents in EUR —')
     end
 
     it 'lists them with no window configured (the statement drops the bind)' do
@@ -616,7 +626,31 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(body).to include(agent_id[0, 8])
       # No window, so both receipts count: the same statement with one bind
       # fewer, which is the branch a mismatched bind list breaks first.
-      expect(body).to include('spent: 12400 cents')
+      expect(body).to include('spent: 12400 cents in EUR —')
+    end
+  end
+end
+
+# The page shows the spend the spending cap counts.
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: manage page'
+
+  describe 'AssistantsController (manage page)' do
+    it 'counts each settlement less its refunds, never below zero' do
+      refund!(settle!(cents: 2500, days_ago: 1), 600)
+      over_refunded = settle!(cents: 1000, days_ago: 1)
+      2.times { refund!(over_refunded, 1000) }
+
+      _, body = dispatch(:show, method: 'GET')
+      expect(body).to include('spent: 1900 cents in EUR —')
+    end
+
+    it 'shows one figure per currency' do
+      settle!(cents: 2500, days_ago: 1)
+      settle!(cents: 700, days_ago: 1, currency: 'usd')
+
+      _, body = dispatch(:show, method: 'GET')
+      expect(body).to include('spent: 2500 cents in EUR, 700 cents in USD —')
     end
   end
 end
@@ -637,9 +671,11 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(status).to eq(200)
       expect(body).to include('spent: 0 cents')
     ensure
+      connection.execute(%(DROP TABLE #{table('refunds')}))
       connection.execute(Kiosk::Server::SchemaDefinitions.mandates_sql(
                            schema: AuthPlanePersistenceSpec::SCHEMA, user_id_type: :uuid
                          ))
+      connection.execute(Kiosk::Server::SchemaDefinitions.refunds_sql(schema: AuthPlanePersistenceSpec::SCHEMA))
     end
   end
 end

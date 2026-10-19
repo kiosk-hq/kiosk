@@ -1095,6 +1095,35 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /not a legal verb name/)
     end
+
+    # `^[a-z][a-z0-9_]*$`, one name at a time: each refused name breaks one
+    # part of the pattern, and each accepted name sits on one of its edges.
+    def declare_named(name)
+      Class.new(ApplicationController) do
+        include Kiosk::Handler
+
+        kind :query
+        description 'Named.'
+        input_schema type: 'object'
+        output_schema true
+        wire_name name
+        def browse = render(json: [])
+      end
+    end
+
+    ['9lives', '_listings', 'Browse', 'browsE', 'browse-listings', 'browse listings',
+     'browse/listings', "browse\n", 'brówse', ''].each do |name|
+      it "refuses the verb name #{name.inspect}" do
+        expect { declare_named(name) }.to raise_error(ArgumentError, /not a legal verb name/)
+      end
+    end
+
+    %w[a b9 browse_ browse_listings_2].each do |name|
+      it "accepts the verb name #{name.inspect}" do
+        declare_named(name)
+        expect(Kiosk::Server::Queries.known).to include(name)
+      end
+    end
   end
 end
 

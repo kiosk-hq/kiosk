@@ -92,7 +92,7 @@ RSpec.describe Kiosk::Server::Actions do
       declare_action('bare', input_schema: { type: 'object' })
 
       descriptor = described_class.describe('bare')
-      expect(descriptor[:description]).to be_nil
+      expect(descriptor).to include(description: nil)
       expect(descriptor).not_to have_key(:params)
     end
 

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 # Every published verb declares a `description`, an `input_schema` and an
-# `output_schema`. The engine refuses an incomplete declaration at class load;
-# this lint reads the origins' sources as text, needs no database and no Rails,
+# `output_schema`; a verb that takes nothing declares the closed empty object.
+# The engine refuses a declaration with a missing macro at class load. This
+# lint reads the origins' sources as text, needs no database and no Rails,
 # and names the offending verb. It also covers a verb whose declaration is
 # present but empty, and a controller that `c.handlers` does not name (the
 # class never loads, so the engine never checks it).
@@ -35,7 +36,28 @@ module DescriptorRequiredFields
     declared = MACROS.select { |macro| header.match?(/^[ \t]*#{macro}[ \t(]/) }
     return if declared.empty? && !header.match?(/^[ \t]*wire_name[ \t]/)
 
-    { name: header[/^[ \t]*wire_name[ \t]+['"]([^'"]*)['"]/, 1] || method_name, declared: declared }
+    { name: header[/^[ \t]*wire_name[ \t]+['"]([^'"]*)['"]/, 1] || method_name, declared: declared,
+      input_schema: header[INPUT_SCHEMA] }
+  end
+
+  # The `input_schema` line and the lines indented deeper than it.
+  INPUT_SCHEMA = /^([ \t]*)input_schema[ \t(].*\n(?:\1[ \t]+.*\n)*/
+
+  # A verb that takes nothing: its input schema names no property.
+  def takes_nothing?(input_schema)
+    !input_schema.match?(/\bproperties:/) || input_schema.match?(/\bproperties:[ \t]*\{[ \t]*\}/)
+  end
+
+  def verbs_taking_nothing(paths)
+    paths.sort.flat_map do |path|
+      verbs_in(File.read(path)).select { |verb| verb[:input_schema] && takes_nothing?(verb[:input_schema]) }
+    end
+  end
+
+  def open_empty_inputs(origin, paths)
+    verbs_taking_nothing(paths).filter_map do |verb|
+      "#{origin} #{verb[:name]}" unless verb[:input_schema].match?(/\badditionalProperties:[ \t]*false\b/)
+    end
   end
 
   # Handler controller paths per origin: each demo, and the e2e fixtures.
@@ -64,13 +86,19 @@ RSpec.describe 'descriptor required fields' do
   end
 
   # The lint is a text matcher, so a reworded or relocated descriptor would make
-  # every example below pass while checking nothing. 45 is the fleet's verb
+  # every example below pass while checking nothing. 43 is the fleet's verb
   # count; `>=` lets a new verb pass.
   it 'sees the whole fleet (the lint is not vacuous)' do
     total = origins.values.flatten.sum { |path| DescriptorRequiredFields.verbs_in(File.read(path)).length }
     expect(total).to be >= 43,
                      "the lint resolved only #{total} verbs across #{origins.size} origins — " \
                      'the descriptors moved somewhere it does not read'
+  end
+
+  # Fourteen verbs in the fleet take nothing; `>=` lets a new one pass.
+  it 'sees the verbs that take nothing (the closed-object check is not vacuous)' do
+    total = origins.values.sum { |paths| DescriptorRequiredFields.verbs_taking_nothing(paths).length }
+    expect(total).to be >= 14, "the check found only #{total} verbs that take nothing"
   end
 end
 
@@ -88,6 +116,18 @@ RSpec.describe 'descriptor required fields per origin' do
         wire coerces and validates arguments against, and `output_schema` is
         the only machine-readable statement of what a call returns. A verb that
         takes nothing still declares the closed empty object.
+      MSG
+    end
+
+    it "#{origin}: every verb that takes nothing declares the closed empty object" do
+      open = DescriptorRequiredFields.open_empty_inputs(origin, paths)
+
+      expect(open).to be_empty, <<~MSG
+        #{open.size} verb(s) take nothing and accept any argument:
+
+        #{open.join("\n")}
+
+        Declare `input_schema type: 'object', additionalProperties: false, properties: {}`.
       MSG
     end
   end

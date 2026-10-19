@@ -296,6 +296,12 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(status).to eq(200)
       expect(body).to eq(appointment_id: 7, salon_id: 3)
     end
+
+    it 'answers an action POST with no credential 401 unauthenticated' do
+      status, body = call_verb(:post, 'book_appointment', body: JSON.generate(salon_id: 3), auth: false)
+      expect(status).to eq(401)
+      expect(body[:code]).to eq('unauthenticated')
+    end
   end
 end
 
@@ -693,6 +699,12 @@ RSpec.describe Kiosk::Server::VerbController do
       declare_action('noop') { render json: { seen: params.to_unsafe_h.keys.sort } }
       _status, body = call_verb(:post, 'noop', query: 'sneaky=1', body: '{}')
       expect(body[:seen]).not_to include('sneaky')
+    end
+
+    it "does not read a body on a GET — a query's arguments are its query string" do
+      _status, body = call_verb(:get, 'echo', query: 'min_stars=4', body: JSON.generate(amenity: ['pool']))
+      expect(body.first[:min_stars]).to eq(4)
+      expect(body.first[:seen]).not_to include('amenity')
     end
   end
 end

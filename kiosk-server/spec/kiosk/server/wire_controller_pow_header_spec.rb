@@ -11,8 +11,8 @@
 #   * the controller feeds the gate the METHOD and the PATH-SEGMENT verb, so a
 #     proof solved for `GET /kiosk/catalog?q=milk` is spendable there and on no
 #     other endpoint;
-#   * the reserved `GET <endpoint>/schema` is NEVER tolled — it is public, and
-#     a toll needs an identity to charge;
+#   * the reserved `GET <endpoint>/schema` and the JWKS document are NEVER
+#     tolled — they are public, and a toll needs an identity to charge;
 #   * every accepted header form (single proof, JSON array, repeated
 #     `\n`-joined lines, proxy comma-combined) reaches the gate;
 #   * a proof placed in an action's BODY is not a proof — the gate re-challenges;
@@ -243,6 +243,16 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
     expect(status).to eq(200)
     expect(headers).not_to have_key('WWW-Authenticate')
     expect(body).to have_key(:queries)
+  end
+
+  it 'never tolls the JWKS document, under a policy that challenges everything' do
+    status, headers, body = finish(
+      Kiosk::Server::JwksController.action(:show).call(Rack::MockRequest.env_for('/kiosk/.well-known/jwks.json'))
+    )
+
+    expect(status).to eq(200)
+    expect(headers).not_to have_key('WWW-Authenticate')
+    expect(body[:keys]).not_to be_empty
   end
 
   it 're-challenges a per-verb GET with a fresh 402 problem document when no header is sent' do

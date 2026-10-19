@@ -67,3 +67,19 @@ RSpec.describe 'Finding a hotel', 'page size', type: :story do
     expect(guest.searches(limit: 500).rows.size).to eq(50)
   end
 end
+
+RSpec.describe 'Finding a hotel', 'a cursor the guest makes up', type: :story do
+  include_context 'a guest searching hotels'
+
+  it 'a made-up cursor moves through the hotels the search matches, and reaches no other hotel' do
+    matching = guest.searches(min_stars: 5, limit: 50)
+    expect(matching.rows.size).to be > 1
+    expect(matching.next_page).to be_nil
+
+    forged = guest.searches(min_stars: 5, limit: 50, cursor: '1')
+    expect(forged).to be_ok
+    expect(forged.rows).to eq(matching.rows.drop(1))
+    expect(total(forged)).to eq(total(matching))
+    expect(guest.searches(min_stars: 5, limit: 50, cursor: '100000').rows).to be_empty
+  end
+end

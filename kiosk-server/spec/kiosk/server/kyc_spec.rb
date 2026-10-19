@@ -392,6 +392,15 @@ RSpec.describe Kiosk::Server::Kyc do
         }
     end
 
+    it 'gates on the names an action passes, with its own detail' do
+      described_class.grant!('u-1', 'age_over_18' => true)
+      expect { as('u-1', 'a-1') { described_class.require!(%w[age_over_18]) } }.not_to raise_error
+      expect { as('u-1', 'a-1') { described_class.require!(%w[licence_a], detail: 'X-1 needs a category-A licence') } }
+        .to raise_error(Kiosk::Server::Errors::KycRequired, 'X-1 needs a category-A licence') { |e|
+          expect(e.hint).to include('`request_kyc` to verify licence_a:')
+        }
+    end
+
     it 'lets every assistant of that person through, and nobody else' do
       described_class.grant!('u-1', 'age_over_18' => true, 'licence_a' => true)
       expect { as('u-1', 'a-2') { described_class.require! } }.not_to raise_error

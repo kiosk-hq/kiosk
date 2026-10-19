@@ -102,13 +102,13 @@ module Kiosk
         delegate :grant!, to: :'Kiosk::Server::Kyc::Store'
 
         # The gate: raises `kyc_required` unless the calling principal holds
-        # every one of `kyc_claims`.
-        def require!
-          return if Store.granted?(CurrentRequest.identity.user_id, claims.uniq)
+        # every one of `names`. `detail` replaces the default refusal text.
+        def require!(names = claims, detail: nil)
+          return if Store.granted?(CurrentRequest.identity.user_id, names.uniq)
 
-          names = claims.join(', ')
-          raise Errors::KycRequired.new("this action requires the verified attributes #{names}",
-                                        hint: format(gate_hint, claims: names))
+          listed = names.join(', ')
+          raise Errors::KycRequired.new(detail || "this action requires the verified attributes #{listed}",
+                                        hint: format(gate_hint, claims: listed))
         end
 
         private

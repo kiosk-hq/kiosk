@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: `Kyc.require!` takes the attribute names an action needs and an optional refusal `detail`; with none it requires every one of `kyc_claims`.
 - 2026-10-19: The `capabilities` configuration setting is removed. Discovery always derives the list from what is registered.
 - 2026-10-19: The spending cap subtracts the `kiosk.refunds` rows of each settlement, never below zero. It needs the `create_kiosk_refunds` migration.
 - 2026-10-19: The derived OpenAPI document writes the verb and topic name `pattern` as `^[a-z][a-z0-9_]*$`, a valid ECMA-262 pattern, as JSON Schema requires.

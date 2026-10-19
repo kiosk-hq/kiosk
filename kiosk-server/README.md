@@ -90,7 +90,8 @@ Set a KYC provider adapter (a `kiosk-kyc-*` gem) and the engine serves
 `kyc_verification` topic, and records the verified attributes against the
 person. Declare the attributes your gated actions need; gate with
 `Kiosk::Server::Kyc.require!`, which refuses `403 kyc_required` until the
-calling principal holds them.
+calling principal holds them. An action that needs only some of them passes
+their names, `require!(%w[age_over_18])`, and may pass its own `detail:`.
 
 ```ruby
 Kiosk.configure do |c|

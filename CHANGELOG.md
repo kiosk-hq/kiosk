@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The spend the manage-assistants page shows is the settled part of what the spending cap counts. The cap also counts the carts in flight.
 - 2026-10-20: The derived OpenAPI document closes the verb and topic descriptors, as the spec does: a member the spec does not name fails validation.
 - 2026-10-19: The manage-assistants page shows what each assistant spent per currency, less refunds and never below zero: the figure the spending cap counts.
 - 2026-10-19: The prove broker's development callback host for skooti and getgrocery is `localhost`, the host of their development issuer, so `request_kyc` works under `bin/dev`.

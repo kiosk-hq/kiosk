@@ -3,8 +3,8 @@
 module Kiosk
   module Server
     # What an assistant spent: each settlement less what was refunded of it,
-    # never below zero. The spending cap and the «Link an assistant» page count
-    # the same figure, one tally per currency.
+    # never below zero, one tally per currency. The «Link an assistant» page
+    # shows this figure. The spending cap counts it plus the carts in flight.
     module SettledSpend
       module_function
 

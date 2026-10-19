@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at 5b28ccb0 -- test-gap slice: SPEC-222, 233, 294, 298 examples judged
+# recorded: 2026-10-19 at bc92668c -- wire.rb Wire class: uri.hostname dial judged against claim C-122
 # 1914 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
@@ -1889,7 +1889,7 @@ kiosk-test-support/lib/kiosk/test_helpers/person.rb	6c193c6814571d48	b1d0a419	@s
 kiosk-test-support/lib/kiosk/test_helpers/person.rb	e531001cf0c50623	b1d0a419	raise "the site did not unlink #{customer.principal.agent_id}: #{status}" unless status == 204
 kiosk-test-support/lib/kiosk/test_helpers/story.rb	9290ac3a490defef	b1d0a419	raise "GET #{path} with no credential answered #{status}" unless status == 200
 kiosk-test-support/lib/kiosk/test_helpers/stripe_mock.rb	64e760bc735bd703	b1d0a419	stripe-mock not found. Install it: brew install stripe-mock
-kiosk-test-support/lib/kiosk/test_helpers/wire.rb	67b264a3ad16c2c0	b1d0a419	    class Wire
+kiosk-test-support/lib/kiosk/test_helpers/wire.rb	c69557f690621795	bc92668c	    class Wire
 kiosk-test-support/spec/descriptor_cross_reference_spec.rb	ec64dfe38f21bf58	b1d0a419	#{demo}: every verb description's cross-reference names params the target verb declares
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	9daec8f8205c4616	b1d0a419	#{origin}: every verb declares #{DescriptorRequiredFields::MACROS.join(', ')}
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	ccf1c188b36c8386	b1d0a419	sees the whole fleet (the lint is not vacuous)

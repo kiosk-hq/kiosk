@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at e8503071 -- T-138 slice: §8.1-§8.4 test gaps and code fixes
-# 1934 anchors.
+# recorded: 2026-10-19 at d2787217 -- T-138 slice: §9-§10 re-judge citations
+# 1941 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -917,14 +917,16 @@ kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	50ad23a0d90e46e8	
 kiosk-reputation/lib/kiosk/reputation/policy.rb	efadbd818ae873ca	b1d0a419	@return [Hash{alg: String, params: Hash, count: Integer}, nil]
 kiosk-reputation/lib/kiosk/reputation/policy.rb	31483c85b8ee79f2	b1d0a419	coarse CALL KIND: :query, :run or :pay
 kiosk-reputation/lib/kiosk/reputation/policy.rb	cce87723250c72d6	b1d0a419	def challenge_for(**)
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	a890565e7031ca5c	b1d0a419	  it 'does not invoke the backend when sig is wrong (uses spy backend)' do
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	5e7740918635b0a0	b1d0a419	'.verify cheap checks run before the backend' do
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	e6da3bfb1339b089	b1d0a419	does not invoke the backend for an expired challenge (uses spy backend)
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	a890565e7031ca5c	b1d0a419	does not invoke the backend when sig is wrong (uses spy backend)
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	30acb61cda4bb48c	b1d0a419	returns :bad_sig when params are tampered
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	d4d2e55258fc4f93	b1d0a419	returns :bad_sig when salt is tampered
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	d06801f9faf83eff	b1d0a419	returns :bad_sig when the sig field itself is corrupted
-kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	ba598e066af52156	b1d0a419	sets exp = now + ttl
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	a890565e7031ca5c	d2787217	  it 'does not invoke the backend when sig is wrong (uses spy backend)' do
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	5e7740918635b0a0	d2787217	'.verify cheap checks run before the backend' do
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	e6da3bfb1339b089	d2787217	does not invoke the backend for an expired challenge (uses spy backend)
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	a890565e7031ca5c	d2787217	does not invoke the backend when sig is wrong (uses spy backend)
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	30acb61cda4bb48c	d2787217	returns :bad_sig when params are tampered
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	d4fad5f1fd02934f	d2787217	returns :bad_sig when request_fingerprint at verify differs from issue
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	d4d2e55258fc4f93	d2787217	returns :bad_sig when salt is tampered
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	d06801f9faf83eff	d2787217	returns :bad_sig when the sig field itself is corrupted
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	9617123f91b76fbe	d2787217	returns a hash with all required wire fields
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	ba598e066af52156	d2787217	sets exp = now + ttl
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	d364018b07ff17e2	b1d0a419	draws once per access token, so each call made with one token meets the same outcome
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	fdf8ac86a400f9d2	b1d0a419	gives every token minted for one customer within one token lifetime the same outcome
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	6d78b6ab8500678a	b1d0a419	reads the cap in whole currency units and the spend in cents
@@ -1686,30 +1688,35 @@ kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	8f2bea6361cb1f8a	b1
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	d39dea3548ea2185	b1d0a419	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	f5d6804d32b8f501	b1d0a419	re-challenges when the VERB differs (a catalog proof is not an orders proof)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	9906e6546b37cb13	b1d0a419	rejects a WRONG nonce through the real verifier (403 + penalty)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	00a8103a6f669e9f	b1d0a419	PowRequired carries a well-formed challenge
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	a7672a17678088c1	b1d0a419	PowRequired has HTTP status 402
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e4d4dd58c1d89e92	b1d0a419	PowRequired#to_problem renders a pow_required 402 problem document
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	036581e11ca592e3	b1d0a419	carries a hint steering to the shipped reference solver
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	86059c3d3b8b2349	b1d0a419	does NOT call on_bad_proof (replaying a valid proof is not a wrong proof)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	bac4a5deaab8e019	b1d0a419	does not disclose the construction, the parameters, or which check failed
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	0b6b292ab3089275	b1d0a419	expect(error).not_to respond_to(:to_envelope)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4e97cb0faf6ec199	b1d0a419	is deterministic: same inputs → same fingerprint
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4983340cd95a9a57	b1d0a419	issues `count` challenges with distinct ids AND salts (no amortisation)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c544608530c31f82	b1d0a419	it 'raises Forbidden' do
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	8ad83259f7acf35f	b1d0a419	it 'raises PowRequired'
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	7894b3e4c8043e31	b1d0a419	lets every later call with the paid token through, without a proof
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e403638c83b2678f	b1d0a419	nil reputation_policy (the default)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	a54a056259c5603f	b1d0a419	pow_spent_store defaults to the database-backed store
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	36cf559cd70f1bca	b1d0a419	re-challenge carries a well-formed NEW challenge (different id from the spent one)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ad77818514f76758	b1d0a419	re-challenges when the ARGUMENTS differ
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4a315ce89e0f29b0	b1d0a419	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	00a15ceb0ecb56e5	b1d0a419	re-challenges when the VERB differs (a catalog proof is not an orders proof)
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	cd0cb2f5f3748d6d	b1d0a419	re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	014fa4c2ecef5316	b1d0a419	renders the documented forbidden problem document, carrying the hint
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	2d5a47204f5082c6	b1d0a419	scales the challenge TTL by `count`, so a sequential solver does not lose the first
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e3e374a5f93bbe56	b1d0a419	still issues a 402 at the shipped equihash default — accepted set unchanged
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d666487e71817178	b1d0a419	tolls a new token again
-kiosk-server/spec/kiosk/server/pow_gate_spec.rb	dc6e5a2b0e3d44b6	b1d0a419	verifies for the identical method + verb + args (the control)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	00a8103a6f669e9f	d2787217	PowRequired carries a well-formed challenge
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	a7672a17678088c1	d2787217	PowRequired has HTTP status 402
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e4d4dd58c1d89e92	d2787217	PowRequired#to_problem renders a pow_required 402 problem document
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	036581e11ca592e3	d2787217	carries a hint steering to the shipped reference solver
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	86059c3d3b8b2349	d2787217	does NOT call on_bad_proof (replaying a valid proof is not a wrong proof)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	bac4a5deaab8e019	d2787217	does not disclose the construction, the parameters, or which check failed
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	0b6b292ab3089275	d2787217	expect(error).not_to respond_to(:to_envelope)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	beaef7bae7b72490	d2787217	flattens a proxy comma-combined value {A},{B} (RFC 7230)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	124dc9cb5f1b39f1	d2787217	flattens repeated header lines (Rack joins duplicates with
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4e97cb0faf6ec199	d2787217	is deterministic: same inputs → same fingerprint
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	30e8aab7cbb6cc48	d2787217	is exactly SHA256(
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4983340cd95a9a57	d2787217	issues `count` challenges with distinct ids AND salts (no amortisation)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	c544608530c31f82	d2787217	it 'raises Forbidden' do
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	8ad83259f7acf35f	d2787217	it 'raises PowRequired'
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	7894b3e4c8043e31	d2787217	lets every later call with the paid token through, without a proof
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e403638c83b2678f	d2787217	nil reputation_policy (the default)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	b5757099087cde9f	d2787217	parses a JSON-array value into the proofs list
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	a54a056259c5603f	d2787217	pow_spent_store defaults to the database-backed store
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	36cf559cd70f1bca	d2787217	re-challenge carries a well-formed NEW challenge (different id from the spent one)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	ad77818514f76758	d2787217	re-challenges when the ARGUMENTS differ
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	4a315ce89e0f29b0	d2787217	re-challenges when the METHOD differs (a GET catalog proof on POST catalog)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	00a15ceb0ecb56e5	d2787217	re-challenges when the VERB differs (a catalog proof is not an orders proof)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	cd0cb2f5f3748d6d	d2787217	re-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	014fa4c2ecef5316	d2787217	renders the documented forbidden problem document, carrying the hint
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	2d5a47204f5082c6	d2787217	scales the challenge TTL by `count`, so a sequential solver does not lose the first
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	e3e374a5f93bbe56	d2787217	still issues a 402 at the shipped equihash default — accepted set unchanged
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	d666487e71817178	d2787217	tolls a new token again
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	dc6e5a2b0e3d44b6	d2787217	verifies for the identical method + verb + args (the control)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	6df421720bda5db2	d2787217	wraps a single {…} proof into a one-element proofs list
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	f01606b795344abc	b1d0a419	is idempotent and visible to a second instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	fa175d243d151b21	b1d0a419	keys the table on the challenge id, so the PK is the single-use gate
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	4e20db37947db123	b1d0a419	leaves exactly one row for N racing claims of one id

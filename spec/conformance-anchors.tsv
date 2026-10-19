@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1934 anchors.
+# 1941 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -941,8 +941,10 @@ kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	'.verify cheap checks r
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	does not invoke the backend for an expired challenge (uses spy backend)
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	does not invoke the backend when sig is wrong (uses spy backend)
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when params are tampered
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when request_fingerprint at verify differs from issue
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when salt is tampered
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns :bad_sig when the sig field itself is corrupted
+kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	returns a hash with all required wire fields
 kiosk-reputation/spec/kiosk/reputation/challenge_spec.rb	sets exp = now + ttl
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	draws once per access token, so each call made with one token meets the same outcome
 kiosk-reputation/spec/kiosk/reputation/policies/recent_spend_spec.rb	gives every token minted for one customer within one token lifetime the same outcome
@@ -1712,12 +1714,16 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	carries a hint steering to the s
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	does NOT call on_bad_proof (replaying a valid proof is not a wrong proof)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	does not disclose the construction, the parameters, or which check failed
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	expect(error).not_to respond_to(:to_envelope)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	flattens a proxy comma-combined value {A},{B} (RFC 7230)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	flattens repeated header lines (Rack joins duplicates with
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	is deterministic: same inputs → same fingerprint
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	is exactly SHA256(
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	issues `count` challenges with distinct ids AND salts (no amortisation)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	it 'raises Forbidden' do
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	it 'raises PowRequired'
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	lets every later call with the paid token through, without a proof
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	nil reputation_policy (the default)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	parses a JSON-array value into the proofs list
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	pow_spent_store defaults to the database-backed store
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	re-challenge carries a well-formed NEW challenge (different id from the spent one)
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	re-challenges when the ARGUMENTS differ
@@ -1729,6 +1735,7 @@ kiosk-server/spec/kiosk/server/pow_gate_spec.rb	scales the challenge TTL by `cou
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	still issues a 402 at the shipped equihash default — accepted set unchanged
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	tolls a new token again
 kiosk-server/spec/kiosk/server/pow_gate_spec.rb	verifies for the identical method + verb + args (the control)
+kiosk-server/spec/kiosk/server/pow_gate_spec.rb	wraps a single {…} proof into a one-element proofs list
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	is idempotent and visible to a second instance
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	keys the table on the challenge id, so the PK is the single-use gate
 kiosk-server/spec/kiosk/server/pow_spent_stores_spec.rb	leaves exactly one row for N racing claims of one id

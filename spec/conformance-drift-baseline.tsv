@@ -6,7 +6,7 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at 9e766433
+# recorded: 2026-10-19 at 9843e8b9 -- K-2136 re-judge
 # 2005 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
@@ -498,27 +498,27 @@ kiosk-demo-philslist/test/stories/privacy_test.rb	dc1c9c08e56b1585	b1d0a419	one 
 kiosk-demo-philslist/test/stories/privacy_test.rb	3b8c0d1828adefbf	b1d0a419	only the board is public; every question about the seller's own listings shows nothing of anyone else's
 kiosk-demo-philslist/test/stories/privacy_test.rb	dc1c9c08e56b1585	b1d0a419	test "one seller can neither edit nor close another's listing" do
 kiosk-demo-philslist/test/stories/selling_test.rb	f7d82d8d99da8893	b1d0a419	a seller who retitles a listing keeps its price, and clears the price only by saying so
-kiosk-demo-prove/README.md	faa431869db8c698	b1d0a419	  `KycVerifier` **also** enforces this at the wire: every
-kiosk-demo-prove/README.md	74addcc68b814268	b1d0a419	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
-kiosk-demo-prove/README.md	5d3949ff29c6c42d	b1d0a419	"attributes": { "age_over_18": true, "licence_a": true }, "iat": …, "exp": … }
-kiosk-demo-prove/README.md	500519b55f315d89	b1d0a419	# kiosk-demo-prove
-kiosk-demo-prove/README.md	100db29d360b2883	b1d0a419	## The three legs
-kiosk-demo-prove/README.md	b6252e51bed8d2fc	b1d0a419	- **Bound, single-use, TTL'd claim.** The claim binds to (subject + operator +
-kiosk-demo-prove/README.md	0148332b3350de10	b1d0a419	- **No replay across operators.** The claim carries `operator`/`aud`; the
-kiosk-demo-prove/README.md	6d82c57c36e94468	b1d0a419	The broker mounts **no** Kiosk wire at all — neither of the two reserved
-kiosk-demo-prove/README.md	05673f303e9ace79	b1d0a419	bin/rails test         # the broker's own suite; CI runs exactly this
-kiosk-demo-prove/README.md	c748e74282d28731	b1d0a419	operator → broker (server-to-server)
-kiosk-demo-prove/README.md	c75e94076c1ebf42	b1d0a419	public verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake
-kiosk-demo-prove/README.md	73d48efc1c0e2b80	b1d0a419	required in production; development and test set `https://kyc.test.local`. The
-kiosk-demo-prove/README.md	c748e74282d28731	b1d0a419	| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle, audience?}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", nonce, expires_at}` |
-kiosk-demo-prove/app/controllers/verifications_controller.rb	18004b99c5bb9624	b1d0a419	        # The callback echoes it, so the operator can tell it from a replay.
-kiosk-demo-prove/app/controllers/verifications_controller.rb	14b7cb3129553435	b1d0a419	    # The audience is the registered operator's, never the body's.
-kiosk-demo-prove/app/controllers/verifications_controller.rb	eee72ac2003ccf31	b1d0a419	    audience = operator[:audience].to_s
-kiosk-demo-prove/app/controllers/verifications_controller.rb	4899bcf34862c52e	b1d0a419	    base = (Rails.configuration.x.prove.public_url || request.base_url).to_s.chomp('/')
-kiosk-demo-prove/app/controllers/verifications_controller.rb	becee71cedbdcf1a	b1d0a419	    nonce      = SecureRandom.urlsafe_base64(32)
-kiosk-demo-prove/app/controllers/verifications_controller.rb	a254f7192bb628d4	b1d0a419	    request_id = SecureRandom.urlsafe_base64(32) # 256 bits
-kiosk-demo-prove/app/controllers/verifications_controller.rb	1e1859c56e15a9b0	b1d0a419	  REQUEST_TTL = 15 * 60
-kiosk-demo-prove/app/controllers/verifications_controller.rb	bc8e4cb362eb997a	b1d0a419	attributes = ClaimCatalog.attributes_for(prove_request.requested_claims)
+kiosk-demo-prove/README.md	faa431869db8c698	9843e8b9	  `KycVerifier` **also** enforces this at the wire: every
+kiosk-demo-prove/README.md	74addcc68b814268	9843e8b9	  per-request STATE (single-use / TTL / no-replay) — never the human's identity
+kiosk-demo-prove/README.md	8d879540d613121d	9843e8b9	"attributes": { "age_over_18": true, "licence_a1": true, "licence_a": true }, "iat": …, "exp": … }
+kiosk-demo-prove/README.md	500519b55f315d89	9843e8b9	# kiosk-demo-prove
+kiosk-demo-prove/README.md	100db29d360b2883	9843e8b9	## The three legs
+kiosk-demo-prove/README.md	b6252e51bed8d2fc	9843e8b9	- **Bound, single-use, TTL'd claim.** The claim binds to (subject + operator +
+kiosk-demo-prove/README.md	0148332b3350de10	9843e8b9	- **No replay across operators.** The claim carries `operator`/`aud`; the
+kiosk-demo-prove/README.md	6d82c57c36e94468	9843e8b9	The broker mounts **no** Kiosk wire at all — neither of the two reserved
+kiosk-demo-prove/README.md	05673f303e9ace79	9843e8b9	bin/rails test         # the broker's own suite; CI runs exactly this
+kiosk-demo-prove/README.md	c748e74282d28731	9843e8b9	operator → broker (server-to-server)
+kiosk-demo-prove/README.md	c75e94076c1ebf42	9843e8b9	public verification-URL base (`PROVE_PUBLIC_URL`) defaults to the intake
+kiosk-demo-prove/README.md	73d48efc1c0e2b80	9843e8b9	required in production; development and test set `https://kyc.test.local`. The
+kiosk-demo-prove/README.md	c748e74282d28731	9843e8b9	| `POST /verifications` | operator → broker (server-to-server) | intake: `{operator_id, callback_url, requested_claims, subject_handle, audience?}` + `Authorization: Bearer <operator secret>` → `{request_id, verification_url, status:"pending", nonce, expires_at}` |
+kiosk-demo-prove/app/controllers/verifications_controller.rb	18004b99c5bb9624	9843e8b9	        # The callback echoes it, so the operator can tell it from a replay.
+kiosk-demo-prove/app/controllers/verifications_controller.rb	14b7cb3129553435	9843e8b9	    # The audience is the registered operator's, never the body's.
+kiosk-demo-prove/app/controllers/verifications_controller.rb	eee72ac2003ccf31	9843e8b9	    audience = operator[:audience].to_s
+kiosk-demo-prove/app/controllers/verifications_controller.rb	4899bcf34862c52e	9843e8b9	    base = (Rails.configuration.x.prove.public_url || request.base_url).to_s.chomp('/')
+kiosk-demo-prove/app/controllers/verifications_controller.rb	becee71cedbdcf1a	9843e8b9	    nonce      = SecureRandom.urlsafe_base64(32)
+kiosk-demo-prove/app/controllers/verifications_controller.rb	a254f7192bb628d4	9843e8b9	    request_id = SecureRandom.urlsafe_base64(32) # 256 bits
+kiosk-demo-prove/app/controllers/verifications_controller.rb	1e1859c56e15a9b0	9843e8b9	  REQUEST_TTL = 15 * 60
+kiosk-demo-prove/app/controllers/verifications_controller.rb	f58970e14925c1c5	9843e8b9	attributes = ClaimCatalog.attributes_for(prove_request.requested_claims, params[:licence_category])
 kiosk-demo-prove/app/models/operator_registry.rb	7ce6cd29dc97de15	b1d0a419	  def callback_allowed?(operator, callback_url)
 kiosk-demo-prove/app/models/operator_registry.rb	c90bc7382ff4c738	b1d0a419	# The operators this broker serves: each authenticates with its own secret,
 kiosk-demo-prove/app/models/operator_registry.rb	0304dcdde68ba268	b1d0a419	# and the broker posts its callbacks to that operator's registered host only.
@@ -537,21 +537,21 @@ kiosk-demo-prove/test/verifications_test.rb	9502032dccdbb548	b1d0a419	mints an a
 kiosk-demo-prove/test/verifications_test.rb	bf44e9975de6fda0	b1d0a419	records a decline without minting
 kiosk-demo-prove/test/verifications_test.rb	9bf6803a5ce1a6cd	b1d0a419	rejects a callback_url whose host is NOT allow-listed (SSRF/open-relay guard, 403)
 kiosk-demo-prove/test/verifications_test.rb	5516bc71361c2ffb	b1d0a419	rejects an operator requesting ANOTHER operator's audience (cross-operator forgery)
-kiosk-demo-skooti/README.md	f5366b2da43ad843	b1d0a419	**What this KYC proves, and what it deliberately does not (honest scope).** The
-kiosk-demo-skooti/README.md	68fa3bdf9a1435e1	b1d0a419	Hold a vehicle for 3 minutes and quote the first minute to pay
-kiosk-demo-skooti/README.md	305294d69b904e3d	b1d0a419	Scooter rental demo operator for Kiosk.
-kiosk-demo-skooti/README.md	7a01e89bcc7c0af6	b1d0a419	Start the rental of a paid, licence-free vehicle and issue its offline Ed25519 unlock token
-kiosk-demo-skooti/README.md	ac2ea06e019a5558	b1d0a419	attestation proves the assistant is *eligible* — that a valid category-A licence
-kiosk-demo-skooti/README.md	dcd340bebcb05139	b1d0a419	bin/rails test         # the tests; CI runs exactly this
-kiosk-demo-skooti/README.md	4a701dfc88bef40f	b1d0a419	with one Equihash proof-of-work at the gem's default n=168 k=7
+kiosk-demo-skooti/README.md	f5366b2da43ad843	9843e8b9	**What this KYC proves, and what it deliberately does not (honest scope).** The
+kiosk-demo-skooti/README.md	68fa3bdf9a1435e1	9843e8b9	Hold a vehicle for 3 minutes and quote the first minute to pay
+kiosk-demo-skooti/README.md	305294d69b904e3d	9843e8b9	Scooter rental demo operator for Kiosk.
+kiosk-demo-skooti/README.md	7a01e89bcc7c0af6	9843e8b9	Start the rental of a paid, licence-free vehicle and issue its offline Ed25519 unlock token
+kiosk-demo-skooti/README.md	243b8bcd6d5d9d47	9843e8b9	attestation proves the assistant is *eligible* — that a valid licence of the
+kiosk-demo-skooti/README.md	dcd340bebcb05139	9843e8b9	bin/rails test         # the tests; CI runs exactly this
+kiosk-demo-skooti/README.md	4a701dfc88bef40f	9843e8b9	with one Equihash proof-of-work at the gem's default n=168 k=7
 kiosk-demo-skooti/app/controllers/kiosk/reservations_controller.rb	5a9309c180408f7f	b1d0a419	@reservation = Reservation.create!(user_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])
 kiosk-demo-skooti/app/jobs/refund_unstarted_job.rb	59aa6d75d9c5d4ec	b1d0a419	Reservation.unstarted.ids.each { Reservation.refund_unstarted!(it) }
-kiosk-demo-skooti/app/models/reservation.rb	7fe6e54261287ef6	b1d0a419	HOLD = 3.minutes
-kiosk-demo-skooti/app/models/reservation.rb	8d0cec0f71ed38b6	b1d0a419	before_create { self.held_until = HOLD.from_now }
-kiosk-demo-skooti/app/models/reservation.rb	73035c8f9e4e1cc0	b1d0a419	return if scooter.licence_free?
-kiosk-demo-skooti/app/models/reservation.rb	28e27cc9eb435f18	b1d0a419	scope :live, -> { where(arel_table[:held_until].gt(Time.current)) }
-kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	594037f9e6dc4878	b1d0a419	# attested `age_over_18` and `licence_a`.
-kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	73f69f1f8576caa6	b1d0a419	Kiosk::Server::Kyc.require!
+kiosk-demo-skooti/app/models/reservation.rb	7fe6e54261287ef6	9843e8b9	HOLD = 3.minutes
+kiosk-demo-skooti/app/models/reservation.rb	8d0cec0f71ed38b6	9843e8b9	before_create { self.held_until = HOLD.from_now }
+kiosk-demo-skooti/app/models/reservation.rb	683b28b2dc6223d2	9843e8b9	return unless scooter.needs_licence?
+kiosk-demo-skooti/app/models/reservation.rb	28e27cc9eb435f18	9843e8b9	scope :live, -> { where(arel_table[:held_until].gt(Time.current)) }
+kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	1087b629bf7ad75a	9843e8b9	# attested `age_over_18` and the licence attribute of the vehicle's category.
+kiosk-demo-skooti/app/operations/rent_motorcycle_operation.rb	e04773069facfca8	9843e8b9	Kiosk::Server::Kyc.require!
 kiosk-demo-skooti/app/operations/rental.rb	e2db2df1b44c72d0	b1d0a419	Reservation.own.reserved.find_by(id: reservation_id) or refuse
 kiosk-demo-skooti/app/operations/rental.rb	d799eeb9807a10a2	b1d0a419	def require_paid!(reservation)
 kiosk-demo-skooti/app/operations/rental.rb	d5d09b31cdb5bef5	b1d0a419	return if reservation.paid?
@@ -561,15 +561,15 @@ kiosk-demo-skooti/app/views/home/index.html.erb	9030591272c4c067	b1d0a419	      
 kiosk-demo-skooti/app/views/home/index.html.erb	fd5ede94ef196613	b1d0a419	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
 kiosk-demo-skooti/before-after.md	e5a7c6550352ee43	b1d0a419	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	6543a73a1ea54fca	b1d0a419	`test/stories/ride_test.rb` runs the errand with no human account and no sign-in:
-kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	d96d6810	  c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	d96d6810	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-kiosk-demo-skooti/config/initializers/kiosk.rb	fdbc265b29fbf0bb	d96d6810	Kiosk::PaymentProviders::Stripe.new(
-kiosk-demo-skooti/config/initializers/kiosk.rb	bffa9a7e0b8d47ff	d96d6810	c.kyc_audience   = 'skooti'
-kiosk-demo-skooti/config/initializers/kiosk.rb	7ae4bd0e72010398	d96d6810	c.kyc_claims     = %w[age_over_18 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	d96d6810	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-kiosk-demo-skooti/config/initializers/kiosk.rb	822e8dd9dfcfa05d	d96d6810	c.registration_pow_count = 1
-kiosk-demo-skooti/config/initializers/kiosk.rb	aba966214b08a8c7	d96d6810	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
-kiosk-demo-skooti/config/initializers/kiosk.rb	d1660d1bacbc7f54	d96d6810	c.validate_responses = true
+kiosk-demo-skooti/config/initializers/kiosk.rb	419b6f2f5aafbc7f	9843e8b9	  c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	9843e8b9	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
+kiosk-demo-skooti/config/initializers/kiosk.rb	fdbc265b29fbf0bb	9843e8b9	Kiosk::PaymentProviders::Stripe.new(
+kiosk-demo-skooti/config/initializers/kiosk.rb	bffa9a7e0b8d47ff	9843e8b9	c.kyc_audience   = 'skooti'
+kiosk-demo-skooti/config/initializers/kiosk.rb	419b6f2f5aafbc7f	9843e8b9	c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	9843e8b9	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
+kiosk-demo-skooti/config/initializers/kiosk.rb	822e8dd9dfcfa05d	9843e8b9	c.registration_pow_count = 1
+kiosk-demo-skooti/config/initializers/kiosk.rb	aba966214b08a8c7	9843e8b9	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
+kiosk-demo-skooti/config/initializers/kiosk.rb	d1660d1bacbc7f54	9843e8b9	c.validate_responses = true
 kiosk-demo-skooti/config/routes.rb	6b079e6bff56ba78	b1d0a419	kiosk do
 kiosk-demo-skooti/script/lock_sim.rb	14ec6a37eb152935	b1d0a419	  def unlock(token:, now:)
 kiosk-demo-skooti/test/payment_window_test.rb	89f0a676eff954e6	b1d0a419	a capture in flight reads pending and does not start
@@ -580,10 +580,10 @@ kiosk-demo-skooti/test/rental_token_issuer_test.rb	c55a6a3be55a5b73	b1d0a419	a t
 kiosk-demo-skooti/test/rental_token_issuer_test.rb	412b86c167eb0938	b1d0a419	test 'the known answer' do
 kiosk-demo-skooti/test/scooter_hold_test.rb	59be98b23a60850f	b1d0a419	test 'a lapsed hold frees the vehicle' do
 kiosk-demo-skooti/test/scooter_hold_test.rb	fc8981cebc844ae1	b1d0a419	test 'a second live reservation of one vehicle is refused by the database' do
-kiosk-demo-skooti/test/stories/licence_check_test.rb	90fa63e4a17c276a	b1d0a419	a licence-free scooter needs no licence check
-kiosk-demo-skooti/test/stories/licence_check_test.rb	8d0aa6a41b8cf1b9	b1d0a419	a rider confirmed as an adult but without a motorcycle licence gets no motorcycle
-kiosk-demo-skooti/test/stories/licence_check_test.rb	cdffd85564598f34	b1d0a419	a rider rides a motorcycle once a verification service confirms their motorcycle licence
-kiosk-demo-skooti/test/stories/licence_check_test.rb	383861b1dba7948a	b1d0a419	an attestation that spells the answer any other way than true proves nothing
+kiosk-demo-skooti/test/stories/licence_check_test.rb	90fa63e4a17c276a	9843e8b9	a licence-free scooter needs no licence check
+kiosk-demo-skooti/test/stories/licence_check_test.rb	8d0aa6a41b8cf1b9	9843e8b9	a rider confirmed as an adult but without a motorcycle licence gets no motorcycle
+kiosk-demo-skooti/test/stories/licence_check_test.rb	cdffd85564598f34	9843e8b9	a rider rides a motorcycle once a verification service confirms their motorcycle licence
+kiosk-demo-skooti/test/stories/licence_check_test.rb	9b95275f68737aa3	9843e8b9	an attestation that spells the answer any other way than true proves nothing
 kiosk-demo-skooti/test/stories/privacy_test.rb	73aaa6e489887d2d	b1d0a419	one rider can neither pay for, ride, nor see another's reservation
 kiosk-demo-skooti/test/stories/ride_test.rb	7ad09cb1e78cd327	b1d0a419	a rider with no account reserves a scooter nearby, pays for the first minute and unlocks it
 kiosk-demo-skooti/test/stories/ride_test.rb	556b93274bd0bdb2	b1d0a419	assert_not lock.unlock(token:, now:), 'replayed'
@@ -696,7 +696,7 @@ kiosk-demo-tudu/test/stories/link_test.rb	4d1f1acd9ee58d98	b1d0a419	Alice links 
 kiosk-demo-tudu/test/stories/link_test.rb	4d712a143d7ede4b	b1d0a419	assert @on_its_own.asks(:my_lists).refused?(:unauthenticated)
 kiosk-demo-tudu/test/stories/privacy_test.rb	c2bfbccba2e392ba	b1d0a419	a housemate reads the list, and a stranger can neither read it, nor join it, nor see it exists
 kiosk-demo-tudu/test/stories/privacy_test.rb	60f9a477da0399bd	b1d0a419	only queries the catalog says reach past the assistant's own account ever show a shared list
-kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	c9b686a6612a4e6d	b1d0a419	CLAIM_IDS = { 'licence_a' => 'licence_category:A' }.freeze
+kiosk-kyc-prove/lib/kiosk/kyc_providers/prove.rb	f0a438aa0d877e01	9843e8b9	requested_claims: claims,
 kiosk-pay-stripe/README.md	2a11a52aa92a4861	b1d0a419	Test mode only for the PoC (`sk_test_…`).
 kiosk-pay-stripe/README.md	50c988bc489df4bb	b1d0a419	`Kiosk::PaymentProviders::Base` over Stripe PaymentIntents.
 kiosk-pay-stripe/lib/generators/kiosk/pay_stripe/install/install_generator.rb	950844a255e63602	b1d0a419	Generate the migration for the stripe_customers table of kiosk-pay-stripe.

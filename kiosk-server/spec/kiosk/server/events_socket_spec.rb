@@ -147,10 +147,10 @@ end
 RSpec.describe 'the Kiosk event stream over a real socket', 'subscribing' do
   let(:report) { EventsSocketSpec.report }
   it 'confirms a declared topic with head and truncated' do
-    expect(report['subscribed']).to include(
-      'type' => 'subscribed', 'topic' => 'order_delivery', 'truncated' => false
+    expect(report['subscribed']).to match(
+      'type' => 'subscribed', 'topic' => 'order_delivery', 'subject' => nil,
+      'head' => a_kind_of(Integer), 'truncated' => false
     )
-    expect(report['subscribed']['head']).to be_a(Integer)
   end
 
   # A silent subscription to nothing is indistinguishable from a quiet topic,
@@ -430,7 +430,7 @@ RSpec.describe 'the Kiosk event stream over a real socket', 'resuming with `sinc
   # already seen (spec Section 8.5.5).
   it 'replays only what the cursor had not seen' do
     expect(report['resumed_ids']).to eq(report['resumed_ids'].sort)
-    expect(report['resumed_ids'].first).to be > 1
+    expect(report['resumed_ids']).to all(be > report['live']['id'])
   end
 
   it 'reports head on the resumed subscription' do

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1911 anchors.
+# 1914 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1213,6 +1213,8 @@ kiosk-server/spec/kiosk/server/actions_spec.rb	leaves description nil when the v
 kiosk-server/spec/kiosk/server/actions_spec.rb	returns all descriptors sorted by name
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	carries the `actor` claim through verification into the resolved Identity
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	keeps an earlier token valid after a second is minted for the same agent
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	mints a token that lives access_token_ttl seconds when the operator configures it
+kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	mints a token that lives one hour by default
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	omits the role claim entirely when role is nil
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	revokes both at once when the agent's watermark passes them
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	stamps an `actor` claim of `agent` on every token it mints, role or no role
@@ -1648,6 +1650,7 @@ kiosk-server/spec/kiosk/server/page_spec.rb	publishes the offset as a decimal in
 kiosk-server/spec/kiosk/server/page_spec.rb	refuses a cursor it did not issue with a typed 400, not a silent page one
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	builds the cart a PaymentClaim accepts: a line naming the row, then the priced lines
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	class ClaimSpecPsp < Kiosk::PaymentProviders::Base
+kiosk-server/spec/kiosk/server/payment_claim_spec.rb	publishes the payment topic with reach principal
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	pushes data that satisfies the payload_schema the origin serves for the topic
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	pushes one payment event to the owner when the capture returns
 kiosk-server/spec/kiosk/server/payment_claim_spec.rb	reaches the row's owner and nobody else

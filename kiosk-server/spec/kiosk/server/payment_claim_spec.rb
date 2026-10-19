@@ -421,6 +421,11 @@ RSpec.describe Kiosk::Server::PaymentClaim, '#topic' do
     expect(events.since(owner, 0).flat_map { schema.validate(it['data']).to_a }).to be_empty
   end
 
+  it 'publishes the payment topic with reach principal' do
+    served = JSON.parse(Kiosk::Server::SchemaDocument.json).fetch('events').find { it['name'] == 'payment' }
+    expect(served['reach']).to eq('principal')
+  end
+
   it "reaches the row's owner and nobody else" do
     reachable = claim.topic[:subject_reachable]
     identity = ->(user_id) { Struct.new(:user_id).new(user_id) }

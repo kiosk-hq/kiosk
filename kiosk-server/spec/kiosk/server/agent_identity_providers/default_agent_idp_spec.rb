@@ -273,3 +273,22 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     end
   end
 end
+
+# Spec Section 10: an access token lives one hour unless the operator
+# configures another lifetime. Read off the token `#issue` mints.
+RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
+  describe '#issue — the lifetime of the token it mints' do
+    include_context 'default agent idp spec: issuing idp'
+
+    def lifetime = decode(idp.issue(agent_id: 'a-1', role: :customer)).values_at('exp', 'iat').reduce(:-)
+
+    it 'mints a token that lives one hour by default' do
+      expect(lifetime).to eq(3600)
+    end
+
+    it 'mints a token that lives access_token_ttl seconds when the operator configures it' do
+      Kiosk.configure { |c| c.access_token_ttl = 900 }
+      expect(lifetime).to eq(900)
+    end
+  end
+end

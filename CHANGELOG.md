@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The kiosk-server README says the engine keeps its own state in the `kiosk` schema and writes no audit record there; the audit sink is off by default.
+
 ## [0.5.18] — 2026-10-18
 
 - 2026-10-18: **Every gem, `API_VERSION` and `MIN_CLIENT` are 0.5.18, matching skill 0.5.18.**

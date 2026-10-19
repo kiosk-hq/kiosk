@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The README says the engine keeps its own state in the `kiosk` schema and writes no audit record there; the audit sink is off by default.
+
 ## [0.5.18] — 2026-10-18
 
 - 2026-10-18: Version 0.5.18, the tree cut that matches skill 0.5.18.

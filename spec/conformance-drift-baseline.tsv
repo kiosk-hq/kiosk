@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at d2787217 -- T-138 slice: §9-§10 re-judge citations
-# 1941 anchors.
+# recorded: 2026-10-19 at 500b5f1c -- T-138 slice: §9-§10 test gaps and fixes
+# 1945 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -806,25 +806,27 @@ kiosk-pow-equihash/lib/kiosk/pow/equihash/solver.rb	5c4f24629dcea74a	b1d0a419	ra
 kiosk-pow-equihash/solve.py	271c59884cd2d0f8	b1d0a419	        "ERROR: this solver requires numpy.\n"
 kiosk-pow-equihash/solve.py	6232671ff2204f17	b1d0a419	BUCKET_CAP = 32
 kiosk-pow-equihash/solve.py	8e20ad8273971819	b1d0a419	Equihash PoW solver for Kiosk (default n=168, k=7).
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	e32cf7553880fee4	b1d0a419	.verify at the default params (n=168, k=7)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	b7cded5efca48a89	b1d0a419	ACCEPT — header_nonce=0 same as default
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	bb6ac36ca5741298	b1d0a419	ACCEPT — valid KAT (n=8,k=1, indices [2,10])
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ba04135acfb5f8dc	b1d0a419	ACCEPT — valid k=2 KAT (n=24, canonical/tree order)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	27fb855be9b53186	b1d0a419	ACCEPT — valid k=3 KAT (n=32, canonical/tree order)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	69b9e56592c62f2e	b1d0a419	KAT: the constructed pair XORs to zero
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	9d238af3d54ebffc	b1d0a419	REJECT — Hash header_nonce returns false, does not raise
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	e0f132766eec4743	b1d0a419	REJECT — different header_nonce changes seed
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ab1a85e3eea601d2	b1d0a419	REJECT — k=2 canonical values but subtree order violated (halves swapped)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	98790ad2bc531f74	b1d0a419	REJECT — k=2 with one mutated index (XOR no longer cancels)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	c932c5486bee8efb	b1d0a419	REJECT — non-coercible header_nonce type (Array) returns false, does not raise
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	100a596ebf10f7bd	b1d0a419	REJECT — non-numeric string header_nonce (returns false, does not raise)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	2f674c51d2b6f6ce	b1d0a419	REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ae153f20ab70c0f1	b1d0a419	REJECT — the same solution globally sorted (breaks tree pairing)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	d10ace4d037dfd67	b1d0a419	Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	95475e65a150aab5	b1d0a419	are the benchmark-chosen defaults (168, 7)
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	d8a1d9ba78701996	b1d0a419	production params (n=168, k=7) KAT
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	7acacdb112c5be2e	b1d0a419	rejects a valid solution with 2**64 added to an index, without hashing
-kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	a9f559a96a0c992f	b1d0a419	returns n:168, k:7 by default
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	e32cf7553880fee4	500b5f1c	.verify at the default params (n=168, k=7)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	057965910334c48f	500b5f1c	ACCEPT — a proof solved at header_nonce 1, which is folded as a little-endian u32
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	b7cded5efca48a89	500b5f1c	ACCEPT — header_nonce=0 same as default
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	bb6ac36ca5741298	500b5f1c	ACCEPT — valid KAT (n=8,k=1, indices [2,10])
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ba04135acfb5f8dc	500b5f1c	ACCEPT — valid k=2 KAT (n=24, canonical/tree order)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	27fb855be9b53186	500b5f1c	ACCEPT — valid k=3 KAT (n=32, canonical/tree order)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	69b9e56592c62f2e	500b5f1c	KAT: the constructed pair XORs to zero
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	9d238af3d54ebffc	500b5f1c	REJECT — Hash header_nonce returns false, does not raise
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	e0f132766eec4743	500b5f1c	REJECT — different header_nonce changes seed
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ab1a85e3eea601d2	500b5f1c	REJECT — k=2 canonical values but subtree order violated (halves swapped)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	98790ad2bc531f74	500b5f1c	REJECT — k=2 with one mutated index (XOR no longer cancels)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	c932c5486bee8efb	500b5f1c	REJECT — non-coercible header_nonce type (Array) returns false, does not raise
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	100a596ebf10f7bd	500b5f1c	REJECT — non-numeric string header_nonce (returns false, does not raise)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	2f674c51d2b6f6ce	500b5f1c	REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	1d1dade417961c11	500b5f1c	REJECT — the same proof without its header_nonce
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ae153f20ab70c0f1	500b5f1c	REJECT — the same solution globally sorted (breaks tree pairing)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	d10ace4d037dfd67	500b5f1c	Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	95475e65a150aab5	500b5f1c	are the benchmark-chosen defaults (168, 7)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	d8a1d9ba78701996	500b5f1c	production params (n=168, k=7) KAT
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	7acacdb112c5be2e	500b5f1c	rejects a valid solution with 2**64 added to an index, without hashing
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	a9f559a96a0c992f	500b5f1c	returns n:168, k:7 by default
 kiosk-pow-equihash/spec/readme_lever_spec.rb	dede49ed5355c5d6	b1d0a419	README's own benchmarks give, or state that it is unbenched.
 kiosk-redteam/README.md	2f3ee66401e2f514	b1d0a419	Adversarial regression harness for [Kiosk](https://kiosk.tech) providers — it
 kiosk-redteam/README.md	31c52b5f46869d3c	b1d0a419	attack is correctly blocked.
@@ -1476,9 +1478,11 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	7f63112e75b5445c	b1d0a419	resume
 kiosk-server/spec/kiosk/server/executor_spec.rb	b91fd4f8156e69cb	b1d0a419	scopes the settled-total tally to the cart's currency (not currency-blind)
 kiosk-server/spec/kiosk/server/executor_spec.rb	39edff6b054a195a	b1d0a419	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	06b1ad16d5206beb	b1d0a419	verifies the trail, captures, and returns the full settlement payload
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	d610fe37bd2ec5f4	e8503071	refuses an empty next_cursor, whose next link would lead back to page one
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	63b8a006a6ec2abc	e8503071	rejects a page whose rows are not an array
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	b42d4459115a687d	e8503071	rejects a query that answers an object, paginating or not
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	0ad1deff6effa91d	500b5f1c	carries the challenges a handler renders on pow_required
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	f3e1db753dd233e8	500b5f1c	keeps type, title and status those of the code, and drops instance and challenges
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	d610fe37bd2ec5f4	500b5f1c	refuses an empty next_cursor, whose next link would lead back to page one
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	63b8a006a6ec2abc	500b5f1c	rejects a page whose rows are not an array
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	b42d4459115a687d	500b5f1c	rejects a query that answers an object, paginating or not
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	a48b474c51f65884	e8503071	404s a request that did not come through the Kiosk wire
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	636961ab3b110c23	e8503071	accepts the verb name #{name.inspect}
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	3733a87179f21bd3	e8503071	answers bad_request whose detail is the errors' full messages
@@ -1864,18 +1868,18 @@ kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	b0ff822ee29f892d	b1d0
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	7c16391ab49351af	b1d0a419	answers a per-verb GET the same gate as a problem document, uncacheable
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	48a86a341201c1c2	b1d0a419	carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	b8d268c0b5aac795	b1d0a419	carries WWW-Authenticate: Payment
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	44131f86e1069d1a	e8503071	accepts a JSON-array Kiosk-PoW header (proceeds)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	d103da5940f4e85d	e8503071	accepts a proxy comma-combined header value {A},{B} (RFC 7230)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	c6a539e5c2f2357a	e8503071	accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	e102b5eccd3101c3	e8503071	accepts repeated header lines joined by \\n (Rack duplicate presentation)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	43084a247ab1ea9f	e8503071	accepts the matching POST proof on that same action (the control)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	d9321b7a97c67330	e8503071	does NOT accept a GET proof on the POST endpoint of the same name
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	5c845a0de6575251	e8503071	does NOT accept a catalog proof on another query's endpoint
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	d214086cbbc188ac	e8503071	does NOT accept a proof placed in an action's BODY (the header is the channel)
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	01a0cfa35d496dab	e8503071	never tolls GET /kiosk/schema, under a policy that challenges everything
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	074046dfe6b3cf39	e8503071	never tolls the JWKS document, under a policy that challenges everything
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	586179f69c3d2faa	e8503071	re-challenges a per-verb GET with a fresh 402 problem document when no header is sent
-kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	dc23daa595bcd9c0	e8503071	rejects a malformed Kiosk-PoW header with a 400 problem document + hint
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	44131f86e1069d1a	500b5f1c	accepts a JSON-array Kiosk-PoW header (proceeds)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	d103da5940f4e85d	500b5f1c	accepts a proxy comma-combined header value {A},{B} (RFC 7230)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	c6a539e5c2f2357a	500b5f1c	accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	e102b5eccd3101c3	500b5f1c	accepts repeated header lines joined by \\n (Rack duplicate presentation)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	43084a247ab1ea9f	500b5f1c	accepts the matching POST proof on that same action (the control)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	d9321b7a97c67330	500b5f1c	does NOT accept a GET proof on the POST endpoint of the same name
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	5c845a0de6575251	500b5f1c	does NOT accept a catalog proof on another query's endpoint
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	d214086cbbc188ac	500b5f1c	does NOT accept a proof placed in an action's BODY (the header is the channel)
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	01a0cfa35d496dab	500b5f1c	never tolls GET /kiosk/schema, under a policy that challenges everything
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	074046dfe6b3cf39	500b5f1c	never tolls the JWKS document, under a policy that challenges everything
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	586179f69c3d2faa	500b5f1c	re-challenges a per-verb GET with a fresh 402 problem document when no header is sent
+kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	251828329947d9e8	500b5f1c	rejects a malformed Kiosk-PoW header with a 400 problem document + hint
 kiosk-server/spec/kiosk/server/wire_controller_validation_spec.rb	3dcba295bcdde035	b1d0a419	answers a proof for an algorithm it does not implement with a challenge for one it does, never a 400 on the nonce's shape
 kiosk-test-support/README.md	a4ba4190f7e5b341	b1d0a419	Carries the shared pieces of the Kiosk journey-test DSL: the `Journey` module mixed into RSpec / Minitest tests, the pluggable `executor` contract, a `NullExecutor` for self-tests
 kiosk-test-support/README.md	6d6149171b41dd0f	b1d0a419	For unit-shaped tests where you only care about call ordering, use the bundled `NullExecutor`:

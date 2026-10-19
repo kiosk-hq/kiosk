@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1941 anchors.
+# 1945 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -826,6 +826,7 @@ kiosk-pow-equihash/solve.py	        "ERROR: this solver requires numpy.\n"
 kiosk-pow-equihash/solve.py	BUCKET_CAP = 32
 kiosk-pow-equihash/solve.py	Equihash PoW solver for Kiosk (default n=168, k=7).
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	.verify at the default params (n=168, k=7)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ACCEPT — a proof solved at header_nonce 1, which is folded as a little-endian u32
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ACCEPT — header_nonce=0 same as default
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ACCEPT — valid KAT (n=8,k=1, indices [2,10])
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	ACCEPT — valid k=2 KAT (n=24, canonical/tree order)
@@ -838,6 +839,7 @@ kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	REJECT — k=2 with one mutat
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	REJECT — non-coercible header_nonce type (Array) returns false, does not raise
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	REJECT — non-numeric string header_nonce (returns false, does not raise)
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)
+kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	REJECT — the same proof without its header_nonce
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	REJECT — the same solution globally sorted (breaks tree pairing)
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver
 kiosk-pow-equihash/spec/kiosk/pow/equihash_spec.rb	are the benchmark-chosen defaults (168, 7)
@@ -1495,6 +1497,8 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	resumes a chain whose capture ra
 kiosk-server/spec/kiosk/server/executor_spec.rb	scopes the settled-total tally to the cart's currency (not currency-blind)
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	carries the challenges a handler renders on pow_required
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	keeps type, title and status those of the code, and drops instance and challenges
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	refuses an empty next_cursor, whose next link would lead back to page one
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a page whose rows are not an array
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a query that answers an object, paginating or not

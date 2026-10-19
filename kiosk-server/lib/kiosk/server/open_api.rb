@@ -16,6 +16,9 @@ module Kiosk
 
       CONTENT_TYPE = 'application/vnd.oai.openapi+json;version=3.1'
 
+      # A verb or topic name as a JSON Schema pattern, which is ECMA-262: it anchors with `^` and `$`.
+      NAME_PATTERN = "^#{HandlerMixin::NAME_PATTERN.source.delete_prefix('\\A').delete_suffix('\\z')}$".freeze
+
       # No operation answers 405: the other method at a verb's path matches no route.
       METHOD_NOT_ALLOWED = 'method_not_allowed'
 
@@ -394,7 +397,7 @@ module Kiosk
           type: 'object',
           title: 'One verb descriptor',
           properties: {
-            name: { type: 'string', pattern: HandlerMixin::NAME_PATTERN.source },
+            name: { type: 'string', pattern: OpenApi::NAME_PATTERN },
             description: { type: %w[string null],
                            description: "The verb's SEMANTICS, in prose. Authoritative." },
             reach: { type: 'string', enum: HandlerMixin::REACHES.map(&:to_s),

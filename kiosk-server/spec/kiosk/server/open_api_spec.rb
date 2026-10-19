@@ -201,6 +201,14 @@ RSpec.describe Kiosk::Server::OpenApi, 'the reserved wire endpoints' do
     expect(props.keys).to eq(%i[name description reach input_schema output_schema
                                 example_params example_row])
   end
+
+  it 'writes the verb and topic name pattern as ECMA-262, the dialect of a JSON Schema pattern' do
+    declare_query('salons')
+    schemas = document.dig(:components, :schemas)
+
+    expect(schemas.dig('schema.descriptor', :properties, :name, :pattern)).to eq('^[a-z][a-z0-9_]*$')
+    expect(schemas.dig('schema.topic', :properties, :name, :pattern)).to eq('^[a-z][a-z0-9_]*$')
+  end
 end
 
 RSpec.describe Kiosk::Server::OpenApi, 'the reserved wire endpoints' do

@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The derived OpenAPI document writes the verb and topic name `pattern` as `^[a-z][a-z0-9_]*$`, a valid ECMA-262 pattern, as JSON Schema requires.
 - 2026-10-19: An error a handler renders keeps the `type`, `title`, `status` and `detail` of its code; the engine drops its `instance`, and its `challenges` unless the code is `pow_required`.
 - 2026-10-19: The derived OpenAPI document describes the `events` array of the `schema` catalog, so it accepts a catalog that serves topics.
 - 2026-10-19: A `Page` refuses an empty `next_cursor`: the last page passes nil, and the wire sends no `next` link that leads back to page one.

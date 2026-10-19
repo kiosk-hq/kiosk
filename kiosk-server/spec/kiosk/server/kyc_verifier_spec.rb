@@ -173,6 +173,12 @@ RSpec.describe Kiosk::Server::KycVerifier do
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
+
+    it 'raises Errors::Forbidden for an attestation signed with the right key under RS512' do
+      raw_jws = JWT.encode(valid_payload, kyc_key, 'RS512')
+      expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /signature invalid/)
+    end
   end
 end
 

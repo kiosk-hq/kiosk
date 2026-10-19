@@ -274,9 +274,10 @@ RSpec.describe Kiosk::Server::Kyc do
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: jws)).to eq([200, { 'ok' => true }])
 
       expect(granted).to eq(%w[age_over_18 licence_a])
-      event = store.since('u-1', 0).first
-      expect(event).to include('topic' => 'kyc_verification', 'subject' => request_id,
-                               'data' => { 'request_id' => request_id, 'status' => 'approved', 'kyc_jws' => jws })
+      expect(store.since('u-1', 0)).to contain_exactly(
+        a_hash_including('topic' => 'kyc_verification', 'subject' => request_id,
+                         'data' => { 'request_id' => request_id, 'status' => 'approved', 'kyc_jws' => jws })
+      )
     end
 
     it 'pushes an event its published payload schema accepts' do

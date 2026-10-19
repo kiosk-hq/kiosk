@@ -394,8 +394,7 @@ module Kiosk
         }.freeze
 
         DESCRIPTOR = {
-          type: 'object',
-          title: 'One verb descriptor',
+          type: 'object', title: 'One verb descriptor',
           properties: {
             name: { type: 'string', pattern: OpenApi::NAME_PATTERN },
             description: { type: %w[string null],
@@ -452,8 +451,7 @@ module Kiosk
 
         PAY = {
           'pay.request' => {
-            type: 'object',
-            title: 'The AP2 mandate chain',
+            type: 'object', title: 'The AP2 mandate chain',
             properties: %w[intent cart payment].to_h do |what|
               [:"#{what}_mandate_jws", { type: 'string', description: "Compact RS256 JWS: the signed #{what} mandate." }]
             end,
@@ -461,8 +459,7 @@ module Kiosk
             additionalProperties: false
           },
           'pay.response' => {
-            type: 'object',
-            title: 'Settlement receipt',
+            type: 'object', title: 'Settlement receipt',
             properties: {
               settlement_id: { type: 'string', description: "This origin's settlement row id." },
               psp_reference: { type: 'string', description: "The processor's own reference." },

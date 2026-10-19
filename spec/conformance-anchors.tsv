@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1992 anchors.
+# 2005 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -421,6 +421,7 @@ kiosk-demo-getgrocery/test/delivery_slots_test.rb	travel_to(DUBLIN.local(2026, 8
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	windows are on the district's clock, across daylight saving
 kiosk-demo-getgrocery/test/order_test.rb	errors(order(date: Date.new(2026, 9, 7), slot: 2)).sole)
 kiosk-demo-getgrocery/test/order_test.rb	its window has not passed and still reaches the door
+kiosk-demo-getgrocery/test/slot_search_test.rb	a caller that declares no zone is read on the shop's clock
 kiosk-demo-getgrocery/test/slot_search_test.rb	a caller's zone is only what it declares
 kiosk-demo-getgrocery/test/slot_search_test.rb	a day already past on the caller's calendar is refused in the caller's terms
 kiosk-demo-getgrocery/test/slot_search_test.rb	test 'an address outside the served districts is refused with the reason' do
@@ -1237,12 +1238,14 @@ kiosk-server/spec/kiosk/server/agent_login_spec.rb	maps a known key to its regis
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	mints a fresh token for a known key and provisions nothing
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	proves possession and burns the challenge before the lookup
 kiosk-server/spec/kiosk/server/agent_login_spec.rb	raises NotFound for an unregistered key (no silent new account)
+kiosk-server/spec/kiosk/server/agent_login_spec.rb	stops at a failed proof: no challenge burned, no lookup, no token
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	RSpec.describe Kiosk::Server::AgentRegistration do
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	burns the challenge and proves possession before touching the database
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	does not accept a role argument on .call
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	provisions a new agent and never writes a client-supplied name column
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	raises Conflict on an already-registered public key (use /auth/login)
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	requires a `signed` proof-of-possession argument
+kiosk-server/spec/kiosk/server/agent_registration_spec.rb	stops at a failed proof: no challenge burned, no query, no account, no token
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	treats an empty-string registration_role as unset (no ConfigurationError)
 kiosk-server/spec/kiosk/server/agent_registration_spec.rb	writes an empty allowed_roles with registration_role unset (K-788)
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an INDEXED name where an array is declared — a%5B0%5D= is an object
@@ -1371,6 +1374,7 @@ kiosk-server/spec/kiosk/server/engine_mount_spec.rb	an unhandled 500 UNDER the m
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers #{line} with a 501 module_not_served problem document
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers a name nobody registered the same ordinary 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on that same verb an ordinary routing 404
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the schema_url of kiosk.json with the same document as the bare GET schema
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	publishes all six auth URLs and no binding capability
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	reports itself mounted
@@ -1569,6 +1573,7 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	accepts the issuer when suppli
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	defaults to a one-hour lifetime
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	honours an `expires_in` override
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	produces a JWT carrying the supplied claims and the standard time bounds
+kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a bearer signed with PS256 instead of RS256
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a token signed by a key not in the JWKS
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a token whose agent has been revoked as of now
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	rejects a wrong audience
@@ -1741,7 +1746,9 @@ kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	names NO origin on the wire
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	names NO origin on the wire — not the configured issuer, not any other
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	prefers Rails.logger for the diagnostic when a Rails logger is present
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof missing the challenge nonce
+kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof missing the jti
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof signed by a different key than the one presented
+kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof signed with PS256 instead of RS256
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof whose `aud` is a different origin (relay/takeover)
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof whose `pub` thumbprint does not match the presented key
 kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a public key above the 4096-bit cap
@@ -1874,6 +1881,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	hands the handler the cal
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	is still private, no-store — a page is never shared-cacheable
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	keeps `private, max-age=N` the handler set
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	names YYYY-MM-DD when an action body carries a malformed date
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	names all three request headers on an action 200, a pay answer, a 400 and a 401
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	not even when the handler tried to set a policy of its own
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	not on a refusal
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	not when only `public` is named, nor only `s-maxage`, nor only `must-revalidate`
@@ -1986,8 +1994,10 @@ kiosk-test-support/lib/kiosk/test_helpers/story.rb	raise "GET #{path} with no cr
 kiosk-test-support/lib/kiosk/test_helpers/stripe_mock.rb	stripe-mock not found. Install it: brew install stripe-mock
 kiosk-test-support/lib/kiosk/test_helpers/wire.rb	    class Wire
 kiosk-test-support/spec/descriptor_cross_reference_spec.rb	#{demo}: every verb description's cross-reference names params the target verb declares
+kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every calendar-day argument names its clock
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every verb declares #{DescriptorRequiredFields::MACROS.join(', ')}
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every verb that takes nothing declares the closed empty object
+kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the calendar-day arguments (the clock check is not vacuous)
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the verbs that take nothing (the closed-object check is not vacuous)
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the whole fleet (the lint is not vacuous)
 kiosk-test-support/spec/kiosk/test_helpers/kyc_spec.rb	signs claims the published kyc.schema.json accepts as an attestation, and it refuses another level
@@ -1999,6 +2009,9 @@ kiosk-test-support/spec/skill_pin_spec.rb	it "is the same published cut in kiosk
 kiosk-test-support/spec/skill_pin_spec.rb	it "kiosk-server's default names a published file, the same one the demos pin" do
 kiosk-test-support/spec/skill_pin_spec.rb	kiosk-server's default names a published file, the same one the demos pin
 kiosk-test-support/spec/skill_pin_spec.rb	reads kiosk-server's default skill_url
+kiosk-test-support/spec/verb_reach_spec.rb	declares no user_id, agent_id, actor or role in any input_schema
+kiosk-test-support/spec/verb_reach_spec.rb	finds a principal name declared as a property (the matcher is not vacuous)
+kiosk-test-support/spec/verb_reach_spec.rb	reads every input_schema in the fleet (the check is not vacuous)
 kiosk-test-support/spec/verb_reach_spec.rb	the reviewed inventory is exactly what the fleet declares
 kiosk-user-idp-devise/README.md	**Lockable / confirmable handling is implicit.** Devise's `active_for_authentication?` already gates the Warden user, so
 kiosk-user-idp-devise/README.md	Add the adapter explicitly — the `kiosk-all` meta-gem pulls in only `kiosk-core` and `kiosk-server`, so IdP adapters are

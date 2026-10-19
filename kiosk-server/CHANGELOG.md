@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The derived OpenAPI document closes the verb and topic descriptors, as the spec does: a member the spec does not name fails validation.
 - 2026-10-19: The manage-assistants page shows the spend of each assistant per currency, less refunds and never below zero, as the spending cap counts it.
 - 2026-10-19: `Kyc.require!` takes the attribute names an action needs and an optional refusal `detail`; with none it requires every one of `kyc_claims`.
 - 2026-10-19: The `capabilities` configuration setting is removed. Discovery always derives the list from what is registered.

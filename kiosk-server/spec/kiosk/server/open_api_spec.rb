@@ -606,6 +606,18 @@ RSpec.describe Kiosk::Server::OpenApi, 'conformance, judged by a third-party Ope
     expect(definition.validate_response(request('GET', '/schema'), response(200, catalog))).to be_valid
   end
 
+  it 'refuses a verb or topic descriptor that carries a member the spec does not name' do
+    catalog = JSON.parse(Kiosk::Server::SchemaDocument.json)
+    catalog['events'] = [{ 'name' => 'order_delivery', 'description' => nil, 'reach' => 'principal',
+                           'payload_schema' => { 'type' => 'object' } }]
+    extra_verb = catalog.merge('queries' => catalog['queries'].map { it.merge('params' => {}) })
+    extra_topic = catalog.merge('events' => catalog['events'].map { it.merge('priority' => 1) })
+
+    expect(definition.validate_response(request('GET', '/schema'), response(200, catalog))).to be_valid
+    expect(definition.validate_response(request('GET', '/schema'), response(200, extra_verb))).not_to be_valid
+    expect(definition.validate_response(request('GET', '/schema'), response(200, extra_topic))).not_to be_valid
+  end
+
   it 'accepts a scalar query and coerces it to the declared type' do
     validated = definition.validate_request(request('GET', '/search_hotels?min_stars=4'))
 

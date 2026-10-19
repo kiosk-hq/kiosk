@@ -418,7 +418,8 @@ module Kiosk
                                         'value for an action. It ILLUSTRATES ' \
                                         '`output_schema` and is not the contract.' }
           },
-          required: %w[name description reach input_schema output_schema]
+          required: %w[name description reach input_schema output_schema],
+          additionalProperties: false
         }.freeze
 
         TOPIC = {
@@ -430,7 +431,8 @@ module Kiosk
             payload_schema: { description: "JSON Schema (draft 2020-12) for the event's `data`." },
             examples: { type: 'array', description: 'Example `data` objects. They ILLUSTRATE `payload_schema` and are not the contract.' }
           },
-          required: %w[name description reach payload_schema]
+          required: %w[name description reach payload_schema],
+          additionalProperties: false
         }.freeze
 
         SCHEMA = {

@@ -222,7 +222,8 @@ jobs:
           fi
           if [ -n "${{ matrix.prove_broker }}" ]; then
             # The broker runs in development: its intake secrets are the ones the demos' test environment sends.
-            (cd ../kiosk-demo-prove && export RAILS_ENV=development && bin/rails db:reset && bin/rails server -p 3020 -d)
+            # Its callback host is the host of this job's KIOSK_ISSUER.
+            (cd ../kiosk-demo-prove && export RAILS_ENV=development KIOSK_PROVE_SKOOTI_CALLBACK_HOST=127.0.0.1 && bin/rails db:reset && bin/rails server -p 3020 -d)
           fi
           bin/rails db:reset
           bin/rails server -p 3000 -d

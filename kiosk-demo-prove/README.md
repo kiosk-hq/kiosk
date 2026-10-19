@@ -122,6 +122,7 @@ On your own machine you need Ruby 4.0 or newer and a reachable Postgres. From th
 ```sh
 bundle install
 bin/rails db:reset     # DROPS and recreates kiosk_prove_development, loads the schema, seeds it
+bin/rails server -p 3020   # serves the broker where skooti and getgrocery look for it
 bin/rails test         # the broker's own suite; CI runs exactly this
 ```
 

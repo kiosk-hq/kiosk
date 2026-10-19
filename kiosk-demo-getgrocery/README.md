@@ -53,6 +53,10 @@ there too. Under `docker compose up`, `request_kyc` fails as well and answers 50
 `action_failed`. The app looks for the KYC broker at `http://127.0.0.1:3020`, and
 inside the container that address is the container itself.
 
+On your own machine, `request_kyc` needs the KYC broker on port 3020. In a third
+terminal, in `../kiosk-demo-prove`, run `bin/rails db:reset`, then
+`bin/rails server -p 3020`.
+
 `bin/setup` seeds this demo and leaves the origin running on
 <http://localhost:3000>. Then say this to your AI assistant:
 

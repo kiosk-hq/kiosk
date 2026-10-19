@@ -5,12 +5,13 @@ require 'active_support/core_ext/integer/time'
 require 'openssl'
 
 # The KYC broker as the local operator demos expect it: their issuer, their intake
-# secrets, callbacks on loopback, and the development signing key.
+# secrets, callbacks to the host of their development issuer (localhost), and the
+# development signing key.
 ENV['KIOSK_PROVE_ISSUER']                   ||= 'https://kyc.test.local'
 ENV['KIOSK_PROVE_SKOOTI_SECRET']            ||= 'prove-skooti-demo-shared-secret'
 ENV['KIOSK_PROVE_GETGROCERY_SECRET']        ||= 'prove-getgrocery-demo-shared-secret'
-ENV['KIOSK_PROVE_SKOOTI_CALLBACK_HOST']     ||= '127.0.0.1'
-ENV['KIOSK_PROVE_GETGROCERY_CALLBACK_HOST'] ||= '127.0.0.1'
+ENV['KIOSK_PROVE_SKOOTI_CALLBACK_HOST']     ||= 'localhost'
+ENV['KIOSK_PROVE_GETGROCERY_CALLBACK_HOST'] ||= 'localhost'
 ENV['PROVE_KEY_PEM']                        ||= File.read(File.expand_path('../dev_prove_key.pem', __dir__))
 
 Rails.application.configure do

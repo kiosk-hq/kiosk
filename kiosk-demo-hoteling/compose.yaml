@@ -4,7 +4,7 @@
 # up against it, and serves the demo on http://localhost:3003.
 #
 # The setup step is destructive and stays destructive here: it runs
-# `db:drop db:create db:schema:load db:seed`, so `kiosk_hoteling_development` is dropped
+# `db:reset`, so `kiosk_hoteling_development` and `kiosk_hoteling_test` are dropped
 # and recreated on every `up`. What changes is WHERE — that database lives on
 # the `pgdata` volume this file declares, so the drop cannot reach a Postgres
 # on your machine.

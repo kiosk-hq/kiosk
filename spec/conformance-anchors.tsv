@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1914 anchors.
+# 1923 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -853,6 +853,7 @@ kiosk-redteam/lib/kiosk/redteam/runner.rb	        @client  = Kiosk::TestHelpers:
 kiosk-redteam/lib/kiosk/redteam/scenarios/privilege_self_selection.rb	class PrivilegeSelfSelection < Scenario
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	class WrongCurrencyCart < Scenario
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	super(name: 'WrongCurrencyCart')
+kiosk-redteam/suites/atablefor.rb	BATTERY.record('HostileArgShapes',
 kiosk-redteam/suites/atablefor.rb	BATTERY.record('WholeValuedFloatBody',
 kiosk-redteam/suites/getgrocery.rb	  # No KYC here — these must SKIP.
 kiosk-redteam/suites/getgrocery.rb	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
@@ -1236,17 +1237,21 @@ kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an array-valued 
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES two levels of nesting — that read is an ACTION (rule 5)
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	coerces limit to an integer on a verb that declares neither
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	decodes a percent-encoded non-ASCII string to its characters
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	decodes an explicitly empty value to the empty string under its key
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	decodes one level of object, in either spelling
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	decodes the PERCENT-ENCODED bracket spelling — the wire form
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	decodes the RAW bracket spelling to exactly the same thing
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	folds a bare repeat into an array ONLY where the schema declares one
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	keeps Rack's last-wins for a repeated name with NO array declared
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	keeps cursor an opaque string
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	leaves a name that was never sent out of the hash entirely
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	lets a verb that DOES declare limit constrain it itself
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	names YYYY-MM-DD in the refusal, because that is what the caller has to send
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	names the ACTION remedy in the hint rather than only refusing
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	reads an INDEXED name the verb does NOT declare as the object it is
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	recovers an integer
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a WHOLE-VALUED float where an integer is declared — 2.0 is not an integer LITERAL
+kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a float where an integer is declared
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a malformed date where format: date is declared
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a name used as both scalar and array in one query string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses an EMPTY value where a scalar type is declared
@@ -1344,6 +1349,8 @@ kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on 
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	publishes all six auth URLs and no binding capability
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	reports itself mounted
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	routes the RESERVED `pay` into WireController (401 problem, not 404)
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	serves JWKS under the mount, stamped by the auto-injected middleware
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	stamps every path UNDER the mount — success and refusal alike
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	the HOST's own route outside the mount carries none — on a 200
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	…and none on a root-level routing 404
@@ -1485,6 +1492,7 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	resumes a chain whose capture ra
 kiosk-server/spec/kiosk/server/executor_spec.rb	scopes the settled-total tally to the cart's currency (not currency-blind)
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
+kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a page whose rows are not an array
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	404s a request that did not come through the Kiosk wire
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	answers bad_request whose detail is the errors' full messages
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	carries a 403 code a bare status cannot name (rls_denied)
@@ -1745,6 +1753,7 @@ kiosk-server/spec/kiosk/server/response_validation_spec.rb	passes a query whose 
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	refuses a query whose rows do NOT, naming the verb and the pointer
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	refuses an ACTION whose object does not satisfy its declared schema
 kiosk-server/spec/kiosk/server/response_validation_spec.rb	refuses an object schema on a paginating verb
+kiosk-server/spec/kiosk/server/result_spec.rb	rejects a next_cursor on a non-:rows result
 kiosk-server/spec/kiosk/server/revocation_stores_spec.rb	holds a revoke made through another store instance
 kiosk-server/spec/kiosk/server/revocation_stores_spec.rb	only moves the watermark forward
 kiosk-server/spec/kiosk/server/revocation_stores_spec.rb	revokes a token issued before the watermark and keeps one issued at or after it

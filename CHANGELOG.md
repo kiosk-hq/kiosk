@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The getgrocery and skooti READMEs say `request_kyc` answers 500 under `docker compose up`, because the app cannot reach the KYC broker from its container.
 - 2026-10-19: The hoteling `check_out` argument of `hotel_detail`, `availability` and `reserve_room` says it is a day on the hotel's own clock.
 - 2026-10-19: The derived OpenAPI document writes the verb and topic name `pattern` as `^[a-z][a-z0-9_]*$`, a valid ECMA-262 pattern, as JSON Schema requires.
 - 2026-10-19: An error a handler renders keeps the `type`, `title`, `status` and `detail` of its code; the engine drops its `instance`, and its `challenges` unless the code is `pow_required`.

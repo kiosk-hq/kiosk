@@ -49,7 +49,9 @@ terminal where you run `bin/setup`, run
 `export STRIPE_MOCK_URL=http://localhost:12111`. Without this variable the app
 sends each payment to the real Stripe API with a placeholder key, and the
 payment fails. `docker compose up` does not start stripe-mock, so payment fails
-there too.
+there too. Under `docker compose up`, `request_kyc` fails as well and answers 500
+`action_failed`. The app looks for the KYC broker at `http://127.0.0.1:3020`, and
+inside the container that address is the container itself.
 
 `bin/setup` seeds this demo and leaves the origin running on
 <http://localhost:3000>. Then say this to your AI assistant:

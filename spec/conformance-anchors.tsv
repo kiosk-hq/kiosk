@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1969 anchors.
+# 1972 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1567,6 +1567,7 @@ kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 400 bad_request when request_
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 404 for a request_id it never opened
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers 500 action_failed when the provider does not open one
 kiosk-server/spec/kiosk/server/kyc_spec.rb	answers request_kyc and the callback with 501 module_not_served
+kiosk-server/spec/kiosk/server/kyc_spec.rb	answers request_kyc with a verification the schema accepts, and the schema refuses another status
 kiosk-server/spec/kiosk/server/kyc_spec.rb	gates naming agents/kyc and not request_kyc
 kiosk-server/spec/kiosk/server/kyc_spec.rb	gates naming no KYC path when no kyc_public_key is configured either
 kiosk-server/spec/kiosk/server/kyc_spec.rb	grants only the JSON boolean true, in Postgres
@@ -1576,6 +1577,7 @@ kiosk-server/spec/kiosk/server/kyc_spec.rb	names the claims in its descriptor an
 kiosk-server/spec/kiosk/server/kyc_spec.rb	opens a verification of the declared claims for the principal
 kiosk-server/spec/kiosk/server/kyc_spec.rb	publishes neither request_kyc nor its topic
 kiosk-server/spec/kiosk/server/kyc_spec.rb	pushes an event its published payload schema accepts
+kiosk-server/spec/kiosk/server/kyc_spec.rb	pushes kyc_verification data the schema accepts, and the schema refuses it without kyc_jws
 kiosk-server/spec/kiosk/server/kyc_spec.rb	records the grant on the person and pushes the attestation to them
 kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a fourth open verification with 429 quota_exceeded
 kiosk-server/spec/kiosk/server/kyc_spec.rb	refuses a wrong nonce, another subject, and an attestation the provider does not accept
@@ -1968,6 +1970,7 @@ kiosk-test-support/spec/descriptor_required_fields_spec.rb	#{origin}: every verb
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the verbs that take nothing (the closed-object check is not vacuous)
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	sees the whole fleet (the lint is not vacuous)
 kiosk-test-support/spec/kiosk/test_helpers/conformance/in_process_origin_spec.rb	runs the handler inside a GUC-scoped transaction as the named principal
+kiosk-test-support/spec/kiosk/test_helpers/kyc_spec.rb	signs claims the published kyc.schema.json accepts as an attestation, and it refuses another level
 kiosk-test-support/spec/skill_pin_spec.rb	  it "is the same published cut in kiosk-server's default and in every demo" do
 kiosk-test-support/spec/skill_pin_spec.rb	  it "kiosk-server's default names a published file, the same one the demos pin" do
 kiosk-test-support/spec/skill_pin_spec.rb	#{demo} pins the sha256 of the published skill version file

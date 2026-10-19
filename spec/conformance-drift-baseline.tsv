@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at 3f40db06
-# 1969 anchors.
+# recorded: 2026-10-19 at 7412bd4b
+# 1972 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -1544,25 +1544,27 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	fc699cc518871e02	b1d0a419	roun
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	6d119e78229eb4ee	b1d0a419	stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	f51435342b232dcd	b1d0a419	declares no value column — presence of the row IS the grant
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	658a1008ed192ad8	b1d0a419	keys the grants on the person, in the host's user id type
-kiosk-server/spec/kiosk/server/kyc_spec.rb	0ba58ffa3ad58780	3f40db06	answers 400 bad_request when request_id or kyc_jws is missing
-kiosk-server/spec/kiosk/server/kyc_spec.rb	70d487e0997d9567	3f40db06	answers 404 for a request_id it never opened
-kiosk-server/spec/kiosk/server/kyc_spec.rb	a8b0800c092d699c	3f40db06	answers 500 action_failed when the provider does not open one
-kiosk-server/spec/kiosk/server/kyc_spec.rb	fe11964313567470	3f40db06	answers request_kyc and the callback with 501 module_not_served
-kiosk-server/spec/kiosk/server/kyc_spec.rb	1eb0b0782980f550	3f40db06	gates naming agents/kyc and not request_kyc
-kiosk-server/spec/kiosk/server/kyc_spec.rb	26b5de48267324cf	3f40db06	gates naming no KYC path when no kyc_public_key is configured either
-kiosk-server/spec/kiosk/server/kyc_spec.rb	4c4409d12a8599b0	3f40db06	grants only the JSON boolean true, in Postgres
-kiosk-server/spec/kiosk/server/kyc_spec.rb	806036f05bd0231b	3f40db06	is good once: the same callback again finds no open verification
-kiosk-server/spec/kiosk/server/kyc_spec.rb	5bdcf328cabc0ee4	3f40db06	lets every assistant of that person through, and nobody else
-kiosk-server/spec/kiosk/server/kyc_spec.rb	c68f0137fdaa6be1	3f40db06	names the claims in its descriptor and publishes the topic
-kiosk-server/spec/kiosk/server/kyc_spec.rb	5cd81f9be5fb56bb	3f40db06	opens a verification of the declared claims for the principal
-kiosk-server/spec/kiosk/server/kyc_spec.rb	6153ee6dde9c6182	3f40db06	publishes neither request_kyc nor its topic
-kiosk-server/spec/kiosk/server/kyc_spec.rb	9a4fa15322dec34d	3f40db06	pushes an event its published payload schema accepts
-kiosk-server/spec/kiosk/server/kyc_spec.rb	80d85791b88bc40d	3f40db06	records the grant on the person and pushes the attestation to them
-kiosk-server/spec/kiosk/server/kyc_spec.rb	9edef53674a9328e	3f40db06	refuses a fourth open verification with 429 quota_exceeded
-kiosk-server/spec/kiosk/server/kyc_spec.rb	1a21002961a504cb	3f40db06	refuses a wrong nonce, another subject, and an attestation the provider does not accept
-kiosk-server/spec/kiosk/server/kyc_spec.rb	1237ff7e1529b967	3f40db06	refuses with kyc_required until the person holds every declared claim
-kiosk-server/spec/kiosk/server/kyc_spec.rb	d56c2071fd8e44c3	3f40db06	replaces the grant set
-kiosk-server/spec/kiosk/server/kyc_spec.rb	a7bfd6b0123cf59a	3f40db06	stops counting a verification after the window, or once approved, or another person's
+kiosk-server/spec/kiosk/server/kyc_spec.rb	0ba58ffa3ad58780	7412bd4b	answers 400 bad_request when request_id or kyc_jws is missing
+kiosk-server/spec/kiosk/server/kyc_spec.rb	70d487e0997d9567	7412bd4b	answers 404 for a request_id it never opened
+kiosk-server/spec/kiosk/server/kyc_spec.rb	a8b0800c092d699c	7412bd4b	answers 500 action_failed when the provider does not open one
+kiosk-server/spec/kiosk/server/kyc_spec.rb	fe11964313567470	7412bd4b	answers request_kyc and the callback with 501 module_not_served
+kiosk-server/spec/kiosk/server/kyc_spec.rb	1937938c4ba60b1a	7412bd4b	answers request_kyc with a verification the schema accepts, and the schema refuses another status
+kiosk-server/spec/kiosk/server/kyc_spec.rb	1eb0b0782980f550	7412bd4b	gates naming agents/kyc and not request_kyc
+kiosk-server/spec/kiosk/server/kyc_spec.rb	26b5de48267324cf	7412bd4b	gates naming no KYC path when no kyc_public_key is configured either
+kiosk-server/spec/kiosk/server/kyc_spec.rb	4c4409d12a8599b0	7412bd4b	grants only the JSON boolean true, in Postgres
+kiosk-server/spec/kiosk/server/kyc_spec.rb	806036f05bd0231b	7412bd4b	is good once: the same callback again finds no open verification
+kiosk-server/spec/kiosk/server/kyc_spec.rb	5bdcf328cabc0ee4	7412bd4b	lets every assistant of that person through, and nobody else
+kiosk-server/spec/kiosk/server/kyc_spec.rb	c68f0137fdaa6be1	7412bd4b	names the claims in its descriptor and publishes the topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	5cd81f9be5fb56bb	7412bd4b	opens a verification of the declared claims for the principal
+kiosk-server/spec/kiosk/server/kyc_spec.rb	6153ee6dde9c6182	7412bd4b	publishes neither request_kyc nor its topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	9a4fa15322dec34d	7412bd4b	pushes an event its published payload schema accepts
+kiosk-server/spec/kiosk/server/kyc_spec.rb	35df495ced7ee48c	7412bd4b	pushes kyc_verification data the schema accepts, and the schema refuses it without kyc_jws
+kiosk-server/spec/kiosk/server/kyc_spec.rb	80d85791b88bc40d	7412bd4b	records the grant on the person and pushes the attestation to them
+kiosk-server/spec/kiosk/server/kyc_spec.rb	9edef53674a9328e	7412bd4b	refuses a fourth open verification with 429 quota_exceeded
+kiosk-server/spec/kiosk/server/kyc_spec.rb	1a21002961a504cb	7412bd4b	refuses a wrong nonce, another subject, and an attestation the provider does not accept
+kiosk-server/spec/kiosk/server/kyc_spec.rb	1237ff7e1529b967	7412bd4b	refuses with kyc_required until the person holds every declared claim
+kiosk-server/spec/kiosk/server/kyc_spec.rb	d56c2071fd8e44c3	7412bd4b	replaces the grant set
+kiosk-server/spec/kiosk/server/kyc_spec.rb	a7bfd6b0123cf59a	7412bd4b	stops counting a verification after the window, or once approved, or another person's
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ed2afb9f4a16f172	3f40db06	%i[exp iss sub].each do |claim|
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	806c80f056bdcc94	3f40db06	I1: raises Errors::Forbidden when level is missing entirely
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6f8b87038204bf49	3f40db06	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
@@ -1949,6 +1951,7 @@ kiosk-test-support/spec/descriptor_required_fields_spec.rb	21277c183e107972	e850
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	966a934ed7407630	e8503071	sees the verbs that take nothing (the closed-object check is not vacuous)
 kiosk-test-support/spec/descriptor_required_fields_spec.rb	ccf1c188b36c8386	e8503071	sees the whole fleet (the lint is not vacuous)
 kiosk-test-support/spec/kiosk/test_helpers/conformance/in_process_origin_spec.rb	ded6ee5e501b0004	b1d0a419	runs the handler inside a GUC-scoped transaction as the named principal
+kiosk-test-support/spec/kiosk/test_helpers/kyc_spec.rb	67834ea5149abfb2	7412bd4b	signs claims the published kyc.schema.json accepts as an attestation, and it refuses another level
 kiosk-test-support/spec/skill_pin_spec.rb	19e4cff2521cfda0	b1d0a419	  it "is the same published cut in kiosk-server's default and in every demo" do
 kiosk-test-support/spec/skill_pin_spec.rb	70168f0d359307f6	b1d0a419	  it "kiosk-server's default names a published file, the same one the demos pin" do
 kiosk-test-support/spec/skill_pin_spec.rb	ee1f5243246486bd	b1d0a419	#{demo} pins the sha256 of the published skill version file

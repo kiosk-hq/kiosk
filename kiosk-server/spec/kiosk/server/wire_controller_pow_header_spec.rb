@@ -295,6 +295,7 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
     expect(problem[:code]).to   eq('bad_request')
     expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
     expect(problem[:status]).to eq(400)
-    expect(problem[:hint]).to include('Kiosk-PoW')
+    expect(problem[:hint]).to include('Kiosk-PoW', 'a single proof {"challenge": ', '"nonce": {"indices"',
+                                      'a JSON array of such proofs')
   end
 end

@@ -17,9 +17,9 @@ skill is `skill.md` on the same site.
    Landing pages, posts and READMEs claim only what the code does. An ADR may
    override the spec; then update the spec.
 2. **Conflict rule.** On a conflict with no recorded decision, do not pick a
-   side. Record it in the findings ledger as `decision-needed` and skip it.
-3. **Scope rule.** Record a problem outside your task in the findings ledger.
-   Do not fix it inline.
+   side. Ask the question on its task in the task store and skip the item.
+3. **Scope rule.** A problem outside your task goes into the task store, not
+   into an inline fix.
 4. **Merge gate.** Tests that cover the change are green before merge: the
    touched gem's suite plus `e2e/run.sh`. When any `.rb` file in this
    repository changes, also run `kiosk-test-support`'s suite. It reads every

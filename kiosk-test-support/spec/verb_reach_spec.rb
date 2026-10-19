@@ -102,7 +102,28 @@ module VerbReach
     return unless header.match?(/^[ \t]*kind[ \t]/)
 
     { name: header[/^[ \t]*wire_name[ \t]+['"]([^'"]*)['"]/, 1] || method_name,
-      reach: header[/^[ \t]*reach[ \t]+:([a-z_]+)/, 1] }
+      reach: header[/^[ \t]*reach[ \t]+:([a-z_]+)/, 1],
+      input_schema: header[INPUT_SCHEMA] }
+  end
+
+  # The `input_schema` line and the lines indented deeper than it.
+  INPUT_SCHEMA = /^([ \t]*)input_schema[ \t(].*\n(?:\1[ \t]+.*\n)*/
+
+  # §7.1: the principal comes from the token, so no verb takes one of these as an input.
+  PRINCIPAL_NAMES = %w[user_id agent_id actor role].freeze
+
+  PRINCIPAL_KEY = /(?<![A-Za-z0-9_])['"]?(#{PRINCIPAL_NAMES.join('|')})['"]?[ \t]*(?::(?!:)|=>)/
+
+  # The principal names an input schema declares as a property.
+  def principal_inputs(input_schema)
+    input_schema.to_s.scan(PRINCIPAL_KEY).flatten.uniq
+  end
+
+  # origin => verbs with an input_schema, each as {name:, input_schema:}.
+  def input_schemas
+    origin_paths.transform_values do |paths|
+      paths.sort.flat_map { |path| verbs_in(File.read(path)) }.select { |verb| verb[:input_schema] }
+    end
   end
 
   # origin => { verb => declared reach or nil }, read from the sources.
@@ -172,5 +193,34 @@ RSpec.describe 'verb reach declarations per reviewed origin' do
     it "#{origin}: still declares its cross-principal verbs" do
       expect(VerbReach.declared.fetch(origin, {}).slice(*verbs.keys)).to eq(verbs)
     end
+  end
+end
+
+RSpec.describe 'no verb takes the principal as an input' do
+  let(:input_schemas) { VerbReach.input_schemas }
+
+  it 'reads every input_schema in the fleet (the check is not vacuous)' do
+    total = input_schemas.values.sum(&:size)
+    expect(total).to be >= 43, "the check read only #{total} input schemas — the declarations moved somewhere it does not read"
+  end
+
+  it 'finds a principal name declared as a property (the matcher is not vacuous)' do
+    forged = "input_schema type: 'object', properties: { user_id: { type: 'string' }, 'role' => {} }\n"
+    expect(VerbReach.principal_inputs(forged)).to eq(%w[user_id role])
+    expect(VerbReach.principal_inputs("input_schema properties: { owner_id: {}, roles: {} }\n")).to be_empty
+  end
+
+  it 'declares no user_id, agent_id, actor or role in any input_schema' do
+    offenders = input_schemas.flat_map do |origin, verbs|
+      verbs.filter_map do |verb|
+        names = VerbReach.principal_inputs(verb[:input_schema])
+        "#{origin} #{verb[:name]}: #{names.join(', ')}" unless names.empty?
+      end
+    end
+    expect(offenders).to be_empty, <<~MSG
+      #{offenders.join("\n")}
+
+      The principal comes from the verified token (§7.1). Remove the input and read the identity instead.
+    MSG
   end
 end

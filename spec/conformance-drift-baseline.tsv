@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-19 at d96d6810
-# 1965 anchors.
+# recorded: 2026-10-19 at 3f40db06
+# 1969 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -252,21 +252,22 @@ e2e/run.sh	2e4cf64c003c5fd3	b1d0a419	cp "$FIXTURES/routes.rb"             config
 e2e/run.sh	9d2288c57fc89d95	b1d0a419	export KIOSK_AUDIT_SINK_REDACTED_FILE="$AUDIT_EVENTS_REDACTED"
 e2e/run.sh	cf1377dff67eed9d	b1d0a419	log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
 e2e/run.sh	45a6aff676606ed1	b1d0a419	rails new "$APP_NAME" --skip-bundle -d postgresql --skip-test --api --skip-git \
-e2e/schema_conformance.rb	9919a966995230e7	b1d0a419	    conforms("the #{defn} mandate's claims", "#{B}/mandates.schema.json",
-e2e/schema_conformance.rb	ca8175a1336a9ecb	b1d0a419	  conforms('the pay REQUEST body', "#{B}/mandates.schema.json", cap.fetch('request'),
-e2e/schema_conformance.rb	97e4a794eb323767	b1d0a419	  conforms('the settlement this origin answered', "#{B}/mandates.schema.json",
-e2e/schema_conformance.rb	d02d33457f21c1b4	b1d0a419	GET /.well-known/kiosk.json
-e2e/schema_conformance.rb	3367cfd5012fc610	b1d0a419	GET /kiosk/schema
-e2e/schema_conformance.rb	dfacc0ad1cbbb009	b1d0a419	VIOLATES its own schema
-e2e/schema_conformance.rb	c7131da3f9cb7fb8	b1d0a419	and the same schema REFUSES a broken copy of those very bytes
-e2e/schema_conformance.rb	29d40ed0d9f0e4f6	b1d0a419	no control mutation given
-e2e/schema_conformance.rb	f11eb5e75e28078e	b1d0a419	published examples (the loop is not empty)
-e2e/schema_conformance.rb	45522b2a2b65c4ca	b1d0a419	satisfies its own schema
-e2e/schema_conformance.rb	9919a966995230e7	b1d0a419	the #{defn} mandate's claims
-e2e/schema_conformance.rb	1a103f40182dcf7b	b1d0a419	the Kiosk-PoW header this origin ACCEPTED
-e2e/schema_conformance.rb	ca8175a1336a9ecb	b1d0a419	the pay REQUEST body
-e2e/schema_conformance.rb	97e4a794eb323767	b1d0a419	the settlement this origin answered
-e2e/schema_conformance.rb	8893fcc52c97380e	b1d0a419	§5 and §6 — the auth and binding planes
+e2e/schema_conformance.rb	9919a966995230e7	3f40db06	    conforms("the #{defn} mandate's claims", "#{B}/mandates.schema.json",
+e2e/schema_conformance.rb	ca8175a1336a9ecb	3f40db06	  conforms('the pay REQUEST body', "#{B}/mandates.schema.json", cap.fetch('request'),
+e2e/schema_conformance.rb	97e4a794eb323767	3f40db06	  conforms('the settlement this origin answered', "#{B}/mandates.schema.json",
+e2e/schema_conformance.rb	d02d33457f21c1b4	3f40db06	GET /.well-known/kiosk.json
+e2e/schema_conformance.rb	3367cfd5012fc610	3f40db06	GET /kiosk/schema
+e2e/schema_conformance.rb	dfacc0ad1cbbb009	3f40db06	VIOLATES its own schema
+e2e/schema_conformance.rb	c7131da3f9cb7fb8	3f40db06	and the same schema REFUSES a broken copy of those very bytes
+e2e/schema_conformance.rb	29d40ed0d9f0e4f6	3f40db06	no control mutation given
+e2e/schema_conformance.rb	f11eb5e75e28078e	3f40db06	published examples (the loop is not empty)
+e2e/schema_conformance.rb	45522b2a2b65c4ca	3f40db06	satisfies its own schema
+e2e/schema_conformance.rb	9919a966995230e7	3f40db06	the #{defn} mandate's claims
+e2e/schema_conformance.rb	1a103f40182dcf7b	3f40db06	the Kiosk-PoW header this origin ACCEPTED
+e2e/schema_conformance.rb	b19312576b1d2ef4	3f40db06	the event pushed on the stream
+e2e/schema_conformance.rb	ca8175a1336a9ecb	3f40db06	the pay REQUEST body
+e2e/schema_conformance.rb	97e4a794eb323767	3f40db06	the settlement this origin answered
+e2e/schema_conformance.rb	8893fcc52c97380e	3f40db06	§5 and §6 — the auth and binding planes
 e2e/schemas/schema-descriptor.schema.json	6d333cec435170f7	b1d0a419	One verb's description. CLOSED (Section 8.3): a descriptor carries the members named here and no others
 kiosk-all/Gemfile	8777c0810f90225f	b1d0a419	gem 'rspec', '~> 3.13'
 kiosk-all/README.md	38e41bce797bf1bb	b1d0a419	`kiosk-all` declares runtime dependencies on the two production data-plane gems:
@@ -1187,13 +1188,14 @@ kiosk-server/lib/kiosk/skill_link.rb	82d16545fff8025d	b1d0a419	module SkillLink
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	6682adedee206e5b	b1d0a419	draws no verb of its own — a fresh app declares none
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	2e42d4ca9819d0e3	b1d0a419	so the protocol plane wins by first match
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	9af08a2c9df3cd37	b1d0a419	writes no separate routes file
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	274a3d13a35dec8f	b1d0a419	STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	72b0dd0a1660ca4f	b1d0a419	does not fire assistant_claimed for a fresh key (nothing was re-bound)
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	2c4a9f3806a1f111	b1d0a419	fires assistant_claimed(agent:, from:, to:) with both accounts
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	256e3c72955f5235	b1d0a419	registers a linked assistant account under the holder's user_id
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	641886fa9b11a597	b1d0a419	remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	d90cb9b20207c174	b1d0a419	warns the operator when a role-less ceremony lands on a multi-role origin
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	6bac05ff2290f38c	b1d0a419	watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	274a3d13a35dec8f	3f40db06	STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	fafb31a5e8ce0545	3f40db06	deactivates the binding (revoked_at) and watermark-revokes outstanding tokens
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	72b0dd0a1660ca4f	3f40db06	does not fire assistant_claimed for a fresh key (nothing was re-bound)
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	2c4a9f3806a1f111	3f40db06	fires assistant_claimed(agent:, from:, to:) with both accounts
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	256e3c72955f5235	3f40db06	registers a linked assistant account under the holder's user_id
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	641886fa9b11a597	3f40db06	remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	d90cb9b20207c174	3f40db06	warns the operator when a role-less ceremony lands on a multi-role origin
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	6bac05ff2290f38c	3f40db06	watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)
 kiosk-server/spec/kiosk/server/actions_spec.rb	94dac73e45cab95d	e8503071	OMITS the extension keys entirely when they are not declared
 kiosk-server/spec/kiosk/server/actions_spec.rb	ff18597b2468a178	e8503071	carries the declared description into the descriptor
 kiosk-server/spec/kiosk/server/actions_spec.rb	b8b65b38743f9578	e8503071	carries the declared schemas and examples into the descriptor
@@ -1258,10 +1260,11 @@ kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	ef5d2a4d2d1ec3f3	
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	efea73694435d701	b1d0a419	mints a single-use link code for the signed-in account holder (201)
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	7fa053ef0e1aaab5	b1d0a419	refuses a link posted as a form
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	7ff9247ba78acebc	b1d0a419	refuses an unlink posted as a form, and unlinks nothing
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	85774e4f89f3d12c	b1d0a419	returns 400 bad_request when public_key is absent
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	42bd8fcefb2dbe37	b1d0a419	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	76964fcbed461139	b1d0a419	returns 401 Unauthenticated when NO Authorization header is present
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	4643ae5f6000ba2b	b1d0a419	revokes all sessions for the caller and hands back a fresh usable token
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	3a49258f317a7ce0	3f40db06	puts the caller's original token under the revocation watermark
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	85774e4f89f3d12c	3f40db06	returns 400 bad_request when public_key is absent
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	42bd8fcefb2dbe37	3f40db06	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	76964fcbed461139	3f40db06	returns 401 Unauthenticated when NO Authorization header is present
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	4643ae5f6000ba2b	3f40db06	revokes all sessions for the caller and hands back a fresh usable token
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	d173498a7acf5bf6	b1d0a419	registers one key on each origin as two assistant accounts
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	af59d2e55e012e0a	b1d0a419	answers #{method} #{path} with 501 module_not_served
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	26a149949915d1bf	b1d0a419	keeps the OAuth error object for an ordinary refusal
@@ -1541,45 +1544,46 @@ kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	fc699cc518871e02	b1d0a419	roun
 kiosk-server/spec/kiosk/server/jwt_issuer_spec.rb	6d119e78229eb4ee	b1d0a419	stamps `nbf` at the issue instant — equal to `iat`, inside the lifetime
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	f51435342b232dcd	b1d0a419	declares no value column — presence of the row IS the grant
 kiosk-server/spec/kiosk/server/kyc_schema_spec.rb	658a1008ed192ad8	b1d0a419	keys the grants on the person, in the host's user id type
-kiosk-server/spec/kiosk/server/kyc_spec.rb	0ba58ffa3ad58780	b1d0a419	answers 400 bad_request when request_id or kyc_jws is missing
-kiosk-server/spec/kiosk/server/kyc_spec.rb	70d487e0997d9567	b1d0a419	answers 404 for a request_id it never opened
-kiosk-server/spec/kiosk/server/kyc_spec.rb	a8b0800c092d699c	b1d0a419	answers 500 action_failed when the provider does not open one
-kiosk-server/spec/kiosk/server/kyc_spec.rb	fe11964313567470	b1d0a419	answers request_kyc and the callback with 501 module_not_served
-kiosk-server/spec/kiosk/server/kyc_spec.rb	1eb0b0782980f550	b1d0a419	gates naming agents/kyc and not request_kyc
-kiosk-server/spec/kiosk/server/kyc_spec.rb	26b5de48267324cf	b1d0a419	gates naming no KYC path when no kyc_public_key is configured either
-kiosk-server/spec/kiosk/server/kyc_spec.rb	4c4409d12a8599b0	b1d0a419	grants only the JSON boolean true, in Postgres
-kiosk-server/spec/kiosk/server/kyc_spec.rb	806036f05bd0231b	b1d0a419	is good once: the same callback again finds no open verification
-kiosk-server/spec/kiosk/server/kyc_spec.rb	5bdcf328cabc0ee4	b1d0a419	lets every assistant of that person through, and nobody else
-kiosk-server/spec/kiosk/server/kyc_spec.rb	c68f0137fdaa6be1	b1d0a419	names the claims in its descriptor and publishes the topic
-kiosk-server/spec/kiosk/server/kyc_spec.rb	5cd81f9be5fb56bb	b1d0a419	opens a verification of the declared claims for the principal
-kiosk-server/spec/kiosk/server/kyc_spec.rb	6153ee6dde9c6182	b1d0a419	publishes neither request_kyc nor its topic
-kiosk-server/spec/kiosk/server/kyc_spec.rb	9a4fa15322dec34d	b1d0a419	pushes an event its published payload schema accepts
-kiosk-server/spec/kiosk/server/kyc_spec.rb	0194c1cb0186ade1	b1d0a419	records the grant on the person and pushes the attestation to them
-kiosk-server/spec/kiosk/server/kyc_spec.rb	9edef53674a9328e	b1d0a419	refuses a fourth open verification with 429 quota_exceeded
-kiosk-server/spec/kiosk/server/kyc_spec.rb	1a21002961a504cb	b1d0a419	refuses a wrong nonce, another subject, and an attestation the provider does not accept
-kiosk-server/spec/kiosk/server/kyc_spec.rb	1237ff7e1529b967	b1d0a419	refuses with kyc_required until the person holds every declared claim
-kiosk-server/spec/kiosk/server/kyc_spec.rb	d56c2071fd8e44c3	b1d0a419	replaces the grant set
-kiosk-server/spec/kiosk/server/kyc_spec.rb	a7bfd6b0123cf59a	b1d0a419	stops counting a verification after the window, or once approved, or another person's
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ed2afb9f4a16f172	b1d0a419	%i[exp iss sub].each do |claim|
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	806c80f056bdcc94	b1d0a419	I1: raises Errors::Forbidden when level is missing entirely
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6f8b87038204bf49	b1d0a419	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4b40a456c300dd4e	b1d0a419	I2: raises Errors::Forbidden when #{claim} claim is absent
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	84bea1147831e8c7	b1d0a419	accepts an attestation whose aud matches kyc_audience (happy path)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	0657877cc498614b	b1d0a419	defaults kyc_audience to the operator issuer when not explicitly set
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1da47c95e35be352	b1d0a419	drops any non-true attribute value (no truthy-but-not-true grants)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	5ea599871dc7a9c3	b1d0a419	on a bigint-PK host (Integer identity, String attestation sub)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1bf05e04378c9630	b1d0a419	puts module_not_served/501 on the wire for it, and names the module in detail
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	7c4525ded5af1ae6	b1d0a419	raises Errors::Forbidden for a tampered / wrong-key signature
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4d595cfaf5ffd8d4	b1d0a419	raises Errors::Forbidden for an expired attestation
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8f4d2a71bc6db51a	b1d0a419	raises Errors::Forbidden when attributes is not an object
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	3810ee9a91602f19	b1d0a419	raises Errors::Forbidden when aud does not match this operator's kyc_audience
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a93c7651670ccc59	b1d0a419	raises Errors::Forbidden when the aud claim is absent
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4264279f15f31001	b1d0a419	raises Errors::Forbidden when the iss does not match kyc_issuer
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6365edd5453b7228	b1d0a419	raises Errors::Forbidden when the sub does not match identity.user_id
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	fa71ca2df83f188c	b1d0a419	raises Errors::ModuleNotServed when kyc_public_key is not configured
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	621a516df7f11072	b1d0a419	returns an empty attribute set for a bare binary attestation (backward-compat)
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a2c6ceff9cd81ad5	b1d0a419	returns claims hash for a valid attestation
-kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4164d54aebfd7541	b1d0a419	returns the granted named boolean attributes (String-keyed)
+kiosk-server/spec/kiosk/server/kyc_spec.rb	0ba58ffa3ad58780	3f40db06	answers 400 bad_request when request_id or kyc_jws is missing
+kiosk-server/spec/kiosk/server/kyc_spec.rb	70d487e0997d9567	3f40db06	answers 404 for a request_id it never opened
+kiosk-server/spec/kiosk/server/kyc_spec.rb	a8b0800c092d699c	3f40db06	answers 500 action_failed when the provider does not open one
+kiosk-server/spec/kiosk/server/kyc_spec.rb	fe11964313567470	3f40db06	answers request_kyc and the callback with 501 module_not_served
+kiosk-server/spec/kiosk/server/kyc_spec.rb	1eb0b0782980f550	3f40db06	gates naming agents/kyc and not request_kyc
+kiosk-server/spec/kiosk/server/kyc_spec.rb	26b5de48267324cf	3f40db06	gates naming no KYC path when no kyc_public_key is configured either
+kiosk-server/spec/kiosk/server/kyc_spec.rb	4c4409d12a8599b0	3f40db06	grants only the JSON boolean true, in Postgres
+kiosk-server/spec/kiosk/server/kyc_spec.rb	806036f05bd0231b	3f40db06	is good once: the same callback again finds no open verification
+kiosk-server/spec/kiosk/server/kyc_spec.rb	5bdcf328cabc0ee4	3f40db06	lets every assistant of that person through, and nobody else
+kiosk-server/spec/kiosk/server/kyc_spec.rb	c68f0137fdaa6be1	3f40db06	names the claims in its descriptor and publishes the topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	5cd81f9be5fb56bb	3f40db06	opens a verification of the declared claims for the principal
+kiosk-server/spec/kiosk/server/kyc_spec.rb	6153ee6dde9c6182	3f40db06	publishes neither request_kyc nor its topic
+kiosk-server/spec/kiosk/server/kyc_spec.rb	9a4fa15322dec34d	3f40db06	pushes an event its published payload schema accepts
+kiosk-server/spec/kiosk/server/kyc_spec.rb	80d85791b88bc40d	3f40db06	records the grant on the person and pushes the attestation to them
+kiosk-server/spec/kiosk/server/kyc_spec.rb	9edef53674a9328e	3f40db06	refuses a fourth open verification with 429 quota_exceeded
+kiosk-server/spec/kiosk/server/kyc_spec.rb	1a21002961a504cb	3f40db06	refuses a wrong nonce, another subject, and an attestation the provider does not accept
+kiosk-server/spec/kiosk/server/kyc_spec.rb	1237ff7e1529b967	3f40db06	refuses with kyc_required until the person holds every declared claim
+kiosk-server/spec/kiosk/server/kyc_spec.rb	d56c2071fd8e44c3	3f40db06	replaces the grant set
+kiosk-server/spec/kiosk/server/kyc_spec.rb	a7bfd6b0123cf59a	3f40db06	stops counting a verification after the window, or once approved, or another person's
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ed2afb9f4a16f172	3f40db06	%i[exp iss sub].each do |claim|
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	806c80f056bdcc94	3f40db06	I1: raises Errors::Forbidden when level is missing entirely
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6f8b87038204bf49	3f40db06	I1: raises Errors::Forbidden when level is not 'verified' (e.g. 'pending')
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4b40a456c300dd4e	3f40db06	I2: raises Errors::Forbidden when #{claim} claim is absent
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	84bea1147831e8c7	3f40db06	accepts an attestation whose aud matches kyc_audience (happy path)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	0657877cc498614b	3f40db06	defaults kyc_audience to the operator issuer when not explicitly set
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1da47c95e35be352	3f40db06	drops any non-true attribute value (no truthy-but-not-true grants)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	5ea599871dc7a9c3	3f40db06	on a bigint-PK host (Integer identity, String attestation sub)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	1bf05e04378c9630	3f40db06	puts module_not_served/501 on the wire for it, and names the module in detail
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	7c4525ded5af1ae6	3f40db06	raises Errors::Forbidden for a tampered / wrong-key signature
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	ee3bfe227713085c	3f40db06	raises Errors::Forbidden for an attestation signed with the right key under RS512
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4d595cfaf5ffd8d4	3f40db06	raises Errors::Forbidden for an expired attestation
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	8f4d2a71bc6db51a	3f40db06	raises Errors::Forbidden when attributes is not an object
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	3810ee9a91602f19	3f40db06	raises Errors::Forbidden when aud does not match this operator's kyc_audience
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a93c7651670ccc59	3f40db06	raises Errors::Forbidden when the aud claim is absent
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4264279f15f31001	3f40db06	raises Errors::Forbidden when the iss does not match kyc_issuer
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	6365edd5453b7228	3f40db06	raises Errors::Forbidden when the sub does not match identity.user_id
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	fa71ca2df83f188c	3f40db06	raises Errors::ModuleNotServed when kyc_public_key is not configured
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	621a516df7f11072	3f40db06	returns an empty attribute set for a bare binary attestation (backward-compat)
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	a2c6ceff9cd81ad5	3f40db06	returns claims hash for a valid attestation
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	4164d54aebfd7541	3f40db06	returns the granted named boolean attributes (String-keyed)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	f5cc5e2e1a793c1f	b1d0a419	binds the presented key with a valid proof and consumes the code (single-use)
 kiosk-server/spec/kiosk/server/link_code_spec.rb	d318bc056ef88681	b1d0a419	creates a pre-approved :link row bound to the holder and returns the plain code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	ce52380725f6c775	b1d0a419	persists only the hash of the link code

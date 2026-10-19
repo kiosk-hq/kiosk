@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 1965 anchors.
+# 1969 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -283,6 +283,7 @@ e2e/schema_conformance.rb	published examples (the loop is not empty)
 e2e/schema_conformance.rb	satisfies its own schema
 e2e/schema_conformance.rb	the #{defn} mandate's claims
 e2e/schema_conformance.rb	the Kiosk-PoW header this origin ACCEPTED
+e2e/schema_conformance.rb	the event pushed on the stream
 e2e/schema_conformance.rb	the pay REQUEST body
 e2e/schema_conformance.rb	the settlement this origin answered
 e2e/schema_conformance.rb	§5 and §6 — the auth and binding planes
@@ -1207,6 +1208,7 @@ kiosk-server/spec/generators/kiosk/install_generator_spec.rb	draws no verb of it
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	so the protocol plane wins by first match
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	writes no separate routes file
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	deactivates the binding (revoked_at) and watermark-revokes outstanding tokens
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	does not fire assistant_claimed for a fresh key (nothing was re-bound)
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	fires assistant_claimed(agent:, from:, to:) with both accounts
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	registers a linked assistant account under the holder's user_id
@@ -1277,6 +1279,7 @@ kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	delegates to Link
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	mints a single-use link code for the signed-in account holder (201)
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	refuses a link posted as a form
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	refuses an unlink posted as a form, and unlinks nothing
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	puts the caller's original token under the revocation watermark
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 400 bad_request when public_key is absent
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated when NO Authorization header is present
@@ -1589,6 +1592,7 @@ kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	drops any non-true attribute
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	on a bigint-PK host (Integer identity, String attestation sub)
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	puts module_not_served/501 on the wire for it, and names the module in detail
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden for a tampered / wrong-key signature
+kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden for an attestation signed with the right key under RS512
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden for an expired attestation
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden when attributes is not an object
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::Forbidden when aud does not match this operator's kyc_audience

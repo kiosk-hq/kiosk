@@ -299,6 +299,24 @@ RSpec.describe Kiosk::Server::Kyc do
   end
 end
 
+RSpec.describe Kiosk::Server::Kyc, 'against the published kyc.schema.json' do
+  include_context "kyc spec: the provider's callback"
+
+  def published(definition) = Kiosk::Server::RequestValidation::Schemas.wire("kyc.schema.json#/$defs/#{definition}")
+
+  it 'answers request_kyc with a verification the schema accepts, and the schema refuses another status' do
+    expect(published('verification').validate(opened).to_a).to be_empty
+    expect(published('verification').valid?(opened.merge('status' => 'approved'))).to be(false)
+  end
+
+  it 'pushes kyc_verification data the schema accepts, and the schema refuses it without kyc_jws' do
+    callback(request_id: request_id, nonce: nonce, kyc_jws: attestation)
+    data = store.since('u-1', 0).first['data']
+    expect(published('verificationEvent').validate(data).to_a).to be_empty
+    expect(published('verificationEvent').valid?(data.except('kyc_jws'))).to be(false)
+  end
+end
+
 RSpec.describe Kiosk::Server::Kyc do
   include_context "kyc spec: the provider's callback"
 

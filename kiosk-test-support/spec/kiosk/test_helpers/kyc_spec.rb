@@ -2,6 +2,7 @@
 
 require 'kiosk/test_helpers/assistant'
 require 'kiosk/test_helpers/kyc'
+require 'kiosk/server'
 
 KycSpecOperator = Struct.new(:kyc_provider, :kyc_issuer, :kyc_public_key, :kyc_audience)
 
@@ -36,6 +37,13 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
   it 'signs an attestation for the principal, addressed to this operator' do
     expect(verified(kyc_attestation(rider, age_over_18: true))) # rubocop:disable Naming/VariableNumber -- age_over_18 is the published KYC claim name.
       .to include('sub' => 'u1', 'aud' => 'skooti', 'level' => 'verified', 'attributes' => { 'age_over_18' => true })
+  end
+
+  it 'signs claims the published kyc.schema.json accepts as an attestation, and it refuses another level' do
+    schema = Kiosk::Server::RequestValidation::Schemas.wire('kyc.schema.json#/$defs/attestation')
+    claims = verified(kyc_attestation(rider, licence_a: true))
+    expect(schema.validate(claims).to_a).to be_empty
+    expect(schema.valid?(claims.merge('level' => 'unverified'))).to be(false)
   end
 
   it 'refuses a customer who opened no check' do

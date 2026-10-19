@@ -98,10 +98,8 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.mount_path).to eq('/agent-surface')
     end
 
-    it 'lets capabilities be pinned explicitly (returned verbatim, bypasses computation)' do
-      declare_query('q')
-      Kiosk.configure { |c| c.capabilities = %w[schema query] }
-      expect(Kiosk.configuration.capabilities).to eq(%w[schema query])
+    it 'offers no way to set capabilities' do
+      expect(Kiosk.configuration).not_to respond_to(:capabilities=)
     end
 
     it 'lets owner be set' do

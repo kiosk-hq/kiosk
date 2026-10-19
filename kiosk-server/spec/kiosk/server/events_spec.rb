@@ -498,15 +498,6 @@ RSpec.describe 'the events surface in the catalogue and discovery', 'capabilitie
 
     expect(Kiosk.configuration.capabilities).not_to include('events')
   end
-
-  # An explicit list is returned verbatim — the override the accessor already
-  # documents, and a fifth member must not start overriding the override.
-  it "leaves an operator's explicit list alone" do
-    declare_topic!
-    Kiosk.configure { |c| c.capabilities = %w[schema queries] }
-
-    expect(Kiosk.configuration.capabilities).to eq(%w[schema queries])
-  end
 end
 
 RSpec.describe 'the events surface in the catalogue and discovery', '/.well-known/kiosk.json' do

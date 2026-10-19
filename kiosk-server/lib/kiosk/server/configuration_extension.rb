@@ -17,13 +17,9 @@ module Kiosk
           @mount_path ||= Kiosk::Protocol::DEFAULT_MOUNT_PATH
         end
 
-        # Module names advertised in `/.well-known/kiosk.json`. Default: computed
-        # from what is registered and configured; a set value is returned verbatim.
-        attr_writer :capabilities
-
+        # Module names advertised in `/.well-known/kiosk.json`. Computed from what
+        # is registered and configured. An operator cannot set them.
         def capabilities
-          return @capabilities if @capabilities
-
           computed_capabilities
         end
 

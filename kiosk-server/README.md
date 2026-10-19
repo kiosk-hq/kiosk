@@ -21,7 +21,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. The default is no sink, so no `ActionEvent` goes anywhere. The engine keeps its own state in the `kiosk` schema (agents, mandates, settlements, refunds, events, visits), but it writes no audit record there. See [The audit sink](#the-audit-sink).
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for every table and helper that `bin/rails g kiosk:install` creates.
 - **`Kiosk::Server::Engine`** — the Rails engine: `kiosk` in `config/routes.rb` mounts it, drawing the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding), then one route per verb its block names — installs the root discovery routes when mounted, and auto-injects the headers and issuer middleware (see [Draw the routes](#draw-the-routes)).
-- **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `capabilities`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
+- **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `owner`, `min_client` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer, the migrations and the `kiosk` block in `config/routes.rb` that mounts the engine.
 
 kiosk-server is a Rails gem: it depends on railties, actionpack, actioncable, activerecord and activesupport (`~> 8.1`), and `require "kiosk/server"` loads them. Pieces such as `WellKnown` and `SchemaDefinitions` still work without a BOOTED Rails app — they just need the framework on the load path.
@@ -80,7 +80,6 @@ Kiosk.configure do |c|
   # c.mount_path  = "/kiosk"   # default
   # Optional: one event per action invocation. See "The audit sink".
   # c.audit_sink  = ->(event) { AuditRow.create!(**event.to_h) }
-  # c.capabilities = %w[schema queries actions pay] # computed from what is registered by default
 end
 ```
 

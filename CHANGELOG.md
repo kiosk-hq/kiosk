@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-19: The `capabilities` configuration setting is removed. Discovery always derives the list from what is registered.
 - 2026-10-19: The spending cap counts each settled charge less what the operator refunded of it, so a refund gives its amount back to the cap.
 - 2026-10-19: The getgrocery and skooti READMEs say `request_kyc` answers 500 under `docker compose up`, because the app cannot reach the KYC broker from its container.
 - 2026-10-19: The hoteling `check_out` argument of `hotel_detail`, `availability` and `reserve_room` says it is a day on the hotel's own clock.

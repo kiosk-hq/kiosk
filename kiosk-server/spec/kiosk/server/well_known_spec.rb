@@ -180,13 +180,6 @@ RSpec.describe Kiosk::Server::WellKnown do
   describe '.build' do
     subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
 
-    it 'passes through an explicitly pinned capability list' do
-      declare_query('catalog')
-      Kiosk.configure { |c| c.capabilities = %w[schema queries] }
-      d = described_class.build(base_url: 'https://api.acme.example')
-      expect(d[:kiosk][:capabilities]).to eq(%w[schema queries])
-    end
-
     it 'passes through configured min_client' do
       Kiosk.configure { |c| c.min_client = '0.9.0' }
       d = described_class.build(base_url: 'https://api.acme.example')

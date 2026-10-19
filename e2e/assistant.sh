@@ -145,17 +145,15 @@ assert "…and carries NO Vary, even when the request negotiates" \
 #
 # The api-catalog MUST name every verb. It is a static, untolled GET that
 # anyone may read without authenticating, and an enumeration nobody has to ask
-# for is not a defence worth keeping. The other four still must NOT name one —
+# for is not a defence worth keeping. The other five still must NOT name one —
 # for a different reason, which is that they are POINTERS and not copies of the
 # contract. Both halves are asserted POSITIVELY below; "no longer refuses to
 # publish" would be a green nothing.
 #
-# NON-VACUITY, COMMITTED RATHER THAN PROVED ONCE BY HAND. Slice 5 checked this
-# loop was not vacuous by temporarily adding a token that IS present and
-# watching it fail. That property is now a permanent CONTROL: every one of
-# these documents names this origin, so if a fetch or a grep silently stopped
-# working the control fails and the "0" assertions stop meaning nothing.
-for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well-known/agent-configuration"; do
+# NON-VACUITY: every one of these documents names this origin. If a fetch or a
+# grep silently stops working, the control fails, so the "0" assertions keep
+# their meaning.
+for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well-known/agent-configuration" "/auth.md"; do
   body=$(curl -sf "$SERVER_URL$public_doc")
   assert "$public_doc is really being read (control token)" \
     "$(echo "$body" | grep -qF "$SERVER_URL" && echo present || echo MISSING)" "present"
@@ -165,7 +163,7 @@ for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well
   done
 done
 
-# THE INVERSE, on the fifth document. Every verb, at its real per-verb
+# THE INVERSE, on the sixth document. Every verb, at its real per-verb
 # endpoint, with the method that reaches it — anonymously.
 apc_body=$(curl -sf "$SERVER_URL/.well-known/api-catalog")
 for verb_name in salons my_appointments book_appointment; do

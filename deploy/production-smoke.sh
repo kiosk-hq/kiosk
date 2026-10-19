@@ -534,9 +534,9 @@ smoke_prove() {
   bundle exec rails db:create db:schema:load db:seed >/dev/null
 
   # Seed ONE pending request so /verify?request=<id> renders the live yes/no form
-  # (200) — the broker seeds no rows on its own (it is an issuer; rows appear
-  # only at operator intake), so without this the live-form path is never
-  # rendered under eager-load.
+  # (200) with its licence-category fieldset — the broker seeds no rows on its
+  # own (it is an issuer; rows appear only at operator intake), so without this
+  # the live-form path is never rendered under eager-load.
   echo "── Seeding one pending verification request ──"
   REQ="$(bundle exec rails runner '
     r = ProveRequest.create!(
@@ -544,7 +544,7 @@ smoke_prove() {
       operator_id:      "skooti",
       audience:         "skooti",
       callback_url:     "https://127.0.0.1/kiosk/kyc/callback",
-      requested_claims: ["age_over_18", "licence_category:A"],
+      requested_claims: ["age_over_18", "licence_a1", "licence_a"],
       subject_handle:   "smoke-agent-subject",
       nonce:            "smoke-nonce",
       status:           "pending",
@@ -581,13 +581,14 @@ smoke_prove() {
   code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" "${BASE}/")"
   [ "$code" = "200" ] && pass "GET / → 200" || fail "GET / expected 200, got $code"
 
-  echo "── Assertion 2: GET /verify?request=<seeded pending> → 200 live form (NOT 500) ──"
+  echo "── Assertion 2: GET /verify?request=<seeded pending> → 200 live form with the licence categories (NOT 500) ──"
   body="$(curl -s "${PROXY_HEADERS[@]}" -H "Accept: text/html" "${BASE}/verify?request=${REQ}")"
   code="$(curl -s -o /dev/null -w '%{http_code}' "${PROXY_HEADERS[@]}" -H "Accept: text/html" "${BASE}/verify?request=${REQ}")"
-  if [ "$code" = "200" ] && printf '%s' "$body" | grep -qi "confirm these"; then
-    pass "GET /verify (live) → 200 with the yes/no form"
+  if [ "$code" = "200" ] && printf '%s' "$body" | grep -qi "confirm these" &&
+     printf '%s' "$body" | grep -qF 'name="licence_category"'; then
+    pass "GET /verify (live) → 200 with the yes/no form and the licence categories"
   else
-    fail "GET /verify (live) expected 200 + form, got $code"
+    fail "GET /verify (live) expected 200 + form with name=\"licence_category\", got $code"
   fi
 
   echo "── Assertion 3: GET /verify (no token) → 200 clean 'not recognised' (NOT 500) ──"

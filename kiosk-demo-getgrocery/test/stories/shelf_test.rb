@@ -3,17 +3,7 @@
 require 'test_helper'
 
 class ShelfStory < StoryTest
-  def sells_out(sku) = Product.find_by!(sku:).update!(stock: 0)
   def shelf(*skus) = Product.where(sku: skus).pluck(:sku, :stock).to_h
-
-  # Runs the block while the shelf of `sku` empties right after the price check passes.
-  def another_payment_takes(sku)
-    config = Kiosk.configuration
-    config.cart_price_checker = ->(*args) { PriceChecker.call(*args).tap { sells_out(sku) } }
-    yield
-  ensure
-    config.cart_price_checker = PriceChecker
-  end
 
   test 'a price change after ordering does not change what the shopper pays' do
     shopper = a_shopper

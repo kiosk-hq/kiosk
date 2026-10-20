@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: getgrocery ships an order when the processor refuses a sold-out line's refund. The amount is credit (`credited_cents`) and `Rails.error` gets the error.
 - 2026-10-20: A spending cap has a currency. kiosk-server refuses a `pay` in another currency with `403 spending_cap_exceeded`; `config.spending_cap` returns `{ amount_cents:, currency: }`.
 - 2026-10-20: The seven operator demos add `kiosk.agents.spending_cap_currency`; an existing cap becomes a cap in euros.
 - 2026-10-20: The `min_client` setting is removed from kiosk-server. `Kiosk-Min-Client` and `kiosk.min_client` carry kiosk-core's `MIN_CLIENT`.

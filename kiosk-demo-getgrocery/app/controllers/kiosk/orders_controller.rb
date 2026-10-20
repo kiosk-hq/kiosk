@@ -26,9 +26,14 @@ module Kiosk
                       payment_state: Kiosk::Payable::STATE_SCHEMA,
                       refunded_cents: { type: 'integer',
                                         description: 'EUR cents returned to the card for items that sold out ' \
-                                                     'before the basket was packed; all of it on a `cancelled` order.' }
+                                                     'before the basket was packed; all of it on a `cancelled` order.' },
+                      credited_cents: { type: 'integer',
+                                        description: 'EUR cents the shop owes your account for items that sold out ' \
+                                                     'before the basket was packed, when the payment processor ' \
+                                                     'refused to return them to the card.' }
                     },
-                    required: %w[order_id status total_cents slot_at slot_label address payment_state refunded_cents]
+                    required: %w[order_id status total_cents slot_at slot_label address payment_state refunded_cents
+                                 credited_cents]
                   }
     def my_orders
       @orders = Order.own.with_settlement(Kiosk::Settlement.own).order(created_at: :desc)

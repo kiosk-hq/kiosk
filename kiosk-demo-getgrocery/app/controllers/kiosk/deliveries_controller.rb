@@ -10,10 +10,14 @@ module Kiosk
     topic :order_delivery do
       description "The order is on its way (`out_for_delivery`, with the courier's ETA), at the " \
                   'door (`delivered`), or `cancelled`: everything in it sold out before it was packed, and the ' \
-                  'payment went back to the card.'
+                  'payment went back to the card. `credited_cents` (on `placed` or `cancelled`): items sold out ' \
+                  'before packing, the payment processor refused to return their price to the card, and the shop ' \
+                  'owes it to your account. A `placed` order is delivered without them.'
       payload_schema type: 'object', additionalProperties: false,
                      properties: { order_id: { type: 'string', format: 'uuid' },
-                                   status: { enum: %w[out_for_delivery delivered cancelled] },
+                                   status: { enum: %w[placed out_for_delivery delivered cancelled] },
+                                   credited_cents: { type: 'integer', minimum: 1,
+                                                     description: 'EUR cents the shop owes your account.' },
                                    eta: { type: 'string', format: 'date-time',
                                           description: 'When the courier arrives.' },
                                    eta_label: { type: 'string', description: 'The ETA as a human reads it.' },
@@ -24,6 +28,7 @@ module Kiosk
               timezone: DeliverySlots::DEFAULT_ZONE_NAME
       example order_id: OrdersController::ORDER_ID, status: 'delivered'
       example order_id: OrdersController::ORDER_ID, status: 'cancelled'
+      example order_id: OrdersController::ORDER_ID, status: 'placed', credited_cents: 349
       subject_reachable ->(order_id, identity) { Order.readable_by?(order_id, identity.user_id) }
     end
 

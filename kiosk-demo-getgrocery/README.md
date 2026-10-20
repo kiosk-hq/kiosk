@@ -170,7 +170,11 @@ for more than the shelf holds is refused with **409 (`conflict`)**, and `pay` is
 refused before any charge when an item has sold out since the order was placed. A
 paid order takes its items off the shelf; a line a concurrent payment emptied the
 shelf of is refunded (`refunded_cents` in `my_orders`), and an order with nothing
-left is `cancelled` and refunded in full. `test/stories/shelf_test.rb` drives each case.
+left is `cancelled` and refunded in full. When the payment processor refuses that
+refund, the order still ships what is on the shelf. The amount becomes credit on the
+shopper's account (`credited_cents` in `my_orders` and on the `order_delivery`
+event), and `Rails.error` gets the error. Nothing spends the credit.
+`test/stories/shelf_test.rb` and `test/stories/refused_refund_test.rb` drive each case.
 
 ## Age-restricted purchases (anonymized KYC)
 

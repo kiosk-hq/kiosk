@@ -55,4 +55,15 @@ class StoryTest < Kiosk::StoryTest
   setup { Kiosk::TestHelpers::StripeMock.start }
 
   def a_shopper = a_customer(as: Shopper)
+
+  def sells_out(sku) = Product.find_by!(sku:).update!(stock: 0)
+
+  # Runs the block while the shelf of `sku` empties right after the price check passes.
+  def another_payment_takes(sku)
+    config = Kiosk.configuration
+    config.cart_price_checker = ->(*args) { PriceChecker.call(*args).tap { sells_out(sku) } }
+    yield
+  ensure
+    config.cart_price_checker = PriceChecker
+  end
 end

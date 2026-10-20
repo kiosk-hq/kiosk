@@ -33,7 +33,7 @@ Kiosk.configure do |c|
     currency: 'eur', model: 'Order', reference: 'order_id', query: 'my_orders'
   )
   c.cart_price_checker = PriceChecker
-  c.after_payment      = ->(order_id) { Order.fulfil!(order_id) }
+  c.after_payment      = ->(order_id) { FulfilOrderOperation.call(order_id) }
 end
 
 # KYC: the broker that checks the customer, and the claims this origin asks for.

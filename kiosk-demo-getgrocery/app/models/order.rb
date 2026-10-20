@@ -49,34 +49,6 @@ class Order < ApplicationRecord
     end
   end
 
-  # Once per paid order, whoever reports the payment first: the basket leaves
-  # the shelf and the courier is booked. `dispatch_at` is NULL until then. A
-  # line a concurrent payment emptied the shelf of is refunded; an order with
-  # no line left is cancelled.
-  def self.fulfil!(order_id)
-    transaction do
-      order = paid.where(dispatch_at: nil).lock.find_by(id: order_id)
-      next unless order
-
-      missing = order.order_items.sort_by(&:product_id).reject { Product.take!(it.product_id, it.qty) }
-      order.refund!(missing) if missing.any?
-      CourierDispatchJob.arm!(order) unless order.cancelled?
-    end
-  end
-
-  # A refund of every line cancels the order and tells its owner on both topics.
-  def refund!(lines)
-    amount = lines.sum { it.price_cents * it.qty }
-    claim = Kiosk.configuration.payment_provider
-    claim.refund(psp_reference: settlement.psp_reference, amount_cents: amount, key: id)
-    update!(refunded_cents: amount)
-    return unless amount == total_cents
-
-    update!(status: :cancelled, payment_status: :refunded)
-    announce_cancelled
-    claim.announce(id, Kiosk::Payable::REFUNDED)
-  end
-
   def awaiting_courier? = paid? && (placed? || rescheduled?)
 
   # Moves the basket from the shop to the courier. The row lock makes two runs
@@ -86,13 +58,6 @@ class Order < ApplicationRecord
   end
 
   private
-
-  def announce_cancelled
-    Kiosk::Server::Events.emit(
-      topic: :order_delivery, subject: id, identity_scope: [user_id],
-      data: { 'order_id' => id, 'status' => 'cancelled' }
-    )
-  end
 
   # A window takes orders while a basket paid now still reaches the door inside it.
   def window_bookable

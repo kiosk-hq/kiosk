@@ -68,9 +68,9 @@ class OrderTest < ActiveSupport::TestCase
     placed = order(date: Date.tomorrow, items: [['sourdough-bread', 3]])
     placed.update!(payment_status: :paid)
 
-    Order.fulfil!(placed.id)
+    FulfilOrderOperation.call(placed.id)
     dispatch_at = placed.reload.dispatch_at
-    Order.fulfil!(placed.id)
+    FulfilOrderOperation.call(placed.id)
 
     assert_equal 17, @bread.reload.stock
     assert_equal dispatch_at, placed.reload.dispatch_at

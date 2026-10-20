@@ -27,6 +27,9 @@ module Kiosk
                     type: 'object', additionalProperties: false,
                     properties: {
                       restaurant: { type: 'string', description: 'Restaurant name.' },
+                      timezone_note: { type: 'string',
+                                       description: 'Present only when your declared Kiosk-Timezone is on another ' \
+                                                    "clock now: how far the restaurant's clock is from yours." },
                       neighborhood: { type: %w[string null], description: 'Lisbon neighbourhood.' },
                       cuisine: { type: %w[string null], description: 'Cuisine.' },
                       restaurant_table_id: { type: 'integer', description: 'The table; pass it to book_table.' },

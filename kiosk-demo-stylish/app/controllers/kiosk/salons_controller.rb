@@ -16,7 +16,10 @@ module Kiosk
                       salon_id: { type: 'integer', description: 'Pass to book_appointment as `salon_id`.' },
                       name: { type: 'string', description: 'Salon name.' },
                       timezone: { type: 'string',
-                                  description: "The salon's IANA zone; an hour the human names is an hour on this clock." }
+                                  description: "The salon's IANA zone; an hour the human names is an hour on this clock." },
+                      timezone_note: { type: 'string',
+                                       description: 'Present only when your declared Kiosk-Timezone is on another ' \
+                                                    "clock now: how far the salon's clock is from yours." }
                     },
                     required: %w[salon_id name timezone]
                   }

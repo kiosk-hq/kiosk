@@ -38,7 +38,9 @@ the result (no envelope).
   **across all restaurants** for the upcoming seatings that seat the party; each
   row carries `restaurant_table_id`, `seating_at` (ISO 8601 with the restaurant's
   offset) and `seating_label` (`Sun 18 Oct, 20:00 (Europe/Lisbon)`, the line to
-  read to a human)
+  read to a human). When the caller's `Kiosk-Timezone` is on another clock than
+  the restaurant, a row also carries `timezone_note`: one sentence that names
+  the restaurant's zone and how many hours it is from the caller's
 - `GET /kiosk/my_bookings` — the signed-in customer's bookings, with table + restaurant
 - `POST /kiosk/book_table {restaurant_table_id, seating_at, party_size}` — book the
   table and seating of an availability row; a table already taken for that

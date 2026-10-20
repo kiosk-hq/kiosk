@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: `availability` rows carry `timezone_note` when the caller's declared `Kiosk-Timezone` is on another clock than the restaurant.
+
 - 2026-10-18: atablefor runs its jobs on Solid Queue inside Puma, so a booking seated after a restart still counts as a visit.
 
 - 2026-10-17: atablefor tolls registration only, at the Equihash default: the reputation search toll and the discovery `pow_notice` are removed.

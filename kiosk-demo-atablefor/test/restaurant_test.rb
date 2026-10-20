@@ -34,4 +34,22 @@ class RestaurantTest < ActiveSupport::TestCase
     assert_equal 'Mon 15 Jun, 20:00 (Australia/Sydney)',
                  Restaurant.seating_label(Restaurant.new(timezone: 'Australia/Sydney').seating(Date.new(2026, 6, 15), 20))
   end
+
+  test 'a timezone note names the hours between the two clocks, in one sentence' do
+    tasca = Restaurant.new(name: 'Tasca do Tejo', timezone: 'Europe/Lisbon')
+
+    travel_to Time.utc(2026, 1, 15, 12) do
+      assert_equal 'Tasca do Tejo runs on Europe/Lisbon time, 3 hours behind your Europe/Istanbul. ' \
+                   "Every date and time here is the restaurant's.",
+                   tasca.timezone_note(Time.find_zone!('Europe/Istanbul'))
+      assert_includes tasca.timezone_note(Time.find_zone!('Atlantic/Azores')), '1 hour ahead of your Atlantic/Azores'
+    end
+  end
+
+  test 'a timezone note says nothing to a caller on the same clock, or one that declared none' do
+    tasca = Restaurant.new(name: 'Tasca do Tejo', timezone: 'Europe/Lisbon')
+
+    assert_nil tasca.timezone_note(Time.find_zone!('Europe/London'))
+    assert_nil tasca.timezone_note(nil)
+  end
 end

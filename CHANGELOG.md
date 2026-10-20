@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: atablefor's `availability` rows and stylish's `salons` rows carry `timezone_note` when the caller's declared zone is on another clock than the place.
+
 ## [0.5.20] — 2026-10-20
 
 - 2026-10-20: **Every gem and `API_VERSION` are 0.5.20, matching skill 0.5.20.** `MIN_CLIENT` is 0.5.20: a 0.5.19 skill reads a service time on its human's clock.

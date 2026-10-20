@@ -31,6 +31,14 @@
 # a key and covers the adapter's public methods with plain RSpec doubles
 # (no WebMock — the SDK classes are stubbed directly).
 RSpec.shared_context 'with a live Stripe test key' do
+  subject(:adapter) do
+    described_class.new(
+      api_key: ENV.fetch('STRIPE_SECRET_KEY', 'sk_test_unset'),
+      customer_resolver: ->(uid) { customer_store[uid] },
+      customer_saver: ->(uid, cid) { customer_store[uid] = cid }
+    )
+  end
+
   before do |example|
     next if example.metadata[:no_key_needed]
 
@@ -42,14 +50,6 @@ RSpec.shared_context 'with a live Stripe test key' do
 
   # The test-mode API the examples set the scene on.
   let(:stripe_api) { Stripe::StripeClient.new(ENV.fetch('STRIPE_SECRET_KEY')).v1 }
-
-  subject(:adapter) do
-    described_class.new(
-      api_key: ENV.fetch('STRIPE_SECRET_KEY', 'sk_test_unset'),
-      customer_resolver: ->(uid) { customer_store[uid] },
-      customer_saver: ->(uid, cid) { customer_store[uid] = cid }
-    )
-  end
 
   let(:user_id) { "integration-test-user-#{Process.pid}" }
 

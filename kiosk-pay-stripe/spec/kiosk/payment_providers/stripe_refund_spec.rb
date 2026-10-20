@@ -26,7 +26,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#refund' do
 
     expect { adapter.refund(psp_reference: 'pi_123', amount_cents: 1599, key: 'order-7') }
       .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
-        expect(e.message).not_to match(/ch_1/)
+        expect(e.message).not_to include('ch_1')
       }
   end
 end

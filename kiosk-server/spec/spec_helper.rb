@@ -59,7 +59,7 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.warnings = false
 
-  config.before(:each) do
+  config.before do
     Kiosk.reset!
     Kiosk.configure do |c|
       c.pow_spent_store      = MemoryPowSpentStore.new

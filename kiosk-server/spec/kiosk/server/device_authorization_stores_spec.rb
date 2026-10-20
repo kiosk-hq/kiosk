@@ -267,6 +267,8 @@ end
 RSpec.shared_context 'device authorization stores spec: postgres schema' do
   schema = DeviceAuthorizationStoresSpec::SPEC_SCHEMA
 
+  subject(:store) { described_class.new }
+
   before(:context) do
     error = DeviceAuthorizationStoresSpec.postgres_error
     skip "no local Postgres reachable (#{error})" if error
@@ -284,8 +286,6 @@ RSpec.shared_context 'device authorization stores spec: postgres schema' do
   after(:context) do
     ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{schema}" CASCADE)) unless DeviceAuthorizationStoresSpec.postgres_error
   end
-
-  subject(:store) { described_class.new }
 
   before do
     Kiosk.configure { |c| c.schema = schema }

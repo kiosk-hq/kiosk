@@ -17,7 +17,7 @@ RSpec.configure do |config|
   config.warnings = false
 
   # Reset Kiosk.configuration between examples to keep tests independent.
-  config.before(:each) { Kiosk.reset! }
+  config.before { Kiosk.reset! }
 end
 
 # Test doubles — kiosk-user-idp-devise does NOT depend on Devise at runtime

@@ -32,7 +32,7 @@ RSpec.describe Kiosk::Server::Queries do
           # The hint names the available queries, so a near-miss typo is
           # recoverable without the schema, and it still points at the schema.
           expect(e.hint).to include('browse_listings', 'listing_detail', "unknown query 'listings'")
-          expect(e.hint).to match(/schema/)
+          expect(e.hint).to include('schema')
         }
     end
 
@@ -43,7 +43,7 @@ RSpec.describe Kiosk::Server::Queries do
         .to raise_error(Kiosk::Server::Errors::VerbNotFound) { |e|
           expect(e.hint).to include('q00', 'q19', '…')
           expect(e.hint).not_to include('q20') # capped
-          expect(e.hint).to match(/schema/)
+          expect(e.hint).to include('schema')
         }
     end
   end

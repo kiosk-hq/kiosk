@@ -564,7 +564,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         run!
 
         expect(connection.all_sql).not_to include('action_log')
-        expect(connection.all_sql).not_to match(/INSERT INTO kiosk\.actions/)
+        expect(connection.all_sql).not_to include('INSERT INTO kiosk.actions')
       end
 
       it "emits OUTSIDE the action's transaction — a sink cannot hold it open" do

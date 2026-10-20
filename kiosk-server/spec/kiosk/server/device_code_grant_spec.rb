@@ -200,7 +200,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant, '.exchange BIND-POP on an approve
 
     result = exchange(signed: 'bad-jws')
     expect(result).to include(ok: false, error: 'invalid_client')
-    expect(result[:description]).to match(/proof signature invalid/)
+    expect(result[:description]).to include('proof signature invalid')
 
     # The rightful key holder can still retry with a valid proof.
     allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })

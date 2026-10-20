@@ -54,6 +54,8 @@ end
 RSpec.shared_context 'event stores spec: throwaway schema' do
   include EventStoresSpec
 
+  subject(:store) { described_class.new }
+
   before(:context) do
     skip "no local Postgres reachable (#{EventStoresSpec.postgres_error})" if EventStoresSpec.postgres_error
 
@@ -70,8 +72,6 @@ RSpec.shared_context 'event stores spec: throwaway schema' do
       )
     end
   end
-
-  subject(:store) { described_class.new }
 
   before do
     Kiosk.configure { |c| c.schema = EventStoresSpec::SCHEMA }

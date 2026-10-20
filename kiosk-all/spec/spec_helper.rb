@@ -16,5 +16,5 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.warnings = false
 
-  config.before(:each) { Kiosk.reset! }
+  config.before { Kiosk.reset! }
 end

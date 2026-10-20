@@ -127,14 +127,14 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
     it 'scopes agent_payment_key lookups to non-revoked agents' do
       idp.agent_payment_key('agent-1')
       sql, binds = recorder.last
-      expect(sql).to match(/FROM kiosk\.agents WHERE id = \$1 AND revoked_at IS NULL/)
+      expect(sql).to include('FROM kiosk.agents WHERE id = $1 AND revoked_at IS NULL')
       expect(binds).to eq(['agent-1'])
     end
 
     it 'scopes lookup_user_id lookups to non-revoked agents' do
       idp.send(:lookup_user_id, 'agent-1')
       sql, binds = recorder.last
-      expect(sql).to match(/FROM kiosk\.agents WHERE id = \$1 AND revoked_at IS NULL/)
+      expect(sql).to include('FROM kiosk.agents WHERE id = $1 AND revoked_at IS NULL')
       expect(binds).to eq(['agent-1'])
     end
   end

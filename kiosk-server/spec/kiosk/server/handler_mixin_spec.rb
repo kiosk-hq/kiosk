@@ -902,8 +902,8 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         'status' => 404,
         'code' => 'verb_not_found'
       )
-      expect(problem['detail']).to match(/Kiosk wire only/)
-      expect(problem['hint']).to match(/<query-name>/)
+      expect(problem['detail']).to include('Kiosk wire only')
+      expect(problem['hint']).to include('<query-name>')
       # FLAT: neither of the two members the retired envelope owned survives.
       expect(problem.keys).not_to include('ok')
       expect(problem.keys).not_to include('error')

@@ -17,7 +17,7 @@ RSpec.configure do |config|
   config.warnings = false
 
   # Reset the backend registry between examples to avoid cross-test pollution.
-  config.before(:each) { Kiosk::Reputation::Backends.reset! }
+  config.before { Kiosk::Reputation::Backends.reset! }
 end
 
 # PoW backend doubles. Challenge treats alg and params as opaque and calls only

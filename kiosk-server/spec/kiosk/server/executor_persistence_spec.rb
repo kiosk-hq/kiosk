@@ -834,7 +834,7 @@ RSpec.describe Kiosk::Server::Executor, 'a repeated pay after an unknown outcome
   it 'keeps an unknown outcome open: the repeat charges again under the same key' do
     allow(provider).to receive(:capture)
       .and_raise(Kiosk::PaymentProviders::PaymentFailed.new('unknown', retryable: false))
-    expect { pay }.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e| expect(e.hint).to match(/SAME chain/) }
+    expect { pay }.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e| expect(e.hint).to include('SAME chain') }
 
     expect(pay.payload[:psp_reference]).to eq("pi_#{cart.id}")
     expect(settlement_count).to eq(1)

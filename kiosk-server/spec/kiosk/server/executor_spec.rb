@@ -867,8 +867,8 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay capture failure' do
     end.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e|
       expect(e.http_status).to eq(402)
       expect(e.code).to        eq('payment_failed')
-      expect(e.hint).to        match(/Send the SAME chain again/)
-      expect(e.hint).to        match(/Do not sign a new chain/)
+      expect(e.hint).to        include('Send the SAME chain again')
+      expect(e.hint).to        include('Do not sign a new chain')
     }
   end
 end
@@ -1137,9 +1137,9 @@ RSpec.shared_context 'executor spec: dated mandates' do
 end
 
 RSpec.shared_context 'executor spec: pay-path persistence (bind parameters)' do
-  include_context 'executor spec: dated mandates'
-
   subject(:executor) { described_class.new(connection: connection, identity: identity) }
+
+  include_context 'executor spec: dated mandates'
 
   before { Kiosk.configure { |c| c.schema = 'kiosk' } }
 end

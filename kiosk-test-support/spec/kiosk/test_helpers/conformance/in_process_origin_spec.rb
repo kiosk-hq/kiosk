@@ -69,6 +69,7 @@ RSpec.shared_context 'conformance origin spec: origin' do
   let(:connection) { ConformanceOriginSpec::RecordingConnection.new }
 
   before { serve_wire_on(connection) }
+
   let(:alice)      { Struct.new(:id, :role).new('u-alice', 'customer') }
   let(:bob)        { Struct.new(:id, :role).new('u-bob', 'customer') }
 end

@@ -682,7 +682,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       end
 
       it 'tells the reader not to hand-roll a solver and to check the digest first' do
-        expect(register).to match(/Do not write your own Equihash solver/)
+        expect(register).to include('Do not write your own Equihash solver')
         expect(register).to match(/SHA-256.*pin/m)
       end
     end
@@ -730,7 +730,7 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to match(/`code`.*FLAT member/)
       # The retired envelope must not survive anywhere in the document.
       expect(body).not_to include('ok: false')
-      expect(body).not_to match(/JSON envelope/)
+      expect(body).not_to include('JSON envelope')
     end
 
     it 'requires the possession proof in the token poll (BIND-POP is not optional)' do

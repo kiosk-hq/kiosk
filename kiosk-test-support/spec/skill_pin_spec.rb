@@ -181,11 +181,11 @@ RSpec.describe 'the skill pin: the device-code poll in the pinned cut' do
                        "#{name} teaches the device-code poll without naming #{missing.join(', ')} — the engine " \
                        "emits #{emitted.sort.join(', ')} (#{SkillPin::GRANT_SOURCE}), and an error the skill " \
                        'does not name is an error the assistant loops on'
-    expect(section).to match(/GIVE UP/),
+    expect(section).to include('GIVE UP'),
                        "#{name}'s device-code poll states no give-up horizon. Nothing pushes on approval, so a " \
                        "loop without one runs until the assistant's budget dies — the card-setup and KYC polls " \
                        'both say where to stop, and this is the third such poll.'
-    expect(section).to match(/TERMINAL/),
+    expect(section).to include('TERMINAL'),
                        "#{name}'s device-code poll marks no outcome TERMINAL, so a denied or expired ceremony has no stated stop condition."
   end
 end

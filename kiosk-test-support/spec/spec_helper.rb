@@ -17,7 +17,7 @@ RSpec.configure do |config|
   config.disable_monkey_patching!
   config.warnings = false
 
-  config.before(:each) do
+  config.before do
     Kiosk.reset!
     Kiosk::TestHelpers.reset!
     Kiosk::TestHelpers::Conformance.reset!

@@ -33,14 +33,14 @@ end
 RSpec.shared_context 'pow spent stores spec: postgres' do
   include PowSpentStoresSpec
 
+  subject(:store) { described_class.new }
+
   before(:context) do
     skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
     PowSpentStoresSpec.create_schema
   end
 
   after(:context) { SpecPostgres.drop_schema(PowSpentStoresSpec::SCHEMA) }
-
-  subject(:store) { described_class.new }
 
   let(:live) { Time.now.to_i + 300 }
 

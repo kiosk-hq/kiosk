@@ -138,7 +138,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when the charge fails 
         expect(e).to be_retryable
         expect(e.message).to eq('the payment method was declined')
         # No raw Stripe text leaks through.
-        expect(e.message).not_to match(/Your card was declined/)
+        expect(e.message).not_to include('Your card was declined')
       }
   end
 
@@ -167,7 +167,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, '#capture when Stripe cannot con
       .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
         expect(e).not_to be_retryable
         expect(e.message).to match(/unknown/i)
-        expect(e.message).not_to match(/timed out/)
+        expect(e.message).not_to include('timed out')
       }
   end
 end

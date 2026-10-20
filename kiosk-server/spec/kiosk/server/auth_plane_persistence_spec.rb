@@ -568,7 +568,7 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       expect(row.fetch('spending_cap_cents')).to eq(2500)
     end
 
-    it 'will not write across holders (the ownership predicate is a bind pair)' do
+    it 'does not write across holders (the ownership predicate is a bind pair)' do
       foreign = Kiosk::Server::AccountBinding.bind!(public_key_pem: "#{pem}-other", user_id: other)[:agent_id]
 
       dispatch(:update, method: 'POST', params: { agent_id: foreign, human_label: 'mine now' })

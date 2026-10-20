@@ -965,8 +965,9 @@ end
 
 # ─── PowRequired error class ──────────────────────────────────────────────
 RSpec.describe Kiosk::Server::Errors::PowRequired do
-  let(:challenge_hash) { { id: 'cid-1', alg: 'argon2id', params: { d: 4 }, salt: 'abc', exp: 9999, sig: 'xxx' } }
   subject(:error)      { described_class.new(challenges: [challenge_hash]) }
+
+  let(:challenge_hash) { { id: 'cid-1', alg: 'argon2id', params: { d: 4 }, salt: 'abc', exp: 9999, sig: 'xxx' } }
 
   it 'is a subclass of Errors::Base' do
     expect(error).to be_a(Kiosk::Server::Errors::Base)
@@ -986,8 +987,9 @@ RSpec.describe Kiosk::Server::Errors::PowRequired do
 end
 
 RSpec.describe Kiosk::Server::Errors::PowRequired do
-  let(:challenge_hash) { { id: 'cid-1', alg: 'argon2id', params: { d: 4 }, salt: 'abc', exp: 9999, sig: 'xxx' } }
   subject(:error)      { described_class.new(challenges: [challenge_hash]) }
+
+  let(:challenge_hash) { { id: 'cid-1', alg: 'argon2id', params: { d: 4 }, salt: 'abc', exp: 9999, sig: 'xxx' } }
 
   it 'accepts a multi-element challenges list' do
     c2 = challenge_hash.merge(id: 'cid-2', salt: 'def')

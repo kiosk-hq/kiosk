@@ -153,7 +153,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder, 'rule (4) — deeper shapes are a
   it 'names the ACTION remedy in the hint rather than only refusing' do
     expect { decode('price%5Brange%5D%5Bmin%5D=8000') }
       .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
-        expect(e.hint).to match(/ACTION/)
+        expect(e.hint).to include('ACTION')
       }
   end
 end

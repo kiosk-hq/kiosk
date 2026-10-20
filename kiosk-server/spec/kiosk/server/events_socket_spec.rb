@@ -54,6 +54,7 @@ end
 
 RSpec.describe 'the Kiosk event stream over a real socket', 'the upgrade' do
   let(:report) { EventsSocketSpec.report }
+
   # Action Cable finishes the handshake and THEN runs `connect`, so a refused
   # upgrade still answers 101 and closes immediately after. The `welcome`
   # frame is therefore the only thing that separates accepted from refused —
@@ -130,6 +131,7 @@ end
 # own frames are wrapped, the connection's are not.
 RSpec.describe 'the Kiosk event stream over a real socket', 'the actioncable-v1-json framing' do
   let(:report) { EventsSocketSpec.report }
+
   # The identifier is compared, never parsed, so the echo is held byte for byte.
   it "wraps a subscription's own frames, echoing the identifier it was given" do
     expect(report['subscribed_envelope'].keys).to contain_exactly('identifier', 'message')
@@ -146,6 +148,7 @@ end
 
 RSpec.describe 'the Kiosk event stream over a real socket', 'subscribing' do
   let(:report) { EventsSocketSpec.report }
+
   it 'confirms a declared topic with head and truncated' do
     expect(report['subscribed']).to match(
       'type' => 'subscribed', 'topic' => 'order_delivery', 'subject' => nil,
@@ -259,6 +262,7 @@ end
 # three with a silence of its own.
 RSpec.describe 'the Kiosk event stream over a real socket', 'a frame the origin cannot act on for a reason inside the identifier' do
   let(:report) { EventsSocketSpec.report }
+
   it 'REJECTS an unsubscribe naming a subscription this socket never opened' do
     expect(report.dig('unopened_unsubscribe', 'answer'))
       .to eq([{ 'identifier' => '{"channel":"KioskEvents","topic":"order_delivery"}',
@@ -340,6 +344,7 @@ end
 # something that works.
 RSpec.describe 'the Kiosk event stream over a real socket', 'a second subscribe for a subscription already live' do
   let(:report) { EventsSocketSpec.report }
+
   it 'CONFIRMS it again, and says nothing else' do
     expect(report.dig('duplicate_subscribe', 'answer'))
       .to eq([{ 'identifier' => '{"channel":"KioskEvents","topic":"todo","subject":"list_ok"}',
@@ -355,6 +360,7 @@ end
 
 RSpec.describe 'the Kiosk event stream over a real socket', 'delivery' do
   let(:report) { EventsSocketSpec.report }
+
   it 'pushes an emitted event carrying the five closed members and no others' do
     expect(report['live']).not_to be_nil
     expect(report['live'].keys)
@@ -381,6 +387,7 @@ end
 # Spec Section 8.5.4: the wire has no confirmation for an unsubscribe.
 RSpec.describe 'the Kiosk event stream over a real socket', 'unsubscribing from a live subscription' do
   let(:report) { EventsSocketSpec.report }
+
   it 'drops it, answers nothing, and delivers nothing emitted after it' do
     expect(report['before_unsubscribe_delivered']).to be(true)
     expect(report['after_unsubscribe_frames']).to eq([])
@@ -390,6 +397,7 @@ end
 # Spec Section 8.5.6, measured as two consecutive pings on one socket.
 RSpec.describe 'the Kiosk event stream over a real socket', 'the heartbeat' do
   let(:report) { EventsSocketSpec.report }
+
   it 'pings with the unix time' do
     expect(report['ping']).to match('type' => 'ping', 'message' => kind_of(Integer))
   end
@@ -401,6 +409,7 @@ end
 
 RSpec.describe 'the Kiosk event stream over a real socket', 'subscriptions declared in the URL' do
   let(:report) { EventsSocketSpec.report }
+
   # Action Cable streams nothing until the client SENDS a subscribe command,
   # and a client that can set a header on the upgrade may still be unable to
   # send a frame — it would hold an open socket and receive nothing, forever.
@@ -426,6 +435,7 @@ end
 
 RSpec.describe 'the Kiosk event stream over a real socket', 'resuming with `since`' do
   let(:report) { EventsSocketSpec.report }
+
   # A socket that missed events gets exactly the gap back, and nothing it had
   # already seen (spec Section 8.5.5).
   it 'replays only what the cursor had not seen' do
@@ -451,6 +461,7 @@ end
 # something: a socket nothing has changed under is left alone.
 RSpec.describe 'the Kiosk event stream over a real socket', 're-authorisation while the socket stands' do
   let(:report) { EventsSocketSpec.report }
+
   it 'leaves a subscription whose reach and credential still hold alone' do
     expect(report['steady_unsubscribed']).to be(false)
     expect(report['steady_disconnected']).to be(false)

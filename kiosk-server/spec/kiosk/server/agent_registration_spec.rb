@@ -179,8 +179,8 @@ RSpec.describe Kiosk::Server::AgentRegistration, 'provisioning (register-only; k
 
     insert_sql, binds = con.bound(/INSERT INTO kiosk\.agents/).first
     expect(insert_sql).to include("'{}'::text[]")
-    expect(insert_sql).not_to match(/NULL/)
-    expect(insert_sql).not_to match(/ARRAY\[/)
+    expect(insert_sql).not_to include('NULL')
+    expect(insert_sql).not_to include('ARRAY[')
     expect(binds).to eq([42, pem, Kiosk.current_issuer]) # no role bind: the empty set is a shape
   end
 end

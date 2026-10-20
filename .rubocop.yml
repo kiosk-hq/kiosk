@@ -78,6 +78,12 @@ Rails:
 RSpecRails:
   Exclude: *plain_ruby
 
+# A conformance matcher takes the name of the verb it checks as its subject.
+RSpec/ExpectActual:
+  Exclude:
+    - "kiosk-demo-hoteling/spec/conformance/kiosk_conformance_spec.rb"
+    - "kiosk-test-support/spec/kiosk/test_helpers/conformance/adapters_spec.rb"
+
 # The RSpec cops below are being fixed one family at a time.
 RSpec/AnyInstance:
   Enabled: false
@@ -91,21 +97,9 @@ RSpec/DescribeMethod:
   Enabled: false
 RSpec/DescribedClass:
   Enabled: false
-RSpec/EmptyLineAfterExample:
-  Enabled: false
-RSpec/EmptyLineAfterFinalLet:
-  Enabled: false
-RSpec/EmptyLineAfterHook:
-  Enabled: false
 RSpec/ExampleLength:
   Enabled: false
-RSpec/ExampleWording:
-  Enabled: false
-RSpec/ExpectActual:
-  Enabled: false
 RSpec/ExpectInHook:
-  Enabled: false
-RSpec/HookArgument:
   Enabled: false
 RSpec/IdenticalEqualityAssertion:
   Enabled: false
@@ -113,13 +107,9 @@ RSpec/IncludeExamples:
   Enabled: false
 RSpec/InstanceVariable:
   Enabled: false
-RSpec/LeadingSubject:
-  Enabled: false
 RSpec/LeakyLocalVariable:
   Enabled: false
 RSpec/LetSetup:
-  Enabled: false
-RSpec/MatchWithSimpleRegex:
   Enabled: false
 RSpec/MessageSpies:
   Enabled: false

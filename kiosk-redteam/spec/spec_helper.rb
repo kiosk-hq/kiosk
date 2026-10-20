@@ -130,7 +130,7 @@ RSpec.configure do |config|
   # Every registration now begins with a proof-of-possession challenge fetch
   # (GET /kiosk/auth/challenge). Stub it broadly so scenario/client specs only
   # have to stub the register POST; a specific example may still override this.
-  config.before(:each) do
+  config.before do
     stub_request(:get, %r{/kiosk/auth/challenge}).to_return(
       status: 200,
       body: JSON.generate('challenge' => 'test-nonce', 'exp' => Time.now.to_i + 120),

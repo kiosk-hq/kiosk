@@ -88,7 +88,7 @@ RSpec.describe 'OAuth binding controllers' do
       status, body = start!('client_id' => 'assistant')
       expect(status).to eq(400)
       expect(body[:error]).to eq('invalid_request')
-      expect(body[:error_description]).to match(/public_key/)
+      expect(body[:error_description]).to include('public_key')
     end
   end
 end
@@ -102,8 +102,9 @@ RSpec.describe 'OAuth binding controllers' do
       status, body = start!('client_id' => 'assistant', 'public_key' => small)
       expect(status).to eq(400)
       expect(body[:error]).to eq('invalid_request')
-      expect(body[:error_description]).to match(/too small/)
+      expect(body[:error_description]).to include('too small')
     end
+
     it 'rejects a malformed key' do
       status, body = start!('client_id' => 'assistant', 'public_key' => 'not-a-pem')
       expect(status).to eq(400)
@@ -113,7 +114,7 @@ RSpec.describe 'OAuth binding controllers' do
     it 'still requires client_id' do
       status, body = start!('public_key' => pem)
       expect(status).to eq(400)
-      expect(body[:error_description]).to match(/client_id/)
+      expect(body[:error_description]).to include('client_id')
     end
   end
 end
@@ -131,14 +132,14 @@ RSpec.describe 'OAuth binding controllers' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem, 'role' => 'customer')
       expect(status).to eq(400)
       expect(body[:error]).to eq('invalid_request')
-      expect(body[:error_description]).to match(/role is not accepted here/)
-      expect(body[:error_description]).to match(/does not choose its own role/)
+      expect(body[:error_description]).to include('role is not accepted here')
+      expect(body[:error_description]).to include('does not choose its own role')
     end
 
     it 'refuses an undeclared role the same way — the value is never consulted' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem, 'role' => 'root')
       expect(status).to eq(400)
-      expect(body[:error_description]).to match(/role is not accepted here/)
+      expect(body[:error_description]).to include('role is not accepted here')
     end
   end
 end
@@ -150,7 +151,7 @@ RSpec.describe 'OAuth binding controllers' do
     it 'refuses the OAuth-standard `scope` spelling too' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem, 'scope' => 'owner')
       expect(status).to eq(400)
-      expect(body[:error_description]).to match(/scope is not accepted here/)
+      expect(body[:error_description]).to include('scope is not accepted here')
     end
 
     it 'refuses an EMPTY role or scope — the parameter itself is not accepted' do

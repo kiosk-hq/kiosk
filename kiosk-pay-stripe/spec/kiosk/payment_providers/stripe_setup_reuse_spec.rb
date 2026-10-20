@@ -36,10 +36,6 @@ require 'kiosk/test_helpers/stripe_mock'
 # to plug with a key. `stripe_integration_spec.rb`'s header carries the whole
 # ruling.
 RSpec.shared_context 'with a stateful local Stripe API' do
-  let(:fake)           { FakeStripeApi.new }
-  let(:customer_store) { {} }
-  let(:return_url)     { 'https://shop.example/kiosk/payment_setup/return' }
-
   subject(:adapter) do
     described_class.new(
       api_key: 'sk_test_fake', api_base: fake.base_url,
@@ -47,6 +43,10 @@ RSpec.shared_context 'with a stateful local Stripe API' do
       customer_saver: ->(uid, cid) { customer_store[uid] = cid }
     )
   end
+
+  let(:fake)           { FakeStripeApi.new }
+  let(:customer_store) { {} }
+  let(:return_url)     { 'https://shop.example/kiosk/payment_setup/return' }
 
   # The local API answers at once; a retry would only hide a wrong answer.
   around do |example|
@@ -161,10 +161,6 @@ end
 # fixture shapes — and it pins the fixture, so if stripe-mock ever starts
 # serving a setup-mode session the reuse group above can be extended to it.
 RSpec.shared_context 'with stripe-mock' do
-  let(:mock_url) { Kiosk::TestHelpers::StripeMock.start }
-  let(:return_url) { 'https://shop.example/kiosk/payment_setup/return' }
-  let(:customer_store) { {} }
-
   subject(:adapter) do
     described_class.new(
       api_key: 'sk_test_mock', api_base: mock_url,
@@ -172,6 +168,10 @@ RSpec.shared_context 'with stripe-mock' do
       customer_saver: ->(uid, cid) { customer_store[uid] = cid }
     )
   end
+
+  let(:mock_url) { Kiosk::TestHelpers::StripeMock.start }
+  let(:return_url) { 'https://shop.example/kiosk/payment_setup/return' }
+  let(:customer_store) { {} }
 
   let(:sessions) { Stripe::StripeClient.new('sk_test_mock', api_base: mock_url).v1.checkout.sessions }
 end

@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
 RSpec.shared_context 'column spending cap spec: seam' do
-  let(:conn) { FakeConnection.new }
   subject(:seam) { described_class.new }
+
+  let(:conn) { FakeConnection.new }
 
   before do
     Kiosk.configure { |c| c.schema = 'kiosk' }

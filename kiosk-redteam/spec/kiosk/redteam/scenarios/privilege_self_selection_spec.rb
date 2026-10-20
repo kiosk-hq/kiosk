@@ -69,7 +69,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection, 'when the serv
     stub_register_returning(token_with_role('master'))
     verdict = scenario.call(client, profile)
     expect(verdict.blocked).to be(false)
-    expect(verdict.detail).to match(/master/)
+    expect(verdict.detail).to include('master')
   end
 end
 

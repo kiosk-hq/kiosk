@@ -40,7 +40,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow, '#call — non
       verdict = scenario.call(client, profile)
 
       expect(verdict.blocked).to be(false)
-      expect(verdict.detail).to match(/201/)
+      expect(verdict.detail).to include('201')
     end
   end
 end

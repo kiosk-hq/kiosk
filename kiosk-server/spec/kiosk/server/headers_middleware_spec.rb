@@ -3,11 +3,11 @@
 require 'rack/mock'
 
 RSpec.shared_context 'headers middleware spec: rack harness' do
+  subject(:middleware) { described_class.new(downstream_app) }
+
   let(:downstream_app) do
     ->(_env) { [200, { 'Content-Type' => 'text/plain' }, ['ok']] }
   end
-
-  subject(:middleware) { described_class.new(downstream_app) }
 
   def call(path)
     env = Rack::MockRequest.env_for(path)

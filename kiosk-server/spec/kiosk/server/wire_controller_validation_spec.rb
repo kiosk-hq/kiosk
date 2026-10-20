@@ -388,7 +388,7 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
 
       expect { validate_any_proof! }.to raise_error(Kiosk::Server::Errors::ConfigurationError) { |e|
         expect(e.message).not_to match(/optional/i)
-        expect(e.message).to match(/RUNTIME dependency/)
+        expect(e.message).to include('RUNTIME dependency')
       }
     end
   end

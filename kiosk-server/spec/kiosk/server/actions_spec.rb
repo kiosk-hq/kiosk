@@ -45,7 +45,7 @@ RSpec.describe Kiosk::Server::Actions do
           expect(e.hint).to include('place_order')
           expect(e.hint).to include('cancel_order')
           # ...WITHOUT first fetching the schema, but still points there.
-          expect(e.hint).to match(/schema/)
+          expect(e.hint).to include('schema')
           expect(e.hint).to include("unknown action 'order'")
         }
     end

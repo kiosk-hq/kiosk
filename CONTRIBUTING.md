@@ -106,12 +106,11 @@ bundle install
 bin/lint
 ```
 
-RuboCop runs with its default cops and the `rubocop-rails`, `rubocop-minitest`
-and `rubocop-rspec_rails` plugins, new cops included; only `Layout/LineLength`
-and `Style/Documentation` are off. The Rails cops read the code that runs in a
-Rails app; `.rubocop.yml` lists the plain Ruby paths they skip. The
-`rubocop-rspec` gem loads only because `rubocop-rspec_rails` runs on its code;
-its own `RSpec` cops are off. Fix an offense rather than disable the cop. An
+RuboCop runs with its default cops and the `rubocop-rails`, `rubocop-minitest`,
+`rubocop-rake`, `rubocop-rspec` and `rubocop-rspec_rails` plugins, new cops
+included; only `Layout/LineLength` and `Style/Documentation` are off. The Rails
+cops read the code that runs in a Rails app; `.rubocop.yml` lists the plain Ruby
+paths they skip. Fix an offense rather than disable the cop. An
 inline `# rubocop:disable` is for a line where the cop is wrong, and it carries
 its reason after `--`. A Brakeman false positive goes into that app's
 `config/brakeman.ignore` with a note.

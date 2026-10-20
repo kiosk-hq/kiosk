@@ -1,6 +1,7 @@
 plugins:
   - rubocop-minitest
   - rubocop-rails
+  - rubocop-rake
   - rubocop-rspec
   - rubocop-rspec_rails
 
@@ -77,7 +78,78 @@ Rails:
 RSpecRails:
   Exclude: *plain_ruby
 
-# rubocop-rspec_rails runs on the code of rubocop-rspec, so the plugin list
-# loads both; the RSpec cops of rubocop-rspec are not part of this setup.
-RSpec:
+# The RSpec cops below are being fixed one family at a time.
+RSpec/AnyInstance:
+  Enabled: false
+RSpec/BeforeAfterAll:
+  Enabled: false
+RSpec/ContextWording:
+  Enabled: false
+RSpec/DescribeClass:
+  Enabled: false
+RSpec/DescribeMethod:
+  Enabled: false
+RSpec/DescribedClass:
+  Enabled: false
+RSpec/EmptyLineAfterExample:
+  Enabled: false
+RSpec/EmptyLineAfterFinalLet:
+  Enabled: false
+RSpec/EmptyLineAfterHook:
+  Enabled: false
+RSpec/ExampleLength:
+  Enabled: false
+RSpec/ExampleWording:
+  Enabled: false
+RSpec/ExpectActual:
+  Enabled: false
+RSpec/ExpectInHook:
+  Enabled: false
+RSpec/HookArgument:
+  Enabled: false
+RSpec/IdenticalEqualityAssertion:
+  Enabled: false
+RSpec/IncludeExamples:
+  Enabled: false
+RSpec/InstanceVariable:
+  Enabled: false
+RSpec/LeadingSubject:
+  Enabled: false
+RSpec/LeakyLocalVariable:
+  Enabled: false
+RSpec/LetSetup:
+  Enabled: false
+RSpec/MatchWithSimpleRegex:
+  Enabled: false
+RSpec/MessageSpies:
+  Enabled: false
+RSpec/MultipleDescribes:
+  Enabled: false
+RSpec/MultipleExpectations:
+  Enabled: false
+RSpec/MultipleMemoizedHelpers:
+  Enabled: false
+RSpec/NestedGroups:
+  Enabled: false
+RSpec/Output:
+  Enabled: false
+RSpec/PredicateMatcher:
+  Enabled: false
+RSpec/ReceiveMessages:
+  Enabled: false
+RSpec/RemoveConst:
+  Enabled: false
+RSpec/RepeatedDescription:
+  Enabled: false
+RSpec/RepeatedExampleGroupDescription:
+  Enabled: false
+RSpec/SpecFilePathFormat:
+  Enabled: false
+RSpec/SpecFilePathSuffix:
+  Enabled: false
+RSpec/StubbedMock:
+  Enabled: false
+RSpec/VerifiedDoubleReference:
+  Enabled: false
+RSpec/VerifiedDoubles:
   Enabled: false

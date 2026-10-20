@@ -48,11 +48,11 @@ skill is `skill.md` on the same site.
   (hoteling: `bundle exec rspec`). CI also runs its
   `kiosk-redteam/suites/<demo>.rb` against a started server. Postgres is required.
 - Lint: `bin/lint` from the root bundle runs RuboCop (default cops plus the
-  Rails, Minitest and RSpec Rails plugins), bundler-audit over every tracked
-  `Gemfile.lock`, and Brakeman over every demo. CI's `lint` job runs it. Fix
-  the offense; do not disable the cop. A rare inline `# rubocop:disable`
-  states its reason after `--`. A Brakeman false positive goes into that app's
-  `config/brakeman.ignore` with a note.
+  Rails, Minitest, Rake, RSpec and RSpec Rails plugins), bundler-audit over
+  every tracked `Gemfile.lock`, and Brakeman over every demo. CI's `lint` job
+  runs it. Fix the offense; do not disable the cop. A rare inline
+  `# rubocop:disable` states its reason after `--`. A Brakeman false positive
+  goes into that app's `config/brakeman.ignore` with a note.
 - Full e2e: `./e2e/run.sh` (Postgres and jq). CI: `.github/workflows/ci.yml`.
 - A demo task's namespace says what it is: a `check:` task asserts and fails,
   a `demo:` task is for a person to run and read. When you add a `check:`

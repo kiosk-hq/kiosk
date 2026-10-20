@@ -51,12 +51,6 @@ class Order < ApplicationRecord
 
   def awaiting_courier? = paid? && (placed? || rescheduled?)
 
-  # Moves the basket from the shop to the courier. The row lock makes two runs
-  # take turns; false for the run that finds the courier already has it.
-  def hand_to_courier!
-    with_lock { awaiting_courier? && out_for_delivery! }
-  end
-
   private
 
   # A window takes orders while a basket paid now still reaches the door inside it.

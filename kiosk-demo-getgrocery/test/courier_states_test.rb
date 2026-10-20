@@ -87,7 +87,7 @@ class CourierStatesTest < ActiveSupport::TestCase
     order = paid_order(1.hour.ago)
     first, second = Array.new(2) { Order.awaiting_courier.find(order.id) }
 
-    assert_equal [true, false], [first.hand_to_courier!, second.hand_to_courier!]
+    assert_equal [true, false], [HandToCourierOperation.call(first), HandToCourierOperation.call(second)]
     assert_predicate second, :out_for_delivery?, 'the second run reads the row the first one saved'
     assert_not second.changed?
   end

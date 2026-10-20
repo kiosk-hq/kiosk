@@ -19,7 +19,7 @@ class CourierDispatchJob < ApplicationJob
     return unless order&.dispatch_at
     return self.class.enqueue_for(order) if order.dispatch_at.future?
     # Two runs can both get here after a reschedule; one hands the basket over.
-    return unless order.hand_to_courier!
+    return unless HandToCourierOperation.call(order)
 
     arrival = DeliverySlots::DRIVE.from_now
     announce_departure(order, arrival)

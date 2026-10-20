@@ -97,9 +97,7 @@ module ExecutorSpecReplayHelpers
 
   def stub_fresh_chain
     intent2, cart2, pay2 = fresh_chain
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent).and_return(intent2)
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(cart2)
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(pay2)
+    allow(Kiosk::Server::MandateVerifier).to receive_messages(verify_intent: intent2, verify_cart: cart2, verify_payment: pay2)
   end
 
   def fresh_chain
@@ -591,7 +589,7 @@ RSpec.shared_context 'executor spec: verb :pay' do
       lock_assistant_payments!: nil, cart_recorded?: false }.each do |helper, value|
       allow_any_instance_of(described_class).to receive(helper).and_return(value)
     end
-    Kiosk.configuration.payment_provider = instance_double('PSP', capture: settlement, setup_required?: false)
+    Kiosk.configuration.payment_provider = instance_double(Kiosk::PaymentProviders::Base, capture: settlement, setup_required?: false)
   end
 end
 
@@ -788,7 +786,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay capture placement' do
   # a ROLLBACK cannot undo a Stripe charge. FakeConnection tracks tx depth.
   it 'captures OUTSIDE any DB transaction' do
     in_tx_at_capture = nil
-    Kiosk.configuration.payment_provider = instance_double('PSP')
+    Kiosk.configuration.payment_provider = instance_double(Kiosk::PaymentProviders::Base)
     allow(Kiosk.configuration.payment_provider).to receive(:setup_required?).and_return(false)
     allow(Kiosk.configuration.payment_provider).to receive(:capture) do |_cart, **_kwargs|
       in_tx_at_capture = connection.in_transaction?
@@ -807,7 +805,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay payment setup' do
   # anything.  No mandate ids are burned, so the agent can retry after the
   # human completes the SetupIntent flow without hitting the UNIQUE idempotency key.
   it 'raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true' do
-    provider = instance_double('PSP', setup_required?: true)
+    provider = instance_double(Kiosk::PaymentProviders::Base, setup_required?: true)
     Kiosk.configuration.payment_provider = provider
 
     # Phase 1 mandate verification must not run — no mandate burning.
@@ -974,7 +972,7 @@ RSpec.shared_context 'executor spec: replayed with the identical mandate chain' 
 
     route_mandate_tables
 
-    Kiosk.configuration.payment_provider = instance_double('PSP', setup_required?: false)
+    Kiosk.configuration.payment_provider = instance_double(Kiosk::PaymentProviders::Base, setup_required?: false)
     %i[capture resume].each do |call|
       allow(Kiosk.configuration.payment_provider).to receive(call) do |cart, **_kwargs|
         captures << cart.id
@@ -1061,8 +1059,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay replay boundary' do
   it 'refuses a settled cart id re-presented with different bytes (K-850)' do
     pay
     tampered = Kiosk::Mandate::CartMandate.new(**cart.to_h, raw_jws: 'cart-jws-TAMPERED')
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(tampered)
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(payment)
+    allow(Kiosk::Server::MandateVerifier).to receive_messages(verify_cart: tampered, verify_payment: payment)
 
     expect do
       pay
@@ -1295,7 +1292,7 @@ RSpec.shared_context 'executor spec: really signed chain' do
       allow_any_instance_of(described_class).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double(
-      'PSP',
+      Kiosk::PaymentProviders::Base,
       capture: { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.current },
       setup_required?: false
     )

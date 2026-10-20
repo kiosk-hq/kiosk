@@ -590,7 +590,7 @@ RSpec.shared_context 'executor persistence spec: six chains, half declined' do
   end
 
   let(:provider) do
-    psp = instance_double('PSP', setup_required?: false)
+    psp = instance_double(Kiosk::PaymentProviders::Base, setup_required?: false)
     allow(psp).to receive(:capture) do |charged, **|
       sleep(0.05)
       raise Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true) if charged.raw_jws.end_with?('0', '2', '4')
@@ -657,7 +657,7 @@ RSpec.shared_context 'executor persistence spec: two chains of one assistant' do
     end
     Kiosk.configure do |c|
       c.spending_cap     = ->(**) { { amount_cents: 2000, currency: 'eur' } }
-      c.payment_provider = instance_double('PSP', setup_required?: false, capture: settled)
+      c.payment_provider = instance_double(Kiosk::PaymentProviders::Base, setup_required?: false, capture: settled)
     end
   end
 end
@@ -703,7 +703,7 @@ RSpec.shared_context 'executor persistence spec: a replayed pay (K-850)' do
 
   let(:captures) { [] }
   let(:provider) do
-    psp = instance_double('PSP')
+    psp = instance_double(Kiosk::Server::PaymentClaim)
     allow(psp).to receive(:setup_required?).and_return(false)
     # The PSP keys a capture by the cart id: a second capture of one cart answers the first.
     %i[capture resume].each do |call|
@@ -723,9 +723,7 @@ RSpec.shared_context 'executor persistence spec: a replayed pay (K-850)' do
 
   before do
     Kiosk.configuration.payment_provider = provider
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent).and_return(intent)
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart).and_return(cart)
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment).and_return(payment)
+    allow(Kiosk::Server::MandateVerifier).to receive_messages(verify_intent: intent, verify_cart: cart, verify_payment: payment)
   end
 end
 

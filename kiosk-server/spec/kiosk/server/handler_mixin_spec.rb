@@ -257,8 +257,7 @@ RSpec.shared_context 'handler mixin spec: wire' do
       c.signing_key = Kiosk::Server::SigningKey.generate
     end
     [SpecCatalogController, SpecOrdersController, SpecBoardController].each(&:kiosk_register!)
-    allow(ActiveRecord::Base).to receive(:connection).and_return(connection)
-    allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
+    allow(ActiveRecord::Base).to receive_messages(connection: connection, lease_connection: connection)
   end
 end
 

@@ -13,7 +13,7 @@ RSpec.shared_context 'agent login spec: stubbed proof and connection' do
       c.roles  = %i[customer]
       c.schema = 'kiosk'
     end
-    ar_base = class_double('ActiveRecord::Base').as_stubbed_const
+    ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
       .to receive(:issue).and_return('fresh-token')

@@ -100,7 +100,7 @@ RSpec.describe Kiosk::Server::Headers do
     # another caller. Until a handler's headers could reach this seam at all
     # the prohibition held by accident; now it is a check.
     describe 'and it REFUSES a shared-cache policy (§3.7.3)' do
-      before { allow(Kiosk::Server::Headers).to receive(:warn) }
+      before { allow(described_class).to receive(:warn) }
 
       HeadersSpec::SHARED_CACHE_POLICIES.each do |policy|
         it "replaces #{policy.inspect} with the wire's own default" do
@@ -118,7 +118,7 @@ RSpec.describe Kiosk::Server::Headers do
       end
 
       it 'says so, once, naming the value it refused' do
-        expect(Kiosk::Server::Headers).to receive(:warn)
+        expect(described_class).to receive(:warn)
           .with(a_string_including('public, max-age=600')).once
         described_class.add_cache_policy({ 'Cache-Control' => 'public, max-age=600' }, status: 200)
       end

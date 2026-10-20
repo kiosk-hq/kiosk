@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.describe Property, '#timezone_note' do
   include ActiveSupport::Testing::TimeHelpers
 
-  let(:hotel) { Property.new(name: 'Bosphorus Palace', timezone: 'Europe/Istanbul') }
+  let(:hotel) { described_class.new(name: 'Bosphorus Palace', timezone: 'Europe/Istanbul') }
 
   it 'names the hours between the two clocks, in one sentence' do
     travel_to(Time.utc(2026, 1, 15, 12)) do

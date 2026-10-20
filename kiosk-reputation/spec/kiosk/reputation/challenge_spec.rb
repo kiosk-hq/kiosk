@@ -347,7 +347,7 @@ RSpec.describe Kiosk::Reputation::Challenge, '.verify refuses a re-partitioned s
     Kiosk::Reputation::Backends.register('equihash', spy)
 
     verify_challenge(challenge: challenge.merge(params: { 'k=7,n' => '168' }))
-    expect(spy.called?).to be_falsey
+    expect(spy).not_to be_called
   end
 
   it 'leaves the honest echo verifying (control)' do

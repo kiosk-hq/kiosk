@@ -84,6 +84,11 @@ RSpec/ExpectActual:
     - "kiosk-demo-hoteling/spec/conformance/kiosk_conformance_spec.rb"
     - "kiosk-test-support/spec/kiosk/test_helpers/conformance/adapters_spec.rb"
 
+# A probe app runs as a child process and reports to its spec on stdout.
+RSpec/Output:
+  Exclude:
+    - "kiosk-server/spec/support/*_app.rb"
+
 # The RSpec cops below are being fixed one family at a time.
 RSpec/AnyInstance:
   Enabled: false
@@ -95,15 +100,11 @@ RSpec/DescribeClass:
   Enabled: false
 RSpec/DescribeMethod:
   Enabled: false
-RSpec/DescribedClass:
-  Enabled: false
 RSpec/ExampleLength:
   Enabled: false
 RSpec/ExpectInHook:
   Enabled: false
 RSpec/IdenticalEqualityAssertion:
-  Enabled: false
-RSpec/IncludeExamples:
   Enabled: false
 RSpec/InstanceVariable:
   Enabled: false
@@ -121,12 +122,6 @@ RSpec/MultipleMemoizedHelpers:
   Enabled: false
 RSpec/NestedGroups:
   Enabled: false
-RSpec/Output:
-  Enabled: false
-RSpec/PredicateMatcher:
-  Enabled: false
-RSpec/ReceiveMessages:
-  Enabled: false
 RSpec/RemoveConst:
   Enabled: false
 RSpec/RepeatedDescription:
@@ -138,8 +133,6 @@ RSpec/SpecFilePathFormat:
 RSpec/SpecFilePathSuffix:
   Enabled: false
 RSpec/StubbedMock:
-  Enabled: false
-RSpec/VerifiedDoubleReference:
   Enabled: false
 RSpec/VerifiedDoubles:
   Enabled: false

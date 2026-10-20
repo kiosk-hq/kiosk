@@ -125,7 +125,7 @@ end
 RSpec.describe Kiosk do
   describe 'the lazy configuration memo under a concurrent first touch (K-1619)' do
     describe 'the guarded set is derived from the shipped source' do
-      source_path = Kiosk.method(:configuration).source_location.first
+      source_path = described_class.method(:configuration).source_location.first
       # `def self.<name>` with no arguments, through its matching `end` at the
       # same indent: the shape every module-level default in this file uses.
       methods     = File.read(source_path).scan(/^  def self\.([a-z_0-9]+)\n(.*?)^  end$/m).to_h

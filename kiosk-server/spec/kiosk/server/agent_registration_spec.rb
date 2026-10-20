@@ -19,7 +19,7 @@ RSpec.shared_context 'agent registration spec: provisioning stubs' do
   let(:con) { FakeConnection.new }
 
   before do
-    ar_base = class_double('ActiveRecord::Base').as_stubbed_const
+    ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
     allow(Kiosk.configuration).to receive(:user_model).and_return(
@@ -39,7 +39,7 @@ RSpec.shared_context 'agent registration spec: factory stubs' do
   let(:con) { FakeConnection.new }
 
   before do
-    ar_base = class_double('ActiveRecord::Base').as_stubbed_const
+    ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
     allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)

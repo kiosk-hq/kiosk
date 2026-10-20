@@ -87,7 +87,7 @@ RSpec.shared_context 'assistants controller spec: signed-in holder' do
       c.device_authorization_store = store
     end
     wire_user_idp(human)
-    ar_base = class_double('ActiveRecord::Base').as_stubbed_const
+    ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
     route_exec_query(con) { |sql, _binds| sql.include?('settlements') ? spend_rows : con.next_exec_result }

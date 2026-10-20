@@ -209,25 +209,25 @@ RSpec.shared_examples 'a device-authorization store' do
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
 
   describe '#create' do
-    include_examples 'device authorization stores spec: #create'
-    include_examples 'device authorization stores spec: #create reuse'
+    it_behaves_like 'device authorization stores spec: #create'
+    it_behaves_like 'device authorization stores spec: #create reuse'
   end
 
   describe '#update' do
-    include_examples 'device authorization stores spec: #update'
+    it_behaves_like 'device authorization stores spec: #update'
   end
 
   describe '#claim_consume' do
-    include_examples 'device authorization stores spec: #claim_consume'
-    include_examples 'device authorization stores spec: #claim_consume refusal'
+    it_behaves_like 'device authorization stores spec: #claim_consume'
+    it_behaves_like 'device authorization stores spec: #claim_consume refusal'
   end
 
   describe '#lookup_by_device_code_hash' do
-    include_examples 'device authorization stores spec: #lookup_by_device_code_hash'
+    it_behaves_like 'device authorization stores spec: #lookup_by_device_code_hash'
   end
 
   describe '#lookup_by_user_code_hash' do
-    include_examples 'device authorization stores spec: #lookup_by_user_code_hash'
+    it_behaves_like 'device authorization stores spec: #lookup_by_user_code_hash'
   end
 end
 

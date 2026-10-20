@@ -80,7 +80,7 @@ RSpec.shared_context 'account binding spec: stubbed engine' do
       c.roles  = %i[customer]
       c.schema = 'kiosk'
     end
-    ar_base = class_double('ActiveRecord::Base').as_stubbed_const
+    ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
     allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
@@ -570,7 +570,7 @@ RSpec.shared_context 'account binding spec: known key rebind watermark ordering 
     allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
       .to receive(:lookup_user_id).and_return(user_id)
     route_known_agent(previous_user, '{customer}', agent_id: agent_id)
-    ar_base = class_double('ActiveRecord::Base').as_stubbed_const
+    ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
   end
 end

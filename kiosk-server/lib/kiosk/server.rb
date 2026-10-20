@@ -21,6 +21,19 @@ module Kiosk
 
   # The zone the caller declared in `Kiosk-Timezone`, else `default`. Never the clock of a service time.
   def self.reader_zone(default = nil) = Server::CurrentRequest.timezone || default
+
+  # "<name> runs on <zone> time, 2 hours ahead of your <caller_zone>." when the two clocks
+  # differ now, else nil. A place adds a second sentence: every time in the answer is the place's.
+  def self.clock_gap_note(name, zone, caller_zone)
+    return if caller_zone.nil?
+
+    gap = zone.now.utc_offset - caller_zone.now.utc_offset
+    return if gap.zero?
+
+    hours = format('%g', gap.abs / 3600.0)
+    "#{name} runs on #{zone.name} time, #{hours} #{hours == '1' ? 'hour' : 'hours'} " \
+      "#{gap.positive? ? 'ahead of' : 'behind'} your #{caller_zone.name}."
+  end
 end
 
 Kiosk::Configuration.include(Kiosk::Server::ConfigurationExtension)

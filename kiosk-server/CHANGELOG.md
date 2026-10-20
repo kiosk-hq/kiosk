@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- `Kiosk.clock_gap_note(name, zone, caller_zone)` answers one sentence on how far a place's clock is from the caller's now, else `nil`.
+
 ## [0.5.20] — 2026-10-20
 
 - 2026-10-20: The link-code claim and the first token poll of each device code pay the registration toll before any lookup. `RegistrationPow` is now `AuthToll`.

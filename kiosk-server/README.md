@@ -550,6 +550,11 @@ the one rendered whatever `Accept` the caller sent. On top of that:
   for a column with another name.
 - `Kiosk.reader_zone(default = nil)` — the zone the caller declared in
   `Kiosk-Timezone`, else `default`.
+- `Kiosk.clock_gap_note(name, zone, caller_zone)` — when the place's `zone`
+  and `caller_zone` are on different clocks now, one sentence:
+  `Pera House runs on Europe/Istanbul time, 8 hours ahead of your America/New_York.`
+  Else `nil`. Pass `Kiosk.reader_zone` as `caller_zone`. Add your own sentence
+  that every time in the answer is the place's.
 - `include Kiosk::SkillLink` — in a page controller: every answer carries
   `Link: <skill_url>; rel="kiosk"`, the discovery signal for a client that
   does not read HTML.

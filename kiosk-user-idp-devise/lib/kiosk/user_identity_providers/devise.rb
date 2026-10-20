@@ -62,7 +62,7 @@ module Kiosk
         return user.kiosk_role if user.respond_to?(:kiosk_role)
 
         roles = Kiosk.configuration.roles
-        raise ConfigurationError, NO_ROLE if roles.blank?
+        raise ConfigurationError, NO_ROLE if Array(roles).empty?
 
         roles.first
       end

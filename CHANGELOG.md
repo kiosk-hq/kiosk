@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.19] — 2026-10-20
+
+- 2026-10-20: **Every gem and `API_VERSION` are 0.5.19, matching skill 0.5.19.** `MIN_CLIENT` stays 0.5.18: a 0.5.18 skill still works with this release.
+
+- 2026-10-20: **Every demo and the engine default pin `skill-v0.5.19.md`**, which sends a declared `limit` inside its range and says that a spending cap has one currency.
+
 - 2026-10-20: The listener's usage line keeps the token in the origin folder `~/.kiosk/https_shop.example_443/`, as the skill says.
 - 2026-10-20: The solver's numpy error says that the solver has no path without numpy.
 - 2026-10-20: getgrocery ships an order when the processor refuses a sold-out line's refund. The amount is credit (`credited_cents`) and `Rails.error` gets the error.

@@ -10,6 +10,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.19] — 2026-10-20
+
 - 2026-10-19: The adapter asks the broker for the attribute names in `kyc_claims` as they are. The broker names a licence by its category, such as `licence_a1` or `licence_a`.
 - 2026-10-19: The broker client connects to an intake URL that names an IPv6 literal, such as `http://[::1]:3004/`.
 

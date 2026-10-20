@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.19] — 2026-10-20
+
 - 2026-10-19: `Wire` and `Assistant::Events` connect to a base URL that names an IPv6 literal, such as `http://[::1]:3001`.
 
 ## [0.5.18] — 2026-10-18

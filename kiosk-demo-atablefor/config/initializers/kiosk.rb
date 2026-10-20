@@ -24,8 +24,8 @@ Kiosk.configure do |c|
     name: 'atablefor',
     support: 'demo@kiosk.tech'
   }
-  c.skill_url    = 'https://kiosk.tech/skill-v0.5.18.md'
-  c.skill_sha256 = '91b04ce972c85d168e3ace922a28abfcf41c14cf27f707a6d6564cfd97c5ee5b'
+  c.skill_url    = 'https://kiosk.tech/skill-v0.5.19.md'
+  c.skill_sha256 = '32dbeb34f77f791964e0fc610000bfd3d184a8e270a2a9f59755e23d927cc500'
 end
 
 # The proof-of-work toll.

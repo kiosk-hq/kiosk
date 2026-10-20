@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: ROADMAP.md drops durable token revocation and operator-push events, which ship.
 - 2026-10-20: `Kiosk.clock_gap_note` says how far a place's clock is from the caller's declared one. hoteling, atablefor and stylish build `timezone_note` on it.
 - 2026-10-20: atablefor's `availability` rows and stylish's `salons` rows carry `timezone_note` when the caller's declared zone is on another clock than the place.
 

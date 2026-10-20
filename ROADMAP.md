@@ -41,11 +41,6 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   built — `Kiosk::AgentIdentityProviders::Base` plus the `c.agent_idp`
   override — but nothing is written against it yet (Entra Agent ID, Okta Agent
   Identity, Google Agent Passport, ID-JAG); the adapter is the work.
-- **Durable token revocation.** The seam ships — `c.revocation_store` takes
-  any object answering `revoke_all` / `revoked?` / `watermark_for` — but the
-  bundled store is an in-process per-agent watermark: not shared across web
-  workers, and gone on restart. What is missing is a durable implementation,
-  whose provisioned home is the `agent_tokens` table.
 - **Key rotation.** Neither side can roll a key without a break. The JWKS
   document builder takes a list and would carry an outgoing and an incoming
   operator key through an overlap window, but the served document is built from
@@ -53,13 +48,10 @@ demonstrated behavior, adversarial coverage, spec text where the wire changes.
   the assistant side there is not even a shape: rolling its keypair means
   registering a new identity and starting over on reputation. Both want a
   first-class ceremony; the assistant's is the one that costs a customer.
-- **Operator-push events.** The operator tells the assistant something
-  changed instead of waiting to be polled: a slot moved; a saved card is
-  ready (today the assistant relays a card-entry link and then polls for the
-  human to finish, though the PSP already fires a webhook on card-saved); a
-  booking confirmed; or a classifieds buyer wants to reach a listing's poster
-  (today there is no channel at all — the board carries no contact field and no
-  message verb, so a match an assistant finds has nowhere to go).
+- **A buyer reaches a listing's poster.** On the classifieds board a match an
+  assistant finds has nowhere to go: the board carries no contact field and no
+  message verb, so a buyer's assistant can reach the poster only through
+  contact details the poster wrote into the listing text.
 - **Ports beyond Ruby.** The wire is HTTPS + JSON + JWS — nothing
   Ruby-specific. The formal spec and JSON Schemas at kiosk.tech exist for
   porters; a Go, Python, or Node provider implementation is a welcome

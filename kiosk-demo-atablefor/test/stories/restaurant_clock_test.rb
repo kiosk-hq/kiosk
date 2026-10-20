@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-class TimezoneNoteStory < StoryTest
+class RestaurantClockStory < StoryTest
   def tables(diner, zone = nil)
     diner.asks(:availability, headers: zone ? { 'Kiosk-Timezone' => zone } : {}, party_size: 2).rows
   end

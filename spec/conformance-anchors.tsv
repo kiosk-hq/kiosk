@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2021 anchors.
+# 2020 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -49,7 +49,6 @@ README.md	Red-team scenarios, adversarial test harness
 README.md	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
 README.md	multi-assistant identity per user
 README.md	| `kiosk-pay-stripe` | PSP adapter — Stripe, AP2 mandate trail | alpha |
-ROADMAP.md	**MPP as a settlement adapter.**
 deploy/Caddyfile	atablefor.demo.kiosk.tech {
 deploy/Caddyfile	getgrocery.demo.kiosk.tech {
 deploy/Caddyfile	hoteling.demo.kiosk.tech {

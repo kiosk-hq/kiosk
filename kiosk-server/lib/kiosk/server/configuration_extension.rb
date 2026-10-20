@@ -30,13 +30,6 @@ module Kiosk
           @owner ||= {}
         end
 
-        # Advertised in discovery and the `Kiosk-Min-Client` header. Advisory only.
-        attr_writer :min_client
-
-        def min_client
-          @min_client ||= Kiosk::Protocol::MIN_CLIENT
-        end
-
         # The skill this origin was built against. Discovery emits the `skill`
         # block only when `skill_sha256` is set.
         attr_writer :skill_url

@@ -106,7 +106,6 @@ module Kiosk
             origins: config.origins,
             mount_path: config.mount_path.to_s,
             capabilities: Array(config.capabilities),
-            min_client: config.min_client.to_s,
             owner: config.owner,
             skill: [config.skill_url.to_s, config.skill_sha256.to_s]
           }

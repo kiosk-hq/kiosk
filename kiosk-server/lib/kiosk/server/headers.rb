@@ -4,12 +4,10 @@ module Kiosk
   module Server
     # The Kiosk response headers and the cache policy of a wire response.
     module Headers
-      # Min-Client comes from configuration so it matches `kiosk.min_client`
-      # in the discovery document.
       def self.add_to(headers, server_version: Kiosk::Server::VERSION)
         headers[Kiosk::Protocol::HEADER_SERVER_VERSION] = server_version
         headers[Kiosk::Protocol::HEADER_API_VERSION]    = Kiosk::Protocol::API_VERSION
-        headers[Kiosk::Protocol::HEADER_MIN_CLIENT]     = Kiosk.configuration.min_client
+        headers[Kiosk::Protocol::HEADER_MIN_CLIENT]     = Kiosk::Protocol::MIN_CLIENT
         headers
       end
 

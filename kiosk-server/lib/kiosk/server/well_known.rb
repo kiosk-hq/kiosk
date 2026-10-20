@@ -131,7 +131,7 @@ module Kiosk
             capabilities: Array(config.capabilities),
             # Versioned, so the catalog may be cached for a year at this URL.
             schema_url: "#{endpoint}/schema?v=#{SchemaDocument.digest(config: config)}",
-            min_client: config.min_client,
+            min_client: Kiosk::Protocol::MIN_CLIENT,
             issuer: Kiosk.current_issuer,
             owner: config.owner
           }

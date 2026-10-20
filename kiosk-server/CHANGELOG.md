@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The `min_client` setting is removed from kiosk-server. `Kiosk-Min-Client` and `kiosk.min_client` carry kiosk-core's `MIN_CLIENT`.
 - 2026-10-20: kiosk-server refuses at class load a verb that declares `cursor`, or a `limit` that is not an integer. A declared `limit` sets the query's page size.
 - 2026-10-20: The `on_bad_proof` setting is removed from kiosk-server.
 - 2026-10-20: The mandate verifier refuses a currency with surrounding spaces, as §11.1 says. Upper case is still folded to lower case.

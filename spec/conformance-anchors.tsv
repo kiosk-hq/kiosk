@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2007 anchors.
+# 2006 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1304,6 +1304,7 @@ kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil for an un
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil when the assistant row has no cap set (unlimited)
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	includes schema + queries when only a query is registered
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	offers no way to set capabilities
+kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	offers no way to set min_client: kiosk-core states it
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	answers 304 to If-None-Match on the current digest
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	does NOT fall back to user_idp — KYC is an agent-only surface
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	emits no Vary even when the request negotiates content
@@ -1560,11 +1561,9 @@ kiosk-server/spec/kiosk/server/headers_spec.rb	FORCES no-store on a 402 — a si
 kiosk-server/spec/kiosk/server/headers_spec.rb	and it REFUSES a shared-cache policy (§3.7.3)
 kiosk-server/spec/kiosk/server/headers_spec.rb	defaults a 200 to private, no-store
 kiosk-server/spec/kiosk/server/headers_spec.rb	does not duplicate a token already present, whatever its case
-kiosk-server/spec/kiosk/server/headers_spec.rb	falls back to the protocol constant when the operator sets nothing
 kiosk-server/spec/kiosk/server/headers_spec.rb	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
 kiosk-server/spec/kiosk/server/headers_spec.rb	mutates a Rack headers hash with the three Kiosk headers
 kiosk-server/spec/kiosk/server/headers_spec.rb	produces a fresh headers hash with the three Kiosk headers set
-kiosk-server/spec/kiosk/server/headers_spec.rb	publishes the operator's configured min_client, not the constant
 kiosk-server/spec/kiosk/server/headers_spec.rb	varies on every request header that changes the answer
 kiosk-server/spec/kiosk/server/identity_resolution_spec.rb	returns nil when nothing resolves (caller raises 401 — fail closed)
 kiosk-server/spec/kiosk/server/jwks_spec.rb	preserves order for multi-key rotation overlap
@@ -1905,6 +1904,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	…while GET <endpoint>/s
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	is refused AT CONFIGURATION TIME, not at the first tolled write
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	is that the gate vocabulary names the write kind :run, not :action
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises an empty capability set when nothing is registered
+kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises kiosk-core's MIN_CLIENT as min_client
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the DERIVED openapi.json beside it — the only place it is advertised
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the account-binding endpoints (additive keys)
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the computed module names (schema/queries/actions/pay)
@@ -1931,7 +1931,6 @@ kiosk-server/spec/kiosk/server/well_known_spec.rb	never names a registered verb 
 kiosk-server/spec/kiosk/server/well_known_spec.rb	omits the AP2 payment directives but keeps auth/identity
 kiosk-server/spec/kiosk/server/well_known_spec.rb	omits the payments key entirely
 kiosk-server/spec/kiosk/server/well_known_spec.rb	omits the skill block when skill_sha256 is not set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	passes through configured min_client
 kiosk-server/spec/kiosk/server/well_known_spec.rb	points at the RFC 9727 api-catalog under the x-kiosk extension
 kiosk-server/spec/kiosk/server/well_known_spec.rb	respects an overridden skill_url
 kiosk-server/spec/kiosk/server/well_known_spec.rb	returns a parse-able JSON string

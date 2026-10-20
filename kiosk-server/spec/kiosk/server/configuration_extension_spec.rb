@@ -31,10 +31,6 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     it 'defaults owner to an empty hash' do
       expect(Kiosk.configuration.owner).to eq({})
     end
-
-    it "defaults min_client to the Protocol's MIN_CLIENT" do
-      expect(Kiosk.configuration.min_client).to eq(Kiosk::Protocol::MIN_CLIENT)
-    end
   end
 end
 
@@ -102,14 +98,13 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration).not_to respond_to(:capabilities=)
     end
 
+    it 'offers no way to set min_client: kiosk-core states it' do
+      expect(Kiosk.configuration).not_to respond_to(:min_client=)
+    end
+
     it 'lets owner be set' do
       Kiosk.configure { |c| c.owner = { name: 'Acme Inc.', support: 'support@acme.example' } }
       expect(Kiosk.configuration.owner[:name]).to eq('Acme Inc.')
-    end
-
-    it 'lets min_client be bumped (provider requires newer CLI feature)' do
-      Kiosk.configure { |c| c.min_client = '0.9.0' }
-      expect(Kiosk.configuration.min_client).to eq('0.9.0')
     end
   end
 end

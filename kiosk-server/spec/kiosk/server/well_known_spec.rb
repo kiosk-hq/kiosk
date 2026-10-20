@@ -180,10 +180,8 @@ RSpec.describe Kiosk::Server::WellKnown do
   describe '.build' do
     subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }
 
-    it 'passes through configured min_client' do
-      Kiosk.configure { |c| c.min_client = '0.9.0' }
-      d = described_class.build(base_url: 'https://api.acme.example')
-      expect(d[:kiosk][:min_client]).to eq('0.9.0')
+    it "advertises kiosk-core's MIN_CLIENT as min_client" do
+      expect(doc[:kiosk][:min_client]).to eq(Kiosk::Protocol::MIN_CLIENT)
     end
 
     it 'advertises the configured issuer' do

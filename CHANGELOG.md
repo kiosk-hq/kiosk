@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: A spending cap has a currency. kiosk-server refuses a `pay` in another currency with `403 spending_cap_exceeded`; `config.spending_cap` returns `{ amount_cents:, currency: }`.
+- 2026-10-20: The seven operator demos add `kiosk.agents.spending_cap_currency`; an existing cap becomes a cap in euros.
 - 2026-10-20: The `min_client` setting is removed from kiosk-server. `Kiosk-Min-Client` and `kiosk.min_client` carry kiosk-core's `MIN_CLIENT`.
 - 2026-10-20: `bin/check-version-parity` holds `MIN_CLIENT` to the MAJOR.MINOR of `API_VERSION` and no newer, before 1.0 too.
 - 2026-10-20: hoteling's `search_hotels` declares `limit`, 1 to 50 with 20 as default. A `limit` outside that range is refused; it is not clamped.

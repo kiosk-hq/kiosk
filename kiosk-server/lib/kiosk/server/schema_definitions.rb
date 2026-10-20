@@ -37,8 +37,8 @@ module Kiosk
         DDL
       end
 
-      # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled),
-      # `agent_tokens`, `agent_mappings`.
+      # 002: `agents` (`spending_cap_cents`: NULL unlimited, 0 disabled; a cap
+      # has its `spending_cap_currency`), `agent_tokens`, `agent_mappings`.
       def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
         schema ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
@@ -52,9 +52,12 @@ module Kiosk
             public_key          text,
             human_label         text,
             spending_cap_cents  bigint,
+            spending_cap_currency text CHECK (spending_cap_currency ~ '^[a-z]{3}$'),
             created_at          timestamptz NOT NULL DEFAULT now(),
             revoked_at          timestamptz,
-            issuer              text NOT NULL
+            issuer              text NOT NULL,
+            CONSTRAINT agents_spending_cap_currency_set
+              CHECK ((spending_cap_cents IS NULL) = (spending_cap_currency IS NULL))
           );
 
           CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;

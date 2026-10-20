@@ -232,10 +232,11 @@ module Kiosk
       # `account`, a `user_model` record, and its tokens are revoked.
       attr_accessor :assistant_unlinked
 
-      # Optional `(agent_id:) → cents | nil`, checked before capture; 0 blocks payments.
+      # Optional `(agent_id:) → { amount_cents:, currency: } | nil`, checked
+      # before capture; 0 blocks payments, and so does a cart in another currency.
       # {Kiosk::Server::ColumnSpendingCap} reads
       # `agents.spending_cap_cents`, the column edited by the manage-assistants
-      # page.
+      # page, and `agents.spending_cap_currency`.
       attr_accessor :spending_cap
 
       # Days of settled spend summed against the cap. Default nil: all time.

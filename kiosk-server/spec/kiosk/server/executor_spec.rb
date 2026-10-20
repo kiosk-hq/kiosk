@@ -652,7 +652,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay per-assistant spending cap' d
   include_context 'executor spec: verb :pay'
 
   it 'proceeds when spent + cart total is within the cap' do
-    Kiosk.configuration.spending_cap = ->(**) { 5000 }
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
     allow_any_instance_of(described_class).to receive(:spent_in_window).and_return(1000) # +1599 = 2599 <= 5000
     expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
     result = pay
@@ -660,7 +660,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay per-assistant spending cap' d
   end
 
   it 'rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded' do
-    Kiosk.configuration.spending_cap = ->(**) { 2000 }
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } }
     allow_any_instance_of(described_class).to receive(:spent_in_window).and_return(1000) # +1599 = 2599 > 2000
     expect(Kiosk.configuration.payment_provider).not_to receive(:capture)
     expect { pay }
@@ -672,7 +672,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay spending cap tally' do
   include_context 'executor spec: verb :pay'
 
   it 'treats a cap of 0 as disabled (any charge rejected)' do
-    Kiosk.configuration.spending_cap = ->(**) { 0 }
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 0, currency: 'eur' } }
     allow_any_instance_of(described_class).to receive(:spent_in_window).and_return(0)
     expect(Kiosk.configuration.payment_provider).not_to receive(:capture)
     expect { pay }
@@ -680,7 +680,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay spending cap tally' do
   end
 
   it 'binds the acting agent_id, the cart currency and the window to the one tally statement' do
-    Kiosk.configuration.spending_cap = ->(**) { 5000 }
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
     Kiosk.configuration.spending_cap_window_days = 7
     tally = nil
     route_exec_query(connection) do |sql, binds|
@@ -695,9 +695,29 @@ RSpec.describe Kiosk::Server::Executor, 'verb :pay spending cap tally' do
   # across currencies is meaningless (4999 USD is not within a 5000 EUR cap),
   # and a cross-currency sum could erode the cap. The cart here is EUR.
   it "scopes the settled-total tally to the cart's currency (not currency-blind)" do
-    Kiosk.configuration.spending_cap = ->(**) { 5000 }
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
     expect_any_instance_of(described_class).to receive(:spent_in_window)
       .with(having_attributes(currency: 'eur'), nil).and_return(0)
+    pay
+  end
+end
+
+RSpec.describe Kiosk::Server::Executor, "verb :pay spending cap's currency" do
+  include_context 'executor spec: verb :pay'
+
+  it "refuses a cart in a currency other than the cap's, before capture" do
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'usd' } }
+    expect_any_instance_of(described_class).not_to receive(:spent_in_window)
+    expect(Kiosk.configuration.payment_provider).not_to receive(:capture)
+    expect { pay }.to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e|
+      expect(e.hint).to eq('the cap is in USD; this charge is in EUR')
+    }
+  end
+
+  it 'reads the cap currency case-insensitively' do
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'EUR' } }
+    allow_any_instance_of(described_class).to receive(:spent_in_window).and_return(0)
+    expect(Kiosk.configuration.payment_provider).to receive(:capture).and_return(settlement)
     pay
   end
 end

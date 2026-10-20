@@ -77,6 +77,12 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(sql).to include('user_id             uuid NOT NULL REFERENCES "users"(id)')
     end
 
+    it 'gives a spending cap its currency: both set or both NULL, the code lower-case' do
+      expect(sql).to include('spending_cap_currency text')
+      expect(sql).to include(%(CHECK ((spending_cap_cents IS NULL) = (spending_cap_currency IS NULL))))
+      expect(sql).to include(%(CHECK (spending_cap_currency ~ '^[a-z]{3}$')))
+    end
+
     it 'creates `agent_tokens` with FK to agents and a unique token_hash' do
       expect(sql).to include(%(CREATE TABLE IF NOT EXISTS "kiosk".agent_tokens))
       expect(sql).to include(%(REFERENCES "kiosk".agents(id) ON DELETE CASCADE))
@@ -120,9 +126,9 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(sql).not_to match(/idx_agents_issuer_public_key_live\s+ON "kiosk"\.agents \(issuer, public_key\);/)
     end
 
-    it 'declares issuer NOT NULL with no default, last on agents' do
-      agents = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.agents.*?\);/m]
-      expect(agents).to match(/revoked_at\s+timestamptz,\s+issuer\s+text NOT NULL\s+\);/)
+    it 'declares issuer NOT NULL with no default, the last column on agents' do
+      agents = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.agents.*?\n\);/m]
+      expect(agents).to match(/revoked_at\s+timestamptz,\s+issuer\s+text NOT NULL,\s+CONSTRAINT/)
     end
   end
 end

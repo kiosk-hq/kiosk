@@ -485,7 +485,7 @@ RSpec.describe Kiosk::Server::Executor, 'spending cap across spellings' do
   # of 3000 against a 5000 cap and went through; the assistant had spent
   # 5500 under a cap of 5000.
   it 'hits ONE cap across both spellings' do
-    Kiosk.configuration.spending_cap = ->(**) { 5000 }
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
     settle(currency: 'eur', cents: 3000)
     settle(currency: 'EUR', cents: 2500)
 
@@ -496,7 +496,7 @@ RSpec.describe Kiosk::Server::Executor, 'spending cap across spellings' do
   end
 
   it 'still admits a charge that fits under the combined tally' do
-    Kiosk.configuration.spending_cap = ->(**) { 5000 }
+    Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
     settle(currency: 'eur', cents: 3000)
     settle(currency: 'EUR', cents: 1000)
 
@@ -511,7 +511,7 @@ end
 RSpec.describe Kiosk::Server::Executor, 'spending cap and carts in flight' do
   include_context 'executor persistence spec: payment'
 
-  before { Kiosk.configuration.spending_cap = ->(**) { 2000 } }
+  before { Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } } }
 
   def another_cart(cents) = cart.with(id: "cart-#{SecureRandom.hex(6)}", total_amount_cents: cents)
 
@@ -543,7 +543,7 @@ end
 RSpec.describe Kiosk::Server::Executor, 'spending cap and refunds' do
   include_context 'executor persistence spec: payment'
 
-  before { Kiosk.configuration.spending_cap = ->(**) { 2000 } }
+  before { Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } } }
 
   let(:settlement_id) do
     _, cart_row = persist_trail
@@ -603,7 +603,7 @@ RSpec.shared_context 'executor persistence spec: six chains, half declined' do
   before do
     find = ->(raw_jws:, **) { chains.flatten.find { |m| m.raw_jws == raw_jws } }
     %i[verify_intent verify_cart verify_payment].each { allow(Kiosk::Server::MandateVerifier).to receive(it, &find) }
-    Kiosk.configure { |c| (c.spending_cap = ->(**) { 2000 }) && (c.payment_provider = provider) }
+    Kiosk.configure { |c| (c.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } }) && (c.payment_provider = provider) }
   end
 end
 
@@ -656,7 +656,7 @@ RSpec.shared_context 'executor persistence spec: two chains of one assistant' do
       find.call(**kw)
     end
     Kiosk.configure do |c|
-      c.spending_cap     = ->(**) { 2000 }
+      c.spending_cap     = ->(**) { { amount_cents: 2000, currency: 'eur' } }
       c.payment_provider = instance_double('PSP', setup_required?: false, capture: settled)
     end
   end

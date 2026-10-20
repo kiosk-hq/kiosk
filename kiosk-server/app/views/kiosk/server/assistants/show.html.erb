@@ -62,7 +62,7 @@
                             elsif cap.zero?
                               "cap: disabled"
                             else
-                              "cap: #{cap} cents"
+                              "cap: #{cap} cents in #{assistant[:spending_cap_currency].upcase}"
                             end
               %>
               <%= cap_label %>
@@ -75,6 +75,9 @@
               </label>
               <label>Spending cap (cents, blank = no cap)
                 <input type="number" name="spending_cap_cents" min="0" value="<%= assistant[:spending_cap_cents] %>">
+              </label>
+              <label>Cap currency (ISO 4217 code; the assistant cannot pay in another currency)
+                <input type="text" name="spending_cap_currency" maxlength="3" value="<%= assistant[:spending_cap_currency]&.upcase %>">
               </label>
               <button type="submit">Save</button>
             </form>

@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2006 anchors.
+# 2012 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -483,6 +483,7 @@ kiosk-demo-hoteling/spec/stories/search_spec.rb	a made-up cursor moves through t
 kiosk-demo-hoteling/spec/stories/search_spec.rb	a search that matches nothing comes back empty, and a neighbourhood the city does not have is answered with the ones it does
 kiosk-demo-hoteling/spec/stories/search_spec.rb	def total(found) = found.header('x-total-count').to_i
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay in a currency other than its cap's
 kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
 kiosk-demo-philslist/README.md	  `owner_id` on `post_listing` is **refused `400 bad_request`** naming it, and a
 kiosk-demo-philslist/README.md	  scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
@@ -650,7 +651,7 @@ kiosk-demo-stylish/test/stories/linking_test.rb	Alice approves the code her assi
 kiosk-demo-stylish/test/stories/linking_test.rb	assert first.signs_back_in.refused?(:not_found)
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal [booked], second.appointments
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
-kiosk-demo-stylish/test/stories/linking_test.rb	assert_includes page.body, 'cap: 12345 cents'
+kiosk-demo-stylish/test/stories/linking_test.rb	assert_includes page.body, 'cap: 12345 cents in EUR'
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_predicate second.signs_back_in, :ok?
 kiosk-demo-stylish/test/stories/linking_test.rb	signs_in(:alice).approves(request['user_code'])
 kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
@@ -1182,6 +1183,7 @@ kiosk-server/lib/kiosk/server/schema_definitions.rb	          CREATE INDEX IF NO
 kiosk-server/lib/kiosk/server/schema_definitions.rb	      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
 kiosk-server/lib/kiosk/server/schema_definitions.rb	      def mandates_sql(schema: nil, user_id_type: nil)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	.current_user_id() RETURNS 
+kiosk-server/lib/kiosk/server/schema_definitions.rb	CONSTRAINT agents_spending_cap_currency_set
 kiosk-server/lib/kiosk/server/schema_definitions.rb	CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
 kiosk-server/lib/kiosk/server/schema_definitions.rb	agent_mappings (
 kiosk-server/lib/kiosk/server/schema_definitions.rb	def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
@@ -1293,13 +1295,15 @@ kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticat
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated when NO Authorization header is present
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	revokes all sessions for the caller and hands back a fresh usable token
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	does not log a key in on an origin it never registered on
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	refuses a stored cap with no currency
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers one key on each origin as two assistant accounts
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	saves a cap with its currency, and ColumnSpendingCap reads both
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	answers #{method} #{path} with 501 module_not_served
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	keeps the OAuth error object for an ordinary refusal
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all six auth URLs and adds no capability for binding
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	still serves the kiosk-pop challenge endpoint
 kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	refuses a UTC offset by name
-kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	reads the per-assistant cap from agents.spending_cap_cents (live rows only)
+kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	reads the per-assistant cap and its currency from agents (live rows only)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil for an unknown or revoked key (no row)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil when the assistant row has no cap set (unlimited)
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	includes schema + queries when only a query is registered
@@ -1519,6 +1523,8 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	puts module_not_served/501 on th
 kiosk-server/spec/kiosk/server/executor_spec.rb	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
 kiosk-server/spec/kiosk/server/executor_spec.rb	raises Unauthenticated when identity is nil
 kiosk-server/spec/kiosk/server/executor_spec.rb	re-raises a capture-time SetupRequired as PaymentSetupRequired (402)
+kiosk-server/spec/kiosk/server/executor_spec.rb	reads the cap currency case-insensitively
+kiosk-server/spec/kiosk/server/executor_spec.rb	refuses a cart in a currency other than the cap's, before capture
 kiosk-server/spec/kiosk/server/executor_spec.rb	refuses a settled cart id re-presented with different bytes (K-850)
 kiosk-server/spec/kiosk/server/executor_spec.rb	rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded
 kiosk-server/spec/kiosk/server/executor_spec.rb	resumes a chain whose capture ran but whose settlement was never written

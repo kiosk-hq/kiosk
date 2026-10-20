@@ -294,7 +294,8 @@ RSpec.describe 'AssistantsController', 'governance columns' do
   it 'surfaces the label, the spend per currency, and the cap for each bound assistant (show)' do
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Alice shopper', 'spending_cap_cents' => 5000 }
+        'human_label' => 'Alice shopper', 'spending_cap_cents' => 5000,
+        'spending_cap_currency' => 'eur' }
     ]
     spend_rows.push({ 'agent_id' => 'agent-1', 'currency' => 'eur', 'cents' => 1200 },
                     { 'agent_id' => 'agent-1', 'currency' => 'usd', 'cents' => 300 })
@@ -303,10 +304,10 @@ RSpec.describe 'AssistantsController', 'governance columns' do
     expect(status).to eq(200)
     expect(html).to include('Alice shopper')
     expect(html).to include('spent: 1200 cents in EUR, 300 cents in USD —')
-    expect(html).to include('cap: 5000 cents')
+    expect(html).to include('cap: 5000 cents in EUR')
     agents, spend = con.bound(/SELECT/i)
     expect(agents.first).to include('human_label')
-    expect(agents.first).to include('spending_cap_cents')
+    expect(agents.first).to include('spending_cap_cents, spending_cap_currency')
     expect(spend.first).to include('refunded_amount_cents')
     # No window configured → the statement declares TWO parameters and is sent
     # TWO arguments. Postgres rejects a mismatch, which is why the statement and
@@ -353,7 +354,7 @@ RSpec.describe 'AssistantsController', 'unset and disabled caps' do
   it 'shows «cap: disabled» when the cap is zero' do
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Bot', 'spending_cap_cents' => 0 }
+        'human_label' => 'Bot', 'spending_cap_cents' => 0, 'spending_cap_currency' => 'eur' }
     ]
     _status, html = dispatch(:show, method: 'GET')
 
@@ -374,24 +375,24 @@ RSpec.describe 'AssistantsController', 'spending_cap seam note' do
     Kiosk.configure { |c| c.spending_cap = nil }
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Bot', 'spending_cap_cents' => 5000 }
+        'human_label' => 'Bot', 'spending_cap_cents' => 5000, 'spending_cap_currency' => 'eur' }
     ]
     _status, html = dispatch(:show, method: 'GET')
 
     expect(html).to include('nothing')
     expect(html).to include('ColumnSpendingCap')
     # …and the control still submits: this is a note, not a disablement.
-    expect(html).to include(%(name="spending_cap_cents"))
-    expect(html).to include('cap: 5000 cents')
+    expect(html).to include(%(name="spending_cap_cents"), %(name="spending_cap_currency"))
+    expect(html).to include('cap: 5000 cents in EUR')
   end
 
   # THE CONTROL for the example above: with a seam wired the note is absent, so
   # it cannot pass on a build where the paragraph is unconditional.
   it 'drops the note once a spending_cap seam IS configured — the control' do
-    Kiosk.configure { |c| c.spending_cap = ->(**) { 5000 } }
+    Kiosk.configure { |c| c.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } } }
     con.next_exec_result = [
       { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
-        'human_label' => 'Bot', 'spending_cap_cents' => 5000 }
+        'human_label' => 'Bot', 'spending_cap_cents' => 5000, 'spending_cap_currency' => 'eur' }
     ]
     _status, html = dispatch(:show, method: 'GET')
 
@@ -406,7 +407,8 @@ RSpec.describe 'AssistantsController', 'update' do
   it 'updates the label and spending cap, scoped by agent id, user_id AND origin' do
     status, html = dispatch(
       :update, method: 'POST',
-               params: { 'agent_id' => 'agent-1', 'human_label' => "Alice's shopper", 'spending_cap_cents' => '5000' }
+               params: { 'agent_id' => 'agent-1', 'human_label' => "Alice's shopper", 'spending_cap_cents' => '5000',
+                         'spending_cap_currency' => 'EUR' }
     )
 
     expect(status).to eq(200)
@@ -417,14 +419,14 @@ RSpec.describe 'AssistantsController', 'update' do
     # most caller-reachable value in the auth plane — and the apostrophe in
     # "Alice's shopper" is exactly the character that used to need a `quote`.
     expect(upd).to include('human_label = $1')
-    expect(upd).to include('spending_cap_cents = $2')
+    expect(upd).to include('spending_cap_cents = $2, spending_cap_currency = $3')
     # Ownership scoping: the WHERE pins the agent id, the session holder and
     # the origin being served.
-    expect(upd).to include('WHERE id = $3')
-    expect(upd).to include('AND user_id = $4')
-    expect(upd).to include('AND issuer = $5')
+    expect(upd).to include('WHERE id = $4')
+    expect(upd).to include('AND user_id = $5')
+    expect(upd).to include('AND issuer = $6')
     expect(upd).to include('revoked_at IS NULL')
-    expect(binds).to eq(["Alice's shopper", 5000, 'agent-1', user_id, 'https://provider.example'])
+    expect(binds).to eq(["Alice's shopper", 5000, 'eur', 'agent-1', user_id, 'https://provider.example'])
     expect(con.all_sql).not_to include('Alice')
     expect(con).not_to have_received(:quote)
   end
@@ -433,16 +435,16 @@ end
 RSpec.describe 'AssistantsController', 'update edge cases' do
   include_context 'assistants controller spec: signed-in holder'
 
-  it 'clears the cap (unlimited) when spending_cap_cents is blank' do
+  it 'clears the cap and its currency (unlimited) when spending_cap_cents is blank' do
     _status, _html = dispatch(
       :update, method: 'POST',
-               params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => '' }
+               params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => '', 'spending_cap_currency' => 'eur' }
     )
 
     upd, binds = con.bound(/UPDATE/i).first
     # NULL is a statement shape (there is no value), so it takes no bind and the
     # ownership triple shifts down to $1..$3.
-    expect(upd).to include('spending_cap_cents = NULL')
+    expect(upd).to include('spending_cap_cents = NULL, spending_cap_currency = NULL')
     expect(upd).to include('WHERE id = $1')
     expect(upd).to include('AND user_id = $2')
     expect(binds).to eq(['agent-1', user_id, 'https://provider.example'])
@@ -451,11 +453,24 @@ RSpec.describe 'AssistantsController', 'update edge cases' do
   it 'rejects a non-integer spending cap with 400 and writes no UPDATE' do
     status, html = dispatch(
       :update, method: 'POST',
-               params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => 'lots' }
+               params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => 'lots', 'spending_cap_currency' => 'eur' }
     )
 
     expect(status).to eq(400)
     expect(html).to include('must be an integer')
+    expect(con.bound(/UPDATE/i)).to be_empty
+  end
+
+  it 'rejects a cap whose currency is not three letters with 400 and writes no UPDATE' do
+    ['', 'Euro', '978'].each do |currency|
+      status, html = dispatch(
+        :update, method: 'POST',
+                 params: { 'agent_id' => 'agent-1', 'spending_cap_cents' => '5000', 'spending_cap_currency' => currency }
+      )
+
+      expect(status).to eq(400)
+      expect(html).to include('spending_cap_currency must be a three-letter ISO 4217 code')
+    end
     expect(con.bound(/UPDATE/i)).to be_empty
   end
 end

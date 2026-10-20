@@ -677,6 +677,9 @@ COPIES = {
   'db/migrate/20261018100016_create_kiosk_refunds.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk.refunds, the refunds that recent spend leaves out.'
   },
+  'db/migrate/20261020100018_add_spending_cap_currency_to_kiosk_agents.rb' => {
+    rule: :identical, why: "Gives agents.spending_cap_cents its currency, as kiosk:install's agents table has it."
+  },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },

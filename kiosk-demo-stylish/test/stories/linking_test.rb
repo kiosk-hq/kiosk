@@ -41,12 +41,13 @@ class LinkingStory < StoryTest
     renamed = alice.site.post_form('/kiosk/auth/assistants/update', 'authenticity_token' => alice.site.csrf_token(page.body),
                                                                     'agent_id' => linked.principal.agent_id,
                                                                     'human_label' => 'Alice booking bot',
+                                                                    'spending_cap_currency' => 'EUR',
                                                                     'spending_cap_cents' => '12345')
 
     assert_equal '200', renamed.code
     page = alice.visits('/kiosk/auth/assistants')
 
     assert_includes page.body, 'Alice booking bot'
-    assert_includes page.body, 'cap: 12345 cents'
+    assert_includes page.body, 'cap: 12345 cents in EUR'
   end
 end

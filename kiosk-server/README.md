@@ -160,6 +160,11 @@ it (`kiosk-pay-stripe` does). A charge refused with no money moved marks the
 cart declined: it stops counting against `spending_cap` at once, and a repeat of
 that chain answers `409 conflict`.
 
+Set `c.spending_cap = Kiosk::Server::ColumnSpendingCap.new` to cap what each
+assistant spends. The human sets the cap on `/kiosk/auth/assistants`: an amount
+in cents and a currency. The engine refuses a `pay` that passes the cap, or a
+`pay` in another currency, with `403 spending_cap_exceeded` before the capture.
+
 ### Proof of work
 
 Set a policy and the engine tolls the first call of each access token; the

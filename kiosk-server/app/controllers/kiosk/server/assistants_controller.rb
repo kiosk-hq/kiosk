@@ -41,7 +41,7 @@ module Kiosk
         render_error(e)
       end
 
-      # Edits a bound assistant's label and/or spending cap (blank cap → unlimited).
+      # Edits a bound assistant's label and/or spending cap and its currency (blank cap → unlimited).
       def update
         return unless require_account_holder!(prompt: SIGN_IN_PROMPT, flash_alert: SIGN_IN_ALERT)
 
@@ -72,15 +72,24 @@ module Kiosk
       def settings_changes
         changes = {}
         changes['human_label'] = params[:human_label].to_s if params.key?(:human_label)
-        changes['spending_cap_cents'] = spending_cap_param if params.key?(:spending_cap_cents)
+        changes['spending_cap_cents'], changes['spending_cap_currency'] = spending_cap_param if params.key?(:spending_cap_cents)
         changes
       end
 
+      # `[cents, currency]`, or `[nil, nil]` for no cap.
       def spending_cap_param
         raw = params[:spending_cap_cents].to_s
-        return nil if raw.strip.empty?
+        return [nil, nil] if raw.strip.empty?
 
-        Integer(raw, exception: false) || raise(Errors::BadRequest, 'spending_cap_cents must be an integer')
+        cents = Integer(raw, exception: false) || raise(Errors::BadRequest, 'spending_cap_cents must be an integer')
+        [cents, spending_cap_currency_param]
+      end
+
+      def spending_cap_currency_param
+        code = MandateVerifier.canonical_currency(params[:spending_cap_currency])
+        return code if MandateVerifier::CURRENCY_CODE.match?(code)
+
+        raise Errors::BadRequest, 'spending_cap_currency must be a three-letter ISO 4217 code, such as EUR'
       end
     end
   end

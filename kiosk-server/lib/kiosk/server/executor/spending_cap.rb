@@ -7,16 +7,29 @@ module Kiosk
       module SpendingCap
         private
 
-        # A nil seam or a nil cap means uncapped. Runs in the transaction that
-        # persists the cart, under a per-assistant lock, so two concurrent pays
-        # see each other: the second counts the first's cart as in flight. A
-        # cart already recorded is a repeat and adds nothing.
+        # A nil seam or a nil cap means uncapped. A cap allows no payment in
+        # another currency. Runs in the transaction that persists the cart,
+        # under a per-assistant lock, so two concurrent pays see each other: the
+        # second counts the first's cart as in flight. A cart already recorded
+        # is a repeat and adds nothing.
         def enforce_spending_cap!(cart)
           cap = Kiosk.configuration.spending_cap&.call(agent_id: identity.agent_id)
           return if cap.nil? # this assistant is uncapped
 
           lock_assistant_payments!(identity.agent_id)
-          refuse_over_cap!(cap.to_i, cart) unless cart_recorded?(cart)
+          return if cart_recorded?(cart)
+
+          refuse_other_currency!(cap.fetch(:currency), cart)
+          refuse_over_cap!(cap.fetch(:amount_cents).to_i, cart)
+        end
+
+        def refuse_other_currency!(cap_currency, cart)
+          cap_code = MandateVerifier.canonical_currency(cap_currency)
+          cart_code = MandateVerifier.canonical_currency(cart.currency)
+          return if cap_code == cart_code
+
+          raise Errors::SpendingCapExceeded.new('assistant spending cap is in another currency',
+                                                hint: "the cap is in #{cap_code.upcase}; this charge is in #{cart_code.upcase}")
         end
 
         def refuse_over_cap!(cap, cart)

@@ -538,11 +538,12 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
 
     it 'reads the cap of a live agent and nothing for a revoked one' do
       connection.exec_query(
-        %(UPDATE #{table('agents')} SET spending_cap_cents = $1 WHERE id = $2), 'spec', [5000, agent_id]
+        %(UPDATE #{table('agents')} SET spending_cap_cents = $1, spending_cap_currency = $2 WHERE id = $3), 'spec',
+        [5000, 'eur', agent_id]
       )
       cap = Kiosk::Server::ColumnSpendingCap.new
 
-      expect(cap.call(agent_id: agent_id)).to eq(5000)
+      expect(cap.call(agent_id: agent_id)).to eq(amount_cents: 5000, currency: 'eur')
       Kiosk::Server::AccountBinding.unlink!(agent_id: agent_id, user_id: holder)
       expect(cap.call(agent_id: agent_id)).to be_nil
     end
@@ -559,7 +560,7 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
       hostile = "Alice's ' OR 1=1 -- assistant"
       status, = dispatch(:update, method: 'POST',
                                   params: { agent_id: agent_id, human_label: hostile,
-                                            spending_cap_cents: '2500' })
+                                            spending_cap_cents: '2500', spending_cap_currency: 'eur' })
 
       expect(status).to eq(200)
       row = agent_row(agent_id)
@@ -676,6 +677,29 @@ RSpec.describe 'auth plane persistence (real Postgres)' do
                            schema: AuthPlanePersistenceSpec::SCHEMA, user_id_type: :uuid
                          ))
       connection.execute(Kiosk::Server::SchemaDefinitions.refunds_sql(schema: AuthPlanePersistenceSpec::SCHEMA))
+    end
+  end
+end
+
+# The cap the page saves is the cap the seam reads, in the cap's own currency.
+RSpec.describe 'auth plane persistence (real Postgres)' do
+  include_context 'auth plane persistence spec: manage page'
+
+  describe 'AssistantsController (manage page)' do
+    it 'saves a cap with its currency, and ColumnSpendingCap reads both' do
+      dispatch(:update, method: 'POST',
+                        params: { agent_id: agent_id, spending_cap_cents: '5000', spending_cap_currency: 'EUR' })
+
+      expect(Kiosk::Server::ColumnSpendingCap.new.call(agent_id: agent_id)).to eq(amount_cents: 5000, currency: 'eur')
+      _, body = dispatch(:show, method: 'GET')
+      expect(body).to include('cap: 5000 cents in EUR')
+    end
+
+    it 'refuses a stored cap with no currency' do
+      expect do
+        connection.exec_query(%(UPDATE #{table('agents')} SET spending_cap_cents = 5000 WHERE id = $1),
+                              'auth plane spec', [agent_id])
+      end.to raise_error(ActiveRecord::StatementInvalid, /spending_cap_currency/)
     end
   end
 end

@@ -5,13 +5,13 @@ require 'kiosk/test_helpers/customer'
 RSpec.describe Kiosk::TestHelpers::Customer do
   # A customer of one origin, with a signed credential for account u1.
   context 'with a customer' do
-    subject(:customer) { shopper.new(assistant, principal) }
+    subject(:customer) { Class.new(described_class).new(assistant, principal) }
 
-    let(:shopper)   { Class.new(described_class) }
     let(:origin)    { 'http://shop.example.com' }
     let(:assistant) { Kiosk::TestHelpers::Assistant.new(base_url: origin) }
-    let(:key)       { OpenSSL::PKey::RSA.generate(2048) }
-    let(:principal) { Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'u1', token: token('u1'), rsa_key: key) }
+    let(:principal) do
+      Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'u1', token: token('u1'), rsa_key: OpenSSL::PKey::RSA.generate(2048))
+    end
 
     def token(account, agent: 'a1', role: 'customer') = JWT.encode({ sub: account, agent_id: agent, role: }, nil, 'none')
 
@@ -41,7 +41,7 @@ RSpec.describe Kiosk::TestHelpers::Customer do
 
         expect(customer.pays(total: 450, scope: 'grocery', line_items: [{ order_id: 'o1' }])).to be_ok
 
-        signed = JSON.parse(sent.first.body).transform_values { JWT.decode(it, key.public_key, true, algorithm: 'RS256').first }
+        signed = JSON.parse(sent.first.body).transform_values { JWT.decode(it, principal.rsa_key.public_key, true, algorithm: 'RS256').first }
         intent, cart, payment = signed.values_at('intent_mandate_jws', 'cart_mandate_jws', 'payment_mandate_jws')
         expect(intent).to include('scope' => 'grocery', 'cap_amount_cents' => 450, 'currency' => 'eur', 'iss' => origin,
                                   'user_id' => 'u1', 'agent_id' => 'a1')
@@ -76,9 +76,9 @@ RSpec.describe Kiosk::TestHelpers::Customer do
 
         linked = customer.redeems('LINK-1')
 
-        expect(linked).to be_a(shopper)
-        expect(linked.principal).to have_attributes(user_id: 'alice', agent_id: 'a1', rsa_key: key)
-        expect(JSON.parse(sent.first.body)).to include('code' => 'LINK-1', 'public_key' => key.public_key.to_pem)
+        expect(linked).to be_a(customer.class)
+        expect(linked.principal).to have_attributes(user_id: 'alice', agent_id: 'a1', rsa_key: principal.rsa_key)
+        expect(JSON.parse(sent.first.body)).to include('code' => 'LINK-1', 'public_key' => principal.rsa_key.public_key.to_pem)
       end
 
       it 'comes from signing back in with its own key' do

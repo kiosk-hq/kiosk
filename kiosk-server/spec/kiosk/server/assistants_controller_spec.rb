@@ -15,6 +15,12 @@ module AssistantsControllerSpecHelpers
     'user_id' => '22222222-2222-2222-2222-222222222222',
     'allowed_roles' => '{customer}'
   }.freeze
+  HOLDER_ID = '11111111-1111-1111-1111-111111111111'
+
+  # The signed-in human's user_id.
+  def user_id
+    HOLDER_ID
+  end
 
   def wire_user_idp(identity)
     idp = Class.new do
@@ -68,8 +74,6 @@ RSpec.shared_context 'assistants controller spec: signed-in holder' do
   include AssistantsControllerSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
-  let(:human)   { build_identity(actor: 'human', agent_id: nil, user_id: user_id) }
   let(:pem)     { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
   # `next_exec_result: []` — an empty listing unless an example says otherwise.
   # The fake's default row exists for the Executor's `INSERT … RETURNING id`;
@@ -86,7 +90,7 @@ RSpec.shared_context 'assistants controller spec: signed-in holder' do
       c.roles                      = %i[customer]
       c.device_authorization_store = store
     end
-    wire_user_idp(human)
+    wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id))
     ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
@@ -144,8 +148,9 @@ RSpec.describe 'AssistantsController' do
     # The demos' `check:binding` exercises the real middleware end-to-end.
     it 'sets a flash alert telling the visitor to sign in' do
       flash_double = {}
-      allow_any_instance_of(Kiosk::Server::AssistantsController)
-        .to receive(:flash).and_return(flash_double)
+      controller = Kiosk::Server::AssistantsController.new
+      allow(controller).to receive(:flash).and_return(flash_double)
+      allow(Kiosk::Server::AssistantsController).to receive(:new).and_return(controller)
       dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' })
       expect(flash_double[:alert]).to eq('Please sign in to manage your linked assistants.')
     end
@@ -236,8 +241,9 @@ RSpec.describe 'AssistantsController' do
     it "rebinds a KNOWN key onto the new human's role via a browser-minted code" do
       Kiosk.configure { |c| c.roles = %i[customer owner] }
       wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: 'owner'))
-      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-        .to receive(:issue).and_return('kiosk-pop-jwt')
+      idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
+      allow(idp).to receive(:issue).and_return('kiosk-pop-jwt')
+      allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
 
       _status, html = dispatch(:link, method: 'POST')
       code = html[%r{<code>([^<]+)</code>}, 1]

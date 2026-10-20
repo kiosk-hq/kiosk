@@ -59,10 +59,13 @@ RSpec.describe Kiosk::Server::ReputationFactors do
   let(:user)   { SecureRandom.uuid }
   let(:policy) { Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100) }
 
-  before(:context) { skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error }
-  after(:context) { SpecPostgres.drop_schema('kiosk_reputation_factors_spec') }
+  before do
+    skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
 
-  before { create_tables }
+    create_tables
+  end
+
+  after { SpecPostgres.drop_schema(schema) }
 
   def factors = described_class.for(identity: build_identity(user_id: user), policy: policy)
 

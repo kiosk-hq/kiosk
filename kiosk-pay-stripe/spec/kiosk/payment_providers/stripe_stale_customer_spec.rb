@@ -25,12 +25,12 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
     it 'mints a fresh customer for the setup page and saves it in place of the stale one' do
       stub_no_outstanding_session
-      allow(stripe.customers).to receive(:create).and_return(double('Customer', id: 'cus_fresh'))
-      expect(stripe.checkout.sessions).to receive(:create).with(hash_including(customer: 'cus_fresh'))
-                                                          .and_return(double('CheckoutSession', url: fresh_url))
+      allow(stripe.customers).to receive(:create).and_return(Stripe::Customer.construct_from(id: 'cus_fresh'))
+      stub_fresh_session
 
       expect(stale_adapter.setup_url(user_id: 'user-1', return_url: return_url)).to eq(fresh_url)
       expect(store['user-1']).to eq('cus_fresh')
+      expect(stripe.checkout.sessions).to have_received(:create).with(hash_including(customer: 'cus_fresh'))
     end
 
     it 'refuses a charge with SetupRequired' do
@@ -45,7 +45,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(stripe.customers).to receive(:retrieve).with('cus_gone')
                                                    .and_return(Stripe::Customer.construct_from(id: 'cus_gone', deleted: true))
       stub_no_outstanding_session
-      allow(stripe.customers).to receive(:create).and_return(double('Customer', id: 'cus_fresh'))
+      allow(stripe.customers).to receive(:create).and_return(Stripe::Customer.construct_from(id: 'cus_fresh'))
       stub_fresh_session
 
       stale_adapter.setup_url(user_id: 'user-1', return_url: return_url)

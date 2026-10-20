@@ -44,10 +44,12 @@ RSpec.shared_context 'mandate verifier spec: agent' do
   let(:identity)  { build_identity(agent_id: 'agent-1', user_id: 'u-1') }
   let(:future)    { (Time.current + 600).to_i }
 
+  let(:agent_idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
+
   before do
     Kiosk.configure { |c| c.issuer = issuer }
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:agent_payment_key).with('agent-1').and_return(agent_key.public_key)
+    allow(agent_idp).to receive(:agent_payment_key).with('agent-1').and_return(agent_key.public_key)
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(agent_idp)
   end
 end
 
@@ -110,9 +112,8 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # so it escaped decode_and_check's JWT-only rescues and the controller's
     # Errors::Base rescue as an HTTP 500. It must be caught → clean 403 Forbidden.
     it 'rejects (403, not 500) when the agent has no registered payment key' do
-      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-        .to receive(:agent_payment_key).with('agent-1')
-        .and_raise(Kiosk::AgentIdentityProviders::InvalidToken, 'no key for agent agent-1')
+      allow(agent_idp).to receive(:agent_payment_key)
+        .with('agent-1').and_raise(Kiosk::AgentIdentityProviders::InvalidToken, 'no key for agent agent-1')
       expect { described_class.verify_intent(raw_jws: sign(intent_payload), identity: identity) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /payment key|revoked|unknown/)
     end
@@ -398,8 +399,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       let(:big_intent) { intent_payload.merge(agent_id: '7', user_id: '42') }
 
       before do
-        allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-          .to receive(:agent_payment_key).with(7).and_return(agent_key.public_key)
+        allow(agent_idp).to receive(:agent_payment_key).with(7).and_return(agent_key.public_key)
       end
 
       it 'verifies an Integer identity against a String mandate principal' do

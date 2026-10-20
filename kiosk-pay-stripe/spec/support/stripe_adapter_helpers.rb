@@ -21,17 +21,18 @@ module StripeAdapterHelpers
 
   # Stubs the cards Stripe lists for the mapped Customer, newest first.
   def stub_cards(*ids)
+    cards = ids.first(1).map { |id| Stripe::PaymentMethod.construct_from(id: id) }
     allow(stripe.payment_methods).to receive(:list).with(customer: 'cus_existing', type: 'card', limit: 1)
-                                                   .and_return(double('PMList', data: ids.first(1).map { |id| double('PM', id: id) }))
+                                                   .and_return(Stripe::ListObject.construct_from(data: cards))
   end
 
   # A listed Checkout Session as the SDK would return it.
   def listed_session(mode: 'setup', success_url: SUCCESS_URL, url: 'https://checkout.stripe.com/setup/OUTSTANDING')
-    double('ListedSession', mode: mode, success_url: success_url, url: url)
+    Stripe::Checkout::Session.construct_from(mode: mode, success_url: success_url, url: url)
   end
 
   def stub_listed_sessions(*sessions)
-    allow(stripe.checkout.sessions).to receive(:list).and_return(double('SessionList', data: sessions))
+    allow(stripe.checkout.sessions).to receive(:list).and_return(Stripe::ListObject.construct_from(data: sessions))
   end
 
   def stub_no_outstanding_session
@@ -39,11 +40,7 @@ module StripeAdapterHelpers
   end
 
   def stub_fresh_session
-    allow(stripe.checkout.sessions).to receive(:create).and_return(double('CheckoutSession', url: FRESH_URL))
-  end
-
-  def expect_fresh_session
-    expect(stripe.checkout.sessions).to receive(:create).and_return(double('CheckoutSession', url: FRESH_URL))
+    allow(stripe.checkout.sessions).to receive(:create).and_return(Stripe::Checkout::Session.construct_from(url: FRESH_URL))
   end
 
   # The SDK services of every adapter an example builds; the examples stub them.
@@ -80,6 +77,7 @@ RSpec.shared_context 'with a Stripe adapter' do
   before do
     services = stripe
     allow(Stripe::StripeClient).to receive(:new).and_return(instance_double(Stripe::StripeClient, v1: services))
-    allow(stripe.customers).to receive(:retrieve).with('cus_existing').and_return(double('Customer', id: 'cus_existing'))
+    allow(stripe.customers).to receive(:retrieve).with('cus_existing')
+                                                 .and_return(Stripe::Customer.construct_from(id: 'cus_existing'))
   end
 end

@@ -16,7 +16,11 @@ RSpec.shared_context 'with a KYC operator' do
   let(:callback_url) { 'http://127.0.0.1:3001/kiosk/kyc/callback' }
 
   before { allow(Kiosk).to receive(:configuration).and_return(configuration) }
-  after { expect(configuration.to_a).to eq([:brokers_provider, 'https://broker.example', :brokers_key, 'skooti']) }
+
+  # The helper's own after hook runs first and must have put every setting back.
+  after do
+    expect(configuration.to_a).to eq([:brokers_provider, 'https://broker.example', :brokers_key, 'skooti']) # rubocop:disable RSpec/ExpectInHook -- an example cannot observe the helper's after hook; only a later hook can.
+  end
 
   include Kiosk::TestHelpers::Kyc
 

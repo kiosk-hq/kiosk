@@ -315,10 +315,11 @@ RSpec.describe Kiosk::Server::PowGate do
 
     it 'raises before any challenge is minted' do
       configure_with_policy(policy_returning({ n: 168, k: -5 }))
-      expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
+      allow(Kiosk::Reputation::Challenge).to receive(:issue)
       expect do
         described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
       end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+      expect(Kiosk::Reputation::Challenge).not_to have_received(:issue)
     end
 
     it 'raises on a SUBMITTED proof too — not only on the first, unproven request' do

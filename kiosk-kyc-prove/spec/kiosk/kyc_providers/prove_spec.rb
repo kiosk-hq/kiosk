@@ -9,11 +9,17 @@ RSpec.shared_context 'with a Prove broker client' do
 
   let(:sent) { [] }
 
+  # Yields each Net::HTTP the client builds, for the example to stub.
+  def on_http(&)
+    allow(Net::HTTP).to receive(:new).and_wrap_original do |new, *args|
+      new.call(*args).tap(&)
+    end
+  end
+
   def answer(code, body)
-    sent = self.sent
     response = Net::HTTPResponse::CODE_TO_OBJ.fetch(code.to_s).new('1.1', code.to_s, '')
     allow(response).to receive(:body).and_return(body.is_a?(String) ? body : JSON.generate(body))
-    allow_any_instance_of(Net::HTTP).to receive(:request) { |http, req| (sent << [http, req]) && response }
+    on_http { |http| allow(http).to receive(:request) { |req| (sent << [http, req]) && response } }
   end
 
   def open!
@@ -70,7 +76,7 @@ RSpec.describe Kiosk::KycProviders::Prove do
     end
 
     it 'raises Unavailable when the broker cannot be reached' do
-      allow_any_instance_of(Net::HTTP).to receive(:request).and_raise(Errno::ECONNREFUSED)
+      on_http { |http| allow(http).to receive(:request).and_raise(Errno::ECONNREFUSED) }
       expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
     end
 

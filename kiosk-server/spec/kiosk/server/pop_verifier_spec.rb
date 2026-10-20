@@ -115,9 +115,9 @@ RSpec.describe Kiosk::Server::PopVerifier do
 
     it 'prefers Rails.logger for the diagnostic when a Rails logger is present' do
       logged = []
-      logger = double('logger')
+      logger = instance_double(Logger)
       allow(logger).to receive(:warn) { |m| logged << m }
-      stub_const('Rails', double('Rails', logger: logger))
+      allow(Rails).to receive(:logger).and_return(logger)
 
       begin
         described_class.verify!(public_key_pem: pem, signed: sign(aud: 'https://real-host.example'))

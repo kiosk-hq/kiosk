@@ -140,12 +140,12 @@ RSpec.shared_context 'wire controller pow header spec: tolled origin' do
     declare_query('availability') { render json: [] }
     declare_action('place_order') { render json: {} }
 
-    # Stub Executor so a request that PROCEEDS past the gate returns a clean 200
-    # instead of touching ActiveRecord.
-    allow_any_instance_of(Kiosk::Server::Executor).to receive(:call)
-      .and_return(Kiosk::Server::Result.new(kind: :rows, payload: []))
-    allow_any_instance_of(Kiosk::Server::WireController)
-      .to receive(:connection_for).and_return(Object.new)
+    # Stub Executor and the connection lease, so a request that PROCEEDS past
+    # the gate returns a clean 200 and touches no database.
+    executor = instance_double(Kiosk::Server::Executor, call: Kiosk::Server::Result.new(kind: :rows, payload: []))
+    allow(Kiosk::Server::Executor).to receive(:new).and_return(executor)
+    ar_base = class_double(ActiveRecord::Base).as_stubbed_const
+    allow(ar_base).to receive(:lease_connection).and_return(Object.new)
   end
 
   after do

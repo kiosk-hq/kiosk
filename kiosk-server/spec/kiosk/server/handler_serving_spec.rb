@@ -51,18 +51,13 @@ RSpec.shared_context 'handler serving spec: route' do
 end
 
 RSpec.shared_context 'handler serving spec: templated handler' do
-  around do |example|
-    Dir.mktmpdir do |views|
-      write_shelf_views(views)
-      @views = views
-      example.run
-    end
-  end
+  let(:views) { Dir.mktmpdir }
 
   before do
-    views = @views
+    write_shelf_views(views)
+    path = views
     klass = stub_handler('SpecTemplatedController', :query, "Lists the shop's stock.") do
-      prepend_view_path views
+      prepend_view_path path
       def shelf = @sku = 'MILK-1L'
     end
     declare_verb(klass, :query, "Lists the shop's stock one page at a time.")
@@ -72,6 +67,8 @@ RSpec.shared_context 'handler serving spec: templated handler' do
     end
     klass.kiosk_register!
   end
+
+  after { FileUtils.remove_entry(views) }
 end
 
 RSpec.describe Kiosk::Server::HandlerServing do
@@ -175,10 +172,11 @@ RSpec.describe Kiosk::Server::HandlerServing do
         def empty_cursor = render_kiosk_page([{ id: 1 }], next_cursor: '')
       end
 
-      expect(Kiosk::Server::FailureLog)
-        .to receive(:report).with(/raised ArgumentError/, having_attributes(message: /next_cursor is empty/))
+      allow(Kiosk::Server::FailureLog).to receive(:report)
       expect { execute(:query, { name: 'empty_cursor' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('action_failed') }
+      expect(Kiosk::Server::FailureLog)
+        .to have_received(:report).with(/raised ArgumentError/, having_attributes(message: /next_cursor is empty/))
     end
   end
 

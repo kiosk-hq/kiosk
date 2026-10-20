@@ -11,6 +11,10 @@ require 'stringio'
 module AccountBindingSpecHelpers
   PREVIOUS_USER = '22222222-2222-2222-2222-222222222222'
 
+  def previous_user
+    PREVIOUS_USER
+  end
+
   # Every SELECT finds the key already bound to +holder+ with +roles+.
   def route_known_agent(holder, roles, agent_id: 'agent-known')
     route_exec_query(con) do |sql, _binds|
@@ -25,11 +29,10 @@ module AccountBindingSpecHelpers
   # Records every token the default IdP mints, as { agent_id:, role: }.
   def record_issued_tokens
     issued = []
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue) do |_instance, agent_id:, role:|
-        issued << { agent_id: agent_id, role: role }
-        'kiosk-pop-jwt'
-      end
+    allow(idp).to receive(:issue) do |agent_id:, role:|
+      issued << { agent_id: agent_id, role: role }
+      'kiosk-pop-jwt'
+    end
     issued
   end
 
@@ -74,6 +77,8 @@ RSpec.shared_context 'account binding spec: stubbed engine' do
   let(:pem)     { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
   let(:con)     { FakeConnection.new }
+  # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
+  let(:idp)     { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
   before do
     Kiosk.configure do |c|
@@ -83,8 +88,8 @@ RSpec.shared_context 'account binding spec: stubbed engine' do
     ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_return('kiosk-pop-jwt')
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
+    allow(idp).to receive(:issue).and_return('kiosk-pop-jwt')
   end
 end
 
@@ -99,8 +104,6 @@ end
 
 RSpec.shared_context 'account binding spec: known key' do
   include_context 'account binding spec: stubbed engine'
-
-  let(:previous_user) { AccountBindingSpecHelpers::PREVIOUS_USER }
 
   before { route_known_agent(previous_user, '{customer}') }
 end
@@ -137,8 +140,7 @@ end
 RSpec.shared_context 'account binding spec: known key rebind watermark ordering (real issuer)' do
   include_context 'account binding spec: stubbed engine'
 
-  let(:agent_id)      { 'agent-known' }
-  let(:previous_user) { AccountBindingSpecHelpers::PREVIOUS_USER }
+  let(:agent_id) { 'agent-known' }
 
   before do
     Kiosk.reset!
@@ -152,10 +154,8 @@ RSpec.shared_context 'account binding spec: known key rebind watermark ordering 
     # Un-stub issue (the outer before stubs it to a fixed string) so bind!
     # mints a REAL JWT; lookup_user_id (called inside issue) resolves the
     # rebound principal without a DB.
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_call_original
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:lookup_user_id).and_return(user_id)
+    allow(idp).to receive(:issue).and_call_original
+    allow(idp).to receive(:lookup_user_id).and_return(user_id)
     route_known_agent(previous_user, '{customer}', agent_id: agent_id)
     ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
@@ -464,9 +464,9 @@ RSpec.describe Kiosk::Server::AccountBinding do
       configure_multi_role_origin
       route_known_agent(previous_user, '{owner}')
       logged = []
-      logger = double('logger')
+      logger = instance_double(Logger)
       allow(logger).to receive(:warn) { |m| logged << m }
-      stub_const('Rails', double('Rails', logger: logger))
+      allow(Rails).to receive(:logger).and_return(logger)
 
       described_class.bind!(public_key_pem: pem, user_id: user_id, requested_role: nil)
 
@@ -506,10 +506,12 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # A rebind is a principal change, so — like
     # unlink! — it watermark-revokes the key's pre-link tokens.
     it "watermark-revokes the key's pre-link tokens (principal change ⇒ re-login)" do
-      expect(Kiosk.configuration.revocation_store)
-        .to receive(:revoke_all).with('agent-known', hash_including(:at))
+      store = Kiosk.configuration.revocation_store
+      allow(store).to receive(:revoke_all)
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
+
+      expect(store).to have_received(:revoke_all).with('agent-known', hash_including(:at))
     end
   end
 
@@ -548,10 +550,11 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # response, so it needs its own beat — dropping `revoke_all` from this
     # path would leave every other assertion in this context green.
     it "STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)" do
-      expect(Kiosk.configuration.revocation_store)
-        .to receive(:revoke_all).with('agent-known', hash_including(:at))
+      store = Kiosk.configuration.revocation_store
+      allow(store).to receive(:revoke_all)
 
       result = described_class.bind!(public_key_pem: pem, user_id: user_id)
+      expect(store).to have_received(:revoke_all).with('agent-known', hash_including(:at))
       expect(result[:access_token]).to eq('kiosk-pop-jwt')
     end
 
@@ -644,8 +647,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
       allow(Time).to receive(:now).and_return(Time.at(now).utc)
 
       described_class.bind!(public_key_pem: pem, user_id: user_id)
-      relogin = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-                                                                      .issue(agent_id: agent_id, role: 'customer')
+      relogin = idp.issue(agent_id: agent_id, role: 'customer')
 
       expect { verify(relogin) }.not_to raise_error
       expect(verify(relogin)[:iat]).to eq(now + 1)
@@ -657,11 +659,12 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
     it 'deactivates the binding (revoked_at) and watermark-revokes outstanding tokens' do
       route_exec_query(con) { [{ 'id' => 'agent-1' }] }
-      expect(Kiosk.configuration.revocation_store)
-        .to receive(:revoke_all).with('agent-1', hash_including(:at))
+      store = Kiosk.configuration.revocation_store
+      allow(store).to receive(:revoke_all)
 
       result = described_class.unlink!(agent_id: 'agent-1', user_id: user_id)
       expect(result).to eq(agent_id: 'agent-1')
+      expect(store).to have_received(:revoke_all).with('agent-1', hash_including(:at))
 
       sql, binds = con.bound(/UPDATE/i).first
       expect(sql).to include('SET revoked_at = now()')

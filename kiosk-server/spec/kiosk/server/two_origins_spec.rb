@@ -133,8 +133,9 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
       let(:agent_key) { OpenSSL::PKey::RSA.generate(2048) }
 
       before do
-        allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-          .to receive(:agent_payment_key).with('a-1').and_return(agent_key.public_key)
+        idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
+        allow(idp).to receive(:agent_payment_key).with('a-1').and_return(agent_key.public_key)
+        allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
       end
 
       def intent(iss)

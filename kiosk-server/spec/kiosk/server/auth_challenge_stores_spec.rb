@@ -35,20 +35,15 @@ RSpec.shared_context 'auth challenge stores spec: postgres schema' do
   let(:live) { Time.now.to_i + 300 }
   let(:schema) { AuthChallengeStoresSpec::AUTH_CHALLENGE_SPEC_SCHEMA }
 
-  before(:context) do
+  before do
     skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
 
-    schema = AuthChallengeStoresSpec::AUTH_CHALLENGE_SPEC_SCHEMA
     SpecPostgres.recreate_schema(schema)
     ActiveRecord::Base.connection.execute(Kiosk::Server::SchemaDefinitions.auth_challenge_sql(schema: schema))
-  end
-
-  after(:context) { SpecPostgres.drop_schema(AuthChallengeStoresSpec::AUTH_CHALLENGE_SPEC_SCHEMA) }
-
-  before do
     Kiosk.configure { |c| c.schema = schema }
-    ActiveRecord::Base.connection.execute(%(DELETE FROM "#{schema}".auth_challenges))
   end
+
+  after { SpecPostgres.drop_schema(schema) }
 end
 
 RSpec.describe Kiosk::Server::AuthChallengeStores::ActiveRecord do

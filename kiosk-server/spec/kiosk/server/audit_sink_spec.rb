@@ -104,29 +104,22 @@ end
 # default socket; no reachable server → skip, never fail (the same contract
 # as `executor_persistence_spec.rb`).
 RSpec.shared_context 'audit sink spec: real database' do
-  schema = AuditSinkSpec::SCHEMA
-
-  before(:context) do
-    skip "no local Postgres reachable (#{AuditSinkSpec.postgres_error})" if AuditSinkSpec.postgres_error
-
-    conn = ActiveRecord::Base.connection
-    conn.execute(%(DROP SCHEMA IF EXISTS "#{schema}" CASCADE))
-    conn.execute(%(CREATE SCHEMA "#{schema}"))
-    conn.execute(%(CREATE TABLE "#{schema}".widgets (id serial primary key)))
-  end
-
-  after(:context) do
-    ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{schema}" CASCADE)) unless AuditSinkSpec.postgres_error
-  end
-
   let(:connection) { ActiveRecord::Base.connection }
 
   before do
+    skip "no local Postgres reachable (#{AuditSinkSpec.postgres_error})" if AuditSinkSpec.postgres_error
+
+    connection.execute(%(DROP SCHEMA IF EXISTS "#{AuditSinkSpec::SCHEMA}" CASCADE))
+    connection.execute(%(CREATE SCHEMA "#{AuditSinkSpec::SCHEMA}"))
+    connection.execute(%(CREATE TABLE "#{AuditSinkSpec::SCHEMA}".widgets (id serial primary key)))
     Kiosk.configure do |c|
-      c.schema     = schema
+      c.schema     = AuditSinkSpec::SCHEMA
       c.audit_sink = sink
     end
-    connection.execute(%(TRUNCATE "#{schema}".widgets))
+  end
+
+  after do
+    connection.execute(%(DROP SCHEMA IF EXISTS "#{AuditSinkSpec::SCHEMA}" CASCADE)) unless AuditSinkSpec.postgres_error
   end
 end
 
@@ -490,9 +483,10 @@ RSpec.describe Kiosk::Server::AuditSink do
     context 'with NO sink configured (the default)' do
       it 'emits nothing and does not even build an event' do
         declare_action('place_order') { render json: { id: 7 } }
-        expect(Kiosk::Server::ActionEvent).not_to receive(:build)
+        allow(Kiosk::Server::ActionEvent).to receive(:build)
 
         expect(run!.body).to eq('id' => 7)
+        expect(Kiosk::Server::ActionEvent).not_to have_received(:build)
         expect(events).to be_empty
       end
 

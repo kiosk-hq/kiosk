@@ -63,7 +63,9 @@ RSpec.describe Kiosk::UserIdentityProviders::DeviseSession do
     it 'dials an IPv6 literal origin by its bare address' do
       dialed = []
       response = Net::HTTPOK.new('1.1', '200', 'OK')
-      allow_any_instance_of(Net::HTTP).to receive(:request) { |http, _req| (dialed << http) && response }
+      allow(Net::HTTP).to receive(:new).and_wrap_original do |new, *args|
+        new.call(*args).tap { |http| allow(http).to receive(:request) { (dialed << http) && response } }
+      end
 
       described_class.new('http://[::1]:3000').request(Net::HTTP::Get.new(URI('http://[::1]:3000/users/sign_in')))
 

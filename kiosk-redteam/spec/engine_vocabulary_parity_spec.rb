@@ -73,14 +73,16 @@ RSpec.describe 'the engine error vocabulary this suite stubs from' do
   describe 'V4 every code this suite stubs is one the engine can still emit' do
     # Read off this gem's own spec corpus rather than listed here: a list would
     # be the third hand-kept copy of the same vocabulary.
-    stubbed = Dir.glob(File.join(__dir__, '**', '*.rb')).flat_map do |file|
-      File.read(file)
-          .scan(/\bproblem(?:_return)?\(\s*(?::([a-z_]+)|['"]([a-z_]+)['"])/)
-          .map { |symbol, string| symbol || string }
-    end.uniq.sort
+    def self.stubbed
+      Dir.glob(File.join(__dir__, '**', '*.rb')).flat_map do |file|
+        File.read(file)
+            .scan(/\bproblem(?:_return)?\(\s*(?::([a-z_]+)|['"]([a-z_]+)['"])/)
+            .map { |symbol, string| symbol || string }
+      end.uniq.sort
+    end
 
     it 'found codes to check at all (the arm below is not vacuous)' do
-      expect(stubbed.size).to be > 5
+      expect(self.class.stubbed.size).to be > 5
     end
 
     stubbed.each do |code|

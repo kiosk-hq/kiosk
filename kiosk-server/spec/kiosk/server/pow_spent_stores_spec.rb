@@ -35,19 +35,16 @@ RSpec.shared_context 'pow spent stores spec: postgres' do
 
   subject(:store) { described_class.new }
 
-  before(:context) do
+  before do
     skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
     PowSpentStoresSpec.create_schema
   end
 
-  after(:context) { SpecPostgres.drop_schema(PowSpentStoresSpec::SCHEMA) }
+  after { SpecPostgres.drop_schema(PowSpentStoresSpec::SCHEMA) }
 
   let(:live) { Time.now.to_i + 300 }
 
-  before do
-    Kiosk.configure { |c| c.schema = PowSpentStoresSpec::SCHEMA }
-    ActiveRecord::Base.connection.execute(%(DELETE FROM "#{PowSpentStoresSpec::SCHEMA}".pow_spent))
-  end
+  before { Kiosk.configure { |c| c.schema = PowSpentStoresSpec::SCHEMA } }
 end
 
 RSpec.describe Kiosk::Server::PowSpentStores do

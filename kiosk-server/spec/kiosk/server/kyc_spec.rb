@@ -23,6 +23,13 @@ module KycSpec
                                                                      user_table: 'people'))
   end
 
+  # The engine's verb controller with the executor's session on a {FakeConnection}.
+  class VerbController < Kiosk::Server::VerbController
+    private
+
+    def connection_for(_identity) = FakeConnection.new
+  end
+
   def self.drop_schema
     ActiveRecord::Base.connection.execute('RESET search_path') unless SpecPostgres.error
     SpecPostgres.drop_schema(SCHEMA)
@@ -72,7 +79,7 @@ module KycSpec
     )
     env['action_dispatch.request.path_parameters'] =
       { controller: 'kiosk/server/verb', action: 'create', kiosk_verb: 'request_kyc' }
-    dispatch(Kiosk::Server::VerbController, env)
+    dispatch(KycSpec::VerbController, env)
   end
 
   def callback(body)
@@ -134,24 +141,16 @@ end
 RSpec.shared_context 'kyc spec: postgres' do
   include KycSpec
 
-  before(:context) do
+  before do
     skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
     KycSpec.create_schema
   end
 
-  after(:context) { KycSpec.drop_schema }
+  after { KycSpec.drop_schema }
 
   let(:store)    { MemoryEventStore.new }
   let(:kyc_key)  { OpenSSL::PKey::RSA.generate(2048) }
   let(:provider) { KycSpecProvider.new }
-
-  before do
-    ActiveRecord::Base.connection.execute(
-      %(TRUNCATE "#{KycSpec::SCHEMA}".kyc_attributes, "#{KycSpec::SCHEMA}".kyc_requests)
-    )
-    allow_any_instance_of(Kiosk::Server::VerbController)
-      .to receive(:connection_for).and_return(FakeConnection.new)
-  end
 end
 
 RSpec.shared_context "kyc spec: the provider's callback" do

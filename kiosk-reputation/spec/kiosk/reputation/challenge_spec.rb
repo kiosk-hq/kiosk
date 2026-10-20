@@ -4,13 +4,12 @@
 # them replaced.
 module ChallengeCalls
   def issue_challenge(**overrides)
-    fields = { alg:, params:, request_fingerprint: fingerprint, secret:, ttl:, now:, salt:, id: }
-    described_class.issue(**fields, **overrides)
+    described_class.issue(**fields, ttl:, now:, **overrides)
   end
 
   # `.verify` of `challenge` one second after it was issued.
   def verify_challenge(**overrides)
-    arguments = { challenge:, nonce: 'good', request_fingerprint: fingerprint, secret:, now: now + 1 }
+    arguments = { challenge:, nonce: 'good', **fields.slice(:request_fingerprint, :secret), now: now + 1 }
     described_class.verify(**arguments, **overrides)
   end
 
@@ -25,15 +24,14 @@ end
 RSpec.shared_context 'with a challenge fixture' do
   include ChallengeCalls
 
-  let(:secret)      { 'test-hmac-secret' }
-  let(:fingerprint) { 'fp:sha256:abc123' }
-  let(:salt)        { 'A' * 16 } # 16 raw bytes (ASCII)
-  let(:id)          { 'challenge-uuid-001' }
-  let(:now)         { 1_750_000_000 }
-  let(:ttl)         { 300 }
-  let(:params)      { { n: 168, k: 7 } }
-  let(:alg)         { 'equihash' }
-  let(:challenge)   { issue_challenge }
+  # `.issue`'s fields other than the clock; the salt is 16 raw bytes (ASCII).
+  let(:fields) do
+    { alg: 'equihash', params: { n: 168, k: 7 }, request_fingerprint: 'fp:sha256:abc123',
+      secret: 'test-hmac-secret', salt: 'A' * 16, id: 'challenge-uuid-001' }
+  end
+  let(:now)       { 1_750_000_000 }
+  let(:ttl)       { 300 }
+  let(:challenge) { issue_challenge }
 
   before { Kiosk::Reputation::Backends.register('equihash', TestHelpers::StubBackend) }
 end
@@ -51,11 +49,11 @@ RSpec.describe Kiosk::Reputation::Challenge do
     end
 
     it 'base64-encodes the raw salt' do
-      expect(challenge[:salt]).to eq(Base64.strict_encode64(salt))
+      expect(challenge[:salt]).to eq(Base64.strict_encode64(fields[:salt]))
     end
 
     it 'stores the injected id' do
-      expect(challenge[:id]).to eq(id)
+      expect(challenge[:id]).to eq(fields[:id])
     end
 
     it 'produces a non-empty sig' do
@@ -64,7 +62,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
 
     it 'uses SecureRandom defaults when salt/id are not injected' do
       first, second = Array.new(2) do
-        described_class.issue(alg:, params:, request_fingerprint: fingerprint, secret:, ttl:, now:)
+        described_class.issue(**fields.except(:salt, :id), ttl:, now:)
       end
       expect(first[:id]).not_to eq(second[:id])
       expect(first[:salt]).not_to eq(second[:salt])
@@ -93,7 +91,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
     before { register_spy_backend }
 
     def check_challenge(**overrides)
-      described_class.check(challenge:, request_fingerprint: fingerprint, secret:, now: now + 1, **overrides)
+      described_class.check(challenge:, **fields.slice(:request_fingerprint, :secret), now: now + 1, **overrides)
     end
 
     it 'answers nil for a live challenge this secret signed, without running the backend' do
@@ -219,15 +217,15 @@ RSpec.describe Kiosk::Reputation::Challenge do
     include_context 'with a challenge fixture'
 
     it 'ignores key ORDER in the expected params' do
-      expect(verify_challenge(expect: { alg:, params: { k: 7, n: 168 } })).to eq(:ok)
+      expect(verify_challenge(expect: { alg: fields[:alg], params: { k: 7, n: 168 } })).to eq(:ok)
     end
 
     it 'ignores Symbol-vs-String param keys' do
-      expect(verify_challenge(expect: { alg:, params: { 'n' => 168, 'k' => 7 } })).to eq(:ok)
+      expect(verify_challenge(expect: { alg: fields[:alg], params: { 'n' => 168, 'k' => 7 } })).to eq(:ok)
     end
 
     it 'ignores Integer-vs-String param values (one identical signed string)' do
-      expect(verify_challenge(expect: { alg:, params: { n: '168', k: '7' } })).to eq(:ok)
+      expect(verify_challenge(expect: { alg: fields[:alg], params: { n: '168', k: '7' } })).to eq(:ok)
     end
 
     it 'accepts a String-keyed expect hash' do
@@ -336,7 +334,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
       end
 
       it "answers :bad_params for #{repartition.inspect} even WITH expect:" do
-        expect(verify_challenge(challenge: challenge.merge(params: repartition), expect: { alg:, params: })).to eq(:bad_params)
+        expect(verify_challenge(challenge: challenge.merge(params: repartition), expect: fields.slice(:alg, :params))).to eq(:bad_params)
       end
     end
 
@@ -352,7 +350,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
     end
 
     it 'leaves the honest echo verifying (control)' do
-      expect(verify_challenge(expect: { alg:, params: })).to eq(:ok)
+      expect(verify_challenge(expect: fields.slice(:alg, :params))).to eq(:ok)
     end
   end
 

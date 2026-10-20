@@ -56,7 +56,7 @@ RSpec.shared_context 'event stores spec: throwaway schema' do
 
   subject(:store) { described_class.new }
 
-  before(:context) do
+  before do
     skip "no local Postgres reachable (#{EventStoresSpec.postgres_error})" if EventStoresSpec.postgres_error
 
     conn = ActiveRecord::Base.connection
@@ -65,7 +65,7 @@ RSpec.shared_context 'event stores spec: throwaway schema' do
     conn.execute(Kiosk::Server::SchemaDefinitions.events_sql(schema: EventStoresSpec::SCHEMA))
   end
 
-  after(:context) do
+  after do
     unless EventStoresSpec.postgres_error
       ActiveRecord::Base.connection.execute(
         %(DROP SCHEMA IF EXISTS "#{EventStoresSpec::SCHEMA}" CASCADE)
@@ -73,10 +73,7 @@ RSpec.shared_context 'event stores spec: throwaway schema' do
     end
   end
 
-  before do
-    Kiosk.configure { |c| c.schema = EventStoresSpec::SCHEMA }
-    ActiveRecord::Base.connection.execute(%(DELETE FROM "#{EventStoresSpec::SCHEMA}".events))
-  end
+  before { Kiosk.configure { |c| c.schema = EventStoresSpec::SCHEMA } }
 end
 
 RSpec.describe Kiosk::Server::EventStores::ActiveRecord do

@@ -204,11 +204,13 @@ RSpec.describe Kiosk::Server::WireController do
           define_singleton_method(:lease_connection) { Object.new }
         end
         stub_const('ActiveRecord::Base', ar_base)
-        allow_any_instance_of(Kiosk::Server::Executor).to receive(:call).and_raise(
+        executor = instance_double(Kiosk::Server::Executor)
+        allow(executor).to receive(:call).and_raise(
           Kiosk::Server::Errors::PaymentFailed.new(
             'the card was declined', hint: 'the human may need to update the payment method'
           )
         )
+        allow(Kiosk::Server::Executor).to receive(:new).and_return(executor)
       end
 
       it 'carries NO WWW-Authenticate header — no scheme names this gate (§9)' do

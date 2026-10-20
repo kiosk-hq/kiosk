@@ -9,13 +9,13 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     include_context 'with a Stripe adapter'
 
     it "returns the OPEN setup session's url and mints NOTHING when one is outstanding" do
-      expect(stripe.checkout.sessions).to receive(:list).with(
-        customer: 'cus_existing', status: 'open', limit: 10
-      ).and_return(double('SessionList', data: [listed_session]))
-      expect(stripe.checkout.sessions).not_to receive(:create)
+      stub_listed_sessions(listed_session)
+      allow(stripe.checkout.sessions).to receive(:create)
 
       expect(adapter.setup_url(user_id: 'user-1', return_url: return_url))
         .to eq('https://checkout.stripe.com/setup/OUTSTANDING')
+      expect(stripe.checkout.sessions).to have_received(:list).with(customer: 'cus_existing', status: 'open', limit: 10)
+      expect(stripe.checkout.sessions).not_to have_received(:create)
     end
 
     it 'returns the SAME url across repeated polls (the poll is side-effect-free)' do
@@ -38,16 +38,18 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       stub_listed_sessions(
         listed_session(success_url: "https://old-origin.example/kiosk/payment_setup/return?#{described_class::RETURN_QUERY}")
       )
-      expect_fresh_session
+      stub_fresh_session
 
       expect(adapter.setup_url(user_id: 'user-1', return_url: return_url)).to eq(fresh_url)
+      expect(stripe.checkout.sessions).to have_received(:create)
     end
 
     it 'ignores a listed session that is not in setup mode' do
       stub_listed_sessions(listed_session(mode: 'payment'))
-      expect_fresh_session
+      stub_fresh_session
 
       expect(adapter.setup_url(user_id: 'user-1', return_url: return_url)).to eq(fresh_url)
+      expect(stripe.checkout.sessions).to have_received(:create)
     end
   end
 
@@ -62,9 +64,10 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     end
 
     it 'falls back to minting when the lookup itself fails (a probe must not start erroring)' do
-      expect_fresh_session
+      stub_fresh_session
 
       expect(adapter.setup_url(user_id: 'user-1', return_url: return_url)).to eq(fresh_url)
+      expect(stripe.checkout.sessions).to have_received(:create)
     end
 
     it 'SAYS SO when the lookup failed, so the degrade is not mistaken for the happy path' do

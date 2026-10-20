@@ -22,10 +22,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandateReplay do
 
   it 'uses the public Client#pay_raw method (no private __send__ access)' do
     # Verify that the scenario never needs to reach into client internals.
-    expect(client).not_to receive(:__send__)
+    allow(client).to receive(:__send__).and_call_original
     stub_registers('a', 'b')
     stub_pay(status: 403, code: 'forbidden')
     scenario.call(client, profile)
+    expect(client).not_to have_received(:__send__)
   end
 
   describe '#call — non-vacuity' do

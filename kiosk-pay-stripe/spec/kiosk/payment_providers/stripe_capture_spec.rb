@@ -7,13 +7,17 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     include_context 'with a Stripe adapter'
 
     let(:pi) do
-      double('PaymentIntent', id: 'pi_123', status: 'succeeded', amount: 1599, amount_received: 1599,
-                              created: 1_700_000_000)
+      Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount: 1599, amount_received: 1599,
+                                           created: 1_700_000_000)
     end
 
     it "charges the customer's saved card off_session, keyed by the Stripe customer and the cart mandate id" do
       stub_cards('pm_default_visa')
-      expect(stripe.payment_intents).to receive(:create).with(
+      allow(stripe.payment_intents).to receive(:create).and_return(pi)
+
+      result = adapter.capture(cart_mandate, payment_method: nil)
+
+      expect(stripe.payment_intents).to have_received(:create).with(
         {
           amount: 1599,
           currency: 'eur',
@@ -25,9 +29,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
           metadata: { cart_mandate_id: 'cart-1' }
         },
         { idempotency_key: 'cus_existing-cart-1-capture' }
-      ).and_return(pi)
-
-      result = adapter.capture(cart_mandate, payment_method: nil)
+      )
       expect(result[:psp_reference]).to eq('pi_123')
       expect(result[:settled_amount_cents]).to eq(1599)
     end
@@ -39,7 +41,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     it 'lists the cards once and creates the intent, and reads no Customer' do
       stub_cards('pm_listed_visa')
       allow(stripe.payment_intents).to receive(:create)
-        .and_return(double('PaymentIntent', id: 'pi_123', status: 'succeeded', amount_received: 1599, created: 0))
+        .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount_received: 1599,
+                                                         created: 0))
 
       adapter.capture(cart_mandate)
 
@@ -74,18 +77,22 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     it 'ignores an explicitly presented pm and charges the on-file card when a resolver is configured' do
       # The assistant authorizes and never presents a card, so a presented pm is
       # ignored and the saved card is charged.
-      expect(stripe.payment_intents).to receive(:create).with(
-        hash_including(customer: 'cus_existing', payment_method: 'pm_default_visa'),
-        anything
-      ).and_return(double('PaymentIntent', id: 'pi_123', status: 'succeeded', amount_received: 1599, created: 0))
+      allow(stripe.payment_intents).to receive(:create)
+        .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount_received: 1599,
+                                                         created: 0))
 
       adapter.capture(cart_mandate, payment_method: 'pm_explicit')
+
+      expect(stripe.payment_intents).to have_received(:create).with(
+        hash_including(customer: 'cus_existing', payment_method: 'pm_default_visa'),
+        anything
+      )
     end
 
     it 'settles what the intent received, not what it asked for' do
       allow(stripe.payment_intents).to receive(:create)
-        .and_return(double('PaymentIntent', id: 'pi_part', status: 'succeeded', amount: 1599,
-                                            amount_received: 1500, created: 0))
+        .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_part', status: 'succeeded', amount: 1599,
+                                                         amount_received: 1500, created: 0))
 
       expect(adapter.capture(cart_mandate)[:settled_amount_cents]).to eq(1500)
     end
@@ -97,7 +104,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     before { stub_cards('pm_default_visa') }
 
     def intent(status)
-      double('PaymentIntent', id: "pi_#{status}", status: status, amount: 1599, amount_received: 0, created: 0)
+      Stripe::PaymentIntent.construct_from(id: "pi_#{status}", status: status, amount: 1599, amount_received: 0,
+                                           created: 0)
     end
 
     %w[requires_payment_method canceled].each do |status|

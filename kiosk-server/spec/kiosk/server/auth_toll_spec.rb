@@ -139,10 +139,9 @@ RSpec.describe Kiosk::Server::AuthToll do
     # challenge it cannot use. PowRequired carries the challenges, so if one
     # were issued this would raise PowRequired rather than ConfigurationError.
     configure_at({ n: 0, k: 7 })
-    expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
-    expect do
-      register_toll(nil)
-    end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    allow(Kiosk::Reputation::Challenge).to receive(:issue)
+    expect { register_toll(nil) }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    expect(Kiosk::Reputation::Challenge).not_to have_received(:issue)
   end
 
   it 'still accepts the shipped default parameters — the accepted set is unchanged' do
@@ -210,10 +209,9 @@ RSpec.describe Kiosk::Server::AuthToll do
 
     it 'never spends a backend eval on an off-spec challenge' do
       configure_at({ n: 96, k: 5 })
-      expect(Kiosk::Pow::Equihash).not_to receive(:verify)
-      expect do
-        register_toll([trivial_proof(id: 'k541-nohash')])
-      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+      allow(Kiosk::Pow::Equihash).to receive(:verify)
+      expect { register_toll([trivial_proof(id: 'k541-nohash')]) }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect(Kiosk::Pow::Equihash).not_to have_received(:verify)
     end
   end
 end

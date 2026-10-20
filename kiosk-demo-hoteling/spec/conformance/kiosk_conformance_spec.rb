@@ -12,9 +12,6 @@ RSpec.shared_context 'two guests with a booking each' do
                      address: '1 Barbaros Blv, Beşiktaş, Istanbul')
   end
 
-  let(:double) { RoomType.create!(property: property, name: 'Double', nightly_price_cents: 18_000) }
-  let(:suite)  { RoomType.create!(property: property, name: 'Suite',  nightly_price_cents: 32_000) }
-
   let(:check_in)  { Date.current + 30 }
   let(:check_out) { Date.current + 32 }
 
@@ -25,8 +22,8 @@ RSpec.shared_context 'two guests with a booking each' do
   end
 
   before do
-    book_for(ada, double)
-    book_for(ben, suite)
+    book_for(ada, RoomType.create!(property: property, name: 'Double', nightly_price_cents: 18_000))
+    book_for(ben, RoomType.create!(property: property, name: 'Suite', nightly_price_cents: 32_000))
   end
 end
 

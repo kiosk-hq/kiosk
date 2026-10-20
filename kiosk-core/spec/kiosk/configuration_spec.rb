@@ -117,20 +117,23 @@ RSpec.describe Kiosk::Configuration do
 
     # Every module-level lazy memo in the shipped file must take the lock.
     describe 'the guarded set of the lazy memos is derived from the shipped source' do
-      source_path = described_class.method(:configuration).source_location.first
+      # Name => body of each module-level default that memoises. A default is
       # `def self.<name>` with no arguments, through its matching `end` at the
       # same indent: the shape every module-level default in this file uses.
-      methods     = File.read(source_path).scan(/^  def self\.([a-z_0-9]+)\n(.*?)^  end$/m).to_h
-      memoising   = methods.select { |_, body| body.match?(/@[a-z_0-9]+ \|\|=/) }
+      def self.memoising
+        source_path = described_class.method(:configuration).source_location.first
+        File.read(source_path).scan(/^  def self\.([a-z_0-9]+)\n(.*?)^  end$/m).to_h
+            .select { |_, body| body.match?(/@[a-z_0-9]+ \|\|=/) }
+      end
 
       # If the scan stops matching, the census below passes on an empty set.
       it 'finds the memoising module-level defaults at all' do
-        expect(memoising.keys).to include('configuration')
+        expect(self.class.memoising.keys).to include('configuration')
       end
 
-      memoising.each_key do |name|
+      memoising.each do |name, body|
         it "#{name} serialises its first touch on CONFIGURATION_MUTEX" do
-          expect(memoising.fetch(name)).to include('CONFIGURATION_MUTEX')
+          expect(body).to include('CONFIGURATION_MUTEX')
         end
       end
     end

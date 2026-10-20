@@ -5,7 +5,7 @@ require 'spec_helper'
 RSpec.shared_context 'runner setup' do
   let(:base_url) { 'http://kiosk.example.com' }
 
-  let(:profile)  { double('Profile') }
+  let(:profile)  { instance_double(Kiosk::Redteam::Profile) }
 
   def make_scenario(name, verdict)
     scenario = instance_double(Kiosk::Redteam::Scenario, name:)
@@ -102,13 +102,14 @@ RSpec.describe Kiosk::Redteam::Runner do
     end
 
     it 'passes the client (not nil) and the profile to each scenario' do
-      s = instance_double(Kiosk::Redteam::Scenario, name: 'Probe')
-      expect(s).to receive(:call) do |client, passed_profile|
+      s = make_scenario('Probe', blocked_verdict)
+
+      described_class.new(base_url:, profile:).run([s])
+
+      expect(s).to have_received(:call) do |client, passed_profile|
         expect(client).to be_a(Kiosk::TestHelpers::Assistant)
         expect(passed_profile).to be(profile)
-        blocked_verdict
       end
-      described_class.new(base_url:, profile:).run([s])
     end
   end
 

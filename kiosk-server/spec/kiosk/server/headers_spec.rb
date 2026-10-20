@@ -105,9 +105,10 @@ RSpec.describe Kiosk::Server::Headers do
       end
 
       it 'says so, once, naming the value it refused' do
-        expect(described_class).to receive(:warn)
-          .with(a_string_including('public, max-age=600')).once
+        allow(described_class).to receive(:warn)
         described_class.add_cache_policy({ 'Cache-Control' => 'public, max-age=600' }, status: 200)
+        expect(described_class).to have_received(:warn)
+          .with(a_string_including('public, max-age=600')).once
       end
 
       it 'leaves a CONFORMANT relaxation alone — the control' do

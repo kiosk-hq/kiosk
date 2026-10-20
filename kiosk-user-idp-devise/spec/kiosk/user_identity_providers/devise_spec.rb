@@ -167,7 +167,7 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
 
     it "reads the user from env['warden'].user when the request is a Hash" do
       user   = FakeUser.new(id: user_id)
-      warden = double('Warden::Proxy', user: user)
+      warden = FakeWarden.new(user: user)
       env    = { 'warden' => warden }
 
       identity = adapter.verify(env)

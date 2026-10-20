@@ -28,7 +28,7 @@ RSpec.describe Kiosk::Server::IdentityResolution do
         c.issuer       = 'https://example.test'
       end
       forged  = 'agent:u-11111111-1111-4111-8111-111111111111:a-forged:r-owner'
-      request = double('request', headers: { 'Authorization' => "Bearer #{forged}" })
+      request = instance_double(ActionDispatch::Request, headers: { 'Authorization' => "Bearer #{forged}" })
 
       expect(described_class.agent_idp.verify(request)).to be_nil
     end

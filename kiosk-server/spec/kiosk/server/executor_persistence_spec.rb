@@ -111,13 +111,13 @@ end
 RSpec.shared_context 'executor persistence spec: real postgres' do
   include ExecutorPersistenceSpec::Helpers
 
-  before(:context) do
+  before do
     skip "no local Postgres reachable (#{ExecutorPersistenceSpec.postgres_error})" if ExecutorPersistenceSpec.postgres_error
 
     ExecutorPersistenceSpec.create_schema
   end
 
-  after(:context) do
+  after do
     ActiveRecord::Base.connection.execute(%(DROP SCHEMA IF EXISTS "#{ExecutorPersistenceSpec::PERSIST_SPEC_SCHEMA}" CASCADE)) unless ExecutorPersistenceSpec.postgres_error
   end
 
@@ -132,8 +132,6 @@ RSpec.shared_context 'executor persistence spec: real postgres' do
       c.schema = ExecutorPersistenceSpec::PERSIST_SPEC_SCHEMA
       c.issuer = 'https://demo.example'
     end
-    # CASCADE reaches cart_mandates → payment_mandates → settlements.
-    connection.execute(%(TRUNCATE #{table('intent_mandates')} CASCADE))
   end
 end
 
@@ -783,12 +781,13 @@ RSpec.describe Kiosk::Server::Executor do
     # under the same cart id, which the PSP answers with the first charge, and
     # writes the missing settlement.
     it 'settles a chain whose capture ran but whose settlement was never written' do
-      allow_any_instance_of(described_class).to receive(:persist_settlement)
+      allow(described_class).to receive(:new).and_return(executor)
+      allow(executor).to receive(:persist_settlement)
         .and_raise(StandardError, 'connection reset during settlement insert')
       expect { pay }.to raise_error(StandardError, /connection reset/)
       expect(settlement_count).to eq(0)
 
-      allow_any_instance_of(described_class).to receive(:persist_settlement).and_call_original
+      allow(executor).to receive(:persist_settlement).and_call_original
       expect(pay.payload[:psp_reference]).to eq("pi_#{cart.id}")
       expect(captures).to eq([cart.id, cart.id])
       expect(settlement_count).to eq(1)

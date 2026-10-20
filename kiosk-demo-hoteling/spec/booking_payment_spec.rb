@@ -13,9 +13,9 @@ RSpec.shared_context 'a booking two customers can pay for' do
   let(:ada) { User.create!(email: 'ada-pay@example.test', password: 'payment-fixture') }
   let(:ben) { User.create!(email: 'ben-pay@example.test', password: 'payment-fixture') }
 
-  let(:property)  { Property.create!(name: 'Pay Fixture', city: 'Istanbul', stars: 4, amenities: []) }
-  let(:room_type) { RoomType.create!(property: property, name: 'Double', nightly_price_cents: 18_000) }
   let(:booking) do
+    property  = Property.create!(name: 'Pay Fixture', city: 'Istanbul', stars: 4, amenities: [])
+    room_type = RoomType.create!(property: property, name: 'Double', nightly_price_cents: 18_000)
     Booking.create!(user: ada, property: property, room_type: room_type,
                     check_in: Date.current + 30, check_out: Date.current + 31, total_cents: 18_000)
   end

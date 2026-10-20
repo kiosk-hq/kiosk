@@ -45,12 +45,12 @@ module PaymentClaimSpecHelpers
   ClaimSpecCart = Struct.new(:id, :user_id, :currency, :total_amount_cents, :line_items, keyword_init: true)
 
   def self.included(group)
-    group.before(:context) do
+    group.before do
       skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
 
       PaymentClaimSpecHelpers.create_schema
     end
-    group.after(:context) { SpecPostgres.drop_schema(SCHEMA) }
+    group.after { SpecPostgres.drop_schema(SCHEMA) }
     group.before { configure_operator }
   end
 

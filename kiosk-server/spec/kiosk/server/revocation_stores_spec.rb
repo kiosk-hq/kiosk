@@ -30,12 +30,12 @@ end
 RSpec.shared_context 'revocation stores spec: postgres' do
   include RevocationStoresSpec
 
-  before(:context) do
+  before do
     skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
     RevocationStoresSpec.create_schema
   end
 
-  after(:context) { SpecPostgres.drop_schema(RevocationStoresSpec::SCHEMA) }
+  after { SpecPostgres.drop_schema(RevocationStoresSpec::SCHEMA) }
 
   before { Kiosk.configure { |c| c.schema = RevocationStoresSpec::SCHEMA } }
 

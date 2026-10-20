@@ -665,9 +665,11 @@ RSpec.describe Kiosk::Server::WellKnown do
       declare_query('catalog')
       declare_action('checkout')
 
-      expect(Kiosk::Server::Queries).to receive(:known).at_least(:once).and_call_original
-      expect(Kiosk::Server::Actions).to receive(:known).at_least(:once).and_call_original
+      allow(Kiosk::Server::Queries).to receive(:known).and_call_original
+      allow(Kiosk::Server::Actions).to receive(:known).and_call_original
       described_class.api_catalog(base_url: 'https://api.acme.example')
+      expect(Kiosk::Server::Queries).to have_received(:known).at_least(:once)
+      expect(Kiosk::Server::Actions).to have_received(:known).at_least(:once)
     end
 
     it 'links no wire endpoints when nothing is registered (schema module absent)' do

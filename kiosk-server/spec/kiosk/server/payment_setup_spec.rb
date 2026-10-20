@@ -23,13 +23,18 @@ module PaymentSetupSpecHelpers
     def setup_return_user_id(params) = params['ref']
   end
 
+  # The engine's verb controller with the executor's session on a {FakeConnection}.
+  class VerbController < Kiosk::Server::VerbController
+    private
+
+    def connection_for(_identity) = FakeConnection.new
+  end
+
   def store
     @store ||= MemoryEventStore.new
   end
 
   def configure(provider)
-    allow_any_instance_of(Kiosk::Server::VerbController)
-      .to receive(:connection_for).and_return(FakeConnection.new)
     configure_kiosk(provider)
     Kiosk::Server::PaymentSetup.register! if provider
   end
@@ -66,7 +71,7 @@ module PaymentSetupSpecHelpers
     )
     env['action_dispatch.request.path_parameters'] =
       { controller: 'kiosk/server/verb', action: 'create', kiosk_verb: 'payment_setup' }
-    status, _headers, raw = dispatch(Kiosk::Server::VerbController, :create, env)
+    status, _headers, raw = dispatch(PaymentSetupSpecHelpers::VerbController, :create, env)
     [status, JSON.parse(raw)]
   end
 
@@ -188,11 +193,12 @@ RSpec.describe Kiosk::Server::PaymentSetup do
 
     it 'still renders the page when the provider raises' do
       allow(provider).to receive(:setup_return_user_id).and_raise('psp down')
-      expect(Kiosk::Server::FailureLog).to receive(:report).with(/could not push payment_setup/, RuntimeError)
+      allow(Kiosk::Server::FailureLog).to receive(:report)
       status, _headers, body = get_return('ref=u-7')
       expect(status).to eq(200)
       expect(body).not_to include('can now pay')
       expect(store.head).to eq(0)
+      expect(Kiosk::Server::FailureLog).to have_received(:report).with(/could not push payment_setup/, RuntimeError)
     end
   end
 

@@ -92,10 +92,14 @@ RSpec/ExpectActual:
     - "kiosk-demo-hoteling/spec/conformance/kiosk_conformance_spec.rb"
     - "kiosk-test-support/spec/kiosk/test_helpers/conformance/adapters_spec.rb"
 
-# A probe app runs as a child process and reports to its spec on stdout.
+# A probe app runs as a child process without RSpec: it reports to its spec on
+# stdout and changes constants of a process that exits after it.
 RSpec/Output:
-  Exclude:
+  Exclude: &probe_apps
     - "kiosk-server/spec/support/*_app.rb"
+
+RSpec/RemoveConst:
+  Exclude: *probe_apps
 
 # A spec at the root of a spec directory checks the repository's files, a
 # conformance spec checks a whole origin, and a hoteling story follows a guest;
@@ -123,31 +127,9 @@ RSpec/SpecFilePathFormat:
     RLSRSpec: rls_rspec
 
 # The RSpec cops below are being fixed one family at a time.
-RSpec/AnyInstance:
-  Enabled: false
-RSpec/BeforeAfterAll:
-  Enabled: false
 RSpec/ContextWording:
   Enabled: false
 RSpec/ExampleLength:
   Enabled: false
-RSpec/ExpectInHook:
-  Enabled: false
-RSpec/InstanceVariable:
-  Enabled: false
-RSpec/LeakyLocalVariable:
-  Enabled: false
-RSpec/LetSetup:
-  Enabled: false
-RSpec/MessageSpies:
-  Enabled: false
 RSpec/MultipleExpectations:
-  Enabled: false
-RSpec/MultipleMemoizedHelpers:
-  Enabled: false
-RSpec/RemoveConst:
-  Enabled: false
-RSpec/StubbedMock:
-  Enabled: false
-RSpec/VerifiedDoubles:
   Enabled: false

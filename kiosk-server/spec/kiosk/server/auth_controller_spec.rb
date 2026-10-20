@@ -125,11 +125,13 @@ RSpec.describe Kiosk::Server::AuthController do
         agentless = build_identity(actor: 'human', agent_id: nil, user_id: 'u-web')
         Kiosk.configure { |c| c.agent_idp = Class.new { define_method(:verify) { |_r| agentless } }.new }
 
-        # revoke_all must NOT be reached for an agentless identity.
-        expect(Kiosk.configuration.revocation_store).not_to receive(:revoke_all)
+        store = Kiosk.configuration.revocation_store
+        allow(store).to receive(:revoke_all)
 
         status, body = dispatch(described_class, :revoke, revoke_env('some-token'))
         expect_problem(status, body, http: 401, code: 'unauthenticated')
+        # revoke_all must NOT be reached for an agentless identity.
+        expect(store).not_to have_received(:revoke_all)
       end
     end
 
@@ -139,10 +141,11 @@ RSpec.describe Kiosk::Server::AuthController do
         stub_agents_lookup(user_id: 'u-1')
         token = issue_token('a-1')
 
-        expect(Kiosk.configuration.revocation_store)
-          .to receive(:revoke_all).with('a-1', hash_including(:at)).and_call_original
+        store = Kiosk.configuration.revocation_store
+        allow(store).to receive(:revoke_all).and_call_original
 
         status, body = dispatch(described_class, :revoke, revoke_env(token))
+        expect(store).to have_received(:revoke_all).with('a-1', hash_including(:at))
         expect(status).to eq(200)
         expect(body).to match(access_token: a_kind_of(String))
 

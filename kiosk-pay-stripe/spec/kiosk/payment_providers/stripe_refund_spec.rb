@@ -7,17 +7,18 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     include_context 'with a Stripe adapter'
 
     it 'reverses the named PaymentIntent for the amount, keyed by the charge and the refund' do
-      refund = double('Refund', id: 're_123', amount: 1599, created: 1_700_000_100)
-      expect(stripe.refunds).to receive(:create).with(
-        { payment_intent: 'pi_123', amount: 1599 },
-        { idempotency_key: 'pi_123-refund-order-7' }
-      ).and_return(refund)
+      refund = Stripe::Refund.construct_from(id: 're_123', amount: 1599, created: 1_700_000_100)
+      allow(stripe.refunds).to receive(:create).and_return(refund)
 
       expect(adapter.refund(psp_reference: 'pi_123', amount_cents: 1599, key: 'order-7')).to eq(
         psp_reference: 're_123',
         refunded_psp_reference: 'pi_123',
         refunded_amount_cents: 1599,
         refunded_at: Time.at(1_700_000_100).utc
+      )
+      expect(stripe.refunds).to have_received(:create).with(
+        { payment_intent: 'pi_123', amount: 1599 },
+        { idempotency_key: 'pi_123-refund-order-7' }
       )
     end
 

@@ -6,6 +6,8 @@
 RSpec.shared_context 'agent login spec: stubbed proof and connection' do
   let(:pem) { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
   let(:con) { FakeConnection.new }
+  # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
+  let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
   before do
     allow(con).to receive(:quote).and_call_original
@@ -15,8 +17,8 @@ RSpec.shared_context 'agent login spec: stubbed proof and connection' do
     end
     ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_return('fresh-token')
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
+    allow(idp).to receive(:issue).and_return('fresh-token')
     allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })
     allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
   end
@@ -38,8 +40,7 @@ RSpec.describe Kiosk::Server::AgentLogin do
       c.signing_key = Kiosk::Server::SigningKey.generate
       c.issuer      = 'https://demo.example'
     end
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_call_original
+    allow(idp).to receive(:issue).and_call_original
     route_exec_query(con) { [{ 'id' => 'agent-1', 'user_id' => 42, 'allowed_roles' => '{customer}' }] }
 
     subs = Array.new(2) do

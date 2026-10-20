@@ -66,15 +66,14 @@ RSpec.describe Kiosk::Settlement do
   describe 'Kiosk::Settlement and Kiosk::CartMandate' do
     include SettlementSpecHelpers
 
-    before(:context) do
+    before do
       skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
 
       SettlementSpecHelpers.create_schema
+      Kiosk.configure { |c| c.schema = SettlementSpecHelpers::SCHEMA }
     end
 
-    after(:context) { SpecPostgres.drop_schema(SettlementSpecHelpers::SCHEMA) }
-
-    before { Kiosk.configure { |c| c.schema = SettlementSpecHelpers::SCHEMA } }
+    after { SpecPostgres.drop_schema(SettlementSpecHelpers::SCHEMA) }
 
     let(:mine)  { SecureRandom.uuid }
     let(:other) { SecureRandom.uuid }

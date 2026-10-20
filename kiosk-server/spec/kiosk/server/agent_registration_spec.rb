@@ -17,6 +17,8 @@ RSpec.shared_context 'agent registration spec: provisioning stubs' do
   include_context 'agent registration spec: customer origin'
 
   let(:con) { FakeConnection.new }
+  # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
+  let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
   before do
     ar_base = class_double(ActiveRecord::Base).as_stubbed_const
@@ -25,8 +27,8 @@ RSpec.shared_context 'agent registration spec: provisioning stubs' do
     allow(Kiosk.configuration).to receive(:user_model).and_return(
       double(constantize: double(create!: double(id: 42)))
     )
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_return('fake-token')
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
+    allow(idp).to receive(:issue).and_return('fake-token')
     # Isolate the DB branch: PoP proven, challenge burned.
     allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'nonce-1' })
     allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
@@ -37,13 +39,15 @@ RSpec.shared_context 'agent registration spec: factory stubs' do
   include_context 'agent registration spec: customer origin'
 
   let(:con) { FakeConnection.new }
+  # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
+  let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
   before do
     ar_base = class_double(ActiveRecord::Base).as_stubbed_const
     allow(ar_base).to receive(:lease_connection).and_return(con)
     allow(con).to receive(:quote).and_call_original
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_return('fake-token')
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
+    allow(idp).to receive(:issue).and_return('fake-token')
     allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'nonce-1' })
     allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
     # SELECT (dup check) empty → INSERT returns the agent id.
@@ -241,7 +245,8 @@ RSpec.describe Kiosk::Server::AgentRegistration do
     end
 
     it 'does NOT fall back to user_model.create! when the factory is set' do
-      user_model = double('UserModel')
+      # The host's user model: a class that answers create!.
+      user_model = Class.new { def self.create! = nil }
       allow(user_model).to receive(:create!).and_return(double(id: 999))
       allow(Kiosk.configuration).to receive(:user_model)
         .and_return(double(constantize: user_model))

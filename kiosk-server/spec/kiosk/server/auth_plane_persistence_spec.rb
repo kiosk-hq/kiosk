@@ -167,22 +167,17 @@ end
 RSpec.shared_context 'auth plane persistence spec: database' do
   include AuthPlanePersistenceSpec
 
-  before(:context) do
-    skip "no local Postgres reachable (#{AuthPlanePersistenceSpec.postgres_error})" if AuthPlanePersistenceSpec.postgres_error
-
-    AuthPlanePersistenceSpec.create_schema(ActiveRecord::Base.connection)
-  end
-
-  after(:context) do
-    AuthPlanePersistenceSpec.drop_schema(ActiveRecord::Base.connection) unless AuthPlanePersistenceSpec.postgres_error
-  end
-
   let(:connection) { ActiveRecord::Base.connection }
   let(:holder)     { SecureRandom.uuid }
   let(:other)      { SecureRandom.uuid }
   let(:pem)        { "-----BEGIN PUBLIC KEY-----\n#{SecureRandom.hex(20)}\n-----END PUBLIC KEY-----" }
+  # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
+  let(:idp)        { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
   before do
+    skip "no local Postgres reachable (#{AuthPlanePersistenceSpec.postgres_error})" if AuthPlanePersistenceSpec.postgres_error
+
+    AuthPlanePersistenceSpec.create_schema(connection)
     Kiosk.configure do |c|
       c.schema = AuthPlanePersistenceSpec::SCHEMA
       c.issuer = 'https://provider.example'
@@ -195,15 +190,11 @@ RSpec.shared_context 'auth plane persistence spec: database' do
     seed_principals(holder, other)
     # Tokens are not what this file is about; DefaultAgentIdp#issue is covered
     # in default_agent_idp_spec.rb.
-    allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-      .to receive(:issue).and_return('kiosk-pop-jwt')
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
+    allow(idp).to receive(:issue).and_return('kiosk-pop-jwt')
   end
-end
 
-RSpec.shared_context 'auth plane persistence spec: rebind' do
-  include_context 'auth plane persistence spec: database'
-
-  let!(:fresh) { bind!(other, requested_role: 'customer') }
+  after { AuthPlanePersistenceSpec.drop_schema(connection) unless AuthPlanePersistenceSpec.postgres_error }
 end
 
 RSpec.shared_context 'auth plane persistence spec: register door' do
@@ -238,8 +229,7 @@ end
 RSpec.shared_context 'auth plane persistence spec: manage page' do
   include_context 'auth plane persistence spec: database'
 
-  let(:human)     { build_identity(actor: 'human', agent_id: nil, user_id: holder) }
-  let!(:agent_id) { bind!(holder)[:agent_id] }
+  let(:human) { build_identity(actor: 'human', agent_id: nil, user_id: holder) }
 
   before do
     Kiosk.configure do |c|
@@ -311,7 +301,9 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — known key (rebind)' do
-    include_context 'auth plane persistence spec: rebind'
+    include_context 'auth plane persistence spec: database'
+
+    let!(:fresh) { bind!(other, requested_role: 'customer') }
 
     it 'remaps the uuid principal and re-writes allowed_roles as a text[]' do
       result = bind!(holder, requested_role: 'owner')
@@ -411,11 +403,10 @@ RSpec.describe Kiosk::Server::AccountBinding do
     it 'registers with no registration_role at all, and the row LOGS IN (K-788)' do
       configure_no_roles
       issued = []
-      allow_any_instance_of(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
-        .to receive(:issue) { |_instance, **kw|
-              issued << kw
-              'kiosk-pop-jwt'
-            }
+      allow(idp).to receive(:issue) { |**kw|
+        issued << kw
+        'kiosk-pop-jwt'
+      }
 
       agent_id = register!.fetch(:agent_id)
       # A real `text[]`, not NULL and not the string "{}". `array_length` of an
@@ -517,6 +508,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
   describe Kiosk::Server::AssistantsController, 'the manage page' do
     include_context 'auth plane persistence spec: manage page'
+
+    let!(:agent_id) { bind!(holder)[:agent_id] }
 
     it 'writes a free-text label and an integer cap through binds' do
       hostile = "Alice's ' OR 1=1 -- assistant"

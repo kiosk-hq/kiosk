@@ -27,17 +27,20 @@ module InstallGeneratorSpecHelpers
   def invoke!(args = [])
     original_stdout = $stdout
     $stdout = StringIO.new
-    described_class.start(args, destination_root: @destination)
+    described_class.start(args, destination_root: destination)
   ensure
     $stdout = original_stdout
   end
 
+  # The host app's root directory, set by the shared context's `around` hook.
+  attr_reader :destination
+
   def read(relative)
-    File.read(File.join(@destination, relative))
+    File.read(File.join(destination, relative))
   end
 
   def migrations
-    Dir[File.join(@destination, 'db/migrate/*.rb')]
+    Dir[File.join(destination, 'db/migrate/*.rb')]
   end
 
   # The SQL a generated migration executes in `up`, as its heredoc yields it.
@@ -70,7 +73,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
 
     it 'creates config/initializers/kiosk.rb' do
       invoke!
-      expect(File).to exist(File.join(@destination, 'config/initializers/kiosk.rb'))
+      expect(File).to exist(File.join(destination, 'config/initializers/kiosk.rb'))
     end
 
     it 'wraps the configuration in a Kiosk.configure block' do
@@ -173,7 +176,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
 
     it 'writes no separate routes file' do
       invoke!
-      expect(Dir[File.join(@destination, 'config/routes/*')]).to be_empty
+      expect(Dir[File.join(destination, 'config/routes/*')]).to be_empty
     end
   end
 

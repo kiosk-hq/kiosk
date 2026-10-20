@@ -51,12 +51,9 @@ RSpec.shared_context 'device verify controller spec: signed-in holder' do
   include DeviceVerifyControllerSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:rsa)     { OpenSSL::PKey::RSA.generate(2048) }
-  let(:pem)     { rsa.public_key.to_pem }
+  let(:pem)     { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
   let(:session) { {} }
-
-  let(:human) { build_identity(actor: 'human', agent_id: nil, user_id: user_id) }
 
   before do
     Kiosk.configure do |c|
@@ -64,7 +61,7 @@ RSpec.shared_context 'device verify controller spec: signed-in holder' do
       c.roles                      = %i[customer]
       c.device_authorization_store = store
     end
-    wire_user_idp(human)
+    wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id))
   end
 end
 
@@ -117,8 +114,9 @@ RSpec.describe 'DeviceVerifyController' do
     # set the alert rather than reading it back out of a serialised session.
     it 'sets a flash alert telling the visitor to sign in' do
       flash_double = {}
-      allow_any_instance_of(Kiosk::Server::DeviceVerifyController)
-        .to receive(:flash).and_return(flash_double)
+      controller = Kiosk::Server::DeviceVerifyController.new
+      allow(controller).to receive(:flash).and_return(flash_double)
+      allow(Kiosk::Server::DeviceVerifyController).to receive(:new).and_return(controller)
       dispatch(:show, method: 'GET', headers: { 'HTTP_ACCEPT' => 'text/html' })
       expect(flash_double[:alert]).to eq('Please sign in to approve the assistant link.')
     end

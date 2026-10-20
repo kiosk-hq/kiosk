@@ -251,20 +251,18 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     # Every lazy default in the shipped file that ALLOCATES a store must take
     # the lock, so a new store slot added without it reddens here.
     describe 'the guarded set is derived from the shipped source' do
-      allocating = ConfigurationExtensionSpec.allocating_defaults
-
       # If the scan stops matching (a reindent, a rewrite) the census below
       # passes on an empty set and says nothing. Fail instead.
       it 'finds the store-allocating lazy defaults at all' do
-        expect(allocating.keys).to include(
+        expect(ConfigurationExtensionSpec.allocating_defaults.keys).to include(
           'pow_spent_store', 'auth_challenge_store', 'revocation_store', 'device_authorization_store',
           'event_store'
         )
       end
 
-      allocating.each_key do |name|
+      ConfigurationExtensionSpec.allocating_defaults.each do |name, body|
         it "#{name} serialises its first touch on LAZY_STORE_MUTEX" do
-          expect(allocating.fetch(name)).to include('LAZY_STORE_MUTEX')
+          expect(body).to include('LAZY_STORE_MUTEX')
         end
       end
     end

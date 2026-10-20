@@ -42,8 +42,9 @@ module Kiosk
         on the HTTP status alone.
 
         `limit` and `cursor` are reserved parameter names this wire always
-        accepts on a query, whether or not the verb declares them, and they
-        drive the cursor pagination of the specification's Section 8.4. A
+        accepts on a query. A query may declare `limit` to bound its page
+        size; no verb declares `cursor`. The two names drive the cursor
+        pagination of the specification's Section 8.4. A
         paginated answer is still a bare array: the next page's URI arrives in
         an RFC 8288 `Link` response header with `rel="next"`, and the count of
         matching rows in `X-Total-Count`.
@@ -184,7 +185,7 @@ module Kiosk
           }
         end
 
-        # `limit`/`cursor` are always accepted, so declare them unless the verb did.
+        # `limit`/`cursor` are always accepted, so add each one the verb did not declare.
         def self.reserved_parameter_refs(declared)
           ArgumentDecoder::RESERVED.keys.reject { |reserved| declared.include?(reserved) }
                                    .map { |reserved| { '$ref': "#/components/parameters/#{reserved}" } }
@@ -521,7 +522,7 @@ module Kiosk
             style: 'form',
             explode: true,
             description: 'Maximum rows in one page. The operator MAY clamp it. ' \
-                         'Reserved: always accepted, never required to be declared.',
+                         'Reserved: always accepted. A query MAY declare it to bound the page size.',
             schema: { type: ArgumentDecoder::RESERVED.fetch('limit'), minimum: 1 }
           },
           'cursor' => {
@@ -532,7 +533,7 @@ module Kiosk
             explode: true,
             description: 'The OPAQUE `next` token from the previous page, echoed back ' \
                          'verbatim. Never parse or construct one. ' \
-                         'Reserved: always accepted, never required to be declared.',
+                         'Reserved: always accepted, never declared.',
             schema: { type: ArgumentDecoder::RESERVED.fetch('cursor') }
           }
         }.freeze

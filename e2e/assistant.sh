@@ -345,7 +345,7 @@ assert "the descriptor's description travels verbatim" \
 
 # `style` and `explode` EXPLICIT on every parameter (Prism ignores the
 # defaults). `my_appointments` declares `salon_id`, so the list is not empty.
-# `limit`/`cursor` are INJECTED into every query because no input_schema
+# `limit`/`cursor` are INJECTED into every query because neither query here
 # declares them (a strict validator 400s the pagination the contract invites).
 assert "my_appointments declares salon_id as a query parameter" \
   "$(echo "$oa" | jq -r '[.paths."/my_appointments".get.parameters[] | select(has("$ref") | not) | .name] | join(",")')" \
@@ -658,8 +658,8 @@ assert "…a stale ?v= still answers the CURRENT catalogue, short-lived" \
 assert "If-None-Match on the digest → 304" \
   "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/schema" -H "If-None-Match: \"$sch_digest\"")" "304"
 
-# `limit` and `cursor` are RESERVED parameter names: always
-# accepted, never declared. `salons` declares the CLOSED empty object
+# `limit` and `cursor` are RESERVED parameter names, always accepted on a
+# query, and `salons` declares neither. It declares the CLOSED empty object
 # `{additionalProperties: false, properties: {}}`, so without the reserved
 # rule this is exactly the request that would 400 as a disallowed additional
 # property — on the very verbs the pagination contract invites it on.

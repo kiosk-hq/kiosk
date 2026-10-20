@@ -1174,6 +1174,47 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /without output_schema/)
     end
+
+    it 'refuses a verb that declares cursor' do
+      expect do
+        Class.new(ApplicationController) do
+          include Kiosk::Handler
+
+          kind :query
+          description 'Declares the reserved cursor.'
+          input_schema type: 'object', properties: { cursor: { type: 'string' } }
+          output_schema true
+          def browse = render(json: [])
+        end
+      end.to raise_error(ArgumentError, /declares `cursor`.*Remove `cursor` from the input_schema/)
+    end
+
+    it 'refuses a verb that declares limit as anything but an integer' do
+      expect do
+        Class.new(ApplicationController) do
+          include Kiosk::Handler
+
+          kind :query
+          description 'Declares limit as a string.'
+          input_schema type: 'object', properties: { limit: { type: 'string' } }
+          output_schema true
+          def browse = render(json: [])
+        end
+      end.to raise_error(ArgumentError, /declares `limit`.*the page size, an integer/)
+    end
+
+    it 'accepts a verb that declares limit as an integer with its largest page' do
+      Class.new(ApplicationController) do
+        include Kiosk::Handler
+
+        kind :query
+        description 'Pages of at most ten.'
+        input_schema type: 'object', properties: { limit: { type: 'integer', maximum: 10 } }
+        output_schema true
+        def ten_per_page = render(json: [])
+      end
+      expect(Kiosk::Server::Queries.known).to include('ten_per_page')
+    end
   end
 end
 

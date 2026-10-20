@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2003 anchors.
+# 2007 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1532,6 +1532,7 @@ kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	refuses an empty next_cu
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a page whose rows are not an array
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a query that answers an object, paginating or not
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	404s a request that did not come through the Kiosk wire
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts a verb that declares limit as an integer with its largest page
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts the verb name #{name.inspect}
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	answers bad_request whose detail is the errors' full messages
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	carries a 403 code a bare status cannot name (rls_denied)
@@ -1544,6 +1545,8 @@ kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a declaration with 
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a reach outside the four the spec names
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb name that is not one legal path segment
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb name the engine draws itself
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb that declares cursor
+kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses a verb that declares limit as anything but an integer
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses the verb name #{name.inspect}
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	reserves every first path segment the engine draws under the mount
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	refuses a name declared as both a query and an action
@@ -1887,6 +1890,7 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	omits X-Total-Count on a 
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	on an ACTION as well as a query
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	puts the next page in a Link header with rel=next, not in the body
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a UTC offset in Kiosk-Timezone with a 400 naming the header
+kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a limit above the largest page a verb declares, naming limit
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a value outside a declared enum — K-717's schema half
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a value that will not coerce with a 400 naming the parameter
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	refuses a zone name nobody has, and never falls back

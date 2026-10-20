@@ -12,7 +12,7 @@ module Kiosk
     module ArgumentDecoder
       module_function
 
-      # Reserved names and their types when a verb does not declare them itself.
+      # Reserved names and their types. A verb never declares `cursor`; it may declare `limit` (§8.1 item 6).
       RESERVED = { 'limit' => 'integer', 'cursor' => 'string' }.freeze
 
       # @param input_schema [Hash, nil] the verb's `input_schema`, symbol- or string-keyed

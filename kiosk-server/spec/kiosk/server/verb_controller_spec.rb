@@ -771,6 +771,17 @@ RSpec.describe Kiosk::Server::VerbController do
       end
       expect(call_verb(:get, 'catalog', query: 'limit=20&cursor=eyJvIjoyMH0').first).to eq(200)
     end
+
+    it 'refuses a limit above the largest page a verb declares, naming limit' do
+      declare_query('catalog', input_schema: { type: 'object', additionalProperties: false,
+                                               properties: { limit: { type: 'integer', maximum: 10 } } }) do
+        render json: []
+      end
+      status, body = call_verb(:get, 'catalog', query: 'limit=11')
+      expect(status).to eq(400)
+      expect(body[:detail]).to include('limit')
+      expect(call_verb(:get, 'catalog', query: 'limit=10&cursor=eyJvIjoyMH0').first).to eq(200)
+    end
   end
 end
 

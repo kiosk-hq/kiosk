@@ -345,7 +345,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder, 'rule (6) — a value that will n
   end
 end
 
-RSpec.describe Kiosk::Server::ArgumentDecoder, 'rule (7) — limit and cursor are reserved, always accepted, never declared' do
+RSpec.describe Kiosk::Server::ArgumentDecoder, 'rule (7) — limit and cursor are reserved and always accepted' do
   include ArgumentDecoderSpecHelpers
 
   it 'coerces limit to an integer on a verb that declares neither' do
@@ -365,8 +365,8 @@ RSpec.describe Kiosk::Server::ArgumentDecoder, 'rule (7) — limit and cursor ar
   end
 
   it 'lets a verb that DOES declare limit constrain it itself' do
-    declared = schema(limit: { type: 'string' })
-    expect(decode('limit=20', declared)).to eq(limit: '20')
+    declared = schema(limit: { type: 'integer', maximum: 50 })
+    expect(decode('limit=20', declared)).to eq(limit: 20)
   end
 end
 

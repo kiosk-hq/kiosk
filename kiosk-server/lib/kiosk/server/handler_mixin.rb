@@ -100,7 +100,29 @@ module Kiosk
           return reserved_name(where, name) if RESERVED_NAMES.include?(name)
 
           missing = REQUIRED_DECLARATIONS.reject { |key| declaration.key?(key) }
-          missing_schemas(where, name, missing) unless missing.empty?
+          return missing_schemas(where, name, missing) unless missing.empty?
+
+          reserved_parameter(where, name, ArgumentDecoder.fetch(declaration[:input_schema], :properties))
+        end
+
+        # §8.1 item 6: no verb declares `cursor`; a verb that declares `limit` declares an integer.
+        def reserved_parameter(where, name, properties)
+          return declared_cursor(where, name) if ArgumentDecoder.fetch(properties, :cursor)
+
+          limit = ArgumentDecoder.fetch(properties, :limit)
+          declared_limit(where, name, limit) unless limit.nil? || ArgumentDecoder.declared_type(limit) == 'integer'
+        end
+
+        def declared_cursor(where, name)
+          "#{where} declares `cursor` in the input_schema of #{name.inspect}. `cursor` is reserved: " \
+            'the engine accepts it on every query, and it carries the token of your `next` link. ' \
+            'Remove `cursor` from the input_schema.'
+        end
+
+        def declared_limit(where, name, limit)
+          "#{where} declares `limit` in the input_schema of #{name.inspect} as #{limit.inspect}. " \
+            '`limit` is the page size, an integer. Declare it `{ type: "integer", maximum: <your largest page> }`, ' \
+            'or remove it from the input_schema.'
         end
 
         def missing_kind(where, name)

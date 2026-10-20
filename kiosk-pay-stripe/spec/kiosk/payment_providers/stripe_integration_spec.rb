@@ -63,75 +63,77 @@ RSpec.shared_context 'with a live Stripe test key' do
   end
 end
 
-# The ONE example in this file that does not skip, and the only reason the
-# rest can be trusted to fail for Stripe's reasons rather than for ours: a
-# subject that raises before any network call is indistinguishable from a
-# skip, and a skip is the same colour as a pass. It touches no network.
-RSpec.describe Kiosk::PaymentProviders::Stripe, 'the subject itself', :integration do
-  include_context 'with a live Stripe test key'
+RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
+  # The ONE example in this file that does not skip, and the only reason the
+  # rest can be trusted to fail for Stripe's reasons rather than for ours: a
+  # subject that raises before any network call is indistinguishable from a
+  # skip, and a skip is the same colour as a pass. It touches no network.
+  describe 'the subject itself' do
+    include_context 'with a live Stripe test key'
 
-  it 'builds without reaching Stripe', :no_key_needed do
-    expect(adapter).to be_a(described_class)
-  end
-end
-
-RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url + #capture (full off_session round-trip)', :integration do
-  include_context 'with a live Stripe test key'
-
-  # Attaches a test card to the Customer, as the hosted setup page does.
-  def save_test_card(cus_id)
-    stripe_api.setup_intents.create(customer: cus_id, payment_method: 'pm_card_visa',
-                                    payment_method_types: ['card'], confirm: true, usage: 'off_session')
+    it 'builds without reaching Stripe', :no_key_needed do
+      expect(adapter).to be_a(described_class)
+    end
   end
 
-  it 'charges the card the human saved through the setup page' do
-    adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
-    cus_id = customer_store[user_id]
-    expect(cus_id).to start_with('cus_')
-    save_test_card(cus_id)
+  describe '#setup_url + #capture (full off_session round-trip)' do
+    include_context 'with a live Stripe test key'
 
-    expect(adapter.saved_method?(user_id: user_id)).to be true
+    # Attaches a test card to the Customer, as the hosted setup page does.
+    def save_test_card(cus_id)
+      stripe_api.setup_intents.create(customer: cus_id, payment_method: 'pm_card_visa',
+                                      payment_method_types: ['card'], confirm: true, usage: 'off_session')
+    end
 
-    captured = adapter.capture(cart_mandate, payment_method: nil)
-    expect(captured[:settled_amount_cents]).to eq(1599)
-    expect(captured[:psp_reference]).to start_with('pi_')
+    it 'charges the card the human saved through the setup page' do
+      adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+      cus_id = customer_store[user_id]
+      expect(cus_id).to start_with('cus_')
+      save_test_card(cus_id)
+
+      expect(adapter.saved_method?(user_id: user_id)).to be true
+
+      captured = adapter.capture(cart_mandate, payment_method: nil)
+      expect(captured[:settled_amount_cents]).to eq(1599)
+      expect(captured[:psp_reference]).to start_with('pi_')
+    end
   end
-end
 
-RSpec.describe Kiosk::PaymentProviders::Stripe, '#setup_url', :integration do
-  include_context 'with a live Stripe test key'
+  describe '#setup_url' do
+    include_context 'with a live Stripe test key'
 
-  it 'returns a hosted Stripe Checkout URL for the setup flow' do
-    url = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
-    expect(url).to start_with('https://checkout.stripe.com/')
+    it 'returns a hosted Stripe Checkout URL for the setup flow' do
+      url = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+      expect(url).to start_with('https://checkout.stripe.com/')
+    end
+
+    # K-492 against the real API. This is the ONLY example anywhere that can
+    # answer the question the reuse rests on: does a just-created `mode:setup`
+    # Checkout Session actually come back from `list(status: "open")`? The
+    # double-based specs and the local stateful fake in
+    # `stripe_setup_reuse_spec.rb` both ASSUME it — they exercise our side of
+    # the contract, not Stripe's. Needs STRIPE_SECRET_KEY; CI deliberately has
+    # none, so in CI this is skipped, not passed.
+    it 'returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)' do
+      first  = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+      second = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+
+      expect(second).to eq(first)
+
+      cus_id     = customer_store[user_id]
+      open_setup = stripe_api.checkout.sessions
+                             .list(customer: cus_id, status: 'open', limit: 10)
+                             .data.select { |s| s.mode == 'setup' }
+      expect(open_setup.map(&:url)).to eq([first])
+    end
   end
 
-  # K-492 against the real API. This is the ONLY example anywhere that can
-  # answer the question the reuse rests on: does a just-created `mode:setup`
-  # Checkout Session actually come back from `list(status: "open")`? The
-  # double-based specs and the local stateful fake in
-  # `stripe_setup_reuse_spec.rb` both ASSUME it — they exercise our side of
-  # the contract, not Stripe's. Needs STRIPE_SECRET_KEY; CI deliberately has
-  # none, so in CI this is skipped, not passed.
-  it 'returns the SAME url on a second call and leaves exactly ONE open setup session (K-492)' do
-    first  = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
-    second = adapter.setup_url(user_id: user_id, return_url: 'https://shop.example/kiosk/payment_setup/return')
+  describe '#saved_method? before card setup' do
+    include_context 'with a live Stripe test key'
 
-    expect(second).to eq(first)
-
-    cus_id     = customer_store[user_id]
-    open_setup = stripe_api.checkout.sessions
-                           .list(customer: cus_id, status: 'open', limit: 10)
-                           .data.select { |s| s.mode == 'setup' }
-    expect(open_setup.map(&:url)).to eq([first])
-  end
-end
-
-RSpec.describe Kiosk::PaymentProviders::Stripe, '#saved_method? before card setup', :integration do
-  include_context 'with a live Stripe test key'
-
-  it 'returns false for a new user with no card on file' do
-    fresh_user = "no-card-user-#{Process.pid}"
-    expect(adapter.saved_method?(user_id: fresh_user)).to be false
+    it 'returns false for a new user with no card on file' do
+      fresh_user = "no-card-user-#{Process.pid}"
+      expect(adapter.saved_method?(user_id: fresh_user)).to be false
+    end
   end
 end

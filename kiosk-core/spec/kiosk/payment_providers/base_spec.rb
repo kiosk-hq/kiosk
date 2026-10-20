@@ -31,11 +31,11 @@ RSpec.describe Kiosk::PaymentProviders::Base do
         .to raise_error(NotImplementedError, /refund must be implemented/)
     end
   end
-end
 
-RSpec.describe Kiosk::PaymentProviders::Base, '#resume' do
-  it 'runs the capture again, which the adapter keys by the cart mandate id' do
-    adapter = Class.new(described_class) { def capture(cart, payment_method:) = [cart, payment_method] }.new
-    expect(adapter.resume(:cart_mandate, payment_method: 'on_file')).to eq([:cart_mandate, 'on_file'])
+  describe '#resume' do
+    it 'runs the capture again, which the adapter keys by the cart mandate id' do
+      adapter = Class.new(described_class) { def capture(cart, payment_method:) = [cart, payment_method] }.new
+      expect(adapter.resume(:cart_mandate, payment_method: 'on_file')).to eq([:cart_mandate, 'on_file'])
+    end
   end
 end

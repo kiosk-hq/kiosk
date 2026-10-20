@@ -146,14 +146,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
       expect(problem[:hint]).to include('challenge')
     end
-  end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
-
-  context 'with validate_requests: true' do
-    include_context 'wire controller validation spec: shape check on'
 
     it 'rejects a malformed proof inside a JSON-array header (per-proof validation)' do
       status, _headers, problem = call_with_pow(
@@ -180,14 +172,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).not_to eq('bad_request')
       expect(problem[:challenges]).to be_an(Array)
     end
-  end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
-
-  context 'with validate_requests: true' do
-    include_context 'wire controller validation spec: shape check on'
 
     it 'accepts a JSON-array of well-formed proofs (passes to the gate)' do
       status, _headers, problem = call_with_pow(
@@ -211,14 +195,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
       expect(problem[:code]).not_to eq('pow_required')
     end
-  end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
-
-  context 'with validate_requests: true' do
-    include_context 'wire controller validation spec: shape check on'
 
     # The bound must not refuse the largest legal index. The schema writes the
     # upper bound as an inclusive `maximum: 2**64 - 1`, so a double-precision
@@ -243,14 +219,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
       expect(problem[:code]).not_to eq('pow_required')
     end
-  end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
-
-  context 'with validate_requests: true' do
-    include_context 'wire controller validation spec: shape check on'
 
     # `header_nonce` is a u32, folded into the seed with `pack("V")`, which
     # truncates mod 2**32. Out-of-range values are refused here as malformed
@@ -274,14 +242,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('pow_required')
       expect(problem[:code]).not_to eq('bad_request')
     end
-  end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
-
-  context 'with validate_requests: true' do
-    include_context 'wire controller validation spec: shape check on'
 
     it 'rejects a negative header_nonce with 400 bad_request (u32 lower bound)' do
       status, _headers, problem = call_with_pow(
@@ -301,14 +261,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(body[:code]).to eq('pow_required')
       expect(body[:challenges].pluck(:alg)).to eq(['argon2id'])
     end
-  end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
-
-  context 'with validate_requests: true' do
-    include_context 'wire controller validation spec: shape check on'
 
     it 'leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)' do
       # An absent header means the initial request; the gate must still issue the
@@ -331,10 +283,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:hint]).to include('Kiosk-PoW')
     end
   end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
 
   context 'with validate_requests explicitly off' do
     before { Kiosk.configure { |c| c.validate_requests = false } }
@@ -359,10 +307,6 @@ RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
       expect(problem[:code]).to eq('bad_request')
     end
   end
-end
-
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
 
   # ── Fail-loud when the RUNTIME dependency is not loadable ──────────────────
   context 'when validate_requests is on but json_schemer is not loadable' do

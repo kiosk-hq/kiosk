@@ -59,95 +59,6 @@ RSpec.shared_context 'with a stateful local Stripe API' do
   end
 end
 
-RSpec.describe Kiosk::PaymentProviders::Stripe,
-               'setup-session reuse (K-492) over the real SDK against a stateful local Stripe API' do
-  include_context 'with a stateful local Stripe API'
-
-  it 'hands back the SAME setup_url on a second poll and mints only ONE session' do
-    first  = adapter.setup_url(user_id: 'user-1', return_url: return_url)
-    second = adapter.setup_url(user_id: 'user-1', return_url: return_url)
-
-    expect(first).to start_with('https://checkout.stripe.com/')
-    expect(second).to eq(first)
-    expect(fake.requests_to('POST', '/v1/checkout/sessions').size).to eq(1)
-  end
-
-  it 'replaces a stored customer Stripe answers 404 for, and saves the new one (K-1993)' do
-    customer_store['user-1'] = 'cus_gone'
-    url = adapter.setup_url(user_id: 'user-1', return_url: return_url)
-
-    expect(url).to start_with('https://checkout.stripe.com/')
-    expect(customer_store['user-1']).to start_with('cus_fake_')
-  end
-
-  it 'stays on that one session for a whole poll loop (the live bug minted five)' do
-    urls = Array.new(5) { adapter.setup_url(user_id: 'user-1', return_url: return_url) }
-
-    expect(urls.uniq.size).to eq(1)
-    expect(fake.requests_to('POST', '/v1/checkout/sessions').size).to eq(1)
-  end
-end
-
-RSpec.describe Kiosk::PaymentProviders::Stripe,
-               'setup-session reuse (K-492) over the real SDK against a stateful local Stripe API' do
-  include_context 'with a stateful local Stripe API'
-
-  # The wire request, not the Ruby call: a filter that never leaves the
-  # process is a filter that cannot be wrong in the way K-492 was.
-  it "asks for this customer's OPEN sessions on the wire" do
-    adapter.setup_url(user_id: 'user-1', return_url: return_url)
-    adapter.setup_url(user_id: 'user-1', return_url: return_url)
-
-    lookup = fake.requests_to('GET', '/v1/checkout/sessions').last
-    expect(lookup.params).to include('status' => 'open', 'limit' => '10')
-    expect(lookup.params['customer']).to eq(customer_store['user-1'])
-    expect(customer_store['user-1']).to start_with('cus_')
-  end
-
-  # Proves the `status: "open"` filter is LOAD-BEARING and not decoration:
-  # once the session is no longer open the same code must mint a new one.
-  it 'mints a fresh session once the outstanding one is no longer open' do
-    first = adapter.setup_url(user_id: 'user-1', return_url: return_url)
-    fake.close_all_sessions!
-    second = adapter.setup_url(user_id: 'user-1', return_url: return_url)
-
-    expect(second).not_to eq(first)
-    expect(fake.requests_to('POST', '/v1/checkout/sessions').size).to eq(2)
-  end
-end
-
-RSpec.describe Kiosk::PaymentProviders::Stripe,
-               'setup-session reuse (K-492) over the real SDK against a stateful local Stripe API' do
-  include_context 'with a stateful local Stripe API'
-
-  # Two principals must never share a hosted page.
-  it "does not hand one principal another principal's outstanding session" do
-    one = adapter.setup_url(user_id: 'user-1', return_url: return_url)
-    two = adapter.setup_url(user_id: 'user-2', return_url: return_url)
-
-    expect(two).not_to eq(one)
-    expect(customer_store['user-2']).not_to eq(customer_store['user-1'])
-  end
-
-  # The adapter reads listed sessions through `field(obj, :name)`, which is
-  # `respond_to?` + `public_send` — and `Stripe::StripeObject` answers API
-  # fields through `method_missing`. If that ever stopped being true the
-  # helper would return nil for everything and reuse would quietly never
-  # happen. Pinned against a genuinely deserialized object, not a double.
-  it 'reads mode/success_url/url off a genuinely deserialized listed session' do
-    adapter.setup_url(user_id: 'user-1', return_url: return_url)
-
-    sessions = Stripe::StripeClient.new('sk_test_fake', api_base: fake.base_url).v1.checkout.sessions
-    listed = sessions.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
-    expect(listed).to be_a(Stripe::Checkout::Session)
-    %i[mode success_url url].each do |name|
-      expect(listed.respond_to?(name)).to be(true), "StripeObject no longer exposes ##{name}; `field` would read nil"
-    end
-    expect(listed.mode).to eq('setup')
-    expect(listed.success_url).to eq("#{return_url}?#{described_class::RETURN_QUERY}")
-  end
-end
-
 # HONEST BOUNDARY. stripe-mock cannot cover reuse end to end, and this states
 # why in an executable form rather than in a comment that could rot: it serves
 # OpenAPI fixtures and keeps no state, so `GET /v1/checkout/sessions` answers
@@ -176,28 +87,107 @@ RSpec.shared_context 'with stripe-mock' do
   let(:sessions) { Stripe::StripeClient.new('sk_test_mock', api_base: mock_url).v1.checkout.sessions }
 end
 
-RSpec.describe Kiosk::PaymentProviders::Stripe,
-               "setup-session reuse (K-492) against stripe-mock (Stripe's own fixture server)" do
-  include_context 'with stripe-mock'
+RSpec.describe Kiosk::PaymentProviders::Stripe do
+  describe 'setup-session reuse (K-492) over the real SDK against a stateful local Stripe API' do
+    include_context 'with a stateful local Stripe API'
 
-  it 'serves a list fixture that CANNOT stand in for an outstanding setup session' do
-    listed = sessions.list(customer: 'cus_whatever', status: 'open', limit: 10).data.first
+    it 'hands back the SAME setup_url on a second poll and mints only ONE session' do
+      first  = adapter.setup_url(user_id: 'user-1', return_url: return_url)
+      second = adapter.setup_url(user_id: 'user-1', return_url: return_url)
 
-    expect(listed.status).to eq('open')
-    # …but neither of the two things the adapter requires:
-    expect(listed.mode).to eq('payment')
-    expect(listed.success_url).to eq('https://example.com/success')
+      expect(first).to start_with('https://checkout.stripe.com/')
+      expect(second).to eq(first)
+      expect(fake.requests_to('POST', '/v1/checkout/sessions').size).to eq(1)
+    end
+
+    it 'replaces a stored customer Stripe answers 404 for, and saves the new one (K-1993)' do
+      customer_store['user-1'] = 'cus_gone'
+      url = adapter.setup_url(user_id: 'user-1', return_url: return_url)
+
+      expect(url).to start_with('https://checkout.stripe.com/')
+      expect(customer_store['user-1']).to start_with('cus_fake_')
+    end
+
+    it 'stays on that one session for a whole poll loop (the live bug minted five)' do
+      urls = Array.new(5) { adapter.setup_url(user_id: 'user-1', return_url: return_url) }
+
+      expect(urls.uniq.size).to eq(1)
+      expect(fake.requests_to('POST', '/v1/checkout/sessions').size).to eq(1)
+    end
+
+    # The wire request, not the Ruby call: a filter that never leaves the
+    # process is a filter that cannot be wrong in the way K-492 was.
+    it "asks for this customer's OPEN sessions on the wire" do
+      adapter.setup_url(user_id: 'user-1', return_url: return_url)
+      adapter.setup_url(user_id: 'user-1', return_url: return_url)
+
+      lookup = fake.requests_to('GET', '/v1/checkout/sessions').last
+      expect(lookup.params).to include('status' => 'open', 'limit' => '10')
+      expect(lookup.params['customer']).to eq(customer_store['user-1'])
+      expect(customer_store['user-1']).to start_with('cus_')
+    end
+
+    # Proves the `status: "open"` filter is LOAD-BEARING and not decoration:
+    # once the session is no longer open the same code must mint a new one.
+    it 'mints a fresh session once the outstanding one is no longer open' do
+      first = adapter.setup_url(user_id: 'user-1', return_url: return_url)
+      fake.close_all_sessions!
+      second = adapter.setup_url(user_id: 'user-1', return_url: return_url)
+
+      expect(second).not_to eq(first)
+      expect(fake.requests_to('POST', '/v1/checkout/sessions').size).to eq(2)
+    end
+
+    # Two principals must never share a hosted page.
+    it "does not hand one principal another principal's outstanding session" do
+      one = adapter.setup_url(user_id: 'user-1', return_url: return_url)
+      two = adapter.setup_url(user_id: 'user-2', return_url: return_url)
+
+      expect(two).not_to eq(one)
+      expect(customer_store['user-2']).not_to eq(customer_store['user-1'])
+    end
+
+    # The adapter reads listed sessions through `field(obj, :name)`, which is
+    # `respond_to?` + `public_send` — and `Stripe::StripeObject` answers API
+    # fields through `method_missing`. If that ever stopped being true the
+    # helper would return nil for everything and reuse would quietly never
+    # happen. Pinned against a genuinely deserialized object, not a double.
+    it 'reads mode/success_url/url off a genuinely deserialized listed session' do
+      adapter.setup_url(user_id: 'user-1', return_url: return_url)
+
+      sessions = Stripe::StripeClient.new('sk_test_fake', api_base: fake.base_url).v1.checkout.sessions
+      listed = sessions.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
+      expect(listed).to be_a(Stripe::Checkout::Session)
+      %i[mode success_url url].each do |name|
+        expect(listed.respond_to?(name)).to be(true), "StripeObject no longer exposes ##{name}; `field` would read nil"
+      end
+      expect(listed.mode).to eq('setup')
+      expect(listed.success_url).to eq("#{return_url}?#{described_class::RETURN_QUERY}")
+    end
   end
 
-  it 'does not let that fixture be mistaken for one — it mints instead of reusing' do
-    url = adapter.setup_url(user_id: 'user-1', return_url: return_url)
+  describe "setup-session reuse (K-492) against stripe-mock (Stripe's own fixture server)" do
+    include_context 'with stripe-mock'
 
-    expect(url).to start_with('https://checkout.stripe.com/')
-    # stripe-mock is STATELESS: the session the adapter just minted is not in
-    # its list, which still serves the canned payment-mode fixture. That is
-    # the assertion — the mint above cannot have been a reuse of anything the
-    # list served, because the list has not changed.
-    listed_after_mint = sessions.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
-    expect(listed_after_mint.mode).to eq('payment'), 'stripe-mock became stateful — extend the reuse group above to it'
+    it 'serves a list fixture that CANNOT stand in for an outstanding setup session' do
+      listed = sessions.list(customer: 'cus_whatever', status: 'open', limit: 10).data.first
+
+      expect(listed.status).to eq('open')
+      # …but neither of the two things the adapter requires:
+      expect(listed.mode).to eq('payment')
+      expect(listed.success_url).to eq('https://example.com/success')
+    end
+
+    it 'does not let that fixture be mistaken for one — it mints instead of reusing' do
+      url = adapter.setup_url(user_id: 'user-1', return_url: return_url)
+
+      expect(url).to start_with('https://checkout.stripe.com/')
+      # stripe-mock is STATELESS: the session the adapter just minted is not in
+      # its list, which still serves the canned payment-mode fixture. That is
+      # the assertion — the mint above cannot have been a reuse of anything the
+      # list served, because the list has not changed.
+      listed_after_mint = sessions.list(customer: customer_store['user-1'], status: 'open', limit: 10).data.first
+      expect(listed_after_mint.mode).to eq('payment'), 'stripe-mock became stateful — extend the reuse group above to it'
+    end
   end
 end

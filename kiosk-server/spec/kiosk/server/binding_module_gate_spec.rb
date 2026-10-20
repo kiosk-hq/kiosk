@@ -108,10 +108,6 @@ RSpec.describe 'the declined account-binding profile' do
       expect(status).to eq(200)
     end
   end
-end
-
-RSpec.describe 'the declined account-binding profile' do
-  include_context 'binding module gate spec: configured origin'
 
   describe 'with the module declined' do
     # §4.3: the auth block is CORE discovery. All six URLs are published by
@@ -137,10 +133,6 @@ RSpec.describe 'the declined account-binding profile' do
       expect(auth[:claim_url]).to eq('https://provider.example/kiosk/auth/claim')
     end
   end
-end
-
-RSpec.describe 'the declined account-binding profile' do
-  include_context 'binding module gate spec: configured origin'
 
   describe 'with the module served (the default)' do
     it 'defaults to true, so no configured origin moves' do

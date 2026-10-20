@@ -39,9 +39,7 @@ RSpec.describe Kiosk::Server::Headers do
       expect(described_class.add_to(headers)).to equal(headers)
     end
   end
-end
 
-RSpec.describe Kiosk::Server::Headers do
   describe '.build' do
     it 'produces a fresh headers hash with the three Kiosk headers set' do
       headers = described_class.build
@@ -52,14 +50,7 @@ RSpec.describe Kiosk::Server::Headers do
       )
     end
   end
-end
 
-# Spec §3.7, landed with the response shape (T-068 slice 2). Not in
-# HeadersMiddleware on purpose: that covers every path under the mount,
-# including the deliberately public, long-lived `/kiosk/.well-known/
-# jwks.json`, where `Vary: Authorization` would be both a lie and a
-# performance regression.
-RSpec.describe Kiosk::Server::Headers do
   describe '.add_cache_policy' do
     it 'varies on every request header that changes the answer' do
       headers = described_class.add_cache_policy({}, status: 200)
@@ -89,11 +80,7 @@ RSpec.describe Kiosk::Server::Headers do
       headers = described_class.add_cache_policy({ 'Cache-Control' => 'private, max-age=60' }, status: 402)
       expect(headers['Cache-Control']).to eq('no-store')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::Headers do
-  describe '.add_cache_policy' do
     # §3.7.3 (K-823). "Leaves an operator's own alone" stops at the one policy
     # the spec forbids: a verb payload is scoped to one authenticated identity,
     # so `public` or `s-maxage` hands it to a shared cache and thence to

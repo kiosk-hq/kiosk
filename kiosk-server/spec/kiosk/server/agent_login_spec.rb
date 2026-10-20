@@ -48,10 +48,6 @@ RSpec.describe Kiosk::Server::AgentLogin do
     end
     expect(subs).to eq([42, 42])
   end
-end
-
-RSpec.describe Kiosk::Server::AgentLogin do
-  include_context 'agent login spec: stubbed proof and connection'
 
   # K-782: the presented key is the request body. It reaches the lookup as `$1`,
   # so it is never read as SQL — and the statement text cannot contain it.
@@ -85,10 +81,6 @@ RSpec.describe Kiosk::Server::AgentLogin do
     expect(Kiosk::Server::AuthChallenge).not_to have_received(:consume!)
     expect(con.all_sql).to be_empty
   end
-end
-
-RSpec.describe Kiosk::Server::AgentLogin do
-  include_context 'agent login spec: stubbed proof and connection'
 
   it 'raises NotFound for an unregistered key (no silent new account)' do
     route_exec_query(con) { [] }

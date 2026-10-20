@@ -80,12 +80,6 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect(results.count(false)).to eq(3)
       end
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::PowSpentStores do
-  describe Kiosk::Server::PowSpentStores::ActiveRecord do
-    include_context 'pow spent stores spec: postgres'
 
     describe '#claim' do
       it 'returns true the first time and false after' do
@@ -107,15 +101,7 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         # The same hostile id cannot be spent twice.
         expect(store.claim(hostile, live)).to be(false)
       end
-    end
-  end
-end
 
-RSpec.describe Kiosk::Server::PowSpentStores do
-  describe Kiosk::Server::PowSpentStores::ActiveRecord do
-    include_context 'pow spent stores spec: postgres'
-
-    describe '#claim' do
       it 'returns false for a nil id without touching the database' do
         expect(store.claim(nil, live)).to be(false)
       end
@@ -138,12 +124,6 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect { store.release(nil) }.not_to raise_error
       end
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::PowSpentStores do
-  describe Kiosk::Server::PowSpentStores::ActiveRecord do
-    include_context 'pow spent stores spec: postgres'
 
     describe '#spent?' do
       it 'is false before a claim and true after' do
@@ -161,12 +141,6 @@ RSpec.describe Kiosk::Server::PowSpentStores do
         expect(store.spent?(nil)).to be(false)
       end
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::PowSpentStores do
-  describe Kiosk::Server::PowSpentStores::ActiveRecord do
-    include_context 'pow spent stores spec: postgres'
 
     describe '#mark_spent' do
       it 'is idempotent and visible to a second instance' do
@@ -188,12 +162,6 @@ RSpec.describe Kiosk::Server::PowSpentStores do
     it 'answers the whole spent-store interface' do
       expect(store).to respond_to(:claim, :release, :spent?, :mark_spent)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::PowSpentStores do
-  describe Kiosk::Server::PowSpentStores::ActiveRecord do
-    include_context 'pow spent stores spec: postgres'
 
     describe '#prune!' do
       it 'deletes expired entries and keeps live ones' do
@@ -217,9 +185,7 @@ RSpec.describe Kiosk::Server::PowSpentStores do
       end
     end
   end
-end
 
-RSpec.describe Kiosk::Server::PowSpentStores do
   describe 'Kiosk::Server::SchemaDefinitions.pow_spent_sql' do
     it 'keys the table on the challenge id, so the PK is the single-use gate' do
       sql = Kiosk::Server::SchemaDefinitions.pow_spent_sql(schema: 'kiosk')

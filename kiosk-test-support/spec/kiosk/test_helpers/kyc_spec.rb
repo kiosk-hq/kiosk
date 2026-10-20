@@ -50,26 +50,24 @@ RSpec.describe Kiosk::TestHelpers::Kyc do
     stranger = Struct.new(:principal).new(rider.with(user_id: 'u2'))
     expect { the_verification_service_confirms(stranger) }.to raise_error(ArgumentError, /"u2"/)
   end
-end
 
-RSpec.describe Kiosk::TestHelpers::Kyc, 'callback delivery' do
-  include_context 'with a KYC operator'
+  describe 'callback delivery' do
+    it 'delivers a passed check to the callback the engine gave it' do
+      opened = configuration.kyc_provider.open_verification(subject: 'u1', claims: %w[licence_a], audience: 'skooti', callback_url:)
+      callback = stub_request(:post, callback_url).to_return(json_return(200, 'ok' => true))
 
-  it 'delivers a passed check to the callback the engine gave it' do
-    opened = configuration.kyc_provider.open_verification(subject: 'u1', claims: %w[licence_a], audience: 'skooti', callback_url:)
-    callback = stub_request(:post, callback_url).to_return(json_return(200, 'ok' => true))
+      jws = the_verification_service_confirms(customer, licence_a: true)
 
-    jws = the_verification_service_confirms(customer, licence_a: true)
+      expect(callback.with { JSON.parse(it.body) == { 'request_id' => opened[:request_id], 'nonce' => opened[:nonce], 'kyc_jws' => jws } })
+        .to have_been_requested
+      expect(verified(jws)).to include('sub' => 'u1', 'attributes' => { 'licence_a' => true })
+    end
 
-    expect(callback.with { JSON.parse(it.body) == { 'request_id' => opened[:request_id], 'nonce' => opened[:nonce], 'kyc_jws' => jws } })
-      .to have_been_requested
-    expect(verified(jws)).to include('sub' => 'u1', 'attributes' => { 'licence_a' => true })
-  end
+    it 'says so when the engine refuses the callback' do
+      configuration.kyc_provider.open_verification(subject: 'u1', claims: [], audience: 'skooti', callback_url:)
+      stub_request(:post, callback_url).to_return(problem_return('forbidden', status: 403))
 
-  it 'says so when the engine refuses the callback' do
-    configuration.kyc_provider.open_verification(subject: 'u1', claims: [], audience: 'skooti', callback_url:)
-    stub_request(:post, callback_url).to_return(problem_return('forbidden', status: 403))
-
-    expect { the_verification_service_confirms(customer) }.to raise_error(/refused the KYC callback: 403/)
+      expect { the_verification_service_confirms(customer) }.to raise_error(/refused the KYC callback: 403/)
+    end
   end
 end

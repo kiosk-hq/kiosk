@@ -1,9 +1,5 @@
 # frozen_string_literal: true
 
-# The read-side registry. A verb gets into it one way: a controller that
-# includes Kiosk::Handler and declares `kind :query`. `declare_query`
-# (spec_helper) builds exactly that. These examples cover the registry's own
-# surface: fetch, describe, catalog, known, reset!.
 RSpec.describe Kiosk::Server::Queries do
   describe '.fetch' do
     it 'returns the registered handler' do
@@ -18,9 +14,7 @@ RSpec.describe Kiosk::Server::Queries do
       expect(described_class.fetch(:menu)).to eq(described_class.fetch('menu'))
     end
   end
-end
 
-RSpec.describe Kiosk::Server::Queries do
   describe '.fetch unknown name' do
     it 'raises NotFound whose hint names the available queries and points at the schema' do
       declare_query('browse_listings')
@@ -47,9 +41,7 @@ RSpec.describe Kiosk::Server::Queries do
         }
     end
   end
-end
 
-RSpec.describe Kiosk::Server::Queries do
   describe '.known' do
     it 'lists registered query names' do
       declare_query('a')
@@ -63,9 +55,7 @@ RSpec.describe Kiosk::Server::Queries do
       expect(described_class.known).to be_empty
     end
   end
-end
 
-RSpec.describe Kiosk::Server::Queries do
   describe '.describe' do
     it 'carries the declared description into the descriptor' do
       declare_query('menu', description: 'Browse the menu')
@@ -82,11 +72,7 @@ RSpec.describe Kiosk::Server::Queries do
 
       expect(described_class.describe('menu')).not_to have_key(:params)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::Queries do
-  describe '.describe' do
     it 'leaves description nil when the verb opted in with another macro' do
       declare_query('bare', input_schema: { type: 'object' })
 
@@ -103,9 +89,7 @@ RSpec.describe Kiosk::Server::Queries do
       expect(fetched).to respond_to(:call)
     end
   end
-end
 
-RSpec.describe Kiosk::Server::Queries do
   describe '.catalog' do
     it 'returns all descriptors sorted by name' do
       declare_query('zebra', description: 'Last')
@@ -128,9 +112,7 @@ RSpec.describe Kiosk::Server::Queries do
       expect(described_class.known).to eq(['x'])
     end
   end
-end
 
-RSpec.describe Kiosk::Server::Queries do
   describe 'machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)' do
     let(:input_schema) do
       { type: 'object', required: ['city'],
@@ -149,14 +131,7 @@ RSpec.describe Kiosk::Server::Queries do
       expect(d[:example_params]).to eq({ city: 'Lisbon', limit: 20 })
       expect(d[:example_row]).to    eq({ id: 7, name: 'Grand Aljube', city: 'Lisbon' })
     end
-  end
-end
 
-# An extension a descriptor does not declare is absent, never null. These
-# examples call `declare` directly: the handler mixin requires both schemas on
-# every verb, while the registry itself still takes nil for each optional field.
-RSpec.describe Kiosk::Server::Queries do
-  describe 'machine-readable descriptor extensions (input_schema / example_params / example_row — ADR-0021)' do
     it 'OMITS the extension keys entirely when they are not declared' do
       described_class.declare('plain', ->(_args) { [] }, description: 'Browse')
 

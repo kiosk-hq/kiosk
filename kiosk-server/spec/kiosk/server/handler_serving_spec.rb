@@ -100,10 +100,6 @@ RSpec.describe Kiosk::Server::HandlerServing do
         .to raise_error(Kiosk::Server::Errors::Base, /is not loaded/) { |e| expect(e.code).to eq('verb_not_found') }
     end
   end
-end
-
-RSpec.describe Kiosk::Server::HandlerServing do
-  include_context 'handler serving spec: route'
 
   describe 'a handler that does not answer with JSON' do
     it 'fails loudly rather than putting HTML on the wire' do
@@ -126,13 +122,7 @@ RSpec.describe Kiosk::Server::HandlerServing do
       expect { execute(:run, { name: 'bare_payment_required' }) }
         .to raise_error(Kiosk::Server::Errors::Base, /pay up/) { |e| expect(e.code).to eq('action_failed') }
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::HandlerServing do
-  include_context 'handler serving spec: route'
-
-  describe 'a handler that does not answer with JSON' do
     it "never mistakes an operator's own code field for the wire vocabulary" do
       stub_handler('SpecSoldOutController', :action, "Answers a domain refusal with the app's own error code.") do
         def sold_out
@@ -146,48 +136,7 @@ RSpec.describe Kiosk::Server::HandlerServing do
           expect(e.message).to eq('sold out')
         }
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::HandlerServing do
-  include_context 'handler serving spec: route'
-
-  describe 'a handler that renders its own problem members' do
-    it 'keeps type, title and status those of the code, and drops instance and challenges' do
-      stub_handler('SpecSelfTitledController', :action, 'Renders RFC members of its own on a 409.') do
-        def self_titled
-          render json: { error: { code: 'conflict', message: 'taken', status: 200, type: 'urn:mine',
-                                  title: 'Mine', detail: 'mine', instance: '/i/1', challenges: [1],
-                                  slot: 'S-1' } },
-                 status: :conflict
-        end
-      end
-
-      expect { execute(:run, { name: 'self_titled' }) }
-        .to raise_error(Kiosk::Server::Errors::Base) { |e|
-          expect(e.to_problem).to eq(type: 'https://kiosk.tech/problems/conflict', title: 'State conflict',
-                                     status: 409, detail: 'taken', code: 'conflict', slot: 'S-1')
-        }
-    end
-
-    it 'carries the challenges a handler renders on pow_required' do
-      stub_handler('SpecSelfTolledController', :action, 'Renders its own proof-of-work refusal.') do
-        def self_tolled
-          render json: { error: { code: 'pow_required', message: 'solve', challenges: [1] } },
-                 status: :payment_required
-        end
-      end
-
-      expect { execute(:run, { name: 'self_tolled' }) }
-        .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.to_problem[:challenges]).to eq([1]) }
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::HandlerServing do
-  include_context 'handler serving spec: route'
-
-  describe 'a handler that does not answer with JSON' do
     it 'falls back to the status when a rendered code does not belong to it' do
       # pow_required is a 402 code; rendered on a 403 it is a handler bug, and
       # the seam answers with what the status alone says rather than putting a
@@ -232,10 +181,37 @@ RSpec.describe Kiosk::Server::HandlerServing do
         .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('action_failed') }
     end
   end
-end
 
-RSpec.describe Kiosk::Server::HandlerServing do
-  include_context 'handler serving spec: route'
+  describe 'a handler that renders its own problem members' do
+    it 'keeps type, title and status those of the code, and drops instance and challenges' do
+      stub_handler('SpecSelfTitledController', :action, 'Renders RFC members of its own on a 409.') do
+        def self_titled
+          render json: { error: { code: 'conflict', message: 'taken', status: 200, type: 'urn:mine',
+                                  title: 'Mine', detail: 'mine', instance: '/i/1', challenges: [1],
+                                  slot: 'S-1' } },
+                 status: :conflict
+        end
+      end
+
+      expect { execute(:run, { name: 'self_titled' }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.to_problem).to eq(type: 'https://kiosk.tech/problems/conflict', title: 'State conflict',
+                                     status: 409, detail: 'taken', code: 'conflict', slot: 'S-1')
+        }
+    end
+
+    it 'carries the challenges a handler renders on pow_required' do
+      stub_handler('SpecSelfTolledController', :action, 'Renders its own proof-of-work refusal.') do
+        def self_tolled
+          render json: { error: { code: 'pow_required', message: 'solve', challenges: [1] } },
+                 status: :payment_required
+        end
+      end
+
+      expect { execute(:run, { name: 'self_tolled' }) }
+        .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.to_problem[:challenges]).to eq([1]) }
+    end
+  end
 
   describe 'a handler answering through its template' do
     include_context 'handler serving spec: templated handler'
@@ -257,10 +233,6 @@ RSpec.describe Kiosk::Server::HandlerServing do
         .to eq([[{ 'sku' => 'OATS-500G' }], '1', '2'])
     end
   end
-end
-
-RSpec.describe Kiosk::Server::HandlerServing do
-  include_context 'handler serving spec: route'
 
   describe 'an empty answer' do
     it 'carries a bodiless 200 through as a nil value' do

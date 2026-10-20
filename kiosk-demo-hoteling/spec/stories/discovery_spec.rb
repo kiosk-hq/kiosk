@@ -28,15 +28,15 @@ RSpec.describe 'Discovering the hotel', type: :story do
     expect(examples.size).to be >= 4
     expect(examples.filter_map(&:violation)).to be_empty
   end
-end
 
-RSpec.describe 'Discovering the hotel', 'the landing page', type: :story do
-  it 'the landing page advertises the skill this origin pins' do
-    pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
-    expect(pinned).to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
+  describe 'the landing page' do
+    it 'the landing page advertises the skill this origin pins' do
+      pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
+      expect(pinned).to match(%r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z})
 
-    page = Net::HTTP.get_response(URI("#{live_url}/"))
-    expect(page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]).to eq(pinned)
-    expect(page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]).to eq(pinned)
+      page = Net::HTTP.get_response(URI("#{live_url}/"))
+      expect(page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]).to eq(pinned)
+      expect(page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]).to eq(pinned)
+    end
   end
 end

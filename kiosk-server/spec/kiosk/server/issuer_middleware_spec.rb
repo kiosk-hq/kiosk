@@ -18,33 +18,35 @@ RSpec.shared_context 'issuer middleware spec: two origins' do
   end
 end
 
-RSpec.describe Kiosk::Server::IssuerMiddleware, 'origin resolution' do
-  include_context 'issuer middleware spec: two origins'
+RSpec.describe Kiosk::Server::IssuerMiddleware do
+  describe 'origin resolution' do
+    include_context 'issuer middleware spec: two origins'
 
-  it 'resolves a listed origin to itself' do
-    expect(issuer_for('https://buymilk.example/kiosk/catalog')).to eq('https://buymilk.example')
+    it 'resolves a listed origin to itself' do
+      expect(issuer_for('https://buymilk.example/kiosk/catalog')).to eq('https://buymilk.example')
+    end
+
+    it 'resolves the default origin to the issuer' do
+      expect(issuer_for('https://getgrocery.example/.well-known/kiosk.json')).to eq('https://getgrocery.example')
+    end
+
+    it 'resolves an origin the operator does not serve to the issuer' do
+      expect(issuer_for('http://www.example.com/kiosk/catalog')).to eq('https://getgrocery.example')
+    end
   end
 
-  it 'resolves the default origin to the issuer' do
-    expect(issuer_for('https://getgrocery.example/.well-known/kiosk.json')).to eq('https://getgrocery.example')
-  end
+  describe 'proxies and cleanup' do
+    include_context 'issuer middleware spec: two origins'
 
-  it 'resolves an origin the operator does not serve to the issuer' do
-    expect(issuer_for('http://www.example.com/kiosk/catalog')).to eq('https://getgrocery.example')
-  end
-end
+    it 'reads the scheme a TLS-terminating proxy forwarded' do
+      expect(issuer_for('http://buymilk.example/kiosk/catalog',
+                        'HTTP_HOST' => 'buymilk.example', 'HTTP_X_FORWARDED_PROTO' => 'https'))
+        .to eq('https://buymilk.example')
+    end
 
-RSpec.describe Kiosk::Server::IssuerMiddleware, 'proxies and cleanup' do
-  include_context 'issuer middleware spec: two origins'
-
-  it 'reads the scheme a TLS-terminating proxy forwarded' do
-    expect(issuer_for('http://buymilk.example/kiosk/catalog',
-                      'HTTP_HOST' => 'buymilk.example', 'HTTP_X_FORWARDED_PROTO' => 'https'))
-      .to eq('https://buymilk.example')
-  end
-
-  it 'leaves no issuer behind once the request is served' do
-    issuer_for('https://buymilk.example/kiosk/catalog')
-    expect(Kiosk.current_issuer).to eq('https://getgrocery.example')
+    it 'leaves no issuer behind once the request is served' do
+      issuer_for('https://buymilk.example/kiosk/catalog')
+      expect(Kiosk.current_issuer).to eq('https://getgrocery.example')
+    end
   end
 end

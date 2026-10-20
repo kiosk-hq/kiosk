@@ -44,26 +44,24 @@ RSpec.describe Kiosk::TestHelpers::Person do
 
     expect(unlink).to have_been_requested
   end
-end
 
-RSpec.describe Kiosk::TestHelpers::Person, 'on the verification page' do
-  include_context 'with a signed-in person'
+  describe 'on the verification page' do
+    it "approves a code on the verification page, with the page's CSRF token" do
+      stub_request(:get, "#{origin}/kiosk/oauth/device/verify?user_code=U-1").to_return(status: 200, body: form)
+      approval = stub_request(:post, "#{origin}/kiosk/oauth/device/verify")
+                 .with(body: { 'user_code' => 'U-1', 'decision' => 'approve', 'authenticity_token' => 'csrf-1' })
+                 .to_return(status: 200)
 
-  it "approves a code on the verification page, with the page's CSRF token" do
-    stub_request(:get, "#{origin}/kiosk/oauth/device/verify?user_code=U-1").to_return(status: 200, body: form)
-    approval = stub_request(:post, "#{origin}/kiosk/oauth/device/verify")
-               .with(body: { 'user_code' => 'U-1', 'decision' => 'approve', 'authenticity_token' => 'csrf-1' })
-               .to_return(status: 200)
+      alice.approves('U-1')
 
-    alice.approves('U-1')
+      expect(approval).to have_been_requested
+    end
 
-    expect(approval).to have_been_requested
-  end
+    it 'says so when the site does not approve' do
+      stub_request(:get, "#{origin}/kiosk/oauth/device/verify?user_code=U-1").to_return(status: 404)
+      stub_request(:post, "#{origin}/kiosk/oauth/device/verify").to_return(status: 422)
 
-  it 'says so when the site does not approve' do
-    stub_request(:get, "#{origin}/kiosk/oauth/device/verify?user_code=U-1").to_return(status: 404)
-    stub_request(:post, "#{origin}/kiosk/oauth/device/verify").to_return(status: 422)
-
-    expect { alice.approves('U-1') }.to raise_error(/did not approve U-1: 404, 422/)
+      expect { alice.approves('U-1') }.to raise_error(/did not approve U-1: 404, 422/)
+    end
   end
 end

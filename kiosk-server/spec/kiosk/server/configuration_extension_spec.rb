@@ -31,11 +31,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     it 'defaults owner to an empty hash' do
       expect(Kiosk.configuration.owner).to eq({})
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
-  describe 'defaults' do
     # The two validation flags point OPPOSITE ways on purpose: a request-shape
     # refusal is a 400 to a caller who sent a bad request; a response-shape
     # refusal is a 500 to a caller who did nothing wrong.
@@ -53,11 +49,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
         expect(Kiosk.configuration.validate_requests).to be(false)
       end
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
-  describe 'defaults' do
     # The auth-challenge nonce must outlive the registration PoW solve,
     # or a slow honest solver's nonce expires mid-solve (and the proofs are
     # already burned). The PoW solve window is pow_ttl * count.
@@ -85,9 +77,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       end
     end
   end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'overrides' do
     it 'lets mount_path be set via Kiosk.configure' do
       Kiosk.configure { |c| c.mount_path = '/agent-surface' }
@@ -107,12 +97,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.owner[:name]).to eq('Acme Inc.')
     end
   end
-end
 
-# Members are MODULE names actually served, drawn from
-# schema/queries/actions/pay and emitted in that order. Derived from the live
-# registry so discovery never advertises a module the provider has not wired.
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe '#capabilities (computed)' do
     it 'includes schema + queries when only a query is registered' do
       declare_query('catalog')
@@ -135,14 +120,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       Kiosk.configure { |c| c.payment_provider = Object.new }
       expect(Kiosk.configuration.capabilities).to eq(%w[schema queries actions pay])
     end
-  end
-end
 
-# Members are MODULE names actually served, drawn from
-# schema/queries/actions/pay and emitted in that order. Derived from the live
-# registry so discovery never advertises a module the provider has not wired.
-RSpec.describe Kiosk::Server::ConfigurationExtension do
-  describe '#capabilities (computed)' do
     it 'never encodes HTTP methods' do
       declare_query('catalog')
       expect(Kiosk.configuration.capabilities).not_to include('GET', 'POST')
@@ -159,9 +137,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(caps).not_to include('secret_pricing_tiers', 'cancel_enterprise_contract')
     end
   end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'reset' do
     it 'Kiosk.reset! returns server-specific fields to defaults' do
       Kiosk.configure { |c| c.mount_path = '/elsewhere' }
@@ -177,9 +153,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.app_role).to      eq('app_role')
     end
   end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe '#enforce_db_role' do
     it 'defaults to false' do
       expect(Kiosk.configuration.enforce_db_role).to be(false)
@@ -201,9 +175,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.sign_in_path).to eq('/users/sign_in')
     end
   end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'signing_key' do
     # RSA generation is ~100ms; cache one for the whole context.
     let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
@@ -225,14 +197,6 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       Kiosk.configure { |c| c.signing_key = signing_key }
       expect(Kiosk.configuration.signing_key).to equal(signing_key)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::ConfigurationExtension do
-  describe 'signing_key' do
-    # RSA generation is ~100ms; cache one for the whole context.
-    let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
-    let(:signing_key) { Kiosk::Server::SigningKey.new(rsa) }
 
     it 'accepts a PEM string via the setter' do
       Kiosk.configure { |c| c.signing_key = rsa.to_pem }
@@ -251,9 +215,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect { Kiosk.configuration.signing_key }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
     end
   end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'pow_secret' do
     it 'refuses a secret shorter than 32 bytes' do
       expect { Kiosk.configure { |c| c.pow_secret = 'short' } }
@@ -265,14 +227,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       expect(Kiosk.configuration.pow_secret).to eq('x' * 32)
     end
   end
-end
 
-# ─── a lazy STORE default is allocated exactly once ────────────────────────
-#
-# `@x ||= Store.new` with no lock lets racing first-touchers each build a
-# store of their own. These examples force that interleaving — see
-# `with_slow_store_allocation` in spec_helper.
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'lazy store defaults under a concurrent first touch' do
     # Every slot here is stateful: what the losers of the race record is lost
     # when the last write lands, and for `pow_spent_store` what is lost is the
@@ -293,9 +248,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       end
     end
   end
-end
 
-RSpec.describe Kiosk::Server::ConfigurationExtension do
   describe 'lazy store defaults under a concurrent first touch' do
     # Every lazy default in the shipped file that ALLOCATES a store must take
     # the lock, so a new store slot added without it reddens here.

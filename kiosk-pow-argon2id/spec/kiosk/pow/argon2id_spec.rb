@@ -26,9 +26,7 @@ RSpec.describe Kiosk::Pow::Argon2id do
       expect(result[:d]).to eq(0)
     end
   end
-end
 
-RSpec.describe Kiosk::Pow::Argon2id do
   describe '.leading_zero_bits' do
     it 'returns 0 for an empty string' do
       expect(described_class.leading_zero_bits('')).to eq(0)
@@ -49,11 +47,7 @@ RSpec.describe Kiosk::Pow::Argon2id do
     it 'counts 7 leading zeros for 0x01' do
       expect(described_class.leading_zero_bits("\x01")).to eq(7)
     end
-  end
-end
 
-RSpec.describe Kiosk::Pow::Argon2id do
-  describe '.leading_zero_bits' do
     it 'counts 8 leading zeros for a zero byte and stops at the next non-zero byte' do
       # 0x00 0x80 → 8 + 0 = 8
       expect(described_class.leading_zero_bits("\x00\x80")).to eq(8)
@@ -73,24 +67,7 @@ RSpec.describe Kiosk::Pow::Argon2id do
       expect(described_class.leading_zero_bits("\x40\x00")).to eq(1)
     end
   end
-end
 
-# .digest known-answer vector. Update it only if the Argon2id params change.
-#   salt    = "testsalt12345678"  (16 raw ASCII bytes)
-#   nonce   = "42"               (decimal ASCII string)
-#   m       = 8_192 KiB
-#   t       = 1
-#   p       = 1
-#   version = 0x13 (19)
-#   → digest (hex) = 020b766a76b5149e772a60e06b0c26975b07fc6073fa107650bdeab15cb95118
-#   → leading_zero_bits = 6
-#
-# Python argon2-cffi gives the same digest for the same inputs:
-#   argon2.low_level.hash_secret_raw(secret=b"42", salt=b"testsalt12345678",
-#     time_cost=1, memory_cost=8192, parallelism=1, hash_len=32,
-#     type=Type.ID, version=19)
-# The parity examples below and `bundle exec rake parity` check this.
-RSpec.describe Kiosk::Pow::Argon2id do
   describe '.digest' do
     let(:salt)   { 'testsalt12345678' }
     let(:params) { described_class.params(d: 6, m: 8_192, t: 1, p: 1) }
@@ -112,13 +89,6 @@ RSpec.describe Kiosk::Pow::Argon2id do
       result_str = described_class.digest(salt:, params:, nonce: '42')
       expect(result_int).to eq(result_str)
     end
-  end
-end
-
-RSpec.describe Kiosk::Pow::Argon2id do
-  describe '.digest' do
-    let(:salt)   { 'testsalt12345678' }
-    let(:params) { described_class.params(d: 6, m: 8_192, t: 1, p: 1) }
 
     it 'changes with a different nonce' do
       d1 = described_class.digest(salt:, params:, nonce: '42')
@@ -132,9 +102,7 @@ RSpec.describe Kiosk::Pow::Argon2id do
       expect(d1).not_to eq(d2)
     end
   end
-end
 
-RSpec.describe Kiosk::Pow::Argon2id do
   describe '.verify' do
     let(:salt) { 'testsalt12345678' }
 
@@ -153,12 +121,6 @@ RSpec.describe Kiosk::Pow::Argon2id do
       params = described_class.params(d: 0, m: 8_192, t: 1, p: 1)
       expect(described_class.verify(salt:, params:, nonce: '999')).to be(true)
     end
-  end
-end
-
-RSpec.describe Kiosk::Pow::Argon2id do
-  describe '.verify' do
-    let(:salt) { 'testsalt12345678' }
 
     it 'returns false for a wrong nonce with realistic d' do
       # nonce "1" has a different digest; we check it against d=6
@@ -185,12 +147,6 @@ RSpec.describe Kiosk::Pow::Argon2id do
       described_class.verify(salt:, params:, nonce: '42')
       expect(call_count).to eq(1)
     end
-  end
-end
-
-RSpec.describe Kiosk::Pow::Argon2id do
-  describe '.verify' do
-    let(:salt) { 'testsalt12345678' }
 
     # Non-ASCII / binary nonce must NOT raise — it should simply fail the
     # leading-zero-bits check and return false (junk proof → :bad_proof in gate).
@@ -214,12 +170,7 @@ RSpec.describe Kiosk::Pow::Argon2id do
       expect(result).to be(true).or be(false)
     end
   end
-end
 
-# Cross-implementation parity. Shells out to Python. Without a python3 that has
-# argon2-cffi the examples skip, unless `KIOSK_REQUIRE_PARITY=1` makes them fail.
-# Run `bundle exec rake parity` for the full interactive parity report.
-RSpec.describe Kiosk::Pow::Argon2id do
   describe 'Python solver cross-implementation parity', :parity do
     include PythonParity
 

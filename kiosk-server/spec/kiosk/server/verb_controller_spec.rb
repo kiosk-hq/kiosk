@@ -141,11 +141,101 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
       expect(last_headers['Cache-Control']).to eq('private, no-store')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
+    # ── THE CALLER'S DECLARED CLOCK REACHES THE HANDLER ──────────────────
+    #
+    # Spec §3 point 8. It exists so an operator can read a bare `YYYY-MM-DD`
+    # ARGUMENT in the calendar the caller meant it in. It never decides how an
+    # answer is RENDERED — that zone is the serviced RESOURCE's, and the engine
+    # holds none of an operator's data.
+    it "hands the handler the caller's declared timezone" do
+      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone&.name }] }
+
+      _, body = call_verb(:get, 'clock', timezone: 'Australia/Sydney')
+      expect(body).to eq([{ zone: 'Australia/Sydney' }])
+    end
+
+    it 'hands the handler nil when the caller declared none — silence is not an error' do
+      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone&.name }] }
+
+      status, body = call_verb(:get, 'clock')
+      expect(status).to eq(200)
+      expect(body).to eq([{ zone: nil }])
+    end
+
+    it 'hands the handler its own default when the caller declared none' do
+      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone(Time.find_zone!('Europe/Lisbon')).name }] }
+
+      _, body = call_verb(:get, 'clock')
+      expect(body).to eq([{ zone: 'Europe/Lisbon' }])
+    end
+
+    # §9.1's first branch: a value outside its declared domain is refused BY
+    # NAME. A silent fallback would answer in a clock nobody chose and tell
+    # nobody it had — a wrong answer shaped exactly like a right one.
+    it 'refuses a UTC offset in Kiosk-Timezone with a 400 naming the header' do
+      declare_query('clock') { render json: [] }
+
+      status, body = call_verb(:get, 'clock', timezone: '+03:00')
+      expect(status).to eq(400)
+      expect(body[:code]).to    eq('bad_request')
+      expect(body[:detail]).to  include('Kiosk-Timezone')
+      expect(body[:hint]).to    include('Area/Location')
+    end
+
+    # The header is input, so it is refused at the argument gate, before the
+    # toll: a caller does not pay for a proof to learn its header is unreadable.
+    context 'when the verb is tolled' do
+      before do
+        Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
+        Kiosk.configure do |c|
+          c.reputation_policy = tolling_policy
+          c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
+        end
+      end
+
+      after { Kiosk::Reputation::Backends.reset! }
+
+      it 'refuses an unreadable Kiosk-Timezone with 400 before asking for a proof' do
+        declare_query('clock') { render json: [] }
+
+        status, body = call_verb(:get, 'clock', timezone: '+03:00')
+        expect(status).to eq(400)
+        expect(body[:detail]).to include('Kiosk-Timezone')
+      end
+    end
+
+    it 'refuses a zone name nobody has, and never falls back' do
+      declare_query('clock') { render json: [{ reached: true }] }
+
+      status, body = call_verb(:get, 'clock', timezone: 'Mars/Olympus')
+      expect(status).to eq(400)
+      expect(body[:code]).to eq('bad_request')
+    end
+
+    it 'answers 401 before it will say whether the verb exists' do
+      # The 0.4 wire was first drafted with the declared-verb check BEFORE
+      # authentication; this controller resolves identity first, so an unauthenticated probe
+      # cannot tell a registered name from an unregistered one. That is
+      # ordinary gate ORDER, not an anti-enumeration defence — spec §4.2 and
+      # {VerbController}'s own comment record that warrant as RETIRED, because
+      # `GET <endpoint>/schema` is public and publishes the whole catalog to
+      # anyone who asks. Both answer 401 here.
+      expect(call_verb(:get, 'salons',     auth: false).first).to eq(401)
+      expect(call_verb(:get, 'frobnicate', auth: false).first).to eq(401)
+    end
+
+    it 'answers an unknown name a problem document, naming what IS registered' do
+      status, body = call_verb(:get, 'frobnicate')
+      expect(status).to eq(404)
+      expect(last_headers['Content-Type']).to include('application/problem+json')
+      expect(body[:type]).to   eq('https://kiosk.tech/problems/verb_not_found')
+      expect(body[:title]).to  eq('No such verb')
+      expect(body[:status]).to eq(404)
+      expect(body[:code]).to   eq('verb_not_found')
+      expect(body[:hint]).to   include('salons')
+    end
+  end
 
   describe 'Vary on every verb response (§3.7.1)' do
     before do
@@ -175,144 +265,6 @@ RSpec.describe Kiosk::Server::VerbController do
       end
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a query is a GET at its own path' do
-    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
-
-    # ── THE CALLER'S DECLARED CLOCK REACHES THE HANDLER ──────────────────
-    #
-    # Spec §3 point 8. It exists so an operator can read a bare `YYYY-MM-DD`
-    # ARGUMENT in the calendar the caller meant it in. It never decides how an
-    # answer is RENDERED — that zone is the serviced RESOURCE's, and the engine
-    # holds none of an operator's data.
-    it "hands the handler the caller's declared timezone" do
-      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone&.name }] }
-
-      _, body = call_verb(:get, 'clock', timezone: 'Australia/Sydney')
-      expect(body).to eq([{ zone: 'Australia/Sydney' }])
-    end
-
-    it 'hands the handler nil when the caller declared none — silence is not an error' do
-      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone&.name }] }
-
-      status, body = call_verb(:get, 'clock')
-      expect(status).to eq(200)
-      expect(body).to eq([{ zone: nil }])
-    end
-
-    it 'hands the handler its own default when the caller declared none' do
-      declare_query('clock') { render json: [{ zone: Kiosk.reader_zone(Time.find_zone!('Europe/Lisbon')).name }] }
-
-      _, body = call_verb(:get, 'clock')
-      expect(body).to eq([{ zone: 'Europe/Lisbon' }])
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a query is a GET at its own path' do
-    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
-
-    # §9.1's first branch: a value outside its declared domain is refused BY
-    # NAME. A silent fallback would answer in a clock nobody chose and tell
-    # nobody it had — a wrong answer shaped exactly like a right one.
-    it 'refuses a UTC offset in Kiosk-Timezone with a 400 naming the header' do
-      declare_query('clock') { render json: [] }
-
-      status, body = call_verb(:get, 'clock', timezone: '+03:00')
-      expect(status).to eq(400)
-      expect(body[:code]).to    eq('bad_request')
-      expect(body[:detail]).to  include('Kiosk-Timezone')
-      expect(body[:hint]).to    include('Area/Location')
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a query is a GET at its own path' do
-    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
-
-    # The header is input, so it is refused at the argument gate, before the
-    # toll: a caller does not pay for a proof to learn its header is unreadable.
-    context 'when the verb is tolled' do
-      before do
-        Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
-        Kiosk.configure do |c|
-          c.reputation_policy = tolling_policy
-          c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
-        end
-      end
-
-      after { Kiosk::Reputation::Backends.reset! }
-
-      it 'refuses an unreadable Kiosk-Timezone with 400 before asking for a proof' do
-        declare_query('clock') { render json: [] }
-
-        status, body = call_verb(:get, 'clock', timezone: '+03:00')
-        expect(status).to eq(400)
-        expect(body[:detail]).to include('Kiosk-Timezone')
-      end
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a query is a GET at its own path' do
-    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
-
-    it 'refuses a zone name nobody has, and never falls back' do
-      declare_query('clock') { render json: [{ reached: true }] }
-
-      status, body = call_verb(:get, 'clock', timezone: 'Mars/Olympus')
-      expect(status).to eq(400)
-      expect(body[:code]).to eq('bad_request')
-    end
-
-    it 'answers 401 before it will say whether the verb exists' do
-      # The 0.4 wire was first drafted with the declared-verb check BEFORE
-      # authentication; this controller resolves identity first, so an unauthenticated probe
-      # cannot tell a registered name from an unregistered one. That is
-      # ordinary gate ORDER, not an anti-enumeration defence — spec §4.2 and
-      # {VerbController}'s own comment record that warrant as RETIRED, because
-      # `GET <endpoint>/schema` is public and publishes the whole catalog to
-      # anyone who asks. Both answer 401 here.
-      expect(call_verb(:get, 'salons',     auth: false).first).to eq(401)
-      expect(call_verb(:get, 'frobnicate', auth: false).first).to eq(401)
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a query is a GET at its own path' do
-    before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }
-
-    it 'answers an unknown name a problem document, naming what IS registered' do
-      status, body = call_verb(:get, 'frobnicate')
-      expect(status).to eq(404)
-      expect(last_headers['Content-Type']).to include('application/problem+json')
-      expect(body[:type]).to   eq('https://kiosk.tech/problems/verb_not_found')
-      expect(body[:title]).to  eq('No such verb')
-      expect(body[:status]).to eq(404)
-      expect(body[:code]).to   eq('verb_not_found')
-      expect(body[:hint]).to   include('salons')
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   describe 'an action is a POST at its own path' do
     before do
@@ -333,10 +285,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:code]).to eq('unauthenticated')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   # RFC 8288. A paginating query stopped being a shape: the body is the
   # bare array every query answers and the two page facts are response headers.
@@ -353,14 +301,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Link'])
         .to eq(%(<http://example.org/kiosk/listings?limit=1&cursor=#{cursor}>; rel="next"))
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
-    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     # §8.4 (matrix SPEC-088). RFC 8288 PERMITS a relative target resolved
     # against the request URI; the spec's SHOULD is that an operator send an
@@ -384,14 +324,6 @@ RSpec.describe Kiosk::Server::VerbController do
       # An absolute reference is its own resolution against any base.
       expect(URI.join('http://elsewhere.invalid/deep/path', target).to_s).to eq(target)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
-    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     it 'replaces an incoming cursor rather than appending a second one' do
       declare_query('listings') do
@@ -409,14 +341,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body).to eq([{ id: 1 }])
       expect(last_headers['Link']).to be_nil
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
-    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     # The total is the handler's to state on a truncated page, and the wire's
     # to derive on a complete one. It is never guessed from the page.
@@ -442,14 +366,6 @@ RSpec.describe Kiosk::Server::VerbController do
       call_verb(:get, 'salons')
       expect(last_headers['X-Total-Count']).to eq('2')
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'a paginating query answers a bare array with Link + X-Total-Count' do
-    let(:cursor) { Kiosk::Server::Cursor.encode_offset(20) }
 
     it 'sends neither header for an action' do
       declare_action('book_appointment') { render json: { ok: 1 } }
@@ -469,10 +385,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   # §3.7.3 (matrix SPEC-013), a MUST-NOT: `public` or `s-maxage` on a verb
   # response hands an identity-scoped answer to a SHARED cache, which is one
@@ -516,14 +428,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect_no_shared_caching(last_headers['Cache-Control'])
       expect(last_headers['Cache-Control']).to eq('private, no-store')
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'no verb response is shared-cacheable (§3.7.3)' do
-    before { allow(Kiosk::Server::Headers).to receive(:warn) }
 
     it 'not when only `public` is named, nor only `s-maxage`, nor only `must-revalidate`' do
       # Each of §3.7.3's three directives on its own — a regex that only
@@ -540,14 +444,6 @@ RSpec.describe Kiosk::Server::VerbController do
           expect(last_headers['Cache-Control']).to eq('private, no-store'), policy
         end
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'no verb response is shared-cacheable (§3.7.3)' do
-    before { allow(Kiosk::Server::Headers).to receive(:warn) }
 
     it 'not on a refusal' do
       declare_query('salons', input_schema: { type: 'object', additionalProperties: false,
@@ -564,10 +460,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(headers['Cache-Control']).to match(/\bpublic\b/)
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   # §3.7.4 (matrix SPEC-016), the neighbouring MAY: "the default for a `200`
   # is `private, no-store`; an operator MAY relax it to `private, max-age=N`
@@ -604,13 +496,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(call_verb(:post, 'book_appointment', body: '{}').first).to eq(200)
       expect(last_headers['Cache-Control']).to eq('max-age=30, private')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe "an operator MAY relax a 200's cache policy from a handler (§3.7.4)" do
     it "NOT on a refusal: a 4xx keeps the wire's own policy" do
       # §3.7.4 speaks about a `200`, and {HandlerServing} only carries the
       # render's headers on a 2xx. A handler that renders 403 with a
@@ -642,10 +528,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   describe 'the HTTP method carries the read/write semantics' do
     before do
@@ -674,10 +556,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:hint]).to   include('GET /kiosk/salons')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   describe 'arguments reach the handler with their declared types' do
     before do
@@ -697,18 +575,6 @@ RSpec.describe Kiosk::Server::VerbController do
       _s2, raw     = call_verb(:get, 'echo', query: 'amenity[]=pool&amenity[]=spa')
       expect(percent.first[:amenity]).to eq(%w[pool spa])
       expect(raw).to eq(percent)
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'arguments reach the handler with their declared types' do
-    before do
-      declare_echo(type: 'object', additionalProperties: false,
-                   properties: { min_stars: { type: 'integer' },
-                                 amenity: { type: 'array', items: { type: 'string' } } })
     end
 
     it 'refuses a value that will not coerce with a 400 naming the parameter' do
@@ -737,10 +603,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body.first[:seen]).not_to include('amenity')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   # `input_schema` is REQUIRED on every verb, and §8.1 item 5 makes the
   # operator coerce-then-validate before the handler sees an argument. So the
@@ -791,13 +653,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:detail]).to include('limit')
       expect(call_verb(:get, 'catalog', query: 'limit=10&cursor=eyJvIjoyMH0').first).to eq(200)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'input_schema is executable UNCONDITIONALLY on the per-verb wire' do
     it "refuses a value outside a declared enum — K-717's schema half" do
       declare_query('availability', input_schema: {
                       type: 'object', additionalProperties: false,
@@ -819,13 +675,7 @@ RSpec.describe Kiosk::Server::VerbController do
       # simply echoed the request would satisfy the line above by accident.
       expect(body[:detail]).not_to include('19:00')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'input_schema is executable UNCONDITIONALLY on the per-verb wire' do
     it 'names YYYY-MM-DD when an action body carries a malformed date' do
       declare_action('book', input_schema: {
                        type: 'object',
@@ -847,10 +697,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:detail]).to include('nope')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   # A body that is not JSON at all never reaches Kiosk's own parse guard on
   # this wire: `serve` reads `params[:kiosk_verb]` first, and touching `params`
@@ -874,10 +720,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(problem[:hint]).to   include('query string')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
 
   describe 'the 0.3 wire is GONE — one wire, one conformance surface' do
     before { declare_query('salons') { render json: [{ id: 1 }] } }
@@ -904,14 +746,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(paths.grep(%r{\A/(query|run)\b})).to be_empty
       expect(paths.grep(/kiosk_verb/)).to be_empty
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'the 0.3 wire is GONE — one wire, one conformance surface' do
-    before { declare_query('salons') { render json: [{ id: 1 }] } }
 
     it 'answers POST <endpoint>/query as the VERB named `query` — 404, nobody registered one' do
       # The sharpest statement of the cut, at the CONTROLLER rather than at the
@@ -942,14 +776,6 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:code]).to eq('verb_not_found')
       expect(body).not_to have_key(:ok)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
-
-  describe 'the 0.3 wire is GONE — one wire, one conformance surface' do
-    before { declare_query('salons') { render json: [{ id: 1 }] } }
 
     it 'leaves both names REGISTRABLE — they stopped being reserved with the routes that named them' do
       # `RESERVED_NAMES` is the engine's drawn first segments, and `query`/`run`
@@ -975,38 +801,36 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(seen).to eq([{ method: 'GET', verb: 'salons', body: { city: 'Lisbon' } }])
     end
   end
-end
 
-# The toll is paid once per access token: one proof, then every call with that token.
-RSpec.describe Kiosk::Server::VerbController, 'the session toll' do
-  include_context 'verb controller spec: authenticated origin'
-
-  before do
-    Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
-    Kiosk.configure do |c|
-      c.reputation_policy = tolling_policy
-      c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
+  # The toll is paid once per access token: one proof, then every call with that token.
+  describe 'the session toll' do
+    before do
+      Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
+      Kiosk.configure do |c|
+        c.reputation_policy = tolling_policy
+        c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
+      end
+      declare_query('salons') { render json: [] }
+      declare_action('book') { render json: {} }
     end
-    declare_query('salons') { render json: [] }
-    declare_action('book') { render json: {} }
-  end
 
-  after { Kiosk::Reputation::Backends.reset! }
+    after { Kiosk::Reputation::Backends.reset! }
 
-  it 'asks the first call for a proof and serves every later call of the token without one' do
-    status, body = call_verb(:get, 'salons')
-    expect(status).to eq(402)
+    it 'asks the first call for a proof and serves every later call of the token without one' do
+      status, body = call_verb(:get, 'salons')
+      expect(status).to eq(402)
 
-    expect(call_verb(:get, 'salons', pow: proof_for(body[:challenges].first)).first).to eq(200)
-    expect(call_verb(:get, 'salons').first).to eq(200)
-    expect(call_verb(:post, 'book', body: '{}').first).to eq(200)
-  end
+      expect(call_verb(:get, 'salons', pow: proof_for(body[:challenges].first)).first).to eq(200)
+      expect(call_verb(:get, 'salons').first).to eq(200)
+      expect(call_verb(:post, 'book', body: '{}').first).to eq(200)
+    end
 
-  it 'asks a new token again' do
-    _, body = call_verb(:get, 'salons')
-    call_verb(:get, 'salons', pow: proof_for(body[:challenges].first))
-    @token = nil
+    it 'asks a new token again' do
+      _, body = call_verb(:get, 'salons')
+      call_verb(:get, 'salons', pow: proof_for(body[:challenges].first))
+      @token = nil
 
-    expect(call_verb(:get, 'salons').first).to eq(402)
+      expect(call_verb(:get, 'salons').first).to eq(402)
+    end
   end
 end

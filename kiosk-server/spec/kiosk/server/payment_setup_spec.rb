@@ -78,145 +78,131 @@ module PaymentSetupSpecHelpers
   end
 end
 
-RSpec.describe Kiosk::Server::PaymentSetup, 'an origin with no payment provider' do
-  include PaymentSetupSpecHelpers
+RSpec.describe Kiosk::Server::PaymentSetup do
+  describe 'an origin with no payment provider' do
+    include PaymentSetupSpecHelpers
 
-  before { configure(nil) }
+    before { configure(nil) }
 
-  it 'publishes no payment_setup action' do
-    expect(Kiosk::Server::Actions.known).not_to include('payment_setup')
+    it 'publishes no payment_setup action' do
+      expect(Kiosk::Server::Actions.known).not_to include('payment_setup')
+    end
+
+    it 'answers POST payment_setup with 501 module_not_served' do
+      status, problem = post_payment_setup
+      expect(status).to eq(501)
+      expect(problem['code']).to eq('module_not_served')
+    end
+
+    it 'answers the return page with 501 module_not_served' do
+      status, = get_return
+      expect(status).to eq(501)
+    end
   end
 
-  it 'answers POST payment_setup with 501 module_not_served' do
-    status, problem = post_payment_setup
-    expect(status).to eq(501)
-    expect(problem['code']).to eq('module_not_served')
+  describe 'an origin with a payment provider' do
+    include PaymentSetupSpecHelpers
+
+    let(:provider) { PaymentSetupSpecHelpers::Provider.new }
+
+    before { configure(provider) }
+
+    it 'answers ready when the provider needs no setup' do
+      provider.required = false
+      expect(post_payment_setup).to eq([200, { 'status' => 'ready' }])
+    end
+
+    it "answers setup_required with the provider's url, returning the human to the engine's page" do
+      provider.required = true
+      expect(post_payment_setup)
+        .to eq([200, { 'status' => 'setup_required', 'setup_url' => 'https://psp.example/setup/u-1' }])
+      expect(provider.seen_return_url).to eq('https://shop.example/kiosk/payment_setup/return')
+    end
+
+    it 'publishes a descriptor with a backing-off poll cadence and a give-up horizon' do
+      description = Kiosk::Server::Actions.describe('payment_setup')[:description]
+      tiers = description.match(/re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/)
+      expect(tiers).not_to be_nil
+      expect(tiers[2].to_i).to be > tiers[1].to_i
+      expect(description).to match(/GIVE UP after about \d+ minutes/)
+    end
+
+    it 'declares no payment_setup topic when the provider cannot say who came back' do
+      expect(Kiosk::Server::Events.known).not_to include('payment_setup')
+    end
+
+    it 'claims nothing on the return page when the provider cannot say who came back' do
+      provider.required = false
+      status, _headers, body = get_return('ref=u-7')
+      expect(status).to eq(200)
+      expect(body).not_to include('can now pay')
+      expect(body).to include('Your assistant will check')
+    end
   end
 
-  it 'answers the return page with 501 module_not_served' do
-    status, = get_return
-    expect(status).to eq(501)
-  end
-end
+  describe 'the return page, with a provider that can say who came back' do
+    include PaymentSetupSpecHelpers
 
-RSpec.describe Kiosk::Server::PaymentSetup, 'an origin with a payment provider' do
-  include PaymentSetupSpecHelpers
+    let(:provider) { PaymentSetupSpecHelpers::ReturningProvider.new }
 
-  let(:provider) { PaymentSetupSpecHelpers::Provider.new }
+    before { configure(provider) }
 
-  before { configure(provider) }
+    it 'declares the payment_setup topic' do
+      expect(Kiosk::Server::Events.known).to include('payment_setup')
+    end
 
-  it 'answers ready when the provider needs no setup' do
-    provider.required = false
-    expect(post_payment_setup).to eq([200, { 'status' => 'ready' }])
-  end
+    it 'pushes payment_setup ready to the principal once the provider confirms readiness' do
+      provider.required = false
+      status, headers, body = get_return('ref=u-7')
 
-  it "answers setup_required with the provider's url, returning the human to the engine's page" do
-    provider.required = true
-    expect(post_payment_setup)
-      .to eq([200, { 'status' => 'setup_required', 'setup_url' => 'https://psp.example/setup/u-1' }])
-    expect(provider.seen_return_url).to eq('https://shop.example/kiosk/payment_setup/return')
-  end
+      expect(status).to eq(200)
+      expect(headers['content-type']).to start_with('text/html')
+      expect(body).to include('Your assistant can now pay')
+      event = store.since('u-7', 0).first
+      expect(event).to include('topic' => 'payment_setup', 'subject' => 'u-7',
+                               'data' => { 'status' => 'ready' })
+    end
 
-  it 'publishes a descriptor with a backing-off poll cadence and a give-up horizon' do
-    description = Kiosk::Server::Actions.describe('payment_setup')[:description]
-    tiers = description.match(/re-check every ~(\d+) seconds for the first minute, then every ~(\d+) seconds/)
-    expect(tiers).not_to be_nil
-    expect(tiers[2].to_i).to be > tiers[1].to_i
-    expect(description).to match(/GIVE UP after about \d+ minutes/)
-  end
-end
+    it 'pushes data that satisfies the payload_schema the origin serves for the topic' do
+      provider.required = false
+      get_return('ref=u-7')
+      served = JSON.parse(Kiosk::Server::SchemaDocument.json).fetch('events')
+                   .find { |t| t['name'] == 'payment_setup' }
+      expect(JSONSchemer.schema(served['payload_schema']).validate(store.since('u-7', 0).first['data']).to_a)
+        .to be_empty
+    end
 
-RSpec.describe Kiosk::Server::PaymentSetup, 'an origin with a payment provider' do
-  include PaymentSetupSpecHelpers
+    it 'pushes nothing and claims nothing while the provider still says setup is required' do
+      provider.required = true
+      status, _headers, body = get_return('ref=u-7')
+      expect(status).to eq(200)
+      expect(body).not_to include('can now pay')
+      expect(store.head).to eq(0)
+    end
 
-  let(:provider) { PaymentSetupSpecHelpers::Provider.new }
+    it 'pushes nothing when the request names nobody' do
+      status, = get_return
+      expect(status).to eq(200)
+      expect(store.head).to eq(0)
+    end
 
-  before { configure(provider) }
-
-  it 'declares no payment_setup topic when the provider cannot say who came back' do
-    expect(Kiosk::Server::Events.known).not_to include('payment_setup')
-  end
-
-  it 'claims nothing on the return page when the provider cannot say who came back' do
-    provider.required = false
-    status, _headers, body = get_return('ref=u-7')
-    expect(status).to eq(200)
-    expect(body).not_to include('can now pay')
-    expect(body).to include('Your assistant will check')
-  end
-end
-
-RSpec.describe Kiosk::Server::PaymentSetup, 'the return page, with a provider that can say who came back' do
-  include PaymentSetupSpecHelpers
-
-  let(:provider) { PaymentSetupSpecHelpers::ReturningProvider.new }
-
-  before { configure(provider) }
-
-  it 'declares the payment_setup topic' do
-    expect(Kiosk::Server::Events.known).to include('payment_setup')
+    it 'still renders the page when the provider raises' do
+      allow(provider).to receive(:setup_return_user_id).and_raise('psp down')
+      expect(Kiosk::Server::FailureLog).to receive(:report).with(/could not push payment_setup/, RuntimeError)
+      status, _headers, body = get_return('ref=u-7')
+      expect(status).to eq(200)
+      expect(body).not_to include('can now pay')
+      expect(store.head).to eq(0)
+    end
   end
 
-  it 'pushes payment_setup ready to the principal once the provider confirms readiness' do
-    provider.required = false
-    status, headers, body = get_return('ref=u-7')
+  describe 'the payment_setup topic' do
+    it 'reaches the principal it names and nobody else' do
+      reachable = described_class::TOPIC[:subject_reachable]
+      identity = ->(user_id) { Struct.new(:user_id).new(user_id) }
 
-    expect(status).to eq(200)
-    expect(headers['content-type']).to start_with('text/html')
-    expect(body).to include('Your assistant can now pay')
-    event = store.since('u-7', 0).first
-    expect(event).to include('topic' => 'payment_setup', 'subject' => 'u-7',
-                             'data' => { 'status' => 'ready' })
-  end
-
-  it 'pushes data that satisfies the payload_schema the origin serves for the topic' do
-    provider.required = false
-    get_return('ref=u-7')
-    served = JSON.parse(Kiosk::Server::SchemaDocument.json).fetch('events')
-                 .find { |t| t['name'] == 'payment_setup' }
-    expect(JSONSchemer.schema(served['payload_schema']).validate(store.since('u-7', 0).first['data']).to_a)
-      .to be_empty
-  end
-end
-
-RSpec.describe Kiosk::Server::PaymentSetup, 'the return page, with a provider that can say who came back' do
-  include PaymentSetupSpecHelpers
-
-  let(:provider) { PaymentSetupSpecHelpers::ReturningProvider.new }
-
-  before { configure(provider) }
-
-  it 'pushes nothing and claims nothing while the provider still says setup is required' do
-    provider.required = true
-    status, _headers, body = get_return('ref=u-7')
-    expect(status).to eq(200)
-    expect(body).not_to include('can now pay')
-    expect(store.head).to eq(0)
-  end
-
-  it 'pushes nothing when the request names nobody' do
-    status, = get_return
-    expect(status).to eq(200)
-    expect(store.head).to eq(0)
-  end
-
-  it 'still renders the page when the provider raises' do
-    allow(provider).to receive(:setup_return_user_id).and_raise('psp down')
-    expect(Kiosk::Server::FailureLog).to receive(:report).with(/could not push payment_setup/, RuntimeError)
-    status, _headers, body = get_return('ref=u-7')
-    expect(status).to eq(200)
-    expect(body).not_to include('can now pay')
-    expect(store.head).to eq(0)
-  end
-end
-
-RSpec.describe Kiosk::Server::PaymentSetup, 'the payment_setup topic' do
-  it 'reaches the principal it names and nobody else' do
-    reachable = described_class::TOPIC[:subject_reachable]
-    identity = ->(user_id) { Struct.new(:user_id).new(user_id) }
-
-    expect([reachable.call('u-1', identity.call('u-1')), reachable.call('u-1', identity.call('u-2'))])
-      .to eq([true, false])
+      expect([reachable.call('u-1', identity.call('u-1')), reachable.call('u-1', identity.call('u-2'))])
+        .to eq([true, false])
+    end
   end
 end

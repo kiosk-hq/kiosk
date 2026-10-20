@@ -59,9 +59,6 @@ RSpec.shared_context 'auth toll spec: equihash backend' do
   let(:secret) { 'registration-pow-secret-at-least-32-bytes' }
 end
 
-# The auth toll — the SAME equihash machinery as the reputation gate, applied
-# at /auth/register (here), /auth/claim and the device-code token poll. Driven with the
-# kiosk-pow-equihash known-answer proof (n=8, k=1) so it is fast and real.
 RSpec.describe Kiosk::Server::AuthToll do
   include_context 'auth toll spec: equihash backend'
 
@@ -86,10 +83,6 @@ RSpec.describe Kiosk::Server::AuthToll do
       register_toll([proof])
     ).to be_nil
   end
-end
-
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
 
   it 'rejects a WRONG nonce (403), with no principal to penalise' do
     configure(count: 1)
@@ -98,10 +91,6 @@ RSpec.describe Kiosk::Server::AuthToll do
       register_toll([proof])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
-end
-
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
 
   it 'binds proofs to the public key (a proof for another key re-challenges)' do
     configure(count: 1)
@@ -130,10 +119,6 @@ RSpec.describe Kiosk::Server::AuthToll do
       register_toll([{ challenge: elsewhere, nonce: EquihashKat::NONCE }])
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
-end
-
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
 
   it 'raises ConfigurationError when count > 0 but pow_secret is missing' do
     Kiosk.configure { |c| c.registration_pow_count = 1 }
@@ -141,10 +126,6 @@ RSpec.describe Kiosk::Server::AuthToll do
       register_toll(nil)
     end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
   end
-end
-
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
 
   it 'names the algorithm and the offending parameters in the message' do
     configure_at({ n: 0, k: 7 })
@@ -171,14 +152,6 @@ RSpec.describe Kiosk::Server::AuthToll do
       register_toll(nil)
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
-end
-
-# /auth/register runs this gate UNAUTHENTICATED, BEFORE PopVerifier, so one
-# free challenge must not fuel unlimited garbage-proof verifies. The atomic
-# claim consumes the challenge id BEFORE the verify, so a replay of the same id
-# gets a re-challenge (402) and never reaches the equihash verify again.
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
 
   it 'consumes the challenge id on a bad proof so a replay does not re-verify' do
     configure(count: 1)
@@ -203,15 +176,6 @@ RSpec.describe Kiosk::Server::AuthToll do
 
     expect(verify_calls).to eq(1)
   end
-end
-
-# The gate re-derives the demanded alg/params from live config on every
-# verify, so an HMAC-VALID challenge is honoured only at the difficulty the
-# server demands now. The examples submit the SAME proof (real secret, real
-# register fingerprint, live exp, a nonce that solves it at n=8 k=1) against
-# different server configs. Only the params differ.
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
 
   describe 'server-side parameter re-derivation (K-541)' do
     it 'accepts the trivial proof while the server itself demands n=8 k=1' do
@@ -220,13 +184,7 @@ RSpec.describe Kiosk::Server::AuthToll do
         register_toll([trivial_proof(id: 'k541-ok')])
       ).to be_nil
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
-
-  describe 'server-side parameter re-derivation (K-541)' do
     it 'REJECTS that same proof once the server demands harder params' do
       configure_at({ n: 96, k: 5 })
 
@@ -249,13 +207,7 @@ RSpec.describe Kiosk::Server::AuthToll do
       # burnt (and a forger must not be able to poison the spent store).
       expect(Kiosk.configuration.pow_spent_store.spent?('k541-rel')).to be(false)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
-
-  describe 'server-side parameter re-derivation (K-541)' do
     it 'never spends a backend eval on an off-spec challenge' do
       configure_at({ n: 96, k: 5 })
       expect(Kiosk::Pow::Equihash).not_to receive(:verify)

@@ -30,7 +30,6 @@ RSpec.shared_context 'two guests with a booking each' do
   end
 end
 
-# The four properties the protocol makes normative of an origin.
 RSpec.describe 'Kiosk conformance' do
   include_context 'two guests with a booking each'
 
@@ -43,46 +42,42 @@ RSpec.describe 'Kiosk conformance' do
     expect(:my_bookings).to   execute_as_a_kiosk_verb(as: ada)
     expect(:search_hotels).to execute_as_a_kiosk_verb(as: ada)
   end
-end
 
-RSpec.describe 'Kiosk conformance', 'declared schemas' do
-  include_context 'two guests with a booking each'
+  describe 'declared schemas' do
+    it 'answers the shape `properties` publishes' do
+      expect(:properties).to answer_its_declared_schema(as: ada)
+    end
 
-  it 'answers the shape `properties` publishes' do
-    expect(:properties).to answer_its_declared_schema(as: ada)
+    it 'answers the shape `my_bookings` publishes' do
+      expect(:my_bookings).to answer_its_declared_schema(as: ada)
+    end
+
+    it 'answers the shape `search_hotels` publishes, running its own example' do
+      expect(:search_hotels).to answer_its_declared_schema(as: ada)
+    end
+
+    it 'answers the shape `availability` publishes' do
+      expect(:availability).to answer_its_declared_schema(
+        as: ada,
+        params: { property_id: property.id,
+                  check_in: check_in.iso8601,
+                  check_out: check_out.iso8601 }
+      )
+    end
   end
 
-  it 'answers the shape `my_bookings` publishes' do
-    expect(:my_bookings).to answer_its_declared_schema(as: ada)
-  end
+  describe 'principal scoping' do
+    it 'hands one guest nothing belonging to another' do
+      expect(:my_bookings).to be_scoped_to_principal(as: ada, and_not: ben)
+    end
 
-  it 'answers the shape `search_hotels` publishes, running its own example' do
-    expect(:search_hotels).to answer_its_declared_schema(as: ada)
-  end
+    it 'publishes the same shelf to every customer' do
+      ada_shelf = Kiosk::TestHelpers::Conformance.executes(:properties, as: ada)
+      ben_shelf = Kiosk::TestHelpers::Conformance.executes(:properties, as: ben)
 
-  it 'answers the shape `availability` publishes' do
-    expect(:availability).to answer_its_declared_schema(
-      as: ada,
-      params: { property_id: property.id,
-                check_in: check_in.iso8601,
-                check_out: check_out.iso8601 }
-    )
-  end
-end
-
-RSpec.describe 'Kiosk conformance', 'principal scoping' do
-  include_context 'two guests with a booking each'
-
-  it 'hands one guest nothing belonging to another' do
-    expect(:my_bookings).to be_scoped_to_principal(as: ada, and_not: ben)
-  end
-
-  it 'publishes the same shelf to every customer' do
-    ada_shelf = Kiosk::TestHelpers::Conformance.executes(:properties, as: ada)
-    ben_shelf = Kiosk::TestHelpers::Conformance.executes(:properties, as: ben)
-
-    expect(ada_shelf).to be_ok
-    expect(ben_shelf).to be_ok
-    expect(ada_shelf.details[:answer]).to eq(ben_shelf.details[:answer])
+      expect(ada_shelf).to be_ok
+      expect(ben_shelf).to be_ok
+      expect(ada_shelf.details[:answer]).to eq(ben_shelf.details[:answer])
+    end
   end
 end

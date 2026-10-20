@@ -76,8 +76,6 @@ RSpec.shared_context 'a capture in a second thread' do
   end
 end
 
-# A booking reads `paid` from the moment the PSP captures. The property
-# answers it once the settlement row lands.
 RSpec.describe 'the window between a capture and its settlement' do
   include_context 'a guest with a room to pay for'
   include_context 'a capture in a second thread'
@@ -106,29 +104,26 @@ RSpec.describe 'the window between a capture and its settlement' do
     expect(events.pluck('subject')).to eq([id])
     expect(Kiosk::TestHelpers::Assistant::Events.payload_errors(JSON.parse(Kiosk::Server::SchemaDocument.json), events)).to be_empty
   end
-end
 
-# Racing pays charge a booking at most once.
-RSpec.describe 'the window between a capture and its settlement', 'racing pays' do
-  include_context 'a guest with a room to pay for'
-  include_context 'a capture in a second thread'
+  # Racing pays charge a booking at most once.
+  describe 'racing pays' do
+    let(:counting_psp) { CountingPsp.new }
 
-  let(:counting_psp) { CountingPsp.new }
-
-  it 'charges a booking once however many pays race for it' do
-    id = reserve
-    racers = Array.new(4) do
-      Thread.new do
-        capture(counting_psp, id)
-        :captured
-      rescue Kiosk::Server::Errors::Base
-        :refused
+    it 'charges a booking once however many pays race for it' do
+      id = reserve
+      racers = Array.new(4) do
+        Thread.new do
+          capture(counting_psp, id)
+          :captured
+        rescue Kiosk::Server::Errors::Base
+          :refused
+        end
       end
-    end
-    outcomes = ActiveSupport::Dependencies.interlock.permit_concurrent_loads { racers.map(&:value) }
+      outcomes = ActiveSupport::Dependencies.interlock.permit_concurrent_loads { racers.map(&:value) }
 
-    expect(counting_psp.captures.value).to eq(1)
-    expect(outcomes.count(:captured)).to eq(1)
-    expect(payment_state(id)).to eq('paid')
+      expect(counting_psp.captures.value).to eq(1)
+      expect(outcomes.count(:captured)).to eq(1)
+      expect(payment_state(id)).to eq('paid')
+    end
   end
 end

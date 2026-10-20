@@ -46,28 +46,26 @@ RSpec.describe Kiosk::Server::Routing do
     expect(recognize(routes, :post, '/kiosk/catalog')).to be_nil
     expect(recognize(routes, :get, '/kiosk/place_order')).to be_nil
   end
-end
 
-RSpec.describe Kiosk::Server::Routing, 'the kiosk block' do
-  include RoutingSpecHelpers
+  describe 'the kiosk block' do
+    it 'honours the configured mount_path' do
+      previous = Kiosk.configuration.mount_path
+      Kiosk.configuration.mount_path = '/api'
+      set = draw { kiosk { queries :catalog } }
 
-  it 'honours the configured mount_path' do
-    previous = Kiosk.configuration.mount_path
-    Kiosk.configuration.mount_path = '/api'
-    set = draw { kiosk { queries :catalog } }
+      expect(set.routes.first.path.spec.to_s).to eq('/api')
+      expect(recognize(set, :get, '/api/catalog')).to eq(kind: :query, name: 'catalog')
+    ensure
+      Kiosk.configuration.mount_path = previous
+    end
 
-    expect(set.routes.first.path.spec.to_s).to eq('/api')
-    expect(recognize(set, :get, '/api/catalog')).to eq(kind: :query, name: 'catalog')
-  ensure
-    Kiosk.configuration.mount_path = previous
-  end
+    it 'only mounts when given no block' do
+      set = draw { kiosk }
+      expect(set.routes.map { |route| route.app.app }).to eq([Kiosk::Server::Engine])
+    end
 
-  it 'only mounts when given no block' do
-    set = draw { kiosk }
-    expect(set.routes.map { |route| route.app.app }).to eq([Kiosk::Server::Engine])
-  end
-
-  it 'knows no kind besides queries and actions' do
-    expect { draw { kiosk { verbs :catalog } } }.to raise_error(NoMethodError, /verbs/)
+    it 'knows no kind besides queries and actions' do
+      expect { draw { kiosk { verbs :catalog } } }.to raise_error(NoMethodError, /verbs/)
+    end
   end
 end

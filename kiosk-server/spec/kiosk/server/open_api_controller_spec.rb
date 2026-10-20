@@ -71,10 +71,6 @@ RSpec.describe Kiosk::Server::OpenApiController do
     # `/pay` does not: this origin has no payment provider.
     expect(body[:paths].keys).to eq(%i[/schema /salons])
   end
-end
-
-RSpec.describe Kiosk::Server::OpenApiController do
-  include_context 'open api controller spec: demo origin'
 
   it 'serves it under the OAI-registered media type' do
     _status, _body, headers = get_document
@@ -88,10 +84,6 @@ RSpec.describe Kiosk::Server::OpenApiController do
 
     expect([with, without]).to eq([200, 200])
   end
-end
-
-RSpec.describe Kiosk::Server::OpenApiController do
-  include_context 'open api controller spec: demo origin'
 
   it 'is NOT tolled — a toll needs an identity, and there is none here' do
     # The policy below tolls every call it is asked about. The gate never asks
@@ -122,10 +114,6 @@ RSpec.describe Kiosk::Server::OpenApiController do
     expect(headers['Cache-Control']).to eq('max-age=60, public')
     expect(headers['ETag']).to match(/\A"[0-9a-f]{32}"\z/)
   end
-end
-
-RSpec.describe Kiosk::Server::OpenApiController do
-  include_context 'open api controller spec: demo origin'
 
   # A REAL CLIENT SENDS AN ACCEPT HEADER, AND RAILS REACTS TO IT.
   # `ActionController::Rendering#_set_vary_header` stamps `Vary: Accept` on a
@@ -153,10 +141,6 @@ RSpec.describe Kiosk::Server::OpenApiController do
     expect(body[:openapi]).to eq(Kiosk::Server::OpenApi::OPENAPI_VERSION)
     expect(stale['Cache-Control']).to eq('max-age=60, public')
   end
-end
-
-RSpec.describe Kiosk::Server::OpenApiController do
-  include_context 'open api controller spec: demo origin'
 
   it 'answers 304 to If-None-Match on its own ETag' do
     _status, _body, headers = get_document
@@ -169,10 +153,6 @@ RSpec.describe Kiosk::Server::OpenApiController do
     status, = get_document(headers: { 'HTTP_IF_NONE_MATCH' => %("stale") })
     expect(status).to eq(200)
   end
-end
-
-RSpec.describe Kiosk::Server::OpenApiController do
-  include_context 'open api controller spec: demo origin'
 
   # The ETag is this document's OWN bytes, not the shared `?v=` version: two
   # origins render different documents under one version, and an entity tag

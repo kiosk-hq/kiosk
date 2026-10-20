@@ -109,10 +109,6 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     expect(store.since('u1', 0).first.keys)
       .to contain_exactly('id', 'topic', 'subject', 'occurred_at', 'data')
   end
-end
-
-RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
-  include_context 'event stores spec: throwaway schema'
 
   it 'round-trips nested data through jsonb unchanged' do
     store.append('u1', event(data: { 'nested' => { 'k' => [1, 2] }, 's' => 'x' }))
@@ -142,10 +138,6 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
 
     expect(store.since('u2', 0)).to eq([])
   end
-end
-
-RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
-  include_context 'event stores spec: throwaway schema'
 
   # ── what only a table can do, and the whole reason this is the default ────
 
@@ -164,46 +156,6 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     seen = Thread.new { described_class.new.since('u1', 0).length }.value
     expect(seen).to eq(1)
   end
-end
-
-RSpec.describe Kiosk::Server::EventStores::ActiveRecord, 'retention' do
-  include_context 'event stores spec: throwaway schema'
-
-  it 'sweeps rows past the window and reports truncated to a stale cursor' do
-    store.append('u1', event)
-    second = store.append('u1', event)
-    backdate(id_below: second, hours: 25)
-    store.prune!
-
-    expect(store.truncated?('u1', 0)).to be(true)
-    expect(store.truncated?('u1', second)).to be(false)
-  end
-
-  it 'keeps rows inside the window' do
-    store.append('u1', event)
-    store.prune!
-
-    expect(store.since('u1', 0).length).to eq(1)
-  end
-
-  # An hour was the old floor, reasoned from one access-token lifetime. It is
-  # the right bound for a WAIT and the wrong one for a SUBSCRIPTION, which is
-  # what `delivery` and `todo` are.
-  it 'retains for 24 hours by default, not one' do
-    expect(described_class::DEFAULT_RETENTION_HOURS).to eq(24)
-  end
-
-  it 'honours a longer window an operator configures' do
-    store.append('u1', event)
-    backdate(id_below: store.head + 1, hours: 25)
-    described_class.new(retention_hours: 48).prune!
-
-    expect(store.since('u1', 0).length).to eq(1)
-  end
-end
-
-RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
-  include_context 'event stores spec: throwaway schema'
 
   it 'is NOT truncated for a cursor at head' do
     id = store.append('u1', event)
@@ -227,5 +179,39 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
 
     expect(store.since('u1', first).pluck('id')).to eq([second, third])
     expect(store.truncated?('u1', first)).to be(false)
+  end
+
+  describe 'retention' do
+    it 'sweeps rows past the window and reports truncated to a stale cursor' do
+      store.append('u1', event)
+      second = store.append('u1', event)
+      backdate(id_below: second, hours: 25)
+      store.prune!
+
+      expect(store.truncated?('u1', 0)).to be(true)
+      expect(store.truncated?('u1', second)).to be(false)
+    end
+
+    it 'keeps rows inside the window' do
+      store.append('u1', event)
+      store.prune!
+
+      expect(store.since('u1', 0).length).to eq(1)
+    end
+
+    # An hour was the old floor, reasoned from one access-token lifetime. It is
+    # the right bound for a WAIT and the wrong one for a SUBSCRIPTION, which is
+    # what `delivery` and `todo` are.
+    it 'retains for 24 hours by default, not one' do
+      expect(described_class::DEFAULT_RETENTION_HOURS).to eq(24)
+    end
+
+    it 'honours a longer window an operator configures' do
+      store.append('u1', event)
+      backdate(id_below: store.head + 1, hours: 25)
+      described_class.new(retention_hours: 48).prune!
+
+      expect(store.since('u1', 0).length).to eq(1)
+    end
   end
 end

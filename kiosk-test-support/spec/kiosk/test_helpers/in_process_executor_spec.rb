@@ -74,13 +74,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       executor.with_identity(identity) { observed = executor.current_identity }
       expect(observed).to eq(identity)
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#with_identity' do
     it 'clears identity after the block returns' do
       executor.with_identity(identity) { :inside }
       expect(executor.current_identity).to be_nil
@@ -102,13 +96,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       # Identity was still cleaned up even after the raise.
       expect(executor.current_identity).to be_nil
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#with_identity' do
     it 'skips GUC setup when identity is nil (as_anonymous semantics)' do
       executor.with_identity(nil) { :inside }
       expect(connection.exec_queries.select { |sql, _n, _b| sql.include?('set_config') }).to be_empty
@@ -117,13 +105,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
     it 'requires a block' do
       expect { executor.with_identity(identity) }.to raise_error(ArgumentError, /block required/)
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#with_identity' do
     it 'leaves an enclosing scope intact when a blockless call is rescued inside it' do
       preserved = nil
       executor.with_identity(nil) do
@@ -137,13 +119,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       end
       expect(preserved).to be(true)
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#with_identity' do
     it 'keeps current_identity from an enclosing scope after a rescued blockless call' do
       observed = nil
       executor.with_identity(identity) do
@@ -164,10 +140,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       expect(executor.in_scope?).to be(false)
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
 
   describe '#query (default-deny enforcement)' do
     it 'raises NoScopeError when called outside any with_identity scope' do
@@ -187,13 +159,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       rows = executor.with_identity(identity) { executor.query('SELECT id,name FROM users') }
       expect(rows.first.keys).to all(be_a(Symbol))
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#query (default-deny enforcement)' do
     it 'translates RLS denial (PG message) to Kiosk::TestHelpers::Errors::RLSDenied' do
       connection.queue_error(StandardError, 'ERROR: new row violates row-level security policy')
       expect do
@@ -215,10 +181,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       end.to raise_error(ArgumentError, /syntax/)
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
 
   describe '#run_action' do
     it 'raises NoScopeError outside scope' do
@@ -244,10 +206,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       end.to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
 
   describe '#run_query' do
     # The read-side twin of #run_action.
@@ -266,13 +224,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       result = executor.with_identity(identity) { executor.run_query(:mine, {}) }
       expect(result).to eq([{ 'user' => identity.user_id }])
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#run_query' do
     it 'answers a paginated query with its rows — what a caller receives' do
       declare_query('paged') { render_kiosk_page([{ id: 1 }], next_cursor: 'opaque') }
       result = executor.with_identity(identity) { executor.run_query(:paged, {}) }
@@ -292,10 +244,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       end.to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('method_not_allowed') }
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
 
   describe '#pay_action' do
     it 'raises NotImplementedError — pay is not exercised through the journey DSL' do
@@ -304,10 +252,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       end.to raise_error(NotImplementedError, /not exercised through the RLS journey DSL/)
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
 
   describe '#seed' do
     let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
@@ -326,14 +270,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       expect(inserts.size).to eq(3)
       expect(inserts.first).to include('RETURNING *')
     end
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#seed' do
-    let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
 
     it 'quotes column names + table to defang reserved words / casing' do
       system_connection.queue_result([row])
@@ -353,14 +289,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       executor.seed(:t, { amount_cents: 5_000 }, count: 1)
       expect(system_connection.executed_sql.first).to include('VALUES (5000)')
     end
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#seed' do
-    let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
 
     it 'renders NULL for nil and TRUE/FALSE for booleans' do
       system_connection.queue_result([row])
@@ -375,14 +303,6 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       result = executor.seed(:appointments, { user_id: 'u-1', salon_id: 1 }, count: 1)
       expect(result.first).to include(id: 42, user_id: 'u-1', salon_id: 1)
     end
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
-
-  describe '#seed' do
-    let(:row) { { 'id' => 42, 'user_id' => 'u-1', 'salon_id' => 1 } }
 
     it "renders a Time as a UTC ISO-8601 literal without mutating the caller's object" do
       system_connection.queue_result([row])

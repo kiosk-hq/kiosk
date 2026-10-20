@@ -1,14 +1,5 @@
 # frozen_string_literal: true
 
-# ── THE CALLER'S DECLARED CLOCK ──────────────────────────────────────────────
-#
-# `Kiosk-Timezone` is the only thing on this wire that says which CALENDAR a
-# bare `YYYY-MM-DD` argument was written on. Spec Section 3 point 8.
-#
-# What it is NOT is asserted here too, because that is the half a reader gets
-# wrong: it never decides how an ANSWER is rendered. An answer is rendered at
-# the place the service happens, and that zone is a property of the serviced
-# RESOURCE, which is operator data this gem holds none of.
 RSpec.describe Kiosk::Server::CallerTimezone do
   describe '.from_value' do
     it 'resolves an IANA Area/Location name' do
@@ -36,11 +27,7 @@ RSpec.describe Kiosk::Server::CallerTimezone do
       expect(described_class.from_value('')).to  be_nil
       expect(described_class.from_value('   ')).to be_nil
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::CallerTimezone do
-  describe '.from_value' do
     # THE REASON THE SHAPE IS A SHAPE AND NOT MERELY A LOOKUP: an offset cannot
     # carry a DST transition, so an operator holding one cannot say which side
     # of a boundary a FUTURE date falls on, and "the caller's tomorrow" stops
@@ -70,11 +57,7 @@ RSpec.describe Kiosk::Server::CallerTimezone do
       expect { described_class.from_value('EST') }
         .to raise_error(Kiosk::Server::Errors::BadRequest)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::CallerTimezone do
-  describe '.from_value' do
     it 'carries a hint naming what IS accepted' do
       expect { described_class.from_value('nonsense') }
         .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
@@ -88,9 +71,7 @@ RSpec.describe Kiosk::Server::CallerTimezone do
       expect(Kiosk::Server::Errors::BadRequest::HTTP_STATUS).to eq(400)
     end
   end
-end
 
-RSpec.describe Kiosk::Server::CallerTimezone do
   describe '.from_env' do
     it 'reads the Rack env key HTTP_KIOSK_TIMEZONE' do
       zone = described_class.from_env('HTTP_KIOSK_TIMEZONE' => 'Australia/Sydney')

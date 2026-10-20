@@ -15,177 +15,179 @@ RSpec.shared_context 'with a journey harness' do
   end
 end
 
-RSpec.describe Kiosk::TestHelpers::Journey, '#as_agent_of' do
-  include_context 'with a journey harness'
+RSpec.describe Kiosk::TestHelpers::Journey do
+  describe '#as_agent_of' do
+    include_context 'with a journey harness'
 
-  it 'scopes the block with an agent identity for the user' do
-    observed = nil
-    harness.as_agent_of(alice) { observed = executor.current_identity }
+    it 'scopes the block with an agent identity for the user' do
+      observed = nil
+      harness.as_agent_of(alice) { observed = executor.current_identity }
 
-    expect(observed.user_id).to  eq('u-alice')
-    expect(observed.role).to     eq('customer')
-    expect(observed.actor).to    eq('agent')
-    expect(observed.agent_id).to be_a(String)
-  end
+      expect(observed.user_id).to  eq('u-alice')
+      expect(observed.role).to     eq('customer')
+      expect(observed.actor).to    eq('agent')
+      expect(observed.agent_id).to be_a(String)
+    end
 
-  it 'generates a fresh agent_id per call' do
-    ids = []
-    harness.as_agent_of(alice) { ids << executor.current_identity.agent_id }
-    harness.as_agent_of(alice) { ids << executor.current_identity.agent_id }
-    expect(ids.uniq.size).to eq(2)
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Journey, '#as_agent_of roles and block' do
-  include_context 'with a journey harness'
-
-  it 'respects an explicit role override' do
-    harness.as_agent_of(alice, role: :master) do
-      expect(executor.current_identity.role).to eq('master')
+    it 'generates a fresh agent_id per call' do
+      ids = []
+      harness.as_agent_of(alice) { ids << executor.current_identity.agent_id }
+      harness.as_agent_of(alice) { ids << executor.current_identity.agent_id }
+      expect(ids.uniq.size).to eq(2)
     end
   end
 
-  it 'falls back to the first configured role when the user has none' do
-    bare = Struct.new(:id).new('u-x')
-    harness.as_agent_of(bare) do
-      expect(executor.current_identity.role).to eq('customer')
+  describe '#as_agent_of roles and block' do
+    include_context 'with a journey harness'
+
+    it 'respects an explicit role override' do
+      harness.as_agent_of(alice, role: :master) do
+        expect(executor.current_identity.role).to eq('master')
+      end
+    end
+
+    it 'falls back to the first configured role when the user has none' do
+      bare = Struct.new(:id).new('u-x')
+      harness.as_agent_of(bare) do
+        expect(executor.current_identity.role).to eq('customer')
+      end
+    end
+
+    it 'raises ArgumentError when called without a block' do
+      expect { harness.as_agent_of(alice) }.to raise_error(ArgumentError, /block/)
     end
   end
 
-  it 'raises ArgumentError when called without a block' do
-    expect { harness.as_agent_of(alice) }.to raise_error(ArgumentError, /block/)
-  end
-end
+  describe '#as_user' do
+    include_context 'with a journey harness'
 
-RSpec.describe Kiosk::TestHelpers::Journey, '#as_user' do
-  include_context 'with a journey harness'
-
-  it 'scopes with a human identity (no agent_id)' do
-    harness.as_user(alice) do
-      ident = executor.current_identity
-      expect(ident.actor).to    eq('human')
-      expect(ident.agent_id).to be_nil
-      expect(ident.user_id).to  eq('u-alice')
-    end
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Journey, '#as_agent' do
-  include_context 'with a journey harness'
-
-  it 'scopes a synthetic-user agent under a label' do
-    harness.as_agent('greenfield-1') do
-      ident = executor.current_identity
-      expect(ident.user_id).to eq('synthetic:greenfield-1')
-      expect(ident.actor).to   eq('agent')
+    it 'scopes with a human identity (no agent_id)' do
+      harness.as_user(alice) do
+        ident = executor.current_identity
+        expect(ident.actor).to    eq('human')
+        expect(ident.agent_id).to be_nil
+        expect(ident.user_id).to  eq('u-alice')
+      end
     end
   end
 
-  it 'yields the same synthetic user_id across calls with the same label' do
-    seen = []
-    harness.as_agent('alpha') { seen << executor.current_identity.user_id }
-    harness.as_agent('alpha') { seen << executor.current_identity.user_id }
-    expect(seen.uniq).to eq(['synthetic:alpha'])
-  end
-end
+  describe '#as_agent' do
+    include_context 'with a journey harness'
 
-RSpec.describe Kiosk::TestHelpers::Journey, '#as_anonymous' do
-  include_context 'with a journey harness'
-
-  it 'scopes with nil identity (no GUCs set)' do
-    harness.as_anonymous { expect(executor.current_identity).to be_nil }
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Journey, '#query' do
-  include_context 'with a journey harness'
-
-  it 'delegates to the executor' do
-    executor.enqueue_query([{ 'n' => 1 }])
-    result = harness.as_user(alice) { harness.query('select 1') }
-    expect(result).to eq([{ 'n' => 1 }])
-  end
-
-  it 'records the call with the current identity' do
-    harness.as_agent_of(alice) { harness.query('select * from orders') }
-    call = executor.calls_of(:query).first
-    expect(call.identity.user_id).to eq('u-alice')
-    expect(call.args[:sql]).to       eq('select * from orders')
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Journey, '#run_action' do
-  include_context 'with a journey harness'
-
-  it 'delegates name + kwargs' do
-    harness.as_agent_of(alice) do
-      harness.run_action(:create_order, items: ['bread'])
+    it 'scopes a synthetic-user agent under a label' do
+      harness.as_agent('greenfield-1') do
+        ident = executor.current_identity
+        expect(ident.user_id).to eq('synthetic:greenfield-1')
+        expect(ident.actor).to   eq('agent')
+      end
     end
-    call = executor.calls_of(:run_action).first
-    expect(call.args).to eq(name: :create_order, args: { items: ['bread'] })
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::Journey, '#run_query' do
-  include_context 'with a journey harness'
-
-  # K-1706. Two `respond_to` roll-calls asserted this helper's NAME and
-  # nothing at either layer ran it, so the read side of an origin's wire
-  # could be renamed or mis-forwarded with the suite green.
-  it 'delegates name + kwargs under the current identity' do
-    harness.as_agent_of(alice) do
-      harness.run_query(:my_orders, since: '2026-01-01')
+    it 'yields the same synthetic user_id across calls with the same label' do
+      seen = []
+      harness.as_agent('alpha') { seen << executor.current_identity.user_id }
+      harness.as_agent('alpha') { seen << executor.current_identity.user_id }
+      expect(seen.uniq).to eq(['synthetic:alpha'])
     end
-    call = executor.calls_of(:run_query).first
-    expect(call.args).to eq(name: :my_orders, args: { since: '2026-01-01' })
-    expect(call.identity.user_id).to eq('u-alice')
   end
 
-  it 'is a DIFFERENT kind from run_action, which is the whole reason it exists' do
-    harness.as_agent_of(alice) { harness.run_query(:my_orders) }
+  describe '#as_anonymous' do
+    include_context 'with a journey harness'
 
-    expect(executor.calls_of(:run_query).size).to eq(1)
-    expect(executor.calls_of(:run_action)).to be_empty
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Journey, '#pay_action' do
-  include_context 'with a journey harness'
-
-  it 'delegates under :pay_action kind' do
-    harness.as_agent_of(alice) { harness.pay_action(:buy, sku: 'x') }
-    expect(executor.calls_of(:pay_action).size).to eq(1)
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Journey, '#kiosk_seed' do
-  include_context 'with a journey harness'
-
-  it 'delegates table + attrs + count' do
-    harness.kiosk_seed(:rentals, count: 2, active: true)
-    call = executor.calls_of(:seed).first
-    expect(call.args).to eq(table: :rentals, attrs: { active: true }, count: 2)
+    it 'scopes with nil identity (no GUCs set)' do
+      harness.as_anonymous { expect(executor.current_identity).to be_nil }
+    end
   end
 
-  it 'expands `owner:` to user_id' do
-    harness.kiosk_seed(:rentals, owner: alice)
-    call = executor.calls_of(:seed).first
-    expect(call.args[:attrs]).to eq(user_id: 'u-alice')
+  describe '#query' do
+    include_context 'with a journey harness'
+
+    it 'delegates to the executor' do
+      executor.enqueue_query([{ 'n' => 1 }])
+      result = harness.as_user(alice) { harness.query('select 1') }
+      expect(result).to eq([{ 'n' => 1 }])
+    end
+
+    it 'records the call with the current identity' do
+      harness.as_agent_of(alice) { harness.query('select * from orders') }
+      call = executor.calls_of(:query).first
+      expect(call.identity.user_id).to eq('u-alice')
+      expect(call.args[:sql]).to       eq('select * from orders')
+    end
   end
-end
 
-RSpec.describe Kiosk::TestHelpers::Journey, 'without an executor wired' do
-  include_context 'with a journey harness'
+  describe '#run_action' do
+    include_context 'with a journey harness'
 
-  before { Kiosk::TestHelpers.reset! }
-
-  it 'raises on as_agent_of' do
-    expect { harness.as_agent_of(alice) { nil } }
-      .to raise_error(Kiosk::TestHelpers::Errors::ExecutorNotConfigured)
+    it 'delegates name + kwargs' do
+      harness.as_agent_of(alice) do
+        harness.run_action(:create_order, items: ['bread'])
+      end
+      call = executor.calls_of(:run_action).first
+      expect(call.args).to eq(name: :create_order, args: { items: ['bread'] })
+    end
   end
 
-  it 'raises on query' do
-    expect { harness.query('x') }
-      .to raise_error(Kiosk::TestHelpers::Errors::ExecutorNotConfigured)
+  describe '#run_query' do
+    include_context 'with a journey harness'
+
+    # K-1706. Two `respond_to` roll-calls asserted this helper's NAME and
+    # nothing at either layer ran it, so the read side of an origin's wire
+    # could be renamed or mis-forwarded with the suite green.
+    it 'delegates name + kwargs under the current identity' do
+      harness.as_agent_of(alice) do
+        harness.run_query(:my_orders, since: '2026-01-01')
+      end
+      call = executor.calls_of(:run_query).first
+      expect(call.args).to eq(name: :my_orders, args: { since: '2026-01-01' })
+      expect(call.identity.user_id).to eq('u-alice')
+    end
+
+    it 'is a DIFFERENT kind from run_action, which is the whole reason it exists' do
+      harness.as_agent_of(alice) { harness.run_query(:my_orders) }
+
+      expect(executor.calls_of(:run_query).size).to eq(1)
+      expect(executor.calls_of(:run_action)).to be_empty
+    end
+  end
+
+  describe '#pay_action' do
+    include_context 'with a journey harness'
+
+    it 'delegates under :pay_action kind' do
+      harness.as_agent_of(alice) { harness.pay_action(:buy, sku: 'x') }
+      expect(executor.calls_of(:pay_action).size).to eq(1)
+    end
+  end
+
+  describe '#kiosk_seed' do
+    include_context 'with a journey harness'
+
+    it 'delegates table + attrs + count' do
+      harness.kiosk_seed(:rentals, count: 2, active: true)
+      call = executor.calls_of(:seed).first
+      expect(call.args).to eq(table: :rentals, attrs: { active: true }, count: 2)
+    end
+
+    it 'expands `owner:` to user_id' do
+      harness.kiosk_seed(:rentals, owner: alice)
+      call = executor.calls_of(:seed).first
+      expect(call.args[:attrs]).to eq(user_id: 'u-alice')
+    end
+  end
+
+  describe 'without an executor wired' do
+    include_context 'with a journey harness'
+
+    before { Kiosk::TestHelpers.reset! }
+
+    it 'raises on as_agent_of' do
+      expect { harness.as_agent_of(alice) { nil } }
+        .to raise_error(Kiosk::TestHelpers::Errors::ExecutorNotConfigured)
+    end
+
+    it 'raises on query' do
+      expect { harness.query('x') }
+        .to raise_error(Kiosk::TestHelpers::Errors::ExecutorNotConfigured)
+    end
   end
 end

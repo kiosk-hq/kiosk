@@ -187,10 +187,6 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
 
     expect(status).to eq(200)
   end
-end
-
-RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
-  include_context 'wire controller pow header spec: tolled origin'
 
   # ── the controller feeds METHOD and PATH SEGMENT to the fingerprint ────────
   #
@@ -225,10 +221,6 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
 
     expect(status).to eq(200)
   end
-end
-
-RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
-  include_context 'wire controller pow header spec: tolled origin'
 
   # ── the reserved GET schema is public and free ─────────────────────────────
   #
@@ -267,10 +259,6 @@ RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
     expect(problem[:challenges]).to be_an(Array)
     expect(problem[:challenges]).not_to be_empty
   end
-end
-
-RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
-  include_context 'wire controller pow header spec: tolled origin'
 
   # ── a body-pow is NOT a proof ──────────────────────────────────────────────
   it "does NOT accept a proof placed in an action's BODY (the header is the channel)" do

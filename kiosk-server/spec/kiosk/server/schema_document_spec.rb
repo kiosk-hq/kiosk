@@ -52,10 +52,6 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(described_class.document).to eq(queries: [], actions: [], events: [])
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
 
   describe '.digest' do
     it 'is 32 lowercase hex characters' do
@@ -68,13 +64,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(digest).to eq(digest)
       expect(described_class.document).to equal(described_class.document)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
-
-  describe '.digest' do
     # ── THE REGISTRY ────────────────────────────────────────────────────
     it 'moves when a verb is ADDED' do
       declare_query('menu')
@@ -103,13 +93,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       declare_query('menu', description: 'Generation 2.')
       expect(digest).not_to eq(first)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
-
-  describe '.digest' do
     # ── THE ORIGIN CONFIG ───────────────────────────────────────────────
     it 'moves when the mount path moves' do
       declare_query('menu')
@@ -142,10 +126,6 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(digest).not_to eq(at_current)
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
 
   describe '.etag' do
     it 'is the digest, quoted, and STRONG — no `W/` prefix' do
@@ -154,10 +134,6 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(described_class.etag).not_to start_with('W/')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
 
   describe 'the boot contract' do
     it 'reports NOT derived before anything asks, and derived after derive!' do
@@ -188,17 +164,6 @@ RSpec.describe Kiosk::Server::SchemaDocument do
       expect(described_class.document[:queries].pluck(:name)).to eq(%w[brunch])
     end
   end
-end
-
-# ── A DATA-DERIVED SLOT ──────────────────────────────────────────────────────
-#
-# The catalogue updates without a deploy. A slot declared
-# `enum: -> { Category.pluck(:slug) }` makes the catalogue a function of the
-# operator's ROWS, and the boot memo is keyed on the verb NAMES, which do not
-# move when a category is added. The epoch in {cache_key} lets the digest
-# follow the rows without a restart.
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
 
   describe 'when a descriptor slot is data-derived' do
     it 'moves the digest when the derived value changes, with no reset and no restart' do
@@ -226,13 +191,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
       expect(digest).to eq(first)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
-
-  describe 'when a descriptor slot is data-derived' do
     # The epoch is a MEMO key, not a digest input: an epoch that rolls while
     # the resolved value is unchanged must produce the SAME digest. Two
     # documents publish this digest (the `?v=` on the discovery link and the
@@ -260,13 +219,7 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
       expect(digest).not_to eq(first)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
-
-  describe 'when a descriptor slot is data-derived' do
     # `after_initialize` runs on EVERY boot, `db:create` and `db:migrate`
     # included, and a proc that reads a table cannot succeed there. Eager
     # derivation is an optimisation, so it defers rather than taking the boot

@@ -50,9 +50,6 @@ RSpec.shared_context 'link code spec: in-memory store' do
   let(:code) { described_class.mint(user_id: user_id)[:link_code] }
 end
 
-# The link half of the ceremony (Kiosk extension). Binding is
-# stubbed (account_binding_spec.rb covers it); the possession proof uses a
-# REAL key so the BIND-POP gate is exercised end-to-end at this layer.
 RSpec.describe Kiosk::Server::LinkCode do
   include_context 'link code spec: in-memory store'
 
@@ -75,13 +72,7 @@ RSpec.describe Kiosk::Server::LinkCode do
       )
       expect(stored).to eq(result[:da])
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
-
-  describe '.mint' do
     # roles-from-IdP (Path A): the human's role travels on the link
     # row so the assistant inherits it at claim time.
     it "stamps the human's requested_role onto the link row (roles-from-IdP)" do
@@ -112,13 +103,7 @@ RSpec.describe Kiosk::Server::LinkCode do
         described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
       end.to raise_error(Kiosk::Server::Errors::Conflict, /already used/)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
-
-  describe '.redeem' do
     # ── K-887: single-use is decided by the ROW, not by a Ruby check ────────
     #
     # The `consumed?` check in `.redeem` reads the snapshot returned by
@@ -153,13 +138,7 @@ RSpec.describe Kiosk::Server::LinkCode do
       expect(Kiosk::Server::AccountBinding).not_to have_received(:bind!)
         .with(hash_including(public_key_pem: pem_b.strip))
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
-
-  describe '.redeem' do
     # The claim runs AFTER the proof, so a bad proof must still leave the code
     # live -- the property the K-887 fix could most easily have broken.
     it 'does not burn the code on a failed possession proof' do
@@ -183,13 +162,7 @@ RSpec.describe Kiosk::Server::LinkCode do
         public_key_pem: pem.strip, user_id: user_id, requested_role: 'owner'
       )
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
-
-  describe '.redeem' do
     it 'raises Unauthenticated on a failed proof and does NOT consume the code' do
       stub_binding
       other_key = OpenSSL::PKey::RSA.generate(2048)
@@ -209,13 +182,7 @@ RSpec.describe Kiosk::Server::LinkCode do
         described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
       ).to include(agent_id: 'agent-1')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
-
-  describe '.redeem' do
     it 'raises Unauthenticated on an origin-mismatched proof (relay defense)' do
       stub_binding
       expect do
@@ -232,13 +199,7 @@ RSpec.describe Kiosk::Server::LinkCode do
         described_class.redeem(code: code, public_key_pem: small.public_key.to_pem, signed: 'x')
       end.to raise_error(Kiosk::Server::Errors::BadRequest, /too small/)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
-
-  describe '.redeem' do
     it 'raises NotFound for an unknown code' do
       expect do
         described_class.redeem(code: 'no-such-code', public_key_pem: pem, signed: 'x')
@@ -250,13 +211,7 @@ RSpec.describe Kiosk::Server::LinkCode do
         described_class.redeem(code: '', public_key_pem: pem, signed: 'x')
       end.to raise_error(Kiosk::Server::Errors::BadRequest, /code required/)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
-
-  describe '.redeem' do
     it 'raises NotFound for an expired code (and bumps the row lazily)' do
       minted = described_class.mint(user_id: user_id)
       expect do

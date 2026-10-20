@@ -17,12 +17,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     it 'marks the helpers as STABLE' do
       expect(sql.scan('LANGUAGE sql STABLE').size).to eq(4)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions do
-  describe '.helper_functions_sql' do
-    subject(:sql) { described_class.helper_functions_sql }
 
     it 'types current_user_id() against the configured user-id type (default :uuid)' do
       expect(sql).to include('current_user_id() RETURNS uuid')
@@ -39,12 +33,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     it "uses the configured GUC namespace (default 'app')" do
       expect(sql).to include("current_setting('app.current_user_id', true)")
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions do
-  describe '.helper_functions_sql' do
-    subject(:sql) { described_class.helper_functions_sql }
 
     it 'uses an overridden GUC namespace' do
       Kiosk.configure { |c| c.guc_namespace = 'kiosk-all' }
@@ -66,9 +54,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(out).to include('current_user_id() RETURNS text')
     end
   end
-end
 
-RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe '.identity_tables_sql' do
     subject(:sql) { described_class.identity_tables_sql }
 
@@ -104,12 +90,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       out = described_class.identity_tables_sql
       expect(out).to include('user_id             bigint NOT NULL')
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions do
-  describe '.identity_tables_sql' do
-    subject(:sql) { described_class.identity_tables_sql }
 
     # DB-level dedupe of the credential, per origin: one key may hold a live
     # row on each origin served.
@@ -130,12 +110,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       agents = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.agents.*?\n\);/m]
       expect(agents).to match(/revoked_at\s+timestamptz,\s+issuer\s+text NOT NULL,\s+CONSTRAINT/)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions do
-  describe '.identity_tables_sql' do
-    subject(:sql) { described_class.identity_tables_sql }
 
     # Nullable, and free to an operator who never uses them.
     it 'declares spending_cap_cents and human_label on agents, and no KYC column' do
@@ -145,12 +119,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(agents).to include('human_label         text')
     end
   end
-end
 
-# A database that already carries the kiosk schema may replay a migration
-# onto tables that exist; an unguarded CREATE aborts `db:migrate` there and
-# strands every later migration.
-RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe 'replay safety (K-1083)' do
     # Found rather than listed: the emitters are this module's own `*_sql`
     # singleton methods, so an eleventh is covered the day it is defined.
@@ -178,11 +147,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
                            "stranding every later migration:\n#{unguarded.join}"
     end
   end
-end
 
-# Kiosk stores no audit trail: it emits one ActionEvent per invocation to the
-# operator's `audit_sink`.
-RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe 'the retired actions-log generator' do
     it 'no longer exists' do
       expect(described_class).not_to respond_to(:actions_log_sql)
@@ -203,9 +168,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(sql).not_to include(%(CREATE TABLE IF NOT EXISTS "kiosk".actions))
     end
   end
-end
 
-RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe '.mandates_sql' do
     subject(:sql) { described_class.mandates_sql(schema: 'kiosk', user_id_type: :uuid) }
 
@@ -233,12 +196,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       settlements_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.settlements.*?\);/m]
       expect(settlements_table).not_to match(/^\s*raw_jws\s+\w/)
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions do
-  describe '.mandates_sql' do
-    subject(:sql) { described_class.mandates_sql(schema: 'kiosk', user_id_type: :uuid) }
 
     it 'keeps a server-generated uuid PK on every table (never caller-supplied)' do
       expect(sql.scan(/\bid +uuid PRIMARY KEY DEFAULT gen_random_uuid\(\)/).size).to eq(4)
@@ -262,12 +219,6 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
     it 'anchors idempotency with one settlement per cart on settlements' do
       expect(sql).to include('UNIQUE (cart_mandate_id)')
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaDefinitions do
-  describe '.mandates_sql' do
-    subject(:sql) { described_class.mandates_sql(schema: 'kiosk', user_id_type: :uuid) }
 
     it 'the signed payment_mandates table carries mandate_id, payment_method, amount_cents, and UNIQUE(user_id, mandate_id)' do
       payment_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.payment_mandates.*?\);/m]
@@ -283,9 +234,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(settlements_table).to include('settled_amount_cents')
     end
   end
-end
 
-RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe '.device_authorizations_sql' do
     subject(:sql) { described_class.device_authorizations_sql }
 
@@ -317,9 +266,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
       expect(out).to include('user_id          bigint')
     end
   end
-end
 
-RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe '.user_id_cast' do
     it "maps :uuid to 'uuid'" do
       expect(described_class.user_id_cast(:uuid)).to eq('uuid')

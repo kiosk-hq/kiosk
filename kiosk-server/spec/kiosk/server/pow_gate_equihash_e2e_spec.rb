@@ -105,10 +105,6 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       gate(pow: [proof])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
-end
-
-RSpec.describe 'PowGate × equihash (real backend, real gate)' do
-  include_context 'pow gate equihash e2e spec: gate'
 
   context 'N = 3 independent proofs' do
     let(:count) { 3 }
@@ -123,10 +119,6 @@ RSpec.describe 'PowGate × equihash (real backend, real gate)' do
       expect(gate(pow: proofs)).to eq(:proceed)
     end
   end
-end
-
-RSpec.describe 'PowGate × equihash (real backend, real gate)' do
-  include_context 'pow gate equihash e2e spec: gate'
 
   # ── fingerprint binding, through the real crypto ─────────────────────────
   #

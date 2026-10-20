@@ -38,55 +38,53 @@ RSpec.describe Kiosk::KycProviders::Prove do
   it 'refuses to be built without an intake secret' do
     expect { described_class.new(operator_id: 'shop', intake_secret: '') }.to raise_error(ArgumentError)
   end
-end
 
-RSpec.describe Kiosk::KycProviders::Prove, '#open_verification' do
-  include_context 'with a Prove broker client'
+  describe '#open_verification' do
+    it "opens a verification at the broker's intake, asking for the attribute names" do
+      answer(201, request_id: 'r-1', verification_url: 'https://broker.example/v/r-1', nonce: 'n-1')
 
-  it "opens a verification at the broker's intake, asking for the attribute names" do
-    answer(201, request_id: 'r-1', verification_url: 'https://broker.example/v/r-1', nonce: 'n-1')
-
-    expect(open!).to eq(request_id: 'r-1', verification_url: 'https://broker.example/v/r-1', nonce: 'n-1')
-    http, req = sent.first
-    expect([http.address, http.use_ssl?, req.path]).to eq(['broker.example', true, '/verifications'])
-    expect(req['Authorization']).to eq('Bearer s3cret')
-    expect(JSON.parse(req.body)).to eq(
-      'operator_id' => 'shop', 'callback_url' => 'https://shop.example/kiosk/kyc/callback',
-      'requested_claims' => %w[age_over_18 licence_a], 'subject_handle' => 'u-1', 'audience' => 'shop'
-    )
-  end
-
-  it 'raises Unavailable on a refusal, a body that is not JSON, or a body missing a field' do
-    [[401, { error: 'no' }], [201, '<html>'], [201, { request_id: 'r-1', nonce: 'n-1' }]].each do |code, body|
-      answer(code, body)
-      expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable)
+      expect(open!).to eq(request_id: 'r-1', verification_url: 'https://broker.example/v/r-1', nonce: 'n-1')
+      http, req = sent.first
+      expect([http.address, http.use_ssl?, req.path]).to eq(['broker.example', true, '/verifications'])
+      expect(req['Authorization']).to eq('Bearer s3cret')
+      expect(JSON.parse(req.body)).to eq(
+        'operator_id' => 'shop', 'callback_url' => 'https://shop.example/kiosk/kyc/callback',
+        'requested_claims' => %w[age_over_18 licence_a], 'subject_handle' => 'u-1', 'audience' => 'shop'
+      )
     end
-  end
 
-  it 'dials an IPv6 literal intake by its bare address' do
-    answer(201, request_id: 'r-1', verification_url: 'http://[::1]:3004/v/r-1', nonce: 'n-1')
-    broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: 'http://[::1]:3004/')
-    broker.open_verification(subject: 'u-1', claims: %w[age_over_18], audience: 'shop', callback_url: 'https://shop.example/cb')
+    it 'raises Unavailable on a refusal, a body that is not JSON, or a body missing a field' do
+      [[401, { error: 'no' }], [201, '<html>'], [201, { request_id: 'r-1', nonce: 'n-1' }]].each do |code, body|
+        answer(code, body)
+        expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable)
+      end
+    end
 
-    http, = sent.first
-    expect([http.address, http.port]).to eq(['::1', 3004])
-  end
-
-  it 'raises Unavailable when the broker cannot be reached' do
-    allow_any_instance_of(Net::HTTP).to receive(:request).and_raise(Errno::ECONNREFUSED)
-    expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
-  end
-
-  it 'raises Unavailable when the broker answers bytes that are not HTTP' do
-    server = TCPServer.new('127.0.0.1', 0)
-    listener = Thread.new { server.accept.then { |peer| peer.readpartial(4096) && peer.write("garbage\r\n") && peer.close } }
-    broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: "http://127.0.0.1:#{server.addr[1]}/")
-
-    expect do
+    it 'dials an IPv6 literal intake by its bare address' do
+      answer(201, request_id: 'r-1', verification_url: 'http://[::1]:3004/v/r-1', nonce: 'n-1')
+      broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: 'http://[::1]:3004/')
       broker.open_verification(subject: 'u-1', claims: %w[age_over_18], audience: 'shop', callback_url: 'https://shop.example/cb')
-    end.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
-  ensure
-    listener&.join(1)
-    server&.close
+
+      http, = sent.first
+      expect([http.address, http.port]).to eq(['::1', 3004])
+    end
+
+    it 'raises Unavailable when the broker cannot be reached' do
+      allow_any_instance_of(Net::HTTP).to receive(:request).and_raise(Errno::ECONNREFUSED)
+      expect { open! }.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
+    end
+
+    it 'raises Unavailable when the broker answers bytes that are not HTTP' do
+      server = TCPServer.new('127.0.0.1', 0)
+      listener = Thread.new { server.accept.then { |peer| peer.readpartial(4096) && peer.write("garbage\r\n") && peer.close } }
+      broker = described_class.new(operator_id: 'shop', intake_secret: 's3cret', url: "http://127.0.0.1:#{server.addr[1]}/")
+
+      expect do
+        broker.open_verification(subject: 'u-1', claims: %w[age_over_18], audience: 'shop', callback_url: 'https://shop.example/cb')
+      end.to raise_error(Kiosk::KycProviders::Unavailable, /could not be reached/)
+    ensure
+      listener&.join(1)
+      server&.close
+    end
   end
 end

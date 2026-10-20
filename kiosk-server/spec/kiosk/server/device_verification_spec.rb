@@ -22,166 +22,168 @@ RSpec.shared_context 'device verification spec: pending claim' do
   end
 end
 
-RSpec.describe Kiosk::Server::DeviceVerification, '.normalize_user_code' do
-  include_context 'device verification spec: pending claim'
+RSpec.describe Kiosk::Server::DeviceVerification do
+  describe '.normalize_user_code' do
+    include_context 'device verification spec: pending claim'
 
-  it 'strips the XXXX-XXXX visual dash' do
-    expect(described_class.normalize_user_code('WDJB-MJHT')).to eq('WDJBMJHT')
+    it 'strips the XXXX-XXXX visual dash' do
+      expect(described_class.normalize_user_code('WDJB-MJHT')).to eq('WDJBMJHT')
+    end
+
+    it 'strips ambient whitespace from copy/paste' do
+      expect(described_class.normalize_user_code('  WDJB MJHT  ')).to eq('WDJBMJHT')
+      expect(described_class.normalize_user_code("\tWDJB\nMJHT\r\n")).to eq('WDJBMJHT')
+    end
+
+    it 'upcases lowercase input (auto-cap keyboards / browsers)' do
+      expect(described_class.normalize_user_code('wdjb-mjht')).to eq('WDJBMJHT')
+    end
+
+    it 'returns empty string for blank input' do
+      expect(described_class.normalize_user_code(nil)).to eq('')
+      expect(described_class.normalize_user_code('')).to eq('')
+      expect(described_class.normalize_user_code('   ')).to eq('')
+    end
   end
 
-  it 'strips ambient whitespace from copy/paste' do
-    expect(described_class.normalize_user_code('  WDJB MJHT  ')).to eq('WDJBMJHT')
-    expect(described_class.normalize_user_code("\tWDJB\nMJHT\r\n")).to eq('WDJBMJHT')
+  describe '.find_pending' do
+    include_context 'device verification spec: pending claim'
+
+    it 'returns the row for a matching pending user_code (hashed lookup)' do
+      code, da = fresh
+      expect(described_class.find_pending(user_code: code)).to eq(da)
+    end
+
+    it 'honours the display form (XXXX-XXXX)' do
+      code, da = fresh
+      expect(described_class.find_pending(user_code: display(code))).to eq(da)
+    end
+
+    it 'honours case-insensitive lookup (user typed lowercase)' do
+      code, da = fresh
+      expect(described_class.find_pending(user_code: display(code).downcase)).to eq(da)
+    end
+
+    it 'returns nil for a code that does not exist' do
+      expect(described_class.find_pending(user_code: 'NOPECODE')).to be_nil
+    end
+
+    it 'returns nil when the row has left pending (approved/denied/consumed)' do
+      code, da = fresh
+      store.update(da.approve(user_id: user_id))
+      expect(described_class.find_pending(user_code: code)).to be_nil
+    end
+
+    it 'returns nil for blank input (no store hit)' do
+      expect(described_class.find_pending(user_code: nil)).to be_nil
+      expect(described_class.find_pending(user_code: '')).to be_nil
+    end
   end
 
-  it 'upcases lowercase input (auto-cap keyboards / browsers)' do
-    expect(described_class.normalize_user_code('wdjb-mjht')).to eq('WDJBMJHT')
-  end
+  describe '.approve' do
+    include_context 'device verification spec: pending claim'
 
-  it 'returns empty string for blank input' do
-    expect(described_class.normalize_user_code(nil)).to eq('')
-    expect(described_class.normalize_user_code('')).to eq('')
-    expect(described_class.normalize_user_code('   ')).to eq('')
-  end
-end
+    it 'transitions a pending row to approved with the user_id set' do
+      code, = fresh
+      approved = described_class.approve(user_code: code, user_id: user_id, role: nil)
+      expect(approved).to be_approved
+      expect(approved.user_id).to eq(user_id)
+    end
 
-RSpec.describe Kiosk::Server::DeviceVerification, '.find_pending' do
-  include_context 'device verification spec: pending claim'
+    it 'accepts the display form (XXXX-XXXX) at the boundary' do
+      code, = fresh
+      approved = described_class.approve(user_code: display(code), user_id: user_id, role: nil)
+      expect(approved).to be_approved
+    end
 
-  it 'returns the row for a matching pending user_code (hashed lookup)' do
-    code, da = fresh
-    expect(described_class.find_pending(user_code: code)).to eq(da)
-  end
+    it 'raises CodeNotFoundError when no pending row matches' do
+      expect do
+        described_class.approve(user_code: 'NOPECODE', user_id: user_id, role: nil)
+      end.to raise_error(described_class::CodeNotFoundError, /user_code/)
+    end
 
-  it 'honours the display form (XXXX-XXXX)' do
-    code, da = fresh
-    expect(described_class.find_pending(user_code: display(code))).to eq(da)
-  end
-
-  it 'honours case-insensitive lookup (user typed lowercase)' do
-    code, da = fresh
-    expect(described_class.find_pending(user_code: display(code).downcase)).to eq(da)
-  end
-
-  it 'returns nil for a code that does not exist' do
-    expect(described_class.find_pending(user_code: 'NOPECODE')).to be_nil
-  end
-
-  it 'returns nil when the row has left pending (approved/denied/consumed)' do
-    code, da = fresh
-    store.update(da.approve(user_id: user_id))
-    expect(described_class.find_pending(user_code: code)).to be_nil
-  end
-
-  it 'returns nil for blank input (no store hit)' do
-    expect(described_class.find_pending(user_code: nil)).to be_nil
-    expect(described_class.find_pending(user_code: '')).to be_nil
-  end
-end
-
-RSpec.describe Kiosk::Server::DeviceVerification, '.approve' do
-  include_context 'device verification spec: pending claim'
-
-  it 'transitions a pending row to approved with the user_id set' do
-    code, = fresh
-    approved = described_class.approve(user_code: code, user_id: user_id, role: nil)
-    expect(approved).to be_approved
-    expect(approved.user_id).to eq(user_id)
-  end
-
-  it 'accepts the display form (XXXX-XXXX) at the boundary' do
-    code, = fresh
-    approved = described_class.approve(user_code: display(code), user_id: user_id, role: nil)
-    expect(approved).to be_approved
-  end
-
-  it 'raises CodeNotFoundError when no pending row matches' do
-    expect do
-      described_class.approve(user_code: 'NOPECODE', user_id: user_id, role: nil)
-    end.to raise_error(described_class::CodeNotFoundError, /user_code/)
-  end
-
-  it 'raises CodeNotFoundError when the row has already been approved' do
-    code, = fresh
-    described_class.approve(user_code: code, user_id: user_id, role: nil)
-    expect do
+    it 'raises CodeNotFoundError when the row has already been approved' do
+      code, = fresh
       described_class.approve(user_code: code, user_id: user_id, role: nil)
-    end.to raise_error(described_class::CodeNotFoundError)
-  end
-end
-
-RSpec.describe Kiosk::Server::DeviceVerification, '.approve user and role' do
-  include_context 'device verification spec: pending claim'
-
-  it 'raises ArgumentError when user_id is blank' do
-    code, = fresh
-    expect { described_class.approve(user_code: code, user_id: nil, role: nil) }
-      .to raise_error(ArgumentError, /user_id/)
-    expect { described_class.approve(user_code: code, user_id: '', role: nil) }
-      .to raise_error(ArgumentError, /user_id/)
+      expect do
+        described_class.approve(user_code: code, user_id: user_id, role: nil)
+      end.to raise_error(described_class::CodeNotFoundError)
+    end
   end
 
-  # ── the approval IS the role source (ADR-0011 amendment; K-072) ───────
-  it "stamps the approving human's role onto the row, and PERSISTS it" do
-    code, da = fresh
-    expect(da.requested_role).to be_nil
+  describe '.approve user and role' do
+    include_context 'device verification spec: pending claim'
 
-    approved = described_class.approve(user_code: code, user_id: user_id, role: 'owner')
-    expect(approved.requested_role).to eq('owner')
+    it 'raises ArgumentError when user_id is blank' do
+      code, = fresh
+      expect { described_class.approve(user_code: code, user_id: nil, role: nil) }
+        .to raise_error(ArgumentError, /user_id/)
+      expect { described_class.approve(user_code: code, user_id: '', role: nil) }
+        .to raise_error(ArgumentError, /user_id/)
+    end
 
-    # Read back through the store: the value the token poll will consult is
-    # the persisted one, not the object this call happened to return.
-    reloaded = store.lookup_by_device_code_hash(da.device_code_hash)
-    expect(reloaded.requested_role).to eq('owner')
+    # ── the approval IS the role source (ADR-0011 amendment; K-072) ───────
+    it "stamps the approving human's role onto the row, and PERSISTS it" do
+      code, da = fresh
+      expect(da.requested_role).to be_nil
+
+      approved = described_class.approve(user_code: code, user_id: user_id, role: 'owner')
+      expect(approved.requested_role).to eq('owner')
+
+      # Read back through the store: the value the token poll will consult is
+      # the persisted one, not the object this call happened to return.
+      reloaded = store.lookup_by_device_code_hash(da.device_code_hash)
+      expect(reloaded.requested_role).to eq('owner')
+    end
+
+    it "leaves the row role-less when the provider's user_idp reports no role" do
+      code, da = fresh
+      described_class.approve(user_code: code, user_id: user_id, role: nil)
+      expect(store.lookup_by_device_code_hash(da.device_code_hash).requested_role).to be_nil
+    end
   end
 
-  it "leaves the row role-less when the provider's user_idp reports no role" do
-    code, da = fresh
-    described_class.approve(user_code: code, user_id: user_id, role: nil)
-    expect(store.lookup_by_device_code_hash(da.device_code_hash).requested_role).to be_nil
-  end
-end
+  describe '.approve role keyword' do
+    include_context 'device verification spec: pending claim'
 
-RSpec.describe Kiosk::Server::DeviceVerification, '.approve role keyword' do
-  include_context 'device verification spec: pending claim'
+    # ── K-1127: naming the role is mandatory, holding one is not ───────────
+    #
+    # The module's own header invites a provider to drive a bespoke consent
+    # page from these helpers, and `role:` used to default to nil — so such a
+    # host produced role-less bindings by omission, indistinguishably from an
+    # origin that deliberately reports no role. The keyword is required now;
+    # the example above is what makes "and nil is still a legal answer" a
+    # measured claim rather than a promise in a comment.
+    it 'REQUIRES role: to be named — a bespoke consent page cannot omit it' do
+      code, = fresh
+      expect { described_class.approve(user_code: code, user_id: user_id) }
+        .to raise_error(ArgumentError, /role/)
+    end
 
-  # ── K-1127: naming the role is mandatory, holding one is not ───────────
-  #
-  # The module's own header invites a provider to drive a bespoke consent
-  # page from these helpers, and `role:` used to default to nil — so such a
-  # host produced role-less bindings by omission, indistinguishably from an
-  # origin that deliberately reports no role. The keyword is required now;
-  # the example above is what makes "and nil is still a legal answer" a
-  # measured claim rather than a promise in a comment.
-  it 'REQUIRES role: to be named — a bespoke consent page cannot omit it' do
-    code, = fresh
-    expect { described_class.approve(user_code: code, user_id: user_id) }
-      .to raise_error(ArgumentError, /role/)
-  end
-
-  # The keyword being required must not have quietly become "a role is
-  # required": an origin whose user_idp reports none still binds.
-  it 'still accepts an explicit nil, and the row is still reachable afterwards' do
-    code, da = fresh
-    expect { described_class.approve(user_code: code, user_id: user_id, role: nil) }
-      .not_to raise_error
-    expect(store.lookup_by_device_code_hash(da.device_code_hash)).to be_approved
-  end
-end
-
-RSpec.describe Kiosk::Server::DeviceVerification, '.deny' do
-  include_context 'device verification spec: pending claim'
-
-  it 'transitions a pending row to denied (no user_id needed — the holder said no)' do
-    code, = fresh
-    denied = described_class.deny(user_code: code)
-    expect(denied).to be_denied
-    expect(denied.user_id).to be_nil
+    # The keyword being required must not have quietly become "a role is
+    # required": an origin whose user_idp reports none still binds.
+    it 'still accepts an explicit nil, and the row is still reachable afterwards' do
+      code, da = fresh
+      expect { described_class.approve(user_code: code, user_id: user_id, role: nil) }
+        .not_to raise_error
+      expect(store.lookup_by_device_code_hash(da.device_code_hash)).to be_approved
+    end
   end
 
-  it 'raises CodeNotFoundError when no pending row matches' do
-    expect do
-      described_class.deny(user_code: 'NOPECODE')
-    end.to raise_error(described_class::CodeNotFoundError)
+  describe '.deny' do
+    include_context 'device verification spec: pending claim'
+
+    it 'transitions a pending row to denied (no user_id needed — the holder said no)' do
+      code, = fresh
+      denied = described_class.deny(user_code: code)
+      expect(denied).to be_denied
+      expect(denied.user_id).to be_nil
+    end
+
+    it 'raises CodeNotFoundError when no pending row matches' do
+      expect do
+        described_class.deny(user_code: 'NOPECODE')
+      end.to raise_error(described_class::CodeNotFoundError)
+    end
   end
 end

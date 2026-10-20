@@ -76,10 +76,6 @@ RSpec.describe 'two origins on one deployment' do
         .to eq(a)
     end
   end
-end
-
-RSpec.describe 'two origins on one deployment' do
-  include_context 'two origins spec: deployment'
 
   describe 'the possession proof' do
     let(:rsa) { OpenSSL::PKey::RSA.generate(2048) }
@@ -106,10 +102,6 @@ RSpec.describe 'two origins on one deployment' do
       end
     end
   end
-end
-
-RSpec.describe 'two origins on one deployment' do
-  include_context 'two origins spec: deployment'
 
   describe 'access tokens' do
     let(:idp) { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
@@ -135,10 +127,6 @@ RSpec.describe 'two origins on one deployment' do
       expect(verify_on(a, token_on(b))).to be_nil
     end
   end
-end
-
-RSpec.describe 'two origins on one deployment' do
-  include_context 'two origins spec: deployment'
 
   describe 'mandates' do
     let(:agent_key) { OpenSSL::PKey::RSA.generate(2048) }
@@ -165,10 +153,6 @@ RSpec.describe 'two origins on one deployment' do
       end.to raise_error(Kiosk::Server::Errors::Forbidden, /issuer mismatch/)
     end
   end
-end
-
-RSpec.describe 'two origins on one deployment' do
-  include_context 'two origins spec: deployment'
 
   describe 'the WWW-Authenticate realm' do
     before do
@@ -191,10 +175,6 @@ RSpec.describe 'two origins on one deployment' do
       expect(headers['WWW-Authenticate']).to eq(%(Kiosk-PoW realm="#{b}"))
     end
   end
-end
-
-RSpec.describe 'two origins on one deployment' do
-  include_context 'two origins spec: deployment'
 
   it 'defaults the KYC attestation audience to the origin being served' do
     expect(Kiosk.with_issuer(b) { Kiosk.configuration.kyc_audience }).to eq(b)

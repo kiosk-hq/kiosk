@@ -59,10 +59,6 @@ RSpec.describe 'DiscoveryController' do
       expect(doc.dig('authorization', 'discovery')).to eq('/.well-known/agent-configuration')
     end
   end
-end
-
-RSpec.describe 'DiscoveryController' do
-  include_context 'discovery controller spec: acme origin'
 
   describe 'GET /.well-known/agent-configuration' do
     it 'returns 200 application/json listing the auth endpoints' do
@@ -88,10 +84,6 @@ RSpec.describe 'DiscoveryController' do
       expect(raw).to include('## Pick a method')
     end
   end
-end
-
-RSpec.describe 'DiscoveryController' do
-  include_context 'discovery controller spec: acme origin'
 
   describe 'GET /.well-known/kiosk.json' do
     it 'returns 200 application/json byte-identical to WellKnown.build_json' do
@@ -104,10 +96,6 @@ RSpec.describe 'DiscoveryController' do
       expect(raw).to eq(expected)
     end
   end
-end
-
-RSpec.describe 'DiscoveryController' do
-  include_context 'discovery controller spec: acme origin'
 
   describe 'GET /.well-known/api-catalog' do
     it 'returns 200 application/linkset+json (RFC 9727) with a non-empty item list' do
@@ -132,10 +120,6 @@ RSpec.describe 'DiscoveryController' do
       expect(schema['rel']).to eq('service-desc')
     end
   end
-end
-
-RSpec.describe 'DiscoveryController' do
-  include_context 'discovery controller spec: acme origin'
 
   # ─── the cache policy of the POINTER documents ───────────────────────────
   #

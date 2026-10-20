@@ -43,47 +43,49 @@ RSpec.shared_context 'revocation stores spec: postgres' do
   let(:now)   { Time.now.to_i }
 end
 
-RSpec.describe Kiosk::Server::RevocationStores::ActiveRecord, 'watermark' do
-  include_context 'revocation stores spec: postgres'
+RSpec.describe Kiosk::Server::RevocationStores::ActiveRecord do
+  describe 'watermark' do
+    include_context 'revocation stores spec: postgres'
 
-  it 'revokes a token issued before the watermark and keeps one issued at or after it' do
-    described_class.new.revoke_all(agent, at: now)
+    it 'revokes a token issued before the watermark and keeps one issued at or after it' do
+      described_class.new.revoke_all(agent, at: now)
 
-    expect(described_class.new.revoked?(agent_id: agent, iat: now - 1)).to be(true)
-    expect(described_class.new.revoked?(agent_id: agent, iat: now)).to be(false)
+      expect(described_class.new.revoked?(agent_id: agent, iat: now - 1)).to be(true)
+      expect(described_class.new.revoked?(agent_id: agent, iat: now)).to be(false)
+    end
+
+    # A second instance stands in for a second process, or the same process after a restart.
+    it 'holds a revoke made through another store instance' do
+      described_class.new.revoke_all(agent, at: now)
+
+      expect(described_class.new.watermark_for(agent)).to eq(now)
+    end
+
+    it 'only moves the watermark forward' do
+      store = described_class.new
+      store.revoke_all(agent, at: now + 100)
+      store.revoke_all(agent, at: now)
+
+      expect(store.watermark_for(agent)).to eq(now + 100)
+    end
   end
 
-  # A second instance stands in for a second process, or the same process after a restart.
-  it 'holds a revoke made through another store instance' do
-    described_class.new.revoke_all(agent, at: now)
+  describe 'agent row' do
+    include_context 'revocation stores spec: postgres'
 
-    expect(described_class.new.watermark_for(agent)).to eq(now)
-  end
+    it 'revokes every token of an unlinked agent, whatever its iat' do
+      unlink(agent)
 
-  it 'only moves the watermark forward' do
-    store = described_class.new
-    store.revoke_all(agent, at: now + 100)
-    store.revoke_all(agent, at: now)
+      expect(described_class.new.revoked?(agent_id: agent, iat: now + 3600)).to be(true)
+    end
 
-    expect(store.watermark_for(agent)).to eq(now + 100)
-  end
-end
+    it 'revokes a token whose agent no longer exists' do
+      expect(described_class.new.revoked?(agent_id: SecureRandom.uuid, iat: now)).to be(true)
+    end
 
-RSpec.describe Kiosk::Server::RevocationStores::ActiveRecord, 'agent row' do
-  include_context 'revocation stores spec: postgres'
-
-  it 'revokes every token of an unlinked agent, whatever its iat' do
-    unlink(agent)
-
-    expect(described_class.new.revoked?(agent_id: agent, iat: now + 3600)).to be(true)
-  end
-
-  it 'revokes a token whose agent no longer exists' do
-    expect(described_class.new.revoked?(agent_id: SecureRandom.uuid, iat: now)).to be(true)
-  end
-
-  it 'keeps a token of a live agent that was never revoked' do
-    expect(described_class.new.revoked?(agent_id: agent, iat: now)).to be(false)
-    expect(described_class.new.watermark_for(agent)).to be_nil
+    it 'keeps a token of a live agent that was never revoked' do
+      expect(described_class.new.revoked?(agent_id: agent, iat: now)).to be(false)
+      expect(described_class.new.watermark_for(agent)).to be_nil
+    end
   end
 end

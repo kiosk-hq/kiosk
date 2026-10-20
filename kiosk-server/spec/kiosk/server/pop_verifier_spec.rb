@@ -75,13 +75,6 @@ RSpec.describe Kiosk::Server::PopVerifier do
       silencing_operator_log { described_class.verify!(public_key_pem: pem, signed: relayed) }
     end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /audience/)
   end
-end
-
-# The rejection must not name an origin. An agent uses values the server gives
-# it, so a hostile origin that echoed "<bank>" in its answer could collect a
-# proof signed for <bank> and replay it there.
-RSpec.describe Kiosk::Server::PopVerifier do
-  include_context 'pop verifier spec: issuer'
 
   describe 'audience-mismatch rejection (K-511)' do
     # The problem `type` is a constant per code and carries no origin. Without
@@ -108,15 +101,7 @@ RSpec.describe Kiosk::Server::PopVerifier do
       )
       expect(error.http_status).to eq(401)
     end
-  end
-end
 
-# The diagnostic the wire does not carry goes to the operator, so a wrong
-# `c.issuer` can be debugged.
-RSpec.describe Kiosk::Server::PopVerifier do
-  include_context 'pop verifier spec: issuer'
-
-  describe 'audience-mismatch rejection (K-511)' do
     it "routes the issuer-vs-signed-aud diagnostic to the operator's log" do
       output = capture_operator_log do
         described_class.verify!(public_key_pem: pem, signed: sign(aud: 'https://real-host.example'))
@@ -144,10 +129,6 @@ RSpec.describe Kiosk::Server::PopVerifier do
       expect(logged.first).to include('PoP audience mismatch')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::PopVerifier do
-  include_context 'pop verifier spec: issuer'
 
   it 'rejects a proof signed by a different key than the one presented' do
     forged = sign(key: PopVerifierSpec.other)
@@ -183,10 +164,6 @@ RSpec.describe Kiosk::Server::PopVerifier do
       described_class.verify!(public_key_pem: pem, signed: sign(include_pub: 'not-the-thumbprint'))
     end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /thumbprint/)
   end
-end
-
-RSpec.describe Kiosk::Server::PopVerifier do
-  include_context 'pop verifier spec: issuer'
 
   it 'rejects a public key below the RSA-2048 floor' do
     expect do

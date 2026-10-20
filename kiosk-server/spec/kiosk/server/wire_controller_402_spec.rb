@@ -110,14 +110,6 @@ RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
       expect(problem).not_to have_key(:ok)
       expect(problem).not_to have_key(:error)
     end
-  end
-end
-
-RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
-  include_context 'wire controller 402 spec: origin'
-
-  describe 'the pow_required 402' do
-    include_context 'wire controller 402 spec: pow gate'
 
     # The same gate on the per-verb wire: the header names the gate, the
     # challenges ride in the body, and the code an assistant branches on is
@@ -139,14 +131,6 @@ RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
       expect(body[:challenges]).to be_an(Array)
       expect(body[:challenges]).not_to be_empty
     end
-  end
-end
-
-RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
-  include_context 'wire controller 402 spec: origin'
-
-  describe 'the pow_required 402' do
-    include_context 'wire controller 402 spec: pow gate'
 
     # §3.7.5, a MUST: the toll gate runs BEFORE the freshness check, because a
     # `304` is a served response. A `304 Not Modified` to an untolled
@@ -172,10 +156,6 @@ RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
       expect(sch_status).to eq(304)
     end
   end
-end
-
-RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
-  include_context 'wire controller 402 spec: origin'
 
   # ─── Payment-setup gate → WWW-Authenticate: Payment ────────────────────
   describe 'the payment_setup_required 402' do
@@ -206,10 +186,6 @@ RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
       expect(problem).not_to have_key(:challenges)
     end
   end
-end
-
-RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
-  include_context 'wire controller 402 spec: origin'
 
   # ─── payment_failed → NO WWW-Authenticate ──────────────────────────────
   #
@@ -247,10 +223,6 @@ RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
       expect(headers.to_h.transform_keys(&:downcase)).not_to have_key('www-authenticate')
     end
   end
-end
-
-RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
-  include_context 'wire controller 402 spec: origin'
 
   # ─── non-402 errors carry NO WWW-Authenticate header ───────────────────
   #

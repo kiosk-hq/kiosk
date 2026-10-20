@@ -110,11 +110,6 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
       described_class.assert!(Kiosk::Reputation::Policies::RecentSpend.new(within: 3600, cap: 100), :challenge_for, 'spend')
     ).to eq(:clean)
   end
-end
-
-# ── the refusals ─────────────────────────────────────────────────────────────
-RSpec.describe Kiosk::Server::VerbVocabulary do
-  include VerbVocabularySpec
 
   describe 'a policy branching on the declaration spelling' do
     it 'is refused with a message naming :run' do
@@ -139,10 +134,6 @@ RSpec.describe Kiosk::Server::VerbVocabulary do
         .to raise_error(Kiosk::Server::Errors::ConfigurationError)
     end
   end
-end
-
-RSpec.describe Kiosk::Server::VerbVocabulary do
-  include VerbVocabularySpec
 
   # ── the false-positive control ─────────────────────────────────────────────
 

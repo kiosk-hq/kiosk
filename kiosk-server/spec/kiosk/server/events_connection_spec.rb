@@ -3,8 +3,6 @@
 require 'logger'
 require 'stringio'
 
-# What the re-authorisation timer does when the call it makes RAISES: Action
-# Cable's worker pool would swallow it into a logger the engine does not own.
 RSpec.describe Kiosk::Server::EventsConnection do
   it 'logs a re-authorisation that raises rather than losing it to the worker pool' do
     log = StringIO.new
@@ -25,21 +23,21 @@ RSpec.describe Kiosk::Server::EventsConnection do
     periods = KioskEvents.periodic_timers.map { |_callback, options| options[:every] }
     expect(periods + [described_class.reauthorise_every]).to all(be_between(1, 60))
   end
-end
 
-RSpec.describe Kiosk::Server::EventsConnection, 'identity' do
-  # A page on a sibling subdomain is same-site, so its socket carries the
-  # human's cookie; the upgrade must not turn that cookie into an identity.
-  it 'resolves no identity from a signed-in session cookie' do
-    human = build_identity(actor: 'human', agent_id: nil)
-    Kiosk.configure do |c|
-      c.issuer   = 'https://demo.example'
-      c.user_idp = Class.new { define_method(:verify) { |_r| human } }.new
+  describe 'identity' do
+    # A page on a sibling subdomain is same-site, so its socket carries the
+    # human's cookie; the upgrade must not turn that cookie into an identity.
+    it 'resolves no identity from a signed-in session cookie' do
+      human = build_identity(actor: 'human', agent_id: nil)
+      Kiosk.configure do |c|
+        c.issuer   = 'https://demo.example'
+        c.user_idp = Class.new { define_method(:verify) { |_r| human } }.new
+      end
+      connection = described_class.allocate
+      env = Rack::MockRequest.env_for('https://demo.example/kiosk/events', 'HTTP_COOKIE' => '_session=signed-in')
+      allow(connection).to receive(:request).and_return(ActionDispatch::Request.new(env))
+
+      expect(connection.send(:resolve_identity)).to be_nil
     end
-    connection = described_class.allocate
-    env = Rack::MockRequest.env_for('https://demo.example/kiosk/events', 'HTTP_COOKIE' => '_session=signed-in')
-    allow(connection).to receive(:request).and_return(ActionDispatch::Request.new(env))
-
-    expect(connection.send(:resolve_identity)).to be_nil
   end
 end

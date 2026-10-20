@@ -51,10 +51,6 @@ RSpec.describe 'the default role in a booted app' do
       expect(boot('roles_without_default')['message']).to include('c.roles = []')
     end
   end
-end
-
-RSpec.describe 'the default role in a booted app' do
-  include DefaultRoleBoot
 
   context 'an origin that declares roles AND a default' do
     it 'boots — this is what all seven demos and the e2e fixture configure' do

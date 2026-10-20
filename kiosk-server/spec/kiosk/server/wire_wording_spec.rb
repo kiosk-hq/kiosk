@@ -89,10 +89,6 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(body[:hint]).to eq(Kiosk::Server::Errors::MALFORMED_JSON_HINT)
     end
   end
-end
-
-RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: provider'
 
   describe 'POST /kiosk/auth/login' do
     it 'names the absent field when signed is omitted' do
@@ -120,10 +116,6 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect_no_ruby(body)
     end
   end
-end
-
-RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: provider'
 
   describe 'Kiosk::Server::Errors.missing_field' do
     it 'names the KEY of a rescued KeyError, never its message' do
@@ -146,10 +138,6 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(built.message).not_to include('smuggled')
     end
   end
-end
-
-RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: provider'
 
   describe 'Kiosk::Server::Errors.malformed_json' do
     it 'is the whole detail, with the recovery sentence in the hint' do
@@ -164,11 +152,6 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(built.hint).to eq("a query's arguments are in the query string.")
     end
   end
-end
-
-# The sentence for a Rails-native raise.
-RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: provider'
 
   describe 'Kiosk::Server::Errors.rescued_wire' do
     it 'words the refusal itself and names the verb, so nothing of the exception travels' do
@@ -184,13 +167,7 @@ RSpec.describe 'the malformed-request sentences on the wire' do
       expect(Kiosk::Server::Errors.rescued_wire('not_found', verb: '')[:message])
         .to eq('this verb found no such record')
     end
-  end
-end
 
-RSpec.describe 'the malformed-request sentences on the wire' do
-  include_context 'wire wording spec: provider'
-
-  describe 'Kiosk::Server::Errors.rescued_wire' do
     # The rescue seam reaches this builder for every code STATUS_CODES can
     # decide. A code it cannot word would be a KeyError, so a 500, at request time.
     it 'words every code the rescue seam can decide, and invents none' do

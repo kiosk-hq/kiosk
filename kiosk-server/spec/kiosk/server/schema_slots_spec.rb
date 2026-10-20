@@ -60,10 +60,6 @@ RSpec.describe Kiosk::Server::SchemaSlots do
       expect(described_class.epoch).to eq(0)
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
 
   describe '.descriptor resolution' do
     it 'resolves an `enum` proc when the descriptor is READ, not when it is declared' do
@@ -99,10 +95,6 @@ RSpec.describe Kiosk::Server::SchemaSlots do
       expect(Kiosk::Server::SchemaDocument.json).to include('"enum":["bikes"]')
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
 
   describe 'the memo, and its lifetime' do
     it 'calls the proc ONCE across many reads inside one window' do
@@ -131,13 +123,7 @@ RSpec.describe Kiosk::Server::SchemaSlots do
 
       expect(board_enum).to eq(%w[bikes free])
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
-
-  describe 'the memo, and its lifetime' do
     it 'holds the previous value for the rest of the window' do
       slugs = %w[bikes]
       described_class.refresh_seconds = 3600
@@ -161,10 +147,6 @@ RSpec.describe Kiosk::Server::SchemaSlots do
       expect(board_enum).to eq(%w[housing])
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
 
   describe 'SPEC-278: reuse bound and caller independence' do
     it "reuses a derived value no longer than the discovery document's freshness lifetime" do
@@ -190,14 +172,6 @@ RSpec.describe Kiosk::Server::SchemaSlots do
       expect(calls).to eq(1)
     end
   end
-end
-
-# Puma is multi-threaded, so concurrent first reads of one descriptor are an
-# ordinary event. The barrier releases every thread into the empty memo at
-# once and the proc is SLOW, so an unlocked `@cache[key] ||= resolve` runs it
-# once per thread and publishes as many different answers.
-RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
 
   describe 'concurrent first fill' do
     let(:thread_count) { 8 }
@@ -218,14 +192,6 @@ RSpec.describe Kiosk::Server::SchemaSlots do
       expect(answers.uniq.length).to eq(1)
       expect(answers.first).to eq(%w[slug-1])
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
-
-  describe 'concurrent first fill' do
-    let(:thread_count) { 8 }
 
     it 'hands every thread the SAME frozen object, so nobody can tear it' do
       described_class.refresh_seconds = 3600
@@ -240,10 +206,6 @@ RSpec.describe Kiosk::Server::SchemaSlots do
       expect(descriptors.first).to be_frozen
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
 
   describe '.resolve' do
     it 'refuses a proc chain deeper than MAX_DEPTH rather than looping' do

@@ -62,322 +62,324 @@ module ConformanceVerbs
   end
 end
 
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.routes' do
-  include ConformanceVerbs
+RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
+  describe '.routes' do
+    include ConformanceVerbs
 
-  it 'passes when every verb is routed with the method its kind requires' do
-    origin  = null_origin.new(verbs: [catalog_verb, create_order_verb])
-    outcome = described_class.routes(origin)
+    it 'passes when every verb is routed with the method its kind requires' do
+      origin  = null_origin.new(verbs: [catalog_verb, create_order_verb])
+      outcome = described_class.routes(origin)
 
-    expect(outcome).to be_ok
-    expect(outcome.message).to include('all 2 declared verbs are routed under /kiosk/')
-  end
-
-  it 'FAILS when a declared verb has no route at all — the T-183 bug class' do
-    verbs  = [catalog_verb, create_order_verb]
-    table  = null_origin.routes_for('/kiosk', verbs)
-    table.delete(['POST', '/kiosk/create_order'])
-
-    outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('nothing answers POST /kiosk/create_order')
-    expect(outcome.message).to include('404 to every caller')
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.routes, method mismatches' do
-  include ConformanceVerbs
-
-  it 'FAILS when a query is routed POST instead of GET' do
-    verbs = [catalog_verb]
-    table = { ['POST', '/kiosk/catalog'] => { controller: 'kiosk/server/verb', action: 'create',
-                                              kiosk_verb: 'catalog' } }
-
-    outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('nothing answers GET /kiosk/catalog')
-  end
-
-  it 'FAILS when a verb ALSO answers the other method' do
-    verbs = [catalog_verb]
-    table = null_origin.routes_for('/kiosk', verbs)
-    table[['POST', '/kiosk/catalog']] = { controller: 'kiosk/server/verb', action: 'create',
-                                          kiosk_verb: 'catalog' }
-
-    outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('also reaches the verb on POST')
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.routes, wiring faults' do
-  include ConformanceVerbs
-
-  it 'FAILS when a route reaches an action other than the one that answers the verb' do
-    verbs = [catalog_verb]
-    table = { ['GET', '/kiosk/catalog'] => { controller: 'kiosk/storefront', action: 'catalog',
-                                             kiosk_verb: 'catalog' } }
-
-    outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('answers 404 to every caller')
-  end
-
-  it 'FAILS when the path segment and the kiosk_verb default disagree' do
-    verbs = [catalog_verb]
-    table = { ['GET', '/kiosk/catalog'] => { controller: 'kiosk/server/verb', action: 'show',
-                                             kiosk_verb: 'catalogue' } }
-
-    outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('two spellings of one name')
-  end
-
-  it 'VACUITY ARM: FAILS on an origin that declares no verbs at all' do
-    outcome = described_class.routes(null_origin.new(verbs: []))
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('declares no verbs at all')
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.executes' do
-  include ConformanceVerbs
-
-  it "passes and reports the answer's shape" do
-    origin  = null_origin.new(verbs: [catalog_verb],
-                              answers: { 'catalog' => [{ 'sku' => 'a', 'price_cents' => 1 }] })
-    outcome = described_class.executes(origin, :catalog)
-
-    expect(outcome).to be_ok
-    expect(outcome.message).to include('query "catalog" executed')
-    expect(outcome.message).to include('1 row(s)')
-  end
-
-  it "uses the verb's own example_params when none are given, and says so" do
-    origin  = null_origin.new(verbs: [create_order_verb],
-                              answers: { 'create_order' => { 'order_id' => 'x' } })
-    outcome = described_class.executes(origin, :create_order)
-
-    expect(outcome).to be_ok
-    expect(outcome.message).to include('with its own example_params')
-    expect(origin.calls.last[:params]).to eq({ 'sku' => 'sourdough-bread' })
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.executes, failures' do
-  include ConformanceVerbs
-
-  it 'reports a refusal with its wire code, message and hint' do
-    refusal = wire_error('not yours', code: 'forbidden', hint: "this verb only answers the order's owner")
-
-    origin  = null_origin.new(verbs: [my_orders_verb], answers: { 'my_orders' => refusal })
-    outcome = described_class.executes(origin, :my_orders)
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('did not execute')
-    expect(outcome.message).to include('code=forbidden')
-    expect(outcome.message).to include("hint: this verb only answers the order's owner")
-  end
-
-  it 'names the declared verbs when asked for one that is not declared' do
-    origin  = null_origin.new(verbs: [catalog_verb, create_order_verb])
-    outcome = described_class.executes(origin, :catalogue)
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('no verb named "catalogue"')
-    expect(outcome.message).to include('Declared: catalog, create_order')
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.declared_shape' do
-  include ConformanceVerbs
-
-  it "passes when the answer satisfies the verb's own output_schema" do
-    origin = null_origin.new(
-      verbs: [catalog_verb],
-      answers: { 'catalog' => [{ 'sku' => 'sourdough', 'price_cents' => 449 }] }
-    )
-
-    expect(described_class.declared_shape(origin, :catalog)).to be_ok
-  end
-
-  it 'FAILS when the handler renders a shape the descriptor rejects' do
-    origin = null_origin.new(
-      verbs: [catalog_verb],
-      # `price_cents` as a formatted String — the commonest descriptor lie
-      # there is, and one nothing on the wire would notice.
-      answers: { 'catalog' => [{ 'sku' => 'sourdough', 'price_cents' => '4.49' }] }
-    )
-    outcome = described_class.declared_shape(origin, :catalog)
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('rendered a payload its own output_schema rejects')
-    expect(outcome.message).to include('/0/price_cents')
-    expect(outcome.details[:stage]).to eq(:output)
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.declared_shape, arguments and missing output schema' do
-  include ConformanceVerbs
-
-  it 'FAILS on the ARGUMENTS separately, before executing anything' do
-    origin  = null_origin.new(verbs: [create_order_verb],
-                              answers: { 'create_order' => { 'order_id' => 'x' } })
-    outcome = described_class.declared_shape(origin, :create_order, params: { 'sku' => 12 })
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('do not satisfy')
-    expect(outcome.message).to include('input_schema')
-    expect(outcome.details[:stage]).to eq(:input)
-    expect(origin.calls).to be_empty
-  end
-
-  it 'FAILS rather than skipping when the verb declares no output_schema' do
-    origin  = null_origin.new(verbs: [catalog_verb(output_schema: nil)])
-    outcome = described_class.declared_shape(origin, :catalog)
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('publishes no output_schema')
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.declared_shape, missing input schema and own checker' do
-  include ConformanceVerbs
-
-  it 'FAILS rather than skipping when the verb declares no input_schema' do
-    origin  = null_origin.new(verbs: [catalog_verb(input_schema: nil)])
-    outcome = described_class.declared_shape(origin, :catalog)
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('publishes no input_schema')
-  end
-
-  it 'delegates validation to an origin that brings its own checker' do
-    origin = null_origin.new(verbs: [catalog_verb], answers: { 'catalog' => [] })
-    def origin.schema_errors(_payload, slot:, **)
-      slot == 'output_schema' ? ["(root): the engine's own checker said so"] : []
+      expect(outcome).to be_ok
+      expect(outcome.message).to include('all 2 declared verbs are routed under /kiosk/')
     end
 
-    outcome = described_class.declared_shape(origin, :catalog)
+    it 'FAILS when a declared verb has no route at all — the T-183 bug class' do
+      verbs  = [catalog_verb, create_order_verb]
+      table  = null_origin.routes_for('/kiosk', verbs)
+      table.delete(['POST', '/kiosk/create_order'])
 
-    expect(outcome).to be_failed
-    expect(outcome.message).to include("the engine's own checker said so")
-  end
-end
+      outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.principal_scope' do
-  include ConformanceVerbs
-
-  it "passes when the second principal sees none of the first's rows" do
-    origin = scoped_origin(alice_rows: [{ 'order_id' => 'a1' }],
-                           bob_rows: [{ 'order_id' => 'b1' }])
-    outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
-
-    expect(outcome).to be_ok
-    expect(outcome.message).to include('none of which reached :bob')
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('nothing answers POST /kiosk/create_order')
+      expect(outcome.message).to include('404 to every caller')
+    end
   end
 
-  it 'FAILS when a row leaks across principals' do
-    leaked = { 'order_id' => 'a1', 'total_cents' => 500 }
-    origin = scoped_origin(alice_rows: [leaked], bob_rows: [leaked, { 'order_id' => 'b1' }])
+  describe '.routes, method mismatches' do
+    include ConformanceVerbs
 
-    outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+    it 'FAILS when a query is routed POST instead of GET' do
+      verbs = [catalog_verb]
+      table = { ['POST', '/kiosk/catalog'] => { controller: 'kiosk/server/verb', action: 'create',
+                                                kiosk_verb: 'catalog' } }
 
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('leaked 1 row(s) belonging to :alice')
-  end
-end
+      outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.principal_scope, vacuity and declared reach' do
-  include ConformanceVerbs
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('nothing answers GET /kiosk/catalog')
+    end
 
-  it 'VACUITY ARM: FAILS when the first principal sees nothing' do
-    # The trap this arm exists for: a verb that answers EVERYBODY with
-    # nothing satisfies "bob sees none of alice's rows" vacuously, and the
-    # naive spelling of this assertion goes green on a broken verb.
-    origin  = scoped_origin(alice_rows: [], bob_rows: [])
-    outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+    it 'FAILS when a verb ALSO answers the other method' do
+      verbs = [catalog_verb]
+      table = null_origin.routes_for('/kiosk', verbs)
+      table[['POST', '/kiosk/catalog']] = { controller: 'kiosk/server/verb', action: 'create',
+                                            kiosk_verb: 'catalog' }
 
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('no positive control')
-  end
+      outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
-  it 'FAILS on a verb declared reach: published, naming the declared reach' do
-    origin  = scoped_origin(alice_rows: [{ 'id' => 1 }], bob_rows: [{ 'id' => 1 }],
-                            verb: my_orders_verb(reach: 'published'))
-    outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
-
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('reach: :published')
-    expect(outcome.message).to include('asserts the opposite of the descriptor')
-  end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.principal_scope, a refused second principal' do
-  include ConformanceVerbs
-
-  it 'PASSES when the second principal is REFUSED outright' do
-    # Refusing is the stronger spelling of scoping: an origin that answers 404
-    # to a row it will not show does not even confirm the row exists.
-    refusal = wire_error('no such verification request for this principal', code: 'not_found', http_status: 404)
-    origin  = scoped_origin(alice_rows: [{ 'order_id' => 'a1' }], bob_rows: refusal)
-    outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
-
-    expect(outcome).to be_ok
-    expect(outcome.message).to include('REFUSED :bob outright (404 not_found)')
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('also reaches the verb on POST')
+    end
   end
 
-  it "still FAILS when the second principal's call breaks rather than refuses" do
-    # A 500 is a defect in the handler and a 400 is a defect in the test's own
-    # arguments. Neither is scoping, and reading either as a pass is how this
-    # check would go green on a verb nobody can call.
-    broken = wire_error('undefined method for nil', code: 'action_failed', http_status: 500)
-    origin = scoped_origin(alice_rows: [{ 'order_id' => 'a1' }], bob_rows: broken)
-    outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+  describe '.routes, wiring faults' do
+    include ConformanceVerbs
 
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('did not execute')
-  end
-end
+    it 'FAILS when a route reaches an action other than the one that answers the verb' do
+      verbs = [catalog_verb]
+      table = { ['GET', '/kiosk/catalog'] => { controller: 'kiosk/storefront', action: 'catalog',
+                                               kiosk_verb: 'catalog' } }
 
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.principal_scope, the first principal and actions' do
-  include ConformanceVerbs
+      outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
-  it 'FAILS when the FIRST principal is refused their own rows' do
-    refusal = wire_error('not yours', code: 'forbidden', http_status: 403)
-    origin  = scoped_origin(alice_rows: refusal, bob_rows: [])
-    outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('answers 404 to every caller')
+    end
 
-    expect(outcome).to be_failed
-    expect(outcome.message).to include('did not execute')
-  end
+    it 'FAILS when the path segment and the kiosk_verb default disagree' do
+      verbs = [catalog_verb]
+      table = { ['GET', '/kiosk/catalog'] => { controller: 'kiosk/server/verb', action: 'show',
+                                               kiosk_verb: 'catalogue' } }
 
-  it "treats an action's single object as one row" do
-    origin = scoped_origin(alice_rows: { 'order_id' => 'a1' }, bob_rows: { 'order_id' => 'b1' }, verb: create_order_verb)
+      outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
-    expect(
-      described_class.principal_scope(origin, :create_order, as: :alice, and_not: :bob)
-    ).to be_ok
-  end
-end
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('two spellings of one name')
+    end
 
-RSpec.describe Kiosk::TestHelpers::Conformance::Checks, 'the origin seam' do
-  include ConformanceVerbs
+    it 'VACUITY ARM: FAILS on an origin that declares no verbs at all' do
+      outcome = described_class.routes(null_origin.new(verbs: []))
 
-  it 'raises a wiring hint when no origin is configured' do
-    expect { conformance.routes }
-      .to raise_error(Kiosk::TestHelpers::Errors::OriginNotConfigured, /InProcessOrigin/)
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('declares no verbs at all')
+    end
   end
 
-  it 'runs the checks against the configured origin' do
-    conformance.origin = null_origin.new(verbs: [catalog_verb])
+  describe '.executes' do
+    include ConformanceVerbs
 
-    expect(conformance.routes).to be_ok
+    it "passes and reports the answer's shape" do
+      origin  = null_origin.new(verbs: [catalog_verb],
+                                answers: { 'catalog' => [{ 'sku' => 'a', 'price_cents' => 1 }] })
+      outcome = described_class.executes(origin, :catalog)
+
+      expect(outcome).to be_ok
+      expect(outcome.message).to include('query "catalog" executed')
+      expect(outcome.message).to include('1 row(s)')
+    end
+
+    it "uses the verb's own example_params when none are given, and says so" do
+      origin  = null_origin.new(verbs: [create_order_verb],
+                                answers: { 'create_order' => { 'order_id' => 'x' } })
+      outcome = described_class.executes(origin, :create_order)
+
+      expect(outcome).to be_ok
+      expect(outcome.message).to include('with its own example_params')
+      expect(origin.calls.last[:params]).to eq({ 'sku' => 'sourdough-bread' })
+    end
+  end
+
+  describe '.executes, failures' do
+    include ConformanceVerbs
+
+    it 'reports a refusal with its wire code, message and hint' do
+      refusal = wire_error('not yours', code: 'forbidden', hint: "this verb only answers the order's owner")
+
+      origin  = null_origin.new(verbs: [my_orders_verb], answers: { 'my_orders' => refusal })
+      outcome = described_class.executes(origin, :my_orders)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('did not execute')
+      expect(outcome.message).to include('code=forbidden')
+      expect(outcome.message).to include("hint: this verb only answers the order's owner")
+    end
+
+    it 'names the declared verbs when asked for one that is not declared' do
+      origin  = null_origin.new(verbs: [catalog_verb, create_order_verb])
+      outcome = described_class.executes(origin, :catalogue)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('no verb named "catalogue"')
+      expect(outcome.message).to include('Declared: catalog, create_order')
+    end
+  end
+
+  describe '.declared_shape' do
+    include ConformanceVerbs
+
+    it "passes when the answer satisfies the verb's own output_schema" do
+      origin = null_origin.new(
+        verbs: [catalog_verb],
+        answers: { 'catalog' => [{ 'sku' => 'sourdough', 'price_cents' => 449 }] }
+      )
+
+      expect(described_class.declared_shape(origin, :catalog)).to be_ok
+    end
+
+    it 'FAILS when the handler renders a shape the descriptor rejects' do
+      origin = null_origin.new(
+        verbs: [catalog_verb],
+        # `price_cents` as a formatted String — the commonest descriptor lie
+        # there is, and one nothing on the wire would notice.
+        answers: { 'catalog' => [{ 'sku' => 'sourdough', 'price_cents' => '4.49' }] }
+      )
+      outcome = described_class.declared_shape(origin, :catalog)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('rendered a payload its own output_schema rejects')
+      expect(outcome.message).to include('/0/price_cents')
+      expect(outcome.details[:stage]).to eq(:output)
+    end
+  end
+
+  describe '.declared_shape, arguments and missing output schema' do
+    include ConformanceVerbs
+
+    it 'FAILS on the ARGUMENTS separately, before executing anything' do
+      origin  = null_origin.new(verbs: [create_order_verb],
+                                answers: { 'create_order' => { 'order_id' => 'x' } })
+      outcome = described_class.declared_shape(origin, :create_order, params: { 'sku' => 12 })
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('do not satisfy')
+      expect(outcome.message).to include('input_schema')
+      expect(outcome.details[:stage]).to eq(:input)
+      expect(origin.calls).to be_empty
+    end
+
+    it 'FAILS rather than skipping when the verb declares no output_schema' do
+      origin  = null_origin.new(verbs: [catalog_verb(output_schema: nil)])
+      outcome = described_class.declared_shape(origin, :catalog)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('publishes no output_schema')
+    end
+  end
+
+  describe '.declared_shape, missing input schema and own checker' do
+    include ConformanceVerbs
+
+    it 'FAILS rather than skipping when the verb declares no input_schema' do
+      origin  = null_origin.new(verbs: [catalog_verb(input_schema: nil)])
+      outcome = described_class.declared_shape(origin, :catalog)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('publishes no input_schema')
+    end
+
+    it 'delegates validation to an origin that brings its own checker' do
+      origin = null_origin.new(verbs: [catalog_verb], answers: { 'catalog' => [] })
+      def origin.schema_errors(_payload, slot:, **)
+        slot == 'output_schema' ? ["(root): the engine's own checker said so"] : []
+      end
+
+      outcome = described_class.declared_shape(origin, :catalog)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include("the engine's own checker said so")
+    end
+  end
+
+  describe '.principal_scope' do
+    include ConformanceVerbs
+
+    it "passes when the second principal sees none of the first's rows" do
+      origin = scoped_origin(alice_rows: [{ 'order_id' => 'a1' }],
+                             bob_rows: [{ 'order_id' => 'b1' }])
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_ok
+      expect(outcome.message).to include('none of which reached :bob')
+    end
+
+    it 'FAILS when a row leaks across principals' do
+      leaked = { 'order_id' => 'a1', 'total_cents' => 500 }
+      origin = scoped_origin(alice_rows: [leaked], bob_rows: [leaked, { 'order_id' => 'b1' }])
+
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('leaked 1 row(s) belonging to :alice')
+    end
+  end
+
+  describe '.principal_scope, vacuity and declared reach' do
+    include ConformanceVerbs
+
+    it 'VACUITY ARM: FAILS when the first principal sees nothing' do
+      # The trap this arm exists for: a verb that answers EVERYBODY with
+      # nothing satisfies "bob sees none of alice's rows" vacuously, and the
+      # naive spelling of this assertion goes green on a broken verb.
+      origin  = scoped_origin(alice_rows: [], bob_rows: [])
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('no positive control')
+    end
+
+    it 'FAILS on a verb declared reach: published, naming the declared reach' do
+      origin  = scoped_origin(alice_rows: [{ 'id' => 1 }], bob_rows: [{ 'id' => 1 }],
+                              verb: my_orders_verb(reach: 'published'))
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('reach: :published')
+      expect(outcome.message).to include('asserts the opposite of the descriptor')
+    end
+  end
+
+  describe '.principal_scope, a refused second principal' do
+    include ConformanceVerbs
+
+    it 'PASSES when the second principal is REFUSED outright' do
+      # Refusing is the stronger spelling of scoping: an origin that answers 404
+      # to a row it will not show does not even confirm the row exists.
+      refusal = wire_error('no such verification request for this principal', code: 'not_found', http_status: 404)
+      origin  = scoped_origin(alice_rows: [{ 'order_id' => 'a1' }], bob_rows: refusal)
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_ok
+      expect(outcome.message).to include('REFUSED :bob outright (404 not_found)')
+    end
+
+    it "still FAILS when the second principal's call breaks rather than refuses" do
+      # A 500 is a defect in the handler and a 400 is a defect in the test's own
+      # arguments. Neither is scoping, and reading either as a pass is how this
+      # check would go green on a verb nobody can call.
+      broken = wire_error('undefined method for nil', code: 'action_failed', http_status: 500)
+      origin = scoped_origin(alice_rows: [{ 'order_id' => 'a1' }], bob_rows: broken)
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('did not execute')
+    end
+  end
+
+  describe '.principal_scope, the first principal and actions' do
+    include ConformanceVerbs
+
+    it 'FAILS when the FIRST principal is refused their own rows' do
+      refusal = wire_error('not yours', code: 'forbidden', http_status: 403)
+      origin  = scoped_origin(alice_rows: refusal, bob_rows: [])
+      outcome = described_class.principal_scope(origin, :my_orders, as: :alice, and_not: :bob)
+
+      expect(outcome).to be_failed
+      expect(outcome.message).to include('did not execute')
+    end
+
+    it "treats an action's single object as one row" do
+      origin = scoped_origin(alice_rows: { 'order_id' => 'a1' }, bob_rows: { 'order_id' => 'b1' }, verb: create_order_verb)
+
+      expect(
+        described_class.principal_scope(origin, :create_order, as: :alice, and_not: :bob)
+      ).to be_ok
+    end
+  end
+
+  describe 'the origin seam' do
+    include ConformanceVerbs
+
+    it 'raises a wiring hint when no origin is configured' do
+      expect { conformance.routes }
+        .to raise_error(Kiosk::TestHelpers::Errors::OriginNotConfigured, /InProcessOrigin/)
+    end
+
+    it 'runs the checks against the configured origin' do
+      conformance.origin = null_origin.new(verbs: [catalog_verb])
+
+      expect(conformance.routes).to be_ok
+    end
   end
 end

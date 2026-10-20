@@ -90,13 +90,7 @@ RSpec.describe 'OAuth binding controllers' do
       expect(body[:error]).to eq('invalid_request')
       expect(body[:error_description]).to include('public_key')
     end
-  end
-end
 
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/device_authorization' do
     it 'rejects an undersized key with the registration floor (RSA-2048)' do
       small = OpenSSL::PKey::RSA.generate(1024).public_key.to_pem
       status, body = start!('client_id' => 'assistant', 'public_key' => small)
@@ -116,18 +110,7 @@ RSpec.describe 'OAuth binding controllers' do
       expect(status).to eq(400)
       expect(body[:error_description]).to include('client_id')
     end
-  end
-end
 
-# The ceremony's role is the APPROVING HUMAN's, captured at the verify page, so
-# this unauthenticated request carries none, at any value. Both spellings and
-# both kinds of value are sent: an undeclared role and a DECLARED one (the
-# escalation a multi-role origin must refuse).
-
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/device_authorization' do
     it 'refuses a client-supplied role — even one this provider declares' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem, 'role' => 'customer')
       expect(status).to eq(400)
@@ -141,13 +124,7 @@ RSpec.describe 'OAuth binding controllers' do
       expect(status).to eq(400)
       expect(body[:error_description]).to include('role is not accepted here')
     end
-  end
-end
 
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/device_authorization' do
     it 'refuses the OAuth-standard `scope` spelling too' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem, 'scope' => 'owner')
       expect(status).to eq(400)
@@ -162,13 +139,7 @@ RSpec.describe 'OAuth binding controllers' do
         expect(body[:error_description]).to match(/#{name} is not accepted here/)
       end
     end
-  end
-end
 
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/device_authorization' do
     it 'opens the ceremony with a ROLE-LESS row — the role is stamped at approval' do
       status, body = start!('client_id' => 'assistant', 'public_key' => pem)
       expect(status).to eq(200)
@@ -192,26 +163,14 @@ RSpec.describe 'OAuth binding controllers' do
       expect(status).to eq(400)
       expect(body[:error]).to eq('unsupported_grant_type')
     end
-  end
-end
 
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/token' do
     it 'returns 400 with the RFC 8628 code while approval is pending' do
       start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
       status, body = token!('grant_type' => grant, 'device_code' => start[:device_code])
       expect(status).to eq(400)
       expect(body[:error]).to eq('authorization_pending')
     end
-  end
-end
 
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/token' do
     it 'returns 401 invalid_client when the possession proof is missing/failed (BIND-POP)' do
       start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
       store.update(start[:da].approve(user_id: user_id))
@@ -221,13 +180,7 @@ RSpec.describe 'OAuth binding controllers' do
       expect(status).to eq(401)
       expect(body[:error]).to eq('invalid_client')
     end
-  end
-end
 
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/token' do
     it 'completes the ceremony with a valid proof: binds and returns the kiosk-pop token' do
       start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
       store.update(start[:da].approve(user_id: user_id))
@@ -246,13 +199,7 @@ RSpec.describe 'OAuth binding controllers' do
         public_key_pem: pem.strip, user_id: user_id, requested_role: nil
       )
     end
-  end
-end
 
-RSpec.describe 'OAuth binding controllers' do
-  include_context 'oauth binding controllers spec: provider origin'
-
-  describe 'POST /oauth/token' do
     # The role that reaches `bind!` is the one the APPROVER carried, although
     # the opening request said nothing. The `scope` echoed back is that same
     # granted role.

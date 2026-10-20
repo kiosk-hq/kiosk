@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2013 anchors.
+# 2021 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -144,6 +144,7 @@ e2e/assistant.sh	assert "…served public, one minute"     "$(echo "$sch_headers
 e2e/assistant.sh	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
 e2e/assistant.sh	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
 e2e/assistant.sh	binding: /auth.md served
+e2e/assistant.sh	binding: claim and token poll each paid one toll
 e2e/assistant.sh	binding: device_authorization fields
 e2e/assistant.sh	binding: fast poll → slow_down
 e2e/assistant.sh	binding: held token dies at unlink
@@ -320,7 +321,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.19'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.20'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -361,7 +362,6 @@ kiosk-demo-getgrocery/README.md	local stripe-mock; `export STRIPE_MOCK_URL=http:
 kiosk-demo-getgrocery/README.md	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	include Kiosk::SkillLink
 kiosk-demo-getgrocery/app/controllers/kiosk/catalog_controller.rb	def catalog
-kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	caller_zone: Kiosk.reader_zone)
 kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def create_order
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	def my_orders
@@ -374,11 +374,8 @@ kiosk-demo-getgrocery/app/models/delivery_slots.rb	  PICKING = 20..30 # minutes
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	(slot_at + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	def zone_at(address) = Time.find_zone!(DublinZones::ZONES.fetch(DublinZones.check(address).district, DEFAULT_ZONE_NAME))
 kiosk-demo-getgrocery/app/models/dublin_zones.rb	# The clock of each served district.
-kiosk-demo-getgrocery/app/models/order.rb	def window_bookable
-kiosk-demo-getgrocery/app/models/slot_search.rb	# The shop's day the caller's day starts on, never before the soonest it delivers.
-kiosk-demo-getgrocery/app/models/slot_search.rb	def calendar = caller_zone || zone
+kiosk-demo-getgrocery/app/models/slot_search.rb	# The named day at the address, never before the soonest day the shop delivers.
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	Kiosk::Server::Kyc.require! if age_restricted?(order)
-kiosk-demo-getgrocery/app/operations/create_order_operation.rb	timezone: DeliverySlots.zone_at(delivery_address).name
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	refuse 'this order is not paid; only a paid order can be moved' unless order.paid?
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	unless order.paid?
 kiosk-demo-getgrocery/app/services/price_checker.rb	def self.ordered(order) = order.order_items.map { [it.product.sku, it.qty, it.price_cents] }.sort
@@ -421,11 +418,10 @@ kiosk-demo-getgrocery/test/delivery_slots_test.rb	travel_to(DUBLIN.local(2026, 8
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	windows are on the district's clock, across daylight saving
 kiosk-demo-getgrocery/test/order_test.rb	errors(order(date: Date.new(2026, 9, 7), slot: 2)).sole)
 kiosk-demo-getgrocery/test/order_test.rb	its window has not passed and still reaches the door
-kiosk-demo-getgrocery/test/slot_search_test.rb	a caller that declares no zone is read on the shop's clock
 kiosk-demo-getgrocery/test/slot_search_test.rb	a caller's zone is only what it declares
-kiosk-demo-getgrocery/test/slot_search_test.rb	a day already past on the caller's calendar is refused in the caller's terms
+kiosk-demo-getgrocery/test/slot_search_test.rb	a day that has ended at the address is refused naming its zone
+kiosk-demo-getgrocery/test/slot_search_test.rb	a named day is a day on the address's clock
 kiosk-demo-getgrocery/test/slot_search_test.rb	test 'an address outside the served districts is refused with the reason' do
-kiosk-demo-getgrocery/test/slot_search_test.rb	the day a caller names is read on its declared calendar
 kiosk-demo-getgrocery/test/stories/age_check_test.rb	a shopper buys wine once a verification service confirms they are over 18
 kiosk-demo-getgrocery/test/stories/claim_test.rb	an assistant that started on its own is linked to Hana and pays with her saved card
 kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal 'ready', hanas.sets_up_payment['status']
@@ -438,6 +434,7 @@ kiosk-demo-getgrocery/test/stories/privacy_test.rb	one shopper can neither move 
 kiosk-demo-getgrocery/test/stories/shelf_test.rb	a price change after ordering does not change what the shopper pays
 kiosk-demo-getgrocery/test/stories/shop_test.rb	a paid order is not charged again
 kiosk-demo-getgrocery/test/stories/shop_test.rb	a shopper with no account orders groceries for tomorrow morning and pays
+kiosk-demo-getgrocery/test/stories/shop_test.rb	a shopper's declared zone does not move the day a window is on
 kiosk-demo-getgrocery/test/stories/shop_test.rb	assert_equal '08:00–10:00 (Europe/Dublin)', window['label']
 kiosk-demo-getgrocery/test/stories/shop_test.rb	assert_equal ['paid', '08:00–10:00 (Europe/Dublin)'], placed.values_at('payment_state', 'slot_label')
 kiosk-demo-getgrocery/test/test_helper.rb	setup { Kiosk::TestHelpers::StripeMock.start }
@@ -458,6 +455,7 @@ kiosk-demo-hoteling/app/models/booking.rb	PAY_WINDOW = 15.minutes
 kiosk-demo-hoteling/app/models/booking.rb	booking = reserved.lapsed.lock.find_by(id: booking_id)
 kiosk-demo-hoteling/app/models/booking.rb	scope :lapsed, -> { unpaid.where(created_at: ..PAY_WINDOW.ago) }
 kiosk-demo-hoteling/app/models/property.rb	# One hotel, sold on its own clock (`timezone`).
+kiosk-demo-hoteling/app/models/property.rb	def timezone_note(caller_zone)
 kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	held.reserved.lapsed.ids.each { Booking.cancel_lapsed!(it) }
 kiosk-demo-hoteling/app/views/home/index.html.erb	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-hoteling/app/views/home/index.html.erb	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
@@ -471,6 +469,8 @@ kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	publishes each p
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	reads each property's zone off the property
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	sells the 15th at one property and refuses it as past at the other, at the same instant
 kiosk-demo-hoteling/spec/payment_window_spec.rb	reads a capture in flight pending, and a returned capture paid before its settlement row
+kiosk-demo-hoteling/spec/property_spec.rb	names the hours between the two clocks, in one sentence
+kiosk-demo-hoteling/spec/property_spec.rb	says nothing to a caller on the same clock, or one that declared none
 kiosk-demo-hoteling/spec/stories/booking_spec.rb	  it 'a booking nobody paid for is not confirmed' do
 kiosk-demo-hoteling/spec/stories/booking_spec.rb	a booking nobody paid for is not confirmed
 kiosk-demo-hoteling/spec/stories/booking_spec.rb	a guest with no account books three nights, pays, and gets the confirmation code the hotel keeps
@@ -484,6 +484,7 @@ kiosk-demo-hoteling/spec/stories/search_spec.rb	a search that matches nothing co
 kiosk-demo-hoteling/spec/stories/search_spec.rb	def total(found) = found.header('x-total-count').to_i
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
 kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	a guest's assistant cannot pay in a currency other than its cap's
+kiosk-demo-hoteling/spec/stories/timezone_note_spec.rb	tells a guest on another clock how far the hotel is from them, and moves no date
 kiosk-demo-philslist/README.md	  **deliberately no payments**: philslist configures no `payment_provider`, so
 kiosk-demo-philslist/README.md	  `owner_id` on `post_listing` is **refused `400 bad_request`** naming it, and a
 kiosk-demo-philslist/README.md	  scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
@@ -878,7 +879,7 @@ kiosk-redteam/suites/getgrocery.rb	bytes.none? { |b| b.include?(CLOCK_WEST) || b
 kiosk-redteam/suites/getgrocery.rb	class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
 kiosk-redteam/suites/getgrocery.rb	class OneRenderingPerRow < Kiosk::Redteam::Scenario
 kiosk-redteam/suites/getgrocery.rb	exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)
-kiosk-redteam/suites/getgrocery.rb	refused_naming?(@ended, @day)
+kiosk-redteam/suites/getgrocery.rb	ok = control? && [@west, @east, @baited_e, @baited_w].all? { unmoved?(it) }
 kiosk-redteam/suites/getgrocery.rb	the two clocks are 90000s apart
 kiosk-redteam/suites/hoteling.rb	Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new # → BLOCKED (register PoW ON)
 kiosk-redteam/suites/hoteling.rb	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,       # → SKIP (no action waits on a payment)
@@ -1056,6 +1057,8 @@ kiosk-server/lib/kiosk/server/account_binding.rb	role ? [', allowed_roles = ARRA
 kiosk-server/lib/kiosk/server/account_holder_gate.rb	@identity = Kiosk.configuration.user_idp&.verify(request)
 kiosk-server/lib/kiosk/server/actions.rb	module Actions
 kiosk-server/lib/kiosk/server/agent_identity_providers/default_agent_idp.rb	def authorization_for(request)
+kiosk-server/lib/kiosk/server/auth_toll.rb	def gate(verb:, body:, pow:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/auth_toll.rb	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: config.registration_pow_count.to_i }
 kiosk-server/lib/kiosk/server/caller_timezone.rb	      ENV_KEY = 'HTTP_KIOSK_TIMEZONE'
 kiosk-server/lib/kiosk/server/caller_timezone.rb	An IANA `Area/Location` name or `UTC` only: no offsets (no DST), no Rails
 kiosk-server/lib/kiosk/server/caller_timezone.rb	def from_env(env)
@@ -1068,6 +1071,8 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :sp
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities
 kiosk-server/lib/kiosk/server/configuration_extension.rb	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
 kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. Generate one with
+kiosk-server/lib/kiosk/server/device_code_grant.rb	        pay_toll_once!(device_code, hash, pow, now)
+kiosk-server/lib/kiosk/server/device_code_grant.rb	da = store.lookup_by_device_code_hash(hash)
 kiosk-server/lib/kiosk/server/device_code_grant.rb	device_code parameter required
 kiosk-server/lib/kiosk/server/engine.rb	          get '/.well-known/agent-configuration', to: 'kiosk/server/discovery#agent_configuration'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
@@ -1114,7 +1119,6 @@ kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth e
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	status = ::ActionDispatch::ExceptionWrapper.rescue_responses[exception.class.name]
-kiosk-server/lib/kiosk/server/handler_mixin.rb	when ::ActiveModel::ValidationError then exception.model
 kiosk-server/lib/kiosk/server/handler_serving.rb	def wire_error(status, parsed)
 kiosk-server/lib/kiosk/server/handler_serving.rb	kiosk_render_refusal(e)
 kiosk-server/lib/kiosk/server/handler_serving.rb	module HandlerServing
@@ -1133,6 +1137,7 @@ kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verified_attributes(raw)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verify(raw_jws:, subject:)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	if payload[:aud].to_s != config.kyc_audience.to_s
 kiosk-server/lib/kiosk/server/link_code.rb	# minting human's own role, never anything the assistant sends.
+kiosk-server/lib/kiosk/server/link_code.rb	AuthToll.gate(verb: 'auth/claim', body: { code: code.to_s, public_key: pem }, pow: pow)
 kiosk-server/lib/kiosk/server/link_code.rb	def mint(user_id:,
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	        require_amount!(payload, :cap_amount_cents)
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	        return if payload[:exp].to_i - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
@@ -1167,8 +1172,6 @@ kiosk-server/lib/kiosk/server/pow_toll.rb	ttl = @config.pow_ttl * count
 kiosk-server/lib/kiosk/server/pow_toll.rb	when :expired, :bad_sig, :bad_params
 kiosk-server/lib/kiosk/server/queries.rb	convention the provider upholds (the registry does not enforce it)
 kiosk-server/lib/kiosk/server/queries.rb	module Queries
-kiosk-server/lib/kiosk/server/registration_pow.rb	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/registration_pow.rb	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: count }
 kiosk-server/lib/kiosk/server/reputation_factors.rb	# Settlements and visits of this customer since `since`: their count and their cents.
 kiosk-server/lib/kiosk/server/request_validation.rb	RESERVED-PLANE REQUEST BODY => the published object that types it.
 kiosk-server/lib/kiosk/server/request_validation.rb	raise Errors.missing_field(absent, hint: body_hint(pointer)) if absent
@@ -1299,6 +1302,17 @@ kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	does not log a key
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	refuses a stored cap with no currency
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers one key on each origin as two assistant accounts
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	saves a cap with its currency, and ColumnSpendingCap reads both
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers a paid claim of an unknown link code not found
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers an unpaid poll with the 402 problem document, the same for an unknown and a live code
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks an unknown link code for the toll, the same as a live one
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks the first poll of an unknown device code for the toll before it reads the store
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks the toll again for another device code
+kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	charges each device code once: later polls of the same code are free
+kiosk-server/spec/kiosk/server/auth_toll_spec.rb	binds proofs to POST auth/register (the same key under another call re-challenges)
+kiosk-server/spec/kiosk/server/auth_toll_spec.rb	binds proofs to the public key (a proof for another key re-challenges)
+kiosk-server/spec/kiosk/server/auth_toll_spec.rb	demands `count` challenges (402) when no proof is submitted
+kiosk-server/spec/kiosk/server/auth_toll_spec.rb	is a no-op when registration_pow_count is 0 (default)
+kiosk-server/spec/kiosk/server/auth_toll_spec.rb	proceeds when the real verifier accepts the proof
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	answers #{method} #{path} with 501 module_not_served
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	keeps the OAuth error object for an ordinary refusal
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all six auth URLs and adds no capability for binding
@@ -1537,7 +1551,6 @@ kiosk-server/spec/kiosk/server/filtered_parameters_spec.rb	'kyc_jws' => 'the KYC
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	404s a request that did not come through the Kiosk wire
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts a verb that declares limit as an integer with its largest page
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts the verb name #{name.inspect}
-kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	answers bad_request whose detail is the errors' full messages
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	carries a 403 code a bare status cannot name (rls_denied)
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	emits NO WWW-Authenticate on payment_failed — the third 402, which no scheme names
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	exposes the resolved identity as kiosk_identity
@@ -1810,11 +1823,6 @@ kiosk-server/spec/kiosk/server/queries_spec.rb	carries the declared schemas and 
 kiosk-server/spec/kiosk/server/queries_spec.rb	does not publish params at all — the slot left the wire (T-085)
 kiosk-server/spec/kiosk/server/queries_spec.rb	emits only the extension keys that were declared
 kiosk-server/spec/kiosk/server/queries_spec.rb	returns all descriptors sorted by name
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	binds proofs to POST auth/register (the same key under another call re-challenges)
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	binds proofs to the public key (a proof for another key re-challenges)
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	demands `count` challenges (402) when no proof is submitted
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	is a no-op when registration_pow_count is 0 (default)
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	proceeds when the real verifier accepts the proof
 kiosk-server/spec/kiosk/server/reputation_factors_spec.rb	counts no one else's spend
 kiosk-server/spec/kiosk/server/reputation_factors_spec.rb	sums the customer's settlements and recorded visits inside the window
 kiosk-server/spec/kiosk/server/request_body_validation_spec.rb	carries every exchange the engine dials

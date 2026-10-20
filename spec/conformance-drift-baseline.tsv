@@ -6,14 +6,14 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-20 at 2f70460f -- release 0.5.19: the skill default and API_VERSION judged against their rows
-# 2007 anchors.
-.github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
-.github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
-.github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
-.github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
-.github/workflows/ci.yml	6018aa9658a15f18	b1d0a419	name: kiosk OSS end-to-end
-.github/workflows/ci.yml	cd63b8cec8954ef0	b1d0a419	run: ./e2e/run.sh
+# recorded: 2026-10-20 at 89637b9d -- spending cap currency, min_client, on_bad_proof, getgrocery courier/README, CI battery: 26 anchors re-judged, 3 retired dropped
+# 2012 anchors.
+.github/workflows/ci.yml	a100f004b2f6d4c6	89637b9d	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
+.github/workflows/ci.yml	64bbf3bdb1c84cd4	89637b9d	        if: matrix.demo != 'kiosk-demo-prove'
+.github/workflows/ci.yml	35989635114b3570	89637b9d	      - name: Red-team battery
+.github/workflows/ci.yml	a100f004b2f6d4c6	89637b9d	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
+.github/workflows/ci.yml	6018aa9658a15f18	89637b9d	name: kiosk OSS end-to-end
+.github/workflows/ci.yml	cd63b8cec8954ef0	89637b9d	run: ./e2e/run.sh
 CHANGELOG.md	4570005aad48e6ba	b1d0a419	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	ab88745a8a9ff044	b1d0a419	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	dc0ce9e1fdb10ca8	b1d0a419	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
@@ -332,14 +332,14 @@ kiosk-demo-atablefor/test/stories/discovery_test.rb	ae95e9e57b144a4f	b1d0a419	th
 kiosk-demo-atablefor/test/stories/link_test.rb	9b07cbaa646f0c99	b1d0a419	Diego links his assistant from the restaurant site, and the table it books is his
 kiosk-demo-atablefor/test/stories/link_test.rb	723b26ca8cf634f7	b1d0a419	assert_equal diego.id, Booking.find(booking['booking_id']).user_id
 kiosk-demo-atablefor/test/stories/privacy_test.rb	6f3ff7f39561ad8e	b1d0a419	one diner can neither cancel nor see another's booking
-kiosk-demo-getgrocery/README.md	3cbe08017280144f	b1d0a419	# kiosk-demo-getgrocery
-kiosk-demo-getgrocery/README.md	20aec2bec43b7416	b1d0a419	(the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
-kiosk-demo-getgrocery/README.md	d73635e5213dbf0d	b1d0a419	**Honest scope:** the operator validates **format and zone only**.
-kiosk-demo-getgrocery/README.md	777a26ce52f7148b	b1d0a419	Grocery delivery demo operator for Kiosk.
-kiosk-demo-getgrocery/README.md	a5d447c9375dd333	b1d0a419	Without this variable the app
-kiosk-demo-getgrocery/README.md	0d291f4a635529d4	b1d0a419	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
-kiosk-demo-getgrocery/README.md	96e85401b2991009	b1d0a419	local stripe-mock; `export STRIPE_MOCK_URL=http://localhost:12111` sends the
-kiosk-demo-getgrocery/README.md	3eed0a9d78c4702b	b1d0a419	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
+kiosk-demo-getgrocery/README.md	3cbe08017280144f	89637b9d	# kiosk-demo-getgrocery
+kiosk-demo-getgrocery/README.md	20aec2bec43b7416	89637b9d	(the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
+kiosk-demo-getgrocery/README.md	d73635e5213dbf0d	89637b9d	**Honest scope:** the operator validates **format and zone only**.
+kiosk-demo-getgrocery/README.md	777a26ce52f7148b	89637b9d	Grocery delivery demo operator for Kiosk.
+kiosk-demo-getgrocery/README.md	286f751757954a3f	89637b9d	Without this variable the app
+kiosk-demo-getgrocery/README.md	0d291f4a635529d4	89637b9d	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
+kiosk-demo-getgrocery/README.md	96e85401b2991009	89637b9d	local stripe-mock; `export STRIPE_MOCK_URL=http://localhost:12111` sends the
+kiosk-demo-getgrocery/README.md	3eed0a9d78c4702b	89637b9d	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	e2d91d28f5235fbd	b1d0a419	include Kiosk::SkillLink
 kiosk-demo-getgrocery/app/controllers/kiosk/catalog_controller.rb	9f1d698861cb19c0	b1d0a419	def catalog
 kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	a974802adf1f39e9	b1d0a419	caller_zone: Kiosk.reader_zone)
@@ -347,9 +347,9 @@ kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	ca94fb8
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	22ac38a6897e6dad	b1d0a419	def create_order
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	4a01a81eeaf34227	b1d0a419	def my_orders
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	5822ea343f970e85	b1d0a419	required: %w[items slot_at delivery_address]
-kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	6dd2c813ab96616f	b1d0a419	    arrival = DeliverySlots::DRIVE.from_now
-kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	aee70de9faf73e46	b1d0a419	class CourierDispatchJob < ApplicationJob
-kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	6d804aa9fbcf2624	b1d0a419	order.update!(dispatch_at: [rand(DeliverySlots::PICKING).minutes.from_now, order.slot_at].max)
+kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	6dd2c813ab96616f	89637b9d	    arrival = DeliverySlots::DRIVE.from_now
+kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	0d3373c74e93e5da	89637b9d	class CourierDispatchJob < ApplicationJob
+kiosk-demo-getgrocery/app/jobs/courier_dispatch_job.rb	6d804aa9fbcf2624	89637b9d	order.update!(dispatch_at: [rand(DeliverySlots::PICKING).minutes.from_now, order.slot_at].max)
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	a3f0c6f913f6fd05	b1d0a419	  DRIVE   = 5.minutes
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	cb2aa3baa5923142	b1d0a419	  PICKING = 20..30 # minutes
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	31401ecc1dd289c9	b1d0a419	(slot_at + WINDOW_HOURS.hours - PICKING.max.minutes - DRIVE).past?
@@ -463,7 +463,8 @@ kiosk-demo-hoteling/spec/stories/search_spec.rb	034291b9044afcb2	e8503071	a gues
 kiosk-demo-hoteling/spec/stories/search_spec.rb	b6127a74ed1014bb	e8503071	a made-up cursor moves through the hotels the search matches, and reaches no other hotel
 kiosk-demo-hoteling/spec/stories/search_spec.rb	78588fdca4dfa25c	e8503071	a search that matches nothing comes back empty, and a neighbourhood the city does not have is answered with the ones it does
 kiosk-demo-hoteling/spec/stories/search_spec.rb	5e2109901780ad46	e8503071	def total(found) = found.header('x-total-count').to_i
-kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	9ab06fe2f7e968f6	b1d0a419	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	9ab06fe2f7e968f6	89637b9d	a guest's assistant cannot pay for the stay that would cross its cap, however the currency is spelled, until the cap is raised
+kiosk-demo-hoteling/spec/stories/spending_cap_spec.rb	3be14cc12ec9116b	89637b9d	a guest's assistant cannot pay in a currency other than its cap's
 kiosk-demo-philslist/README.md	1d35b83853dcb1ed	b1d0a419	  **deliberately no payments**: philslist configures no `payment_provider`, so
 kiosk-demo-philslist/README.md	f5262ce653fcbf55	b1d0a419	  `owner_id` on `post_listing` is **refused `400 bad_request`** naming it, and a
 kiosk-demo-philslist/README.md	0ed3d23f0927f81c	b1d0a419	  scenario must be BLOCKED: `CrossTenantRead`, `ForgedUserId`, `CrossOwnerEdit`,
@@ -624,19 +625,19 @@ kiosk-demo-stylish/test/book_appointment_test.rb	7ac62782885c3c4c	b1d0a419	a slo
 kiosk-demo-stylish/test/book_appointment_test.rb	91215efe9c4a3e9d	b1d0a419	one instant in any spelling is one booking, answered on the salon's clock
 kiosk-demo-stylish/test/stories/discovery_test.rb	876c5760e9019d12	b1d0a419	an assistant that knows nothing finds out, without an account, what the salon offers and how to book
 kiosk-demo-stylish/test/stories/discovery_test.rb	18fb9382b2dbe534	b1d0a419	class DiscoveryStory < StoryTest
-kiosk-demo-stylish/test/stories/linking_test.rb	7821192b3f8f8ab1	b1d0a419	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
-kiosk-demo-stylish/test/stories/linking_test.rb	6d95d42615b15a1b	b1d0a419	  test 'Alice approves the code her assistant shows her, and it books in her name' do
-kiosk-demo-stylish/test/stories/linking_test.rb	50235a0ebeda307b	b1d0a419	'spending_cap_cents' => '12345')
-kiosk-demo-stylish/test/stories/linking_test.rb	6d95d42615b15a1b	b1d0a419	Alice approves the code her assistant shows her, and it books in her name
-kiosk-demo-stylish/test/stories/linking_test.rb	07100ae0e0740ec9	b1d0a419	assert first.signs_back_in.refused?(:not_found)
-kiosk-demo-stylish/test/stories/linking_test.rb	1fc5aed79fe347a6	b1d0a419	assert_equal [booked], second.appointments
-kiosk-demo-stylish/test/stories/linking_test.rb	0bb22e663f8fc1e9	b1d0a419	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
-kiosk-demo-stylish/test/stories/linking_test.rb	e20166bed29601f1	b1d0a419	assert_includes page.body, 'cap: 12345 cents'
-kiosk-demo-stylish/test/stories/linking_test.rb	c76363319de56dd3	b1d0a419	assert_predicate second.signs_back_in, :ok?
-kiosk-demo-stylish/test/stories/linking_test.rb	7b07ddeb7f4668c7	b1d0a419	signs_in(:alice).approves(request['user_code'])
-kiosk-demo-stylish/test/stories/linking_test.rb	7821192b3f8f8ab1	b1d0a419	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
-kiosk-demo-stylish/test/stories/linking_test.rb	6d95d42615b15a1b	b1d0a419	test 'Alice approves the code her assistant shows her, and it books in her name' do
-kiosk-demo-stylish/test/stories/linking_test.rb	95ec15c763d35f1a	b1d0a419	test 'Alice names her assistant and caps its spending on the assistants page' do
+kiosk-demo-stylish/test/stories/linking_test.rb	7821192b3f8f8ab1	89637b9d	  test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/stories/linking_test.rb	6d95d42615b15a1b	89637b9d	  test 'Alice approves the code her assistant shows her, and it books in her name' do
+kiosk-demo-stylish/test/stories/linking_test.rb	50235a0ebeda307b	89637b9d	'spending_cap_cents' => '12345')
+kiosk-demo-stylish/test/stories/linking_test.rb	6d95d42615b15a1b	89637b9d	Alice approves the code her assistant shows her, and it books in her name
+kiosk-demo-stylish/test/stories/linking_test.rb	07100ae0e0740ec9	89637b9d	assert first.signs_back_in.refused?(:not_found)
+kiosk-demo-stylish/test/stories/linking_test.rb	1fc5aed79fe347a6	89637b9d	assert_equal [booked], second.appointments
+kiosk-demo-stylish/test/stories/linking_test.rb	0bb22e663f8fc1e9	89637b9d	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
+kiosk-demo-stylish/test/stories/linking_test.rb	f6c3f3afa8e41ec2	89637b9d	assert_includes page.body, 'cap: 12345 cents in EUR'
+kiosk-demo-stylish/test/stories/linking_test.rb	c76363319de56dd3	89637b9d	assert_predicate second.signs_back_in, :ok?
+kiosk-demo-stylish/test/stories/linking_test.rb	7b07ddeb7f4668c7	89637b9d	signs_in(:alice).approves(request['user_code'])
+kiosk-demo-stylish/test/stories/linking_test.rb	7821192b3f8f8ab1	89637b9d	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
+kiosk-demo-stylish/test/stories/linking_test.rb	6d95d42615b15a1b	89637b9d	test 'Alice approves the code her assistant shows her, and it books in her name' do
+kiosk-demo-stylish/test/stories/linking_test.rb	46bfa8c0e57edfaf	89637b9d	test 'Alice names her assistant and caps its spending on the assistants page' do
 kiosk-demo-stylish/test/stories/privacy_test.rb	ac1129ed6ae567bd	b1d0a419	Alice's assistant sees Alice's appointment and not Bob's
 kiosk-demo-stylish/test/stories/privacy_test.rb	3057d9e0db95008f	b1d0a419	an appointment belongs to whoever booked it, whoever the arguments name
 kiosk-demo-stylish/test/stories/privacy_test.rb	3841ec5370cbfb3c	b1d0a419	class PrivacyStory < StoryTest
@@ -901,20 +902,19 @@ kiosk-reputation/lib/kiosk/reputation/backends.rb	c498d533ad82e491	b1d0a419	    
 kiosk-reputation/lib/kiosk/reputation/backends.rb	44723dda8945ffb4	b1d0a419	# kiosk-pow-equihash registers `equihash` itself at boot.
 kiosk-reputation/lib/kiosk/reputation/backends.rb	99fd6a97c602c963	b1d0a419	def fetch(alg_name)
 kiosk-reputation/lib/kiosk/reputation/backends.rb	c498d533ad82e491	b1d0a419	def register(alg_name, backend)
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	2bc6f1451eac3671	b1d0a419	                  salt: SecureRandom.bytes(16),
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	7266a59193db98dc	b1d0a419	        def issue(alg:, params:, request_fingerprint:, secret:, ttl:,
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	99d5c0ffc12bc2a3	b1d0a419	# @return [Hash] wire challenge: {id:, alg:, params:, salt: <base64>, exp:, sig:}
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	6ac70d7a19524ba1	b1d0a419	# The one expensive step: a single backend evaluation.
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	404297938bb8c23c	b1d0a419	:bad_params unless matches_expected?(expect, fields.alg, fields.params)
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	097472f8fcd8c27f	b1d0a419	Backends.fetch(fields.alg).verify(
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	e680447af6858483	b1d0a419	OpenSSL.fixed_length_secure_compare(expected, given)
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	6cd36e91289a2bf4	b1d0a419	def matches_expected?(expect, alg, params)
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	0057b0c3d584c584	b1d0a419	def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil)
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	7e051116722b5b90	b1d0a419	proof_valid?(fields_of(challenge, request_fingerprint), nonce) ? :ok : :bad_proof
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	d7ab8ec1f1f04f6a	b1d0a419	return :bad_sig unless constant_time_compare(compute_sig(secret, fields), sig)
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	508b9a76c2353b40	b1d0a419	return :expired unless fields.exp.to_i > now.to_i
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	2cd1426fe946f764	b1d0a419	sig: compute_sig(secret, fields) }
-kiosk-reputation/lib/kiosk/reputation/challenge.rb	2cd1426fe946f764	b1d0a419	{ id:, alg:, params:, salt: fields.salt, exp: fields.exp,
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	2bc6f1451eac3671	89637b9d	                  salt: SecureRandom.bytes(16),
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	7266a59193db98dc	89637b9d	        def issue(alg:, params:, request_fingerprint:, secret:, ttl:,
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	99d5c0ffc12bc2a3	89637b9d	# @return [Hash] wire challenge: {id:, alg:, params:, salt: <base64>, exp:, sig:}
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	6ac70d7a19524ba1	89637b9d	# The one expensive step: a single backend evaluation.
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	404297938bb8c23c	89637b9d	:bad_params unless matches_expected?(expect, fields.alg, fields.params)
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	097472f8fcd8c27f	89637b9d	Backends.fetch(fields.alg).verify(
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	e680447af6858483	89637b9d	OpenSSL.fixed_length_secure_compare(expected, given)
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	6cd36e91289a2bf4	89637b9d	def matches_expected?(expect, alg, params)
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	0057b0c3d584c584	89637b9d	def verify(challenge:, nonce:, request_fingerprint:, secret:, now:, expect: nil)
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	d7ab8ec1f1f04f6a	89637b9d	return :bad_sig unless constant_time_compare(compute_sig(secret, fields), sig)
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	508b9a76c2353b40	89637b9d	return :expired unless fields.exp.to_i > now.to_i
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	2cd1426fe946f764	89637b9d	sig: compute_sig(secret, fields) }
+kiosk-reputation/lib/kiosk/reputation/challenge.rb	2cd1426fe946f764	89637b9d	{ id:, alg:, params:, salt: fields.salt, exp: fields.exp,
 kiosk-reputation/lib/kiosk/reputation/factors.rb	ca9e834533a21f1f	b1d0a419	Factors = Data.define(:settled_purchases_count, :settled_purchases_cents) do
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	7cddbece8d16f984	b1d0a419	#{identity.user_id}:#{span}
 kiosk-reputation/lib/kiosk/reputation/policies/recent_spend.rb	7cddbece8d16f984	b1d0a419	Digest::SHA256.digest("#{identity.user_id}:#{span}").unpack1('Q>').fdiv(2**64)
@@ -979,7 +979,7 @@ kiosk-server/README.md	5d828d292aafb56d	b1d0a419	- **Account binding** — the c
 kiosk-server/README.md	8280692a04521e04	b1d0a419	A block-less `kiosk` only mounts.
 kiosk-server/README.md	1ffb51c6835073f3	b1d0a419	The full host-side surface is shipped and covered by the gem's own suite
 kiosk-server/README.md	fe179f99c73c7446	b1d0a419	in this directory runs it and prints how many examples that is
-kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	c9ad7ac9ae70455f	b1d0a419	class AssistantsController < ApplicationController
+kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	fe627a20cdd981d2	89637b9d	class AssistantsController < ApplicationController
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	0a1244f50f31a73e	b1d0a419	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	07cb305eb3126bb0	b1d0a419	def link
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	3ea1c773de1ee07d	b1d0a419	def register
@@ -999,13 +999,13 @@ kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.
 kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	2c109e8591542361	b1d0a419	public_key parameter required
 kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	7c67d28cc12c80b0	b1d0a419	grant_type required
 kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	5e0de5f9ac4b02c0	b1d0a419	only the device_code grant is served here — 
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	8009875ad8aab383	b1d0a419	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	280fe37f405ceda2	b1d0a419	    # The per-verb wire, one endpoint per registered verb under the mount:
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	8009875ad8aab383	b1d0a419	GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	280fe37f405ceda2	b1d0a419	The per-verb wire, one endpoint per registered verb under the mount:
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	2f6e49f8a3d86717	b1d0a419	class VerbController < WireController
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	2c24f2ac346161f9	b1d0a419	def serve(command)
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	82ad7b8f46d3298b	b1d0a419	descriptor = descriptor_for!(command, name)
+kiosk-server/app/controllers/kiosk/server/verb_controller.rb	8009875ad8aab383	89637b9d	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
+kiosk-server/app/controllers/kiosk/server/verb_controller.rb	280fe37f405ceda2	89637b9d	    # The per-verb wire, one endpoint per registered verb under the mount:
+kiosk-server/app/controllers/kiosk/server/verb_controller.rb	8009875ad8aab383	89637b9d	GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
+kiosk-server/app/controllers/kiosk/server/verb_controller.rb	280fe37f405ceda2	89637b9d	The per-verb wire, one endpoint per registered verb under the mount:
+kiosk-server/app/controllers/kiosk/server/verb_controller.rb	9ee53a308af7e1dc	89637b9d	class VerbController < WireController
+kiosk-server/app/controllers/kiosk/server/verb_controller.rb	2c24f2ac346161f9	89637b9d	def serve(command)
+kiosk-server/app/controllers/kiosk/server/verb_controller.rb	82ad7b8f46d3298b	89637b9d	descriptor = descriptor_for!(command, name)
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	5d053b178e1d71a0	b1d0a419	    # Wire response (JSON): success is the handler's payload VERBATIM
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	8b05aaed37814ca4	b1d0a419	PowGate.gate(
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	5d053b178e1d71a0	b1d0a419	Wire response (JSON): success is the handler's payload VERBATIM
@@ -1048,7 +1048,7 @@ kiosk-server/lib/kiosk/server/caller_timezone.rb	d3c9fa209f9c4de2	b1d0a419	An IA
 kiosk-server/lib/kiosk/server/caller_timezone.rb	e107b50d34992866	b1d0a419	def from_env(env)
 kiosk-server/lib/kiosk/server/caller_timezone.rb	4ffc4626532791da	b1d0a419	def from_value(raw)
 kiosk-server/lib/kiosk/server/caller_timezone.rb	ce4dee21ef86a2da	b1d0a419	refuse(raw) unless SHAPE.match?(value)
-kiosk-server/lib/kiosk/server/column_spending_cap.rb	650f3fdeca57d5b0	b1d0a419	class ColumnSpendingCap
+kiosk-server/lib/kiosk/server/column_spending_cap.rb	280c4c3ed68c9655	89637b9d	class ColumnSpendingCap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	312b04a31a362e63	2f70460f	        @skill_url ||= 'https://kiosk.tech/skill-v
 kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	2f70460f	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
 kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	2f70460f	      attr_accessor :spending_cap_window_days
@@ -1095,8 +1095,8 @@ kiosk-server/lib/kiosk/server/executor.rb	7d7d211b6b7eb97c	b1d0a419	            
 kiosk-server/lib/kiosk/server/executor.rb	7c224f50bece7db5	b1d0a419	      VERBS = %i[query run pay].freeze
 kiosk-server/lib/kiosk/server/executor.rb	03872ee574617572	b1d0a419	# The coarse kinds of call shared by the toll, the policy and this dispatcher; not wire paths.
 kiosk-server/lib/kiosk/server/executor.rb	7c224f50bece7db5	b1d0a419	VERBS = %i[query run pay].freeze
-kiosk-server/lib/kiosk/server/executor/spending_cap.rb	9aedc67c5026b03f	b1d0a419	WHERE agent_id = $1 AND lower(btrim(currency)) = $2
-kiosk-server/lib/kiosk/server/executor/spending_cap.rb	069947d78bd85cb8	b1d0a419	def enforce_spending_cap!(cart)
+kiosk-server/lib/kiosk/server/executor/spending_cap.rb	9aedc67c5026b03f	89637b9d	WHERE agent_id = $1 AND lower(btrim(currency)) = $2
+kiosk-server/lib/kiosk/server/executor/spending_cap.rb	67a537a11619b871	89637b9d	def enforce_spending_cap!(cart)
 kiosk-server/lib/kiosk/server/handler_dispatch.rb	2fc370822b195fa8	b1d0a419	def wire_error(status, parsed)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	b7b425b388d45e00	b1d0a419	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	8300e07d877e59d3	b1d0a419	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
@@ -1152,24 +1152,25 @@ kiosk-server/lib/kiosk/server/pow_toll.rb	66cacfe5a27f548b	b1d0a419	ttl = @confi
 kiosk-server/lib/kiosk/server/pow_toll.rb	0eca37daec4caffc	b1d0a419	when :expired, :bad_sig, :bad_params
 kiosk-server/lib/kiosk/server/queries.rb	5ff4a54e71aa5537	b1d0a419	convention the provider upholds (the registry does not enforce it)
 kiosk-server/lib/kiosk/server/queries.rb	5648021f8a0ad42b	b1d0a419	module Queries
-kiosk-server/lib/kiosk/server/registration_pow.rb	a3943c460079c203	b1d0a419	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/registration_pow.rb	10c7e0a3ebc9c6f7	b1d0a419	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: count }
+kiosk-server/lib/kiosk/server/registration_pow.rb	c60222a14eeeea1f	89637b9d	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/registration_pow.rb	10c7e0a3ebc9c6f7	89637b9d	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: count }
 kiosk-server/lib/kiosk/server/reputation_factors.rb	40ce2bc77be109c3	b1d0a419	# Settlements and visits of this customer since `since`: their count and their cents.
 kiosk-server/lib/kiosk/server/request_validation.rb	e4c16e491779cff0	b1d0a419	RESERVED-PLANE REQUEST BODY => the published object that types it.
 kiosk-server/lib/kiosk/server/request_validation.rb	b9540a13fb94ab5e	b1d0a419	raise Errors.missing_field(absent, hint: body_hint(pointer)) if absent
 kiosk-server/lib/kiosk/server/routing.rb	6d3a7c22ab33775e	b1d0a419	def actions(*names) = draw(:post, 'create', names)
 kiosk-server/lib/kiosk/server/routing.rb	67a816a0e0381554	b1d0a419	def queries(*names) = draw(:get, 'show', names)
 kiosk-server/lib/kiosk/server/routing.rb	f6bce994e58fbc48	b1d0a419	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
-kiosk-server/lib/kiosk/server/schema_definitions.rb	0111da54a0526fe3	b1d0a419	          CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
-kiosk-server/lib/kiosk/server/schema_definitions.rb	1f2267b31abf8022	b1d0a419	      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
-kiosk-server/lib/kiosk/server/schema_definitions.rb	bc879d77fa10690f	b1d0a419	      def mandates_sql(schema: nil, user_id_type: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	afa1629f1747eaa7	b1d0a419	.current_user_id() RETURNS 
-kiosk-server/lib/kiosk/server/schema_definitions.rb	afa1629f1747eaa7	b1d0a419	CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
-kiosk-server/lib/kiosk/server/schema_definitions.rb	4babd479cc288178	b1d0a419	agent_mappings (
-kiosk-server/lib/kiosk/server/schema_definitions.rb	a09a64e34236c9f0	b1d0a419	def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	b048abcea7d7862a	b1d0a419	def kyc_attributes_sql(schema: nil, user_id_type: nil, user_table: nil)
-kiosk-server/lib/kiosk/server/schema_definitions.rb	ba55ab4292bed17f	b1d0a419	spending_cap_cents  bigint,
-kiosk-server/lib/kiosk/server/schema_document.rb	73298b3e1d97029f	b1d0a419	    module SchemaDocument
+kiosk-server/lib/kiosk/server/schema_definitions.rb	0111da54a0526fe3	89637b9d	          CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
+kiosk-server/lib/kiosk/server/schema_definitions.rb	1670ef12b19a8990	89637b9d	      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
+kiosk-server/lib/kiosk/server/schema_definitions.rb	bc879d77fa10690f	89637b9d	      def mandates_sql(schema: nil, user_id_type: nil)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	afa1629f1747eaa7	89637b9d	.current_user_id() RETURNS 
+kiosk-server/lib/kiosk/server/schema_definitions.rb	1d74ac35b49ae097	89637b9d	CONSTRAINT agents_spending_cap_currency_set
+kiosk-server/lib/kiosk/server/schema_definitions.rb	afa1629f1747eaa7	89637b9d	CREATE OR REPLACE FUNCTION "#{schema}".current_user_id() RETURNS #{cast} LANGUAGE sql STABLE AS $$
+kiosk-server/lib/kiosk/server/schema_definitions.rb	4babd479cc288178	89637b9d	agent_mappings (
+kiosk-server/lib/kiosk/server/schema_definitions.rb	a09a64e34236c9f0	89637b9d	def helper_functions_sql(schema: nil, guc_namespace: nil, user_id_type: nil)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	b048abcea7d7862a	89637b9d	def kyc_attributes_sql(schema: nil, user_id_type: nil, user_table: nil)
+kiosk-server/lib/kiosk/server/schema_definitions.rb	ba55ab4292bed17f	89637b9d	spending_cap_cents  bigint,
+kiosk-server/lib/kiosk/server/schema_document.rb	c3e57ca0dcf95e5c	89637b9d	    module SchemaDocument
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	d56a3004db70b43d	b1d0a419	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 kiosk-server/lib/kiosk/server/schemas/binding.schema.json	63d7b6213371465a	b1d0a419	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/verb_registry.rb	d1dae4cdb2720c8e	b1d0a419	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
@@ -1274,16 +1275,18 @@ kiosk-server/spec/kiosk/server/auth_controller_spec.rb	85774e4f89f3d12c	9e766433
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	42bd8fcefb2dbe37	9e766433	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	76964fcbed461139	9e766433	returns 401 Unauthenticated when NO Authorization header is present
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	073a76e62e1e22e8	9e766433	revokes all sessions for the caller and hands back a fresh usable token
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	12e5d5a8fd047a97	72b28958	does not log a key in on an origin it never registered on
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	d173498a7acf5bf6	72b28958	registers one key on each origin as two assistant accounts
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	12e5d5a8fd047a97	89637b9d	does not log a key in on an origin it never registered on
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	e593a343a82a5008	89637b9d	refuses a stored cap with no currency
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	d173498a7acf5bf6	89637b9d	registers one key on each origin as two assistant accounts
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	c279a36d63132421	89637b9d	saves a cap with its currency, and ColumnSpendingCap reads both
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	af59d2e55e012e0a	b1d0a419	answers #{method} #{path} with 501 module_not_served
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	26a149949915d1bf	b1d0a419	keeps the OAuth error object for an ordinary refusal
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	49e87f2e671dc1fc	b1d0a419	publishes all six auth URLs and adds no capability for binding
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	7626f86bf530d4ca	b1d0a419	still serves the kiosk-pop challenge endpoint
 kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	7bd7d5221093af1b	b1d0a419	refuses a UTC offset by name
-kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	f499e2b768b27640	b1d0a419	reads the per-assistant cap from agents.spending_cap_cents (live rows only)
-kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	704f2d34bd2aa0ce	b1d0a419	returns nil for an unknown or revoked key (no row)
-kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	b7351e992647f161	b1d0a419	returns nil when the assistant row has no cap set (unlimited)
+kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	80e569ebe5d4c3c2	89637b9d	reads the per-assistant cap and its currency from agents (live rows only)
+kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	704f2d34bd2aa0ce	89637b9d	returns nil for an unknown or revoked key (no row)
+kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	b06e2bd1e8c47c68	89637b9d	returns nil when the assistant row has no cap set (unlimited)
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	6121b4a466641c5e	a45e5755	includes schema + queries when only a query is registered
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	14018c87d069bc9a	a45e5755	offers no way to set capabilities
 kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	d90633719f61d4a9	a45e5755	offers no way to set min_client: kiosk-core states it
@@ -1472,42 +1475,44 @@ kiosk-server/spec/kiosk/server/events_spec.rb	f6a32af7bb9833c7	b1d0a419	refuses 
 kiosk-server/spec/kiosk/server/events_spec.rb	e0ed1ce83227af86	b1d0a419	requires description
 kiosk-server/spec/kiosk/server/events_spec.rb	e9dc754318663303	b1d0a419	requires payload_schema
 kiosk-server/spec/kiosk/server/events_spec.rb	ab7b5613e4a1ee1c	b1d0a419	stamps occurred_at as ISO 8601 UTC when the caller gives none
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	4056475027a9d465	20b9c784	counts a persisted cart with no settlement yet
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	72ab06ca6da0082c	20b9c784	does not count a repeat of a recorded cart a second time
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	97c9f61f2c0664c0	20b9c784	hits ONE cap across both spellings
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	d44c2d7f36e11c74	20b9c784	is currency-scoped (K-551): a different currency tallies zero
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	38177c660f1e7481	20b9c784	lets one through when each fits the cap alone and the two together do not
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	67477b4a2bf66ed0	20b9c784	never settles past the cap, and leaves no declined cart in flight
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	9f6ed64712738151	20b9c784	raises the unique violation the Executor maps to 409 when the same mandate id is replayed
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	6ef04844e47b1aa9	20b9c784	spelling is not identity (K-1251)
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	ae5d5f9ebf47253b	20b9c784	spending cap across spellings
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	d0623666ecb7e9e0	20b9c784	still keeps usd out of the eur tally
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	8ed5962901bc2616	20b9c784	stops counting a declined cart at once
-kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	75d077558751bf8b	20b9c784	stops counting an unsettled cart once its mandate has expired
-kiosk-server/spec/kiosk/server/executor_spec.rb	925d77c6c5620363	dbf5333b	answers 409 conflict to a repeat of a declined chain
-kiosk-server/spec/kiosk/server/executor_spec.rb	8b325ff4ec89aa80	dbf5333b	answers `eur` to a chain already signed `eur`, which is the only case where the bytes match
-kiosk-server/spec/kiosk/server/executor_spec.rb	b35ef9d1b4342b7f	dbf5333b	answers `eur` to a chain signed `EUR` throughout
-kiosk-server/spec/kiosk/server/executor_spec.rb	cdd533f10e4b4467	dbf5333b	answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)
-kiosk-server/spec/kiosk/server/executor_spec.rb	a139f0b2a945dc46	dbf5333b	charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)
-kiosk-server/spec/kiosk/server/executor_spec.rb	daa60ecb7ed56b01	dbf5333b	charges once and replays the ORIGINAL settlement the second time (K-850)
-kiosk-server/spec/kiosk/server/executor_spec.rb	16bddf9501366fa2	dbf5333b	does not answer a settled replay with an error at all (K-850)
-kiosk-server/spec/kiosk/server/executor_spec.rb	9ac7ff11aa7048f5	dbf5333b	does not enforce when no spending_cap seam is configured (default)
-kiosk-server/spec/kiosk/server/executor_spec.rb	c8e5bbe820ef7c9d	dbf5333b	is gone from the vocabulary entirely — one list, not two
-kiosk-server/spec/kiosk/server/executor_spec.rb	365b84b6b79ad5c5	dbf5333b	maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same chain again
-kiosk-server/spec/kiosk/server/executor_spec.rb	76e48adf58eb0bc3	dbf5333b	maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)
-kiosk-server/spec/kiosk/server/executor_spec.rb	e9632d27652eaedb	dbf5333b	omits `next` when a paginating handler signals the last page (Page with nil cursor)
-kiosk-server/spec/kiosk/server/executor_spec.rb	387da35d45429084	dbf5333b	proceeds when spent + cart total is within the cap
-kiosk-server/spec/kiosk/server/executor_spec.rb	960b5735480ea87a	dbf5333b	puts module_not_served/501 on the wire for it, not a 403
-kiosk-server/spec/kiosk/server/executor_spec.rb	790980962818ce91	dbf5333b	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
-kiosk-server/spec/kiosk/server/executor_spec.rb	eeeef97c5cefba04	dbf5333b	raises Unauthenticated when identity is nil
-kiosk-server/spec/kiosk/server/executor_spec.rb	cc9e0d134ce97e44	dbf5333b	re-raises a capture-time SetupRequired as PaymentSetupRequired (402)
-kiosk-server/spec/kiosk/server/executor_spec.rb	b488395dc6b6788b	dbf5333b	refuses a settled cart id re-presented with different bytes (K-850)
-kiosk-server/spec/kiosk/server/executor_spec.rb	4891ce2170459987	dbf5333b	rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded
-kiosk-server/spec/kiosk/server/executor_spec.rb	7f63112e75b5445c	dbf5333b	resumes a chain whose capture ran but whose settlement was never written
-kiosk-server/spec/kiosk/server/executor_spec.rb	b91fd4f8156e69cb	dbf5333b	scopes the settled-total tally to the cart's currency (not currency-blind)
-kiosk-server/spec/kiosk/server/executor_spec.rb	39edff6b054a195a	dbf5333b	threads a Page's next_cursor and total onto the Result, not into the body
-kiosk-server/spec/kiosk/server/executor_spec.rb	ab0e022096bc3ffc	dbf5333b	treats a cap of 0 as disabled (any charge rejected)
-kiosk-server/spec/kiosk/server/executor_spec.rb	06b1ad16d5206beb	dbf5333b	verifies the trail, captures, and returns the full settlement payload
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	4056475027a9d465	89637b9d	counts a persisted cart with no settlement yet
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	72ab06ca6da0082c	89637b9d	does not count a repeat of a recorded cart a second time
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	7b267cb86fb93c45	89637b9d	hits ONE cap across both spellings
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	d44c2d7f36e11c74	89637b9d	is currency-scoped (K-551): a different currency tallies zero
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	38177c660f1e7481	89637b9d	lets one through when each fits the cap alone and the two together do not
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	67477b4a2bf66ed0	89637b9d	never settles past the cap, and leaves no declined cart in flight
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	9f6ed64712738151	89637b9d	raises the unique violation the Executor maps to 409 when the same mandate id is replayed
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	6ef04844e47b1aa9	89637b9d	spelling is not identity (K-1251)
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	ed504470f2bb5905	89637b9d	spending cap across spellings
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	d0623666ecb7e9e0	89637b9d	still keeps usd out of the eur tally
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	8ed5962901bc2616	89637b9d	stops counting a declined cart at once
+kiosk-server/spec/kiosk/server/executor_persistence_spec.rb	75d077558751bf8b	89637b9d	stops counting an unsettled cart once its mandate has expired
+kiosk-server/spec/kiosk/server/executor_spec.rb	925d77c6c5620363	89637b9d	answers 409 conflict to a repeat of a declined chain
+kiosk-server/spec/kiosk/server/executor_spec.rb	8b325ff4ec89aa80	89637b9d	answers `eur` to a chain already signed `eur`, which is the only case where the bytes match
+kiosk-server/spec/kiosk/server/executor_spec.rb	b35ef9d1b4342b7f	89637b9d	answers `eur` to a chain signed `EUR` throughout
+kiosk-server/spec/kiosk/server/executor_spec.rb	cdd533f10e4b4467	89637b9d	answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)
+kiosk-server/spec/kiosk/server/executor_spec.rb	a139f0b2a945dc46	89637b9d	charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)
+kiosk-server/spec/kiosk/server/executor_spec.rb	daa60ecb7ed56b01	89637b9d	charges once and replays the ORIGINAL settlement the second time (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	16bddf9501366fa2	89637b9d	does not answer a settled replay with an error at all (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	9ac7ff11aa7048f5	89637b9d	does not enforce when no spending_cap seam is configured (default)
+kiosk-server/spec/kiosk/server/executor_spec.rb	c8e5bbe820ef7c9d	89637b9d	is gone from the vocabulary entirely — one list, not two
+kiosk-server/spec/kiosk/server/executor_spec.rb	365b84b6b79ad5c5	89637b9d	maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same chain again
+kiosk-server/spec/kiosk/server/executor_spec.rb	76e48adf58eb0bc3	89637b9d	maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)
+kiosk-server/spec/kiosk/server/executor_spec.rb	e9632d27652eaedb	89637b9d	omits `next` when a paginating handler signals the last page (Page with nil cursor)
+kiosk-server/spec/kiosk/server/executor_spec.rb	74f40c140dc3799b	89637b9d	proceeds when spent + cart total is within the cap
+kiosk-server/spec/kiosk/server/executor_spec.rb	960b5735480ea87a	89637b9d	puts module_not_served/501 on the wire for it, not a 403
+kiosk-server/spec/kiosk/server/executor_spec.rb	790980962818ce91	89637b9d	raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true
+kiosk-server/spec/kiosk/server/executor_spec.rb	eeeef97c5cefba04	89637b9d	raises Unauthenticated when identity is nil
+kiosk-server/spec/kiosk/server/executor_spec.rb	cc9e0d134ce97e44	89637b9d	re-raises a capture-time SetupRequired as PaymentSetupRequired (402)
+kiosk-server/spec/kiosk/server/executor_spec.rb	75f6eaa2a166bbf4	89637b9d	reads the cap currency case-insensitively
+kiosk-server/spec/kiosk/server/executor_spec.rb	c8ac9066f71b6a9d	89637b9d	refuses a cart in a currency other than the cap's, before capture
+kiosk-server/spec/kiosk/server/executor_spec.rb	b488395dc6b6788b	89637b9d	refuses a settled cart id re-presented with different bytes (K-850)
+kiosk-server/spec/kiosk/server/executor_spec.rb	f4cac4aa7cd66d87	89637b9d	rejects with SpendingCapExceeded (403) and does NOT capture when the cap would be exceeded
+kiosk-server/spec/kiosk/server/executor_spec.rb	7f63112e75b5445c	89637b9d	resumes a chain whose capture ran but whose settlement was never written
+kiosk-server/spec/kiosk/server/executor_spec.rb	211da9c4008d5265	89637b9d	scopes the settled-total tally to the cart's currency (not currency-blind)
+kiosk-server/spec/kiosk/server/executor_spec.rb	39edff6b054a195a	89637b9d	threads a Page's next_cursor and total onto the Result, not into the body
+kiosk-server/spec/kiosk/server/executor_spec.rb	6093200b342e579c	89637b9d	treats a cap of 0 as disabled (any charge rejected)
+kiosk-server/spec/kiosk/server/executor_spec.rb	06b1ad16d5206beb	89637b9d	verifies the trail, captures, and returns the full settlement payload
 kiosk-server/spec/kiosk/server/filtered_parameters_spec.rb	6442cc10f616dd17	d96d6810	'kyc_jws' => 'the KYC attestation (§12)'
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	0ad1deff6effa91d	500b5f1c	carries the challenges a handler renders on pow_required
 kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	f3e1db753dd233e8	500b5f1c	keeps type, title and status those of the code, and drops instance and challenges

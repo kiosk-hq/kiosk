@@ -1,10 +1,11 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# check-version-parity — protocol.md §14.1: before 1.0, API_VERSION, MIN_CLIENT, every gem,
-# every lockfile kiosk-* entry and every skill pin share one MAJOR.MINOR.PATCH (from 1.0,
-# MAJOR.MINOR). Also: inter-gem deps are `~> MAJOR.MINOR.0`, each gem's version comes from
-# one version.rb, and each demo emits rel="kiosk" from Kiosk.configuration.skill_url.
+# check-version-parity — protocol.md §14.1: before 1.0, API_VERSION, every gem, every
+# lockfile kiosk-* entry and every skill pin share one MAJOR.MINOR.PATCH (from 1.0,
+# MAJOR.MINOR). MIN_CLIENT is in API_VERSION's MAJOR.MINOR and no newer (§3.6). Also:
+# inter-gem deps are `~> MAJOR.MINOR.0`, each gem's version comes from one version.rb,
+# and each demo emits rel="kiosk" from Kiosk.configuration.skill_url.
 
 require 'rubygems'
 
@@ -36,11 +37,8 @@ check  = lambda do |where, version|
   errors << "#{where} is #{version}; must be #{rule}" unless agrees.call(version)
 end
 
-if pre_one
-  check.call('Kiosk::Protocol::MIN_CLIENT', min_client)
-elsif series(min_client) != series(api) || Gem::Version.new(min_client) > Gem::Version.new(api)
-  errors << "MIN_CLIENT #{min_client} must be in series #{series(api)} and not newer than API_VERSION #{api}"
-end
+min_ok = series(min_client) == series(api) && Gem::Version.new(min_client) <= Gem::Version.new(api)
+errors << "MIN_CLIENT #{min_client} must be in series #{series(api)} and not newer than API_VERSION #{api}" unless min_ok
 
 # ── Gems ─────────────────────────────────────────────────────────────────────
 specs = Dir[File.join(ROOT, '*', '*.gemspec')].to_h do |path|

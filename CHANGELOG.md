@@ -12,6 +12,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 ## [Unreleased]
 
 - 2026-10-20: The `min_client` setting is removed from kiosk-server. `Kiosk-Min-Client` and `kiosk.min_client` carry kiosk-core's `MIN_CLIENT`.
+- 2026-10-20: `bin/check-version-parity` holds `MIN_CLIENT` to the MAJOR.MINOR of `API_VERSION` and no newer, before 1.0 too.
 - 2026-10-20: hoteling's `search_hotels` declares `limit`, 1 to 50 with 20 as default. A `limit` outside that range is refused; it is not clamped.
 - 2026-10-20: kiosk-server refuses at class load a verb that declares `cursor`, or a `limit` that is not an integer. A declared `limit` sets the query's page size.
 - 2026-10-20: The `on_bad_proof` setting is removed from kiosk-server.

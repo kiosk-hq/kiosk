@@ -664,8 +664,8 @@ jobs:
       - name: RuboCop, bundler-audit, Brakeman
         run: ./bin/lint
 
-  # Before 1.0 every gem, lockfile entry, API_VERSION, MIN_CLIENT and skill pin
-  # carries the same MAJOR.MINOR.PATCH (protocol.md §14.1).
+  # Before 1.0 every gem, lockfile entry, API_VERSION and skill pin carries the
+  # same MAJOR.MINOR.PATCH (protocol.md §14.1).
   version-parity:
     name: version parity (bin/check-version-parity)
     runs-on: ubuntu-latest

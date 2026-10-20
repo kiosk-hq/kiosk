@@ -91,7 +91,7 @@ over it would name a number nothing publishes.
 
 The order of one cut, and it is the order that keeps the heading true:
 
-1. Bump `API_VERSION` (before 1.0 `MIN_CLIENT` too), every
+1. Bump `API_VERSION`, every
    `lib/**/version.rb` and every tracked `Gemfile.lock` (`bundle lock --local`),
    all to the same number.
 2. Rename `## [Unreleased]` to `## [X.Y.Z] — <the date it was cut>` in the root

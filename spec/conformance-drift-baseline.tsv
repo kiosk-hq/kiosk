@@ -6,8 +6,8 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-20 at e5014104 -- 5ab868b5 SPEC-067
-# 2006 anchors.
+# recorded: 2026-10-20 at a45e5755
+# 2007 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	b1d0a419	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	b1d0a419	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	fcfeea46be69dcce	b1d0a419	      - name: Red-team battery
@@ -1284,6 +1284,9 @@ kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	7bd7d5221093af1b	b1d0a419
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	f499e2b768b27640	b1d0a419	reads the per-assistant cap from agents.spending_cap_cents (live rows only)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	704f2d34bd2aa0ce	b1d0a419	returns nil for an unknown or revoked key (no row)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	b7351e992647f161	b1d0a419	returns nil when the assistant row has no cap set (unlimited)
+kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	6121b4a466641c5e	a45e5755	includes schema + queries when only a query is registered
+kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	14018c87d069bc9a	a45e5755	offers no way to set capabilities
+kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	d90633719f61d4a9	a45e5755	offers no way to set min_client: kiosk-core states it
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	0d1efe762842492b	8f516de9	answers 304 to If-None-Match on the current digest
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	486c4e0cf18638a0	8f516de9	does NOT fall back to user_idp — KYC is an agent-only surface
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	81ac5225e4110a66	8f516de9	emits no Vary even when the request negotiates content
@@ -1535,17 +1538,15 @@ kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	f11127c640e417d9	72b28
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	197cb54d6b07d6d8	72b28958	injects the three Kiosk headers on /kiosk root
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	01ccaf687f889c5a	72b28958	respects an overridden mount_path
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	1d9b9c3847022210	72b28958	still stamps: the request's identity was decided before the app ran
-kiosk-server/spec/kiosk/server/headers_spec.rb	31f70c9a4e517501	b1d0a419	ADDS to a Vary the operator already set rather than replacing it
-kiosk-server/spec/kiosk/server/headers_spec.rb	405f6ca2cc87aae0	b1d0a419	FORCES no-store on a 402 — a single-use challenge is never cacheable
-kiosk-server/spec/kiosk/server/headers_spec.rb	3edba230339fc7bb	b1d0a419	and it REFUSES a shared-cache policy (§3.7.3)
-kiosk-server/spec/kiosk/server/headers_spec.rb	3dc39e7fafe0f2f2	b1d0a419	defaults a 200 to private, no-store
-kiosk-server/spec/kiosk/server/headers_spec.rb	555bb58339c678cd	b1d0a419	does not duplicate a token already present, whatever its case
-kiosk-server/spec/kiosk/server/headers_spec.rb	ec375f7d0000ee37	b1d0a419	falls back to the protocol constant when the operator sets nothing
-kiosk-server/spec/kiosk/server/headers_spec.rb	a3921be2a897a1b6	b1d0a419	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
-kiosk-server/spec/kiosk/server/headers_spec.rb	8c3c317d5f8817fd	b1d0a419	mutates a Rack headers hash with the three Kiosk headers
-kiosk-server/spec/kiosk/server/headers_spec.rb	68b1a896469fffa4	b1d0a419	produces a fresh headers hash with the three Kiosk headers set
-kiosk-server/spec/kiosk/server/headers_spec.rb	f2b80a4d9d968433	b1d0a419	publishes the operator's configured min_client, not the constant
-kiosk-server/spec/kiosk/server/headers_spec.rb	74b7d5a0dc9e339f	b1d0a419	varies on every request header that changes the answer
+kiosk-server/spec/kiosk/server/headers_spec.rb	31f70c9a4e517501	a45e5755	ADDS to a Vary the operator already set rather than replacing it
+kiosk-server/spec/kiosk/server/headers_spec.rb	405f6ca2cc87aae0	a45e5755	FORCES no-store on a 402 — a single-use challenge is never cacheable
+kiosk-server/spec/kiosk/server/headers_spec.rb	3edba230339fc7bb	a45e5755	and it REFUSES a shared-cache policy (§3.7.3)
+kiosk-server/spec/kiosk/server/headers_spec.rb	3dc39e7fafe0f2f2	a45e5755	defaults a 200 to private, no-store
+kiosk-server/spec/kiosk/server/headers_spec.rb	555bb58339c678cd	a45e5755	does not duplicate a token already present, whatever its case
+kiosk-server/spec/kiosk/server/headers_spec.rb	a3921be2a897a1b6	a45e5755	leaves an operator's own Cache-Control alone — that is how a toll gets cached away
+kiosk-server/spec/kiosk/server/headers_spec.rb	8c3c317d5f8817fd	a45e5755	mutates a Rack headers hash with the three Kiosk headers
+kiosk-server/spec/kiosk/server/headers_spec.rb	68b1a896469fffa4	a45e5755	produces a fresh headers hash with the three Kiosk headers set
+kiosk-server/spec/kiosk/server/headers_spec.rb	74b7d5a0dc9e339f	a45e5755	varies on every request header that changes the answer
 kiosk-server/spec/kiosk/server/identity_resolution_spec.rb	95119766d52962ee	b1d0a419	returns nil when nothing resolves (caller raises 401 — fail closed)
 kiosk-server/spec/kiosk/server/jwks_spec.rb	c3a41bb3c37d4a0d	b1d0a419	preserves order for multi-key rotation overlap
 kiosk-server/spec/kiosk/server/jwks_spec.rb	1f9381bb7ad832d6	b1d0a419	produces JSON that's parseable and contains only the public JWK fields
@@ -1884,42 +1885,42 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	4ba3550ee50cf6f1	e5014104
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	6f3e9c39b9b74995	e5014104	…while GET <endpoint>/schema, which IS public, says so — the control
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	3ed4704b3d1aa755	b1d0a419	is refused AT CONFIGURATION TIME, not at the first tolled write
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	87bc7884ae09fe9d	b1d0a419	is that the gate vocabulary names the write kind :run, not :action
-kiosk-server/spec/kiosk/server/well_known_spec.rb	309556b42a73d6c9	72b28958	advertises an empty capability set when nothing is registered
-kiosk-server/spec/kiosk/server/well_known_spec.rb	3749fafa18623954	72b28958	advertises the DERIVED openapi.json beside it — the only place it is advertised
-kiosk-server/spec/kiosk/server/well_known_spec.rb	e61c1760f62e2a76	72b28958	advertises the account-binding endpoints (additive keys)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	be7fa0423e8c3a3b	72b28958	advertises the computed module names (schema/queries/actions/pay)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	15bd4014b1a77a12	72b28958	advertises the configured issuer
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f54e36f61c16b586	72b28958	advertises the configured owner
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f179813b6ac49aa2	72b28958	advertises the document schema version
-kiosk-server/spec/kiosk/server/well_known_spec.rb	c38ee4a1b9215d93	72b28958	advertises the proof-of-possession auth surface under the same origin
-kiosk-server/spec/kiosk/server/well_known_spec.rb	9b633674c3935d05	72b28958	advertises the skill descriptor when skill_sha256 is set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	546095da1a1d0cfa	72b28958	carries the AP2 payment directives
-kiosk-server/spec/kiosk/server/well_known_spec.rb	eb1efdcc2345d836	72b28958	carries the agents.txt v1.0 auth directives (auth-md alongside agent-auth)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	4ca7081cf6ac8cca	72b28958	carries the wire pointers under the x-kiosk extension
-kiosk-server/spec/kiosk/server/well_known_spec.rb	11c2deb95b66531e	72b28958	computes the endpoint as base_url + mount_path
-kiosk-server/spec/kiosk/server/well_known_spec.rb	54ebc5e129c3d077	72b28958	declares AP2 payments as required
-kiosk-server/spec/kiosk/server/well_known_spec.rb	fbb9b32c27af1217	72b28958	documents the OAuth error vocabulary as the one exception
-kiosk-server/spec/kiosk/server/well_known_spec.rb	05c083413812a236	72b28958	follows the canonical auth.md section order
-kiosk-server/spec/kiosk/server/well_known_spec.rb	6243bbd92a599eec	72b28958	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
-kiosk-server/spec/kiosk/server/well_known_spec.rb	51d67a15a1da8857	72b28958	keeps both service-desc members — the operations are added, not swapped in
-kiosk-server/spec/kiosk/server/well_known_spec.rb	1eb428e1a8dba12b	72b28958	keeps the pre-binding auth keys first and byte-identical (additive-only rule)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	a6428f8c7c1bcaac	72b28958	links the catalog at its digest-versioned, immutable URL
-kiosk-server/spec/kiosk/server/well_known_spec.rb	29f1c8789d8a37bc	72b28958	lists the four auth endpoints as absolute URLs
-kiosk-server/spec/kiosk/server/well_known_spec.rb	69529a4d3f292694	72b28958	moves that link when the catalog moves — that is the whole mechanism
-kiosk-server/spec/kiosk/server/well_known_spec.rb	8bfd73028f009cb9	72b28958	never names a registered verb in this companion — pointer, not copy
-kiosk-server/spec/kiosk/server/well_known_spec.rb	125251b46fb23fb6	72b28958	never names a registered verb in this document — pointer, not copy
-kiosk-server/spec/kiosk/server/well_known_spec.rb	9191f0e8be4c631d	72b28958	omits the AP2 payment directives but keeps auth/identity
-kiosk-server/spec/kiosk/server/well_known_spec.rb	934bba8622e55bad	72b28958	omits the payments key entirely
-kiosk-server/spec/kiosk/server/well_known_spec.rb	aeea346567035d9f	72b28958	omits the skill block when skill_sha256 is not set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	8e0e377075335099	72b28958	passes through configured min_client
-kiosk-server/spec/kiosk/server/well_known_spec.rb	5bb2bdbcaafbb51b	72b28958	points at the RFC 9727 api-catalog under the x-kiosk extension
-kiosk-server/spec/kiosk/server/well_known_spec.rb	f991665aa0202d36	72b28958	respects an overridden skill_url
-kiosk-server/spec/kiosk/server/well_known_spec.rb	bc503c08c4579ddc	72b28958	returns a parse-able JSON string
-kiosk-server/spec/kiosk/server/well_known_spec.rb	d77f9864da88a513	72b28958	returns an RFC 9727 linkset anchored at the api-catalog URL
-kiosk-server/spec/kiosk/server/well_known_spec.rb	70b78f44e2f6a0a3	72b28958	says which METHOD reaches each verb — GET a query, POST an action
-kiosk-server/spec/kiosk/server/well_known_spec.rb	eb29d2ee15b9e593	72b28958	tags the one remaining non-description wire endpoint — `pay` — with rel=item
-kiosk-server/spec/kiosk/server/well_known_spec.rb	aafea0fe795396cc	72b28958	tags the schema endpoint as the machine-readable service-desc
-kiosk-server/spec/kiosk/server/well_known_spec.rb	bd25dcbd8ca23455	72b28958	wraps everything under a top-level `kiosk` key
+kiosk-server/spec/kiosk/server/well_known_spec.rb	309556b42a73d6c9	a45e5755	advertises an empty capability set when nothing is registered
+kiosk-server/spec/kiosk/server/well_known_spec.rb	2891edbc2916e3db	a45e5755	advertises kiosk-core's MIN_CLIENT as min_client
+kiosk-server/spec/kiosk/server/well_known_spec.rb	3749fafa18623954	a45e5755	advertises the DERIVED openapi.json beside it — the only place it is advertised
+kiosk-server/spec/kiosk/server/well_known_spec.rb	e61c1760f62e2a76	a45e5755	advertises the account-binding endpoints (additive keys)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	be7fa0423e8c3a3b	a45e5755	advertises the computed module names (schema/queries/actions/pay)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	15bd4014b1a77a12	a45e5755	advertises the configured issuer
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f54e36f61c16b586	a45e5755	advertises the configured owner
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f179813b6ac49aa2	a45e5755	advertises the document schema version
+kiosk-server/spec/kiosk/server/well_known_spec.rb	c38ee4a1b9215d93	a45e5755	advertises the proof-of-possession auth surface under the same origin
+kiosk-server/spec/kiosk/server/well_known_spec.rb	9b633674c3935d05	a45e5755	advertises the skill descriptor when skill_sha256 is set
+kiosk-server/spec/kiosk/server/well_known_spec.rb	546095da1a1d0cfa	a45e5755	carries the AP2 payment directives
+kiosk-server/spec/kiosk/server/well_known_spec.rb	eb1efdcc2345d836	a45e5755	carries the agents.txt v1.0 auth directives (auth-md alongside agent-auth)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	4ca7081cf6ac8cca	a45e5755	carries the wire pointers under the x-kiosk extension
+kiosk-server/spec/kiosk/server/well_known_spec.rb	11c2deb95b66531e	a45e5755	computes the endpoint as base_url + mount_path
+kiosk-server/spec/kiosk/server/well_known_spec.rb	54ebc5e129c3d077	a45e5755	declares AP2 payments as required
+kiosk-server/spec/kiosk/server/well_known_spec.rb	fbb9b32c27af1217	a45e5755	documents the OAuth error vocabulary as the one exception
+kiosk-server/spec/kiosk/server/well_known_spec.rb	05c083413812a236	a45e5755	follows the canonical auth.md section order
+kiosk-server/spec/kiosk/server/well_known_spec.rb	6243bbd92a599eec	a45e5755	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
+kiosk-server/spec/kiosk/server/well_known_spec.rb	51d67a15a1da8857	a45e5755	keeps both service-desc members — the operations are added, not swapped in
+kiosk-server/spec/kiosk/server/well_known_spec.rb	1eb428e1a8dba12b	a45e5755	keeps the pre-binding auth keys first and byte-identical (additive-only rule)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	a6428f8c7c1bcaac	a45e5755	links the catalog at its digest-versioned, immutable URL
+kiosk-server/spec/kiosk/server/well_known_spec.rb	29f1c8789d8a37bc	a45e5755	lists the four auth endpoints as absolute URLs
+kiosk-server/spec/kiosk/server/well_known_spec.rb	69529a4d3f292694	a45e5755	moves that link when the catalog moves — that is the whole mechanism
+kiosk-server/spec/kiosk/server/well_known_spec.rb	8bfd73028f009cb9	a45e5755	never names a registered verb in this companion — pointer, not copy
+kiosk-server/spec/kiosk/server/well_known_spec.rb	125251b46fb23fb6	a45e5755	never names a registered verb in this document — pointer, not copy
+kiosk-server/spec/kiosk/server/well_known_spec.rb	9191f0e8be4c631d	a45e5755	omits the AP2 payment directives but keeps auth/identity
+kiosk-server/spec/kiosk/server/well_known_spec.rb	934bba8622e55bad	a45e5755	omits the payments key entirely
+kiosk-server/spec/kiosk/server/well_known_spec.rb	aeea346567035d9f	a45e5755	omits the skill block when skill_sha256 is not set
+kiosk-server/spec/kiosk/server/well_known_spec.rb	5bb2bdbcaafbb51b	a45e5755	points at the RFC 9727 api-catalog under the x-kiosk extension
+kiosk-server/spec/kiosk/server/well_known_spec.rb	f991665aa0202d36	a45e5755	respects an overridden skill_url
+kiosk-server/spec/kiosk/server/well_known_spec.rb	bc503c08c4579ddc	a45e5755	returns a parse-able JSON string
+kiosk-server/spec/kiosk/server/well_known_spec.rb	d77f9864da88a513	a45e5755	returns an RFC 9727 linkset anchored at the api-catalog URL
+kiosk-server/spec/kiosk/server/well_known_spec.rb	70b78f44e2f6a0a3	a45e5755	says which METHOD reaches each verb — GET a query, POST an action
+kiosk-server/spec/kiosk/server/well_known_spec.rb	eb29d2ee15b9e593	a45e5755	tags the one remaining non-description wire endpoint — `pay` — with rel=item
+kiosk-server/spec/kiosk/server/well_known_spec.rb	aafea0fe795396cc	a45e5755	tags the schema endpoint as the machine-readable service-desc
+kiosk-server/spec/kiosk/server/well_known_spec.rb	bd25dcbd8ca23455	a45e5755	wraps everything under a top-level `kiosk` key
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	b0ff822ee29f892d	b1d0a419	answers 402 to a CONDITIONAL request — the toll runs before freshness
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	7c16391ab49351af	b1d0a419	answers a per-verb GET the same gate as a problem document, uncacheable
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	48a86a341201c1c2	b1d0a419	carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay

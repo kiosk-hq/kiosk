@@ -130,6 +130,6 @@ RSpec/SpecFilePathFormat:
 RSpec/MultipleExpectations:
   Enabled: false
 
-# The RSpec cops below are being fixed one family at a time.
+# An example may tell one story, or walk one table of cases, in many lines.
 RSpec/ExampleLength:
   Enabled: false

@@ -23,8 +23,8 @@ except ImportError:  # pragma: no cover - guidance path
     sys.stderr.write(
         "ERROR: this solver requires numpy.\n"
         "  pip install numpy\n"
-        "The Wagner sort/collide steps are vectorised; without numpy a solve of\n"
-        "the default parameters is an order of magnitude slower.\n"
+        "The Wagner sort and collide steps run on numpy arrays; the solver has\n"
+        "no path without numpy.\n"
     )
     sys.exit(3)
 

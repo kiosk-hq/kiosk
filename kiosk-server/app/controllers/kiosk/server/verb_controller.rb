@@ -66,7 +66,7 @@ module Kiosk
 
         # Unconditional: §8.1 item 5 makes coerce-then-validate a MUST.
         RequestValidation.validate_arguments!(
-          args, input_schema: descriptor[:input_schema], verb: name
+          args, input_schema: descriptor[:input_schema], verb: name, query: command == :query
         )
 
         args

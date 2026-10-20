@@ -772,6 +772,18 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(call_verb(:get, 'catalog', query: 'limit=20&cursor=eyJvIjoyMH0').first).to eq(200)
     end
 
+    it 'holds an action body to a CLOSED schema: an action has no pages, so limit and cursor are extras' do
+      declare_action('book', input_schema: { type: 'object', additionalProperties: false,
+                                             properties: { day: { type: 'string' } } }) { render json: { ok: 1 } }
+
+      %w[limit cursor].each do |reserved|
+        status, body = call_verb(:post, 'book', body: JSON.generate(day: '2026-08-19', reserved => 1))
+        expect(status).to eq(400)
+        expect(body[:detail]).to include(reserved)
+      end
+      expect(call_verb(:post, 'book', body: JSON.generate(day: '2026-08-19')).first).to eq(200)
+    end
+
     it 'refuses a limit above the largest page a verb declares, naming limit' do
       declare_query('catalog', input_schema: { type: 'object', additionalProperties: false,
                                                properties: { limit: { type: 'integer', maximum: 10 } } }) do

@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: kiosk-server validates an action's body against its `input_schema` with no exemption. Only a query accepts an undeclared `limit` or `cursor`.
+
 ## [0.5.19] — 2026-10-20
 
 - 2026-10-20: **Every gem and `API_VERSION` are 0.5.19, matching skill 0.5.19.** `MIN_CLIENT` stays 0.5.18: a 0.5.18 skill still works with this release.

@@ -63,13 +63,14 @@ module Kiosk
           "https://kiosk.tech/spec/schemas/#{file}."
       end
 
-      # Runs on the coerced arguments. An undeclared `limit`/`cursor` is exempt:
-      # those names are always accepted.
-      def validate_arguments!(arguments, input_schema:, verb:)
+      # Runs on the coerced arguments. On a query an undeclared `limit`/`cursor`
+      # is exempt: a query always accepts those names (§8.1 item 6). An action
+      # has no pages, so its body is held to its input_schema with no exemption.
+      def validate_arguments!(arguments, input_schema:, verb:, query:)
         return if input_schema.nil?
 
         require_schemer!
-        exempt  = ArgumentDecoder::RESERVED.keys - declared_property_names(input_schema)
+        exempt  = query ? ArgumentDecoder::RESERVED.keys - declared_property_names(input_schema) : []
         payload = normalize(arguments).except(*exempt)
         errors  = JSONSchemer.schema(normalize(input_schema)).validate(payload).to_a
         return if errors.empty?
@@ -79,7 +80,7 @@ module Kiosk
 
       def arguments_hint(errors)
         "#{format_spellings(errors)}GET <endpoint>/schema publishes this verb's input_schema; the " \
-          'arguments must satisfy it. `limit` and `cursor` are always accepted.'
+          'arguments must satisfy it. A query also accepts `limit` and `cursor`.'
       end
 
       def summary(errors) = errors.pluck('error').compact.join('; ')

@@ -242,6 +242,16 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
                                   schema: closed, verb: 'search_hotels', kind: :query,
                                   slot: 'input_schema')).to eq([])
     end
+
+    it 'exempts no reserved name from an ACTION, which has no pages' do
+      closed = { type: 'object', additionalProperties: false,
+                 properties: { neighbourhood: { type: 'string' } }, required: [] }
+
+      errors = origin.schema_errors({ neighbourhood: 'Beşiktaş', limit: 20 },
+                                    schema: closed, verb: 'book_stay', kind: :action, slot: 'input_schema')
+      expect(errors.length).to eq(1)
+      expect(errors.first).to include('limit')
+    end
   end
 end
 

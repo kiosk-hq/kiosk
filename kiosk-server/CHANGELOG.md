@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: kiosk-server validates an action's body against its `input_schema` with no exemption. Only a query accepts an undeclared `limit` or `cursor`.
+
 ## [0.5.19] — 2026-10-20
 
 - 2026-10-20: `listen.py`'s usage line keeps the token in the origin folder `~/.kiosk/https_shop.example_443/`, as the skill says.

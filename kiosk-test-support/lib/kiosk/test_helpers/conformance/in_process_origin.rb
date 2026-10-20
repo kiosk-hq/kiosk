@@ -51,14 +51,17 @@ module Kiosk
         def call(name, kind:, params:, as: nil)
           registry = kind == :query ? Kiosk::Server::Queries : Kiosk::Server::Actions
           handler  = registry.fetch(name)
-          Kiosk::Server::RequestValidation.validate_arguments!(params, input_schema: registry.describe(name)[:input_schema], verb: name.to_s)
+          schema   = registry.describe(name)[:input_schema]
+          Kiosk::Server::RequestValidation.validate_arguments!(params, input_schema: schema, verb: name.to_s,
+                                                                       query: kind == :query)
           unwrap(answer_as(identity_for(as)) { handler.call(symbolize(params)) })
         end
 
-        # Uses the wire's own validators, so reserved `limit`/`cursor` pass as they do on the wire.
+        # Uses the wire's own validators, so a query's reserved `limit`/`cursor` pass as they do on the wire.
         def schema_errors(payload, schema:, verb:, kind:, slot:)
           if slot.to_s == 'input_schema'
-            Kiosk::Server::RequestValidation.validate_arguments!(payload, input_schema: schema, verb: verb)
+            Kiosk::Server::RequestValidation.validate_arguments!(payload, input_schema: schema, verb: verb,
+                                                                          query: kind == :query)
           else
             Kiosk::Server::ResponseValidation.validate_payload!(payload, output_schema: schema, verb: verb,
                                                                          kind: kind)

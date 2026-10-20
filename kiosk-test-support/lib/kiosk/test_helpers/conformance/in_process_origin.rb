@@ -9,23 +9,21 @@ require 'securerandom'
 
 require 'kiosk/server'
 require 'kiosk/test_helpers/conformance'
+require 'kiosk/test_helpers/in_process_wire'
 
 module Kiosk
   module TestHelpers
     module Conformance
-      # The origin the conformance checks run against: the booted engine's own
-      # registries, router and validators, minus HTTP and authentication. Calls
-      # do not roll back; undoing writes is the test framework's job.
+      # The origin the conformance checks run against: the booted app's own
+      # registries, routes and validators. A call goes through the verb's route
+      # as an assistant's does, with a token the origin signs for the principal.
+      # Calls do not roll back; undoing writes is the test framework's job.
       class InProcessOrigin
-        attr_reader :connection
-
-        # @param connection [#exec_query, #transaction] defaults to `ActiveRecord::Base.lease_connection`
-        # @param routes [#recognize_path] defaults to `Rails.application.routes`
-        # @param actor [String] "agent", "human" or "service"
-        def initialize(connection: nil, routes: nil, actor: 'agent')
-          @connection = connection
-          @routes     = routes
-          @actor      = actor.to_s
+        # @param app [#call] the Rack app a call goes through; defaults to `Rails.application`
+        # @param routes [ActionDispatch::Routing::RouteSet] defaults to `Rails.application.routes`
+        def initialize(app: nil, routes: nil)
+          @wire   = InProcessWire.new(app: app)
+          @routes = routes
         end
 
         def mount_path = Kiosk.configuration.mount_path
@@ -35,26 +33,16 @@ module Kiosk
           descriptors(Kiosk::Server::Queries, :query) + descriptors(Kiosk::Server::Actions, :action)
         end
 
-        # nil when no route answers.
+        # The action a request reaches, as `{controller:, action:, kiosk_verb:}`; nil when no route answers.
         def recognize(path, method:)
-          recognized = route_set.recognize_path(path, method: method.to_s.downcase.to_sym)
-          {
-            controller: recognized[:controller],
-            action: recognized[:action],
-            kiosk_verb: recognized[:kiosk_verb]
-          }
-        rescue StandardError
+          verb_route(path, method.to_s.upcase) ||
+            route_set.recognize_path(path, method: method.to_s.downcase.to_sym).slice(:controller, :action, :kiosk_verb)
+        rescue ActionController::RoutingError
           nil
         end
 
-        # Arguments are validated first, as the per-verb wire does.
         def call(name, kind:, params:, as: nil)
-          registry = kind == :query ? Kiosk::Server::Queries : Kiosk::Server::Actions
-          handler  = registry.fetch(name)
-          schema   = registry.describe(name)[:input_schema]
-          Kiosk::Server::RequestValidation.validate_arguments!(params, input_schema: schema, verb: name.to_s,
-                                                                       query: kind == :query)
-          unwrap(answer_as(identity_for(as)) { handler.call(symbolize(params)) })
+          @wire.call(name, kind: kind, params: params, identity: identity_for(as))
         end
 
         # Uses the wire's own validators, so a query's reserved `limit`/`cursor` pass as they do on the wire.
@@ -77,9 +65,7 @@ module Kiosk
 
           Kiosk::Identity.new(
             user_id: subject.respond_to?(:id) ? subject.id : subject,
-            role: resolve_role(subject, role),
-            actor: @actor,
-            agent_id: @actor == 'agent' ? SecureRandom.uuid : nil
+            role: resolve_role(subject, role), actor: 'agent', agent_id: SecureRandom.uuid
           )
         end
 
@@ -91,31 +77,36 @@ module Kiosk
 
         private
 
-        def answer_as(identity)
-          answer = nil
-          Kiosk::Server::SessionContext.open(connection: resolved_connection, identity: identity) do
-            Kiosk::Server::CurrentRequest.with(identity: identity) { answer = yield }
-          end
-          answer
-        end
-
         def descriptors(registry, kind)
           registry.catalog.map do |descriptor|
             Verb.new(
-              name: descriptor[:name],
-              kind: kind,
-              reach: descriptor[:reach],
-              input_schema: descriptor[:input_schema],
-              output_schema: descriptor[:output_schema],
-              example_params: descriptor[:example_params]
+              name: descriptor[:name], kind: kind, reach: descriptor[:reach],
+              input_schema: descriptor[:input_schema], output_schema: descriptor[:output_schema],
+              example_params: descriptor[:example_params], endpoint: endpoint(registry.fetch(descriptor[:name]))
             )
           end
         end
 
-        def route_set = @routes || ::Rails.application.routes
+        # The action that answers the verb: its own, or the engine's verb endpoint.
+        def endpoint(handler)
+          controller = handler.controller if handler.is_a?(Kiosk::Server::ControllerVerb)
+          "#{controller.controller_path}##{handler.method_name}" if controller
+        end
 
-        # Not memoised: each call is independent of whichever connection was current at build time.
-        def resolved_connection = @connection || ::ActiveRecord::Base.lease_connection
+        # The verb route `kiosk do` drew at `path`, as the action it reaches.
+        def verb_route(path, method)
+          route = route_set.routes.find { |r| verb_route?(r) && r.verb == method && r.path.match(path) }
+          return unless route
+
+          controller, action = route.app.app.endpoint.split('#')
+          { controller: controller, action: action, kiosk_verb: route.app.app.name }
+        end
+
+        def verb_route?(route)
+          route.app.respond_to?(:app) && route.app.app.is_a?(Kiosk::Server::Routing::VerbRoute)
+        end
+
+        def route_set = @routes || ::Rails.application.routes
 
         def resolve_role(subject, explicit)
           return explicit.to_s if explicit
@@ -123,15 +114,6 @@ module Kiosk
 
           roles = Kiosk.configuration.roles
           roles.first.to_s if roles && !roles.empty?
-        end
-
-        # The wire's body for a paginated query is its rows; cursor and total travel as headers.
-        def unwrap(answer) = answer.is_a?(Kiosk::Server::Page) ? answer.rows : answer
-
-        def symbolize(params)
-          return params unless params.is_a?(Hash)
-
-          params.each_with_object({}) { |(key, value), out| out[key.to_sym] = value }
         end
       end
     end

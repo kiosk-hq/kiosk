@@ -18,8 +18,14 @@ module ExecutorSpecHelpers
     described_class.call(kind: :pay, args: args, identity: as, connection: connection)
   end
 
+  # Registers `handler` as the callable of verb `name`, the shape the engine's own verbs take.
+  def register(kind, name, &handler)
+    registry = kind == :query ? Kiosk::Server::Queries : Kiosk::Server::Actions
+    registry.declare(name, handler, input_schema: { type: 'object' }, output_schema: true)
+  end
+
   def run_boom(kind: :run)
-    kind == :run ? declare_action('boom') { raise 'kaboom' } : declare_query('boom') { raise 'kaboom' }
+    register(kind == :run ? :action : :query, 'boom') { raise 'kaboom' }
     described_class.call(kind: kind, args: {}, name: 'boom',
                          identity: identity, connection: connection)
   end
@@ -153,10 +159,10 @@ RSpec.describe Kiosk::Server::Executor, 'transaction discipline' do
   include_context 'executor spec: fake connection'
 
   it 'wraps the verb in a single transaction with GUCs set' do
-    declare_query('probe') { render json: [{ ok: 1 }] }
+    register(:query, 'probe') { [{ ok: 1 }] }
     described_class.call(kind: :query, args: {}, name: 'probe', identity: identity, connection: connection)
 
-    # 4 GUC statements only (the handler renders rows without hitting
+    # 4 GUC statements only (the handler answers rows without hitting
     # connection). They are `set_config` binds since K-789, so the GUC name
     # is the first bind rather than part of the statement text.
     gucs = connection.bound(/set_config/)
@@ -172,7 +178,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :query' do
   include_context 'executor spec: fake connection'
 
   before do
-    declare_query('menu') { render json: [{ 'id' => 1, 'name' => 'Margherita' }] }
+    register(:query, 'menu') { [{ 'id' => 1, 'name' => 'Margherita' }] }
   end
 
   it 'looks up the query by name and returns :rows Result' do
@@ -187,13 +193,11 @@ RSpec.describe Kiosk::Server::Executor, 'verb :query' do
   end
 
   it 'passes params (args minus name) to the query handler' do
-    declare_query('items') { render json: [{ filter: params[:category] }] }
+    register(:query, 'items') { |args| [{ 'filter' => args[:category] }] }
     result = described_class.call(
       kind: :query, args: { category: 'pizza' }, name: 'items',
       identity: identity, connection: connection
     )
-    # String keys: a handler RENDERS, so the row makes a JSON round trip
-    # before the Executor sees it — which is what reaches the agent.
     expect(result.payload).to eq([{ 'filter' => 'pizza' }])
   end
 end
@@ -215,7 +219,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :query refusals' do
   end
 
   it 'lets Kiosk::Server::Errors raised inside the query propagate unchanged' do
-    declare_query('denied') { raise Kiosk::Server::Errors::RLSDenied, 'no' }
+    register(:query, 'denied') { raise Kiosk::Server::Errors::RLSDenied, 'no' }
 
     expect do
       described_class.call(kind: :query, args: {}, name: 'denied',
@@ -238,7 +242,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :query handler crash' do
   # no syllable of the message, and the message is on the operator's log
   # where the `hint` has always promised the backtrace would be.
   it 'wraps StandardError raised inside the query as ActionFailed' do
-    declare_query('boom') { raise 'kaboom' }
+    register(:query, 'boom') { raise 'kaboom' }
 
     expect do
       expect do
@@ -258,7 +262,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :query pagination' do
   include_context 'executor spec: fake connection'
 
   it 'leaves next_cursor nil when the handler returns a bare Array (back-compat)' do
-    declare_query('flat') { render json: [{ 'id' => 1 }, { 'id' => 2 }] }
+    register(:query, 'flat') { [{ 'id' => 1 }, { 'id' => 2 }] }
     result = described_class.call(kind: :query, args: {}, name: 'flat',
                                   identity: identity, connection: connection)
 
@@ -269,9 +273,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :query pagination' do
   end
 
   it 'omits `next` when a paginating handler signals the last page (Page with nil cursor)' do
-    declare_query('last') do
-      render_kiosk_page([{ 'id' => 99 }]) # no next_cursor => complete
-    end
+    register(:query, 'last') { Kiosk::Server::Page.new(rows: [{ 'id' => 99 }]) } # no next_cursor => complete
     result = described_class.call(kind: :query, args: {}, name: 'last',
                                   identity: identity, connection: connection)
 
@@ -287,11 +289,10 @@ RSpec.describe Kiosk::Server::Executor, 'verb :query next page' do
   # T-092: the cursor reaches the RESULT, never the body. The wire turns it
   # into `Link: …; rel="next"`; the Executor's job ends at carrying it.
   it "threads a Page's next_cursor and total onto the Result, not into the body" do
-    declare_query('paged') do
-      offset = Kiosk::Server::Cursor.decode_offset(params[:cursor])
-      render_kiosk_page([{ 'id' => offset + 1 }],
-                        next_cursor: Kiosk::Server::Cursor.encode_offset(offset + 1),
-                        total: 42)
+    register(:query, 'paged') do |args|
+      offset = Kiosk::Server::Cursor.decode_offset(args[:cursor])
+      Kiosk::Server::Page.new(rows: [{ 'id' => offset + 1 }],
+                              next_cursor: Kiosk::Server::Cursor.encode_offset(offset + 1), total: 42)
     end
 
     result = described_class.call(kind: :query, args: { limit: 1 }, name: 'paged',
@@ -309,7 +310,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :run' do
   include_context 'executor spec: fake connection'
 
   before do
-    declare_action('ping') { render json: { pong: params[:greeting] } }
+    register(:action, 'ping') { |args| { 'pong' => args[:greeting] } }
   end
 
   it 'looks up the action by name and calls it with sym-keyed args' do
@@ -319,17 +320,23 @@ RSpec.describe Kiosk::Server::Executor, 'verb :run' do
     )
 
     expect(result.kind).to    eq(:value)
-    # String keys: the handler renders, so the value makes a JSON round trip.
     expect(result.payload).to eq('pong' => 'world')
   end
 
   it 'passes through args (except name) to the action handler' do
-    declare_action('echo') { render json: { a: params[:a], b: params[:b] } }
+    register(:action, 'echo') { |args| { 'a' => args[:a], 'b' => args[:b] } }
     result = described_class.call(
       kind: :run, args: { a: 1, b: 'x' }, name: 'echo',
       identity: identity, connection: connection
     )
     expect(result.payload).to eq('a' => 1, 'b' => 'x')
+  end
+
+  it 'calls the handler it is given in place of the registered one' do
+    result = described_class.new(connection: connection, identity: identity).call(
+      kind: :run, args: { greeting: 'there' }, name: 'ping', handler: ->(args) { { 'in_place' => args[:greeting] } }
+    )
+    expect(result.payload).to eq('in_place' => 'there')
   end
 end
 
@@ -350,7 +357,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :run refusals' do
   end
 
   it 'lets Kiosk::Server::Errors raised inside the action propagate unchanged' do
-    declare_action('denied') { raise Kiosk::Server::Errors::RLSDenied, 'no' }
+    register(:action, 'denied') { raise Kiosk::Server::Errors::RLSDenied, 'no' }
 
     expect do
       described_class.call(kind: :run, args: {}, name: 'denied',
@@ -367,7 +374,7 @@ RSpec.describe Kiosk::Server::Executor, 'verb :run handler crash' do
   # not the other is exactly the half-done shape this class keeps recurring
   # as.
   it 'wraps StandardError raised inside the action as ActionFailed' do
-    declare_action('boom') { raise 'kaboom' }
+    register(:action, 'boom') { raise 'kaboom' }
 
     expect do
       expect do
@@ -442,7 +449,7 @@ RSpec.describe Kiosk::Server::Executor, "reporting a handler's crash safely" do
 
   it 'BOUNDS the backtrace — a report is a pointer, not the whole stack' do
     allow(Rails).to receive(:logger).and_return(logger)
-    declare_action('deep') do
+    register(:action, 'deep') do
       recurse = ->(n) { n.zero? ? raise('kaboom') : recurse.call(n - 1) }
       recurse.call(60)
     end

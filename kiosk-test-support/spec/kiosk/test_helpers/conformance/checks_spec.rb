@@ -100,7 +100,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.routes, method mismatc
     expect(outcome.message).to include('nothing answers GET /kiosk/catalog')
   end
 
-  it 'FAILS when a verb ALSO answers the other method on the verb wire' do
+  it 'FAILS when a verb ALSO answers the other method' do
     verbs = [catalog_verb]
     table = null_origin.routes_for('/kiosk', verbs)
     table[['POST', '/kiosk/catalog']] = { controller: 'kiosk/server/verb', action: 'create',
@@ -109,14 +109,14 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.routes, method mismatc
     outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
     expect(outcome).to be_failed
-    expect(outcome.message).to include('also reaches the verb wire on POST')
+    expect(outcome.message).to include('also reaches the verb on POST')
   end
 end
 
 RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.routes, wiring faults' do
   include ConformanceVerbs
 
-  it 'FAILS when a route reaches the handler controller directly' do
+  it 'FAILS when a route reaches an action other than the one that answers the verb' do
     verbs = [catalog_verb]
     table = { ['GET', '/kiosk/catalog'] => { controller: 'kiosk/storefront', action: 'catalog',
                                              kiosk_verb: 'catalog' } }
@@ -124,7 +124,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks, '.routes, wiring faults'
     outcome = described_class.routes(null_origin.new(verbs: verbs, routes: table))
 
     expect(outcome).to be_failed
-    expect(outcome.message).to include('bypasses authentication')
+    expect(outcome.message).to include('answers 404 to every caller')
   end
 
   it 'FAILS when the path segment and the kiosk_verb default disagree' do

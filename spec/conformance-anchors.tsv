@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2012 anchors.
+# 2013 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1018,19 +1018,13 @@ kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.
 kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	public_key parameter required
 kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	grant_type required
 kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	only the device_code grant is served here — 
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	    # The per-verb wire, one endpoint per registered verb under the mount:
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-kiosk-server/app/controllers/kiosk/server/verb_controller.rb	The per-verb wire, one endpoint per registered verb under the mount:
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	class VerbController < WireController
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	def serve(command)
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	    # Wire response (JSON): success is the handler's payload VERBATIM
-kiosk-server/app/controllers/kiosk/server/wire_controller.rb	PowGate.gate(
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	Wire response (JSON): success is the handler's payload VERBATIM
-kiosk-server/app/controllers/kiosk/server/wire_controller.rb	def render_wire_error(error)
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	def schema
-kiosk-server/app/controllers/kiosk/server/wire_controller.rb	pow = PowGate.proofs_from_header(
+kiosk-server/app/controllers/kiosk/server/wire_controller.rb	include VerbWire
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	rescue_from ::ActionDispatch::Http::Parameters::ParseError do
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	rescue_from Errors::Base, with: :render_wire_error
 kiosk-server/kiosk-server.gemspec	spec.license       = 'Apache-2.0'
@@ -1116,12 +1110,14 @@ kiosk-server/lib/kiosk/server/executor.rb	# The coarse kinds of call shared by t
 kiosk-server/lib/kiosk/server/executor.rb	VERBS = %i[query run pay].freeze
 kiosk-server/lib/kiosk/server/executor/spending_cap.rb	WHERE agent_id = $1 AND lower(btrim(currency)) = $2
 kiosk-server/lib/kiosk/server/executor/spending_cap.rb	def enforce_spending_cap!(cart)
-kiosk-server/lib/kiosk/server/handler_dispatch.rb	def wire_error(status, parsed)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	status = ::ActionDispatch::ExceptionWrapper.rescue_responses[exception.class.name]
 kiosk-server/lib/kiosk/server/handler_mixin.rb	when ::ActiveModel::ValidationError then exception.model
+kiosk-server/lib/kiosk/server/handler_serving.rb	def wire_error(status, parsed)
+kiosk-server/lib/kiosk/server/handler_serving.rb	kiosk_render_refusal(e)
+kiosk-server/lib/kiosk/server/handler_serving.rb	module HandlerServing
 kiosk-server/lib/kiosk/server/identity_resolution.rb	# the configured agent IdP or the bundled kiosk-pop one. A cookie session
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/jwt_issuer.rb	DEFAULT_EXPIRES_IN = 3600
@@ -1176,9 +1172,11 @@ kiosk-server/lib/kiosk/server/registration_pow.rb	spec = { alg: 'equihash', para
 kiosk-server/lib/kiosk/server/reputation_factors.rb	# Settlements and visits of this customer since `since`: their count and their cents.
 kiosk-server/lib/kiosk/server/request_validation.rb	RESERVED-PLANE REQUEST BODY => the published object that types it.
 kiosk-server/lib/kiosk/server/request_validation.rb	raise Errors.missing_field(absent, hint: body_hint(pointer)) if absent
-kiosk-server/lib/kiosk/server/routing.rb	def actions(*names) = draw(:post, 'create', names)
-kiosk-server/lib/kiosk/server/routing.rb	def queries(*names) = draw(:get, 'show', names)
+kiosk-server/lib/kiosk/server/routing.rb	class VerbRoute
+kiosk-server/lib/kiosk/server/routing.rb	def actions(*names) = draw(:post, :action, names)
+kiosk-server/lib/kiosk/server/routing.rb	def queries(*names) = draw(:get, :query, names)
 kiosk-server/lib/kiosk/server/routing.rb	mount Kiosk::Server::Engine => Kiosk.configuration.mount_path
+kiosk-server/lib/kiosk/server/routing.rb	registry = HandlerMixin.registry_for(@kind)
 kiosk-server/lib/kiosk/server/schema_definitions.rb	          CREATE INDEX IF NOT EXISTS idx_agents_user_id ON "#{schema}".agents (user_id) WHERE revoked_at IS NULL;
 kiosk-server/lib/kiosk/server/schema_definitions.rb	      def identity_tables_sql(schema: nil, user_id_type: nil, user_table: 'users')
 kiosk-server/lib/kiosk/server/schema_definitions.rb	      def mandates_sql(schema: nil, user_id_type: nil)
@@ -1193,6 +1191,8 @@ kiosk-server/lib/kiosk/server/schema_document.rb	    module SchemaDocument
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/verb_registry.rb	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
+kiosk-server/lib/kiosk/server/verb_wire.rb	PowGate.gate(
+kiosk-server/lib/kiosk/server/verb_wire.rb	pow = PowGate.proofs_from_header(
 kiosk-server/lib/kiosk/server/well_known.rb	            kind: 'kiosk-pop',
 kiosk-server/lib/kiosk/server/well_known.rb	          - **Identity assertion (ID-JAG)** — not supported (planned).
 kiosk-server/lib/kiosk/server/well_known.rb	# The discovery documents — kiosk.json, agents.txt, agents.json,
@@ -1206,6 +1206,7 @@ kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_txt(base_url:, confi
 kiosk-server/lib/kiosk/server/well_known.rb	def self.api_catalog(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.auth_md(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.build(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/wire_rendering.rb	def render_wire_error(error)
 kiosk-server/lib/kiosk/skill_link.rb	before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 kiosk-server/lib/kiosk/skill_link.rb	module SkillLink
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	draws no verb of its own — a fresh app declares none
@@ -1533,11 +1534,6 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and
 kiosk-server/spec/kiosk/server/executor_spec.rb	treats a cap of 0 as disabled (any charge rejected)
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
 kiosk-server/spec/kiosk/server/filtered_parameters_spec.rb	'kyc_jws' => 'the KYC attestation (§12)'
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	carries the challenges a handler renders on pow_required
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	keeps type, title and status those of the code, and drops instance and challenges
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	refuses an empty next_cursor, whose next link would lead back to page one
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a page whose rows are not an array
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	rejects a query that answers an object, paginating or not
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	404s a request that did not come through the Kiosk wire
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts a verb that declares limit as an integer with its largest page
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts the verb name #{name.inspect}
@@ -1558,6 +1554,11 @@ kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	refuses the verb name #{nam
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	reserves every first path segment the engine draws under the mount
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	refuses a name declared as both a query and an action
 kiosk-server/spec/kiosk/server/handler_registrations_spec.rb	registers the verbs of every handler, from an empty registry
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	carries the challenges a handler renders on pow_required
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	keeps type, title and status those of the code, and drops instance and challenges
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	refuses an empty next_cursor, whose next link would lead back to page one
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	rejects a page whose rows are not an array
+kiosk-server/spec/kiosk/server/handler_serving_spec.rb	rejects a query that answers an object, paginating or not
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	injects the headers on any /kiosk/* sub-path
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	injects the three Kiosk headers on /kiosk root
 kiosk-server/spec/kiosk/server/headers_middleware_spec.rb	respects an overridden mount_path

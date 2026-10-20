@@ -42,6 +42,7 @@ end
 require_relative 'support/memory_revocation_store'
 require_relative 'support/memory_event_store'
 require_relative 'support/memory_auth_challenge_store'
+require_relative 'support/verb_route_call'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -53,6 +54,7 @@ RSpec.configure do |config|
   end
 
   config.shared_context_metadata_behavior = :apply_to_host_groups
+  config.include VerbRouteCall
   config.example_status_persistence_file_path = '.rspec_status'
   config.disable_monkey_patching!
   config.warnings = false
@@ -85,8 +87,8 @@ end
 #
 # `protect_from_forgery` is here because every real Rails app installs it on
 # ActionController::Base (config.action_controller.default_protect_from_forgery),
-# and a handler sub-dispatch can never present a CSRF token — so the mixin has
-# to skip it, and these specs have to prove it does.
+# and an assistant's verb call carries no CSRF token — so the mixin has to skip
+# it, and these specs have to prove it does.
 class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 end

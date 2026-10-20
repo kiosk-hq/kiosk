@@ -5,8 +5,12 @@ module RoutingSpecHelpers
     ActionDispatch::Routing::RouteSet.new.tap { |set| set.draw(&) }
   end
 
+  # The verb the route at `method path` is drawn to, or nil when no verb route matches.
   def recognize(set, method, path)
-    set.recognize_path(path, method: method)
+    route = set.routes.find do |r|
+      r.app.app.is_a?(Kiosk::Server::Routing::VerbRoute) && r.verb == method.to_s.upcase && r.path.match(path)
+    end
+    { kind: route.app.app.kind, name: route.app.app.name } if route
   end
 
   def routes
@@ -30,19 +34,17 @@ RSpec.describe Kiosk::Server::Routing do
 
   it 'draws GET <mount_path>/<name> for each query' do
     %w[catalog my_orders].each do |name|
-      expect(recognize(routes, :get, "/kiosk/#{name}"))
-        .to eq(controller: 'kiosk/server/verb', action: 'show', kiosk_verb: name)
+      expect(recognize(routes, :get, "/kiosk/#{name}")).to eq(kind: :query, name: name)
     end
   end
 
   it 'draws POST <mount_path>/<name> for each action' do
-    expect(recognize(routes, :post, '/kiosk/place_order'))
-      .to eq(controller: 'kiosk/server/verb', action: 'create', kiosk_verb: 'place_order')
+    expect(recognize(routes, :post, '/kiosk/place_order')).to eq(kind: :action, name: 'place_order')
   end
 
   it "draws no other method on a verb's path" do
-    expect { recognize(routes, :post, '/kiosk/catalog') }.to raise_error(ActionController::RoutingError)
-    expect { recognize(routes, :get, '/kiosk/place_order') }.to raise_error(ActionController::RoutingError)
+    expect(recognize(routes, :post, '/kiosk/catalog')).to be_nil
+    expect(recognize(routes, :get, '/kiosk/place_order')).to be_nil
   end
 end
 
@@ -55,7 +57,7 @@ RSpec.describe Kiosk::Server::Routing, 'the kiosk block' do
     set = draw { kiosk { queries :catalog } }
 
     expect(set.routes.first.path.spec.to_s).to eq('/api')
-    expect(recognize(set, :get, '/api/catalog')).to include(kiosk_verb: 'catalog')
+    expect(recognize(set, :get, '/api/catalog')).to eq(kind: :query, name: 'catalog')
   ensure
     Kiosk.configuration.mount_path = previous
   end

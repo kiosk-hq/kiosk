@@ -34,7 +34,7 @@ RSpec.describe 'handler registration in a booted app' do
     end
 
     it 'serves those names on the wire — the registry holds a real dispatch' do
-      expect(probe('development')['browse_fetches']).to eq('Kiosk::Server::HandlerDispatch')
+      expect(probe('development')['browse_fetches']).to eq('Kiosk::Server::ControllerVerb')
     end
 
     it 'advertises the capabilities computed from that catalog' do
@@ -55,7 +55,7 @@ RSpec.describe 'handler registration in a booted app' do
     it 'picks up an ADDED verb on reload' do
       after_add = probe('development', 'after_add')
       expect(after_add['queries']).to include('probe_added')
-      expect(after_add['added_fetches']).to eq('Kiosk::Server::HandlerDispatch')
+      expect(after_add['added_fetches']).to eq('Kiosk::Server::ControllerVerb')
     end
 
     it 'drops a REMOVED verb from the catalog on reload' do
@@ -103,7 +103,7 @@ RSpec.describe 'handler registration in a booted app' do
   context 'in production (eager_load = true)' do
     it 'registers every handler exactly once' do
       expect(probe('production')['queries']).to eq(%w[probe_browse probe_detail])
-      expect(probe('production')['browse_fetches']).to eq('Kiosk::Server::HandlerDispatch')
+      expect(probe('production')['browse_fetches']).to eq('Kiosk::Server::ControllerVerb')
     end
   end
 end

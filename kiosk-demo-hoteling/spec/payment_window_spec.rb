@@ -3,6 +3,7 @@
 require 'spec_helper'
 require 'kiosk/test_helpers/live_server'
 require 'kiosk/test_helpers/assistant'
+require 'kiosk/test_helpers/in_process_wire'
 
 # A PSP whose capture waits until the test releases it.
 class BlockingPsp
@@ -37,21 +38,15 @@ RSpec.shared_context 'a guest with a room to pay for' do
   let(:room)     { RoomType.first }
   let(:identity) { Kiosk::Identity.new(user_id: guest.id, role: 'customer', actor: 'agent', agent_id: SecureRandom.uuid) }
 
-  def as_guest(&)
-    Kiosk::Server::CurrentRequest.with(identity:) do
-      Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity:, &)
-    end
-  end
+  # The verb through its route, as the guest's assistant.
+  def as_guest(name, kind, **params) = Kiosk::TestHelpers::InProcessWire.new.call(name, kind:, params:, identity:)
 
   def reserve
     check_in = Date.current + 30
-    as_guest do
-      Kiosk::Server::Actions.fetch('reserve_room').call(room_type_id: room.id, check_in: check_in.iso8601,
-                                                        check_out: (check_in + 1).iso8601)
-    end['booking_id']
+    as_guest('reserve_room', :action, room_type_id: room.id, check_in: check_in.iso8601, check_out: (check_in + 1).iso8601)['booking_id']
   end
 
-  def booking_row(id) = as_guest { Kiosk::Server::Queries.fetch('my_bookings').call({}) }.find { it['booking_id'] == id }
+  def booking_row(id) = as_guest('my_bookings', :query).find { it['booking_id'] == id }
   def payment_state(id) = booking_row(id)['payment_state']
   def payment_status(id) = Booking.uncached { Booking.find(id).payment_status }
 end

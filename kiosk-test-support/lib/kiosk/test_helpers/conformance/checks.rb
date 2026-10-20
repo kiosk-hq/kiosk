@@ -16,8 +16,8 @@ module Kiosk
       module Checks
         module_function
 
-        # Every declared verb is routed to the verb wire under its own name, GET
-        # for a query and POST for an action. No verbs at all fails.
+        # Every declared verb is routed under its own name to the action that
+        # answers it, GET for a query and POST for an action. No verbs at all fails.
         def routes(origin)
           Routes.call(origin)
         end

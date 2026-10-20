@@ -5,8 +5,14 @@
 require 'kiosk/server'
 require 'action_controller'
 
-# The host application's base controller. A handler sub-dispatch never carries
-# a CSRF token, so the mixin must skip forgery protection.
+# The engine's controllers, which a Rails host autoloads.
+Zeitwerk::Loader.new.tap do |loader|
+  loader.push_dir(Kiosk::Server::Engine.root.join('app/controllers').to_s)
+  loader.setup
+end
+
+# The host application's base controller. An assistant's verb call carries no
+# CSRF token, so the mixin must skip forgery protection.
 class ApplicationController < ActionController::Base
   protect_from_forgery with: :exception
 end
@@ -34,6 +40,38 @@ module KioskServerSpecSupport
       kind verb_kind
       macros.each { |macro, value| public_send(macro, value) }
       define_method(name.to_s, &body)
+    end
+  end
+
+  # The routes `kiosk do` draws for these names; the same route set serves the calls.
+  def kiosk_routes(queries: [], actions: [])
+    ActionDispatch::Routing::RouteSet.new.tap do |routes|
+      routes.draw do
+        kiosk do
+          queries(*queries)
+          actions(*actions)
+        end
+      end
+    end
+  end
+
+  # An origin with no database: linking an assistant mints its token, nothing
+  # revokes it, and a verb's session runs on `connection`.
+  def serve_wire_on(connection)
+    Kiosk.configure do |c|
+      c.issuer           = 'https://provider.example'
+      c.signing_key      = Kiosk::Server::SigningKey.generate
+      c.revocation_store = instance_double(Kiosk::Server::RevocationStores::ActiveRecord, revoked?: false)
+    end
+    link_assistants_without_database
+    allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
+  end
+
+  # Linking an assistant mints its token and writes no agent row.
+  def link_assistants_without_database
+    allow(Kiosk::Server::AccountBinding).to receive(:bind!) do |user_id:, requested_role:, **|
+      claims = { sub: user_id, agent_id: "a-#{user_id}", role: requested_role }.compact
+      { access_token: Kiosk::Server::JwtIssuer.issue(claims: claims, audience: Kiosk.current_issuer) }
     end
   end
 

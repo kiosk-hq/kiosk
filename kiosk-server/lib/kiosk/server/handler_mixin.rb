@@ -41,9 +41,6 @@ module Kiosk
         # The wire authenticates by bearer token, never by cookie, so CSRF protection does not apply.
         base.skip_forgery_protection if base.respond_to?(:skip_forgery_protection)
 
-        # A route drawn straight at a handler controller must not bypass the wire.
-        base.before_action(:kiosk_require_wire_dispatch!) if base.respond_to?(:before_action)
-
         # Registered at include time, so an operator's own `rescue_from` declared later wins.
         base.rescue_from(StandardError, with: :kiosk_rescue_to_wire) if base.respond_to?(:rescue_from)
       end
@@ -58,8 +55,8 @@ module Kiosk
         module_function
 
         NOT_A_CONTROLLER =
-          'include Kiosk::Handler into a controller class — Kiosk dispatches ' \
-          'handlers through Controller.action(…), which needs an ActionController subclass. ' \
+          'include Kiosk::Handler into a controller class — each verb route reaches ' \
+          'a controller action, which needs an ActionController subclass. ' \
           'Pick the base class yourself (ApplicationController, ActionController::API, …); ' \
           'Kiosk does not impose one.'
 
@@ -346,7 +343,7 @@ module Kiosk
         end
 
         def kiosk_register_one(declaration)
-          handler = HandlerDispatch.new(
+          handler = ControllerVerb.new(
             controller: self,
             method_name: declaration[:method_name],
             wire_name: declaration[:wire_name],
@@ -360,23 +357,21 @@ module Kiosk
 
       # Handler-side helpers, private so none is mistaken for a controller action.
       module InstanceMethods
+        include HandlerServing
+
         private
 
         # The acting {Kiosk::Identity}; nil outside a wire request.
-        def kiosk_identity
-          request.env[HandlerDispatch::IDENTITY_KEY]
-        end
+        def kiosk_identity = CurrentRequest.identity
 
         # Differs from the method name only under `wire_name`.
-        def kiosk_wire_name
-          request.env[HandlerDispatch::DISPATCH_KEY]
-        end
+        def kiosk_wire_name = @_kiosk_wire_name
 
         # One page of rows; a nil `next_cursor` is the last page. `total` counts every matching row and
         # nil omits `X-Total-Count`. The body stays the bare rows; the page facts leave as headers.
         # Without `rows` the action's own template renders them.
         def render_kiosk_page(rows = nil, next_cursor: nil, total: nil)
-          request.env[HandlerDispatch::PAGE_KEY] = { next_cursor: next_cursor, total: total }
+          @_kiosk_page = { next_cursor: next_cursor, total: total }
           rows.nil? ? render : render(json: rows)
         end
 
@@ -416,22 +411,6 @@ module Kiosk
           when ::ActiveModel::ValidationError then exception.model
           when ::ActiveRecord::RecordInvalid  then exception.record
           end
-        end
-
-        # A route drawn straight at a handler controller answers 404 `verb_not_found`.
-        def kiosk_require_wire_dispatch!
-          return if request.env.key?(HandlerDispatch::DISPATCH_KEY)
-
-          problem = Kiosk::Server::Errors::VerbNotFound.new(
-            'Kiosk handlers are reachable through the Kiosk wire only',
-            hint: "call the verb's own route — " \
-                  "GET #{Kiosk.configuration.mount_path}/<query-name> or " \
-                  "POST #{Kiosk.configuration.mount_path}/<action-name>"
-          ).to_problem
-
-          render json: problem,
-                 status: :not_found,
-                 content_type: Kiosk::Server::Errors::PROBLEM_CONTENT_TYPE
         end
       end
     end

@@ -142,7 +142,7 @@ RSpec.shared_context 'wire controller pow header spec: tolled origin' do
 
     # Stub Executor so a request that PROCEEDS past the gate returns a clean 200
     # instead of touching ActiveRecord.
-    allow(Kiosk::Server::Executor).to receive(:call)
+    allow_any_instance_of(Kiosk::Server::Executor).to receive(:call)
       .and_return(Kiosk::Server::Result.new(kind: :rows, payload: []))
     allow_any_instance_of(Kiosk::Server::WireController)
       .to receive(:connection_for).and_return(Object.new)

@@ -43,8 +43,13 @@ end
 RSpec.shared_context 'test executor spec: executor' do
   let(:connection)        { TestExecutorSpecConnection.new }
   let(:system_connection) { TestExecutorSpecConnection.new }
-  let(:executor)          { described_class.new(connection: connection, system_connection: system_connection) }
-  let(:identity)          { build_identity(actor: 'agent') }
+  let(:executor) do
+    described_class.new(connection: connection, system_connection: system_connection,
+                        app: kiosk_routes(queries: %w[menu mine paged missing order], actions: %w[ping missing denied]))
+  end
+  let(:identity) { build_identity(actor: 'agent') }
+
+  before { serve_wire_on(connection) }
 end
 
 RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
@@ -220,17 +225,23 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       expect { executor.run_action(:foo, {}) }.to raise_error(described_class::NoScopeError)
     end
 
-    it 'fetches the action from the registry and calls it with args' do
+    it 'calls the action through its route with args' do
       declare_action('ping') { render json: { pong: params[:msg] } }
       result = executor.with_identity(identity) { executor.run_action(:ping, msg: 'hi') }
-      # String keys: the handler renders, so the value makes a JSON round trip.
       expect(result).to eq('pong' => 'hi')
     end
 
-    it 'raises Errors::VerbNotFound for an unregistered action (via Actions.fetch)' do
+    it 'raises the wire refusal for an unregistered action' do
       expect do
         executor.with_identity(identity) { executor.run_action(:missing, {}) }
-      end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+      end.to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('verb_not_found') }
+    end
+
+    it 'raises RLSDenied for a refusal coded rls_denied' do
+      declare_action('denied') { render json: { error: { code: 'rls_denied', message: 'no' } }, status: :forbidden }
+      expect do
+        executor.with_identity(identity) { executor.run_action(:denied, {}) }
+      end.to raise_error(Kiosk::TestHelpers::Errors::RLSDenied)
     end
   end
 end
@@ -244,7 +255,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       expect { executor.run_query(:foo, {}) }.to raise_error(described_class::NoScopeError)
     end
 
-    it 'fetches the query from the registry and calls it with args' do
+    it 'calls the query through its route with args' do
       declare_query('menu') { render json: [{ item: params[:only] }] }
       result = executor.with_identity(identity) { executor.run_query(:menu, only: 'soup') }
       expect(result).to eq([{ 'item' => 'soup' }])
@@ -268,17 +279,17 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       expect(result).to eq([{ 'id' => 1 }])
     end
 
-    it 'raises Errors::VerbNotFound for an unregistered query' do
+    it 'raises the wire refusal for an unregistered query' do
       expect do
         executor.with_identity(identity) { executor.run_query(:missing, {}) }
-      end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+      end.to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('verb_not_found') }
     end
 
     it 'does not resolve an ACTION name — the two registries stay separate' do
       declare_action('order')
       expect do
         executor.with_identity(identity) { executor.run_query(:order, {}) }
-      end.to raise_error(Kiosk::Server::Errors::VerbNotFound)
+      end.to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('method_not_allowed') }
     end
   end
 end

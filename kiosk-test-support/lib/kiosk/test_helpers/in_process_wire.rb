@@ -1,0 +1,90 @@
+# frozen_string_literal: true
+
+# Needs kiosk-server, which only a Rails host carries; this gem does not depend
+# on it, so a test helper requires this file explicitly.
+
+require 'json'
+require 'openssl'
+require 'rack/mock'
+require 'uri'
+require 'kiosk/server'
+require 'kiosk/test_helpers/wire'
+
+module Kiosk
+  module TestHelpers
+    # Calls a verb of the booted app through its route, in this process, as an
+    # assistant does: one linked to the principal's account, as a person links
+    # one, and paying any proof-of-work toll. A caller with no identity sends no
+    # token.
+    class InProcessWire
+      # `app` defaults to the Rails application, middleware included.
+      def initialize(app: nil)
+        @app = app
+      end
+
+      # The verb's answer, or the wire error its refusal names.
+      def call(name, kind:, params:, identity:)
+        token      = token_for(identity) if identity
+        response   = request(name, kind, params, token)
+        challenges = toll_challenges(response)
+        response   = request(name, kind, params, token, Wire.solve(challenges)) if challenges
+        answer(response)
+      end
+
+      private
+
+      def app = @app || ::Rails.application
+
+      def request(name, kind, params, token, proofs = nil)
+        env = credentials(token, proofs)
+        url = "#{Kiosk.current_issuer.to_s.chomp('/')}#{Kiosk.configuration.mount_path}/#{name}"
+        return Rack::MockRequest.new(app).get(query_url(url, params), env) if kind.to_sym == :query
+
+        Rack::MockRequest.new(app).post(url, env.merge(input: JSON.generate(params), 'CONTENT_TYPE' => 'application/json'))
+      end
+
+      def credentials(token, proofs)
+        { 'HTTP_AUTHORIZATION' => ("Bearer #{token}" if token),
+          'HTTP_KIOSK_POW' => (JSON.generate(proofs) if proofs) }.compact
+      end
+
+      def query_url(url, params) = params.empty? ? url : "#{url}?#{URI.encode_www_form(params)}"
+
+      # The token of an assistant linked to the principal for this call.
+      def token_for(identity)
+        Kiosk::Server::AccountBinding.bind!(
+          public_key_pem: OpenSSL::PKey::RSA.generate(2048).public_key.to_pem,
+          user_id: identity.user_id, requested_role: identity.role
+        ).fetch(:access_token)
+      end
+
+      def toll_challenges(response)
+        problem = parse(response.body)
+        return unless response.status == 402 && problem.is_a?(Hash) && problem['code'] == 'pow_required'
+
+        problem['challenges']
+      end
+
+      def answer(response)
+        body = parse(response.body)
+        return body if response.successful?
+
+        raise refusal(response.status, body)
+      end
+
+      def refusal(status, body)
+        return RuntimeError.new("the origin answered #{status}: #{body.inspect}") unless problem?(body)
+
+        Kiosk::Server::Errors::WireError.new(body['detail'], code: body['code'], hint: body['hint'])
+      end
+
+      def problem?(body) = body.is_a?(Hash) && Kiosk::Server::Errors::CODES.key?(body['code'])
+
+      def parse(raw)
+        raw.to_s.empty? ? nil : JSON.parse(raw)
+      rescue JSON::ParserError
+        raw
+      end
+    end
+  end
+end

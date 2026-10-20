@@ -4,9 +4,8 @@
 # (T-053, K-495 slice 2).
 #
 # Written from the CONSUMER's side: the controllers below are what an operator
-# writes, and every assertion goes through a real path — the wire controller for
-# the end-to-end ones, {Kiosk::Server::Executor} for the rest. Nothing calls the
-# mixin's internals.
+# writes, and every assertion goes through the route `kiosk do` draws, as the
+# router reaches it. Nothing calls the mixin's internals.
 #
 # `ApplicationController` (spec_helper.rb) is the fake this suite needs: a
 # stand-in for the host app's base class, carrying `protect_from_forgery`
@@ -164,17 +163,13 @@ class SpecReachController < SpecKioskBaseController
 end
 
 module HandlerMixinSpec
-  # The REAL dispatch path, minus HTTP: exactly what VerbController calls.
-  # The wire NAME is an argument of its own — it is a path segment on the 0.4
-  # wire, never a body field — so it is lifted out of `args` here the way the
-  # controller lifts it out of `params[:kiosk_verb]`.
+  # The verb through its route, as `identity`. The wire NAME is an argument of
+  # its own — a path segment on the wire, never a body field — so it is lifted
+  # out of `args` here.
   def execute(kind, args)
     args = args.dup
     name = (args.delete(:name) || args.delete('name')).to_s
-    Kiosk::Server::CurrentRequest.with(identity: identity) do
-      Kiosk::Server::Executor.call(kind: kind, args: args, identity: identity,
-                                   connection: connection, name: name.empty? ? nil : name)
-    end
+    verb_answer(kind == :run ? :action : :query, name, args)
   end
 
   def party_model
@@ -222,9 +217,8 @@ module HandlerMixinWireSpec
   end
 
   def dispatch(action, name, env)
-    env['action_dispatch.request.path_parameters'] =
-      { controller: 'kiosk/server/verb', action: action.to_s, kiosk_verb: name.to_s }
-    status, headers, body = Kiosk::Server::VerbController.action(action).call(env)
+    status, headers, body = Kiosk::Server::Routing::VerbRoute.new(action == :show ? :query : :action, name.to_s)
+                                                             .call(env)
     raw = +''
     body.each { |chunk| raw << chunk }
     [status, JSON.parse(raw), headers]
@@ -386,35 +380,31 @@ end
 RSpec.describe 'Kiosk::Handler (the operator mixin)' do
   include_context 'handler mixin spec: executor'
 
-  describe 'running a query through the executor' do
+  describe 'running a query through its route' do
     it 'returns the rendered rows as the rows payload' do
       result = execute(:query, { name: 'catalog' })
 
-      expect(result.kind).to eq(:rows)
-      expect(result.payload).to eq([{ 'sku' => 'MILK-1L', 'price_cents' => 199 },
-                                    { 'sku' => 'OATS-500G', 'price_cents' => 249 }])
+      expect(result.body).to eq([{ 'sku' => 'MILK-1L', 'price_cents' => 199 },
+                                 { 'sku' => 'OATS-500G', 'price_cents' => 249 }])
     end
 
     it "hands the agent's params to the action as ordinary params" do
       result = execute(:query, { name: 'catalog', q: 'oats' })
 
-      expect(result.payload).to eq([{ 'sku' => 'OATS-500G', 'price_cents' => 249 }])
+      expect(result.body).to eq([{ 'sku' => 'OATS-500G', 'price_cents' => 249 }])
     end
 
     it 'exposes the resolved identity as kiosk_identity' do
       result = execute(:query, { name: 'whoami' })
 
-      expect(result.payload.first).to include('user_id' => 'u-1', 'agent_id' => 'a-1')
+      expect(result.body.first).to include('user_id' => 'u-1', 'agent_id' => 'a-1')
     end
 
-    it 'carries the cursor of a paginated page onto the Result, not into the body' do
+    it 'carries the cursor of a paginated page in the Link header, not in the body' do
       result = execute(:query, { name: 'my_orders' })
 
-      expect(result.kind).to eq(:rows)
-      expect(result.payload).to eq([{ 'order_id' => 'o-1', 'for' => 'u-1' }])
+      expect(result.body).to eq([{ 'order_id' => 'o-1', 'for' => 'u-1' }])
       expect(Kiosk::Server::Cursor.decode_offset(result.next_cursor)).to eq(1)
-      # T-092: the body is the bare rows; the cursor leaves as a `Link` header.
-      expect(result.to_payload).to eq([{ 'order_id' => 'o-1', 'for' => 'u-1' }])
     end
   end
 end
@@ -422,7 +412,7 @@ end
 RSpec.describe 'Kiosk::Handler (the operator mixin)' do
   include_context 'handler mixin spec: executor'
 
-  describe 'running a query through the executor' do
+  describe 'running a query through its route' do
     it "runs inside the wire's GUC-scoped transaction" do
       execute(:query, { name: 'catalog' })
 
@@ -434,17 +424,16 @@ end
 RSpec.describe 'Kiosk::Handler (the operator mixin)' do
   include_context 'handler mixin spec: executor'
 
-  describe 'running an action through the executor' do
+  describe 'running an action through its route' do
     it 'returns the rendered object as the value payload' do
       result = execute(:run, { name: 'create_order', items: [{ sku: 'MILK-1L' }] })
 
-      expect(result.kind).to eq(:value)
-      expect(result.payload).to eq('order_id' => 'o-1', 'item_count' => 1, 'for' => 'u-1')
+      expect(result.body).to eq('order_id' => 'o-1', 'item_count' => 1, 'for' => 'u-1')
     end
 
     it 'never lets a wire name reach an undeclared method' do
       expect { execute(:run, { name: 'place' }) }
-        .to raise_error(Kiosk::Server::Errors::VerbNotFound, /Unknown action/)
+        .to raise_error(Kiosk::Server::Errors::Base, /Unknown action/) { |e| expect(e.code).to eq('verb_not_found') }
     end
   end
 end
@@ -454,7 +443,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
 
   describe 'errors' do
     it "maps a rendered 400 to bad_request, keeping the handler's message and hint" do
-      expect { execute(:run, { name: 'create_order' }) }
+      expect { execute(:run, { name: 'create_order', items: [] }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
           expect(e.message).to eq('at least one item is required')
           expect(e.hint).to eq('pass items: [{sku:, quantity:}]')
@@ -479,7 +468,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
   describe 'errors' do
     it 'lets a handler raise a wire error no HTTP status can carry' do
       expect { execute(:run, { name: 'rent_motorcycle' }) }
-        .to raise_error(Kiosk::Server::Errors::KycRequired) { |e|
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
           expect(e.code).to eq('kyc_required')
           expect(e.http_status).to eq(403)
         }
@@ -494,7 +483,8 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
     it 'turns an unhandled exception into action_failed, not a silent success' do
       expect do
         expect { execute(:run, { name: 'explode' }) }
-          .to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+          .to raise_error(Kiosk::Server::Errors::Base) { |e|
+            expect(e.code).to eq('action_failed')
             expect(e.message).to eq('Action "explode" failed')
             expect(e.message).not_to include('boom')
             expect(e.hint).to eq('See server logs for the backtrace.')
@@ -513,8 +503,8 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         validating(:seat) { Party.new(size: 21).validate! }
 
         expect { execute(:run, { name: 'seat' }) }
-          .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
-            expect(e.http_status).to eq(400)
+          .to raise_error(Kiosk::Server::Errors::Base) { |e|
+            expect(e.code).to eq('bad_request')
             expect(e.message).to eq('Size must be less than or equal to 20; ' \
                                     'Date is not among the upcoming seatings — currently 2026-09-01')
             expect(e.hint).to be_nil
@@ -528,7 +518,9 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
 
         expect { execute(:run, { name: 'save' }) }
-          .to raise_error(Kiosk::Server::Errors::BadRequest, /\ASize must be less than or equal to 20; Date/)
+          .to raise_error(Kiosk::Server::Errors::Base, /\ASize must be less than or equal to 20; Date/) { |e|
+            expect(e.code).to eq('bad_request')
+          }
       end
     end
   end
@@ -603,7 +595,6 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
             expect(e.message).to eq('verb "vetoed" refused the request')
             expect(e.hint).to eq(Kiosk::Server::Errors::RESCUED_HINTS.fetch('forbidden'))
             expect(e.message).not_to include('policy said no')
-            expect(e.cause).to be_a(SpecVetoError)
           }
       end.to output(/\[kiosk-server\] verb "vetoed" answered forbidden for SpecVetoError: policy said no/)
         .to_stderr
@@ -657,7 +648,8 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       end
 
       expect { execute(:run, { name: 'vetoed_by_raise' }) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden) { |e|
+        .to raise_error(Kiosk::Server::Errors::Base) { |e|
+          expect(e.code).to eq('forbidden')
           expect(e.message).to eq('policy said no')
           expect(e.hint).to eq('ask your human to raise the limit')
         }
@@ -861,7 +853,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
 
     it "survives the host app's forgery protection" do
       # Every real Rails app installs protect_from_forgery on ActionController::Base;
-      # the sub-dispatch cannot carry a token, so the mixin skips it on include.
+      # an assistant's verb call carries no token, so the mixin skips it on include.
       # Without that, this POST would be an InvalidAuthenticityToken → 500.
       callbacks = SpecOrdersController._process_action_callbacks.map(&:filter)
       expect(callbacks).not_to include(:verify_authenticity_token)
@@ -892,15 +884,9 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
 
   describe 'guards' do
     it '404s a request that did not come through the Kiosk wire, as a problem document' do
-      # THE BODY IS CLIENT-FACING (K-1092). The guard returns early under
-      # sub-dispatch, so what it renders is never re-wrapped by the Executor: it
-      # goes straight to whoever dialed a route an operator drew at a handler
-      # controller. It used to answer the 0.3 `{ok:false, error:{…}}` envelope —
-      # deleted with the endpoints that served it (K-808, T-074 = A) — which made
-      # it the last shipped body emitting that shape to a client. Contrast
-      # `kiosk_rescue_to_wire`, which keeps the nested shape ON PURPOSE: that one
-      # is the internal sub-dispatch protocol between a handler and
-      # HandlerDispatch, and the Executor re-wraps it before anything sees it.
+      # THE BODY IS CLIENT-FACING (K-1092): it goes straight to whoever dialed a
+      # route an operator drew at a handler controller, so it is a flat problem
+      # document with no `ok` or `error` member.
       env = Rack::MockRequest.env_for('https://provider.example/catalog', method: 'POST')
       status, headers, body = SpecCatalogController.action(:catalog).call(env)
       raw = +''
@@ -1242,7 +1228,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       klass.send(:private, :vanishing)
 
       expect { execute(:query, { name: 'vanishing' }) }
-        .to raise_error(Kiosk::Server::Errors::VerbNotFound, /no longer dispatchable/)
+        .to raise_error(Kiosk::Server::Errors::Base, /no longer dispatchable/) { |e| expect(e.code).to eq('verb_not_found') }
     end
   end
 end

@@ -4,7 +4,7 @@ module Kiosk
   module TestHelpers
     module Conformance
       module Checks
-        # Every declared verb is routed to the verb wire under its own name.
+        # Every declared verb is routed under its own name to the action that answers it.
         module Routes
           extend Helpers
 
@@ -66,8 +66,8 @@ module Kiosk
             return if endpoint == verb.endpoint
 
             "#{verb}: #{verb.http_method} #{path} reaches #{endpoint}, not " \
-              "#{verb.endpoint} — a route drawn straight at a handler bypasses " \
-              'authentication, the gate and the declared-input check'
+              "#{verb.endpoint} — a route drawn straight at a handler answers " \
+              '404 to every caller; name the verb in the `kiosk` block'
           end
 
           def wrong_name(verb, path, found)
@@ -81,9 +81,9 @@ module Kiosk
 
           def other_method(origin, verb, path)
             other = recognize(origin, path, verb.other_http_method)
-            return unless other && WIRE_ENDPOINTS.value?("#{other[:controller]}##{other[:action]}")
+            return unless other && other[:kiosk_verb].to_s == verb.name
 
-            "#{verb}: #{path} also reaches the verb wire on " \
+            "#{verb}: #{path} also reaches the verb on " \
               "#{verb.other_http_method} — the method follows the kind, so a " \
               "#{verb.kind} answers #{verb.http_method} and nothing else"
           end

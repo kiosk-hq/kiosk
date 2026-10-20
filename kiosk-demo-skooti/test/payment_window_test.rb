@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'test_helper'
+require 'kiosk/test_helpers/in_process_wire'
 
 # A reservation reads `paid` from the moment the PSP captures, not from the
 # moment the settlement row lands; and racing pays charge it at most once.
@@ -37,15 +38,12 @@ class PaymentWindowTest < ActiveSupport::TestCase
     @identity = Kiosk::Identity.new(user_id: @rider.id, role: 'customer', actor: 'agent', agent_id: SecureRandom.uuid)
   end
 
-  def as_rider(&)
-    Kiosk::Server::CurrentRequest.with(identity: @identity) do
-      Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: @identity, &)
-    end
-  end
+  # The verb through its route, as the rider's assistant.
+  def as_rider(name, kind, **params) = Kiosk::TestHelpers::InProcessWire.new.call(name, kind:, params:, identity: @identity)
 
-  def reserve = as_rider { Kiosk::Server::Actions.fetch('reserve').call(scooter_code: @scooter.code) }['reservation_id']
-  def start_rental(id) = as_rider { Kiosk::Server::Actions.fetch('start_rental').call(reservation_id: id) }
-  def payment_state(id) = as_rider { Kiosk::Server::Queries.fetch('my_reservations').call({}) }.find { it['reservation_id'] == id }['payment_state']
+  def reserve = as_rider('reserve', :action, scooter_code: @scooter.code)['reservation_id']
+  def start_rental(id) = as_rider('start_rental', :action, reservation_id: id)
+  def payment_state(id) = as_rider('my_reservations', :query).find { it['reservation_id'] == id }['payment_state']
   def payment_status(id) = Reservation.uncached { Reservation.find(id).payment_status }
 
   def capture(psp, reservation_id)
@@ -81,7 +79,7 @@ class PaymentWindowTest < ActiveSupport::TestCase
     id = reserve
 
     assert_equal 'unpaid', payment_state(id)
-    error = assert_raises(Kiosk::Server::Errors::Forbidden) { start_rental(id) }
+    error = assert_raises(Kiosk::Server::Errors::WireError) { start_rental(id) }
     assert_includes error.message, 'this reservation is not paid'
   end
 
@@ -90,7 +88,7 @@ class PaymentWindowTest < ActiveSupport::TestCase
 
     pay_through_a_held_capture(id) do
       assert_equal 'pending', payment_state(id)
-      error = assert_raises(Kiosk::Server::Errors::Forbidden) { start_rental(id) }
+      error = assert_raises(Kiosk::Server::Errors::WireError) { start_rental(id) }
       assert_includes error.message, 'in progress'
     end
   end

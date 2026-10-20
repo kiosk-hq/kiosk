@@ -9,23 +9,10 @@ require 'kiosk/test_helpers/conformance/in_process_origin'
 # The point of these examples is the seam, not the checks — those are covered
 # where they live, in kiosk-test-support. What has to be true here is that the
 # four questions the checks ask get answered from the same sources the running
-# server answers them from: the verb registry the mixin populated, the route
-# table Rails dispatches on, the registered handler under a GUC-scoped session,
-# and the engine's own schema validator.
+# server answers them from: the verb registry the mixin populated, the routes
+# `kiosk do` draws, a verb call through its route, and the engine's own schema
+# validator.
 module ConformanceOriginSpec
-  # A route table with `recognize_path`'s contract: it RAISES for a path with
-  # no route, which is what makes "nothing answers" different from "answers
-  # something else".
-  class FakeRouteSet
-    def initialize(table) = @table = table
-
-    def recognize_path(path, method:)
-      @table.fetch([method.to_s.upcase, path]) do
-        raise ActionController::RoutingError, "No route matches #{method.upcase} #{path}"
-      end
-    end
-  end
-
   # Records the transaction and the GUC binds, so an example can assert the
   # call really ran inside a session context.
   class RecordingConnection
@@ -47,19 +34,9 @@ module ConformanceOriginSpec
     end
   end
 
-  def origin(routes: nil)
-    described_class.new(connection: connection, routes: routes)
-  end
-
-  def wired_routes(*names_and_kinds)
-    table = names_and_kinds.each_with_object({}) do |(name, kind), out|
-      query  = kind.to_sym == :query
-      method = query ? 'GET' : 'POST'
-      action = query ? 'show' : 'create'
-      out[[method, "/kiosk/#{name}"]] =
-        { controller: 'kiosk/server/verb', action: action, kiosk_verb: name }
-    end
-    FakeRouteSet.new(table)
+  def origin(queries: %w[catalog menu mine my_orders paged search], actions: %w[order place_order])
+    routes = kiosk_routes(queries: queries, actions: actions)
+    described_class.new(app: routes, routes: routes)
   end
 
   def declare_the_fleet
@@ -90,6 +67,8 @@ RSpec.shared_context 'conformance origin spec: origin' do
   include ConformanceOriginSpec
 
   let(:connection) { ConformanceOriginSpec::RecordingConnection.new }
+
+  before { serve_wire_on(connection) }
   let(:alice)      { Struct.new(:id, :role).new('u-alice', 'customer') }
   let(:bob)        { Struct.new(:id, :role).new('u-bob', 'customer') }
 end
@@ -97,11 +76,9 @@ end
 RSpec.shared_context 'conformance origin spec: the four checks' do
   include_context 'conformance origin spec: origin'
 
-  before { Kiosk::TestHelpers::Conformance.origin = origin(routes: routes) }
+  before { Kiosk::TestHelpers::Conformance.origin = origin(queries: %w[catalog my_orders], actions: %w[place_order]) }
 
   after { Kiosk::TestHelpers::Conformance.reset! }
-
-  let(:routes) { wired_routes(%w[catalog query], %w[my_orders query], %w[place_order action]) }
 end
 
 RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
@@ -139,15 +116,15 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#recognize' do
-    it 'reports what the router says' do
-      routes = wired_routes(%w[menu query])
+    it 'reports the action the route reaches' do
+      stub_const('Kiosk::MenuController', declare_query('menu'))
 
-      expect(origin(routes: routes).recognize('/kiosk/menu', method: 'GET'))
-        .to eq(controller: 'kiosk/server/verb', action: 'show', kiosk_verb: 'menu')
+      expect(origin.recognize('/kiosk/menu', method: 'GET'))
+        .to eq(controller: 'kiosk/menu', action: 'menu', kiosk_verb: 'menu')
     end
 
     it 'answers nil — not an error — when nothing is routed there' do
-      expect(origin(routes: wired_routes).recognize('/kiosk/menu', method: 'GET')).to be_nil
+      expect(origin(queries: []).recognize('/kiosk/menu', method: 'GET')).to be_nil
     end
   end
 end
@@ -156,7 +133,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#call' do
-    it 'runs the handler inside a GUC-scoped transaction as the named principal' do
+    it 'runs the handler through its route, in a GUC-scoped transaction, as the named principal' do
       declare_query('mine') { render json: [{ user: kiosk_identity.user_id }] }
 
       answer = origin.call('mine', kind: :query, params: {}, as: alice)
@@ -186,13 +163,13 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include_context 'conformance origin spec: origin'
 
   describe '#call' do
-    it 'validates arguments against input_schema first, as the wire does' do
+    it "refuses arguments its input_schema rejects with the wire's own code" do
       declare_query('search',
                     input_schema: { type: 'object', properties: { limit: { type: 'integer' } },
                                     required: %w[limit] }) { render json: [] }
 
       expect { origin.call('search', kind: :query, params: { limit: 'many' }, as: alice) }
-        .to raise_error(Kiosk::Server::Errors::BadRequest)
+        .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('bad_request') }
     end
 
     it 'unwraps a paginated answer to its rows, which is what a caller receives' do

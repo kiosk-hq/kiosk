@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: A verb route reaches the controller action that declares the verb, and `Kiosk::Handler` runs the wire's checks around it. `HandlerDispatch` is removed.
 - 2026-10-20: kiosk-server validates an action's body against its `input_schema` with no exemption. Only a query accepts an undeclared `limit` or `cursor`.
 
 ## [0.5.19] — 2026-10-20

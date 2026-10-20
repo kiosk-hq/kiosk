@@ -14,15 +14,9 @@ module ResponseValidationSpecSetup
   let(:connection) { FakeConnection.new }
   let(:identity)   { build_identity(actor: 'agent') }
 
-  def query(name, args = {})
-    Kiosk::Server::Executor.call(kind: :query, args: args, name: name,
-                                 identity: identity, connection: connection)
-  end
+  def query(name, args = {}) = verb_answer(:query, name, args)
 
-  def action(name, args = {})
-    Kiosk::Server::Executor.call(kind: :run, args: args, name: name,
-                                 identity: identity, connection: connection)
-  end
+  def action(name, args = {}) = verb_answer(:action, name, args)
 end
 
 RSpec.describe Kiosk::Server::ResponseValidation, 'off by default' do
@@ -35,7 +29,7 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'off by default' do
       render json: [{ id: 1 }]
     end
 
-    expect(query('menu').payload).to eq([{ 'id' => 1 }])
+    expect(query('menu').body).to eq([{ 'id' => 1 }])
   end
 end
 
@@ -52,7 +46,7 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'with validate_responses on' d
                              required: %w[id name] }
                   }) { render json: [{ id: 1, name: 'Margherita' }] }
 
-    expect(query('menu').payload).to eq([{ 'id' => 1, 'name' => 'Margherita' }])
+    expect(query('menu').body).to eq([{ 'id' => 1, 'name' => 'Margherita' }])
   end
 
   it 'refuses a query whose rows do NOT, naming the verb and the pointer' do
@@ -62,7 +56,7 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'with validate_responses on' d
                              properties: { id: { type: 'integer' } }, required: ['id'] }
                   }) { render json: [{ id: 1, surprise: true }] }
 
-    expect { query('menu') }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+    expect { query('menu') }.to raise_error(Kiosk::Server::Errors::Base) { |e|
       expect(e.message).to include('query "menu"')
       expect(e.message).to include('output_schema')
       expect(e.message).to include('/0')
@@ -82,7 +76,7 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'with validate_responses on' d
                      properties: { order_id: { type: 'string' } }, required: ['order_id']
                    }) { render json: { order_id: 7 } }
 
-    expect { action('place_order') }.to raise_error(Kiosk::Server::Errors::ActionFailed,
+    expect { action('place_order') }.to raise_error(Kiosk::Server::Errors::Base,
                                                     /action "place_order"/)
   end
 
@@ -100,7 +94,7 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'with validate_responses on' d
       render_kiosk_page([{ id: 1 }], next_cursor: 'b2Zmc2V0OjIw', total: 9)
     end
 
-    expect(query('search').to_payload).to eq([{ 'id' => 1 }])
+    expect(query('search').body).to eq([{ 'id' => 1 }])
   end
 
   # The corollary, and it is what the shape collapse BOUGHT: a paginating
@@ -111,7 +105,7 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'with validate_responses on' d
     schema = { type: 'array', items: { type: 'object' } }
     declare_query('search', output_schema: schema) { render_kiosk_page([{ id: 1 }]) }
 
-    expect(query('search').to_payload).to eq([{ 'id' => 1 }])
+    expect(query('search').body).to eq([{ 'id' => 1 }])
   end
 end
 
@@ -128,7 +122,7 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'with validate_responses on' d
       render_kiosk_page([{ id: 1 }], next_cursor: 'b2Zmc2V0OjIw')
     end
 
-    expect { query('search') }.to raise_error(Kiosk::Server::Errors::ActionFailed,
+    expect { query('search') }.to raise_error(Kiosk::Server::Errors::Base,
                                               /output_schema rejects/)
   end
 
@@ -138,6 +132,6 @@ RSpec.describe Kiosk::Server::ResponseValidation, 'with validate_responses on' d
     # invent a contract where none was published.
     Kiosk::Server::Queries.declare('legacy', ->(_args) { [{ 'id' => 1 }] })
 
-    expect(query('legacy').payload).to eq([{ 'id' => 1 }])
+    expect(query('legacy').body).to eq([{ 'id' => 1 }])
   end
 end

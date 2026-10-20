@@ -10,9 +10,8 @@
 # refusal comes back as an RFC 9457 problem document, and, in the last
 # groups, that this is the ONLY way to reach an operator verb.
 #
-# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
-# app — no Rails host, so `path_parameters` is set by hand exactly as the
-# router would.
+# Each call goes through the endpoint `kiosk do` draws for the verb, a plain
+# Rack app — no Rails host.
 
 require 'rack/mock'
 require 'json'
@@ -27,17 +26,14 @@ module VerbControllerSpec
     )
   end
 
-  # One per-verb request. The action is :show for a GET, :create for a POST;
-  # `kiosk_verb` is the path segment the router would have captured.
-  # `headers` takes `auth:` (default true), `accept:`, `timezone:` and `pow:`.
+  # One per-verb request, through the route of a query for a GET and of an
+  # action for a POST. `headers` takes `auth:` (default true), `accept:`,
+  # `timezone:` and `pow:`.
   def call_verb(method, name, query: nil, body: nil, **headers)
-    action = method == :get ? :show : :create
     opts = { method: method.to_s.upcase }.merge(body_env(body), header_env(**headers))
     env = Rack::MockRequest.env_for("/kiosk/#{name}#{"?#{query}" if query}", opts)
-    env['action_dispatch.request.path_parameters'] =
-      { controller: 'kiosk/server/verb', action: action.to_s, kiosk_verb: name }
 
-    dispatch(described_class, action, env)
+    answer(Kiosk::Server::Routing::VerbRoute.new(method == :get ? :query : :action, name).call(env))
   end
 
   def body_env(body)
@@ -58,8 +54,9 @@ module VerbControllerSpec
   # Returns [status, parsed body, headers]. The media type is half of what
   # makes a problem document one, and the cache policy is response shape
   # (spec §3.7).
-  def dispatch(controller, action, env)
-    status, headers, body = controller.action(action).call(env)
+  def dispatch(controller, action, env) = answer(controller.action(action).call(env))
+
+  def answer((status, headers, body))
     raw = +''
     body.each { |chunk| raw << chunk }
     @last_headers = headers
@@ -123,7 +120,7 @@ RSpec.shared_context 'verb controller spec: authenticated origin' do
     end
     # No database in the gem's own env; SessionContext only needs a connection
     # that answers #transaction and #exec_query.
-    allow_any_instance_of(described_class).to receive(:connection_for).and_return(connection)
+    allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
   end
 end
 
@@ -574,9 +571,9 @@ RSpec.describe Kiosk::Server::VerbController do
 
   # §3.7.4 (matrix SPEC-016), the neighbouring MAY: "the default for a `200`
   # is `private, no-store`; an operator MAY relax it to `private, max-age=N`
-  # for a genuinely identity-independent payload". {HandlerDispatch} carries
-  # the sub-response's `Cache-Control` out, so a handler can use that
-  # permission through a real request.
+  # for a genuinely identity-independent payload". {HandlerServing} carries
+  # the `Cache-Control` of the handler's render to the wire answer, so a
+  # handler can use that permission through a real request.
   describe "an operator MAY relax a 200's cache policy from a handler (§3.7.4)" do
     it 'keeps `private, max-age=N` the handler set' do
       declare_query('salons') do
@@ -615,8 +612,8 @@ RSpec.describe Kiosk::Server::VerbController do
 
   describe "an operator MAY relax a 200's cache policy from a handler (§3.7.4)" do
     it "NOT on a refusal: a 4xx keeps the wire's own policy" do
-      # §3.7.4 speaks about a `200`, and {HandlerDispatch} only publishes the
-      # sub-response's headers on a 2xx. A handler that renders 403 with a
+      # §3.7.4 speaks about a `200`, and {HandlerServing} only carries the
+      # render's headers on a 2xx. A handler that renders 403 with a
       # long freshness would otherwise make its own refusal cacheable.
       declare_query('salons') do
         response.headers['Cache-Control'] = 'private, max-age=600'
@@ -627,14 +624,14 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     # WHY THE PROPAGATION LIST HAS EXACTLY ONE ENTRY, measured rather than
-    # asserted. The sub-request is built from the wire request, `HTTP_ACCEPT`
+    # asserted. The handler renders on the wire request, `HTTP_ACCEPT`
     # included, so Rails' own `_set_vary_header` stamps `Vary: Accept` on the
-    # handler's render. A blanket copy of the sub-response's headers would
+    # handler's render. A blanket copy of the render's headers would
     # import that onto the wire, where it is false — the answer is JSON
     # whatever the caller asked for — and would split a cache by Accept string
     # for nothing. The first expectation proves Rails really does it; the
     # second proves the seam does not carry it.
-    it 'does not carry the `Vary` Rails synthesises on the sub-render' do
+    it "does not carry the `Vary` Rails synthesises on the handler's render" do
       seen = nil
       declare_query('salons') do
         render json: [{ id: 1 }]

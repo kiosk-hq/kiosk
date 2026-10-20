@@ -52,8 +52,8 @@ module Kiosk
       # data. It is also how an assistant's own cache saves a toll — a response
       # still fresh is never re-requested and therefore never re-challenged.
       #
-      # It reaches the wire because {HandlerDispatch} PRESERVES the sub-response's
-      # headers; a seam that dropped them would make this permission unreachable
+      # It reaches the wire because the engine carries the `Cache-Control` of the
+      # handler's render; a seam that dropped it would make this permission unreachable
       # from the one kind of code an operator writes. `my_appointments`
       # (Kiosk::BookingsController) sets nothing and keeps `private, no-store` —
       # the control, and the honest policy for a per-principal payload.

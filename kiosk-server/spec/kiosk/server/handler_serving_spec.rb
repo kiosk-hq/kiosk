@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# The callable the mixin puts in the registry (T-053). The operator-facing
-# behaviour lives in handler_mixin_spec.rb; this covers what the seam does when
+# A handler action answering its verb route (T-296). The operator-facing
+# behaviour lives in handler_mixin_spec.rb; this covers what the wire does when
 # the handler misbehaves, plus the reload property the whole design rests on.
 #
 # `ApplicationController` (the fake host base class) is defined in spec_helper.rb.
@@ -23,17 +23,13 @@ class SpecReloadableController < ApplicationController
   def reloadable = render(json: [{ 'sku' => 'ORIGINAL' }])
 end
 
-module HandlerDispatchSpec
-  # The wire NAME is its own argument — a path segment on the wire, never
-  # a body field — so it is lifted out of `args` here exactly as
-  # {Kiosk::Server::VerbController} lifts it out of `params[:kiosk_verb]`.
+module HandlerServingSpec
+  # The verb through its route. The wire NAME is its own argument — a path
+  # segment on the wire, never a body field — so it is lifted out of `args`.
   def execute(kind, args)
     args = args.dup
     name = (args.delete(:name) || args.delete('name')).to_s
-    Kiosk::Server::CurrentRequest.with(identity: identity) do
-      Kiosk::Server::Executor.call(kind: kind, args: args, identity: identity,
-                                   connection: connection, name: name.empty? ? nil : name)
-    end
+    verb_answer(kind == :run ? :action : :query, name, args)
   end
 
   def write_shelf_views(views)
@@ -46,15 +42,15 @@ module HandlerDispatchSpec
   end
 end
 
-RSpec.shared_context 'handler dispatch spec: executor' do
+RSpec.shared_context 'handler serving spec: route' do
   include B1HandlerClasses
-  include HandlerDispatchSpec
+  include HandlerServingSpec
 
   let(:identity)   { build_identity(user_id: 'u-1', agent_id: 'a-1') }
   let(:connection) { FakeConnection.new }
 end
 
-RSpec.shared_context 'handler dispatch spec: templated handler' do
+RSpec.shared_context 'handler serving spec: templated handler' do
   around do |example|
     Dir.mktmpdir do |views|
       write_shelf_views(views)
@@ -78,8 +74,8 @@ RSpec.shared_context 'handler dispatch spec: templated handler' do
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  include_context 'handler dispatch spec: executor'
+RSpec.describe Kiosk::Server::HandlerServing do
+  include_context 'handler serving spec: route'
 
   describe 'reload safety' do
     before { SpecReloadableController.kiosk_register! }
@@ -87,27 +83,27 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
     it 'holds a named controller by NAME, so a reloaded class is picked up' do
       handler = Kiosk::Server::Queries.fetch('reloadable')
       expect(handler.controller_name).to eq('SpecReloadableController')
-      expect(execute(:query, { name: 'reloadable' }).payload).to eq([{ 'sku' => 'ORIGINAL' }])
+      expect(execute(:query, { name: 'reloadable' }).body).to eq([{ 'sku' => 'ORIGINAL' }])
 
       # What Zeitwerk does on a code reload: same constant, new class object.
       stub_handler('SpecReloadableController', :query, 'The edited handler.') do
         def reloadable = render(json: [{ 'sku' => 'EDITED' }])
       end
 
-      expect(execute(:query, { name: 'reloadable' }).payload).to eq([{ 'sku' => 'EDITED' }])
+      expect(execute(:query, { name: 'reloadable' }).body).to eq([{ 'sku' => 'EDITED' }])
     end
 
     it 'answers not_found when the controller constant is gone' do
       hide_const('SpecReloadableController')
 
       expect { execute(:query, { name: 'reloadable' }) }
-        .to raise_error(Kiosk::Server::Errors::VerbNotFound, /is not loaded/)
+        .to raise_error(Kiosk::Server::Errors::Base, /is not loaded/) { |e| expect(e.code).to eq('verb_not_found') }
     end
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  include_context 'handler dispatch spec: executor'
+RSpec.describe Kiosk::Server::HandlerServing do
+  include_context 'handler serving spec: route'
 
   describe 'a handler that does not answer with JSON' do
     it 'fails loudly rather than putting HTML on the wire' do
@@ -116,7 +112,7 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       end
 
       expect { execute(:query, { name: 'html_query' }) }
-        .to raise_error(Kiosk::Server::Errors::ActionFailed, /non-JSON body/)
+        .to raise_error(Kiosk::Server::Errors::Base, /non-JSON body/) { |e| expect(e.code).to eq('action_failed') }
     end
 
     it 'reports an unmapped status rather than guessing a wire code' do
@@ -128,13 +124,13 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       end
 
       expect { execute(:run, { name: 'bare_payment_required' }) }
-        .to raise_error(Kiosk::Server::Errors::ActionFailed, /pay up/)
+        .to raise_error(Kiosk::Server::Errors::Base, /pay up/) { |e| expect(e.code).to eq('action_failed') }
     end
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  include_context 'handler dispatch spec: executor'
+RSpec.describe Kiosk::Server::HandlerServing do
+  include_context 'handler serving spec: route'
 
   describe 'a handler that does not answer with JSON' do
     it "never mistakes an operator's own code field for the wire vocabulary" do
@@ -153,8 +149,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  include_context 'handler dispatch spec: executor'
+RSpec.describe Kiosk::Server::HandlerServing do
+  include_context 'handler serving spec: route'
 
   describe 'a handler that renders its own problem members' do
     it 'keeps type, title and status those of the code, and drops instance and challenges' do
@@ -188,8 +184,8 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  include_context 'handler dispatch spec: executor'
+RSpec.describe Kiosk::Server::HandlerServing do
+  include_context 'handler serving spec: route'
 
   describe 'a handler that does not answer with JSON' do
     it 'falls back to the status when a rendered code does not belong to it' do
@@ -213,7 +209,7 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       end
 
       expect { execute(:query, { name: 'bad_page' }) }
-        .to raise_error(Kiosk::Server::Errors::ActionFailed, /not an array of rows/)
+        .to raise_error(Kiosk::Server::Errors::Base, /not an array of rows/) { |e| expect(e.code).to eq('action_failed') }
     end
 
     it 'rejects a query that answers an object, paginating or not' do
@@ -222,7 +218,7 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       end
 
       expect { execute(:query, { name: 'one_object' }) }
-        .to raise_error(Kiosk::Server::Errors::ActionFailed, /not an array of rows/)
+        .to raise_error(Kiosk::Server::Errors::Base, /not an array of rows/) { |e| expect(e.code).to eq('action_failed') }
     end
 
     it 'refuses an empty next_cursor, whose next link would lead back to page one' do
@@ -233,16 +229,16 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
       expect(Kiosk::Server::FailureLog)
         .to receive(:report).with(/raised ArgumentError/, having_attributes(message: /next_cursor is empty/))
       expect { execute(:query, { name: 'empty_cursor' }) }
-        .to raise_error(Kiosk::Server::Errors::ActionFailed)
+        .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('action_failed') }
     end
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  include_context 'handler dispatch spec: executor'
+RSpec.describe Kiosk::Server::HandlerServing do
+  include_context 'handler serving spec: route'
 
   describe 'a handler answering through its template' do
-    include_context 'handler dispatch spec: templated handler'
+    include_context 'handler serving spec: templated handler'
 
     it 'leaves ActionController loading to the host, so a view library can set it up first' do
       script = 'require "kiosk/server"; ' \
@@ -251,36 +247,20 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
     end
 
     it "renders the JSON template whatever the caller's Accept header asks for" do
-      result = Kiosk::Server::CurrentRequest.with(identity: identity,
-                                                  env: { 'HTTP_ACCEPT' => 'text/html' }) do
-        Kiosk::Server::Executor.call(kind: :query, args: {}, identity: identity,
-                                     connection: connection, name: 'shelf')
-      end
-      expect(result.payload).to eq([{ 'sku' => 'MILK-1L' }])
+      answer = call_verb_route(:query, 'shelf', 'HTTP_ACCEPT' => 'text/html')
+      expect(answer.body).to eq([{ 'sku' => 'MILK-1L' }])
     end
 
     it 'pages the rows the template renders' do
-      result = execute(:query, { name: 'shelf_page' })
-      expect([result.payload, result.next_cursor, result.total])
-        .to eq([[{ 'sku' => 'OATS-500G' }], '1', 2])
+      answer = execute(:query, { name: 'shelf_page' })
+      expect([answer.body, answer.next_cursor, answer.headers['X-Total-Count']])
+        .to eq([[{ 'sku' => 'OATS-500G' }], '1', '2'])
     end
   end
 end
 
-RSpec.describe Kiosk::Server::HandlerDispatch do
-  include_context 'handler dispatch spec: executor'
-
-  describe 'outside a wire request' do
-    it 'runs with no identity and no caller headers (the RLS journey case)' do
-      stub_handler('SpecBareController', :query, 'Reports what it can see.') do
-        def bare = render(json: [{ identity: kiosk_identity, ua: request.headers['User-Agent'] }])
-      end
-
-      result = Kiosk::Server::Queries.fetch('bare').call({})
-
-      expect(result).to eq([{ 'identity' => nil, 'ua' => nil }])
-    end
-  end
+RSpec.describe Kiosk::Server::HandlerServing do
+  include_context 'handler serving spec: route'
 
   describe 'an empty answer' do
     it 'carries a bodiless 200 through as a nil value' do
@@ -288,7 +268,7 @@ RSpec.describe Kiosk::Server::HandlerDispatch do
         def ack = head(:ok)
       end
 
-      expect(execute(:run, { name: 'ack' }).payload).to be_nil
+      expect(execute(:run, { name: 'ack' }).body).to be_nil
     end
   end
 end

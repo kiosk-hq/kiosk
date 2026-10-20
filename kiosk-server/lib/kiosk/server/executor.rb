@@ -24,14 +24,15 @@ module Kiosk
         @identity   = identity
       end
 
-      def call(kind:, args:, name: nil)
+      # `handler` answers in place of the registered one.
+      def call(kind:, args:, name: nil, handler: nil)
         verb = kind.to_sym
         raise Errors::BadRequest.new("Unknown verb: #{kind.inspect}", hint: "Valid verbs: #{VERBS.inspect}") unless VERBS.include?(verb)
         # A self-managed verb opens its own SessionContext(s).
-        return dispatch(verb, args, name) if SELF_MANAGED_VERBS.include?(verb)
-        return audited(name, args) { in_session { dispatch(verb, args, name) } } if verb == :run
+        return dispatch(verb, args, name, handler) if SELF_MANAGED_VERBS.include?(verb)
+        return audited(name, args) { in_session { dispatch(verb, args, name, handler) } } if verb == :run
 
-        in_session { dispatch(verb, args, name) }
+        in_session { dispatch(verb, args, name, handler) }
       end
 
       private
@@ -66,20 +67,20 @@ module Kiosk
         )
       end
 
-      def dispatch(verb, args, name = nil)
+      def dispatch(verb, args, name, handler)
         case verb
-        when :query  then verb_query(args, name)
-        when :run    then verb_run(args, name)
+        when :query  then verb_query(args, name, handler)
+        when :run    then verb_run(args, name, handler)
         when :pay    then verb_pay(args)
         end
       end
 
       # A handler returns rows or a {Page}; the page facts become the `Link` and `X-Total-Count` headers (§8.2).
-      def verb_query(args, name = nil)
+      def verb_query(args, name, handler)
         args = symbolize(args)
         raise Errors::BadRequest, 'query name required' if name.nil? || name.to_s.empty?
 
-        returned = invoke('Query', Queries.fetch(name), name, args)
+        returned = invoke('Query', handler || Queries.fetch(name), name, args)
         validate_response!(Queries, :query, name, rows_result(returned))
       end
 
@@ -89,11 +90,11 @@ module Kiosk
         Result.new(kind: :rows, payload: returned.rows, next_cursor: returned.next_cursor, total: returned.total)
       end
 
-      def verb_run(args, name = nil)
+      def verb_run(args, name, handler)
         args = symbolize(args)
         raise Errors::BadRequest, 'action name required' if name.nil? || name.to_s.empty?
 
-        value = invoke('Action', Actions.fetch(name), name, args)
+        value = invoke('Action', handler || Actions.fetch(name), name, args)
         validate_response!(Actions, :action, name, Result.new(kind: :value, payload: value))
       end
 

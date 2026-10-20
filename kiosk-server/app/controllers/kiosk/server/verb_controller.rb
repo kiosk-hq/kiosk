@@ -4,13 +4,14 @@ require 'action_controller'
 
 module Kiosk
   module Server
-    # The per-verb wire, one endpoint per registered verb under the mount:
-    #
-    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
-    #   POST <endpoint>/<action-name>          an action — JSON body
+    # The verbs the engine itself answers, `POST <endpoint>/payment_setup` and
+    # `POST <endpoint>/request_kyc`, and every verb route that no controller
+    # action can answer: 404 for an unknown name, 405 for a name of the other
+    # kind. An operator's own verb goes straight to the action that declares
+    # it ({Routing::VerbRoute}).
     #
     # Gates, in order: identity (401), the verb (404/405), the arguments
-    # (400), the toll (402). Answers and refusals are written by {WireController}.
+    # (400), the toll (402).
     class VerbController < WireController
       # GET <endpoint>/<query-name>
       def show
@@ -54,22 +55,6 @@ module Kiosk
           hint: "call #{wanted} #{Kiosk.configuration.mount_path}/#{name} instead — " \
                 'queries are GET, actions are POST.'
         )
-      end
-
-      # Query string for a query, JSON body for an action; never both.
-      def arguments_for(command, name, descriptor)
-        args = if command == :query
-                 ArgumentDecoder.decode(request.query_string, input_schema: descriptor[:input_schema])
-               else
-                 parse_body!
-               end
-
-        # Unconditional: §8.1 item 5 makes coerce-then-validate a MUST.
-        RequestValidation.validate_arguments!(
-          args, input_schema: descriptor[:input_schema], verb: name, query: command == :query
-        )
-
-        args
       end
     end
   end

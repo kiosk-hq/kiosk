@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'test_helper'
+require 'kiosk/test_helpers/in_process_wire'
 
 # The claim an order takes while its capture is in flight, over real row locks.
 class PaymentClaimTest < ActiveSupport::TestCase
@@ -37,22 +38,15 @@ class PaymentClaimTest < ActiveSupport::TestCase
 
   def new_shopper = Kiosk::Identity.new(user_id: User.create!.id, role: 'customer', actor: 'agent', agent_id: SecureRandom.uuid)
 
-  def as_shopper(&)
-    Kiosk::Server::CurrentRequest.with(identity: @identity) do
-      Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: @identity, &)
-    end
-  end
+  # The verb through its route, as the shopper's assistant.
+  def as_shopper(name, kind, **params) = Kiosk::TestHelpers::InProcessWire.new.call(name, kind:, params:, identity: @identity)
 
   def place(sku, qty: 1)
-    as_shopper do
-      Kiosk::Server::Actions.fetch('create_order').call(
-        items: [{ sku:, qty: }], slot_at: DeliverySlots.starts(Date.current + 1)[2].iso8601,
-        delivery_address: '42 Camden Street, Dublin 2'
-      ).merge('sku' => sku)
-    end
+    as_shopper('create_order', :action, items: [{ sku:, qty: }], slot_at: DeliverySlots.starts(Date.current + 1)[2].iso8601,
+                                        delivery_address: '42 Camden Street, Dublin 2').merge('sku' => sku)
   end
 
-  def payment_state(order_id) = as_shopper { Kiosk::Server::Queries.fetch('my_orders').call({}) }.find { it['order_id'] == order_id }['payment_state']
+  def payment_state(order_id) = as_shopper('my_orders', :query).find { it['order_id'] == order_id }['payment_state']
   def status(order_id) = Order.uncached { Order.find(order_id).payment_status }
 
   def capture(psp, order)
@@ -143,11 +137,9 @@ class PaymentClaimTest < ActiveSupport::TestCase
     @identity = new_shopper
 
     assert_raises(Kiosk::Server::Errors::Forbidden) { capture(CountingPsp.new, theirs) }
-    error = assert_raises(Kiosk::Server::Errors::Forbidden) do
-      as_shopper do
-        Kiosk::Server::Actions.fetch('reschedule_delivery').call(order_id: SecureRandom.uuid, slot_at: DeliverySlots.starts(Date.current + 1)[3].iso8601)
-      end
+    error = assert_raises(Kiosk::Server::Errors::WireError) do
+      as_shopper('reschedule_delivery', :action, order_id: SecureRandom.uuid, slot_at: DeliverySlots.starts(Date.current + 1)[3].iso8601)
     end
-    assert_equal 403, error.http_status
+    assert_equal 'forbidden', error.code
   end
 end

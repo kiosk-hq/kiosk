@@ -9,7 +9,7 @@ RSpec.describe Kiosk::Server::Queries do
     it 'returns the registered handler' do
       declare_query('menu')
 
-      expect(described_class.fetch('menu')).to be_a(Kiosk::Server::HandlerDispatch)
+      expect(described_class.fetch('menu')).to be_a(Kiosk::Server::ControllerVerb)
     end
 
     it 'accepts a symbol name (registry keys are strings)' do

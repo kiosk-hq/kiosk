@@ -21,7 +21,7 @@ RSpec.describe Kiosk::Server::Actions do
     it 'returns the registered handler' do
       declare_action('ping')
 
-      expect(described_class.fetch('ping')).to be_a(Kiosk::Server::HandlerDispatch)
+      expect(described_class.fetch('ping')).to be_a(Kiosk::Server::ControllerVerb)
     end
 
     it 'accepts a symbol name (registry keys are strings)' do

@@ -77,7 +77,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
     it 'registers a handler the wire can reach' do
       register('SpecRegistrationsQueriesController')
 
-      expect(queries.fetch('spec_browse')).to be_a(Kiosk::Server::HandlerDispatch)
+      expect(queries.fetch('spec_browse')).to be_a(Kiosk::Server::ControllerVerb)
       expect(queries.describe('spec_browse')[:description]).to eq('Lists the board.')
     end
 

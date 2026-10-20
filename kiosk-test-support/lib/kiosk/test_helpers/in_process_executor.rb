@@ -8,12 +8,14 @@
 require 'date'
 require 'kiosk/server'
 require 'kiosk/test_helpers/errors'
+require 'kiosk/test_helpers/in_process_wire'
 
 module Kiosk
   module TestHelpers
     # Runs the kiosk-test-support journey DSL against a real connection: each
     # identity scope sets the GUCs and always rolls back, and an RLS denial
-    # surfaces as {Kiosk::TestHelpers::Errors::RLSDenied}.
+    # surfaces as {Kiosk::TestHelpers::Errors::RLSDenied}. A verb goes through
+    # its route, as an assistant calls it.
     class InProcessExecutor
       class NoScopeError < StandardError; end
 
@@ -23,9 +25,11 @@ module Kiosk
       attr_reader :connection, :system_connection, :current_identity
 
       # `system_connection` seeds irrespective of RLS; it defaults to `connection`.
-      def initialize(connection: nil, system_connection: nil)
+      # `app` is the Rack app a verb call goes through; it defaults to `Rails.application`.
+      def initialize(connection: nil, system_connection: nil, app: nil)
         @connection        = connection        || default_connection
         @system_connection = system_connection || @connection
+        @wire              = InProcessWire.new(app: app)
         @current_identity  = nil
         @scope_depth       = 0
       end
@@ -55,26 +59,9 @@ module Kiosk
       end
 
       # A paginated answer returns its rows, as the caller receives them.
-      def run_query(name, args)
-        require_scope!
-        query_handler = Kiosk::Server::Queries.fetch(name)
-        rescue_rls_denials do
-          answer = Kiosk::Server::CurrentRequest.with(identity: current_identity) do
-            query_handler.call(args)
-          end
-          answer.is_a?(Kiosk::Server::Page) ? answer.rows : answer
-        end
-      end
+      def run_query(name, args) = call_verb(name, :query, args)
 
-      def run_action(name, args)
-        require_scope!
-        action = Kiosk::Server::Actions.fetch(name)
-        rescue_rls_denials do
-          Kiosk::Server::CurrentRequest.with(identity: current_identity) do
-            action.call(args)
-          end
-        end
-      end
+      def run_action(name, args) = call_verb(name, :action, args)
 
       # Settlement captures against a PSP, which an always-rolled-back scope cannot host.
       def pay_action(_name, _args)
@@ -92,6 +79,16 @@ module Kiosk
       private
 
       def default_connection = ::ActiveRecord::Base.lease_connection
+
+      # A refusal coded `rls_denied` surfaces as {Kiosk::TestHelpers::Errors::RLSDenied}.
+      def call_verb(name, kind, args)
+        require_scope!
+        @wire.call(name, kind: kind, params: args, identity: current_identity)
+      rescue Kiosk::Server::Errors::WireError => e
+        raise Kiosk::TestHelpers::Errors::RLSDenied, e.message if e.code == 'rls_denied'
+
+        raise
+      end
 
       def require_scope!
         return if in_scope?

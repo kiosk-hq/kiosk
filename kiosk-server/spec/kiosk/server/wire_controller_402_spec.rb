@@ -227,7 +227,7 @@ RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
         define_singleton_method(:lease_connection) { Object.new }
       end
       stub_const('ActiveRecord::Base', ar_base)
-      allow(Kiosk::Server::Executor).to receive(:call).and_raise(
+      allow_any_instance_of(Kiosk::Server::Executor).to receive(:call).and_raise(
         Kiosk::Server::Errors::PaymentFailed.new(
           'the card was declined', hint: 'the human may need to update the payment method'
         )

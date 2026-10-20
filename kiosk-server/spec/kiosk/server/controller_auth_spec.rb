@@ -2,15 +2,19 @@
 
 # Wire-level controller specs.
 #
-# Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
-# app — no Rails host.
+# Dispatch goes through `ActionController::Metal.action(...)` or a verb's route
+# endpoint, plain Rack apps — no Rails host.
 
 require 'rack/mock'
 require 'json'
 
 module ControllerAuthSpecHelpers
-  def dispatch(controller, action, env)
-    status, headers, body = controller.action(action).call(env)
+  def dispatch(controller, action, env) = answer(controller.action(action).call(env))
+
+  # Through the route `kiosk do` draws for the verb.
+  def route(kind, name, env) = answer(Kiosk::Server::Routing::VerbRoute.new(kind, name).call(env))
+
+  def answer((status, headers, body))
     raw = +''
     body.each { |chunk| raw << chunk }
     @last_headers = headers
@@ -78,11 +82,8 @@ module ControllerAuthSpecWireHelpers
   # to be REGISTERED for a request to reach the body at all, because name
   # resolution runs before the arguments are read.
   def post_verb(name, raw_body)
-    env = bearer_env("/kiosk/#{name}", agent_token, method: 'POST',
-                                                    input: raw_body, 'CONTENT_TYPE' => 'application/json')
-    env['action_dispatch.request.path_parameters'] =
-      { controller: 'kiosk/server/verb', action: 'create', kiosk_verb: name }
-    dispatch(Kiosk::Server::VerbController, :create, env)
+    route(:action, name, bearer_env("/kiosk/#{name}", agent_token, method: 'POST', input: raw_body,
+                                                                   'CONTENT_TYPE' => 'application/json'))
   end
 
   # The other surviving body-reading POST, and the SAME
@@ -174,12 +175,7 @@ module ControllerAuthSpecDefaultsHelpers
   # identity cannot show that one WAS resolved, and a 200 from it would pass
   # whether the idp worked or not. A registered query on the per-verb wire
   # reaches exactly the same {IdentityResolution}.
-  def probe_env(**)
-    env = Rack::MockRequest.env_for('/kiosk/probe', **)
-    env['action_dispatch.request.path_parameters'] =
-      { controller: 'kiosk/server/verb', action: 'show', kiosk_verb: 'probe' }
-    env
-  end
+  def probe_env(**) = Rack::MockRequest.env_for('/kiosk/probe', **)
 end
 
 module ControllerAuthSpecDeviceHelpers
@@ -482,15 +478,15 @@ RSpec.describe 'wire-surface controller auth', 'WireController identity resoluti
   it 'verifies a self-minted token with NO idp configured (bundled kiosk-pop default)' do
     declare_query('probe')
     token = agent_token
-    status, = dispatch(Kiosk::Server::VerbController, :show,
-                       probe_env('HTTP_AUTHORIZATION' => "Bearer #{token}"))
+    status, = route(:query, 'probe',
+                    probe_env('HTTP_AUTHORIZATION' => "Bearer #{token}"))
     expect(status).to eq(200)
   end
 
   it 'still 401s garbage under the zero-config default' do
     declare_query('probe')
-    status, body = dispatch(Kiosk::Server::VerbController, :show,
-                            probe_env('HTTP_AUTHORIZATION' => 'Bearer garbage'))
+    status, body = route(:query, 'probe',
+                         probe_env('HTTP_AUTHORIZATION' => 'Bearer garbage'))
     expect_problem(status, body, http: 401, code: 'unauthenticated')
   end
 
@@ -499,7 +495,7 @@ RSpec.describe 'wire-surface controller auth', 'WireController identity resoluti
     fixed = build_identity(actor: 'human', agent_id: nil, user_id: 'u-web')
     Kiosk.configure { |c| c.user_idp = Class.new { define_method(:verify) { |_r| fixed } }.new }
 
-    status, body = dispatch(Kiosk::Server::VerbController, :show, probe_env)
+    status, body = route(:query, 'probe', probe_env)
     expect_problem(status, body, http: 401, code: 'unauthenticated')
   end
 end

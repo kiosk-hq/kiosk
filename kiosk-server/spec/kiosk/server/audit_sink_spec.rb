@@ -17,8 +17,8 @@ require 'securerandom'
 #
 # (4) is the one that would be easy to get wrong and impossible to notice, so
 # it is asserted three ways: through {AuditSink.emit} directly, through a real
-# {Executor} run whose Result must still come back, and with a logger that
-# raises on top of the sink that raised.
+# action call whose answer must still come back, and with a logger that raises
+# on top of the sink that raised.
 module AuditSinkSpec
   SCHEMA = 'kiosk_audit_sink_spec'
 
@@ -45,9 +45,9 @@ module AuditSinkSpec
     ActiveRecord::Base.connection.execute('SELECT 1')
   end
 
+  # The action through its route.
   def run!(name: 'place_order', args: { sku: 'ABC', slot: '2026-06-15T14:00:00Z' })
-    Kiosk::Server::Executor.call(kind: :run, args: args, name: name,
-                                 identity: identity, connection: connection)
+    verb_answer(:action, name, args)
   end
 
   # An ActionFailed raised while an ArgumentError with a 5000-char message is
@@ -395,7 +395,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
       include_context 'audit sink spec: configured sink'
 
@@ -423,7 +423,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
       include_context 'audit sink spec: configured sink'
 
@@ -431,7 +431,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         declare_action('place_order') { raise 'inventory exploded' }
 
         expect do
-          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+          expect { run! }.to raise_error(Kiosk::Server::Errors::Base, 'Action "place_order" failed')
         end.to output(/\[kiosk-server\] Action "place_order" raised RuntimeError: inventory exploded/)
           .to_stderr
 
@@ -449,7 +449,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
       include_context 'audit sink spec: configured sink'
 
@@ -457,7 +457,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         declare_action('place_order') { raise 'inventory exploded' }
 
         expect do
-          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+          expect { run! }.to raise_error(Kiosk::Server::Errors::Base, 'Action "place_order" failed')
         end.to output(/inventory exploded/).to_stderr
 
         expect(events.first.cause_class).to eq('RuntimeError')
@@ -468,14 +468,13 @@ RSpec.describe Kiosk::Server::AuditSink do
 end
 
 # A raise Rails knows a status for is mapped by the mixin's `rescue_from` seam,
-# which RENDERS, so HandlerDispatch rebuilds the wire error in a frame where
-# nothing is being rescued and Ruby attaches no `cause` of its own. The cause
-# is handed over explicitly; without it the sink would see only `verb "…"
+# which raises the wire error inside the rescue, so Ruby attaches the handler's
+# own error as its `cause`; without it the sink would see only `verb "…"
 # rejected the request as malformed`.
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
       include_context 'audit sink spec: configured sink'
 
@@ -501,7 +500,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
       include_context 'audit sink spec: configured sink'
 
@@ -511,7 +510,7 @@ RSpec.describe Kiosk::Server::AuditSink do
                                                      hint: 'ask your human')
         end
 
-        expect { run! }.to raise_error(Kiosk::Server::Errors::Forbidden)
+        expect { run! }.to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('forbidden') }
 
         expect(events.first.error_class).to eq('Kiosk::Server::Errors::Forbidden')
         expect(events.first.error_message).to eq('assistants may not do that')
@@ -525,7 +524,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
       include_context 'audit sink spec: configured sink'
 
@@ -538,15 +537,14 @@ RSpec.describe Kiosk::Server::AuditSink do
 
       it 'emits NOTHING for a query — this is an action trail, not a request log' do
         declare_query('catalog') { render json: [] }
-        Kiosk::Server::Executor.call(kind: :query, args: {}, name: 'catalog',
-                                     identity: identity, connection: connection)
+        verb_answer(:query, 'catalog')
 
         expect(events).to be_empty
       end
 
       it 'emits NOTHING for a name no registry knows — nothing was invoked' do
         expect { run!(name: 'no_such_action') }
-          .to raise_error(Kiosk::Server::Errors::VerbNotFound)
+          .to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('verb_not_found') }
 
         expect(events).to be_empty
       end
@@ -557,7 +555,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
       include_context 'audit sink spec: configured sink'
 
@@ -584,7 +582,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink that raises' do
       include_context 'audit sink spec: raising sink'
 
@@ -593,14 +591,14 @@ RSpec.describe Kiosk::Server::AuditSink do
 
         result = nil
         expect { result = run! }.to output(/audit_sink raised/).to_stderr
-        expect(result.payload).to eq('id' => 7)
+        expect(result.body).to eq('id' => 7)
       end
 
       it "reports BOTH failures to the operator — the handler's and the sink's" do
         declare_action('place_order') { raise 'inventory exploded' }
 
         expect do
-          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+          expect { run! }.to raise_error(Kiosk::Server::Errors::Base, 'Action "place_order" failed')
         end.to output(
           /Action "place_order" raised RuntimeError: inventory exploded.*audit_sink raised for action "place_order": RuntimeError: kafka is down/m
         ).to_stderr
@@ -612,7 +610,7 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with a sink that raises' do
       include_context 'audit sink spec: raising sink'
 
@@ -623,7 +621,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         declare_action('place_order') { raise 'inventory exploded' }
 
         expect do
-          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed) { |e|
+          expect { run! }.to raise_error(Kiosk::Server::Errors::Base, 'Action "place_order" failed') { |e|
             expect(e.message).to eq('Action "place_order" failed')
             expect(e.message).not_to include('inventory exploded')
             expect(e.message).not_to include('kafka is down')
@@ -637,13 +635,13 @@ end
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
 
-  describe 'one event per action invocation (through Kiosk::Server::Executor)' do
+  describe 'one event per action invocation (through its route)' do
     context 'with NO sink configured (the default)' do
       it 'emits nothing and does not even build an event' do
         declare_action('place_order') { render json: { id: 7 } }
         expect(Kiosk::Server::ActionEvent).not_to receive(:build)
 
-        expect(run!.payload).to eq('id' => 7)
+        expect(run!.body).to eq('id' => 7)
         expect(events).to be_empty
       end
 
@@ -654,7 +652,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         # a sink is configured; capturing it keeps the backtrace out of the
         # suite's output.
         expect do
-          expect { run! }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+          expect { run! }.to raise_error(Kiosk::Server::Errors::Base, 'Action "place_order" failed')
         end.to output(/raised RuntimeError: inventory exploded/).to_stderr
 
         expect(connection.all_sql).not_to include('action_log')
@@ -676,7 +674,7 @@ RSpec.describe Kiosk::Server::AuditSink do
       end
 
       expect do
-        expect { run!(args: { sku: 'ABC' }) }.to raise_error(Kiosk::Server::Errors::ActionFailed)
+        expect { run!(args: { sku: 'ABC' }) }.to raise_error(Kiosk::Server::Errors::Base, 'Action "place_order" failed')
       end.to output(/raised RuntimeError: too late/).to_stderr
 
       expect(widget_count).to eq(0)  # the action really rolled back …

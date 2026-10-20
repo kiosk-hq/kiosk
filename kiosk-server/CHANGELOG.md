@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.21] — 2026-10-21
+
 - agents.txt and agents.json name `x-kiosk-pop` and claim no AP2, required payment or required identity. `/.well-known/agent-configuration` is not served.
 - New: `/.well-known/oauth-authorization-server` (RFC 8414), `/.well-known/agent-skills/index.json` and `/.well-known/ard.json`.
 - The api-catalog links the descriptions from the endpoint and carries `rel="api-catalog"`; `Kiosk::SkillLink` adds that link to a page.

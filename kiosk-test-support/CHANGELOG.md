@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.21] — 2026-10-21
+
+- 2026-10-21: Version 0.5.21, the tree cut that matches skill 0.5.21.
+
 ## [0.5.20] — 2026-10-20
 
 - 2026-10-20: `InProcessOrigin` and `InProcessExecutor` call a verb through its route with a linked assistant's token; `InProcessWire` does the call.

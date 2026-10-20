@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.21] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.5.21, matching skill 0.5.21.** `MIN_CLIENT` stays 0.5.20: the 0.5.20 skill reads the same wire.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.5.21.md`**, whose frontmatter follows agentskills.io and which names kiosk.tech as the only source of the skill.
+
 - 2026-10-21: agents.txt and agents.json name `x-kiosk-pop` and claim no AP2, no required payment or identity. `/.well-known/agent-configuration` is gone; each document passes its standard's schema.
 - 2026-10-21: kiosk-server serves RFC 8414 OAuth metadata, the agent skills index and `ard.json`, and its api-catalog follows RFC 9727. A landing page links the api-catalog.
 - 2026-10-21: Every operator demo's robots.txt states a Content-Signal and allows `/agents.txt`.

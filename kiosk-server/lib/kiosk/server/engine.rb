@@ -144,9 +144,11 @@ module Kiosk
           get '/agents.txt',  to: 'kiosk/server/discovery#agents_txt'
           get '/agents.json', to: 'kiosk/server/discovery#agents_json'
           get '/auth.md',     to: 'kiosk/server/discovery#auth_md'
-          get '/.well-known/agent-configuration', to: 'kiosk/server/discovery#agent_configuration'
           get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
           get '/.well-known/api-catalog',         to: 'kiosk/server/discovery#api_catalog'
+          get '/.well-known/oauth-authorization-server', to: 'kiosk/server/discovery#oauth_authorization_server'
+          get '/.well-known/agent-skills/index.json',    to: 'kiosk/server/discovery#agent_skills_index'
+          get '/.well-known/ard.json',                   to: 'kiosk/server/discovery#ard'
         end
       end
 

@@ -65,7 +65,7 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
         expect(discovery(:kiosk_json, a, '/.well-known/kiosk.json').dig('kiosk', 'issuer')).to eq(a)
         expect(discovery(:kiosk_json, b, '/.well-known/kiosk.json').dig('kiosk', 'issuer')).to eq(b)
         expect(discovery(:kiosk_json, b, '/.well-known/kiosk.json').dig('kiosk', 'endpoint')).to eq("#{b}/kiosk")
-        expect(discovery(:agent_configuration, b, '/.well-known/agent-configuration')['issuer']).to eq(b)
+        expect(discovery(:oauth_authorization_server, b, '/.well-known/oauth-authorization-server')['issuer']).to eq(b)
       end
 
       it 'names each origin by its own host when no owner is set' do

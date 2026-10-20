@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require 'digest'
+require 'yaml'
+require 'kiosk/server/well_known'
 
 # Skill pin check (immutable versioned skill files).
 #
@@ -154,6 +156,21 @@ RSpec.describe 'the skill pin' do
                              "#{demo} pins skill_sha256 #{pin[:sha]} but #{File.basename(pin[:url])} " \
                              "hashes to #{actual} — re-pin the demos or publish a new immutable skill version"
       end
+    end
+  end
+
+  # The skills index and agents.json repeat the pinned cut's `name` and
+  # `description`; Agent Skills Discovery asks that they match the file.
+  describe 'the skill pin: the name and description the engine repeats' do
+    include_context 'with the published kiosk.tech checkout'
+
+    it "match the pinned cut's frontmatter" do
+      name = File.basename(SkillPin.default_url)
+      head = YAML.safe_load(File.read(SkillPin.published_file(name))[/\A---\n(.*?)\n---\n/m, 1])
+      expect(head.values_at('name', 'description'))
+        .to eq([Kiosk::Server::WellKnown::SKILL_NAME, Kiosk::Server::WellKnown::SKILL_DESCRIPTION]),
+            "#{name}'s frontmatter names #{head['name'].inspect}; copy its name and description into " \
+            'Kiosk::Server::WellKnown::SKILL_NAME and SKILL_DESCRIPTION'
     end
   end
 

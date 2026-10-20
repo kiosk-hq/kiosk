@@ -1,31 +1,40 @@
 # frozen_string_literal: true
 
 require 'json'
+require 'uri'
 
 module Kiosk
   module Server
-    # The discovery documents — kiosk.json, agents.txt, agents.json,
-    # agent-configuration, api-catalog and auth.md — rendered as pure functions
-    # of one configuration and the request's base URL, so they cannot drift.
+    # The discovery documents — kiosk.json, agents.txt, agents.json, the OAuth
+    # metadata, the skills index, ard.json, api-catalog and auth.md — rendered
+    # as pure functions of one configuration and the request's base URL, so they
+    # cannot drift.
     module WellKnown
       DOCUMENT_VERSION = '1.0'
 
       AGENTS_VERSION  = '1.0'
-      AGENTS_STANDARD = 'https://agents-txt.com/standard'
+      AGENTS_STANDARD = 'https://agents-txt.com'
+      AGENTS_SCHEMA   = 'https://agents-txt.com/schema/agents-json/v1.0.json'
 
-      # Modules with one fixed endpoint; the catalog links every verb separately.
-      MODULE_ENDPOINTS = { 'pay' => 'pay' }.freeze
+      # agents.txt v1.0 registers no identifier for kiosk-pop, so it takes the
+      # standard's `x-` prefix. Its discovery document is kiosk.json.
+      AUTHORIZATION = { protocols: %w[x-kiosk-pop], discovery: '/.well-known/kiosk.json' }.freeze
 
-      PAYMENTS = {
-        ap2: { description: 'Mandate-trust layer with VC presentations' },
-        required: true
-      }.freeze
+      DEVICE_CODE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 
-      AUTHORIZATION = {
-        protocols: %w[agent-auth auth-md],
-        discovery: '/.well-known/agent-configuration',
-        identity: 'required'
-      }.freeze
+      SKILLS_INDEX_SCHEMA = 'https://schemas.agentskills.io/discovery/0.2.0/schema.json'
+
+      # The `name` and `description` of the pinned skill's frontmatter.
+      # kiosk-test-support's skill_pin_spec holds them to the published cut.
+      SKILL_NAME = 'kiosk-agent-protocol'
+      SKILL_DESCRIPTION = 'A protocol that lets an AI assistant use the service of any Kiosk operator -- ' \
+                          'a shop, a booking desk, a job board, a classifieds board, or data, not only ' \
+                          'commerce. Register, read the catalogue to learn the operations, then act: ' \
+                          'browse, order, book, apply, pay -- and subscribe to the operator\'s event ' \
+                          'stream for anything that you would otherwise wait for.'
+
+      ARD_API = 'The Kiosk discovery document of this origin: the endpoint, the sign-in and the catalogue. ' \
+                'Read it with the Kiosk skill.'
 
       # `/.well-known/kiosk.json`.
       def self.build(base_url:, config: Kiosk.configuration)
@@ -50,57 +59,81 @@ module Kiosk
         base = base_url.to_s.chomp('/')
 
         lines = ['# agents.txt — https://agents-txt.com', "# JSON: #{base}/agents.json"]
-        lines.push('', 'Protocols: ap2', 'Payments: required') if Shared.pay_served?(config)
-        lines.push('', 'Authorization: agent-auth auth-md', 'Identity: required')
-        lines.push('', "Skills: #{config.skill_url}") if config.skill_url && !config.skill_url.to_s.empty?
+        lines.push('', "Authorization: #{AUTHORIZATION[:protocols].join(', ')}")
+        lines.push('', "Skills: #{config.skill_url}") if Shared.skill?(config)
 
         "#{lines.join("\n")}\n"
       end
 
-      # agents.json v1.0; Kiosk's pointers ride the `x-kiosk` extension.
+      # agents.json v1.0.
       def self.agents_json(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
-        doc = { version: AGENTS_VERSION, standard: AGENTS_STANDARD,
-                site: { name: site_name(config), url: base_url.to_s.chomp('/') } }
-        doc[:payments] = PAYMENTS if Shared.pay_served?(config)
-        doc[:authorization] = AUTHORIZATION
-        doc[:skills] = Shared.skills_list(config)
-        doc[:'x-kiosk'] = Shared.x_kiosk(config)
+        doc = { '$schema': AGENTS_SCHEMA, version: AGENTS_VERSION, standard: AGENTS_STANDARD,
+                site: { name: site_name(config), url: base_url.to_s.chomp('/') },
+                authorization: AUTHORIZATION }
+        doc[:skills] = [{ url: config.skill_url, description: SKILL_DESCRIPTION }] if Shared.skill?(config)
         doc
       end
 
-      # `/.well-known/agent-configuration`: the kiosk-pop auth endpoints.
-      def self.agent_configuration(base_url:, config: Kiosk.configuration)
+      # `/.well-known/oauth-authorization-server` (RFC 8414): the binding
+      # ceremony's device-code grant. nil when the origin serves no binding.
+      def self.oauth_authorization_server(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
+        return unless config.serve_account_binding
+
         base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
-
-        {
-          issuer: Kiosk.current_issuer,
-          endpoints: Shared.auth_urls(endpoint),
+        { issuer: Kiosk.current_issuer, token_endpoint: "#{endpoint}/oauth/token",
+          device_authorization_endpoint: "#{endpoint}/oauth/device_authorization",
           jwks_uri: "#{endpoint}/.well-known/jwks.json",
-          auth_modes: %w[kiosk-pop user-claimed link-code],
-          auth_md: "#{base}/auth.md"
-        }
+          # No authorization endpoint, so no response type.
+          response_types_supported: [], grant_types_supported: [DEVICE_CODE_GRANT],
+          token_endpoint_auth_methods_supported: ['none'], service_documentation: "#{base}/auth.md" }
       end
 
-      # `/.well-known/api-catalog` (RFC 9727): the two service descriptions, then
-      # every verb with its method in the `kiosk-method` extension attribute.
-      # Composed from configuration and the registries only, never a query.
+      # `/.well-known/agent-skills/index.json` (Agent Skills Discovery v0.2.0):
+      # the pinned skill and its digest. nil without a `skill_sha256`.
+      def self.agent_skills_index(config: Kiosk.configuration)
+        return unless Shared.skill?(config) && config.skill_sha256
+
+        { '$schema': SKILLS_INDEX_SCHEMA,
+          skills: [{ name: SKILL_NAME, type: 'skill-md', description: SKILL_DESCRIPTION,
+                     url: config.skill_url, digest: "sha256:#{config.skill_sha256}" }] }
+      end
+
+      # `/.well-known/ard.json` (Agentic Resource Discovery v0.91): this
+      # origin's kiosk.json and the skill that reads it.
+      def self.ard(base_url:, config: Kiosk.configuration)
+        Shared.validate_issuer!(config)
+        base = base_url.to_s.chomp('/')
+        urn = "urn:air:#{URI.parse(base).host}:kiosk"
+        entries = [{ identifier: "#{urn}:api", displayName: "#{site_name(config)} Kiosk endpoint",
+                     type: 'application/json', url: "#{base}/.well-known/kiosk.json", description: ARD_API }]
+        if Shared.skill?(config)
+          entries << { identifier: "#{urn}:skill", displayName: SKILL_NAME, type: 'application/agent-skills+md',
+                       url: config.skill_url, description: SKILL_DESCRIPTION }
+        end
+        { entries: entries }
+      end
+
+      # `/.well-known/api-catalog` (RFC 9727): every verb as an `item` of the
+      # catalog, its method in the `kiosk-method` extension attribute, and the
+      # two service descriptions on the endpoint. Composed from configuration
+      # and the registries only, never a query.
       def self.api_catalog(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
         base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
         modules = Array(config.capabilities)
 
-        items = Catalog.service_descs(endpoint, modules, config) + Catalog.verb_items(endpoint) +
-                Catalog.module_items(endpoint, modules)
-        items << { href: "#{base}/agents.json", rel: 'item' }
-
-        { linkset: [{ anchor: "#{base}/.well-known/api-catalog", item: items }] }
+        linkset = [{ anchor: "#{base}/.well-known/api-catalog",
+                     item: Catalog.verb_items(endpoint) + Catalog.module_items(endpoint, modules) }]
+        descs = Catalog.service_descs(endpoint, modules, config)
+        linkset << { anchor: endpoint, 'service-desc': descs } if descs.any?
+        { linkset: linkset }
       end
 
-      # `/auth.md`: the auth methods in auth.md's vocabulary and section order.
+      # `/auth.md`: the auth methods in auth.md's section order.
       def self.auth_md(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
         base = base_url.to_s.chomp('/')
@@ -147,16 +180,6 @@ module Kiosk
           }
         end
 
-        # Pointers, never a copy of `kiosk.json`'s facts.
-        def x_kiosk(config)
-          {
-            schema: "#{config.mount_path}/schema?v=#{SchemaDocument.digest(config: config)}",
-            api_catalog: '/.well-known/api-catalog',
-            mount_path: config.mount_path,
-            api_version: Kiosk::Protocol::API_VERSION
-          }
-        end
-
         def auth_urls(endpoint)
           {
             challenge: "#{endpoint}/auth/challenge",
@@ -166,31 +189,23 @@ module Kiosk
           }
         end
 
-        def pay_served?(config)
-          Array(config.capabilities).map(&:to_s).include?('pay')
-        end
-
         def host_of(issuer)
-          require 'uri'
           URI.parse(issuer.to_s).host || issuer.to_s
         rescue URI::InvalidURIError
           issuer.to_s
         end
 
         def skill_discover_line(config)
-          url = config.skill_url
-          return '' if url.nil? || url.to_s.empty?
+          return '' unless skill?(config)
 
           sha = config.skill_sha256
-          line = "- Wire skill for AI assistants: `#{url}`"
+          line = "- Wire skill for AI assistants: `#{config.skill_url}`"
           line += " (sha256 `#{sha}`)" if sha && !sha.to_s.empty?
           line
         end
 
-        def skills_list(config)
-          return [] if config.skill_url.nil? || config.skill_url.to_s.empty?
-
-          [{ url: config.skill_url, description: 'Kiosk wire skill' }]
+        def skill?(config)
+          !config.skill_url.to_s.empty?
         end
 
         def validate_issuer!(config)
@@ -203,7 +218,7 @@ module Kiosk
         end
       end
 
-      # The api-catalog's linkset items, in document order.
+      # The api-catalog's links.
       module Catalog
         module_function
 
@@ -213,7 +228,8 @@ module Kiosk
           return [] unless modules.include?('schema')
 
           version = SchemaDocument.digest(config: config)
-          %w[schema openapi.json].map { |path| { href: "#{endpoint}/#{path}?v=#{version}", rel: 'service-desc' } }
+          [{ href: "#{endpoint}/schema?v=#{version}", type: 'application/json' },
+           { href: "#{endpoint}/openapi.json?v=#{version}", type: OpenApi::CONTENT_TYPE }]
         end
 
         # Sorted, so the document is byte-stable across boots.
@@ -223,14 +239,12 @@ module Kiosk
         end
 
         def module_items(endpoint, modules)
-          MODULE_ENDPOINTS.filter_map do |mod, path|
-            { href: "#{endpoint}/#{path}", rel: 'item' } if modules.include?(mod)
-          end
+          modules.include?('pay') ? [verb_item(endpoint, 'pay', 'POST')] : []
         end
 
         # RFC 9264 §4.2.4.3: an extension attribute is an array of strings.
         def verb_item(endpoint, name, method)
-          { href: "#{endpoint}/#{name}", rel: 'item', 'kiosk-method': [method] }
+          { href: "#{endpoint}/#{name}", 'kiosk-method': [method] }
         end
       end
 
@@ -239,39 +253,39 @@ module Kiosk
       module AuthMd
         def self.render(site:, base:, endpoint:, urls:, skill_line:)
           <<~MARKDOWN
-            # #{site} — agent authentication
+            # auth.md — #{site}
 
             How AI assistants authenticate against this provider's Kiosk
             endpoint (`#{endpoint}`). Wire contract: the Kiosk specification
-            (https://kiosk.tech/specification.html).
+            (https://kiosk.tech/specification.html). This file follows the
+            auth.md section order. The provider does not serve the auth.md
+            registration endpoints: register with kiosk-pop as below.
 
             ## Discover
 
             - This file: `#{base}/auth.md`
-            - Agent auth configuration: `#{base}/.well-known/agent-configuration`
             - Kiosk discovery document: `#{base}/.well-known/kiosk.json`
+            - OAuth metadata of the claim ceremony (RFC 8414): `#{base}/.well-known/oauth-authorization-server`
             - Verb catalogue (PUBLIC, no token): `#{endpoint}/schema`
             - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
             #{skill_line}
 
             ## Pick a method
 
-            - **Anonymous + proof-of-possession (kiosk-pop)** — supported.
-              Self-registration of a per-provider RSA keypair: no human
-              account needed. In auth.md terms this is the anonymous class,
-              upgraded with a key-possession proof on every register/login.
-            - **User claimed** — supported. The claim ceremony below binds an
-              agent key to an EXISTING account after its holder approves in
-              their own browser session.
-            - **Link code** — supported (Kiosk extension: auth.md defines no
-              human-initiated direction). The account holder mints a
+            - **kiosk-pop** — supported. Self-registration of a per-provider
+              RSA keypair: no human account needed. Every register and login
+              carries a proof that you hold the private key.
+            - **Claim ceremony** — supported. It binds an agent key to an
+              EXISTING account after its holder approves in their own browser
+              session.
+            - **Link code** — supported. The account holder mints a
               single-use code on the provider's site and hands it to the
               assistant.
             - **Identity assertion (ID-JAG)** — not supported (planned).
 
             ## Register
 
-            kiosk-pop self-registration (anonymous class):
+            kiosk-pop self-registration:
 
             1. `GET #{urls[:challenge]}?public_key=<PEM>` → `{ challenge, exp }`
             2. Sign a compact RS256 JWS over `{aud, nonce, jti}` with the
@@ -311,7 +325,7 @@ module Kiosk
 
             ## Claim ceremony
 
-            User-claimed binding (RFC 8628 wire) — binds YOUR key to the
+            Claim binding (RFC 8628 wire) — binds YOUR key to the
             account holder's existing account; single-use, short-TTL codes:
 
             1. `POST #{endpoint}/oauth/device_authorization`
@@ -326,7 +340,7 @@ module Kiosk
                step 1) → `{ access_token, token_type, expires_in }`.
                No binding happens without a valid possession proof.
 
-            Link flow (Kiosk extension, mirror direction): the holder mints a
+            Link flow (the mirror direction): the holder mints a
             code on the provider's site and pastes it to you; redeem with
             `POST #{endpoint}/auth/claim` `{ code, public_key, signed }`
             → `201 { agent_id, user_id, access_token }`.

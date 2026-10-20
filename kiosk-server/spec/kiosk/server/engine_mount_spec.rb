@@ -83,15 +83,16 @@ RSpec.describe Kiosk::Server::Engine do
       it 'serves the root discovery documents end-to-end' do
         expect(served('GET /agents.txt')['body']).to include('http://localhost/agents.json')
 
-        # The pointer carries the boot digest as `?v=`.
-        expect(JSON.parse(served('GET /agents.json')['body']).dig('x-kiosk', 'schema'))
-          .to match(%r{\A/kiosk/schema\?v=[0-9a-f]{32}\z})
+        expect(JSON.parse(served('GET /agents.json')['body']).dig('site', 'url')).to eq('http://localhost')
 
         kiosk = JSON.parse(served('GET /.well-known/kiosk.json')['body']).fetch('kiosk')
         expect(kiosk['capabilities']).to include('queries')
         expect(kiosk['schema_url']).to match(%r{\Ahttp://localhost/kiosk/schema\?v=[0-9a-f]{32}\z})
 
-        expect(JSON.parse(served('GET /.well-known/agent-configuration')['body'])).to be_a(Hash)
+        expect(JSON.parse(served('GET /.well-known/oauth-authorization-server')['body'])['token_endpoint'])
+          .to eq('http://localhost/kiosk/oauth/token')
+        expect(JSON.parse(served('GET /.well-known/ard.json')['body'])['entries']).not_to be_empty
+        expect(probe('mounted', 'GET /.well-known/agent-skills/index.json')['status']).to eq(404)
         expect(served('GET /.well-known/api-catalog')['headers']['content-type']).to include('linkset+json')
         expect(served('GET /auth.md')['headers']['content-type']).to include('markdown')
       end
@@ -237,8 +238,7 @@ RSpec.describe Kiosk::Server::Engine do
       it 'paths only the engine draws still resolve through the mount' do
         res = probe('double_draw', 'GET /agents.json')
         expect(res['status']).to eq(200)
-        expect(JSON.parse(res['body']).dig('x-kiosk', 'schema'))
-          .to match(%r{\A/kiosk/schema\?v=[0-9a-f]{32}\z})
+        expect(JSON.parse(res['body']).dig('site', 'url')).to eq('http://localhost')
 
         expect(probe('double_draw', 'GET /kiosk/.well-known/jwks.json')['status']).to eq(200)
       end

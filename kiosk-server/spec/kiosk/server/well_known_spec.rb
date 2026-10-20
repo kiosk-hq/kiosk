@@ -14,7 +14,7 @@ module WellKnownSpec
     end.to_h
   end
 
-  # The linkset's single member: anchored at the api-catalog URL, carrying
+  # The linkset's first member: anchored at the api-catalog URL, carrying
   # the `item` link array.
   def member(linkset) = linkset[:linkset].first
 
@@ -211,35 +211,17 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to be_a(String)
     end
 
-    it 'carries the agents.txt v1.0 auth directives (auth-md alongside agent-auth)' do
-      d = directives(body)
-      expect(d['Authorization']).to eq('agent-auth auth-md')
-      expect(d['Identity']).to eq('required')
+    it 'names kiosk-pop with the x- prefix the standard gives an unregistered protocol' do
+      expect(directives(body)).to eq('Authorization' => 'x-kiosk-pop',
+                                     'Skills' => Kiosk.configuration.skill_url)
     end
 
-    # Payment directives are pay-conditional: emitted only when the
-    # provider serves `pay` (a payment_provider is configured → `pay` is in the
-    # computed capabilities).
-    context 'when the provider serves pay (payment_provider configured)' do
-      before { Kiosk.configure { |c| c.payment_provider = Object.new } }
-
-      it 'carries the AP2 payment directives' do
-        d = directives(described_class.agents_txt(base_url: 'https://api.acme.example'))
-        expect(d['Protocols']).to eq('ap2')
-        expect(d['Payments']).to eq('required')
-      end
-    end
-
-    context 'when the provider serves no pay (no payment_provider)' do
-      it 'omits the AP2 payment directives but keeps auth/identity' do
-        # Bare config from the outer `before` registers no payment_provider →
-        # capabilities excludes `pay`.
-        expect(body).not_to include('Protocols: ap2')
-        expect(body).not_to include('Payments: required')
-        d = directives(body)
-        expect(d['Authorization']).to eq('agent-auth auth-md')
-        expect(d['Identity']).to eq('required')
-      end
+    # The AP2 v0.1-shaped mandates are not the AP2 protocol agents.txt names,
+    # and `Payments: required` means no free path; `schema` is one.
+    it 'declares no payment protocol, even where the operator serves pay' do
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+      d = directives(described_class.agents_txt(base_url: 'https://api.acme.example'))
+      expect(d.keys).to eq(%w[Authorization Skills])
     end
 
     it 'emits a Skills directive pointing at the configured skill URL' do
@@ -294,31 +276,13 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:site][:name]).to eq('api.acme.example')
     end
 
-    # The `payments` block is pay-conditional: present only when the
-    # provider serves `pay` (payment_provider configured → `pay` in capabilities).
-    # Optional in agents.json v1.0, so omitted otherwise.
-    context 'when the provider serves pay (payment_provider configured)' do
-      before { Kiosk.configure { |c| c.payment_provider = Object.new } }
-
-      it 'declares AP2 payments as required' do
-        d = described_class.agents_json(base_url: 'https://api.acme.example')
-        expect(d[:payments][:required]).to be(true)
-        expect(d[:payments]).to have_key(:ap2)
-      end
+    it 'declares no payments block, even where the operator serves pay' do
+      Kiosk.configure { |c| c.payment_provider = Object.new }
+      expect(described_class.agents_json(base_url: 'https://api.acme.example')).not_to have_key(:payments)
     end
 
-    context 'when the provider serves no pay (no payment_provider)' do
-      it 'omits the payments key entirely' do
-        # Bare config from the outer `before` registers no payment_provider →
-        # capabilities excludes `pay`.
-        expect(doc).not_to have_key(:payments)
-      end
-    end
-
-    it 'advertises agent-auth + auth-md with the agent-configuration discovery pointer' do
-      expect(doc[:authorization][:protocols]).to eq(%w[agent-auth auth-md])
-      expect(doc[:authorization][:discovery]).to eq('/.well-known/agent-configuration')
-      expect(doc[:authorization][:identity]).to eq('required')
+    it 'advertises kiosk-pop with kiosk.json as its discovery document' do
+      expect(doc[:authorization]).to eq(protocols: %w[x-kiosk-pop], discovery: '/.well-known/kiosk.json')
     end
 
     it 'lists the configured skill' do
@@ -330,35 +294,6 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:skills].first[:url]).to eq('https://example.test/skill.md')
     end
 
-    # The block carries POINTERS, not a copy of the
-    # contract. Four keys, exactly.
-    it 'carries the wire pointers under the x-kiosk extension' do
-      declare_query('catalog')
-      d = described_class.agents_json(base_url: 'https://api.acme.example')
-      xk = d[:'x-kiosk']
-      expect(xk.keys).to eq(%i[schema api_catalog mount_path api_version])
-      # The pointer carries the same `?v=<digest>` cache-buster `kiosk.json`
-      # publishes: a pointer a client may follow must point at the URL
-      # that is safe to cache.
-      expect(xk[:schema]).to eq("/kiosk/schema?v=#{Kiosk::Server::SchemaDocument.digest}")
-      expect(xk[:api_catalog]).to eq('/.well-known/api-catalog')
-      expect(xk[:mount_path]).to eq('/kiosk')
-      expect(xk[:api_version]).to eq(Kiosk::Protocol::API_VERSION)
-    end
-
-    # It stopped echoing `capabilities` (the `wire.verbs` key is GONE): a
-    # discovery envelope that restates the catalog is a second source of truth
-    # for it, and `kiosk.json` is canonical. `min_client` went the same way.
-    it 'does not echo capabilities or min_client under x-kiosk' do
-      declare_query('catalog')
-      d = described_class.agents_json(base_url: 'https://api.acme.example')
-      xk = d[:'x-kiosk']
-      expect(xk).not_to have_key(:wire)
-      expect(xk).not_to have_key(:verbs)
-      expect(xk).not_to have_key(:capabilities)
-      expect(xk).not_to have_key(:min_client)
-    end
-
     # Same rule, same NEW reason as kiosk.json above: a pointer, not a copy.
     it 'never names a registered verb in this companion — pointer, not copy' do
       declare_query('secret_pricing_tiers')
@@ -366,49 +301,70 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(JSON.generate(d)).not_to include('secret_pricing_tiers')
     end
 
-    it 'points at the RFC 9727 api-catalog under the x-kiosk extension' do
-      expect(doc[:'x-kiosk'][:api_catalog]).to eq('/.well-known/api-catalog')
+    it 'names the agents.json v1.0 schema' do
+      expect(doc[:$schema]).to eq('https://agents-txt.com/schema/agents-json/v1.0.json')
     end
   end
 
-  # ─── W3: /.well-known/agent-configuration (agent-auth discovery) ─────────
-  describe '.agent_configuration' do
-    subject(:doc) { described_class.agent_configuration(base_url: 'https://api.acme.example') }
+  # ─── /.well-known/oauth-authorization-server (RFC 8414) ─────────────────
+  describe '.oauth_authorization_server' do
+    subject(:doc) { described_class.oauth_authorization_server(base_url: 'https://api.acme.example') }
 
-    it 'advertises the issuer' do
-      expect(doc[:issuer]).to eq('https://api.acme.example')
+    it 'names the issuer and the device-code grant at its two endpoints' do
+      expect(doc).to eq(
+        issuer: 'https://api.acme.example',
+        token_endpoint: 'https://api.acme.example/kiosk/oauth/token',
+        device_authorization_endpoint: 'https://api.acme.example/kiosk/oauth/device_authorization',
+        jwks_uri: 'https://api.acme.example/kiosk/.well-known/jwks.json',
+        response_types_supported: [],
+        grant_types_supported: ['urn:ietf:params:oauth:grant-type:device_code'],
+        token_endpoint_auth_methods_supported: ['none'],
+        service_documentation: 'https://api.acme.example/auth.md'
+      )
     end
 
-    it 'lists the four auth endpoints as absolute URLs' do
-      expect(doc[:endpoints][:challenge]).to eq('https://api.acme.example/kiosk/auth/challenge')
-      expect(doc[:endpoints][:register]).to  eq('https://api.acme.example/kiosk/auth/register')
-      expect(doc[:endpoints][:login]).to     eq('https://api.acme.example/kiosk/auth/login')
-      expect(doc[:endpoints][:revoke]).to    eq('https://api.acme.example/kiosk/auth/revoke')
-    end
-
-    it 'points at the JWKS document' do
-      expect(doc[:jwks_uri]).to eq('https://api.acme.example/kiosk/.well-known/jwks.json')
-    end
-
-    it 'declares kiosk-pop plus the binding modes' do
-      expect(doc[:auth_modes]).to eq(%w[kiosk-pop user-claimed link-code])
-    end
-
-    it 'points at /auth.md for the full method description' do
-      expect(doc[:auth_md]).to eq('https://api.acme.example/auth.md')
-    end
-
-    it 'respects an overridden mount_path across all endpoints' do
-      Kiosk.configure { |c| c.mount_path = '/agent-surface' }
-      d = described_class.agent_configuration(base_url: 'https://api.acme.example')
-      expect(d[:endpoints][:challenge]).to eq('https://api.acme.example/agent-surface/auth/challenge')
-      expect(d[:jwks_uri]).to eq('https://api.acme.example/agent-surface/.well-known/jwks.json')
+    it 'is nil where the origin serves no account binding' do
+      Kiosk.configure { |c| c.serve_account_binding = false }
+      expect(doc).to be_nil
     end
 
     it 'validates the issuer (same contract as build)' do
       Kiosk.reset!
-      expect { described_class.agent_configuration(base_url: 'https://api.acme.example') }
-        .to raise_error(ArgumentError, /issuer/)
+      expect { doc }.to raise_error(ArgumentError, /issuer/)
+    end
+  end
+
+  # ─── /.well-known/agent-skills/index.json (Agent Skills Discovery) ───────
+  describe '.agent_skills_index' do
+    it 'lists the pinned skill with its digest' do
+      Kiosk.configure { |c| c.skill_sha256 = 'a' * 64 }
+      expect(described_class.agent_skills_index).to eq(
+        '$schema': 'https://schemas.agentskills.io/discovery/0.2.0/schema.json',
+        skills: [{ name: 'kiosk-agent-protocol', type: 'skill-md',
+                   description: described_class::SKILL_DESCRIPTION,
+                   url: Kiosk.configuration.skill_url, digest: "sha256:#{'a' * 64}" }]
+      )
+    end
+
+    it 'is nil without a pinned digest, which every entry requires' do
+      expect(described_class.agent_skills_index).to be_nil
+    end
+  end
+
+  # ─── /.well-known/ard.json (Agentic Resource Discovery) ──────────────────
+  describe '.ard' do
+    subject(:doc) { described_class.ard(base_url: 'https://api.acme.example') }
+
+    it 'lists kiosk.json and the skill, each under a URN of this host' do
+      expect(doc[:entries].map { |e| e.values_at(:identifier, :type, :url) }).to eq(
+        [['urn:air:api.acme.example:kiosk:api', 'application/json', 'https://api.acme.example/.well-known/kiosk.json'],
+         ['urn:air:api.acme.example:kiosk:skill', 'application/agent-skills+md', Kiosk.configuration.skill_url]]
+      )
+    end
+
+    it 'lists kiosk.json alone at an origin advertising no skill' do
+      Kiosk.configure { |c| c.skill_url = '' }
+      expect(doc[:entries].pluck(:identifier)).to eq(['urn:air:api.acme.example:kiosk:api'])
     end
   end
 
@@ -425,18 +381,21 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to start_with('# ')
     end
 
-    it 'presents kiosk-pop as anonymous-class + PoP upgrade — NEVER as Agent Verified' do
-      expect(body).to match(/anonymous/i)
-      expect(body).to match(/proof-of-possession/i)
-      expect(body).not_to include('Agent Verified')
+    # The heading the auth.md format and its scanners look for.
+    it 'opens with an H1 that names auth.md' do
+      expect(body.lines.first).to eq("# auth.md — Acme Inc.\n")
+    end
+
+    it 'says the auth.md registration endpoints are not served here' do
+      expect(body).to include('does not serve the auth.md')
     end
 
     it 'marks identity assertion (ID-JAG) as not supported / planned' do
       expect(body).to match(/Identity assertion \(ID-JAG\).*not supported \(planned\)/)
     end
 
-    it 'labels the link flow a Kiosk extension (auth.md has no human-initiated direction)' do
-      expect(body).to match(/Link code.*Kiosk extension/m)
+    it 'points at the OAuth metadata' do
+      expect(body).to include('https://api.acme.example/.well-known/oauth-authorization-server')
     end
 
     # ── The register step teaches the header PoW transport ──────────────────
@@ -565,98 +524,56 @@ RSpec.describe Kiosk::Server::WellKnown do
   describe '.api_catalog' do
     subject(:doc) { described_class.api_catalog(base_url: 'https://api.acme.example') }
 
-    it 'returns an RFC 9727 linkset anchored at the api-catalog URL' do
-      expect(doc).to have_key(:linkset)
+    def descs(linkset) = linkset[:linkset].find { |m| m.key?(:'service-desc') }&.dig(:'service-desc')
+
+    it 'anchors the items at the api-catalog URL' do
       expect(member(doc)[:anchor]).to eq('https://api.acme.example/.well-known/api-catalog')
     end
 
-    it 'carries a non-empty item array of endpoint links' do
-      items = member(doc)[:item]
-      expect(items).to be_an(Array)
-      expect(items).not_to be_empty
-      expect(items).to all(include(:href, :rel))
-    end
-
-    it 'maps only the modules that still HAVE a single endpoint' do
-      # A module holding N verbs has N endpoints, so the catalog links THE
-      # VERBS (below) rather than a module URL that answers nothing.
-      expect(described_class::MODULE_ENDPOINTS).to eq('pay' => 'pay')
-    end
-
-    it 'links the two descriptions, THEN every registered verb, then pay' do
+    it 'links every registered verb, then pay, as an item with its method' do
       declare_query('catalog')
       declare_action('checkout')
       Kiosk.configure { |c| c.payment_provider = Object.new }
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      hrefs = member(d)[:item].pluck(:href)
-      # Every module is live here — schema, queries, actions AND pay. The two
-      # `service-desc` members come first; then one `item` per registered
-      # verb, at the endpoint the verb answers on.
-      expect(hrefs).to eq(["https://api.acme.example/kiosk/schema#{v}",
-                           "https://api.acme.example/kiosk/openapi.json#{v}",
-                           'https://api.acme.example/kiosk/catalog',
-                           'https://api.acme.example/kiosk/checkout',
-                           'https://api.acme.example/kiosk/pay',
-                           'https://api.acme.example/agents.json'])
-      expect(hrefs).not_to include('https://api.acme.example/kiosk/query')
-      expect(hrefs).not_to include('https://api.acme.example/kiosk/run')
-    end
-
-    it 'omits the endpoints of modules not present in capabilities' do
-      # Register only a query → capabilities = [schema, queries]; the pay
-      # module is absent, so its endpoint is not catalogued.
-      declare_query('catalog')
-      d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      hrefs = member(d)[:item].pluck(:href)
-      expect(hrefs).to include("https://api.acme.example/kiosk/schema#{v}")
-      expect(hrefs).not_to include('https://api.acme.example/kiosk/pay')
-    end
-
-    # ── Verb names are public ────────────────────────────────────────────
-    #
-    # The fixture verbs are named to sound like secrets. They are not: this
-    # document is a render of in-process state, so it caches behind a CDN and
-    # anonymous enumeration costs the origin nothing. Asserted positively, so
-    # it fails if the catalog stops publishing them.
-    it 'hyperlinks EVERY registered verb, at its own endpoint, unauthenticated' do
-      declare_query('secret_pricing_tiers')
-      declare_action('cancel_enterprise_contract')
-      d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      items = member(d)[:item]
-
-      expect(items).to include(
-        { href: 'https://api.acme.example/kiosk/secret_pricing_tiers',
-          rel: 'item', 'kiosk-method': ['GET'] },
-        { href: 'https://api.acme.example/kiosk/cancel_enterprise_contract',
-          rel: 'item', 'kiosk-method': ['POST'] }
+      expect(member(d)[:item]).to eq(
+        [{ href: 'https://api.acme.example/kiosk/catalog', 'kiosk-method': ['GET'] },
+         { href: 'https://api.acme.example/kiosk/checkout', 'kiosk-method': ['POST'] },
+         { href: 'https://api.acme.example/kiosk/pay', 'kiosk-method': ['POST'] }]
       )
     end
 
-    # The METHOD is the half a bare href cannot carry, and it is not decorative:
-    # a GET at an action's path is a 405. `kiosk-method` is an EXTENSION target
-    # attribute, so RFC 9264 §4.2.4.3 serializes it as an array of strings.
-    it 'says which METHOD reaches each verb — GET a query, POST an action' do
-      declare_query('catalog')
-      declare_action('checkout')
-      d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      by_href = member(d)[:item].to_h { |i| [i[:href], i[:'kiosk-method']] }
-
-      expect(by_href['https://api.acme.example/kiosk/catalog']).to eq(['GET'])
-      expect(by_href['https://api.acme.example/kiosk/checkout']).to eq(['POST'])
-      # A service description is not an operation and carries no method.
-      expect(by_href["https://api.acme.example/kiosk/schema#{v}"]).to be_nil
+    # The fixture verbs are named to sound like secrets. They are not: this
+    # document is a render of in-process state, so it caches behind a CDN and
+    # anonymous enumeration costs the origin nothing.
+    it 'hyperlinks EVERY registered verb, at its own endpoint, unauthenticated' do
+      declare_query('secret_pricing_tiers')
+      declare_action('cancel_enterprise_contract')
+      hrefs = member(described_class.api_catalog(base_url: 'https://api.acme.example'))[:item].pluck(:href)
+      expect(hrefs).to eq(%w[https://api.acme.example/kiosk/secret_pricing_tiers
+                             https://api.acme.example/kiosk/cancel_enterprise_contract])
     end
 
-    # RFC 9727: a catalog lists APIs and points at their DESCRIPTIONS. So
-    # both description members stay, and the operations are listed beside
-    # them.
-    it 'keeps both service-desc members — the operations are added, not swapped in' do
+    # RFC 9727 Appendix A.1: a description is a `service-desc` link of the API.
+    it 'links the two versioned descriptions from the endpoint' do
       declare_query('catalog')
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      items = member(d)[:item]
-      expect(items.select { |i| i[:rel] == 'service-desc' }.pluck(:href))
-        .to eq(["https://api.acme.example/kiosk/schema#{v}", "https://api.acme.example/kiosk/openapi.json#{v}"])
-      expect(items).to include(hash_including(href: 'https://api.acme.example/kiosk/catalog', rel: 'item'))
+      expect(d[:linkset].last).to eq(
+        anchor: 'https://api.acme.example/kiosk',
+        'service-desc': [{ href: "https://api.acme.example/kiosk/schema#{v}", type: 'application/json' },
+                         { href: "https://api.acme.example/kiosk/openapi.json#{v}",
+                           type: Kiosk::Server::OpenApi::CONTENT_TYPE }]
+      )
+    end
+
+    it 'links nothing when nothing is registered' do
+      expect(doc).to eq(linkset: [{ anchor: 'https://api.acme.example/.well-known/api-catalog', item: [] }])
+      expect(descs(doc)).to be_nil
+    end
+
+    it 'omits pay when the origin serves none' do
+      declare_query('catalog')
+      hrefs = member(described_class.api_catalog(base_url: 'https://api.acme.example'))[:item].pluck(:href)
+      expect(hrefs).not_to include('https://api.acme.example/kiosk/pay')
     end
 
     # Publishing every verb is acceptable only while the document is CHEAP
@@ -672,67 +589,16 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(Kiosk::Server::Actions).to have_received(:known).at_least(:once)
     end
 
-    it 'links no wire endpoints when nothing is registered (schema module absent)' do
-      # Bare config registers no queries/actions → capabilities = []; only the
-      # agents.json discovery companion is catalogued.
-      hrefs = member(doc)[:item].pluck(:href)
-      expect(hrefs).to eq(['https://api.acme.example/agents.json'])
-    end
-
-    it 'tags the schema endpoint as the machine-readable service-desc' do
-      declare_query('catalog')
-      d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      schema = member(d)[:item].find { |i| i[:href].start_with?('https://api.acme.example/kiosk/schema') }
-      expect(schema[:href]).to eq("https://api.acme.example/kiosk/schema#{v}")
-      expect(schema[:rel]).to eq('service-desc')
-    end
-
-    it 'advertises the DERIVED openapi.json beside it — the only place it is advertised' do
-      # RFC 8631 allows more than one `service-desc`; the canonical
-      # bespoke catalog stays FIRST, and the derived document — which the skill
-      # names nowhere — follows it. This item and the renderer are the whole of
-      # the provisional surface.
-      declare_query('catalog')
-      d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      descs = member(d)[:item].select { |i| i[:rel] == 'service-desc' }.pluck(:href)
-
-      expect(descs).to eq(["https://api.acme.example/kiosk/schema#{v}",
-                           "https://api.acme.example/kiosk/openapi.json#{v}"])
-    end
-
-    it 'advertises no openapi.json when there is nothing to describe' do
-      hrefs = member(doc)[:item].pluck(:href)
-      expect(hrefs.grep(%r{/kiosk/openapi\.json})).to be_empty
-    end
-
-    it 'tags the one remaining non-description wire endpoint — `pay` — with rel=item' do
-      # `service-desc` is for the two documents that DESCRIBE the API; a live
-      # API endpoint is a plain catalogued `item`. Since the cutover `pay` is
-      # the only one of those left with a single URL to link.
-      declare_action('checkout')
-      Kiosk.configure { |c| c.payment_provider = Object.new }
-      d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      pay = d[:linkset].first[:item].find { |i| i[:href].end_with?('/pay') }
-      expect(pay[:rel]).to eq('item')
-    end
-
-    it 'links the agents.json discovery companion' do
-      hrefs = member(doc)[:item].pluck(:href)
-      expect(hrefs).to include('https://api.acme.example/agents.json')
-    end
-
-    it 'respects an overridden mount_path for the wire endpoints' do
+    it 'respects an overridden mount_path' do
       declare_query('catalog')
       Kiosk.configure { |c| c.mount_path = '/agent-surface' }
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      hrefs = d[:linkset].first[:item].pluck(:href)
-      expect(hrefs).to include("https://api.acme.example/agent-surface/schema#{v}")
+      expect(descs(d).first[:href]).to eq("https://api.acme.example/agent-surface/schema#{v}")
     end
 
     it 'strips trailing slashes from base_url' do
       d = described_class.api_catalog(base_url: 'https://api.acme.example/')
-      expect(d[:linkset].first[:anchor])
-        .to eq('https://api.acme.example/.well-known/api-catalog')
+      expect(member(d)[:anchor]).to eq('https://api.acme.example/.well-known/api-catalog')
     end
 
     it 'validates the issuer (same contract as build)' do

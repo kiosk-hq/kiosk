@@ -145,7 +145,7 @@ assert "…and carries NO Vary, even when the request negotiates" \
 #
 # The api-catalog MUST name every verb. It is a static, untolled GET that
 # anyone may read without authenticating, and an enumeration nobody has to ask
-# for is not a defence worth keeping. The other five still must NOT name one —
+# for is not a defence worth keeping. The other documents still must NOT name one —
 # for a different reason, which is that they are POINTERS and not copies of the
 # contract. Both halves are asserted POSITIVELY below; "no longer refuses to
 # publish" would be a green nothing.
@@ -153,7 +153,8 @@ assert "…and carries NO Vary, even when the request negotiates" \
 # NON-VACUITY: every one of these documents names this origin. If a fetch or a
 # grep silently stops working, the control fails, so the "0" assertions keep
 # their meaning.
-for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well-known/agent-configuration" "/auth.md"; do
+for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/auth.md" \
+                  "/.well-known/oauth-authorization-server" "/.well-known/ard.json"; do
   body=$(curl -sf "$SERVER_URL$public_doc")
   assert "$public_doc is really being read (control token)" \
     "$(echo "$body" | grep -qF "$SERVER_URL" && echo present || echo MISSING)" "present"
@@ -163,7 +164,7 @@ for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/.well
   done
 done
 
-# THE INVERSE, on the sixth document. Every verb, at its real per-verb
+# THE INVERSE, on the api-catalog. Every verb, at its real per-verb
 # endpoint, with the method that reaches it — anonymously.
 apc_body=$(curl -sf "$SERVER_URL/.well-known/api-catalog")
 for verb_name in salons my_appointments book_appointment; do
@@ -181,18 +182,21 @@ assert "…an action is advertised POST" \
 # pointer with a one-minute TTL, so what it hands a reader is the url that may
 # be cached for a year.
 assert "…and links the catalog at its versioned url" \
-  "$(echo "$apc_body" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(test("\\?v=[0-9a-f]{32}$")) | all')" "true"
+  "$(echo "$apc_body" | jq -r '[.linkset[1]."service-desc"[].href] | map(test("\\?v=[0-9a-f]{32}$")) | all')" "true"
 apc_headers=$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/api-catalog")
 assert "…served public, one minute" \
   "$(echo "$apc_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
 assert "…and carries NO Vary, even when the request negotiates" \
   "$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
+# RFC 9727 §2: a HEAD request finds the catalog by its Link header.
+assert "…and a HEAD answers its rel=\"api-catalog\" Link" \
+  "$(curl -sS -I "$SERVER_URL/.well-known/api-catalog" | grep -i '^Link:' | grep -c 'rel="api-catalog"')" "1"
 
-# ─── native discovery: agents.txt / agents.json / agent-configuration ───
+# ─── native discovery: agents.txt / agents.json / OAuth metadata ───────
 #
-# The agents.txt v1.0 surface (ROOT-served) plus the RFC 8414-style
-# agent-configuration doc, all served by DiscoveryController from the same
-# WellKnown model as kiosk.json above (so they cannot drift).
+# The agents.txt v1.0 surface (ROOT-served) plus the RFC 8414 metadata, all
+# served by DiscoveryController from the same WellKnown model as kiosk.json
+# above (so they cannot drift).
 
 printf "\n\033[1m=== /agents.txt (native agents.txt v1.0) ===\033[0m\n"
 
@@ -203,7 +207,8 @@ at_body=$(cat "$AGENTS_TXT_BODY")
 assert "agents.txt → 200"            "$at_status" "200"
 assert "agents.txt Content-Type"     "$(echo "$at_headers" | grep -i '^Content-Type:' | grep -ic 'text/plain')" "1"
 assert "agents.txt CORS *"           "$(echo "$at_headers" | grep -i '^Access-Control-Allow-Origin:' | grep -c '\*')" "1"
-assert "agents.txt Protocols: ap2"   "$(echo "$at_body" | grep -c '^Protocols: ap2$')" "1"
+assert "agents.txt names x-kiosk-pop" "$(echo "$at_body" | grep -c '^Authorization: x-kiosk-pop$')" "1"
+assert "agents.txt claims no payment protocol" "$(echo "$at_body" | grep -c '^Protocols:' || true)" "0"
 assert "agents.txt has Skills:"      "$(echo "$at_body" | grep -c '^Skills: ')" "1"
 
 printf "\n\033[1m=== /agents.json (native agents.json v1.0) ===\033[0m\n"
@@ -213,22 +218,18 @@ aj_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/agents.json")
 aj=$(curl -sf "$SERVER_URL/agents.json")
 assert "agents.json → 200"           "$aj_status" "200"
 assert "agents.json Content-Type"    "$(echo "$aj_headers" | grep -i '^Content-Type:' | grep -ic 'application/json')" "1"
-assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.discovery')" "/.well-known/agent-configuration"
-# x-kiosk carries POINTERS, not a copy of the contract: it stopped echoing
-# `capabilities` under `wire.verbs`.
-assert "agents.json x-kiosk keys"    "$(echo "$aj" | jq -r '."x-kiosk" | keys_unsorted | join(",")')" "schema,api_catalog,mount_path,api_version"
-# The pointer carries the boot digest as `?v=` — the cache-busting
-# half, without which a year-long TTL on a fixed URL is a stale catalogue.
-assert "agents.json x-kiosk.schema is digest-versioned" \
-  "$(echo "$aj" | jq -r '."x-kiosk".schema' | grep -Ec '^/kiosk/schema\?v=[0-9a-f]{32}$')" "1"
-assert "agents.json x-kiosk has no wire.verbs echo" "$(echo "$aj" | jq -r '."x-kiosk" | has("wire")')" "false"
+assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.discovery')" "/.well-known/kiosk.json"
+assert "agents.json has no root extension" "$(echo "$aj" | jq -r 'keys | map(select(startswith("x-"))) | length')" "0"
 
-printf "\n\033[1m=== /.well-known/agent-configuration (agent-auth discovery) ===\033[0m\n"
+printf "\n\033[1m=== /.well-known/oauth-authorization-server (RFC 8414) ===\033[0m\n"
 
-ac_status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/.well-known/agent-configuration")
-ac=$(curl -sf "$SERVER_URL/.well-known/agent-configuration")
-assert "agent-configuration → 200"        "$ac_status" "200"
-assert "agent-configuration endpoints.register" "$(echo "$ac" | jq -r '.endpoints.register | length > 0')" "true"
+as_meta=$(curl -sf "$SERVER_URL/.well-known/oauth-authorization-server")
+assert "oauth metadata names the issuer" "$(echo "$as_meta" | jq -r '.issuer')" "$KIOSK_ISSUER"
+# The endpoints it names are the ones the binding ceremony below dials.
+assert "oauth metadata names the device endpoint" \
+  "$(echo "$as_meta" | jq -r '.device_authorization_endpoint')" "$SERVER_URL/kiosk/oauth/device_authorization"
+assert "oauth metadata names the token endpoint" \
+  "$(echo "$as_meta" | jq -r '.token_endpoint')" "$SERVER_URL/kiosk/oauth/token"
 
 # ─── /auth.md is not a cold-start dead end ───────────────────────────────
 #
@@ -251,6 +252,7 @@ assert "auth.md forbids a hand-rolled solver" \
 # Non-vacuity control: this grep really is reading the served document.
 assert "auth.md is really being read (control token)" \
   "$(printf '%s' "$authmd_body" | grep -c '^## Discover$')" "1"
+assert "auth.md opens with the auth.md heading" "$(printf '%s' "$authmd_body" | head -1 | grep -c '^# auth.md')" "1"
 
 printf "\n\033[1m=== /.well-known/api-catalog (RFC 9727 linkset) ===\033[0m\n"
 
@@ -275,7 +277,7 @@ printf "\n\033[1m=== GET /kiosk/openapi.json (derived, RFC 9727 service-desc) ==
 # pointer with a one-minute TTL, so the url it hands a reader is the one that
 # may be cached for a year, not the bare path.
 assert "api-catalog advertises it as a service-desc" \
-  "$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(test("/kiosk/openapi\\.json\\?v=[0-9a-f]{32}$")) | any')" \
+  "$(echo "$apc" | jq -r '[.linkset[1]."service-desc"[].href] | map(test("/kiosk/openapi\\.json\\?v=[0-9a-f]{32}$")) | any')" \
   "true"
 
 # PUBLIC AND UNTOLLED, on the same terms as `GET /kiosk/schema` and the
@@ -302,7 +304,7 @@ assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')
 oa_etag=$(echo "$oa_headers" | tr -d '\r' | grep -i '^ETag:' | sed 's/.*"\(.*\)"/\1/')
 assert "If-None-Match on its ETag → 304" \
   "$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/openapi.json" -H "If-None-Match: \"$oa_etag\"")" "304"
-oa_v=$(echo "$apc" | jq -r '[.linkset[0].item[] | select(.rel == "service-desc") | .href] | map(select(test("openapi"))) | .[0]' | sed 's/.*v=//')
+oa_v=$(echo "$apc" | jq -r '[.linkset[1]."service-desc"[].href] | map(select(test("openapi"))) | .[0]' | sed 's/.*v=//')
 assert "?v=<version> is immutable for a year" \
   "$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/openapi.json?v=$oa_v" | grep -ic '^Cache-Control: max-age=31536000, public, immutable')" "1"
 assert "declares OpenAPI 3.1"        "$(echo "$oa" | jq -r '.openapi')" "3.1.0"

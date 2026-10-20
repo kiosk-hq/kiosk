@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "application/linkset+json as RFC 9264 section 4.2 defines it, written as a schema: the RFC publishes none.",
+  "type": "object",
+  "required": ["linkset"],
+  "additionalProperties": false,
+  "properties": {
+    "linkset": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "anchor": { "type": "string", "format": "uri" } },
+        "additionalProperties": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["href"],
+            "properties": {
+              "href": { "type": "string", "format": "uri-reference" },
+              "type": { "type": "string" },
+              "media": { "type": "string" },
+              "title": { "type": "string" },
+              "hreflang": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

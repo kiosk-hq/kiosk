@@ -43,7 +43,7 @@ class DiscoveryStory < StoryTest
     end
   end
 
-  test 'the landing page advertises the skill this origin pins' do
+  test 'the landing page advertises the skill this origin pins and its api-catalog' do
     pinned = published('/.well-known/kiosk.json').dig('kiosk', 'skill', 'url')
 
     assert_match %r{\Ahttps://kiosk\.tech/skill-v\d+\.\d+\.\d+\.md\z}, pinned
@@ -52,5 +52,6 @@ class DiscoveryStory < StoryTest
 
     assert_equal pinned, page.body[/<link\s+rel="kiosk"\s+href="([^"]*)"/, 1]
     assert_equal pinned, page['Link'][/<([^>]*)>\s*;\s*rel="kiosk"/, 1]
+    assert_equal '/.well-known/api-catalog', page['Link'][/<([^>]*)>\s*;\s*rel="api-catalog"/, 1]
   end
 end

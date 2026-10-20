@@ -139,8 +139,7 @@ as well as an invented one, while the role-less request still opens it.
 
 Asserts the schema catalog (queries/actions + non-empty descriptions, including
 `invite`/`accept_invite`) **and** that the advertised `capabilities` do **not**
-include `pay`, `agents.json` carries no payments block, and `agents.txt` carries
-no `Protocols: ap2` / `Payments:` directives.
+include `pay`, and that `agents.json` and `agents.txt` declare no payment.
 
 ### In-process tests
 

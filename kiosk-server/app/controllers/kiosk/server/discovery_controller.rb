@@ -23,8 +23,19 @@ module Kiosk
         render json: WellKnown.agents_json(base_url: request.base_url)
       end
 
-      def agent_configuration
-        render json: WellKnown.agent_configuration(base_url: request.base_url)
+      def oauth_authorization_server
+        render_or_not_found WellKnown.oauth_authorization_server(base_url: request.base_url)
+      end
+
+      def agent_skills_index
+        allow_cors
+        render_or_not_found WellKnown.agent_skills_index
+      end
+
+      def ard
+        allow_cors
+        short_ttl
+        render json: WellKnown.ard(base_url: request.base_url)
       end
 
       def kiosk_json
@@ -35,6 +46,8 @@ module Kiosk
       def api_catalog
         allow_cors
         short_ttl
+        # RFC 9727 §2: a HEAD request finds the catalog by this header.
+        response.set_header('Link', %(<#{request.base_url}/.well-known/api-catalog>; rel="api-catalog"))
         render json: WellKnown.api_catalog(base_url: request.base_url),
                content_type: 'application/linkset+json; ' \
                              'profile="https://www.rfc-editor.org/info/rfc9727"'
@@ -47,6 +60,10 @@ module Kiosk
       end
 
       private
+
+      def render_or_not_found(document)
+        document ? render(json: document) : head(:not_found)
+      end
 
       # agents.txt v1.0 requires `Access-Control-Allow-Origin: *`.
       def allow_cors

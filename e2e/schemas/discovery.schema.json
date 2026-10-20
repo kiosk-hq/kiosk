@@ -104,7 +104,8 @@
           "properties": {
             "url": {
               "type": "string",
-              "description": "A versioned, immutable skill URL on kiosk.tech (skill-vX.Y.Z.md)."
+              "description": "A versioned, immutable skill URL on kiosk.tech (skill-vX.Y.Z.md). An assistant refuses a skill on any other host.",
+              "pattern": "^https://kiosk\\.tech/skill-v[0-9]+\\.[0-9]+\\.[0-9]+\\.md$"
             },
             "sha256": {
               "type": "string",

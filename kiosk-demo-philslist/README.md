@@ -4,7 +4,7 @@ A free classifieds board, Kiosk-enabled. This is the demo that proves Kiosk is
 **not only for commerce**: it exercises the full query + action + `schema` +
 identity-binding surface with **no money on the wire at all** — no `pay` verb,
 no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
-`capabilities`, `agents.json` and `agents.txt`.
+`capabilities`.
 
 The AP2 mandate and settlement TABLES are present and empty, and that is the
 canonical install rather than an oversight: every demo runs the same unmodified
@@ -23,15 +23,13 @@ services/data use here.
 Demonstrates:
 
 - `/.well-known/kiosk.json` discovery **with `pay` absent** from capabilities —
-  and `agents.json` / `agents.txt` carrying no payments block (the honest
-  signal this operator takes no money)
+  the honest signal this operator takes no money
 - Authenticated REST wire surface — one endpoint per verb
   (`GET /kiosk/browse_listings`, `GET /kiosk/my_listings`,
   `POST /kiosk/post_listing`, `POST /kiosk/edit_listing`,
   `POST /kiosk/close_listing`) beside the public `GET /kiosk/schema` — and
   **deliberately no payments**: philslist configures no `payment_provider`, so
-  `pay` is absent from `capabilities`, from `agents.json` and from `agents.txt`,
-  and `POST /kiosk/pay` — which the mounted engine draws at every origin, because
+  `pay` is absent from `capabilities`, and `POST /kiosk/pay` — which the mounted engine draws at every origin, because
   the path is the protocol's — refuses an authenticated caller with `501
   module_not_served`, the origin-wide refusal
 - App-layer data isolation on an **owned resource**: any signed-in assistant may
@@ -119,8 +117,7 @@ The stories in `test/stories/` show it:
   `NoSellerPiiOnTheOpenBoard`, `ContactDetailsStayOutOfTheRequestLog`, and the
   shared `DeviceGrantRoleSelfSelection`.
 - **Not only commerce** — the capabilities are `schema`, `queries` and `actions`
-  only: no `pay`, no `events`; `agents.json` and `agents.txt` carry no payment
-  terms; the catalogue is public, and its examples satisfy their own schemas.
+  only: no `pay`, no `events`; the catalogue is public, and its examples satisfy their own schemas.
 - **Registration toll** — registering without a proof is **402 `pow_required`**,
   even on a board that sells nothing. A board records no spend, so each access
   token (one hour) also pays one proof on its first call.

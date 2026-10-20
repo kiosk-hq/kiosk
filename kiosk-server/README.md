@@ -375,7 +375,8 @@ kiosk-pop auth plane (`auth/challenge`, `auth/register`, `auth/login`,
 `auth/link`/`claim`/`unlink`, the verify and «Link an assistant» pages). The
 engine also installs the ROOT-relative discovery documents — `/agents.txt`,
 `/agents.json`, `/auth.md`,
-`/.well-known/{agent-configuration,kiosk.json,api-catalog}` — into the host app
+`/.well-known/{kiosk.json,api-catalog,oauth-authorization-server,ard.json}` and
+`/.well-known/agent-skills/index.json` — into the host app
 via `routes.append`, because the agents.txt standard and RFC 8615 place them at
 the origin root, outside any mount prefix. That install happens ONLY when the
 engine is mounted: merely bundling the gem adds no routes.

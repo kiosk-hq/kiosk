@@ -35,10 +35,12 @@ class ShopStory < StoryTest
     assert a_shopper.delivery_windows(address: '123 Demo Street, Dublin').refused?(:bad_request)
   end
 
-  test "a shopper whose clock is past midnight in UTC still sees today's Dublin windows" do
-    today = a_shopper.delivery_windows(headers: { 'Kiosk-Timezone' => 'UTC' }, date: Time.now.utc.to_date.iso8601)
+  test "a shopper's declared zone does not move the day a window is on" do
+    day      = DeliverySlots.default_zone.today.iso8601
+    declared = a_shopper.delivery_windows(headers: { 'Kiosk-Timezone' => 'Pacific/Niue' }, date: day)
 
-    assert_predicate today, :ok?, today
-    assert_not_empty today.rows
+    assert_predicate declared, :ok?, declared
+    assert_not_empty declared.rows
+    assert_equal a_shopper.delivery_windows(date: day).rows, declared.rows
   end
 end

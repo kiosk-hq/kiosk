@@ -13,8 +13,7 @@ module Kiosk
                  additionalProperties: false,
                  properties: {
                    date: { type: 'string', format: 'date',
-                           description: "The day on the customer's calendar (send " \
-                                        "`Kiosk-Timezone`), else the address's. Omit it " \
+                           description: "A day on the delivery address's clock. Omit it " \
                                         'for the soonest day the shop delivers.' },
                    delivery_address: { type: 'string', description: 'A Dublin address naming its postal district, e.g. "Dublin 2".' }
                  },
@@ -38,8 +37,7 @@ module Kiosk
                   label: "08:00–10:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                   timezone: DeliverySlots::DEFAULT_ZONE_NAME, district: 'D02' })
     def delivery_slots
-      @search = SlotSearch.new(delivery_address: params[:delivery_address], date: params[:date],
-                               caller_zone: Kiosk.reader_zone)
+      @search = SlotSearch.new(delivery_address: params[:delivery_address], date: params[:date])
       @search.validate!
     end
   end

@@ -5,8 +5,9 @@ require 'kiosk/protocol'
 
 module Kiosk
   module Server
-    # `Kiosk-Timezone`: the zone of the human the assistant acts for, in which a
-    # bare `YYYY-MM-DD` argument is read. It never decides how an answer is rendered.
+    # `Kiosk-Timezone`: the zone of the human the assistant acts for. A service
+    # time is on the clock of its place whatever this says; an operator may use it
+    # to tell the caller that the place's clock differs from theirs.
     module CallerTimezone
       HEADER  = Kiosk::Protocol::HEADER_TIMEZONE
       ENV_KEY = 'HTTP_KIOSK_TIMEZONE'

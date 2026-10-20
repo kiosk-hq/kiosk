@@ -3,12 +3,10 @@
 require 'test_helper'
 
 class SlotSearchTest < ActiveSupport::TestCase
-  SHOP             = DeliverySlots.default_zone
-  LISBON_CALLER    = Time.find_zone!('Europe/Lisbon')
-  BUCHAREST_CALLER = Time.find_zone!('Europe/Bucharest')
-  ADDRESS          = '42 Camden Street, Dublin 2'
-  # 23:30 in Dublin and Lisbon, 01:30 on the 8th in Bucharest.
-  LATE_EVENING     = Time.utc(2026, 9, 7, 22, 30)
+  SHOP    = DeliverySlots.default_zone
+  ADDRESS = '42 Camden Street, Dublin 2'
+  # 00:30 on the 8th in Dublin, still the 7th in UTC and far west of it.
+  AFTER_MIDNIGHT = Time.utc(2026, 9, 7, 23, 30)
 
   def search(**arguments) = SlotSearch.new(delivery_address: ADDRESS, **arguments)
 
@@ -18,31 +16,19 @@ class SlotSearchTest < ActiveSupport::TestCase
                  search(delivery_address: 'Dublin 24').tap(&:validate).errors.full_messages.sole)
   end
 
-  test 'the day a caller names is read on its declared calendar' do
-    travel_to LATE_EVENING do
-      assert_equal Date.new(2026, 9, 8), search(date: '2026-09-07').day
-      assert_equal Date.new(2026, 9, 8), search(date: '2026-09-07', caller_zone: LISBON_CALLER).day
-      assert_not search(date: '2026-09-07', caller_zone: BUCHAREST_CALLER).valid?
+  test "a named day is a day on the address's clock" do
+    travel_to AFTER_MIDNIGHT do
+      assert_equal Date.new(2026, 9, 9), search(date: '2026-09-09').day
+      assert_not search(date: '2026-09-07').valid?
     end
   end
 
-  test "a day already past on the caller's calendar is refused in the caller's terms" do
-    travel_to LATE_EVENING do
-      message = search(date: '2026-09-07', caller_zone: BUCHAREST_CALLER).tap(&:validate).errors.full_messages.sole
-
-      assert_includes message, 'date 2026-09-07 is in the past on the calendar it is read in (Europe/Bucharest)'
-      assert_includes message, 'the earliest day you can ask for is 2026-09-08'
-      assert_not_includes message, SHOP.name
-    end
-  end
-
-  # 00:30 on the 8th in Dublin, still the 7th in UTC and in Reykjavik.
-  test "a caller that declares no zone is read on the shop's clock" do
-    travel_to Time.utc(2026, 9, 7, 23, 30) do
+  test 'a day that has ended at the address is refused naming its zone' do
+    travel_to AFTER_MIDNIGHT do
       message = search(date: '2026-09-07').tap(&:validate).errors.full_messages.sole
 
-      assert_includes message, "date 2026-09-07 is in the past on the calendar it is read in (#{SHOP.name})"
-      assert_predicate search(date: '2026-09-07', caller_zone: Time.find_zone!('Atlantic/Reykjavik')), :valid?
+      assert_includes message, "date 2026-09-07 is in the past at the delivery address (#{SHOP.name})"
+      assert_includes message, 'the earliest day you can ask for is 2026-09-08'
     end
   end
 

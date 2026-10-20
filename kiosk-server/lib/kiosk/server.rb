@@ -19,7 +19,7 @@ module Kiosk
   def self.current_user_id = Server::SessionContext.identity.user_id
   def self.current_role    = Server::SessionContext.identity.role
 
-  # The zone the caller declared in `Kiosk-Timezone`, else `default`.
+  # The zone the caller declared in `Kiosk-Timezone`, else `default`. Never the clock of a service time.
   def self.reader_zone(default = nil) = Server::CurrentRequest.timezone || default
 end
 

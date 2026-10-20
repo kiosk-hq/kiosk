@@ -115,17 +115,12 @@ dates a published example, which addresses no district. The real IANA zone is
 used — not a fixed offset — so DST is handled automatically
 (`app/models/delivery_slots.rb`).
 
-**A `date` YOU send is read in YOUR calendar.** Declare it in the
-`Kiosk-Timezone` request header, as an IANA name, and `delivery_slots` reads a
-day you name on your human's calendar rather than on the shop's. Declare
-nothing and it is read at the delivery address. A calendar day is an
-INTERVAL, so a day you are
-still IN is never "in the past" even when the shop has already rolled over —
-that is the 23:05 case the rule exists for — and the rows then come back on the
-**shop's** calendar, which is how you learn that your tonight became its
-tomorrow. A day you have entirely finished IS past, and is a `400` naming the
-earliest day the shop can serve. `create_order` and `reschedule_delivery` take
-the row's `slot_at`, an instant, so no calendar is involved.
+**A `date` YOU send is a day at the delivery address.** `delivery_slots` reads
+it on the address's clock, as it renders every row. `Kiosk-Timezone` does not
+change that reading. A day that has ended at the address is a `400` naming the
+address's zone and the earliest day the shop can serve. `create_order` and
+`reschedule_delivery` take the row's `slot_at`, an instant, so no calendar is
+involved.
 
 **The row names its zone, and that is the point of it.** `slot_at` is
 unambiguous, but nobody says an offset out loud: the field a human
@@ -156,8 +151,8 @@ re-validate the same rule: a closed window is rejected with a clean **400
 (`bad_request`)**, never silently booked. After payment the courier sets out
 20–30 minutes later, or as a later window opens (`out_for_delivery`), and
 `delivered` follows five minutes on. `test/delivery_slots_test.rb` and
-`test/slot_search_test.rb` pin the filter across DST and the caller's
-declared calendar.
+`test/slot_search_test.rb` pin the filter across DST and on the address's
+clock.
 
 ## Prices and stock
 

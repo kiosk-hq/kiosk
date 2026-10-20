@@ -1565,7 +1565,7 @@ SPEC_UNITS = {
   'NOON_UTC' => { rule: :code, why: 'The instant two clock tests pin.' },
   'as' => { rule: :per_file, why: 'Each helper opens a session as a principal.' },
   'test' => { rule: :per_file, why: "Minitest's own declaration macro; each body is its own example." },
-  'TOKYO' => { rule: :code, why: "The far-side zone three clock specs use to prove rendering in the caller's zone." },
+  'TOKYO' => { rule: :code, why: 'The far-side zone three clock specs hand in, to prove rendering on a zone other than the default.' },
   'MONTREAL' => { rule: :code, why: 'The other zone the same three clock specs pair with TOKYO.' }
 }.freeze
 

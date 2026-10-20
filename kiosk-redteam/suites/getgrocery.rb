@@ -30,13 +30,6 @@ REDTEAM_ADDRESS = '1 Redteam St, Dublin 1'
 CLOCK_EAST = 'Pacific/Kiritimati' # UTC+14, no DST
 CLOCK_WEST = 'Pacific/Niue'       # UTC-11, no DST
 
-# Read the day slightly ahead so it is still current when the last request lands.
-CLOCK_PROBE_LEAD = 300
-
-def clock_probe_day(offset_hours)
-  (Time.now.utc + CLOCK_PROBE_LEAD + (offset_hours * 3600)).to_date.iso8601
-end
-
 # The catalog rows. A non-paginating query answers a BARE ARRAY, so there is no `rows` to unwrap.
 def catalog_rows(client, customer)
   body = client.query(customer, name: 'catalog').body
@@ -471,7 +464,7 @@ module GetgroceryScenarios
     end
   end
 
-  # §3.8.5: the caller's zone is never inferred from locale or geolocation headers.
+  # §3.8.5: a declared zone never moves a service day, and no zone is inferred from locale or geolocation headers.
   class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
     ADDRESS = '1 Redteam St, Dublin 1'
 
@@ -493,10 +486,10 @@ module GetgroceryScenarios
     def call(client, _profile)
       @client   = client
       @customer = client.register!
-      @day      = clock_probe_day(-11)
+      @day      = (Date.today + 1).iso8601
       ask_all
-      ok = control? && unmoved?(@baited_e) && unmoved?(@baited_w)
-      scenario_verdict(ok, @bare.status) { "#{control_detail}; #{bait_detail}" }
+      ok = control? && [@west, @east, @baited_e, @baited_w].all? { unmoved?(it) }
+      scenario_verdict(ok, @bare.status) { "#{control_detail}; #{moved_detail}" }
     end
 
     private
@@ -505,44 +498,34 @@ module GetgroceryScenarios
       @client.query(@customer, name: 'delivery_slots', date: @day, delivery_address: ADDRESS, headers: headers)
     end
 
-    # The declared header is asked first: it is the control, and it moves the answer.
     def ask_all
-      @declared = ask('Kiosk-Timezone' => CLOCK_WEST)
-      @ended    = ask('Kiosk-Timezone' => CLOCK_EAST)
-      @garbled  = ask('Kiosk-Timezone' => UNREADABLE)
       @bare     = ask({})
+      @garbled  = ask('Kiosk-Timezone' => UNREADABLE)
+      @west     = ask('Kiosk-Timezone' => CLOCK_WEST)
+      @east     = ask('Kiosk-Timezone' => CLOCK_EAST)
       @baited_e = ask(BAIT_EAST)
       @baited_w = ask(BAIT_WEST)
     end
 
+    # The origin reads the header: an unreadable zone is refused by name.
     def control?
-      @declared.status == 200 && @declared.body.is_a?(Array) && @declared.body.any? &&
-        refused_naming?(@ended, @day) && refused_naming?(@garbled, 'Kiosk-Timezone')
-    end
-
-    def refused_naming?(resp, text)
-      resp.status == 400 && error_code(resp) == 'bad_request' && detail_text(resp).include?(text)
+      @bare.status == 200 && @bare.body.is_a?(Array) && @bare.body.any? &&
+        @garbled.status == 400 && error_code(@garbled) == 'bad_request' &&
+        detail_text(@garbled).include?('Kiosk-Timezone')
     end
 
     def unmoved?(resp) = resp.status == @bare.status && resp.body == @bare.body
 
     def control_detail
-      "CONTROL date=#{@day} declared #{CLOCK_WEST} → #{@declared.status}/#{row_count(@declared)} rows, " \
-        "#{refusal_detail(CLOCK_EAST, @ended)}, #{refusal_detail(UNREADABLE, @garbled)} " \
-        '(want 200 with rows on the clock that day ' \
-        'belongs to, a 400 bad_request naming the day on the clock 25 hours ahead of ' \
-        'it, and a 400 bad_request naming the header for an unreadable zone)'
+      "CONTROL date=#{@day} bare → #{@bare.status}/#{row_count(@bare)} rows, declared #{UNREADABLE} → " \
+        "#{@garbled.status}/#{error_code(@garbled).inspect} detail=#{detail_text(@garbled)[0, 80].inspect} " \
+        '(want 200 with rows, and a 400 bad_request naming the header)'
     end
 
-    def refusal_detail(zone, resp)
-      "declared #{zone} → #{resp.status}/#{error_code(resp).inspect} detail=#{detail_text(resp)[0, 80].inspect}"
-    end
-
-    def bait_detail
-      "bare → #{@bare.status}, Kiribati-baited → " \
-        "#{@baited_e.status} (same=#{unmoved?(@baited_e)}), Niue-baited → #{@baited_w.status} " \
-        "(same=#{unmoved?(@baited_w)}) " \
-        '(want both baits byte-identical to bare — a declared clock, never an inferred one)'
+    def moved_detail
+      "declared #{CLOCK_WEST} same=#{unmoved?(@west)}, declared #{CLOCK_EAST} same=#{unmoved?(@east)}, " \
+        "Kiribati-baited same=#{unmoved?(@baited_e)}, Niue-baited same=#{unmoved?(@baited_w)} " \
+        "(want all four byte-identical to bare — a service day is on the address's clock)"
     end
   end
 

@@ -51,6 +51,9 @@ module Kiosk
                                   description: 'The first night `room_types` is free for; null when no dates were given.' },
                       check_out: { type: %w[string null], description: 'The checkout day; null when no dates were given.' },
                       timezone: { type: 'string', description: "The IANA zone the hotel's calendar runs on." },
+                      timezone_note: { type: 'string',
+                                       description: 'Present only when your declared Kiosk-Timezone is on another ' \
+                                                    "clock now: how far the hotel's clock is from yours." },
                       room_types: {
                         type: 'array',
                         description: 'Cheapest first.',

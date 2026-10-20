@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_context 'agent registration spec: customer origin' do
+RSpec.shared_context 'with a customer registration origin' do
   let(:pem) { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
 
   before do
@@ -13,8 +13,8 @@ RSpec.shared_context 'agent registration spec: customer origin' do
   end
 end
 
-RSpec.shared_context 'agent registration spec: provisioning stubs' do
-  include_context 'agent registration spec: customer origin'
+RSpec.shared_context 'with registration provisioning stubs' do
+  include_context 'with a customer registration origin'
 
   let(:con) { FakeConnection.new }
   # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
@@ -35,8 +35,8 @@ RSpec.shared_context 'agent registration spec: provisioning stubs' do
   end
 end
 
-RSpec.shared_context 'agent registration spec: factory stubs' do
-  include_context 'agent registration spec: customer origin'
+RSpec.shared_context 'with registration factory stubs' do
+  include_context 'with a customer registration origin'
 
   let(:con) { FakeConnection.new }
   # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
@@ -58,7 +58,7 @@ end
 
 RSpec.describe Kiosk::Server::AgentRegistration do
   describe 'role is pinned server-side (agents cannot choose it)' do
-    include_context 'agent registration spec: customer origin'
+    include_context 'with a customer registration origin'
 
     it 'does not accept a role argument on .call' do
       param_names = described_class.method(:call).parameters.map(&:last)
@@ -82,7 +82,7 @@ RSpec.describe Kiosk::Server::AgentRegistration do
   # nonce) is covered in pop_verifier_spec.rb + auth_challenge_spec.rb. Here we
   # stub it so the DB-provisioning branch can be exercised in isolation.
   describe 'provisioning (register-only; known keys 409, not re-issued)' do
-    include_context 'agent registration spec: provisioning stubs'
+    include_context 'with registration provisioning stubs'
 
     it 'requires a `signed` proof-of-possession argument' do
       param_names = described_class.method(:call).parameters
@@ -199,7 +199,7 @@ RSpec.describe Kiosk::Server::AgentRegistration do
   # record's id — so a bigint (or any non-uuid) id flows straight through,
   # instead of the framework forcing a uuid principal that 500s on bigint apps.
   describe 'assistant-account factory (config.assistant_creation)' do
-    include_context 'agent registration spec: factory stubs'
+    include_context 'with registration factory stubs'
 
     it 'calls the factory with ONLY the pubkey and uses its RETURN as the principal' do
       captured = {}

@@ -34,7 +34,7 @@ RSpec.describe Kiosk::Server::Engine do
   describe 'the default role in a booted app' do
     include DefaultRoleBoot
 
-    context 'an origin that declares roles and configures no default' do
+    context 'when an origin declares roles and configures no default' do
       it 'does not come up at all' do
         expect(boot('roles_without_default')['booted']).to be(false)
       end
@@ -53,7 +53,7 @@ RSpec.describe Kiosk::Server::Engine do
       end
     end
 
-    context 'an origin that declares roles AND a default' do
+    context 'when an origin declares roles AND a default' do
       it 'boots — this is what all seven demos and the e2e fixture configure' do
         expect(boot('roles_with_default')['booted']).to be(true)
       end
@@ -66,7 +66,7 @@ RSpec.describe Kiosk::Server::Engine do
     # ADR-0011's protected operator. The amendment narrows that decision to
     # origins that declare a role vocabulary; this one still boots with no role
     # anywhere, exactly as it did before.
-    context 'an origin that declares no roles at all' do
+    context 'when an origin declares no roles at all' do
       it 'boots' do
         expect(boot('no_roles')['booted']).to be(true)
       end

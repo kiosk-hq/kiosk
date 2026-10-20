@@ -9,7 +9,7 @@ require_relative 'support'
 RENTAL_BODY = { 'scooter_code' => 'SK-001', 'rental_token' => 'rt-b',
                 'exp' => 4_102_444_800 }.freeze
 
-RSpec.shared_context 'pay_for_other_use_self setup' do
+RSpec.shared_context 'with a gated action that one account pays for and another uses' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -25,7 +25,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
   describe '#call — non-vacuity' do
-    include_context 'pay_for_other_use_self setup'
+    include_context 'with a gated action that one account pays for and another uses'
 
     context "when B can use A's resource after paying for it (broken — C2 BREACH)" do
       it 'returns blocked: false' do
@@ -90,7 +90,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
   # check)" and the attack was never attempted — so a card decline and an
   # expired token were both reported as the ownership gate firing.
   describe '#call — only a 403 at pay time is the early ownership gate (K-732)' do
-    include_context 'pay_for_other_use_self setup'
+    include_context 'with a gated action that one account pays for and another uses'
 
     it 'scores the 403 forbidden pay refusal as the early ownership gate' do
       stub_registers('a', 'b')
@@ -149,7 +149,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
 
   # The use-time verdict names the ownership gate too.
   describe '#call — the use-time refusal must be the ownership gate (K-732)' do
-    include_context 'pay_for_other_use_self setup'
+    include_context 'with a gated action that one account pays for and another uses'
 
     def stub_flow(gated_status:, gated_code: nil, gated_body: nil)
       stub_registers('a', 'b')
@@ -190,7 +190,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
 
   # K-731 at a fifth call site: B's staged attestation was discarded too.
   describe "#call — B's staged KYC must be accepted (K-731)" do
-    include_context 'pay_for_other_use_self setup'
+    include_context 'with a gated action that one account pays for and another uses'
 
     let(:kyc_profile) do
       minimal_profile(
@@ -215,7 +215,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
   end
 
   describe '#call — skip conditions' do
-    include_context 'pay_for_other_use_self setup'
+    include_context 'with a gated action that one account pays for and another uses'
 
     it 'skips when gated_action is nil' do
       p = minimal_profile(pay_for: pay_for_callable)

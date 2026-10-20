@@ -2,14 +2,14 @@
 
 require 'story_helper'
 
-RSpec.shared_context 'a guest searching hotels' do
+RSpec.shared_context 'with a guest searching hotels' do
   let(:guest) { a_guest }
 
   def total(found) = found.header('x-total-count').to_i
 end
 
 RSpec.describe 'Finding a hotel', type: :story do
-  include_context 'a guest searching hotels'
+  include_context 'with a guest searching hotels'
 
   it 'a guest pages through every hotel in town, and a narrow search fits on one page' do
     first = guest.searches(limit: 20)

@@ -190,7 +190,7 @@ module ControllerAuthSpecDeviceHelpers
 end
 
 # ─── bad tokens on a wire endpoint are 401, never 500 ────────────
-RSpec.shared_context 'controller auth spec: bare DefaultAgentIdp' do
+RSpec.shared_context 'with a bare DefaultAgentIdp' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecWireHelpers
 
@@ -205,7 +205,7 @@ RSpec.shared_context 'controller auth spec: bare DefaultAgentIdp' do
 end
 
 # ─── KYC endpoint uses the CONFIGURED IdP, not a hardcoded one ───
-RSpec.shared_context 'controller auth spec: KYC attestation' do
+RSpec.shared_context 'with a KYC attestation and a custom agent idp' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecKycHelpers
 
@@ -233,7 +233,7 @@ RSpec.shared_context 'controller auth spec: KYC attestation' do
 end
 
 # ─── zero-config default idp; no session identity on the wire ──
-RSpec.shared_context 'controller auth spec: zero-config install' do
+RSpec.shared_context 'with a zero-config install' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecDefaultsHelpers
 
@@ -257,7 +257,7 @@ end
 # not which ones an unauthenticated caller may have. The role now comes from
 # the approving human (`DeviceVerification.approve`), so the parameter has no
 # legitimate sender and is refused whatever it says.
-RSpec.shared_context 'controller auth spec: device authorization' do
+RSpec.shared_context 'with device authorization on the wire' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecDeviceHelpers
 
@@ -276,7 +276,7 @@ end
 
 RSpec.describe Kiosk::Server::WireController do
   describe 'with the bare DefaultAgentIdp: public schema' do
-    include_context 'controller auth spec: bare DefaultAgentIdp'
+    include_context 'with a bare DefaultAgentIdp'
 
     # THE INVERSE OF THE FOUR BELOW, and the reason they moved (T-094).
     # `GET /kiosk/schema` answers an ANONYMOUS caller, under a public cache
@@ -323,7 +323,7 @@ RSpec.describe Kiosk::Server::WireController do
   end
 
   describe 'with the bare DefaultAgentIdp: schema versions' do
-    include_context 'controller auth spec: bare DefaultAgentIdp'
+    include_context 'with a bare DefaultAgentIdp'
 
     # The digest-versioned URL, which is the only one that may be cached long.
     it 'serves ?v=<digest> immutable, and a stale ?v= short-lived' do
@@ -353,7 +353,7 @@ RSpec.describe Kiosk::Server::WireController do
   end
 
   describe 'with the bare DefaultAgentIdp: bad tokens' do
-    include_context 'controller auth spec: bare DefaultAgentIdp'
+    include_context 'with a bare DefaultAgentIdp'
 
     it 'returns 401 Unauthenticated (not 500) for an EXPIRED token' do
       token = agent_token(now: Time.current - 7200)
@@ -382,7 +382,7 @@ RSpec.describe Kiosk::Server::WireController do
   end
 
   describe 'with the bare DefaultAgentIdp: malformed bodies' do
-    include_context 'controller auth spec: bare DefaultAgentIdp'
+    include_context 'with a bare DefaultAgentIdp'
 
     # Dialed at `pay` rather than at a verb path, deliberately: a per-verb call
     # reads its name off `params[:kiosk_verb]`, and touching `params` makes
@@ -412,7 +412,7 @@ RSpec.describe Kiosk::Server::WireController do
   end
 
   describe 'identity resolution defaults' do
-    include_context 'controller auth spec: zero-config install'
+    include_context 'with a zero-config install'
 
     it 'verifies a self-minted token with NO idp configured (bundled kiosk-pop default)' do
       declare_query('probe')
@@ -441,7 +441,7 @@ RSpec.describe Kiosk::Server::WireController do
 
   describe Kiosk::Server::KycAttestationController do
     describe 'IdP resolution' do
-      include_context 'controller auth spec: KYC attestation'
+      include_context 'with a KYC attestation and a custom agent idp'
 
       it 'authenticates via a custom configured agent_idp' do
         Kiosk.configure { |c| c.agent_idp = custom_idp }
@@ -463,7 +463,7 @@ RSpec.describe Kiosk::Server::WireController do
     end
 
     describe 'named attributes' do
-      include_context 'controller auth spec: KYC attestation'
+      include_context 'with a KYC attestation and a custom agent idp'
 
       it 'records the named anonymized attributes an attestation carries' do
         Kiosk.configure { |c| c.agent_idp = custom_idp }
@@ -489,7 +489,7 @@ RSpec.describe Kiosk::Server::WireController do
     end
 
     describe 'unauthenticated' do
-      include_context 'controller auth spec: KYC attestation'
+      include_context 'with a KYC attestation and a custom agent idp'
 
       it 'does NOT fall back to user_idp — KYC is an agent-only surface' do
         Kiosk.configure { |c| c.user_idp = custom_idp }
@@ -505,7 +505,7 @@ RSpec.describe Kiosk::Server::WireController do
     end
 
     describe 'malformed bodies' do
-      include_context 'controller auth spec: KYC attestation'
+      include_context 'with a KYC attestation and a custom agent idp'
 
       before { Kiosk.configure { |c| c.agent_idp = custom_idp } }
 
@@ -531,7 +531,7 @@ RSpec.describe Kiosk::Server::WireController do
 
   describe Kiosk::Server::OauthDeviceAuthorizationController do
     describe 'rejects a client-chosen role' do
-      include_context 'controller auth spec: device authorization'
+      include_context 'with device authorization on the wire'
 
       it 'rejects a role not among the configured roles with 400 invalid_request' do
         status, body = request_device_authorization('client_id' => 'kiosk-cli', 'role' => 'superadmin')

@@ -32,7 +32,7 @@ module SessionContextSpec
   def guc_names = connection.bound(/set_config/).map { |_sql, binds| binds.first }
 end
 
-RSpec.shared_context 'session context spec: fake connection' do
+RSpec.shared_context 'with a fake session connection' do
   include SessionContextSpec
 
   let(:connection) { FakeConnection.new }
@@ -44,7 +44,7 @@ end
 # `kiosk.current_user_id()` predicate and every RLS policy see NULL, and a
 # leaked one makes them see the PREVIOUS request's principal. Same skip
 # contract as the other real-Postgres files.
-RSpec.shared_context 'session context spec: real Postgres' do
+RSpec.shared_context 'with real Postgres for the session context' do
   include SessionContextSpec
 
   before { skip "no local Postgres reachable (#{SessionContextSpec.postgres_error})" if SessionContextSpec.postgres_error }
@@ -56,7 +56,7 @@ end
 
 RSpec.describe Kiosk::Server::SessionContext do
   describe '.open with agent identity' do
-    include_context 'session context spec: fake connection'
+    include_context 'with a fake session connection'
 
     it 'opens a transaction and yields self' do
       yielded = nil
@@ -114,7 +114,7 @@ RSpec.describe Kiosk::Server::SessionContext do
   end
 
   describe '#guc_statements' do
-    include_context 'session context spec: fake connection'
+    include_context 'with a fake session connection'
 
     it 'returns [sql, binds] pairs without executing' do
       ctx = described_class.new(connection: connection, identity: build_identity(actor: 'agent'))
@@ -128,7 +128,7 @@ RSpec.describe Kiosk::Server::SessionContext do
   end
 
   describe '#guc_statements enforce_db_role' do
-    include_context 'session context spec: fake connection'
+    include_context 'with a fake session connection'
 
     before { Kiosk.reset! }
 
@@ -163,7 +163,7 @@ RSpec.describe Kiosk::Server::SessionContext do
   end
 
   describe '.identity' do
-    include_context 'session context spec: fake connection'
+    include_context 'with a fake session connection'
 
     it 'raises unauthenticated outside a session' do
       expect { described_class.identity }
@@ -210,7 +210,7 @@ RSpec.describe Kiosk::Server::SessionContext do
   end
 
   describe 'against a real Postgres' do
-    include_context 'session context spec: real Postgres'
+    include_context 'with real Postgres for the session context'
 
     it 'lands the four GUCs on the connection the block then uses' do
       seen = {}

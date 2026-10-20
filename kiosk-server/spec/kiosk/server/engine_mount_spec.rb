@@ -305,7 +305,7 @@ RSpec.describe Kiosk::Server::Engine do
       end
     end
 
-    context 'the three version headers, over the whole mounted surface (§3 point 6)' do
+    describe 'the three version headers, over the whole mounted surface (§3 point 6)' do
       it 'stamps every path UNDER the mount — success and refusal alike' do
         under_mount = probe('mounted').select { |line, _| line.start_with?('GET /kiosk', 'POST /kiosk') }
         expect(under_mount.size).to be >= 18 # the drawn surface, not a sample

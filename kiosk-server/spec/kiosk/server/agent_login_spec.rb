@@ -3,7 +3,7 @@
 # Proof-of-possession itself is covered in pop_verifier_spec.rb; here it is
 # stubbed so the login DB branch (known key → token, unknown key → 404) can be
 # exercised in isolation with the FakeConnection.
-RSpec.shared_context 'agent login spec: stubbed proof and connection' do
+RSpec.shared_context 'with a stubbed proof and connection for login' do
   let(:pem) { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
   let(:con) { FakeConnection.new }
   # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
@@ -25,7 +25,7 @@ RSpec.shared_context 'agent login spec: stubbed proof and connection' do
 end
 
 RSpec.describe Kiosk::Server::AgentLogin do
-  include_context 'agent login spec: stubbed proof and connection'
+  include_context 'with a stubbed proof and connection for login'
 
   it 'mints a fresh token for a known key and provisions nothing' do
     route_exec_query(con) { [{ 'id' => 'agent-1', 'user_id' => 42, 'allowed_roles' => '{customer}' }] }

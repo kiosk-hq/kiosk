@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_context 'kyc schema spec: grants sql' do
+RSpec.shared_context 'with the KYC grants SQL' do
   subject(:sql) { described_class.kyc_attributes_sql(schema: 'kiosk', user_id_type: :bigint, user_table: 'people') }
 end
 
@@ -10,7 +10,7 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
   end
 
   describe '.kyc_attributes_sql' do
-    include_context 'kyc schema spec: grants sql'
+    include_context 'with the KYC grants SQL'
 
     it "keys the grants on the person, in the host's user id type" do
       grants = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.kyc_attributes.*?\);/m]

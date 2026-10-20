@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'wrong_currency_cart setup' do
+RSpec.shared_context 'with a profile that pays in euros' do
   subject(:scenario) { described_class.new }
 
   let(:client)  { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -13,7 +13,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart do
   describe '#call — non-vacuity' do
-    include_context 'wrong_currency_cart setup'
+    include_context 'with a profile that pays in euros'
 
     context 'when the operator settles a cart in a currency it does not price in (BREACH)' do
       it 'returns blocked: false' do
@@ -65,7 +65,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart do
   end
 
   describe 'the probed currency' do
-    include_context 'wrong_currency_cart setup'
+    include_context 'with a profile that pays in euros'
 
     it "denominates both mandates in a currency that is NOT the operator's" do
       stub_registers('a')
@@ -109,7 +109,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::WrongCurrencyCart do
   end
 
   describe '#call — skips' do
-    include_context 'wrong_currency_cart setup'
+    include_context 'with a profile that pays in euros'
 
     it 'skips when the profile names no currency' do
       verdict = scenario.call(client, minimal_profile(pay_for: pay_for_callable))

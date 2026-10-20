@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_context 'device verification spec: pending claim' do
+RSpec.shared_context 'with a pending device verification claim' do
   let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
 
@@ -24,7 +24,7 @@ end
 
 RSpec.describe Kiosk::Server::DeviceVerification do
   describe '.normalize_user_code' do
-    include_context 'device verification spec: pending claim'
+    include_context 'with a pending device verification claim'
 
     it 'strips the XXXX-XXXX visual dash' do
       expect(described_class.normalize_user_code('WDJB-MJHT')).to eq('WDJBMJHT')
@@ -47,7 +47,7 @@ RSpec.describe Kiosk::Server::DeviceVerification do
   end
 
   describe '.find_pending' do
-    include_context 'device verification spec: pending claim'
+    include_context 'with a pending device verification claim'
 
     it 'returns the row for a matching pending user_code (hashed lookup)' do
       code, da = fresh
@@ -81,7 +81,7 @@ RSpec.describe Kiosk::Server::DeviceVerification do
   end
 
   describe '.approve' do
-    include_context 'device verification spec: pending claim'
+    include_context 'with a pending device verification claim'
 
     it 'transitions a pending row to approved with the user_id set' do
       code, = fresh
@@ -112,7 +112,7 @@ RSpec.describe Kiosk::Server::DeviceVerification do
   end
 
   describe '.approve user and role' do
-    include_context 'device verification spec: pending claim'
+    include_context 'with a pending device verification claim'
 
     it 'raises ArgumentError when user_id is blank' do
       code, = fresh
@@ -144,7 +144,7 @@ RSpec.describe Kiosk::Server::DeviceVerification do
   end
 
   describe '.approve role keyword' do
-    include_context 'device verification spec: pending claim'
+    include_context 'with a pending device verification claim'
 
     # ── K-1127: naming the role is mandatory, holding one is not ───────────
     #
@@ -171,7 +171,7 @@ RSpec.describe Kiosk::Server::DeviceVerification do
   end
 
   describe '.deny' do
-    include_context 'device verification spec: pending claim'
+    include_context 'with a pending device verification claim'
 
     it 'transitions a pending row to denied (no user_id needed — the holder said no)' do
       code, = fresh

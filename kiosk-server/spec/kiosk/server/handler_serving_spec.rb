@@ -42,7 +42,7 @@ module HandlerServingSpec
   end
 end
 
-RSpec.shared_context 'handler serving spec: route' do
+RSpec.shared_context 'with handler classes for serving' do
   include B1HandlerClasses
   include HandlerServingSpec
 
@@ -50,7 +50,7 @@ RSpec.shared_context 'handler serving spec: route' do
   let(:connection) { FakeConnection.new }
 end
 
-RSpec.shared_context 'handler serving spec: templated handler' do
+RSpec.shared_context 'with a templated handler' do
   let(:views) { Dir.mktmpdir }
 
   before do
@@ -72,7 +72,7 @@ RSpec.shared_context 'handler serving spec: templated handler' do
 end
 
 RSpec.describe Kiosk::Server::HandlerServing do
-  include_context 'handler serving spec: route'
+  include_context 'with handler classes for serving'
 
   describe 'reload safety' do
     before { SpecReloadableController.kiosk_register! }
@@ -212,7 +212,7 @@ RSpec.describe Kiosk::Server::HandlerServing do
   end
 
   describe 'a handler answering through its template' do
-    include_context 'handler serving spec: templated handler'
+    include_context 'with a templated handler'
 
     it 'leaves ActionController loading to the host, so a view library can set it up first' do
       script = 'require "kiosk/server"; ' \

@@ -63,7 +63,7 @@ module AuthControllerBindingSpecHelpers
   end
 end
 
-RSpec.shared_context 'auth controller binding spec: signed-in holder' do
+RSpec.shared_context 'with a holder signed in to the auth controller' do
   include AuthControllerBindingSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
@@ -83,7 +83,7 @@ end
 RSpec.describe Kiosk::Server::AuthController do
   describe 'binding endpoints' do
     describe 'POST /auth/link' do
-      include_context 'auth controller binding spec: signed-in holder'
+      include_context 'with a holder signed in to the auth controller'
 
       it 'mints a single-use link code for the signed-in account holder (201)' do
         status, body = dispatch(:link)
@@ -106,7 +106,7 @@ RSpec.describe Kiosk::Server::AuthController do
     end
 
     describe 'POST /auth/link roles-from-IdP' do
-      include_context 'auth controller binding spec: signed-in holder'
+      include_context 'with a holder signed in to the auth controller'
 
       # roles-from-IdP (Path A): the human's role — as the provider's
       # user_idp reports it on the session identity — is captured onto the link
@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Server::AuthController do
     end
 
     describe 'POST /auth/claim' do
-      include_context 'auth controller binding spec: signed-in holder'
+      include_context 'with a holder signed in to the auth controller'
 
       it 'delegates to LinkCode.redeem and returns the register-shaped 201' do
         allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
@@ -161,7 +161,7 @@ RSpec.describe Kiosk::Server::AuthController do
     end
 
     describe 'POST /auth/claim response fields' do
-      include_context 'auth controller binding spec: signed-in holder'
+      include_context 'with a holder signed in to the auth controller'
 
       # K-855. `AccountBinding.bind!` — which is what `redeem` returns — also
       # carries `fresh:`, an internal fresh-key-vs-rebind signal that NO published
@@ -197,7 +197,7 @@ RSpec.describe Kiosk::Server::AuthController do
     end
 
     describe 'POST /auth/unlink' do
-      include_context 'auth controller binding spec: signed-in holder'
+      include_context 'with a holder signed in to the auth controller'
 
       # 204, EMPTY (K-870). This used to be `200 {ok: true}` — a body no published
       # surface documented, on an endpoint whose two siblings above ARE documented
@@ -227,7 +227,7 @@ RSpec.describe Kiosk::Server::AuthController do
     end
 
     describe 'a session request that is not JSON' do
-      include_context 'auth controller binding spec: signed-in holder'
+      include_context 'with a holder signed in to the auth controller'
 
       # A page on a sibling subdomain is same-site: its `text/plain` form carries
       # the holder's cookie and needs no CORS preflight.
@@ -246,7 +246,7 @@ RSpec.describe Kiosk::Server::AuthController do
     end
 
     describe 'POST /auth/unlink request errors' do
-      include_context 'auth controller binding spec: signed-in holder'
+      include_context 'with a holder signed in to the auth controller'
 
       it '400s on a missing agent_id' do
         status, body = dispatch(:unlink, body: {})

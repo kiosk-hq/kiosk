@@ -264,7 +264,7 @@ module DeviceAuthorizationStoresSpec
   end
 end
 
-RSpec.shared_context 'device authorization stores spec: postgres schema' do
+RSpec.shared_context 'with a device authorization Postgres schema' do
   subject(:store) { described_class.new }
 
   let(:schema) { DeviceAuthorizationStoresSpec::SPEC_SCHEMA }
@@ -325,7 +325,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorizationStores do
   end
 
   describe Kiosk::Server::DeviceAuthorizationStores::ActiveRecord do
-    include_context 'device authorization stores spec: postgres schema'
+    include_context 'with a device authorization Postgres schema'
 
     it_behaves_like 'a device-authorization store'
 

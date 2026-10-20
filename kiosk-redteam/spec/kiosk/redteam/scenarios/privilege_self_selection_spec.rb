@@ -4,7 +4,7 @@ require 'spec_helper'
 require 'base64'
 require_relative 'support'
 
-RSpec.shared_context 'privilege_self_selection setup' do
+RSpec.shared_context 'with a challenge stub and a token for any role' do
   subject(:scenario) { described_class.new }
 
   let(:client)  { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -39,7 +39,7 @@ RSpec.shared_context 'privilege_self_selection setup' do
 end
 
 RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
-  include_context 'privilege_self_selection setup'
+  include_context 'with a challenge stub and a token for any role'
 
   it 'injects the escalated role onto the register wire (attack simulation)' do
     stub = stub_request(:post, "#{BASE_URL}/kiosk/auth/register")

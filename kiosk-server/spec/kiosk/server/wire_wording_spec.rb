@@ -51,7 +51,7 @@ module WireWordingSpec
   end
 end
 
-RSpec.shared_context 'wire wording spec: provider' do
+RSpec.shared_context 'with a provider origin for wire wording' do
   include WireWordingSpec
 
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
@@ -67,7 +67,7 @@ end
 
 RSpec.describe Kiosk::Server::Errors do
   describe 'the malformed-request sentences on the wire' do
-    include_context 'wire wording spec: provider'
+    include_context 'with a provider origin for wire wording'
 
     # The first call an assistant makes.
     describe 'POST /kiosk/auth/register' do

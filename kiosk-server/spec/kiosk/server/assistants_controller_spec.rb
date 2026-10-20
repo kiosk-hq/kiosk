@@ -70,7 +70,7 @@ module AssistantsControllerSpecHelpers
   end
 end
 
-RSpec.shared_context 'assistants controller spec: signed-in holder' do
+RSpec.shared_context 'with a holder signed in to the assistants page' do
   include AssistantsControllerSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
@@ -98,8 +98,8 @@ RSpec.shared_context 'assistants controller spec: signed-in holder' do
   end
 end
 
-RSpec.shared_context 'assistants controller spec: forgery guarded' do
-  include_context 'assistants controller spec: signed-in holder'
+RSpec.shared_context 'with a forgery-guarded assistants page' do
+  include_context 'with a holder signed in to the assistants page'
 
   let(:guarded) do
     stub_const(
@@ -111,7 +111,7 @@ end
 
 RSpec.describe 'AssistantsController' do
   describe 'without a provider session' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     # Default config wires no sign_in_path → the engine keeps its neutral bare
     # 401 (unchanged API contract). A browser Accept header does NOT change this.
@@ -127,7 +127,7 @@ RSpec.describe 'AssistantsController' do
   # request, an unauthenticated visitor is redirected to the operator's
   # sign-in — not shown a bare 401 — with a flash alert and a stored return-to.
   describe 'with config.sign_in_path set (browser UX)' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     before do
       wire_user_idp(nil)
@@ -165,7 +165,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'listing' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it "lists the holder's bound assistant accounts with key fingerprints" do
       con.next_exec_result = [
@@ -189,7 +189,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'link' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it 'mints a link code and shows it exactly once' do
       status, html = dispatch(:link, method: 'POST')
@@ -211,7 +211,7 @@ RSpec.describe 'AssistantsController' do
   # walked through. Read out of the STORE, not off a message expectation: what
   # matters is the row the assistant will redeem.
   describe 'roles-from-IdP on the browser mint (ADR-0011 Path A)' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it "stamps the signed-in human's role onto the link row" do
       Kiosk.configure { |c| c.roles = %i[customer owner] }
@@ -236,7 +236,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'roles-from-IdP on the browser mint: rebind' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it "rebinds a KNOWN key onto the new human's role via a browser-minted code" do
       Kiosk.configure { |c| c.roles = %i[customer owner] }
@@ -266,7 +266,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'unlink and form actions' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it 'unlinks via AccountBinding and reports it' do
       allow(Kiosk::Server::AccountBinding).to receive(:unlink!).and_return({ agent_id: 'agent-1' })
@@ -296,7 +296,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'governance columns' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it 'surfaces the label, the spend per currency, and the cap for each bound assistant (show)' do
       con.next_exec_result = [
@@ -325,7 +325,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'spending-cap window' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     # The rolling window is a VALUE, so it is `$3` through `make_interval` — the
     # same treatment Executor#spent_in_window gives the same expression.
@@ -345,7 +345,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'unset and disabled caps' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it 'shows «(unnamed)» / «cap: none» when the label and cap are unset' do
       con.next_exec_result = [
@@ -370,7 +370,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'spending_cap seam note' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     # K-1014. The editor is rendered unconditionally, and on an origin that wires
     # no `config.spending_cap` seam the number it saves is read by nothing —
@@ -409,7 +409,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'update' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it 'updates the label and spending cap, scoped by agent id, user_id AND origin' do
       status, html = dispatch(
@@ -440,7 +440,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'update edge cases' do
-    include_context 'assistants controller spec: signed-in holder'
+    include_context 'with a holder signed in to the assistants page'
 
     it 'clears the cap and its currency (unlimited) when spending_cap_cents is blank' do
       _status, _html = dispatch(
@@ -496,7 +496,7 @@ RSpec.describe 'AssistantsController' do
   # explicitly to reproduce the production condition. Subclassing keeps the
   # shipped controller untouched for the rest of the suite.
   describe 'forgery protection on a JSON POST' do
-    include_context 'assistants controller spec: forgery guarded'
+    include_context 'with a forgery-guarded assistants page'
 
     it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the wire' do
       status, body, headers = dispatch_guarded(
@@ -523,7 +523,7 @@ RSpec.describe 'AssistantsController' do
   end
 
   describe 'forgery protection on a browser form POST' do
-    include_context 'assistants controller spec: forgery guarded'
+    include_context 'with a forgery-guarded assistants page'
 
     # The signpost must not soften the forgery gate for the surface it guards:
     # a browser form POST with a bad/absent token keeps failing exactly as it

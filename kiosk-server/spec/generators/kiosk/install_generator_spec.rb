@@ -53,7 +53,7 @@ module InstallGeneratorSpecHelpers
   end
 end
 
-RSpec.shared_context 'install generator spec: host app' do
+RSpec.shared_context 'with a freshly generated host app' do
   include InstallGeneratorSpecHelpers
 
   around do |example|
@@ -69,7 +69,7 @@ end
 
 RSpec.describe Kiosk::Generators::InstallGenerator do
   describe 'initializer' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     it 'creates config/initializers/kiosk.rb' do
       invoke!
@@ -93,7 +93,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'initializer options' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     it 'honours --user-table by classifying it' do
       invoke!(%w[--user-table=members])
@@ -122,7 +122,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
 
   # A generated app checks its own responses outside production.
   describe 'initializer validation flags' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     it "gates response validation off production — the engine's own hazard, in a fresh app" do
       invoke!
@@ -149,7 +149,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   # Bundling kiosk-server draws no route: the engine installs its surface only
   # when it is mounted, so the generator writes the `kiosk` block that mounts it.
   describe 'wire routes' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     it 'writes a `kiosk` block FIRST inside the routes block, so the protocol plane wins by first match' do
       invoke!
@@ -181,7 +181,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'config/application.rb' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     it 'dumps every schema, so schema.rb carries the kiosk tables' do
       invoke!
@@ -190,7 +190,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     it 'creates exactly the eleven canonical migrations' do
       invoke!
@@ -213,7 +213,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations shape and order' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     # The shape, not merely the count: every canonical migration creates its
     # tables in their final shape, so a fresh install replays no history.
@@ -233,7 +233,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 012 create_kiosk_refunds' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_refunds.rb') } }
 
@@ -249,7 +249,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 011 create_kiosk_visits' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_visits.rb') } }
 
@@ -265,7 +265,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 010 create_kiosk_auth_challenges' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_auth_challenges.rb') } }
 
@@ -281,7 +281,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 009 create_kiosk_revocations' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_revocations.rb') } }
 
@@ -292,7 +292,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 008 create_kiosk_pow_spent' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_pow_spent.rb') } }
 
@@ -308,7 +308,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 007 create_kiosk_events' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_events.rb') } }
 
@@ -329,7 +329,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 001 create_kiosk_schema' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_schema.rb') } }
 
@@ -357,7 +357,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 002 create_kiosk_identity_tables' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_identity_tables.rb') } }
 
@@ -379,7 +379,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 004 create_kiosk_device_authorizations' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_device_authorizations.rb') } }
 
@@ -396,7 +396,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 005 create_kiosk_mandates' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_mandates.rb') } }
 
@@ -426,7 +426,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'migrations 006 create_kiosk_kyc_attributes' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     let(:file) { migrations.find { |p| p.end_with?('_create_kiosk_kyc_attributes.rb') } }
 
@@ -450,7 +450,7 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
   end
 
   describe 'default options' do
-    include_context 'install generator spec: host app'
+    include_context 'with a freshly generated host app'
 
     it "uses :uuid, schema 'kiosk', guc 'app', table 'users' when no flags are passed" do
       invoke!

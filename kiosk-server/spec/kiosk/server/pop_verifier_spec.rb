@@ -43,7 +43,7 @@ module PopVerifierSpec
   end
 end
 
-RSpec.shared_context 'pop verifier spec: issuer' do
+RSpec.shared_context 'with a proof-of-possession issuer' do
   include PopVerifierSpec
 
   let(:pem)        { PopVerifierSpec.rsa.public_key.to_pem }
@@ -54,7 +54,7 @@ RSpec.shared_context 'pop verifier spec: issuer' do
 end
 
 RSpec.describe Kiosk::Server::PopVerifier do
-  include_context 'pop verifier spec: issuer'
+  include_context 'with a proof-of-possession issuer'
 
   it 'returns the payload for a valid, origin-bound, key-bound proof' do
     payload = described_class.verify!(public_key_pem: pem, signed: sign)

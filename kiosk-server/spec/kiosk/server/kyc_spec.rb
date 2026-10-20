@@ -138,7 +138,7 @@ class KycSpecProvider < Kiosk::KycProviders::Base
   def accepts?(payload) = payload['operator'] == 'shop'
 end
 
-RSpec.shared_context 'kyc spec: postgres' do
+RSpec.shared_context 'with Postgres for KYC' do
   include KycSpec
 
   before do
@@ -153,8 +153,8 @@ RSpec.shared_context 'kyc spec: postgres' do
   let(:provider) { KycSpecProvider.new }
 end
 
-RSpec.shared_context "kyc spec: the provider's callback" do
-  include_context 'kyc spec: postgres'
+RSpec.shared_context "with the KYC provider's callback" do
+  include_context 'with Postgres for KYC'
 
   before { configure(provider) }
 
@@ -165,7 +165,7 @@ end
 
 RSpec.describe Kiosk::Server::Kyc do
   describe 'an origin with no KYC provider' do
-    include_context 'kyc spec: postgres'
+    include_context 'with Postgres for KYC'
 
     before { configure(nil) }
 
@@ -201,7 +201,7 @@ RSpec.describe Kiosk::Server::Kyc do
   end
 
   describe 'request_kyc' do
-    include_context 'kyc spec: postgres'
+    include_context 'with Postgres for KYC'
 
     before { configure(provider) }
 
@@ -246,7 +246,7 @@ RSpec.describe Kiosk::Server::Kyc do
   end
 
   describe "the provider's callback" do
-    include_context "kyc spec: the provider's callback"
+    include_context "with the KYC provider's callback"
 
     it 'records the grant on the person and pushes the attestation to them' do
       jws = attestation
@@ -319,7 +319,7 @@ RSpec.describe Kiosk::Server::Kyc do
   end
 
   describe 'POST <endpoint>/agents/kyc' do
-    include_context 'kyc spec: postgres'
+    include_context 'with Postgres for KYC'
 
     before { configure(provider) }
 
@@ -336,7 +336,7 @@ RSpec.describe Kiosk::Server::Kyc do
   end
 
   describe '.grant! and .require!' do
-    include_context 'kyc spec: postgres'
+    include_context 'with Postgres for KYC'
 
     before { configure(provider) }
 

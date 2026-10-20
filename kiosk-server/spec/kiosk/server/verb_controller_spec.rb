@@ -106,7 +106,7 @@ module VerbControllerSpec
   end
 end
 
-RSpec.shared_context 'verb controller spec: authenticated origin' do
+RSpec.shared_context 'with an authenticated origin for the verb controller' do
   include VerbControllerSpec
 
   let(:connection) { FakeConnection.new }
@@ -125,7 +125,7 @@ RSpec.shared_context 'verb controller spec: authenticated origin' do
 end
 
 RSpec.describe Kiosk::Server::VerbController do
-  include_context 'verb controller spec: authenticated origin'
+  include_context 'with an authenticated origin for the verb controller'
 
   describe 'a query is a GET at its own path' do
     before { declare_query('salons') { render json: [{ id: 1, name: 'Combette on Park' }] } }

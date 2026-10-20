@@ -29,7 +29,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
   describe 'in a booted app' do
     include HandlerRegistrationBootSpec
 
-    context 'in development (eager_load = false)' do
+    context 'when the app runs in development (eager_load = false)' do
       it 'has the full catalog at boot, before any request touches a controller' do
         expect(probe('development')['queries']).to eq(%w[probe_browse probe_detail])
       end
@@ -89,7 +89,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
       end
     end
 
-    context 'in production (eager_load = true)' do
+    context 'when the app runs in production (eager_load = true)' do
       it 'registers every handler exactly once' do
         expect(probe('production')['queries']).to eq(%w[probe_browse probe_detail])
         expect(probe('production')['browse_fetches']).to eq('Kiosk::Server::ControllerVerb')

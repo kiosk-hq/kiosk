@@ -36,7 +36,7 @@ class SpecRegistrationsDoomedController < ApplicationController
   end
 end
 
-RSpec.shared_context 'handler registrations spec: isolated registry' do
+RSpec.shared_context 'with an isolated handler registry' do
   let(:queries) { Kiosk::Server::Queries }
   let(:actions) { Kiosk::Server::Actions }
 
@@ -56,7 +56,7 @@ end
 
 RSpec.describe Kiosk::Server::HandlerRegistrations do
   context 'with an isolated registry' do
-    include_context 'handler registrations spec: isolated registry'
+    include_context 'with an isolated handler registry'
 
     describe '.add' do
       it 'is called by include Kiosk::Handler' do

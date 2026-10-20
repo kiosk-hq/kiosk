@@ -3,7 +3,7 @@
 require 'spec_helper'
 require 'stringio'
 
-RSpec.shared_context 'battery setup' do
+RSpec.shared_context 'with a battery that writes to a buffer' do
   let(:io)      { StringIO.new }
 
   let(:battery) { described_class.new(io: io) }
@@ -32,7 +32,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Battery do
   describe '#record' do
-    include_context 'battery setup'
+    include_context 'with a battery that writes to a buffer'
 
     it 'files and prints a blocked beat' do
       battery.record('CrossTenantRead', true, "Bob's rows exclude Alice's")
@@ -59,7 +59,7 @@ RSpec.describe Kiosk::Redteam::Battery do
   end
 
   describe '#scenario' do
-    include_context 'battery setup'
+    include_context 'with a battery that writes to a buffer'
 
     it 'runs a library scenario and files its verdict beside the hand-written beats' do
       battery.record('HandWritten', true, '')
@@ -92,7 +92,7 @@ RSpec.describe Kiosk::Redteam::Battery do
   end
 
   describe '#absorb' do
-    include_context 'battery setup'
+    include_context 'with a battery that writes to a buffer'
 
     let(:results) do
       [{ scenario: scenario_double('CrossTenantRead', blocked_verdict), verdict: blocked_verdict },
@@ -117,7 +117,7 @@ RSpec.describe Kiosk::Redteam::Battery do
   end
 
   describe '#report!' do
-    include_context 'battery setup'
+    include_context 'with a battery that writes to a buffer'
 
     it 'answers 0 and says so when every attack that ran was blocked' do
       battery.record('A', true, '')

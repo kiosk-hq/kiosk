@@ -112,7 +112,7 @@ module WireControllerPowHeaderSpec
   end
 end
 
-RSpec.shared_context 'wire controller pow header spec: tolled origin' do
+RSpec.shared_context 'with a tolled origin' do
   include WireControllerPowHeaderSpec
 
   let(:fake_identity) { build_identity(user_id: 'u-1', agent_id: 'a-1', role: 'customer') }
@@ -156,7 +156,7 @@ end
 
 RSpec.describe Kiosk::Server::WireController do
   describe 'Kiosk-PoW header path (ADR-0022)' do
-    include_context 'wire controller pow header spec: tolled origin'
+    include_context 'with a tolled origin'
 
     # ── proof in the header → proceeds ─────────────────────────────────────────
     it 'accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)' do

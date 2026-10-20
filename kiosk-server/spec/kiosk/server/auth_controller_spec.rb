@@ -87,7 +87,7 @@ module AuthControllerSpecHelpers
   end
 end
 
-RSpec.shared_context 'auth controller spec: configured origin' do
+RSpec.shared_context 'with an origin configured for the auth controller' do
   include AuthControllerSpecHelpers
 
   before do
@@ -101,7 +101,7 @@ RSpec.shared_context 'auth controller spec: configured origin' do
 end
 
 RSpec.describe Kiosk::Server::AuthController do
-  include_context 'auth controller spec: configured origin'
+  include_context 'with an origin configured for the auth controller'
 
   describe '#revoke (revoke-all-sessions)' do
     describe '401 guards' do

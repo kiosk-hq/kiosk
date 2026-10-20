@@ -60,7 +60,7 @@ module RequestBodyValidationSpec
   end
 end
 
-RSpec.shared_context 'request body validation spec: validating' do
+RSpec.shared_context 'with request body validation on' do
   include RequestBodyValidationSpec
 
   before do
@@ -71,7 +71,7 @@ end
 
 RSpec.describe Kiosk::Server::RequestValidation do
   describe 'Reserved-plane request-body validation' do
-    include_context 'request body validation spec: validating'
+    include_context 'with request body validation on'
 
     Kiosk::Server::RequestValidation::BODY_SCHEMAS.each_key do |exchange|
       context exchange do

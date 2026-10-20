@@ -26,7 +26,7 @@ module DefaultAgentIdpSpec
   end
 end
 
-RSpec.shared_context 'default agent idp spec: configured origin' do
+RSpec.shared_context 'with a DefaultAgentIdp on a configured origin' do
   include DefaultAgentIdpSpec
 
   subject(:idp) { described_class.new }
@@ -43,8 +43,8 @@ RSpec.shared_context 'default agent idp spec: configured origin' do
 end
 
 # An IdP whose agent lookup answers 'u-1' without a database.
-RSpec.shared_context 'default agent idp spec: issuing idp' do
-  include_context 'default agent idp spec: configured origin'
+RSpec.shared_context 'with an issuing DefaultAgentIdp' do
+  include_context 'with a DefaultAgentIdp on a configured origin'
 
   let(:idp) do
     described_class.new.tap { |i| allow(i).to receive(:lookup_user_id).and_return('u-1') }
@@ -54,8 +54,8 @@ end
 # Records each agent lookup statement AND ITS BINDS via a minimal
 # `ActiveRecord::Base.lease_connection` stub (AR is not loaded here). The stub
 # offers no `quote`, so a lookup that reached for one would be a NoMethodError.
-RSpec.shared_context 'default agent idp spec: recorded lookups' do
-  include_context 'default agent idp spec: configured origin'
+RSpec.shared_context 'with recorded DefaultAgentIdp lookups' do
+  include_context 'with a DefaultAgentIdp on a configured origin'
 
   let(:recorder) { [] }
 
@@ -72,7 +72,7 @@ end
 
 RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   describe '#verify' do
-    include_context 'default agent idp spec: configured origin'
+    include_context 'with a DefaultAgentIdp on a configured origin'
 
     it 'verifies a self-issued agent token into an agent Identity' do
       token = Kiosk::Server::JwtIssuer.issue(
@@ -118,7 +118,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   # A revoked agent must not be able to authenticate or sign mandates, so both
   # agent lookups scope to `revoked_at IS NULL`, with the id as a bind.
   describe 'honors agent revocation' do
-    include_context 'default agent idp spec: recorded lookups'
+    include_context 'with recorded DefaultAgentIdp lookups'
 
     it 'scopes agent_payment_key lookups to non-revoked agents' do
       idp.agent_payment_key('agent-1')
@@ -146,7 +146,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   end
 
   describe '#issue (role-less path)' do
-    include_context 'default agent idp spec: issuing idp'
+    include_context 'with an issuing DefaultAgentIdp'
 
     it 'omits the role claim entirely when role is nil' do
       payload = decode(idp.issue(agent_id: 'a-1', role: nil))
@@ -186,7 +186,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   # constructor argument, proves the test's setup and not the issuer's output.
   # So this decodes what `#issue` produced and reads the claim off the payload.
   describe '#issue — the claims every minted token carries' do
-    include_context 'default agent idp spec: issuing idp'
+    include_context 'with an issuing DefaultAgentIdp'
 
     it 'stamps an `actor` claim of `agent` on every token it mints, role or no role' do
       with_role    = decode(idp.issue(agent_id: 'a-1', role: :customer))
@@ -214,7 +214,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   # binding ceremony's link/unlink/rebind, never on issuance — `#issue` only
   # READS it (`mint_instant`) so it cannot mint into an already-revoked window.
   describe '#issue — concurrent tokens for one identity' do
-    include_context 'default agent idp spec: issuing idp'
+    include_context 'with an issuing DefaultAgentIdp'
 
     it 'keeps an earlier token valid after a second is minted for the same agent' do
       first  = idp.issue(agent_id: 'a-1', role: :customer)
@@ -248,7 +248,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   # Spec Section 10: an access token lives one hour unless the operator
   # configures another lifetime. Read off the token `#issue` mints.
   describe '#issue — the lifetime of the token it mints' do
-    include_context 'default agent idp spec: issuing idp'
+    include_context 'with an issuing DefaultAgentIdp'
 
     def lifetime = decode(idp.issue(agent_id: 'a-1', role: :customer)).values_at('exp', 'iat').reduce(:-)
 

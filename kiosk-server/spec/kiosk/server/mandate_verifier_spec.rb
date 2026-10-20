@@ -36,7 +36,7 @@ module MandateVerifierSpec
   end
 end
 
-RSpec.shared_context 'mandate verifier spec: agent' do
+RSpec.shared_context 'with an agent payment key' do
   include MandateVerifierSpec
 
   let(:agent_key) { OpenSSL::PKey::RSA.generate(2048) }
@@ -53,8 +53,8 @@ RSpec.shared_context 'mandate verifier spec: agent' do
   end
 end
 
-RSpec.shared_context 'mandate verifier spec: verifier' do
-  include_context 'mandate verifier spec: agent'
+RSpec.shared_context 'with signed intent and cart mandates' do
+  include_context 'with an agent payment key'
 
   let(:intent_payload) do
     base(id: 'intent-1', scope: 'groceries', cap_amount_cents: 5000, currency: 'eur')
@@ -80,7 +80,7 @@ RSpec.shared_context 'mandate verifier spec: verifier' do
 end
 
 RSpec.describe Kiosk::Server::MandateVerifier do
-  include_context 'mandate verifier spec: verifier'
+  include_context 'with signed intent and cart mandates'
 
   # ─── verify_intent ───────────────────────────────────────────────────
   describe '.verify_intent' do
@@ -393,7 +393,7 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     # signs the mandate with the String the register response returned. The
     # principal check must compare as STRING on both sides, or every mandate on
     # a bigint host is wrongly Forbidden.
-    context 'on a bigint-PK host (Integer identity, String mandate principal)' do
+    context 'when on a bigint-PK host (Integer identity, String mandate principal)' do
       let(:identity)   { build_identity(agent_id: 7, user_id: 42) }
 
       let(:big_intent) { intent_payload.merge(agent_id: '7', user_id: '42') }

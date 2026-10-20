@@ -72,7 +72,7 @@ module AuditSinkSpec
   end
 end
 
-RSpec.shared_context 'audit sink spec: sink' do
+RSpec.shared_context 'with a recording audit sink' do
   include AuditSinkSpec
 
   let(:connection) { FakeConnection.new }
@@ -81,7 +81,7 @@ RSpec.shared_context 'audit sink spec: sink' do
   let(:sink)       { ->(event) { events << event } }
 end
 
-RSpec.shared_context 'audit sink spec: event' do
+RSpec.shared_context 'with an audit event' do
   subject(:event) do
     described_class.build(identity: identity, name: 'place_order',
                           args: { sku: 'ABC', qty: 2, express: true },
@@ -91,7 +91,7 @@ RSpec.shared_context 'audit sink spec: event' do
   let(:invoked_at) { Time.current - 5 }
 end
 
-RSpec.shared_context 'audit sink spec: raising sink' do
+RSpec.shared_context 'with a raising audit sink' do
   before { Kiosk.configure { |c| c.audit_sink = ->(_e) { raise 'kafka is down' } } }
 end
 
@@ -103,7 +103,7 @@ end
 # than inside it. Connection from PG* env vars (CI's service) or the local
 # default socket; no reachable server → skip, never fail (the same contract
 # as `executor_persistence_spec.rb`).
-RSpec.shared_context 'audit sink spec: real database' do
+RSpec.shared_context 'with a real audit-sink database' do
   let(:connection) { ActiveRecord::Base.connection }
 
   before do
@@ -124,12 +124,12 @@ RSpec.shared_context 'audit sink spec: real database' do
 end
 
 RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
+  include_context 'with a recording audit sink'
 
   # ── the value object ────────────────────────────────────────────────────
 
   describe Kiosk::Server::ActionEvent do
-    include_context 'audit sink spec: event'
+    include_context 'with an audit event'
 
     it 'carries every fact the retired action_log columns carried' do
       expect(event.to_h).to eq(
@@ -296,7 +296,7 @@ RSpec.describe Kiosk::Server::AuditSink do
     end
 
     context 'with a sink that raises' do
-      include_context 'audit sink spec: raising sink'
+      include_context 'with a raising audit sink'
 
       it 'SWALLOWS a raising sink, reports it, and returns false' do
         expect { expect(described_class.emit(event)).to be(false) }
@@ -444,7 +444,7 @@ RSpec.describe Kiosk::Server::AuditSink do
     end
 
     context 'with a sink that raises' do
-      include_context 'audit sink spec: raising sink'
+      include_context 'with a raising audit sink'
 
       it "still returns the action's result — the operator's logging bug is theirs" do
         declare_action('place_order') { render json: { id: 7 } }
@@ -506,7 +506,7 @@ RSpec.describe Kiosk::Server::AuditSink do
   end
 
   describe 'a real invocation against a real database' do
-    include_context 'audit sink spec: real database'
+    include_context 'with a real audit-sink database'
 
     it "emits the event even though the action's own write rolled back" do
       declare_action('place_order') do

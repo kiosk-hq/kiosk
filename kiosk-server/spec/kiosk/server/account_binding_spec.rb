@@ -71,7 +71,7 @@ module AccountBindingSpecHelpers
   end
 end
 
-RSpec.shared_context 'account binding spec: stubbed engine' do
+RSpec.shared_context 'with a stubbed engine for account binding' do
   include AccountBindingSpecHelpers
 
   let(:pem)     { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
@@ -93,8 +93,8 @@ RSpec.shared_context 'account binding spec: stubbed engine' do
   end
 end
 
-RSpec.shared_context 'account binding spec: fresh key' do
-  include_context 'account binding spec: stubbed engine'
+RSpec.shared_context 'with a fresh key to bind' do
+  include_context 'with a stubbed engine for account binding'
 
   before do
     # SELECT finds no live agent; INSERT returns the new id.
@@ -102,8 +102,8 @@ RSpec.shared_context 'account binding spec: fresh key' do
   end
 end
 
-RSpec.shared_context 'account binding spec: known key' do
-  include_context 'account binding spec: stubbed engine'
+RSpec.shared_context 'with a key bound to the previous human' do
+  include_context 'with a stubbed engine for account binding'
 
   before { route_known_agent(previous_user, '{customer}') }
 end
@@ -127,8 +127,8 @@ end
 # bound to is idempotent — it still succeeds, still re-issues, and the
 # previous tokens still stop verifying — so the revocation below is a
 # conformance assertion, not an implementation detail.
-RSpec.shared_context 'account binding spec: when the key is ALREADY bound to this same human (re-link, K-783)' do
-  include_context 'account binding spec: known key'
+RSpec.shared_context 'with the key already bound to this same human' do
+  include_context 'with a key bound to the previous human'
 
   before { route_known_agent(user_id, '{customer}') }
 end
@@ -137,8 +137,8 @@ end
 # a token minted BEFORE the rebind must stop verifying, while the fresh token
 # bind! returns must still verify. Proves the strict `iat < watermark` check
 # keeps the replacement token alive.
-RSpec.shared_context 'account binding spec: known key rebind watermark ordering (real issuer)' do
-  include_context 'account binding spec: stubbed engine'
+RSpec.shared_context 'with a real issuer and a known key to rebind' do
+  include_context 'with a stubbed engine for account binding'
 
   let(:agent_id) { 'agent-known' }
 
@@ -164,7 +164,7 @@ end
 
 RSpec.describe Kiosk::Server::AccountBinding do
   describe '.bind! — fresh key' do
-    include_context 'account binding spec: fresh key'
+    include_context 'with a fresh key to bind'
 
     it "registers a linked assistant account under the holder's user_id" do
       result = described_class.bind!(public_key_pem: pem, user_id: user_id)
@@ -196,7 +196,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — fresh key hooks and role' do
-    include_context 'account binding spec: fresh key'
+    include_context 'with a fresh key to bind'
 
     it 'never invokes the assistant_creation factory (the principal already exists)' do
       factory = ->(_pubkey) { raise 'assistant_creation must not run during binding' }
@@ -232,7 +232,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — fresh key role fallback' do
-    include_context 'account binding spec: fresh key'
+    include_context 'with a fresh key to bind'
 
     it 'falls back to registration_role, and the empty role set when neither is set' do
       # THE EMPTY-SET HALF IS AN ORIGIN THAT DECLARES NO ROLES, and the
@@ -269,7 +269,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — known key (rebind, scenario TWO)' do
-    include_context 'account binding spec: known key'
+    include_context 'with a key bound to the previous human'
 
     it 'remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched' do
       result = described_class.bind!(public_key_pem: pem, user_id: user_id)
@@ -303,7 +303,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — known key hook and token' do
-    include_context 'account binding spec: known key'
+    include_context 'with a key bound to the previous human'
 
     it 'runs the hook inside the rebind transaction (a raising hook aborts the rebind)' do
       stub_const('Account', Class.new { def self.find(id) = id })
@@ -329,7 +329,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # remaps allowed_roles in the same UPDATE and mints the token with it —
   # the agent adopts the role of the principal it is now bound to.
   describe '.bind! — known key, when the ceremony carries a requested_role (roles-from-IdP)' do
-    include_context 'account binding spec: known key'
+    include_context 'with a key bound to the previous human'
 
     before { Kiosk.configure { |c| c.roles = %i[customer stylist owner] } }
 
@@ -365,7 +365,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # `bind!` cannot disagree. The agent's PREVIOUS role is not an input on
   # either of them: it belonged to the principal the key is leaving.
   describe '.bind! — known key role resolution' do
-    include_context 'account binding spec: known key'
+    include_context 'with a key bound to the previous human'
 
     it "resets allowed_roles to the operator's registration role on a role-less rebind" do
       Kiosk.configure { |c| c.registration_role = :customer }
@@ -405,7 +405,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # role and never a nil, which closes it at the one place that can:
   # resolution does not read the agent's current row (K-1791).
   describe '.bind! — known key privilege escalation' do
-    include_context 'account binding spec: known key'
+    include_context 'with a key bound to the previous human'
 
     it 'RESETS a privileged role across a change of principal when the ceremony carries none' do
       configure_multi_role_origin
@@ -436,7 +436,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # unchanged: the operator fixes the identity system, and the engine keeps
   # its behaviour.
   describe '.bind! — known key misconfiguration warning' do
-    include_context 'account binding spec: known key'
+    include_context 'with a key bound to the previous human'
 
     it 'warns the operator when a role-less ceremony lands on a multi-role origin' do
       # A declared vocabulary comes with a default since ADR-0036 — an origin
@@ -476,7 +476,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — known key, no misconfiguration warning' do
-    include_context 'account binding spec: known key'
+    include_context 'with a key bound to the previous human'
 
     # A single-role origin cannot exhibit the defect — retaining and resetting
     # are the same value there — so warning about it would be noise on a correct
@@ -516,7 +516,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — re-link to the same human' do
-    include_context 'account binding spec: when the key is ALREADY bound to this same human (re-link, K-783)'
+    include_context 'with the key already bound to this same human'
 
     it 'does NOT fire assistant_claimed (nothing transitioned)' do
       fired = false
@@ -542,7 +542,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — re-link answers' do
-    include_context 'account binding spec: when the key is ALREADY bound to this same human (re-link, K-783)'
+    include_context 'with the key already bound to this same human'
 
     # protocol.md §6.3 (K-787): "the ceremony still succeeds, still returns a
     # fresh `access_token`, and the key's previous tokens still stop
@@ -580,7 +580,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — known key rebind watermark ordering (real issuer)' do
-    include_context 'account binding spec: known key rebind watermark ordering (real issuer)'
+    include_context 'with a real issuer and a known key to rebind'
 
     it 'revokes a pre-rebind token but leaves the fresh bind! token verifiable' do
       # A token minted BEFORE the rebind (iat in the past ⇒ strictly < watermark).
@@ -624,7 +624,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — known key rebind watermark second' do
-    include_context 'account binding spec: known key rebind watermark ordering (real issuer)'
+    include_context 'with a real issuer and a known key to rebind'
 
     it 'stamps the watermark at the NEXT second and dates the replacement token at it' do
       now = Time.now.to_i
@@ -655,7 +655,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.unlink!' do
-    include_context 'account binding spec: stubbed engine'
+    include_context 'with a stubbed engine for account binding'
 
     it 'deactivates the binding (revoked_at) and watermark-revokes outstanding tokens' do
       route_exec_query(con) { [{ 'id' => 'agent-1' }] }
@@ -681,7 +681,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.unlink! hook and refusals' do
-    include_context 'account binding spec: stubbed engine'
+    include_context 'with a stubbed engine for account binding'
 
     it 'fires assistant_unlinked(agent:, account:) with the account' do
       route_exec_query(con) { [{ 'id' => 'agent-1' }] }
@@ -710,7 +710,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.unlink! watermark' do
-    include_context 'account binding spec: stubbed engine'
+    include_context 'with a stubbed engine for account binding'
 
     # K-835. Spec §6.3/§15.4 promise that an unlinked key's tokens STOP
     # VERIFYING — with no "except one" attached. The store compares

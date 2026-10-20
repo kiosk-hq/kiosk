@@ -2,7 +2,7 @@
 
 require 'rack/mock'
 
-RSpec.shared_context 'issuer middleware spec: two origins' do
+RSpec.shared_context 'with two origins for the issuer middleware' do
   subject(:middleware) { described_class.new(->(_env) { [200, {}, [Kiosk.current_issuer.to_s]] }) }
 
   before do
@@ -20,7 +20,7 @@ end
 
 RSpec.describe Kiosk::Server::IssuerMiddleware do
   describe 'origin resolution' do
-    include_context 'issuer middleware spec: two origins'
+    include_context 'with two origins for the issuer middleware'
 
     it 'resolves a listed origin to itself' do
       expect(issuer_for('https://buymilk.example/kiosk/catalog')).to eq('https://buymilk.example')
@@ -36,7 +36,7 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
   end
 
   describe 'proxies and cleanup' do
-    include_context 'issuer middleware spec: two origins'
+    include_context 'with two origins for the issuer middleware'
 
     it 'reads the scheme a TLS-terminating proxy forwarded' do
       expect(issuer_for('http://buymilk.example/kiosk/catalog',

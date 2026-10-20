@@ -31,7 +31,7 @@ module LinkCodeSpecHelpers
   end
 end
 
-RSpec.shared_context 'link code spec: in-memory store' do
+RSpec.shared_context 'with an in-memory link code store' do
   include LinkCodeSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
@@ -51,7 +51,7 @@ RSpec.shared_context 'link code spec: in-memory store' do
 end
 
 RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'link code spec: in-memory store'
+  include_context 'with an in-memory link code store'
 
   describe '.mint' do
     it 'creates a pre-approved :link row bound to the holder and returns the plain code' do

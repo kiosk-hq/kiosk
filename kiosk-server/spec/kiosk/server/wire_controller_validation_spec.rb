@@ -86,7 +86,7 @@ module WireControllerValidationSpec
   end
 end
 
-RSpec.shared_context 'wire controller validation spec: gated origin' do
+RSpec.shared_context 'with a gated origin' do
   include WireControllerValidationSpec
 
   before do
@@ -113,16 +113,16 @@ RSpec.shared_context 'wire controller validation spec: gated origin' do
   end
 end
 
-RSpec.shared_context 'wire controller validation spec: shape check on' do
+RSpec.shared_context 'with request shape checks on' do
   before { Kiosk.configure { |c| c.validate_requests = true } }
 end
 
 RSpec.describe Kiosk::Server::WireController do
   describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-    include_context 'wire controller validation spec: gated origin'
+    include_context 'with a gated origin'
 
     context 'with validate_requests: true' do
-      include_context 'wire controller validation spec: shape check on'
+      include_context 'with request shape checks on'
 
       it 'rejects the K-479 shape ({solutions:[…]}) with 400 bad_request + hint (NOT a 402)' do
         status, headers, problem = call_with_pow(solutions: [{ indices: [1, 2, 3], header_nonce: 0 }])

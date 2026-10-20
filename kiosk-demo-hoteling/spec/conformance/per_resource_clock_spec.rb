@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.shared_context 'one operator with hotels in Istanbul and Auckland' do
+RSpec.shared_context 'with one operator who has hotels in Istanbul and Auckland' do
   # 15:00 on the 15th in Istanbul, 01:00 on the 16th in Auckland.
   let(:instant)  { Time.utc(2026, 3, 15, 12, 0, 0) }
   let(:the_15th) { Date.new(2026, 3, 15) }
@@ -30,7 +30,7 @@ end
 RSpec.describe "a property's clock is the property's" do
   include ActiveSupport::Testing::TimeHelpers
 
-  include_context 'one operator with hotels in Istanbul and Auckland'
+  include_context 'with one operator who has hotels in Istanbul and Auckland'
 
   it "reads each property's zone off the property" do
     expect(istanbul.zone.name).to eq('Europe/Istanbul')

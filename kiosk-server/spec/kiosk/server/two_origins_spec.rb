@@ -40,7 +40,7 @@ module TwoOriginsSpec
   end
 end
 
-RSpec.shared_context 'two origins spec: deployment' do
+RSpec.shared_context 'with a two-origin deployment' do
   include TwoOriginsSpec
 
   let(:a) { 'https://getgrocery.example' }
@@ -58,7 +58,7 @@ end
 
 RSpec.describe Kiosk::Server::IssuerMiddleware do
   describe 'two origins on one deployment' do
-    include_context 'two origins spec: deployment'
+    include_context 'with a two-origin deployment'
 
     describe 'discovery' do
       it 'advertises each origin as its own issuer' do

@@ -17,7 +17,7 @@ module KycVerifierSpec
   end
 end
 
-RSpec.shared_context 'kyc verifier spec: configured' do
+RSpec.shared_context 'with a configured KYC verifier' do
   include KycVerifierSpec
 
   let(:kyc_key)      { OpenSSL::PKey::RSA.generate(2048) }
@@ -37,7 +37,7 @@ end
 
 RSpec.describe Kiosk::Server::KycVerifier do
   describe '.verify' do
-    include_context 'kyc verifier spec: configured'
+    include_context 'with a configured KYC verifier'
 
     it 'returns claims hash for a valid attestation' do
       raw_jws = sign_kyc(valid_payload)
@@ -117,7 +117,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
         .to raise_error(Kiosk::Server::Errors::Forbidden, /subject/)
     end
 
-    context 'on a bigint-PK host (Integer identity, String attestation sub)' do
+    context 'when on a bigint-PK host (Integer identity, String attestation sub)' do
       it 'verifies an Integer identity against a String attestation sub' do
         claims = described_class.verify(raw_jws: sign_kyc(valid_payload(sub: '42')), subject: 42)
         expect(claims[:sub]).to eq('42')

@@ -48,7 +48,7 @@ module OauthBindingControllersSpecHelpers
   end
 end
 
-RSpec.shared_context 'oauth binding controllers spec: provider origin' do
+RSpec.shared_context 'with a provider origin for OAuth binding' do
   include OauthBindingControllersSpecHelpers
 
   let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
@@ -69,7 +69,7 @@ RSpec.shared_context 'oauth binding controllers spec: provider origin' do
 end
 
 RSpec.describe Kiosk::Server::OauthDeviceAuthorizationController do
-  include_context 'oauth binding controllers spec: provider origin'
+  include_context 'with a provider origin for OAuth binding'
 
   describe 'POST /oauth/device_authorization' do
     it 'opens a claim ceremony for a well-formed key (form-encoded)' do

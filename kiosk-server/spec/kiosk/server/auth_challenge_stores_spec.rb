@@ -27,7 +27,7 @@ module AuthChallengeStoresSpec
   end
 end
 
-RSpec.shared_context 'auth challenge stores spec: postgres schema' do
+RSpec.shared_context 'with an auth challenge Postgres schema' do
   include AuthChallengeStoresSpec
 
   subject(:store) { described_class.new }
@@ -50,7 +50,7 @@ RSpec.describe Kiosk::Server::AuthChallengeStores::ActiveRecord do
   # ── the property the whole row is about ────────────────────────────────
 
   describe 'one handshake across two workers (K-751)' do
-    include_context 'auth challenge stores spec: postgres schema'
+    include_context 'with an auth challenge Postgres schema'
 
     it 'takes a challenge PUT by a second, independent store instance' do
       worker_a = described_class.new
@@ -84,7 +84,7 @@ RSpec.describe Kiosk::Server::AuthChallengeStores::ActiveRecord do
   # ── the AuthChallengeStore contract, adapter-side ──────────────────────
 
   describe '#take' do
-    include_context 'auth challenge stores spec: postgres schema'
+    include_context 'with an auth challenge Postgres schema'
 
     it 'is single-use: the second take of the same nonce is false' do
       store.put('PEM', 'nonce-1', live)
@@ -114,7 +114,7 @@ RSpec.describe Kiosk::Server::AuthChallengeStores::ActiveRecord do
   end
 
   describe '#put' do
-    include_context 'auth challenge stores spec: postgres schema'
+    include_context 'with an auth challenge Postgres schema'
 
     it 'keeps only the most recently issued challenge for a key' do
       store.put('PEM', 'nonce-old', live)
@@ -148,7 +148,7 @@ RSpec.describe Kiosk::Server::AuthChallengeStores::ActiveRecord do
   end
 
   describe '#prune!' do
-    include_context 'auth challenge stores spec: postgres schema'
+    include_context 'with an auth challenge Postgres schema'
 
     it 'drops expired rows and leaves live ones' do
       store.put('PEM-live', 'nonce-1', live)

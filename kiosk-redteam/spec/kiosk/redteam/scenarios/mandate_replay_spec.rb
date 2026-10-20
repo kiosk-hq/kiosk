@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'mandate_replay setup' do
+RSpec.shared_context 'with a paying profile whose mandate is replayed' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -14,7 +14,7 @@ RSpec.shared_context 'mandate_replay setup' do
 end
 
 RSpec.describe Kiosk::Redteam::Scenarios::MandateReplay do
-  include_context 'mandate_replay setup'
+  include_context 'with a paying profile whose mandate is replayed'
 
   # `POST /kiosk/pay` twice — A's legitimate settlement, then B's replay of A's
   # exact JWS under B's token — so the two legs are one stub answering in order.

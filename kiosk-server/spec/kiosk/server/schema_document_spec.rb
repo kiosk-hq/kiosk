@@ -11,7 +11,7 @@
 # otherwise.** A digest narrower than that is a stale catalogue with a green
 # check beside it.
 
-RSpec.shared_context 'schema document spec: fresh catalog' do
+RSpec.shared_context 'with a fresh schema catalog' do
   before do
     Kiosk.configure do |c|
       c.issuer = 'https://demo.example'
@@ -25,7 +25,7 @@ RSpec.shared_context 'schema document spec: fresh catalog' do
 end
 
 RSpec.describe Kiosk::Server::SchemaDocument do
-  include_context 'schema document spec: fresh catalog'
+  include_context 'with a fresh schema catalog'
 
   describe '.document' do
     it 'is exactly {queries, actions, events} — sorted descriptors, and NO `verbs`' do

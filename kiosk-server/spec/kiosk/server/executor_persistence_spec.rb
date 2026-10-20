@@ -108,7 +108,7 @@ module ExecutorPersistenceSpec
   end
 end
 
-RSpec.shared_context 'executor persistence spec: real postgres' do
+RSpec.shared_context 'with real Postgres for executor persistence' do
   include ExecutorPersistenceSpec::Helpers
 
   before do
@@ -135,8 +135,8 @@ RSpec.shared_context 'executor persistence spec: real postgres' do
   end
 end
 
-RSpec.shared_context 'executor persistence spec: mandate trail' do
-  include_context 'executor persistence spec: real postgres'
+RSpec.shared_context 'with a mandate trail to persist' do
+  include_context 'with real Postgres for executor persistence'
 
   # A fixed, non-round instant pinned to an offset that is NOT UTC and not
   # whole-hour, on purpose: the value reaches Postgres as a zone-LESS
@@ -166,8 +166,8 @@ RSpec.shared_context 'executor persistence spec: mandate trail' do
   end
 end
 
-RSpec.shared_context 'executor persistence spec: payment' do
-  include_context 'executor persistence spec: mandate trail'
+RSpec.shared_context 'with a payment mandate on the trail' do
+  include_context 'with a mandate trail to persist'
 
   let(:payment) do
     Kiosk::Mandate::PaymentMandate.new(
@@ -193,8 +193,8 @@ end
 # are written with the non-canonical spelling ON PURPOSE — a row already in
 # the table from before the boundary canonicalised its input is exactly the
 # case the query-side fold exists for.
-RSpec.shared_context 'executor persistence spec: currency spellings' do
-  include_context 'executor persistence spec: mandate trail'
+RSpec.shared_context 'with settlements in several currency spellings' do
+  include_context 'with a mandate trail to persist'
 
   # A whole trail of its own, so two settlements can coexist under
   # `UNIQUE (cart_mandate_id)`.
@@ -213,8 +213,8 @@ end
 
 # Concurrent pays of one assistant, half of them declined by the payment
 # provider: what settles never passes the cap, and every decline is recorded.
-RSpec.shared_context 'executor persistence spec: six chains, half declined' do
-  include_context 'executor persistence spec: payment'
+RSpec.shared_context 'with six chains, half declined' do
+  include_context 'with a payment mandate on the trail'
 
   let(:chains) do
     Array.new(6) do |n|
@@ -243,8 +243,8 @@ RSpec.shared_context 'executor persistence spec: six chains, half declined' do
   end
 end
 
-RSpec.shared_context 'executor persistence spec: two chains of one assistant' do
-  include_context 'executor persistence spec: payment'
+RSpec.shared_context 'with two chains of one assistant' do
+  include_context 'with a payment mandate on the trail'
 
   let(:chains) do
     Array.new(2) do |n|
@@ -286,8 +286,8 @@ end
 # already-SETTLED cart is IDEMPOTENT — it returns the settlement the first
 # call returned. A re-presented chain that was never captured, or whose
 # capture is still in flight, keeps `409 conflict` before any capture.
-RSpec.shared_context 'executor persistence spec: a replayed pay (K-850)' do
-  include_context 'executor persistence spec: payment'
+RSpec.shared_context 'with a replayed pay against real Postgres' do
+  include_context 'with a payment mandate on the trail'
   include ExecutorPersistenceSpec::Replay
 
   let(:captures) { [] }
@@ -320,7 +320,7 @@ RSpec.describe Kiosk::Server::Executor do
   # The helpers are private — they are the Executor's own persistence, not a
   # public seam — so the spec reaches them the only way there is.
   describe '#persist_intent_mandate' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     it 'returns the SERVER-generated uuid PK and persists every signed field' do
       id  = executor.send(:persist_intent_mandate, intent)
@@ -345,7 +345,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#persist_intent_mandate column types' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     # The uuid columns are the second half of the type story. Postgres'
     # `uuid` type CANONICALISES on input, so an UPPERCASE agent id comes back
@@ -370,7 +370,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#persist_intent_mandate hostile input' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     # The whole point of the row (K-654): values are DATA, never SQL. This
     # passes under `connection.quote` too — that is what makes it the
@@ -394,7 +394,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#persist_cart_mandate' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     it 'persists the cart against the SERVER intent id and returns its own server id' do
       intent_row = executor.send(:persist_intent_mandate, intent)
@@ -414,7 +414,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#persist_cart_mandate line_items' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     def containing_count(cart_row, items)
       value(
@@ -448,7 +448,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#persist_payment_mandate' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     it 'persists the signed payment mandate against the SERVER cart id' do
       _intent_row, cart_row = persist_trail
@@ -472,7 +472,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#persist_payment_mandate expiry' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     it 'persists a NULL expires_at when the mandate carries none (the column is nullable here)' do
       intent_row = executor.send(:persist_intent_mandate, intent)
@@ -486,7 +486,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#persist_settlement' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     it 'records the receipt against the SERVER cart id and returns its server id' do
       _intent_row, cart_row = persist_trail
@@ -517,7 +517,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe '#spent_in_window over settlements' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     before do
       _intent_row, cart_row = persist_trail
@@ -549,7 +549,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'spelling is not identity (K-1251)' do
-    include_context 'executor persistence spec: currency spellings'
+    include_context 'with settlements in several currency spellings'
 
     it 'tallies an EUR settlement under eur' do
       settle(currency: 'EUR', cents: 2500)
@@ -582,7 +582,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'spending cap across spellings' do
-    include_context 'executor persistence spec: currency spellings'
+    include_context 'with settlements in several currency spellings'
 
     # THE ONE THE ROW IS ABOUT: spend under one spelling, then the other,
     # against a single configured cap. Pre-fix the second charge saw a tally
@@ -613,7 +613,7 @@ RSpec.describe Kiosk::Server::Executor do
   # A cart whose capture may still be running counts against the cap, and two
   # concurrent pays of one assistant are serialised, so neither can miss the other.
   describe 'spending cap and carts in flight' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     before { Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } } }
 
@@ -645,7 +645,7 @@ RSpec.describe Kiosk::Server::Executor do
 
   # A refund gives the cap back: the cap counts a settlement less what was refunded of it.
   describe 'spending cap and refunds' do
-    include_context 'executor persistence spec: payment'
+    include_context 'with a payment mandate on the trail'
 
     before { Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 2000, currency: 'eur' } } }
 
@@ -680,7 +680,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'concurrent pays with declines under one cap' do
-    include_context 'executor persistence spec: six chains, half declined'
+    include_context 'with six chains, half declined'
 
     def pay_in_a_thread(intent, cart, payment)
       args = { intent_mandate_jws: intent.raw_jws, cart_mandate_jws: cart.raw_jws, payment_mandate_jws: payment.raw_jws }
@@ -707,7 +707,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'two concurrent pays under one cap' do
-    include_context 'executor persistence spec: two chains of one assistant'
+    include_context 'with two chains of one assistant'
 
     def pay_in_a_thread(intent, cart, payment)
       args = { intent_mandate_jws: intent.raw_jws, cart_mandate_jws: cart.raw_jws, payment_mandate_jws: payment.raw_jws }
@@ -727,7 +727,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'a replayed pay of a settled chain' do
-    include_context 'executor persistence spec: a replayed pay (K-850)'
+    include_context 'with a replayed pay against real Postgres'
 
     # THE PIN THE DECISION ASKED FOR: one capture, one settlement row, and
     # the SECOND call returns the FIRST call's answer field for field.
@@ -765,7 +765,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'a repeated pay of an unfinished chain' do
-    include_context 'executor persistence spec: a replayed pay (K-850)'
+    include_context 'with a replayed pay against real Postgres'
 
     # The trail is persisted and nothing was captured: the call stopped before
     # the capture. The repeat captures and settles.
@@ -797,7 +797,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'a repeated pay of an unfinished chain, concurrent or declined' do
-    include_context 'executor persistence spec: a replayed pay (K-850)'
+    include_context 'with a replayed pay against real Postgres'
 
     it 'answers two concurrent repeats with one settlement' do
       persist_trail
@@ -827,7 +827,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'a repeated pay after an unknown outcome' do
-    include_context 'executor persistence spec: a replayed pay (K-850)'
+    include_context 'with a replayed pay against real Postgres'
 
     it 'keeps an unknown outcome open: the repeat charges again under the same key' do
       allow(provider).to receive(:capture)
@@ -840,7 +840,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'a replayed pay that is not the same request' do
-    include_context 'executor persistence spec: a replayed pay (K-850)'
+    include_context 'with a replayed pay against real Postgres'
 
     # A MANDATE ID RE-USED WITH DIFFERENT CONTENT IS NOT A REPLAY. The cart
     # `id` is the settled one, the signed bytes are not — so the settlement

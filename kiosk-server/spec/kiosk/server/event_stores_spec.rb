@@ -51,7 +51,7 @@ module EventStoresSpec
   end
 end
 
-RSpec.shared_context 'event stores spec: throwaway schema' do
+RSpec.shared_context 'with a throwaway event store schema' do
   include EventStoresSpec
 
   subject(:store) { described_class.new }
@@ -77,7 +77,7 @@ RSpec.shared_context 'event stores spec: throwaway schema' do
 end
 
 RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
-  include_context 'event stores spec: throwaway schema'
+  include_context 'with a throwaway event store schema'
 
   # ── the contract, exactly as the in-process store answers it ──────────────
 

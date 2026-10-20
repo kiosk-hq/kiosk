@@ -171,7 +171,7 @@ end
 
 # The spent-id store is written only for a live challenge this origin signed,
 # at the exp it signed, and for no more proofs than the toll asks.
-RSpec.shared_context 'pow gate spec: recorded claims' do
+RSpec.shared_context 'with recorded spent-proof claims' do
   include PowGateSpecHelpers
 
   let(:claims) { [] }
@@ -655,7 +655,7 @@ RSpec.describe Kiosk::Server::PowGate do
   end
 
   describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} what reaches the spent-id store" do
-    include_context 'pow gate spec: recorded claims'
+    include_context 'with recorded spent-proof claims'
 
     it 'claims nothing for a challenge whose exp the caller moved' do
       challenge = issue_challenge_via_gate

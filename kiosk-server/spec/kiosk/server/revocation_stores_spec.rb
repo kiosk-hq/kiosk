@@ -27,7 +27,7 @@ module RevocationStoresSpec
   end
 end
 
-RSpec.shared_context 'revocation stores spec: postgres' do
+RSpec.shared_context 'with a revocation Postgres schema' do
   include RevocationStoresSpec
 
   before do
@@ -45,7 +45,7 @@ end
 
 RSpec.describe Kiosk::Server::RevocationStores::ActiveRecord do
   describe 'watermark' do
-    include_context 'revocation stores spec: postgres'
+    include_context 'with a revocation Postgres schema'
 
     it 'revokes a token issued before the watermark and keeps one issued at or after it' do
       described_class.new.revoke_all(agent, at: now)
@@ -71,7 +71,7 @@ RSpec.describe Kiosk::Server::RevocationStores::ActiveRecord do
   end
 
   describe 'agent row' do
-    include_context 'revocation stores spec: postgres'
+    include_context 'with a revocation Postgres schema'
 
     it 'revokes every token of an unlinked agent, whatever its iat' do
       unlink(agent)

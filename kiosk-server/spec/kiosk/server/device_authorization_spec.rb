@@ -2,7 +2,7 @@
 
 require 'digest'
 
-RSpec.shared_context 'device authorization spec: lifecycle' do
+RSpec.shared_context 'with a pending device authorization' do
   let(:pending) { described_class.generate(client_id: 'kiosk-cli', requested_role: 'customer').last }
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
 end
@@ -228,7 +228,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
   end
 
   describe '#approve' do
-    include_context 'device authorization spec: lifecycle'
+    include_context 'with a pending device authorization'
 
     it 'transitions pending → approved with user_id set' do
       approved = pending.approve(user_id: user_id)
@@ -255,7 +255,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
   end
 
   describe '#approve role' do
-    include_context 'device authorization spec: lifecycle'
+    include_context 'with a pending device authorization'
 
     # ── the role travels with the approval (K-072) ──────────────────────
     #
@@ -295,7 +295,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
   end
 
   describe '#deny' do
-    include_context 'device authorization spec: lifecycle'
+    include_context 'with a pending device authorization'
 
     it 'transitions pending → denied' do
       denied = pending.deny
@@ -310,7 +310,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
   end
 
   describe '#consume' do
-    include_context 'device authorization spec: lifecycle'
+    include_context 'with a pending device authorization'
 
     it 'transitions approved → consumed with consumed_at set' do
       approved = pending.approve(user_id: user_id)
@@ -333,7 +333,7 @@ RSpec.describe Kiosk::Server::DeviceAuthorization do
   end
 
   describe '#expire' do
-    include_context 'device authorization spec: lifecycle'
+    include_context 'with a pending device authorization'
 
     it 'transitions pending → expired' do
       expect(pending.expire).to be_expired

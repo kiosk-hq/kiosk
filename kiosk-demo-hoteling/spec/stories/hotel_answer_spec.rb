@@ -2,7 +2,7 @@
 
 require 'story_helper'
 
-RSpec.shared_context 'a hotel that answers on demand' do
+RSpec.shared_context 'with a hotel that answers on demand' do
   before { Rails.configuration.x.hoteling.decision_delay_seconds = 1.hour }
 
   def the_hotel_answers(booking, accepts:)
@@ -13,7 +13,7 @@ RSpec.shared_context 'a hotel that answers on demand' do
 end
 
 RSpec.describe "The hotel's answer to a paid booking", type: :story do
-  include_context 'a hotel that answers on demand'
+  include_context 'with a hotel that answers on demand'
 
   it 'a guest waits for the hotel, and once it accepts reads the confirmation code, which a later answer does not change' do
     guest = a_guest

@@ -25,7 +25,7 @@ module WellKnownSpec
   def v = "?v=#{Kiosk::Server::SchemaDocument.digest}"
 end
 
-RSpec.shared_context 'well known spec: acme origin' do
+RSpec.shared_context 'with the acme origin for well-known documents' do
   include WellKnownSpec
 
   before do
@@ -37,7 +37,7 @@ RSpec.shared_context 'well known spec: acme origin' do
 end
 
 RSpec.describe Kiosk::Server::WellKnown do
-  include_context 'well known spec: acme origin'
+  include_context 'with the acme origin for well-known documents'
 
   describe '.build' do
     subject(:doc) { described_class.build(base_url: 'https://api.acme.example') }

@@ -12,7 +12,7 @@ module JwtIssuerSpec
   end
 end
 
-RSpec.shared_context 'jwt issuer spec: configured' do
+RSpec.shared_context 'with a configured JWT issuer' do
   include JwtIssuerSpec
 
   let(:key)        { Kiosk::Server::SigningKey.new(JwtIssuerSpec.rsa1) }
@@ -29,8 +29,8 @@ RSpec.shared_context 'jwt issuer spec: configured' do
   end
 end
 
-RSpec.shared_context 'jwt issuer spec: issued token' do
-  include_context 'jwt issuer spec: configured'
+RSpec.shared_context 'with an issued JWT' do
+  include_context 'with a configured JWT issuer'
 
   let(:token) do
     described_class.issue(claims: { sub: 'user-1', role: 'customer' }, audience: audience)
@@ -39,7 +39,7 @@ end
 
 RSpec.describe Kiosk::Server::JwtIssuer do
   describe '.issue' do
-    include_context 'jwt issuer spec: configured'
+    include_context 'with a configured JWT issuer'
 
     it 'produces a JWT carrying the supplied claims and the standard time bounds' do
       token = described_class.issue(claims: { sub: 'user-1', role: 'customer' }, audience: audience)
@@ -101,7 +101,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
   end
 
   describe '.verify' do
-    include_context 'jwt issuer spec: issued token'
+    include_context 'with an issued JWT'
 
     it 'round-trips an issued token and returns symbol-keyed claims' do
       claims = described_class.verify(token: token, jwks: jwks, audience: audience)
@@ -193,7 +193,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
   end
 
   describe '.normalize_jwks input polymorphism' do
-    include_context 'jwt issuer spec: configured'
+    include_context 'with a configured JWT issuer'
 
     let(:token) { described_class.issue(claims: { sub: 'u' }, audience: audience) }
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_context 'auth challenge spec: key and ttl' do
+RSpec.shared_context 'with an auth challenge key and ttl' do
   let(:pem) { "-----BEGIN PUBLIC KEY-----\nAAA\n-----END PUBLIC KEY-----" }
 
   before { Kiosk.configure { |c| c.auth_challenge_ttl = 120 } }
@@ -8,7 +8,7 @@ end
 
 RSpec.describe Kiosk::Server::AuthChallenge do
   describe '.issue' do
-    include_context 'auth challenge spec: key and ttl'
+    include_context 'with an auth challenge key and ttl'
 
     it 'mints a nonce and records it with a TTL, consumable exactly once' do
       now    = Time.current
@@ -41,7 +41,7 @@ RSpec.describe Kiosk::Server::AuthChallenge do
   end
 
   describe '.consume!' do
-    include_context 'auth challenge spec: key and ttl'
+    include_context 'with an auth challenge key and ttl'
 
     it 'burns a matching live challenge' do
       c = described_class.issue(public_key_pem: pem)

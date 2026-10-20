@@ -40,7 +40,7 @@ class TestExecutorSpecConnection
   def queue_error(klass, msg)    = @queued_errors  << klass.new(msg)
 end
 
-RSpec.shared_context 'test executor spec: executor' do
+RSpec.shared_context 'with an in-process executor on fake connections' do
   let(:connection)        { TestExecutorSpecConnection.new }
   let(:system_connection) { TestExecutorSpecConnection.new }
   let(:executor) do
@@ -53,7 +53,7 @@ RSpec.shared_context 'test executor spec: executor' do
 end
 
 RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
-  include_context 'test executor spec: executor'
+  include_context 'with an in-process executor on fake connections'
 
   describe '#with_identity' do
     it 'opens exactly one transaction' do

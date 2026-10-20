@@ -43,7 +43,7 @@ module AuthTollSpec
   end
 end
 
-RSpec.shared_context 'auth toll spec: equihash backend' do
+RSpec.shared_context 'with the equihash toll backend' do
   include AuthTollSpec
 
   before do
@@ -60,7 +60,7 @@ RSpec.shared_context 'auth toll spec: equihash backend' do
 end
 
 RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll spec: equihash backend'
+  include_context 'with the equihash toll backend'
 
   it 'is a no-op when registration_pow_count is 0 (default)' do
     expect(register_toll(nil)).to be_nil

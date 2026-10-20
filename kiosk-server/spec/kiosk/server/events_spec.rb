@@ -7,7 +7,7 @@
 # example declares a topic the way a demo will and then reads the registry the
 # catalogue reads. Nothing calls the mixin's internals.
 
-RSpec.shared_context 'events spec: operator controller' do
+RSpec.shared_context 'with an operator controller' do
   # An operator's own controller. `topic` needs no method of its own, but the
   # leak example below defines a verb, and that needs a real controller base.
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
@@ -18,7 +18,7 @@ RSpec.shared_context 'events spec: operator controller' do
   end
 end
 
-RSpec.shared_context 'events spec: a declared delivery topic' do
+RSpec.shared_context 'with a declared delivery topic' do
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
   let(:store) { MemoryEventStore.new }
 
@@ -34,7 +34,7 @@ RSpec.shared_context 'events spec: a declared delivery topic' do
   end
 end
 
-RSpec.shared_context 'events spec: catalogue declarations' do
+RSpec.shared_context 'with a controller for catalogue declarations' do
   let(:controller) { Class.new(ApplicationController) { include Kiosk::Handler } }
 
   def declare_topic!
@@ -63,7 +63,7 @@ end
 
 RSpec.describe Kiosk::Server::Events do
   describe 'the topic registry' do
-    include_context 'events spec: operator controller'
+    include_context 'with an operator controller'
 
     it 'registers a topic declared with a block' do
       declare_in_controller do
@@ -347,7 +347,7 @@ RSpec.describe Kiosk::Server::Events do
   # domain knows it; `reach` authorises a SUBSCRIPTION and is a different
   # question, answered at the socket.
   describe '.emit' do
-    include_context 'events spec: a declared delivery topic'
+    include_context 'with a declared delivery topic'
 
     it 'appends one event per identity in scope and returns the last id' do
       id = described_class.emit(
@@ -412,7 +412,7 @@ RSpec.describe Kiosk::Server::Events do
   # The events surface as an operator and an assistant SEE it: a third catalogue
   # array, a fifth capability, and a discovery field.
   describe 'the events surface in the catalogue and discovery' do
-    include_context 'events spec: catalogue declarations'
+    include_context 'with a controller for catalogue declarations'
 
     describe 'GET <endpoint>/schema' do
       it 'publishes an events array beside queries and actions' do

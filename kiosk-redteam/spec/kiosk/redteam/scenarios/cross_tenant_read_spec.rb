@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'cross_tenant_read setup' do
+RSpec.shared_context 'with a profile that reads my_orders' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -33,7 +33,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
   describe '#call — non-vacuity' do
-    include_context 'cross_tenant_read setup'
+    include_context 'with a profile that reads my_orders'
 
     context "when the server leaks A's row to B (broken — BREACH)" do
       it 'returns blocked: false' do
@@ -83,7 +83,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
   # pass, but only once A's own query has demonstrated that this query returns
   # this key for its owner.
   describe '#call — the empty answer must be earned (K-729)' do
-    include_context 'cross_tenant_read setup'
+    include_context 'with a profile that reads my_orders'
 
     context 'when the provider answers EVERY query with [] (no isolation logic)' do
       it 'fails the control instead of scoring a pass' do
@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
   # A non-2xx on B's query is not isolation — and a 5xx counting as blocked
   # broke the gem's own "a crash can never mask a breach" invariant.
   describe "#call — B's query must be ANSWERED (K-729)" do
-    include_context 'cross_tenant_read setup'
+    include_context 'with a profile that reads my_orders'
 
     [
       [500, 'internal_error', 'a crash'],
@@ -157,7 +157,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::CrossTenantRead do
   end
 
   describe '#call — skip conditions' do
-    include_context 'cross_tenant_read setup'
+    include_context 'with a profile that reads my_orders'
 
     it 'skips when per_user_query is nil' do
       profile_no_query = Kiosk::Redteam::Profile.new(create_owned: ->(_c, _p) { { id: 'x' } })

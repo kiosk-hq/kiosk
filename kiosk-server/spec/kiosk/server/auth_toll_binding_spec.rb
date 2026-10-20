@@ -48,7 +48,7 @@ module AuthTollBindingSpec
   end
 end
 
-RSpec.shared_context 'auth toll binding spec: a tolled provider' do
+RSpec.shared_context 'with a tolled provider for binding' do
   include AuthTollBindingSpec
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
@@ -78,7 +78,7 @@ RSpec.shared_context 'auth toll binding spec: a tolled provider' do
 end
 
 RSpec.describe Kiosk::Server::AuthToll do
-  include_context 'auth toll binding spec: a tolled provider'
+  include_context 'with a tolled provider for binding'
 
   describe Kiosk::Server::LinkCode do
     let(:live) { described_class.mint(user_id: user_id, store: store)[:link_code] }

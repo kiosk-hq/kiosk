@@ -9,7 +9,7 @@ require_relative 'support'
 RENTAL_TOKEN_BODY = { 'scooter_code' => 'SK-001', 'rental_token' => 'rt-1',
                       'exp' => 4_102_444_800 }.freeze
 
-RSpec.shared_context 'missing_kyc setup' do
+RSpec.shared_context 'with a KYC-gated profile' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -26,7 +26,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
   describe '#call — non-vacuity' do
-    include_context 'missing_kyc setup'
+    include_context 'with a KYC-gated profile'
 
     context 'when the server allows gated action without KYC (broken — BREACH)' do
       it 'returns blocked: false' do
@@ -59,7 +59,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
   # KYC gate. Demonstrated: pay → 402, gated action → 402, printed
   # "BLOCKED ✓ MissingKyc" — a line the KYC gate's deletion would not change.
   describe '#call — the staged payment must actually settle (K-731)' do
-    include_context 'missing_kyc setup'
+    include_context 'with a KYC-gated profile'
 
     it 'reports SETUP FAILED when pay is refused 402 and the gated action then 402s' do
       stub_registers('a')
@@ -107,7 +107,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MissingKyc do
   end
 
   describe '#call — skip conditions' do
-    include_context 'missing_kyc setup'
+    include_context 'with a KYC-gated profile'
 
     it 'skips when requires_kyc is false' do
       p = minimal_profile(gated_action: 'start_rental', pay_for: pay_for_callable)

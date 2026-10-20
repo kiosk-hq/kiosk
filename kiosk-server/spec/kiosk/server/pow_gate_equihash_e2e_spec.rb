@@ -59,7 +59,7 @@ module PowGateEquihashE2eSpec
   end
 end
 
-RSpec.shared_context 'pow gate equihash e2e spec: gate' do
+RSpec.shared_context 'with an equihash proof-of-work gate' do
   include PowGateEquihashE2eSpec
 
   before do
@@ -83,7 +83,7 @@ end
 
 RSpec.describe Kiosk::Server::PowGate do
   describe 'with equihash (real backend, real gate)' do
-    include_context 'pow gate equihash e2e spec: gate'
+    include_context 'with an equihash proof-of-work gate'
 
     it 'issues `count` equihash challenges on an unproven request (the 402 shape)' do
       expect { gate(pow: nil) }.to raise_error(Kiosk::Server::Errors::PowRequired) { |err|
@@ -107,7 +107,7 @@ RSpec.describe Kiosk::Server::PowGate do
       end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
     end
 
-    context 'N = 3 independent proofs' do
+    context 'with N = 3 independent proofs' do
       let(:count) { 3 }
 
       it 'proceeds only when ALL three verify; a short set re-challenges' do

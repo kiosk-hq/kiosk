@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.shared_context 'column spending cap spec: seam' do
+RSpec.shared_context 'with a column spending cap seam' do
   subject(:seam) { described_class.new }
 
   let(:conn) { FakeConnection.new }
@@ -13,7 +13,7 @@ end
 
 RSpec.describe Kiosk::Server::ColumnSpendingCap do
   describe 'reading the cap' do
-    include_context 'column spending cap spec: seam'
+    include_context 'with a column spending cap seam'
 
     it 'reads the per-assistant cap and its currency from agents (live rows only)' do
       conn.next_exec_result = [{ 'spending_cap_cents' => 2500, 'spending_cap_currency' => 'eur' }]
@@ -31,7 +31,7 @@ RSpec.describe Kiosk::Server::ColumnSpendingCap do
   end
 
   describe 'without a cap' do
-    include_context 'column spending cap spec: seam'
+    include_context 'with a column spending cap seam'
 
     it 'returns nil when the assistant row has no cap set (unlimited)' do
       conn.next_exec_result = [{ 'spending_cap_cents' => nil, 'spending_cap_currency' => nil }]

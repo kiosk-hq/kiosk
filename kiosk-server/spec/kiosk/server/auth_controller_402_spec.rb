@@ -29,7 +29,7 @@ module AuthController402Spec
   end
 end
 
-RSpec.shared_context 'auth controller 402 spec: registration toll' do
+RSpec.shared_context 'with a registration toll on the auth controller' do
   before do
     Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
     allow(Kiosk::Pow::Equihash).to receive(:params).and_return(AuthController402Spec::KAT_PARAMS_REGISTER)
@@ -49,7 +49,7 @@ end
 
 RSpec.describe Kiosk::Server::AuthController do
   describe '402 WWW-Authenticate' do
-    include_context 'auth controller 402 spec: registration toll'
+    include_context 'with a registration toll on the auth controller'
     include AuthController402Spec
 
     it 'register toll 402 pow_required carries WWW-Authenticate: Kiosk-PoW AND the challenges body' do

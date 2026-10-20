@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'expired_kyc setup' do
+RSpec.shared_context 'with a KYC-gated profile and an expired KYC token' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -21,7 +21,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::ExpiredKyc do
   describe '#call — non-vacuity' do
-    include_context 'expired_kyc setup'
+    include_context 'with a KYC-gated profile and an expired KYC token'
 
     context 'when the server rejects the expired KYC at the kyc endpoint (correct — BLOCKED)' do
       it 'returns blocked: true' do
@@ -71,7 +71,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ExpiredKyc do
   # then walk on and attack the gated action with an UN-ATTESTED principal —
   # MissingKyc running under ExpiredKyc's name. It stalls instead.
   describe '#call — a 402 at /kyc is not a pass and does not fall through (K-736)' do
-    include_context 'expired_kyc setup'
+    include_context 'with a KYC-gated profile and an expired KYC token'
 
     %w[pow_required payment_setup_required payment_failed].each do |code|
       it "reports could-not-test on 402 #{code}" do
@@ -98,7 +98,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ExpiredKyc do
   end
 
   describe '#call — skip conditions' do
-    include_context 'expired_kyc setup'
+    include_context 'with a KYC-gated profile and an expired KYC token'
 
     it 'skips when requires_kyc is false' do
       p = minimal_profile(gated_action: 'start_rental', pay_for: pay_for_callable,

@@ -54,7 +54,7 @@ module DeviceGrantStubs
   end
 end
 
-RSpec.shared_context 'device_grant_role_self_selection setup' do
+RSpec.shared_context 'with a profile that declares the customer and owner roles' do
   include DeviceGrantStubs
 
   subject(:scenario) { described_class.new }
@@ -67,7 +67,7 @@ RSpec.shared_context 'device_grant_role_self_selection setup' do
 end
 
 RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
-  include_context 'device_grant_role_self_selection setup'
+  include_context 'with a profile that declares the customer and owner roles'
 
   it 'is BLOCKED against the engine at head' do
     stub_fixed_engine

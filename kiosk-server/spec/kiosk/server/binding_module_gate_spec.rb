@@ -62,7 +62,7 @@ module BindingModuleGateSpec
   end
 end
 
-RSpec.shared_context 'binding module gate spec: configured origin' do
+RSpec.shared_context 'with an origin configured for the binding module gate' do
   include BindingModuleGateSpec
 
   let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
@@ -78,7 +78,7 @@ end
 
 RSpec.describe Kiosk::Server::BindingModuleGate do
   describe 'the declined account-binding profile' do
-    include_context 'binding module gate spec: configured origin'
+    include_context 'with an origin configured for the binding module gate'
 
     describe 'with the module declined' do
       BindingModuleGateSpec::BINDING_ENDPOINTS.each do |method, path, controller_name, action|

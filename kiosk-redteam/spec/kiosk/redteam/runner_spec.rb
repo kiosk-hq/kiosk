@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.shared_context 'runner setup' do
+RSpec.shared_context 'with a profile double and scenario doubles' do
   let(:base_url) { 'http://kiosk.example.com' }
 
   let(:profile)  { instance_double(Kiosk::Redteam::Profile) }
@@ -30,7 +30,7 @@ RSpec.describe Kiosk::Redteam::Runner do
   # ── #run ────────────────────────────────────────────────────────────────
 
   describe '#run' do
-    include_context 'runner setup'
+    include_context 'with a profile double and scenario doubles'
 
     it 'returns an array of { scenario:, verdict: } hashes' do
       s1 = make_scenario('CrossTenantRead', blocked_verdict)
@@ -120,7 +120,7 @@ RSpec.describe Kiosk::Redteam::Runner do
   # what a raising scenario does — and none of it was covered (K-728). It must
   # ABORT, loudly, and must never leave a caller able to read the run as clean.
   describe 'a scenario that raises' do
-    include_context 'runner setup'
+    include_context 'with a profile double and scenario doubles'
 
     def raising_scenario(name, error = RuntimeError.new('redteam: create_owned failed (500)'))
       s = instance_double(Kiosk::Redteam::Scenario, name:)

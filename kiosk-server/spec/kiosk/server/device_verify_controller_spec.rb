@@ -47,7 +47,7 @@ module DeviceVerifyControllerSpecHelpers
   end
 end
 
-RSpec.shared_context 'device verify controller spec: signed-in holder' do
+RSpec.shared_context 'with a holder signed in to the device verify page' do
   include DeviceVerifyControllerSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
@@ -67,7 +67,7 @@ end
 
 RSpec.describe 'DeviceVerifyController' do
   describe 'show' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     it 'renders the code-entry form for a signed-in account holder' do
       status, html = dispatch(:show, method: 'GET')
@@ -95,7 +95,7 @@ RSpec.describe 'DeviceVerifyController' do
   # manage-assistants page has had. Both read `config.sign_in_path` through
   # {Kiosk::Server::AccountHolderGate}.
   describe 'with config.sign_in_path set (browser UX)' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     before do
       wire_user_idp(nil)
@@ -133,7 +133,7 @@ RSpec.describe 'DeviceVerifyController' do
   end
 
   describe 'consent panel' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     it 'shows the consent panel with key fingerprint and requested-at for a live code' do
       start = start_claim
@@ -166,7 +166,7 @@ RSpec.describe 'DeviceVerifyController' do
   end
 
   describe 'consent panel without a role' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     it 'says so plainly when the provider gives the approver no role' do
       wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: nil))
@@ -187,7 +187,7 @@ RSpec.describe 'DeviceVerifyController' do
   end
 
   describe 'approve' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     it "approve stamps the SESSION holder's user_id on the row" do
       start = start_claim
@@ -223,7 +223,7 @@ RSpec.describe 'DeviceVerifyController' do
   end
 
   describe 'approve without a role, and deny' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     it 'approve leaves the row role-less when the session holder has no role' do
       wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: nil))
@@ -251,7 +251,7 @@ RSpec.describe 'DeviceVerifyController' do
   end
 
   describe 'decision errors and attempt cap' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     it 'rejects an unknown decision' do
       status, = dispatch(
@@ -289,7 +289,7 @@ RSpec.describe 'DeviceVerifyController' do
   # never a pointer to the wire. The harness has no Rails app, so the subclass
   # opts into `protect_from_forgery` to reproduce that condition.
   describe 'forgery protection on a JSON POST' do
-    include_context 'device verify controller spec: signed-in holder'
+    include_context 'with a holder signed in to the device verify page'
 
     let(:guarded) do
       stub_const(

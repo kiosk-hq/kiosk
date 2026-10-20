@@ -20,7 +20,7 @@ NEEDLES = ['NoMethodError', 'undefined method', 'TypeError', 'no implicit conver
            '::uuid', '::integer', '::date', 'PG::', '22P02', 'invalid input syntax',
            'ActiveRecord::', 'ActiveModel::'].freeze
 
-RSpec.shared_context 'leak_scan setup' do
+RSpec.shared_context 'with the pre-fix oracle and a refusal' do
   # The oracle as it stood before this module existed, so "removing the fix"
   # is something this spec can EXECUTE rather than something a comment claims.
   def pre_fix_oracle(body)
@@ -36,7 +36,7 @@ RSpec.shared_context 'leak_scan setup' do
 end
 
 RSpec.describe Kiosk::Redteam::LeakScan do
-  include_context 'leak_scan setup'
+  include_context 'with the pre-fix oracle and a refusal'
 
   # ── The strict containment rule ─────────────────────────────────────────────
 

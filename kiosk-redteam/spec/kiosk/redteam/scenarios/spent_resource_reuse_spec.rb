@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'spent_resource_reuse setup' do
+RSpec.shared_context 'with a gated action whose rental is used twice' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -26,7 +26,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
   describe '#call — non-vacuity' do
-    include_context 'spent_resource_reuse setup'
+    include_context 'with a gated action whose rental is used twice'
 
     context 'when the server allows the gated action twice (broken — BREACH, C3)' do
       it 'returns blocked: false' do
@@ -102,7 +102,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
   # means the payment gate answered — but A paid, and the first use succeeded —
   # and a 401 means A's token died mid-scenario. Both used to score BLOCKED.
   describe '#call — only a 403 forbidden/rls_denied proves the state gate (K-728)' do
-    include_context 'spent_resource_reuse setup'
+    include_context 'with a gated action whose rental is used twice'
 
     def stub_second_use(status, code)
       stub_registers('a')
@@ -137,7 +137,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::SpentResourceReuse do
   end
 
   describe '#call — skip conditions' do
-    include_context 'spent_resource_reuse setup'
+    include_context 'with a gated action whose rental is used twice'
 
     it 'skips when gated_action is nil' do
       p = minimal_profile(pay_for: pay_for_callable)

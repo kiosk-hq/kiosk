@@ -128,15 +128,15 @@ module ExecutorSpecCurrencyHelpers
   end
 end
 
-RSpec.shared_context 'executor spec: fake connection' do
+RSpec.shared_context 'with a fake executor connection' do
   include ExecutorSpecHelpers
 
   let(:connection) { FakeConnection.new }
   let(:identity)   { build_identity(actor: 'agent') }
 end
 
-RSpec.shared_context 'executor spec: pay mandates' do
-  include_context 'executor spec: fake connection'
+RSpec.shared_context 'with pay mandates' do
+  include_context 'with a fake executor connection'
 
   let(:identity) { build_identity(agent_id: 'a-1') }
   let(:intent) do
@@ -165,7 +165,7 @@ end
 # `Executor.call` builds one instance per call; this hands the spec the one
 # it builds for `identity`, so an example stubs that instance's helpers. A
 # call for any other identity builds a fresh instance.
-RSpec.shared_context 'executor spec: the instance a call builds' do
+RSpec.shared_context 'with the executor instance a call builds' do
   let(:executor) { described_class.new(connection: connection, identity: identity) }
 
   before do
@@ -175,9 +175,9 @@ RSpec.shared_context 'executor spec: the instance a call builds' do
   end
 end
 
-RSpec.shared_context 'executor spec: verb :pay' do
-  include_context 'executor spec: pay mandates'
-  include_context 'executor spec: the instance a call builds'
+RSpec.shared_context 'with verb :pay' do
+  include_context 'with pay mandates'
+  include_context 'with the executor instance a call builds'
 
   let(:settlement) { { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.current } }
   let(:valid_args) do
@@ -219,8 +219,8 @@ end
 # constraint the shipped schema declares: `UNIQUE (user_id, mandate_id)` on
 # each of the three mandate tables. So the 409 is produced by the same
 # `unique_violation?` remap a real Postgres would trip, not by a stub.
-RSpec.shared_context 'executor spec: replayed with the identical mandate chain' do
-  include_context 'executor spec: verb :pay'
+RSpec.shared_context 'with a pay replayed with the identical mandate chain' do
+  include_context 'with verb :pay'
   include ExecutorSpecReplayHelpers
 
   # `[table, mandate_id]` for every mandate row the router has accepted —
@@ -266,8 +266,8 @@ end
 # What this group deliberately does NOT claim is that the values are STORED
 # correctly: a fake connection cannot know what Postgres makes of a bind's
 # type. That is `executor_persistence_spec.rb`, against a real database.
-RSpec.shared_context 'executor spec: dated mandates' do
-  include_context 'executor spec: fake connection'
+RSpec.shared_context 'with dated mandates' do
+  include_context 'with a fake executor connection'
 
   let(:expires_at) { Time.at(1_800_000_071).utc }
   let(:intent) do
@@ -295,18 +295,18 @@ RSpec.shared_context 'executor spec: dated mandates' do
   end
 end
 
-RSpec.shared_context 'executor spec: pay-path persistence (bind parameters)' do
+RSpec.shared_context 'with pay-path persistence (bind parameters)' do
   subject(:executor) { described_class.new(connection: connection, identity: identity) }
 
-  include_context 'executor spec: dated mandates'
+  include_context 'with dated mandates'
 
   before { Kiosk.configure { |c| c.schema = 'kiosk' } }
 end
 
-RSpec.shared_context 'executor spec: really signed chain' do
+RSpec.shared_context 'with a really signed mandate chain' do
   include ExecutorSpecCurrencyHelpers
 
-  include_context 'executor spec: the instance a call builds'
+  include_context 'with the executor instance a call builds'
 
   let(:agent_key)  { OpenSSL::PKey::RSA.generate(2048) }
   let(:issuer)     { 'https://demo.example' }
@@ -335,7 +335,7 @@ end
 
 RSpec.describe Kiosk::Server::Executor do
   describe '.call construction' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'raises Unauthenticated when identity is nil' do
       expect do
@@ -353,7 +353,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'transaction discipline' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'wraps the verb in a single transaction with GUCs set' do
       register(:query, 'probe') { [{ ok: 1 }] }
@@ -372,7 +372,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :query' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     before do
       register(:query, 'menu') { [{ 'id' => 1, 'name' => 'Margherita' }] }
@@ -400,7 +400,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :query refusals' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'raises BadRequest when name is missing' do
       expect do
@@ -426,7 +426,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :query handler crash' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     # THE WIRE GETS THE CLASS, THE OPERATOR GETS THE SENTENCE (K-1307).
     #
@@ -456,7 +456,7 @@ RSpec.describe Kiosk::Server::Executor do
 
   # ── cursor pagination seam (ADR-0021 / T-042) ─────────────────────────
   describe 'verb :query pagination' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'leaves next_cursor nil when the handler returns a bare Array (back-compat)' do
       register(:query, 'flat') { [{ 'id' => 1 }, { 'id' => 2 }] }
@@ -481,7 +481,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :query next page' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     # T-092: the cursor reaches the RESULT, never the body. The wire turns it
     # into `Link: …; rel="next"`; the Executor's job ends at carrying it.
@@ -504,7 +504,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :run' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     before do
       register(:action, 'ping') { |args| { 'pong' => args[:greeting] } }
@@ -538,7 +538,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :run refusals' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'raises BadRequest when name is missing' do
       expect do
@@ -564,7 +564,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :run handler crash' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     # Same split as the query branch above, and it is asserted twice because
     # the two rescues are two pieces of code: a fix applied to one of them and
@@ -605,7 +605,7 @@ RSpec.describe Kiosk::Server::Executor do
   # it matters — {AuditSink}'s sibling guarantee is asserted the same way, one
   # file over.
   describe "reporting a handler's crash to the operator" do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     let(:logger) { instance_double(Logger, error: nil) }
 
@@ -640,8 +640,8 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe "reporting a handler's crash safely" do
-    include_context 'executor spec: fake connection'
-    include_context 'executor spec: the instance a call builds'
+    include_context 'with a fake executor connection'
+    include_context 'with the executor instance a call builds'
 
     let(:logger) { instance_double(Logger, error: nil) }
 
@@ -686,7 +686,7 @@ RSpec.describe Kiosk::Server::Executor do
   # The `events` verb was removed (never a capability). It is
   # now an unknown verb → a clean 400 BadRequest, not a raw NotImplementedError.
   describe 'removed :events verb' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'is rejected as an unknown verb (clean BadRequest, not NotImplementedError)' do
       expect do
@@ -703,7 +703,7 @@ RSpec.describe Kiosk::Server::Executor do
   # in schema_document_spec.rb. What stays here is the pair of facts that keep
   # the two vocabularies honest.
   describe 'verb :schema (no longer dispatchable)' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'is refused as an unknown verb, with the valid three named' do
       expect do
@@ -723,7 +723,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :help (removed)' do
-    include_context 'executor spec: fake connection'
+    include_context 'with a fake executor connection'
 
     it 'is no longer a recognised verb' do
       expect do
@@ -733,7 +733,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     it 'verifies the trail, captures, and returns the full settlement payload' do
       result = pay
@@ -770,7 +770,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay per-assistant spending cap' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     it 'does not enforce when no spending_cap seam is configured (default)' do
       allow(executor).to receive(:spent_in_window)
@@ -805,7 +805,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay spending cap tally' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     it 'treats a cap of 0 as disabled (any charge rejected)' do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 0, currency: 'eur' } }
@@ -839,7 +839,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe "verb :pay spending cap's currency" do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     it "refuses a cart in a currency other than the cap's, before capture" do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'usd' } }
@@ -860,7 +860,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay phase-1 errors' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     # N2: a unique-violation surfacing from phase-1 persistence (same signed
     # mandate replayed) is a 409 Conflict, not a 500. Matched by class NAME so
@@ -900,7 +900,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay capture placement' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     it 'does not capture when phase-1 persistence raises a unique violation' do
       stub_const('ActiveRecord::RecordNotUnique', Class.new(StandardError))
@@ -929,7 +929,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay payment setup' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     # I-1: provider.setup_required? == true → clean 402 BEFORE Phase 1 persists
     # anything.  No mandate ids are burned, so the agent can retry after the
@@ -963,7 +963,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay capture failure' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     # K-545: a card DECLINE (retryable PaymentFailed) becomes a typed
     # `payment_failed` 402, NOT a raw 500. The mandate trail is already
@@ -1001,7 +1001,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay missing mandates' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     it 'raises BadRequest when intent_mandate_jws is missing' do
       expect do
@@ -1023,7 +1023,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay without a payment provider' do
-    include_context 'executor spec: verb :pay'
+    include_context 'with verb :pay'
 
     # T-158: `module_not_served` (501), not `forbidden` (403). "This origin does
     # not do payments" is a fact about the ORIGIN and is true of every caller,
@@ -1063,7 +1063,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay replayed with the identical mandate chain' do
-    include_context 'executor spec: replayed with the identical mandate chain'
+    include_context 'with a pay replayed with the identical mandate chain'
 
     # THE ONE-CHARGE ASSERTION, and since K-850 also the IDEMPOTENCE one.
     # Same args, twice: the second call re-presents `intent-1`, the row is
@@ -1113,7 +1113,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay replay boundary' do
-    include_context 'executor spec: replayed with the identical mandate chain'
+    include_context 'with a pay replayed with the identical mandate chain'
 
     # A chain whose charge was declined is closed: no money moved under it, and
     # a repeat answers `409 conflict` before any capture.
@@ -1149,7 +1149,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'verb :pay phase-3 window' do
-    include_context 'executor spec: replayed with the identical mandate chain'
+    include_context 'with a pay replayed with the identical mandate chain'
 
     # The capture succeeds and phase 3 — the transaction that records it —
     # fails. The identical chain sent again charges under the same cart id,
@@ -1172,7 +1172,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'pay-path mandate inserts' do
-    include_context 'executor spec: pay-path persistence (bind parameters)'
+    include_context 'with pay-path persistence (bind parameters)'
 
     it 'binds every intent-mandate value and splices none of them into the SQL' do
       id = executor.send(:persist_intent_mandate, intent)
@@ -1201,7 +1201,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'pay-path payment and settlement inserts' do
-    include_context 'executor spec: pay-path persistence (bind parameters)'
+    include_context 'with pay-path persistence (bind parameters)'
 
     it 'binds every payment-mandate value' do
       executor.send(:persist_payment_mandate, cart_row_id: 'cart-row', payment: payment)
@@ -1238,7 +1238,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'pay-path persistence (bind parameters)' do
-    include_context 'executor spec: pay-path persistence (bind parameters)'
+    include_context 'with pay-path persistence (bind parameters)'
 
     # The regression guard the row is actually about: no value — not even a
     # harmless one — may appear in the statement text, and `quote` must never
@@ -1266,7 +1266,7 @@ RSpec.describe Kiosk::Server::Executor do
   end
 
   describe 'pay-path #spent_in_window' do
-    include_context 'executor spec: pay-path persistence (bind parameters)'
+    include_context 'with pay-path persistence (bind parameters)'
 
     before { connection.next_exec_result = [{ 'total' => 0 }] }
 
@@ -1307,7 +1307,7 @@ RSpec.describe Kiosk::Server::Executor do
   # `verb :pay` groups stub `MandateVerifier.verify_*`, so this group runs the
   # REAL verifier on a really signed chain and reads the answer.
   describe 'the currency a `pay` answers with (§11.3, K-1257)' do
-    include_context 'executor spec: really signed chain'
+    include_context 'with a really signed mandate chain'
 
     it 'answers `eur` to a chain signed `EUR` throughout' do
       expect(answered('EUR')).to eq('eur')

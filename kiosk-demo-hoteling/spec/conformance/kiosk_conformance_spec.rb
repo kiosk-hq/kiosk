@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.shared_context 'two guests with a booking each' do
+RSpec.shared_context 'with two guests who have a booking each' do
   let(:ada) { User.create!(email: 'ada-conformance@example.test', password: 'conformance-fixture') }
   let(:ben) { User.create!(email: 'ben-conformance@example.test', password: 'conformance-fixture') }
 
@@ -28,7 +28,7 @@ RSpec.shared_context 'two guests with a booking each' do
 end
 
 RSpec.describe 'Kiosk conformance' do
-  include_context 'two guests with a booking each'
+  include_context 'with two guests who have a booking each'
 
   it 'routes every verb it declares, with the method its kind requires' do
     expect(kiosk_origin).to have_a_route_for_every_verb

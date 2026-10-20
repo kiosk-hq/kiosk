@@ -2,7 +2,7 @@
 
 require 'rack/mock'
 
-RSpec.shared_context 'headers middleware spec: rack harness' do
+RSpec.shared_context 'with a rack harness for the headers middleware' do
   subject(:middleware) { described_class.new(downstream_app) }
 
   let(:downstream_app) do
@@ -17,7 +17,7 @@ end
 
 RSpec.describe Kiosk::Server::HeadersMiddleware do
   describe 'kiosk paths' do
-    include_context 'headers middleware spec: rack harness'
+    include_context 'with a rack harness for the headers middleware'
 
     it 'injects the three Kiosk headers on /kiosk root' do
       _, headers, = call('/kiosk')
@@ -49,7 +49,7 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
   # requested. This is the unit-level statement of the property; the booted
   # proof is in engine_mount_spec.
   describe "when a downstream layer rewrites PATH_INFO (Rails' exception apps)" do
-    include_context 'headers middleware spec: rack harness'
+    include_context 'with a rack harness for the headers middleware'
 
     let(:downstream_app) do
       lambda do |env|
@@ -63,7 +63,7 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
       expect(headers[Kiosk::Protocol::HEADER_API_VERSION]).to eq(Kiosk::Protocol::API_VERSION)
     end
 
-    context 'and the rewrite points INTO the mount path' do
+    context 'when the rewrite points INTO the mount path' do
       # The mirror: a non-Kiosk request whose path is rewritten to look like a
       # Kiosk one must stay bare, or the guard would be a coin toss rather than
       # a question about the caller.
@@ -82,7 +82,7 @@ RSpec.describe Kiosk::Server::HeadersMiddleware do
   end
 
   describe 'non-kiosk paths' do
-    include_context 'headers middleware spec: rack harness'
+    include_context 'with a rack harness for the headers middleware'
 
     it 'passes downstream headers through unchanged on /unrelated' do
       _, headers, = call('/unrelated')

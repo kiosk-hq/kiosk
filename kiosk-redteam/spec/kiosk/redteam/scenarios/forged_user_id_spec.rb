@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'forged_user_id setup' do
+RSpec.shared_context 'with a profile that forges user_id on reserve' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -32,7 +32,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
   describe '#call — non-vacuity' do
-    include_context 'forged_user_id setup'
+    include_context 'with a profile that forges user_id on reserve'
 
     it 'puts the forged user_id on the wire as a plain argument, with no `name` field' do
       stub_registers('a', 'b')
@@ -126,7 +126,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
   # ahead of the handler and says nothing about whether the injected user_id
   # would have been honoured; it used to score BLOCKED.
   describe '#call — the outright rejection must be an auth/authz refusal (K-728)' do
-    include_context 'forged_user_id setup'
+    include_context 'with a profile that forges user_id on reserve'
 
     def stub_forge(status, code)
       stub_registers('a', 'b')
@@ -161,7 +161,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
 
   # ── What a real 0.4 origin answers, and what this scenario makes of it ───
   describe '#call — against the shipped 0.4 wire' do
-    include_context 'forged_user_id setup'
+    include_context 'with a profile that forges user_id on reserve'
 
     # An action's payload reaches the wire VERBATIM, so skooti's `reserve`
     # answers {reservation_id, price_per_min_cents, currency, cart} — a bare
@@ -235,7 +235,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
   end
 
   describe '#call — skip conditions' do
-    include_context 'forged_user_id setup'
+    include_context 'with a profile that forges user_id on reserve'
 
     it 'skips when forge_action is nil' do
       p = Kiosk::Redteam::Profile.new(create_owned: ->(_c, _p) { { id: 'x' } })

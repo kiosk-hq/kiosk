@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'mandate_principal_swap setup' do
+RSpec.shared_context 'with a paying profile whose mandate is swapped' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -20,7 +20,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
   # is register ×2 and the single pay.
 
   describe '#call — non-vacuity' do
-    include_context 'mandate_principal_swap setup'
+    include_context 'with a paying profile whose mandate is swapped'
 
     context 'when the server accepts a cross-principal mandate (broken — BREACH)' do
       it 'returns blocked: false' do
@@ -54,7 +54,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
   # verified at all — the swap unexamined — and a 401 means B's own token was
   # rejected. Both used to score BLOCKED.
   describe '#call — only a 403 forbidden/rls_denied proves the binding was checked (K-728)' do
-    include_context 'mandate_principal_swap setup'
+    include_context 'with a paying profile whose mandate is swapped'
 
     def stub_refused_pay(status, code)
       stub_registers('a', 'b')
@@ -92,7 +92,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
   end
 
   describe '#call — skip conditions' do
-    include_context 'mandate_principal_swap setup'
+    include_context 'with a paying profile whose mandate is swapped'
 
     it 'skips when pay_for is nil' do
       p = Kiosk::Redteam::Profile.new(create_owned: ->(_c, _pr) { { id: 'x' } })

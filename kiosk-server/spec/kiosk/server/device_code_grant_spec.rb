@@ -4,7 +4,7 @@
 # (fresh-register vs rebind) is covered in account_binding_spec.rb; here it
 # is stubbed so the RFC 8628 state machine + BIND-POP gate can be exercised
 # in isolation.
-RSpec.shared_context 'device code grant spec: store' do
+RSpec.shared_context 'with a device code grant store' do
   let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
   let(:pem)   { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
@@ -18,8 +18,8 @@ RSpec.shared_context 'device code grant spec: store' do
   end
 end
 
-RSpec.shared_context 'device code grant spec: exchange' do
-  include_context 'device code grant spec: store'
+RSpec.shared_context 'with a device code exchange' do
+  include_context 'with a device code grant store'
 
   let(:start_result) do
     described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
@@ -33,8 +33,8 @@ RSpec.shared_context 'device code grant spec: exchange' do
   end
 end
 
-RSpec.shared_context 'device code grant spec: approved row' do
-  include_context 'device code grant spec: exchange'
+RSpec.shared_context 'with an approved device code row' do
+  include_context 'with a device code exchange'
 
   # The role reaches the row the ONLY way it can since K-072: through the
   # approval, from the approving human's identity. `.start` accepted a
@@ -45,8 +45,8 @@ RSpec.shared_context 'device code grant spec: approved row' do
   end
 end
 
-RSpec.shared_context 'device code grant spec: valid proof' do
-  include_context 'device code grant spec: approved row'
+RSpec.shared_context 'with an approved device code and a valid proof' do
+  include_context 'with an approved device code row'
 
   before do
     allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })
@@ -59,7 +59,7 @@ end
 
 RSpec.describe Kiosk::Server::DeviceCodeGrant do
   describe '.start' do
-    include_context 'device code grant spec: store'
+    include_context 'with a device code grant store'
 
     it 'creates a pending :claim row and returns the full /oauth/device_authorization payload' do
       result = described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
@@ -88,7 +88,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.start codes' do
-    include_context 'device code grant spec: store'
+    include_context 'with a device code grant store'
 
     it 'binds the presented public key to the row (normalised)' do
       result = described_class.start(client_id: 'kiosk-cli', public_key_pem: "  #{pem}\n")
@@ -108,7 +108,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.exchange request validation' do
-    include_context 'device code grant spec: exchange'
+    include_context 'with a device code exchange'
 
     it 'rejects missing device_code with invalid_request' do
       result = described_class.exchange(device_code: nil)
@@ -127,7 +127,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.exchange slow_down (RFC 8628 §3.5)' do
-    include_context 'device code grant spec: exchange'
+    include_context 'with a device code exchange'
 
     it 'tells a client polling faster than the interval to back off' do
       start_result
@@ -151,7 +151,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.exchange state-machine outcomes' do
-    include_context 'device code grant spec: exchange'
+    include_context 'with a device code exchange'
 
     before { start_result } # materialise the pending row
 
@@ -183,7 +183,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.exchange BIND-POP on an approved row' do
-    include_context 'device code grant spec: approved row'
+    include_context 'with an approved device code row'
 
     it 'returns invalid_client when the poll carries no signed proof — row NOT consumed' do
       result = exchange
@@ -214,7 +214,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.exchange BIND-POP on an approved row, stale nonce' do
-    include_context 'device code grant spec: approved row'
+    include_context 'with an approved device code row'
 
     it 'returns invalid_client on a stale/missing challenge nonce — row NOT consumed' do
       allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })
@@ -231,7 +231,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.exchange BIND-POP with a valid proof' do
-    include_context 'device code grant spec: valid proof'
+    include_context 'with an approved device code and a valid proof'
 
     it "verifies the proof against the ROW's key, not anything client-supplied" do
       exchange(signed: 'jws')
@@ -261,7 +261,7 @@ RSpec.describe Kiosk::Server::DeviceCodeGrant do
   end
 
   describe '.exchange BIND-POP with a valid proof, concurrency and scope' do
-    include_context 'device code grant spec: valid proof'
+    include_context 'with an approved device code and a valid proof'
 
     # K-887 sibling: the `:approved` branch is decided against the snapshot
     # read at the top of `.exchange`, so two concurrent polls of one

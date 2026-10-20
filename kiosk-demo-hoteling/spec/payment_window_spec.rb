@@ -31,7 +31,7 @@ class CountingPsp
   end
 end
 
-RSpec.shared_context 'a guest with a room to pay for' do
+RSpec.shared_context 'with a guest who has a room to pay for' do
   include Kiosk::TestHelpers::SeededDatabase
 
   let(:guest)    { User.create! }
@@ -51,7 +51,7 @@ RSpec.shared_context 'a guest with a room to pay for' do
   def payment_status(id) = Booking.uncached { Booking.find(id).payment_status }
 end
 
-RSpec.shared_context 'a capture in a second thread' do
+RSpec.shared_context 'with a capture in a second thread' do
   def settled?(id) = Kiosk::Settlement.uncached { Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(booking_id: id)).exists? }
 
   def capture(psp, booking_id)
@@ -77,8 +77,8 @@ RSpec.shared_context 'a capture in a second thread' do
 end
 
 RSpec.describe 'the window between a capture and its settlement' do
-  include_context 'a guest with a room to pay for'
-  include_context 'a capture in a second thread'
+  include_context 'with a guest who has a room to pay for'
+  include_context 'with a capture in a second thread'
 
   let(:blocking_psp) { BlockingPsp.new }
 

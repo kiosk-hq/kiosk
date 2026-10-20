@@ -23,14 +23,14 @@ module SchemaSlotsSpec
   end
 end
 
-RSpec.shared_context 'schema slots spec: issuer' do
+RSpec.shared_context 'with an issuer for schema slots' do
   include SchemaSlotsSpec
 
   before { Kiosk.configure { |c| c.issuer = 'https://demo.example' } }
 end
 
 RSpec.describe Kiosk::Server::SchemaSlots do
-  include_context 'schema slots spec: issuer'
+  include_context 'with an issuer for schema slots'
 
   describe 'declaration time' do
     it 'does NOT call a proc slot while the class body is read' do

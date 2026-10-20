@@ -35,7 +35,7 @@ module OpenApiControllerSpecHelpers
   end
 end
 
-RSpec.shared_context 'open api controller spec: demo origin' do
+RSpec.shared_context 'with a demo origin that declares a query' do
   include OpenApiControllerSpecHelpers
 
   before do
@@ -50,7 +50,7 @@ RSpec.shared_context 'open api controller spec: demo origin' do
 end
 
 RSpec.describe Kiosk::Server::OpenApiController do
-  include_context 'open api controller spec: demo origin'
+  include_context 'with a demo origin that declares a query'
 
   # ─── public (K-804) ──────────────────────────────────────────────────────
   #

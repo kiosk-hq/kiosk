@@ -2,7 +2,7 @@
 
 require 'spec_helper'
 
-RSpec.shared_context 'a booking on the first of September in Istanbul' do
+RSpec.shared_context 'with a booking on the first of September in Istanbul' do
   include ActiveSupport::Testing::TimeHelpers
 
   let(:property)  { Property.create!(name: 'Booking Spec', city: 'Istanbul', timezone: 'Europe/Istanbul', stars: 4, amenities: []) }
@@ -20,7 +20,7 @@ end
 
 RSpec.describe Booking, type: :model do
   describe 'stay dates' do
-    include_context 'a booking on the first of September in Istanbul'
+    include_context 'with a booking on the first of September in Istanbul'
 
     it 'holds the checkout after the first night' do
       expect(errors).to be_empty
@@ -42,7 +42,7 @@ RSpec.describe Booking, type: :model do
   end
 
   describe 'room type' do
-    include_context 'a booking on the first of September in Istanbul'
+    include_context 'with a booking on the first of September in Istanbul'
 
     it 'books the hotel its room type belongs to' do
       elsewhere = RoomType.create!(property: Property.create!(name: 'Elsewhere', city: 'Istanbul', stars: 3, amenities: []),

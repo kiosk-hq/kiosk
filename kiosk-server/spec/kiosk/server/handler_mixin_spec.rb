@@ -225,7 +225,7 @@ module HandlerMixinWireSpec
   end
 end
 
-RSpec.shared_context 'handler mixin spec: executor' do
+RSpec.shared_context 'with registered handler classes for the executor' do
   include B1HandlerClasses
   include HandlerMixinSpec
 
@@ -240,7 +240,7 @@ RSpec.shared_context 'handler mixin spec: executor' do
   end
 end
 
-RSpec.shared_context 'handler mixin spec: wire' do
+RSpec.shared_context 'with a wire token for the handler mixin' do
   include HandlerMixinWireSpec
 
   let(:token) do
@@ -262,7 +262,7 @@ RSpec.shared_context 'handler mixin spec: wire' do
 end
 
 RSpec.describe Kiosk::Server::HandlerMixin do
-  include_context 'handler mixin spec: executor'
+  include_context 'with registered handler classes for the executor'
 
   describe 'declaring verbs' do
     it 'registers each decorated method under its wire name' do
@@ -635,7 +635,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
   end
 
   describe 'the end-to-end wire path' do
-    include_context 'handler mixin spec: wire'
+    include_context 'with a wire token for the handler mixin'
 
     it 'answers a query with the rendered rows, verbatim' do
       status, payload = get_wire('catalog', { q: 'milk' })

@@ -7,7 +7,7 @@ require 'openssl'
 require 'json'
 require 'base64'
 
-RSpec.shared_context 'token_tampering setup' do
+RSpec.shared_context 'with a valid RS256 token to tamper' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -29,7 +29,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   describe '#call — a profile that declares no routed verb' do
-    include_context 'token_tampering setup'
+    include_context 'with a valid RS256 token to tamper'
 
     it 'SKIPS rather than scoring a routing 404 as a refused token' do
       # An origin routes one explicit line per registered verb and nothing else,
@@ -44,7 +44,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   end
 
   describe '#call — non-vacuity' do
-    include_context 'token_tampering setup'
+    include_context 'with a valid RS256 token to tamper'
 
     context 'when the server accepts a tampered token (broken — BREACH)' do
       it 'returns blocked: false' do
@@ -103,7 +103,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   # 402 means a toll fired ahead of the signature check. Both used to score
   # BLOCKED off the permissive blocked? set.
   describe '#call — only a 401 proves the signature was checked (K-728)' do
-    include_context 'token_tampering setup'
+    include_context 'with a valid RS256 token to tamper'
 
     def stub_register_with_real_jwt
       stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
@@ -135,7 +135,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   end
 
   describe 'tamper_token (private helper)' do
-    include_context 'token_tampering setup'
+    include_context 'with a valid RS256 token to tamper'
 
     let(:scenario_instance) { described_class.new }
 

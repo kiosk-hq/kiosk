@@ -30,7 +30,7 @@ module PowSpentStoresSpec
   end
 end
 
-RSpec.shared_context 'pow spent stores spec: postgres' do
+RSpec.shared_context 'with a spent-proof Postgres schema' do
   include PowSpentStoresSpec
 
   subject(:store) { described_class.new }
@@ -49,7 +49,7 @@ end
 
 RSpec.describe Kiosk::Server::PowSpentStores do
   describe Kiosk::Server::PowSpentStores::ActiveRecord do
-    include_context 'pow spent stores spec: postgres'
+    include_context 'with a spent-proof Postgres schema'
 
     describe 'single-use ACROSS store instances (K-738)' do
       it 'rejects a replay claimed through a second, independent store instance' do

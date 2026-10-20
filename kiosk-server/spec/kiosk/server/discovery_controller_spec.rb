@@ -8,7 +8,7 @@
 require 'rack/mock'
 require 'json'
 
-RSpec.shared_context 'discovery controller spec: acme origin' do
+RSpec.shared_context 'with the acme origin for discovery' do
   def dispatch(action, path, **)
     status, headers, body = Kiosk::Server::DiscoveryController.action(action).call(
       Rack::MockRequest.env_for("https://api.acme.example#{path}", **)
@@ -32,7 +32,7 @@ RSpec.shared_context 'discovery controller spec: acme origin' do
 end
 
 RSpec.describe 'DiscoveryController' do
-  include_context 'discovery controller spec: acme origin'
+  include_context 'with the acme origin for discovery'
 
   describe 'GET /agents.txt' do
     it 'returns 200 text/plain with the directives + CORS' do

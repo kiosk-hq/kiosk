@@ -9,7 +9,7 @@ class InstantPsp
   end
 end
 
-RSpec.shared_context 'a booking two customers can pay for' do
+RSpec.shared_context 'with a booking two customers can pay for' do
   let(:ada) { User.create!(email: 'ada-pay@example.test', password: 'payment-fixture') }
   let(:ben) { User.create!(email: 'ben-pay@example.test', password: 'payment-fixture') }
 
@@ -34,7 +34,7 @@ end
 
 RSpec.describe Booking do
   describe 'paying for a booking' do
-    include_context 'a booking two customers can pay for'
+    include_context 'with a booking two customers can pay for'
 
     it "refuses a customer paying for somebody else's booking" do
       expect { cashier.capture(cart(ben)) }

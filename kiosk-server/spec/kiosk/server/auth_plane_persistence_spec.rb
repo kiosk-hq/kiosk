@@ -164,7 +164,7 @@ module AuthPlanePersistenceSpec
   end
 end
 
-RSpec.shared_context 'auth plane persistence spec: database' do
+RSpec.shared_context 'with the auth plane database' do
   include AuthPlanePersistenceSpec
 
   let(:connection) { ActiveRecord::Base.connection }
@@ -197,8 +197,8 @@ RSpec.shared_context 'auth plane persistence spec: database' do
   after { AuthPlanePersistenceSpec.drop_schema(connection) unless AuthPlanePersistenceSpec.postgres_error }
 end
 
-RSpec.shared_context 'auth plane persistence spec: register door' do
-  include_context 'auth plane persistence spec: database'
+RSpec.shared_context 'with the auth plane register door' do
+  include_context 'with the auth plane database'
 
   before do
     stub_register_door
@@ -209,8 +209,8 @@ RSpec.shared_context 'auth plane persistence spec: register door' do
   end
 end
 
-RSpec.shared_context 'auth plane persistence spec: two origins' do
-  include_context 'auth plane persistence spec: database'
+RSpec.shared_context 'with two origins on the auth plane database' do
+  include_context 'with the auth plane database'
 
   let(:a) { 'https://provider.example' }
   let(:b) { 'https://second.example' }
@@ -226,8 +226,8 @@ RSpec.shared_context 'auth plane persistence spec: two origins' do
   def register_on(origin) = Kiosk.with_issuer(origin) { register! }
 end
 
-RSpec.shared_context 'auth plane persistence spec: manage page' do
-  include_context 'auth plane persistence spec: database'
+RSpec.shared_context 'with the auth plane manage page' do
+  include_context 'with the auth plane database'
 
   let(:human) { build_identity(actor: 'human', agent_id: nil, user_id: holder) }
 
@@ -252,7 +252,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # ── AccountBinding: the uuid principal and the text[] role list ───────────
 
   describe '.bind! — fresh key' do
-    include_context 'auth plane persistence spec: database'
+    include_context 'with the auth plane database'
 
     it 'stores user_id as a real uuid and allowed_roles as a real text[] (not a string)' do
       result = bind!(holder, requested_role: 'customer')
@@ -301,7 +301,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.bind! — known key (rebind)' do
-    include_context 'auth plane persistence spec: database'
+    include_context 'with the auth plane database'
 
     let!(:fresh) { bind!(other, requested_role: 'customer') }
 
@@ -355,7 +355,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   end
 
   describe '.unlink!' do
-    include_context 'auth plane persistence spec: database'
+    include_context 'with the auth plane database'
 
     let!(:bound) { bind!(holder) }
 
@@ -377,7 +377,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # ── AgentRegistration: the same INSERT from the register door ─────────────
 
   describe Kiosk::Server::AgentRegistration, '.call' do
-    include_context 'auth plane persistence spec: register door'
+    include_context 'with the auth plane register door'
 
     it 'writes a uuid principal and a text[] role from the register door too' do
       result = register!
@@ -428,7 +428,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # ── Two origins: the account namespace is per origin (ADR-0040) ───────────
 
   describe 'two origins on one deployment' do
-    include_context 'auth plane persistence spec: two origins'
+    include_context 'with two origins on the auth plane database'
 
     it 'registers one key on each origin as two assistant accounts' do
       on_a = register_on(a)
@@ -464,7 +464,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # ── DefaultAgentIdp: one lookup, four columns, a uuid bind ────────────────
 
   describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp, 'lookups' do
-    include_context 'auth plane persistence spec: database'
+    include_context 'with the auth plane database'
 
     let(:idp) { described_class.new }
     let!(:agent_id) { bind!(holder)[:agent_id] }
@@ -487,7 +487,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # ── ColumnSpendingCap: uuid bind, bigint column ──────────────────────────
 
   describe Kiosk::Server::ColumnSpendingCap do
-    include_context 'auth plane persistence spec: database'
+    include_context 'with the auth plane database'
 
     let!(:agent_id) { bind!(holder)[:agent_id] }
 
@@ -507,7 +507,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   # ── AssistantsController: the two-branch statement and its window bind ────
 
   describe Kiosk::Server::AssistantsController, 'the manage page' do
-    include_context 'auth plane persistence spec: manage page'
+    include_context 'with the auth plane manage page'
 
     let!(:agent_id) { bind!(holder)[:agent_id] }
 

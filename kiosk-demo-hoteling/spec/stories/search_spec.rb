@@ -58,13 +58,14 @@ end
 RSpec.describe 'Finding a hotel', 'page size', type: :story do
   include_context 'a guest searching hotels'
 
-  it 'a guest asking for fewer than one or more than fifty hotels at once gets one or fifty' do
-    one = guest.searches(limit: 0)
-    expect(one).to be_ok
-    expect(one.rows.size).to eq(1)
-    expect(total(one)).to be > 1
-    expect(guest.searches(limit: -5).rows.size).to eq(1)
-    expect(guest.searches(limit: 500).rows.size).to eq(50)
+  it 'a guest gets twenty hotels a page, up to fifty on asking, and is told the range when asking for more or for none' do
+    expect(guest.searches.rows.size).to eq(20)
+    expect(guest.searches(limit: 50).rows.size).to eq(50)
+
+    too_many = guest.searches(limit: 51)
+    expect(too_many).to be_refused(:bad_request)
+    expect(too_many['detail']).to include('limit', '50')
+    expect(guest.searches(limit: 0)).to be_refused(:bad_request)
   end
 end
 

@@ -27,7 +27,9 @@ module Kiosk
                    max_price_cents: { type: 'integer', minimum: 0, maximum: RoomType::MAX_NIGHTLY_PRICE_CENTS,
                                       description: 'Most the cheapest room may cost per night, in cents.' },
                    min_stars: { type: 'integer', minimum: 1, maximum: 5, description: 'Fewest stars.' },
-                   amenity: { type: 'string', enum: Property::AMENITIES, description: 'An amenity the hotel must offer.' }
+                   amenity: { type: 'string', enum: Property::AMENITIES, description: 'An amenity the hotel must offer.' },
+                   limit: { type: 'integer', minimum: 1, maximum: SEARCH_MAX, default: SEARCH_PAGE,
+                            description: 'Hotels in one page.' }
                  },
                  required: []
     output_schema '$defs': {
@@ -70,7 +72,8 @@ module Kiosk
 
     private
 
-    def page_limit = (params[:limit] || SEARCH_PAGE).to_i.clamp(1, SEARCH_MAX)
+    # The wire holds `limit` to the range `input_schema` declares.
+    def page_limit = params[:limit] || SEARCH_PAGE
 
     def matching_hotels
       FILTERS.reduce(Property.all) do |scope, (name, filter)|

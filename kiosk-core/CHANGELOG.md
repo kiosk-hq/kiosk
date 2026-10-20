@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-10-20
+
+- 2026-10-20: Version 0.5.20, the tree cut that matches skill 0.5.20.
+
 ## [0.5.19] — 2026-10-20
 
 - 2026-10-20: `MIN_CLIENT` is the oldest skill cut the release works with: the same MAJOR.MINOR as `API_VERSION`, no newer.

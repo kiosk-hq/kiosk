@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-10-20
+
+- 2026-10-20: **Every gem and `API_VERSION` are 0.5.20, matching skill 0.5.20.** `MIN_CLIENT` is 0.5.20: a 0.5.19 skill reads a service time on its human's clock.
+
+- 2026-10-20: **Every demo and the engine default pin `skill-v0.5.20.md`**, which reads a service time on the place's clock and pays the binding toll.
+
 - 2026-10-20: The link-code claim and the first token poll of each device code pay the registration toll before the code is looked up. `RegistrationPow` is renamed `AuthToll`.
 - 2026-10-20: getgrocery reads a `delivery_slots` date on the delivery address's clock. `Kiosk-Timezone` does not move it.
 - 2026-10-20: hoteling's `hotel_detail` row carries `timezone_note` when the caller's declared zone is on another clock than the hotel.

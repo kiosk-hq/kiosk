@@ -10,6 +10,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-10-20
+
+- 2026-10-20: Version 0.5.20, the tree cut that matches skill 0.5.20.
+
 ## [0.5.19] — 2026-10-20
 
 - 2026-10-19: The adapter asks the broker for the attribute names in `kyc_claims` as they are. The broker names a licence by its category, such as `licence_a1` or `licence_a`.

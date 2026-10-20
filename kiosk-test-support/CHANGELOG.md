@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-10-20
+
 - 2026-10-20: `InProcessOrigin` and `InProcessExecutor` call a verb through its route with a linked assistant's token; `InProcessWire` does the call.
 - 2026-10-20: The conformance checks hold an action's arguments to its `input_schema` with no exemption for `limit` or `cursor`, as the wire does.
 

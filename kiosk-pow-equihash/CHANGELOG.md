@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-10-20
+
+- 2026-10-20: Version 0.5.20, the tree cut that matches skill 0.5.20.
+
 ## [0.5.19] — 2026-10-20
 
 - 2026-10-20: `solve.py`'s numpy error says that the solver has no path without numpy.

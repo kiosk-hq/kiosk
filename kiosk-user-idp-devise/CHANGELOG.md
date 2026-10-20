@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.20] — 2026-10-20
+
+- 2026-10-20: Version 0.5.20, the tree cut that matches skill 0.5.20.
+
 ## [0.5.19] — 2026-10-20
 
 - 2026-10-19: `DeviseSession` connects to an origin that names an IPv6 literal, such as `http://[::1]:3000`.

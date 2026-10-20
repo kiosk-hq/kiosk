@@ -13,6 +13,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 - 2026-10-21: agents.txt and agents.json name `x-kiosk-pop` and claim no AP2, no required payment or identity. `/.well-known/agent-configuration` is gone; each document passes its standard's schema.
 - 2026-10-21: kiosk-server serves RFC 8414 OAuth metadata, the agent skills index and `ard.json`, and its api-catalog follows RFC 9727. A landing page links the api-catalog.
+- 2026-10-21: Every operator demo's robots.txt states a Content-Signal and allows `/agents.txt`.
 - 2026-10-21: ROADMAP.md is removed.
 - 2026-10-21: RuboCop also runs the Rake plugin and the RSpec cops of rubocop-rspec, and the tree has no offense.
 - 2026-10-20: ROADMAP.md drops durable token revocation and operator-push events, which ship.

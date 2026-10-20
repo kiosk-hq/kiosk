@@ -1,6 +1,9 @@
 # This is a PUBLIC live demo — crawling and indexing are welcome.
 User-agent: *
+Allow: /agents.txt
 Disallow:
+# How AI systems may use this site's content (contentsignals.org).
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 
 # robots.txt governs the human web. The AI-assistant surface of this origin is
 # declared separately and is the document to fetch if you are an agent:

@@ -7,7 +7,7 @@ operator pushes when something happens, so there is nothing to poll and no
 cadence to invent.
 
     python3 listen.py --url wss://shop.example/kiosk/events \
-                      --token-file ~/.kiosk/shop.example/token \
+                      --token-file ~/.kiosk/https_shop.example_443/token \
                       --topic order_delivery:<order-id>
 
 The bearer token is read from a file, never from the command line, where every

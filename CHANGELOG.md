@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The listener's usage line keeps the token in the origin folder `~/.kiosk/https_shop.example_443/`, as the skill says.
 - 2026-10-20: The solver's numpy error says that the solver has no path without numpy.
 - 2026-10-20: getgrocery ships an order when the processor refuses a sold-out line's refund. The amount is credit (`credited_cents`) and `Rails.error` gets the error.
 - 2026-10-20: A spending cap has a currency. kiosk-server refuses a `pay` in another currency with `403 spending_cap_exceeded`; `config.spending_cap` returns `{ amount_cents:, currency: }`.

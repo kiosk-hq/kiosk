@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2020 anchors.
+# 2023 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -117,9 +117,10 @@ e2e/assistant.sh	a COMPLETE answer carries X-Total-Count
 e2e/assistant.sh	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
 e2e/assistant.sh	a query's 200 declares Link and X-Total-Count as HEADERS
 e2e/assistant.sh	a routing 404 UNDER the mount is a 404
-e2e/assistant.sh	agent-configuration → 200
+e2e/assistant.sh	agents.json has no root extension
 e2e/assistant.sh	agents.json → 200
-e2e/assistant.sh	agents.txt Protocols: ap2
+e2e/assistant.sh	agents.txt claims no payment protocol
+e2e/assistant.sh	agents.txt names x-kiosk-pop
 e2e/assistant.sh	agents.txt → 200
 e2e/assistant.sh	alice: 1 appointment exists
 e2e/assistant.sh	alice: does NOT see bob's row
@@ -142,6 +143,7 @@ e2e/assistant.sh	assert "…and NO Vary at all"        "$(echo "$oa_headers" | g
 e2e/assistant.sh	assert "…served public, one minute"     "$(echo "$sch_headers"
 e2e/assistant.sh	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
 e2e/assistant.sh	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
+e2e/assistant.sh	auth.md opens with the auth.md heading
 e2e/assistant.sh	binding: /auth.md served
 e2e/assistant.sh	binding: claim and token poll each paid one toll
 e2e/assistant.sh	binding: device_authorization fields
@@ -185,6 +187,8 @@ e2e/assistant.sh	kiosk.version present
 e2e/assistant.sh	limit and cursor are injected into a query
 e2e/assistant.sh	my_appointments declares salon_id as a query parameter
 e2e/assistant.sh	no auth → 401
+e2e/assistant.sh	oauth metadata names the device endpoint
+e2e/assistant.sh	oauth metadata names the issuer
 e2e/assistant.sh	one path per verb the canonical catalog publishes
 e2e/assistant.sh	pay: a Stripe PaymentIntent
 e2e/assistant.sh	pay: http 200
@@ -320,7 +324,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.20'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.21'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -1010,6 +1014,7 @@ kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	# The public d
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	class DiscoveryController < ::ActionController::API
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render json: WellKnown.agents_json(base_url: request.base_url)
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render json: WellKnown.api_catalog(base_url: request.base_url),
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render json: WellKnown.ard(base_url: request.base_url)
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render plain: WellKnown.agents_txt(base_url: request.base_url),
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render plain: WellKnown.auth_md(base_url: request.base_url),
 kiosk-server/app/controllers/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
@@ -1073,7 +1078,6 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not se
 kiosk-server/lib/kiosk/server/device_code_grant.rb	        pay_toll_once!(device_code, hash, pow, now)
 kiosk-server/lib/kiosk/server/device_code_grant.rb	da = store.lookup_by_device_code_hash(hash)
 kiosk-server/lib/kiosk/server/device_code_grant.rb	device_code parameter required
-kiosk-server/lib/kiosk/server/engine.rb	          get '/.well-known/agent-configuration', to: 'kiosk/server/discovery#agent_configuration'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/agents.json', to: 'kiosk/server/discovery#agents_json'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/agents.txt',  to: 'kiosk/server/discovery#agents_txt'
@@ -1092,6 +1096,7 @@ kiosk-server/lib/kiosk/server/engine.rb	get  'oauth/device/verify',        to: '
 kiosk-server/lib/kiosk/server/engine.rb	get  'schema', to: 'wire#schema'
 kiosk-server/lib/kiosk/server/engine.rb	get '/.well-known/api-catalog',
 kiosk-server/lib/kiosk/server/engine.rb	get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
+kiosk-server/lib/kiosk/server/engine.rb	get '/.well-known/oauth-authorization-server', to: 'kiosk/server/discovery#oauth_authorization_server'
 kiosk-server/lib/kiosk/server/engine.rb	get '/agents.txt',  to: 'kiosk/server/discovery#agents_txt'
 kiosk-server/lib/kiosk/server/engine.rb	get 'openapi.json', to: 'open_api#show'
 kiosk-server/lib/kiosk/server/engine.rb	post 'kyc/callback', to: 'kyc_callback#create'
@@ -1197,20 +1202,22 @@ kiosk-server/lib/kiosk/server/verb_wire.rb	PowGate.gate(
 kiosk-server/lib/kiosk/server/verb_wire.rb	pow = PowGate.proofs_from_header(
 kiosk-server/lib/kiosk/server/well_known.rb	            kind: 'kiosk-pop',
 kiosk-server/lib/kiosk/server/well_known.rb	          - **Identity assertion (ID-JAG)** — not supported (planned).
-kiosk-server/lib/kiosk/server/well_known.rb	# The discovery documents — kiosk.json, agents.txt, agents.json,
-kiosk-server/lib/kiosk/server/well_known.rb	# of one configuration and the request's base URL, so they cannot drift.
+kiosk-server/lib/kiosk/server/well_known.rb	# The discovery documents — kiosk.json, agents.txt, agents.json, the OAuth
+kiosk-server/lib/kiosk/server/well_known.rb	# as pure functions of one configuration and the request's base URL, so they
 kiosk-server/lib/kiosk/server/well_known.rb	**Identity assertion (ID-JAG)** — not supported (planned).
-kiosk-server/lib/kiosk/server/well_known.rb	AGENTS_STANDARD = 'https://agents-txt.com/standard'
-kiosk-server/lib/kiosk/server/well_known.rb	auth_modes: %w[kiosk-pop user-claimed link-code],
-kiosk-server/lib/kiosk/server/well_known.rb	def self.agent_configuration(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	AGENTS_STANDARD = 'https://agents-txt.com'
+kiosk-server/lib/kiosk/server/well_known.rb	AUTHORIZATION = { protocols: %w[x-kiosk-pop], discovery: '/.well-known/kiosk.json' }.freeze
+kiosk-server/lib/kiosk/server/well_known.rb	def self.agent_skills_index(config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_json(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_txt(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.api_catalog(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	def self.ard(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.auth_md(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.build(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	def self.oauth_authorization_server(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/wire_rendering.rb	def render_wire_error(error)
-kiosk-server/lib/kiosk/skill_link.rb	before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 kiosk-server/lib/kiosk/skill_link.rb	module SkillLink
+kiosk-server/lib/kiosk/skill_link.rb	response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk", #{API_CATALOG}))
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	draws no verb of its own — a fresh app declares none
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	so the protocol plane wins by first match
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	writes no separate routes file
@@ -1364,17 +1371,19 @@ kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	names the role t
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	redirects an unauthenticated HTML request to the sign-in path (302) and stores return-to
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	says so plainly when the provider gives the approver no role
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	shows the consent panel with key fingerprint and requested-at for a live code
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	GET /agents.txt
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	carries only registered directives with registered or x- identifiers
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	describe 'GET /agents.txt' do
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	emits no Vary on any of the six, negotiated or not
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	emits no Vary on any of them, negotiated or not
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	it 'returns 200 application/json byte-identical to WellKnown.build_json' do
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	it 'serves the three pointer documents public, one minute' do
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	it 'serves the four pointer documents public, one minute' do
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/json + CORS, valid against the agents.json v1.0 schema
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/json byte-identical to WellKnown.build_json
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/json listing the auth endpoints
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/json with the required keys + CORS
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/linkset+json (RFC 9727) with a non-empty item list
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/linkset+json (RFC 9727), valid against RFC 9264, with its Link header
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 text/markdown with the auth.md body + CORS
-kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the three pointer documents public, one minute
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the RFC 8414 metadata, its endpoints on this origin
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the index, valid against Agent Skills Discovery v0.2.0
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the manifest, valid against the ARD v0.91 schema
+kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the four pointer documents public, one minute
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots with no role vocabulary and no default — nothing was made mandatory
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots — this is what all seven demos and the e2e fixture configure
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	does not come up at all
@@ -1919,7 +1928,7 @@ kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	is refused AT CONFIGURATI
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	is that the gate vocabulary names the write kind :run, not :action
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises an empty capability set when nothing is registered
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises kiosk-core's MIN_CLIENT as min_client
-kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the DERIVED openapi.json beside it — the only place it is advertised
+kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises kiosk-pop with kiosk.json as its discovery document
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the account-binding endpoints (additive keys)
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the computed module names (schema/queries/actions/pay)
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the configured issuer
@@ -1927,31 +1936,25 @@ kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the configured owne
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the document schema version
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the proof-of-possession auth surface under the same origin
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the skill descriptor when skill_sha256 is set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	carries the AP2 payment directives
-kiosk-server/spec/kiosk/server/well_known_spec.rb	carries the agents.txt v1.0 auth directives (auth-md alongside agent-auth)
-kiosk-server/spec/kiosk/server/well_known_spec.rb	carries the wire pointers under the x-kiosk extension
 kiosk-server/spec/kiosk/server/well_known_spec.rb	computes the endpoint as base_url + mount_path
-kiosk-server/spec/kiosk/server/well_known_spec.rb	declares AP2 payments as required
+kiosk-server/spec/kiosk/server/well_known_spec.rb	declares no payment protocol, even where the operator serves pay
+kiosk-server/spec/kiosk/server/well_known_spec.rb	declares no payments block, even where the operator serves pay
 kiosk-server/spec/kiosk/server/well_known_spec.rb	documents the OAuth error vocabulary as the one exception
 kiosk-server/spec/kiosk/server/well_known_spec.rb	follows the canonical auth.md section order
 kiosk-server/spec/kiosk/server/well_known_spec.rb	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
-kiosk-server/spec/kiosk/server/well_known_spec.rb	keeps both service-desc members — the operations are added, not swapped in
 kiosk-server/spec/kiosk/server/well_known_spec.rb	keeps the pre-binding auth keys first and byte-identical (additive-only rule)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	links every registered verb, then pay, as an item with its method
 kiosk-server/spec/kiosk/server/well_known_spec.rb	links the catalog at its digest-versioned, immutable URL
-kiosk-server/spec/kiosk/server/well_known_spec.rb	lists the four auth endpoints as absolute URLs
+kiosk-server/spec/kiosk/server/well_known_spec.rb	links the two versioned descriptions from the endpoint
 kiosk-server/spec/kiosk/server/well_known_spec.rb	moves that link when the catalog moves — that is the whole mechanism
+kiosk-server/spec/kiosk/server/well_known_spec.rb	names kiosk-pop with the x- prefix the standard gives an unregistered protocol
+kiosk-server/spec/kiosk/server/well_known_spec.rb	names the issuer and the device-code grant at its two endpoints
 kiosk-server/spec/kiosk/server/well_known_spec.rb	never names a registered verb in this companion — pointer, not copy
 kiosk-server/spec/kiosk/server/well_known_spec.rb	never names a registered verb in this document — pointer, not copy
-kiosk-server/spec/kiosk/server/well_known_spec.rb	omits the AP2 payment directives but keeps auth/identity
-kiosk-server/spec/kiosk/server/well_known_spec.rb	omits the payments key entirely
 kiosk-server/spec/kiosk/server/well_known_spec.rb	omits the skill block when skill_sha256 is not set
-kiosk-server/spec/kiosk/server/well_known_spec.rb	points at the RFC 9727 api-catalog under the x-kiosk extension
+kiosk-server/spec/kiosk/server/well_known_spec.rb	opens with an H1 that names auth.md
 kiosk-server/spec/kiosk/server/well_known_spec.rb	respects an overridden skill_url
 kiosk-server/spec/kiosk/server/well_known_spec.rb	returns a parse-able JSON string
-kiosk-server/spec/kiosk/server/well_known_spec.rb	returns an RFC 9727 linkset anchored at the api-catalog URL
-kiosk-server/spec/kiosk/server/well_known_spec.rb	says which METHOD reaches each verb — GET a query, POST an action
-kiosk-server/spec/kiosk/server/well_known_spec.rb	tags the one remaining non-description wire endpoint — `pay` — with rel=item
-kiosk-server/spec/kiosk/server/well_known_spec.rb	tags the schema endpoint as the machine-readable service-desc
 kiosk-server/spec/kiosk/server/well_known_spec.rb	wraps everything under a top-level `kiosk` key
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	answers 402 to a CONDITIONAL request — the toll runs before freshness
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	answers a per-verb GET the same gate as a problem document, uncacheable

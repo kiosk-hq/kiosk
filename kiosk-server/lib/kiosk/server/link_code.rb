@@ -4,7 +4,7 @@ module Kiosk
   module Server
     # Account binding started by the human: the signed-in holder mints a
     # single-use link code ({.mint}, POST /auth/link) and their assistant
-    # redeems it with its key and a possession proof ({.redeem}, POST /auth/claim).
+    # redeems it with its key, a possession proof and the auth toll ({.redeem}, POST /auth/claim).
     module LinkCode
       CLIENT_ID = 'kiosk-link'
 
@@ -30,13 +30,15 @@ module Kiosk
         { link_code: plain_device_code, expires_in: expires_in, da: da }
       end
 
-      def redeem(code:, public_key_pem:, signed:,
+      # The toll comes before the lookup, so an unknown code costs the same work as a live one.
+      def redeem(code:, public_key_pem:, signed:, pow: nil, # rubocop:disable Metrics/ParameterLists -- the claim controller and the specs pass these by name
                  store: Kiosk.configuration.device_authorization_store,
                  now: Time.current)
         raise Errors::BadRequest, 'code required' if code.to_s.empty?
 
         pem = public_key_pem.to_s.strip
         PopVerifier.load_public_key(pem)
+        AuthToll.gate(verb: 'auth/claim', body: { code: code.to_s, public_key: pem }, pow: pow)
         da = live_link(store, code.to_s, now)
 
         # The proof comes before the consume, so a failed one leaves the code live.

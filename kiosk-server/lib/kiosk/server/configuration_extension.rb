@@ -57,8 +57,9 @@ module Kiosk
 
       # The proof-of-work settings: registration proofs and the reputation challenge.
       module ProofOfWork
-        # Equihash proofs required at `POST /auth/register`, at the gem's default
-        # params. Default 0 (open). Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
+        # Equihash proofs asked at `POST /auth/register`, at the link-code claim and
+        # at the first token poll of each device code, at the gem's default params.
+        # Default 0 (open). Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
         attr_writer :registration_pow_count
 
         def registration_pow_count
@@ -307,7 +308,7 @@ module Kiosk
       end
 
       # Seconds between `GET /auth/challenge` and the signed POST. Default covers
-      # the registration proof-of-work window plus 60s.
+      # the auth toll's proof-of-work window plus 60s.
       attr_writer :auth_challenge_ttl
 
       def auth_challenge_ttl

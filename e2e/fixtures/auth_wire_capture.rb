@@ -95,9 +95,9 @@ end
 # `post_json`, and it carries no cookie and no Bearer: anything in it is an
 # assertion by a stranger, which is the property the endpoint is designed
 # around.
-def post_form(url, form)
+def post_form(url, form, headers = {})
   uri = URI(url)
-  req = Net::HTTP::Post.new(uri)
+  req = Net::HTTP::Post.new(uri, headers)
   req.set_form_data(form)
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   [res.code.to_i, begin
@@ -105,6 +105,17 @@ def post_form(url, form)
   rescue StandardError
     {}
   end]
+end
+
+# The link-code claim and the first token poll of a device code pay the same
+# toll as register: on `402 pow_required`, solve every challenge and yield the
+# `Kiosk-PoW` header for the SAME request again.
+def paying_toll(answer)
+  rc, problem = answer
+  return answer unless rc == 402 && problem['code'] == 'pow_required'
+
+  proofs = problem.fetch('challenges').map { |c| { challenge: c, nonce: equihash_solve(c) } }
+  yield('Kiosk-PoW' => JSON.generate(proofs))
 end
 
 # The decoded payload of a compact JWS/JWT, without verifying — the point here
@@ -182,7 +193,8 @@ cap['link_code'] = link
 
 claim_signed, = possession_proof(reg_key, reg_pem)
 claim_body = { 'code' => link.fetch('link_code'), 'public_key' => reg_pem, 'signed' => claim_signed }
-rc, claimed = post_json("#{SERVER}/kiosk/auth/claim", claim_body)
+claim_url = "#{SERVER}/kiosk/auth/claim"
+rc, claimed = paying_toll(post_json(claim_url, claim_body)) { |pow| post_json(claim_url, claim_body, pow) }
 abort "claim failed (#{rc}): #{JSON.generate(claimed)}" unless rc == 201
 cap['claim_request']  = claim_body
 cap['claim_response'] = claimed
@@ -223,10 +235,10 @@ approve = session.post_form('/kiosk/oauth/device/verify', form)
 abort "approval failed (#{approve.code})" unless [200, 302, 303].include?(approve.code.to_i)
 
 poll_signed, = possession_proof(reg_key, reg_pem)
-rc, granted = post_form("#{SERVER}/kiosk/oauth/token",
-                        { 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code',
-                          'device_code' => da.fetch('device_code'),
-                          'signed' => poll_signed })
+poll = { 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code',
+         'device_code' => da.fetch('device_code'), 'signed' => poll_signed }
+token_url = "#{SERVER}/kiosk/oauth/token"
+rc, granted = paying_toll(post_form(token_url, poll)) { |pow| post_form(token_url, poll, pow) }
 abort "token poll failed (#{rc}): #{JSON.generate(granted)}" unless rc == 200
 cap['device_token_response'] = granted
 

@@ -210,18 +210,8 @@ BATTERY.record('CustomerCalendarStaysOwnScoped',
 
 DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 
-# The OAuth endpoints are form-encoded.
-def oauth_post(path, form)
-  uri = URI("#{SERVER}#{path}")
-  req = Net::HTTP::Post.new(uri)
-  req.set_form_data(form)
-  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
-  [res.code.to_i, begin
-    JSON.parse(res.body)
-  rescue StandardError
-    {}
-  end]
-end
+# The OAuth endpoints are form-encoded; the first token poll of a code pays the toll.
+def oauth_post(path, form) = WIRE.post_form(path, form).then { [it.status, it.body] }
 
 # The human approves `user_code` on the verify page; returns that page.
 def approve_on_verify_page(session, user_code)

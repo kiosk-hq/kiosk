@@ -112,7 +112,7 @@ module AuthPlanePersistenceSpec
   # PoW, PoP and the challenge are covered in their own specs; this file is
   # about the row.
   def stub_register_door
-    allow(Kiosk::Server::RegistrationPow).to receive(:gate)
+    allow(Kiosk::Server::AuthToll).to receive(:gate)
     allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return(nonce: 'n')
     allow(Kiosk::Server::AuthChallenge).to receive(:consume!)
   end

@@ -4,7 +4,7 @@ module Kiosk
   module Server
     # One proof-of-work toll on one request: `count` distinct, unspent, valid
     # proofs, or the error that sends the caller back. Shared by
-    # {PowGate.gate} and {RegistrationPow}.
+    # {PowGate.gate} and {AuthToll}.
     class PowToll
       def initialize(spec:, fingerprint:, secret:, config:)
         @spec         = spec

@@ -221,6 +221,17 @@ status, raw = post('/kiosk/auth/register',
                                  signed: 'not-reached-the-toll-comes-first'))
 problems << ["POST /kiosk/auth/register (unpaid toll, #{status})", parse(raw)]
 
+# The token poll's toll comes before the device code is looked up, so an
+# unknown code draws the same 402 problem document as a live one.
+status, raw = post('/kiosk/oauth/token',
+                   JSON.generate(grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+                                 device_code: 'e2e-a-device-code-nobody-issued'))
+if status == 402
+  problems << ["POST /kiosk/oauth/token (unpaid toll, unknown device code, #{status})", parse(raw)]
+else
+  skipped 'the token poll 402 problem document', "this origin answered #{status}: it tolls no device-code poll"
+end
+
 # THE PROBE VERB IS READ OFF THE CATALOG THIS ORIGIN JUST SERVED, not named
 # here. `salons` is what the e2e fixture app publishes; a deployed origin
 # publishes its own verbs, and a harness that can only probe one origin's verb

@@ -46,16 +46,18 @@ module Kiosk
       end
 
       # Returns `{ok: true, access_token:, …}` or `{ok: false, error:, description:}`
-      # with an RFC 8628 §3.5 error code.
-      def exchange(device_code:,
+      # with an RFC 8628 §3.5 error code. The auth toll raises its own errors.
+      def exchange(device_code:, # rubocop:disable Metrics/ParameterLists -- the token controller and the specs pass these by name
                    signed: nil,
+                   pow: nil,
                    store: Kiosk.configuration.device_authorization_store,
                    interval: DEFAULT_POLL_INTERVAL,
                    now: Time.current)
         return failure(:invalid_request, 'device_code parameter required') if device_code.to_s.empty?
 
         hash = DeviceAuthorization.hash_device_code(device_code)
-        da   = store.lookup_by_device_code_hash(hash)
+        pay_toll_once!(device_code, hash, pow, now)
+        da = store.lookup_by_device_code_hash(hash)
         return failure(:invalid_grant, 'unknown device_code') if da.nil?
         return failure(:slow_down, 'polling faster than the advertised interval') if polled_too_fast?(hash, interval, now)
 
@@ -71,6 +73,18 @@ module Kiosk
 
       class << self
         private
+
+        # The first poll of each device code value pays the auth toll; later polls
+        # of that value are free until any code could have expired. The store is
+        # not read first, so an unknown code costs the same work as a live one.
+        def pay_toll_once!(device_code, hash, pow, now)
+          config = Kiosk.configuration
+          paid   = "device_code:#{hash}"
+          return if !AuthToll.on?(config) || config.pow_spent_store.spent?(paid)
+
+          AuthToll.gate(verb: 'oauth/token', body: { device_code: device_code.to_s }, pow: pow, config: config)
+          config.pow_spent_store.mark_spent(paid, now.to_i + DeviceAuthorization::DEFAULT_EXPIRES_IN)
+        end
 
         def expire_if_due(authorization, store, now)
           return authorization unless authorization.expired_at_time?(now)

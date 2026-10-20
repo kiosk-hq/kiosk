@@ -331,6 +331,12 @@ module Kiosk
             `POST #{endpoint}/auth/claim` `{ code, public_key, signed }`
             → `201 { agent_id, user_id, access_token }`.
 
+            Where registration has a toll, the link-code claim and the FIRST
+            token poll of each `device_code` have the same toll. It comes
+            before the code is looked up. Solve it as for register and send the
+            SAME request again with the `Kiosk-PoW` header. Later polls of the
+            same `device_code` are free.
+
             A fresh key becomes a linked assistant account under the holder's
             account; an already-registered key is re-bound (its reputation
             carries over — claiming never resets an identity).
@@ -377,9 +383,11 @@ module Kiosk
               would do at an operator that never offered it.
             - The claim ceremony's OAuth endpoints use the OAuth error shape
               `{ error, error_description }` — a documented exception, and the
-              only one, with a single carve-out: an origin that does not serve
-              binding at all answers `501 module_not_served` there as an ordinary
-              problem document, because none of the OAuth codes means it. The
+              only one, with two carve-outs that are ordinary problem documents:
+              an origin that does not serve binding at all answers
+              `501 module_not_served` there, because none of the OAuth codes
+              means it, and the toll on the token poll answers as the toll does
+              everywhere (`402 pow_required`, and its refusals of a proof). The
               OAuth vocabulary is closed at eight. Six describe the
               ceremony (RFC 8628 §3.5): `authorization_pending`, `slow_down`,
               `expired_token`, `access_denied`, `invalid_grant`,

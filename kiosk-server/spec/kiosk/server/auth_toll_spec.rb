@@ -5,10 +5,13 @@ require 'kiosk/reputation'
 require 'kiosk/pow/equihash'
 require_relative '../../support/equihash_kat'
 
-module RegistrationPowSpec
+module AuthTollSpec
   PEM = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
 
   def pem = PEM
+
+  # The register request's toll: `POST auth/register` over the key being registered.
+  def register_toll(pow) = Kiosk::Server::AuthToll.gate(verb: 'auth/register', body: { public_key: pem }, pow: pow)
 
   def configure(count:)
     Kiosk.configure do |c|
@@ -40,8 +43,8 @@ module RegistrationPowSpec
   end
 end
 
-RSpec.shared_context 'registration pow spec: equihash backend' do
-  include RegistrationPowSpec
+RSpec.shared_context 'auth toll spec: equihash backend' do
+  include AuthTollSpec
 
   before do
     Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
@@ -56,20 +59,20 @@ RSpec.shared_context 'registration pow spec: equihash backend' do
   let(:secret) { 'registration-pow-secret-at-least-32-bytes' }
 end
 
-# Registration PoW gate — the SAME equihash machinery as the reputation gate,
-# applied at /auth/register to price fresh identity minting. Driven with the
+# The auth toll — the SAME equihash machinery as the reputation gate, applied
+# at /auth/register (here), /auth/claim and the device-code token poll. Driven with the
 # kiosk-pow-equihash known-answer proof (n=8, k=1) so it is fast and real.
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   it 'is a no-op when registration_pow_count is 0 (default)' do
-    expect(Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)).to be_nil
+    expect(register_toll(nil)).to be_nil
   end
 
   it 'demands `count` challenges (402) when no proof is submitted' do
     configure(count: 1)
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)
+      register_toll(nil)
     end.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
       expect(e.challenges.length).to eq(1)
       expect(e.challenges.first[:alg]).to eq('equihash')
@@ -80,32 +83,32 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     configure(count: 1)
     proof = { challenge: kat_challenge(id: 'r1'), nonce: EquihashKat::NONCE }
     expect(
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [proof])
+      register_toll([proof])
     ).to be_nil
   end
 end
 
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   it 'rejects a WRONG nonce (403), with no principal to penalise' do
     configure(count: 1)
     proof = { challenge: kat_challenge(id: 'r1'), nonce: { indices: [3, 10] } }
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [proof])
+      register_toll([proof])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
 end
 
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   it 'binds proofs to the public key (a proof for another key re-challenges)' do
     configure(count: 1)
     other = { challenge: kat_challenge(id: 'r1', pem: "-----BEGIN PUBLIC KEY-----\nOTHER\n-----END PUBLIC KEY-----"),
               nonce: EquihashKat::NONCE }
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [other])
+      register_toll([other])
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 
@@ -124,31 +127,29 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     )
 
     expect do
-      Kiosk::Server::RegistrationPow.gate(
-        public_key_pem: pem, pow: [{ challenge: elsewhere, nonce: EquihashKat::NONCE }]
-      )
+      register_toll([{ challenge: elsewhere, nonce: EquihashKat::NONCE }])
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 end
 
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   it 'raises ConfigurationError when count > 0 but pow_secret is missing' do
     Kiosk.configure { |c| c.registration_pow_count = 1 }
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)
+      register_toll(nil)
     end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
   end
 end
 
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   it 'names the algorithm and the offending parameters in the message' do
     configure_at({ n: 0, k: 7 })
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)
+      register_toll(nil)
     end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /equihash.*n.*0/m)
   end
 
@@ -159,7 +160,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     configure_at({ n: 0, k: 7 })
     expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)
+      register_toll(nil)
     end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
   end
 
@@ -167,7 +168,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     allow(Kiosk::Pow::Equihash).to receive(:params).and_call_original
     configure(count: 1)
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: nil)
+      register_toll(nil)
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
   end
 end
@@ -176,8 +177,8 @@ end
 # free challenge must not fuel unlimited garbage-proof verifies. The atomic
 # claim consumes the challenge id BEFORE the verify, so a replay of the same id
 # gets a re-challenge (402) and never reaches the equihash verify again.
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   it 'consumes the challenge id on a bad proof so a replay does not re-verify' do
     configure(count: 1)
@@ -191,13 +192,13 @@ RSpec.describe Kiosk::Server::RegistrationPow do
 
     # First bad submission → a real 403; the id is now consumed.
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [bad])
+      register_toll([bad])
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
 
     # Replay of the SAME challenge id → re-challenge (402), NOT another 403, and
     # NO second verify (the claim short-circuits before the hash loop).
     expect do
-      Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [bad])
+      register_toll([bad])
     end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
     expect(verify_calls).to eq(1)
@@ -209,21 +210,21 @@ end
 # server demands now. The examples submit the SAME proof (real secret, real
 # register fingerprint, live exp, a nonce that solves it at n=8 k=1) against
 # different server configs. Only the params differ.
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   describe 'server-side parameter re-derivation (K-541)' do
     it 'accepts the trivial proof while the server itself demands n=8 k=1' do
       configure_at(EquihashKat::PARAMS)
       expect(
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-ok')])
+        register_toll([trivial_proof(id: 'k541-ok')])
       ).to be_nil
     end
   end
 end
 
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   describe 'server-side parameter re-derivation (K-541)' do
     it 'REJECTS that same proof once the server demands harder params' do
@@ -231,7 +232,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
 
       # A valid signature alone must not set the difficulty.
       expect do
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-stale')])
+        register_toll([trivial_proof(id: 'k541-stale')])
       end.to raise_error(Kiosk::Server::Errors::PowRequired) { |e|
         # Re-challenged at the CURRENT difficulty, not the one it asked for.
         expect(e.challenges.first[:params]).to eq({ n: 96, k: 5 })
@@ -241,7 +242,7 @@ RSpec.describe Kiosk::Server::RegistrationPow do
     it 'is a re-challenge, not bad faith: the off-spec id is released, not burnt' do
       configure_at({ n: 96, k: 5 })
       expect do
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-rel')])
+        register_toll([trivial_proof(id: 'k541-rel')])
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
 
       # An honest client holding a pre-raise challenge must not have its id
@@ -251,15 +252,15 @@ RSpec.describe Kiosk::Server::RegistrationPow do
   end
 end
 
-RSpec.describe Kiosk::Server::RegistrationPow do
-  include_context 'registration pow spec: equihash backend'
+RSpec.describe Kiosk::Server::AuthToll do
+  include_context 'auth toll spec: equihash backend'
 
   describe 'server-side parameter re-derivation (K-541)' do
     it 'never spends a backend eval on an off-spec challenge' do
       configure_at({ n: 96, k: 5 })
       expect(Kiosk::Pow::Equihash).not_to receive(:verify)
       expect do
-        Kiosk::Server::RegistrationPow.gate(public_key_pem: pem, pow: [trivial_proof(id: 'k541-nohash')])
+        register_toll([trivial_proof(id: 'k541-nohash')])
       end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
   end

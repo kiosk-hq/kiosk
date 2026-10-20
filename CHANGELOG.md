@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The link-code claim and the first token poll of each device code pay the registration toll before the code is looked up. `RegistrationPow` is renamed `AuthToll`.
 - 2026-10-20: `InProcessOrigin` and `InProcessExecutor` call a verb through its route with a linked assistant's token; `InProcessWire` does the call.
 - 2026-10-20: A verb route reaches the controller action that declares the verb, and `Kiosk::Handler` runs the wire's checks around it. `HandlerDispatch` is removed.
 - 2026-10-20: kiosk-server validates an action's body against its `input_schema` with no exemption. Only a query accepts an undeclared `limit` or `cursor`.

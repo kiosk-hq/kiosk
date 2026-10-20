@@ -29,16 +29,35 @@ PASSWORD = ENV.fetch('HUMAN_PASSWORD')
 # Alice's browser, signed in once and held for every human-side call below.
 HUMAN_SESSION = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 
-def post_json(url, body, headers = {})
-  uri = URI(url)
-  req = Net::HTTP::Post.new(uri, { 'Content-Type' => 'application/json' }.merge(headers))
-  req.body = JSON.generate(body)
+# The proof-of-work tolls paid, by path. The link-code claim and the first
+# token poll of a device code pay the same toll as register on this origin.
+TOLLS = Hash.new(0)
+
+# Sends the request; on `402 pow_required` it solves the challenges and sends
+# the SAME request again with the `Kiosk-PoW` header.
+def paying(uri, &build)
+  status, body = deliver(uri, build.call({}))
+  return [status, body] unless status == 402 && body['code'] == 'pow_required'
+
+  TOLLS[uri.path] += 1
+  deliver(uri, build.call('Kiosk-PoW' => JSON.generate(Kiosk::TestHelpers::Wire.solve(body.fetch('challenges')))))
+end
+
+def deliver(uri, req)
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
   [res.code.to_i, begin
     JSON.parse(res.body)
   rescue StandardError
     {}
   end]
+end
+
+def post_json(url, body, headers = {})
+  uri = URI(url)
+  paying(uri) do |toll|
+    Net::HTTP::Post.new(uri, { 'Content-Type' => 'application/json' }.merge(headers).merge(toll))
+                   .tap { it.body = JSON.generate(body) }
+  end
 end
 
 def get_json(url, headers = {})
@@ -53,14 +72,7 @@ end
 
 def post_form(url, form, headers = {})
   uri = URI(url)
-  req = Net::HTTP::Post.new(uri, headers)
-  req.set_form_data(form)
-  res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
-  [res.code.to_i, begin
-    JSON.parse(res.body)
-  rescue StandardError
-    {}
-  end]
+  paying(uri) { |toll| Net::HTTP::Post.new(uri, headers.merge(toll)).tap { it.set_form_data(form) } }
 end
 
 # Fresh possession proof (same challenge-response JWS as register/login).
@@ -173,6 +185,7 @@ results[:link_mint] = rc
 rc, claim = post_json("#{SERVER}/kiosk/auth/claim",
                       { code: link.fetch('link_code', ''), public_key: pem2, signed: pop_proof(key2, pem2) })
 results[:link_claim] = [rc, claim['user_id'] == HUMAN]
+results[:tolls] = TOLLS
 
 # ── unlink the first assistant: registration-layer revocation ──
 #

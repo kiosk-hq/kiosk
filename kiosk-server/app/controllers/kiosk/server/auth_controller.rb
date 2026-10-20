@@ -43,6 +43,19 @@ module Kiosk
       end
       include Answers
 
+      # The auth toll's proofs: the `Kiosk-PoW` header, schema-checked, or nil.
+      module Proofs
+        private
+
+        def proofs
+          header = request.get_header('HTTP_KIOSK_POW')
+          pow    = PowGate.proofs_from_header(header)
+          RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && pow
+          pow
+        end
+      end
+      include Proofs
+
       # Only the binding actions depend on this origin serving binding.
       include BindingModuleGate
 
@@ -62,8 +75,7 @@ module Kiosk
       # header, so the signed body stays the same on retry.
       def register
         body   = parse_body!('POST <endpoint>/auth/register')
-        pow    = PowGate.proofs_from_header(request.get_header('HTTP_KIOSK_POW'))
-        validate_proofs!(pow)
+        pow    = proofs
         result = AgentRegistration.call(public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed), pow: pow)
         respond(result, :created)
       rescue KeyError => e
@@ -107,9 +119,11 @@ module Kiosk
       # §6.2's three fields only: `fresh` stays off the wire so a re-bind is indistinguishable (§6.3).
       CLAIM_RESPONSE_FIELDS = %i[agent_id user_id access_token].freeze
 
+      # The optional PoW proof rides in the `Kiosk-PoW` header, as on register.
       def claim
         body   = parse_body!('POST <endpoint>/auth/claim')
-        result = LinkCode.redeem(code: body.fetch(:code), public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed))
+        result = LinkCode.redeem(code: body.fetch(:code), public_key_pem: body.fetch(:public_key),
+                                 signed: body.fetch(:signed), pow: proofs)
         respond(result.slice(*CLAIM_RESPONSE_FIELDS), :created)
       rescue KeyError => e
         render_error(Errors.missing_field(e))
@@ -131,10 +145,6 @@ module Kiosk
       end
 
       private
-
-      def validate_proofs!(pow)
-        RequestValidation.validate_proofs!(pow) if Kiosk.configuration.validate_requests && pow
-      end
 
       # Auth endpoints always mint through the bundled DefaultAgentIdp.
       def fresh_token(identity)

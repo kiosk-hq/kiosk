@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-20: The link-code claim and the first token poll of each device code pay the registration toll before any lookup. `RegistrationPow` is now `AuthToll`.
 - 2026-10-20: A verb route reaches the controller action that declares the verb, and `Kiosk::Handler` runs the wire's checks around it. `HandlerDispatch` is removed.
 - 2026-10-20: kiosk-server validates an action's body against its `input_schema` with no exemption. Only a query accepts an undeclared `limit` or `cursor`.
 

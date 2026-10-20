@@ -15,7 +15,7 @@ module Kiosk
         role   = registration_role(config)
         public_key_pem = public_key_pem.to_s.strip
 
-        RegistrationPow.gate(public_key_pem: public_key_pem, pow: pow, config: config)
+        AuthToll.gate(verb: 'auth/register', body: { public_key: public_key_pem }, pow: pow, config: config)
 
         # Prove possession of the private key before any lookup or write.
         payload = PopVerifier.verify!(public_key_pem: public_key_pem, signed: signed)

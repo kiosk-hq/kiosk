@@ -139,7 +139,7 @@ RSpec.describe 'AuthController binding endpoints', 'POST /auth/claim' do
     expect(status).to eq(201)
     expect(body).to eq(agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt')
     expect(Kiosk::Server::LinkCode).to have_received(:redeem).with(
-      code: 'c', public_key_pem: 'PEM', signed: 'jws'
+      code: 'c', public_key_pem: 'PEM', signed: 'jws', pow: nil
     )
   end
 

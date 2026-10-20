@@ -1009,6 +1009,10 @@ assert "binding: wire verb as bound account"  "$(echo "$bind_out" | jq -r '.wire
 assert "binding: kiosk-pop login refresh"     "$(echo "$bind_out" | jq -r '.login_bound')"                          "200"
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
 assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "201:true"
+# The toll comes before the code is looked up: the claim pays every time, the
+# token poll once per device code (five polls above, one toll).
+assert "binding: claim and token poll each paid one toll" \
+  "$(echo "$bind_out" | jq -r '[.tolls["/kiosk/auth/claim"], .tolls["/kiosk/oauth/token"]] | map(tostring) | join(":")')" "1:1"
 # 204, not 200: unlink answers with no body at all, and protocol.md §6.2 states
 # that beside its two siblings.
 assert "binding: unlink → 204 (no body)"      "$(echo "$bind_out" | jq -r '.unlink')"                               "204"

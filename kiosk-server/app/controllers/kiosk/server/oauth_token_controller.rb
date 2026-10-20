@@ -8,6 +8,8 @@ module Kiosk
     # (RFC 8628 §3.4). Only the device_code grant is served.
     class OauthTokenController < ::ActionController::API
       include BindingModuleGate
+      include AuthController::Answers
+      include AuthController::Proofs
 
       prepend_before_action :refuse_unserved_binding
 
@@ -24,13 +26,20 @@ module Kiosk
 
       private
 
+      # The auth toll answers with its own problem documents (§10); every other refusal is OAuth's.
       def handle_device_code_grant
-        result = DeviceCodeGrant.exchange(device_code: params[:device_code].to_s, signed: params[:signed])
+        result = DeviceCodeGrant.exchange(device_code: params[:device_code].to_s, signed: params[:signed], pow: proofs)
         Kiosk::Server::Headers.add_to(response.headers)
         return render json: token_body(result) if result[:ok]
 
-        # RFC 6749 §5.2: invalid_client — the possession proof failed —
-        # is the one error the server SHOULD signal with 401.
+        render_grant_failure(result)
+      rescue Errors::Base => e
+        render_error(e)
+      end
+
+      # RFC 6749 §5.2: invalid_client — the possession proof failed —
+      # is the one error the server SHOULD signal with 401.
+      def render_grant_failure(result)
         status = result[:error] == 'invalid_client' ? 401 : 400
         render json: { error: result[:error], error_description: result[:description] }, status: status
       end

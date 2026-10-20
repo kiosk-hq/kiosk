@@ -6,7 +6,7 @@
 # The spec error table (specification.html) and skill both state every
 # pow_required 402 carries `WWW-Authenticate: Kiosk-PoW`, so the register path
 # must set the header too — not only the wire verbs (WireController). The toll
-# (RegistrationPow.gate) runs BEFORE PoP verification, so a dummy `signed` still
+# (AuthToll.gate) runs BEFORE PoP verification, so a dummy `signed` still
 # reaches the 402.
 #
 # Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack

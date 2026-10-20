@@ -8,7 +8,7 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 The full host-side surface is shipped and covered by the gem's own suite
 (`bundle exec rspec` in this directory runs it and prints how many examples that is):
 
-- **Wire-protocol controllers** — `VerbController` serves ONE ENDPOINT PER VERB (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`); `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `VerbController` also serves `POST <mount>/payment_setup` against the payment provider port, and `PaymentSetupController` the page the provider returns the human to; `VerbController` serves `POST <mount>/request_kyc` against the KYC provider port, and `KycCallbackController` the provider's callback; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
+- **Wire-protocol controllers** — each verb route (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`) reaches the operator's controller action that declares the verb, and `Kiosk::Handler` runs the wire's checks around it; `VerbController` refuses a verb route that no action answers; `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `VerbController` also serves `POST <mount>/payment_setup` against the payment provider port, and `PaymentSetupController` the page the provider returns the human to; `VerbController` serves `POST <mount>/request_kyc` against the KYC provider port, and `KycCallbackController` the provider's callback; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login proof-of-possession challenge-response (kiosk-pop — the auth story); JWKS backs stateless token verification.
 - **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers in `app/controllers/kiosk/` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
@@ -361,7 +361,8 @@ end
 
 `kiosk` mounts the engine at `Kiosk.configuration.mount_path`, then draws
 `GET <mount_path>/<name>` for each query and `POST <mount_path>/<name>` for each
-action. A block-less `kiosk` only mounts.
+action. Each route reaches the controller action that declares the verb, and
+`bin/rails routes` prints that action. A block-less `kiosk` only mounts.
 
 **The mount draws the PROTOCOL PLANE** — the paths whose shape is the spec's and
 not yours. Under the mount: the reserved `schema`, `openapi.json` and `pay`,
@@ -481,7 +482,7 @@ helper methods stay invisible to the wire.
 
 | macro | what it declares |
 | --- | --- |
-| `kind` | **Required.** `:query` (reached by `GET <mount>/<name>`) or `:action` (`POST <mount>/<name>`). A property of the declaration, so one controller may carry both. There is no default: either one would silently pick an HTTP method for you. `:action` is the DECLARATION name and nothing else: the wire command an action travels under is **`:run`**, so a `kind :action` verb reaches a reputation policy as `verb: :run` (`VerbController#create` → `serve(:run)`; the reserved pay endpoint arrives as `:pay`). Branch on `:run` there, not on `:action` — see `kiosk-reputation`'s README. |
+| `kind` | **Required.** `:query` (reached by `GET <mount>/<name>`) or `:action` (`POST <mount>/<name>`). A property of the declaration, so one controller may carry both. There is no default: either one would silently pick an HTTP method for you. `:action` is the DECLARATION name and nothing else: the wire command an action travels under is **`:run`**, so a `kind :action` verb reaches a reputation policy as `verb: :run` (`Kiosk::Handler` serves an action as `:run`; the reserved pay endpoint arrives as `:pay`). Branch on `:run` there, not on `:action` — see `kiosk-reputation`'s README. |
 | `reach` | Optional, and the default is the strong one. Whose rows this verb may touch (spec §7.2): `:principal` (default — only the caller's own, or rows that belong to no principal), `:published`, `:consented` or `:role`. Declare nothing and the verb is held to per-principal scoping absolutely; a departure costs one line and is published on the catalog, so an assistant can tell an open board from a scoping bug. |
 | `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas. |
 | `input_schema` | **Required.** JSON Schema for the params. The input contract: every name, type, enum and range — and the wire coerces and validates every call against it. A verb that takes nothing still declares the empty closed object. |
@@ -524,9 +525,10 @@ change under a caller between the catalog it read and the call it made.
 
 ### Two things to know
 
-**Handler controllers are not routable.** Do not draw a route at one. They are
-reached only through the wire, which is where authentication, the proof-of-work
-gate and the transaction live; a direct request answers 404.
+**Draw verb routes with `kiosk` only.** A route you draw at a handler action
+yourself answers 404: the `kiosk` block names the verb that the action answers.
+`Kiosk::Handler` runs authentication, the argument check, the proof-of-work gate
+and the transaction around the action, before your own `before_action` filters.
 
 ### What you get inside a handler
 

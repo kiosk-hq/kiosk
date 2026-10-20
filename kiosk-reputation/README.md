@@ -204,8 +204,8 @@ class MyPolicy < Kiosk::Reputation::Policy
   # @param identity [Object]  opaque identity value from the host
   # @param verb     [Symbol]  the WIRE command — :query, :run or :pay. Not the
   #   declaration name: a verb a handler declares as `kind :action` in
-  #   kiosk-server arrives here as :run (VerbController#create serves
-  #   `serve(:run)`), so branch on :run rather than on :action. The protocol
+  #   kiosk-server arrives here as :run (`Kiosk::Handler` serves an action
+  #   as `:run`), so branch on :run rather than on :action. The protocol
   #   states the same mapping in its Reputation section. Branching on :action
   #   would otherwise be silent: it matches
   #   nothing, so the toll never applies to a write and no error, log line or

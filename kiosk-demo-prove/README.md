@@ -34,8 +34,8 @@ surface. It depends on **no** kiosk gem.
 | `POST /verify` | human → broker | `{request, decision:"approve"\|"decline", licence_category?}` — on approve mints the claim and POSTs it to `callback_url` |
 
 The broker answers `age_over_18` and the licence attributes `licence_a1`,
-`licence_a`, `licence_b1` and `licence_b`. When the operator asks for a licence
-attribute, the human chooses a category: A1, A, B1, B or none. The claim
+`licence_a`, `licence_b` and `licence_c`. When the operator asks for a licence
+attribute, the human chooses a category: A1, A, B, C or none. The claim
 carries each requested attribute that the category lets its holder ride. A
 licence of category A lets its holder ride A1 and A; each other category lets
 its holder ride only that category. The table is `ClaimCatalog::LICENCE_CATEGORIES`.

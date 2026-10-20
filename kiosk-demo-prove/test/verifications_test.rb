@@ -72,7 +72,7 @@ class VerificationPageTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
     assert_includes response.body, 'over 18'
-    %w[A1 A B1 B none].each { assert_includes response.body, %(name="licence_category" value="#{it}") }
+    %w[A1 A B C none].each { assert_includes response.body, %(name="licence_category" value="#{it}") }
   end
 
   test 'asks no licence category when the operator asks for no licence' do
@@ -137,12 +137,12 @@ class ApprovalTest < ActionDispatch::IntegrationTest
   end
 
   test 'grants the licence attributes the chosen category covers, of those the operator asked for' do
-    granted = %w[A1 B1 B none].index_with do |category|
+    granted = %w[A1 B C none].index_with do |category|
       decode(approve_capturing(open_request, licence_category: category)[:kyc_jws])['attributes']
     end
 
     assert_equal({ 'A1' => { 'age_over_18' => true, 'licence_a1' => true },
-                   'B1' => { 'age_over_18' => true }, 'B' => { 'age_over_18' => true },
+                   'B' => { 'age_over_18' => true }, 'C' => { 'age_over_18' => true },
                    'none' => { 'age_over_18' => true } }, granted)
   end
 

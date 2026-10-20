@@ -8,7 +8,7 @@ module ClaimCatalog
 
   # The driving-licence categories the human chooses from, each with the
   # categories a licence of it lets its holder ride. A real licence lists them.
-  LICENCE_CATEGORIES = { 'A1' => %w[A1], 'A' => %w[A1 A], 'B1' => %w[B1], 'B' => %w[B], 'none' => [] }.freeze
+  LICENCE_CATEGORIES = { 'A1' => %w[A1], 'A' => %w[A1 A], 'B' => %w[B], 'C' => %w[C], 'none' => [] }.freeze
 
   module_function
 

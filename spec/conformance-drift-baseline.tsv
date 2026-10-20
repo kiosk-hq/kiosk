@@ -6,16 +6,16 @@
 # region, measured at commit `ref` (or `dirty` / `unknown`). Re-record a row
 # only after its drift has been re-judged.
 #
-# recorded: 2026-10-20 at 89637b9d -- spending cap currency, min_client, on_bad_proof, getgrocery courier/README, CI battery: 26 anchors re-judged, 3 retired dropped
-# 2012 anchors.
+# recorded: 2026-10-20 at c0bcc253 -- release 0.5.20: binding toll and service-place clock anchors judged against their rows; handler_dispatch and registration_pow rows dropped with their removed files
+# 2002 anchors.
 .github/workflows/ci.yml	a100f004b2f6d4c6	89637b9d	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	64bbf3bdb1c84cd4	89637b9d	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	35989635114b3570	89637b9d	      - name: Red-team battery
 .github/workflows/ci.yml	a100f004b2f6d4c6	89637b9d	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	6018aa9658a15f18	89637b9d	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	cd63b8cec8954ef0	89637b9d	run: ./e2e/run.sh
-CHANGELOG.md	4570005aad48e6ba	b1d0a419	Surfaced by a live hosted Hermes run. (K-437)
-CHANGELOG.md	ab88745a8a9ff044	b1d0a419	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
+CHANGELOG.md	4570005aad48e6ba	c0bcc253	Surfaced by a live hosted Hermes run. (K-437)
+CHANGELOG.md	ab88745a8a9ff044	c0bcc253	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	dc0ce9e1fdb10ca8	b1d0a419	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
 README.md	6bca48efdaf6a781	12cad6e9	Apache-2.0 for every gem in this repo.
 README.md	1f421bc7216e27e3	12cad6e9	Apache-2.0 monorepo for [Kiosk](https://kiosk.tech) — the standards-based open protocol that lets your customers' AI assistants discover, transact with, and pay your service, and its Ruby reference implementation
@@ -74,163 +74,164 @@ e2e/README.md	051214e824541696	b1d0a419	The principal flows into handlers: the `
 e2e/README.md	eb5fa49eb3be9781	b1d0a419	The wire carries no SQL: there is no arbitrary-SQL surface.
 e2e/README.md	90f78e4898e2c41d	b1d0a419	`.github/workflows/ci.yml` invokes the same script (the `e2e` job) after standard Ruby + Postgres setup.
 e2e/README.md	e1db8ac210994324	b1d0a419	└── fixtures/                               # files copied into the generated app
-e2e/assistant.sh	7e10b403edbedbeb	72b28958	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	32ea9a773eca7bad	72b28958	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	f9dc523d4a428d91	72b28958	$public_doc is really being read (control token)
-e2e/assistant.sh	cd4eddd677e611ab	72b28958	$public_doc names no verb ($verb_name) — pointer, not copy
-e2e/assistant.sh	d41cd84579bfa314	72b28958	=== the event stream (pinned listener) ===
-e2e/assistant.sh	52a16a65def7b005	72b28958	?v=<digest> is immutable for a year
-e2e/assistant.sh	de71535d9f908166	72b28958	GET /kiosk/schema is unenveloped
-e2e/assistant.sh	be84dc69a52f0de8	72b28958	GET at an action's path → 404
-e2e/assistant.sh	0e42a2b846f5fe80	72b28958	If-None-Match on the digest → 304
-e2e/assistant.sh	fc5ed1c45af6f66d	72b28958	KYC at an origin that serves no KYC → 501
-e2e/assistant.sh	2cb1d4a638ff83d5	72b28958	Kiosk-API-Version is MAJOR.MINOR.PATCH
-e2e/assistant.sh	0c6e61a6e86b5b4a	72b28958	Kiosk-API-Version present
-e2e/assistant.sh	bc7d2b93abf90689	72b28958	Kiosk-Min-Client is a version, and it is advertised
-e2e/assistant.sh	a6b6c17e5d494b55	72b28958	Kiosk-Min-Client present
-e2e/assistant.sh	87deaf53b2cad295	72b28958	Kiosk-Server-Version present
-e2e/assistant.sh	cb17459ec2775ab4	72b28958	POST /kiosk/$undrawn unauthenticated → 404 too
-e2e/assistant.sh	a34c9ec317cae464	72b28958	POST /kiosk/$undrawn → 404
-e2e/assistant.sh	4bb3da33897158f5	72b28958	POST at a query's path → 404
-e2e/assistant.sh	6cf148d0f731b35e	72b28958	There is no name-dispatch endpoint: a verb
-e2e/assistant.sh	c59f5eadf745850a	72b28958	Vary names all three request headers
-e2e/assistant.sh	df0d94a1b986f270	72b28958	X-Total-Count is not dressed up as a standard
-e2e/assistant.sh	4cd879b78cb0c183	72b28958	a COMPLETE answer carries X-Total-Count
-e2e/assistant.sh	ef224c9cb44cbb95	72b28958	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
-e2e/assistant.sh	b76eae5f3c62353f	72b28958	a query's 200 declares Link and X-Total-Count as HEADERS
-e2e/assistant.sh	3f173be1e2e5e6d4	72b28958	a routing 404 UNDER the mount is a 404
-e2e/assistant.sh	043ce0f1b8f803fe	72b28958	agent-configuration → 200
-e2e/assistant.sh	a4869ee1251f12dd	72b28958	agents.json → 200
-e2e/assistant.sh	738da0416039b544	72b28958	agents.txt Protocols: ap2
-e2e/assistant.sh	4865e3df051b115e	72b28958	agents.txt → 200
-e2e/assistant.sh	27623ecc0e894ec5	72b28958	alice: 1 appointment exists
-e2e/assistant.sh	e78676291551400a	72b28958	alice: does NOT see bob's row
-e2e/assistant.sh	02b6ca6cf2c18c64	72b28958	alice: sees her own row
-e2e/assistant.sh	8828ef7892c3b853	72b28958	all three version headers on all 19 mount routes
-e2e/assistant.sh	cde0ddb3a718eb34	72b28958	an action declares no pagination headers
-e2e/assistant.sh	3414347124974678	72b28958	an ancient client is SERVED, not refused — the floor is advisory
-e2e/assistant.sh	495ef79de3304b32	72b28958	an unhandled 500 UNDER the mount is a 500
-e2e/assistant.sh	ed89efb6f3b589b6	72b28958	api-catalog advertises it as a service-desc
-e2e/assistant.sh	0a416c3fbc34fac4	72b28958	api-catalog hyperlinks $verb_name, unauthenticated
-e2e/assistant.sh	925c895ed1752035	72b28958	api-catalog → 200
-e2e/assistant.sh	e11c6988d2261b05	72b28958	appointment_id returned
-e2e/assistant.sh	d4c74e287d30eced	72b28958	assert "kiosk.auth.challenge_url"
-e2e/assistant.sh	92d4c091191b4943	72b28958	assert "no Authorization header → 200"  "$oa_anon" "200"
-e2e/assistant.sh	0e49e161b51f30b4	72b28958	assert "no Authorization header → 200"  "$sch_status" "200"
-e2e/assistant.sh	8162f19f3c75904b	72b28958	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
-e2e/assistant.sh	63296b35e0f9aa9f	72b28958	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
-e2e/assistant.sh	f5e466c5fafd1254	72b28958	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	6d1f2f3ec664cf33	72b28958	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
-e2e/assistant.sh	3c03c2f4e3a8fac4	72b28958	assert "…served public, one minute"     "$(echo "$sch_headers"
-e2e/assistant.sh	3c03c2f4e3a8fac4	72b28958	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
-e2e/assistant.sh	8260833a5969c6bb	72b28958	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
-e2e/assistant.sh	0d0f836bd68acf3d	72b28958	binding: /auth.md served
-e2e/assistant.sh	2bbd0fc251be7c9b	72b28958	binding: device_authorization fields
-e2e/assistant.sh	ccb93f1a98523323	72b28958	binding: fast poll → slow_down
-e2e/assistant.sh	70635320f2eb5a70	72b28958	binding: held token dies at unlink
-e2e/assistant.sh	72f676ec402b4865	72b28958	binding: human approve → 200
-e2e/assistant.sh	4995ae43296c0de7	72b28958	binding: kiosk-pop login refresh
-e2e/assistant.sh	a068223c610f6da1	72b28958	binding: link-code mint (session)
-e2e/assistant.sh	e42229805575dd27	72b28958	binding: link-code redeem → human
-e2e/assistant.sh	cbd9d7971a07e188	72b28958	binding: login after unlink → 404
-e2e/assistant.sh	54ad1edd79a08dfa	72b28958	binding: pending before approval
-e2e/assistant.sh	331bdc8120102cc0	72b28958	binding: poll without proof denied
-e2e/assistant.sh	0358f39ad1c38d12	72b28958	binding: role/scope refused on the opening request
-e2e/assistant.sh	d5b18fb08d192dac	72b28958	binding: same-second token dies too
-e2e/assistant.sh	2a1b3270ce906612	72b28958	binding: token bound to the human
-e2e/assistant.sh	5f5e9e3953bd6731	72b28958	binding: token role is the approver's
-e2e/assistant.sh	f3a3396abdde3394	72b28958	binding: unlink → 204 (no body)
-e2e/assistant.sh	4eb6f08faf943420	72b28958	binding: wire verb as bound account
-e2e/assistant.sh	d6dcf51d33158d14	72b28958	binding: …and the code is not_found
-e2e/assistant.sh	071974087eeebe97	72b28958	binding: …type names it
-e2e/assistant.sh	dc02931f1a65a16a	72b28958	bob: 1 appointment exists
-e2e/assistant.sh	35dbfa8f87dfa9b2	72b28958	bob: does NOT see alice's row
-e2e/assistant.sh	9531e3cc8978ad14	72b28958	db: 1 cart_mandate
-e2e/assistant.sh	d50ffe8fb3a8dd1b	72b28958	db: 1 intent_mandate
-e2e/assistant.sh	b594bfbf72a637c6	72b28958	db: 1 payment_mandate
-e2e/assistant.sh	1116b1c3811604ff	72b28958	db: settlement amount 1599
-e2e/assistant.sh	ed6b1367f15e3dc1	72b28958	declares OpenAPI 3.1
-e2e/assistant.sh	35f292ac2372b6d2	72b28958	every parameter writes style and explode
-e2e/assistant.sh	efe9e4d4b1d7260a	72b28958	exactly 1 salon
-e2e/assistant.sh	656b0c791b2e4775	72b28958	garbage token → 401
-e2e/assistant.sh	d518750461584001	72b28958	jwks: alg=RS256
-e2e/assistant.sh	9aeb0747055be8c8	72b28958	jwks: keys[] present
-e2e/assistant.sh	b2ee3e99d7568864	72b28958	jwks: no private d field
-e2e/assistant.sh	8112d41b031fd800	72b28958	jwks: no private p field
-e2e/assistant.sh	532fa3d4713fe001	72b28958	jwks: use=sig
-e2e/assistant.sh	b408203f37deb5bd	72b28958	kiosk.auth.kind kiosk-pop
-e2e/assistant.sh	6e3bcf018a1f61b9	72b28958	kiosk.capabilities[]
-e2e/assistant.sh	f9112efaabed8a59	72b28958	kiosk.endpoint correct
-e2e/assistant.sh	8eab52eaf2363e28	72b28958	kiosk.schema_url is digest-versioned
-e2e/assistant.sh	d579e23ce8062bcd	72b28958	kiosk.version present
-e2e/assistant.sh	e84d99154b561b20	72b28958	limit and cursor are injected into a query
-e2e/assistant.sh	038644421408493c	72b28958	my_appointments declares salon_id as a query parameter
-e2e/assistant.sh	44fb3eeebeb7d35e	72b28958	no auth → 401
-e2e/assistant.sh	fbcc8cc09baa8c03	72b28958	one path per verb the canonical catalog publishes
-e2e/assistant.sh	1e9077ac4f7c7830	72b28958	pay: a Stripe PaymentIntent
-e2e/assistant.sh	748f2225b621319d	72b28958	pay: http 200
-e2e/assistant.sh	bcb08892f428d28f	72b28958	pay: settled 1599
-e2e/assistant.sh	a857334f9cd8098d	72b28958	pay: settlement_id
-e2e/assistant.sh	852f48828eddcdd9	72b28958	pay: unenveloped
-e2e/assistant.sh	fb7c0573a8996caa	72b28958	payment_setup: once the card is saved → ready
-e2e/assistant.sh	85a0cd7c49a0afa4	72b28958	payment_setup: served by the engine → setup_required
-e2e/assistant.sh	ff614cf8e3579a06	72b28958	register-pow: 1 challenge issued
-e2e/assistant.sh	296cc8a8da7d3020	72b28958	register-pow: code pow_required
-e2e/assistant.sh	c85a037c585530c2	72b28958	register-pow: minted token wire → 200
-e2e/assistant.sh	83cb3cf0d792a0b7	72b28958	register-pow: no-proof → 402
-e2e/assistant.sh	eb77fdb8c475fee3	72b28958	register-pow: role pinned customer
-e2e/assistant.sh	6396f70927fa5f0d	72b28958	register-pow: served (n,k) IS the gem default
-e2e/assistant.sh	d6440cc5cecd3f3a	72b28958	register-pow: solve+proof → registered
-e2e/assistant.sh	f8d02d7f9e1e20bb	72b28958	register-pow: the expected (n,k) was READ from the gem
-e2e/assistant.sh	17550b6710f97372	72b28958	request_kyc at an origin that serves no KYC → 501
-e2e/assistant.sh	5227abc963e74bf4	72b28958	reserved limit/cursor accepted → 200
-e2e/assistant.sh	a8664229f3a352f9	72b28958	salon name is Combette
-e2e/assistant.sh	51e1c6d825c87950	72b28958	schema publishes {queries, actions, events} and nothing else
-e2e/assistant.sh	4dd6e4bdab26ea40	72b28958	status restates the HTTP status
-e2e/assistant.sh	5faf8b659059c918	72b28958	the OPERATOR's own 200 outside the mount carries none
-e2e/assistant.sh	bd4514200645ffd1	72b28958	the body is a bare array
-e2e/assistant.sh	62baa4b1702a1abb	72b28958	the body is the action's object
-e2e/assistant.sh	ca77b6e308979ec0	72b28958	the descriptor's description travels verbatim
-e2e/assistant.sh	0682d7fb66bc44a9	72b28958	the reserved parameters are form/explode:true
-e2e/assistant.sh	828e5b7ea2d416f5	72b28958	the two 'it is not here' answers are two DIFFERENT codes
-e2e/assistant.sh	a44e3a4f72bd6a57	72b28958	title is the code's, not the incident's
-e2e/assistant.sh	c6a9404addc1896a	72b28958	two origins: first's token on second → 401
-e2e/assistant.sh	e12539c452ad6da0	72b28958	two origins: issuer is the first origin
-e2e/assistant.sh	ec1172912739901f	72b28958	two origins: issuer is the second origin
-e2e/assistant.sh	70f5c7d56295ad58	72b28958	two origins: same key, second account
-e2e/assistant.sh	bdea24d4d4b02d2b	72b28958	type names the code
-e2e/assistant.sh	d5f2babc5f8abb49	72b28958	unknown query → 404
-e2e/assistant.sh	44966e689e87b8e5	72b28958	…a query is advertised GET
-e2e/assistant.sh	ba604e7462629406	72b28958	…a stale ?v= still answers the CURRENT catalogue, short-lived
-e2e/assistant.sh	2260fca65574498f	72b28958	…an action is advertised POST
-e2e/assistant.sh	89ed2eaaaec56fa7	72b28958	…and NO Link header, because there is no next page
-e2e/assistant.sh	ff53dce362c1da79	72b28958	…and NOT forbidden
-e2e/assistant.sh	2606ef3b71c72642	72b28958	…and is itself an RFC 9457 document
-e2e/assistant.sh	1aec2e6ba0769424	72b28958	…and kiosk.json itself expires quickly
-e2e/assistant.sh	29b59cbcac7e5cd4	72b28958	…and links the catalog at its versioned url
-e2e/assistant.sh	efb81ff034c053fb	72b28958	…and neither does the operator's own 500 — same exception path
-e2e/assistant.sh	69e443dba65ee078	72b28958	…and never a 402: the toll went with the gate
-e2e/assistant.sh	09918c8c250f4cf0	72b28958	…and the body is no envelope
-e2e/assistant.sh	22d22b6da7976dbb	72b28958	…and the boot digest IS the ETag
-e2e/assistant.sh	d81b8d1896d34fed	72b28958	…and the module set lives in kiosk.json alone
-e2e/assistant.sh	651f65938444bd59	72b28958	…and the route loop actually ran
-e2e/assistant.sh	4d1c6faa12f88aa5	72b28958	…and the write never ran
-e2e/assistant.sh	99e541f202237a2c	72b28958	…and with --token-command it mints a fresh one and carries on
-e2e/assistant.sh	6bca2bfea6562cb2	72b28958	…by \$ref into components.headers
-e2e/assistant.sh	992754f67571b9b3	72b28958	…code is module_not_served
-e2e/assistant.sh	abe144a08e285d82	72b28958	…detail names the module
-e2e/assistant.sh	6bada86079f88c7e	72b28958	…into each of the two queries
-e2e/assistant.sh	52fa1c92a224dd15	72b28958	…not a problem document
-e2e/assistant.sh	ddd8021a01baccbc	72b28958	…public, one minute at the bare path
-e2e/assistant.sh	4dd6e4bdab26ea40	72b28958	…status restates the HTTP status
-e2e/assistant.sh	5fe2e13e122c3fec	72b28958	…the catalog is the body itself
-e2e/assistant.sh	17a6a3b925163d46	72b28958	…the events array carries this origin's topic and payment_setup
-e2e/assistant.sh	a44e3a4f72bd6a57	72b28958	…title is the code's, not the incident's
-e2e/assistant.sh	f616315f74fab8eb	72b28958	…while a ROOT discovery surface carries none of them
-e2e/assistant.sh	b993275ea6622f13	72b28958	…while an identity-scoped 200 keeps private, no-store
-e2e/assistant.sh	387cf424f11b420f	72b28958	…while the same request with a bad token is still 401
-e2e/assistant.sh	f1636056fbcf93c1	72b28958	…with no Allow on it
-e2e/assistant.sh	18d2cd878d48540b	72b28958	…with no code to branch on
+e2e/assistant.sh	7e10b403edbedbeb	c0bcc253	"$(curl -sS -o /dev/null -D - -H 'Accept: application/json' "$SERVER_URL/.well-known/kiosk.json" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	32ea9a773eca7bad	c0bcc253	"$(echo "$apc_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	f9dc523d4a428d91	c0bcc253	$public_doc is really being read (control token)
+e2e/assistant.sh	cd4eddd677e611ab	c0bcc253	$public_doc names no verb ($verb_name) — pointer, not copy
+e2e/assistant.sh	d41cd84579bfa314	c0bcc253	=== the event stream (pinned listener) ===
+e2e/assistant.sh	52a16a65def7b005	c0bcc253	?v=<digest> is immutable for a year
+e2e/assistant.sh	de71535d9f908166	c0bcc253	GET /kiosk/schema is unenveloped
+e2e/assistant.sh	be84dc69a52f0de8	c0bcc253	GET at an action's path → 404
+e2e/assistant.sh	0e42a2b846f5fe80	c0bcc253	If-None-Match on the digest → 304
+e2e/assistant.sh	fc5ed1c45af6f66d	c0bcc253	KYC at an origin that serves no KYC → 501
+e2e/assistant.sh	2cb1d4a638ff83d5	c0bcc253	Kiosk-API-Version is MAJOR.MINOR.PATCH
+e2e/assistant.sh	0c6e61a6e86b5b4a	c0bcc253	Kiosk-API-Version present
+e2e/assistant.sh	bc7d2b93abf90689	c0bcc253	Kiosk-Min-Client is a version, and it is advertised
+e2e/assistant.sh	a6b6c17e5d494b55	c0bcc253	Kiosk-Min-Client present
+e2e/assistant.sh	87deaf53b2cad295	c0bcc253	Kiosk-Server-Version present
+e2e/assistant.sh	cb17459ec2775ab4	c0bcc253	POST /kiosk/$undrawn unauthenticated → 404 too
+e2e/assistant.sh	a34c9ec317cae464	c0bcc253	POST /kiosk/$undrawn → 404
+e2e/assistant.sh	4bb3da33897158f5	c0bcc253	POST at a query's path → 404
+e2e/assistant.sh	6cf148d0f731b35e	c0bcc253	There is no name-dispatch endpoint: a verb
+e2e/assistant.sh	c59f5eadf745850a	c0bcc253	Vary names all three request headers
+e2e/assistant.sh	df0d94a1b986f270	c0bcc253	X-Total-Count is not dressed up as a standard
+e2e/assistant.sh	4cd879b78cb0c183	c0bcc253	a COMPLETE answer carries X-Total-Count
+e2e/assistant.sh	ef224c9cb44cbb95	c0bcc253	a handler MAY relax its own 200 (§3.7.4) — the public catalogue does
+e2e/assistant.sh	b76eae5f3c62353f	c0bcc253	a query's 200 declares Link and X-Total-Count as HEADERS
+e2e/assistant.sh	3f173be1e2e5e6d4	c0bcc253	a routing 404 UNDER the mount is a 404
+e2e/assistant.sh	043ce0f1b8f803fe	c0bcc253	agent-configuration → 200
+e2e/assistant.sh	a4869ee1251f12dd	c0bcc253	agents.json → 200
+e2e/assistant.sh	738da0416039b544	c0bcc253	agents.txt Protocols: ap2
+e2e/assistant.sh	4865e3df051b115e	c0bcc253	agents.txt → 200
+e2e/assistant.sh	27623ecc0e894ec5	c0bcc253	alice: 1 appointment exists
+e2e/assistant.sh	e78676291551400a	c0bcc253	alice: does NOT see bob's row
+e2e/assistant.sh	02b6ca6cf2c18c64	c0bcc253	alice: sees her own row
+e2e/assistant.sh	8828ef7892c3b853	c0bcc253	all three version headers on all 19 mount routes
+e2e/assistant.sh	cde0ddb3a718eb34	c0bcc253	an action declares no pagination headers
+e2e/assistant.sh	3414347124974678	c0bcc253	an ancient client is SERVED, not refused — the floor is advisory
+e2e/assistant.sh	495ef79de3304b32	c0bcc253	an unhandled 500 UNDER the mount is a 500
+e2e/assistant.sh	ed89efb6f3b589b6	c0bcc253	api-catalog advertises it as a service-desc
+e2e/assistant.sh	0a416c3fbc34fac4	c0bcc253	api-catalog hyperlinks $verb_name, unauthenticated
+e2e/assistant.sh	925c895ed1752035	c0bcc253	api-catalog → 200
+e2e/assistant.sh	e11c6988d2261b05	c0bcc253	appointment_id returned
+e2e/assistant.sh	d4c74e287d30eced	c0bcc253	assert "kiosk.auth.challenge_url"
+e2e/assistant.sh	92d4c091191b4943	c0bcc253	assert "no Authorization header → 200"  "$oa_anon" "200"
+e2e/assistant.sh	0e49e161b51f30b4	c0bcc253	assert "no Authorization header → 200"  "$sch_status" "200"
+e2e/assistant.sh	8162f19f3c75904b	c0bcc253	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
+e2e/assistant.sh	63296b35e0f9aa9f	c0bcc253	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
+e2e/assistant.sh	f5e466c5fafd1254	c0bcc253	assert "…and NO Vary at all"            "$(echo "$sch_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	6d1f2f3ec664cf33	c0bcc253	assert "…and NO Vary at all"        "$(echo "$oa_headers" | grep -ic '^Vary:')" "0"
+e2e/assistant.sh	3c03c2f4e3a8fac4	c0bcc253	assert "…served public, one minute"     "$(echo "$sch_headers"
+e2e/assistant.sh	3c03c2f4e3a8fac4	c0bcc253	assert "…served public, one minute"     "$(echo "$sch_headers" | grep -ic '^Cache-Control: max-age=60, public')" "1"
+e2e/assistant.sh	8260833a5969c6bb	c0bcc253	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers" | tr -d '\r' | grep -Eci '^ETag: "[0-9a-f]{32}"$')" "1"
+e2e/assistant.sh	0d0f836bd68acf3d	c0bcc253	binding: /auth.md served
+e2e/assistant.sh	f5087606d276208b	c0bcc253	binding: claim and token poll each paid one toll
+e2e/assistant.sh	2bbd0fc251be7c9b	c0bcc253	binding: device_authorization fields
+e2e/assistant.sh	ccb93f1a98523323	c0bcc253	binding: fast poll → slow_down
+e2e/assistant.sh	70635320f2eb5a70	c0bcc253	binding: held token dies at unlink
+e2e/assistant.sh	72f676ec402b4865	c0bcc253	binding: human approve → 200
+e2e/assistant.sh	4995ae43296c0de7	c0bcc253	binding: kiosk-pop login refresh
+e2e/assistant.sh	a068223c610f6da1	c0bcc253	binding: link-code mint (session)
+e2e/assistant.sh	e42229805575dd27	c0bcc253	binding: link-code redeem → human
+e2e/assistant.sh	cbd9d7971a07e188	c0bcc253	binding: login after unlink → 404
+e2e/assistant.sh	54ad1edd79a08dfa	c0bcc253	binding: pending before approval
+e2e/assistant.sh	331bdc8120102cc0	c0bcc253	binding: poll without proof denied
+e2e/assistant.sh	0358f39ad1c38d12	c0bcc253	binding: role/scope refused on the opening request
+e2e/assistant.sh	d5b18fb08d192dac	c0bcc253	binding: same-second token dies too
+e2e/assistant.sh	2a1b3270ce906612	c0bcc253	binding: token bound to the human
+e2e/assistant.sh	5f5e9e3953bd6731	c0bcc253	binding: token role is the approver's
+e2e/assistant.sh	f3a3396abdde3394	c0bcc253	binding: unlink → 204 (no body)
+e2e/assistant.sh	4eb6f08faf943420	c0bcc253	binding: wire verb as bound account
+e2e/assistant.sh	d6dcf51d33158d14	c0bcc253	binding: …and the code is not_found
+e2e/assistant.sh	071974087eeebe97	c0bcc253	binding: …type names it
+e2e/assistant.sh	dc02931f1a65a16a	c0bcc253	bob: 1 appointment exists
+e2e/assistant.sh	35dbfa8f87dfa9b2	c0bcc253	bob: does NOT see alice's row
+e2e/assistant.sh	9531e3cc8978ad14	c0bcc253	db: 1 cart_mandate
+e2e/assistant.sh	d50ffe8fb3a8dd1b	c0bcc253	db: 1 intent_mandate
+e2e/assistant.sh	b594bfbf72a637c6	c0bcc253	db: 1 payment_mandate
+e2e/assistant.sh	1116b1c3811604ff	c0bcc253	db: settlement amount 1599
+e2e/assistant.sh	ed6b1367f15e3dc1	c0bcc253	declares OpenAPI 3.1
+e2e/assistant.sh	35f292ac2372b6d2	c0bcc253	every parameter writes style and explode
+e2e/assistant.sh	efe9e4d4b1d7260a	c0bcc253	exactly 1 salon
+e2e/assistant.sh	656b0c791b2e4775	c0bcc253	garbage token → 401
+e2e/assistant.sh	d518750461584001	c0bcc253	jwks: alg=RS256
+e2e/assistant.sh	9aeb0747055be8c8	c0bcc253	jwks: keys[] present
+e2e/assistant.sh	b2ee3e99d7568864	c0bcc253	jwks: no private d field
+e2e/assistant.sh	8112d41b031fd800	c0bcc253	jwks: no private p field
+e2e/assistant.sh	532fa3d4713fe001	c0bcc253	jwks: use=sig
+e2e/assistant.sh	b408203f37deb5bd	c0bcc253	kiosk.auth.kind kiosk-pop
+e2e/assistant.sh	6e3bcf018a1f61b9	c0bcc253	kiosk.capabilities[]
+e2e/assistant.sh	f9112efaabed8a59	c0bcc253	kiosk.endpoint correct
+e2e/assistant.sh	8eab52eaf2363e28	c0bcc253	kiosk.schema_url is digest-versioned
+e2e/assistant.sh	d579e23ce8062bcd	c0bcc253	kiosk.version present
+e2e/assistant.sh	e84d99154b561b20	c0bcc253	limit and cursor are injected into a query
+e2e/assistant.sh	038644421408493c	c0bcc253	my_appointments declares salon_id as a query parameter
+e2e/assistant.sh	44fb3eeebeb7d35e	c0bcc253	no auth → 401
+e2e/assistant.sh	fbcc8cc09baa8c03	c0bcc253	one path per verb the canonical catalog publishes
+e2e/assistant.sh	1e9077ac4f7c7830	c0bcc253	pay: a Stripe PaymentIntent
+e2e/assistant.sh	748f2225b621319d	c0bcc253	pay: http 200
+e2e/assistant.sh	bcb08892f428d28f	c0bcc253	pay: settled 1599
+e2e/assistant.sh	a857334f9cd8098d	c0bcc253	pay: settlement_id
+e2e/assistant.sh	852f48828eddcdd9	c0bcc253	pay: unenveloped
+e2e/assistant.sh	fb7c0573a8996caa	c0bcc253	payment_setup: once the card is saved → ready
+e2e/assistant.sh	85a0cd7c49a0afa4	c0bcc253	payment_setup: served by the engine → setup_required
+e2e/assistant.sh	ff614cf8e3579a06	c0bcc253	register-pow: 1 challenge issued
+e2e/assistant.sh	296cc8a8da7d3020	c0bcc253	register-pow: code pow_required
+e2e/assistant.sh	c85a037c585530c2	c0bcc253	register-pow: minted token wire → 200
+e2e/assistant.sh	83cb3cf0d792a0b7	c0bcc253	register-pow: no-proof → 402
+e2e/assistant.sh	eb77fdb8c475fee3	c0bcc253	register-pow: role pinned customer
+e2e/assistant.sh	6396f70927fa5f0d	c0bcc253	register-pow: served (n,k) IS the gem default
+e2e/assistant.sh	d6440cc5cecd3f3a	c0bcc253	register-pow: solve+proof → registered
+e2e/assistant.sh	f8d02d7f9e1e20bb	c0bcc253	register-pow: the expected (n,k) was READ from the gem
+e2e/assistant.sh	17550b6710f97372	c0bcc253	request_kyc at an origin that serves no KYC → 501
+e2e/assistant.sh	5227abc963e74bf4	c0bcc253	reserved limit/cursor accepted → 200
+e2e/assistant.sh	a8664229f3a352f9	c0bcc253	salon name is Combette
+e2e/assistant.sh	51e1c6d825c87950	c0bcc253	schema publishes {queries, actions, events} and nothing else
+e2e/assistant.sh	4dd6e4bdab26ea40	c0bcc253	status restates the HTTP status
+e2e/assistant.sh	5faf8b659059c918	c0bcc253	the OPERATOR's own 200 outside the mount carries none
+e2e/assistant.sh	bd4514200645ffd1	c0bcc253	the body is a bare array
+e2e/assistant.sh	62baa4b1702a1abb	c0bcc253	the body is the action's object
+e2e/assistant.sh	ca77b6e308979ec0	c0bcc253	the descriptor's description travels verbatim
+e2e/assistant.sh	0682d7fb66bc44a9	c0bcc253	the reserved parameters are form/explode:true
+e2e/assistant.sh	828e5b7ea2d416f5	c0bcc253	the two 'it is not here' answers are two DIFFERENT codes
+e2e/assistant.sh	a44e3a4f72bd6a57	c0bcc253	title is the code's, not the incident's
+e2e/assistant.sh	c6a9404addc1896a	c0bcc253	two origins: first's token on second → 401
+e2e/assistant.sh	e12539c452ad6da0	c0bcc253	two origins: issuer is the first origin
+e2e/assistant.sh	ec1172912739901f	c0bcc253	two origins: issuer is the second origin
+e2e/assistant.sh	70f5c7d56295ad58	c0bcc253	two origins: same key, second account
+e2e/assistant.sh	bdea24d4d4b02d2b	c0bcc253	type names the code
+e2e/assistant.sh	d5f2babc5f8abb49	c0bcc253	unknown query → 404
+e2e/assistant.sh	44966e689e87b8e5	c0bcc253	…a query is advertised GET
+e2e/assistant.sh	ba604e7462629406	c0bcc253	…a stale ?v= still answers the CURRENT catalogue, short-lived
+e2e/assistant.sh	2260fca65574498f	c0bcc253	…an action is advertised POST
+e2e/assistant.sh	89ed2eaaaec56fa7	c0bcc253	…and NO Link header, because there is no next page
+e2e/assistant.sh	ff53dce362c1da79	c0bcc253	…and NOT forbidden
+e2e/assistant.sh	2606ef3b71c72642	c0bcc253	…and is itself an RFC 9457 document
+e2e/assistant.sh	1aec2e6ba0769424	c0bcc253	…and kiosk.json itself expires quickly
+e2e/assistant.sh	29b59cbcac7e5cd4	c0bcc253	…and links the catalog at its versioned url
+e2e/assistant.sh	efb81ff034c053fb	c0bcc253	…and neither does the operator's own 500 — same exception path
+e2e/assistant.sh	69e443dba65ee078	c0bcc253	…and never a 402: the toll went with the gate
+e2e/assistant.sh	09918c8c250f4cf0	c0bcc253	…and the body is no envelope
+e2e/assistant.sh	22d22b6da7976dbb	c0bcc253	…and the boot digest IS the ETag
+e2e/assistant.sh	d81b8d1896d34fed	c0bcc253	…and the module set lives in kiosk.json alone
+e2e/assistant.sh	651f65938444bd59	c0bcc253	…and the route loop actually ran
+e2e/assistant.sh	4d1c6faa12f88aa5	c0bcc253	…and the write never ran
+e2e/assistant.sh	99e541f202237a2c	c0bcc253	…and with --token-command it mints a fresh one and carries on
+e2e/assistant.sh	6bca2bfea6562cb2	c0bcc253	…by \$ref into components.headers
+e2e/assistant.sh	992754f67571b9b3	c0bcc253	…code is module_not_served
+e2e/assistant.sh	abe144a08e285d82	c0bcc253	…detail names the module
+e2e/assistant.sh	6bada86079f88c7e	c0bcc253	…into each of the two queries
+e2e/assistant.sh	52fa1c92a224dd15	c0bcc253	…not a problem document
+e2e/assistant.sh	ddd8021a01baccbc	c0bcc253	…public, one minute at the bare path
+e2e/assistant.sh	4dd6e4bdab26ea40	c0bcc253	…status restates the HTTP status
+e2e/assistant.sh	5fe2e13e122c3fec	c0bcc253	…the catalog is the body itself
+e2e/assistant.sh	17a6a3b925163d46	c0bcc253	…the events array carries this origin's topic and payment_setup
+e2e/assistant.sh	a44e3a4f72bd6a57	c0bcc253	…title is the code's, not the incident's
+e2e/assistant.sh	f616315f74fab8eb	c0bcc253	…while a ROOT discovery surface carries none of them
+e2e/assistant.sh	b993275ea6622f13	c0bcc253	…while an identity-scoped 200 keeps private, no-store
+e2e/assistant.sh	387cf424f11b420f	c0bcc253	…while the same request with a bad token is still 401
+e2e/assistant.sh	f1636056fbcf93c1	c0bcc253	…with no Allow on it
+e2e/assistant.sh	18d2cd878d48540b	c0bcc253	…with no code to branch on
 e2e/fixtures/bookings_controller.rb	30ed27acbc6cfcd6	b1d0a419	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	55790f84c5e0843f	b1d0a419	# controller may declare BOTH kinds: `my_appointments` is a query
 e2e/fixtures/bookings_controller.rb	e36d833ef9bfe902	b1d0a419	Appointment.own.order(:id)
@@ -253,23 +254,23 @@ e2e/run.sh	2e4cf64c003c5fd3	b1d0a419	cp "$FIXTURES/routes.rb"             config
 e2e/run.sh	9d2288c57fc89d95	b1d0a419	export KIOSK_AUDIT_SINK_REDACTED_FILE="$AUDIT_EVENTS_REDACTED"
 e2e/run.sh	cf1377dff67eed9d	b1d0a419	log "assert DB-level uniqueness on kiosk.agents.public_key (live rows)"
 e2e/run.sh	45a6aff676606ed1	b1d0a419	rails new "$APP_NAME" --skip-bundle -d postgresql --skip-test --api --skip-git \
-e2e/schema_conformance.rb	9919a966995230e7	72b28958	    conforms("the #{defn} mandate's claims", "#{B}/mandates.schema.json",
-e2e/schema_conformance.rb	ca8175a1336a9ecb	72b28958	  conforms('the pay REQUEST body', "#{B}/mandates.schema.json", cap.fetch('request'),
-e2e/schema_conformance.rb	97e4a794eb323767	72b28958	  conforms('the settlement this origin answered', "#{B}/mandates.schema.json",
-e2e/schema_conformance.rb	d02d33457f21c1b4	72b28958	GET /.well-known/kiosk.json
-e2e/schema_conformance.rb	3367cfd5012fc610	72b28958	GET /kiosk/schema
-e2e/schema_conformance.rb	dfacc0ad1cbbb009	72b28958	VIOLATES its own schema
-e2e/schema_conformance.rb	c7131da3f9cb7fb8	72b28958	and the same schema REFUSES a broken copy of those very bytes
-e2e/schema_conformance.rb	b807efe1e41e61c4	72b28958	conforms('the POST /auth/register 201'
-e2e/schema_conformance.rb	29d40ed0d9f0e4f6	72b28958	no control mutation given
-e2e/schema_conformance.rb	f11eb5e75e28078e	72b28958	published examples (the loop is not empty)
-e2e/schema_conformance.rb	45522b2a2b65c4ca	72b28958	satisfies its own schema
-e2e/schema_conformance.rb	9919a966995230e7	72b28958	the #{defn} mandate's claims
-e2e/schema_conformance.rb	1a103f40182dcf7b	72b28958	the Kiosk-PoW header this origin ACCEPTED
-e2e/schema_conformance.rb	b19312576b1d2ef4	72b28958	the event pushed on the stream
-e2e/schema_conformance.rb	ca8175a1336a9ecb	72b28958	the pay REQUEST body
-e2e/schema_conformance.rb	97e4a794eb323767	72b28958	the settlement this origin answered
-e2e/schema_conformance.rb	8893fcc52c97380e	72b28958	§5 and §6 — the auth and binding planes
+e2e/schema_conformance.rb	9919a966995230e7	c0bcc253	    conforms("the #{defn} mandate's claims", "#{B}/mandates.schema.json",
+e2e/schema_conformance.rb	ca8175a1336a9ecb	c0bcc253	  conforms('the pay REQUEST body', "#{B}/mandates.schema.json", cap.fetch('request'),
+e2e/schema_conformance.rb	97e4a794eb323767	c0bcc253	  conforms('the settlement this origin answered', "#{B}/mandates.schema.json",
+e2e/schema_conformance.rb	d02d33457f21c1b4	c0bcc253	GET /.well-known/kiosk.json
+e2e/schema_conformance.rb	3367cfd5012fc610	c0bcc253	GET /kiosk/schema
+e2e/schema_conformance.rb	dfacc0ad1cbbb009	c0bcc253	VIOLATES its own schema
+e2e/schema_conformance.rb	c7131da3f9cb7fb8	c0bcc253	and the same schema REFUSES a broken copy of those very bytes
+e2e/schema_conformance.rb	b807efe1e41e61c4	c0bcc253	conforms('the POST /auth/register 201'
+e2e/schema_conformance.rb	29d40ed0d9f0e4f6	c0bcc253	no control mutation given
+e2e/schema_conformance.rb	f11eb5e75e28078e	c0bcc253	published examples (the loop is not empty)
+e2e/schema_conformance.rb	45522b2a2b65c4ca	c0bcc253	satisfies its own schema
+e2e/schema_conformance.rb	9919a966995230e7	c0bcc253	the #{defn} mandate's claims
+e2e/schema_conformance.rb	1a103f40182dcf7b	c0bcc253	the Kiosk-PoW header this origin ACCEPTED
+e2e/schema_conformance.rb	b19312576b1d2ef4	c0bcc253	the event pushed on the stream
+e2e/schema_conformance.rb	ca8175a1336a9ecb	c0bcc253	the pay REQUEST body
+e2e/schema_conformance.rb	97e4a794eb323767	c0bcc253	the settlement this origin answered
+e2e/schema_conformance.rb	8893fcc52c97380e	c0bcc253	§5 and §6 — the auth and binding planes
 e2e/schemas/schema-descriptor.schema.json	6d333cec435170f7	b1d0a419	One verb's description. CLOSED (Section 8.3): a descriptor carries the members named here and no others
 kiosk-all/Gemfile	8777c0810f90225f	b1d0a419	gem 'rspec', '~> 3.13'
 kiosk-all/README.md	38e41bce797bf1bb	b1d0a419	`kiosk-all` declares runtime dependencies on the two production data-plane gems:
@@ -301,7 +302,7 @@ kiosk-core/lib/kiosk/configuration.rb	f93913e953f166ea	b1d0a419	    # to the iss
 kiosk-core/lib/kiosk/configuration.rb	3509e124dce01fd7	b1d0a419	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	eb55ac83bee281d4	b1d0a419	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	0b9b9bb8049ae29f	b1d0a419	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	ce89347fc3f0bb0d	2f70460f	API_VERSION = '0.5.19'
+kiosk-core/lib/kiosk/protocol.rb	5a2084cecc7b9d7e	c0bcc253	API_VERSION = '0.5.20'
 kiosk-core/spec/spec_helper.rb	c89ca3f73742cd52	b1d0a419	require 'kiosk'
 kiosk-demo-atablefor/README.md	9c41ef23a955233a	b1d0a419	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	90d2d7b9f9107588	b1d0a419	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -320,7 +321,7 @@ kiosk-demo-atablefor/app/views/layouts/home.html.erb	a30dbab6b75418c5	b1d0a419	T
 kiosk-demo-atablefor/before-after.md	3d813b7312b4430a	b1d0a419	`test/stories/booking_test.rb` runs the errand with no human, no web sign-in and no payment:
 kiosk-demo-atablefor/before-after.md	412d49f4284ee6e0	b1d0a419	every new assistant pays an Equihash proof-of-work to register. One diner's
 kiosk-demo-atablefor/before-after.md	41d0a748ba79db6d	b1d0a419	rails g kiosk:install
-kiosk-demo-atablefor/config/initializers/kiosk.rb	822e8dd9dfcfa05d	b1d0a419	c.registration_pow_count = 1
+kiosk-demo-atablefor/config/initializers/kiosk.rb	822e8dd9dfcfa05d	c0bcc253	c.registration_pow_count = 1
 kiosk-demo-atablefor/db/seeds.rb	7b05fc6f8e10ee65	b1d0a419	# A few Lisbon restaurants with named tables, and two diners who sign in with a
 kiosk-demo-atablefor/db/seeds.rb	e76a84632db36917	b1d0a419	# clock (Restaurant#upcoming_seatings), so nothing here goes stale.
 kiosk-demo-atablefor/test/restaurant_test.rb	c459d7ce938ca940	b1d0a419	the upcoming seatings roll forward on each restaurant's clock
@@ -332,18 +333,17 @@ kiosk-demo-atablefor/test/stories/discovery_test.rb	ae95e9e57b144a4f	b1d0a419	th
 kiosk-demo-atablefor/test/stories/link_test.rb	9b07cbaa646f0c99	b1d0a419	Diego links his assistant from the restaurant site, and the table it books is his
 kiosk-demo-atablefor/test/stories/link_test.rb	723b26ca8cf634f7	b1d0a419	assert_equal diego.id, Booking.find(booking['booking_id']).user_id
 kiosk-demo-atablefor/test/stories/privacy_test.rb	6f3ff7f39561ad8e	b1d0a419	one diner can neither cancel nor see another's booking
-kiosk-demo-getgrocery/README.md	3cbe08017280144f	89637b9d	# kiosk-demo-getgrocery
-kiosk-demo-getgrocery/README.md	20aec2bec43b7416	89637b9d	(the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
-kiosk-demo-getgrocery/README.md	d73635e5213dbf0d	89637b9d	**Honest scope:** the operator validates **format and zone only**.
-kiosk-demo-getgrocery/README.md	777a26ce52f7148b	89637b9d	Grocery delivery demo operator for Kiosk.
-kiosk-demo-getgrocery/README.md	286f751757954a3f	89637b9d	Without this variable the app
-kiosk-demo-getgrocery/README.md	0d291f4a635529d4	89637b9d	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
-kiosk-demo-getgrocery/README.md	96e85401b2991009	89637b9d	local stripe-mock; `export STRIPE_MOCK_URL=http://localhost:12111` sends the
-kiosk-demo-getgrocery/README.md	3eed0a9d78c4702b	89637b9d	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
+kiosk-demo-getgrocery/README.md	3cbe08017280144f	c0bcc253	# kiosk-demo-getgrocery
+kiosk-demo-getgrocery/README.md	20aec2bec43b7416	c0bcc253	(the cart must be EUR, mirror the order at the prices it was ordered at, and sum correctly),
+kiosk-demo-getgrocery/README.md	d73635e5213dbf0d	c0bcc253	**Honest scope:** the operator validates **format and zone only**.
+kiosk-demo-getgrocery/README.md	777a26ce52f7148b	c0bcc253	Grocery delivery demo operator for Kiosk.
+kiosk-demo-getgrocery/README.md	286f751757954a3f	c0bcc253	Without this variable the app
+kiosk-demo-getgrocery/README.md	0d291f4a635529d4	c0bcc253	`delivered` follows five minutes on. `test/delivery_slots_test.rb` and
+kiosk-demo-getgrocery/README.md	96e85401b2991009	c0bcc253	local stripe-mock; `export STRIPE_MOCK_URL=http://localhost:12111` sends the
+kiosk-demo-getgrocery/README.md	3eed0a9d78c4702b	c0bcc253	minutes before it ends (querying at 11:00 Dublin hides `08:00–10:00` and keeps
 kiosk-demo-getgrocery/app/controllers/home_controller.rb	e2d91d28f5235fbd	b1d0a419	include Kiosk::SkillLink
 kiosk-demo-getgrocery/app/controllers/kiosk/catalog_controller.rb	9f1d698861cb19c0	b1d0a419	def catalog
-kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	a974802adf1f39e9	b1d0a419	caller_zone: Kiosk.reader_zone)
-kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	ca94fb8ac906d386	b1d0a419	def delivery_slots
+kiosk-demo-getgrocery/app/controllers/kiosk/delivery_slots_controller.rb	e2d6f0cad662b54a	c0bcc253	def delivery_slots
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	22ac38a6897e6dad	b1d0a419	def create_order
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	4a01a81eeaf34227	b1d0a419	def my_orders
 kiosk-demo-getgrocery/app/controllers/kiosk/orders_controller.rb	5822ea343f970e85	b1d0a419	required: %w[items slot_at delivery_address]
@@ -356,8 +356,7 @@ kiosk-demo-getgrocery/app/models/delivery_slots.rb	31401ecc1dd289c9	b1d0a419	(sl
 kiosk-demo-getgrocery/app/models/delivery_slots.rb	65dde4616ac44e66	b1d0a419	def zone_at(address) = Time.find_zone!(DublinZones::ZONES.fetch(DublinZones.check(address).district, DEFAULT_ZONE_NAME))
 kiosk-demo-getgrocery/app/models/dublin_zones.rb	558a957d55ffa88a	b1d0a419	# The clock of each served district.
 kiosk-demo-getgrocery/app/models/order.rb	e9d16923b8e77743	b1d0a419	def window_bookable
-kiosk-demo-getgrocery/app/models/slot_search.rb	bce2b2450f01b07f	b1d0a419	# The shop's day the caller's day starts on, never before the soonest it delivers.
-kiosk-demo-getgrocery/app/models/slot_search.rb	62d5cc1967f07545	b1d0a419	def calendar = caller_zone || zone
+kiosk-demo-getgrocery/app/models/slot_search.rb	c484f6e27d85cfaa	c0bcc253	# The named day at the address, never before the soonest day the shop delivers.
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	aeccf5f83e29a8f3	b1d0a419	Kiosk::Server::Kyc.require! if age_restricted?(order)
 kiosk-demo-getgrocery/app/operations/create_order_operation.rb	7cd0c8b51c7e9dd2	b1d0a419	timezone: DeliverySlots.zone_at(delivery_address).name
 kiosk-demo-getgrocery/app/operations/reschedule_delivery_operation.rb	4710631f30b273d8	b1d0a419	refuse 'this order is not paid; only a paid order can be moved' unless order.paid?
@@ -377,17 +376,17 @@ kiosk-demo-getgrocery/before-after.md	542ca3543f5508d2	b1d0a419	ChatGPT-Agent fo
 kiosk-demo-getgrocery/before-after.md	1537d0b6bc6d7ead	b1d0a419	`test/stories/shop_test.rb` runs the errand end to end:
 kiosk-demo-getgrocery/config/environments/development.rb	3670be0b793ae0ad	b1d0a419	ENV['STRIPE_SECRET_KEY']          ||= 'sk_test_mock'
 kiosk-demo-getgrocery/config/environments/test.rb	be1c45c578d8434d	b1d0a419	||= Kiosk::TestHelpers::StripeMock.url
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	b1d0a419	  c.kyc_claims     = %w[age_over_18]
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	88d01155587d8f06	b1d0a419	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	53dbf44fdd7f5693	b1d0a419	  c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	fdbc265b29fbf0bb	b1d0a419	Kiosk::PaymentProviders::Stripe.new(
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	fdbc265b29fbf0bb	b1d0a419	Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY'),
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	ce7af726c894d80d	b1d0a419	api_base: ENV.fetch('STRIPE_MOCK_URL', nil)
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	b1d0a419	c.kyc_claims     = %w[age_over_18]
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	51f03509c9aa0217	b1d0a419	c.payment_provider = Kiosk::Server::PaymentClaim.new(
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	822e8dd9dfcfa05d	b1d0a419	c.registration_pow_count = 1
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	aba966214b08a8c7	b1d0a419	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
-kiosk-demo-getgrocery/config/initializers/kiosk.rb	38393c0ce1baae5f	b1d0a419	c.signing_key       = Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64'))
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	c0bcc253	  c.kyc_claims     = %w[age_over_18]
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	88d01155587d8f06	c0bcc253	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	53dbf44fdd7f5693	c0bcc253	  c.kyc_public_key = ENV.fetch('KIOSK_PROVE_PUBLIC_KEY_PEM')
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	fdbc265b29fbf0bb	c0bcc253	Kiosk::PaymentProviders::Stripe.new(
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	fdbc265b29fbf0bb	c0bcc253	Kiosk::PaymentProviders::Stripe.new(api_key: ENV.fetch('STRIPE_SECRET_KEY'),
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	ce7af726c894d80d	c0bcc253	api_base: ENV.fetch('STRIPE_MOCK_URL', nil)
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	78af5e1e6ce22134	c0bcc253	c.kyc_claims     = %w[age_over_18]
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	51f03509c9aa0217	c0bcc253	c.payment_provider = Kiosk::Server::PaymentClaim.new(
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	822e8dd9dfcfa05d	c0bcc253	c.registration_pow_count = 1
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	aba966214b08a8c7	c0bcc253	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
+kiosk-demo-getgrocery/config/initializers/kiosk.rb	38393c0ce1baae5f	c0bcc253	c.signing_key       = Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64'))
 kiosk-demo-getgrocery/config/routes.rb	a1aca122ae535e0e	b1d0a419	actions :create_order, :reschedule_delivery
 kiosk-demo-getgrocery/config/routes.rb	5f601e47fba0eea0	b1d0a419	kiosk do
 kiosk-demo-getgrocery/config/routes.rb	f4a527032aa3be83	b1d0a419	queries :catalog, :delivery_slots, :my_orders
@@ -402,11 +401,10 @@ kiosk-demo-getgrocery/test/delivery_slots_test.rb	2be520999c6b603f	b1d0a419	trav
 kiosk-demo-getgrocery/test/delivery_slots_test.rb	3ea7cffc460f931a	b1d0a419	windows are on the district's clock, across daylight saving
 kiosk-demo-getgrocery/test/order_test.rb	8f6a6b6710d9d775	b1d0a419	errors(order(date: Date.new(2026, 9, 7), slot: 2)).sole)
 kiosk-demo-getgrocery/test/order_test.rb	2cbfb12a4261f454	b1d0a419	its window has not passed and still reaches the door
-kiosk-demo-getgrocery/test/slot_search_test.rb	12fcf234b309c493	9e766433	a caller that declares no zone is read on the shop's clock
-kiosk-demo-getgrocery/test/slot_search_test.rb	6adfb635a9fb3e14	9e766433	a caller's zone is only what it declares
-kiosk-demo-getgrocery/test/slot_search_test.rb	4b4e9ab0f2e53e86	9e766433	a day already past on the caller's calendar is refused in the caller's terms
-kiosk-demo-getgrocery/test/slot_search_test.rb	629ba443a77e4992	9e766433	test 'an address outside the served districts is refused with the reason' do
-kiosk-demo-getgrocery/test/slot_search_test.rb	e4589e2e40b47496	9e766433	the day a caller names is read on its declared calendar
+kiosk-demo-getgrocery/test/slot_search_test.rb	6adfb635a9fb3e14	c0bcc253	a caller's zone is only what it declares
+kiosk-demo-getgrocery/test/slot_search_test.rb	dcedaf068add1278	c0bcc253	a day that has ended at the address is refused naming its zone
+kiosk-demo-getgrocery/test/slot_search_test.rb	25d91d0c9cee5ec0	c0bcc253	a named day is a day on the address's clock
+kiosk-demo-getgrocery/test/slot_search_test.rb	629ba443a77e4992	c0bcc253	test 'an address outside the served districts is refused with the reason' do
 kiosk-demo-getgrocery/test/stories/age_check_test.rb	6fa68a7cc2517e3a	b1d0a419	a shopper buys wine once a verification service confirms they are over 18
 kiosk-demo-getgrocery/test/stories/claim_test.rb	c5f985d9504f60de	b1d0a419	an assistant that started on its own is linked to Hana and pays with her saved card
 kiosk-demo-getgrocery/test/stories/claim_test.rb	be5cab372b3a075e	b1d0a419	assert_equal 'ready', hanas.sets_up_payment['status']
@@ -417,10 +415,11 @@ kiosk-demo-getgrocery/test/stories/claim_test.rb	d129a507fb66af3e	b1d0a419	asser
 kiosk-demo-getgrocery/test/stories/discovery_test.rb	f83301492620e77e	b1d0a419	an assistant that knows nothing finds out, without an account, what the shop offers and how to buy
 kiosk-demo-getgrocery/test/stories/privacy_test.rb	4f3de8f9dbaecb55	b1d0a419	one shopper can neither move nor see another's delivery
 kiosk-demo-getgrocery/test/stories/shelf_test.rb	7482caab5501fc22	b1d0a419	a price change after ordering does not change what the shopper pays
-kiosk-demo-getgrocery/test/stories/shop_test.rb	94cecd63cb4fd221	b1d0a419	a paid order is not charged again
-kiosk-demo-getgrocery/test/stories/shop_test.rb	a843d6200b17fd86	b1d0a419	a shopper with no account orders groceries for tomorrow morning and pays
-kiosk-demo-getgrocery/test/stories/shop_test.rb	1e689e3d75cc6ca7	b1d0a419	assert_equal '08:00–10:00 (Europe/Dublin)', window['label']
-kiosk-demo-getgrocery/test/stories/shop_test.rb	638b79c261256c9d	b1d0a419	assert_equal ['paid', '08:00–10:00 (Europe/Dublin)'], placed.values_at('payment_state', 'slot_label')
+kiosk-demo-getgrocery/test/stories/shop_test.rb	94cecd63cb4fd221	c0bcc253	a paid order is not charged again
+kiosk-demo-getgrocery/test/stories/shop_test.rb	a843d6200b17fd86	c0bcc253	a shopper with no account orders groceries for tomorrow morning and pays
+kiosk-demo-getgrocery/test/stories/shop_test.rb	7c66889bc7bad642	c0bcc253	a shopper's declared zone does not move the day a window is on
+kiosk-demo-getgrocery/test/stories/shop_test.rb	1e689e3d75cc6ca7	c0bcc253	assert_equal '08:00–10:00 (Europe/Dublin)', window['label']
+kiosk-demo-getgrocery/test/stories/shop_test.rb	638b79c261256c9d	c0bcc253	assert_equal ['paid', '08:00–10:00 (Europe/Dublin)'], placed.values_at('payment_state', 'slot_label')
 kiosk-demo-getgrocery/test/test_helper.rb	8f5899c10f9daa5b	b1d0a419	setup { Kiosk::TestHelpers::StripeMock.start }
 kiosk-demo-hoteling/README.md	6c58be83a8cbdf1d	b1d0a419	- `POST /kiosk/payment_setup` — check whether the customer has a saved payment method
 kiosk-demo-hoteling/README.md	38bd19c7090b4c12	b1d0a419	Advertised capabilities are `[schema, queries, actions, pay, events]` — the MODULES
@@ -431,21 +430,22 @@ kiosk-demo-hoteling/README.md	1a41e0402a6f59db	b1d0a419	bundle exec rspec      #
 kiosk-demo-hoteling/README.md	37b133b478bd2a55	b1d0a419	customer, for 15 minutes; a hold left unpaid past that time is cancelled and
 kiosk-demo-hoteling/README.md	a185cf92f9869e38	b1d0a419	this origin serves, never the registered verb names. That is a MODELLING rule,
 kiosk-demo-hoteling/app/controllers/kiosk/hotel_search_controller.rb	3921294664312de7	b1d0a419	def search_hotels
-kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	2debff3611e2fc58	b1d0a419	  def hotel_detail
-kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	5e769fe8ba519dd6	b1d0a419	@property = Property.find(params.expect(:property_id))
+kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	2debff3611e2fc58	c0bcc253	  def hotel_detail
+kiosk-demo-hoteling/app/controllers/kiosk/hotels_controller.rb	5e769fe8ba519dd6	c0bcc253	@property = Property.find(params.expect(:property_id))
 kiosk-demo-hoteling/app/controllers/kiosk/room_types_controller.rb	9e36933e44816487	b1d0a419	@search = RoomSearch.new(property: Property.find(params.expect(:property_id)),
 kiosk-demo-hoteling/app/jobs/property_decision_job.rb	612a400750369ae8	b1d0a419	booking = Booking.lock.reserved.paid.find_by(id: booking_id)
 kiosk-demo-hoteling/app/models/booking.rb	783dea083bedd5d0	b1d0a419	PAY_WINDOW = 15.minutes
 kiosk-demo-hoteling/app/models/booking.rb	c35229b9f8768c57	b1d0a419	booking = reserved.lapsed.lock.find_by(id: booking_id)
 kiosk-demo-hoteling/app/models/booking.rb	75b2d20bb95ee60d	b1d0a419	scope :lapsed, -> { unpaid.where(created_at: ..PAY_WINDOW.ago) }
-kiosk-demo-hoteling/app/models/property.rb	c41fe88e2815b907	b1d0a419	# One hotel, sold on its own clock (`timezone`).
+kiosk-demo-hoteling/app/models/property.rb	c41fe88e2815b907	c0bcc253	# One hotel, sold on its own clock (`timezone`).
+kiosk-demo-hoteling/app/models/property.rb	34573a7d7fbdfa97	c0bcc253	def timezone_note(caller_zone)
 kiosk-demo-hoteling/app/operations/reserve_room_operation.rb	876fddbfaba4073f	b1d0a419	held.reserved.lapsed.ids.each { Booking.cancel_lapsed!(it) }
 kiosk-demo-hoteling/app/views/home/index.html.erb	9030591272c4c067	b1d0a419	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-hoteling/app/views/home/index.html.erb	5584fba83783935e	b1d0a419	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-hoteling
 kiosk-demo-hoteling/before-after.md	b27fed7ab0b03a3c	b1d0a419	`spec/stories/booking_spec.rb` runs the errand with no human present:
-kiosk-demo-hoteling/config/initializers/kiosk.rb	fdbc265b29fbf0bb	b1d0a419	Kiosk::PaymentProviders::Stripe.new(
-kiosk-demo-hoteling/config/initializers/kiosk.rb	822e8dd9dfcfa05d	b1d0a419	c.registration_pow_count = 1
-kiosk-demo-hoteling/config/initializers/kiosk.rb	11d160ab8ca232a7	b1d0a419	c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
+kiosk-demo-hoteling/config/initializers/kiosk.rb	fdbc265b29fbf0bb	c0bcc253	Kiosk::PaymentProviders::Stripe.new(
+kiosk-demo-hoteling/config/initializers/kiosk.rb	822e8dd9dfcfa05d	c0bcc253	c.registration_pow_count = 1
+kiosk-demo-hoteling/config/initializers/kiosk.rb	11d160ab8ca232a7	c0bcc253	c.spending_cap       = Kiosk::Server::ColumnSpendingCap.new
 kiosk-demo-hoteling/db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb	89ed032b10965e76	b1d0a419	t.column :user_id, :uuid, null: false
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	584ff10064ddc2d7	72b28958	echoes a calendar day back byte-identical
 kiosk-demo-hoteling/spec/conformance/per_resource_clock_spec.rb	095ac70c20c93dbd	72b28958	publishes each property's own zone in its hotel_detail row
@@ -478,8 +478,8 @@ kiosk-demo-philslist/README.md	2816e360e9a8a5ac	b1d0a419	identity-binding surfac
 kiosk-demo-philslist/app/controllers/kiosk/board_controller.rb	942855a44f04c7d6	b1d0a419	reach :published
 kiosk-demo-philslist/app/views/home/index.html.erb	9030591272c4c067	b1d0a419	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-philslist/app/views/home/index.html.erb	f485b7b519abc01d	b1d0a419	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-philslist
-kiosk-demo-philslist/config/initializers/kiosk.rb	fd4df9cada2035c2	b1d0a419	# A classifieds board takes no money: no payment_provider, so `pay` is absent from discovery.
-kiosk-demo-philslist/config/initializers/kiosk.rb	822e8dd9dfcfa05d	b1d0a419	c.registration_pow_count = 1
+kiosk-demo-philslist/config/initializers/kiosk.rb	fd4df9cada2035c2	c0bcc253	# A classifieds board takes no money: no payment_provider, so `pay` is absent from discovery.
+kiosk-demo-philslist/config/initializers/kiosk.rb	822e8dd9dfcfa05d	c0bcc253	c.registration_pow_count = 1
 kiosk-demo-philslist/test/stories/discovery_test.rb	5d09a7861c9532f3	b1d0a419	    assert_equal %w[actions queries schema], kiosk['capabilities'].sort
 kiosk-demo-philslist/test/stories/discovery_test.rb	ea5a2dedfb877fde	b1d0a419	an assistant that knows nothing finds out, without an account, what the board offers and how to post
 kiosk-demo-philslist/test/stories/discovery_test.rb	5d09a7861c9532f3	b1d0a419	assert_equal %w[actions queries schema], kiosk['capabilities'].sort
@@ -562,15 +562,15 @@ kiosk-demo-skooti/app/views/home/index.html.erb	9030591272c4c067	b1d0a419	      
 kiosk-demo-skooti/app/views/home/index.html.erb	fd5ede94ef196613	b1d0a419	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-skooti
 kiosk-demo-skooti/before-after.md	e5a7c6550352ee43	b1d0a419	**The step the assistant does not take, and cannot**
 kiosk-demo-skooti/before-after.md	6543a73a1ea54fca	b1d0a419	`test/stories/ride_test.rb` runs the errand with no human account and no sign-in:
-kiosk-demo-skooti/config/initializers/kiosk.rb	419b6f2f5aafbc7f	9843e8b9	  c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	9843e8b9	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-kiosk-demo-skooti/config/initializers/kiosk.rb	fdbc265b29fbf0bb	9843e8b9	Kiosk::PaymentProviders::Stripe.new(
-kiosk-demo-skooti/config/initializers/kiosk.rb	bffa9a7e0b8d47ff	9843e8b9	c.kyc_audience   = 'skooti'
-kiosk-demo-skooti/config/initializers/kiosk.rb	419b6f2f5aafbc7f	9843e8b9	c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
-kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	9843e8b9	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
-kiosk-demo-skooti/config/initializers/kiosk.rb	822e8dd9dfcfa05d	9843e8b9	c.registration_pow_count = 1
-kiosk-demo-skooti/config/initializers/kiosk.rb	aba966214b08a8c7	9843e8b9	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
-kiosk-demo-skooti/config/initializers/kiosk.rb	d1660d1bacbc7f54	9843e8b9	c.validate_responses = true
+kiosk-demo-skooti/config/initializers/kiosk.rb	419b6f2f5aafbc7f	c0bcc253	  c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	c0bcc253	  c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
+kiosk-demo-skooti/config/initializers/kiosk.rb	fdbc265b29fbf0bb	c0bcc253	Kiosk::PaymentProviders::Stripe.new(
+kiosk-demo-skooti/config/initializers/kiosk.rb	bffa9a7e0b8d47ff	c0bcc253	c.kyc_audience   = 'skooti'
+kiosk-demo-skooti/config/initializers/kiosk.rb	419b6f2f5aafbc7f	c0bcc253	c.kyc_claims     = %w[age_over_18 licence_a1 licence_a]
+kiosk-demo-skooti/config/initializers/kiosk.rb	88d01155587d8f06	c0bcc253	c.kyc_issuer     = ENV.fetch('KIOSK_PROVE_ISSUER')
+kiosk-demo-skooti/config/initializers/kiosk.rb	822e8dd9dfcfa05d	c0bcc253	c.registration_pow_count = 1
+kiosk-demo-skooti/config/initializers/kiosk.rb	aba966214b08a8c7	c0bcc253	c.reputation_policy      = Kiosk::Reputation::Policies::RecentSpend.new(within: 1.week, cap: 100)
+kiosk-demo-skooti/config/initializers/kiosk.rb	d1660d1bacbc7f54	c0bcc253	c.validate_responses = true
 kiosk-demo-skooti/config/routes.rb	6b079e6bff56ba78	b1d0a419	kiosk do
 kiosk-demo-skooti/script/lock_sim.rb	14ec6a37eb152935	b1d0a419	  def unlock(token:, now:)
 kiosk-demo-skooti/test/payment_window_test.rb	89f0a676eff954e6	b1d0a419	a capture in flight reads pending and does not start
@@ -617,7 +617,7 @@ kiosk-demo-stylish/app/controllers/kiosk/calendar_controller.rb	20c97f60d21fd63c
 kiosk-demo-stylish/app/models/appointment.rb	364018ab2174fe3c	b1d0a419	Kiosk::Visit.record!(user_id: appointment.user_id, value_cents: appointment.price_cents.to_i)
 kiosk-demo-stylish/app/views/home/index.html.erb	9030591272c4c067	b1d0a419	      <div class="sec-k">🤖 Try it with your own assistant</div>
 kiosk-demo-stylish/app/views/home/index.html.erb	9450f8754900d614	b1d0a419	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-stylish
-kiosk-demo-stylish/config/initializers/kiosk.rb	822e8dd9dfcfa05d	b1d0a419	c.registration_pow_count = 1
+kiosk-demo-stylish/config/initializers/kiosk.rb	822e8dd9dfcfa05d	c0bcc253	c.registration_pow_count = 1
 kiosk-demo-stylish/config/routes.rb	7ab9fa2eedbed022	b1d0a419	actions :book_appointment
 kiosk-demo-stylish/config/routes.rb	9bf0728493684b31	b1d0a419	kiosk do
 kiosk-demo-stylish/config/routes.rb	16adeb2bb4d34c0d	b1d0a419	queries :my_appointments, :salon_calendar, :salons, :service_menu
@@ -680,10 +680,10 @@ kiosk-demo-tudu/app/operations/list_access.rb	09b754a3f710a5b3	b1d0a419	return i
 kiosk-demo-tudu/app/operations/list_access.rb	2c71e20343111eab	b1d0a419	return if Membership.own.owner.exists?(list_id: list_id)
 kiosk-demo-tudu/app/views/lists/index.html.erb	8a9d6ee8ada80d2a	b1d0a419	      <h2>Point your AI assistant here — it creates &amp; shares a todo list</h2>
 kiosk-demo-tudu/app/views/lists/index.html.erb	085f329c0ae1e6fe	b1d0a419	github.com/kiosk-hq/kiosk/tree/main/kiosk-demo-tudu
-kiosk-demo-tudu/config/initializers/kiosk.rb	20759a2eed4b481c	b1d0a419	# Linking an assistant's bare account to a human moves its lists and memberships to the human.
-kiosk-demo-tudu/config/initializers/kiosk.rb	5331a6d88a666380	b1d0a419	# No payment_provider: tudu takes no money, so discovery advertises no `pay`.
-kiosk-demo-tudu/config/initializers/kiosk.rb	b82e86e377e3b080	b1d0a419	c.assistant_claimed = lambda { |from:, to:, **|
-kiosk-demo-tudu/config/initializers/kiosk.rb	822e8dd9dfcfa05d	b1d0a419	c.registration_pow_count = 1
+kiosk-demo-tudu/config/initializers/kiosk.rb	20759a2eed4b481c	c0bcc253	# Linking an assistant's bare account to a human moves its lists and memberships to the human.
+kiosk-demo-tudu/config/initializers/kiosk.rb	5331a6d88a666380	c0bcc253	# No payment_provider: tudu takes no money, so discovery advertises no `pay`.
+kiosk-demo-tudu/config/initializers/kiosk.rb	b82e86e377e3b080	c0bcc253	c.assistant_claimed = lambda { |from:, to:, **|
+kiosk-demo-tudu/config/initializers/kiosk.rb	822e8dd9dfcfa05d	c0bcc253	c.registration_pow_count = 1
 kiosk-demo-tudu/test/stories/discovery_test.rb	4fbfc452a147a3e1	b1d0a419	    assert_equal %w[actions events queries schema], kiosk['capabilities'].sort
 kiosk-demo-tudu/test/stories/discovery_test.rb	e20bd6b75bee3de2	b1d0a419	an assistant that knows nothing finds out, without an account, what the household lists offer and how to use them
 kiosk-demo-tudu/test/stories/discovery_test.rb	4fbfc452a147a3e1	b1d0a419	assert_equal %w[actions events queries schema], kiosk['capabilities'].sort
@@ -847,33 +847,33 @@ kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	168f710824a94e4
 kiosk-redteam/lib/kiosk/redteam/scenarios/wrong_currency_cart.rb	cef2b22a3f0b0a6c	b1d0a419	super(name: 'WrongCurrencyCart')
 kiosk-redteam/suites/atablefor.rb	58a375a447c3ebc2	818f134c	BATTERY.record('HostileArgShapes',
 kiosk-redteam/suites/atablefor.rb	0319e7c01d8374b9	818f134c	BATTERY.record('WholeValuedFloatBody',
-kiosk-redteam/suites/getgrocery.rb	762c4c62b0e368e6	b1d0a419	  # No KYC here — these must SKIP.
-kiosk-redteam/suites/getgrocery.rb	d4ab4169afe601fc	b1d0a419	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
-kiosk-redteam/suites/getgrocery.rb	35ff48e965463f3e	b1d0a419	  pow_difficulty: 1,
-kiosk-redteam/suites/getgrocery.rb	14d2c38dfd7edb03	b1d0a419	# Red-team battery for getgrocery: attacks a running server and asserts every attack is refused.
-kiosk-redteam/suites/getgrocery.rb	6174c6c7ad9881bb	b1d0a419	EXPECTED_SKIP_NAMES = %w[
-kiosk-redteam/suites/getgrocery.rb	a2f662f62b590ba7	b1d0a419	MachineTimestampsIgnoreTheCallerClock.new,
-kiosk-redteam/suites/getgrocery.rb	a0205cee1d9074eb	b1d0a419	PastDeliveryDate.new,
-kiosk-redteam/suites/getgrocery.rb	d698f36a7941e3f6	b1d0a419	TOLERANCE_SECONDS = 60
-kiosk-redteam/suites/getgrocery.rb	48b5a7978849f6a7	b1d0a419	bytes.none? { |b| b.include?(CLOCK_WEST) || b.include?(CLOCK_EAST) }
-kiosk-redteam/suites/getgrocery.rb	b8b50a9e96e8d618	b1d0a419	class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
-kiosk-redteam/suites/getgrocery.rb	4635e200ce331167	b1d0a419	class OneRenderingPerRow < Kiosk::Redteam::Scenario
-kiosk-redteam/suites/getgrocery.rb	cd25143df13e29d6	b1d0a419	exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)
-kiosk-redteam/suites/getgrocery.rb	2488a0586edeef34	b1d0a419	refused_naming?(@ended, @day)
-kiosk-redteam/suites/getgrocery.rb	49ee43e51ea2b96c	b1d0a419	the two clocks are 90000s apart
+kiosk-redteam/suites/getgrocery.rb	762c4c62b0e368e6	c0bcc253	  # No KYC here — these must SKIP.
+kiosk-redteam/suites/getgrocery.rb	d4ab4169afe601fc	c0bcc253	  Kiosk::Redteam::Scenarios::CrossTenantRead.new,
+kiosk-redteam/suites/getgrocery.rb	35ff48e965463f3e	c0bcc253	  pow_difficulty: 1,
+kiosk-redteam/suites/getgrocery.rb	14d2c38dfd7edb03	c0bcc253	# Red-team battery for getgrocery: attacks a running server and asserts every attack is refused.
+kiosk-redteam/suites/getgrocery.rb	6174c6c7ad9881bb	c0bcc253	EXPECTED_SKIP_NAMES = %w[
+kiosk-redteam/suites/getgrocery.rb	a2f662f62b590ba7	c0bcc253	MachineTimestampsIgnoreTheCallerClock.new,
+kiosk-redteam/suites/getgrocery.rb	a0205cee1d9074eb	c0bcc253	PastDeliveryDate.new,
+kiosk-redteam/suites/getgrocery.rb	d698f36a7941e3f6	c0bcc253	TOLERANCE_SECONDS = 60
+kiosk-redteam/suites/getgrocery.rb	48b5a7978849f6a7	c0bcc253	bytes.none? { |b| b.include?(CLOCK_WEST) || b.include?(CLOCK_EAST) }
+kiosk-redteam/suites/getgrocery.rb	53a4b97eb5898ef4	c0bcc253	class CallerZoneIsNotInferred < Kiosk::Redteam::Scenario
+kiosk-redteam/suites/getgrocery.rb	4635e200ce331167	c0bcc253	class OneRenderingPerRow < Kiosk::Redteam::Scenario
+kiosk-redteam/suites/getgrocery.rb	cd25143df13e29d6	c0bcc253	exit battery.report!(expected_skips: EXPECTED_SKIP_NAMES)
+kiosk-redteam/suites/getgrocery.rb	388399861bcc0dbd	c0bcc253	ok = control? && [@west, @east, @baited_e, @baited_w].all? { unmoved?(it) }
+kiosk-redteam/suites/getgrocery.rb	49ee43e51ea2b96c	c0bcc253	the two clocks are 90000s apart
 kiosk-redteam/suites/hoteling.rb	cb874b9737ac9b3a	b1d0a419	Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new # → BLOCKED (register PoW ON)
 kiosk-redteam/suites/hoteling.rb	c8be21ffee7abe13	b1d0a419	Kiosk::Redteam::Scenarios::UnpaidGatedAction.new,       # → SKIP (no action waits on a payment)
 kiosk-redteam/suites/philslist.rb	b484392764b1f314	b1d0a419	BATTERY.record('NoSellerPiiOnTheOpenBoard',
-kiosk-redteam/suites/stylish.rb	0634510475c1593d	b1d0a419	  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
-kiosk-redteam/suites/stylish.rb	218cd32d08e9ef2b	b1d0a419	BATTERY.record('CrossTenantRead',
-kiosk-redteam/suites/stylish.rb	4ab0b2110f1a470f	b1d0a419	BATTERY.record('CustomerCalendarStaysOwnScoped',
-kiosk-redteam/suites/stylish.rb	c1078d58b202f4df	b1d0a419	BATTERY.record('CustomerLinkCannotCarryOwnerRole',
-kiosk-redteam/suites/stylish.rb	84b39a9b0320d82d	b1d0a419	BATTERY.record('DeviceGrantCannotSelfSelectRole',
-kiosk-redteam/suites/stylish.rb	b06848d8b72654d0	b1d0a419	BATTERY.record('DeviceGrantRebindCannotEscalate',
-kiosk-redteam/suites/stylish.rb	7a9217b76365311d	b1d0a419	BATTERY.record('DeviceGrantRoleComesFromTheApprover',
-kiosk-redteam/suites/stylish.rb	6c4743957098bccd	b1d0a419	BATTERY.record('DeviceGrantVerifyPageNamesTheAccess',
-kiosk-redteam/suites/stylish.rb	271def4c81d94ab3	b1d0a419	BATTERY.record('OwnerLinkIgnoresForgedClaimBody',
-kiosk-redteam/suites/stylish.rb	6f02d11a2886631e	b1d0a419	BATTERY.record('SelfAssertedTokenForgery',
+kiosk-redteam/suites/stylish.rb	0634510475c1593d	c0bcc253	  Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
+kiosk-redteam/suites/stylish.rb	218cd32d08e9ef2b	c0bcc253	BATTERY.record('CrossTenantRead',
+kiosk-redteam/suites/stylish.rb	4ab0b2110f1a470f	c0bcc253	BATTERY.record('CustomerCalendarStaysOwnScoped',
+kiosk-redteam/suites/stylish.rb	c1078d58b202f4df	c0bcc253	BATTERY.record('CustomerLinkCannotCarryOwnerRole',
+kiosk-redteam/suites/stylish.rb	84b39a9b0320d82d	c0bcc253	BATTERY.record('DeviceGrantCannotSelfSelectRole',
+kiosk-redteam/suites/stylish.rb	b06848d8b72654d0	c0bcc253	BATTERY.record('DeviceGrantRebindCannotEscalate',
+kiosk-redteam/suites/stylish.rb	7a9217b76365311d	c0bcc253	BATTERY.record('DeviceGrantRoleComesFromTheApprover',
+kiosk-redteam/suites/stylish.rb	6c4743957098bccd	c0bcc253	BATTERY.record('DeviceGrantVerifyPageNamesTheAccess',
+kiosk-redteam/suites/stylish.rb	271def4c81d94ab3	c0bcc253	BATTERY.record('OwnerLinkIgnoresForgedClaimBody',
+kiosk-redteam/suites/stylish.rb	6f02d11a2886631e	c0bcc253	BATTERY.record('SelfAssertedTokenForgery',
 kiosk-redteam/suites/tudu.rb	f3a15f730660d072	b1d0a419	BATTERY.record('ChosenNameNeverTheAddress',
 kiosk-redteam/suites/tudu.rb	87b65f3eb7be025a	b1d0a419	BATTERY.record('NoLoginAddressOnTheRoster',
 kiosk-redteam/suites/tudu.rb	d1907ee3342d7d36	b1d0a419	BATTERY.record('PreLinkTokenAfterLink', rc == 401,
@@ -956,7 +956,7 @@ kiosk-rls-rspec/kiosk-rls-rspec.gemspec	b1358976e59dd91e	b1d0a419	    `type: :ki
 kiosk-rls-rspec/lib/kiosk/rls_rspec.rb	7fc12a808bd2c3e0	b1d0a419	# Metadata tags that pull in the same journey DSL;
 kiosk-rls-rspec/lib/kiosk/rls_rspec.rb	09f0309ed01d37df	b1d0a419	JOURNEY_TYPES = %i[kiosk_journey kiosk_agent].freeze
 kiosk-rls-rspec/lib/kiosk/rls_rspec/matchers.rb	15b9299fb8977a15	b1d0a419	RSpec::Matchers.define :be_rls_denied do
-kiosk-rls/CHANGELOG.md	a45a83d02936ef7e	b1d0a419	- `rake kiosk:rls:{show,check}` rake tasks (need PG connection — land later).
+kiosk-rls/CHANGELOG.md	a45a83d02936ef7e	c0bcc253	- `rake kiosk:rls:{show,check}` rake tasks (need PG connection — land later).
 kiosk-rls/README.md	532185e35e3e208a	b1d0a419	**Prerequisite for real enforcement:** the application must connect as a **non-superuser, non-owner role**
 kiosk-rls/README.md	87781be8cbdfa2bb	b1d0a419	**RLS is not Kiosk's primary security model.**
 kiosk-rls/README.md	88b61f2a819e64e3	b1d0a419	This gem emits DDL and ships no rake tasks.
@@ -971,22 +971,22 @@ kiosk-rls/lib/kiosk/rls/dsl.rb	04f3b20a94cbbd04	b1d0a419	def rename_kiosk_policy
 kiosk-rls/lib/kiosk/rls/emitter.rb	8613bd9762461a62	b1d0a419	          %(ALTER TABLE #{quote_ident(table_name)} FORCE ROW LEVEL SECURITY)
 kiosk-rls/lib/kiosk/rls/emitter.rb	fe49e093a696114c	b1d0a419	        def statements_for(table)
 kiosk-rls/lib/kiosk/rls/railtie.rb	649840f787643893	b1d0a419	          ActiveRecord::Migration.include(Kiosk::RLS::DSL)
-kiosk-server/CHANGELOG.md	66bde369aafcac8a	b1d0a419	- `rake kiosk:doctor` — follow-up.
-kiosk-server/CHANGELOG.md	98de4ad5f7877b14	b1d0a419	`Kiosk::OperationResult` and `render_kiosk_result` are removed
+kiosk-server/CHANGELOG.md	66bde369aafcac8a	c0bcc253	- `rake kiosk:doctor` — follow-up.
+kiosk-server/CHANGELOG.md	98de4ad5f7877b14	c0bcc253	`Kiosk::OperationResult` and `render_kiosk_result` are removed
 kiosk-server/LICENSE.txt	d328a3b7eb22e8d7	b1d0a419	Version 2.0, January 2004
-kiosk-server/README.md	4c85cab5e0e50749	b1d0a419	## What's in this release
-kiosk-server/README.md	5d828d292aafb56d	b1d0a419	- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account
-kiosk-server/README.md	8280692a04521e04	b1d0a419	A block-less `kiosk` only mounts.
-kiosk-server/README.md	1ffb51c6835073f3	b1d0a419	The full host-side surface is shipped and covered by the gem's own suite
-kiosk-server/README.md	fe179f99c73c7446	b1d0a419	in this directory runs it and prints how many examples that is
+kiosk-server/README.md	4c85cab5e0e50749	c0bcc253	## What's in this release
+kiosk-server/README.md	5d828d292aafb56d	c0bcc253	- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account
+kiosk-server/README.md	31f66197dff96819	c0bcc253	A block-less `kiosk` only mounts.
+kiosk-server/README.md	1ffb51c6835073f3	c0bcc253	The full host-side surface is shipped and covered by the gem's own suite
+kiosk-server/README.md	fe179f99c73c7446	c0bcc253	in this directory runs it and prints how many examples that is
 kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	fe627a20cdd981d2	89637b9d	class AssistantsController < ApplicationController
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	0a1244f50f31a73e	b1d0a419	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	07cb305eb3126bb0	b1d0a419	def link
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	3ea1c773de1ee07d	b1d0a419	def register
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	c883ff6ae18af688	b1d0a419	identity = Kiosk.configuration.user_idp&.verify(request)
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	338ad5488f38dc7f	b1d0a419	pow    = PowGate.proofs_from_header(
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	d7c437ddab4d6e1e	b1d0a419	respond({ access_token: token }, :ok)
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	37568745ff057f78	b1d0a419	result = AgentRegistration.call(
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	0a1244f50f31a73e	c0bcc253	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	07cb305eb3126bb0	c0bcc253	def link
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	ba005e885693dd50	c0bcc253	def register
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	c883ff6ae18af688	c0bcc253	identity = Kiosk.configuration.user_idp&.verify(request)
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	33ba4eb13eb2d508	c0bcc253	pow    = PowGate.proofs_from_header(
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	d7c437ddab4d6e1e	c0bcc253	respond({ access_token: token }, :ok)
+kiosk-server/app/controllers/kiosk/server/auth_controller.rb	37568745ff057f78	c0bcc253	result = AgentRegistration.call(
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	528c528a45f3b2bf	b1d0a419	# The public discovery documents at the host root, all rendered by
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	61ff2c3d62e51600	b1d0a419	class DiscoveryController < ::ActionController::API
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	e6e66e56c553e70c	b1d0a419	render json: WellKnown.agents_json(base_url: request.base_url)
@@ -997,8 +997,8 @@ kiosk-server/app/controllers/kiosk/server/kyc_attestation_controller.rb	c3b09862
 kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	76391aa02e33eaec	b1d0a419	client_id parameter required
 kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	ecfe52476006e80e	b1d0a419	is not accepted here — an assistant does not choose its own role.
 kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	2c109e8591542361	b1d0a419	public_key parameter required
-kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	7c67d28cc12c80b0	b1d0a419	grant_type required
-kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	5e0de5f9ac4b02c0	b1d0a419	only the device_code grant is served here — 
+kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	7c67d28cc12c80b0	c0bcc253	grant_type required
+kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	5e0de5f9ac4b02c0	c0bcc253	only the device_code grant is served here — 
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	8009875ad8aab383	89637b9d	    #   GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	280fe37f405ceda2	89637b9d	    # The per-verb wire, one endpoint per registered verb under the mount:
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	8009875ad8aab383	89637b9d	GET  <endpoint>/<query-name>?<args>    a query  — safe, no body
@@ -1043,19 +1043,21 @@ kiosk-server/lib/kiosk/server/account_binding.rb	62945665eaf34ae7	b1d0a419	role 
 kiosk-server/lib/kiosk/server/account_holder_gate.rb	9bc2331b61cb76b8	b1d0a419	@identity = Kiosk.configuration.user_idp&.verify(request)
 kiosk-server/lib/kiosk/server/actions.rb	2608a060da8db686	b1d0a419	module Actions
 kiosk-server/lib/kiosk/server/agent_identity_providers/default_agent_idp.rb	05213139ac67ecc8	b1d0a419	def authorization_for(request)
-kiosk-server/lib/kiosk/server/caller_timezone.rb	f2985d3224bf6ae7	b1d0a419	      ENV_KEY = 'HTTP_KIOSK_TIMEZONE'
-kiosk-server/lib/kiosk/server/caller_timezone.rb	d3c9fa209f9c4de2	b1d0a419	An IANA `Area/Location` name or `UTC` only: no offsets (no DST), no Rails
-kiosk-server/lib/kiosk/server/caller_timezone.rb	e107b50d34992866	b1d0a419	def from_env(env)
-kiosk-server/lib/kiosk/server/caller_timezone.rb	4ffc4626532791da	b1d0a419	def from_value(raw)
-kiosk-server/lib/kiosk/server/caller_timezone.rb	ce4dee21ef86a2da	b1d0a419	refuse(raw) unless SHAPE.match?(value)
+kiosk-server/lib/kiosk/server/caller_timezone.rb	f2985d3224bf6ae7	c0bcc253	      ENV_KEY = 'HTTP_KIOSK_TIMEZONE'
+kiosk-server/lib/kiosk/server/caller_timezone.rb	d3c9fa209f9c4de2	c0bcc253	An IANA `Area/Location` name or `UTC` only: no offsets (no DST), no Rails
+kiosk-server/lib/kiosk/server/caller_timezone.rb	e107b50d34992866	c0bcc253	def from_env(env)
+kiosk-server/lib/kiosk/server/caller_timezone.rb	4ffc4626532791da	c0bcc253	def from_value(raw)
+kiosk-server/lib/kiosk/server/caller_timezone.rb	ce4dee21ef86a2da	c0bcc253	refuse(raw) unless SHAPE.match?(value)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	280c4c3ed68c9655	89637b9d	class ColumnSpendingCap
-kiosk-server/lib/kiosk/server/configuration_extension.rb	312b04a31a362e63	2f70460f	        @skill_url ||= 'https://kiosk.tech/skill-v
-kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	2f70460f	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
-kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	2f70460f	      attr_accessor :spending_cap_window_days
-kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	2f70460f	      def computed_capabilities
-kiosk-server/lib/kiosk/server/configuration_extension.rb	2fe4bb03b7d5660a	2f70460f	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
-kiosk-server/lib/kiosk/server/configuration_extension.rb	9f042d0496c5ecdb	2f70460f	c.signing_key is not set. Generate one with
-kiosk-server/lib/kiosk/server/device_code_grant.rb	387d172b4ac2440e	b1d0a419	device_code parameter required
+kiosk-server/lib/kiosk/server/configuration_extension.rb	eb0b87ed1881f06c	c0bcc253	        @skill_url ||= 'https://kiosk.tech/skill-v
+kiosk-server/lib/kiosk/server/configuration_extension.rb	36df325440ad6258	c0bcc253	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
+kiosk-server/lib/kiosk/server/configuration_extension.rb	467f51cb9fcb93e6	c0bcc253	      attr_accessor :spending_cap_window_days
+kiosk-server/lib/kiosk/server/configuration_extension.rb	6e434cbca168f64e	c0bcc253	      def computed_capabilities
+kiosk-server/lib/kiosk/server/configuration_extension.rb	2fe4bb03b7d5660a	c0bcc253	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
+kiosk-server/lib/kiosk/server/configuration_extension.rb	9f042d0496c5ecdb	c0bcc253	c.signing_key is not set. Generate one with
+kiosk-server/lib/kiosk/server/device_code_grant.rb	ddd7e7fb35db3eb5	c0bcc253	        pay_toll_once!(device_code, hash, pow, now)
+kiosk-server/lib/kiosk/server/device_code_grant.rb	16c1fb8baa122619	c0bcc253	da = store.lookup_by_device_code_hash(hash)
+kiosk-server/lib/kiosk/server/device_code_grant.rb	387d172b4ac2440e	c0bcc253	device_code parameter required
 kiosk-server/lib/kiosk/server/engine.rb	75c5116a84e0fd3c	b1d0a419	          get '/.well-known/agent-configuration', to: 'kiosk/server/discovery#agent_configuration'
 kiosk-server/lib/kiosk/server/engine.rb	9a04fe52f1e0a44f	b1d0a419	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
 kiosk-server/lib/kiosk/server/engine.rb	a3c81a7c49ac7aa1	b1d0a419	          get '/agents.json', to: 'kiosk/server/discovery#agents_json'
@@ -1097,7 +1099,6 @@ kiosk-server/lib/kiosk/server/executor.rb	03872ee574617572	b1d0a419	# The coarse
 kiosk-server/lib/kiosk/server/executor.rb	7c224f50bece7db5	b1d0a419	VERBS = %i[query run pay].freeze
 kiosk-server/lib/kiosk/server/executor/spending_cap.rb	9aedc67c5026b03f	89637b9d	WHERE agent_id = $1 AND lower(btrim(currency)) = $2
 kiosk-server/lib/kiosk/server/executor/spending_cap.rb	67a537a11619b871	89637b9d	def enforce_spending_cap!(cart)
-kiosk-server/lib/kiosk/server/handler_dispatch.rb	2fc370822b195fa8	b1d0a419	def wire_error(status, parsed)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	b7b425b388d45e00	b1d0a419	RESERVED_NAMES = %w[agents auth events kyc oauth pay payment_setup request_kyc schema].freeze
 kiosk-server/lib/kiosk/server/handler_mixin.rb	8300e07d877e59d3	b1d0a419	base.rescue_from(StandardError, with: :kiosk_rescue_to_wire)
 kiosk-server/lib/kiosk/server/handler_mixin.rb	9ee282ffc3946ed4	b1d0a419	raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
@@ -1117,8 +1118,9 @@ kiosk-server/lib/kiosk/server/kyc_verifier.rb	c4b92b4071191439	b1d0a419	acc[name
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	fb5922e9054de7a5	b1d0a419	def verified_attributes(raw)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	426b2c05576e14d3	b1d0a419	def verify(raw_jws:, subject:)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	41b149a411d6cf4c	b1d0a419	if payload[:aud].to_s != config.kyc_audience.to_s
-kiosk-server/lib/kiosk/server/link_code.rb	cb866e6a5177370a	b1d0a419	# minting human's own role, never anything the assistant sends.
-kiosk-server/lib/kiosk/server/link_code.rb	00fdc24c356fe316	b1d0a419	def mint(user_id:,
+kiosk-server/lib/kiosk/server/link_code.rb	cb866e6a5177370a	c0bcc253	# minting human's own role, never anything the assistant sends.
+kiosk-server/lib/kiosk/server/link_code.rb	84716ea6a25ff1e0	c0bcc253	AuthToll.gate(verb: 'auth/claim', body: { code: code.to_s, public_key: pem }, pow: pow)
+kiosk-server/lib/kiosk/server/link_code.rb	00fdc24c356fe316	c0bcc253	def mint(user_id:,
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	93abe459ad478b14	dbf5333b	        require_amount!(payload, :cap_amount_cents)
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	2b1a26dee1186b6c	dbf5333b	        return if payload[:exp].to_i - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	371aa40a3c86f179	dbf5333b	      MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
@@ -1138,22 +1140,20 @@ kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	12cad6e9	      def pr
 kiosk-server/lib/kiosk/server/pow_gate.rb	fcf8ead0ed5e8fa4	12cad6e9	# One proof, a JSON array, repeated header lines (Rack joins them with
 kiosk-server/lib/kiosk/server/pow_gate.rb	7bf0b3eb868bfe4e	12cad6e9	def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	f11eb7345d508202	12cad6e9	policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
-kiosk-server/lib/kiosk/server/pow_toll.rb	ee0f7f352425e9d5	b1d0a419	# Not bad faith (clock skew, a difficulty change): release the claim
-kiosk-server/lib/kiosk/server/pow_toll.rb	2e76d554d27efce4	b1d0a419	# The cheap checks first, so only a live challenge this origin signed
-kiosk-server/lib/kiosk/server/pow_toll.rb	ff351f5960767e29	b1d0a419	A lost claim is a replay: skipped, not penalised.
-kiosk-server/lib/kiosk/server/pow_toll.rb	20c2bb14d677907d	b1d0a419	Array.new(count) { issue_challenge(ttl) }
-kiosk-server/lib/kiosk/server/pow_toll.rb	20c2bb14d677907d	b1d0a419	Errors::PowRequired.new(challenges: Array.new(count) { issue_challenge(ttl) })
-kiosk-server/lib/kiosk/server/pow_toll.rb	6134322b1c85ed38	b1d0a419	def collect!(pow)
-kiosk-server/lib/kiosk/server/pow_toll.rb	b0f2f7ab46440fdc	b1d0a419	def issue_challenge(ttl)
-kiosk-server/lib/kiosk/server/pow_toll.rb	54015eec66a0b4d6	b1d0a419	def validate_spec_params!
-kiosk-server/lib/kiosk/server/pow_toll.rb	3d3f798bca89fada	b1d0a419	secret: @secret, now: Time.now.to_i, expect: { alg: alg, params: params }
-kiosk-server/lib/kiosk/server/pow_toll.rb	dc07f78db4ac5ccb	b1d0a419	submitted = Array(pow)
-kiosk-server/lib/kiosk/server/pow_toll.rb	66cacfe5a27f548b	b1d0a419	ttl = @config.pow_ttl * count
-kiosk-server/lib/kiosk/server/pow_toll.rb	0eca37daec4caffc	b1d0a419	when :expired, :bad_sig, :bad_params
+kiosk-server/lib/kiosk/server/pow_toll.rb	ee0f7f352425e9d5	c0bcc253	# Not bad faith (clock skew, a difficulty change): release the claim
+kiosk-server/lib/kiosk/server/pow_toll.rb	2e76d554d27efce4	c0bcc253	# The cheap checks first, so only a live challenge this origin signed
+kiosk-server/lib/kiosk/server/pow_toll.rb	ff351f5960767e29	c0bcc253	A lost claim is a replay: skipped, not penalised.
+kiosk-server/lib/kiosk/server/pow_toll.rb	20c2bb14d677907d	c0bcc253	Array.new(count) { issue_challenge(ttl) }
+kiosk-server/lib/kiosk/server/pow_toll.rb	20c2bb14d677907d	c0bcc253	Errors::PowRequired.new(challenges: Array.new(count) { issue_challenge(ttl) })
+kiosk-server/lib/kiosk/server/pow_toll.rb	6134322b1c85ed38	c0bcc253	def collect!(pow)
+kiosk-server/lib/kiosk/server/pow_toll.rb	b0f2f7ab46440fdc	c0bcc253	def issue_challenge(ttl)
+kiosk-server/lib/kiosk/server/pow_toll.rb	54015eec66a0b4d6	c0bcc253	def validate_spec_params!
+kiosk-server/lib/kiosk/server/pow_toll.rb	3d3f798bca89fada	c0bcc253	secret: @secret, now: Time.now.to_i, expect: { alg: alg, params: params }
+kiosk-server/lib/kiosk/server/pow_toll.rb	dc07f78db4ac5ccb	c0bcc253	submitted = Array(pow)
+kiosk-server/lib/kiosk/server/pow_toll.rb	66cacfe5a27f548b	c0bcc253	ttl = @config.pow_ttl * count
+kiosk-server/lib/kiosk/server/pow_toll.rb	0eca37daec4caffc	c0bcc253	when :expired, :bad_sig, :bad_params
 kiosk-server/lib/kiosk/server/queries.rb	5ff4a54e71aa5537	b1d0a419	convention the provider upholds (the registry does not enforce it)
 kiosk-server/lib/kiosk/server/queries.rb	5648021f8a0ad42b	b1d0a419	module Queries
-kiosk-server/lib/kiosk/server/registration_pow.rb	c60222a14eeeea1f	89637b9d	def gate(public_key_pem:, pow:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/registration_pow.rb	10c7e0a3ebc9c6f7	89637b9d	spec = { alg: 'equihash', params: ::Kiosk::Pow::Equihash.params, count: count }
 kiosk-server/lib/kiosk/server/reputation_factors.rb	40ce2bc77be109c3	b1d0a419	# Settlements and visits of this customer since `since`: their count and their cents.
 kiosk-server/lib/kiosk/server/request_validation.rb	e4c16e491779cff0	b1d0a419	RESERVED-PLANE REQUEST BODY => the published object that types it.
 kiosk-server/lib/kiosk/server/request_validation.rb	b9540a13fb94ab5e	b1d0a419	raise Errors.missing_field(absent, hint: body_hint(pointer)) if absent
@@ -1174,19 +1174,19 @@ kiosk-server/lib/kiosk/server/schema_document.rb	c3e57ca0dcf95e5c	89637b9d	    m
 kiosk-server/lib/kiosk/server/schemas/auth.schema.json	d56a3004db70b43d	b1d0a419	VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json.
 kiosk-server/lib/kiosk/server/schemas/binding.schema.json	63d7b6213371465a	b1d0a419	VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json.
 kiosk-server/lib/kiosk/server/verb_registry.rb	d1dae4cdb2720c8e	b1d0a419	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
-kiosk-server/lib/kiosk/server/well_known.rb	8a8f7222f00afc9b	b1d0a419	            kind: 'kiosk-pop',
-kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	b1d0a419	          - **Identity assertion (ID-JAG)** — not supported (planned).
-kiosk-server/lib/kiosk/server/well_known.rb	58f0a8be538d03fd	b1d0a419	# The discovery documents — kiosk.json, agents.txt, agents.json,
-kiosk-server/lib/kiosk/server/well_known.rb	f8d6fdb77985c778	b1d0a419	# of one configuration and the request's base URL, so they cannot drift.
-kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	b1d0a419	**Identity assertion (ID-JAG)** — not supported (planned).
-kiosk-server/lib/kiosk/server/well_known.rb	cd3b3ba104500b75	b1d0a419	AGENTS_STANDARD = 'https://agents-txt.com/standard'
-kiosk-server/lib/kiosk/server/well_known.rb	60c0f41079f38164	b1d0a419	auth_modes: %w[kiosk-pop user-claimed link-code],
-kiosk-server/lib/kiosk/server/well_known.rb	19f18655980e594d	b1d0a419	def self.agent_configuration(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	192633987684f6ac	b1d0a419	def self.agents_json(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	5c4262fc7b6b45cd	b1d0a419	def self.agents_txt(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	d306dc5e9862e95d	b1d0a419	def self.api_catalog(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	7560ab4e538c8006	b1d0a419	def self.auth_md(base_url:, config: Kiosk.configuration)
-kiosk-server/lib/kiosk/server/well_known.rb	86b648818418e031	b1d0a419	def self.build(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	8a8f7222f00afc9b	c0bcc253	            kind: 'kiosk-pop',
+kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	c0bcc253	          - **Identity assertion (ID-JAG)** — not supported (planned).
+kiosk-server/lib/kiosk/server/well_known.rb	58f0a8be538d03fd	c0bcc253	# The discovery documents — kiosk.json, agents.txt, agents.json,
+kiosk-server/lib/kiosk/server/well_known.rb	f8d6fdb77985c778	c0bcc253	# of one configuration and the request's base URL, so they cannot drift.
+kiosk-server/lib/kiosk/server/well_known.rb	31056551b65684dc	c0bcc253	**Identity assertion (ID-JAG)** — not supported (planned).
+kiosk-server/lib/kiosk/server/well_known.rb	cd3b3ba104500b75	c0bcc253	AGENTS_STANDARD = 'https://agents-txt.com/standard'
+kiosk-server/lib/kiosk/server/well_known.rb	60c0f41079f38164	c0bcc253	auth_modes: %w[kiosk-pop user-claimed link-code],
+kiosk-server/lib/kiosk/server/well_known.rb	19f18655980e594d	c0bcc253	def self.agent_configuration(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	192633987684f6ac	c0bcc253	def self.agents_json(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	5c4262fc7b6b45cd	c0bcc253	def self.agents_txt(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	d306dc5e9862e95d	c0bcc253	def self.api_catalog(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	7560ab4e538c8006	c0bcc253	def self.auth_md(base_url:, config: Kiosk.configuration)
+kiosk-server/lib/kiosk/server/well_known.rb	86b648818418e031	c0bcc253	def self.build(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/skill_link.rb	9037f4aee3174962	b1d0a419	before_action { response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk")) }
 kiosk-server/lib/kiosk/skill_link.rb	82d16545fff8025d	b1d0a419	module SkillLink
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	6682adedee206e5b	b1d0a419	draws no verb of its own — a fresh app declares none
@@ -1263,22 +1263,22 @@ kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	85b13c2f07a4d638	b1
 kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	60d011eaccf5d424	b1d0a419	lets exactly one of N racing takes win
 kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	5044ebc5e2ac80f3	b1d0a419	refuses a WRONG nonce and does NOT consume the outstanding challenge
 kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	7e202c32544cf9b7	b1d0a419	refuses an EXPIRED challenge and refuses an unknown key
-kiosk-server/spec/kiosk/server/auth_controller_402_spec.rb	c9716179ee1afdaf	b1d0a419	register toll 402 pow_required carries WWW-Authenticate: Kiosk-PoW AND the challenges body
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	0b32640906ad0f42	72b28958	captures the human's user_idp role onto the link row (roles-from-IdP)
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	04e42ed0b82a3b00	72b28958	deactivates one of the holder's own bindings and answers 204 with no body
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	ef5d2a4d2d1ec3f3	72b28958	delegates to LinkCode.redeem and returns the register-shaped 201
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	efea73694435d701	72b28958	mints a single-use link code for the signed-in account holder (201)
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	7fa053ef0e1aaab5	72b28958	refuses a link posted as a form
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	7ff9247ba78acebc	72b28958	refuses an unlink posted as a form, and unlinks nothing
+kiosk-server/spec/kiosk/server/auth_controller_402_spec.rb	c9716179ee1afdaf	c0bcc253	register toll 402 pow_required carries WWW-Authenticate: Kiosk-PoW AND the challenges body
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	0b32640906ad0f42	c0bcc253	captures the human's user_idp role onto the link row (roles-from-IdP)
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	04e42ed0b82a3b00	c0bcc253	deactivates one of the holder's own bindings and answers 204 with no body
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	f9a618f6db93e888	c0bcc253	delegates to LinkCode.redeem and returns the register-shaped 201
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	efea73694435d701	c0bcc253	mints a single-use link code for the signed-in account holder (201)
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	7fa053ef0e1aaab5	c0bcc253	refuses a link posted as a form
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	7ff9247ba78acebc	c0bcc253	refuses an unlink posted as a form, and unlinks nothing
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	3a49258f317a7ce0	9e766433	puts the caller's original token under the revocation watermark
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	85774e4f89f3d12c	9e766433	returns 400 bad_request when public_key is absent
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	42bd8fcefb2dbe37	9e766433	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	76964fcbed461139	9e766433	returns 401 Unauthenticated when NO Authorization header is present
 kiosk-server/spec/kiosk/server/auth_controller_spec.rb	073a76e62e1e22e8	9e766433	revokes all sessions for the caller and hands back a fresh usable token
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	12e5d5a8fd047a97	89637b9d	does not log a key in on an origin it never registered on
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	e593a343a82a5008	89637b9d	refuses a stored cap with no currency
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	d173498a7acf5bf6	89637b9d	registers one key on each origin as two assistant accounts
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	c279a36d63132421	89637b9d	saves a cap with its currency, and ColumnSpendingCap reads both
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	12e5d5a8fd047a97	c0bcc253	does not log a key in on an origin it never registered on
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	e593a343a82a5008	c0bcc253	refuses a stored cap with no currency
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	d173498a7acf5bf6	c0bcc253	registers one key on each origin as two assistant accounts
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	c279a36d63132421	c0bcc253	saves a cap with its currency, and ColumnSpendingCap reads both
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	af59d2e55e012e0a	b1d0a419	answers #{method} #{path} with 501 module_not_served
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	26a149949915d1bf	b1d0a419	keeps the OAuth error object for an ordinary refusal
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	49e87f2e671dc1fc	b1d0a419	publishes all six auth URLs and adds no capability for binding
@@ -1514,11 +1514,6 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	39edff6b054a195a	89637b9d	thread
 kiosk-server/spec/kiosk/server/executor_spec.rb	6093200b342e579c	89637b9d	treats a cap of 0 as disabled (any charge rejected)
 kiosk-server/spec/kiosk/server/executor_spec.rb	06b1ad16d5206beb	89637b9d	verifies the trail, captures, and returns the full settlement payload
 kiosk-server/spec/kiosk/server/filtered_parameters_spec.rb	6442cc10f616dd17	d96d6810	'kyc_jws' => 'the KYC attestation (§12)'
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	0ad1deff6effa91d	500b5f1c	carries the challenges a handler renders on pow_required
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	f3e1db753dd233e8	500b5f1c	keeps type, title and status those of the code, and drops instance and challenges
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	d610fe37bd2ec5f4	500b5f1c	refuses an empty next_cursor, whose next link would lead back to page one
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	63b8a006a6ec2abc	500b5f1c	rejects a page whose rows are not an array
-kiosk-server/spec/kiosk/server/handler_dispatch_spec.rb	b42d4459115a687d	500b5f1c	rejects a query that answers an object, paginating or not
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	a48b474c51f65884	e5014104	404s a request that did not come through the Kiosk wire
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	8ed1e3da89602cc8	e5014104	accepts a verb that declares limit as an integer with its largest page
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	636961ab3b110c23	e5014104	accepts the verb name #{name.inspect}
@@ -1790,11 +1785,6 @@ kiosk-server/spec/kiosk/server/queries_spec.rb	54544eb1f819755b	b1d0a419	carries
 kiosk-server/spec/kiosk/server/queries_spec.rb	2382e6c0998c2b1e	b1d0a419	does not publish params at all — the slot left the wire (T-085)
 kiosk-server/spec/kiosk/server/queries_spec.rb	3c02acfa67a2a407	b1d0a419	emits only the extension keys that were declared
 kiosk-server/spec/kiosk/server/queries_spec.rb	c892b8a4f102964b	b1d0a419	returns all descriptors sorted by name
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	a49d09e35062298e	b1d0a419	binds proofs to POST auth/register (the same key under another call re-challenges)
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	220bfb14c0bcbd17	b1d0a419	binds proofs to the public key (a proof for another key re-challenges)
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	fe2086bfd7a440de	b1d0a419	demands `count` challenges (402) when no proof is submitted
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	0fa2eb34870636e3	b1d0a419	is a no-op when registration_pow_count is 0 (default)
-kiosk-server/spec/kiosk/server/registration_pow_spec.rb	4c4dfa9d2a093587	b1d0a419	proceeds when the real verifier accepts the proof
 kiosk-server/spec/kiosk/server/reputation_factors_spec.rb	6b12c83ce4999f71	b1d0a419	counts no one else's spend
 kiosk-server/spec/kiosk/server/reputation_factors_spec.rb	b1076250056fc6e3	b1d0a419	sums the customer's settlements and recorded visits inside the window
 kiosk-server/spec/kiosk/server/request_body_validation_spec.rb	7ce11fc6cdf937f0	b1d0a419	carries every exchange the engine dials

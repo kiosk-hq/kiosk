@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# AuthController#revoke specs.
+# AuthController specs: #revoke and the guards of the auth surface.
 #
 # Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
 # app — no Rails host.
@@ -100,177 +100,172 @@ RSpec.shared_context 'auth controller spec: configured origin' do
   end
 end
 
-RSpec.describe 'AuthController#revoke (revoke-all-sessions)', '401 guards' do
+RSpec.describe Kiosk::Server::AuthController do
   include_context 'auth controller spec: configured origin'
 
-  # ─── 401 guard: nothing resolves (no / garbage token → nil identity) ─────
-  it 'returns 401 Unauthenticated when NO Authorization header is present' do
-    status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env)
-    expect_problem(status, body, http: 401, code: 'unauthenticated')
+  describe '#revoke (revoke-all-sessions)' do
+    describe '401 guards' do
+      # ─── 401 guard: nothing resolves (no / garbage token → nil identity) ─────
+      it 'returns 401 Unauthenticated when NO Authorization header is present' do
+        status, body = dispatch(described_class, :revoke, revoke_env)
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
+
+      it 'returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)' do
+        status, body = dispatch(described_class, :revoke, revoke_env('garbage-not-a-jwt'))
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
+
+      # ─── 401 guard: identity resolves but carries NO agent_id ───────────────
+      # A resolved-but-agentless identity (e.g. a human web session that somehow
+      # reached this agent-only endpoint) must 401 rather than call revoke_all
+      # with a nil agent_id. Only a custom idp can produce this shape — the
+      # bundled DefaultAgentIdp's tokens always carry an agent_id.
+      it 'returns 401 Unauthenticated when the resolved identity has a nil agent_id' do
+        agentless = build_identity(actor: 'human', agent_id: nil, user_id: 'u-web')
+        Kiosk.configure { |c| c.agent_idp = Class.new { define_method(:verify) { |_r| agentless } }.new }
+
+        # revoke_all must NOT be reached for an agentless identity.
+        expect(Kiosk.configuration.revocation_store).not_to receive(:revoke_all)
+
+        status, body = dispatch(described_class, :revoke, revoke_env('some-token'))
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
+    end
+
+    describe 'happy path' do
+      # ─── happy path: revoke_all called, fresh token re-issued ───────────────
+      it 'revokes all sessions for the caller and hands back a fresh usable token' do
+        stub_agents_lookup(user_id: 'u-1')
+        token = issue_token('a-1')
+
+        expect(Kiosk.configuration.revocation_store)
+          .to receive(:revoke_all).with('a-1', hash_including(:at)).and_call_original
+
+        status, body = dispatch(described_class, :revoke, revoke_env(token))
+        expect(status).to eq(200)
+        expect(body).to match(access_token: a_kind_of(String))
+
+        # The re-issued token must NOT itself be caught by the watermark it just
+        # set: it verifies cleanly and resolves back to the same agent.
+        claims = verify_token(body[:access_token])
+        expect(claims[:agent_id]).to eq('a-1')
+        expect(claims[:role]).to eq('customer')
+      end
+
+      it "puts the caller's original token under the revocation watermark" do
+        stub_agents_lookup(user_id: 'u-1')
+        token = issue_token('a-2')
+
+        status, _body = dispatch(described_class, :revoke, revoke_env(token))
+        expect(status).to eq(200)
+
+        expect(Kiosk.configuration.revocation_store.revoked?(agent_id: 'a-2', iat: 0)).to be(true)
+      end
+    end
   end
 
-  it 'returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)' do
-    status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env('garbage-not-a-jwt'))
-    expect_problem(status, body, http: 401, code: 'unauthenticated')
-  end
+  # ─── challenge / register / login HTTP-boundary error branches ─────
+  #
+  # The success paths of these actions are covered end-to-end by the auth-flow
+  # and e2e specs; these examples pin the controller's OWN error guards — the
+  # missing-public_key 400, missing-field 400, and malformed-body 400 — so they
+  # render a clean 4xx problem document rather than escaping as a 500.
+  describe 'auth-surface error branches' do
+    # ─── GET /auth/challenge missing-public_key guard ───────────────────────
+    describe '#challenge' do
+      it 'returns 400 bad_request when public_key is absent' do
+        env = Rack::MockRequest.env_for('/kiosk/auth/challenge')
+        status, body = dispatch(described_class, :challenge, env)
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: 'public_key')
+      end
 
-  # ─── 401 guard: identity resolves but carries NO agent_id ───────────────
-  # A resolved-but-agentless identity (e.g. a human web session that somehow
-  # reached this agent-only endpoint) must 401 rather than call revoke_all
-  # with a nil agent_id. Only a custom idp can produce this shape — the
-  # bundled DefaultAgentIdp's tokens always carry an agent_id.
-  it 'returns 401 Unauthenticated when the resolved identity has a nil agent_id' do
-    agentless = build_identity(actor: 'human', agent_id: nil, user_id: 'u-web')
-    Kiosk.configure { |c| c.agent_idp = Class.new { define_method(:verify) { |_r| agentless } }.new }
+      it 'returns 400 bad_request when public_key is blank' do
+        env = Rack::MockRequest.env_for('/kiosk/auth/challenge?public_key=')
+        status, body = dispatch(described_class, :challenge, env)
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
+    end
 
-    # revoke_all must NOT be reached for an agentless identity.
-    expect(Kiosk.configuration.revocation_store).not_to receive(:revoke_all)
+    # ─── POST /auth/register body/field guards ──────────────────────────────
+    describe '#register' do
+      it 'returns 400 bad_request for an EMPTY body (not 500)' do
+        status, body = register('')
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-    status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env('some-token'))
-    expect_problem(status, body, http: 401, code: 'unauthenticated')
-  end
-end
+      it 'returns 400 bad_request for INVALID JSON (not 500)' do
+        status, body = register('{not valid json')
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-RSpec.describe 'AuthController#revoke (revoke-all-sessions)', 'happy path' do
-  include_context 'auth controller spec: configured origin'
+      it 'returns 400 bad_request for a non-object JSON body (not 500)' do
+        status, body = register('[1,2,3]')
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-  # ─── happy path: revoke_all called, fresh token re-issued ───────────────
-  it 'revokes all sessions for the caller and hands back a fresh usable token' do
-    stub_agents_lookup(user_id: 'u-1')
-    token = issue_token('a-1')
+      it 'returns 400 bad_request naming the missing field when public_key is omitted' do
+        status, body = register(JSON.generate(signed: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: 'public_key')
+      end
 
-    expect(Kiosk.configuration.revocation_store)
-      .to receive(:revoke_all).with('a-1', hash_including(:at)).and_call_original
+      it 'returns 400 bad_request naming the missing field when signed is omitted' do
+        status, body = register(JSON.generate(public_key: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: 'signed')
+      end
+    end
 
-    status, body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env(token))
-    expect(status).to eq(200)
-    expect(body).to match(access_token: a_kind_of(String))
+    describe '#register wrong-typed public_key' do
+      # A wrong-TYPED public_key (not just a missing one — the missing-field
+      # branch covered only missing fields) must render a clean 400, not escape as a 500. A JSON
+      # number / object / array field reaches AgentRegistration as an Integer /
+      # Hash / Array; `.to_s.strip` coerces it so PopVerifier rejects it as an
+      # invalid key with a 400 problem document instead of NoMethodError-ing on
+      # `.strip`. (`expect_problem` above is why the shape is named that way: the
+      # token is the TOP-LEVEL `code`, not `error.code`.)
+      it 'returns 400 bad_request (not 500) when public_key is a NUMBER' do
+        status, body = register(JSON.generate(public_key: 12_345, signed: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-    # The re-issued token must NOT itself be caught by the watermark it just
-    # set: it verifies cleanly and resolves back to the same agent.
-    claims = verify_token(body[:access_token])
-    expect(claims[:agent_id]).to eq('a-1')
-    expect(claims[:role]).to eq('customer')
-  end
+      it 'returns 400 bad_request (not 500) when public_key is an OBJECT' do
+        status, body = register(JSON.generate(public_key: { k: 'v' }, signed: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-  it "puts the caller's original token under the revocation watermark" do
-    stub_agents_lookup(user_id: 'u-1')
-    token = issue_token('a-2')
+      it 'returns 400 bad_request (not 500) when public_key is an ARRAY' do
+        status, body = register(JSON.generate(public_key: [1, 2], signed: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
+    end
 
-    status, _body = dispatch(Kiosk::Server::AuthController, :revoke, revoke_env(token))
-    expect(status).to eq(200)
+    # ─── POST /auth/login body/field guards ─────────────────────────────────
+    describe '#login' do
+      it 'returns 400 bad_request for an EMPTY body (not 500)' do
+        status, body = login('')
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-    expect(Kiosk.configuration.revocation_store.revoked?(agent_id: 'a-2', iat: 0)).to be(true)
-  end
-end
+      it 'returns 400 bad_request for INVALID JSON (not 500)' do
+        status, body = login('{not valid json')
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-# ─── challenge / register / login HTTP-boundary error branches ─────
-#
-# The success paths of these actions are covered end-to-end by the auth-flow
-# and e2e specs; these examples pin the controller's OWN error guards — the
-# missing-public_key 400, missing-field 400, and malformed-body 400 — so they
-# render a clean 4xx problem document rather than escaping as a 500.
+      it 'returns 400 bad_request naming the missing field when signed is omitted' do
+        status, body = login(JSON.generate(public_key: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: 'signed')
+      end
 
-# ─── GET /auth/challenge missing-public_key guard ───────────────────────
-RSpec.describe 'AuthController auth-surface error branches', '#challenge' do
-  include_context 'auth controller spec: configured origin'
+      # The same wrong-typed-field guard on the login sibling.
+      it 'returns 400 bad_request (not 500) when public_key is a NUMBER' do
+        status, body = login(JSON.generate(public_key: 12_345, signed: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
 
-  it 'returns 400 bad_request when public_key is absent' do
-    env = Rack::MockRequest.env_for('/kiosk/auth/challenge')
-    status, body = dispatch(Kiosk::Server::AuthController, :challenge, env)
-    expect_problem(status, body, http: 400, code: 'bad_request', detail: 'public_key')
-  end
-
-  it 'returns 400 bad_request when public_key is blank' do
-    env = Rack::MockRequest.env_for('/kiosk/auth/challenge?public_key=')
-    status, body = dispatch(Kiosk::Server::AuthController, :challenge, env)
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-end
-
-# ─── POST /auth/register body/field guards ──────────────────────────────
-RSpec.describe 'AuthController auth-surface error branches', '#register' do
-  include_context 'auth controller spec: configured origin'
-
-  it 'returns 400 bad_request for an EMPTY body (not 500)' do
-    status, body = register('')
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request for INVALID JSON (not 500)' do
-    status, body = register('{not valid json')
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request for a non-object JSON body (not 500)' do
-    status, body = register('[1,2,3]')
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request naming the missing field when public_key is omitted' do
-    status, body = register(JSON.generate(signed: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request', detail: 'public_key')
-  end
-
-  it 'returns 400 bad_request naming the missing field when signed is omitted' do
-    status, body = register(JSON.generate(public_key: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request', detail: 'signed')
-  end
-end
-
-RSpec.describe 'AuthController auth-surface error branches', '#register wrong-typed public_key' do
-  include_context 'auth controller spec: configured origin'
-
-  # A wrong-TYPED public_key (not just a missing one — the missing-field
-  # branch covered only missing fields) must render a clean 400, not escape as a 500. A JSON
-  # number / object / array field reaches AgentRegistration as an Integer /
-  # Hash / Array; `.to_s.strip` coerces it so PopVerifier rejects it as an
-  # invalid key with a 400 problem document instead of NoMethodError-ing on
-  # `.strip`. (`expect_problem` above is why the shape is named that way: the
-  # token is the TOP-LEVEL `code`, not `error.code`.)
-  it 'returns 400 bad_request (not 500) when public_key is a NUMBER' do
-    status, body = register(JSON.generate(public_key: 12_345, signed: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request (not 500) when public_key is an OBJECT' do
-    status, body = register(JSON.generate(public_key: { k: 'v' }, signed: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request (not 500) when public_key is an ARRAY' do
-    status, body = register(JSON.generate(public_key: [1, 2], signed: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-end
-
-# ─── POST /auth/login body/field guards ─────────────────────────────────
-RSpec.describe 'AuthController auth-surface error branches', '#login' do
-  include_context 'auth controller spec: configured origin'
-
-  it 'returns 400 bad_request for an EMPTY body (not 500)' do
-    status, body = login('')
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request for INVALID JSON (not 500)' do
-    status, body = login('{not valid json')
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request naming the missing field when signed is omitted' do
-    status, body = login(JSON.generate(public_key: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request', detail: 'signed')
-  end
-
-  # The same wrong-typed-field guard on the login sibling.
-  it 'returns 400 bad_request (not 500) when public_key is a NUMBER' do
-    status, body = login(JSON.generate(public_key: 12_345, signed: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request')
-  end
-
-  it 'returns 400 bad_request (not 500) when public_key is an OBJECT' do
-    status, body = login(JSON.generate(public_key: { k: 'v' }, signed: 'x'))
-    expect_problem(status, body, http: 400, code: 'bad_request')
+      it 'returns 400 bad_request (not 500) when public_key is an OBJECT' do
+        status, body = login(JSON.generate(public_key: { k: 'v' }, signed: 'x'))
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
+    end
   end
 end

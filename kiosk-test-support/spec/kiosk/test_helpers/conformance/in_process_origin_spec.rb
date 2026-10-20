@@ -63,27 +63,14 @@ module ConformanceOriginSpec
   end
 end
 
-RSpec.shared_context 'conformance origin spec: origin' do
+RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
   include ConformanceOriginSpec
 
   let(:connection) { ConformanceOriginSpec::RecordingConnection.new }
-
-  before { serve_wire_on(connection) }
-
   let(:alice)      { Struct.new(:id, :role).new('u-alice', 'customer') }
   let(:bob)        { Struct.new(:id, :role).new('u-bob', 'customer') }
-end
 
-RSpec.shared_context 'conformance origin spec: the four checks' do
-  include_context 'conformance origin spec: origin'
-
-  before { Kiosk::TestHelpers::Conformance.origin = origin(queries: %w[catalog my_orders], actions: %w[place_order]) }
-
-  after { Kiosk::TestHelpers::Conformance.reset! }
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: origin'
+  before { serve_wire_on(connection) }
 
   describe '#verbs' do
     it "reads BOTH registries, with each verb's kind, reach and schemas" do
@@ -111,10 +98,6 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
       expect(subject_origin.verbs).to be_empty
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: origin'
 
   describe '#recognize' do
     it 'reports the action the route reaches' do
@@ -128,10 +111,6 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
       expect(origin(queries: []).recognize('/kiosk/menu', method: 'GET')).to be_nil
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: origin'
 
   describe '#call' do
     it 'runs the handler through its route, in a GUC-scoped transaction, as the named principal' do
@@ -157,13 +136,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
       expect(origin.call('mine', kind: :query, params: {}, as: 'synthetic:carol'))
         .to eq([{ 'user' => 'synthetic:carol' }])
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: origin'
-
-  describe '#call' do
     it "refuses arguments its input_schema rejects with the wire's own code" do
       declare_query('search',
                     input_schema: { type: 'object', properties: { limit: { type: 'integer' } },
@@ -188,10 +161,6 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
         .to raise_error(ArgumentError, /needs a principal/)
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: origin'
 
   describe '#schema_errors' do
     it "is the ENGINE's own validator, so a test and a running server agree" do
@@ -230,13 +199,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
       expect(errors.length).to eq(1)
       expect(errors.first).to include('limit')
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: origin'
-
-  describe '#schema_errors' do
     it 'still reports an argument the input_schema really rejects' do
       closed = { type: 'object', additionalProperties: false,
                  properties: { neighbourhood: { type: 'string' } }, required: [] }
@@ -253,12 +216,12 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
                                       kind: :query, slot: 'output_schema')).to eq([])
     end
   end
-end
-
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: the four checks'
 
   describe 'the four checks, against a real registry' do
+    before { Kiosk::TestHelpers::Conformance.origin = origin(queries: %w[catalog my_orders], actions: %w[place_order]) }
+
+    after { Kiosk::TestHelpers::Conformance.reset! }
+
     it 'passes all four on a conforming origin' do
       declare_the_fleet
 
@@ -278,13 +241,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
       expect(outcome).to be_failed
       expect(outcome.message).to include('nothing answers GET /kiosk/forgotten')
     end
-  end
-end
 
-RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
-  include_context 'conformance origin spec: the four checks'
-
-  describe 'the four checks, against a real registry' do
     it 'reddens on a handler whose answer its own output_schema rejects' do
       declare_query('catalog',
                     input_schema: { type: 'object', properties: {} },

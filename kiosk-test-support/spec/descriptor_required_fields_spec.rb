@@ -137,47 +137,47 @@ RSpec.describe 'descriptor required fields' do
     total = origins.values.sum { |paths| DescriptorRequiredFields.date_arguments(paths).length }
     expect(total).to be >= 8, "the check found only #{total} format: 'date' arguments"
   end
-end
 
-RSpec.describe 'descriptor required fields per origin' do
-  DescriptorRequiredFields.origins.sort.each do |origin, paths|
-    it "#{origin}: every verb declares #{DescriptorRequiredFields::MACROS.join(', ')}" do
-      missing = DescriptorRequiredFields.missing(origin, paths)
+  describe 'descriptor required fields per origin' do
+    DescriptorRequiredFields.origins.sort.each do |origin, paths|
+      it "#{origin}: every verb declares #{DescriptorRequiredFields::MACROS.join(', ')}" do
+        missing = DescriptorRequiredFields.missing(origin, paths)
 
-      expect(missing).to be_empty, <<~MSG
-        #{missing.size} verb(s) publish an incomplete descriptor:
+        expect(missing).to be_empty, <<~MSG
+          #{missing.size} verb(s) publish an incomplete descriptor:
 
-        #{missing.join("\n")}
+          #{missing.join("\n")}
 
-        Every verb declares BOTH schemas: `input_schema` is the contract the
-        wire coerces and validates arguments against, and `output_schema` is
-        the only machine-readable statement of what a call returns. A verb that
-        takes nothing still declares the closed empty object.
-      MSG
-    end
+          Every verb declares BOTH schemas: `input_schema` is the contract the
+          wire coerces and validates arguments against, and `output_schema` is
+          the only machine-readable statement of what a call returns. A verb that
+          takes nothing still declares the closed empty object.
+        MSG
+      end
 
-    it "#{origin}: every verb that takes nothing declares the closed empty object" do
-      open = DescriptorRequiredFields.open_empty_inputs(origin, paths)
+      it "#{origin}: every verb that takes nothing declares the closed empty object" do
+        open = DescriptorRequiredFields.open_empty_inputs(origin, paths)
 
-      expect(open).to be_empty, <<~MSG
-        #{open.size} verb(s) take nothing and accept any argument:
+        expect(open).to be_empty, <<~MSG
+          #{open.size} verb(s) take nothing and accept any argument:
 
-        #{open.join("\n")}
+          #{open.join("\n")}
 
-        Declare `input_schema type: 'object', additionalProperties: false, properties: {}`.
-      MSG
-    end
+          Declare `input_schema type: 'object', additionalProperties: false, properties: {}`.
+        MSG
+      end
 
-    it "#{origin}: every calendar-day argument names its clock" do
-      clockless = DescriptorRequiredFields.clockless_dates(origin, paths)
+      it "#{origin}: every calendar-day argument names its clock" do
+        clockless = DescriptorRequiredFields.clockless_dates(origin, paths)
 
-      expect(clockless).to be_empty, <<~MSG
-        #{clockless.size} format: 'date' argument(s) name no clock:
+        expect(clockless).to be_empty, <<~MSG
+          #{clockless.size} format: 'date' argument(s) name no clock:
 
-        #{clockless.join("\n")}
+          #{clockless.join("\n")}
 
-        Say in the argument's own description whose clock or calendar the day is on (§3.8.8).
-      MSG
+          Say in the argument's own description whose clock or calendar the day is on (§3.8.8).
+        MSG
+      end
     end
   end
 end

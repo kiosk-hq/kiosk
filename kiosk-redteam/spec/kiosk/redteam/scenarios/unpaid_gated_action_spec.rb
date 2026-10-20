@@ -8,7 +8,7 @@ require_relative 'support'
 # (minimal_profile's create_owned is a plain lambda, so it makes no wire call.)
 RENTAL_OK = { 'scooter_code' => 'SK-001', 'rental_token' => 'rt-1', 'exp' => 4_102_444_800 }.freeze
 
-RSpec.shared_context 'unpaid_gated_action setup' do
+RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -19,12 +19,8 @@ RSpec.shared_context 'unpaid_gated_action setup' do
       gated_args: ->(ref) { { reservation_id: ref[:id] } }
     )
   end
-end
 
-RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
   describe '#call — non-vacuity' do
-    include_context 'unpaid_gated_action setup'
-
     context 'when the server allows the gated action without payment (broken — BREACH)' do
       it 'returns blocked: false' do
         stub_registers('a')
@@ -67,22 +63,13 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     end
   end
 
-  # ── K-736 ────────────────────────────────────────────────────────────────
+  # ── HTTP 402 on the gated action ─────────────────────────────────────────
   #
-  # The tolled-verb case, demonstrated on a stub transport before the fix: the
-  # gated action answered 402 and the runner printed
-  # "BLOCKED ✓ UnpaidGatedAction (HTTP 402)" and the battery went green — a pass for
-  # an attack that never executed, because #run had no 402 retry (the harness
-  # solved PoW only in Client#register_raw). Latent in the shipped demos, which
-  # answer 403 here; armed the day an operator prices a real verb.
-  #
-  # K-760 gave #run that retry, so a `pow_required` carrying challenges is now
-  # PAID and the attack does run. These stubs carry none — the shape of the two
-  # payment 402s, and of a toll a provider re-demands — so the could-not-test
-  # verdict is still exactly the right answer for them.
+  # #run pays a `pow_required` that carries challenges, and the attack runs.
+  # These stubs carry none: the shape of the two payment 402s, and of a toll a
+  # provider demands again. The attack never executed, so the verdict is
+  # could-not-test, or a breach for payment_failed, and never a pass.
   describe '#call — a 402 on the gated action is not a pass (K-736)' do
-    include_context 'unpaid_gated_action setup'
-
     def stub_toll(code)
       stub_registers('a')
       stub_action('start_rental', status: 402, code: code)
@@ -115,14 +102,10 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
   end
 
   # Coverage for submit_valid_kyc + the `if profile.requires_kyc` guard.
-  # The three scenarios that gate submit_valid_kyc behind requires_kyc
-  # (UnpaidGatedAction, PayForOtherUseSelf, SpentResourceReuse) all build their
-  # profile with requires_kyc defaulting to false, so the helper never ran in
-  # the gem suite though it is live via the skooti demo. This exercises the
-  # requires_kyc:true + kyc_valid path so the helper POSTs a valid attestation.
+  # The other examples build their profile with requires_kyc defaulting to
+  # false. This exercises the requires_kyc:true + kyc_valid path, so the helper
+  # POSTs a valid attestation.
   describe '#call — requires_kyc:true drives submit_valid_kyc' do
-    include_context 'unpaid_gated_action setup'
-
     let(:kyc_profile) do
       minimal_profile(
         gated_action: 'start_rental',
@@ -147,14 +130,12 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
     end
   end
 
-  # ── K-731 ────────────────────────────────────────────────────────────────
+  # ── The staged KYC ───────────────────────────────────────────────────────
   #
   # The staged KYC is the ONLY thing separating this scenario from MissingKyc.
-  # Its response was discarded, so an attestation the provider refused left the
-  # gated action to be denied for want of KYC — scored here as the payment gate.
+  # If the provider refuses the attestation, a denial of the gated action could
+  # be for want of KYC, so it cannot be scored as the payment gate.
   describe '#call — the staged KYC must be accepted (K-731)' do
-    include_context 'unpaid_gated_action setup'
-
     let(:kyc_profile) do
       minimal_profile(
         gated_action: 'start_rental',
@@ -178,19 +159,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
         expect(verdict.detail).to include('KYC gate')
       end
     end
-  end
-
-  describe '#call — the staged KYC must be accepted (K-731)' do
-    include_context 'unpaid_gated_action setup'
-
-    let(:kyc_profile) do
-      minimal_profile(
-        gated_action: 'start_rental',
-        gated_args: ->(ref) { { reservation_id: ref[:id] } },
-        requires_kyc: true,
-        kyc_valid: ->(user_id) { "valid-kyc-jws-for-#{user_id}" }
-      )
-    end
 
     it 'does not run the gated action once the KYC setup has failed' do
       stub_registers('a')
@@ -209,19 +177,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
 
       expect(scenario.call(client, kyc_profile).blocked).to be(true)
     end
-  end
-
-  describe '#call — the staged KYC must be accepted (K-731)' do
-    include_context 'unpaid_gated_action setup'
-
-    let(:kyc_profile) do
-      minimal_profile(
-        gated_action: 'start_rental',
-        gated_args: ->(ref) { { reservation_id: ref[:id] } },
-        requires_kyc: true,
-        kyc_valid: ->(user_id) { "valid-kyc-jws-for-#{user_id}" }
-      )
-    end
 
     # A profile with no KYC surface has no setup step to assert.
     it 'is unaffected when requires_kyc is false (no setup call to check)' do
@@ -233,8 +188,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
   end
 
   describe '#call — skip conditions' do
-    include_context 'unpaid_gated_action setup'
-
     it 'skips when gated_action is nil' do
       p = minimal_profile
       expect(scenario.call(client, p).detail).to include('SKIP')

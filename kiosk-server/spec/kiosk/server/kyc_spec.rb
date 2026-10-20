@@ -165,9 +165,9 @@ RSpec.shared_context "kyc spec: the provider's callback" do
 end
 
 RSpec.describe Kiosk::Server::Kyc do
-  include_context 'kyc spec: postgres'
-
   describe 'an origin with no KYC provider' do
+    include_context 'kyc spec: postgres'
+
     before { configure(nil) }
 
     it 'publishes neither request_kyc nor its topic' do
@@ -180,14 +180,6 @@ RSpec.describe Kiosk::Server::Kyc do
       status, problem = callback(request_id: 'r', nonce: 'n', kyc_jws: 'x')
       expect([status, problem['code']]).to eq([501, 'module_not_served'])
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::Kyc do
-  include_context 'kyc spec: postgres'
-
-  describe 'an origin with no KYC provider' do
-    before { configure(nil) }
 
     it 'gates naming agents/kyc and not request_kyc' do
       expect { as('u-1', 'a-1') { described_class.require! } }
@@ -208,12 +200,10 @@ RSpec.describe Kiosk::Server::Kyc do
         }
     end
   end
-end
-
-RSpec.describe Kiosk::Server::Kyc do
-  include_context 'kyc spec: postgres'
 
   describe 'request_kyc' do
+    include_context 'kyc spec: postgres'
+
     before { configure(provider) }
 
     it 'opens a verification of the declared claims for the principal' do
@@ -235,14 +225,6 @@ RSpec.describe Kiosk::Server::Kyc do
       status, problem = request_kyc
       expect([status, problem['code']]).to eq([500, 'action_failed'])
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::Kyc do
-  include_context 'kyc spec: postgres'
-
-  describe 'request_kyc' do
-    before { configure(provider) }
 
     it 'refuses a fourth open verification with 429 quota_exceeded' do
       3.times { open_request }
@@ -263,12 +245,10 @@ RSpec.describe Kiosk::Server::Kyc do
       expect(request_kyc.first).to eq(200)
     end
   end
-end
-
-RSpec.describe Kiosk::Server::Kyc do
-  include_context "kyc spec: the provider's callback"
 
   describe "the provider's callback" do
+    include_context "kyc spec: the provider's callback"
+
     it 'records the grant on the person and pushes the attestation to them' do
       jws = attestation
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: jws)).to eq([200, { 'ok' => true }])
@@ -296,31 +276,7 @@ RSpec.describe Kiosk::Server::Kyc do
       callback(request_id: request_id, nonce: nonce, kyc_jws: attestation)
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: attestation).first).to eq(404)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::Kyc, 'against the published kyc.schema.json' do
-  include_context "kyc spec: the provider's callback"
-
-  def published(definition) = Kiosk::Server::RequestValidation::Schemas.wire("kyc.schema.json#/$defs/#{definition}")
-
-  it 'answers request_kyc with a verification the schema accepts, and the schema refuses another status' do
-    expect(published('verification').validate(opened).to_a).to be_empty
-    expect(published('verification').valid?(opened.merge('status' => 'approved'))).to be(false)
-  end
-
-  it 'pushes kyc_verification data the schema accepts, and the schema refuses it without kyc_jws' do
-    callback(request_id: request_id, nonce: nonce, kyc_jws: attestation)
-    data = store.since('u-1', 0).first['data']
-    expect(published('verificationEvent').validate(data).to_a).to be_empty
-    expect(published('verificationEvent').valid?(data.except('kyc_jws'))).to be(false)
-  end
-end
-
-RSpec.describe Kiosk::Server::Kyc do
-  include_context "kyc spec: the provider's callback"
-
-  describe "the provider's callback" do
     it 'refuses a wrong nonce, another subject, and an attestation the provider does not accept' do
       expect(callback(request_id: request_id, nonce: 'wrong', kyc_jws: attestation).first).to eq(403)
       expect(callback(request_id: request_id, nonce: nonce, kyc_jws: attestation(sub: 'u-2')).first).to eq(403)
@@ -345,13 +301,27 @@ RSpec.describe Kiosk::Server::Kyc do
       end
       expect(store.head).to eq(0)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::Kyc do
-  include_context 'kyc spec: postgres'
+    describe 'against the published kyc.schema.json' do
+      def published(definition) = Kiosk::Server::RequestValidation::Schemas.wire("kyc.schema.json#/$defs/#{definition}")
+
+      it 'answers request_kyc with a verification the schema accepts, and the schema refuses another status' do
+        expect(published('verification').validate(opened).to_a).to be_empty
+        expect(published('verification').valid?(opened.merge('status' => 'approved'))).to be(false)
+      end
+
+      it 'pushes kyc_verification data the schema accepts, and the schema refuses it without kyc_jws' do
+        callback(request_id: request_id, nonce: nonce, kyc_jws: attestation)
+        data = store.since('u-1', 0).first['data']
+        expect(published('verificationEvent').validate(data).to_a).to be_empty
+        expect(published('verificationEvent').valid?(data.except('kyc_jws'))).to be(false)
+      end
+    end
+  end
 
   describe 'POST <endpoint>/agents/kyc' do
+    include_context 'kyc spec: postgres'
+
     before { configure(provider) }
 
     it 'records an attestation the provider accepts' do
@@ -365,12 +335,10 @@ RSpec.describe Kiosk::Server::Kyc do
       expect(granted).to eq([])
     end
   end
-end
-
-RSpec.describe Kiosk::Server::Kyc do
-  include_context 'kyc spec: postgres'
 
   describe '.grant! and .require!' do
+    include_context 'kyc spec: postgres'
+
     before { configure(provider) }
 
     it 'grants only the JSON boolean true, in Postgres' do
@@ -407,15 +375,15 @@ RSpec.describe Kiosk::Server::Kyc do
       expect { as('u-2', 'a-1') { described_class.require! } }.to raise_error(Kiosk::Server::Errors::KycRequired)
     end
   end
-end
 
-RSpec.describe Kiosk::Server::Kyc, '.register!' do
-  it 'refuses a kyc_provider with no kyc_claims, which no verification could satisfy' do
-    Kiosk.configure do |c|
-      c.kyc_provider = Kiosk::KycProviders::Base.new
-      c.kyc_claims   = []
+  describe '.register!' do
+    it 'refuses a kyc_provider with no kyc_claims, which no verification could satisfy' do
+      Kiosk.configure do |c|
+        c.kyc_provider = Kiosk::KycProviders::Base.new
+        c.kyc_claims   = []
+      end
+
+      expect { described_class.register! }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /kyc_claims/)
     end
-
-    expect { described_class.register! }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /kyc_claims/)
   end
 end

@@ -653,9 +653,10 @@ RSpec.describe Kiosk::Server::WellKnown do
     it 'keeps both service-desc members — the operations are added, not swapped in' do
       declare_query('catalog')
       d = described_class.api_catalog(base_url: 'https://api.acme.example')
-      descs = member(d)[:item].select { |i| i[:rel] == 'service-desc' }.pluck(:href)
-      expect(descs).to eq(["https://api.acme.example/kiosk/schema#{v}",
-                           "https://api.acme.example/kiosk/openapi.json#{v}"])
+      items = member(d)[:item]
+      expect(items.select { |i| i[:rel] == 'service-desc' }.pluck(:href))
+        .to eq(["https://api.acme.example/kiosk/schema#{v}", "https://api.acme.example/kiosk/openapi.json#{v}"])
+      expect(items).to include(hash_including(href: 'https://api.acme.example/kiosk/catalog', rel: 'item'))
     end
 
     # Publishing every verb is acceptable only while the document is CHEAP

@@ -29,10 +29,18 @@ RSpec.shared_context 'jwt issuer spec: configured' do
   end
 end
 
-RSpec.describe Kiosk::Server::JwtIssuer do
+RSpec.shared_context 'jwt issuer spec: issued token' do
   include_context 'jwt issuer spec: configured'
 
+  let(:token) do
+    described_class.issue(claims: { sub: 'user-1', role: 'customer' }, audience: audience)
+  end
+end
+
+RSpec.describe Kiosk::Server::JwtIssuer do
   describe '.issue' do
+    include_context 'jwt issuer spec: configured'
+
     it 'produces a JWT carrying the supplied claims and the standard time bounds' do
       token = described_class.issue(claims: { sub: 'user-1', role: 'customer' }, audience: audience)
       payload, header = decode(token)
@@ -56,13 +64,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       expect(payload['nbf']).to eq(payload['iat'])
       expect(payload['nbf']).to be < payload['exp']
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: configured'
-
-  describe '.issue' do
     it 'defaults to a one-hour lifetime' do
       now = Time.utc(2026, 6, 10, 12, 0, 0)
       token = described_class.issue(claims: { sub: 'user-1' }, audience: audience, now: now)
@@ -81,13 +83,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       payload, = decode(token)
       expect(payload['jti']).to eq('fixed-id')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: configured'
-
-  describe '.issue' do
     it 'raises when no issuer is configured' do
       Kiosk.configure { |c| c.issuer = nil }
       expect do
@@ -103,20 +99,10 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       end.to raise_error(ArgumentError, /private key/)
     end
   end
-end
-
-RSpec.shared_context 'jwt issuer spec: issued token' do
-  include_context 'jwt issuer spec: configured'
-
-  let(:token) do
-    described_class.issue(claims: { sub: 'user-1', role: 'customer' }, audience: audience)
-  end
-end
-
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: issued token'
 
   describe '.verify' do
+    include_context 'jwt issuer spec: issued token'
+
     it 'round-trips an issued token and returns symbol-keyed claims' do
       claims = described_class.verify(token: token, jwks: jwks, audience: audience)
       expect(claims).to include(sub: 'user-1', role: 'customer', iss: issuer, aud: audience)
@@ -133,13 +119,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
         described_class.verify(token: token, jwks: jwks, audience: 'https://wrong.example')
       end.to raise_error(described_class::AudienceError)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: issued token'
-
-  describe '.verify' do
     it 'rejects an expired token' do
       old = described_class.issue(claims: { sub: 'u' }, audience: audience, expires_in: -3600)
       expect do
@@ -169,13 +149,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
         described_class.verify(token: 'not.a.jwt', jwks: jwks, audience: audience)
       end.to raise_error(described_class::InvalidError)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: issued token'
-
-  describe '.verify' do
     it 'rejects a tampered payload' do
       header, payload, signature = token.split('.')
       claims = JSON.parse(Base64.urlsafe_decode64(payload.ljust((payload.size + 3) / 4 * 4, '=')))
@@ -193,13 +167,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
         described_class.verify(token: future, jwks: jwks, audience: audience)
       end.not_to raise_error
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: issued token'
-
-  describe '.verify' do
     describe 'revocation' do
       let(:agent_token) do
         described_class.issue(claims: { sub: 'u', agent_id: 'a-1' }, audience: audience)
@@ -223,12 +191,10 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       end
     end
   end
-end
-
-RSpec.describe Kiosk::Server::JwtIssuer do
-  include_context 'jwt issuer spec: configured'
 
   describe '.normalize_jwks input polymorphism' do
+    include_context 'jwt issuer spec: configured'
+
     let(:token) { described_class.issue(claims: { sub: 'u' }, audience: audience) }
 
     {

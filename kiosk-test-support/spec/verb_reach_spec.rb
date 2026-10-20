@@ -186,41 +186,41 @@ RSpec.describe 'verb reach declarations' do
       declaration, not this list.
     MSG
   end
-end
 
-RSpec.describe 'verb reach declarations per reviewed origin' do
-  VerbReach::CROSS_PRINCIPAL.each do |origin, verbs|
-    it "#{origin}: still declares its cross-principal verbs" do
-      expect(VerbReach.declared.fetch(origin, {}).slice(*verbs.keys)).to eq(verbs)
-    end
-  end
-end
-
-RSpec.describe 'no verb takes the principal as an input' do
-  let(:input_schemas) { VerbReach.input_schemas }
-
-  it 'reads every input_schema in the fleet (the check is not vacuous)' do
-    total = input_schemas.values.sum(&:size)
-    expect(total).to be >= 43, "the check read only #{total} input schemas — the declarations moved somewhere it does not read"
-  end
-
-  it 'finds a principal name declared as a property (the matcher is not vacuous)' do
-    forged = "input_schema type: 'object', properties: { user_id: { type: 'string' }, 'role' => {} }\n"
-    expect(VerbReach.principal_inputs(forged)).to eq(%w[user_id role])
-    expect(VerbReach.principal_inputs("input_schema properties: { owner_id: {}, roles: {} }\n")).to be_empty
-  end
-
-  it 'declares no user_id, agent_id, actor or role in any input_schema' do
-    offenders = input_schemas.flat_map do |origin, verbs|
-      verbs.filter_map do |verb|
-        names = VerbReach.principal_inputs(verb[:input_schema])
-        "#{origin} #{verb[:name]}: #{names.join(', ')}" unless names.empty?
+  describe 'verb reach declarations per reviewed origin' do
+    VerbReach::CROSS_PRINCIPAL.each do |origin, verbs|
+      it "#{origin}: still declares its cross-principal verbs" do
+        expect(VerbReach.declared.fetch(origin, {}).slice(*verbs.keys)).to eq(verbs)
       end
     end
-    expect(offenders).to be_empty, <<~MSG
-      #{offenders.join("\n")}
+  end
 
-      The principal comes from the verified token (§7.1). Remove the input and read the identity instead.
-    MSG
+  describe 'no verb takes the principal as an input' do
+    let(:input_schemas) { VerbReach.input_schemas }
+
+    it 'reads every input_schema in the fleet (the check is not vacuous)' do
+      total = input_schemas.values.sum(&:size)
+      expect(total).to be >= 43, "the check read only #{total} input schemas — the declarations moved somewhere it does not read"
+    end
+
+    it 'finds a principal name declared as a property (the matcher is not vacuous)' do
+      forged = "input_schema type: 'object', properties: { user_id: { type: 'string' }, 'role' => {} }\n"
+      expect(VerbReach.principal_inputs(forged)).to eq(%w[user_id role])
+      expect(VerbReach.principal_inputs("input_schema properties: { owner_id: {}, roles: {} }\n")).to be_empty
+    end
+
+    it 'declares no user_id, agent_id, actor or role in any input_schema' do
+      offenders = input_schemas.flat_map do |origin, verbs|
+        verbs.filter_map do |verb|
+          names = VerbReach.principal_inputs(verb[:input_schema])
+          "#{origin} #{verb[:name]}: #{names.join(', ')}" unless names.empty?
+        end
+      end
+      expect(offenders).to be_empty, <<~MSG
+        #{offenders.join("\n")}
+
+        The principal comes from the verified token (§7.1). Remove the input and read the identity instead.
+      MSG
+    end
   end
 end

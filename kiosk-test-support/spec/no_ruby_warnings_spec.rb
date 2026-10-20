@@ -145,21 +145,21 @@ RSpec.describe 'no Ruby parse warning in tracked source (K-1718)' do
     rest.each { |(rel, line)| RSpec.configuration.reporter.message("  NOTICE #{rel}: #{line}") }
     expect(rest.length).to be_a(Integer)
   end
-end
 
-RSpec.describe 'no constant assigned into Object by two spec files of one suite' do
-  # Scope: the spec files that RSpec loads, so each one carries an
-  # `RSpec.describe`. The demos run each `spec/*_spec.rb` as its own `ruby`
-  # process, so the comparison is per top-level directory.
-  it 'has no constant two spec files of one suite both assign into Object' do
-    declared   = ParseWarnings.spec_constants(ParseWarnings::FILES)
-    collisions = declared.select { |_, sites| sites.map { |s| s[/\A[^:]+/] }.uniq.length > 1 }
+  describe 'no constant assigned into Object by two spec files of one suite' do
+    # Scope: the spec files that RSpec loads, so each one carries an
+    # `RSpec.describe`. The demos run each `spec/*_spec.rb` as its own `ruby`
+    # process, so the comparison is per top-level directory.
+    it 'has no constant two spec files of one suite both assign into Object' do
+      declared   = ParseWarnings.spec_constants(ParseWarnings::FILES)
+      collisions = declared.select { |_, sites| sites.map { |s| s[/\A[^:]+/] }.uniq.length > 1 }
 
-    expect(collisions).to be_empty, lambda {
-      "#{collisions.length} constant(s) are assigned into Object by two spec files of one suite. " \
-      "Whichever loads second wins, so editing one file silently changes the other's inputs. " \
-      "Give it one home — a module in spec/support, required by both.\n" +
-        collisions.map { |(gem, name), sites| "  #{gem}: #{name} — #{sites.join(', ')}" }.join("\n")
-    }
+      expect(collisions).to be_empty, lambda {
+        "#{collisions.length} constant(s) are assigned into Object by two spec files of one suite. " \
+        "Whichever loads second wins, so editing one file silently changes the other's inputs. " \
+        "Give it one home — a module in spec/support, required by both.\n" +
+          collisions.map { |(gem, name), sites| "  #{gem}: #{name} — #{sites.join(', ')}" }.join("\n")
+      }
+    end
   end
 end

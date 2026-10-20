@@ -122,98 +122,98 @@ RSpec.describe 'demo descriptor sources' do
                         "these files declare verbs outside #{DescriptorSource::HANDLERS_DIR}, so the " \
                         "engine never loads them in development: #{problems.inspect}"
   end
-end
 
-RSpec.describe 'DescriptorSource.macro_region' do
-  let(:multi_line) do
-    <<~RB
-      input_schema type: "object",
-                   properties: { basket_id: { type: "string" } }
-      output_schema type: "array"
-    RB
+  describe 'DescriptorSource.macro_region' do
+    let(:multi_line) do
+      <<~RB
+        input_schema type: "object",
+                     properties: { basket_id: { type: "string" } }
+        output_schema type: "array"
+      RB
+    end
+
+    # The cut is decided by what follows the macro, never by the macro's own shape.
+    it 'cuts a macro region at what follows it, not at its own line count' do
+      one_line = %(kind :query\ninput_schema type: "object"\ndef ring_up = nil\n)
+      trailing = 'input_schema type: "object"'
+      last     = multi_line[0, multi_line.index('output_schema')]
+
+      expect(DescriptorSource.macro_region(one_line, 'input_schema')).to eq(%(input_schema type: "object"\n))
+      expect(DescriptorSource.macro_region(multi_line, 'input_schema'))
+        .to eq(%(input_schema type: "object",\n             properties: { basket_id: { type: "string" } }\n))
+      expect(DescriptorSource.macro_region(trailing, 'input_schema')).to eq(trailing)
+      expect(DescriptorSource.macro_region(last, 'input_schema')).to eq(last)
+    end
   end
 
-  # The cut is decided by what follows the macro, never by the macro's own shape.
-  it 'cuts a macro region at what follows it, not at its own line count' do
-    one_line = %(kind :query\ninput_schema type: "object"\ndef ring_up = nil\n)
-    trailing = 'input_schema type: "object"'
-    last     = multi_line[0, multi_line.index('output_schema')]
+  describe 'DescriptorSource.controller_verbs' do
+    # A comment contributes no params, and its stray `{` and `"` do not move the
+    # end of the body: `price_text`, which follows the comment, still reads. A `#`
+    # inside a string literal is content, not the start of a comment.
+    it 'reads code out of a descriptor, never comments or string literals (K-1772)' do
+      verbs = DescriptorSource.controller_verbs(DescriptorProseLint::PHANTOM_CONTROLLER)
 
-    expect(DescriptorSource.macro_region(one_line, 'input_schema')).to eq(%(input_schema type: "object"\n))
-    expect(DescriptorSource.macro_region(multi_line, 'input_schema'))
-      .to eq(%(input_schema type: "object",\n             properties: { basket_id: { type: "string" } }\n))
-    expect(DescriptorSource.macro_region(trailing, 'input_schema')).to eq(trailing)
-    expect(DescriptorSource.macro_region(last, 'input_schema')).to eq(last)
-  end
-end
-
-RSpec.describe 'DescriptorSource.controller_verbs' do
-  # A comment contributes no params, and its stray `{` and `"` do not move the
-  # end of the body: `price_text`, which follows the comment, still reads. A `#`
-  # inside a string literal is content, not the start of a comment.
-  it 'reads code out of a descriptor, never comments or string literals (K-1772)' do
-    verbs = DescriptorSource.controller_verbs(DescriptorProseLint::PHANTOM_CONTROLLER)
-
-    expect(verbs.map { |verb| verb[:name] }).to eq(%w[edit_listing browse_listings])
-    expect(verbs.first[:params]).to eq(%w[listing_id price_text])
-    expect(verbs.last[:params]).to eq(%w[keyword])
-    expect(verbs.last[:description]).to eq('Ranking is by recency; a # in prose is not a comment.')
-  end
-end
-
-RSpec.describe 'demo descriptions (ADR-0023)' do
-  let(:demo_dirs) { DescriptorSource.demo_dirs }
-
-  it 'no demo description carries a prose parameter list (ADR-0023 §Decision 1/4)' do
-    offenders = demo_dirs.flat_map { |dir| DescriptorProseLint.parameter_list_offenders(dir) }
-
-    expect(offenders).to be_empty, <<~MSG
-      #{offenders.size} description(s) carry a prose parameter list:
-
-      #{offenders.join("\n")}
-
-      ADR-0023 re-scoped `description` to semantics only and retired the
-      `params:` field; restating it in prose is the same duplication one layer
-      over. Every name, type and constraint belongs in `input_schema`, and the
-      row->input mapping belongs in the two schemas' per-property descriptions.
-    MSG
+      expect(verbs.map { |verb| verb[:name] }).to eq(%w[edit_listing browse_listings])
+      expect(verbs.first[:params]).to eq(%w[listing_id price_text])
+      expect(verbs.last[:params]).to eq(%w[keyword])
+      expect(verbs.last[:description]).to eq('Ranking is by recency; a # in prose is not a comment.')
+    end
   end
 
-  # A verb name is not an offence: naming the follow-on verb is the sanctioned
-  # form. `limit` and `cursor` are reserved names that no verb declares.
-  it 'no demo description names a param some verb declares (ADR-0023 §Decision 1)' do
-    offenders = demo_dirs.flat_map { |dir| DescriptorProseLint.declared_param_offenders(dir) }
+  describe 'demo descriptions (ADR-0023)' do
+    let(:demo_dirs) { DescriptorSource.demo_dirs }
 
-    expect(offenders).to be_empty, <<~MSG
-      #{offenders.size} description(s) name a param the schemas already declare:
+    it 'no demo description carries a prose parameter list (ADR-0023 §Decision 1/4)' do
+      offenders = demo_dirs.flat_map { |dir| DescriptorProseLint.parameter_list_offenders(dir) }
 
-      #{offenders.join("\n")}
+      expect(offenders).to be_empty, <<~MSG
+        #{offenders.size} description(s) carry a prose parameter list:
 
-      ADR-0023 §Decision 1 re-scoped `description` to semantics only: it may not
-      carry "a param name that the schema also carries". Say what the verb MEANS
-      and name the follow-on VERB; leave every argument name to `input_schema`,
-      and put a row->argument mapping in the two schemas' per-property
-      descriptions, where both ends are declared.
-    MSG
-  end
-end
+        #{offenders.join("\n")}
 
-RSpec.describe 'demo descriptor cross-references' do
-  DescriptorSource.demo_dirs.each do |dir|
-    demo = File.basename(dir)
-
-    it "#{demo}: every verb description's cross-reference names params the target verb declares" do
-      failures = DescriptorProseLint.cross_reference_failures(dir)
-
-      expect(failures).to be_empty, <<~MSG
-        #{failures.size} unresolvable descriptor cross-reference(s):
-
-        #{failures.join("\n")}
-
-        A description that names a param the target verb rejects is what the
-        assistant sends first. Name the target's REAL input, and state the
-        row→input mapping when the row field is spelled differently.
+        ADR-0023 re-scoped `description` to semantics only and retired the
+        `params:` field; restating it in prose is the same duplication one layer
+        over. Every name, type and constraint belongs in `input_schema`, and the
+        row->input mapping belongs in the two schemas' per-property descriptions.
       MSG
+    end
+
+    # A verb name is not an offence: naming the follow-on verb is the sanctioned
+    # form. `limit` and `cursor` are reserved names that no verb declares.
+    it 'no demo description names a param some verb declares (ADR-0023 §Decision 1)' do
+      offenders = demo_dirs.flat_map { |dir| DescriptorProseLint.declared_param_offenders(dir) }
+
+      expect(offenders).to be_empty, <<~MSG
+        #{offenders.size} description(s) name a param the schemas already declare:
+
+        #{offenders.join("\n")}
+
+        ADR-0023 §Decision 1 re-scoped `description` to semantics only: it may not
+        carry "a param name that the schema also carries". Say what the verb MEANS
+        and name the follow-on VERB; leave every argument name to `input_schema`,
+        and put a row->argument mapping in the two schemas' per-property
+        descriptions, where both ends are declared.
+      MSG
+    end
+  end
+
+  describe 'demo descriptor cross-references' do
+    DescriptorSource.demo_dirs.each do |dir|
+      demo = File.basename(dir)
+
+      it "#{demo}: every verb description's cross-reference names params the target verb declares" do
+        failures = DescriptorProseLint.cross_reference_failures(dir)
+
+        expect(failures).to be_empty, <<~MSG
+          #{failures.size} unresolvable descriptor cross-reference(s):
+
+          #{failures.join("\n")}
+
+          A description that names a param the target verb rejects is what the
+          assistant sends first. Name the target's REAL input, and state the
+          row→input mapping when the row field is spelled differently.
+        MSG
+      end
     end
   end
 end

@@ -169,520 +169,6 @@ module PowGateHeaderSpecHelpers
   def proof_b = { challenge: { id: 'b' }, nonce: { indices: [2] } }
 end
 
-# ─── the request fingerprint: SHA256("<METHOD> <verb>\n<canonical args>") ─
-#
-# 0.3 hashed `"<command>\n<body>"`: with every read multiplexed through
-# `POST <endpoint>/query` the method was a constant and the verb name only
-# reached the digest because the wire smuggled it back into the body. On the
-# per-verb wire the method carries the read/write fork and the name is a path
-# segment, so BOTH are hashed directly — and each of the three inputs is
-# separately load-bearing, which is what the four examples below pin.
-RSpec.describe Kiosk::Server::PowGate, '.request_fingerprint' do
-  include PowGateSpecHelpers
-
-  it 'is deterministic: same inputs → same fingerprint' do
-    fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
-    fp2 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
-    expect(fp1).to eq(fp2)
-  end
-
-  it 'changes when the HTTP METHOD changes (GET catalog is not POST catalog)' do
-    fp_get  = described_class.request_fingerprint(method: 'GET',  verb: 'catalog', body: { q: 'milk' })
-    fp_post = described_class.request_fingerprint(method: 'POST', verb: 'catalog', body: { q: 'milk' })
-    expect(fp_get).not_to eq(fp_post)
-  end
-
-  it 'changes when the VERB changes (the path segment, no longer a body field)' do
-    fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
-    fp2 = described_class.request_fingerprint(method: 'GET', verb: 'orders',  body: { q: 'milk' })
-    expect(fp1).not_to eq(fp2)
-  end
-
-  it 'changes when the body changes' do
-    fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
-    fp2 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'bread' })
-    expect(fp1).not_to eq(fp2)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, '.request_fingerprint' do
-  include PowGateSpecHelpers
-
-  it 'upcases the method, so a lower-case spelling is the SAME request' do
-    fp_lower = described_class.request_fingerprint(method: 'get', verb: 'catalog', body: { q: 'milk' })
-    fp_upper = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
-    expect(fp_lower).to eq(fp_upper)
-  end
-
-  it 'is canonical (key-order-independent)' do
-    fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { a: 1, b: 2 })
-    fp2 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { b: 2, a: 1 })
-    expect(fp1).to eq(fp2)
-  end
-
-  it 'treats nil body the same as an empty hash' do
-    fp_nil   = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: nil)
-    fp_empty = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: {})
-    expect(fp_nil).to eq(fp_empty)
-  end
-
-  # The formula itself, pinned: a client solving a challenge has to reproduce
-  # this digest byte for byte, so the separator and the ordering are wire
-  # contract, not an implementation detail.
-  it 'is exactly SHA256("<METHOD> <verb>\\n<canonical args>")' do
-    expect(described_class.request_fingerprint(method: 'get', verb: 'catalog', body: { b: 2, a: 1 }))
-      .to eq(Digest::SHA256.hexdigest(%(GET catalog\n{"a":1,"b":2})))
-  end
-end
-
-# ─── nil-policy regression (the make-or-break invariant) ─────────────────
-RSpec.describe Kiosk::Server::PowGate, 'nil reputation_policy (the default)' do
-  include PowGateSpecHelpers
-
-  it 'defaults to nil' do
-    expect(Kiosk.configuration.reputation_policy).to be_nil
-  end
-
-  it 'returns :proceed immediately without touching kiosk-reputation' do
-    result = described_class.gate(
-      identity: identity, command: 'query', body: { name: 'menu' }, pow: nil
-    )
-    expect(result).to eq(:proceed)
-  end
-
-  it 'returns :proceed even when a pow field is present' do
-    result = described_class.gate(
-      identity: identity, command: 'query', body: { name: 'menu' },
-      pow: [{ challenge: {}, nonce: '123' }]
-    )
-    expect(result).to eq(:proceed)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, 'configuration guard: policy set but pow_secret nil' do
-  include PowGateSpecHelpers
-
-  it 'raises ConfigurationError mentioning pow_secret' do
-    Kiosk.configure { |c| c.reputation_policy = always_challenge_policy }
-    # pow_secret intentionally left nil
-
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
-  end
-end
-
-# ── K-843: a policy may not demand a difficulty no proof could satisfy ─────
-#
-# The reputation half of the same guard. `Policy#challenge_for` returns
-# `params:` freely and Challenge.issue signs whatever it is handed, so a
-# policy that computes `{n: 0}` mints challenges every honest solve fails —
-# and the 403 blames the client. Asked at gate time instead, so the operator
-# who wrote the policy is the one who hears about it.
-#
-# Driven with the REAL equihash backend, because the seam is duck-typed:
-# kiosk-pow-argon2id does not implement `.valid_params?` and is therefore
-# unconstrained, which the last example here pins deliberately.
-RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params are unsatisfiable (K-843)" do
-  include PowGateSpecHelpers
-
-  before { Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash) }
-
-  it 'raises ConfigurationError naming challenge_for rather than issuing a 402' do
-    configure_with_policy(policy_returning({ n: 0, k: 7 }))
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /challenge_for/)
-  end
-
-  it 'raises before any challenge is minted' do
-    configure_with_policy(policy_returning({ n: 168, k: -5 }))
-    expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
-  end
-
-  it 'raises on a SUBMITTED proof too — not only on the first, unproven request' do
-    # The check sits at the top of `PowToll#collect!`, which both entry points share,
-    # so a client that already holds a challenge minted before the misconfig
-    # gets the same operator-facing error rather than a 403 blaming its proof.
-    configure_with_policy(policy_returning({ n: 0, k: 7 }))
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: {},
-                           pow: [{ challenge: { id: 'x', params: { n: 0, k: 7 } }, nonce: { indices: [] } }])
-    end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "configuration guard: the policy's params are unsatisfiable (K-843)" do
-  include PowGateSpecHelpers
-
-  before { Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash) }
-
-  it 'still issues a 402 at the shipped equihash default — accepted set unchanged' do
-    configure_with_policy(policy_returning(Kiosk::Pow::Equihash.params))
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-
-  it 'raises ConfigurationError for a policy that returns string keys' do
-    configure_with_policy(
-      Class.new(Kiosk::Reputation::Policy) do
-        def challenge_for(**) = { 'alg' => 'equihash', 'params' => Kiosk::Pow::Equihash.params }
-      end.new
-    )
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
-  end
-
-  it 'leaves a backend with no .valid_params? unconstrained (argon2id)' do
-    # kiosk-pow-argon2id answers nothing about its parameters, so the seam must not
-    # answer for it. `{d: 0}` is nonsense to argon2id and this gate does not
-    # pretend to know that — it issues the 402 exactly as before.
-    configure_with_policy(
-      Class.new(Kiosk::Reputation::Policy) do
-        def challenge_for(**)
-          { alg: 'argon2id', params: { d: 0, m: 8 } }
-        end
-      end.new
-    )
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-end
-
-# ─── challenge flow ───────────────────────────────────────────────────────
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} first request — no pow submitted" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'raises PowRequired' do
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-
-  it 'PowRequired carries a well-formed challenge' do
-    error = catch_error(Kiosk::Server::Errors::PowRequired) do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-    end
-
-    ch = error.challenges.first
-    expect(ch[:id]).not_to   be_nil
-    expect(ch[:alg]).to      eq('argon2id')
-    expect(ch[:params]).to   include(:d)
-    expect(ch[:salt]).not_to be_nil
-    expect(ch[:exp]).to      be > Time.now.to_i
-    expect(ch[:sig]).not_to  be_nil
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} first request — no pow submitted" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  # The 0.3 `{ok:false, error:{…}}` envelope was DELETED at the cutover.
-  # The gate's 402 is an RFC 9457 problem document: the branch point is the
-  # TOP-LEVEL `code`, the message is `detail`, and `challenges` survives as
-  # an extension member so the client still solves without a second trip.
-  it 'PowRequired#to_problem renders a pow_required 402 problem document' do
-    error = catch_error(Kiosk::Server::Errors::PowRequired) do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-    end
-
-    problem = error.to_problem
-    expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
-    expect(problem[:title]).to  eq('Proof-of-work required')
-    expect(problem[:status]).to eq(402)
-    expect(problem[:detail]).to eq('proof-of-work required')
-    expect(problem[:code]).to   eq('pow_required')
-    expect(problem[:challenges]).to be_an(Array)
-    expect(problem[:challenges].first).not_to be_nil
-    # No trace of the retired envelope, at either nesting.
-    expect(problem).not_to have_key(:ok)
-    expect(problem).not_to have_key(:error)
-    expect(problem).not_to have_key(:message)
-    expect(error).not_to respond_to(:to_envelope)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} first request — no pow submitted" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'PowRequired has HTTP status 402' do
-    error = catch_error(Kiosk::Server::Errors::PowRequired) do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-    end
-    expect(error.http_status).to eq(402)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a valid proof" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'returns :proceed when the proof is correct' do
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    nonce     = solve_nonce(challenge)
-
-    result = described_class.gate(
-      identity: identity,
-      command: 'query',
-      body: { name: 'menu' },
-      pow: [{ challenge: challenge, nonce: nonce }]
-    )
-    expect(result).to eq(:proceed)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a wrong nonce" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'raises Forbidden' do
-    challenge  = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    bad_nonce  = find_bad_nonce(challenge)
-
-    expect do
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: [{ challenge: challenge, nonce: bad_nonce }]
-      )
-    end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a wrong nonce" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  # ── K-512: the 403 must be actionable ──────────────────────────────────
-  # A bare "invalid proof of work" is a dead end: a live agent that
-  # hand-rolled an Equihash solver got four independent construction
-  # errors wrong at once and this 403 told it none of that. The hint names
-  # the ONE recovery step — run the shipped solver — and nothing else.
-
-  it 'carries a hint steering to the shipped reference solver' do
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    bad_nonce = find_bad_nonce(challenge)
-
-    error = catch_error(Kiosk::Server::Errors::Forbidden) do
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: [{ challenge: challenge, nonce: bad_nonce }]
-      )
-    end
-
-    # Pinned verbatim, and pinned to the UNVERSIONED solver URL on purpose:
-    # a server naming a solver does not know which skill cut its caller
-    # read, so the 403 names the copy that is allowed to move and the
-    # published skill supplies the digest beside its own content-addressed
-    # pin. The two URLs are therefore NOT the same string and must not be
-    # made so.
-    expect(error.hint).to eq(
-      'solve with the reference solver at https://kiosk.tech/pow/solve.py — ' \
-      'a hand-written Equihash solver will not match this verifier'
-    )
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a wrong nonce" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'renders the documented forbidden problem document, carrying the hint' do
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    bad_nonce = find_bad_nonce(challenge)
-
-    error = catch_error(Kiosk::Server::Errors::Forbidden) do
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: [{ challenge: challenge, nonce: bad_nonce }]
-      )
-    end
-
-    # Whole-document equality, as the envelope assertion was: nothing else
-    # rides along, and `hint` keeps its own member name under RFC 9457.
-    expect(error.to_problem).to eq(
-      type: 'https://kiosk.tech/problems/forbidden',
-      title: 'Forbidden',
-      status: 403,
-      detail: 'invalid proof of work',
-      code: 'forbidden',
-      hint: Kiosk::Server::PowGate::POW_INVALID_HINT
-    )
-    expect(error.http_status).to eq(403)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a wrong nonce" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'does not disclose the construction, the parameters, or which check failed' do
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    bad_nonce = find_bad_nonce(challenge)
-
-    error = catch_error(Kiosk::Server::Errors::Forbidden) do
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: [{ challenge: challenge, nonce: bad_nonce }]
-      )
-    end
-
-    wire = "#{error.message} #{error.hint}"
-    %w[wagner xor subtree endian salt header_nonce indices thumbprint expired].each do |leak|
-      expect(wire.downcase).not_to include(leak)
-    end
-  end
-end
-
-# ── proof bound to a DIFFERENT request (fingerprint mismatch) → re-challenge
-#
-# The sig covers the request fingerprint, so a genuinely solved proof is
-# spendable on ONE call and nothing else. All three halves of that digest
-# are exercised here, one example each, and the control example FIRST in
-# the block proves the three refusals are not passing for some trivial
-# reason.
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} proof issued for a different request" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'verifies for the identical method + verb + args (the control)' do
-    result = described_class.gate(
-      identity: identity, command: 'query', method: 'GET', verb: 'catalog',
-      body: { q: 'milk' }, pow: catalog_pow
-    )
-    expect(result).to eq(:proceed)
-  end
-
-  it 're-challenges when the ARGUMENTS differ' do
-    proof = catalog_pow(body: { q: 'milk' })
-
-    expect do
-      described_class.gate(
-        identity: identity, command: 'query', method: 'GET', verb: 'catalog',
-        body: { q: 'bread' }, # different args!
-        pow: proof
-      )
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} proof issued for a different request" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 're-challenges when the METHOD differs (a GET catalog proof on POST catalog)' do
-    proof = catalog_pow(body: {})
-
-    expect do
-      described_class.gate(
-        identity: identity, command: 'run', method: 'POST', verb: 'catalog',
-        body: {}, pow: proof
-      )
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-
-  it 're-challenges when the VERB differs (a catalog proof is not an orders proof)' do
-    proof = catalog_pow(body: {})
-
-    expect do
-      described_class.gate(
-        identity: identity, command: 'query', method: 'GET', verb: 'orders',
-        body: {}, pow: proof
-      )
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-end
-
-# ── replayed (spent) challenge id → re-challenge (not a penalty) ────────
-#
-# An honest client that solved + submitted + was served but LOST the 200
-# response (timeout / at-least-once HTTP) retries the identical pow. The id
-# is now spent. The correct response is a fresh challenge (402), NOT a 403
-# penalty — a replayed valid proof is not a wrong proof.
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} replayed challenge id (spent proof — honest retry)" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 're-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden' do
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    nonce     = solve_nonce(challenge)
-    pow       = [{ challenge: challenge, nonce: nonce }]
-
-    # First submission → accepted
-    result = described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
-    expect(result).to eq(:proceed)
-
-    # Replay of the same (now-spent) proof → re-challenge, NOT 403
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} replayed challenge id (spent proof — honest retry)" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 're-challenge carries a well-formed NEW challenge (different id from the spent one)' do
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    nonce     = solve_nonce(challenge)
-    pow       = [{ challenge: challenge, nonce: nonce }]
-
-    described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
-
-    new_error = catch_error(Kiosk::Server::Errors::PowRequired) do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
-    end
-
-    new_ch = new_error.challenges.first
-    expect(new_ch[:id]).not_to   be_nil
-    expect(new_ch[:id]).not_to   eq(challenge[:id]) # fresh id
-    expect(new_ch[:alg]).to      eq('argon2id')
-    expect(new_ch[:exp]).to      be > Time.now.to_i
-  end
-end
-
-# ── malformed proof: challenge missing a params object (K-551) ───────────
-# A challenge echoed back WITHOUT a `params` object would 500 inside the
-# challenge sig computation (`nil.sort_by`). The gate rejects it as a clean
-# bad_request first, before the claim or any hash work.
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} malformed proof (challenge without params)" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'raises BadRequest (400), not a 500, when challenge.params is missing' do
-    malformed = { id: 'x', alg: 'argon2id', salt: 'abc',
-                  exp: Time.now.to_i + 300, sig: 'deadbeef' }
-    expect do
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: [{ challenge: malformed, nonce: '1' }]
-      )
-    end.to raise_error(Kiosk::Server::Errors::BadRequest, /params/)
-  end
-end
-
 # The spent-id store is written only for a live challenge this origin signed,
 # at the exp it signed, and for no more proofs than the toll asks.
 RSpec.shared_context 'pow gate spec: recorded claims' do
@@ -704,439 +190,853 @@ RSpec.shared_context 'pow gate spec: recorded claims' do
   end
 end
 
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} what reaches the spent-id store" do
-  include_context 'pow gate spec: recorded claims'
+RSpec.describe Kiosk::Server::PowGate do
+  # ─── the request fingerprint: SHA256("<METHOD> <verb>\n<canonical args>") ─
+  #
+  # 0.3 hashed `"<command>\n<body>"`: with every read multiplexed through
+  # `POST <endpoint>/query` the method was a constant and the verb name only
+  # reached the digest because the wire smuggled it back into the body. On the
+  # per-verb wire the method carries the read/write fork and the name is a path
+  # segment, so BOTH are hashed directly — and each of the three inputs is
+  # separately load-bearing, which is what the four examples below pin.
+  describe '.request_fingerprint' do
+    include PowGateSpecHelpers
 
-  it 'claims nothing for a challenge whose exp the caller moved' do
-    challenge = issue_challenge_via_gate
-    moved = challenge.merge(exp: challenge[:exp] + 86_400)
+    it 'is deterministic: same inputs → same fingerprint' do
+      fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
+      fp2 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
+      expect(fp1).to eq(fp2)
+    end
 
-    expect(gate_with([{ challenge: moved, nonce: solve_nonce(challenge) }])).to eq(:pow_required)
-    expect(claims).to be_empty
+    it 'changes when the HTTP METHOD changes (GET catalog is not POST catalog)' do
+      fp_get  = described_class.request_fingerprint(method: 'GET',  verb: 'catalog', body: { q: 'milk' })
+      fp_post = described_class.request_fingerprint(method: 'POST', verb: 'catalog', body: { q: 'milk' })
+      expect(fp_get).not_to eq(fp_post)
+    end
+
+    it 'changes when the VERB changes (the path segment, no longer a body field)' do
+      fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
+      fp2 = described_class.request_fingerprint(method: 'GET', verb: 'orders',  body: { q: 'milk' })
+      expect(fp1).not_to eq(fp2)
+    end
+
+    it 'changes when the body changes' do
+      fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
+      fp2 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'bread' })
+      expect(fp1).not_to eq(fp2)
+    end
+
+    it 'upcases the method, so a lower-case spelling is the SAME request' do
+      fp_lower = described_class.request_fingerprint(method: 'get', verb: 'catalog', body: { q: 'milk' })
+      fp_upper = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { q: 'milk' })
+      expect(fp_lower).to eq(fp_upper)
+    end
+
+    it 'is canonical (key-order-independent)' do
+      fp1 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { a: 1, b: 2 })
+      fp2 = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: { b: 2, a: 1 })
+      expect(fp1).to eq(fp2)
+    end
+
+    it 'treats nil body the same as an empty hash' do
+      fp_nil   = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: nil)
+      fp_empty = described_class.request_fingerprint(method: 'GET', verb: 'catalog', body: {})
+      expect(fp_nil).to eq(fp_empty)
+    end
+
+    # The formula itself, pinned: a client solving a challenge has to reproduce
+    # this digest byte for byte, so the separator and the ordering are wire
+    # contract, not an implementation detail.
+    it 'is exactly SHA256("<METHOD> <verb>\\n<canonical args>")' do
+      expect(described_class.request_fingerprint(method: 'get', verb: 'catalog', body: { b: 2, a: 1 }))
+        .to eq(Digest::SHA256.hexdigest(%(GET catalog\n{"a":1,"b":2})))
+    end
   end
 
-  it 'claims the id at the exp the challenge was signed with' do
-    challenge = issue_challenge_via_gate
+  # ─── nil-policy regression (the make-or-break invariant) ─────────────────
+  describe 'nil reputation_policy (the default)' do
+    include PowGateSpecHelpers
 
-    expect(gate_with([{ challenge: challenge, nonce: solve_nonce(challenge) }])).to eq(:proceed)
-    expect(claims).to eq([[challenge[:id], challenge[:exp]]])
-  end
-end
+    it 'defaults to nil' do
+      expect(Kiosk.configuration.reputation_policy).to be_nil
+    end
 
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} what reaches the spent-id store" do
-  include_context 'pow gate spec: recorded claims'
+    it 'returns :proceed immediately without touching kiosk-reputation' do
+      result = described_class.gate(
+        identity: identity, command: 'query', body: { name: 'menu' }, pow: nil
+      )
+      expect(result).to eq(:proceed)
+    end
 
-  it 'looks at no more proofs than the toll asks for' do
-    first, second = Array.new(2) { issue_challenge_via_gate }
-
-    expect(gate_with([{ challenge: first, nonce: solve_nonce(first) },
-                      { challenge: second, nonce: solve_nonce(second) }])).to eq(:proceed)
-    expect(claims.map(&:first)).to eq([first[:id]])
-  end
-
-  it 'refuses a policy that names a backend nobody registered, before any challenge is issued' do
-    unregistered = Class.new(Kiosk::Reputation::Policy) { def challenge_for(**) = { alg: 'no-such-backend', params: { n: 1 } } }
-    configure_with_policy(unregistered.new)
-
-    expect { gate_with(nil) }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /no-such-backend/)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} policy that returns nil for some verbs (free pass)" do
-  include PowGateSpecHelpers
-
-  before { configure_with_policy(PowGateSpecHelpers::SelectivePolicy.new) }
-
-  it 'returns :proceed for a verb the policy exempts' do
-    result = described_class.gate(identity: identity, command: 'run', body: { name: 'ping' }, pow: nil)
-    expect(result).to eq(:proceed)
+    it 'returns :proceed even when a pow field is present' do
+      result = described_class.gate(
+        identity: identity, command: 'query', body: { name: 'menu' },
+        pow: [{ challenge: {}, nonce: '123' }]
+      )
+      expect(result).to eq(:proceed)
+    end
   end
 
-  it 'raises PowRequired for a verb the policy challenges' do
-    expect do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-end
+  describe 'configuration guard: policy set but pow_secret nil' do
+    include PowGateSpecHelpers
 
-# ─── a valid proof is single-use even under concurrency ──────────────────
-# The gate claims the id atomically BEFORE the ~22 ms verify, so a single
-# proof id is accepted exactly once across N racing submissions.
-RSpec.describe Kiosk::Server::PowGate, 'concurrent submission of one valid proof (spent-store TOCTOU)' do
-  include PowGateSpecHelpers
+    it 'raises ConfigurationError mentioning pow_secret' do
+      Kiosk.configure { |c| c.reputation_policy = always_challenge_policy }
+      # pow_secret intentionally left nil
 
-  before do
-    Kiosk::Reputation::Backends.register('slowtest', PowGateSpecHelpers::SlowOkBackend.new)
-    configure_with_policy(PowGateSpecHelpers::SlowOkPolicy.new)
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /pow_secret/)
+    end
   end
 
-  it 'accepts one proof id exactly once across N racing submissions' do
-    challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
-    pow       = [{ challenge: challenge, nonce: 'n' }]
-    n         = 20
-    latch     = Queue.new
+  # ── K-843: a policy may not demand a difficulty no proof could satisfy ─────
+  #
+  # The reputation half of the same guard. `Policy#challenge_for` returns
+  # `params:` freely and Challenge.issue signs whatever it is handed, so a
+  # policy that computes `{n: 0}` mints challenges every honest solve fails —
+  # and the 403 blames the client. Asked at gate time instead, so the operator
+  # who wrote the policy is the one who hears about it.
+  #
+  # Driven with the REAL equihash backend, because the seam is duck-typed:
+  # kiosk-pow-argon2id does not implement `.valid_params?` and is therefore
+  # unconstrained, which the last example here pins deliberately.
+  describe "configuration guard: the policy's params are unsatisfiable (K-843)" do
+    include PowGateSpecHelpers
 
-    threads = Array.new(n) do
-      Thread.new do
-        latch.pop
-        begin
-          described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
-        rescue Kiosk::Server::Errors::PowRequired
-          :rechallenged
-        end
+    before { Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash) }
+
+    it 'raises ConfigurationError naming challenge_for rather than issuing a 402' do
+      configure_with_policy(policy_returning({ n: 0, k: 7 }))
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::ConfigurationError, /challenge_for/)
+    end
+
+    it 'raises before any challenge is minted' do
+      configure_with_policy(policy_returning({ n: 168, k: -5 }))
+      expect(Kiosk::Reputation::Challenge).not_to receive(:issue)
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end
+
+    it 'raises on a SUBMITTED proof too — not only on the first, unproven request' do
+      # The check sits at the top of `PowToll#collect!`, which both entry points share,
+      # so a client that already holds a challenge minted before the misconfig
+      # gets the same operator-facing error rather than a 403 blaming its proof.
+      configure_with_policy(policy_returning({ n: 0, k: 7 }))
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: {},
+                             pow: [{ challenge: { id: 'x', params: { n: 0, k: 7 } }, nonce: { indices: [] } }])
+      end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end
+
+    it 'still issues a 402 at the shipped equihash default — accepted set unchanged' do
+      configure_with_policy(policy_returning(Kiosk::Pow::Equihash.params))
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it 'raises ConfigurationError for a policy that returns string keys' do
+      configure_with_policy(
+        Class.new(Kiosk::Reputation::Policy) do
+          def challenge_for(**) = { 'alg' => 'equihash', 'params' => Kiosk::Pow::Equihash.params }
+        end.new
+      )
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end
+
+    it 'leaves a backend with no .valid_params? unconstrained (argon2id)' do
+      # kiosk-pow-argon2id answers nothing about its parameters, so the seam must not
+      # answer for it. `{d: 0}` is nonsense to argon2id and this gate does not
+      # pretend to know that — it issues the 402 exactly as before.
+      configure_with_policy(
+        Class.new(Kiosk::Reputation::Policy) do
+          def challenge_for(**)
+            { alg: 'argon2id', params: { d: 0, m: 8 } }
+          end
+        end.new
+      )
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: {}, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+  end
+
+  # ─── challenge flow ───────────────────────────────────────────────────────
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} first request — no pow submitted" do
+    include PowGateSpecHelpers
+
+    before { configure_with_policy(always_challenge_policy) }
+
+    it 'raises PowRequired' do
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it 'PowRequired carries a well-formed challenge' do
+      error = catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+      end
+
+      ch = error.challenges.first
+      expect(ch[:id]).not_to   be_nil
+      expect(ch[:alg]).to      eq('argon2id')
+      expect(ch[:params]).to   include(:d)
+      expect(ch[:salt]).not_to be_nil
+      expect(ch[:exp]).to      be > Time.now.to_i
+      expect(ch[:sig]).not_to  be_nil
+    end
+
+    # The 0.3 `{ok:false, error:{…}}` envelope was DELETED at the cutover.
+    # The gate's 402 is an RFC 9457 problem document: the branch point is the
+    # TOP-LEVEL `code`, the message is `detail`, and `challenges` survives as
+    # an extension member so the client still solves without a second trip.
+    it 'PowRequired#to_problem renders a pow_required 402 problem document' do
+      error = catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+      end
+
+      problem = error.to_problem
+      expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+      expect(problem[:title]).to  eq('Proof-of-work required')
+      expect(problem[:status]).to eq(402)
+      expect(problem[:detail]).to eq('proof-of-work required')
+      expect(problem[:code]).to   eq('pow_required')
+      expect(problem[:challenges]).to be_an(Array)
+      expect(problem[:challenges].first).not_to be_nil
+      # No trace of the retired envelope, at either nesting.
+      expect(problem).not_to have_key(:ok)
+      expect(problem).not_to have_key(:error)
+      expect(problem).not_to have_key(:message)
+      expect(error).not_to respond_to(:to_envelope)
+    end
+
+    it 'PowRequired has HTTP status 402' do
+      error = catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+      end
+      expect(error.http_status).to eq(402)
+    end
+  end
+
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a valid proof" do
+    include PowGateSpecHelpers
+
+    before { configure_with_policy(always_challenge_policy) }
+
+    it 'returns :proceed when the proof is correct' do
+      challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      nonce     = solve_nonce(challenge)
+
+      result = described_class.gate(
+        identity: identity,
+        command: 'query',
+        body: { name: 'menu' },
+        pow: [{ challenge: challenge, nonce: nonce }]
+      )
+      expect(result).to eq(:proceed)
+    end
+  end
+
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} retry with a wrong nonce" do
+    include PowGateSpecHelpers
+
+    before { configure_with_policy(always_challenge_policy) }
+
+    it 'raises Forbidden' do
+      challenge  = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      bad_nonce  = find_bad_nonce(challenge)
+
+      expect do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: [{ challenge: challenge, nonce: bad_nonce }]
+        )
+      end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
+    end
+
+    # ── K-512: the 403 must be actionable ──────────────────────────────────
+    # A bare "invalid proof of work" is a dead end: a live agent that
+    # hand-rolled an Equihash solver got four independent construction
+    # errors wrong at once and this 403 told it none of that. The hint names
+    # the ONE recovery step — run the shipped solver — and nothing else.
+
+    it 'carries a hint steering to the shipped reference solver' do
+      challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      bad_nonce = find_bad_nonce(challenge)
+
+      error = catch_error(Kiosk::Server::Errors::Forbidden) do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: [{ challenge: challenge, nonce: bad_nonce }]
+        )
+      end
+
+      # Pinned verbatim, and pinned to the UNVERSIONED solver URL on purpose:
+      # a server naming a solver does not know which skill cut its caller
+      # read, so the 403 names the copy that is allowed to move and the
+      # published skill supplies the digest beside its own content-addressed
+      # pin. The two URLs are therefore NOT the same string and must not be
+      # made so.
+      expect(error.hint).to eq(
+        'solve with the reference solver at https://kiosk.tech/pow/solve.py — ' \
+        'a hand-written Equihash solver will not match this verifier'
+      )
+    end
+
+    it 'renders the documented forbidden problem document, carrying the hint' do
+      challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      bad_nonce = find_bad_nonce(challenge)
+
+      error = catch_error(Kiosk::Server::Errors::Forbidden) do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: [{ challenge: challenge, nonce: bad_nonce }]
+        )
+      end
+
+      # Whole-document equality, as the envelope assertion was: nothing else
+      # rides along, and `hint` keeps its own member name under RFC 9457.
+      expect(error.to_problem).to eq(
+        type: 'https://kiosk.tech/problems/forbidden',
+        title: 'Forbidden',
+        status: 403,
+        detail: 'invalid proof of work',
+        code: 'forbidden',
+        hint: Kiosk::Server::PowGate::POW_INVALID_HINT
+      )
+      expect(error.http_status).to eq(403)
+    end
+
+    it 'does not disclose the construction, the parameters, or which check failed' do
+      challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      bad_nonce = find_bad_nonce(challenge)
+
+      error = catch_error(Kiosk::Server::Errors::Forbidden) do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: [{ challenge: challenge, nonce: bad_nonce }]
+        )
+      end
+
+      wire = "#{error.message} #{error.hint}"
+      %w[wagner xor subtree endian salt header_nonce indices thumbprint expired].each do |leak|
+        expect(wire.downcase).not_to include(leak)
       end
     end
-    n.times { latch.push(:go) }
-    results = threads.map(&:value)
-
-    expect(results.count(:proceed)).to eq(1)
-    expect(results.count(:rechallenged)).to eq(n - 1)
-  end
-end
-
-# ─── configuration extension defaults ─────────────────────────────────────
-RSpec.describe Kiosk::Server::PowGate, 'new config slots (defaults)' do
-  include PowGateSpecHelpers
-
-  it 'reputation_policy defaults to nil' do
-    expect(Kiosk.configuration.reputation_policy).to be_nil
   end
 
-  it 'pow_secret defaults to nil' do
-    expect(Kiosk.configuration.pow_secret).to be_nil
-  end
+  # ── proof bound to a DIFFERENT request (fingerprint mismatch) → re-challenge
+  #
+  # The sig covers the request fingerprint, so a genuinely solved proof is
+  # spendable on ONE call and nothing else. All three halves of that digest
+  # are exercised here, one example each, and the control example FIRST in
+  # the block proves the three refusals are not passing for some trivial
+  # reason.
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} proof issued for a different request" do
+    include PowGateSpecHelpers
 
-  it 'pow_ttl defaults to 300' do
-    expect(Kiosk.configuration.pow_ttl).to eq(300)
-  end
-end
+    before { configure_with_policy(always_challenge_policy) }
 
-RSpec.describe Kiosk::Server::PowGate, 'new config slots (defaults)' do
-  include PowGateSpecHelpers
-
-  it 'pow_spent_store defaults to the database-backed store' do
-    Kiosk.reset!
-    expect(Kiosk.configuration.pow_spent_store).to be_a(Kiosk::Server::PowSpentStores::ActiveRecord)
-  end
-
-  it 'pow_spent_store is fresh after Kiosk.reset!' do
-    store_before = Kiosk.configuration.pow_spent_store
-    Kiosk.reset!
-    store_after = Kiosk.configuration.pow_spent_store
-    expect(store_after).not_to be(store_before)
-  end
-end
-
-# ─── N×PoW: policy demands multiple independent proofs ─────────────────────
-# The gate is algorithm-agnostic — argon2id (d=4, m=8) keeps solving fast.
-# Equihash's own verify math is covered in kiosk-pow-equihash. Here we prove
-# the gate's N-proof ORCHESTRATION: N distinct challenges, all-or-re-challenge,
-# no-burn-on-partial, and bad-faith detection.
-RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
-  include PowGateSpecHelpers
-
-  let(:count) { 3 }
-
-  before { configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count)) }
-
-  it 'issues `count` challenges with distinct ids AND salts (no amortisation)' do
-    challenges = issue_n_challenges
-    expect(challenges.length).to eq(count)
-    expect(challenges.pluck(:id).uniq.length).to eq(count)
-    expect(challenges.pluck(:salt).uniq.length).to eq(count)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
-  include PowGateSpecHelpers
-
-  let(:count) { 3 }
-
-  before { configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count)) }
-
-  it 'scales the challenge TTL by `count`, so a sequential solver does not lose the first' do
-    # Spec §10 (matrix SPEC-119). Every challenge in a batch expires at
-    # `pow_ttl × count`, NOT at `pow_ttl`: an honest client solving three
-    # memory-hard proofs one after another spends real time on each, and a
-    # flat TTL would expire challenge #1 while it is still working on #3 —
-    # the batch could then never be completed at all, at any speed short of
-    # parallel solving. `PowToll#pow_required` sets this TTL.
-    #
-    # A DISTINCTIVE ttl (100, not the 300 default) so the assertion reads a
-    # value that could only have come from configuration, and BOTH arms are
-    # measured in the same example: the N-proof batch AND a single-proof
-    # challenge from the same code path. Without the second arm "exp is 300
-    # seconds out" would pass for a gate that had simply been left at its
-    # default and never scaled anything.
-    configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count), pow_ttl: 100)
-    before_issue = Time.now.to_i
-    batch        = issue_n_challenges
-    after_issue  = Time.now.to_i
-
-    expect(batch.length).to eq(count)
-    batch.each do |ch|
-      expect(ch[:exp]).to be_between(before_issue + (100 * count), after_issue + (100 * count))
+    it 'verifies for the identical method + verb + args (the control)' do
+      result = described_class.gate(
+        identity: identity, command: 'query', method: 'GET', verb: 'catalog',
+        body: { q: 'milk' }, pow: catalog_pow
+      )
+      expect(result).to eq(:proceed)
     end
 
-    # The control: one proof, same gate, same ttl — the UNSCALED window.
-    configure_with_policy(always_challenge_policy, pow_ttl: 100)
-    before_single = Time.now.to_i
-    single = catch_error(Kiosk::Server::Errors::PowRequired) do
-      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-    end.challenges
-    after_single = Time.now.to_i
+    it 're-challenges when the ARGUMENTS differ' do
+      proof = catalog_pow(body: { q: 'milk' })
 
-    expect(single.length).to eq(1)
-    expect(single.first[:exp]).to be_between(before_single + 100, after_single + 100)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
-  include PowGateSpecHelpers
-
-  let(:count) { 3 }
-
-  before { configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count)) }
-
-  it 'proceeds only when ALL `count` proofs are valid' do
-    result = described_class.gate(
-      identity: identity, command: 'query', body: { name: 'menu' },
-      pow: solve_all(issue_n_challenges)
-    )
-    expect(result).to eq(:proceed)
-  end
-
-  it 're-challenges when fewer than `count` valid proofs are submitted' do
-    proofs = solve_all(issue_n_challenges)
-    expect do
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: proofs.first(count - 1)
-      )
-    end.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-end
-
-RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
-  include PowGateSpecHelpers
-
-  let(:count) { 3 }
-
-  before { configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count)) }
-
-  it 'does NOT spend proofs on a short submission (a later full submission still works)' do
-    proofs = solve_all(issue_n_challenges)
-
-    catch_error(Kiosk::Server::Errors::PowRequired) do
-      described_class.gate(
-        identity: identity, command: 'query', body: { name: 'menu' },
-        pow: proofs.first(count - 1)
-      )
+      expect do
+        described_class.gate(
+          identity: identity, command: 'query', method: 'GET', verb: 'catalog',
+          body: { q: 'bread' }, # different args!
+          pow: proof
+        )
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
     end
 
-    result = described_class.gate(
-      identity: identity, command: 'query', body: { name: 'menu' },
-      pow: proofs
-    )
-    expect(result).to eq(:proceed)
+    it 're-challenges when the METHOD differs (a GET catalog proof on POST catalog)' do
+      proof = catalog_pow(body: {})
+
+      expect do
+        described_class.gate(
+          identity: identity, command: 'run', method: 'POST', verb: 'catalog',
+          body: {}, pow: proof
+        )
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it 're-challenges when the VERB differs (a catalog proof is not an orders proof)' do
+      proof = catalog_pow(body: {})
+
+      expect do
+        described_class.gate(
+          identity: identity, command: 'query', method: 'GET', verb: 'orders',
+          body: {}, pow: proof
+        )
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
   end
-end
 
-RSpec.describe Kiosk::Server::PowGate, PowGateSpecHelpers::N_PROOFS do
-  include PowGateSpecHelpers
+  # ── replayed (spent) challenge id → re-challenge (not a penalty) ────────
+  #
+  # An honest client that solved + submitted + was served but LOST the 200
+  # response (timeout / at-least-once HTTP) retries the identical pow. The id
+  # is now spent. The correct response is a fresh challenge (402), NOT a 403
+  # penalty — a replayed valid proof is not a wrong proof.
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} replayed challenge id (spent proof — honest retry)" do
+    include PowGateSpecHelpers
 
-  let(:count) { 3 }
+    before { configure_with_policy(always_challenge_policy) }
 
-  before { configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count)) }
+    it 're-issues a fresh challenge (PowRequired / HTTP 402) instead of Forbidden' do
+      challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      nonce     = solve_nonce(challenge)
+      pow       = [{ challenge: challenge, nonce: nonce }]
 
-  it 'raises Forbidden if any single proof is cryptographically wrong' do
-    challenges = issue_n_challenges
-    proofs     = solve_all(challenges)
-    proofs[1]  = { challenge: challenges[1], nonce: find_bad_nonce(challenges[1]) }
+      # First submission → accepted
+      result = described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
+      expect(result).to eq(:proceed)
 
-    expect do
-      described_class.gate(
+      # Replay of the same (now-spent) proof → re-challenge, NOT 403
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it 're-challenge carries a well-formed NEW challenge (different id from the spent one)' do
+      challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      nonce     = solve_nonce(challenge)
+      pow       = [{ challenge: challenge, nonce: nonce }]
+
+      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
+
+      new_error = catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
+      end
+
+      new_ch = new_error.challenges.first
+      expect(new_ch[:id]).not_to   be_nil
+      expect(new_ch[:id]).not_to   eq(challenge[:id]) # fresh id
+      expect(new_ch[:alg]).to      eq('argon2id')
+      expect(new_ch[:exp]).to      be > Time.now.to_i
+    end
+  end
+
+  # ── malformed proof: challenge missing a params object (K-551) ───────────
+  # A challenge echoed back WITHOUT a `params` object would 500 inside the
+  # challenge sig computation (`nil.sort_by`). The gate rejects it as a clean
+  # bad_request first, before the claim or any hash work.
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} malformed proof (challenge without params)" do
+    include PowGateSpecHelpers
+
+    before { configure_with_policy(always_challenge_policy) }
+
+    it 'raises BadRequest (400), not a 500, when challenge.params is missing' do
+      malformed = { id: 'x', alg: 'argon2id', salt: 'abc',
+                    exp: Time.now.to_i + 300, sig: 'deadbeef' }
+      expect do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: [{ challenge: malformed, nonce: '1' }]
+        )
+      end.to raise_error(Kiosk::Server::Errors::BadRequest, /params/)
+    end
+  end
+
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} what reaches the spent-id store" do
+    include_context 'pow gate spec: recorded claims'
+
+    it 'claims nothing for a challenge whose exp the caller moved' do
+      challenge = issue_challenge_via_gate
+      moved = challenge.merge(exp: challenge[:exp] + 86_400)
+
+      expect(gate_with([{ challenge: moved, nonce: solve_nonce(challenge) }])).to eq(:pow_required)
+      expect(claims).to be_empty
+    end
+
+    it 'claims the id at the exp the challenge was signed with' do
+      challenge = issue_challenge_via_gate
+
+      expect(gate_with([{ challenge: challenge, nonce: solve_nonce(challenge) }])).to eq(:proceed)
+      expect(claims).to eq([[challenge[:id], challenge[:exp]]])
+    end
+
+    it 'looks at no more proofs than the toll asks for' do
+      first, second = Array.new(2) { issue_challenge_via_gate }
+
+      expect(gate_with([{ challenge: first, nonce: solve_nonce(first) },
+                        { challenge: second, nonce: solve_nonce(second) }])).to eq(:proceed)
+      expect(claims.map(&:first)).to eq([first[:id]])
+    end
+
+    it 'refuses a policy that names a backend nobody registered, before any challenge is issued' do
+      unregistered = Class.new(Kiosk::Reputation::Policy) { def challenge_for(**) = { alg: 'no-such-backend', params: { n: 1 } } }
+      configure_with_policy(unregistered.new)
+
+      expect { gate_with(nil) }.to raise_error(Kiosk::Server::Errors::ConfigurationError, /no-such-backend/)
+    end
+  end
+
+  describe "#{PowGateSpecHelpers::ALWAYS_CHALLENGES} policy that returns nil for some verbs (free pass)" do
+    include PowGateSpecHelpers
+
+    before { configure_with_policy(PowGateSpecHelpers::SelectivePolicy.new) }
+
+    it 'returns :proceed for a verb the policy exempts' do
+      result = described_class.gate(identity: identity, command: 'run', body: { name: 'ping' }, pow: nil)
+      expect(result).to eq(:proceed)
+    end
+
+    it 'raises PowRequired for a verb the policy challenges' do
+      expect do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+  end
+
+  # ─── a valid proof is single-use even under concurrency ──────────────────
+  # The gate claims the id atomically BEFORE the ~22 ms verify, so a single
+  # proof id is accepted exactly once across N racing submissions.
+  describe 'concurrent submission of one valid proof (spent-store TOCTOU)' do
+    include PowGateSpecHelpers
+
+    before do
+      Kiosk::Reputation::Backends.register('slowtest', PowGateSpecHelpers::SlowOkBackend.new)
+      configure_with_policy(PowGateSpecHelpers::SlowOkPolicy.new)
+    end
+
+    it 'accepts one proof id exactly once across N racing submissions' do
+      challenge = issue_challenge_via_gate(command: 'query', body: { name: 'menu' })
+      pow       = [{ challenge: challenge, nonce: 'n' }]
+      n         = 20
+      latch     = Queue.new
+
+      threads = Array.new(n) do
+        Thread.new do
+          latch.pop
+          begin
+            described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: pow)
+          rescue Kiosk::Server::Errors::PowRequired
+            :rechallenged
+          end
+        end
+      end
+      n.times { latch.push(:go) }
+      results = threads.map(&:value)
+
+      expect(results.count(:proceed)).to eq(1)
+      expect(results.count(:rechallenged)).to eq(n - 1)
+    end
+  end
+
+  # ─── configuration extension defaults ─────────────────────────────────────
+  describe 'new config slots (defaults)' do
+    include PowGateSpecHelpers
+
+    it 'reputation_policy defaults to nil' do
+      expect(Kiosk.configuration.reputation_policy).to be_nil
+    end
+
+    it 'pow_secret defaults to nil' do
+      expect(Kiosk.configuration.pow_secret).to be_nil
+    end
+
+    it 'pow_ttl defaults to 300' do
+      expect(Kiosk.configuration.pow_ttl).to eq(300)
+    end
+
+    it 'pow_spent_store defaults to the database-backed store' do
+      Kiosk.reset!
+      expect(Kiosk.configuration.pow_spent_store).to be_a(Kiosk::Server::PowSpentStores::ActiveRecord)
+    end
+
+    it 'pow_spent_store is fresh after Kiosk.reset!' do
+      store_before = Kiosk.configuration.pow_spent_store
+      Kiosk.reset!
+      store_after = Kiosk.configuration.pow_spent_store
+      expect(store_after).not_to be(store_before)
+    end
+  end
+
+  # ─── N×PoW: policy demands multiple independent proofs ─────────────────────
+  # The gate is algorithm-agnostic — argon2id (d=4, m=8) keeps solving fast.
+  # Equihash's own verify math is covered in kiosk-pow-equihash. Here we prove
+  # the gate's N-proof ORCHESTRATION: N distinct challenges, all-or-re-challenge,
+  # no-burn-on-partial, and bad-faith detection.
+  describe PowGateSpecHelpers::N_PROOFS do
+    include PowGateSpecHelpers
+
+    let(:count) { 3 }
+
+    before { configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count)) }
+
+    it 'issues `count` challenges with distinct ids AND salts (no amortisation)' do
+      challenges = issue_n_challenges
+      expect(challenges.length).to eq(count)
+      expect(challenges.pluck(:id).uniq.length).to eq(count)
+      expect(challenges.pluck(:salt).uniq.length).to eq(count)
+    end
+
+    it 'scales the challenge TTL by `count`, so a sequential solver does not lose the first' do
+      # Spec §10 (matrix SPEC-119). Every challenge in a batch expires at
+      # `pow_ttl × count`, NOT at `pow_ttl`: an honest client solving three
+      # memory-hard proofs one after another spends real time on each, and a
+      # flat TTL would expire challenge #1 while it is still working on #3 —
+      # the batch could then never be completed at all, at any speed short of
+      # parallel solving. `PowToll#pow_required` sets this TTL.
+      #
+      # A DISTINCTIVE ttl (100, not the 300 default) so the assertion reads a
+      # value that could only have come from configuration, and BOTH arms are
+      # measured in the same example: the N-proof batch AND a single-proof
+      # challenge from the same code path. Without the second arm "exp is 300
+      # seconds out" would pass for a gate that had simply been left at its
+      # default and never scaled anything.
+      configure_with_policy(PowGateSpecHelpers::MultiProofPolicy.new(count), pow_ttl: 100)
+      before_issue = Time.now.to_i
+      batch        = issue_n_challenges
+      after_issue  = Time.now.to_i
+
+      expect(batch.length).to eq(count)
+      batch.each do |ch|
+        expect(ch[:exp]).to be_between(before_issue + (100 * count), after_issue + (100 * count))
+      end
+
+      # The control: one proof, same gate, same ttl — the UNSCALED window.
+      configure_with_policy(always_challenge_policy, pow_ttl: 100)
+      before_single = Time.now.to_i
+      single = catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+      end.challenges
+      after_single = Time.now.to_i
+
+      expect(single.length).to eq(1)
+      expect(single.first[:exp]).to be_between(before_single + 100, after_single + 100)
+    end
+
+    it 'proceeds only when ALL `count` proofs are valid' do
+      result = described_class.gate(
+        identity: identity, command: 'query', body: { name: 'menu' },
+        pow: solve_all(issue_n_challenges)
+      )
+      expect(result).to eq(:proceed)
+    end
+
+    it 're-challenges when fewer than `count` valid proofs are submitted' do
+      proofs = solve_all(issue_n_challenges)
+      expect do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: proofs.first(count - 1)
+        )
+      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it 'does NOT spend proofs on a short submission (a later full submission still works)' do
+      proofs = solve_all(issue_n_challenges)
+
+      catch_error(Kiosk::Server::Errors::PowRequired) do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: proofs.first(count - 1)
+        )
+      end
+
+      result = described_class.gate(
         identity: identity, command: 'query', body: { name: 'menu' },
         pow: proofs
       )
-    end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
-  end
-end
+      expect(result).to eq(:proceed)
+    end
 
-# ─── PowRequired error class ──────────────────────────────────────────────
-RSpec.describe Kiosk::Server::Errors::PowRequired do
-  subject(:error)      { described_class.new(challenges: [challenge_hash]) }
+    it 'raises Forbidden if any single proof is cryptographically wrong' do
+      challenges = issue_n_challenges
+      proofs     = solve_all(challenges)
+      proofs[1]  = { challenge: challenges[1], nonce: find_bad_nonce(challenges[1]) }
 
-  let(:challenge_hash) { { id: 'cid-1', alg: 'argon2id', params: { d: 4 }, salt: 'abc', exp: 9999, sig: 'xxx' } }
-
-  it 'is a subclass of Errors::Base' do
-    expect(error).to be_a(Kiosk::Server::Errors::Base)
-  end
-
-  it 'has HTTP status 402' do
-    expect(error.http_status).to eq(402)
-  end
-
-  it "has code 'pow_required'" do
-    expect(error.code).to eq('pow_required')
+      expect do
+        described_class.gate(
+          identity: identity, command: 'query', body: { name: 'menu' },
+          pow: proofs
+        )
+      end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
+    end
   end
 
-  it 'carries the challenges list' do
-    expect(error.challenges).to eq([challenge_hash])
-  end
-end
+  # ─── PowRequired error class ──────────────────────────────────────────────
+  describe Kiosk::Server::Errors::PowRequired do
+    subject(:error)      { described_class.new(challenges: [challenge_hash]) }
 
-RSpec.describe Kiosk::Server::Errors::PowRequired do
-  subject(:error)      { described_class.new(challenges: [challenge_hash]) }
+    let(:challenge_hash) { { id: 'cid-1', alg: 'argon2id', params: { d: 4 }, salt: 'abc', exp: 9999, sig: 'xxx' } }
 
-  let(:challenge_hash) { { id: 'cid-1', alg: 'argon2id', params: { d: 4 }, salt: 'abc', exp: 9999, sig: 'xxx' } }
+    it 'is a subclass of Errors::Base' do
+      expect(error).to be_a(Kiosk::Server::Errors::Base)
+    end
 
-  it 'accepts a multi-element challenges list' do
-    c2 = challenge_hash.merge(id: 'cid-2', salt: 'def')
-    err = described_class.new(challenges: [challenge_hash, c2])
-    expect(err.challenges).to eq([challenge_hash, c2])
-  end
+    it 'has HTTP status 402' do
+      expect(error.http_status).to eq(402)
+    end
 
-  it 'serialises to the correct problem document (plural challenges)' do
-    expect(error.to_problem).to eq(
-      type: 'https://kiosk.tech/problems/pow_required',
-      title: 'Proof-of-work required',
-      status: 402,
-      detail: 'proof-of-work required',
-      code: 'pow_required',
-      challenges: [challenge_hash]
-    )
-  end
-end
+    it "has code 'pow_required'" do
+      expect(error.code).to eq('pow_required')
+    end
 
-# ─── .proofs_from_header — parse the proof(s) out of the Kiosk-PoW header ─────
-# The wire carries the proof(s) in the `Kiosk-PoW` request HEADER as raw JSON
-# (ADR-0022), NOT in the body — so the body is identical at issue time (no
-# proof) and verify time (proof in the header) and the challenge fingerprint
-# matches. The parser flattens every accepted presentation (single proof, JSON
-# array, repeated header lines joined by "\n", proxy comma-combined) into one
-# flat proofs list. Malformed JSON → Errors::BadRequest (400) with a header hint.
-RSpec.describe 'Kiosk::Server::PowGate.proofs_from_header (b3 dual-accept)' do
-  include PowGateHeaderSpecHelpers
+    it 'carries the challenges list' do
+      expect(error.challenges).to eq([challenge_hash])
+    end
 
-  it 'returns nil for an absent header' do
-    expect(parse.call(nil)).to be_nil
+    it 'accepts a multi-element challenges list' do
+      c2 = challenge_hash.merge(id: 'cid-2', salt: 'def')
+      err = described_class.new(challenges: [challenge_hash, c2])
+      expect(err.challenges).to eq([challenge_hash, c2])
+    end
+
+    it 'serialises to the correct problem document (plural challenges)' do
+      expect(error.to_problem).to eq(
+        type: 'https://kiosk.tech/problems/pow_required',
+        title: 'Proof-of-work required',
+        status: 402,
+        detail: 'proof-of-work required',
+        code: 'pow_required',
+        challenges: [challenge_hash]
+      )
+    end
   end
 
-  it 'returns nil for a blank / whitespace-only header' do
-    expect(parse.call('')).to be_nil
-    expect(parse.call('   ')).to be_nil
+  # ─── .proofs_from_header — parse the proof(s) out of the Kiosk-PoW header ─────
+  # The wire carries the proof(s) in the `Kiosk-PoW` request HEADER as raw JSON
+  # (ADR-0022), NOT in the body — so the body is identical at issue time (no
+  # proof) and verify time (proof in the header) and the challenge fingerprint
+  # matches. The parser flattens every accepted presentation (single proof, JSON
+  # array, repeated header lines joined by "\n", proxy comma-combined) into one
+  # flat proofs list. Malformed JSON → Errors::BadRequest (400) with a header hint.
+  describe '.proofs_from_header (b3 dual-accept)' do
+    include PowGateHeaderSpecHelpers
+
+    it 'returns nil for an absent header' do
+      expect(parse.call(nil)).to be_nil
+    end
+
+    it 'returns nil for a blank / whitespace-only header' do
+      expect(parse.call('')).to be_nil
+      expect(parse.call('   ')).to be_nil
+    end
+
+    it 'wraps a single {…} proof into a one-element proofs list' do
+      proofs = parse.call(JSON.generate(proof_a))
+      expect(proofs).to eq([proof_a])
+    end
+
+    it 'parses a JSON-array value into the proofs list' do
+      proofs = parse.call(JSON.generate([proof_a, proof_b]))
+      expect(proofs).to eq([proof_a, proof_b])
+    end
+
+    it 'flattens repeated header lines (Rack joins duplicates with \\n)' do
+      raw = "#{JSON.generate(proof_a)}\n#{JSON.generate(proof_b)}"
+      expect(parse.call(raw)).to eq([proof_a, proof_b])
+    end
+
+    it 'flattens a proxy comma-combined value {A},{B} (RFC 7230)' do
+      raw = "#{JSON.generate(proof_a)},#{JSON.generate(proof_b)}"
+      expect(parse.call(raw)).to eq([proof_a, proof_b])
+    end
+
+    it 'supports N > 10 proofs across repeated lines' do
+      lines  = Array.new(12) { |i| JSON.generate(challenge: { id: i.to_s }, nonce: { indices: [i] }) }
+      proofs = parse.call(lines.join("\n"))
+      expect(proofs.length).to eq(12)
+    end
+
+    it 'raises Errors::BadRequest with a Kiosk-PoW hint on malformed JSON' do
+      expect { parse.call('{not json') }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /Kiosk-PoW/)
+    end
   end
 
-  it 'wraps a single {…} proof into a one-element proofs list' do
-    proofs = parse.call(JSON.generate(proof_a))
-    expect(proofs).to eq([proof_a])
+  # One paid toll buys every call made with that access token, until it expires.
+  describe 'the session toll' do
+    include PowGateSpecHelpers
+
+    def token_identity(jti) = build_identity(claims: { jti: jti, exp: Time.now.to_i + 3600 })
+
+    def pay_once
+      challenge = issue_challenge_via_gate
+      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' },
+                           pow: [{ challenge: challenge, nonce: solve_nonce(challenge) }])
+    end
+
+    before { configure_with_policy(always_challenge_policy) }
+
+    it 'lets every later call with the paid token through, without a proof' do
+      @identity = token_identity('t-1')
+      pay_once
+
+      expect(described_class.gate(identity: identity, command: 'run', body: { name: 'order' }, pow: nil)).to eq(:proceed)
+    end
+
+    it 'tolls a new token again' do
+      @identity = token_identity('t-1')
+      pay_once
+      @identity = token_identity('t-2')
+
+      expect(issue_challenge_via_gate).to include(:id, :sig)
+    end
+
+    it 'tolls every call of a caller with no token id' do
+      pay_once
+
+      expect(issue_challenge_via_gate).to include(:id, :sig)
+    end
   end
 
-  it 'parses a JSON-array value into the proofs list' do
-    proofs = parse.call(JSON.generate([proof_a, proof_b]))
-    expect(proofs).to eq([proof_a, proof_b])
-  end
-end
+  # The recent-spend policy draws once per customer and token lifetime: every call
+  # made with one token, and every token minted again in that lifetime, meets the
+  # outcome of the first call.
+  describe 'the recent-spend draw' do
+    include PowGateSpecHelpers
 
-RSpec.describe 'Kiosk::Server::PowGate.proofs_from_header (b3 dual-accept)' do
-  include PowGateHeaderSpecHelpers
+    let(:hour) { Time.now.to_i - (Time.now.to_i % 3600) }
 
-  it 'flattens repeated header lines (Rack joins duplicates with \\n)' do
-    raw = "#{JSON.generate(proof_a)}\n#{JSON.generate(proof_b)}"
-    expect(parse.call(raw)).to eq([proof_a, proof_b])
-  end
+    def outcome(user, jti: "#{user}-token", iat: hour)
+      identity = build_identity(user_id: user, claims: { jti: jti, iat: iat, exp: iat + 3600 })
+      described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
+    rescue Kiosk::Server::Errors::PowRequired
+      :owes
+    end
 
-  it 'flattens a proxy comma-combined value {A},{B} (RFC 7230)' do
-    raw = "#{JSON.generate(proof_a)},#{JSON.generate(proof_b)}"
-    expect(parse.call(raw)).to eq([proof_a, proof_b])
-  end
+    def customers = Array.new(100) { |i| "u-#{i}" }
 
-  it 'supports N > 10 proofs across repeated lines' do
-    lines  = Array.new(12) { |i| JSON.generate(challenge: { id: i.to_s }, nonce: { indices: [i] }) }
-    proofs = parse.call(lines.join("\n"))
-    expect(proofs.length).to eq(12)
-  end
+    before do
+      Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
+      configure_with_policy(Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100))
+      spend = Kiosk::Reputation::Factors.empty.with(settled_purchases_cents: 25_00)
+      allow(Kiosk::Server::ReputationFactors).to receive(:for).and_return(spend)
+    end
 
-  it 'raises Errors::BadRequest with a Kiosk-PoW hint on malformed JSON' do
-    expect { parse.call('{not json') }
-      .to raise_error(Kiosk::Server::Errors::BadRequest, /Kiosk-PoW/)
-  end
-end
+    it 'keeps the outcome of a token for every later call made with it' do
+      expect(customers.map { |user| Array.new(3) { outcome(user) }.uniq.size }.uniq).to eq([1])
+    end
 
-# One paid toll buys every call made with that access token, until it expires.
-RSpec.describe Kiosk::Server::PowGate, 'the session toll' do
-  include PowGateSpecHelpers
+    it 'excuses a token and keeps it excused' do
+      excused = customers.find { outcome(it) == :proceed }
 
-  def token_identity(jti) = build_identity(claims: { jti: jti, exp: Time.now.to_i + 3600 })
+      expect(Array.new(5) { outcome(excused) }).to all(eq(:proceed))
+    end
 
-  def pay_once
-    challenge = issue_challenge_via_gate
-    described_class.gate(identity: identity, command: 'query', body: { name: 'menu' },
-                         pow: [{ challenge: challenge, nonce: solve_nonce(challenge) }])
-  end
+    it 'asks the toll of every token minted again in the lifetime of an owed token' do
+      owed = customers.find { outcome(it) == :owes }
 
-  before { configure_with_policy(always_challenge_policy) }
-
-  it 'lets every later call with the paid token through, without a proof' do
-    @identity = token_identity('t-1')
-    pay_once
-
-    expect(described_class.gate(identity: identity, command: 'run', body: { name: 'order' }, pow: nil)).to eq(:proceed)
-  end
-
-  it 'tolls a new token again' do
-    @identity = token_identity('t-1')
-    pay_once
-    @identity = token_identity('t-2')
-
-    expect(issue_challenge_via_gate).to include(:id, :sig)
-  end
-
-  it 'tolls every call of a caller with no token id' do
-    pay_once
-
-    expect(issue_challenge_via_gate).to include(:id, :sig)
-  end
-end
-
-# The recent-spend policy draws once per customer and token lifetime: every call
-# made with one token, and every token minted again in that lifetime, meets the
-# outcome of the first call.
-RSpec.describe Kiosk::Server::PowGate, 'the recent-spend draw' do
-  include PowGateSpecHelpers
-
-  let(:hour) { Time.now.to_i - (Time.now.to_i % 3600) }
-
-  def outcome(user, jti: "#{user}-token", iat: hour)
-    identity = build_identity(user_id: user, claims: { jti: jti, iat: iat, exp: iat + 3600 })
-    described_class.gate(identity: identity, command: 'query', body: { name: 'menu' }, pow: nil)
-  rescue Kiosk::Server::Errors::PowRequired
-    :owes
-  end
-
-  def customers = Array.new(100) { |i| "u-#{i}" }
-
-  before do
-    Kiosk::Reputation::Backends.register('equihash', Kiosk::Pow::Equihash)
-    configure_with_policy(Kiosk::Reputation::Policies::RecentSpend.new(within: 7 * 86_400, cap: 100))
-    spend = Kiosk::Reputation::Factors.empty.with(settled_purchases_cents: 25_00)
-    allow(Kiosk::Server::ReputationFactors).to receive(:for).and_return(spend)
-  end
-
-  it 'keeps the outcome of a token for every later call made with it' do
-    expect(customers.map { |user| Array.new(3) { outcome(user) }.uniq.size }.uniq).to eq([1])
-  end
-
-  it 'excuses a token and keeps it excused' do
-    excused = customers.find { outcome(it) == :proceed }
-
-    expect(Array.new(5) { outcome(excused) }).to all(eq(:proceed))
-  end
-
-  it 'asks the toll of every token minted again in the lifetime of an owed token' do
-    owed = customers.find { outcome(it) == :owes }
-
-    expect(Array.new(20) { |i| outcome(owed, jti: "remint-#{i}", iat: hour + i) }).to all(eq(:owes))
+      expect(Array.new(20) { |i| outcome(owed, jti: "remint-#{i}", iat: hour + i) }).to all(eq(:owes))
+    end
   end
 end

@@ -61,7 +61,8 @@ RSpec.describe Kiosk::Server::SchemaDocument do
 
     it 'is STABLE across reads — the derivation happens once' do
       declare_query('menu')
-      expect(digest).to eq(digest)
+      first = digest
+      expect(digest).to eq(first)
       expect(described_class.document).to equal(described_class.document)
     end
 

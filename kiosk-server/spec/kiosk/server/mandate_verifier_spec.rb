@@ -243,71 +243,71 @@ RSpec.describe Kiosk::Server::MandateVerifier do
         m = described_class.verify_intent(raw_jws: sign(intent_payload), identity: identity)
         expect(m.currency).to eq('eur')
       end
+    end
 
-      # ── The currency domain: an ISO 4217 alpha-3 shape ──
-      #
-      # Each clause is a place a regression would land:
-      #   * "Euro" is a NAME, not a code, and is refused.
-      #   * The status is 403, not 400: `currency` is one of the seven limbs of
-      #     the §9.1 mandate carve-out.
-      #   * The refusal is on the SHAPE, so `"xyz"` still passes — stated here
-      #     rather than left to be discovered, because it is the operator's
-      #     MINIMUM refusal and not the whole domain (§11.1). The PSP refuses the
-      #     rest one call later, and no list in this repository could do better:
-      #     the vendored Stripe client documents a server-side supported set and
-      #     enumerates nothing.
-      describe 'the currency domain is ISO 4217 alpha-3' do
-        it 'refuses a currency NAME such as Euro' do
-          odd = intent_payload.merge(currency: 'Euro')
-          expect { described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
-            .to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
-        end
+    # ── The currency domain: an ISO 4217 alpha-3 shape ──
+    #
+    # Each clause is a place a regression would land:
+    #   * "Euro" is a NAME, not a code, and is refused.
+    #   * The status is 403, not 400: `currency` is one of the seven limbs of
+    #     the §9.1 mandate carve-out.
+    #   * The refusal is on the SHAPE, so `"xyz"` still passes — stated here
+    #     rather than left to be discovered, because it is the operator's
+    #     MINIMUM refusal and not the whole domain (§11.1). The PSP refuses the
+    #     rest one call later, and no list in this repository could do better:
+    #     the vendored Stripe client documents a server-side supported set and
+    #     enumerates nothing.
+    describe 'the currency domain is ISO 4217 alpha-3' do
+      it 'refuses a currency NAME such as Euro' do
+        odd = intent_payload.merge(currency: 'Euro')
+        expect { described_class.verify_intent(raw_jws: sign(odd), identity: identity) }
+          .to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
+      end
 
-        it 'refuses a two-letter country code: US is not a currency' do
-          expect do
-            described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: 'US')),
-                                          identity: identity)
-          end.to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
-        end
+      it 'refuses a two-letter country code: US is not a currency' do
+        expect do
+          described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: 'US')),
+                                        identity: identity)
+        end.to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
+      end
 
-        # ISO 4217 publishes a numeric-3 code beside every alpha-3 one, so «an
-        # ISO 4217 code» read literally admits "978". §11.1 says alpha-3 in those
-        # words BECAUSE the PSP takes letters: the vendored Stripe client
-        # documents `currency` as «Three-letter ISO currency code, in lowercase».
-        it 'refuses the NUMERIC-3 spelling ISO 4217 also publishes' do
-          expect do
-            described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: '978')),
-                                          identity: identity)
-          end.to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
-        end
+      # ISO 4217 publishes a numeric-3 code beside every alpha-3 one, so «an
+      # ISO 4217 code» read literally admits "978". §11.1 says alpha-3 in those
+      # words BECAUSE the PSP takes letters: the vendored Stripe client
+      # documents `currency` as «Three-letter ISO currency code, in lowercase».
+      it 'refuses the NUMERIC-3 spelling ISO 4217 also publishes' do
+        expect do
+          described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: '978')),
+                                        identity: identity)
+        end.to raise_error(Kiosk::Server::Errors::Forbidden, /ISO 4217/)
+      end
 
-        it 'answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out' do
-          expect do
-            described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: 'Euro')),
-                                          identity: identity)
-          end.to(raise_error { |e| expect(e.class::HTTP_STATUS).to eq(403) })
-        end
+      it 'answers 403, not 400 — a domain refusal is inside the §9.1 mandate carve-out' do
+        expect do
+          described_class.verify_intent(raw_jws: sign(intent_payload.merge(currency: 'Euro')),
+                                        identity: identity)
+        end.to(raise_error { |e| expect(e.class::HTTP_STATUS).to eq(403) })
+      end
 
-        # The control: every code this repository spells must still settle.
-        # gbp is getgrocery's glyph map and jpy is kiosk-redteam's
-        # WrongCurrencyCart ALTERNATIVES.
-        it 'settles eur, usd, gbp and jpy — either case' do
-          { 'eur' => 'eur', 'EUR' => 'eur', 'usd' => 'usd', 'USD' => 'usd',
-            'gbp' => 'gbp', 'jpy' => 'jpy' }.each do |sent, canonical|
-            m = described_class.verify_intent(
-              raw_jws: sign(intent_payload.merge(currency: sent)), identity: identity
-            )
-            expect(m.currency).to eq(canonical), "#{sent.inspect} should settle as #{canonical.inspect}"
-          end
-        end
-
-        # The shape is the MINIMUM refusal; an allow-list would change this example.
-        it 'accepts three letters that name no currency — the shape is the minimum, not the domain' do
+      # The control: every code this repository spells must still settle.
+      # gbp is getgrocery's glyph map and jpy is kiosk-redteam's
+      # WrongCurrencyCart ALTERNATIVES.
+      it 'settles eur, usd, gbp and jpy — either case' do
+        { 'eur' => 'eur', 'EUR' => 'eur', 'usd' => 'usd', 'USD' => 'usd',
+          'gbp' => 'gbp', 'jpy' => 'jpy' }.each do |sent, canonical|
           m = described_class.verify_intent(
-            raw_jws: sign(intent_payload.merge(currency: 'xyz')), identity: identity
+            raw_jws: sign(intent_payload.merge(currency: sent)), identity: identity
           )
-          expect(m.currency).to eq('xyz')
+          expect(m.currency).to eq(canonical), "#{sent.inspect} should settle as #{canonical.inspect}"
         end
+      end
+
+      # The shape is the MINIMUM refusal; an allow-list would change this example.
+      it 'accepts three letters that name no currency — the shape is the minimum, not the domain' do
+        m = described_class.verify_intent(
+          raw_jws: sign(intent_payload.merge(currency: 'xyz')), identity: identity
+        )
+        expect(m.currency).to eq('xyz')
       end
     end
 

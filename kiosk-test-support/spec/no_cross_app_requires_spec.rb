@@ -95,39 +95,39 @@ RSpec.describe "no demo requires another demo's source into its process (K-683)"
                                                          'own process (K-681). Boot the other app out of process, or ' \
                                                          'copy the file and declare the copy in bin/check-demo-copies'
   end
-end
 
-# Written against strings rather than the tree: on a clean tree only examples
-# like these show which of the three kinds the rule catches. A stubbed
-# `File.read` is the whole fixture; the path arithmetic runs against the real
-# repository root.
-RSpec.describe 'the cross-app require shapes it forbids, and the shapes it does not' do
-  def source(rel, body)
-    allow(File).to receive(:read).and_call_original
-    allow(File).to receive(:read).with(File.join(CrossAppRequires::REPO_ROOT, rel)).and_return(body)
-    rel
-  end
+  # Written against strings rather than the tree: on a clean tree only examples
+  # like these show which of the three kinds the rule catches. A stubbed
+  # `File.read` is the whole fixture; the path arithmetic runs against the real
+  # repository root.
+  describe 'the cross-app require shapes it forbids, and the shapes it does not' do
+    def source(rel, body)
+      allow(File).to receive(:read).and_call_original
+      allow(File).to receive(:read).with(File.join(CrossAppRequires::REPO_ROOT, rel)).and_return(body)
+      rel
+    end
 
-  it 'FORBIDS an in-process require_relative into another demo' do
-    rel = source('kiosk-demo-skooti/script/rental_flow.rb',
-                 %(require_relative "../../kiosk-demo-prove/app/services/prove_key"\n))
-    expect(CrossAppRequires.violations([rel]).first).to include('kiosk-demo-skooti', 'kiosk-demo-prove')
-  end
+    it 'FORBIDS an in-process require_relative into another demo' do
+      rel = source('kiosk-demo-skooti/script/rental_flow.rb',
+                   %(require_relative "../../kiosk-demo-prove/app/services/prove_key"\n))
+      expect(CrossAppRequires.violations([rel]).first).to include('kiosk-demo-skooti', 'kiosk-demo-prove')
+    end
 
-  it 'ALLOWS a data-file path read — a PEM is bytes, not code' do
-    rel = source('kiosk-demo-skooti/script/rental_flow.rb', %(DEV_KEY_PATH = "../kiosk-demo-prove/config/dev_key.pem"\n))
-    expect(CrossAppRequires.violations([rel])).to be_empty
-  end
+    it 'ALLOWS a data-file path read — a PEM is bytes, not code' do
+      rel = source('kiosk-demo-skooti/script/rental_flow.rb', %(DEV_KEY_PATH = "../kiosk-demo-prove/config/dev_key.pem"\n))
+      expect(CrossAppRequires.violations([rel])).to be_empty
+    end
 
-  it "ALLOWS naming another app's directory in order to BOOT it (K-663)" do
-    rel = source('kiosk-demo-skooti/script/rental_flow.rb',
-                 %(BROKER_APP = File.expand_path("../../kiosk-demo-prove", __dir__)\n) +
-                 %(spawn({}, "bin/rails s", chdir: BROKER_APP)\n))
-    expect(CrossAppRequires.violations([rel])).to be_empty
-  end
+    it "ALLOWS naming another app's directory in order to BOOT it (K-663)" do
+      rel = source('kiosk-demo-skooti/script/rental_flow.rb',
+                   %(BROKER_APP = File.expand_path("../../kiosk-demo-prove", __dir__)\n) +
+                   %(spawn({}, "bin/rails s", chdir: BROKER_APP)\n))
+      expect(CrossAppRequires.violations([rel])).to be_empty
+    end
 
-  it "FORBIDS the e2e harness reaching into a demo's app/ or config/" do
-    rel = source('e2e/fixtures/bind_assistants.rb', %(require_relative "../../kiosk-demo-stylish/app/models/user"\n))
-    expect(CrossAppRequires.violations([rel]).first).to include('e2e → kiosk-demo-stylish')
+    it "FORBIDS the e2e harness reaching into a demo's app/ or config/" do
+      rel = source('e2e/fixtures/bind_assistants.rb', %(require_relative "../../kiosk-demo-stylish/app/models/user"\n))
+      expect(CrossAppRequires.violations([rel]).first).to include('e2e → kiosk-demo-stylish')
+    end
   end
 end

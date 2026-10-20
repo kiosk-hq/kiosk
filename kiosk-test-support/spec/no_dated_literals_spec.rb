@@ -104,41 +104,41 @@ RSpec.describe 'no demo writes a calendar date into runtime code (K-972)' do
                       'RESOLVABLE SLOT — `example_params({ date: -> { Time.find_zone!("Europe/Dublin").tomorrow.iso8601 } })`, ' \
                       "see Kiosk::Server::SchemaSlots — and in prose interpolate the same helper.\n#{report.join("\n")}"
   end
-end
 
-# Written against strings rather than the tree: on a clean tree only examples
-# like these show which shapes the rule catches.
-RSpec.describe 'the dated-literal shapes it forbids' do
-  {
-    'FORBIDS a dated example_params' => %(  example_params({ date: "2026-08-10", delivery_address: "42 Camden Street" })\n),
-    'FORBIDS a dated example_row, including a timestamp' => %(  example_row({ slot_at: "2026-08-10T08:00:00+01:00" })\n),
-    'FORBIDS a date buried in a sentence rather than standing alone' => %(    room_types_scope: "free 2026-09-01..2026-09-04",\n),
-    'FORBIDS a dated «e.g.» inside a refusal message' =>
-      %(      refused("missing field: slot — an ISO 8601 timestamp, e.g. \\"2026-10-01T14:00:00Z\\"")\n)
-  }.each do |label, src|
-    it label do
-      expect(DatedLiterals.violations(src).map(&:first)).to eq([1])
-    end
-  end
-end
-
-RSpec.describe 'the dated-literal shapes it allows' do
-  {
-    'ALLOWS the resolvable-slot form the engine resolves per read' =>
-      %(  example_params({ date: -> { DeliverySlots.default_zone.tomorrow.iso8601 } })\n),
-    'ALLOWS a date computed relative to now' => %(  CHECK_IN = (Date.today + 30).to_s.freeze\n),
-    'ALLOWS a full-line comment that shows the forbidden shape' => %(  # it published check_in: "2026-09-01" until K-972\n),
-    'ALLOWS a wall-clock time, which never ages' => %(  example_params({ time: "20:00" })\n),
-    'ALLOWS a version or an id that merely looks numeric' =>
-      %(  PIN = "0.4.5"\n  ID = "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e"\n)
-  }.each do |label, src|
-    it label do
-      expect(DatedLiterals.violations(src)).to be_empty
+  # Written against strings rather than the tree: on a clean tree only examples
+  # like these show which shapes the rule catches.
+  describe 'the dated-literal shapes it forbids' do
+    {
+      'FORBIDS a dated example_params' => %(  example_params({ date: "2026-08-10", delivery_address: "42 Camden Street" })\n),
+      'FORBIDS a dated example_row, including a timestamp' => %(  example_row({ slot_at: "2026-08-10T08:00:00+01:00" })\n),
+      'FORBIDS a date buried in a sentence rather than standing alone' => %(    room_types_scope: "free 2026-09-01..2026-09-04",\n),
+      'FORBIDS a dated «e.g.» inside a refusal message' =>
+        %(      refused("missing field: slot — an ISO 8601 timestamp, e.g. \\"2026-10-01T14:00:00Z\\"")\n)
+    }.each do |label, src|
+      it label do
+        expect(DatedLiterals.violations(src).map(&:first)).to eq([1])
+      end
     end
   end
 
-  it 'cannot see a date assembled from parts, or written as a Date (KNOWN blind spots)' do
-    expect(DatedLiterals.violations(%(  date = "\#{Date.today.year}-09-01"\n))).to be_empty
-    expect(DatedLiterals.violations(%(  date = Date.new(2026, 9, 1).iso8601\n))).to be_empty
+  describe 'the dated-literal shapes it allows' do
+    {
+      'ALLOWS the resolvable-slot form the engine resolves per read' =>
+        %(  example_params({ date: -> { DeliverySlots.default_zone.tomorrow.iso8601 } })\n),
+      'ALLOWS a date computed relative to now' => %(  CHECK_IN = (Date.today + 30).to_s.freeze\n),
+      'ALLOWS a full-line comment that shows the forbidden shape' => %(  # it published check_in: "2026-09-01" until K-972\n),
+      'ALLOWS a wall-clock time, which never ages' => %(  example_params({ time: "20:00" })\n),
+      'ALLOWS a version or an id that merely looks numeric' =>
+        %(  PIN = "0.4.5"\n  ID = "e2b1c0d4-5f6a-4b3c-8d2e-1f0a9b8c7d6e"\n)
+    }.each do |label, src|
+      it label do
+        expect(DatedLiterals.violations(src)).to be_empty
+      end
+    end
+
+    it 'cannot see a date assembled from parts, or written as a Date (KNOWN blind spots)' do
+      expect(DatedLiterals.violations(%(  date = "\#{Date.today.year}-09-01"\n))).to be_empty
+      expect(DatedLiterals.violations(%(  date = Date.new(2026, 9, 1).iso8601\n))).to be_empty
+    end
   end
 end

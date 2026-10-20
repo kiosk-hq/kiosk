@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The fresh-host boot behind spec/kiosk/server/default_role_boot_spec.rb (T-225)
+# The fresh-host boot behind spec/kiosk/server/engine_default_role_boot_spec.rb (T-225)
 # — run as a SUBPROCESS, never loaded into the RSpec process (same reasons as
 # handler_registration_probe_app.rb: booting Rails in-process leaks
 # Rails.logger and ActionDispatch::Flash into unrelated controller specs, and a
@@ -11,7 +11,7 @@
 # reports whether `Rails.application.initialize!` came back or raised.
 #
 # WHY A REAL BOOT AND NOT ONLY THE UNIT EXAMPLES. The condition is asserted in
-# default_role_configuration_spec.rb; what THIS file proves is the other half —
+# engine_default_role_configuration_spec.rb; what THIS file proves is the other half —
 # that the engine's `after_initialize` block actually RAISES on it, and that a
 # correctly configured origin still comes up. A refusal nobody can show firing
 # is a rule the tree only believes it has.

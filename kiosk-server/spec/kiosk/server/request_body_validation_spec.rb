@@ -69,86 +69,80 @@ RSpec.shared_context 'request body validation spec: validating' do
   end
 end
 
-RSpec.describe 'Reserved-plane request-body validation' do
-  include_context 'request body validation spec: validating'
+RSpec.describe Kiosk::Server::RequestValidation do
+  describe 'Reserved-plane request-body validation' do
+    include_context 'request body validation spec: validating'
 
-  Kiosk::Server::RequestValidation::BODY_SCHEMAS.each_key do |exchange|
-    context exchange do
-      it 'accepts a body that satisfies the published object' do
-        expect { rv.validate_body!(accepted_body(exchange), exchange: exchange) }
-          .not_to raise_error
-      end
+    Kiosk::Server::RequestValidation::BODY_SCHEMAS.each_key do |exchange|
+      context exchange do
+        it 'accepts a body that satisfies the published object' do
+          expect { rv.validate_body!(accepted_body(exchange), exchange: exchange) }
+            .not_to raise_error
+        end
 
-      it 'refuses a wrong-typed member, naming it' do
-        member = wrong_member(exchange)
-        body   = accepted_body(exchange).merge(member => 42)
+        it 'refuses a wrong-typed member, naming it' do
+          member = wrong_member(exchange)
+          body   = accepted_body(exchange).merge(member => 42)
 
-        expect { rv.validate_body!(body, exchange: exchange) }
-          .to raise_error(Kiosk::Server::Errors::BadRequest, /#{member}/)
-      end
+          expect { rv.validate_body!(body, exchange: exchange) }
+            .to raise_error(Kiosk::Server::Errors::BadRequest, /#{member}/)
+        end
 
-      it 'refuses an absent required member, naming it' do
-        member = wrong_member(exchange)
-        body   = accepted_body(exchange).reject { |name, _| name == member }
+        it 'refuses an absent required member, naming it' do
+          member = wrong_member(exchange)
+          body   = accepted_body(exchange).reject { |name, _| name == member }
 
-        expect { rv.validate_body!(body, exchange: exchange) }
-          .to raise_error(Kiosk::Server::Errors::BadRequest, /#{member}/)
-      end
-    end
-  end
-end
-
-RSpec.describe 'Reserved-plane request-body validation' do
-  include_context 'request body validation spec: validating'
-
-  # NON-VACUITY. Section 16.3 anchor 1 makes validating a SHOULD, so an
-  # operator may turn it off, and this example exercises the off position.
-  it 'does nothing when the operator sets validate_requests = false' do
-    Kiosk.configure { |c| c.validate_requests = false }
-
-    expect { rv.validate_body!({ public_key: 42 }, exchange: 'POST <endpoint>/auth/register') }
-      .not_to raise_error
-  end
-
-  # THE TABLE IS THE LIST, so nothing may dial an exchange it does not carry.
-  # Derived from the engine's own source rather than restated here: a seventh
-  # endpoint wired up without a row fails this example instead of raising
-  # KeyError at a caller.
-  it 'carries every exchange the engine dials' do
-    root   = File.expand_path('../../..', __dir__)
-    dialed = Dir[File.join(root, '{app,lib}', '**', '*.rb')].flat_map do |path|
-      File.read(path).scan(/exchange:\s*'([^']+)'|parse_body!\('([^']+)'\)/).flatten.compact
-    end.uniq
-
-    expect(dialed).not_to be_empty
-    expect(dialed - Kiosk::Server::RequestValidation::BODY_SCHEMAS.keys).to eq([])
-  end
-end
-
-RSpec.describe 'Reserved-plane request-body validation' do
-  include_context 'request body validation spec: validating'
-
-  describe 'the refusal, over HTTP' do
-    before do
-      Kiosk.configure do |c|
-        c.signing_key = Kiosk::Server::SigningKey.generate
-        c.issuer      = 'https://demo.example'
+          expect { rv.validate_body!(body, exchange: exchange) }
+            .to raise_error(Kiosk::Server::Errors::BadRequest, /#{member}/)
+        end
       end
     end
 
-    it 'is an RFC 9457 bad_request naming the member and pointing at the schema' do
-      env = Rack::MockRequest.env_for(
-        '/kiosk/auth/register',
-        method: 'POST', input: JSON.generate(public_key: 42, signed: 'eyJ.eyJ.SIG'),
-        'CONTENT_TYPE' => 'application/json'
-      )
-      status, headers, body = dispatch(Kiosk::Server::AuthController, :register, env)
+    # NON-VACUITY. Section 16.3 anchor 1 makes validating a SHOULD, so an
+    # operator may turn it off, and this example exercises the off position.
+    it 'does nothing when the operator sets validate_requests = false' do
+      Kiosk.configure { |c| c.validate_requests = false }
 
-      expect(status).to eq(400)
-      expect(headers['Content-Type']).to include('application/problem+json')
-      expect(body[:code]).to eq('bad_request')
-      expect(body[:detail]).to include('auth/register').and include('public_key')
-      expect(body[:hint]).to include('auth.schema.json')
+      expect { rv.validate_body!({ public_key: 42 }, exchange: 'POST <endpoint>/auth/register') }
+        .not_to raise_error
+    end
+
+    # THE TABLE IS THE LIST, so nothing may dial an exchange it does not carry.
+    # Derived from the engine's own source rather than restated here: a seventh
+    # endpoint wired up without a row fails this example instead of raising
+    # KeyError at a caller.
+    it 'carries every exchange the engine dials' do
+      root   = File.expand_path('../../..', __dir__)
+      dialed = Dir[File.join(root, '{app,lib}', '**', '*.rb')].flat_map do |path|
+        File.read(path).scan(/exchange:\s*'([^']+)'|parse_body!\('([^']+)'\)/).flatten.compact
+      end.uniq
+
+      expect(dialed).not_to be_empty
+      expect(dialed - Kiosk::Server::RequestValidation::BODY_SCHEMAS.keys).to eq([])
+    end
+
+    describe 'the refusal, over HTTP' do
+      before do
+        Kiosk.configure do |c|
+          c.signing_key = Kiosk::Server::SigningKey.generate
+          c.issuer      = 'https://demo.example'
+        end
+      end
+
+      it 'is an RFC 9457 bad_request naming the member and pointing at the schema' do
+        env = Rack::MockRequest.env_for(
+          '/kiosk/auth/register',
+          method: 'POST', input: JSON.generate(public_key: 42, signed: 'eyJ.eyJ.SIG'),
+          'CONTENT_TYPE' => 'application/json'
+        )
+        status, headers, body = dispatch(Kiosk::Server::AuthController, :register, env)
+
+        expect(status).to eq(400)
+        expect(headers['Content-Type']).to include('application/problem+json')
+        expect(body[:code]).to eq('bad_request')
+        expect(body[:detail]).to include('auth/register').and include('public_key')
+        expect(body[:hint]).to include('auth.schema.json')
+      end
     end
   end
 end

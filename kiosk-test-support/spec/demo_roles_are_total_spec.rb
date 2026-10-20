@@ -127,27 +127,27 @@ RSpec.describe 'no shipped host hands the binding ceremony a nil role (K-1124)' 
                      'ceremony binds at `registration_role` — so a human the IdP cannot ' \
                      'answer for gets an assistant that cannot act for them (K-1124, K-1791).'
   end
-end
 
-# Invariant 2: every #kiosk_role is declared, with a reason, at a pinned body.
-RSpec.describe 'every #kiosk_role is declared total (K-1124)' do
-  it 'declares every #kiosk_role in the corpus, at the body that was reasoned about' do
-    found = RolesTotal.kiosk_roles
-    undeclared = found.map(&:first).reject { |rel| RolesTotal::DECLARED.key?(rel) }
-    expect(undeclared).to be_empty,
-                          "a new #kiosk_role appeared and nobody has said whether it can answer nil: #{undeclared.join(', ')}. " \
-                          'Declare it in ROLES_TOTAL_DECLARED with a reason and the ' \
-                          'fingerprint the drift check names, or make the method total.'
+  # Invariant 2: every #kiosk_role is declared, with a reason, at a pinned body.
+  describe 'every #kiosk_role is declared total (K-1124)' do
+    it 'declares every #kiosk_role in the corpus, at the body that was reasoned about' do
+      found = RolesTotal.kiosk_roles
+      undeclared = found.map(&:first).reject { |rel| RolesTotal::DECLARED.key?(rel) }
+      expect(undeclared).to be_empty,
+                            "a new #kiosk_role appeared and nobody has said whether it can answer nil: #{undeclared.join(', ')}. " \
+                            'Declare it in ROLES_TOTAL_DECLARED with a reason and the ' \
+                            'fingerprint the drift check names, or make the method total.'
 
-    gone = RolesTotal::DECLARED.keys - found.map(&:first)
-    expect(gone).to be_empty,
-                    "declared but no longer present: #{gone.join(', ')} — delete the entry, an " \
-                    'exception for a method that does not exist is a comfortable lie.'
+      gone = RolesTotal::DECLARED.keys - found.map(&:first)
+      expect(gone).to be_empty,
+                      "declared but no longer present: #{gone.join(', ')} — delete the entry, an " \
+                      'exception for a method that does not exist is a comfortable lie.'
 
-    drifted = RolesTotal.drifted(found)
-    expect(drifted).to be_empty,
-                       "a declared #kiosk_role changed: #{drifted.join('; ')}. Re-read the method, " \
-                       'decide again whether it can answer nil, then update the fingerprint AND ' \
-                       'the reason beside it.'
+      drifted = RolesTotal.drifted(found)
+      expect(drifted).to be_empty,
+                         "a declared #kiosk_role changed: #{drifted.join('; ')}. Re-read the method, " \
+                         'decide again whether it can answer nil, then update the fingerprint AND ' \
+                         'the reason beside it.'
+    end
   end
 end

@@ -45,18 +45,18 @@ RSpec.describe "the demos' human channel is real Devise (T-066)" do
                       'authenticate through kiosk-user-idp-devise (T-066); a self-asserted ' \
                       '`user:u-…` or `X-Staff-Session` parser lets anyone be anyone.'
   end
-end
 
-RSpec.describe "the demos' c.user_idp wiring" do
-  it 'wires c.user_idp to the Devise adapter, unconditionally, wherever it is set' do
-    wirings = DemoUserIdp.wirings
-    # Every operator demo authenticates humans; only the KYC broker does not.
-    expect(wirings.size).to be >= 7, "expected every operator demo to set c.user_idp, got #{wirings.inspect}"
+  describe "the demos' c.user_idp wiring" do
+    it 'wires c.user_idp to the Devise adapter, unconditionally, wherever it is set' do
+      wirings = DemoUserIdp.wirings
+      # Every operator demo authenticates humans; only the KYC broker does not.
+      expect(wirings.size).to be >= 7, "expected every operator demo to set c.user_idp, got #{wirings.inspect}"
 
-    wirings.each do |demo, line|
-      expect(line.squeeze(' ')).to eq('c.user_idp = Kiosk::UserIdentityProviders::Devise.new'),
-                                   "#{demo} wires c.user_idp as `#{line}` — it must be the real Devise adapter " \
-                                   'with no dev-only arm (T-066).'
+      wirings.each do |demo, line|
+        expect(line.squeeze(' ')).to eq('c.user_idp = Kiosk::UserIdentityProviders::Devise.new'),
+                                     "#{demo} wires c.user_idp as `#{line}` — it must be the real Devise adapter " \
+                                     'with no dev-only arm (T-066).'
+      end
     end
   end
 end

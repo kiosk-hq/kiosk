@@ -18,7 +18,7 @@
 #
 # The condition lives on the engine class so it is unit-testable without a
 # boot; that the `after_initialize` block RAISES on it is proven against a real
-# boot in default_role_boot_spec.rb.
+# boot in engine_default_role_boot_spec.rb.
 module DefaultRoleConfigurationSpecHelpers
   def error(config: Kiosk.configuration)
     described_class.default_role_configuration_error(config: config)

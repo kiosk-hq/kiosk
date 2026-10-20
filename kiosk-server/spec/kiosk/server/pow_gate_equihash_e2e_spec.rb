@@ -81,76 +81,78 @@ RSpec.shared_context 'pow gate equihash e2e spec: gate' do
   let(:count)    { 1 }
 end
 
-RSpec.describe 'PowGate × equihash (real backend, real gate)' do
-  include_context 'pow gate equihash e2e spec: gate'
+RSpec.describe Kiosk::Server::PowGate do
+  describe 'with equihash (real backend, real gate)' do
+    include_context 'pow gate equihash e2e spec: gate'
 
-  it 'issues `count` equihash challenges on an unproven request (the 402 shape)' do
-    expect { gate(pow: nil) }.to raise_error(Kiosk::Server::Errors::PowRequired) { |err|
-      expect(err.challenges.length).to eq(count)
-      expect(err.challenges.first[:alg]).to eq('equihash')
-      expect(err.challenges.first[:params]).to eq(EquihashKat::PARAMS)
-    }
-  end
-
-  it 'proceeds when the real equihash verifier accepts the submitted proof (N=1)' do
-    proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
-
-    expect(gate(pow: [proof])).to eq(:proceed)
-  end
-
-  it 'rejects a WRONG nonce through the real verifier (403)' do
-    proof = { challenge: kat_challenge(id: 'c1'), nonce: { indices: [3, 10] } } # not a valid solution
-
-    expect do
-      gate(pow: [proof])
-    end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
-  end
-
-  context 'N = 3 independent proofs' do
-    let(:count) { 3 }
-
-    it 'proceeds only when ALL three verify; a short set re-challenges' do
-      proofs = %w[c1 c2 c3].map { |id| { challenge: kat_challenge(id: id), nonce: EquihashKat::NONCE } }
-
-      expect do
-        gate(pow: proofs.first(2))
-      end.to raise_error(Kiosk::Server::Errors::PowRequired)
-
-      expect(gate(pow: proofs)).to eq(:proceed)
-    end
-  end
-
-  # ── fingerprint binding, through the real crypto ─────────────────────────
-  #
-  # The request fingerprint hashes "<METHOD> <verb>\n<canonical args>", so a
-  # proof solved for `GET catalog?q=milk` is spendable on that call and on
-  # nothing else. Each example below mints its challenge for THAT call and
-  # submits it against a request differing in exactly ONE of the three inputs;
-  # the N=1 example above is the matching control that shows the proof itself
-  # is good.
-  describe 'a valid proof submitted against a DIFFERENT request' do
-    it 're-challenges when the ARGUMENTS differ' do
-      proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
-
-      expect do
-        gate(pow: [proof], body: { q: 'bread' })
-      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+    it 'issues `count` equihash challenges on an unproven request (the 402 shape)' do
+      expect { gate(pow: nil) }.to raise_error(Kiosk::Server::Errors::PowRequired) { |err|
+        expect(err.challenges.length).to eq(count)
+        expect(err.challenges.first[:alg]).to eq('equihash')
+        expect(err.challenges.first[:params]).to eq(EquihashKat::PARAMS)
+      }
     end
 
-    it 're-challenges when the METHOD differs (a GET catalog proof on POST catalog)' do
+    it 'proceeds when the real equihash verifier accepts the submitted proof (N=1)' do
       proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
 
-      expect do
-        gate(pow: [proof], command: 'run', method: 'POST')
-      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect(gate(pow: [proof])).to eq(:proceed)
     end
 
-    it 're-challenges when the VERB differs (a catalog proof is not an orders proof)' do
-      proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
+    it 'rejects a WRONG nonce through the real verifier (403)' do
+      proof = { challenge: kat_challenge(id: 'c1'), nonce: { indices: [3, 10] } } # not a valid solution
 
       expect do
-        gate(pow: [proof], verb: 'orders')
-      end.to raise_error(Kiosk::Server::Errors::PowRequired)
+        gate(pow: [proof])
+      end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
+    end
+
+    context 'N = 3 independent proofs' do
+      let(:count) { 3 }
+
+      it 'proceeds only when ALL three verify; a short set re-challenges' do
+        proofs = %w[c1 c2 c3].map { |id| { challenge: kat_challenge(id: id), nonce: EquihashKat::NONCE } }
+
+        expect do
+          gate(pow: proofs.first(2))
+        end.to raise_error(Kiosk::Server::Errors::PowRequired)
+
+        expect(gate(pow: proofs)).to eq(:proceed)
+      end
+    end
+
+    # ── fingerprint binding, through the real crypto ─────────────────────────
+    #
+    # The request fingerprint hashes "<METHOD> <verb>\n<canonical args>", so a
+    # proof solved for `GET catalog?q=milk` is spendable on that call and on
+    # nothing else. Each example below mints its challenge for THAT call and
+    # submits it against a request differing in exactly ONE of the three inputs;
+    # the N=1 example above is the matching control that shows the proof itself
+    # is good.
+    describe 'a valid proof submitted against a DIFFERENT request' do
+      it 're-challenges when the ARGUMENTS differ' do
+        proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
+
+        expect do
+          gate(pow: [proof], body: { q: 'bread' })
+        end.to raise_error(Kiosk::Server::Errors::PowRequired)
+      end
+
+      it 're-challenges when the METHOD differs (a GET catalog proof on POST catalog)' do
+        proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
+
+        expect do
+          gate(pow: [proof], command: 'run', method: 'POST')
+        end.to raise_error(Kiosk::Server::Errors::PowRequired)
+      end
+
+      it 're-challenges when the VERB differs (a catalog proof is not an orders proof)' do
+        proof = { challenge: kat_challenge(id: 'c1'), nonce: EquihashKat::NONCE }
+
+        expect do
+          gate(pow: [proof], verb: 'orders')
+        end.to raise_error(Kiosk::Server::Errors::PowRequired)
+      end
     end
   end
 end

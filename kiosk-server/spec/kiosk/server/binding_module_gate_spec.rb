@@ -76,86 +76,86 @@ RSpec.shared_context 'binding module gate spec: configured origin' do
   end
 end
 
-RSpec.describe 'the declined account-binding profile' do
-  include_context 'binding module gate spec: configured origin'
+RSpec.describe Kiosk::Server::BindingModuleGate do
+  describe 'the declined account-binding profile' do
+    include_context 'binding module gate spec: configured origin'
 
-  describe 'with the module declined' do
-    BindingModuleGateSpec::BINDING_ENDPOINTS.each do |method, path, controller_name, action|
-      it "answers #{method} #{path} with 501 module_not_served" do
+    describe 'with the module declined' do
+      BindingModuleGateSpec::BINDING_ENDPOINTS.each do |method, path, controller_name, action|
+        it "answers #{method} #{path} with 501 module_not_served" do
+          decline_binding!
+          controller = Kiosk::Server.const_get(controller_name)
+          status, headers, body = dispatch(controller, action, method, path)
+
+          expect(status).to eq(501)
+          expect(headers['Content-Type']).to include('application/problem+json')
+
+          problem = JSON.parse(body, symbolize_names: true)
+          expect(problem[:code]).to   eq('module_not_served')
+          expect(problem[:status]).to eq(501)
+          expect(problem[:type]).to   eq('https://kiosk.tech/problems/module_not_served')
+          # `detail` NAMES the module: it is the only thing telling "no binding
+          # here" from "no payments here" to whoever reads the answer.
+          expect(problem[:detail]).to include('account binding')
+        end
+      end
+
+      it 'still serves the kiosk-pop challenge endpoint' do
         decline_binding!
-        controller = Kiosk::Server.const_get(controller_name)
-        status, headers, body = dispatch(controller, action, method, path)
+        status, = dispatch(
+          Kiosk::Server::AuthController, :challenge, 'GET',
+          "/kiosk/auth/challenge?public_key=#{CGI.escape(OpenSSL::PKey::RSA.generate(2048).public_key.to_pem)}"
+        )
+        expect(status).to eq(200)
+      end
 
-        expect(status).to eq(501)
-        expect(headers['Content-Type']).to include('application/problem+json')
+      # §4.3: the auth block is CORE discovery. All six URLs are published by
+      # every conformant origin whether or not it serves what the last two reach,
+      # and `capabilities` has no binding member — so an assistant cannot read
+      # the discovery document as a capability check and has to dial and branch.
+      it 'publishes all six auth URLs and adds no capability for binding' do
+        served_capabilities = Kiosk::Server::WellKnown.build(base_url: 'https://provider.example')
+                                                      .fetch(:kiosk).fetch(:capabilities)
+        decline_binding!
+        kiosk = Kiosk::Server::WellKnown.build(base_url: 'https://provider.example').fetch(:kiosk)
+        auth  = kiosk.fetch(:auth)
 
-        problem = JSON.parse(body, symbolize_names: true)
-        expect(problem[:code]).to   eq('module_not_served')
-        expect(problem[:status]).to eq(501)
-        expect(problem[:type]).to   eq('https://kiosk.tech/problems/module_not_served')
-        # `detail` NAMES the module: it is the only thing telling "no binding
-        # here" from "no payments here" to whoever reads the answer.
-        expect(problem[:detail]).to include('account binding')
+        expect(kiosk.fetch(:capabilities)).to eq(served_capabilities)
+        expect(served_capabilities.map(&:to_s).grep(/bind|claim|device/)).to be_empty
+
+        expect(auth.keys).to include(
+          :challenge_url, :register_url, :login_url, :revoke_url,
+          :device_authorization_url, :claim_url
+        )
+        expect(auth[:device_authorization_url])
+          .to eq('https://provider.example/kiosk/oauth/device_authorization')
+        expect(auth[:claim_url]).to eq('https://provider.example/kiosk/auth/claim')
       end
     end
 
-    it 'still serves the kiosk-pop challenge endpoint' do
-      decline_binding!
-      status, = dispatch(
-        Kiosk::Server::AuthController, :challenge, 'GET',
-        "/kiosk/auth/challenge?public_key=#{CGI.escape(OpenSSL::PKey::RSA.generate(2048).public_key.to_pem)}"
-      )
-      expect(status).to eq(200)
-    end
-  end
+    describe 'with the module served (the default)' do
+      it 'defaults to true, so no configured origin moves' do
+        expect(Kiosk.configuration.serve_account_binding).to be(true)
+      end
 
-  describe 'with the module declined' do
-    # §4.3: the auth block is CORE discovery. All six URLs are published by
-    # every conformant origin whether or not it serves what the last two reach,
-    # and `capabilities` has no binding member — so an assistant cannot read
-    # the discovery document as a capability check and has to dial and branch.
-    it 'publishes all six auth URLs and adds no capability for binding' do
-      served_capabilities = Kiosk::Server::WellKnown.build(base_url: 'https://provider.example')
-                                                    .fetch(:kiosk).fetch(:capabilities)
-      decline_binding!
-      kiosk = Kiosk::Server::WellKnown.build(base_url: 'https://provider.example').fetch(:kiosk)
-      auth  = kiosk.fetch(:auth)
+      it 'opens a claim ceremony rather than refusing it' do
+        pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
+        status, _headers, body = post_device_authorization('client_id' => 'assistant', 'public_key' => pem)
 
-      expect(kiosk.fetch(:capabilities)).to eq(served_capabilities)
-      expect(served_capabilities.map(&:to_s).grep(/bind|claim|device/)).to be_empty
+        expect(status).to eq(200)
+        expect(JSON.parse(body, symbolize_names: true)[:device_code]).to be_a(String)
+      end
 
-      expect(auth.keys).to include(
-        :challenge_url, :register_url, :login_url, :revoke_url,
-        :device_authorization_url, :claim_url
-      )
-      expect(auth[:device_authorization_url])
-        .to eq('https://provider.example/kiosk/oauth/device_authorization')
-      expect(auth[:claim_url]).to eq('https://provider.example/kiosk/auth/claim')
-    end
-  end
+      # The OAuth wire is unchanged when the module IS served: a malformed call
+      # gets the OAuth error object, not a problem document. `module_not_served`
+      # is the single carve-out, and this is the control that says so.
+      it 'keeps the OAuth error object for an ordinary refusal' do
+        status, headers, body = post_device_authorization('client_id' => 'assistant')
 
-  describe 'with the module served (the default)' do
-    it 'defaults to true, so no configured origin moves' do
-      expect(Kiosk.configuration.serve_account_binding).to be(true)
-    end
-
-    it 'opens a claim ceremony rather than refusing it' do
-      pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
-      status, _headers, body = post_device_authorization('client_id' => 'assistant', 'public_key' => pem)
-
-      expect(status).to eq(200)
-      expect(JSON.parse(body, symbolize_names: true)[:device_code]).to be_a(String)
-    end
-
-    # The OAuth wire is unchanged when the module IS served: a malformed call
-    # gets the OAuth error object, not a problem document. `module_not_served`
-    # is the single carve-out, and this is the control that says so.
-    it 'keeps the OAuth error object for an ordinary refusal' do
-      status, headers, body = post_device_authorization('client_id' => 'assistant')
-
-      expect(status).to eq(400)
-      expect(headers['Content-Type']).not_to include('problem+json')
-      expect(JSON.parse(body, symbolize_names: true)[:error]).to eq('invalid_request')
+        expect(status).to eq(400)
+        expect(headers['Content-Type']).not_to include('problem+json')
+        expect(JSON.parse(body, symbolize_names: true)[:error]).to eq('invalid_request')
+      end
     end
   end
 end

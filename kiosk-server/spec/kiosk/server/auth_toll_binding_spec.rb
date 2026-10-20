@@ -77,98 +77,96 @@ RSpec.shared_context 'auth toll binding spec: a tolled provider' do
   end
 end
 
-RSpec.describe Kiosk::Server::LinkCode do
+RSpec.describe Kiosk::Server::AuthToll do
   include_context 'auth toll binding spec: a tolled provider'
 
-  let(:live) { described_class.mint(user_id: user_id, store: store)[:link_code] }
-  let(:unknown) { SecureRandom.urlsafe_base64(32) }
+  describe Kiosk::Server::LinkCode do
+    let(:live) { described_class.mint(user_id: user_id, store: store)[:link_code] }
+    let(:unknown) { SecureRandom.urlsafe_base64(32) }
 
-  def redeem(code, pow: nil)
-    described_class.redeem(code: code, public_key_pem: pem, signed: possession, pow: pow, store: store)
-  end
-
-  it 'asks an unknown link code for the toll, the same as a live one' do
-    asked = [unknown, live].map do |code|
-      redeem(code)
-    rescue Kiosk::Server::Errors::PowRequired => e
-      e.challenges.map { it.slice(:alg, :params) }
+    def redeem(code, pow: nil)
+      described_class.redeem(code: code, public_key_pem: pem, signed: possession, pow: pow, store: store)
     end
-    expect(asked.uniq).to eq([[{ alg: 'equihash', params: EquihashKat::PARAMS }]])
-  end
 
-  it 'answers a paid claim of an unknown link code not found' do
-    expect { redeem(unknown, pow: claim_proof(unknown, id: 'c-unknown')) }
-      .to raise_error(Kiosk::Server::Errors::NotFound, /unknown link code/)
-  end
-
-  it 'binds a paid claim of a live link code' do
-    expect(redeem(live, pow: claim_proof(live, id: 'c-live'))).to include(access_token: 'kiosk-pop-jwt')
-  end
-
-  it 'refuses a proof paid for another link code' do
-    expect { redeem(live, pow: claim_proof(unknown, id: 'c-other')) }
-      .to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-end
-
-RSpec.describe Kiosk::Server::DeviceCodeGrant do
-  include_context 'auth toll binding spec: a tolled provider'
-
-  let(:live) { described_class.start(client_id: 'assistant', public_key_pem: pem, store: store)[:device_code] }
-  let(:unknown) { SecureRandom.urlsafe_base64(32) }
-
-  it 'asks the first poll of an unknown device code for the toll before it reads the store' do
-    allow(store).to receive(:lookup_by_device_code_hash).and_call_original
-    expect { poll(unknown) }.to raise_error(Kiosk::Server::Errors::PowRequired)
-    expect(store).not_to have_received(:lookup_by_device_code_hash)
-  end
-
-  it 'answers a paid poll of an unknown device code invalid_grant' do
-    expect(poll(unknown, pow: poll_proof(unknown, id: 'p-unknown'))).to include(error: 'invalid_grant')
-  end
-
-  it 'charges each device code once: later polls of the same code are free' do
-    now = Time.current
-    expect(poll(live, pow: poll_proof(live, id: 'p-live'), now: now)).to include(error: 'authorization_pending')
-    expect(poll(live, now: now + 1)).to include(error: 'slow_down')
-    expect(poll(live, now: now + 10)).to include(error: 'authorization_pending')
-  end
-
-  it 'asks the toll again for another device code' do
-    poll(live, pow: poll_proof(live, id: 'p-first'))
-    expect { poll(unknown) }.to raise_error(Kiosk::Server::Errors::PowRequired)
-  end
-
-  it 'asks nothing when the toll is off' do
-    Kiosk.configuration.registration_pow_count = 0
-    expect(poll(unknown)).to include(error: 'invalid_grant')
-  end
-end
-
-RSpec.describe Kiosk::Server::OauthTokenController do
-  include_context 'auth toll binding spec: a tolled provider'
-
-  let(:grant) { Kiosk::Server::DeviceCodeGrant::GRANT_TYPE }
-  let(:live) { Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem, store: store)[:device_code] }
-
-  it 'answers an unpaid poll with the 402 problem document, the same for an unknown and a live code' do
-    answers = [SecureRandom.urlsafe_base64(32), live].map do |code|
-      status, headers, body = token!('grant_type' => grant, 'device_code' => code)
-      [status, headers['WWW-Authenticate'], headers['Cache-Control'], body[:code], body[:challenges].size]
+    it 'asks an unknown link code for the toll, the same as a live one' do
+      asked = [unknown, live].map do |code|
+        redeem(code)
+      rescue Kiosk::Server::Errors::PowRequired => e
+        e.challenges.map { it.slice(:alg, :params) }
+      end
+      expect(asked.uniq).to eq([[{ alg: 'equihash', params: EquihashKat::PARAMS }]])
     end
-    expect(answers.uniq).to eq([[402, 'Kiosk-PoW realm="https://provider.example"', 'no-store', 'pow_required', 1]])
+
+    it 'answers a paid claim of an unknown link code not found' do
+      expect { redeem(unknown, pow: claim_proof(unknown, id: 'c-unknown')) }
+        .to raise_error(Kiosk::Server::Errors::NotFound, /unknown link code/)
+    end
+
+    it 'binds a paid claim of a live link code' do
+      expect(redeem(live, pow: claim_proof(live, id: 'c-live'))).to include(access_token: 'kiosk-pop-jwt')
+    end
+
+    it 'refuses a proof paid for another link code' do
+      expect { redeem(live, pow: claim_proof(unknown, id: 'c-other')) }
+        .to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
   end
 
-  it 'answers a malformed Kiosk-PoW header 400 bad_request as a problem document' do
-    status, headers, body = token!({ 'grant_type' => grant, 'device_code' => live }, 'HTTP_KIOSK_POW' => '{not json')
-    expect([status, body[:code]]).to eq([400, 'bad_request'])
-    expect(headers['Content-Type']).to include('application/problem+json')
+  describe Kiosk::Server::DeviceCodeGrant do
+    let(:live) { described_class.start(client_id: 'assistant', public_key_pem: pem, store: store)[:device_code] }
+    let(:unknown) { SecureRandom.urlsafe_base64(32) }
+
+    it 'asks the first poll of an unknown device code for the toll before it reads the store' do
+      allow(store).to receive(:lookup_by_device_code_hash).and_call_original
+      expect { poll(unknown) }.to raise_error(Kiosk::Server::Errors::PowRequired)
+      expect(store).not_to have_received(:lookup_by_device_code_hash)
+    end
+
+    it 'answers a paid poll of an unknown device code invalid_grant' do
+      expect(poll(unknown, pow: poll_proof(unknown, id: 'p-unknown'))).to include(error: 'invalid_grant')
+    end
+
+    it 'charges each device code once: later polls of the same code are free' do
+      now = Time.current
+      expect(poll(live, pow: poll_proof(live, id: 'p-live'), now: now)).to include(error: 'authorization_pending')
+      expect(poll(live, now: now + 1)).to include(error: 'slow_down')
+      expect(poll(live, now: now + 10)).to include(error: 'authorization_pending')
+    end
+
+    it 'asks the toll again for another device code' do
+      poll(live, pow: poll_proof(live, id: 'p-first'))
+      expect { poll(unknown) }.to raise_error(Kiosk::Server::Errors::PowRequired)
+    end
+
+    it 'asks nothing when the toll is off' do
+      Kiosk.configuration.registration_pow_count = 0
+      expect(poll(unknown)).to include(error: 'invalid_grant')
+    end
   end
 
-  it 'answers a paid poll on the OAuth wire' do
-    proof = JSON.generate(poll_proof(live, id: 'ctl-live'))
-    status, _headers, body = token!({ 'grant_type' => grant, 'device_code' => live, 'signed' => possession },
-                                    'HTTP_KIOSK_POW' => proof)
-    expect([status, body[:error]]).to eq([400, 'authorization_pending'])
+  describe Kiosk::Server::OauthTokenController do
+    let(:grant) { Kiosk::Server::DeviceCodeGrant::GRANT_TYPE }
+    let(:live) { Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem, store: store)[:device_code] }
+
+    it 'answers an unpaid poll with the 402 problem document, the same for an unknown and a live code' do
+      answers = [SecureRandom.urlsafe_base64(32), live].map do |code|
+        status, headers, body = token!('grant_type' => grant, 'device_code' => code)
+        [status, headers['WWW-Authenticate'], headers['Cache-Control'], body[:code], body[:challenges].size]
+      end
+      expect(answers.uniq).to eq([[402, 'Kiosk-PoW realm="https://provider.example"', 'no-store', 'pow_required', 1]])
+    end
+
+    it 'answers a malformed Kiosk-PoW header 400 bad_request as a problem document' do
+      status, headers, body = token!({ 'grant_type' => grant, 'device_code' => live }, 'HTTP_KIOSK_POW' => '{not json')
+      expect([status, body[:code]]).to eq([400, 'bad_request'])
+      expect(headers['Content-Type']).to include('application/problem+json')
+    end
+
+    it 'answers a paid poll on the OAuth wire' do
+      proof = JSON.generate(poll_proof(live, id: 'ctl-live'))
+      status, _headers, body = token!({ 'grant_type' => grant, 'device_code' => live, 'signed' => possession },
+                                      'HTTP_KIOSK_POW' => proof)
+      expect([status, body[:error]]).to eq([400, 'authorization_pending'])
+    end
   end
 end

@@ -247,9 +247,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
         expect(stores.first).to be_a(klass)
       end
     end
-  end
 
-  describe 'lazy store defaults under a concurrent first touch' do
     # Every lazy default in the shipped file that ALLOCATES a store must take
     # the lock, so a new store slot added without it reddens here.
     describe 'the guarded set is derived from the shipped source' do

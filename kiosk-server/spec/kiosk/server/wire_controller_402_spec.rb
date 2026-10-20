@@ -86,152 +86,154 @@ RSpec.shared_context 'wire controller 402 spec: pow gate' do
   after { Kiosk::Reputation::Backends.reset! }
 end
 
-RSpec.describe 'WireController 402 WWW-Authenticate (W4)' do
-  include_context 'wire controller 402 spec: origin'
+RSpec.describe Kiosk::Server::WireController do
+  describe '402 WWW-Authenticate (W4)' do
+    include_context 'wire controller 402 spec: origin'
 
-  # ─── PoW gate → WWW-Authenticate: Kiosk-PoW ────────────────────────────
-  describe 'the pow_required 402' do
-    include_context 'wire controller 402 spec: pow gate'
+    # ─── PoW gate → WWW-Authenticate: Kiosk-PoW ────────────────────────────
+    describe 'the pow_required 402' do
+      include_context 'wire controller 402 spec: pow gate'
 
-    # The reserved plane pays the same toll and answers the same way as the
-    # per-verb wire: one answer shape on every Kiosk endpoint, here
-    # `POST <endpoint>/pay` for the PoW gate.
-    it 'carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay' do
-      status, headers, problem = dispatch(:pay, pay_env)
-      expect(status).to eq(402)
-      expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
-      expect(headers['Content-Type']).to include('application/problem+json')
-      # Body payload preserved (header names, body carries).
-      expect(problem[:code]).to   eq('pow_required')
-      expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
-      expect(problem[:status]).to eq(402)
-      expect(problem[:challenges]).to be_an(Array)
-      expect(problem[:challenges]).not_to be_empty
-      expect(problem).not_to have_key(:ok)
-      expect(problem).not_to have_key(:error)
-    end
-
-    # The same gate on the per-verb wire: the header names the gate, the
-    # challenges ride in the body, and the code an assistant branches on is
-    # `pow_required`, a top-level `code` member and also the `type` URI.
-    it 'answers a per-verb GET the same gate as a problem document, uncacheable' do
-      declare_query('menu') { render json: [] }
-      status, headers, body = dispatch_verb(:show, 'menu', bearer_env('/kiosk/menu', agent_token))
-
-      expect(status).to eq(402)
-      expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
-      expect(headers['Content-Type']).to include('application/problem+json')
-      # Spec §3.7.2: a single-use challenge is never cacheable, and
-      # `no-store` is the one directive an operator cannot relax.
-      expect(headers['Cache-Control']).to eq('no-store')
-      expect(headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
-      expect(body[:code]).to   eq('pow_required')
-      expect(body[:type]).to   eq('https://kiosk.tech/problems/pow_required')
-      expect(body[:status]).to eq(402)
-      expect(body[:challenges]).to be_an(Array)
-      expect(body[:challenges]).not_to be_empty
-    end
-
-    # §3.7.5, a MUST: the toll gate runs BEFORE the freshness check, because a
-    # `304` is a served response. A `304 Not Modified` to an untolled
-    # conditional request would give out an unmetered "your copy is current"
-    # answer, which is the answer the toll charges for.
-    #
-    # The control is the second half: the same `If-None-Match: *` against
-    # `GET <endpoint>/schema`, which is untolled by design, gets a `304`. So
-    # the tolled plane refuses the conditional request on purpose.
-    it 'answers 402 to a CONDITIONAL request — the toll runs before freshness' do
-      declare_query('menu') { render json: [] }
-      env = bearer_env('/kiosk/menu', agent_token,
-                       'HTTP_IF_NONE_MATCH' => '*',
-                       'HTTP_IF_MODIFIED_SINCE' => 'Sun, 06 Nov 2044 08:49:37 GMT')
-      status, = dispatch_verb(:show, 'menu', env)
-
-      expect(status).to eq(402)
-
-      # The control: an untolled endpoint in the same process DOES honour it.
-      sch_status, = Kiosk::Server::WireController.action(:schema).call(
-        Rack::MockRequest.env_for('/kiosk/schema', 'HTTP_IF_NONE_MATCH' => '*')
-      )
-      expect(sch_status).to eq(304)
-    end
-  end
-
-  # ─── Payment-setup gate → WWW-Authenticate: Payment ────────────────────
-  describe 'the payment_setup_required 402' do
-    before do
-      # A provider that knows the principal has no card on file → the pay verb
-      # raises PaymentSetupRequired BEFORE opening any DB transaction.
-      provider = Object.new
-      provider.define_singleton_method(:setup_required?) { |**| true }
-      Kiosk.configure { |c| c.payment_provider = provider }
-
-      # The pay verb only uses the leased connection after the setup check, so
-      # a bare stub suffices. `.connection` is not defined: the engine must not
-      # call it (it raises under permanent_connection_checkout = :disallowed).
-      stub_const('ActiveRecord::Base', Class.new { define_singleton_method(:lease_connection) { Object.new } })
-    end
-
-    it 'carries WWW-Authenticate: Payment ... method="ap2" AND the body pointer' do
-      status, headers, problem = dispatch(:pay, pay_env)
-      expect(status).to eq(402)
-      expect(headers['WWW-Authenticate']).to eq('Payment realm="https://demo.example", method="ap2"')
-      expect(headers['Content-Type']).to include('application/problem+json')
-      # The other 402 of the pair — same status, same endpoint, different
-      # code — which is why the code member is the branch point.
-      expect(problem[:code]).to   eq('payment_setup_required')
-      expect(problem[:type]).to   eq('https://kiosk.tech/problems/payment_setup_required')
-      expect(problem[:status]).to eq(402)
-      expect(problem[:hint]).to include('payment_setup')
-      expect(problem).not_to have_key(:challenges)
-    end
-  end
-
-  # ─── payment_failed → NO WWW-Authenticate ──────────────────────────────
-  #
-  # §9: an operator MUST NOT emit a `WWW-Authenticate` header on
-  # `payment_failed`. The other two 402s name a gate the client can act on
-  # (solve a proof / set up a card); this one names none, so there is no
-  # scheme to re-present credentials under. `www_authenticate_for` gives nil
-  # for every other code, and this example holds that.
-  describe 'the payment_failed 402' do
-    before do
-      # No database: the executor is stubbed to fail the way a PSP decline
-      # reaches the render seam, which is the only part this example is about.
-      ar_base = Class.new do
-        define_singleton_method(:connection)       { Object.new }
-        define_singleton_method(:lease_connection) { Object.new }
+      # The reserved plane pays the same toll and answers the same way as the
+      # per-verb wire: one answer shape on every Kiosk endpoint, here
+      # `POST <endpoint>/pay` for the PoW gate.
+      it 'carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay' do
+        status, headers, problem = dispatch(:pay, pay_env)
+        expect(status).to eq(402)
+        expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
+        expect(headers['Content-Type']).to include('application/problem+json')
+        # Body payload preserved (header names, body carries).
+        expect(problem[:code]).to   eq('pow_required')
+        expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+        expect(problem[:status]).to eq(402)
+        expect(problem[:challenges]).to be_an(Array)
+        expect(problem[:challenges]).not_to be_empty
+        expect(problem).not_to have_key(:ok)
+        expect(problem).not_to have_key(:error)
       end
-      stub_const('ActiveRecord::Base', ar_base)
-      allow_any_instance_of(Kiosk::Server::Executor).to receive(:call).and_raise(
-        Kiosk::Server::Errors::PaymentFailed.new(
-          'the card was declined', hint: 'the human may need to update the payment method'
+
+      # The same gate on the per-verb wire: the header names the gate, the
+      # challenges ride in the body, and the code an assistant branches on is
+      # `pow_required`, a top-level `code` member and also the `type` URI.
+      it 'answers a per-verb GET the same gate as a problem document, uncacheable' do
+        declare_query('menu') { render json: [] }
+        status, headers, body = dispatch_verb(:show, 'menu', bearer_env('/kiosk/menu', agent_token))
+
+        expect(status).to eq(402)
+        expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
+        expect(headers['Content-Type']).to include('application/problem+json')
+        # Spec §3.7.2: a single-use challenge is never cacheable, and
+        # `no-store` is the one directive an operator cannot relax.
+        expect(headers['Cache-Control']).to eq('no-store')
+        expect(headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
+        expect(body[:code]).to   eq('pow_required')
+        expect(body[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+        expect(body[:status]).to eq(402)
+        expect(body[:challenges]).to be_an(Array)
+        expect(body[:challenges]).not_to be_empty
+      end
+
+      # §3.7.5, a MUST: the toll gate runs BEFORE the freshness check, because a
+      # `304` is a served response. A `304 Not Modified` to an untolled
+      # conditional request would give out an unmetered "your copy is current"
+      # answer, which is the answer the toll charges for.
+      #
+      # The control is the second half: the same `If-None-Match: *` against
+      # `GET <endpoint>/schema`, which is untolled by design, gets a `304`. So
+      # the tolled plane refuses the conditional request on purpose.
+      it 'answers 402 to a CONDITIONAL request — the toll runs before freshness' do
+        declare_query('menu') { render json: [] }
+        env = bearer_env('/kiosk/menu', agent_token,
+                         'HTTP_IF_NONE_MATCH' => '*',
+                         'HTTP_IF_MODIFIED_SINCE' => 'Sun, 06 Nov 2044 08:49:37 GMT')
+        status, = dispatch_verb(:show, 'menu', env)
+
+        expect(status).to eq(402)
+
+        # The control: an untolled endpoint in the same process DOES honour it.
+        sch_status, = described_class.action(:schema).call(
+          Rack::MockRequest.env_for('/kiosk/schema', 'HTTP_IF_NONE_MATCH' => '*')
         )
-      )
+        expect(sch_status).to eq(304)
+      end
     end
 
-    it 'carries NO WWW-Authenticate header — no scheme names this gate (§9)' do
-      declare_action('checkout')
-      env = bearer_env('/kiosk/checkout', agent_token, method: 'POST',
-                                                       input: '{}', 'CONTENT_TYPE' => 'application/json')
-      status, headers, problem = dispatch_verb(:create, 'checkout', env)
+    # ─── Payment-setup gate → WWW-Authenticate: Payment ────────────────────
+    describe 'the payment_setup_required 402' do
+      before do
+        # A provider that knows the principal has no card on file → the pay verb
+        # raises PaymentSetupRequired BEFORE opening any DB transaction.
+        provider = Object.new
+        provider.define_singleton_method(:setup_required?) { |**| true }
+        Kiosk.configure { |c| c.payment_provider = provider }
 
-      expect(status).to eq(402)
-      expect(problem[:code]).to eq('payment_failed')
-      # The two codes that have a scheme do get the header (asserted above),
-      # so this absence is a decision of the render seam.
-      expect(headers.to_h.transform_keys(&:downcase)).not_to have_key('www-authenticate')
+        # The pay verb only uses the leased connection after the setup check, so
+        # a bare stub suffices. `.connection` is not defined: the engine must not
+        # call it (it raises under permanent_connection_checkout = :disallowed).
+        stub_const('ActiveRecord::Base', Class.new { define_singleton_method(:lease_connection) { Object.new } })
+      end
+
+      it 'carries WWW-Authenticate: Payment ... method="ap2" AND the body pointer' do
+        status, headers, problem = dispatch(:pay, pay_env)
+        expect(status).to eq(402)
+        expect(headers['WWW-Authenticate']).to eq('Payment realm="https://demo.example", method="ap2"')
+        expect(headers['Content-Type']).to include('application/problem+json')
+        # The other 402 of the pair — same status, same endpoint, different
+        # code — which is why the code member is the branch point.
+        expect(problem[:code]).to   eq('payment_setup_required')
+        expect(problem[:type]).to   eq('https://kiosk.tech/problems/payment_setup_required')
+        expect(problem[:status]).to eq(402)
+        expect(problem[:hint]).to include('payment_setup')
+        expect(problem).not_to have_key(:challenges)
+      end
     end
-  end
 
-  # ─── non-402 errors carry NO WWW-Authenticate header ───────────────────
-  #
-  # Dialed at `pay`: `GET /kiosk/schema` is public, resolves no identity and
-  # cannot produce a 401. `pay` reaches `resolve_identity!`.
-  it 'does not emit WWW-Authenticate on a non-402 error (e.g. 401)' do
-    status, headers, = dispatch(:pay, bearer_env('/kiosk/pay', 'garbage', method: 'POST',
-                                                                          input: '{}', 'CONTENT_TYPE' => 'application/json'))
-    expect(status).to eq(401)
-    expect(headers).not_to have_key('WWW-Authenticate')
+    # ─── payment_failed → NO WWW-Authenticate ──────────────────────────────
+    #
+    # §9: an operator MUST NOT emit a `WWW-Authenticate` header on
+    # `payment_failed`. The other two 402s name a gate the client can act on
+    # (solve a proof / set up a card); this one names none, so there is no
+    # scheme to re-present credentials under. `www_authenticate_for` gives nil
+    # for every other code, and this example holds that.
+    describe 'the payment_failed 402' do
+      before do
+        # No database: the executor is stubbed to fail the way a PSP decline
+        # reaches the render seam, which is the only part this example is about.
+        ar_base = Class.new do
+          define_singleton_method(:connection)       { Object.new }
+          define_singleton_method(:lease_connection) { Object.new }
+        end
+        stub_const('ActiveRecord::Base', ar_base)
+        allow_any_instance_of(Kiosk::Server::Executor).to receive(:call).and_raise(
+          Kiosk::Server::Errors::PaymentFailed.new(
+            'the card was declined', hint: 'the human may need to update the payment method'
+          )
+        )
+      end
+
+      it 'carries NO WWW-Authenticate header — no scheme names this gate (§9)' do
+        declare_action('checkout')
+        env = bearer_env('/kiosk/checkout', agent_token, method: 'POST',
+                                                         input: '{}', 'CONTENT_TYPE' => 'application/json')
+        status, headers, problem = dispatch_verb(:create, 'checkout', env)
+
+        expect(status).to eq(402)
+        expect(problem[:code]).to eq('payment_failed')
+        # The two codes that have a scheme do get the header (asserted above),
+        # so this absence is a decision of the render seam.
+        expect(headers.to_h.transform_keys(&:downcase)).not_to have_key('www-authenticate')
+      end
+    end
+
+    # ─── non-402 errors carry NO WWW-Authenticate header ───────────────────
+    #
+    # Dialed at `pay`: `GET /kiosk/schema` is public, resolves no identity and
+    # cannot produce a 401. `pay` reaches `resolve_identity!`.
+    it 'does not emit WWW-Authenticate on a non-402 error (e.g. 401)' do
+      status, headers, = dispatch(:pay, bearer_env('/kiosk/pay', 'garbage', method: 'POST',
+                                                                            input: '{}', 'CONTENT_TYPE' => 'application/json'))
+      expect(status).to eq(401)
+      expect(headers).not_to have_key('WWW-Authenticate')
+    end
   end
 end

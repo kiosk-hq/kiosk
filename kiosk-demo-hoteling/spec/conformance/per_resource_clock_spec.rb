@@ -46,29 +46,27 @@ RSpec.describe "a property's clock is the property's" do
         .to match(%r{is in the past.*Pacific/Auckland})
     end
   end
-end
 
-RSpec.describe "a property's clock is the property's", 'on the wire' do
-  include_context 'one operator with hotels in Istanbul and Auckland'
+  describe 'on the wire' do
+    it "publishes each property's own zone in its hotel_detail row" do
+      ist = kiosk_origin.call(:hotel_detail, kind: :query,
+                                             params: { property_id: istanbul.id }, as: guest.id).first
+      akl = kiosk_origin.call(:hotel_detail, kind: :query,
+                                             params: { property_id: auckland.id }, as: guest.id).first
 
-  it "publishes each property's own zone in its hotel_detail row" do
-    ist = kiosk_origin.call(:hotel_detail, kind: :query,
-                                           params: { property_id: istanbul.id }, as: guest.id).first
-    akl = kiosk_origin.call(:hotel_detail, kind: :query,
-                                           params: { property_id: auckland.id }, as: guest.id).first
+      expect(ist[:timezone] || ist['timezone']).to eq('Europe/Istanbul')
+      expect(akl[:timezone] || akl['timezone']).to eq('Pacific/Auckland')
+    end
 
-    expect(ist[:timezone] || ist['timezone']).to eq('Europe/Istanbul')
-    expect(akl[:timezone] || akl['timezone']).to eq('Pacific/Auckland')
-  end
+    it 'echoes a calendar day back byte-identical' do
+      row = kiosk_origin.call(:hotel_detail, kind: :query,
+                                             params: { property_id: auckland.id,
+                                                       check_in: (Date.current + 40).iso8601,
+                                                       check_out: (Date.current + 43).iso8601 },
+                                             as: guest.id).first
 
-  it 'echoes a calendar day back byte-identical' do
-    row = kiosk_origin.call(:hotel_detail, kind: :query,
-                                           params: { property_id: auckland.id,
-                                                     check_in: (Date.current + 40).iso8601,
-                                                     check_out: (Date.current + 43).iso8601 },
-                                           as: guest.id).first
-
-    expect(row[:check_in] || row['check_in']).to eq((Date.current + 40).iso8601)
-    expect(row[:check_out] || row['check_out']).to eq((Date.current + 43).iso8601)
+      expect(row[:check_in] || row['check_in']).to eq((Date.current + 40).iso8601)
+      expect(row[:check_out] || row['check_out']).to eq((Date.current + 43).iso8601)
+    end
   end
 end

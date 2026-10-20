@@ -78,6 +78,14 @@ Rails:
 RSpecRails:
   Exclude: *plain_ruby
 
+# The Minitest tests live in test/; the RSpec cops read the RSpec specs.
+RSpec:
+  inherit_mode:
+    merge:
+      - Exclude
+  Exclude:
+    - "**/test/**/*"
+
 # A conformance matcher takes the name of the verb it checks as its subject.
 RSpec/ExpectActual:
   Exclude:
@@ -89,6 +97,31 @@ RSpec/Output:
   Exclude:
     - "kiosk-server/spec/support/*_app.rb"
 
+# A spec at the root of a spec directory checks the repository's files, a
+# conformance spec checks a whole origin, and a hoteling story follows a guest;
+# none describes a class.
+RSpec/DescribeClass:
+  inherit_mode:
+    merge:
+      - Exclude
+  Exclude:
+    - "*/spec/*_spec.rb"
+    - "kiosk-demo-hoteling/spec/conformance/*_spec.rb"
+  IgnoredMetadata:
+    type: [channel, controller, helper, job, mailer, model, request, routing, view, feature, system, mailbox, aruba, task, story]
+
+# A generator spec follows the generator's lib/generators path, as in Rails.
+RSpec/SpecFilePathFormat:
+  inherit_mode:
+    merge:
+      - Exclude
+  Exclude:
+    - "**/spec/generators/**/*"
+  CustomTransform:
+    RuboCop: rubocop
+    RSpec: rspec
+    RLSRSpec: rls_rspec
+
 # The RSpec cops below are being fixed one family at a time.
 RSpec/AnyInstance:
   Enabled: false
@@ -96,15 +129,9 @@ RSpec/BeforeAfterAll:
   Enabled: false
 RSpec/ContextWording:
   Enabled: false
-RSpec/DescribeClass:
-  Enabled: false
-RSpec/DescribeMethod:
-  Enabled: false
 RSpec/ExampleLength:
   Enabled: false
 RSpec/ExpectInHook:
-  Enabled: false
-RSpec/IdenticalEqualityAssertion:
   Enabled: false
 RSpec/InstanceVariable:
   Enabled: false
@@ -114,23 +141,11 @@ RSpec/LetSetup:
   Enabled: false
 RSpec/MessageSpies:
   Enabled: false
-RSpec/MultipleDescribes:
-  Enabled: false
 RSpec/MultipleExpectations:
   Enabled: false
 RSpec/MultipleMemoizedHelpers:
   Enabled: false
-RSpec/NestedGroups:
-  Enabled: false
 RSpec/RemoveConst:
-  Enabled: false
-RSpec/RepeatedDescription:
-  Enabled: false
-RSpec/RepeatedExampleGroupDescription:
-  Enabled: false
-RSpec/SpecFilePathFormat:
-  Enabled: false
-RSpec/SpecFilePathSuffix:
   Enabled: false
 RSpec/StubbedMock:
   Enabled: false

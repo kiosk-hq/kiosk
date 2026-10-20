@@ -113,79 +113,79 @@ RSpec.describe 'the skill pin' do
                                       'All nine consumers re-pin together when a new skill is cut ' \
                                       "(ADR-0012). Series named: #{series.join(' / ')}."
   end
-end
 
-# The engine default carries no sha256 of its own, so the property is that the
-# file it names is published and is the one the demos verify against.
-RSpec.describe "the skill pin: kiosk-server's default against the published bytes" do
-  include_context 'with the published kiosk.tech checkout'
+  # The engine default carries no sha256 of its own, so the property is that the
+  # file it names is published and is the one the demos verify against.
+  describe "the skill pin: kiosk-server's default against the published bytes" do
+    include_context 'with the published kiosk.tech checkout'
 
-  it "kiosk-server's default names a published file, the same one the demos pin" do
-    url = SkillPin.default_url
-    skip "kiosk-server's default is unreadable (asserted above)" if url.nil?
-    expect(File).to exist(SkillPin.published_file(url)),
-                    "kiosk-server defaults skill_url to #{url}, but #{File.basename(url)} is not published in " \
-                    "#{SkillPin::SITE_ROOT} — every operator who does not override it advertises a URL that 404s, " \
-                    'and an AI assistant that cannot fetch the pinned skill cannot verify it.'
+    it "kiosk-server's default names a published file, the same one the demos pin" do
+      url = SkillPin.default_url
+      skip "kiosk-server's default is unreadable (asserted above)" if url.nil?
+      expect(File).to exist(SkillPin.published_file(url)),
+                      "kiosk-server defaults skill_url to #{url}, but #{File.basename(url)} is not published in " \
+                      "#{SkillPin::SITE_ROOT} — every operator who does not override it advertises a URL that 404s, " \
+                      'and an AI assistant that cannot fetch the pinned skill cannot verify it.'
 
-    actual    = SkillPin.published_sha(url)
-    demo_shas = SkillPin.pins.values.filter_map { it[:sha] }.uniq
-    expect(demo_shas).to eq([actual]),
-                         "the default cut #{File.basename(url)} hashes to #{actual}, " \
-                         "but the demos pin #{demo_shas.inspect} — the default and the demo pins " \
-                         'are supposed to be the same artefact. Re-pin them together, or publish ' \
-                         'a new immutable cut and move all nine consumers to it.'
-  end
-end
-
-RSpec.describe "the skill pin: each demo's sha256 against the published bytes" do
-  include_context 'with the published kiosk.tech checkout'
-
-  SkillPin.pins.each do |demo, pin|
-    it "#{demo} pins the sha256 of the published skill version file" do
-      expect(pin[:sha]).not_to be_nil, "#{demo}: no skill_sha256 pin in #{pin[:path]}"
-      expect(pin[:url]).not_to be_nil,
-                               "could not determine the skill URL (no skill_url in #{pin[:path]} " \
-                               "and no default in #{SkillPin::DEFAULT_URL_SOURCE})"
-      expect(File).to exist(SkillPin.published_file(pin[:url])),
-                      "pinned skill file #{File.basename(pin[:url])} (from #{pin[:url]}) not found in #{SkillPin::SITE_ROOT}"
-
-      actual = SkillPin.published_sha(pin[:url])
-      expect(pin[:sha]).to eq(actual),
-                           "#{demo} pins skill_sha256 #{pin[:sha]} but #{File.basename(pin[:url])} " \
-                           "hashes to #{actual} — re-pin the demos or publish a new immutable skill version"
+      actual    = SkillPin.published_sha(url)
+      demo_shas = SkillPin.pins.values.filter_map { it[:sha] }.uniq
+      expect(demo_shas).to eq([actual]),
+                           "the default cut #{File.basename(url)} hashes to #{actual}, " \
+                           "but the demos pin #{demo_shas.inspect} — the default and the demo pins " \
+                           'are supposed to be the same artefact. Re-pin them together, or publish ' \
+                           'a new immutable cut and move all nine consumers to it.'
     end
   end
-end
 
-# The pinned cut must teach an assistant to END its device-code poll: a
-# ceremony the human denied, or one whose `expires_in` elapsed, must not poll
-# forever. The vocabulary is derived from the engine, so a code added there and
-# not taught to the skill fails here.
-RSpec.describe 'the skill pin: the device-code poll in the pinned cut' do
-  include_context 'with the published kiosk.tech checkout'
+  describe "the skill pin: each demo's sha256 against the published bytes" do
+    include_context 'with the published kiosk.tech checkout'
 
-  it 'the pinned cut names every device-grant error the engine can emit, and a give-up horizon' do
-    expect(File).to exist(SkillPin::GRANT_SOURCE)
-    emitted = SkillPin.emitted_grant_errors
-    expect(emitted.size).to be >= 5,
-                            "parsed only #{emitted.size} failure code(s) out of " \
-                            "#{SkillPin::GRANT_SOURCE}; the call shape changed and this expectation is blind"
+    SkillPin.pins.each do |demo, pin|
+      it "#{demo} pins the sha256 of the published skill version file" do
+        expect(pin[:sha]).not_to be_nil, "#{demo}: no skill_sha256 pin in #{pin[:path]}"
+        expect(pin[:url]).not_to be_nil,
+                                 "could not determine the skill URL (no skill_url in #{pin[:path]} " \
+                                 "and no default in #{SkillPin::DEFAULT_URL_SOURCE})"
+        expect(File).to exist(SkillPin.published_file(pin[:url])),
+                        "pinned skill file #{File.basename(pin[:url])} (from #{pin[:url]}) not found in #{SkillPin::SITE_ROOT}"
 
-    name    = File.basename(SkillPin.pins.values.filter_map { it[:url] }.uniq.first)
-    section = SkillPin.ceremony_section(name)
-    expect(section).not_to be_nil, "could not locate the claim-ceremony bullet in #{name}"
+        actual = SkillPin.published_sha(pin[:url])
+        expect(pin[:sha]).to eq(actual),
+                             "#{demo} pins skill_sha256 #{pin[:sha]} but #{File.basename(pin[:url])} " \
+                             "hashes to #{actual} — re-pin the demos or publish a new immutable skill version"
+      end
+    end
+  end
 
-    missing = emitted.reject { |code| section.include?(code) }
-    expect(missing).to be_empty,
-                       "#{name} teaches the device-code poll without naming #{missing.join(', ')} — the engine " \
-                       "emits #{emitted.sort.join(', ')} (#{SkillPin::GRANT_SOURCE}), and an error the skill " \
-                       'does not name is an error the assistant loops on'
-    expect(section).to include('GIVE UP'),
-                       "#{name}'s device-code poll states no give-up horizon. Nothing pushes on approval, so a " \
-                       "loop without one runs until the assistant's budget dies — the card-setup and KYC polls " \
-                       'both say where to stop, and this is the third such poll.'
-    expect(section).to include('TERMINAL'),
-                       "#{name}'s device-code poll marks no outcome TERMINAL, so a denied or expired ceremony has no stated stop condition."
+  # The pinned cut must teach an assistant to END its device-code poll: a
+  # ceremony the human denied, or one whose `expires_in` elapsed, must not poll
+  # forever. The vocabulary is derived from the engine, so a code added there and
+  # not taught to the skill fails here.
+  describe 'the skill pin: the device-code poll in the pinned cut' do
+    include_context 'with the published kiosk.tech checkout'
+
+    it 'the pinned cut names every device-grant error the engine can emit, and a give-up horizon' do
+      expect(File).to exist(SkillPin::GRANT_SOURCE)
+      emitted = SkillPin.emitted_grant_errors
+      expect(emitted.size).to be >= 5,
+                              "parsed only #{emitted.size} failure code(s) out of " \
+                              "#{SkillPin::GRANT_SOURCE}; the call shape changed and this expectation is blind"
+
+      name    = File.basename(SkillPin.pins.values.filter_map { it[:url] }.uniq.first)
+      section = SkillPin.ceremony_section(name)
+      expect(section).not_to be_nil, "could not locate the claim-ceremony bullet in #{name}"
+
+      missing = emitted.reject { |code| section.include?(code) }
+      expect(missing).to be_empty,
+                         "#{name} teaches the device-code poll without naming #{missing.join(', ')} — the engine " \
+                         "emits #{emitted.sort.join(', ')} (#{SkillPin::GRANT_SOURCE}), and an error the skill " \
+                         'does not name is an error the assistant loops on'
+      expect(section).to include('GIVE UP'),
+                         "#{name}'s device-code poll states no give-up horizon. Nothing pushes on approval, so a " \
+                         "loop without one runs until the assistant's budget dies — the card-setup and KYC polls " \
+                         'both say where to stop, and this is the third such poll.'
+      expect(section).to include('TERMINAL'),
+                         "#{name}'s device-code poll marks no outcome TERMINAL, so a denied or expired ceremony has no stated stop condition."
+    end
   end
 end

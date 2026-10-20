@@ -179,9 +179,7 @@ RSpec.describe Kiosk::Server::Errors do
       expect(described_class.const_defined?(:QuotaExceeded)).to be(false)
       expect(described_class::CODES['quota_exceeded']).to eq(429)
     end
-  end
 
-  describe 'the exception classes' do
     {
       Kiosk::Server::Errors::Base => ['internal_error', 500],
       Kiosk::Server::Errors::BadRequest => ['bad_request', 400],

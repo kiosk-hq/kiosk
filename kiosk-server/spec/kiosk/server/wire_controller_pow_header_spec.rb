@@ -154,136 +154,138 @@ RSpec.shared_context 'wire controller pow header spec: tolled origin' do
   end
 end
 
-RSpec.describe 'Kiosk-PoW header path (ADR-0022)' do
-  include_context 'wire controller pow header spec: tolled origin'
+RSpec.describe Kiosk::Server::WireController do
+  describe 'Kiosk-PoW header path (ADR-0022)' do
+    include_context 'wire controller pow header spec: tolled origin'
 
-  # ── proof in the header → proceeds ─────────────────────────────────────────
-  it 'accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)' do
-    status, = get_verb('catalog', query: 'q=milk', pow_header: JSON.generate(catalog_proof))
+    # ── proof in the header → proceeds ─────────────────────────────────────────
+    it 'accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)' do
+      status, = get_verb('catalog', query: 'q=milk', pow_header: JSON.generate(catalog_proof))
 
-    expect(status).to eq(200)
-  end
+      expect(status).to eq(200)
+    end
 
-  it 'accepts a JSON-array Kiosk-PoW header (proceeds)' do
-    status, = get_verb('catalog', query: 'q=milk', pow_header: JSON.generate([catalog_proof]))
+    it 'accepts a JSON-array Kiosk-PoW header (proceeds)' do
+      status, = get_verb('catalog', query: 'q=milk', pow_header: JSON.generate([catalog_proof]))
 
-    expect(status).to eq(200)
-  end
+      expect(status).to eq(200)
+    end
 
-  it 'accepts a proxy comma-combined header value {A},{B} (RFC 7230)' do
-    # Two independently issued proofs for the SAME call, joined the way a proxy
-    # collapses duplicate header lines. Both must reach the gate.
-    combined = "#{JSON.generate(catalog_proof)},#{JSON.generate(catalog_proof)}"
+    it 'accepts a proxy comma-combined header value {A},{B} (RFC 7230)' do
+      # Two independently issued proofs for the SAME call, joined the way a proxy
+      # collapses duplicate header lines. Both must reach the gate.
+      combined = "#{JSON.generate(catalog_proof)},#{JSON.generate(catalog_proof)}"
 
-    status, = get_verb('catalog', query: 'q=milk', pow_header: combined)
+      status, = get_verb('catalog', query: 'q=milk', pow_header: combined)
 
-    expect(status).to eq(200)
-  end
+      expect(status).to eq(200)
+    end
 
-  it 'accepts repeated header lines joined by \\n (Rack duplicate presentation)' do
-    lines = "#{JSON.generate(catalog_proof)}\n#{JSON.generate(catalog_proof)}"
+    it 'accepts repeated header lines joined by \\n (Rack duplicate presentation)' do
+      lines = "#{JSON.generate(catalog_proof)}\n#{JSON.generate(catalog_proof)}"
 
-    status, = get_verb('catalog', query: 'q=milk', pow_header: lines)
+      status, = get_verb('catalog', query: 'q=milk', pow_header: lines)
 
-    expect(status).to eq(200)
-  end
+      expect(status).to eq(200)
+    end
 
-  # ── the controller feeds METHOD and PATH SEGMENT to the fingerprint ────────
-  #
-  # These are the controller-level half of the request-fingerprint binding
-  # proved against the gate in pow_gate_spec: the wire name the endpoint tolls
-  # under is the PATH SEGMENT it was reached by, and the method is the
-  # request's own.
+    # ── the controller feeds METHOD and PATH SEGMENT to the fingerprint ────────
+    #
+    # These are the controller-level half of the request-fingerprint binding
+    # proved against the gate in pow_gate_spec: the wire name the endpoint tolls
+    # under is the PATH SEGMENT it was reached by, and the method is the
+    # request's own.
 
-  it "does NOT accept a catalog proof on another query's endpoint" do
-    status, _headers, problem =
-      get_verb('availability', query: 'q=milk', pow_header: JSON.generate(catalog_proof))
+    it "does NOT accept a catalog proof on another query's endpoint" do
+      status, _headers, problem =
+        get_verb('availability', query: 'q=milk', pow_header: JSON.generate(catalog_proof))
 
-    expect(status).to eq(402)
-    expect(problem[:code]).to eq('pow_required')
-  end
+      expect(status).to eq(402)
+      expect(problem[:code]).to eq('pow_required')
+    end
 
-  it 'does NOT accept a GET proof on the POST endpoint of the same name' do
-    ch    = issue_challenge(command: 'query', method: 'GET', verb: 'place_order', body: {})
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
+    it 'does NOT accept a GET proof on the POST endpoint of the same name' do
+      ch    = issue_challenge(command: 'query', method: 'GET', verb: 'place_order', body: {})
+      proof = { challenge: ch, nonce: solve_nonce(ch) }
 
-    status, _headers, problem = post_verb('place_order', {}, pow_header: JSON.generate(proof))
+      status, _headers, problem = post_verb('place_order', {}, pow_header: JSON.generate(proof))
 
-    expect(status).to eq(402)
-    expect(problem[:code]).to eq('pow_required')
-  end
+      expect(status).to eq(402)
+      expect(problem[:code]).to eq('pow_required')
+    end
 
-  it 'accepts the matching POST proof on that same action (the control)' do
-    ch    = issue_challenge(command: 'run', method: 'POST', verb: 'place_order', body: {})
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
+    it 'accepts the matching POST proof on that same action (the control)' do
+      ch    = issue_challenge(command: 'run', method: 'POST', verb: 'place_order', body: {})
+      proof = { challenge: ch, nonce: solve_nonce(ch) }
 
-    status, = post_verb('place_order', {}, pow_header: JSON.generate(proof))
+      status, = post_verb('place_order', {}, pow_header: JSON.generate(proof))
 
-    expect(status).to eq(200)
-  end
+      expect(status).to eq(200)
+    end
 
-  # ── the reserved GET schema is public and free ─────────────────────────────
-  #
-  # The schema document is a cacheable static answer, so serving it costs the
-  # origin nothing, and a toll has no identity to charge. The policy in this
-  # file challenges every verb, which is what makes the 200 below mean
-  # something.
-  it 'never tolls GET /kiosk/schema, under a policy that challenges everything' do
-    status, headers, body =
-      dispatch_reserved(:schema, Rack::MockRequest.env_for('/kiosk/schema'))
+    # ── the reserved GET schema is public and free ─────────────────────────────
+    #
+    # The schema document is a cacheable static answer, so serving it costs the
+    # origin nothing, and a toll has no identity to charge. The policy in this
+    # file challenges every verb, which is what makes the 200 below mean
+    # something.
+    it 'never tolls GET /kiosk/schema, under a policy that challenges everything' do
+      status, headers, body =
+        dispatch_reserved(:schema, Rack::MockRequest.env_for('/kiosk/schema'))
 
-    expect(status).to eq(200)
-    expect(headers).not_to have_key('WWW-Authenticate')
-    expect(body).to have_key(:queries)
-  end
+      expect(status).to eq(200)
+      expect(headers).not_to have_key('WWW-Authenticate')
+      expect(body).to have_key(:queries)
+    end
 
-  it 'never tolls the JWKS document, under a policy that challenges everything' do
-    status, headers, body = finish(
-      Kiosk::Server::JwksController.action(:show).call(Rack::MockRequest.env_for('/kiosk/.well-known/jwks.json'))
-    )
+    it 'never tolls the JWKS document, under a policy that challenges everything' do
+      status, headers, body = finish(
+        Kiosk::Server::JwksController.action(:show).call(Rack::MockRequest.env_for('/kiosk/.well-known/jwks.json'))
+      )
 
-    expect(status).to eq(200)
-    expect(headers).not_to have_key('WWW-Authenticate')
-    expect(body[:keys]).not_to be_empty
-  end
+      expect(status).to eq(200)
+      expect(headers).not_to have_key('WWW-Authenticate')
+      expect(body[:keys]).not_to be_empty
+    end
 
-  it 're-challenges a per-verb GET with a fresh 402 problem document when no header is sent' do
-    status, headers, problem = get_verb('catalog', query: 'q=milk')
+    it 're-challenges a per-verb GET with a fresh 402 problem document when no header is sent' do
+      status, headers, problem = get_verb('catalog', query: 'q=milk')
 
-    expect(status).to eq(402)
-    expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
-    expect(headers['Content-Type']).to include('application/problem+json')
-    expect(problem[:code]).to   eq('pow_required')
-    expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
-    expect(problem[:status]).to eq(402)
-    expect(problem[:challenges]).to be_an(Array)
-    expect(problem[:challenges]).not_to be_empty
-  end
+      expect(status).to eq(402)
+      expect(headers['WWW-Authenticate']).to eq('Kiosk-PoW realm="https://demo.example"')
+      expect(headers['Content-Type']).to include('application/problem+json')
+      expect(problem[:code]).to   eq('pow_required')
+      expect(problem[:type]).to   eq('https://kiosk.tech/problems/pow_required')
+      expect(problem[:status]).to eq(402)
+      expect(problem[:challenges]).to be_an(Array)
+      expect(problem[:challenges]).not_to be_empty
+    end
 
-  # ── a body-pow is NOT a proof ──────────────────────────────────────────────
-  it "does NOT accept a proof placed in an action's BODY (the header is the channel)" do
-    ch    = issue_challenge(command: 'run', method: 'POST', verb: 'place_order', body: {})
-    proof = { challenge: ch, nonce: solve_nonce(ch) }
+    # ── a body-pow is NOT a proof ──────────────────────────────────────────────
+    it "does NOT accept a proof placed in an action's BODY (the header is the channel)" do
+      ch    = issue_challenge(command: 'run', method: 'POST', verb: 'place_order', body: {})
+      proof = { challenge: ch, nonce: solve_nonce(ch) }
 
-    # The proof travels in the body and no header is sent. The gate sees no
-    # proof and re-issues. The body is also part of the fingerprint, so the
-    # challenge could not have matched either.
-    status, _headers, problem = post_verb('place_order', { pow: { proofs: [proof] } })
+      # The proof travels in the body and no header is sent. The gate sees no
+      # proof and re-issues. The body is also part of the fingerprint, so the
+      # challenge could not have matched either.
+      status, _headers, problem = post_verb('place_order', { pow: { proofs: [proof] } })
 
-    expect(status).to eq(402)
-    expect(problem[:code]).to eq('pow_required')
-  end
+      expect(status).to eq(402)
+      expect(problem[:code]).to eq('pow_required')
+    end
 
-  # ── malformed header → 400 problem document ────────────────────────────────
-  it 'rejects a malformed Kiosk-PoW header with a 400 problem document + hint' do
-    status, headers, problem = get_verb('catalog', pow_header: '{broken')
+    # ── malformed header → 400 problem document ────────────────────────────────
+    it 'rejects a malformed Kiosk-PoW header with a 400 problem document + hint' do
+      status, headers, problem = get_verb('catalog', pow_header: '{broken')
 
-    expect(status).to eq(400)
-    expect(headers['Content-Type']).to include('application/problem+json')
-    expect(problem[:code]).to   eq('bad_request')
-    expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
-    expect(problem[:status]).to eq(400)
-    expect(problem[:hint]).to include('Kiosk-PoW', 'a single proof {"challenge": ', '"nonce": {"indices"',
-                                      'a JSON array of such proofs')
+      expect(status).to eq(400)
+      expect(headers['Content-Type']).to include('application/problem+json')
+      expect(problem[:code]).to   eq('bad_request')
+      expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
+      expect(problem[:status]).to eq(400)
+      expect(problem[:hint]).to include('Kiosk-PoW', 'a single proof {"challenge": ', '"nonce": {"indices"',
+                                        'a JSON array of such proofs')
+    end
   end
 end

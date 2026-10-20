@@ -55,9 +55,9 @@ RSpec.shared_context 'session context spec: real Postgres' do
 end
 
 RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: fake connection'
-
   describe '.open with agent identity' do
+    include_context 'session context spec: fake connection'
+
     it 'opens a transaction and yields self' do
       yielded = nil
       described_class.open(connection: connection, identity: build_identity(actor: 'agent')) do |s|
@@ -84,13 +84,7 @@ RSpec.describe Kiosk::Server::SessionContext do
       # Nothing reaches the connection through `#execute`.
       expect(connection.executed_sql).to be_empty
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: fake connection'
-
-  describe '.open with agent identity' do
     it 'skips the agent_id GUC for human/service actors (agent_id nil)' do
       open_session(build_identity(actor: 'human', agent_id: nil))
 
@@ -102,13 +96,7 @@ RSpec.describe Kiosk::Server::SessionContext do
 
       expect(guc_names).to eq(%w[app.current_user_id app.current_actor app.current_agent_id])
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: fake connection'
-
-  describe '.open with agent identity' do
     it 'uses the configured GUC namespace' do
       Kiosk.configure { |c| c.guc_namespace = 'kiosk' }
       open_session(build_identity(actor: 'agent'))
@@ -124,12 +112,10 @@ RSpec.describe Kiosk::Server::SessionContext do
       expect(connection.all_sql).not_to include("it's-u")
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: fake connection'
 
   describe '#guc_statements' do
+    include_context 'session context spec: fake connection'
+
     it 'returns [sql, binds] pairs without executing' do
       ctx = described_class.new(connection: connection, identity: build_identity(actor: 'agent'))
       stmts = ctx.guc_statements
@@ -142,6 +128,8 @@ RSpec.describe Kiosk::Server::SessionContext do
   end
 
   describe '#guc_statements enforce_db_role' do
+    include_context 'session context spec: fake connection'
+
     before { Kiosk.reset! }
 
     context 'when enforce_db_role is unset (default false)' do
@@ -153,14 +141,6 @@ RSpec.describe Kiosk::Server::SessionContext do
         expect(stmts.none? { |sql, _binds| sql.include?('ROLE') }).to be(true)
       end
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: fake connection'
-
-  describe '#guc_statements enforce_db_role' do
-    before { Kiosk.reset! }
 
     context "when enforce_db_role is true and app_role is 'kiosk_app'" do
       before do
@@ -181,12 +161,10 @@ RSpec.describe Kiosk::Server::SessionContext do
       end
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: fake connection'
 
   describe '.identity' do
+    include_context 'session context spec: fake connection'
+
     it 'raises unauthenticated outside a session' do
       expect { described_class.identity }
         .to raise_error(Kiosk::Server::Errors::Unauthenticated, /no Kiosk session is open/) { |e|
@@ -207,13 +185,7 @@ RSpec.describe Kiosk::Server::SessionContext do
         expect(described_class.current.identity.user_id).to eq('u-7')
       end
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: fake connection'
-
-  describe '.identity' do
     it 'clears on the way out, and on the way out of a raise' do
       open_session(build_identity)
       expect(described_class.current).to be_nil
@@ -236,12 +208,10 @@ RSpec.describe Kiosk::Server::SessionContext do
       expect(described_class.current).to be_nil
     end
   end
-end
-
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: real Postgres'
 
   describe 'against a real Postgres' do
+    include_context 'session context spec: real Postgres'
+
     it 'lands the four GUCs on the connection the block then uses' do
       seen = {}
       described_class.open(
@@ -268,13 +238,7 @@ RSpec.describe Kiosk::Server::SessionContext do
       expect(current('app.current_user_id')).to eq('')
       expect(current('app.current_agent_id')).to eq('')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: real Postgres'
-
-  describe 'against a real Postgres' do
     it 'is transaction-LOCAL: the values are gone after ROLLBACK' do
       begin
         described_class.open(connection: real, identity: build_identity(actor: 'agent', user_id: 'u-rollback')) do
@@ -297,13 +261,7 @@ RSpec.describe Kiosk::Server::SessionContext do
       end
       expect(value).to eq('owner')
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::SessionContext do
-  include_context 'session context spec: real Postgres'
-
-  describe 'against a real Postgres' do
     # A value that would end a spliced literal early is simply a value.
     it 'stores a quote-bearing principal verbatim, executing nothing' do
       hostile = "u-1'; SET app.current_user_id = 'admin"

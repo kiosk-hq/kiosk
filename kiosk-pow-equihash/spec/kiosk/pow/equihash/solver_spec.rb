@@ -23,66 +23,68 @@ module FreshRuby
   end
 end
 
-RSpec.describe 'the solver/verifier load boundary, verifier side' do
-  include FreshRuby
+RSpec.describe Kiosk::Pow::Equihash, '.solve' do
+  describe 'the solver/verifier load boundary, verifier side' do
+    include FreshRuby
 
-  it 'does not give the verifier a `solve` method' do
-    out, status = ruby(<<~RUBY)
-      require "kiosk/pow/equihash"
-      exit(Kiosk::Pow::Equihash.respond_to?(:solve) ? 1 : 0)
-    RUBY
+    it 'does not give the verifier a `solve` method' do
+      out, status = ruby(<<~RUBY)
+        require "kiosk/pow/equihash"
+        exit(Kiosk::Pow::Equihash.respond_to?(:solve) ? 1 : 0)
+      RUBY
 
-    expect(status).to be_success,
-                      'requiring the verifier defined .solve — the solver is back on the ' \
-                      "provider's unauthenticated register path:\n#{out}"
+      expect(status).to be_success,
+                        'requiring the verifier defined .solve — the solver is back on the ' \
+                        "provider's unauthenticated register path:\n#{out}"
+    end
+
+    it 'does not load open3 into the verifier' do
+      out, status = ruby(<<~RUBY)
+        require "kiosk/pow/equihash"
+        exit(defined?(Open3) ? 1 : 0)
+      RUBY
+
+      expect(status).to be_success, "requiring the verifier loaded open3:\n#{out}"
+    end
   end
 
-  it 'does not load open3 into the verifier' do
-    out, status = ruby(<<~RUBY)
-      require "kiosk/pow/equihash"
-      exit(defined?(Open3) ? 1 : 0)
-    RUBY
+  describe 'the solver/verifier load boundary, solver side' do
+    include FreshRuby
 
-    expect(status).to be_success, "requiring the verifier loaded open3:\n#{out}"
-  end
-end
+    it 'defines `solve` when the solver is required' do
+      out, status = ruby(<<~RUBY)
+        require "kiosk/pow/equihash/solver"
+        exit(Kiosk::Pow::Equihash.respond_to?(:solve) ? 0 : 1)
+      RUBY
 
-RSpec.describe 'the solver/verifier load boundary, solver side' do
-  include FreshRuby
+      expect(status).to be_success, out
+    end
 
-  it 'defines `solve` when the solver is required' do
-    out, status = ruby(<<~RUBY)
-      require "kiosk/pow/equihash/solver"
-      exit(Kiosk::Pow::Equihash.respond_to?(:solve) ? 0 : 1)
-    RUBY
+    it 'loads standalone, without the verifier having been required first' do
+      out, status = ruby(<<~RUBY)
+        require "kiosk/pow/equihash/solver"
+        exit(Kiosk::Pow::Equihash.respond_to?(:verify) ? 0 : 1)
+      RUBY
 
-    expect(status).to be_success, out
-  end
-
-  it 'loads standalone, without the verifier having been required first' do
-    out, status = ruby(<<~RUBY)
-      require "kiosk/pow/equihash/solver"
-      exit(Kiosk::Pow::Equihash.respond_to?(:verify) ? 0 : 1)
-    RUBY
-
-    expect(status).to be_success,
-                      "the solver does not pull in the module it extends:\n#{out}"
-  end
-end
-
-RSpec.describe 'Kiosk::Pow::Equihash.solve' do
-  before { require 'kiosk/pow/equihash/solver' }
-
-  it 'runs the solve.py at the gem root' do
-    path = Kiosk::Pow::Equihash.const_get(:SOLVE_PY)
-    expect(path).to eq(File.join(File.expand_path('../../../..', __dir__), 'solve.py'))
-    expect(File.file?(path)).to be(true)
+      expect(status).to be_success,
+                        "the solver does not pull in the module it extends:\n#{out}"
+    end
   end
 
-  it 'raises SolverError, not an unhandled exception, when the solver refuses' do
-    # `{}` has no `salt`/`params`, so solve.py exits non-zero. A driver aborts
-    # on the message; nothing here may surface a Python traceback as a crash.
-    expect { Kiosk::Pow::Equihash.solve({}) }
-      .to raise_error(Kiosk::Pow::Equihash::SolverError)
+  context 'with the solver required' do
+    before { require 'kiosk/pow/equihash/solver' }
+
+    it 'runs the solve.py at the gem root' do
+      path = described_class.const_get(:SOLVE_PY)
+      expect(path).to eq(File.join(File.expand_path('../../../..', __dir__), 'solve.py'))
+      expect(File.file?(path)).to be(true)
+    end
+
+    it 'raises SolverError, not an unhandled exception, when the solver refuses' do
+      # `{}` has no `salt`/`params`, so solve.py exits non-zero. A driver aborts
+      # on the message; nothing here may surface a Python traceback as a crash.
+      expect { described_class.solve({}) }
+        .to raise_error(described_class::SolverError)
+    end
   end
 end

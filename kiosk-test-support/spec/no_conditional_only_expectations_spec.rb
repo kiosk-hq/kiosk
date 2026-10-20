@@ -224,18 +224,20 @@ RSpec.describe 'no example asserts only under a condition (K-1846)' do
       "and assert it after the call.\n" + report.join("\n")
     }
   end
-end
 
-RSpec.describe 'the shapes the conditional-expectation check flags, and the ones it does not' do
-  ConditionalExpectationFixtures::FLAGGED.each do |label, src|
-    it label do
-      expect(ConditionalExpectations.offenders(src)).to eq([[1, 1]])
+  describe 'the shapes the conditional-expectation check flags' do
+    ConditionalExpectationFixtures::FLAGGED.each do |label, src|
+      it label do
+        expect(ConditionalExpectations.offenders(src)).to eq([[1, 1]])
+      end
     end
   end
 
-  ConditionalExpectationFixtures::ALLOWED.each do |label, src|
-    it label do
-      expect(ConditionalExpectations.offenders(src)).to be_empty
+  describe 'the shapes the conditional-expectation check does not flag' do
+    ConditionalExpectationFixtures::ALLOWED.each do |label, src|
+      it label do
+        expect(ConditionalExpectations.offenders(src)).to be_empty
+      end
     end
   end
 end

@@ -117,223 +117,225 @@ RSpec.shared_context 'wire controller validation spec: shape check on' do
   before { Kiosk.configure { |c| c.validate_requests = true } }
 end
 
-RSpec.describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
-  include_context 'wire controller validation spec: gated origin'
+RSpec.describe Kiosk::Server::WireController do
+  describe 'Opt-in PoW-shape request validation (slice-1, K-479)' do
+    include_context 'wire controller validation spec: gated origin'
 
-  context 'with validate_requests: true' do
-    include_context 'wire controller validation spec: shape check on'
+    context 'with validate_requests: true' do
+      include_context 'wire controller validation spec: shape check on'
 
-    it 'rejects the K-479 shape ({solutions:[…]}) with 400 bad_request + hint (NOT a 402)' do
-      status, headers, problem = call_with_pow(solutions: [{ indices: [1, 2, 3], header_nonce: 0 }])
+      it 'rejects the K-479 shape ({solutions:[…]}) with 400 bad_request + hint (NOT a 402)' do
+        status, headers, problem = call_with_pow(solutions: [{ indices: [1, 2, 3], header_nonce: 0 }])
 
-      expect(status).to eq(400)
-      expect(headers['Content-Type']).to include('application/problem+json')
-      expect(problem[:code]).to   eq('bad_request')
-      expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
-      expect(problem[:status]).to eq(400)
-      expect(problem[:hint]).to include('challenge')
-      expect(problem[:hint]).to include('nonce')
-      # It must NOT have been turned into a fresh pow_required challenge.
-      expect(problem[:code]).not_to eq('pow_required')
-      expect(problem).not_to have_key(:challenges)
+        expect(status).to eq(400)
+        expect(headers['Content-Type']).to include('application/problem+json')
+        expect(problem[:code]).to   eq('bad_request')
+        expect(problem[:type]).to   eq('https://kiosk.tech/problems/bad_request')
+        expect(problem[:status]).to eq(400)
+        expect(problem[:hint]).to include('challenge')
+        expect(problem[:hint]).to include('nonce')
+        # It must NOT have been turned into a fresh pow_required challenge.
+        expect(problem[:code]).not_to eq('pow_required')
+        expect(problem).not_to have_key(:challenges)
+      end
+
+      it 'rejects a proof missing the echoed challenge with 400 bad_request' do
+        status, headers, problem = call_with_pow(nonce: { indices: [1, 2, 3] })
+
+        expect(status).to eq(400)
+        expect(headers['Content-Type']).to include('application/problem+json')
+        expect(problem[:code]).to eq('bad_request')
+        expect(problem[:hint]).to include('challenge')
+      end
+
+      it 'rejects a malformed proof inside a JSON-array header (per-proof validation)' do
+        status, _headers, problem = call_with_pow(
+          [{ challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] } },
+           { solutions: [{ indices: [9] }] }]
+        )
+
+        expect(status).to eq(400)
+        expect(problem[:code]).to eq('bad_request')
+      end
+
+      it 'does NOT reject a well-formed proof at the validation step (it passes to the gate)' do
+        # A well-formed-but-forged proof clears the SHAPE check and reaches the
+        # gate, which does the real cryptographic verification — the forged proof
+        # fails there and the gate re-issues a fresh 402. The point: validation
+        # did NOT reject it with a 400; the gate (not the shape check) is still the
+        # authority on whether a proof is valid.
+        status, _headers, problem = call_with_pow(
+          challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] }
+        )
+
+        expect(status).to eq(402)
+        expect(problem[:code]).to eq('pow_required')
+        expect(problem[:code]).not_to eq('bad_request')
+        expect(problem[:challenges]).to be_an(Array)
+      end
+
+      it 'accepts a JSON-array of well-formed proofs (passes to the gate)' do
+        status, _headers, problem = call_with_pow(
+          [{ challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] } }]
+        )
+
+        expect(status).to eq(402)
+        expect(problem[:code]).to eq('pow_required')
+        expect(problem[:code]).not_to eq('bad_request')
+      end
+
+      # `indices` items are u64. `pack("Q<")` truncates mod 2**64, so an
+      # out-of-range index is a different spelling of an in-range leaf. It is
+      # refused as a malformed proof, 400, before the gate.
+      it 'rejects an index at 2**64 with 400 bad_request (u64 upper bound)' do
+        status, _headers, problem = call_with_pow(
+          challenge: valid_challenge, nonce: { indices: [1, 2, 3, 1 << 64] }
+        )
+
+        expect(status).to eq(400)
+        expect(problem[:code]).to eq('bad_request')
+        expect(problem[:code]).not_to eq('pow_required')
+      end
+
+      # The bound must not refuse the largest legal index. The schema writes the
+      # upper bound as an inclusive `maximum: 2**64 - 1`, so a double-precision
+      # validator cannot round this value onto an excluded bound. Ruby's JSON
+      # parser is exact, so this pins the accepted set: 2**64 - 1 is in it.
+      it 'accepts an index at 2**64 - 1 — the largest legal u64 (passes to the gate)' do
+        status, _headers, problem = call_with_pow(
+          challenge: valid_challenge, nonce: { indices: [1, 2, 3, (1 << 64) - 1] }
+        )
+
+        expect(status).to eq(402)
+        expect(problem[:code]).to eq('pow_required')
+        expect(problem[:code]).not_to eq('bad_request')
+      end
+
+      it 'rejects a negative index with 400 bad_request (u64 lower bound)' do
+        status, _headers, problem = call_with_pow(
+          challenge: valid_challenge, nonce: { indices: [1, 2, 3, -1] }
+        )
+
+        expect(status).to eq(400)
+        expect(problem[:code]).to eq('bad_request')
+        expect(problem[:code]).not_to eq('pow_required')
+      end
+
+      # `header_nonce` is a u32, folded into the seed with `pack("V")`, which
+      # truncates mod 2**32. Out-of-range values are refused here as malformed
+      # proofs, before the gate.
+      it 'rejects a header_nonce at 2**32 with 400 bad_request (u32 upper bound)' do
+        status, _headers, problem = call_with_pow(
+          challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: 1 << 32 }
+        )
+
+        expect(status).to eq(400)
+        expect(problem[:code]).to eq('bad_request')
+        expect(problem[:code]).not_to eq('pow_required')
+      end
+
+      it 'accepts a header_nonce at 2**32 - 1 — the largest legal u32 (passes to the gate)' do
+        status, _headers, problem = call_with_pow(
+          challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: (1 << 32) - 1 }
+        )
+
+        expect(status).to eq(402)
+        expect(problem[:code]).to eq('pow_required')
+        expect(problem[:code]).not_to eq('bad_request')
+      end
+
+      it 'rejects a negative header_nonce with 400 bad_request (u32 lower bound)' do
+        status, _headers, problem = call_with_pow(
+          challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: -1 }
+        )
+
+        expect(status).to eq(400)
+        expect(problem[:code]).to eq('bad_request')
+        expect(problem[:code]).not_to eq('pow_required')
+      end
+
+      it "answers a proof for an algorithm it does not implement with a challenge for one it does, never a 400 on the nonce's shape" do
+        proof = { challenge: valid_challenge.merge(alg: 'cuckoo', params: { edge_bits: 29 }),
+                  nonce: 'a-shape-only-cuckoo-defines' }
+        status, _headers, body = call_with_pow(proof)
+        expect(status).to eq(402)
+        expect(body[:code]).to eq('pow_required')
+        expect(body[:challenges].pluck(:alg)).to eq(['argon2id'])
+      end
+
+      it 'leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)' do
+        # An absent header means the initial request; the gate must still issue the
+        # normal pow_required 402. Missing proof is NOT a malformed proof — it must
+        # never become a 400.
+        status, _headers, problem = call_with_pow(:absent)
+
+        expect(status).to eq(402)
+        expect(problem[:code]).to eq('pow_required')
+        expect(problem[:code]).not_to eq('bad_request')
+        expect(problem[:challenges]).not_to be_empty
+      end
+
+      it 'rejects a malformed Kiosk-PoW header (invalid JSON) with 400 + hint' do
+        status, headers, problem = call_with_pow('{not json')
+
+        expect(status).to eq(400)
+        expect(headers['Content-Type']).to include('application/problem+json')
+        expect(problem[:code]).to eq('bad_request')
+        expect(problem[:hint]).to include('Kiosk-PoW')
+      end
     end
 
-    it 'rejects a proof missing the echoed challenge with 400 bad_request' do
-      status, headers, problem = call_with_pow(nonce: { indices: [1, 2, 3] })
+    context 'with validate_requests explicitly off' do
+      before { Kiosk.configure { |c| c.validate_requests = false } }
 
-      expect(status).to eq(400)
-      expect(headers['Content-Type']).to include('application/problem+json')
-      expect(problem[:code]).to eq('bad_request')
-      expect(problem[:hint]).to include('challenge')
+      it 'does NOT raise a validation error on a malformed proof (byte-identical to today)' do
+        # With the flag off, the gate finds no challenge in the malformed proof
+        # and re-issues a fresh 402. No 400 bad_request comes from a
+        # validation step that is not running.
+        status, _headers, problem = call_with_pow(solutions: [{ indices: [1, 2, 3] }])
+
+        expect(status).to eq(402)
+        expect(problem[:code]).to eq('pow_required')
+        expect(problem[:code]).not_to eq('bad_request')
+      end
+
+      it 'STILL rejects a syntactically-invalid header JSON with 400 (parse is not gated by the flag)' do
+        # Header-JSON parsing happens before the opt-in shape check; a header that
+        # is not valid JSON at all is a malformed request regardless of the flag.
+        status, _headers, problem = call_with_pow('{not json')
+
+        expect(status).to eq(400)
+        expect(problem[:code]).to eq('bad_request')
+      end
     end
 
-    it 'rejects a malformed proof inside a JSON-array header (per-proof validation)' do
-      status, _headers, problem = call_with_pow(
-        [{ challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] } },
-         { solutions: [{ indices: [9] }] }]
-      )
+    # ── Fail-loud when the RUNTIME dependency is not loadable ──────────────────
+    context 'when validate_requests is on but json_schemer is not loadable' do
+      before do
+        Kiosk.configure { |c| c.validate_requests = true }
+        Kiosk::Server::RequestValidation.reset!
+        allow(Kiosk::Server::RequestValidation).to receive(:require)
+          .with('json_schemer').and_raise(LoadError)
+      end
 
-      expect(status).to eq(400)
-      expect(problem[:code]).to eq('bad_request')
-    end
+      it 'raises a ConfigurationError naming the gem' do
+        expect { validate_any_proof! }
+          .to raise_error(Kiosk::Server::Errors::ConfigurationError, /json_schemer/)
+      end
 
-    it 'does NOT reject a well-formed proof at the validation step (it passes to the gate)' do
-      # A well-formed-but-forged proof clears the SHAPE check and reaches the
-      # gate, which does the real cryptographic verification — the forged proof
-      # fails there and the gate re-issues a fresh 402. The point: validation
-      # did NOT reject it with a 400; the gate (not the shape check) is still the
-      # authority on whether a proof is valid.
-      status, _headers, problem = call_with_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] }
-      )
+      # The message must agree with the gemspec, which declares json_schemer a
+      # runtime dependency.
+      it 'does not call the gem optional, because the gemspec declares it a runtime dependency' do
+        spec = Gem::Specification.load(
+          File.expand_path('../../../kiosk-server.gemspec', __dir__)
+        )
+        expect(spec.runtime_dependencies.map(&:name)).to include('json_schemer')
 
-      expect(status).to eq(402)
-      expect(problem[:code]).to eq('pow_required')
-      expect(problem[:code]).not_to eq('bad_request')
-      expect(problem[:challenges]).to be_an(Array)
-    end
-
-    it 'accepts a JSON-array of well-formed proofs (passes to the gate)' do
-      status, _headers, problem = call_with_pow(
-        [{ challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4] } }]
-      )
-
-      expect(status).to eq(402)
-      expect(problem[:code]).to eq('pow_required')
-      expect(problem[:code]).not_to eq('bad_request')
-    end
-
-    # `indices` items are u64. `pack("Q<")` truncates mod 2**64, so an
-    # out-of-range index is a different spelling of an in-range leaf. It is
-    # refused as a malformed proof, 400, before the gate.
-    it 'rejects an index at 2**64 with 400 bad_request (u64 upper bound)' do
-      status, _headers, problem = call_with_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 1 << 64] }
-      )
-
-      expect(status).to eq(400)
-      expect(problem[:code]).to eq('bad_request')
-      expect(problem[:code]).not_to eq('pow_required')
-    end
-
-    # The bound must not refuse the largest legal index. The schema writes the
-    # upper bound as an inclusive `maximum: 2**64 - 1`, so a double-precision
-    # validator cannot round this value onto an excluded bound. Ruby's JSON
-    # parser is exact, so this pins the accepted set: 2**64 - 1 is in it.
-    it 'accepts an index at 2**64 - 1 — the largest legal u64 (passes to the gate)' do
-      status, _headers, problem = call_with_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, (1 << 64) - 1] }
-      )
-
-      expect(status).to eq(402)
-      expect(problem[:code]).to eq('pow_required')
-      expect(problem[:code]).not_to eq('bad_request')
-    end
-
-    it 'rejects a negative index with 400 bad_request (u64 lower bound)' do
-      status, _headers, problem = call_with_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, -1] }
-      )
-
-      expect(status).to eq(400)
-      expect(problem[:code]).to eq('bad_request')
-      expect(problem[:code]).not_to eq('pow_required')
-    end
-
-    # `header_nonce` is a u32, folded into the seed with `pack("V")`, which
-    # truncates mod 2**32. Out-of-range values are refused here as malformed
-    # proofs, before the gate.
-    it 'rejects a header_nonce at 2**32 with 400 bad_request (u32 upper bound)' do
-      status, _headers, problem = call_with_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: 1 << 32 }
-      )
-
-      expect(status).to eq(400)
-      expect(problem[:code]).to eq('bad_request')
-      expect(problem[:code]).not_to eq('pow_required')
-    end
-
-    it 'accepts a header_nonce at 2**32 - 1 — the largest legal u32 (passes to the gate)' do
-      status, _headers, problem = call_with_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: (1 << 32) - 1 }
-      )
-
-      expect(status).to eq(402)
-      expect(problem[:code]).to eq('pow_required')
-      expect(problem[:code]).not_to eq('bad_request')
-    end
-
-    it 'rejects a negative header_nonce with 400 bad_request (u32 lower bound)' do
-      status, _headers, problem = call_with_pow(
-        challenge: valid_challenge, nonce: { indices: [1, 2, 3, 4], header_nonce: -1 }
-      )
-
-      expect(status).to eq(400)
-      expect(problem[:code]).to eq('bad_request')
-      expect(problem[:code]).not_to eq('pow_required')
-    end
-
-    it "answers a proof for an algorithm it does not implement with a challenge for one it does, never a 400 on the nonce's shape" do
-      proof = { challenge: valid_challenge.merge(alg: 'cuckoo', params: { edge_bits: 29 }),
-                nonce: 'a-shape-only-cuckoo-defines' }
-      status, _headers, body = call_with_pow(proof)
-      expect(status).to eq(402)
-      expect(body[:code]).to eq('pow_required')
-      expect(body[:challenges].pluck(:alg)).to eq(['argon2id'])
-    end
-
-    it 'leaves an ABSENT header untouched — the normal 402 challenge path runs (no 400)' do
-      # An absent header means the initial request; the gate must still issue the
-      # normal pow_required 402. Missing proof is NOT a malformed proof — it must
-      # never become a 400.
-      status, _headers, problem = call_with_pow(:absent)
-
-      expect(status).to eq(402)
-      expect(problem[:code]).to eq('pow_required')
-      expect(problem[:code]).not_to eq('bad_request')
-      expect(problem[:challenges]).not_to be_empty
-    end
-
-    it 'rejects a malformed Kiosk-PoW header (invalid JSON) with 400 + hint' do
-      status, headers, problem = call_with_pow('{not json')
-
-      expect(status).to eq(400)
-      expect(headers['Content-Type']).to include('application/problem+json')
-      expect(problem[:code]).to eq('bad_request')
-      expect(problem[:hint]).to include('Kiosk-PoW')
-    end
-  end
-
-  context 'with validate_requests explicitly off' do
-    before { Kiosk.configure { |c| c.validate_requests = false } }
-
-    it 'does NOT raise a validation error on a malformed proof (byte-identical to today)' do
-      # With the flag off, the gate finds no challenge in the malformed proof
-      # and re-issues a fresh 402. No 400 bad_request comes from a
-      # validation step that is not running.
-      status, _headers, problem = call_with_pow(solutions: [{ indices: [1, 2, 3] }])
-
-      expect(status).to eq(402)
-      expect(problem[:code]).to eq('pow_required')
-      expect(problem[:code]).not_to eq('bad_request')
-    end
-
-    it 'STILL rejects a syntactically-invalid header JSON with 400 (parse is not gated by the flag)' do
-      # Header-JSON parsing happens before the opt-in shape check; a header that
-      # is not valid JSON at all is a malformed request regardless of the flag.
-      status, _headers, problem = call_with_pow('{not json')
-
-      expect(status).to eq(400)
-      expect(problem[:code]).to eq('bad_request')
-    end
-  end
-
-  # ── Fail-loud when the RUNTIME dependency is not loadable ──────────────────
-  context 'when validate_requests is on but json_schemer is not loadable' do
-    before do
-      Kiosk.configure { |c| c.validate_requests = true }
-      Kiosk::Server::RequestValidation.reset!
-      allow(Kiosk::Server::RequestValidation).to receive(:require)
-        .with('json_schemer').and_raise(LoadError)
-    end
-
-    it 'raises a ConfigurationError naming the gem' do
-      expect { validate_any_proof! }
-        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /json_schemer/)
-    end
-
-    # The message must agree with the gemspec, which declares json_schemer a
-    # runtime dependency.
-    it 'does not call the gem optional, because the gemspec declares it a runtime dependency' do
-      spec = Gem::Specification.load(
-        File.expand_path('../../../kiosk-server.gemspec', __dir__)
-      )
-      expect(spec.runtime_dependencies.map(&:name)).to include('json_schemer')
-
-      expect { validate_any_proof! }.to raise_error(Kiosk::Server::Errors::ConfigurationError) { |e|
-        expect(e.message).not_to match(/optional/i)
-        expect(e.message).to include('RUNTIME dependency')
-      }
+        expect { validate_any_proof! }.to raise_error(Kiosk::Server::Errors::ConfigurationError) { |e|
+          expect(e.message).not_to match(/optional/i)
+          expect(e.message).to include('RUNTIME dependency')
+        }
+      end
     end
   end
 end

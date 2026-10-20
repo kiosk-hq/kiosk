@@ -1337,17 +1337,6 @@ kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 401 for a foreign
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves ?v=<digest> immutable, and a stale ?v= short-lived
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves GET /kiosk/schema with no credential whatsoever
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	…and a token it cannot verify changes nothing, because it is not read
-kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	boots with no role vocabulary and no default — nothing was made mandatory
-kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	boots — this is what all seven demos and the e2e fixture configure
-kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	does not come up at all
-kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	names the setting the operator has to add
-kiosk-server/spec/kiosk/server/default_role_boot_spec.rb	refuses with a ConfigurationError, not with whatever raised first
-kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	is silent once a default role is configured
-kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	is silent with no default role configured — nothing has changed for it
-kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	names the other supported shape, so the operator has both exits
-kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	names the setting to add and a value it would accept
-kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	refuses a configuration that names no default role
-kiosk-server/spec/kiosk/server/default_role_configuration_spec.rb	refuses a default that is not one of the declared roles
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	captures the public key the ceremony will bind
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	computes expires_at as now + expires_in
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	defaults expires_in to the canonical 900s (15 min)
@@ -1387,6 +1376,18 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 applicat
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 application/linkset+json (RFC 9727) with a non-empty item list
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns 200 text/markdown with the auth.md body + CORS
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the three pointer documents public, one minute
+kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots with no role vocabulary and no default — nothing was made mandatory
+kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots — this is what all seven demos and the e2e fixture configure
+kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	does not come up at all
+kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	names the setting the operator has to add
+kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	refuses with a ConfigurationError, not with whatever raised first
+kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	is silent once a default role is configured
+kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	is silent with no default role configured — nothing has changed for it
+kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	names the other supported shape, so the operator has both exits
+kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	names the setting to add and a value it would accept
+kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	refuses a configuration that names no default role
+kiosk-server/spec/kiosk/server/engine_default_role_configuration_spec.rb	refuses a default that is not one of the declared roles
+kiosk-server/spec/kiosk/server/engine_filtered_parameters_spec.rb	'kyc_jws' => 'the KYC attestation (§12)'
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a declared query reaches the VERB wire
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	a routing 404 UNDER the mount carries all three
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	accepts a token only on the origin that minted it
@@ -1547,7 +1548,6 @@ kiosk-server/spec/kiosk/server/executor_spec.rb	scopes the settled-total tally t
 kiosk-server/spec/kiosk/server/executor_spec.rb	threads a Page's next_cursor and total onto the Result, not into the body
 kiosk-server/spec/kiosk/server/executor_spec.rb	treats a cap of 0 as disabled (any charge rejected)
 kiosk-server/spec/kiosk/server/executor_spec.rb	verifies the trail, captures, and returns the full settlement payload
-kiosk-server/spec/kiosk/server/filtered_parameters_spec.rb	'kyc_jws' => 'the KYC attestation (§12)'
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	404s a request that did not come through the Kiosk wire
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts a verb that declares limit as an integer with its largest page
 kiosk-server/spec/kiosk/server/handler_mixin_spec.rb	accepts the verb name #{name.inspect}

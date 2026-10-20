@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The fresh-host probe behind spec/kiosk/server/handler_registration_boot_spec.rb
+# The fresh-host probe behind spec/kiosk/server/handler_registrations_boot_spec.rb
 # — run as a SUBPROCESS, never loaded into the RSpec process (same reasons as
 # engine_mount_probe_app.rb: booting Rails in-process leaks Rails.logger and
 # ActionDispatch::Flash into unrelated controller specs, and a fresh adopter's

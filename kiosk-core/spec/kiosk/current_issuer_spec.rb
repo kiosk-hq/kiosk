@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe 'Kiosk.current_issuer' do
+RSpec.describe Kiosk, '.current_issuer' do
   describe 'Configuration#additional_origins' do
     it 'defaults to an empty list' do
       expect(Kiosk::Configuration.new.additional_origins).to eq([])
@@ -54,27 +54,27 @@ RSpec.describe 'Kiosk.current_issuer' do
   end
 
   describe 'Kiosk.with_issuer' do
-    before { Kiosk.configure { |c| c.issuer = 'https://a.example' } }
+    before { described_class.configure { |c| c.issuer = 'https://a.example' } }
 
     it 'falls back to the configured issuer outside a block' do
-      expect(Kiosk.current_issuer).to eq('https://a.example')
+      expect(described_class.current_issuer).to eq('https://a.example')
     end
 
     it "answers the block's issuer inside it" do
-      seen = Kiosk.with_issuer('https://b.example') { Kiosk.current_issuer }
+      seen = described_class.with_issuer('https://b.example') { described_class.current_issuer }
       expect(seen).to eq('https://b.example')
     end
 
     it 'restores the previous issuer after a raise' do
-      expect { Kiosk.with_issuer('https://b.example') { raise 'boom' } }.to raise_error('boom')
-      expect(Kiosk.current_issuer).to eq('https://a.example')
+      expect { described_class.with_issuer('https://b.example') { raise 'boom' } }.to raise_error('boom')
+      expect(described_class.current_issuer).to eq('https://a.example')
     end
 
     it 'restores the outer issuer after a nested block' do
       inner = nil
-      outer = Kiosk.with_issuer('https://b.example') do
-        inner = Kiosk.with_issuer('https://c.example') { Kiosk.current_issuer }
-        Kiosk.current_issuer
+      outer = described_class.with_issuer('https://b.example') do
+        inner = described_class.with_issuer('https://c.example') { described_class.current_issuer }
+        described_class.current_issuer
       end
       expect([inner, outer]).to eq(%w[https://c.example https://b.example])
     end

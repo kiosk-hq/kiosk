@@ -2,7 +2,7 @@
 
 # Reads the event-field table out of the README.
 module ReadmeEventTableSpecHelpers
-  README = File.read(File.expand_path('../../../README.md', __dir__))
+  README = File.read(File.expand_path('../README.md', __dir__))
 
   # The first column of every row under the heading, as the names it carries.
   # A cell may pair two fields (`user_id` / `agent_id`), which is prose the

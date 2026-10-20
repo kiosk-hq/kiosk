@@ -32,21 +32,23 @@ RSpec.shared_context 'a booking two customers can pay for' do
   end
 end
 
-RSpec.describe 'paying for a booking' do
-  include_context 'a booking two customers can pay for'
+RSpec.describe Booking do
+  describe 'paying for a booking' do
+    include_context 'a booking two customers can pay for'
 
-  it "refuses a customer paying for somebody else's booking" do
-    expect { cashier.capture(cart(ben)) }
-      .to raise_error(Kiosk::Server::Errors::Forbidden, 'booking not found or not yours')
-    expect(booking.reload).to be_unpaid
-  end
+    it "refuses a customer paying for somebody else's booking" do
+      expect { cashier.capture(cart(ben)) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, 'booking not found or not yours')
+      expect(booking.reload).to be_unpaid
+    end
 
-  it "takes the owner's payment, and the property confirms the paid booking" do
-    paid = cart(ada)
-    cashier.capture(paid)
-    cashier.settled(paid)
+    it "takes the owner's payment, and the property confirms the paid booking" do
+      paid = cart(ada)
+      cashier.capture(paid)
+      cashier.settled(paid)
 
-    expect(booking.reload).to be_paid.and be_confirmed
-    expect(booking.confirmation_code).to be_present
+      expect(booking.reload).to be_paid.and be_confirmed
+      expect(booking.confirmation_code).to be_present
+    end
   end
 end

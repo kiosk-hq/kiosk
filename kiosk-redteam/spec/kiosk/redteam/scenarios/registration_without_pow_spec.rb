@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-RSpec.shared_context 'registration_without_pow setup' do
+RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -15,8 +15,7 @@ RSpec.shared_context 'registration_without_pow setup' do
     stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
   end
 
-  # The auth plane kept its paths and its SUCCESS bodies across the cutover;
-  # its refusals are RFC 9457 problem documents like every other error.
+  # The auth plane's refusals are RFC 9457 problem documents like every other error.
   def refused(status, code = nil)
     problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
   end
@@ -25,12 +24,8 @@ RSpec.shared_context 'registration_without_pow setup' do
     json_return(201, 'agent_id' => "a-#{suffix}", 'user_id' => "u-#{suffix}",
                      'access_token' => "tok-#{suffix}")
   end
-end
 
-RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   describe '#call — non-vacuity' do
-    include_context 'registration_without_pow setup'
-
     let(:profile) { Kiosk::Redteam::Profile.new(pow_difficulty: 20) }
 
     context 'when the server accepts registration without PoW (broken — BREACH)' do
@@ -58,8 +53,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
         expect(verdict.skipped).to be(false)
       end
 
-      # K-730 narrowed this from "only status matters" to "status, plus a
-      # control proving the endpoint issues when the proof IS solved".
+      # The status counts only with a control proving the endpoint issues when
+      # the proof IS solved.
       it 'returns blocked: true even when no domain error code is present' do
         register_returns(refused(422), refused(400), issued)
 
@@ -87,15 +82,12 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
     end
   end
 
-  # ── K-730 ────────────────────────────────────────────────────────────────
+  # ── The control leg ──────────────────────────────────────────────────────
   #
   # "Both attempts were refused" is satisfied by a server that refuses
-  # EVERYTHING. This block overturns the assertion above that a bare status was
-  # sufficient: the control leg is what makes the two refusals evidence of a
+  # EVERYTHING. The control leg is what makes the two refusals evidence of a
   # PoW gate rather than evidence of an outage.
   describe '#call — the refusals must be earned (K-730)' do
-    include_context 'registration_without_pow setup'
-
     let(:profile) { Kiosk::Redteam::Profile.new(pow_difficulty: 20) }
 
     context 'when the server 404s every path (no register endpoint at all)' do
@@ -120,12 +112,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
         expect(verdict.status).to eq(503)
       end
     end
-  end
-
-  describe '#call — the refusals must be earned (K-730)' do
-    include_context 'registration_without_pow setup'
-
-    let(:profile) { Kiosk::Redteam::Profile.new(pow_difficulty: 20) }
 
     context 'when the control answers 201 but hands back no access_token' do
       it 'returns blocked: false' do
@@ -160,12 +146,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
       expect(verdict.blocked).to be(false)
       expect(verdict.detail).to include('pow: "0" crashed')
     end
-  end
-
-  describe '#call — the refusals must be earned (K-730)' do
-    include_context 'registration_without_pow setup'
-
-    let(:profile) { Kiosk::Redteam::Profile.new(pow_difficulty: 20) }
 
     it 'does not spend a control solve when an attempt already succeeded' do
       stub = register_returns(issued('bad'), issued('bad2'))
@@ -178,8 +158,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   end
 
   describe '#call — skip conditions' do
-    include_context 'registration_without_pow setup'
-
     it 'skips when pow_difficulty is 0 (skip is not a pass)' do
       profile = Kiosk::Redteam::Profile.new(pow_difficulty: 0)
       verdict = scenario.call(client, profile)

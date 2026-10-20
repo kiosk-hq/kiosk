@@ -21,7 +21,8 @@ RSpec.describe Kiosk::Mandate do
         cap_amount_cents: 1, currency: 'USD', expires_at: now,
         created_at: now, raw_jws: 'j'
       }
-      expect(described_class.new(**args)).to eq(described_class.new(**args))
+      first, second = Array.new(2) { described_class.new(**args) }
+      expect(first).to eq(second)
     end
   end
 
@@ -60,7 +61,8 @@ RSpec.describe Kiosk::Mandate do
         amount_cents: 350, currency: 'USD',
         expires_at: now + 600, created_at: now, raw_jws: 'eyJ...'
       }
-      expect(described_class.new(**args)).to eq(described_class.new(**args))
+      first, second = Array.new(2) { described_class.new(**args) }
+      expect(first).to eq(second)
     end
   end
 end

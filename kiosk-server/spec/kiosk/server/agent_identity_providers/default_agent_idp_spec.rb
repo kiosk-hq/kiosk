@@ -71,56 +71,52 @@ RSpec.shared_context 'default agent idp spec: recorded lookups' do
 end
 
 RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
-  include_context 'default agent idp spec: configured origin'
+  describe '#verify' do
+    include_context 'default agent idp spec: configured origin'
 
-  it 'verifies a self-issued agent token into an agent Identity' do
-    token = Kiosk::Server::JwtIssuer.issue(
-      claims: { sub: 'user-1', agent_id: 'agent-1', role: 'customer', actor: 'agent' },
-      audience: 'https://demo.example'
-    )
-    identity = idp.verify(bearer(token))
-    expect(identity).to be_a(Kiosk::Identity)
-    expect(identity.user_id).to  eq('user-1')
-    expect(identity.agent_id).to eq('agent-1')
-    expect(identity.role).to     eq('customer')
-    expect(identity.actor).to eq('agent')
+    it 'verifies a self-issued agent token into an agent Identity' do
+      token = Kiosk::Server::JwtIssuer.issue(
+        claims: { sub: 'user-1', agent_id: 'agent-1', role: 'customer', actor: 'agent' },
+        audience: 'https://demo.example'
+      )
+      identity = idp.verify(bearer(token))
+      expect(identity).to be_a(Kiosk::Identity)
+      expect(identity.user_id).to  eq('user-1')
+      expect(identity.agent_id).to eq('agent-1')
+      expect(identity.role).to     eq('customer')
+      expect(identity.actor).to eq('agent')
+    end
+
+    it 'returns nil when there is no Authorization header' do
+      expect(idp.verify({})).to be_nil
+    end
+
+    # Verification failures resolve to nil (→ 401 at the controller), never escape
+    # as JwtIssuer::Error (which would surface as HTTP 500).
+    it 'returns nil for a token signed by a different key' do
+      token = agent_token(agent_id: 'a', signing_key: Kiosk::Server::SigningKey.generate)
+      expect(idp.verify(bearer(token))).to be_nil
+    end
+
+    it 'returns nil for an expired token' do
+      # default 1h lifetime + 60s leeway long gone
+      token = agent_token(agent_id: 'a', now: Time.current - 7200)
+      expect(idp.verify(bearer(token))).to be_nil
+    end
+
+    it 'returns nil for a malformed (garbage) token' do
+      expect(idp.verify(bearer('definitely-not-a-jwt'))).to be_nil
+    end
+
+    it 'returns nil for a revoked token' do
+      token = agent_token(agent_id: 'agent-rev', now: Time.current - 10)
+      Kiosk.configuration.revocation_store.revoke_all('agent-rev', at: Time.now.to_i)
+      expect(idp.verify(bearer(token))).to be_nil
+    end
   end
 
-  it 'returns nil when there is no Authorization header' do
-    expect(idp.verify({})).to be_nil
-  end
-end
-
-# Verification failures resolve to nil (→ 401 at the controller), never escape
-# as JwtIssuer::Error (which would surface as HTTP 500).
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
-  include_context 'default agent idp spec: configured origin'
-
-  it 'returns nil for a token signed by a different key' do
-    token = agent_token(agent_id: 'a', signing_key: Kiosk::Server::SigningKey.generate)
-    expect(idp.verify(bearer(token))).to be_nil
-  end
-
-  it 'returns nil for an expired token' do
-    # default 1h lifetime + 60s leeway long gone
-    token = agent_token(agent_id: 'a', now: Time.current - 7200)
-    expect(idp.verify(bearer(token))).to be_nil
-  end
-
-  it 'returns nil for a malformed (garbage) token' do
-    expect(idp.verify(bearer('definitely-not-a-jwt'))).to be_nil
-  end
-
-  it 'returns nil for a revoked token' do
-    token = agent_token(agent_id: 'agent-rev', now: Time.current - 10)
-    Kiosk.configuration.revocation_store.revoke_all('agent-rev', at: Time.now.to_i)
-    expect(idp.verify(bearer(token))).to be_nil
-  end
-end
-
-# A revoked agent must not be able to authenticate or sign mandates, so both
-# agent lookups scope to `revoked_at IS NULL`, with the id as a bind.
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
+  # A revoked agent must not be able to authenticate or sign mandates, so both
+  # agent lookups scope to `revoked_at IS NULL`, with the id as a bind.
   describe 'honors agent revocation' do
     include_context 'default agent idp spec: recorded lookups'
 
@@ -137,12 +133,6 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(sql).to include('FROM kiosk.agents WHERE id = $1 AND revoked_at IS NULL')
       expect(binds).to eq(['agent-1'])
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
-  describe 'honors agent revocation' do
-    include_context 'default agent idp spec: recorded lookups'
 
     # The column is the only interpolated part, and it is one of four literals
     # in the file rather than anything a caller can reach — Postgres cannot
@@ -154,9 +144,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(recorder.last.first).to start_with('SELECT public_key FROM')
     end
   end
-end
 
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   describe '#issue (role-less path)' do
     include_context 'default agent idp spec: issuing idp'
 
@@ -172,12 +160,6 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       payload = decode(idp.issue(agent_id: 'a-1', role: :customer))
       expect(payload['role']).to eq('customer')
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
-  describe '#issue (role-less path)' do
-    include_context 'default agent idp spec: issuing idp'
 
     it 'round-trips to a usable role-less Identity (the regression: an empty-string role claim made Identity raise)' do
       token  = idp.issue(agent_id: 'a-1', role: nil)
@@ -197,14 +179,12 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(identity.agent_id).to eq('a-1')
     end
   end
-end
 
-# ── SPEC-043's `actor` claim, read off a token this IdP actually minted ─────
-#
-# A fixture written into a hand-built token, or a `Kiosk::Identity`
-# constructor argument, proves the test's setup and not the issuer's output.
-# So this decodes what `#issue` produced and reads the claim off the payload.
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
+  # ── SPEC-043's `actor` claim, read off a token this IdP actually minted ─────
+  #
+  # A fixture written into a hand-built token, or a `Kiosk::Identity`
+  # constructor argument, proves the test's setup and not the issuer's output.
+  # So this decodes what `#issue` produced and reads the claim off the payload.
   describe '#issue — the claims every minted token carries' do
     include_context 'default agent idp spec: issuing idp'
 
@@ -226,15 +206,13 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(identity.actor).to eq('agent')
     end
   end
-end
 
-# ── SPEC-045: two live tokens for ONE identity, both accepted ───────────────
-#
-# One assistant may hold a session on two devices without either killing the
-# other. The revocation watermark moves only on `/auth/revoke` and on the
-# binding ceremony's link/unlink/rebind, never on issuance — `#issue` only
-# READS it (`mint_instant`) so it cannot mint into an already-revoked window.
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
+  # ── SPEC-045: two live tokens for ONE identity, both accepted ───────────────
+  #
+  # One assistant may hold a session on two devices without either killing the
+  # other. The revocation watermark moves only on `/auth/revoke` and on the
+  # binding ceremony's link/unlink/rebind, never on issuance — `#issue` only
+  # READS it (`mint_instant`) so it cannot mint into an already-revoked window.
   describe '#issue — concurrent tokens for one identity' do
     include_context 'default agent idp spec: issuing idp'
 
@@ -254,12 +232,6 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
         expect(identity.user_id).to  eq('u-1')
       end
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
-  describe '#issue — concurrent tokens for one identity' do
-    include_context 'default agent idp spec: issuing idp'
 
     # One `/auth/revoke` at a watermark ahead of both tokens kills BOTH, so
     # "concurrent" is a property of the session and not a hole in revocation.
@@ -272,11 +244,9 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(idp.verify(bearer(second))).to be_nil
     end
   end
-end
 
-# Spec Section 10: an access token lives one hour unless the operator
-# configures another lifetime. Read off the token `#issue` mints.
-RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
+  # Spec Section 10: an access token lives one hour unless the operator
+  # configures another lifetime. Read off the token `#issue` mints.
   describe '#issue — the lifetime of the token it mints' do
     include_context 'default agent idp spec: issuing idp'
 

@@ -52,15 +52,15 @@ RSpec.describe "the demos' agent channel is the engine's own kiosk-pop verifier 
                       'self-asserted `agent:u-…:a-…:r-…` parser lets anyone be any agent at any ' \
                       'role — that was K-539, and an env gate in front of it is not the fix.'
   end
-end
 
-RSpec.describe "the demos' c.agent_idp wiring" do
-  it 'leaves c.agent_idp unset in every demo and in the e2e fixture host' do
-    overrides = DemoAgentIdp.overrides
-    expect(overrides).to be_empty,
-                         "these set c.agent_idp: #{overrides.inspect}. The engine's " \
-                         'DefaultAgentIdp verifies the tokens the engine mints, so a demo needs ' \
-                         'no override — and an override is where a second, weaker verifier gets ' \
-                         'in. Set it only to front an EXTERNAL agent-identity issuer.'
+  describe "the demos' c.agent_idp wiring" do
+    it 'leaves c.agent_idp unset in every demo and in the e2e fixture host' do
+      overrides = DemoAgentIdp.overrides
+      expect(overrides).to be_empty,
+                           "these set c.agent_idp: #{overrides.inspect}. The engine's " \
+                           'DefaultAgentIdp verifies the tokens the engine mints, so a demo needs ' \
+                           'no override — and an override is where a second, weaker verifier gets ' \
+                           'in. Set it only to front an EXTERNAL agent-identity issuer.'
+    end
   end
 end

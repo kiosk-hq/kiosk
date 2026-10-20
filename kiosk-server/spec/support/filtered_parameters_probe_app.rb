@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The fresh-host probe behind spec/kiosk/server/filtered_parameters_spec.rb —
+# The fresh-host probe behind spec/kiosk/server/engine_filtered_parameters_spec.rb —
 # run as a SUBPROCESS, never loaded into the RSpec process. It boots a real
 # Rails::Application with kiosk-server loaded and NOTHING else (no
 # config/initializers/filter_parameter_logging.rb, so what the log shows is

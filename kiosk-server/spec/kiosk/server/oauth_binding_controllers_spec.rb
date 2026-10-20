@@ -68,7 +68,7 @@ RSpec.shared_context 'oauth binding controllers spec: provider origin' do
   let(:grant) { Kiosk::Server::DeviceCodeGrant::GRANT_TYPE }
 end
 
-RSpec.describe 'OAuth binding controllers' do
+RSpec.describe Kiosk::Server::OauthDeviceAuthorizationController do
   include_context 'oauth binding controllers spec: provider origin'
 
   describe 'POST /oauth/device_authorization' do
@@ -151,77 +151,79 @@ RSpec.describe 'OAuth binding controllers' do
     end
   end
 
-  describe 'POST /oauth/token' do
-    it 'requires a grant_type' do
-      status, body = token!({})
-      expect(status).to eq(400)
-      expect(body[:error]).to eq('invalid_request')
-    end
+  describe Kiosk::Server::OauthTokenController do
+    describe 'POST /oauth/token' do
+      it 'requires a grant_type' do
+        status, body = token!({})
+        expect(status).to eq(400)
+        expect(body[:error]).to eq('invalid_request')
+      end
 
-    it 'rejects non-device grants — kiosk-pop login is the refresh path' do
-      status, body = token!('grant_type' => 'refresh_token')
-      expect(status).to eq(400)
-      expect(body[:error]).to eq('unsupported_grant_type')
-    end
+      it 'rejects non-device grants — kiosk-pop login is the refresh path' do
+        status, body = token!('grant_type' => 'refresh_token')
+        expect(status).to eq(400)
+        expect(body[:error]).to eq('unsupported_grant_type')
+      end
 
-    it 'returns 400 with the RFC 8628 code while approval is pending' do
-      start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
-      status, body = token!('grant_type' => grant, 'device_code' => start[:device_code])
-      expect(status).to eq(400)
-      expect(body[:error]).to eq('authorization_pending')
-    end
+      it 'returns 400 with the RFC 8628 code while approval is pending' do
+        start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
+        status, body = token!('grant_type' => grant, 'device_code' => start[:device_code])
+        expect(status).to eq(400)
+        expect(body[:error]).to eq('authorization_pending')
+      end
 
-    it 'returns 401 invalid_client when the possession proof is missing/failed (BIND-POP)' do
-      start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
-      store.update(start[:da].approve(user_id: user_id))
-      Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
+      it 'returns 401 invalid_client when the possession proof is missing/failed (BIND-POP)' do
+        start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
+        store.update(start[:da].approve(user_id: user_id))
+        Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
 
-      status, body = token!('grant_type' => grant, 'device_code' => start[:device_code])
-      expect(status).to eq(401)
-      expect(body[:error]).to eq('invalid_client')
-    end
+        status, body = token!('grant_type' => grant, 'device_code' => start[:device_code])
+        expect(status).to eq(401)
+        expect(body[:error]).to eq('invalid_client')
+      end
 
-    it 'completes the ceremony with a valid proof: binds and returns the kiosk-pop token' do
-      start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
-      store.update(start[:da].approve(user_id: user_id))
-      Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
+      it 'completes the ceremony with a valid proof: binds and returns the kiosk-pop token' do
+        start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
+        store.update(start[:da].approve(user_id: user_id))
+        Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
 
-      signed = signed_proof
-      stub_binding
+        signed = signed_proof
+        stub_binding
 
-      status, body = token!(
-        'grant_type' => grant, 'device_code' => start[:device_code], 'signed' => signed
-      )
-      expect(status).to eq(200)
-      expect(body[:access_token]).to eq('kiosk-pop-jwt')
-      expect(body[:token_type]).to eq('Bearer')
-      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
-        public_key_pem: pem.strip, user_id: user_id, requested_role: nil
-      )
-    end
+        status, body = token!(
+          'grant_type' => grant, 'device_code' => start[:device_code], 'signed' => signed
+        )
+        expect(status).to eq(200)
+        expect(body[:access_token]).to eq('kiosk-pop-jwt')
+        expect(body[:token_type]).to eq('Bearer')
+        expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
+          public_key_pem: pem.strip, user_id: user_id, requested_role: nil
+        )
+      end
 
-    # The role that reaches `bind!` is the one the APPROVER carried, although
-    # the opening request said nothing. The `scope` echoed back is that same
-    # granted role.
-    it "forwards the APPROVING human's role to bind! and echoes it as the granted scope" do
-      Kiosk.configure { |c| c.roles = %i[customer owner] }
-      start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
-      Kiosk::Server::DeviceVerification.approve(
-        user_code: start[:user_code], user_id: user_id, role: 'owner', store: store
-      )
-      Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
+      # The role that reaches `bind!` is the one the APPROVER carried, although
+      # the opening request said nothing. The `scope` echoed back is that same
+      # granted role.
+      it "forwards the APPROVING human's role to bind! and echoes it as the granted scope" do
+        Kiosk.configure { |c| c.roles = %i[customer owner] }
+        start = Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
+        Kiosk::Server::DeviceVerification.approve(
+          user_code: start[:user_code], user_id: user_id, role: 'owner', store: store
+        )
+        Kiosk::Server::DeviceCodeGrant.reset_poll_registry!
 
-      signed = signed_proof
-      stub_binding
+        signed = signed_proof
+        stub_binding
 
-      status, body = token!(
-        'grant_type' => grant, 'device_code' => start[:device_code], 'signed' => signed
-      )
-      expect(status).to eq(200)
-      expect(body[:scope]).to eq('owner')
-      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
-        public_key_pem: pem.strip, user_id: user_id, requested_role: 'owner'
-      )
+        status, body = token!(
+          'grant_type' => grant, 'device_code' => start[:device_code], 'signed' => signed
+        )
+        expect(status).to eq(200)
+        expect(body[:scope]).to eq('owner')
+        expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
+          public_key_pem: pem.strip, user_id: user_id, requested_role: 'owner'
+        )
+      end
     end
   end
 end

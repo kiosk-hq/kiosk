@@ -88,267 +88,268 @@ RSpec.describe Kiosk::Pow::Cuckoo do
         .to eq({ edgebits: 19, proofsize: 42, target: 1234 })
     end
   end
-end
 
-# The KAT keys come from the shared BLAKE2b-256, cross-checked against Python hashlib.
-RSpec.describe Kiosk::Pow::Cuckoo, 'KAT header hash' do
-  it 'matches Python hashlib.blake2b for the KAT header (76 zeros + LE32(20))' do
-    header = CuckooVectors::KAT_SALT + [CuckooVectors::KAT_NONCE].pack('V')
-    expect(Kiosk::Pow::Blake2b.digest256(header).unpack1('H*')).to eq(CuckooVectors::KAT_BLAKE2B_HEX)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Cuckoo, '.siphash' do
-  it 'returns a 64-bit integer' do
-    result = described_class.siphash(0, 0, 0, 0, 0)
-    expect(result).to be_a(Integer)
-    expect(result).to be >= 0
-    expect(result).to be <= (1 << 64) - 1
+  # The KAT keys come from the shared BLAKE2b-256, cross-checked against Python hashlib.
+  describe 'KAT header hash' do
+    it 'matches Python hashlib.blake2b for the KAT header (76 zeros + LE32(20))' do
+      header = CuckooVectors::KAT_SALT + [CuckooVectors::KAT_NONCE].pack('V')
+      expect(Kiosk::Pow::Blake2b.digest256(header).unpack1('H*')).to eq(CuckooVectors::KAT_BLAKE2B_HEX)
+    end
   end
 
-  it 'is deterministic' do
-    expect(described_class.siphash(1, 2, 3, 4, 100)).to eq(described_class.siphash(1, 2, 3, 4, 100))
+  describe '.siphash' do
+    it 'returns a 64-bit integer' do
+      result = described_class.siphash(0, 0, 0, 0, 0)
+      expect(result).to be_a(Integer)
+      expect(result).to be >= 0
+      expect(result).to be <= (1 << 64) - 1
+    end
+
+    it 'is deterministic' do
+      first, second = Array.new(2) { described_class.siphash(1, 2, 3, 4, 100) }
+      expect(first).to eq(second)
+    end
+
+    it 'changes with nonce' do
+      expect(described_class.siphash(1, 2, 3, 4, 0)).not_to eq(described_class.siphash(1, 2, 3, 4, 1))
+    end
+
+    it 'changes with keys' do
+      expect(described_class.siphash(0, 0, 0, 0, 42)).not_to eq(described_class.siphash(1, 0, 0, 0, 42))
+    end
   end
 
-  it 'changes with nonce' do
-    expect(described_class.siphash(1, 2, 3, 4, 0)).not_to eq(described_class.siphash(1, 2, 3, 4, 1))
+  describe '.verify_cycle on the Grin C29 KAT' do
+    include CuckooVectors
+
+    it 'accepts the valid 42-cycle for header=(76-zeros + LE32(20))' do
+      keys  = CuckooVectors::KAT_KEYS
+      first = CuckooVectors::KAT_CYCLE[0]
+      mask  = (1 << 29) - 1
+      expect(kat_cycle_valid?(CuckooVectors::KAT_CYCLE)).to be(true),
+                                                            "KAT FAILED — siphash keying or cycle walk is wrong.\n" \
+                                                            "Keys: #{keys.map { |k| format('0x%016x', k) }.inspect}\n" \
+                                                            "First edge: #{format('0x%x', first)}\n" \
+                                                            "First U endpoint: #{format('0x%x', described_class.siphash(*keys, 2 * first) & mask)}\n" \
+                                                            "First V endpoint: #{format('0x%x', described_class.siphash(*keys, (2 * first) + 1) & mask)}"
+    end
   end
 
-  it 'changes with keys' do
-    expect(described_class.siphash(0, 0, 0, 0, 42)).not_to eq(described_class.siphash(1, 0, 0, 0, 42))
-  end
-end
+  describe '.verify_cycle rejections' do
+    include CuckooVectors
 
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify_cycle on the Grin C29 KAT' do
-  include CuckooVectors
+    it '(a) rejects when first edge is mutated 0x48a9e2 → 0x48a9e1' do
+      expect(kat_cycle_valid?(kat_cycle_with(0, 0x48a9e1))).to be(false)
+    end
 
-  it 'accepts the valid 42-cycle for header=(76-zeros + LE32(20))' do
-    keys  = CuckooVectors::KAT_KEYS
-    first = CuckooVectors::KAT_CYCLE[0]
-    mask  = (1 << 29) - 1
-    expect(kat_cycle_valid?(CuckooVectors::KAT_CYCLE)).to be(true),
-                                                          "KAT FAILED — siphash keying or cycle walk is wrong.\n" \
-                                                          "Keys: #{keys.map { |k| format('0x%016x', k) }.inspect}\n" \
-                                                          "First edge: #{format('0x%x', first)}\n" \
-                                                          "First U endpoint: #{format('0x%x', described_class.siphash(*keys, 2 * first) & mask)}\n" \
-                                                          "First V endpoint: #{format('0x%x', described_class.siphash(*keys, (2 * first) + 1) & mask)}"
-  end
-end
+    it '(b) rejects non-ascending cycle (first two edges swapped)' do
+      expect(kat_cycle_valid?(kat_cycle_swapped)).to be(false)
+    end
 
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify_cycle rejections' do
-  include CuckooVectors
+    it '(c) rejects cycle with a duplicate (first edge repeated)' do
+      expect(kat_cycle_valid?(kat_cycle_with(1, CuckooVectors::KAT_CYCLE[0]))).to be(false)
+    end
 
-  it '(a) rejects when first edge is mutated 0x48a9e2 → 0x48a9e1' do
-    expect(kat_cycle_valid?(kat_cycle_with(0, 0x48a9e1))).to be(false)
-  end
+    # An edge of exactly N is out of range; the sort keeps the cycle ascending.
+    it '(d) rejects cycle with an edge >= N (first edge set to N)' do
+      expect(kat_cycle_valid?(kat_cycle_with(0, 1 << CuckooVectors::KAT_EDGEBITS).sort)).to be(false)
+    end
 
-  it '(b) rejects non-ascending cycle (first two edges swapped)' do
-    expect(kat_cycle_valid?(kat_cycle_swapped)).to be(false)
-  end
+    it '(e) rejects a 41-edge cycle (one short)' do
+      expect(kat_cycle_valid?(CuckooVectors::KAT_CYCLE[0, 41])).to be(false)
+    end
 
-  it '(c) rejects cycle with a duplicate (first edge repeated)' do
-    expect(kat_cycle_valid?(kat_cycle_with(1, CuckooVectors::KAT_CYCLE[0]))).to be(false)
+    it '(e) rejects a 43-edge cycle (one extra)' do
+      expect(kat_cycle_valid?(CuckooVectors::KAT_CYCLE + [CuckooVectors::KAT_CYCLE.last + 2])).to be(false)
+    end
+
+    it '(f) rejects an empty cycle' do
+      expect(kat_cycle_valid?([])).to be(false)
+    end
   end
 
-  # An edge of exactly N is out of range; the sort keeps the cycle ascending.
-  it '(d) rejects cycle with an edge >= N (first edge set to N)' do
-    expect(kat_cycle_valid?(kat_cycle_with(0, 1 << CuckooVectors::KAT_EDGEBITS).sort)).to be(false)
-  end
-
-  it '(e) rejects a 41-edge cycle (one short)' do
-    expect(kat_cycle_valid?(CuckooVectors::KAT_CYCLE[0, 41])).to be(false)
-  end
-
-  it '(e) rejects a 43-edge cycle (one extra)' do
-    expect(kat_cycle_valid?(CuckooVectors::KAT_CYCLE + [CuckooVectors::KAT_CYCLE.last + 2])).to be(false)
-  end
-
-  it '(f) rejects an empty cycle' do
-    expect(kat_cycle_valid?([])).to be(false)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify_cycle on a malformed cycle' do
-  # A String edge at full proofsize length reaches the range comparison.
-  it '(g) returns false (not raise) for a non-Integer cycle element' do
-    expect do
-      expect(described_class.verify_cycle(keys: [1, 2, 3, 4], edgebits: 10, cycle: ['x', 2], proofsize: 2)).to be(false)
-    end.not_to raise_error
-  end
-end
-
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify accepts the KAT' do
-  include CuckooVectors
-
-  it 'accepts the Grin C29 KAT cycle with symbol keys' do
-    expect(verify_kat).to be(true), 'Public API KAT FAILED — verify(salt:, params:, nonce:) rejected valid cycle'
-  end
-
-  it 'accepts the KAT cycle with string keys in nonce hash' do
-    nonce = { 'header_nonce' => CuckooVectors::KAT_NONCE, 'cycle' => CuckooVectors::KAT_CYCLE }
-    expect(described_class.verify(salt: CuckooVectors::KAT_SALT,
-                                  params: described_class.params(edgebits: CuckooVectors::KAT_EDGEBITS),
-                                  nonce:)).to be(true)
-  end
-
-  it 'accepts with string keys in params hash' do
-    params = { 'edgebits' => CuckooVectors::KAT_EDGEBITS, 'proofsize' => 42, 'target' => nil }
-    expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params:,
-                                  nonce: { header_nonce: CuckooVectors::KAT_NONCE, cycle: CuckooVectors::KAT_CYCLE }))
-      .to be(true)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify rejects a different header' do
-  include CuckooVectors
-
-  it '(a) rejects when salt byte 0 is flipped to 1 (different keys)' do
-    expect(verify_kat(salt: "\x01#{"\x00" * 75}")).to be(false)
-  end
-
-  it '(a-nonce) rejects when header_nonce is changed to 21' do
-    expect(verify_kat(header_nonce: 21)).to be(false)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify rejects bad cycle data' do
-  include CuckooVectors
-
-  it '(b) rejects when first cycle edge is mutated 0x48a9e2 → 0x48a9e1' do
-    expect(verify_kat(cycle: kat_cycle_with(0, 0x48a9e1))).to be(false)
-  end
-
-  it '(c) rejects non-ascending cycle' do
-    expect(verify_kat(cycle: kat_cycle_swapped)).to be(false)
-  end
-
-  it '(d) rejects cycle edge >= N' do
-    expect(verify_kat(cycle: (CuckooVectors::KAT_CYCLE[1..] + [1 << CuckooVectors::KAT_EDGEBITS]).sort)).to be(false)
-  end
-
-  it '(e) rejects 41-edge cycle' do
-    expect(verify_kat(cycle: CuckooVectors::KAT_CYCLE[0, 41])).to be(false)
-  end
-
-  it '(e) rejects 43-edge cycle' do
-    expect(verify_kat(cycle: CuckooVectors::KAT_CYCLE + [CuckooVectors::KAT_CYCLE.last + 2])).to be(false)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify guard rails' do
-  include CuckooVectors
-
-  let(:params) { described_class.params(edgebits: CuckooVectors::KAT_EDGEBITS) }
-
-  it 'returns false for a non-Hash nonce' do
-    expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params:, nonce: 'bad')).to be(false)
-  end
-
-  it 'returns false for a nonce missing the cycle key' do
-    expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params:,
-                                  nonce: { header_nonce: CuckooVectors::KAT_NONCE })).to be(false)
-  end
-
-  it 'returns false (not raise) for a non-numeric header_nonce' do
-    expect { expect(verify_kat(header_nonce: 'abc')).to be(false) }.not_to raise_error
-  end
-
-  # A String cycle element at matching proofsize reaches the range comparison.
-  it 'returns false (not raise) for a non-Integer cycle element' do
-    expect do
-      expect(verify_kat(params: { edgebits: 10, proofsize: 2 }, header_nonce: 0, cycle: ['x', 2])).to be(false)
-    end.not_to raise_error
-  end
-
-  # The control that the guards above do not reject a VALID proof.
-  it 'answers the same as the sibling Equihash backend does for its matching shapes' do
-    expect(verify_kat).to be(true)
-  end
-end
-
-# A malformed proof or malformed params answer false, as the Equihash backend
-# does: a raise would reach the wire as a 500, not the 403 a bad proof earns.
-# The first two cycle shapes come from the caller of an unauthenticated
-# registration; the rest are operator params.
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify on malformed input' do
-  {
-    'params missing edgebits' => [{ proofsize: 42 }, { header_nonce: 1, cycle: [1] }],
-    'params that is a String' => ['edgebits=19', { header_nonce: 1, cycle: [1] }],
-    'params that is nil' => [nil, { header_nonce: 1, cycle: [1] }],
-    'a non-numeric edgebits' => [{ edgebits: 'abc', proofsize: 4 }, { header_nonce: 1, cycle: [1] }],
-    'a non-numeric proofsize' => [{ edgebits: 19, proofsize: 'abc' }, { header_nonce: 1, cycle: [1] }],
-    'a non-numeric target' => [{ edgebits: 19, proofsize: 1, target: 'abc' }, { header_nonce: 1, cycle: [1] }],
-    'a cycle that is an Integer' => [{ edgebits: 19, proofsize: 1 }, { header_nonce: 1, cycle: 7 }],
-    'a cycle that is a matching String' => [{ edgebits: 19, proofsize: 4 }, { header_nonce: 1, cycle: 'abcd' }]
-  }.each do |label, (bad_params, bad_nonce)|
-    it "returns false (not raise) for #{label}" do
+  describe '.verify_cycle on a malformed cycle' do
+    # A String edge at full proofsize length reaches the range comparison.
+    it '(g) returns false (not raise) for a non-Integer cycle element' do
       expect do
-        expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params: bad_params, nonce: bad_nonce)).to be(false)
+        expect(described_class.verify_cycle(keys: [1, 2, 3, 4], edgebits: 10, cycle: ['x', 2], proofsize: 2)).to be(false)
       end.not_to raise_error
     end
   end
-end
 
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify on the toy proofsize-12 vector (edgebits 10)' do
-  include CuckooVectors
+  describe '.verify accepts the KAT' do
+    include CuckooVectors
 
-  it 'accepts the 12-cycle produced by the Python solver via .verify' do
-    expect(verify_toy).to be(true), 'Proofsize=12 cross-impl vector FAILED — keying, siphash, or cycle walk is wrong'
+    it 'accepts the Grin C29 KAT cycle with symbol keys' do
+      expect(verify_kat).to be(true), 'Public API KAT FAILED — verify(salt:, params:, nonce:) rejected valid cycle'
+    end
+
+    it 'accepts the KAT cycle with string keys in nonce hash' do
+      nonce = { 'header_nonce' => CuckooVectors::KAT_NONCE, 'cycle' => CuckooVectors::KAT_CYCLE }
+      expect(described_class.verify(salt: CuckooVectors::KAT_SALT,
+                                    params: described_class.params(edgebits: CuckooVectors::KAT_EDGEBITS),
+                                    nonce:)).to be(true)
+    end
+
+    it 'accepts with string keys in params hash' do
+      params = { 'edgebits' => CuckooVectors::KAT_EDGEBITS, 'proofsize' => 42, 'target' => nil }
+      expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params:,
+                                    nonce: { header_nonce: CuckooVectors::KAT_NONCE, cycle: CuckooVectors::KAT_CYCLE }))
+        .to be(true)
+    end
   end
 
-  it 'accepts via .verify_cycle with pre-derived keys' do
-    keys = Kiosk::Pow::Blake2b.digest256(CuckooVectors::TOY_SALT + [CuckooVectors::TOY_HN].pack('V')).unpack('Q<4')
-    expect(described_class.verify_cycle(keys:, edgebits: CuckooVectors::TOY_EDGEBITS,
-                                        cycle: CuckooVectors::TOY_CYCLE, proofsize: CuckooVectors::TOY_PROOFSIZE))
-      .to be(true)
+  describe '.verify rejects a different header' do
+    include CuckooVectors
+
+    it '(a) rejects when salt byte 0 is flipped to 1 (different keys)' do
+      expect(verify_kat(salt: "\x01#{"\x00" * 75}")).to be(false)
+    end
+
+    it '(a-nonce) rejects when header_nonce is changed to 21' do
+      expect(verify_kat(header_nonce: 21)).to be(false)
+    end
   end
 
-  it 'rejects the same cycle with wrong header_nonce' do
-    expect(verify_toy(header_nonce: CuckooVectors::TOY_HN + 1)).to be(false)
+  describe '.verify rejects bad cycle data' do
+    include CuckooVectors
+
+    it '(b) rejects when first cycle edge is mutated 0x48a9e2 → 0x48a9e1' do
+      expect(verify_kat(cycle: kat_cycle_with(0, 0x48a9e1))).to be(false)
+    end
+
+    it '(c) rejects non-ascending cycle' do
+      expect(verify_kat(cycle: kat_cycle_swapped)).to be(false)
+    end
+
+    it '(d) rejects cycle edge >= N' do
+      expect(verify_kat(cycle: (CuckooVectors::KAT_CYCLE[1..] + [1 << CuckooVectors::KAT_EDGEBITS]).sort)).to be(false)
+    end
+
+    it '(e) rejects 41-edge cycle' do
+      expect(verify_kat(cycle: CuckooVectors::KAT_CYCLE[0, 41])).to be(false)
+    end
+
+    it '(e) rejects 43-edge cycle' do
+      expect(verify_kat(cycle: CuckooVectors::KAT_CYCLE + [CuckooVectors::KAT_CYCLE.last + 2])).to be(false)
+    end
   end
 
-  it 'rejects a truncated cycle (11 edges instead of 12)' do
-    expect(verify_toy(cycle: CuckooVectors::TOY_CYCLE[0, 11])).to be(false)
+  describe '.verify guard rails' do
+    include CuckooVectors
+
+    let(:params) { described_class.params(edgebits: CuckooVectors::KAT_EDGEBITS) }
+
+    it 'returns false for a non-Hash nonce' do
+      expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params:, nonce: 'bad')).to be(false)
+    end
+
+    it 'returns false for a nonce missing the cycle key' do
+      expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params:,
+                                    nonce: { header_nonce: CuckooVectors::KAT_NONCE })).to be(false)
+    end
+
+    it 'returns false (not raise) for a non-numeric header_nonce' do
+      expect { expect(verify_kat(header_nonce: 'abc')).to be(false) }.not_to raise_error
+    end
+
+    # A String cycle element at matching proofsize reaches the range comparison.
+    it 'returns false (not raise) for a non-Integer cycle element' do
+      expect do
+        expect(verify_kat(params: { edgebits: 10, proofsize: 2 }, header_nonce: 0, cycle: ['x', 2])).to be(false)
+      end.not_to raise_error
+    end
+
+    # The control that the guards above do not reject a VALID proof.
+    it 'answers the same as the sibling Equihash backend does for its matching shapes' do
+      expect(verify_kat).to be(true)
+    end
   end
 
-  it 'rejects a mutated first edge' do
-    expect(verify_toy(cycle: [CuckooVectors::TOY_CYCLE[0] + 1] + CuckooVectors::TOY_CYCLE[1..])).to be(false)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Cuckoo, '.verify with a difficulty target' do
-  include CuckooVectors
-
-  it 'accepts any valid cycle when target is nil (the default)' do
-    expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: nil })).to be(true)
-  end
-
-  it 'accepts when target is 2^256 - 1 (maximum, everything passes)' do
-    expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: (1 << 256) - 1 })).to be(true)
-  end
-
-  # The target is one above the cycle hash the verifier computes: a 256-bit
-  # value strictly between 0 and the maximum that this proof clears.
-  it 'accepts when a non-trivial target is set and the cycle-hash satisfies it' do
-    target = kat_cycle_hash + 1
-    expect(target).to be_positive
-    expect(target).to be < (1 << 256)
-    expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: })).to be(true)
+  # A malformed proof or malformed params answer false, as the Equihash backend
+  # does: a raise would reach the wire as a 500, not the 403 a bad proof earns.
+  # The first two cycle shapes come from the caller of an unauthenticated
+  # registration; the rest are operator params.
+  describe '.verify on malformed input' do
+    {
+      'params missing edgebits' => [{ proofsize: 42 }, { header_nonce: 1, cycle: [1] }],
+      'params that is a String' => ['edgebits=19', { header_nonce: 1, cycle: [1] }],
+      'params that is nil' => [nil, { header_nonce: 1, cycle: [1] }],
+      'a non-numeric edgebits' => [{ edgebits: 'abc', proofsize: 4 }, { header_nonce: 1, cycle: [1] }],
+      'a non-numeric proofsize' => [{ edgebits: 19, proofsize: 'abc' }, { header_nonce: 1, cycle: [1] }],
+      'a non-numeric target' => [{ edgebits: 19, proofsize: 1, target: 'abc' }, { header_nonce: 1, cycle: [1] }],
+      'a cycle that is an Integer' => [{ edgebits: 19, proofsize: 1 }, { header_nonce: 1, cycle: 7 }],
+      'a cycle that is a matching String' => [{ edgebits: 19, proofsize: 4 }, { header_nonce: 1, cycle: 'abcd' }]
+    }.each do |label, (bad_params, bad_nonce)|
+      it "returns false (not raise) for #{label}" do
+        expect do
+          expect(described_class.verify(salt: CuckooVectors::KAT_SALT, params: bad_params, nonce: bad_nonce)).to be(false)
+        end.not_to raise_error
+      end
+    end
   end
 
-  it 'rejects when target is 0 (nothing passes)' do
-    expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: 0 })).to be(false)
+  describe '.verify on the toy proofsize-12 vector (edgebits 10)' do
+    include CuckooVectors
+
+    it 'accepts the 12-cycle produced by the Python solver via .verify' do
+      expect(verify_toy).to be(true), 'Proofsize=12 cross-impl vector FAILED — keying, siphash, or cycle walk is wrong'
+    end
+
+    it 'accepts via .verify_cycle with pre-derived keys' do
+      keys = Kiosk::Pow::Blake2b.digest256(CuckooVectors::TOY_SALT + [CuckooVectors::TOY_HN].pack('V')).unpack('Q<4')
+      expect(described_class.verify_cycle(keys:, edgebits: CuckooVectors::TOY_EDGEBITS,
+                                          cycle: CuckooVectors::TOY_CYCLE, proofsize: CuckooVectors::TOY_PROOFSIZE))
+        .to be(true)
+    end
+
+    it 'rejects the same cycle with wrong header_nonce' do
+      expect(verify_toy(header_nonce: CuckooVectors::TOY_HN + 1)).to be(false)
+    end
+
+    it 'rejects a truncated cycle (11 edges instead of 12)' do
+      expect(verify_toy(cycle: CuckooVectors::TOY_CYCLE[0, 11])).to be(false)
+    end
+
+    it 'rejects a mutated first edge' do
+      expect(verify_toy(cycle: [CuckooVectors::TOY_CYCLE[0] + 1] + CuckooVectors::TOY_CYCLE[1..])).to be(false)
+    end
   end
-end
 
-RSpec.describe 'solve_cuckoo.py memory guard' do
-  # The solver peaks at about 118 bytes per edge, so edgebits 24 needs 1888 MiB.
-  it 'refuses edgebits 24 under the default 1.5 GiB cap' do
-    solver = File.expand_path('../../../solve_cuckoo.py', __dir__)
-    challenge = JSON.generate(salt: Base64.strict_encode64('salt'), params: { edgebits: 24 })
-    out, status = Open3.capture2({ 'KIOSK_POW_MAX_BYTES' => nil }, 'python3', solver, challenge)
+  describe '.verify with a difficulty target' do
+    include CuckooVectors
 
-    expect(status.exitstatus).to eq(2)
-    expect(JSON.parse(out)).to include('error' => 'edgebits_too_large')
+    it 'accepts any valid cycle when target is nil (the default)' do
+      expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: nil })).to be(true)
+    end
+
+    it 'accepts when target is 2^256 - 1 (maximum, everything passes)' do
+      expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: (1 << 256) - 1 })).to be(true)
+    end
+
+    # The target is one above the cycle hash the verifier computes: a 256-bit
+    # value strictly between 0 and the maximum that this proof clears.
+    it 'accepts when a non-trivial target is set and the cycle-hash satisfies it' do
+      target = kat_cycle_hash + 1
+      expect(target).to be_positive
+      expect(target).to be < (1 << 256)
+      expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: })).to be(true)
+    end
+
+    it 'rejects when target is 0 (nothing passes)' do
+      expect(verify_kat(params: { edgebits: CuckooVectors::KAT_EDGEBITS, target: 0 })).to be(false)
+    end
+  end
+
+  describe 'solve_cuckoo.py memory guard' do
+    # The solver peaks at about 118 bytes per edge, so edgebits 24 needs 1888 MiB.
+    it 'refuses edgebits 24 under the default 1.5 GiB cap' do
+      solver = File.expand_path('../../../solve_cuckoo.py', __dir__)
+      challenge = JSON.generate(salt: Base64.strict_encode64('salt'), params: { edgebits: 24 })
+      out, status = Open3.capture2({ 'KIOSK_POW_MAX_BYTES' => nil }, 'python3', solver, challenge)
+
+      expect(status.exitstatus).to eq(2)
+      expect(JSON.parse(out)).to include('error' => 'edgebits_too_large')
+    end
   end
 end

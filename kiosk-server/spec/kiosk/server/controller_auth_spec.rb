@@ -274,8 +274,8 @@ RSpec.shared_context 'controller auth spec: device authorization' do
   end
 end
 
-RSpec.describe 'wire-surface controller auth' do
-  describe 'WireController with the bare DefaultAgentIdp: public schema' do
+RSpec.describe Kiosk::Server::WireController do
+  describe 'with the bare DefaultAgentIdp: public schema' do
     include_context 'controller auth spec: bare DefaultAgentIdp'
 
     # THE INVERSE OF THE FOUR BELOW, and the reason they moved (T-094).
@@ -297,7 +297,7 @@ RSpec.describe 'wire-surface controller auth' do
     it '…and a token it cannot verify changes nothing, because it is not read' do
       declare_query('probe')
 
-      status, = dispatch(Kiosk::Server::WireController, :schema,
+      status, = dispatch(described_class, :schema,
                          bearer_env('/kiosk/schema', 'garbage-not-a-jwt'))
       expect(status).to eq(200)
     end
@@ -322,7 +322,7 @@ RSpec.describe 'wire-surface controller auth' do
     end
   end
 
-  describe 'WireController with the bare DefaultAgentIdp: schema versions' do
+  describe 'with the bare DefaultAgentIdp: schema versions' do
     include_context 'controller auth spec: bare DefaultAgentIdp'
 
     # The digest-versioned URL, which is the only one that may be cached long.
@@ -352,7 +352,7 @@ RSpec.describe 'wire-surface controller auth' do
     end
   end
 
-  describe 'WireController with the bare DefaultAgentIdp: bad tokens' do
+  describe 'with the bare DefaultAgentIdp: bad tokens' do
     include_context 'controller auth spec: bare DefaultAgentIdp'
 
     it 'returns 401 Unauthenticated (not 500) for an EXPIRED token' do
@@ -381,7 +381,7 @@ RSpec.describe 'wire-surface controller auth' do
     end
   end
 
-  describe 'WireController with the bare DefaultAgentIdp: malformed bodies' do
+  describe 'with the bare DefaultAgentIdp: malformed bodies' do
     include_context 'controller auth spec: bare DefaultAgentIdp'
 
     # Dialed at `pay` rather than at a verb path, deliberately: a per-verb call
@@ -396,7 +396,7 @@ RSpec.describe 'wire-surface controller auth' do
     end
 
     it 'answers 401 before it reads the body, so an unauthenticated pay with invalid JSON is not a 400' do
-      status, body = dispatch(Kiosk::Server::WireController, :pay,
+      status, body = dispatch(described_class, :pay,
                               bearer_env('/kiosk/pay', 'not-a-token', method: 'POST',
                                                                       input: '{not valid json',
                                                                       'CONTENT_TYPE' => 'application/json'))
@@ -411,95 +411,7 @@ RSpec.describe 'wire-surface controller auth' do
     end
   end
 
-  describe 'KycAttestationController IdP resolution' do
-    include_context 'controller auth spec: KYC attestation'
-
-    it 'authenticates via a custom configured agent_idp' do
-      Kiosk.configure { |c| c.agent_idp = custom_idp }
-
-      status, body = attest(kyc_env)
-      expect(status).to eq(200)
-      # A bare binary attestation (no `attributes`) verifies and returns the
-      # empty attribute set — the anonymized named-attributes surface.
-      expect(body).to eq(kyc_verified: true, attributes: {})
-      # The grants written are the custom idp's PRINCIPAL's, and the empty
-      # grant set is still WRITTEN — the reset runs even when nothing is
-      # granted, so a later bare attestation takes earlier grants away.
-      reset, grant = executed_sql
-      expect(reset.first).to include('DELETE FROM kiosk.kyc_attributes WHERE user_id = $1')
-      expect(reset.last).to eq(['u-kyc'])
-      expect(grant.first).to include('INSERT INTO kiosk.kyc_attributes')
-      expect(grant.last).to eq(['{}', 'u-kyc'])
-    end
-  end
-
-  describe 'KycAttestationController named attributes' do
-    include_context 'controller auth spec: KYC attestation'
-
-    it 'records the named anonymized attributes an attestation carries' do
-      Kiosk.configure { |c| c.agent_idp = custom_idp }
-      granted = { 'age_over_18' => true, 'licence_a' => true }
-
-      status, body = attest(kyc_env(attributes: granted))
-      expect(status).to eq(200)
-      # NB: the wire body is String-keyed JSON ({"age_over_18": true}); the
-      # dispatch harness re-parses it with symbolize_names, hence Symbol keys here.
-      expect(body).to eq(kyc_verified: true, attributes: granted.transform_keys(&:to_sym))
-      # The granted NAMES become rows, and the spelling of `true` is judged in
-      # Postgres: `jsonb_each(...) WHERE value = 'true'::jsonb` grants a name
-      # only for the JSON boolean, never for the string "true" or a number
-      # (auth_plane_persistence_spec.rb proves that against a real Postgres).
-      # The payload arrives as a BIND (K-782), so it is in the binds and NOT in
-      # the statement text.
-      sql, binds = executed_sql.last
-      expect(sql).to include('INSERT INTO kiosk.kyc_attributes (user_id, name)')
-      expect(sql).to include("FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb")
-      expect(sql).not_to include('age_over_18')
-      expect(binds.first).to eq(JSON.generate('age_over_18' => true, 'licence_a' => true))
-    end
-  end
-
-  describe 'KycAttestationController unauthenticated' do
-    include_context 'controller auth spec: KYC attestation'
-
-    it 'does NOT fall back to user_idp — KYC is an agent-only surface' do
-      Kiosk.configure { |c| c.user_idp = custom_idp }
-
-      status, body = attest(kyc_env)
-      expect_problem(status, body, http: 401, code: 'unauthenticated')
-    end
-
-    it 'returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)' do
-      status, body = attest(kyc_env)
-      expect_problem(status, body, http: 401, code: 'unauthenticated')
-    end
-  end
-
-  describe 'KycAttestationController malformed bodies' do
-    include_context 'controller auth spec: KYC attestation'
-
-    before { Kiosk.configure { |c| c.agent_idp = custom_idp } }
-
-    it 'returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request' do
-      status, body = attest(kyc_env_with_body(''))
-      expect_problem(status, body, http: 400, code: 'bad_request')
-    end
-
-    it 'returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])' do
-      status, body = attest(kyc_env_with_body('[1,2,3]'))
-      expect_problem(status, body, http: 400, code: 'bad_request')
-    end
-
-    # A well-formed JSON OBJECT that simply omits kyc_jws is a distinct
-    # branch from the malformed-body ones above — it survives parse_body! and
-    # hits `body[:kyc_jws] or raise BadRequest("missing field: kyc_jws")`.
-    it 'returns 400 BadRequest for a valid JSON object missing the kyc_jws field' do
-      status, body = attest(kyc_env_with_body(JSON.generate(not_kyc_jws: 'x')))
-      expect_problem(status, body, http: 400, code: 'bad_request', detail: 'kyc_jws')
-    end
-  end
-
-  describe 'WireController identity resolution defaults' do
+  describe 'identity resolution defaults' do
     include_context 'controller auth spec: zero-config install'
 
     it 'verifies a self-minted token with NO idp configured (bundled kiosk-pop default)' do
@@ -527,36 +439,128 @@ RSpec.describe 'wire-surface controller auth' do
     end
   end
 
-  describe 'OauthDeviceAuthorizationController rejects a client-chosen role' do
-    include_context 'controller auth spec: device authorization'
+  describe Kiosk::Server::KycAttestationController do
+    describe 'IdP resolution' do
+      include_context 'controller auth spec: KYC attestation'
 
-    it 'rejects a role not among the configured roles with 400 invalid_request' do
-      status, body = request_device_authorization('client_id' => 'kiosk-cli', 'role' => 'superadmin')
-      expect(status).to eq(400)
-      expect(body[:error]).to eq('invalid_request')
-      expect(body[:error_description]).to include('role is not accepted here')
+      it 'authenticates via a custom configured agent_idp' do
+        Kiosk.configure { |c| c.agent_idp = custom_idp }
+
+        status, body = attest(kyc_env)
+        expect(status).to eq(200)
+        # A bare binary attestation (no `attributes`) verifies and returns the
+        # empty attribute set — the anonymized named-attributes surface.
+        expect(body).to eq(kyc_verified: true, attributes: {})
+        # The grants written are the custom idp's PRINCIPAL's, and the empty
+        # grant set is still WRITTEN — the reset runs even when nothing is
+        # granted, so a later bare attestation takes earlier grants away.
+        reset, grant = executed_sql
+        expect(reset.first).to include('DELETE FROM kiosk.kyc_attributes WHERE user_id = $1')
+        expect(reset.last).to eq(['u-kyc'])
+        expect(grant.first).to include('INSERT INTO kiosk.kyc_attributes')
+        expect(grant.last).to eq(['{}', 'u-kyc'])
+      end
     end
 
-    it 'rejects an unknown role passed via the OAuth-standard scope param' do
-      status, body = request_device_authorization('client_id' => 'kiosk-cli', 'scope' => 'bogus')
-      expect(status).to eq(400)
-      expect(body[:error]).to eq('invalid_request')
+    describe 'named attributes' do
+      include_context 'controller auth spec: KYC attestation'
+
+      it 'records the named anonymized attributes an attestation carries' do
+        Kiosk.configure { |c| c.agent_idp = custom_idp }
+        granted = { 'age_over_18' => true, 'licence_a' => true }
+
+        status, body = attest(kyc_env(attributes: granted))
+        expect(status).to eq(200)
+        # NB: the wire body is String-keyed JSON ({"age_over_18": true}); the
+        # dispatch harness re-parses it with symbolize_names, hence Symbol keys here.
+        expect(body).to eq(kyc_verified: true, attributes: granted.transform_keys(&:to_sym))
+        # The granted NAMES become rows, and the spelling of `true` is judged in
+        # Postgres: `jsonb_each(...) WHERE value = 'true'::jsonb` grants a name
+        # only for the JSON boolean, never for the string "true" or a number
+        # (auth_plane_persistence_spec.rb proves that against a real Postgres).
+        # The payload arrives as a BIND (K-782), so it is in the binds and NOT in
+        # the statement text.
+        sql, binds = executed_sql.last
+        expect(sql).to include('INSERT INTO kiosk.kyc_attributes (user_id, name)')
+        expect(sql).to include("FROM jsonb_each($1::jsonb) WHERE value = 'true'::jsonb")
+        expect(sql).not_to include('age_over_18')
+        expect(binds.first).to eq(JSON.generate('age_over_18' => true, 'licence_a' => true))
+      end
     end
 
-    # THE ESCALATION ITSELF. A DECLARED role is the value that used to be
-    # honoured all the way into the JWT; refusing an undeclared one was never
-    # the control it looked like.
-    it 'rejects a role the provider DOES declare — the escalation, not a typo' do
-      status, body = request_device_authorization('client_id' => 'kiosk-cli', 'role' => 'customer')
-      expect(status).to eq(400)
-      expect(body[:error]).to eq('invalid_request')
-      expect(body[:error_description]).to include('does not choose its own role')
+    describe 'unauthenticated' do
+      include_context 'controller auth spec: KYC attestation'
+
+      it 'does NOT fall back to user_idp — KYC is an agent-only surface' do
+        Kiosk.configure { |c| c.user_idp = custom_idp }
+
+        status, body = attest(kyc_env)
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
+
+      it 'returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)' do
+        status, body = attest(kyc_env)
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
     end
 
-    it 'accepts a role-less request (role stays absent)' do
-      status, body = request_device_authorization('client_id' => 'kiosk-cli')
-      expect(status).to eq(200)
-      expect(body[:device_code]).to be_a(String)
+    describe 'malformed bodies' do
+      include_context 'controller auth spec: KYC attestation'
+
+      before { Kiosk.configure { |c| c.agent_idp = custom_idp } }
+
+      it 'returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request' do
+        status, body = attest(kyc_env_with_body(''))
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
+
+      it 'returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])' do
+        status, body = attest(kyc_env_with_body('[1,2,3]'))
+        expect_problem(status, body, http: 400, code: 'bad_request')
+      end
+
+      # A well-formed JSON OBJECT that simply omits kyc_jws is a distinct
+      # branch from the malformed-body ones above — it survives parse_body! and
+      # hits `body[:kyc_jws] or raise BadRequest("missing field: kyc_jws")`.
+      it 'returns 400 BadRequest for a valid JSON object missing the kyc_jws field' do
+        status, body = attest(kyc_env_with_body(JSON.generate(not_kyc_jws: 'x')))
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: 'kyc_jws')
+      end
+    end
+  end
+
+  describe Kiosk::Server::OauthDeviceAuthorizationController do
+    describe 'rejects a client-chosen role' do
+      include_context 'controller auth spec: device authorization'
+
+      it 'rejects a role not among the configured roles with 400 invalid_request' do
+        status, body = request_device_authorization('client_id' => 'kiosk-cli', 'role' => 'superadmin')
+        expect(status).to eq(400)
+        expect(body[:error]).to eq('invalid_request')
+        expect(body[:error_description]).to include('role is not accepted here')
+      end
+
+      it 'rejects an unknown role passed via the OAuth-standard scope param' do
+        status, body = request_device_authorization('client_id' => 'kiosk-cli', 'scope' => 'bogus')
+        expect(status).to eq(400)
+        expect(body[:error]).to eq('invalid_request')
+      end
+
+      # THE ESCALATION ITSELF. A DECLARED role is the value that used to be
+      # honoured all the way into the JWT; refusing an undeclared one was never
+      # the control it looked like.
+      it 'rejects a role the provider DOES declare — the escalation, not a typo' do
+        status, body = request_device_authorization('client_id' => 'kiosk-cli', 'role' => 'customer')
+        expect(status).to eq(400)
+        expect(body[:error]).to eq('invalid_request')
+        expect(body[:error_description]).to include('does not choose its own role')
+      end
+
+      it 'accepts a role-less request (role stays absent)' do
+        status, body = request_device_authorization('client_id' => 'kiosk-cli')
+        expect(status).to eq(200)
+        expect(body[:device_code]).to be_a(String)
+      end
     end
   end
 end

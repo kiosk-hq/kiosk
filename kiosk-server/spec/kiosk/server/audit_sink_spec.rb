@@ -130,10 +130,10 @@ RSpec.shared_context 'audit sink spec: real database' do
   end
 end
 
-# ── the value object ────────────────────────────────────────────────────
-
 RSpec.describe Kiosk::Server::AuditSink do
   include_context 'audit sink spec: sink'
+
+  # ── the value object ────────────────────────────────────────────────────
 
   describe Kiosk::Server::ActionEvent do
     include_context 'audit sink spec: event'
@@ -151,13 +151,7 @@ RSpec.describe Kiosk::Server::AuditSink do
       expect(event.args[:sku]).to eq('ABC')
       expect(event.args.keys).to contain_exactly(:sku, :qty, :express)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe Kiosk::Server::ActionEvent do
     it 'carries the error class and an UNTRUNCATED message on the failure branch' do
       long = 'x' * 5_000
       failed = described_class.build(identity: identity, name: 'place_order', args: {},
@@ -179,18 +173,12 @@ RSpec.describe Kiosk::Server::AuditSink do
       expect(service.actor).to eq('service')
       expect(service.agent_id).to be_nil
     end
-  end
-end
 
-# The arm above hands `build` a bare exception; the Executor hands it the
-# WRAPPER, because the handler's own sentence is not the wire's to publish. A
-# sink is operator-side, in the operator's own process, already holding the
-# arguments in full, so the wrapped exception travels beside the wrapper
-# rather than instead of it.
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe Kiosk::Server::ActionEvent do
+    # The examples above hand `build` a bare exception; the Executor hands it
+    # the WRAPPER, because the handler's own sentence is not the wire's to
+    # publish. A sink is operator-side, in the operator's own process, already
+    # holding the arguments in full, so the wrapped exception travels beside
+    # the wrapper rather than instead of it.
     describe 'a wrapped handler failure, which is what the Executor emits' do
       let(:wrapped) do
         described_class.build(identity: identity, name: 'place_order', args: {},
@@ -206,15 +194,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(wrapped.cause_class).to eq('ArgumentError')
         expect(wrapped.cause_message.length).to eq(5_000)
       end
-    end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe Kiosk::Server::ActionEvent do
-    describe 'a wrapped handler failure, which is what the Executor emits' do
       it 'leaves the pair nil when the raise wraps nothing, rather than inventing one' do
         bare = described_class.build(identity: identity, name: 'place_order', args: {},
                                      status: described_class::ERROR, error: ArgumentError.new('x'))
@@ -231,14 +211,6 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(built.cause_class).to be_nil
       end
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe Kiosk::Server::ActionEvent do
-    include_context 'audit sink spec: event'
 
     describe "the redaction helpers — easy, obvious, and the operator's choice" do
       it '#arg_types names each argument and its JSON type, never its value' do
@@ -253,17 +225,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(typed.arg_types)
           .to eq('a' => 'null', 'b' => 'number', 'c' => 'array', 'd' => 'object')
       end
-    end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe Kiosk::Server::ActionEvent do
-    include_context 'audit sink spec: event'
-
-    describe "the redaction helpers — easy, obvious, and the operator's choice" do
       it '#with_arg_types returns the same event with the values gone' do
         redacted = event.with_arg_types
 
@@ -277,12 +239,8 @@ RSpec.describe Kiosk::Server::AuditSink do
       end
     end
   end
-end
 
-# ── the configuration seam ──────────────────────────────────────────────
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
+  # ── the configuration seam ──────────────────────────────────────────────
 
   describe 'Kiosk.configuration.audit_sink' do
     it 'is nil by default — Kiosk emits nothing until an operator asks' do
@@ -302,13 +260,7 @@ RSpec.describe Kiosk::Server::AuditSink do
 
       expect(Kiosk.configuration.audit_sink).to be(stateful)
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'Kiosk.configuration.audit_sink' do
     it 'rejects a non-callable AT CONFIGURE TIME, not as a silent missing trail' do
       expect { Kiosk.configure { |c| c.audit_sink = 'AuditLog' } }
         .to raise_error(ArgumentError, /audit_sink must be callable/)
@@ -321,24 +273,16 @@ RSpec.describe Kiosk::Server::AuditSink do
       expect(described_class).not_to be_configured
     end
   end
-end
 
-# ── emission, and the guarantee ─────────────────────────────────────────
-
-RSpec.shared_context 'audit sink spec: emitted event' do
-  include_context 'audit sink spec: sink'
-
-  let(:event) do
-    Kiosk::Server::ActionEvent.build(identity: identity, name: 'place_order',
-                                     args: { sku: 'ABC' },
-                                     status: Kiosk::Server::ActionEvent::OK)
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: emitted event'
+  # ── emission, and the guarantee ─────────────────────────────────────────
 
   describe '.emit' do
+    let(:event) do
+      Kiosk::Server::ActionEvent.build(identity: identity, name: 'place_order',
+                                       args: { sku: 'ABC' },
+                                       status: Kiosk::Server::ActionEvent::OK)
+    end
+
     it 'hands the event to the configured sink' do
       Kiosk.configure { |c| c.audit_sink = sink }
 
@@ -357,47 +301,35 @@ RSpec.describe Kiosk::Server::AuditSink do
       expect { expect(described_class.emit(event)).to be(false) }
         .to output(/audit_sink raised/).to_stderr
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: emitted event'
+    context 'with a sink that raises' do
+      include_context 'audit sink spec: raising sink'
 
-  describe '.emit' do
-    include_context 'audit sink spec: raising sink'
+      it 'SWALLOWS a raising sink, reports it, and returns false' do
+        expect { expect(described_class.emit(event)).to be(false) }
+          .to output(/audit_sink raised for action "place_order".*kafka is down/).to_stderr
+      end
 
-    it 'SWALLOWS a raising sink, reports it, and returns false' do
-      expect { expect(described_class.emit(event)).to be(false) }
-        .to output(/audit_sink raised for action "place_order".*kafka is down/).to_stderr
-    end
+      it 'survives a sink that raises AND a reporter that raises' do
+        allow(described_class).to receive(:warn).and_raise(IOError, 'stderr is gone')
 
-    it 'survives a sink that raises AND a reporter that raises' do
-      allow(described_class).to receive(:warn).and_raise(IOError, 'stderr is gone')
+        expect { described_class.emit(event) }.not_to raise_error
+      end
 
-      expect { described_class.emit(event) }.not_to raise_error
-    end
+      it 'does NOT swallow a non-StandardError — that is the process dying, not a log bug' do
+        fatal = Class.new(Exception) # rubocop:disable Lint/InheritException -- must not be a StandardError
+        Kiosk.configure { |c| c.audit_sink = ->(_e) { raise fatal, 'out of memory' } }
 
-    it 'does NOT swallow a non-StandardError — that is the process dying, not a log bug' do
-      fatal = Class.new(Exception) # rubocop:disable Lint/InheritException -- must not be a StandardError
-      Kiosk.configure { |c| c.audit_sink = ->(_e) { raise fatal, 'out of memory' } }
-
-      expect { described_class.emit(event) }.to raise_error(fatal)
+        expect { described_class.emit(event) }.to raise_error(fatal)
+      end
     end
   end
-end
 
-# ── the Executor seam: one event per action invocation ──────────────────
-
-RSpec.shared_context 'audit sink spec: configured sink' do
-  before { Kiosk.configure { |c| c.audit_sink = sink } }
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
+  # ── the Executor seam: one event per action invocation ──────────────────
 
   describe 'one event per action invocation (through its route)' do
     context 'with a sink configured' do
-      include_context 'audit sink spec: configured sink'
+      before { Kiosk.configure { |c| c.audit_sink = sink } }
 
       it 'emits exactly one event, with the arguments the assistant actually sent' do
         declare_action('place_order') { render json: { id: 7 } }
@@ -410,23 +342,14 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.args).to eq(sku: 'ABC', slot: '2026-06-15T14:00:00Z')
         expect(events.first.invoked_at).to be_within(60).of(Time.current)
       end
-    end
-  end
-end
 
-# The event is built from the exception that ESCAPED the invocation, which is
-# the wire error, so it carries what the wire carries: the verb, the exception
-# CLASS, and none of the handler's own sentence. `Executor` reports that
-# sentence operator-side before it re-raises, which the stderr expectation
-# asserts. A sink is the operator's own process, so the wrapped exception rides
-# along as `cause_class`/`cause_message`, beside the wire error.
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
-    context 'with a sink configured' do
-      include_context 'audit sink spec: configured sink'
-
+      # The event is built from the exception that ESCAPED the invocation,
+      # which is the wire error, so it carries what the wire carries: the verb,
+      # the exception CLASS, and none of the handler's own sentence. `Executor`
+      # reports that sentence operator-side before it re-raises, which the
+      # stderr expectation asserts. A sink is the operator's own process, so the
+      # wrapped exception rides along as `cause_class`/`cause_message`, beside
+      # the wire error.
       it 'emits for a FAILED action too, carrying the WIRE error, and re-raises untouched' do
         declare_action('place_order') { raise 'inventory exploded' }
 
@@ -442,16 +365,6 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.error_message).not_to include('inventory exploded')
         expect(events.first.args).to eq(sku: 'ABC', slot: '2026-06-15T14:00:00Z')
       end
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
-    context 'with a sink configured' do
-      include_context 'audit sink spec: configured sink'
 
       it "…and hands the sink the handler's OWN error as the cause (K-1311)" do
         declare_action('place_order') { raise 'inventory exploded' }
@@ -463,21 +376,11 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.cause_class).to eq('RuntimeError')
         expect(events.first.cause_message).to eq('inventory exploded')
       end
-    end
-  end
-end
 
-# A raise Rails knows a status for is mapped by the mixin's `rescue_from` seam,
-# which raises the wire error inside the rescue, so Ruby attaches the handler's
-# own error as its `cause`; without it the sink would see only `verb "…"
-# rejected the request as malformed`.
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
-    context 'with a sink configured' do
-      include_context 'audit sink spec: configured sink'
-
+      # A raise Rails knows a status for is mapped by the mixin's `rescue_from`
+      # seam, which raises the wire error inside the rescue, so Ruby attaches
+      # the handler's own error as its `cause`; without it the sink would see
+      # only `verb "…" rejected the request as malformed`.
       it 'carries the cause through the rescue_from seam too, which renders rather than raises' do
         declare_action('place_order') { raise ArgumentError, 'salon must exist' }
         ActionDispatch::ExceptionWrapper.rescue_responses['ArgumentError'] = :unprocessable_entity
@@ -493,16 +396,6 @@ RSpec.describe Kiosk::Server::AuditSink do
       ensure
         ActionDispatch::ExceptionWrapper.rescue_responses.delete('ArgumentError')
       end
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
-    context 'with a sink configured' do
-      include_context 'audit sink spec: configured sink'
 
       it 'leaves the cause pair nil for a refusal the handler MEANT — nothing is wrapped' do
         declare_action('place_order') do
@@ -517,16 +410,6 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.cause_class).to be_nil
         expect(events.first.cause_message).to be_nil
       end
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
-    context 'with a sink configured' do
-      include_context 'audit sink spec: configured sink'
 
       it "symbolizes the wire's string keys, as the handler sees them" do
         declare_action('place_order') { render json: {} }
@@ -548,16 +431,6 @@ RSpec.describe Kiosk::Server::AuditSink do
 
         expect(events).to be_empty
       end
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
-    context 'with a sink configured' do
-      include_context 'audit sink spec: configured sink'
 
       it 'WRITES NOTHING TO ANY TABLE — the trail left the database with K-828' do
         declare_action('place_order') { render json: {} }
@@ -576,13 +449,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(depths).to eq([false])
       end
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
     context 'with a sink that raises' do
       include_context 'audit sink spec: raising sink'
 
@@ -603,16 +470,6 @@ RSpec.describe Kiosk::Server::AuditSink do
           /Action "place_order" raised RuntimeError: inventory exploded.*audit_sink raised for action "place_order": RuntimeError: kafka is down/m
         ).to_stderr
       end
-    end
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
-    context 'with a sink that raises' do
-      include_context 'audit sink spec: raising sink'
 
       # The wire sentence carries neither foreign message, and both reach the
       # operator's stderr in the order they are reported: the handler's crash
@@ -629,13 +486,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         end.to output(/raised RuntimeError: inventory exploded/).to_stderr
       end
     end
-  end
-end
 
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'one event per action invocation (through its route)' do
     context 'with NO sink configured (the default)' do
       it 'emits nothing and does not even build an event' do
         declare_action('place_order') { render json: { id: 7 } }
@@ -659,10 +510,6 @@ RSpec.describe Kiosk::Server::AuditSink do
       end
     end
   end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
 
   describe 'a real invocation against a real database' do
     include_context 'audit sink spec: real database'
@@ -681,14 +528,6 @@ RSpec.describe Kiosk::Server::AuditSink do
       expect(events.size).to eq(1)   # … and the event was emitted anyway
       expect(events.first.status).to eq('error')
     end
-  end
-end
-
-RSpec.describe Kiosk::Server::AuditSink do
-  include_context 'audit sink spec: sink'
-
-  describe 'a real invocation against a real database' do
-    include_context 'audit sink spec: real database'
 
     it 'commits a successful action and emits exactly one event for it' do
       declare_action('place_order') do

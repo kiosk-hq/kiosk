@@ -61,247 +61,6 @@ module EquihashKats
   end
 end
 
-RSpec.describe Kiosk::Pow::Equihash do
-  it "is 'equihash'" do
-    expect(described_class::NAME).to eq('equihash')
-  end
-
-  it 'are the benchmark-chosen defaults (168, 7)' do
-    expect(described_class::DEFAULT_N).to eq(168)
-    expect(described_class::DEFAULT_K).to eq(7)
-  end
-
-  it 'returns n:168, k:7 by default' do
-    expect(described_class.params).to eq({ n: 168, k: 7 })
-  end
-
-  it 'accepts custom n and k' do
-    expect(described_class.params(n: 200, k: 9)).to eq({ n: 200, k: 9 })
-  end
-end
-
-RSpec.describe Kiosk::Pow::Equihash, '.verify on the (n=8, k=1) KAT' do
-  include EquihashKats
-
-  it 'KAT: the constructed pair XORs to zero' do
-    expect(leaf_byte(EquihashKats::KAT_SALT, 2) ^ leaf_byte(EquihashKats::KAT_SALT, 10)).to eq(0), 'KAT construction is wrong'
-  end
-
-  it 'ACCEPT — valid KAT (n=8,k=1, indices [2,10])' do
-    expect(verify_kat).to be(true)
-  end
-
-  it 'ACCEPT — valid KAT with string keys in nonce' do
-    expect(verify_kat({ 'indices' => [2, 10] })).to be(true)
-  end
-
-  it 'ACCEPT — valid KAT with string keys in params' do
-    expect(verify_kat(params: { 'n' => 8, 'k' => 1 })).to be(true)
-  end
-
-  it 'REJECT — wrong salt' do
-    expect(verify_kat(salt: 'bad'.b)).to be(false)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Equihash, '.verify on multi-level KATs (k >= 2)' do
-  include EquihashKats
-
-  it 'ACCEPT — valid k=2 KAT (n=24, canonical/tree order)' do
-    expect(verify_multi([29, 653, 113, 572], { n: 24, k: 2 })).to be(true)
-  end
-
-  it 'ACCEPT — valid k=3 KAT (n=32, canonical/tree order)' do
-    expect(verify_multi([31, 833, 279, 285, 147, 676, 596, 738], { n: 32, k: 3 })).to be(true)
-  end
-
-  # Sorting regroups (29,653)(113,572) into (29,113)(572,653), which are not the
-  # colliding pairs, so the level-0 XOR no longer cancels.
-  it 'REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)' do
-    expect(verify_multi([29, 113, 572, 653], { n: 24, k: 2 })).to be(false)
-  end
-
-  it 'REJECT — k=2 with one mutated index (XOR no longer cancels)' do
-    expect(verify_multi([29, 653, 113, 573], { n: 24, k: 2 })).to be(false)
-  end
-
-  # The right subtree (113,572) placed before the left (29,653): the XOR still
-  # cancels, but left.first (113) > right.first (29) breaks the subtree order.
-  it 'REJECT — k=2 canonical values but subtree order violated (halves swapped)' do
-    expect(verify_multi([113, 572, 29, 653], { n: 24, k: 2 })).to be(false)
-  end
-end
-
-# A malformed nonce answers false and never raises.
-RSpec.describe Kiosk::Pow::Equihash, '.verify on malformed indices' do
-  include EquihashKats
-
-  {
-    'REJECT — mutated index (2→3)' => [3, 10],
-    'REJECT — wrong count (3 indices, k=1 expects 2)' => [2, 10, 42],
-    'REJECT — too few indices' => [2],
-    'REJECT — empty indices' => [],
-    'REJECT — non-ascending [10, 2]' => [10, 2],
-    'REJECT — duplicate [2, 2]' => [2, 2],
-    'REJECT — float in indices' => [2.0, 10],
-    'REJECT — nil element in indices (returns false, does not raise)' => [nil, 10],
-    'REJECT — non-numeric string element in indices (returns false, does not raise)' => ['x', 10],
-    'REJECT — :indices is not an Array' => 'nope'
-  }.each do |label, indices|
-    it label do
-      expect(verify_kat({ indices: })).to be(false)
-    end
-  end
-
-  { 'REJECT — nonce is nil' => nil, 'REJECT — nonce is not a Hash' => 'bad', 'REJECT — nonce missing :indices' => {} }
-    .each do |label, nonce|
-      it label do
-        expect(verify_kat(nonce)).to be(false)
-      end
-    end
-end
-
-# header_nonce is client-supplied and a u32: `pack("V")` truncates mod 2**32, so
-# without the range bound 0, 2**32 and -(2**32) would seed identically.
-RSpec.describe Kiosk::Pow::Equihash, '.verify with a header_nonce' do
-  include EquihashKats
-
-  {
-    'REJECT — different header_nonce changes seed' => 1,
-    'REJECT — non-coercible header_nonce type (Array) returns false, does not raise' => [1],
-    'REJECT — Hash header_nonce returns false, does not raise' => { 'x' => 1 },
-    'REJECT — header_nonce == 2**32 (the truncating alias of 0)' => 2**32,
-    'REJECT — header_nonce == -(2**32) (the negative truncating alias of 0)' => -(2**32),
-    'REJECT — a negative header_nonce' => -1
-  }.each do |label, header_nonce|
-    it label do
-      expect(verify_kat({ indices: [2, 10], header_nonce: })).to be(false)
-    end
-  end
-
-  it 'REJECT — non-numeric string header_nonce (returns false, does not raise)' do
-    expect(verify_kat({ 'indices' => [2, 10], 'header_nonce' => 'abc' })).to be(false)
-  end
-
-  it 'ACCEPT — header_nonce=0 same as default' do
-    expect(verify_kat({ indices: [2, 10], header_nonce: 0 })).to be(true)
-  end
-
-  it 'ACCEPT — a proof solved at header_nonce 1, which is folded as a little-endian u32' do
-    nonce = { indices: EquihashKats::NONCE_ONE_INDICES, header_nonce: 1 }
-    expect(described_class.verify(salt: EquihashKats::MULTI_SALT, params: { n: 24, k: 2 }, nonce:)).to be(true)
-  end
-
-  it 'REJECT — the same proof without its header_nonce' do
-    expect(verify_multi(EquihashKats::NONCE_ONE_INDICES, { n: 24, k: 2 })).to be(false)
-  end
-
-  # 2**32 - 1 and 2**32 are one apart, and only the second is out of range.
-  it 'ACCEPT — the largest legal header_nonce is in range (2**32 - 1)' do
-    expect(described_class::MAX_HEADER_NONCE).to eq(4_294_967_296)
-    expect(4_294_967_295).to be < described_class::MAX_HEADER_NONCE
-  end
-end
-
-# (n=8, k=2): n_div=2, proofsize=4. Python blake2b first bytes for indices
-# 0, 5, 33, 84 are 0xbf, 0xba, 0xbc, 0xb9: the top 2 bits all 0b10, the top 4
-# all 0b1011, and the XOR of all four is 0.
-RSpec.describe Kiosk::Pow::Equihash, '.verify on the (n=8, k=2) KAT' do
-  include EquihashKats
-
-  it 'KAT (8,2): indices XOR to zero and form a valid collision tree' do
-    expect([0, 5, 33, 84].map { |i| leaf_byte('kat'.b, i) }.reduce(:^)).to eq(0), 'KAT (8,2) XOR is wrong'
-  end
-
-  it 'ACCEPT — valid KAT (n=8,k=2, indices [0,5,33,84])' do
-    expect(verify_kat({ indices: [0, 5, 33, 84] }, params: { n: 8, k: 2 })).to be(true)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Equihash, '.verify on the production params (n=168, k=7) KAT' do
-  def verify_prod(indices)
-    described_class.verify(salt: EquihashKats::MULTI_SALT, params: described_class.params(n: 168, k: 7), nonce: { indices: })
-  end
-
-  it 'ACCEPT — the frozen reference solution (canonical order)' do
-    expect(verify_prod(EquihashKats::PROD_INDICES)).to be(true)
-  end
-
-  it 'REJECT — the same solution globally sorted (breaks tree pairing)' do
-    expect(verify_prod(EquihashKats::PROD_INDICES.sort)).to be(false)
-  end
-
-  it 'REJECT — one mutated index (XOR no longer cancels)' do
-    expect(verify_prod(EquihashKats::PROD_INDICES.dup.tap { |ix| ix[127] += 1 })).to be(false)
-  end
-end
-
-# Only an operator misconfiguration reaches these (the challenge re-derives its
-# params from live config), and each one answers false: never a crash, and never
-# a vacuous true that accepts a proof nobody supplied.
-RSpec.describe Kiosk::Pow::Equihash, '.verify on degenerate parameters' do
-  include EquihashKats
-
-  # `1 << -5` is 0, so an empty indices array would pass the length check.
-  it 'REJECT — negative k (was: NoMethodError on an empty stack)' do
-    expect(verify_params({ n: 168, k: -5 }, indices: [])).to be(false)
-  end
-
-  # `n_bytes = 0` would make every leaf 0, so every XOR would cancel.
-  it 'REJECT — n = 0 (was: a VACUOUS TRUE for 128 arbitrary indices)' do
-    expect(verify_params({ n: 0, k: 7 })).to be(false)
-  end
-
-  it 'REJECT — negative n (was: NoMethodError, byteslice(0, -1) is nil)' do
-    expect(verify_params({ n: -8, k: 7 })).to be(false)
-  end
-
-  it 'REJECT — n below one byte (n = 4: same vacuous leaf as n = 0)' do
-    expect(verify_params({ n: 4, k: 7 })).to be(false)
-  end
-
-  # `byteslice` returns only the 32 bytes that exist, so the tree levels would
-  # stop being checked. The answer follows from the parameters, not the proof.
-  it 'REJECT — n wider than the digest (n = 512 > 256 bits of BLAKE2b-256)' do
-    expect(verify_params({ n: 512, k: 7 })).to be(false)
-  end
-end
-
-RSpec.describe Kiosk::Pow::Equihash, '.verify on unusable parameters' do
-  include EquihashKats
-
-  # With n_div = 0 every level check passes, and only a one-byte collision is left.
-  it 'REJECT — zero bits per level (n = 8, k = 8 ⇒ n_div = 0)' do
-    expect(verify_params({ n: 8, k: 8 }, indices: (0...256).to_a)).to be(false)
-  end
-
-  it 'REJECT — a non-numeric n (was: ArgumentError out of Integer())' do
-    expect(verify_params({ n: 'abc', k: 7 })).to be(false)
-  end
-
-  it 'REJECT — params that are not a Hash at all (was: NoMethodError)' do
-    expect(verify_params(nil)).to be(false)
-  end
-end
-
-# k = 0 is degenerate but defined: no tree, and the root check is the only one.
-# The guard must refuse k < 0 and keep k = 0, so this is a positive proof.
-RSpec.describe Kiosk::Pow::Equihash, '.verify on edge parameters that stay accepted' do
-  include EquihashKats
-
-  it 'ACCEPTS k = 0 — no tree, the root check is the only one' do
-    index = (0...4096).find { |i| leaf_byte('k0'.b, i).zero? }
-    expect(index).not_to be_nil, 'no 8-bit-zero leaf in the first 4096 — widen the search'
-    expect(described_class.verify(salt: 'k0'.b, params: { n: 8, k: 0 }, nonce: { indices: [index] })).to be(true)
-  end
-
-  # 8 % 3 == 2, and that KAT is a real solution: a divisibility rule would
-  # narrow the accepted set.
-  it 'ACCEPTS n % (k + 1) != 0 — the hand-computed (n=8, k=2) KAT' do
-    expect(verify_kat({ indices: [0, 5, 33, 84] }, params: { n: 8, k: 2 })).to be(true)
-  end
-end
-
 # `.valid_params?` asks the `.verify` parameter check before a challenge is
 # minted, so a gate can refuse at the source. It answers for the same set.
 module EquihashParamSets
@@ -326,50 +85,6 @@ module EquihashParamSets
   }.freeze
 end
 
-RSpec.describe Kiosk::Pow::Equihash, '.valid_params?' do
-  include EquihashKats
-
-  EquihashParamSets::REJECTED.each do |label, params|
-    it "REJECTS #{label}" do
-      expect(described_class.valid_params?(params)).to be(false)
-    end
-  end
-
-  EquihashParamSets::ACCEPTED.each do |label, params|
-    it "ACCEPTS #{label}" do
-      expect(described_class.valid_params?(params)).to be(true)
-    end
-  end
-
-  # `.verify` calls `.valid_params?`, so this fails only if one stops asking
-  # the other: a well-formed nonce cannot rescue a refused parameter set.
-  it "agrees with verify's Step 0 on every rejected set — one owner, no drift" do
-    EquihashParamSets::REJECTED.each_value { |params| expect(verify_params(params)).to be(false) }
-  end
-end
-
-RSpec.describe Kiosk::Pow::Equihash, '.verify at the default params (n=168, k=7)' do
-  include EquihashKats
-
-  let(:big_params) { described_class.params }
-
-  it 'REJECT — 127 indices (expect 128)' do
-    expect(verify_params(big_params, indices: (0...127).to_a)).to be(false)
-  end
-
-  it 'REJECT — 129 indices (expect 128)' do
-    expect(verify_params(big_params, indices: (0...129).to_a)).to be(false)
-  end
-
-  it 'REJECT — non-ascending (first two swapped)' do
-    expect(verify_params(big_params, indices: [1, 0, *(2...128)])).to be(false)
-  end
-
-  it 'REJECT — duplicate at end' do
-    expect(verify_params(big_params, indices: [*(0...127), 126])).to be(false)
-  end
-end
-
 # Counts the BLAKE2b calls one `.verify` makes. The count calls through, so the
 # verdict is the real one.
 module EquihashHashCount
@@ -380,77 +95,6 @@ module EquihashHashCount
       original.call(data)
     end
     [Kiosk::Pow::Equihash.verify(salt:, params:, nonce: { indices: }.merge(extra)), count]
-  end
-end
-
-# `.verify` runs on an unauthenticated registration, so the price of rejecting
-# rubbish is a security property: a wrong proof must not cost what a right one
-# costs. These examples count BLAKE2b calls instead of measuring time.
-RSpec.describe Kiosk::Pow::Equihash, 'cost of rejecting an invalid proof' do
-  include EquihashHashCount
-
-  it 'hashes NOTHING when the indices are not in canonical subtree order' do
-    expect(verify_counting((0...128).to_a.shuffle(random: Random.new(7)))).to eq([false, 0])
-  end
-
-  # The out-of-range index stays the largest, so the order still holds.
-  it 'hashes NOTHING when an index is out of u64 range' do
-    expect(verify_counting([*(0...127), (1 << 64) + 5])).to eq([false, 0])
-  end
-
-  it 'hashes NOTHING when count, type or distinctness fails' do
-    expect(verify_counting((0...127).to_a).last).to eq(0)
-    expect(verify_counting((0...127).to_a + ['x']).last).to eq(0)
-    expect(verify_counting((0...127).to_a + [126]).last).to eq(0)
-  end
-
-  it 'hashes NOTHING when header_nonce is not coercible' do
-    expect(verify_counting((0...128).to_a, extra: { header_nonce: 'abc' }).last).to eq(0)
-  end
-
-  # 0..127 ascending passes count, type, range, distinctness and every
-  # canonical-order comparison; only the hashes can reject it.
-  it 'stops after ONE sibling pair (2 hashes) on structurally clean rubbish' do
-    expect(verify_counting((0...128).to_a)).to eq([false, 2])
-  end
-end
-
-RSpec.describe Kiosk::Pow::Equihash, 'cost of verifying the production KAT' do
-  include EquihashHashCount
-
-  it 'stops after ONE sibling pair on a real solution that was globally sorted' do
-    expect(verify_counting(EquihashKats::PROD_INDICES.sort)).to eq([false, 2])
-  end
-
-  it 'still hashes every leaf for a VALID proof (the toll is not weakened)' do
-    expect(verify_counting(EquihashKats::PROD_INDICES)).to eq([true, 128])
-  end
-
-  # `pack("Q<")` truncates mod 2**64, so without the range bound one solution
-  # would have 2**k spendable spellings.
-  it 'rejects a valid solution with 2**64 added to an index, without hashing' do
-    expect(verify_counting(EquihashKats::PROD_INDICES.dup.tap { |ix| ix[1] += (1 << 64) })).to eq([false, 0])
-  end
-end
-
-# Toy fixture (salt "k540-dfs", n=8, k=3, indices 0..7): both level-0 pairs
-# cancel their 2 bits, but the height-2 node over leaves 0-3 does not cancel
-# its 4. A verifier that folds the tree hashes 4 leaves; one that checks all of
-# level 0 first hashes 8. So an attacker who wants the full hash loop must carry
-# an almost complete solution.
-RSpec.describe Kiosk::Pow::Equihash, 'cost of a proof that fails at a tree node' do
-  include EquihashKats
-  include EquihashHashCount
-
-  it 'stops at the first failing tree NODE, not the first failing pair' do
-    salt   = 'k540-dfs'.b
-    leaves = (0...8).map { |i| leaf_byte(salt, i) }
-    # The premises, so the fixture cannot rot into a vacuous pass.
-    expect((leaves[0] ^ leaves[1]) >> 6).to eq(0), 'pair (0,1) must cancel 2 bits'
-    expect((leaves[2] ^ leaves[3]) >> 6).to eq(0), 'pair (2,3) must cancel 2 bits'
-    expect(leaves[0, 4].reduce(:^) >> 4).not_to eq(0), 'the height-2 node must NOT cancel 4 bits'
-
-    expect(verify_counting((0...8).to_a, params: described_class.params(n: 8, k: 3), salt:)).to eq([false, 4])
   end
 end
 
@@ -492,31 +136,382 @@ module EquihashParity
   end
 end
 
-RSpec.describe Kiosk::Pow::Equihash, 'Python solver parity', :parity do
-  include EquihashParity
-
-  it 'Python blake2b matches Ruby for the KAT seed' do
-    python = python_with('hashlib')
-    parity_skip('python3 with hashlib.blake2b not found') unless python
-    script = 'import hashlib, struct; ' \
-             'print(hashlib.blake2b(b"kat" + struct.pack("<I", 0) + struct.pack("<Q", 2), digest_size=32).hexdigest())'
-    py_hex = IO.popen([python, '-c', script], &:read).strip
-
-    expect(py_hex).to eq(Kiosk::Pow::Blake2b.digest256("kat\0\0\0\0#{[2].pack('Q<')}".b).unpack1('H*'))
+RSpec.describe Kiosk::Pow::Equihash do
+  it "is 'equihash'" do
+    expect(described_class::NAME).to eq('equihash')
   end
 
-  it 'Ruby verify accepts a toy (n=8,k=1) proof from Python solver' do
-    indices = python_solve('kat'.b, { 'n' => 8, 'k' => 1 })
-    ok = described_class.verify(salt: 'kat'.b, params: described_class.params(n: 8, k: 1), nonce: { 'indices' => indices })
-    expect(ok).to be(true), "Ruby verify rejected Python output: #{indices.inspect}"
+  it 'are the benchmark-chosen defaults (168, 7)' do
+    expect(described_class::DEFAULT_N).to eq(168)
+    expect(described_class::DEFAULT_K).to eq(7)
   end
 
-  # The frozen KAT is the only other check at the shipped 168/7; this one
-  # live-solves there. About 10 s to solve.
-  it 'Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver' do
-    salt    = 'kiosk-eqx-parity-168'.b
-    indices = python_solve(salt, { 'n' => 168, 'k' => 7 })
-    ok = described_class.verify(salt:, params: described_class.params(n: 168, k: 7), nonce: { 'indices' => indices })
-    expect(ok).to be(true), "Ruby verify rejected the solver's live 168/7 output: #{indices.inspect}"
+  it 'returns n:168, k:7 by default' do
+    expect(described_class.params).to eq({ n: 168, k: 7 })
+  end
+
+  it 'accepts custom n and k' do
+    expect(described_class.params(n: 200, k: 9)).to eq({ n: 200, k: 9 })
+  end
+
+  describe '.verify on the (n=8, k=1) KAT' do
+    include EquihashKats
+
+    it 'KAT: the constructed pair XORs to zero' do
+      expect(leaf_byte(EquihashKats::KAT_SALT, 2) ^ leaf_byte(EquihashKats::KAT_SALT, 10)).to eq(0), 'KAT construction is wrong'
+    end
+
+    it 'ACCEPT — valid KAT (n=8,k=1, indices [2,10])' do
+      expect(verify_kat).to be(true)
+    end
+
+    it 'ACCEPT — valid KAT with string keys in nonce' do
+      expect(verify_kat({ 'indices' => [2, 10] })).to be(true)
+    end
+
+    it 'ACCEPT — valid KAT with string keys in params' do
+      expect(verify_kat(params: { 'n' => 8, 'k' => 1 })).to be(true)
+    end
+
+    it 'REJECT — wrong salt' do
+      expect(verify_kat(salt: 'bad'.b)).to be(false)
+    end
+  end
+
+  describe '.verify on multi-level KATs (k >= 2)' do
+    include EquihashKats
+
+    it 'ACCEPT — valid k=2 KAT (n=24, canonical/tree order)' do
+      expect(verify_multi([29, 653, 113, 572], { n: 24, k: 2 })).to be(true)
+    end
+
+    it 'ACCEPT — valid k=3 KAT (n=32, canonical/tree order)' do
+      expect(verify_multi([31, 833, 279, 285, 147, 676, 596, 738], { n: 32, k: 3 })).to be(true)
+    end
+
+    # Sorting regroups (29,653)(113,572) into (29,113)(572,653), which are not the
+    # colliding pairs, so the level-0 XOR no longer cancels.
+    it 'REJECT — the SAME k=2 solution globally sorted (breaks the tree pairing)' do
+      expect(verify_multi([29, 113, 572, 653], { n: 24, k: 2 })).to be(false)
+    end
+
+    it 'REJECT — k=2 with one mutated index (XOR no longer cancels)' do
+      expect(verify_multi([29, 653, 113, 573], { n: 24, k: 2 })).to be(false)
+    end
+
+    # The right subtree (113,572) placed before the left (29,653): the XOR still
+    # cancels, but left.first (113) > right.first (29) breaks the subtree order.
+    it 'REJECT — k=2 canonical values but subtree order violated (halves swapped)' do
+      expect(verify_multi([113, 572, 29, 653], { n: 24, k: 2 })).to be(false)
+    end
+  end
+
+  # A malformed nonce answers false and never raises.
+  describe '.verify on malformed indices' do
+    include EquihashKats
+
+    {
+      'REJECT — mutated index (2→3)' => [3, 10],
+      'REJECT — wrong count (3 indices, k=1 expects 2)' => [2, 10, 42],
+      'REJECT — too few indices' => [2],
+      'REJECT — empty indices' => [],
+      'REJECT — non-ascending [10, 2]' => [10, 2],
+      'REJECT — duplicate [2, 2]' => [2, 2],
+      'REJECT — float in indices' => [2.0, 10],
+      'REJECT — nil element in indices (returns false, does not raise)' => [nil, 10],
+      'REJECT — non-numeric string element in indices (returns false, does not raise)' => ['x', 10],
+      'REJECT — :indices is not an Array' => 'nope'
+    }.transform_values { |indices| { indices: } }.merge(
+      'REJECT — nonce is nil' => nil, 'REJECT — nonce is not a Hash' => 'bad', 'REJECT — nonce missing :indices' => {}
+    ).each do |label, nonce|
+      it label do
+        expect(verify_kat(nonce)).to be(false)
+      end
+    end
+  end
+
+  # header_nonce is client-supplied and a u32: `pack("V")` truncates mod 2**32, so
+  # without the range bound 0, 2**32 and -(2**32) would seed identically.
+  describe '.verify with a header_nonce' do
+    include EquihashKats
+
+    {
+      'REJECT — different header_nonce changes seed' => 1,
+      'REJECT — non-coercible header_nonce type (Array) returns false, does not raise' => [1],
+      'REJECT — Hash header_nonce returns false, does not raise' => { 'x' => 1 },
+      'REJECT — header_nonce == 2**32 (the truncating alias of 0)' => 2**32,
+      'REJECT — header_nonce == -(2**32) (the negative truncating alias of 0)' => -(2**32),
+      'REJECT — a negative header_nonce' => -1
+    }.each do |label, header_nonce|
+      it label do
+        expect(verify_kat({ indices: [2, 10], header_nonce: })).to be(false)
+      end
+    end
+
+    it 'REJECT — non-numeric string header_nonce (returns false, does not raise)' do
+      expect(verify_kat({ 'indices' => [2, 10], 'header_nonce' => 'abc' })).to be(false)
+    end
+
+    it 'ACCEPT — header_nonce=0 same as default' do
+      expect(verify_kat({ indices: [2, 10], header_nonce: 0 })).to be(true)
+    end
+
+    it 'ACCEPT — a proof solved at header_nonce 1, which is folded as a little-endian u32' do
+      nonce = { indices: EquihashKats::NONCE_ONE_INDICES, header_nonce: 1 }
+      expect(described_class.verify(salt: EquihashKats::MULTI_SALT, params: { n: 24, k: 2 }, nonce:)).to be(true)
+    end
+
+    it 'REJECT — the same proof without its header_nonce' do
+      expect(verify_multi(EquihashKats::NONCE_ONE_INDICES, { n: 24, k: 2 })).to be(false)
+    end
+
+    # 2**32 - 1 and 2**32 are one apart, and only the second is out of range.
+    it 'ACCEPT — the largest legal header_nonce is in range (2**32 - 1)' do
+      expect(described_class::MAX_HEADER_NONCE).to eq(4_294_967_296)
+      expect(4_294_967_295).to be < described_class::MAX_HEADER_NONCE
+    end
+  end
+
+  # (n=8, k=2): n_div=2, proofsize=4. Python blake2b first bytes for indices
+  # 0, 5, 33, 84 are 0xbf, 0xba, 0xbc, 0xb9: the top 2 bits all 0b10, the top 4
+  # all 0b1011, and the XOR of all four is 0.
+  describe '.verify on the (n=8, k=2) KAT' do
+    include EquihashKats
+
+    it 'KAT (8,2): indices XOR to zero and form a valid collision tree' do
+      expect([0, 5, 33, 84].map { |i| leaf_byte('kat'.b, i) }.reduce(:^)).to eq(0), 'KAT (8,2) XOR is wrong'
+    end
+
+    it 'ACCEPT — valid KAT (n=8,k=2, indices [0,5,33,84])' do
+      expect(verify_kat({ indices: [0, 5, 33, 84] }, params: { n: 8, k: 2 })).to be(true)
+    end
+  end
+
+  describe '.verify on the production params (n=168, k=7) KAT' do
+    def verify_prod(indices)
+      described_class.verify(salt: EquihashKats::MULTI_SALT, params: described_class.params(n: 168, k: 7), nonce: { indices: })
+    end
+
+    it 'ACCEPT — the frozen reference solution (canonical order)' do
+      expect(verify_prod(EquihashKats::PROD_INDICES)).to be(true)
+    end
+
+    it 'REJECT — the same solution globally sorted (breaks tree pairing)' do
+      expect(verify_prod(EquihashKats::PROD_INDICES.sort)).to be(false)
+    end
+
+    it 'REJECT — one mutated index (XOR no longer cancels)' do
+      expect(verify_prod(EquihashKats::PROD_INDICES.dup.tap { |ix| ix[127] += 1 })).to be(false)
+    end
+  end
+
+  # Only an operator misconfiguration reaches these (the challenge re-derives its
+  # params from live config), and each one answers false: never a crash, and never
+  # a vacuous true that accepts a proof nobody supplied.
+  describe '.verify on degenerate parameters' do
+    include EquihashKats
+
+    # `1 << -5` is 0, so an empty indices array would pass the length check.
+    it 'REJECT — negative k (was: NoMethodError on an empty stack)' do
+      expect(verify_params({ n: 168, k: -5 }, indices: [])).to be(false)
+    end
+
+    # `n_bytes = 0` would make every leaf 0, so every XOR would cancel.
+    it 'REJECT — n = 0 (was: a VACUOUS TRUE for 128 arbitrary indices)' do
+      expect(verify_params({ n: 0, k: 7 })).to be(false)
+    end
+
+    it 'REJECT — negative n (was: NoMethodError, byteslice(0, -1) is nil)' do
+      expect(verify_params({ n: -8, k: 7 })).to be(false)
+    end
+
+    it 'REJECT — n below one byte (n = 4: same vacuous leaf as n = 0)' do
+      expect(verify_params({ n: 4, k: 7 })).to be(false)
+    end
+
+    # `byteslice` returns only the 32 bytes that exist, so the tree levels would
+    # stop being checked. The answer follows from the parameters, not the proof.
+    it 'REJECT — n wider than the digest (n = 512 > 256 bits of BLAKE2b-256)' do
+      expect(verify_params({ n: 512, k: 7 })).to be(false)
+    end
+  end
+
+  describe '.verify on unusable parameters' do
+    include EquihashKats
+
+    # With n_div = 0 every level check passes, and only a one-byte collision is left.
+    it 'REJECT — zero bits per level (n = 8, k = 8 ⇒ n_div = 0)' do
+      expect(verify_params({ n: 8, k: 8 }, indices: (0...256).to_a)).to be(false)
+    end
+
+    it 'REJECT — a non-numeric n (was: ArgumentError out of Integer())' do
+      expect(verify_params({ n: 'abc', k: 7 })).to be(false)
+    end
+
+    it 'REJECT — params that are not a Hash at all (was: NoMethodError)' do
+      expect(verify_params(nil)).to be(false)
+    end
+  end
+
+  # k = 0 is degenerate but defined: no tree, and the root check is the only one.
+  # The guard must refuse k < 0 and keep k = 0, so this is a positive proof.
+  describe '.verify on edge parameters that stay accepted' do
+    include EquihashKats
+
+    it 'ACCEPTS k = 0 — no tree, the root check is the only one' do
+      index = (0...4096).find { |i| leaf_byte('k0'.b, i).zero? }
+      expect(index).not_to be_nil, 'no 8-bit-zero leaf in the first 4096 — widen the search'
+      expect(described_class.verify(salt: 'k0'.b, params: { n: 8, k: 0 }, nonce: { indices: [index] })).to be(true)
+    end
+
+    # 8 % 3 == 2, and that KAT is a real solution: a divisibility rule would
+    # narrow the accepted set.
+    it 'ACCEPTS n % (k + 1) != 0 — the hand-computed (n=8, k=2) KAT' do
+      expect(verify_kat({ indices: [0, 5, 33, 84] }, params: { n: 8, k: 2 })).to be(true)
+    end
+  end
+
+  describe '.valid_params?' do
+    include EquihashKats
+
+    EquihashParamSets::REJECTED.each do |label, params|
+      it "REJECTS #{label}" do
+        expect(described_class.valid_params?(params)).to be(false)
+      end
+    end
+
+    EquihashParamSets::ACCEPTED.each do |label, params|
+      it "ACCEPTS #{label}" do
+        expect(described_class.valid_params?(params)).to be(true)
+      end
+    end
+
+    # `.verify` calls `.valid_params?`, so this fails only if one stops asking
+    # the other: a well-formed nonce cannot rescue a refused parameter set.
+    it "agrees with verify's Step 0 on every rejected set — one owner, no drift" do
+      EquihashParamSets::REJECTED.each_value { |params| expect(verify_params(params)).to be(false) }
+    end
+  end
+
+  describe '.verify at the default params (n=168, k=7)' do
+    include EquihashKats
+
+    let(:big_params) { described_class.params }
+
+    it 'REJECT — 127 indices (expect 128)' do
+      expect(verify_params(big_params, indices: (0...127).to_a)).to be(false)
+    end
+
+    it 'REJECT — 129 indices (expect 128)' do
+      expect(verify_params(big_params, indices: (0...129).to_a)).to be(false)
+    end
+
+    it 'REJECT — non-ascending (first two swapped)' do
+      expect(verify_params(big_params, indices: [1, 0, *(2...128)])).to be(false)
+    end
+
+    it 'REJECT — duplicate at end' do
+      expect(verify_params(big_params, indices: [*(0...127), 126])).to be(false)
+    end
+  end
+
+  # `.verify` runs on an unauthenticated registration, so the price of rejecting
+  # rubbish is a security property: a wrong proof must not cost what a right one
+  # costs. These examples count BLAKE2b calls instead of measuring time.
+  describe 'cost of rejecting an invalid proof' do
+    include EquihashHashCount
+
+    it 'hashes NOTHING when the indices are not in canonical subtree order' do
+      expect(verify_counting((0...128).to_a.shuffle(random: Random.new(7)))).to eq([false, 0])
+    end
+
+    # The out-of-range index stays the largest, so the order still holds.
+    it 'hashes NOTHING when an index is out of u64 range' do
+      expect(verify_counting([*(0...127), (1 << 64) + 5])).to eq([false, 0])
+    end
+
+    it 'hashes NOTHING when count, type or distinctness fails' do
+      expect(verify_counting((0...127).to_a).last).to eq(0)
+      expect(verify_counting((0...127).to_a + ['x']).last).to eq(0)
+      expect(verify_counting((0...127).to_a + [126]).last).to eq(0)
+    end
+
+    it 'hashes NOTHING when header_nonce is not coercible' do
+      expect(verify_counting((0...128).to_a, extra: { header_nonce: 'abc' }).last).to eq(0)
+    end
+
+    # 0..127 ascending passes count, type, range, distinctness and every
+    # canonical-order comparison; only the hashes can reject it.
+    it 'stops after ONE sibling pair (2 hashes) on structurally clean rubbish' do
+      expect(verify_counting((0...128).to_a)).to eq([false, 2])
+    end
+  end
+
+  describe 'cost of verifying the production KAT' do
+    include EquihashHashCount
+
+    it 'stops after ONE sibling pair on a real solution that was globally sorted' do
+      expect(verify_counting(EquihashKats::PROD_INDICES.sort)).to eq([false, 2])
+    end
+
+    it 'still hashes every leaf for a VALID proof (the toll is not weakened)' do
+      expect(verify_counting(EquihashKats::PROD_INDICES)).to eq([true, 128])
+    end
+
+    # `pack("Q<")` truncates mod 2**64, so without the range bound one solution
+    # would have 2**k spendable spellings.
+    it 'rejects a valid solution with 2**64 added to an index, without hashing' do
+      expect(verify_counting(EquihashKats::PROD_INDICES.dup.tap { |ix| ix[1] += (1 << 64) })).to eq([false, 0])
+    end
+  end
+
+  # Toy fixture (salt "k540-dfs", n=8, k=3, indices 0..7): both level-0 pairs
+  # cancel their 2 bits, but the height-2 node over leaves 0-3 does not cancel
+  # its 4. A verifier that folds the tree hashes 4 leaves; one that checks all of
+  # level 0 first hashes 8. So an attacker who wants the full hash loop must carry
+  # an almost complete solution.
+  describe 'cost of a proof that fails at a tree node' do
+    include EquihashKats
+    include EquihashHashCount
+
+    it 'stops at the first failing tree NODE, not the first failing pair' do
+      salt   = 'k540-dfs'.b
+      leaves = (0...8).map { |i| leaf_byte(salt, i) }
+      # The premises, so the fixture cannot rot into a vacuous pass.
+      expect((leaves[0] ^ leaves[1]) >> 6).to eq(0), 'pair (0,1) must cancel 2 bits'
+      expect((leaves[2] ^ leaves[3]) >> 6).to eq(0), 'pair (2,3) must cancel 2 bits'
+      expect(leaves[0, 4].reduce(:^) >> 4).not_to eq(0), 'the height-2 node must NOT cancel 4 bits'
+
+      expect(verify_counting((0...8).to_a, params: described_class.params(n: 8, k: 3), salt:)).to eq([false, 4])
+    end
+  end
+
+  describe 'Python solver parity', :parity do
+    include EquihashParity
+
+    it 'Python blake2b matches Ruby for the KAT seed' do
+      python = python_with('hashlib')
+      parity_skip('python3 with hashlib.blake2b not found') unless python
+      script = 'import hashlib, struct; ' \
+               'print(hashlib.blake2b(b"kat" + struct.pack("<I", 0) + struct.pack("<Q", 2), digest_size=32).hexdigest())'
+      py_hex = IO.popen([python, '-c', script], &:read).strip
+
+      expect(py_hex).to eq(Kiosk::Pow::Blake2b.digest256("kat\0\0\0\0#{[2].pack('Q<')}".b).unpack1('H*'))
+    end
+
+    it 'Ruby verify accepts a toy (n=8,k=1) proof from Python solver' do
+      indices = python_solve('kat'.b, { 'n' => 8, 'k' => 1 })
+      ok = described_class.verify(salt: 'kat'.b, params: described_class.params(n: 8, k: 1), nonce: { 'indices' => indices })
+      expect(ok).to be(true), "Ruby verify rejected Python output: #{indices.inspect}"
+    end
+
+    # The frozen KAT is the only other check at the shipped 168/7; this one
+    # live-solves there. About 10 s to solve.
+    it 'Ruby verify accepts a LIVE production-param (n=168,k=7) proof from the Python solver' do
+      salt    = 'kiosk-eqx-parity-168'.b
+      indices = python_solve(salt, { 'n' => 168, 'k' => 7 })
+      ok = described_class.verify(salt:, params: described_class.params(n: 168, k: 7), nonce: { 'indices' => indices })
+      expect(ok).to be(true), "Ruby verify rejected the solver's live 168/7 output: #{indices.inspect}"
+    end
   end
 end

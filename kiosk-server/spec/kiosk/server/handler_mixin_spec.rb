@@ -261,7 +261,7 @@ RSpec.shared_context 'handler mixin spec: wire' do
   end
 end
 
-RSpec.describe 'Kiosk::Handler (the operator mixin)' do
+RSpec.describe Kiosk::Server::HandlerMixin do
   include_context 'handler mixin spec: executor'
 
   describe 'declaring verbs' do
@@ -781,9 +781,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect(problem.keys).not_to include('ok')
       expect(problem.keys).not_to include('error')
     end
-  end
 
-  describe 'guards' do
     it 'refuses to be included into something that is not a controller' do
       expect { Class.new { include Kiosk::Handler } }
         .to raise_error(ArgumentError, /needs an ActionController subclass/)
@@ -801,9 +799,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /without a `kind`/)
     end
-  end
 
-  describe 'guards' do
     it 'refuses a kind that is neither :query nor :action' do
       expect do
         Class.new(ApplicationController) do
@@ -823,9 +819,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /not a Kiosk verb reach/)
     end
-  end
 
-  describe 'guards' do
     # The SAME-CLASS half of one-name-one-kind. It could not arise before
     # K-921 — a class had one kind — and it is refused where the operator has
     # both methods in hand. The cross-class half is HandlerRegistrations'.
@@ -849,9 +843,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /already declares it as a query/)
     end
-  end
 
-  describe 'guards' do
     # The EQUALITY case the kind check above skipped (K-1659). Before this the
     # second declaration was stored, silently replacing the first: the earlier
     # method went off the wire with nothing — not the cross-class check, which
@@ -877,14 +869,12 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /#board on this class already declares/)
     end
-  end
 
-  describe 'guards' do
     # THE CONTROL for the refusal above: re-REGISTERING is not re-DECLARING.
     # The engine's `to_prepare` calls `kiosk_register!` on every reload, and a
     # reloaded class body is read on a new class object whose declarations
     # start empty — so neither path meets the clash, however many times it
-    # runs. (The real reloader cycle is handler_registration_boot_spec.rb's
+    # runs. (The real reloader cycle is handler_registrations_boot_spec.rb's
     # `development` scenario, which reloads three times in a booted app.)
     it 'does not treat re-registration, or a reloaded generation, as a duplicate' do
       generation = lambda do
@@ -905,61 +895,58 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       expect { generation.call }.not_to raise_error
       expect(Kiosk::Server::Queries.known).to include('board')
     end
-  end
 
-  describe 'guards' do
     # ── spec §8.1/§8.3 + T-073 = A, refused where the mistake is made ────
     #
     # All four raise at CLASS-BODY LOAD, so an operator meets them at boot with
     # the class and the method in hand — not as a verb that turns out to be
     # unreachable, or a descriptor an assistant finds incomplete.
+    describe 'verb names' do
+      it 'refuses a verb name that is not one legal path segment' do
+        expect do
+          Class.new(ApplicationController) do
+            include Kiosk::Handler
 
-    it 'refuses a verb name that is not one legal path segment' do
-      expect do
+            kind :query
+            description 'Shouty.'
+            input_schema type: 'object'
+            output_schema true
+            wire_name 'Browse-Listings'
+            def browse = render(json: [])
+          end
+        end.to raise_error(ArgumentError, /not a legal verb name/)
+      end
+
+      # `^[a-z][a-z0-9_]*$`, one name at a time: each refused name breaks one
+      # part of the pattern, and each accepted name sits on one of its edges.
+      def declare_named(name)
         Class.new(ApplicationController) do
           include Kiosk::Handler
 
           kind :query
-          description 'Shouty.'
+          description 'Named.'
           input_schema type: 'object'
           output_schema true
-          wire_name 'Browse-Listings'
+          wire_name name
           def browse = render(json: [])
         end
-      end.to raise_error(ArgumentError, /not a legal verb name/)
-    end
+      end
 
-    # `^[a-z][a-z0-9_]*$`, one name at a time: each refused name breaks one
-    # part of the pattern, and each accepted name sits on one of its edges.
-    def declare_named(name)
-      Class.new(ApplicationController) do
-        include Kiosk::Handler
+      ['9lives', '_listings', 'Browse', 'browsE', 'browse-listings', 'browse listings',
+       'browse/listings', "browse\n", 'brówse', ''].each do |name|
+        it "refuses the verb name #{name.inspect}" do
+          expect { declare_named(name) }.to raise_error(ArgumentError, /not a legal verb name/)
+        end
+      end
 
-        kind :query
-        description 'Named.'
-        input_schema type: 'object'
-        output_schema true
-        wire_name name
-        def browse = render(json: [])
+      %w[a b9 browse_ browse_listings_2].each do |name|
+        it "accepts the verb name #{name.inspect}" do
+          declare_named(name)
+          expect(Kiosk::Server::Queries.known).to include(name)
+        end
       end
     end
 
-    ['9lives', '_listings', 'Browse', 'browsE', 'browse-listings', 'browse listings',
-     'browse/listings', "browse\n", 'brówse', ''].each do |name|
-      it "refuses the verb name #{name.inspect}" do
-        expect { declare_named(name) }.to raise_error(ArgumentError, /not a legal verb name/)
-      end
-    end
-
-    %w[a b9 browse_ browse_listings_2].each do |name|
-      it "accepts the verb name #{name.inspect}" do
-        declare_named(name)
-        expect(Kiosk::Server::Queries.known).to include(name)
-      end
-    end
-  end
-
-  describe 'guards' do
     it 'refuses a verb name the engine draws itself' do
       expect do
         Class.new(ApplicationController) do
@@ -973,9 +960,7 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
         end
       end.to raise_error(ArgumentError, /the engine reserves/)
     end
-  end
 
-  describe 'guards' do
     it 'refuses a declaration with no input_schema' do
       expect do
         Class.new(ApplicationController) do
@@ -1042,13 +1027,11 @@ RSpec.describe 'Kiosk::Handler (the operator mixin)' do
       end
       expect(Kiosk::Server::Queries.known).to include('ten_per_page')
     end
-  end
 
-  describe 'guards' do
     # The reserved list is the engine's own route table, and it must stay that
     # way, and this pins the names the mixin refuses today so a silent shrink is visible.
     it 'reserves every first path segment the engine draws under the mount' do
-      expect(Kiosk::Server::HandlerMixin::RESERVED_NAMES)
+      expect(described_class::RESERVED_NAMES)
         .to contain_exactly('agents', 'auth', 'events', 'kyc', 'oauth', 'pay', 'payment_setup', 'request_kyc', 'schema')
     end
 

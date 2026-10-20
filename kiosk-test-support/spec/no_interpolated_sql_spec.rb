@@ -129,50 +129,50 @@ RSpec.describe 'no demo splices a value into SQL statement text (K-654)' do
                       'parameter instead — `conn.exec_update("UPDATE t SET s = $1 WHERE id = $2::uuid", ' \
                       "\"label\", [s, id])` — the way kiosk-server's executor.rb does.\n#{report.join("\n")}"
   end
-end
 
-# Written against strings rather than the tree: on a clean tree only examples
-# like these show which shapes the rule catches.
-RSpec.describe 'the interpolated-SQL shapes it forbids' do
-  it 'FORBIDS a quoted value spliced into an UPDATE' do
-    v = InterpolatedSql.violations(%(conn.execute("UPDATE orders SET status = \#{conn.quote(to)} WHERE id = 1")\n))
-    expect(v.map { |x| x[1] }).to include('hand-quoted value (`.quote(`)', 'interpolation inside SQL statement text')
+  # Written against strings rather than the tree: on a clean tree only examples
+  # like these show which shapes the rule catches.
+  describe 'the interpolated-SQL shapes it forbids' do
+    it 'FORBIDS a quoted value spliced into an UPDATE' do
+      v = InterpolatedSql.violations(%(conn.execute("UPDATE orders SET status = \#{conn.quote(to)} WHERE id = 1")\n))
+      expect(v.map { |x| x[1] }).to include('hand-quoted value (`.quote(`)', 'interpolation inside SQL statement text')
+    end
+
+    it 'FORBIDS a bare splice into a WHERE continuation fragment' do
+      v = InterpolatedSql.violations(%(  "WHERE id = '\#{order_id}'::uuid " \\\n))
+      expect(v.first[1]).to eq('interpolation inside SQL statement text')
+    end
+
+    it 'FORBIDS a splice inside a SQL-tagged heredoc body' do
+      src = "sql = <<~SQL\n  UPDATE t SET s = '\#{value}'\nSQL\n"
+      expect(InterpolatedSql.violations(src).first[1]).to eq('interpolation inside a SQL heredoc')
+    end
+
+    # The `quote` call is caught by rule A; the splice itself is invisible to
+    # rule B, which is why rule A exists.
+    it 'cannot see a statement assembled from pieces (a KNOWN blind spot)' do
+      src = %(sql = +"UPDATE orders SET status = "\nsql << conn.quote(to)\n)
+      expect(InterpolatedSql.violations(src).map { |x| x[1] }).to eq(['hand-quoted value (`.quote(`)'])
+    end
   end
 
-  it 'FORBIDS a bare splice into a WHERE continuation fragment' do
-    v = InterpolatedSql.violations(%(  "WHERE id = '\#{order_id}'::uuid " \\\n))
-    expect(v.first[1]).to eq('interpolation inside SQL statement text')
-  end
+  describe 'the interpolated-SQL shapes it allows' do
+    it 'ALLOWS the bind-parameter form the engine uses' do
+      src = %(conn.exec_update("UPDATE orders SET status = $1 WHERE id = $2::uuid", "flip", [to, id])\n)
+      expect(InterpolatedSql.violations(src)).to be_empty
+    end
 
-  it 'FORBIDS a splice inside a SQL-tagged heredoc body' do
-    src = "sql = <<~SQL\n  UPDATE t SET s = '\#{value}'\nSQL\n"
-    expect(InterpolatedSql.violations(src).first[1]).to eq('interpolation inside a SQL heredoc')
-  end
+    it 'ALLOWS an ActiveRecord relation carrying the value out of the string' do
+      expect(InterpolatedSql.violations(%(Order.where(id: order_id, status: "created").pick(:total_cents)\n))).to be_empty
+    end
 
-  # The `quote` call is caught by rule A; the splice itself is invisible to
-  # rule B, which is why rule A exists.
-  it 'cannot see a statement assembled from pieces (a KNOWN blind spot)' do
-    src = %(sql = +"UPDATE orders SET status = "\nsql << conn.quote(to)\n)
-    expect(InterpolatedSql.violations(src).map { |x| x[1] }).to eq(['hand-quoted value (`.quote(`)'])
-  end
-end
+    it 'ALLOWS English prose that happens to contain a SQL word' do
+      src = %(bad_request("invalid date: \#{date} — use the YYYY-MM-DD from an availability row")\n)
+      expect(InterpolatedSql.violations(src)).to be_empty
+    end
 
-RSpec.describe 'the interpolated-SQL shapes it allows' do
-  it 'ALLOWS the bind-parameter form the engine uses' do
-    src = %(conn.exec_update("UPDATE orders SET status = $1 WHERE id = $2::uuid", "flip", [to, id])\n)
-    expect(InterpolatedSql.violations(src)).to be_empty
-  end
-
-  it 'ALLOWS an ActiveRecord relation carrying the value out of the string' do
-    expect(InterpolatedSql.violations(%(Order.where(id: order_id, status: "created").pick(:total_cents)\n))).to be_empty
-  end
-
-  it 'ALLOWS English prose that happens to contain a SQL word' do
-    src = %(bad_request("invalid date: \#{date} — use the YYYY-MM-DD from an availability row")\n)
-    expect(InterpolatedSql.violations(src)).to be_empty
-  end
-
-  it 'ALLOWS a full-line comment that shows the forbidden shape' do
-    expect(InterpolatedSql.violations(%(  # was: "WHERE id = \#{conn.quote(id)}::uuid"\n))).to be_empty
+    it 'ALLOWS a full-line comment that shows the forbidden shape' do
+      expect(InterpolatedSql.violations(%(  # was: "WHERE id = \#{conn.quote(id)}::uuid"\n))).to be_empty
+    end
   end
 end

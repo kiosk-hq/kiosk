@@ -62,38 +62,40 @@ end
 
 # The read models over the engine's own payment receipts, against a real
 # Postgres; no reachable server skips, as the other persistence specs do.
-RSpec.describe 'Kiosk::Settlement and Kiosk::CartMandate' do
-  include SettlementSpecHelpers
+RSpec.describe Kiosk::Settlement do
+  describe 'Kiosk::Settlement and Kiosk::CartMandate' do
+    include SettlementSpecHelpers
 
-  before(:context) do
-    skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
+    before(:context) do
+      skip "no local Postgres reachable (#{SpecPostgres.error})" if SpecPostgres.error
 
-    SettlementSpecHelpers.create_schema
-  end
+      SettlementSpecHelpers.create_schema
+    end
 
-  after(:context) { SpecPostgres.drop_schema(SettlementSpecHelpers::SCHEMA) }
+    after(:context) { SpecPostgres.drop_schema(SettlementSpecHelpers::SCHEMA) }
 
-  before { Kiosk.configure { |c| c.schema = SettlementSpecHelpers::SCHEMA } }
+    before { Kiosk.configure { |c| c.schema = SettlementSpecHelpers::SCHEMA } }
 
-  let(:mine)  { SecureRandom.uuid }
-  let(:other) { SecureRandom.uuid }
+    let(:mine)  { SecureRandom.uuid }
+    let(:other) { SecureRandom.uuid }
 
-  it "reads the settlements of the principal the wire resolved, and no one else's" do
-    own = settle(mine, [{ booking_id: 'b-1' }])
-    settle(other, [{ booking_id: 'b-2' }])
+    it "reads the settlements of the principal the wire resolved, and no one else's" do
+      own = settle(mine, [{ booking_id: 'b-1' }])
+      settle(other, [{ booking_id: 'b-2' }])
 
-    expect(as(mine) { Kiosk::Settlement.own.pluck(:id) }).to eq([own])
-  end
+      expect(as(mine) { described_class.own.pluck(:id) }).to eq([own])
+    end
 
-  it 'refuses to answer off the wire rather than answer nothing' do
-    expect { Kiosk::Settlement.own.to_a }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
-  end
+    it 'refuses to answer off the wire rather than answer nothing' do
+      expect { described_class.own.to_a }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
+    end
 
-  it "finds the settlement whose cart names a line item by the operator's own key" do
-    paid = settle(mine, [{ order_id: 'o-1', qty: 2 }])
-    settle(mine, [{ order_id: 'o-2' }])
+    it "finds the settlement whose cart names a line item by the operator's own key" do
+      paid = settle(mine, [{ order_id: 'o-1', qty: 2 }])
+      settle(mine, [{ order_id: 'o-2' }])
 
-    expect(Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: 'o-1')).pluck(:id))
-      .to eq([paid])
+      expect(described_class.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: 'o-1')).pluck(:id))
+        .to eq([paid])
+    end
   end
 end

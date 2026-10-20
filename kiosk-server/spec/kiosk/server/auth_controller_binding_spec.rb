@@ -80,185 +80,187 @@ RSpec.shared_context 'auth controller binding spec: signed-in holder' do
   end
 end
 
-RSpec.describe 'AuthController binding endpoints' do
-  describe 'POST /auth/link' do
-    include_context 'auth controller binding spec: signed-in holder'
+RSpec.describe Kiosk::Server::AuthController do
+  describe 'binding endpoints' do
+    describe 'POST /auth/link' do
+      include_context 'auth controller binding spec: signed-in holder'
 
-    it 'mints a single-use link code for the signed-in account holder (201)' do
-      status, body = dispatch(:link)
+      it 'mints a single-use link code for the signed-in account holder (201)' do
+        status, body = dispatch(:link)
 
-      expect(status).to eq(201)
-      expect(body[:link_code]).to be_a(String)
-      expect(body[:expires_in]).to eq(Kiosk::Server::DeviceAuthorization::DEFAULT_EXPIRES_IN)
+        expect(status).to eq(201)
+        expect(body[:link_code]).to be_a(String)
+        expect(body[:expires_in]).to eq(Kiosk::Server::DeviceAuthorization::DEFAULT_EXPIRES_IN)
 
-      row = link_row(body[:link_code])
-      expect(row).to be_approved
-      expect(row).to be_link
-      expect(row.user_id).to eq(user_id)
+        row = link_row(body[:link_code])
+        expect(row).to be_approved
+        expect(row).to be_link
+        expect(row.user_id).to eq(user_id)
+      end
+
+      it '401s without a provider session — agent Bearer tokens do not open this door' do
+        wire_user_idp(nil)
+        status, body = dispatch(:link)
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
     end
 
-    it '401s without a provider session — agent Bearer tokens do not open this door' do
-      wire_user_idp(nil)
-      status, body = dispatch(:link)
-      expect_problem(status, body, http: 401, code: 'unauthenticated')
-    end
-  end
+    describe 'POST /auth/link roles-from-IdP' do
+      include_context 'auth controller binding spec: signed-in holder'
 
-  describe 'POST /auth/link roles-from-IdP' do
-    include_context 'auth controller binding spec: signed-in holder'
+      # roles-from-IdP (Path A): the human's role — as the provider's
+      # user_idp reports it on the session identity — is captured onto the link
+      # row, so the assistant that redeems it inherits the human's role.
+      it "captures the human's user_idp role onto the link row (roles-from-IdP)" do
+        Kiosk.configure { |c| c.roles = %i[customer owner] }
+        wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: 'owner'))
 
-    # roles-from-IdP (Path A): the human's role — as the provider's
-    # user_idp reports it on the session identity — is captured onto the link
-    # row, so the assistant that redeems it inherits the human's role.
-    it "captures the human's user_idp role onto the link row (roles-from-IdP)" do
-      Kiosk.configure { |c| c.roles = %i[customer owner] }
-      wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: 'owner'))
+        _status, body = dispatch(:link)
+        row = link_row(body[:link_code])
+        expect(row.requested_role).to eq('owner')
+      end
 
-      _status, body = dispatch(:link)
-      row = link_row(body[:link_code])
-      expect(row.requested_role).to eq('owner')
-    end
+      it 'captures no role for a role-less human session (no regression)' do
+        wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: nil))
 
-    it 'captures no role for a role-less human session (no regression)' do
-      wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: nil))
-
-      _status, body = dispatch(:link)
-      row = link_row(body[:link_code])
-      expect(row.requested_role).to be_nil
-    end
-  end
-
-  describe 'POST /auth/claim' do
-    include_context 'auth controller binding spec: signed-in holder'
-
-    it 'delegates to LinkCode.redeem and returns the register-shaped 201' do
-      allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-        { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt' }
-      )
-
-      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
-      expect(status).to eq(201)
-      expect(body).to eq(agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt')
-      expect(Kiosk::Server::LinkCode).to have_received(:redeem).with(
-        code: 'c', public_key_pem: 'PEM', signed: 'jws', pow: nil
-      )
+        _status, body = dispatch(:link)
+        row = link_row(body[:link_code])
+        expect(row.requested_role).to be_nil
+      end
     end
 
-    it '400s on a missing field (register-shaped body: code, public_key, signed)' do
-      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM' })
-      expect_problem(status, body, http: 400, code: 'bad_request', detail: /signed/)
+    describe 'POST /auth/claim' do
+      include_context 'auth controller binding spec: signed-in holder'
+
+      it 'delegates to LinkCode.redeem and returns the register-shaped 201' do
+        allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
+          { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt' }
+        )
+
+        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
+        expect(status).to eq(201)
+        expect(body).to eq(agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt')
+        expect(Kiosk::Server::LinkCode).to have_received(:redeem).with(
+          code: 'c', public_key_pem: 'PEM', signed: 'jws', pow: nil
+        )
+      end
+
+      it '400s on a missing field (register-shaped body: code, public_key, signed)' do
+        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM' })
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: /signed/)
+      end
+
+      it 'maps a failed possession proof to the 401 problem document — code stays live' do
+        allow(Kiosk::Server::LinkCode).to receive(:redeem)
+          .and_raise(Kiosk::Server::Errors::Unauthenticated.new('proof signature invalid'))
+
+        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'bad' })
+        expect_problem(status, body, http: 401, code: 'unauthenticated',
+                                     detail: /proof signature invalid/)
+      end
     end
 
-    it 'maps a failed possession proof to the 401 problem document — code stays live' do
-      allow(Kiosk::Server::LinkCode).to receive(:redeem)
-        .and_raise(Kiosk::Server::Errors::Unauthenticated.new('proof signature invalid'))
+    describe 'POST /auth/claim response fields' do
+      include_context 'auth controller binding spec: signed-in holder'
 
-      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'bad' })
-      expect_problem(status, body, http: 401, code: 'unauthenticated',
-                                   detail: /proof signature invalid/)
-    end
-  end
+      # K-855. `AccountBinding.bind!` — which is what `redeem` returns — also
+      # carries `fresh:`, an internal fresh-key-vs-rebind signal that NO published
+      # surface documents (zero hits in protocol.md, specification.html, skill.md
+      # or the schemas) and that §6.2 contradicts by spelling the response out as
+      # {agent_id, user_id, access_token}. It was on the wire on every claim
+      # because the controller rendered the result hash whole. The example above
+      # could not catch it: it stubs a return value that does not have the field.
+      # This one stubs what the service actually returns.
+      it "renders only the three fields §6.2 specifies — bind!'s `fresh` never reaches the wire" do
+        allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
+          { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: false }
+        )
 
-  describe 'POST /auth/claim response fields' do
-    include_context 'auth controller binding spec: signed-in holder'
+        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
+        expect(status).to eq(201)
+        expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
+        expect(body).not_to have_key(:fresh)
+      end
 
-    # K-855. `AccountBinding.bind!` — which is what `redeem` returns — also
-    # carries `fresh:`, an internal fresh-key-vs-rebind signal that NO published
-    # surface documents (zero hits in protocol.md, specification.html, skill.md
-    # or the schemas) and that §6.2 contradicts by spelling the response out as
-    # {agent_id, user_id, access_token}. It was on the wire on every claim
-    # because the controller rendered the result hash whole. The example above
-    # could not catch it: it stubs a return value that does not have the field.
-    # This one stubs what the service actually returns.
-    it "renders only the three fields §6.2 specifies — bind!'s `fresh` never reaches the wire" do
-      allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-        { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: false }
-      )
+      # The same, for the OTHER branch: a FRESH key. §6.3 requires that a rebind
+      # be indistinguishable from any other rebind (K-787); a `fresh` flag is the
+      # field an assistant would reach for to distinguish binds at all, so it must
+      # be absent whichever branch produced the result.
+      it 'renders the same three fields for a fresh-key bind' do
+        allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
+          { agent_id: 'a-2', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
+        )
 
-      status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
-      expect(status).to eq(201)
-      expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
-      expect(body).not_to have_key(:fresh)
-    end
-
-    # The same, for the OTHER branch: a FRESH key. §6.3 requires that a rebind
-    # be indistinguishable from any other rebind (K-787); a `fresh` flag is the
-    # field an assistant would reach for to distinguish binds at all, so it must
-    # be absent whichever branch produced the result.
-    it 'renders the same three fields for a fresh-key bind' do
-      allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-        { agent_id: 'a-2', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
-      )
-
-      _status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
-      expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
-    end
-  end
-
-  describe 'POST /auth/unlink' do
-    include_context 'auth controller binding spec: signed-in holder'
-
-    # 204, EMPTY (K-870). This used to be `200 {ok: true}` — a body no published
-    # surface documented, on an endpoint whose two siblings above ARE documented
-    # in protocol.md §6.2. K-855 settled it the other way: withdraw the body
-    # rather than specify it after the fact. §6.2 now states the 204, so the status IS
-    # the contract and this example is what pins it.
-    it "deactivates one of the holder's own bindings and answers 204 with no body" do
-      allow(Kiosk::Server::AccountBinding).to receive(:unlink!).and_return({ agent_id: 'a-1' })
-
-      status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
-      expect(status).to eq(204)
-      expect(body).to eq({})
-      expect(last_headers['Content-Type']).to be_nil
-      # The version handshake still rides on it — §3, point 6 is about every
-      # mount-path response, empty ones included.
-      expect(last_headers['Kiosk-API-Version']).to eq(Kiosk::Protocol::API_VERSION)
-      expect(Kiosk::Server::AccountBinding).to have_received(:unlink!).with(
-        agent_id: 'a-1', user_id: user_id
-      )
+        _status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
+        expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
+      end
     end
 
-    it '401s without a provider session' do
-      wire_user_idp(nil)
-      status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
-      expect_problem(status, body, http: 401, code: 'unauthenticated')
-    end
-  end
+    describe 'POST /auth/unlink' do
+      include_context 'auth controller binding spec: signed-in holder'
 
-  describe 'a session request that is not JSON' do
-    include_context 'auth controller binding spec: signed-in holder'
+      # 204, EMPTY (K-870). This used to be `200 {ok: true}` — a body no published
+      # surface documented, on an endpoint whose two siblings above ARE documented
+      # in protocol.md §6.2. K-855 settled it the other way: withdraw the body
+      # rather than specify it after the fact. §6.2 now states the 204, so the status IS
+      # the contract and this example is what pins it.
+      it "deactivates one of the holder's own bindings and answers 204 with no body" do
+        allow(Kiosk::Server::AccountBinding).to receive(:unlink!).and_return({ agent_id: 'a-1' })
 
-    # A page on a sibling subdomain is same-site: its `text/plain` form carries
-    # the holder's cookie and needs no CORS preflight.
-    it 'refuses an unlink posted as a form, and unlinks nothing' do
-      allow(Kiosk::Server::AccountBinding).to receive(:unlink!)
+        status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
+        expect(status).to eq(204)
+        expect(body).to eq({})
+        expect(last_headers['Content-Type']).to be_nil
+        # The version handshake still rides on it — §3, point 6 is about every
+        # mount-path response, empty ones included.
+        expect(last_headers['Kiosk-API-Version']).to eq(Kiosk::Protocol::API_VERSION)
+        expect(Kiosk::Server::AccountBinding).to have_received(:unlink!).with(
+          agent_id: 'a-1', user_id: user_id
+        )
+      end
 
-      status, body = dispatch(:unlink, body: { agent_id: 'a-1' }, content_type: 'text/plain')
-      expect_problem(status, body, http: 400, code: 'bad_request', detail: %r{application/json})
-      expect(Kiosk::Server::AccountBinding).not_to have_received(:unlink!)
-    end
-
-    it 'refuses a link posted as a form' do
-      status, body = dispatch(:link, content_type: 'application/x-www-form-urlencoded')
-      expect_problem(status, body, http: 400, code: 'bad_request', detail: %r{application/json})
-    end
-  end
-
-  describe 'POST /auth/unlink request errors' do
-    include_context 'auth controller binding spec: signed-in holder'
-
-    it '400s on a missing agent_id' do
-      status, body = dispatch(:unlink, body: {})
-      expect_problem(status, body, http: 400, code: 'bad_request', detail: /agent_id/)
+      it '401s without a provider session' do
+        wire_user_idp(nil)
+        status, body = dispatch(:unlink, body: { agent_id: 'a-1' })
+        expect_problem(status, body, http: 401, code: 'unauthenticated')
+      end
     end
 
-    it '404s for an agent not bound to this holder' do
-      allow(Kiosk::Server::AccountBinding).to receive(:unlink!)
-        .and_raise(Kiosk::Server::Errors::NotFound.new('no linked assistant account with this agent_id'))
+    describe 'a session request that is not JSON' do
+      include_context 'auth controller binding spec: signed-in holder'
 
-      status, body = dispatch(:unlink, body: { agent_id: 'foreign' })
-      expect_problem(status, body, http: 404, code: 'not_found',
-                                   detail: /no linked assistant account/)
+      # A page on a sibling subdomain is same-site: its `text/plain` form carries
+      # the holder's cookie and needs no CORS preflight.
+      it 'refuses an unlink posted as a form, and unlinks nothing' do
+        allow(Kiosk::Server::AccountBinding).to receive(:unlink!)
+
+        status, body = dispatch(:unlink, body: { agent_id: 'a-1' }, content_type: 'text/plain')
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: %r{application/json})
+        expect(Kiosk::Server::AccountBinding).not_to have_received(:unlink!)
+      end
+
+      it 'refuses a link posted as a form' do
+        status, body = dispatch(:link, content_type: 'application/x-www-form-urlencoded')
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: %r{application/json})
+      end
+    end
+
+    describe 'POST /auth/unlink request errors' do
+      include_context 'auth controller binding spec: signed-in holder'
+
+      it '400s on a missing agent_id' do
+        status, body = dispatch(:unlink, body: {})
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: /agent_id/)
+      end
+
+      it '404s for an agent not bound to this holder' do
+        allow(Kiosk::Server::AccountBinding).to receive(:unlink!)
+          .and_raise(Kiosk::Server::Errors::NotFound.new('no linked assistant account with this agent_id'))
+
+        status, body = dispatch(:unlink, body: { agent_id: 'foreign' })
+        expect_problem(status, body, http: 404, code: 'not_found',
+                                     detail: /no linked assistant account/)
+      end
     end
   end
 end

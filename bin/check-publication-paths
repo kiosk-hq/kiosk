@@ -127,6 +127,13 @@ ALLOW = [
     match: nil
   },
   {
+    id: 'AL-8',
+    scope: 'kiosk-server/spec/support/standards/, the published schemas of other standards',
+    arms: :sec,
+    why: 'each is a third-party schema kept byte for byte; a section it cites is its own standard\'s.',
+    match: ->(path, _line) { path.start_with?('kiosk-server/spec/support/standards/') }
+  },
+  {
     id: 'AL-7',
     scope: 'the declared development keypairs (DECLARED_DEV_KEYS)',
     arms: :key,

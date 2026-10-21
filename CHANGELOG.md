@@ -11,6 +11,18 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.6.0, matching skill 0.6.0, and every inter-gem constraint is `~> 0.6.0`.** `MIN_CLIENT` is 0.6.0: a 0.5 skill registers an RSA key, which is refused.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.6.0.md`**, which makes an Ed25519 key and signs every JWT EdDSA.
+
+- 2026-10-21: Kiosk signs and verifies with Ed25519 (EdDSA, RFC 8037) and removes RSA. An operator can also accept ES256 from P-256 assistant keys.
+- 2026-10-21: A checkout carries a random 128-bit `jti`, because an EdDSA signature is the same for the same claims.
+- 2026-10-21: The KYC broker demo signs its attestations EdDSA with an Ed25519 key, and the operators that trust it read an Ed25519 public key.
+- 2026-10-21: `deploy/rollout.sh` mints an Ed25519 signing key where the box holds another type, and names a broker key that is not Ed25519 as missing.
+- 2026-10-21: The e2e harness accepts ES256 too: a P-256 key registers and calls, and an RSA key is refused at registration.
+
 ## [0.5.27] — 2026-10-21
 
 - 2026-10-21: **Every gem and `API_VERSION` are 0.5.27, matching skill 0.5.27.** `MIN_CLIENT` is 0.5.27: an older skill registers and logs in at paths that are gone.

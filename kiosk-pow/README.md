@@ -36,7 +36,7 @@ A backend is a Ruby module. It verifies one proof against one challenge.
 Name the gem `kiosk-pow-<algorithm>`. Make it depend on `kiosk-pow`:
 
 ```ruby
-spec.add_dependency 'kiosk-pow', '~> 0.5.0'
+spec.add_dependency 'kiosk-pow', '~> 0.6.0'
 ```
 
 ### 2. Define the module

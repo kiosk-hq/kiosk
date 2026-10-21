@@ -43,5 +43,5 @@ Gem::Specification.new do |spec|
   # m_cost (the high-level Password API uses a power-of-two exponent instead).
   spec.add_dependency 'argon2',    '~> 2.3'
   spec.add_dependency 'ffi',       '~> 1.0'
-  spec.add_dependency 'kiosk-pow', '~> 0.5.0'
+  spec.add_dependency 'kiosk-pow', '~> 0.6.0'
 end

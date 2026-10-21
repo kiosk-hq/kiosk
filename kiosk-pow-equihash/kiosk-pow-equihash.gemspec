@@ -51,5 +51,5 @@ Gem::Specification.new do |spec|
                %w[solve.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'kiosk-pow', '~> 0.5.0'
+  spec.add_dependency 'kiosk-pow', '~> 0.6.0'
 end

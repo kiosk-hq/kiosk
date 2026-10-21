@@ -12,6 +12,14 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-21
+
+- 2026-10-21: The engine signs tokens, checkouts and receipts EdDSA with an Ed25519 `c.signing_key`; an RSA key is refused.
+- 2026-10-21: Assistant keys are Ed25519 (EdDSA). `c.assistant_algorithms = %w[EdDSA ES256]` also accepts P-256 keys; RSA keys are refused.
+- 2026-10-21: A checkout carries a random 128-bit `jti`, because an EdDSA signature is the same for the same claims.
+- 2026-10-21: `c.kyc_public_key` is an Ed25519 key, and an attestation is an EdDSA JWS.
+- 2026-10-21: Version 0.6.0, the tree cut that matches skill 0.6.0.
+
 ## [0.5.27] — 2026-10-21
 
 - 2026-10-21: Registration is RFC 7591 at `POST <endpoint>/oauth/register`; the token endpoint is core and gives tokens for a client assertion (RFC 7523) and a DPoP proof.

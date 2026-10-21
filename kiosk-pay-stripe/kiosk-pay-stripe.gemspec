@@ -48,6 +48,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'activerecord', '~> 8.1'
-  spec.add_dependency 'kiosk-core', '~> 0.5.0'
+  spec.add_dependency 'kiosk-core', '~> 0.6.0'
   spec.add_dependency 'stripe', '~> 19'
 end

@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-21
+
+- 2026-10-21: Version 0.6.0, the tree cut that matches skill 0.6.0.
+
 ## [0.5.27] — 2026-10-21
 
 - 2026-10-21: The docs name the registration toll's path as `POST /kiosk/oauth/register`.

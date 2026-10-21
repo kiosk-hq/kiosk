@@ -3,7 +3,7 @@
 module Kiosk
   module KycProviders
     module ProveVersion
-      VERSION = '0.5.27'
+      VERSION = '0.6.0'
     end
   end
 end

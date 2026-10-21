@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-21
+
+- 2026-10-21: The helpers make Ed25519 assistant keys and sign EdDSA; `Principal#key` replaces `#rsa_key`, and `Dpop.generate_key('ES256')` makes a P-256 key.
+- 2026-10-21: Version 0.6.0, the tree cut that matches skill 0.6.0.
+
 ## [0.5.27] — 2026-10-21
 
 - 2026-10-21: `Assistant` registers at `/kiosk/oauth/register` and gets tokens by client assertion and DPoP; `login`, `proof_of_possession` and the challenge are gone.

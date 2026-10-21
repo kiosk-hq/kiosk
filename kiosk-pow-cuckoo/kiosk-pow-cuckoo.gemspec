@@ -43,5 +43,5 @@ Gem::Specification.new do |spec|
                        %w[solve_cuckoo.py requirements.txt]
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'kiosk-pow', '~> 0.5.0'
+  spec.add_dependency 'kiosk-pow', '~> 0.6.0'
 end

@@ -43,5 +43,5 @@ Gem::Specification.new do |spec|
   spec.files = Dir.glob('lib/**/*') + %w[README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'kiosk-core', '~> 0.5.0'
+  spec.add_dependency 'kiosk-core', '~> 0.6.0'
 end

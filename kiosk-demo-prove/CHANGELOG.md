@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: The broker signs its attestations EdDSA with an Ed25519 `PROVE_KEY_PEM`, and production refuses any other key type.
 - 2026-10-20: The broker offers the licence categories A1, A, B, C and none.
 - 2026-10-19: The human chooses a driving-licence category (A1, A, B1, B or none). The claim carries the requested `licence_*` attributes that category lets its holder ride.
 - 2026-10-19: The README says the broker issues no attestation from an mDL.

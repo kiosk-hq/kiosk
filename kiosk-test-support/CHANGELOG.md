@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-22
+
+- 2026-10-22: Version 0.6.1, the tree cut that matches skill 0.6.1.
 - 2026-10-21: Drops the `kiosk-pow-equihash` and `puma` dependencies; the host's bundle brings them. `Wire` names the gem to add, and refuses a toll in another proof of work.
 
 ## [0.6.0] — 2026-10-21

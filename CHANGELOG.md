@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.1, matching skill 0.6.1.** `MIN_CLIENT` stays 0.6.0: the wire does not change.
+
+- 2026-10-22: **Every demo and the engine default pin `skill-v0.6.1.md`**, which names every error code of the specification and the two DPoP headers.
+
 - 2026-10-22: The OAuth metadata documents carry `scopes_supported: []`, because an AI assistant requests no scope. `/auth.md` writes each Discover URL bare, so a scanner reads it.
 
 - 2026-10-21: kiosk-test-support drops its `kiosk-pow-equihash` and `puma` dependencies; the host's bundle brings them.

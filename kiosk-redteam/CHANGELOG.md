@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-22
+
+- 2026-10-22: Version 0.6.1, the tree cut that matches skill 0.6.1.
 - 2026-10-21: The bundle that runs a battery against an Equihash origin holds `kiosk-pow-equihash`; kiosk-test-support does not bring it.
 
 ## [0.6.0] — 2026-10-21

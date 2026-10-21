@@ -13,21 +13,21 @@ On macOS the script uses CoreBluetooth via bleak.  The first run will trigger
 a system Bluetooth permission prompt — grant it.
 
 HONESTY NOTE:
-    The BLE write below is constructed correctly against the firmware's wire
+    The BLE write below is constructed correctly against the firmware's token
     contract (characteristic 4e2a1002-…, UTF-8 token bytes, write-with-response),
     but this script is UNVERIFIED until run against a real flashed ESP32-C3.
     No board is available in the development environment — exercise against
     hardware before relying on it.
 
 Usage:
-    bin/ble-unlock --scooter SK-001 --token "<wire token>"
+    bin/ble-unlock --scooter SK-001 --token "<token string>"
     bin/ble-unlock --scooter SK-001 --from-server   # requires SERVER_URL env
 
 BLE contract (from skooti_lock.ino):
     Device name:          skooti-<SCOOTER_CODE>  (e.g. skooti-SK-001)
     Service UUID:         4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d
     Unlock char UUID:     4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d
-    Write: raw wire-token (UTF-8, ~200 bytes), write-with-response
+    Write: raw token string (UTF-8, ~200 bytes), write-with-response
 """
 
 import argparse
@@ -53,7 +53,7 @@ def parse_args():
 
     source = p.add_mutually_exclusive_group(required=True)
     source.add_argument("--token", metavar="TOKEN",
-                        help="Wire rental token (explicit)")
+                        help="Rental token string (explicit)")
     source.add_argument("--from-server", action="store_true",
                         help="Run script/rental_flow.rb to obtain a fresh token (SERVER_URL must be set)")
 

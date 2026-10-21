@@ -52,7 +52,7 @@ module ConformanceVerbs
     null_origin.new(verbs: [verb], answers: { [verb.name, :alice] => alice_rows, [verb.name, :bob] => bob_rows })
   end
 
-  # An error as a refusing origin raises it: a wire code, an HTTP status, a hint.
+  # An error as a refusing origin raises it: a error code, an HTTP status, a hint.
   def wire_error(message, code:, http_status: nil, hint: nil)
     Class.new(StandardError) do
       define_method(:code) { code }
@@ -114,7 +114,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
     end
   end
 
-  describe '.routes, wiring faults' do
+  describe '.routes, setup faults' do
     include ConformanceVerbs
 
     it 'FAILS when a route reaches an action other than the one that answers the verb' do
@@ -174,7 +174,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
   describe '.executes, failures' do
     include ConformanceVerbs
 
-    it 'reports a refusal with its wire code, message and hint' do
+    it 'reports a refusal with its error code, message and hint' do
       refusal = wire_error('not yours', code: 'forbidden', hint: "this verb only answers the order's owner")
 
       origin  = null_origin.new(verbs: [my_orders_verb], answers: { 'my_orders' => refusal })
@@ -212,7 +212,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
       origin = null_origin.new(
         verbs: [catalog_verb],
         # `price_cents` as a formatted String — the commonest descriptor lie
-        # there is, and one nothing on the wire would notice.
+        # there is, and one nothing in the protocol would notice.
         answers: { 'catalog' => [{ 'sku' => 'sourdough', 'price_cents' => '4.49' }] }
       )
       outcome = described_class.declared_shape(origin, :catalog)
@@ -371,7 +371,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::Checks do
   describe 'the origin seam' do
     include ConformanceVerbs
 
-    it 'raises a wiring hint when no origin is configured' do
+    it 'raises a setup hint when no origin is configured' do
       expect { conformance.routes }
         .to raise_error(Kiosk::TestHelpers::Errors::OriginNotConfigured, /InProcessOrigin/)
     end

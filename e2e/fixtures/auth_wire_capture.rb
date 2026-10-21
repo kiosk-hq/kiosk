@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# THE SECTION 5 AND SECTION 6 WIRE BYTES, KEPT.
+# THE SECTION 5 AND SECTION 6 PROTOCOL BYTES, KEPT.
 #
 # Same discipline as `pay_flow.rb`'s PAY_CAPTURE and `register_pow_flow.rb`'s
 # POW_CAPTURE, and it exists for the same reason: `e2e/schema_conformance.rb`
@@ -12,18 +12,18 @@
 # other, the two never meeting.
 #
 # So this driver runs the two ceremonies end to end against the booted origin
-# and writes down what went over the wire, request bodies included:
+# and writes down what went over HTTP, request bodies included:
 #
 #   Section 5 (OAuth)          register (RFC 7591, Equihash-tolled) and its
 #                              refusal -> client_credentials token (RFC 7523
 #                              client assertion, RFC 9449 DPoP) and its refusal
-#                              -> a wire call -> rotate, plus the decoded client
+#                              -> an API call -> rotate, plus the decoded client
 #                              assertions, DPoP proofs and access-token claims
 #   Section 6.2/6.3 (link)     link -> claim (204) -> unlink
 #   Section 6.1 (device grant) device_authorization -> human approval on the
 #                              real verify page -> the token poll
 #   Section 6.1 (refusals)     two OAuth error answers; the OAuth errors are
-#                              the one kind of answer on this wire that is
+#                              the one kind of answer in this protocol that is
 #                              not an RFC 9457 problem document
 #
 # THE HUMAN IS REAL. The link, unlink and approval legs authenticate through
@@ -94,7 +94,7 @@ def post_json(url, body, headers = {})
 end
 
 # The OAuth requests are `application/x-www-form-urlencoded` — the spec's one
-# deliberate exception to the JSON wire — so they cannot go through `post_json`.
+# deliberate exception to the JSON protocol — so they cannot go through `post_json`.
 def post_form(url, form, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, headers)
@@ -155,17 +155,17 @@ cap['token_request_proof'] = payload_of(token_proof.fetch('DPoP'))
 cap['token_response']      = issued
 cap['access_token_claims'] = payload_of(issued.fetch('access_token'))
 
-# The same request with no client assertion is the one 401 of this wire's OAuth errors.
+# The same request with no client assertion is the one 401 of this protocol's OAuth errors.
 no_assertion_proof = Kiosk::TestHelpers::Dpop.headers(nil, reg_key, method: 'POST', url: "#{ISSUER}/kiosk/oauth/token")
 rc, unauthenticated = post_form(TOKEN_URL, { 'grant_type' => 'client_credentials' }, no_assertion_proof)
 abort "a token request with no client assertion was not refused (#{rc}): #{JSON.generate(unauthenticated)}" unless rc == 401
 cap['oauth_error_invalid_client'] = unauthenticated
 
-# ── Section 5.6 — a DPoP proof that carries the token, on a wire call ─────────
+# ── Section 5.6 — a DPoP proof that carries the token, on an API call ─────────
 salons_url = "#{SERVER}/kiosk/salons"
 salons_dpop = Kiosk::TestHelpers::Dpop.headers(issued.fetch('access_token'), reg_key, method: 'GET', url: salons_url)
 rc, = get_json(salons_url, salons_dpop)
-abort "the wire call with the token failed (#{rc})" unless rc == 200
+abort "the API call with the token failed (#{rc})" unless rc == 200
 cap['dpop_proof'] = payload_of(salons_dpop.fetch('DPoP'))
 
 # ── Section 6.2 — the human's link code, redeemed by the client ─────────────

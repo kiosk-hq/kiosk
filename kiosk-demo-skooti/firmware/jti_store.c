@@ -13,7 +13,7 @@
  * change that.
  *
  * =========================================================================
- * NVS WIRING (the adopter's step — NOT compiled, NOT shipped)
+ * NVS SETUP (the adopter's step — NOT compiled, NOT shipped)
  * =========================================================================
  * On the ESP32, replace the in-memory s_table array with NVS persistence:
  *
@@ -43,7 +43,7 @@
  * above already passes sizeof(s_table), so the blob is whatever this
  * target's compiler actually laid out.
  *
- * ONCE THE CALLS ABOVE ARE WIRED, the table survives reboots/power-cycles:
+ * ONCE THE CALLS ABOVE ARE ENABLED, the table survives reboots/power-cycles:
  * a consumed jti is remembered until its exp passes, even if the board
  * restarts between the first and second unlock attempt.  Until then it does
  * not, and host_test.c test [15] is the run that says so.
@@ -68,12 +68,12 @@ typedef struct {
  * so a power cycle of the lock, starts from an empty table.
  *
  * NVS: on ESP32, this would be loaded from nvs_get_blob at startup and
- * saved via nvs_set_blob after each mutation.  See the NVS WIRING comment
+ * saved via nvs_set_blob after each mutation.  See the NVS SETUP comment
  * block at the top of this file.
  */
 static JTI_STORE_ENTRY s_table[JTI_STORE_SIZE];
 
-/* The sizing sentence in the NVS WIRING block is held by the compiler rather
+/* The sizing sentence in the NVS SETUP block is held by the compiler rather
  * than by a reader's arithmetic: this declaration is ill-formed (negative
  * array size) on any target where the table outgrows the default 16 KB NVS
  * namespace.  C99, so it needs no _Static_assert. */
@@ -158,7 +158,7 @@ int jti_seen_or_insert(const char *jti, uint64_t exp, uint64_t now)
         s_table[slot].exp = exp;
 
         /* NVS: nvs_set_blob / nvs_commit would go here on the ESP32 board.
-         * See the NVS WIRING comment block at the top of this file. */
+         * See the NVS SETUP comment block at the top of this file. */
     }
 
     return 0; /* NEW — accepted */

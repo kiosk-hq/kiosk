@@ -1,7 +1,7 @@
 # tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 
 A multi-user collaborative todo app, Kiosk-enabled. Like philslist it proves
-Kiosk is **not only for commerce** — no money on the wire at all — but where
+Kiosk is **not only for commerce** — no money in the protocol at all — but where
 philslist shows owner-scoped isolation on a public board, tudu shows the shape
 critics claim GUC-style patterns can't handle: **membership-based many-to-many
 access**, **AI-assistant→AI-assistant collaboration expressed entirely at the app layer**, and
@@ -17,7 +17,7 @@ Demonstrates:
 - **AI-assistant→AI-assistant invites, pure app-layer** — an owner mints a single-use, TTL'd,
   hashed collaboration code (`invite`); the recipient's assistant redeems it
   (`accept_invite`) to join as a member; `remove_member` cuts access instantly.
-  The spec stays silent on invites *by design* — this proves the per-verb wire
+  The spec stays silent on invites *by design* — this proves the per-verb endpoints
   is expressive enough for collaboration with **zero protocol change**.
 - **W5 rebind + domain migration** — an assistant works as a HEADLESS account
   (creates the "Hike" list), the human links it, and the shipped
@@ -75,14 +75,14 @@ two» is said by one person and read by another: share the list and the second
 reader is in another city, so there is no single wall-clock string correct for
 both. So `todos.due_at` is a `timestamptz` holding one absolute MOMENT, an
 assistant resolves «tomorrow at two» on the clock of the human who said it
-before it reaches the wire, and every read renders it in the zone the CALLER
+before it reaches the protocol, and every read renders it in the zone the CALLER
 declares in the `Kiosk-Timezone` header — with `timezone` on the row saying
 which. The test asserts exactly that: Alice reads it in `Europe/Istanbul`, Bob
 reads the same todo in `America/New_York`, the two labels differ, and the
 instant does not. A caller that declares nothing gets this household's own
 clock, stated in the row rather than assumed. And a `due_at` carrying no offset
 is refused `400`: it is the one value that would mean two different moments to
-two readers with nothing on the wire to say so, and completing it here would
+two readers with nothing in the protocol to say so, and completing it here would
 pick one of them silently.
 
 **And Alice's assistant is told, over `<endpoint>/events`, without asking.** It
@@ -108,7 +108,7 @@ assistant already bound to Alice moves nothing and destroys nothing.
 Mallory (a non-member) is walled out: her `my_lists` is empty; `list_todos` /
 `list_members` on a private list → 403; a forged `account_id` on her
 `create_list` is **refused** — `create_list` declares `additionalProperties:
-false` and the owner is not one of its inputs, so the wire answers `400
+false` and the owner is not one of its inputs, so the protocol answers `400
 bad_request` naming the parameter, and her legitimate list still belongs to her
 in the DB; used/garbage invite codes → 403. A genuine member is the positive
 control (she DOES see and read the list), and after `remove_member` her next
@@ -181,7 +181,7 @@ redeem), driven by `test/stories/link_test.rb`.
 > `/.well-known/kiosk.json` and make me a list for next month's move and add the first five things
 > I have to do.
 
-It discovers the wire, registers itself and drives the flow. If it asks you to
+It discovers the protocol, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `alice@example.com` / `tudu-demo-password` and approve it there.
 
@@ -192,12 +192,12 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `db/migrate/` | The canonical kiosk migrations: the full `kiosk:install` set — every demo ships that output unmodified, so mandates, settlements and refunds are installed here and never written — plus `users`, Action Cable's table and `create_tudu_domain` (lists/memberships/todos/invites) |
 | `app/models/{user,list,membership,todo,invite}.rb` | `User` is a member's account (Devise, reused for headless assistant accounts); `memberships` is the many-to-many access surface |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) + the `assistant_claimed` hook — configuration only; the handler controllers live in `app/controllers/kiosk/` |
-| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list` — an ordinary Rails controller with `include Kiosk::Handler`, each verb marked `kind :query` or `kind :action`. Handlers are reached only through the wire |
+| `app/controllers/kiosk/lists_controller.rb` | `my_lists` and `create_list` — an ordinary Rails controller with `include Kiosk::Handler`, each verb marked `kind :query` or `kind :action`. Handlers are reached only through the protocol |
 | `app/controllers/kiosk/todos_controller.rb` | `list_todos`, `add_todo`, `complete_todo` and the `todo` topic |
-| `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `remove_member` and the `list_membership` topic. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the wire renders as a problem document |
+| `app/controllers/kiosk/memberships_controller.rb` | `whoami`, `list_members`, `remove_member` and the `list_membership` topic. An Operation refuses by raising a `Kiosk::Server::Errors` class, which the protocol renders as a problem document |
 | `app/controllers/kiosk/invites_controller.rb` | `invite` and `accept_invite`: the single-use code that adds a member to a list |
 | `app/models/membership.rb`, `app/operations/list_access.rb` | Who may reach a list: `Membership.own` is the signed-in member's memberships, `ListAccess` the 403 a stranger gets |
-| `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, calling the same Operations as the wire; a refusal becomes a flash |
+| `app/controllers/lists_controller.rb`, `todos_controller.rb` | The human web UI, calling the same Operations as the HTTP API; a refusal becomes a flash |
 | `test/` | `bin/rails test`; `test/stories/` tells each household story against a live origin over HTTP |
 
 ## Make it real

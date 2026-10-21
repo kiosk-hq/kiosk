@@ -6,7 +6,7 @@ require 'devise'
 require 'rack/mock'
 require 'kiosk/user_identity_providers/devise'
 
-# A Rails app with Devise, wired the way an operator wires the two signposts.
+# A Rails app with Devise, set up the way an operator sets up the two signposts.
 class SignpostApp < Rails::Application
   config.load_defaults 8.1
   config.eager_load = false

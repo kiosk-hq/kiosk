@@ -289,7 +289,7 @@ RSpec.describe 'DeviceVerifyController' do
   # assistant POSTing JSON to this human consent page has no CSRF token, and in
   # production the resulting InvalidAuthenticityToken yields the host's generic
   # error material (a static public/422.html, a status echo, or a bodyless 422),
-  # never a pointer to the wire. The harness has no Rails app, so the subclass
+  # never a pointer to the protocol. The harness has no Rails app, so the subclass
   # opts into `protect_from_forgery` to reproduce that condition.
   describe 'forgery protection on a JSON POST' do
     include_context 'with a holder signed in to the device verify page'
@@ -301,7 +301,7 @@ RSpec.describe 'DeviceVerifyController' do
       )
     end
 
-    it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the wire' do
+    it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the HTTP API' do
       status, body, headers = dispatch_guarded(
         'CONTENT_TYPE' => 'application/json', 'rack.input' => StringIO.new('{}')
       )

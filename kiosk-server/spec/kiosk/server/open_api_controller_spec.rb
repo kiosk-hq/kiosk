@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# `GET <endpoint>/openapi.json` at the wire level (T-068 slice 4, K-804).
+# `GET <endpoint>/openapi.json` at the protocol level (T-068 slice 4, K-804).
 #
 # The document itself is proved next door in `open_api_spec.rb`. What is
 # proved here is that the ENDPOINT behaves like the OTHER public description
@@ -55,7 +55,7 @@ RSpec.describe Kiosk::Server::OpenApiController do
   # ─── public (K-804) ──────────────────────────────────────────────────────
   #
   # Until 2026-08-19 the first four examples in this file asserted the
-  # opposite: 401 to an anonymous caller, a `:schema` toll, and the wire's
+  # opposite: 401 to an anonymous caller, a `:schema` toll, and the protocol's
   # `private, no-store` + `Vary: Authorization, Kiosk-PoW`. The reason given
   # for the gate — that an anonymous read hands out the catalog enumeration —
   # had been retired for `GET <endpoint>/schema` (T-094) and for

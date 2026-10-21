@@ -2,7 +2,7 @@
 
 # Shared helpers for scenario specs.
 #
-# ── The 0.4 per-verb wire ────────────────────────────────────────────────────
+# ── The 0.4 per-verb endpoints ────────────────────────────────────────────────────
 #
 #   GET  <mount>/<query-name>?<args>   a query  — arguments in the QUERY STRING
 #   POST <mount>/<action-name>         an action — the arguments ARE the body
@@ -70,7 +70,7 @@ def stub_kyc(status: 200, code: nil)
 end
 
 # The default object an action answers with. An action's payload reaches the
-# wire VERBATIM, so this is the whole body — there is no wrapper around it.
+# protocol VERBATIM, so this is the whole body — there is no wrapper around it.
 ACTION_OK = { 'id' => 'res-1' }.freeze
 
 # POST <mount>/<action-name>. `args` are the body, so a stub that wants to

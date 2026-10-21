@@ -175,7 +175,7 @@ RSpec.describe Kiosk::Server::Events do
         .to eq('A todo on a list you can reach changed.')
     end
 
-    it 'refuses a name that is not a legal wire name' do
+    it 'refuses a name that is not a legal published name' do
       expect do
         declare_in_controller do
           topic 'Todo' do
@@ -311,7 +311,7 @@ RSpec.describe Kiosk::Server::Events do
     end
 
     # `subject_reachable` is the operator's authorisation rule, not a fact about
-    # the wire. Publishing the predicate would tell a caller how to look for a gap
+    # the protocol. Publishing the predicate would tell a caller how to look for a gap
     # in it, and a subscriber cannot act on it either way.
     it 'keeps subject_reachable OUT of the published catalogue' do
       declare_in_controller do
@@ -390,7 +390,7 @@ RSpec.describe Kiosk::Server::Events do
       expect(store.since('u1', 0).first['subject']).to be_nil
     end
 
-    it 'refuses a topic nobody declared, rather than inventing one on the wire' do
+    it 'refuses a topic nobody declared, rather than inventing one in the response' do
       expect do
         described_class.emit(topic: :nope, subject: nil, identity_scope: %w[u1], data: {})
       end.to raise_error(ArgumentError, /not a declared topic/)

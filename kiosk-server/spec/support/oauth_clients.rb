@@ -7,7 +7,7 @@ require 'rack/mock'
 require 'securerandom'
 
 # Registered clients in a real Postgres, made with the shipped DDL, and the
-# client side of the OAuth wire: registration bodies, client assertions
+# client side of the OAuth protocol: registration bodies, client assertions
 # (RFC 7523) and token-request DPoP proofs (RFC 9449).
 module OauthClients
   SCHEMA = 'kiosk_oauth_spec'

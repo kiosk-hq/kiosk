@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Wire-level controller specs.
+# Protocol-level controller specs.
 #
 # Dispatch goes through `ActionController::Metal.action(...)` or a verb's route
 # endpoint, plain Rack apps — no Rails host.
@@ -29,7 +29,7 @@ module ControllerAuthSpecHelpers
     Rack::MockRequest.env_for(path, **proof, **opts)
   end
 
-  # EVERY refusal on the wire and the auth plane is an RFC 9457 problem
+  # EVERY refusal in the protocol and the auth plane is an RFC 9457 problem
   # document since the 0.4 cutover: `application/problem+json` (the media type
   # is half of what makes it one), a per-code `type` URI and `title`, the
   # status restated in the body, and the SAME closed-vocabulary token — moved
@@ -79,7 +79,7 @@ module ControllerAuthSpecWireHelpers
   # a 400 problem document, not escape the action's rescue as an uncaught 500.
   #
   # `POST /kiosk/query`, the 0.3 endpoint this pair dialed, was DELETED at
-  # the cutover (T-074 = A). Its successor is the per-verb wire — `POST
+  # the cutover (T-074 = A). Its successor is the per-verb endpoints — `POST
   # <endpoint>/<action-name>`, the verb as a PATH SEGMENT — and the verb has
   # to be REGISTERED for a request to reach the body at all, because name
   # resolution runs before the arguments are read.
@@ -160,7 +160,7 @@ module ControllerAuthSpecDefaultsHelpers
       conn.define_singleton_method(:transaction) { |&blk| blk.call }
       conn.define_singleton_method(:quote_table_name) { |n| n }
     end
-    # ONE reader now: `lease_connection` for the whole dispatch — the wire
+    # ONE reader now: `lease_connection` for the whole dispatch — the protocol
     # controller (K-654) and the bundled DefaultAgentIdp (K-782) agree, and
     # `connection` is deliberately absent so a survivor would fail loudly.
     # `execute` is kept only so a stray caller does not NoMethodError: since
@@ -175,7 +175,7 @@ module ControllerAuthSpecDefaultsHelpers
   # THE PROBE, and why it is a per-verb call. `GET /kiosk/schema` served
   # this block until T-094 made it public: an endpoint that resolves no
   # identity cannot show that one WAS resolved, and a 200 from it would pass
-  # whether the idp worked or not. A registered query on the per-verb wire
+  # whether the idp worked or not. A registered query on the per-verb endpoints
   # reaches exactly the same {IdentityResolution}.
   def probe_env(**) = Rack::MockRequest.env_for('/kiosk/probe', **)
 end
@@ -191,7 +191,7 @@ module ControllerAuthSpecDeviceHelpers
   end
 end
 
-# ─── bad tokens on a wire endpoint are 401, never 500 ────────────
+# ─── bad tokens on a protocol endpoint are 401, never 500 ────────────
 RSpec.shared_context 'with a bare DefaultAgentIdp' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecWireHelpers
@@ -234,7 +234,7 @@ RSpec.shared_context 'with a KYC attestation and a custom agent idp' do
   end
 end
 
-# ─── zero-config default idp; no session identity on the wire ──
+# ─── zero-config default idp; no session identity in the protocol ──
 RSpec.shared_context 'with a zero-config install' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecDefaultsHelpers
@@ -259,7 +259,7 @@ end
 # not which ones an unauthenticated caller may have. The role now comes from
 # the approving human (`DeviceVerification.approve`), so the parameter has no
 # legitimate sender and is refused whatever it says.
-RSpec.shared_context 'with device authorization on the wire' do
+RSpec.shared_context 'with device authorization over HTTP' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecDeviceHelpers
 
@@ -269,7 +269,7 @@ RSpec.shared_context 'with device authorization on the wire' do
     Kiosk.configure do |c|
       c.roles = %i[customer]
       # The binding ceremony requires a public_key; pin the
-      # in-memory store so these wire tests stay DB-free.
+      # in-memory store so these HTTP tests stay DB-free.
       c.device_authorization_store =
         Kiosk::Server::DeviceAuthorizationStores::InMemory.new
     end
@@ -392,7 +392,7 @@ RSpec.describe Kiosk::Server::WireController do
     # ActionDispatch::Http::Parameters::ParseError out of the parameter layer
     # (which a Rails host maps to 400 via rescue_responses) and never reaches
     # Kiosk's own guard. `pay` runs that guard, so this proves it where it runs.
-    it 'returns 400 bad_request (not 500) for INVALID JSON on a wire POST' do
+    it 'returns 400 bad_request (not 500) for INVALID JSON on a verb POST' do
       status, body = post_pay('{not valid json')
       expect_problem(status, body, http: 400, code: 'bad_request', detail: 'invalid JSON')
     end
@@ -405,7 +405,7 @@ RSpec.describe Kiosk::Server::WireController do
       expect_problem(status, body, http: 401, code: 'unauthenticated')
     end
 
-    it 'returns 400 bad_request (not 500) for a non-object JSON body on a wire POST' do
+    it 'returns 400 bad_request (not 500) for a non-object JSON body on a verb POST' do
       declare_action('place_order') { render json: {} }
       status, body = post_verb('place_order', '[1, 2, 3]')
       expect_problem(status, body, http: 400, code: 'bad_request',
@@ -439,7 +439,7 @@ RSpec.describe Kiosk::Server::WireController do
       expect(last_headers['WWW-Authenticate']).to eq('DPoP algs="EdDSA"')
     end
 
-    it 'answers 401 to a signed-in session with no access token: the wire takes no cookie' do
+    it 'answers 401 to a signed-in session with no access token: the protocol takes no cookie' do
       declare_query('probe')
       fixed = build_identity(actor: 'human', agent_id: nil, user_id: 'u-web')
       Kiosk.configure { |c| c.user_idp = Class.new { define_method(:verify) { |_r| fixed } }.new }
@@ -481,7 +481,7 @@ RSpec.describe Kiosk::Server::WireController do
 
         status, body = attest(kyc_env(attributes: granted))
         expect(status).to eq(200)
-        # NB: the wire body is String-keyed JSON ({"age_over_18": true}); the
+        # NB: the protocol body is String-keyed JSON ({"age_over_18": true}); the
         # dispatch harness re-parses it with symbolize_names, hence Symbol keys here.
         expect(body).to eq(kyc_verified: true, attributes: granted.transform_keys(&:to_sym))
         # The granted NAMES become rows, and the spelling of `true` is judged in
@@ -541,7 +541,7 @@ RSpec.describe Kiosk::Server::WireController do
 
   describe Kiosk::Server::OauthDeviceAuthorizationController do
     describe 'rejects a client-chosen role' do
-      include_context 'with device authorization on the wire'
+      include_context 'with device authorization over HTTP'
 
       it 'rejects a role not among the configured roles with 400 invalid_request' do
         status, body = request_device_authorization('client_id' => 'kiosk-cli', 'role' => 'superadmin')

@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = 'Minitest integration for the Kiosk journey-test DSL'
   spec.description   = <<~DESC
-    kiosk-rls-minitest wires the framework-agnostic Kiosk journey-test DSL
+    kiosk-rls-minitest connects the framework-agnostic Kiosk journey-test DSL
     (kiosk-test-support) into Minitest.
 
     `include Kiosk::TestHelpers` inside any `Minitest::Test` subclass mixes

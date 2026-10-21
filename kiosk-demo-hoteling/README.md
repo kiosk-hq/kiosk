@@ -3,13 +3,13 @@
 Hotel booking demo operator for Kiosk.
 
 `hoteling` is a fake-but-realistic hotel operator that takes room bookings
-over the Kiosk wire — the "book me a room for those dates" story, completed
+over the Kiosk HTTP API — the "book me a room for those dates" story, completed
 by an AI assistant with no human present, and gated on payment (a booking is
 only confirmed once it is paid for). Payment is kiosk-pay-stripe in Stripe test
 mode — the tests and CI charge a local stripe-mock — and a booking the property
 declines is refunded to the card that paid.
 
-## Wire surface
+## HTTP API
 
 One endpoint per verb: a query is `GET /kiosk/<query-name>` with
 its arguments in the query string, an action is `POST /kiosk/<action-name>` with
@@ -87,7 +87,7 @@ bundle exec rspec      # the tests; CI runs exactly this
 `bin/setup` does the first two. The stories in `spec/stories/` drive the origin over
 HTTP the way an assistant does. `spec/conformance/` is written with the matchers
 `kiosk-test-support` ships, and is the file to copy when you are adding a Kiosk
-wire to an app of your own; `kiosk-demo-getgrocery` is the same surface in
+protocol to an app of your own; `kiosk-demo-getgrocery` is the same surface in
 Minitest.
 
 ### Watch it work
@@ -116,7 +116,7 @@ there too.
 > There is a Kiosk origin at http://localhost:3000 — read its
 > `/.well-known/kiosk.json` and book me a room for two nights next month and pay for it.
 
-It discovers the wire, registers itself and drives the flow. If it asks you to
+It discovers the protocol, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `ada@example.com` / `hoteling-demo-password` and approve it there.
 

@@ -71,7 +71,7 @@ rc, = WIRE.post_json('/kiosk/close_listing',
                      WIRE.dpop(BOB.token, BOB.key))
 BATTERY.record('CrossOwnerClose', rc == 403, "Bob close Alice's listing → #{rc} (want 403)")
 
-# A junk listing_id is a typed 400 naming the argument, with no SQL internals on the wire.
+# A junk listing_id is a typed 400 naming the argument, with no SQL internals in the protocol.
 MALFORMED_IDS = ['not-a-uuid', '1; DROP TABLE listings', '', '  '].freeze
 SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
 

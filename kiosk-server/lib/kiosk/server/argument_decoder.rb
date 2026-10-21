@@ -56,7 +56,7 @@ module Kiosk
         end
       end
 
-      # What a caller has to send for each string `format` the wire reads.
+      # What a caller has to send for each string `format` the protocol reads.
       FORMAT_SPELLINGS = {
         'date' => 'a calendar date as YYYY-MM-DD, e.g. 2026-08-19',
         'date-time' => 'an ISO 8601 timestamp, e.g. 2026-08-19T14:00:00Z'
@@ -76,7 +76,7 @@ module Kiosk
         "an object argument's leaves are SCALARS: `o%5Bk%5D=v`, not " \
         '`o%5Bk%5D%5B%5D=v`. Anything richer is an ACTION (POST).'
 
-      # The query string's shape: what Rack can decode and the wire accepts.
+      # The query string's shape: what Rack can decode and the protocol accepts.
       module QueryShape
         module_function
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The claim ceremony on the RFC 8628 wire, below the controllers: the row a
+# The claim ceremony on the RFC 8628 protocol, below the controllers: the row a
 # client opens, and each outcome of a poll by that client.
 RSpec.describe Kiosk::Server::DeviceCodeGrant do
   include_context 'with registered clients'

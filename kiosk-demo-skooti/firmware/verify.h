@@ -9,10 +9,10 @@
  * Requires only ed25519/ (vendored orlp/ed25519) + C standard library.
  *
  * =========================================================================
- * TOKEN WIRE FORMAT (offline Ed25519, domain-separated)
+ * TOKEN FORMAT (offline Ed25519, domain-separated)
  * =========================================================================
  *
- *   wire token = "<message>.<base64url(sig)>"
+ *   token string = "<message>.<base64url(sig)>"
  *
  *   message    = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  *                (EXACTLY 6 pipe-delimited fields — a message with any other
@@ -40,7 +40,7 @@
  *   sig        = Ed25519 signature over the message bytes (64 bytes)
  *                base64url-encoded, NO padding characters
  *
- *   Split: find the LAST '.' in the wire token — everything to the left is
+ *   Split: find the LAST '.' in the token string — everything to the left is
  *   the message (signed verbatim), everything to the right is the sig.
  *
  *   THE CANONICAL STATEMENT OF THIS GRAMMAR IS ../RENTAL_TOKEN.md, and two
@@ -79,7 +79,7 @@
  * which as shipped is an in-memory table on the host and on the board alike:
  * it refuses a replay within one boot and forgets everything on a power
  * cycle.  Making it durable is the adopter's step, spelled out in the NVS
- * WIRING block at the top of jti_store.c.
+ * SETUP block at the top of jti_store.c.
  */
 
 #ifndef VERIFY_H
@@ -92,7 +92,7 @@
 extern "C" {
 #endif
 
-/* Maximum wire-token length accepted (covers ~220-byte real tokens). */
+/* Maximum token-string length accepted (covers ~220-byte real tokens). */
 #define SKOOTI_TOKEN_MAX 512
 
 /*
@@ -161,7 +161,7 @@ int skooti_pubkey_is_low_order(const uint8_t pubkey[32]);
  * Parameters:
  *   pubkey         : 32 raw bytes — the skooti Ed25519 public key baked into
  *                    this lock at provisioning (one key for all locks).
- *   token          : NUL-terminated wire token: "<message>.<base64url(sig)>"
+ *   token          : NUL-terminated token string: "<message>.<base64url(sig)>"
  *                    Length must be <= SKOOTI_TOKEN_MAX; any longer → 0.
  *   my_scooter_code: NUL-terminated string — this lock's own code (e.g. "SK-001").
  *   now_unix       : current Unix timestamp in seconds (injected — see CLOCK
@@ -232,7 +232,7 @@ int skooti_verify_token(const uint8_t pubkey[32],
  * at the first NUL, whatever the caller was handed. A BLE write carrying a NUL
  * would be verified as the PREFIX before it, and the bytes after it — which
  * the writer chose and the signature does not cover — would never be looked
- * at. The wire token holds no NUL (../RENTAL_TOKEN.md states this once, for
+ * at. The token string holds no NUL (../RENTAL_TOKEN.md states this once, for
  * all three readers of the token), so a buffer that contains one is refused
  * here rather than truncated and verified.
  *
@@ -258,7 +258,7 @@ int skooti_verify_wire(const uint8_t pubkey[32],
                        uint64_t      now_unix);
 
 /*
- * skooti_parse_jti — extract the jti field from a verified wire token.
+ * skooti_parse_jti — extract the jti field from a verified token string.
  *
  * Call only AFTER skooti_verify_token() returns 1.
  * Copies the jti into jti_out (caller-supplied buffer of at least jti_out_sz

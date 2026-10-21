@@ -2,7 +2,7 @@
 
 # What a Kiosk origin keeps OUT of its request log. Rails writes the
 # `Parameters:` line at `info`, which is what a deployed demo runs at, so the
-# credential-bearing fields of the wire have to be in the host's
+# credential-bearing fields of the protocol have to be in the host's
 # `filter_parameters` — and the engine puts them there, because it is the
 # thing that knows their names.
 #
@@ -33,7 +33,7 @@ module FilteredParametersProbe
 end
 
 RSpec.describe Kiosk::Server::Engine do
-  describe 'the credential-bearing wire fields in the request log' do
+  describe 'the credential-bearing protocol fields in the request log' do
     let(:log) { FilteredParametersProbe.log }
 
     # Each field, and what the specification says it is.

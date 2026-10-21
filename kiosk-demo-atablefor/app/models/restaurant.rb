@@ -9,7 +9,7 @@ class Restaurant < ApplicationRecord
 
   def self.served_neighborhoods = distinct.order(:neighborhood).pluck(:neighborhood).compact
 
-  # "20:00", as the wire spells a seating time.
+  # "20:00", as the protocol spells a seating time.
   def self.seating_times = SEATING_HOURS.map { format('%02d:00', it) }
 
   # "Sun 18 Oct, 20:00 (Europe/Lisbon)": the day, the wall clock and the zone it is read on.

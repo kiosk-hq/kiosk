@@ -19,8 +19,8 @@ require 'test_helper'
 # to compare them.
 #
 # These examples drive the REGISTERED handler through the same GUC-scoped
-# session the wire opens, with the verb's own `input_schema` validated first —
-# so a case that could not be sent over the wire cannot pass here either.
+# session the protocol opens, with the verb's own `input_schema` validated first —
+# so a case that could not be sent over HTTP cannot pass here either.
 class CreateOrderInputsTest < ActiveSupport::TestCase
   ADDRESS = '42 Camden Street, Dublin 2'
 

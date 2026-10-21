@@ -5,17 +5,17 @@ require 'json'
 module Kiosk
   module Server
     # How a controller that includes {Kiosk::Handler} answers a verb call.
-    # {Routing::VerbRoute} sends the wire request to the action that declares
+    # {Routing::VerbRoute} sends the protocol request to the action that declares
     # the verb. Around that action this module runs the gates of {VerbWire},
     # the session and the transaction, and writes the action's render as the
-    # wire answer.
+    # protocol answer.
     module HandlerServing
       include VerbWire
 
-      # The Rack env key where {Routing::VerbRoute} puts the wire name it routed.
+      # The Rack env key where {Routing::VerbRoute} puts the published name it routed.
       VERB_KEY = 'kiosk.verb'
 
-      # The one header of an action's render that reaches the wire: `Cache-Control`, on a 2xx (§3.7.4).
+      # The one header of an action's render that reaches the response: `Cache-Control`, on a 2xx (§3.7.4).
       PROPAGATED_HEADERS = %w[Cache-Control].freeze
 
       private
@@ -34,7 +34,7 @@ module Kiosk
         kiosk_render_refusal(Errors.malformed_json(hint: BODY_HINT))
       end
 
-      # The verb's {Result}: the wire's gates, then the action inside the session.
+      # The verb's {Result}: the protocol's gates, then the action inside the session.
       def kiosk_call(declaration, &)
         kind     = declaration[:kind]
         name     = @_kiosk_wire_name = declaration[:wire_name]
@@ -55,7 +55,7 @@ module Kiosk
         Answer.new(kind, @_kiosk_wire_name).value(status, kiosk_read_body(body), @_kiosk_page)
       end
 
-      # The action's `params` are the decoded arguments; the wire answers JSON whatever the caller's
+      # The action's `params` are the decoded arguments; the protocol answers JSON whatever the caller's
       # `Accept`, so an action's template is its `.json` one.
       def kiosk_wire_parameters!(args)
         request.set_header('action_dispatch.request.request_parameters', args.dup)
@@ -89,7 +89,7 @@ module Kiosk
         render_wire_error(error)
       end
 
-      # The action's render was read; the wire answer is written into a fresh response.
+      # The action's render was read; the protocol answer is written into a fresh response.
       def kiosk_fresh_response!
         set_response!(self.class.make_response!(request))
         @_response_body = nil
@@ -98,7 +98,7 @@ module Kiosk
       # A route drawn straight at a handler action, not through `kiosk do`, answers 404 `verb_not_found`.
       def kiosk_refuse_unrouted
         problem = Errors::VerbNotFound.new(
-          'Kiosk handlers are reachable through the Kiosk wire only',
+          'Kiosk handlers are reachable through the Kiosk HTTP API only',
           hint: "call the verb's own route — " \
                 "GET #{Kiosk.configuration.mount_path}/<query-name> or " \
                 "POST #{Kiosk.configuration.mount_path}/<action-name>"
@@ -107,7 +107,7 @@ module Kiosk
         render json: problem, status: :not_found, content_type: Errors::PROBLEM_CONTENT_TYPE
       end
 
-      # An action's render as the verb's answer: its payload, or the wire error it means.
+      # An action's render as the verb's answer: its payload, or the Kiosk error it means.
       class Answer
         def initialize(kind, wire_name)
           @kind      = kind
@@ -125,7 +125,7 @@ module Kiosk
 
         private
 
-        # 2xx → the rendered JSON; otherwise the wire error it means.
+        # 2xx → the rendered JSON; otherwise the Kiosk error it means.
         def decode(status, raw)
           return parse_json(raw) if status >= 200 && status < 300
 
@@ -172,7 +172,7 @@ module Kiosk
           raise Errors::ActionFailed.new(
             "#{@kind} #{@wire_name.inspect} rendered a non-JSON body",
             hint: 'a Kiosk handler answers with `render json:` — HTML, redirects and ' \
-                  '`send_file` have no place on the wire'
+                  '`send_file` have no place in a Kiosk response'
           )
         end
 

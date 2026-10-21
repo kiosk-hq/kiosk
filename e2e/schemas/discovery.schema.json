@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/discovery.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/discovery.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/discovery.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk discovery document",
   "description": "The JSON served at GET /.well-known/kiosk.json (Kiosk protocol 0.6).",
   "type": "object",
@@ -30,7 +30,7 @@
         },
         "endpoint": {
           "type": "string",
-          "description": "The wire-verb root (base URL + mount path), e.g. https://example.com/kiosk."
+          "description": "The verb root (base URL + mount path), e.g. https://example.com/kiosk."
         },
         "capabilities": {
           "type": "array",

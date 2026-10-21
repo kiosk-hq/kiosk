@@ -133,7 +133,7 @@ RSpec.describe Kiosk::Server::BindingModuleGate do
         expect(Kiosk.configuration.serve_account_binding).to be(true)
       end
 
-      # The OAuth wire is unchanged when the module IS served: a refused call
+      # The OAuth protocol is unchanged when the module IS served: a refused call
       # gets the OAuth error object, not a problem document. `module_not_served`
       # is the single carve-out, and this is the control that says so.
       it 'answers the OAuth error object rather than refusing the module' do

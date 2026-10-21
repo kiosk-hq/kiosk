@@ -20,7 +20,7 @@ Rails.application.routes.draw do
   # on its own /reservations URL.
   get '/reservations', to: 'home#reservations'
 
-  # ── The Kiosk wire surface ────────────────────────────────────────────────
+  # ── The Kiosk HTTP API surface ────────────────────────────────────────────────
   kiosk do
     queries :availability, :my_bookings
     actions :book_table, :cancel_booking

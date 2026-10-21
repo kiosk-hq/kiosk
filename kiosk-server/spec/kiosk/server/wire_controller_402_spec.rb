@@ -63,7 +63,7 @@ module WireController402Spec
   end
 end
 
-RSpec.shared_context 'with an origin for the wire controller' do
+RSpec.shared_context 'with an origin for WireController' do
   include WireController402Spec
 
   before do
@@ -76,7 +76,7 @@ RSpec.shared_context 'with an origin for the wire controller' do
   end
 end
 
-RSpec.shared_context 'with a proof-of-work gate on the wire controller' do
+RSpec.shared_context 'with a proof-of-work gate on WireController' do
   before do
     Kiosk::Reputation::Backends.register('argon2id', Kiosk::Pow::Argon2id)
     Kiosk.configure do |c|
@@ -90,11 +90,11 @@ end
 
 RSpec.describe Kiosk::Server::WireController do
   describe '402 WWW-Authenticate (W4)' do
-    include_context 'with an origin for the wire controller'
+    include_context 'with an origin for WireController'
 
     # ─── PoW gate → WWW-Authenticate: Kiosk-PoW ────────────────────────────
     describe 'the pow_required 402' do
-      include_context 'with a proof-of-work gate on the wire controller'
+      include_context 'with a proof-of-work gate on WireController'
 
       # The reserved plane pays the same toll and answers the same way as the
       # per-verb wire: one answer shape on every Kiosk endpoint, here

@@ -193,7 +193,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       expect(result).to eq('pong' => 'hi')
     end
 
-    it 'raises the wire refusal for an unregistered action' do
+    it 'raises the Kiosk refusal for an unregistered action' do
       expect do
         executor.with_identity(identity) { executor.run_action(:missing, {}) }
       end.to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('verb_not_found') }
@@ -231,7 +231,7 @@ RSpec.describe Kiosk::TestHelpers::InProcessExecutor do
       expect(result).to eq([{ 'id' => 1 }])
     end
 
-    it 'raises the wire refusal for an unregistered query' do
+    it 'raises the Kiosk refusal for an unregistered query' do
       expect do
         executor.with_identity(identity) { executor.run_query(:missing, {}) }
       end.to raise_error(Kiosk::Server::Errors::Base) { |e| expect(e.code).to eq('verb_not_found') }

@@ -3,7 +3,7 @@
 module Kiosk
   module Server
     # The executor's internal carrier for a successful call; only {#to_payload}
-    # reaches the wire, as the body.
+    # reaches the protocol, as the body.
     class Result < Data.define(:kind, :payload, :next_cursor, :total)
       KINDS = %i[rows value].freeze
 

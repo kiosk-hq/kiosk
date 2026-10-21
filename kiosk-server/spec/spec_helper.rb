@@ -115,13 +115,13 @@ require_relative 'support/oauth_clients'
 # What that costs, and why it is the right price: a handler RENDERS, so its
 # result makes a JSON round trip before the {Kiosk::Server::Executor} sees it,
 # and symbol keys come back as strings. Specs assert the string keys — which
-# is what an agent on the wire actually receives.
+# is what an agent in the protocol actually receives.
 #
 # The macros ARE the opt-in: a method declared with none of them is a helper
-# the wire cannot see. So at least one is always passed, and `description:`
+# the protocol cannot see. So at least one is always passed, and `description:`
 # is the default when a spec does not care which.
 #
-# @param name [String, Symbol] the wire name (also the controller method name)
+# @param name [String, Symbol] the published name (also the controller method name)
 # @param macros [Hash] descriptor macros — description:, input_schema:,
 #   output_schema:, example_params:, example_row:
 # @param body [Proc] the controller action; defaults to an empty render
@@ -144,7 +144,7 @@ end
 #
 # The default `input_schema` is the OPEN object, not the closed empty one a
 # real "takes nothing" verb declares: argument validation runs UNCONDITIONALLY
-# on the per-verb wire now, so a closed default would 400 every fixture that
+# on the per-verb endpoints now, so a closed default would 400 every fixture that
 # passes an argument it never meant to constrain. A spec that is ABOUT the
 # input contract declares its own closed schema, which is where the refusals
 # are asserted.

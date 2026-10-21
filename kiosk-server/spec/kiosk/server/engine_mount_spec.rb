@@ -4,7 +4,7 @@
 #
 #   mount Kiosk::Server::Engine => "/kiosk"
 #
-# must serve the full surface — wire + auth plane + JWKS + KYC + binding
+# must serve the full surface — protocol + auth plane + JWKS + KYC + binding
 # ceremony under the mount, and the ROOT-relative discovery documents
 # (/agents.txt, /agents.json, /auth.md, /.well-known/*) installed by the
 # engine's routes.append initializer. Three properties hold:
@@ -134,7 +134,7 @@ RSpec.describe Kiosk::Server::Engine do
         expect(body['queries']).not_to be_empty
       end
 
-      it 'has no 0.3 multiplexed wire left: /query and /run name no route at all' do
+      it 'has no 0.3 multiplexed protocol left: /query and /run name no route at all' do
         # Dialed WITH a token and its DPoP proof, so the identity gate cannot be what produced
         # the answer. Nothing draws these paths, so the answer is the host
         # framework's ordinary 404 with no Kiosk body.
@@ -161,7 +161,7 @@ RSpec.describe Kiosk::Server::Engine do
 
       it 'routes registration and the token endpoint to the OAuth controllers, and rotation to AuthController' do
         # A malformed request answers with the OAuth error object on `/oauth/*`
-        # and with the wire's RFC 9457 problem document on `/auth/rotate`:
+        # and with the protocol's RFC 9457 problem document on `/auth/rotate`:
         # either says a Kiosk controller answered rather than the router.
         res = probe('mounted', 'POST /kiosk/oauth/register')
         expect([res['status'], JSON.parse(res['body'])['error']]).to eq([400, 'invalid_client_metadata'])
@@ -177,7 +177,7 @@ RSpec.describe Kiosk::Server::Engine do
         expect(JSON.parse(res['body'])['code']).to eq('unauthenticated')
       end
 
-      it 'routes the binding ceremony: claim wire + link surface + HTML pages' do
+      it 'routes the binding ceremony: claim endpoints + link surface + HTML pages' do
         res = probe('mounted', 'POST /kiosk/oauth/device_authorization')
         expect([res['status'], JSON.parse(res['body'])['error']]).to eq([401, 'invalid_client'])
 
@@ -210,7 +210,7 @@ RSpec.describe Kiosk::Server::Engine do
         expect(probe('unmounted', 'GET /.well-known/kiosk.json')['status']).to eq(404)
       end
 
-      it 'serves no wire routes' do
+      it 'serves no Kiosk routes' do
         expect(probe('unmounted', 'GET /kiosk/schema')['status']).to eq(404)
       end
 
@@ -242,7 +242,7 @@ RSpec.describe Kiosk::Server::Engine do
     end
 
     context 'when the host draws its own verbs with the `kiosk` block' do
-      it 'a declared query reaches the VERB wire' do
+      it 'a declared query reaches the VERB endpoint' do
         # `?zzz=1` against a CLOSED empty input_schema is `400 bad_request` from
         # RequestValidation — a gate only VerbController runs, and only after a
         # route has dispatched into it, so a 400 can have come from nowhere else.
@@ -296,7 +296,7 @@ RSpec.describe Kiosk::Server::Engine do
 
         expect(res['status']).to eq(200)
         expect(res['headers']['content-type']).to include('application/json')
-        # The WIRE's catalogue, not the verb wire's answer for a verb called
+        # The PROTOCOL's catalogue, not the verb endpoint's answer for a verb called
         # `schema` (which is 401 anonymous, and could never be registered anyway).
         expect(JSON.parse(res['body']).keys).to eq(%w[queries actions events])
       end

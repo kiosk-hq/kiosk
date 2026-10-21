@@ -2,7 +2,7 @@
 
 **What this file is for.** An operator weighing adoption: what an AI assistant
 cannot do at a micromobility operator today, and what the same errand looks
-like once this demo's wire is installed. The code is in this directory; this is
+like once this demo's protocol is installed. The code is in this directory; this is
 the argument, not a listing.
 
 skooti is a fake-but-realistic scooter operator built to show two things: an

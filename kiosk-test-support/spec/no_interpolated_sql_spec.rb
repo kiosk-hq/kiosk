@@ -28,7 +28,7 @@
 # Scope: runtime code only, that is `app/`, `config/`, and `lib/` without
 # `lib/tasks/`. Demo rake tasks and `script/` drivers are out of scope: they
 # check database state through `psql` with ids they minted themselves, and they
-# never serve a wire request. It reads the tracked tree (`git ls-files`), and it
+# never serve a protocol request. It reads the tracked tree (`git ls-files`), and it
 # never skips.
 
 require_relative 'support/demo_runtime_files'

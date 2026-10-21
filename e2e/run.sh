@@ -301,7 +301,7 @@ cp "$FIXTURES/user.rb"               app/models/user.rb
 cp "$FIXTURES/salon.rb"              app/models/salon.rb
 cp "$FIXTURES/appointment.rb"        app/models/appointment.rb
 cp "$FIXTURES/seeds.rb"              db/seeds.rb
-# The wire verbs are ordinary Rails controllers in app/controllers/kiosk/.
+# The verbs are ordinary Rails controllers in app/controllers/kiosk/.
 mkdir -p app/controllers/kiosk
 cp "$FIXTURES/catalog_controller.rb"  app/controllers/kiosk/catalog_controller.rb
 cp "$FIXTURES/bookings_controller.rb" app/controllers/kiosk/bookings_controller.rb
@@ -344,7 +344,7 @@ ruby -e '
 # verify/link/unlink surfaces read that session cookie — so cookies, session and
 # flash middleware must be present. `rails new --api` turns them off; this is the
 # one line it takes to turn them back on, and an adopter scaffolding from --api
-# needs to see it. The agent-facing wire controllers stay ActionController::API
+# needs to see it. The agent-facing protocol controllers stay ActionController::API
 # inside kiosk-server and are unaffected.
 ruby -e '
   path = "config/application.rb"
@@ -543,19 +543,19 @@ auth_capture_out=$( SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                       AUTH_CAPTURE="$AUTH_CAPTURE" \
                       bundle exec ruby "$FIXTURES/auth_wire_capture.rb" ) \
   || fail "the §5/§6 ceremonies did not complete"
-ok "auth + binding wire bytes captured: $auth_capture_out"
+ok "auth + binding HTTP bytes captured: $auth_capture_out"
 
 # ─── the published schemas, against the bytes just served ───────────────────
 #
 # Spec §16.3 anchor 1. The assistant above asserts field by field, in
 # this harness's own words; this step asserts the SAME responses against the
 # normative JSON Schemas kiosk.tech publishes. The two are different oracles
-# and the second is the one an outside implementer can run: a wire that drifts
+# and the second is the one an outside implementer can run: a protocol that drifts
 # from the published schema fails here even when every assertion above still
 # passes. Run from the generated app dir
 # so json_schemer (a kiosk-server runtime dependency) is on the load path, and
 # with the server still up — these are live requests, not a replay.
-log "validate live wire bytes against the published JSON Schemas"
+log "validate live HTTP bytes against the published JSON Schemas"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        TOKEN="$ALICE_AGENT_TOKEN" \
        KEY_FILE="$ALICE_KEY" \
@@ -569,7 +569,7 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
   exit 1
 fi
 
-ok "live wire bytes conform to the published schemas"
+ok "live HTTP bytes conform to the published schemas"
 
 # ─── the audit sink is OFF by default ───────────────────────────────────────
 #

@@ -4,10 +4,10 @@ require 'json'
 
 module Kiosk
   module Server
-    # The gates of a call on the wire, in order: identity (401), the arguments
+    # The gates of a call in the protocol, in order: identity (401), the arguments
     # (400), the caller's timezone (400) and the toll (402). Then the call runs
     # inside a session. {WireController} and every controller that includes
-    # {Kiosk::Handler} serve the wire with them.
+    # {Kiosk::Handler} serve the protocol with them.
     module VerbWire
       include WireRendering
 
@@ -51,7 +51,7 @@ module Kiosk
         raise Errors.malformed_json(hint: BODY_HINT)
       end
 
-      # A {Result}. `command` is the policy verb ({Executor::VERBS}); `name` the wire name;
+      # A {Result}. `command` is the policy verb ({Executor::VERBS}); `name` the published name;
       # `handler` answers in place of the registered one.
       def call_wire(command:, args:, identity:, name:, handler: nil)
         # Refused with the arguments, before the toll.

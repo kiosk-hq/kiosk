@@ -30,7 +30,7 @@
 #
 # Scope: every demo's runtime code (as in `no_interpolated_sql_spec.rb`) and
 # the e2e fixture host's `*_controller.rb` files, which publish a real
-# descriptor over a real wire. The rest of `e2e/fixtures/` holds a fixed
+# descriptor over a real protocol. The rest of `e2e/fixtures/` holds a fixed
 # sentinel that nothing publishes. The `script/` drivers and demo rake tasks
 # are out of scope: their valid dates are already relative, and their fixed
 # dates are hostile inputs (`"2026-02-30"`, `"9999-12-31"`) that must stay

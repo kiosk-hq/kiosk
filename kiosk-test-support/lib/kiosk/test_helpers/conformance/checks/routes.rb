@@ -74,7 +74,7 @@ module Kiosk
             routed_name = found[:kiosk_verb].to_s
             return if routed_name == verb.name
 
-            "#{verb}: #{verb.http_method} #{path} hands the wire " \
+            "#{verb}: #{verb.http_method} #{path} hands the engine " \
               "kiosk_verb: #{routed_name.inspect} — the path segment and the " \
               '`defaults:` are two spellings of one name and must match'
           end

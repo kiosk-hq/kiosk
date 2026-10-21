@@ -34,7 +34,7 @@ module Kiosk
     end
 
     # Serves the app over HTTP from the test process, on a free port that
-    # becomes the origin's issuer, so a test drives the wire as an assistant does.
+    # becomes the origin's issuer, so a test drives the protocol as an assistant does.
     module LiveServer
       def self.included(base)
         base.include SeededDatabase

@@ -4,7 +4,7 @@ module Kiosk
   module Server
     # Runs one call for an identity inside a {SessionContext}; returns a {Result} or raises {Errors::Base}.
     class Executor
-      # The coarse kinds of call shared by the toll, the policy and this dispatcher; not wire paths.
+      # The coarse kinds of call shared by the toll, the policy and this dispatcher; not HTTP paths.
       VERBS = %i[query run pay].freeze
 
       # Kinds with an irreversible external effect (a PSP capture) that manage their own transactions.
@@ -121,7 +121,7 @@ module Kiosk
         result
       end
 
-      # The handler's message goes to the operator's log, never onto the wire.
+      # The handler's message goes to the operator's log, never onto the protocol.
       def report_handler_failure(kind, name, error)
         FailureLog.report("#{kind} #{name.inspect} raised #{error.class}", error)
       end

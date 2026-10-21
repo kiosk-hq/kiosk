@@ -67,7 +67,7 @@ RSpec.describe Kiosk::Server::Queries do
 
     # A descriptor MUST NOT publish `params`. The example asserts that the key
     # is absent, because a nil value would pass for a key published as null.
-    it 'does not publish params at all — the slot left the wire (T-085)' do
+    it 'does not publish params at all — the slot left the protocol (T-085)' do
       declare_query('menu', description: 'Browse the menu')
 
       expect(described_class.describe('menu')).not_to have_key(:params)

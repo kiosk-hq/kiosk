@@ -3,7 +3,7 @@
 require 'kiosk/redteam'
 require 'webmock/rspec'
 
-# Every error on the Kiosk wire is an RFC 9457 problem document served as
+# Every error on the Kiosk HTTP API is an RFC 9457 problem document served as
 # `application/problem+json`, and a problem document is FLAT:
 #
 #   { "type": "https://kiosk.tech/problems/<code>", "title": "…",
@@ -16,7 +16,7 @@ require 'webmock/rspec'
 # The error vocabulary is read from the engine source, not copied here: both
 # tables below are parsed out of `kiosk-server/lib/kiosk/server/errors.rb` when
 # this file loads. This is a spec-time text read, not a dependency; this gem
-# speaks the wire from outside and does not require `kiosk-server`. When the
+# speaks the protocol from outside and does not require `kiosk-server`. When the
 # file is missing the read raises and names the file; it does not skip.
 KIOSK_ENGINE_ERRORS_RB =
   File.expand_path('../../kiosk-server/lib/kiosk/server/errors.rb', __dir__)
@@ -51,7 +51,7 @@ def kiosk_engine_table_lines(constant, path)
 end
 
 # `Errors::CODES` — the closed vocabulary and the status each code canonically
-# rides. A stub cannot invent a code/status pair the wire would never emit.
+# rides. A stub cannot invent a code/status pair the protocol would never emit.
 PROBLEM_STATUS = kiosk_engine_table('CODES')
 
 # `Errors::STATUS_CODES` — the ONE code a bare status carries by itself. 402 is
@@ -101,7 +101,7 @@ def problem_return(code, status: nil, **extensions)
     headers: { 'Content-Type' => PROBLEM_CONTENT_TYPE } }
 end
 
-# One wire answer: a 2xx renders +body+ as-is, anything else renders the problem
+# One protocol answer: a 2xx renders +body+ as-is, anything else renders the problem
 # document for +code+ (defaulting to the code that status carries by itself).
 def wire_return(status:, body: nil, code: nil)
   return json_return(status, body || {}) if status < 400

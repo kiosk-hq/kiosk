@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# THE PUBLISHED JSON SCHEMAS, RUN AGAINST THIS ORIGIN'S LIVE WIRE BYTES.
+# THE PUBLISHED JSON SCHEMAS, RUN AGAINST THIS ORIGIN'S LIVE HTTP API BYTES.
 #
 # WHY THIS FILE EXISTS. `kiosk.tech/spec/schemas/validate.sh` is a real merge
 # gate — it compiles every normative schema and checks a set of example
@@ -13,13 +13,13 @@
 # fiction, the code checked against its own specs, and the pair never met. That
 # is the classic oracle failure — an oracle whose subject has moved — one layer
 # down,
-# and §16.3 anchor 1 ("every wire object validates against its JSON Schema") is
+# and §16.3 anchor 1 ("every protocol object validates against its JSON Schema") is
 # the requirement it leaves untested.
 #
 # WHAT IT DOES. It is handed the bytes the e2e assistant has already made this
 # origin produce — the discovery document, the catalog, four problem documents
 # across four codes (one of them carrying live PoW challenges), the pay request
-# and the settlement it answered, every wire object of Sections 5 and 6, and an
+# and the settlement it answered, every protocol object of Sections 5 and 6, and an
 # event the pinned listener received on the stream — and validates each
 # against the PUBLISHED schema for it, under draft 2020-12.
 #
@@ -132,7 +132,7 @@ end
 
 # THE PAIRED ASSERTION. `payload` must validate; `mutate` must produce
 # something the SAME schema refuses. The second half is not decoration: it is
-# what distinguishes "the wire conforms" from "this schema accepts anything".
+# what distinguishes "the protocol conforms" from "this schema accepts anything".
 #
 # @param label   [String] what is being checked, for the log
 # @param id      [String] schema `$id`
@@ -209,7 +209,7 @@ end
 #
 # A path this origin draws no route for is deliberately NOT among them: it
 # matches nothing, so the answer is the framework's own 404 and there is no
-# problem document to validate. That is the wire's behaviour, not a gap here.
+# problem document to validate. That is the protocol's behaviour, not a gap here.
 problems = []
 
 # A REAL public key, because the toll is not the first gate a garbage one
@@ -236,7 +236,7 @@ end
 # publishes its own verbs, and a harness that can only probe one origin's verb
 # list can only probe one origin. Preference goes to a query whose input_schema
 # is CLOSED and EMPTY, because that is the one an undeclared argument turns into
-# the wire's own 400 below.
+# the protocol's own 400 below.
 PROBE_QUERY = begin
   queries = Array(catalog['queries'])
   closed  = queries.find do |q|
@@ -260,7 +260,7 @@ KEY   = TOKEN && OpenSSL::PKey.read(File.read(ENV.fetch('KEY_FILE')))
 AUTH  = TOKEN ? ->(method, path) { Kiosk::TestHelpers::Dpop.headers(TOKEN, KEY, method:, url: "#{SERVER}#{path}") } : nil
 
 # `salons` declares a CLOSED empty input_schema, so an undeclared argument is
-# the wire's own 400 from RequestValidation — a document built on a different
+# the protocol's own 400 from RequestValidation — a document built on a different
 # path from every other one here.
 if AUTH
   status, raw = get("/kiosk/#{PROBE_QUERY}?zzz=1", AUTH.call('GET', "/kiosk/#{PROBE_QUERY}"))
@@ -461,7 +461,7 @@ end
 # and LOADING and COMPILING them is not the same as validating anything against
 # them: a pair of artefacts can sit in the same process and never meet.
 # `fixtures/auth_wire_capture.rb` runs both ceremonies against this
-# still-booted origin and writes down what went over the wire, request bodies
+# still-booted origin and writes down what went over HTTP, request bodies
 # included; every one of the EIGHTEEN `$defs` those two documents publish is
 # validated below against the bytes this origin produced for it, each paired
 # with a mutated copy the same schema must refuse.
@@ -546,21 +546,21 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   end
 
   # §5.6 — the payloads of two DPoP proofs this origin ACCEPTED: the token
-  # request's, which has no token to name, and a wire call's, whose `ath` ties
+  # request's, which has no token to name, and an API call's, whose `ath` ties
   # it to one token.
   conforms('the DPoP proof of the token request', A, auth.fetch('token_request_proof'),
            pointer: '#/$defs/dpopProof') do |doc|
     doc.delete('htu')
     doc
   end
-  conforms('the DPoP proof of a wire call', A, auth.fetch('dpop_proof'),
+  conforms('the DPoP proof of an API call', A, auth.fetch('dpop_proof'),
            pointer: '#/$defs/dpopProof') do |doc|
     doc.delete('jti')
     doc
   end
   if auth.fetch('token_request_proof').key?('ath') || !auth.fetch('dpop_proof').key?('ath')
     bad 'only the proof that carries a token names it in `ath`',
-        "token request: #{auth.fetch('token_request_proof').keys.sort}, wire call: #{auth.fetch('dpop_proof').keys.sort}"
+        "token request: #{auth.fetch('token_request_proof').keys.sort}, API call: #{auth.fetch('dpop_proof').keys.sort}"
   else
     ok '…and only the proof that carries a token names it in `ath`'
   end
@@ -610,7 +610,7 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
     doc
   end
 
-  # §6.1 — two OAuth refusals, the one kind of answer on this wire that is not
+  # §6.1 — two OAuth refusals, the one kind of answer in this protocol that is not
   # an RFC 9457 problem document. The binding document's `oauthError` is a
   # CROSS-FILE `$ref` into auth.schema.json, so these two also prove the `$ref`
   # is followed.
@@ -663,7 +663,7 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
         "status=#{auth['unlink_status'].inspect} body_len=#{auth['unlink_body_len'].inspect}"
   end
 else
-  absent 'the §5/§6 auth and binding wire objects were validated',
+  absent 'the §5/§6 auth and binding objects were validated',
          "AUTH_CAPTURE (#{auth_capture.inspect}) is missing — auth_wire_capture.rb did not write " \
          "the ceremonies' bytes, so auth.schema.json and binding.schema.json checked nothing",
          'both ceremonies register, bind and unlink an agent'

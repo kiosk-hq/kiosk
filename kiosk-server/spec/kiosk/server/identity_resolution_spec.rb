@@ -88,7 +88,7 @@ RSpec.describe Kiosk::Server::IdentityResolution do
         .to raise_error(Kiosk::Server::Errors::AccessTokenRefused, /bound to no key/)
     end
 
-    it 'ignores a signed-in session: the operator user_idp never resolves a wire caller' do
+    it 'ignores a signed-in session: the operator user_idp never resolves an API caller' do
       Kiosk.configure do |c|
         c.agent_idp = nil_idp
         c.user_idp  = fixed_idp(human_identity)

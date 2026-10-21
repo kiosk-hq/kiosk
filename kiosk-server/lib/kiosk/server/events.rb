@@ -28,7 +28,7 @@ module Kiosk
 
         def known = registry.keys.sort
 
-        # Published beside `queries` and `actions`; `subject_reachable` is the operator's rule, not wire.
+        # Published beside `queries` and `actions`; `subject_reachable` is the operator's rule, not protocol.
         def catalog = known.map { |name| catalog_entry(registry[name]) }
 
         # Appends one event to the tail of every identity in `identity_scope`. `reach` authorises
@@ -70,7 +70,7 @@ module Kiosk
 
         def already_declared(name)
           "topic #{name.inspect} is already declared on this origin. A topic name is one " \
-            'wire name and one payload shape; declare it once, on the controller that owns ' \
+            'published name and one payload shape; declare it once, on the controller that owns ' \
             'the transition it reports.'
         end
 

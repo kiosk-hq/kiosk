@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Adds and completes todos from the web page, through the Operations the wire calls.
+# Adds and completes todos from the web page, through the Operations the API calls.
 class TodosController < ApplicationController
   include KioskSessionable
 

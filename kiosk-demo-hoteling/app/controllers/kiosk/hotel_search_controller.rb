@@ -72,7 +72,7 @@ module Kiosk
 
     private
 
-    # The wire holds `limit` to the range `input_schema` declares.
+    # The protocol holds `limit` to the range `input_schema` declares.
     def page_limit = params[:limit] || SEARCH_PAGE
 
     def matching_hotels

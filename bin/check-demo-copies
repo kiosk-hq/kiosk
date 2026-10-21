@@ -587,7 +587,7 @@ COPIES = {
     except: { 'getgrocery' => "adds `delivery_address`, a customer's postal address.",
               'philslist' => "adds `body`, which carries the seller's contact details.",
               'skooti' => 'adds `rt`, the rental token that opens a vehicle.' },
-    why: "The Rails generator's filter list; the engine appends the wire's own credential fields itself."
+    why: "The Rails generator's filter list; the engine appends its own credential fields itself."
   },
   'public/404.html' => {
     rule: :identical,
@@ -621,8 +621,8 @@ COPIES = {
   },
   'app/controllers/application_controller.rb' => {
     rule: :code,
-    except: { 'prove' => 'prove has no Devise, so it has no wire signpost to include.' },
-    why: "Standard Rails ApplicationController plus the Devise adapter's wire signpost."
+    except: { 'prove' => 'prove has no Devise, so it has no signpost for assistants to include.' },
+    why: "Standard Rails ApplicationController plus the Devise adapter's signpost for assistants."
   },
   'app/controllers/home_controller.rb' => {
     rule: :per_demo,
@@ -1217,7 +1217,7 @@ FRAGMENT_EXCLUDED = {
   'test/stories/link_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'test/stories/privacy_test.rb' => 'Their shared helpers are held by name in SPEC_UNITS.',
   'app/services/price_checker.rb' => "The one shared unit is `self.call`, whose body is each operator's own catalog.",
-  'app/controllers/kiosk/bookings_controller.rb' => "Two domains' booking verbs, sharing only their wire names."
+  'app/controllers/kiosk/bookings_controller.rb' => "Two domains' booking verbs, sharing only their published names."
 }.freeze
 
 FRAGMENTS = {
@@ -1562,7 +1562,7 @@ SPEC_UNITS = {
   'setup_required?' => { rule: :code, why: 'The payment-window stubs answer that a card is on file.' },
   'eventually?' => { rule: :code, why: "The payment-window tests' bounded poll for a racing thread." },
   'capture' => { rule: :per_file, why: "Each stub's charge, and each test's capture of its own product." },
-  'payment_state' => { rule: :per_file, why: "The wire's payment state, read through each demo's own query." },
+  'payment_state' => { rule: :per_file, why: "The protocol's payment state, read through each demo's own query." },
   'payment_status' => { rule: :per_file, why: "The stored payment status of each demo's own model." },
   'reserve' => { rule: :per_file, why: "Each demo's own reserve verb and arguments." },
   'reserves' => { rule: :per_file, why: "Each demo's customer reserves its own kind of thing." },
@@ -1842,7 +1842,7 @@ E2E_FIXTURES = {
   },
   'bookings_controller.rb' => {
     rule: :per_demo,
-    why: "A two-verb fixture wire, not atablefor's booking verbs."
+    why: "A two-verb fixture, not atablefor's booking verbs."
   },
   'routes.rb' => {
     rule: :per_demo,
@@ -1858,7 +1858,7 @@ E2E_FIXTURES = {
   },
   'catalog_controller.rb' => {
     pairs: nil,
-    why: "The fixture wire's read verb; no demo ships one."
+    why: "The fixture's read verb; no demo ships one."
   },
   'demo_audit_sink.rb' => {
     pairs: nil,
@@ -1874,11 +1874,11 @@ E2E_FIXTURES = {
   },
   'es256_flow.rb' => {
     pairs: nil,
-    why: 'Run in place; it registers a P-256 key and an RSA key over the wire, which no demo does.'
+    why: 'Run in place; it registers a P-256 key and an RSA key over HTTP, which no demo does.'
   },
   'rotate_flow.rb' => {
     pairs: nil,
-    why: 'Run in place; it rotates an assistant key over the wire, which no demo does.'
+    why: 'Run in place; it rotates an assistant key over HTTP, which no demo does.'
   },
   'pay_flow.rb' => {
     pairs: nil,
@@ -1894,7 +1894,7 @@ E2E_FIXTURES = {
   },
   'auth_wire_capture.rb' => {
     pairs: nil,
-    why: "Run in place; the harness's own recorder for the auth wire."
+    why: "Run in place; the harness's own recorder for the auth endpoints."
   }
 }.freeze
 

@@ -2,7 +2,7 @@
 
 # Migration 007 — create kiosk.events.
 # The per-identity EVENT TAIL an operator serving any topic needs. `id` is a
-# bigserial, and that is what makes the wire's event id a per-origin monotonic
+# bigserial, and that is what makes the protocol's event id a per-origin monotonic
 # integer — one cursor then resumes every subscription on a socket with one
 # integer comparison.
 # `identity_key` is a user_id, not an agent_id: a human's second assistant must

@@ -13,7 +13,7 @@
  * GATT service ("SKOOTI") with ONE characteristic:
  *
  *   UNLOCK (write):
- *     On WRITE of the wire rental token
+ *     On WRITE of the rental token string
  *       "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
  *     the lock:
  *       1. Calls skooti_verify_wire(SKOOTI_PUBKEY, token, val.size(),
@@ -43,9 +43,9 @@
  * any other lock's identity — the lock only holds a PUBLIC key.
  *
  * =========================================================================
- * TOKEN WIRE FORMAT (CRITICAL — DO NOT CHANGE)
+ * TOKEN FORMAT (CRITICAL — DO NOT CHANGE)
  * =========================================================================
- * wire token = "<message>.<base64url(sig)>"  — split on the LAST '.'
+ * token string = "<message>.<base64url(sig)>"  — split on the LAST '.'
  * message    = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
  * sig        = Ed25519 signature (64 bytes) over the message UTF-8 bytes
  *              → base64url-encoded, no padding
@@ -107,8 +107,8 @@
  * empties it and a token still inside its 15-minute window unlocks a second
  * time.  `cd firmware && make test` demonstrates both halves (test [15]).
  *
- * BEFORE A LOCK OF YOURS LEAVES A BENCH, wire the durable store: uncomment
- * and complete the NVS WIRING block at the top of jti_store.c (nvs_open /
+ * BEFORE A LOCK OF YOURS LEAVES A BENCH, enable the durable store: uncomment
+ * and complete the NVS SETUP block at the top of jti_store.c (nvs_open /
  * nvs_get_blob at startup, nvs_set_blob / nvs_commit after each insert), or
  * use the Preferences library for the same job.  Once that is done, and only
  * then, replay is impossible within the exp window even across a reboot.
@@ -129,7 +129,7 @@
  *
  * Unlock char:  4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d
  *   Properties: WRITE (+ WRITE_NR)
- *   Format:     wire rental token (ASCII, up to ~220 bytes; MTU negotiated to 256)
+ *   Format:     rental token string (ASCII, up to ~220 bytes; MTU negotiated to 256)
  *
  * =========================================================================
  * GPIO / LED WIRING
@@ -272,9 +272,9 @@ static void do_unlock(void)
 class UnlockCallbacks : public NimBLECharacteristicCallbacks {
 public:
     /*
-     * On write: receive the wire rental token, verify it, unlock or reject.
+     * On write: receive the rental token string, verify it, unlock or reject.
      *
-     * Wire token format:
+     * Token string format:
      *   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
      *
      * A typical token is ~200-240 bytes.  MTU is negotiated to 256 in setup().
@@ -297,7 +297,7 @@ public:
          *    c_str() ends at the first NUL, so a write carrying one would
          *    otherwise be verified as the prefix before it while the rest of
          *    the writer's bytes went unread. The grammar admits no NUL in a
-         *    wire token, so such a write is refused whole. */
+         *    token string, so such a write is refused whole. */
         int ok = skooti_verify_wire(SKOOTI_PUBKEY, token, val.size(), SCOOTER_CODE, now);
         if (!ok) {
             Serial.println("[BLE] REJECT — token invalid (bytes/tag/sig/code/exp)");
@@ -315,7 +315,7 @@ public:
         }
 
         /* 3. Replay prevention via jti_store — an in-RAM table, emptied by a
-         *    power cycle until the NVS WIRING block in jti_store.c is wired.
+         *    power cycle until the NVS SETUP block in jti_store.c is enabled.
          *    jti_seen_or_insert prunes expired entries, then checks + records.
          *    Returns 1 (seen → REJECT) or 0 (new → ACCEPT).
          *    Replay is impossible within the exp window FOR AS LONG AS THIS

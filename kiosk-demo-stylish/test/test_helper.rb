@@ -16,7 +16,7 @@ module ActiveSupport
     include Kiosk::TestHelpers::Conformance::Assertions
 
     # The registry, the router, and a GUC-scoped session with the verb's own
-    # `input_schema` validated first — what the wire runs.
+    # `input_schema` validated first — what the protocol runs.
     def kiosk_origin = Kiosk::TestHelpers::Conformance.require_origin!
 
     def assert_kiosk_refused(&)

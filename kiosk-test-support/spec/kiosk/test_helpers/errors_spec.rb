@@ -14,7 +14,7 @@ RSpec.describe Kiosk::TestHelpers::Errors do
   end
 
   describe described_class::ExecutorNotConfigured do
-    it 'has a default message pointing at the wiring API' do
+    it 'has a default message pointing at the setup API' do
       expect(described_class.new.message).to include('Kiosk::TestHelpers.executor')
     end
 
@@ -24,7 +24,7 @@ RSpec.describe Kiosk::TestHelpers::Errors do
   end
 
   describe described_class::OriginNotConfigured do
-    it 'has a default message pointing at the wiring API' do
+    it 'has a default message pointing at the setup API' do
       expect(described_class.new.message).to include('Kiosk::TestHelpers::Conformance.origin')
     end
   end

@@ -4,7 +4,7 @@ require 'kiosk/rls/dsl'
 
 module Kiosk
   module RLS
-    # Adds the RLS migration verbs to `ActiveRecord::Migration` with no host wiring.
+    # Adds the RLS migration verbs to `ActiveRecord::Migration` with no host setup.
     class Railtie < ::Rails::Railtie
       initializer 'kiosk_rls.migration_dsl' do
         ActiveSupport.on_load(:active_record) do

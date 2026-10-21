@@ -8,7 +8,7 @@ module Kiosk
   class StoryTest < ActiveSupport::TestCase
     include TestHelpers::Story
 
-    # Asserts the wire refused `response` with `code`.
+    # Asserts the protocol refused `response` with `code`.
     def assert_refused(response, code)
       assert response.refused?(code), "expected a #{code} refusal, got #{response}"
     end

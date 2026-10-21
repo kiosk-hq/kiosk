@@ -11,6 +11,14 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-10-22
+
+- 2026-10-22: **Every gem and `API_VERSION` are 0.6.2, matching skill 0.6.2.** `MIN_CLIENT` stays 0.6.0: the protocol does not change.
+
+- 2026-10-22: **Every demo and the engine default pin `skill-v0.6.2.md`**, which says "protocol" and "HTTP API" for the requests and answers.
+
+- 2026-10-22: READMEs, comments and messages say "protocol", "HTTP API", "endpoint" or "request". The OpenAPI tag of `schema` and `pay` is `reserved`.
+
 ## [0.6.1] — 2026-10-22
 
 - 2026-10-22: **Every gem and `API_VERSION` are 0.6.1, matching skill 0.6.1.** `MIN_CLIENT` stays 0.6.0: the wire does not change.

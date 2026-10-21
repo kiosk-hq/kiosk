@@ -64,7 +64,7 @@ end. It is also a blind spot, because nothing resolving by `path:` can tell a
 file that EXISTS from a file that is PACKAGED. Do not copy the `path:` form into an
 app outside this repository.
 
-The step-by-step operator walkthrough — install through a served wire, with a
+The step-by-step operator walkthrough — install through a served protocol, with a
 worked verb — is [kiosk.tech/onboarding.html](https://kiosk.tech/onboarding.html).
 
 ## Layout
@@ -85,7 +85,7 @@ settled the `alpha` engine underneath it is.
 | `kiosk-rls` | Opt-in RLS DSL + migration helpers; declares policies in a migration and compiles them to PostgreSQL DDL | alpha |
 | `kiosk-server` | Rails engine, routes, OAuth client registration and DPoP token endpoint, executor | alpha |
 | `kiosk-all` | Meta-gem; `bundle add kiosk-all` installs core + server — **once the gems are published**; today it is one `github:` line, see [Install](#install) | alpha |
-| `kiosk-test-support` | Conformance checks, the assistant-side wire client and a KYC provider stand-in for tests | alpha |
+| `kiosk-test-support` | Conformance checks, the assistant-side protocol client and a KYC provider stand-in for tests | alpha |
 
 ### Plugins & adapters
 

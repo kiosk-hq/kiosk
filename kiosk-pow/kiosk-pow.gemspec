@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
     kiosk-pow is the base of every Kiosk proof-of-work backend:
     kiosk-pow-equihash (the shipped default), kiosk-pow-cuckoo and
     kiosk-pow-argon2id. It holds the one pure-Ruby BLAKE2b-256 that the
-    backends hash with, and the reader for wire parameters. Its README tells
+    backends hash with, and the reader for protocol parameters. Its README tells
     how to add a backend.
 
     Pure Ruby, no runtime dependencies. Does not depend on kiosk-core or Rails.

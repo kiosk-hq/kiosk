@@ -24,7 +24,7 @@ require 'time'
 #      type. Same event, our choice, one method.
 #   3. A SINK THAT RAISES DOES NOT FAIL THE ACTION. For one sentinel slot this
 #      sink blows up on purpose; the booking it was reporting still succeeds on
-#      the wire and still lands in the database.
+#      the protocol and still lands in the database.
 class DemoAuditSink
   # A slot value this sink deliberately cannot handle. Nothing in Kiosk knows
   # about it — it is a bug we planted in OUR code to prove that our bug stays

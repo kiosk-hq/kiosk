@@ -69,7 +69,7 @@ bin/rails db:reset           # drops the development database, loads the schema,
 bin/rails test               # its tests (hoteling: bundle exec rspec)
 ```
 
-**The whole wire.** `./e2e/run.sh` builds a throwaway Rails app, installs the
+**The whole protocol.** `./e2e/run.sh` builds a throwaway Rails app, installs the
 gems by path, runs the generator and the migrations, boots a server, drives a
 mock assistant against it over HTTP, validates the live bytes against the
 published JSON Schemas, and tears down.
@@ -144,7 +144,7 @@ Two things CI does *not* do, and they are yours:
 
 - **A comment explains the code, never its history.** So does a document: a
   public artefact describes what *is*. The afterlife of a removed endpoint,
-  configuration key or wire element is one short changelog line — not a README
+  configuration key or protocol element is one short changelog line — not a README
   paragraph, not a "note that X no longer…". A reader arriving today has no
   memory to correct. A *live* caveat that still binds someone is the opposite:
   that is what the document is for.

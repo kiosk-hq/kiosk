@@ -12,7 +12,7 @@ Gem::Specification.new do |spec|
   spec.description   = <<~DESC
     kiosk-server is the host-side surface for Kiosk. The full surface ships:
 
-      - The controllers — the per-verb wire (GET <endpoint>/<query-name>,
+      - The controllers — the per-verb endpoints (GET <endpoint>/<query-name>,
         POST <endpoint>/<action-name>) and the reserved endpoints
         (/kiosk/schema, /kiosk/pay), a derived OpenAPI description of both,
         OAuth client registration (RFC 7591) and the token endpoint
@@ -34,7 +34,7 @@ Gem::Specification.new do |spec|
 
     The Rails engine serves that whole surface from one `kiosk` block in
     config/routes.rb, which mounts it at Kiosk.configuration.mount_path —
-    drawing the wire/auth/JWKS/KYC/binding routes under the mount and
+    drawing the verb/auth/JWKS/KYC/binding routes under the mount and
     installing the root-relative discovery routes (agents.txt, .well-known)
     into the host — then one route per query and action the block names. It
     also auto-injects the headers middleware.
@@ -70,7 +70,7 @@ Gem::Specification.new do |spec|
   # The Rails components the engine uses; `~> 8.1` is what CI runs.
   # railties: the engine, the install generator, Rails.logger.
   spec.add_dependency 'railties',      '~> 8.1'
-  # actionpack: the wire, auth and discovery controllers.
+  # actionpack: the protocol, auth and discovery controllers.
   spec.add_dependency 'actionpack',    '~> 8.1'
   # actioncable: the event stream at `<endpoint>/events`, on the engine's own server.
   spec.add_dependency 'actioncable',   '~> 8.1'

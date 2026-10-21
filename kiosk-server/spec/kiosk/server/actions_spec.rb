@@ -69,10 +69,10 @@ RSpec.describe Kiosk::Server::Actions do
     end
 
     # ADR-0023 retired the free-text `params` hint and the mixin has no macro
-    # for it; T-085 then took the KEY off the wire too (spec §8.3: a descriptor
+    # for it; T-085 then took the KEY off the protocol too (spec §8.3: a descriptor
     # MUST NOT publish it). Asserted as ABSENCE of the key — a nil-value
     # assertion passes either way, which is the difference this row is about.
-    it 'does not publish params at all — the slot left the wire (T-085)' do
+    it 'does not publish params at all — the slot left the protocol (T-085)' do
       declare_action('place_order', description: 'Place an order')
 
       expect(described_class.describe('place_order')).not_to have_key(:params)

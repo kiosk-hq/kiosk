@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Kiosk
-  # Shape check for wire-supplied uuids, so a malformed id is a typed 4xx rather
+  # Shape check for request-supplied uuids, so a malformed id is a typed 4xx rather
   # than a 500 from Postgres or a false ownership refusal from Active Record's
   # NULL cast. Format only: it says nothing about whether the row exists.
   module UuidCheck

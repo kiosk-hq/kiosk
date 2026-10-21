@@ -5,7 +5,7 @@ Rails.application.routes.draw do
   devise_for :users, controllers: { sessions: 'kiosk/user_identity_providers/devise/sessions' }
 
   # Public root page: what this demo is + live DOMAIN activity (booking counts
-  # read from hoteling's own tables) + how an agent pokes the wire. The app
+  # read from hoteling's own tables) + how an agent pokes the protocol. The app
   # carries the full middleware stack (Devise sessions), and HomeController
   # inherits ApplicationController so HTML renders.
   # Devise needs this as its post-sign-in destination too.
@@ -15,7 +15,7 @@ Rails.application.routes.draw do
   get '/robots.txt', to: 'crawler#robots'
   get '/sitemap.xml', to: 'crawler#sitemap'
 
-  # ── The Kiosk wire surface ────────────────────────────────────────────────
+  # ── The Kiosk HTTP API surface ────────────────────────────────────────────────
   kiosk do
     queries :availability, :hotel_detail, :my_bookings, :properties, :search_hotels
     actions :reserve_room

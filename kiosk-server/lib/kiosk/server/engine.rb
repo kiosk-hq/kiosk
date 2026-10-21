@@ -29,7 +29,7 @@ module Kiosk
                                      Kiosk::Server::IssuerMiddleware
       end
 
-      # Credential-bearing wire fields, kept out of the `Parameters:` log line.
+      # Credential-bearing protocol fields, kept out of the `Parameters:` log line.
       # Whole-key matches, so an operator's own `promo_code` is left alone.
       FILTERED_PARAMETERS = %w[
         client_assertion new_client_assertion code device_code kyc_jws
@@ -155,7 +155,7 @@ module Kiosk
       end
 
       routes do
-        # The wire's reserved endpoints. The mount is drawn first in the host's
+        # The protocol's reserved endpoints. The mount is drawn first in the host's
         # routes, so these win by first-match. Optional modules are drawn
         # unconditionally and answer `module_not_served` (501) when not configured.
         # `schema` resolves no identity — it is PUBLIC, like `openapi.json`

@@ -75,7 +75,7 @@ end
 # configured the signing key and the issuer above, and DefaultAgentIdp#verify
 # checks nothing else — no database is touched. It exists so the probe can
 # reach a gate PAST `401`, which is the only way to tell "this path is the 0.3
-# wire" apart from "this path is an unregistered verb name" through the real
+# protocol" apart from "this path is an unregistered verb name" through the real
 # Rack stack. Every call carries it with a DPoP proof AGENT_KEY signs.
 AGENT_KEY = OpenSSL::PKey.generate_key('ED25519')
 CNF = { jkt: Kiosk::Server::AssistantKey.thumbprint(AGENT_KEY) }.freeze
@@ -180,7 +180,7 @@ report['mounted']['mounted_in?'] =
   Kiosk::Server::Engine.mounted_in?(Rails.application.routes)
 
 # Scenario 2 — gem loaded but NOT mounted: must be inert. Bundling kiosk-server
-# is not a decision to serve a Kiosk wire; mounting it is.
+# is not a decision to serve a Kiosk HTTP API; mounting it is.
 Rails.application.routes.draw do
   # No routes: the engine is not mounted.
 end
@@ -247,11 +247,11 @@ end
 # route per registered verb with the method following the kind. Four questions,
 # and the fourth is the one that had to be measured rather than argued.
 #
-#   * does a declared query actually reach the wire, and serve?
+#   * does a declared query actually reach the protocol, and serve?
 #   * is the OTHER method on that same name an ordinary routing 404?
 #   * is a name nobody registered an ordinary routing 404 too?
 #   * WHAT HAPPENS IF AN OPERATOR ROUTES A VERB AT A RESERVED PATH? The block
-#     below deliberately draws `/kiosk/schema` into the verb wire, BELOW the
+#     below deliberately draws `/kiosk/schema` into the verb protocol, BELOW the
 #     mount. Rails dispatches the first matching route, so the engine's own
 #     `schema` answers and that route is dead — the ordering property is given
 #     by `kiosk` drawing the mount first.
@@ -267,7 +267,7 @@ end
 # unambiguous. `ping` declares a CLOSED empty input_schema, so an undeclared
 # argument is `400 bad_request` from {RequestValidation}, a gate only
 # {VerbController} runs — so a 400 here says the explicit line reached the verb
-# wire and nothing else could have produced it. (A clean `GET /kiosk/ping`
+# protocol and nothing else could have produced it. (A clean `GET /kiosk/ping`
 # would reach the handler and need a database, which this probe deliberately
 # does not have.)
 report['operator_verbs'] = {

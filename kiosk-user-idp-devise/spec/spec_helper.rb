@@ -21,7 +21,7 @@ RSpec.configure do |config|
 end
 
 # Test doubles — kiosk-user-idp-devise does NOT depend on Devise at runtime
-# or at test time. The shipped wire reads the signed-in user from the
+# or at test time. The shipped protocol reads the signed-in user from the
 # request's Warden proxy (`request.env["warden"].user`); a controller-shaped
 # `#current_user` and a bare Rack `env` Hash are also accepted. Small Ruby
 # struct-like doubles cover every shape.
@@ -66,7 +66,7 @@ class FakeWarden
   end
 end
 
-# The shipped-wire shape: an `ActionDispatch::Request`-like object. It does
+# The shipped-protocol shape: an `ActionDispatch::Request`-like object. It does
 # NOT expose `#current_user` (that is a controller helper, not a request
 # method) — the adapter must read the Warden user from `#env`.
 class FakeActionDispatchRequest

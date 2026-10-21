@@ -5,7 +5,7 @@ require_relative 'support'
 
 # The gated action is `POST /kiosk/start_rental` — the verb name is the path
 # segment, and `{reservation_id: …}` is the WHOLE body.
-# (minimal_profile's create_owned is a plain lambda, so it makes no wire call.)
+# (minimal_profile's create_owned is a plain lambda, so it makes no API call.)
 RENTAL_OK = { 'scooter_code' => 'SK-001', 'rental_token' => 'rt-1', 'exp' => 4_102_444_800 }.freeze
 
 RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do

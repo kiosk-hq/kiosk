@@ -17,7 +17,7 @@ module Admin
     # The shop charges in euro.
     def order_money(cents) = number_to_currency(cents / 100.0, unit: '€')
 
-    # The delivery window on the order's own clock, worded as the wire words it.
+    # The delivery window on the order's own clock, worded as the protocol words it.
     def order_slot(order)
       "#{order.slot_at.in_time_zone(order.zone).strftime('%a %-d %b')}, " \
         "#{DeliverySlots.label(order.slot_at, order.zone)}"

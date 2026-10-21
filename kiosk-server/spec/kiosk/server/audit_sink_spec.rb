@@ -168,7 +168,7 @@ RSpec.describe Kiosk::Server::AuditSink do
     end
 
     # The examples above hand `build` a bare exception; the Executor hands it
-    # the WRAPPER, because the handler's own sentence is not the wire's to
+    # the WRAPPER, because the handler's own sentence is not the protocol's to
     # publish. A sink is operator-side, in the operator's own process, already
     # holding the arguments in full, so the wrapped exception travels beside
     # the wrapper rather than instead of it.
@@ -178,7 +178,7 @@ RSpec.describe Kiosk::Server::AuditSink do
                               status: described_class::ERROR, error: wrapped_failure)
       end
 
-      it 'still names what the WIRE refused with — a sink alerting on it keeps meaning it' do
+      it 'still names what the ENGINE refused with — a sink alerting on it keeps meaning it' do
         expect(wrapped.error_class).to eq('Kiosk::Server::Errors::ActionFailed')
         expect(wrapped.error_message).to eq('Action "place_order" raised ArgumentError')
       end
@@ -337,13 +337,13 @@ RSpec.describe Kiosk::Server::AuditSink do
       end
 
       # The event is built from the exception that ESCAPED the invocation,
-      # which is the wire error, so it carries what the wire carries: the verb,
+      # which is the Kiosk error, so it carries what the protocol carries: the verb,
       # the exception CLASS, and none of the handler's own sentence. `Executor`
       # reports that sentence operator-side before it re-raises, which the
       # stderr expectation asserts. A sink is the operator's own process, so the
       # wrapped exception rides along as `cause_class`/`cause_message`, beside
-      # the wire error.
-      it 'emits for a FAILED action too, carrying the WIRE error, and re-raises untouched' do
+      # the Kiosk error.
+      it 'emits for a FAILED action too, carrying the KIOSK error, and re-raises untouched' do
         declare_action('place_order') { raise 'inventory exploded' }
 
         expect do
@@ -371,7 +371,7 @@ RSpec.describe Kiosk::Server::AuditSink do
       end
 
       # A raise Rails knows a status for is mapped by the mixin's `rescue_from`
-      # seam, which raises the wire error inside the rescue, so Ruby attaches
+      # seam, which raises the Kiosk error inside the rescue, so Ruby attaches
       # the handler's own error as its `cause`; without it the sink would see
       # only `verb "…" rejected the request as malformed`.
       it 'carries the cause through the rescue_from seam too, which renders rather than raises' do
@@ -404,7 +404,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         expect(events.first.cause_message).to be_nil
       end
 
-      it "symbolizes the wire's string keys, as the handler sees them" do
+      it "symbolizes the request's string keys, as the handler sees them" do
         declare_action('place_order') { render json: {} }
         run!(args: { 'sku' => 'ABC', 'qty' => 2 })
 
@@ -464,7 +464,7 @@ RSpec.describe Kiosk::Server::AuditSink do
         ).to_stderr
       end
 
-      # The wire sentence carries neither foreign message, and both reach the
+      # The protocol sentence carries neither foreign message, and both reach the
       # operator's stderr in the order they are reported: the handler's crash
       # from inside `verb_run`, then the sink's from the audit seam around it.
       it "still raises the ACTION's error, not the sink's, on the failure branch" do

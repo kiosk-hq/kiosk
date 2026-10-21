@@ -12,7 +12,7 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - `GET /kiosk/salons` and `GET /kiosk/my_appointments` reach the origin's named queries and answer a bare JSON array of rows (no envelope), with `X-Total-Count` beside it and NO `Link` header, because the fixture's one-salon dataset is a complete page. That a page's cursor rides in an RFC 8288 `Link` header is asserted only as an OpenAPI DECLARATION here; a truncated page with a live cursor is exercised by the demos (hoteling `check:search`), not by this fixture
 - `POST /kiosk/book_appointment` reaches the origin's named Action and answers that handler's own JSON object
 - Handler controllers in `app/controllers/kiosk/` that `include Kiosk::Handler` are registered and served in DEVELOPMENT, where nothing eager-loads `app/`
-- ONE controller serves BOTH kinds: `Kiosk::BookingsController` declares `my_appointments` (`kind :query`, reached by `GET`) and `book_appointment` (`kind :action`, reached by `POST`), and both answer over the wire
+- ONE controller serves BOTH kinds: `Kiosk::BookingsController` declares `my_appointments` (`kind :query`, reached by `GET`) and `book_appointment` (`kind :action`, reached by `POST`), and both answer over HTTP
 - Errors are RFC 9457 problem documents — `application/problem+json`, `type`/`title`/`status`/`code`/`hint`, the branch point a FLAT top-level `code` — with the right HTTP status (an argument addressing nothing → 404 `not_found`, an absent capability → 501 `module_not_served`, missing/garbage token → 401 `unauthenticated`). A path this origin draws no route for — a name nobody registered, a verb dialed with the other method — is the framework's ordinary 404 instead, with no problem document behind it
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one Ed25519 signing key (kty OKP, crv, x, use, alg EdDSA, kid) and never leaks the private member `d`
 - The partial UNIQUE index on `kiosk.agents (issuer, public_key)` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key on one origin at the DB level while allowing a revoked re-registration
@@ -27,11 +27,11 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 
 ## What it does NOT verify (deferred)
 
-- **RLS.** The wire carries no SQL: there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in the handler controllers (`Appointment.own` in `my_appointments`). RLS is optional and not used here.
+- **RLS.** The protocol carries no SQL: there is no arbitrary-SQL surface. Per-user isolation is enforced app-layer in the handler controllers (`Appointment.own` in `my_appointments`). RLS is optional and not used here.
 - **Live PSP capture.** The pay flow charges stripe-mock, Stripe's fixture server; no real Stripe call is made.
 - **A deployed event stream.** The stream IS verified, over a real WebSocket, by the pinned listener (see below) — but against this harness's own origin on `localhost`, with Action Cable's in-process pubsub. Whether a stream survives a production edge, a second Puma worker, or a `solid_cable` round trip is not exercised here.
 - **Multi-agent revocation** flows.
-- **Live LLM agent integration** — this fixture drives the wire surface with deterministic `curl`/`jq` calls, not a real model.
+- **Live LLM agent integration** — this fixture drives the HTTP API with deterministic `curl`/`jq` calls, not a real model.
 
 ## Prerequisites
 
@@ -112,7 +112,7 @@ Output is colour-coded `✓` / `✗` per assertion; exits non-zero on any failur
 e2e/
 ├── run.sh                                  # main script
 ├── assistant.sh                            # the mock AI assistant
-├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes, §5/§6 included
+├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live HTTP bytes, §5/§6 included
 ├── schemas/                                # vendored copies of the published normative schemas this harness alone reads (the five kiosk-server ENFORCES are vendored in the gem instead)
 ├── README.md                               # this file
 ├── requirements.txt                        # the harness's python dependencies: numpy for the Equihash register-PoW solver, websockets for the event-stream listener, pyjwt + cryptography for dpop.py
@@ -131,12 +131,12 @@ e2e/
     ├── es256_flow.rb                       # key algorithms: a P-256 key registers and calls with ES256 proofs; an RSA key is refused
     ├── rotate_flow.rb                      # key rotation: register → rotate with both keys signing → the identity stays, the old key and its tokens stop
     ├── auth_wire_capture.rb                 # the §5/§6 ceremonies driven for their BYTES: tolled register → token → rotate, link → claim → unlink, and the device grant with a real verify-page approval — written to AUTH_CAPTURE for schema_conformance.rb
-    ├── claim_flow.rb                       # account-binding claim ceremony: registered key → verify-page approval → token poll with a client assertion → bound wire call → link-code redeem → unlink
+    ├── claim_flow.rb                       # account-binding claim ceremony: registered key → verify-page approval → token poll with a client assertion → bound API call → link-code redeem → unlink
     ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Handler`, `kind :query`: the salons verb
     ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Handler`: the my_appointments QUERY and the book_appointment ACTION in ONE controller, plus the `appointment_confirmed` TOPIC
     ├── salon_desk_controller.rb            # the salon's back office — an operator-side page OUTSIDE the mount and not a Kiosk handler that marks an appointment confirmed and pushes the topic; the one transition on this origin nobody asked for, which is the whole case for a stream
     ├── devise_initializer.rb               # Devise setup (database_authenticatable) — the HUMAN channel the binding pages authenticate
     ├── initializer_kiosk.rb                # Kiosk.configure
-    └── routes.rb                           # the generated app's routes: Devise, the two exception probes, and THE WIRE — the `kiosk` block mounts the engine (schema, pay, openapi.json, jwks, oauth/register, oauth/token, auth/*, the RFC 8628 device pair, agents/kyc, the binding pages and the root discovery documents), then draws one route per verb with the method following the kind — GET salons, GET my_appointments, POST book_appointment
+    └── routes.rb                           # the generated app's routes: Devise, the two exception probes, and THE PROTOCOL — the `kiosk` block mounts the engine (schema, pay, openapi.json, jwks, oauth/register, oauth/token, auth/*, the RFC 8628 device pair, agents/kyc, the binding pages and the root discovery documents), then draws one route per verb with the method following the kind — GET salons, GET my_appointments, POST book_appointment
 ```
 

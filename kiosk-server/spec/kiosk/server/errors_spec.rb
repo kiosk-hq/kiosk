@@ -26,7 +26,7 @@ module ErrorsSpecHelpers
   # runs in NEITHER repository's CI (no job in either checks the other out), so the
   # cross-repo link is proved in the umbrella workspace and not on a runner. What
   # IS closed on a runner is that this gem's table equals the schema this repo
-  # ships — which is the copy `e2e/schema_conformance.rb` validates the live wire
+  # ships — which is the copy `e2e/schema_conformance.rb` validates the live HTTP API
   # against, so the engine, the e2e harness and the published contract cannot
   # disagree about a status without something here going red.
   def vendored_problem_schema = File.expand_path('../../../../e2e/schemas/problem.schema.json', __dir__)
@@ -58,7 +58,7 @@ module ErrorsSpecHelpers
 end
 
 RSpec.describe Kiosk::Server::Errors do
-  describe 'CODES — the wire vocabulary' do
+  describe 'CODES — the error vocabulary' do
     include ErrorsSpecHelpers
 
     it "is exactly the spec's closed `code` table, derived from the published schema rather than restated" do
@@ -72,7 +72,7 @@ RSpec.describe Kiosk::Server::Errors do
       end
 
       # A derivation that derives nothing passes every comparison. The floor is
-      # the vocabulary size the wire has carried since T-158; a schema whose
+      # the vocabulary size the protocol has carried since T-158; a schema whose
       # `allOf` was emptied or whose branch shape changed fails HERE, naming the
       # cause, instead of quietly agreeing with an empty hash.
       expect(published.size).to be >= 17,
@@ -81,7 +81,7 @@ RSpec.describe Kiosk::Server::Errors do
                                 'without them'
 
       # The two halves of the schema must name the same set, or one of them is
-      # describing a wire the other does not.
+      # describing a protocol the other does not.
       expect(published.keys).to match_array(schema.dig('properties', 'code', 'enum'))
 
       expect(described_class::CODES).to eq(published)
@@ -158,7 +158,7 @@ RSpec.describe Kiosk::Server::Errors do
       end
     end
 
-    it "answers 422 with bad_request — Rails' validation idiom, one wire code" do
+    it "answers 422 with bad_request — Rails' validation idiom, one error code" do
       expect(described_class::STATUS_CODES[422]).to eq('bad_request')
     end
   end
@@ -224,19 +224,19 @@ RSpec.describe Kiosk::Server::Errors do
 
     it 'refuses a code outside the closed vocabulary' do
       expect { described_class::WireError.new('x', code: 'out_of_stock') }
-        .to raise_error(ArgumentError, /unknown wire code "out_of_stock"/)
+        .to raise_error(ArgumentError, /unknown error code "out_of_stock"/)
     end
 
     # T-158 widened the vocabulary, and a widened closed set is where near-miss
     # spellings get in. These are the two a porter would actually write.
     it 'refuses a plausible near-miss of a T-158 member' do
       expect { described_class::WireError.new('x', code: 'module_not_found') }
-        .to raise_error(ArgumentError, /unknown wire code "module_not_found"/)
+        .to raise_error(ArgumentError, /unknown error code "module_not_found"/)
       expect { described_class::WireError.new('x', code: 'unknown_verb') }
-        .to raise_error(ArgumentError, /unknown wire code "unknown_verb"/)
+        .to raise_error(ArgumentError, /unknown error code "unknown_verb"/)
     end
 
-    it 'rescues as Base, like every wire error' do
+    it 'rescues as Base, like every Kiosk error' do
       expect(described_class::WireError.new('x', code: 'conflict')).to be_a(described_class::Base)
     end
   end
@@ -350,7 +350,7 @@ RSpec.describe Kiosk::Server::Errors do
     # without Base in its ancestry cannot slip past. `rescue` matches on
     # ancestry, so that IS the contract; `WireError` above raises and catches one
     # for real. ConfigurationError is the deliberate outsider: it is raised at
-    # boot, never on the wire, so nothing rescues it as a wire error.
+    # boot, never in the protocol, so nothing rescues it as a Kiosk error.
     it 'every Kiosk::Server::Errors::* subclass rescues as Base' do
       wire = described_class.constants.map { described_class.const_get(it) }.grep(Class) -
              [described_class::Base, described_class::ConfigurationError]

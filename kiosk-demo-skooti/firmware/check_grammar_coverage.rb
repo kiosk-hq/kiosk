@@ -87,7 +87,7 @@ PAGE = File.expand_path('../RENTAL_TOKEN.md', __dir__)
 SECTION_HEADING = '## Rental token: the exact grammar'
 
 # The bold lines that open a RULE subsection inside it. Each has to yield a rule.
-SUBSECTIONS = ['**Wire token**', '**Message**', '**Fields**'].freeze
+SUBSECTIONS = ['**Token string**', '**Message**', '**Fields**'].freeze
 
 # The bold line that opens the LIMITS subsection. Its bullets are limits, not
 # rules: R1 does not ask them for an axis and R6 does not read them, because a
@@ -449,7 +449,7 @@ GOOD_PAGE = <<~MARKDOWN
 
   Three programs read this token, and this section is where the grammar is decided.
 
-  **Wire token**
+  **Token string**
 
   - At most 512 bytes. <!-- vectors: length -->
   - The signature is unpadded base64url. <!-- vectors: sig -->

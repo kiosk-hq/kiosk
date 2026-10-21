@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/auth.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk client registration and tokens (OAuth)",
-  "description": "The wire objects of Section 5: RFC 7591 open client registration of the AI assistant's public key, RFC 7523 client assertions signed with that key (the private_key_jwt method), and DPoP-bound access tokens from the client_credentials grant (RFC 9449). The roots are open: they state what MUST be present and the shape of each member.",
+  "description": "The protocol objects of Section 5: RFC 7591 open client registration of the AI assistant's public key, RFC 7523 client assertions signed with that key (the private_key_jwt method), and DPoP-bound access tokens from the client_credentials grant (RFC 9449). The roots are open: they state what MUST be present and the shape of each member.",
   "$defs": {
     "publicJwk": {
       "type": "object",

@@ -13,7 +13,7 @@ module Kiosk
         DEFAULT_MESSAGE = <<~MSG.strip
           Kiosk::TestHelpers has no executor configured.
 
-          Wire one in your test helper:
+          Configure one in your test helper:
 
             # spec/spec_helper.rb or test/test_helper.rb
             require "kiosk/test_helpers/in_process_executor"
@@ -33,7 +33,7 @@ module Kiosk
         DEFAULT_MESSAGE = <<~MSG.strip
           Kiosk::TestHelpers::Conformance has no origin configured.
 
-          Wire one in your test helper:
+          Configure one in your test helper:
 
             # spec/spec_helper.rb or test/test_helper.rb
             require "kiosk/test_helpers/conformance/in_process_origin"

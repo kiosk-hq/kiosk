@@ -16,7 +16,7 @@ deploy origin.
 
 ## Not a Kiosk operator — an ISSUER
 
-The broker mounts **no** Kiosk wire at all — neither of the two reserved
+The broker mounts **no** Kiosk HTTP API at all — neither of the two reserved
 endpoints (`GET <endpoint>/schema`, `POST <endpoint>/pay`) and not one
 per-verb endpoint, because it registers no verb. It has no PoW gate, and it
 serves no `/.well-known/kiosk.json`. It is the mirror ISSUER
@@ -67,10 +67,10 @@ The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):
   un-confirmable.
 - **No replay across operators.** The claim carries `operator`/`aud`; the
   operator's callback handler rejects a claim not addressed to it. The engine
-  `KycVerifier` **also** enforces this at the wire: every
+  `KycVerifier` **also** enforces this at the endpoint: every
   `POST /kiosk/agents/kyc` rejects a claim whose `aud` != the operator's
   `kyc_audience`, so the cross-operator check lives in BOTH the operator
-  callback layer and the normative wire.
+  callback layer and the normative protocol.
 - **No replay across subjects.** `sub` is the operator's `user_id` for the
   requesting agent; the operator's `KycVerifier` rejects a `sub` mismatch (the
   `IssuedKycJwsTheft` defense, inherited).

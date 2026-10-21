@@ -3,7 +3,7 @@
 # The salon's customers and staff. `id uuid` matches the kiosk:install
 # --user-id-type=uuid choice. email and encrypted_password are Devise's login
 # columns; email stays NULLable because an assistant account registered over
-# the wire has no login. staff_role is 'owner' or NULL (a customer); the
+# the protocol has no login. staff_role is 'owner' or NULL (a customer); the
 # session carries it, so an assistant linked by an owner inherits it.
 class CreateUsers < ActiveRecord::Migration[ActiveRecord::Migration.current_version]
   def change

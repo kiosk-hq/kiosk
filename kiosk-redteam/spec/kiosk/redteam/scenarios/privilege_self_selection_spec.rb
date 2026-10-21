@@ -28,7 +28,7 @@ end
 RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
   include_context 'with a token for any role'
 
-  it 'injects the escalated role onto the register wire (attack simulation)' do
+  it 'injects the escalated role onto the registration request (attack simulation)' do
     stub_register_returning(token_with_role('customer'))
     stub = stub_request(:post, "#{BASE_URL}/kiosk/oauth/register")
            .with(body: hash_including('role' => 'master'))

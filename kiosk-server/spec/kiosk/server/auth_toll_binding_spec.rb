@@ -130,7 +130,7 @@ RSpec.describe Kiosk::Server::AuthToll do
       expect(headers['Content-Type']).to include('application/problem+json')
     end
 
-    it 'answers a paid poll on the OAuth wire' do
+    it 'answers a paid poll on the OAuth endpoints' do
       status, _headers, body = poll(live, 'HTTP_KIOSK_POW' => JSON.generate(poll_proof(live, id: 'ctl-live')))
       expect([status, body['error']]).to eq([400, 'authorization_pending'])
     end

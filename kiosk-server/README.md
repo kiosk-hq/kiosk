@@ -8,7 +8,7 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 The full host-side surface is shipped and covered by the gem's own suite
 (`bundle exec rspec` in this directory runs it and prints how many examples that is):
 
-- **Wire-protocol controllers** — each verb route (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`) reaches the operator's controller action that declares the verb, and `Kiosk::Handler` runs the wire's checks around it; `VerbController` refuses a verb route that no action answers; `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `VerbController` also serves `POST <mount>/payment_setup` against the payment provider port, and `PaymentSetupController` the page the provider returns the human to; `VerbController` serves `POST <mount>/request_kyc` against the KYC provider port, and `KycCallbackController` the provider's callback; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `OauthRegistrationController` registers an assistant's public key (RFC 7591) and `OauthTokenController` gives a registered client an access token for a client assertion (RFC 7523) and a DPoP proof (the `client_credentials` grant); `AuthController` puts a new key on a client; every access token is bound to the client's registered key, and a call that carries one also carries a DPoP proof (RFC 9449) that `IdentityResolution` checks; JWKS backs stateless token verification.
+- **Protocol controllers** — each verb route (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`) reaches the operator's controller action that declares the verb, and `Kiosk::Handler` runs the protocol's checks around it; `VerbController` refuses a verb route that no action answers; `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `VerbController` also serves `POST <mount>/payment_setup` against the payment provider port, and `PaymentSetupController` the page the provider returns the human to; `VerbController` serves `POST <mount>/request_kyc` against the KYC provider port, and `KycCallbackController` the provider's callback; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `OauthRegistrationController` registers an assistant's public key (RFC 7591) and `OauthTokenController` gives a registered client an access token for a client assertion (RFC 7523) and a DPoP proof (the `client_credentials` grant); `AuthController` puts a new key on a client; every access token is bound to the client's registered key, and a call that carries one also carries a DPoP proof (RFC 9449) that `IdentityResolution` checks; JWKS backs stateless token verification.
 - **Account binding** — the claim/link ceremonies bind a registered client to an existing assistant-account holder's account: the RFC 8628 device authorization and token poll, each authenticated by a client assertion, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. The token endpoint gives the tokens; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers in `app/controllers/kiosk/` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
@@ -20,7 +20,7 @@ The full host-side surface is shipped and covered by the gem's own suite
 - **`IssuerMiddleware`** — answers `Kiosk.current_issuer` for each request: its origin when that is `c.issuer` or one of `c.additional_origins`, else `c.issuer`. Every origin served is its own operator.
 - **The audit sink** — `c.audit_sink` receives one `Kiosk::Server::ActionEvent` per action invocation, success and failure alike. The default is no sink, so no `ActionEvent` goes anywhere. The engine keeps its own state in the `kiosk` schema (agents, mandates, settlements, refunds, events, visits), but it writes no audit record there. See [The audit sink](#the-audit-sink).
 - **`Kiosk::Server::SchemaDefinitions`** — SQL generators for every table and helper that `bin/rails g kiosk:install` creates.
-- **`Kiosk::Server::Engine`** — the Rails engine: `kiosk` in `config/routes.rb` mounts it, drawing the full mount-prefixed PROTOCOL surface (the reserved wire, auth, JWKS, KYC, account binding), then one route per verb its block names — installs the root discovery routes when mounted, and auto-injects the headers and issuer middleware (see [Draw the routes](#draw-the-routes)).
+- **`Kiosk::Server::Engine`** — the Rails engine: `kiosk` in `config/routes.rb` mounts it, drawing the full mount-prefixed PROTOCOL surface (the reserved endpoints, auth, JWKS, KYC, account binding), then one route per verb its block names — installs the root discovery routes when mounted, and auto-injects the headers and issuer middleware (see [Draw the routes](#draw-the-routes)).
 - **`Kiosk::Server::ConfigurationExtension`** — adds `mount_path`, `owner` (and the reputation/PoW slots) to `Kiosk::Configuration`.
 - **`bin/rails g kiosk:install`** — the install generator lays down the initializer, the migrations and the `kiosk` block in `config/routes.rb` that mounts the engine.
 
@@ -306,7 +306,7 @@ framework decided for your customers' data.
 
 | field | |
 |---|---|
-| `action` | the action's wire name |
+| `action` | the action's published name |
 | `user_id` / `agent_id` | the principal, and the assistant credential that acted (nil when the caller is not an agent) |
 | `role` / `actor` | the active role (may be nil), and `"agent"` \| `"human"` \| `"service"` |
 | `args` | **the arguments exactly as the handler received them** |
@@ -392,7 +392,7 @@ human back to (both answer `501 module_not_served` without a `payment_provider`)
 OAuth registration and token endpoints (`oauth/register`, `oauth/token`), the key
 rotation (`auth/rotate`), JWKS (`.well-known/jwks.json`), KYC (`agents/kyc`, and
 `request_kyc` and `kyc/callback`, which answer `501 module_not_served` without a
-`kyc_provider`) and the whole account-binding ceremony (the RFC 8628 claim wire,
+`kyc_provider`) and the whole account-binding ceremony (the RFC 8628 claim endpoints,
 `auth/link`/`claim`/`unlink`, the verify and «Link an assistant» pages). The
 engine also installs the ROOT-relative discovery documents — `/agents.txt`,
 `/agents.json`, `/auth.md`,
@@ -405,7 +405,7 @@ engine is mounted: merely bundling the gem adds no routes.
 **You name your OWN VERBS, and the METHOD FOLLOWS THE KIND** — GET for a
 `kind :query`, POST for a `kind :action`. That is what the protocol says a verb
 IS, so the routes state it instead of hiding it, and `bin/rails routes` prints
-your actual wire.
+your actual protocol.
 
 **The mount comes FIRST.** Rails dispatches the first matching route, so
 everything the engine draws wins over every verb route and no verb of yours can
@@ -415,7 +415,7 @@ anyway — `Kiosk::Handler` refuses a reserved name at boot.)
 A path under the mount that names no route — including a verb called with the
 other method — matches nothing, so it is the ordinary 404 Rails answers at any
 unrouted path: no `code`, no `hint`. The mount-path middleware still stamps the
-version headers on it. If you want the wire's own `404 verb_not_found` there,
+version headers on it. If you want the protocol's own `404 verb_not_found` there,
 draw a catch-all action of your own at the end of your routes; the engine does not
 draw one, because an assistant reads `GET <mount>/schema` before it dials.
 Declared-but-unrouted is the bug class this trade opens: every verb you declare
@@ -499,15 +499,15 @@ verb lands without restarting the server.
 ### What the macros do
 
 Each macro records a declaration; the **next `def`** claims all pending ones and
-becomes a wire verb. A method with no declarations above it is not a verb, so
-helper methods stay invisible to the wire.
+becomes a verb. A method with no declarations above it is not a verb, so
+helper methods stay invisible to the protocol.
 
 | macro | what it declares |
 | --- | --- |
-| `kind` | **Required.** `:query` (reached by `GET <mount>/<name>`) or `:action` (`POST <mount>/<name>`). A property of the declaration, so one controller may carry both. There is no default: either one would silently pick an HTTP method for you. `:action` is the DECLARATION name and nothing else: the wire command an action travels under is **`:run`**, so a `kind :action` verb reaches a reputation policy as `verb: :run` (`Kiosk::Handler` serves an action as `:run`; the reserved pay endpoint arrives as `:pay`). Branch on `:run` there, not on `:action` — see `kiosk-reputation`'s README. |
+| `kind` | **Required.** `:query` (reached by `GET <mount>/<name>`) or `:action` (`POST <mount>/<name>`). A property of the declaration, so one controller may carry both. There is no default: either one would silently pick an HTTP method for you. `:action` is the DECLARATION name and nothing else: the protocol command an action travels under is **`:run`**, so a `kind :action` verb reaches a reputation policy as `verb: :run` (`Kiosk::Handler` serves an action as `:run`; the reserved pay endpoint arrives as `:pay`). Branch on `:run` there, not on `:action` — see `kiosk-reputation`'s README. |
 | `reach` | Optional, and the default is the strong one. Whose rows this verb may touch (spec §7.2): `:principal` (default — only the caller's own, or rows that belong to no principal), `:published`, `:consented` or `:role`. Declare nothing and the verb is held to per-principal scoping absolutely; a departure costs one line and is published on the catalog, so an assistant can tell an open board from a scoping bug. |
 | `description` | Semantics **only**: what the verb does, how, and what it returns *in meaning*. Never a field list, a type, a required marker or a param name — those live in the schemas. |
-| `input_schema` | **Required.** JSON Schema for the params. The input contract: every name, type, enum and range — and the wire coerces and validates every call against it. A verb that takes nothing still declares the empty closed object. |
+| `input_schema` | **Required.** JSON Schema for the params. The input contract: every name, type, enum and range — and the protocol coerces and validates every call against it. A verb that takes nothing still declares the empty closed object. |
 | `output_schema` | **Required.** JSON Schema for what comes back, so an assistant knows the result shape without a call-and-observe probe — the only machine-readable statement of the answer, now that there is no response envelope. |
 | `example_params` | A params object an assistant can copy verbatim. |
 | `example_row` | A worked example of the result. |
@@ -559,7 +559,7 @@ applies, `params` is `ActionController::Parameters`, and the answer is whatever
 you `render` — or the action's JSON template (a Jbuilder view, say), which is
 the one rendered whatever `Accept` the caller sent. On top of that:
 
-- `kiosk_identity` — the `Kiosk::Identity` the wire resolved (`user_id`,
+- `kiosk_identity` — the `Kiosk::Identity` the protocol resolved (`user_id`,
   `agent_id`, `role`, `actor`). The four transaction-local GUCs are already applied to
   the connection, so SQL-side and RLS scoping work whether or not you read it.
 - `render_kiosk_page(rows, next_cursor:, total:)` — answer one page of a large
@@ -584,24 +584,24 @@ the one rendered whatever `Accept` the caller sent. On top of that:
   records `pay` writes. `Kiosk::Settlement.own` is the caller's own;
   `Kiosk::Settlement.joins(:checkout_mandate).merge(Kiosk::CheckoutMandate.referencing(order_id: id))`
   is the settlement whose checkout names your row by the key your line items carry.
-- The handler runs inside the wire's GUC-scoped transaction, so raising rolls
+- The handler runs inside the protocol's GUC-scoped transaction, so raising rolls
   back — and so does rendering a non-2xx, which the seam converts into a raise.
 
-Errors are Rails' idiom, end to end. The error-**code** vocabulary is the wire
+Errors are Rails' idiom, end to end. The error-**code** vocabulary is the protocol
 contract — a closed table, not a class hierarchy. Mind which side of the seam
 you are on: a handler names a code the Rails way, under `error.code` in the body
-it renders, and the wire re-renders that as an RFC 9457
+it renders, and the protocol re-renders that as an RFC 9457
 `application/problem+json` document whose `code` is a FLAT top-level member —
 `error.code` is the handler-side spelling, `code` is what travels and what an
 assistant branches on. Three Rails-native moves cover all of it:
 
-- `render json: {...}, status: :bad_request` — the status becomes its wire
+- `render json: {...}, status: :bad_request` — the status becomes its protocol
   code (400 `bad_request`, 401 `unauthenticated`, 403 `forbidden`,
   404 `not_found`, 409 `conflict`, 422 `bad_request`, 429 `quota_exceeded`).
 - Raise what you would raise anyway. Any exception Rails knows a status for —
   `params.require`, `ActiveRecord::RecordNotFound`, anything your app
   registered in `config.action_dispatch.rescue_responses` (the same registry
-  policy libraries use) — is mapped to that status' wire code by one
+  policy libraries use) — is mapped to that status' error code by one
   `rescue_from` the include installs. Your own `rescue_from` declarations win
   over it. Anything unregistered stays a 500 `action_failed`.
   **The CODE travels; the exception's own SENTENCE does not.** That branch is

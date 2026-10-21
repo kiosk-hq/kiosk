@@ -2,7 +2,7 @@
 
 **What this file is for.** An operator weighing adoption: what an AI assistant
 cannot do at a booking platform today, and what the same errand looks like once
-this demo's wire is installed. The code is in this directory; this is the
+this demo's protocol is installed. The code is in this directory; this is the
 argument, not a listing.
 
 hoteling is a fake-but-realistic hotel operator built to show the mechanism.
@@ -35,7 +35,7 @@ payment settles; `my_bookings` then hands back the hotel's confirmation code. Se
 charges a local stripe-mock, so the flow runs with no real card.
 
 Two things the incumbent flow cannot do follow from that. Payment is part of
-the wire rather than a handback, so the reservation completes in one exchange.
+the protocol rather than a handback, so the reservation completes in one exchange.
 And the booking is the assistant's own: `spec/stories/privacy_spec.rb`
 and `../kiosk-redteam/suites/hoteling.rb` assert a cross-tenant read and a forged `user_id` are
 refused, while `spec/stories/spending_cap_spec.rb` holds a per-assistant limit the

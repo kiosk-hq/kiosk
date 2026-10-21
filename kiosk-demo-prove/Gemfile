@@ -3,7 +3,7 @@
 source 'https://rubygems.org'
 
 # kiosk-demo-prove — the anonymizing KYC broker demo. This is NOT a
-# Kiosk operator: it mounts NO Kiosk wire at all (neither reserved endpoint,
+# Kiosk operator: it mounts NO Kiosk HTTP API at all (neither reserved endpoint,
 # `schema` or `pay`, and no per-verb endpoint, because it registers no verb)
 # and depends on NO kiosk gem.
 # It is the smallest possible Rails app — an Ed25519 issuer key, a request table,

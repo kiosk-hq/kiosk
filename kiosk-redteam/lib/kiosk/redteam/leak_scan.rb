@@ -22,7 +22,7 @@ module Kiosk
 
       module_function
 
-      # +supplied+ is what the probe put on the wire; nil discounts nothing.
+      # +supplied+ is what the probe put in the protocol; nil discounts nothing.
       def scan(body, needles, supplied: nil)
         raw = body.is_a?(String) ? body : JSON.generate(body)
         echoed, leaked = sightings(raw, needles, echo_spans(raw, supplied)).partition(&:last)

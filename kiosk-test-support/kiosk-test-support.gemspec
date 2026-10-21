@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
     `run_query`, `run_action`, `pay_action`, `kiosk_seed`), the pluggable
     executor contract, a NullExecutor for self-tests, and the structured
     error classes (`RLSDenied`, `QuotaExceeded`, `ExecutorNotConfigured`).
-    It is wired into RSpec by `kiosk-rls-rspec` and into Minitest by
+    It is connected to RSpec by `kiosk-rls-rspec` and into Minitest by
     `kiosk-rls-minitest`.
 
     The ASSISTANT drives an origin over HTTP as an assistant does: it

@@ -2,7 +2,7 @@
 
 # A classifieds board split between two sellers who sign in with a password.
 # Alice's account is a household: two of her listings were posted by two
-# different assistants. Assistants register themselves on the wire.
+# different assistants. Assistants register themselves in the protocol.
 
 password = 'philslist-demo-password'
 alice, bob = { '00000000-0000-0000-0000-000000000001' => 'alice@example.com',

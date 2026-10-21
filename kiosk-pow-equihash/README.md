@@ -142,7 +142,7 @@ This is superior to Argon2id's `D` parameter because:
 3. **Operator-friendly.** Adjust N per-client based on abuse score, no parameter tuning.
 4. **Predictable cost.** Each proof is independent — the solver knows exactly how much work is needed.
 
-## Wire format
+## Format
 
 Challenge (as issued by the gate — `Kiosk::Reputation::Challenge.issue`):
 ```json
@@ -164,9 +164,9 @@ Proof:
 }
 ```
 
-The solver accepts the salt under either key — the gate/challenge wire key
+The solver accepts the salt under either key — the gate/challenge protocol key
 `salt` or the alias `salt_b64`. `header_nonce` is a solver-chosen field of the
-*proof*, not a wire-challenge field.
+*proof*, not a challenge field.
 
 `indices` are **not** globally sorted — they are in canonical Wagner-tree
 order (see "Verification contract" below).

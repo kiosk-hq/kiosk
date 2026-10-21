@@ -25,7 +25,7 @@ DIEGO_UUID = DIEGO.user_id
 # The assistants' calls; each pays the proof-of-work toll its access token owes.
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
-# Each assistant's token with the key it is bound to: the wire signs a DPoP proof per call.
+# Each assistant's token with the key it is bound to: the protocol signs a DPoP proof per call.
 AUTH_A = WIRE.dpop(DIEGO.token, DIEGO.key)
 AUTH_B = WIRE.dpop(BEA.token, BEA.key)
 

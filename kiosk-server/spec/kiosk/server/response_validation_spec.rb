@@ -75,8 +75,8 @@ RSpec.describe Kiosk::Server::ResponseValidation do
                                                       /action "place_order"/)
     end
 
-    # THE SHAPE THE WIRE ANSWERS, not the one the handler wrote: a paginating
-    # query renders `{rows:, next_cursor:, total:}` internally and the wire
+    # THE SHAPE THE PROTOCOL ANSWERS, not the one the handler wrote: a paginating
+    # query renders `{rows:, next_cursor:, total:}` internally and the protocol
     # publishes the ROWS — a bare array, the cursor and the total having left
     # as the `Link` and `X-Total-Count` response headers (T-092). The
     # declaration is checked against the PUBLISHED spelling, which is the whole

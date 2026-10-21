@@ -8,12 +8,12 @@
 # is.
 #
 # WHEN TO RUN IT. From anywhere, at any time, and after any Caddyfile change.
-# deploy/deploy-caddy.sh --apply already verifies the header on the wire as it
+# deploy/deploy-caddy.sh --apply already verifies the header in the protocol as it
 # installs. THIS SCRIPT IS NOT RETIRED BY THAT and must not be -- the deploy
 # proves the header arrives at the moment it runs, and this proves it still
 # arrives now, from anywhere, without ssh.
 #
-# WHY IT PROBES THE WIRE RATHER THAN PARSING A CONFIG. "Does this config reach
+# WHY IT PROBES THE PROTOCOL RATHER THAN PARSING A CONFIG. "Does this config reach
 # a directive" is the right question only for a setting that cannot be observed
 # without flooding the box. HSTS is on every single response, so the strongest
 # available oracle is the response itself -- and a config check run on the

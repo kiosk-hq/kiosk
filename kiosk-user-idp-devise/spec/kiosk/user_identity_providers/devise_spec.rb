@@ -129,7 +129,7 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
     end
   end
 
-  describe '#verify shipped wire — ActionDispatch::Request' do
+  describe '#verify shipped request — ActionDispatch::Request' do
     include_context 'with a Devise adapter'
 
     # kiosk-server's WireController does NOT pass `self`; it passes
@@ -137,7 +137,7 @@ RSpec.describe Kiosk::UserIdentityProviders::Devise do
     # `IdentityResolution.resolve(request)`. That object has no
     # `#current_user` and is not a Hash — the adapter must read the
     # signed-in user from its Warden proxy at `request.env["warden"].user`,
-    # or every Devise-session human 401s on the real wire.
+    # or every Devise-session human 401s on the real protocol.
     it "resolves an Identity from the request's Warden user" do
       user    = FakeUser.new(id: user_id)
       request = FakeActionDispatchRequest.new(warden: FakeWarden.new(user: user))

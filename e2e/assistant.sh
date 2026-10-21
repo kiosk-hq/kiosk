@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Mock AI assistant — exercises the Kiosk wire surface against a running
+# Mock AI assistant — exercises the Kiosk HTTP API surface against a running
 # kiosk-server. Executed as a bash subprocess by e2e/run.sh after server
 # start (not sourced — it runs under its own `set -euo pipefail`).
 #
-# Asserts on responses from the REST wire surface: the per-verb endpoints
+# Asserts on responses from the REST HTTP API: the per-verb endpoints
 # (GET /kiosk/<query-name>, POST /kiosk/<action-name>), /kiosk/pay, and the
 # two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). A path
 # under the mount that names NEITHER a verb the catalogue publishes NOR one of
-# the wire's own reserved endpoints is asserted to answer the ordinary routing
+# the protocol's own reserved endpoints is asserted to answer the ordinary routing
 # 404 — with a token and without one alike, since a routing miss is decided
 # before any credential is read.
 # Exits non-zero on any failure.
@@ -19,10 +19,10 @@
 # …; rel="next"` HEADER, with `X-Total-Count` beside it, so there is no
 # composite body shape left at all. There is no name-dispatch endpoint: a verb
 # is addressed by its own path, and `schema` and `pay` answer the same shape as
-# the per-verb wire.
+# the per-verb endpoints.
 #
 # ONE AUTH SHAPE, WITH TWO DELIBERATE EXCEPTIONS. Everything under the mount
-# takes a DPoP-bound access token (RFC 9449) except the two DESCRIPTIONS of this origin's wire —
+# takes a DPoP-bound access token (RFC 9449) except the two DESCRIPTIONS of this origin's protocol —
 # `GET /kiosk/schema` and `GET /kiosk/openapi.json` — which are
 # public, untolled and cacheable, and are the same registry in two dresses.
 #
@@ -106,7 +106,7 @@ assert() {
   fi
 }
 
-# ── The per-verb wire ───────────────────────────────────────────────────
+# ── The per-verb endpoints ───────────────────────────────────────────────────
 #
 # A query is a GET at its own path and carries its arguments in the query
 # string; an action is a POST at its own path and carries them in a JSON
@@ -281,14 +281,14 @@ assert "oauth metadata names the DPoP algorithms" \
 # a token, learns from it that registration may be tolled, and then has to
 # produce an Equihash proof. The solve is the one step of the handshake it
 # cannot derive from prose, so the document has to hand over both halves: the
-# wire skill (the instructions, carrying the solver's content-addressed pin)
-# and the published solver itself. Asserted on the WIRE, over the served
+# skill (the instructions, carrying the solver's content-addressed pin)
+# and the published solver itself. Asserted on the PROTOCOL, over the served
 # bytes, because that is where an assistant meets them.
 printf "\n\033[1m=== /auth.md (cold-start pointers) ===\033[0m\n"
 
 authmd_body=$(curl -sf "$SERVER_URL/auth.md")
-assert "auth.md names the wire skill" \
-  "$(printf '%s' "$authmd_body" | grep -c 'Wire skill for AI assistants: https://kiosk.tech/skill-v')" "1"
+assert "auth.md names the skill" \
+  "$(printf '%s' "$authmd_body" | grep -c 'Skill for AI assistants: https://kiosk.tech/skill-v')" "1"
 assert "auth.md names the published solver" \
   "$(printf '%s' "$authmd_body" | grep -c 'https://kiosk.tech/pow/solve.py')" "1"
 assert "auth.md forbids a hand-rolled solver" \
@@ -357,7 +357,7 @@ assert "server is this origin's endpoint" \
 
 # DERIVED, and this is the assertion that says so: the operator paths are
 # exactly the verbs the canonical catalog publishes, with the query half at GET
-# and the action half at POST. `/schema` and `/pay` are the wire's OWN reserved
+# and the action half at POST. `/schema` and `/pay` are the protocol's OWN reserved
 # endpoints — the protocol's, not the operator's — which is why the comparison
 # below subtracts them before matching the two documents.
 schema_doc=$(curl -sf "$SERVER_URL/kiosk/schema")
@@ -368,8 +368,8 @@ assert "a query is a GET"            "$(echo "$oa" | jq -r '.paths."/salons" | k
 assert "an action is a POST"         "$(echo "$oa" | jq -r '.paths."/book_appointment" | keys | join(",")')" "post"
 assert "the reserved /schema is described, as a GET" \
   "$(echo "$oa" | jq -r '.paths."/schema" | keys | join(",")')" "get"
-assert "…tagged wire, not queries"   "$(echo "$oa" | jq -r '.paths."/schema".get.tags | join(",")')" "wire"
-# `/pay` is described because THIS origin serves it — it wires a payment
+assert "…tagged reserved, not queries"   "$(echo "$oa" | jq -r '.paths."/schema".get.tags | join(",")')" "reserved"
+# `/pay` is described because THIS origin serves it — it configures a payment
 # provider, so `pay` is in its capabilities. The renderer gates both reserved
 # paths on the live capability set, so the document describes what this origin
 # ANSWERS rather than what the protocol allows in general. (The absent case is
@@ -377,7 +377,7 @@ assert "…tagged wire, not queries"   "$(echo "$oa" | jq -r '.paths."/schema".g
 # a provider; this harness only ever boots one fixture app.)
 assert "the reserved /pay is described, as a POST" \
   "$(echo "$oa" | jq -r '.paths."/pay" | keys | join(",")')" "post"
-assert "…also tagged wire"           "$(echo "$oa" | jq -r '.paths."/pay".post.tags | join(",")')" "wire"
+assert "…also tagged reserved"         "$(echo "$oa" | jq -r '.paths."/pay".post.tags | join(",")')" "reserved"
 assert "pay's capability is advertised" \
   "$(echo "$wk" | jq -r '.kiosk.capabilities | index("pay") != null')" "true"
 assert "…and no /query or /run, ever again" \
@@ -455,7 +455,7 @@ assert "Kiosk-Min-Client present"     "$(echo "$headers" | grep -i '^Kiosk-Min-C
 # ON EVERY ROUTE UNDER THE MOUNT, AND ON THE ERROR HALF (spec §3.6).
 #
 # The three assertions above are the ones this harness had, and they covered
-# ONE endpoint on ONE status. §3.6 binds the whole mount — the wire verbs, the
+# ONE endpoint on ONE status. §3.6 binds the whole mount — the verbs, the
 # auth plane, the binding plane, the KYC endpoint and the mount-relative JWKS —
 # "on success and on error alike", and that is precisely the surface an agent
 # uses the handshake on: a client that must decide whether it can speak to this
@@ -628,7 +628,7 @@ assert "Vary names all three request headers" \
 # §3.7.4 (matrix SPEC-016), ON A BOOTED ORIGIN — "an operator MAY relax a 200
 # to `private, max-age=N` for a payload that is genuinely identity-independent
 # — a public catalogue, say". `salons` IS that catalogue and its handler now
-# says so; the value reaches the wire because the dispatch seam preserves a
+# says so; the value reaches the protocol because the dispatch seam preserves a
 # handler's own response headers, so this line is the proof
 # that a published permission is exercisable rather than decorative.
 #
@@ -642,15 +642,15 @@ assert "…and never says public or s-maxage while doing it (§3.7.3)" \
   "$(echo "$cache_headers" | tr -d '\r' | grep -i '^Cache-Control:' | grep -Ec 'public|s-maxage')" "0"
 
 # THE CONTROL, and it is the one that matters: a per-principal payload keeps
-# the default. Without it "the wire honours a handler's Cache-Control" would
+# the default. Without it "the protocol honours a handler's Cache-Control" would
 # pass just as well on a build that had stopped applying any policy at all.
 mine_cache_headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/my_appointments" -sS -o /dev/null -D -)
 assert "…while an identity-scoped 200 keeps private, no-store" \
   "$(echo "$mine_cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
 
-# The pagination facts, on the wire rather than in the document. `salons` does
+# The pagination facts, in the protocol rather than in the document. `salons` does
 # not paginate,
-# so its answer is COMPLETE: the wire states the matching total (which for a
+# so its answer is COMPLETE: the protocol states the matching total (which for a
 # complete array is its own length) and sends NO `Link` at all — the link's
 # absence is the only completeness signal an assistant may rely on.
 assert "a COMPLETE answer carries X-Total-Count" \
@@ -660,7 +660,7 @@ assert "…and NO Link header, because there is no next page" \
 
 # ─── GET /kiosk/schema — PUBLIC, AND THE ONE EXCEPTION TO THE LINE ABOVE ───
 #
-# The two assertions above are the fleet-wide policy: every wire
+# The two assertions above are the fleet-wide policy: every protocol
 # response is identity-scoped, so it varies on `Authorization` and is never
 # stored by a shared cache. `schema` is one of TWO endpoints under the mount
 # that are none of those things — no identity, no toll, the same bytes for
@@ -747,7 +747,7 @@ appts_before_mna=$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments
 assert "GET at an action's path → 404"  "$status" "404"
 assert "…with no Allow on it"           "$(echo "$mna_headers" | grep -ic '^Allow:')" "0"
 assert "…and no problem document"       "$(echo "$mna_headers" | grep -ic '^Content-Type: application/problem+json')" "0"
-assert "…but still stamped by the wire" "$(echo "$mna_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
+assert "…but still stamped by the engine" "$(echo "$mna_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
 assert "…and the write never ran"       "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments")" "$appts_before_mna"
 
 status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/salons" -sS -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d '{}')
@@ -793,12 +793,12 @@ printf "\n\033[1m=== problem documents ===\033[0m\n"
 #
 # The §3.6 version headers are still stamped, because the middleware sits above
 # the router, and that is the discriminating half of these assertions: the
-# answer is Rails' own AND it is still identifiably this wire's origin.
+# answer is Rails' own AND it is still identifiably this protocol's origin.
 nf_headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/frobnicate" -sS -o /dev/null -D -)
 status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/frobnicate" -sS -o /dev/null -w "%{http_code}")
 assert "unknown query → 404"          "$status" "404"
 assert "…not a problem document"      "$(echo "$nf_headers" | grep -ic '^Content-Type: application/problem+json')" "0"
-assert "…still stamped by the wire"   "$(echo "$nf_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
+assert "…still stamped by the engine" "$(echo "$nf_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
 
 r=$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "frobnicate")
 assert "…with no code to branch on"   "$(echo "$r" | grep -c 'verb_not_found')" "0"
@@ -824,7 +824,7 @@ assert "unknown action → 404"         "$status" "404"
 # this app draws one explicit route per verb, so an unregistered name reaches no
 # route at all and the answer is the plain 404 asserted just above -- Rails' own,
 # with no `code` for an assistant to branch on. The code stays in the vocabulary
-# for an operator who draws a catch-all action of their own, and the wire's
+# for an operator who draws a catch-all action of their own, and the protocol's
 # answer for it is asserted in kiosk-server's own suite.
 
 # (2) not_found -- the call is REAL and an ARGUMENT addressed something absent.
@@ -937,7 +937,7 @@ assert "a non-verb-shaped path → 404" "$status" "404"
 
 # ─── a path in neither the catalogue nor the reserved set → ordinary 404 ──
 #
-# TWO kinds of path are drawn under the mount and no third: the wire's OWN
+# TWO kinds of path are drawn under the mount and no third: the protocol's OWN
 # reserved endpoints — `schema`, `pay`, `openapi.json`, the auth plane, JWKS,
 # KYC, the claim and link flows — and one explicit route per verb the
 # catalogue publishes. This script dials both kinds and gets real answers —
@@ -1034,13 +1034,13 @@ assert "jwks: x (public key) present"  "$(echo "$jwks" | jq -r '.keys[0].x | len
 # Never leak private parameters.
 assert "jwks: no private d field"      "$(echo "$jwks" | jq -r '.keys[0] | has("d")')"      "false"
 
-# ─── account binding: claim ceremony → bound wire → link redeem → unlink ──
+# ─── account binding: claim ceremony → bound protocol → link redeem → unlink ──
 #
 # The RFC 8628 claim ceremony binds a registered client to an existing human
 # account (alice); the device authorization request and the token poll
 # authenticate with a client assertion. The client_credentials grant is the
 # refresh path, and unlink (registration-layer revocation) ends it.
-printf "\n\033[1m=== account binding: claim → approve → token poll → bound wire → link → unlink ===\033[0m\n"
+printf "\n\033[1m=== account binding: claim → approve → token poll → bound verb call → link → unlink ===\033[0m\n"
 
 authmd=$(curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/auth.md")
 assert "binding: /auth.md served"           "$authmd" "200"
@@ -1070,7 +1070,7 @@ assert "binding: the client keeps its client_id" "$(echo "$bind_out" | jq -r '.s
 # role, resolved by kiosk-user-idp-devise from Alice's session — and not a value
 # the unauthenticated opening request supplied.
 assert "binding: token role is the approver's" "$(echo "$bind_out" | jq -r '.token_role')"                          "customer"
-assert "binding: wire verb as bound account"  "$(echo "$bind_out" | jq -r '.wire_as_bound | map(tostring) | join(":")')" "200:true"
+assert "binding: verb as bound account"  "$(echo "$bind_out" | jq -r '.wire_as_bound | map(tostring) | join(":")')" "200:true"
 assert "binding: client_credentials refresh"  "$(echo "$bind_out" | jq -r '.token_bound | map(tostring) | join(":")')" "200:true"
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
 assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "204:true"
@@ -1098,7 +1098,7 @@ assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.un
 # THE DISCRIMINATOR, and the point of the split. Two situations that could
 # share one code, dialled at this booted origin, must answer with TWO
 # DIFFERENT codes. A harness that only asserted "some refusal" would pass a
-# single-code wire; this line would not. (The third
+# single-code protocol; this line would not. (The third
 # situation, an unregistered verb NAME, is not dialable at an origin that draws
 # one explicit route per verb -- it is the plain routing 404 asserted far above.)
 assert "the two 'it is not here' answers are two DIFFERENT codes" \
@@ -1116,9 +1116,9 @@ assert "the two 'it is not here' answers are two DIFFERENT codes" \
 # REJECTED 402 pow_required with challenges[], (2) solving each challenge with
 # the bundled numpy solver and re-POSTing the SAME body with the proof(s) in the
 # `Kiosk-PoW` request header — never a body `pow` field — SUCCEEDS 201,
-# (3) the token endpoint's token for that client authenticates a real wire verb. Same mechanism the
+# (3) the token endpoint's token for that client authenticates a real verb. Same mechanism the
 # demos use (kiosk-demo-skooti).
-printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash → 201 → wire ===\033[0m\n"
+printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash → 201 → verb call ===\033[0m\n"
 
 reg_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
              KIOSK_ADDITIONAL_ORIGINS="$KIOSK_ADDITIONAL_ORIGINS" POW_CAPTURE="${POW_CAPTURE:-}" \
@@ -1128,7 +1128,7 @@ assert "register-pow: no-proof → 402"          "$(echo "$reg_out" | jq -r '.no
 assert "register-pow: code pow_required"       "$(echo "$reg_out" | jq -r '.no_proof_code')"          "pow_required"
 assert "register-pow: 1 challenge issued"      "$(echo "$reg_out" | jq -r '.challenges_len')"         "1"
 
-# ─── HOW BIG the toll is, asserted off the wire ──────────────────────────────
+# ─── HOW BIG the toll is, asserted off the protocol ──────────────────────────────
 #
 # `challenge_params_nk` is `challenges[0].params` joined `n:k`, off the same
 # 402. The expected pair is the gem's default, read from the gem.
@@ -1140,8 +1140,8 @@ assert "register-pow: served (n,k) IS the gem default" \
        "$(echo "$reg_out" | jq -r '.challenge_params_nk')"    "$reg_pow_expected"
 assert "register-pow: solve+proof → registered" "$(echo "$reg_out" | jq -r '.with_proof_registered')" "true"
 assert "register-pow: role pinned customer"    "$(echo "$reg_out" | jq -r '.role')"                   "customer"
-assert "register-pow: minted token wire → 200" "$(echo "$reg_out" | jq -r '.wire_status')"            "200"
-assert "register-pow: wire answered rows"      "$(echo "$reg_out" | jq -r '.wire_payload_is_array')"  "true"
+assert "register-pow: minted token on a verb → 200" "$(echo "$reg_out" | jq -r '.wire_status')"            "200"
+assert "register-pow: verb answered rows" "$(echo "$reg_out" | jq -r '.wire_payload_is_array')"  "true"
 
 # The deployment's second origin is its own operator (one key, two accounts,
 # no token crossing between them).
@@ -1251,7 +1251,7 @@ events() { [ -s "$AUDIT_EVENTS" ] && jq -s "$1" "$AUDIT_EVENTS" || echo "0"; }
 event_count() { events "[.[] | select($1)] | length"; }
 
 # 1. The successful bookings above each emitted one event, with the identity the
-#    token carried and the outcome the wire reported.
+#    token carried and the outcome the protocol reported.
 assert "audit: the two bookings emitted ok events" \
   "$(event_count '.action == "book_appointment" and .status == "ok"')" "2"
 assert "audit: the event names the acting assistant, its role and its actor" \
@@ -1287,14 +1287,14 @@ before_fail=$(event_count '.action == "book_appointment"')
 fail_code=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/book_appointment" \
   -sS -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" \
   -d '{"salon_id":987654,"slot":"2027-01-01T09:00:00Z"}')
-assert "audit: a booking for a missing salon fails on the wire" \
+assert "audit: a booking for a missing salon fails in the response" \
   "$([ "$fail_code" -ge 400 ] && echo yes || echo "no($fail_code)")" "yes"
 assert "audit: …and the FAILED invocation emitted an event too" \
   "$(event_count '.status == "error"')" "1"
 assert "audit: …carrying the error class and message" \
   "$(event_count '.status == "error" and (.error_class | length > 0) and (.error_message | length > 0)')" "1"
-# …AND THE HANDLER'S OWN EXCEPTION, NOT ONLY THE WIRE'S WRAPPER. The
-# wire error is `action_failed` naming the exception CLASS and nothing else,
+# …AND THE HANDLER'S OWN EXCEPTION, NOT ONLY THE PROTOCOL'S WRAPPER. The
+# Kiosk error is `action_failed` naming the exception CLASS and nothing else,
 # because a handler's arbitrary sentence is not this protocol's to publish to
 # an untrusted caller. A sink is the operator's own process, so it
 # gets the wrapped exception too — which is the thing alerting is actually

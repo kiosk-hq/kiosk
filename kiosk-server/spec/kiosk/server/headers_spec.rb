@@ -90,7 +90,7 @@ RSpec.describe Kiosk::Server::Headers do
       before { allow(described_class).to receive(:warn) }
 
       HeadersSpec::SHARED_CACHE_POLICIES.each do |policy|
-        it "replaces #{policy.inspect} with the wire's own default" do
+        it "replaces #{policy.inspect} with the engine's own default" do
           headers = described_class.add_cache_policy({ 'Cache-Control' => policy }, status: 200)
           expect(headers['Cache-Control']).to eq('private, no-store')
         end

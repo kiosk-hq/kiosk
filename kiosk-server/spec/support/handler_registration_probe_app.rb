@@ -8,7 +8,7 @@
 #
 # It builds a THROWAWAY Rails app in a temp dir with one handler controller in
 # `app/controllers/kiosk/`, boots it for real, and reports what the registry
-# holds — the only thing `GET <mount>/schema`, the wire's name lookup and the
+# holds — the only thing `GET <mount>/schema`, the protocol's name lookup and the
 # discovery documents' `capabilities` are ever computed from.
 #
 # Usage: ruby handler_registration_probe_app.rb development|production

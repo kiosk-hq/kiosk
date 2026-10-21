@@ -16,7 +16,7 @@ module Kiosk
       DIGEST_BYTES = 32
 
       # d: required leading zero bits; m: memory in KiB.
-      def self.params(d:, m: 65_536, t: 1, p: 1) # rubocop:disable Naming/MethodParameterName -- m, t, p and d are the wire params keys.
+      def self.params(d:, m: 65_536, t: 1, p: 1) # rubocop:disable Naming/MethodParameterName -- m, t, p and d are the protocol params keys.
         { m:, t:, p:, d: }
       end
 

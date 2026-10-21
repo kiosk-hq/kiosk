@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Two housemates who sign in with a password, and the household list they share.
-# Assistants register themselves on the wire. A roster shows the display name,
+# Assistants register themselves in the protocol. A roster shows the display name,
 # never the address.
 
 password = 'tudu-demo-password'

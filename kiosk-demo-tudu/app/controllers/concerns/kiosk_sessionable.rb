@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Runs domain code as the signed-in human, under the same session the wire opens
+# Runs domain code as the signed-in human, under the same session the HTTP API opens
 # for an assistant, so both see one world.
 module KioskSessionable
   extend ActiveSupport::Concern

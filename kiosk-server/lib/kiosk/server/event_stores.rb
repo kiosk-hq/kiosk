@@ -83,7 +83,7 @@ module Kiosk
           SQL
         end
 
-        # The wire's five event members, string-keyed, as {EventStore} gives them.
+        # The protocol's five event members, string-keyed, as {EventStore} gives them.
         def to_event(row)
           {
             'id' => row['id'].to_i,

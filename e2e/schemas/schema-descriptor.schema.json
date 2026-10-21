@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/schema-descriptor.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/schema-descriptor.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/schema-descriptor.schema.json. It is here so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk schema descriptor",
   "description": "The body of the unauthenticated GET <endpoint>/schema: the origin's verbs and their contracts. The root is CLOSED. The module set is in `capabilities` in /.well-known/kiosk.json.",
   "type": "object",
@@ -50,7 +50,7 @@
         "name": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$",
-          "description": "The verb's wire name, which is also its path segment under `endpoint`. One name is one KIND: a name listed under `queries` must not also appear under `actions`."
+          "description": "The verb's name, which is also its path segment under `endpoint`. One name is one KIND: a name listed under `queries` must not also appear under `actions`."
         },
         "description": {
           "type": [
@@ -109,7 +109,7 @@
         "name": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*$",
-          "description": "The topic name -- a wire name, drawn from the same vocabulary as a verb name."
+          "description": "The topic name, drawn from the same vocabulary as a verb name."
         },
         "description": {
           "type": [

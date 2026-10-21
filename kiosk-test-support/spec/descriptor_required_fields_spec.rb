@@ -149,7 +149,7 @@ RSpec.describe 'descriptor required fields' do
           #{missing.join("\n")}
 
           Every verb declares BOTH schemas: `input_schema` is the contract the
-          wire coerces and validates arguments against, and `output_schema` is
+          engine coerces and validates arguments against, and `output_schema` is
           the only machine-readable statement of what a call returns. A verb that
           takes nothing still declares the closed empty object.
         MSG

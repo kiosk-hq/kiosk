@@ -15,7 +15,7 @@ gem 'kiosk-test-support', path: '../kiosk-test-support'
 gem 'kiosk-user-idp-devise', path: '../kiosk-user-idp-devise'
 
 # PoW-gate path deps — available in specs; NOT hard-required in lib code.
-# The host that wires a reputation_policy will have these loaded transitively.
+# The host that configures a reputation_policy will have these loaded transitively.
 # The specs toll with Argon2id, which solves fast at small parameters;
 # kiosk-pow-equihash is the shipped default. kiosk-pow is the base of both.
 gem 'kiosk-pow',          path: '../kiosk-pow'

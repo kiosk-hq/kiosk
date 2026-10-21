@@ -57,9 +57,9 @@ module SkootiTokenVectors
     v('jti',    'jti of 32 non-hex characters',             false, msg(jti: 'z' * 32)),
     v('jti',    'jti of 64 hex characters',                 false, msg(jti: JTI * 2)),
 
-    # ── length: the wire cap the lock enforces before it touches the parse ───
-    v('length', 'wire token at exactly 512 bytes',          true,  msg(resv: RESV_AT_CAP)),
-    v('length', 'wire token one byte over 512',             false, msg(resv: RESV_OVER)),
+    # ── length: the length cap the lock enforces before it touches the parse ───
+    v('length', 'token string at exactly 512 bytes',          true,  msg(resv: RESV_AT_CAP)),
+    v('length', 'token string one byte over 512',             false, msg(resv: RESV_OVER)),
 
     # ── freshness: exp against the injected clock, boundary included ─────────
     v('fresh',  'exp one second past now',                  true,  msg(exp: (NOW + 1).to_s)),
@@ -68,7 +68,7 @@ module SkootiTokenVectors
     v('fresh',  'exp strictly in the past',                 false, msg(exp: EXP_PAST)),
     v('fresh',  'iat exactly now',                          true,  msg(iat: NOW.to_s)),
 
-    # ── sig: how the 64 signature bytes are spelled on the wire ──────────────
+    # ── sig: how the 64 signature bytes are spelled in the token string ──────────────
     v('sig',    'signature padded to 88 with equals signs', false, msg, :padded_sig),
     v('sig',    'signature in the standard base64 alphabet', false,
       msg(resv: RESV_ALPHABET), :standard_sig),
@@ -86,7 +86,7 @@ module SkootiTokenVectors
     # ── bytes: what an opaque field may hold, byte for byte ──────────────────
     v('bytes',  'NUL inside reservation_id',                false, msg(resv: "resv#{NUL}live")),
     v('bytes',  'NUL inside scooter_code',                  false, msg(code: "#{SCOOTER_CODE}#{NUL}X")),
-    v('bytes',  'NUL appended to the wire token',           false, msg, :trailing_nul),
+    v('bytes',  'NUL appended to the token string', false, msg, :trailing_nul),
     v('bytes',  'newline inside reservation_id',            false, msg(resv: "resv\nlive")),
     v('bytes',  'tab inside reservation_id',                false, msg(resv: "resv\tlive")),
     v('bytes',  '0x01 inside reservation_id',               false, msg(resv: "resv\u0001live")),

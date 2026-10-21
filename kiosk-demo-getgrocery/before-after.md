@@ -2,7 +2,7 @@
 
 **For an operator weighing adoption:** what an AI assistant cannot do at a
 grocery platform today, and what the same errand looks like once this demo's
-wire is installed. The code is in this directory; this is the argument.
+protocol is installed. The code is in this directory; this is the argument.
 
 **Honesty note up front.** getgrocery is what Instacart or Getir would look
 like if it spoke Kiosk — a fake-but-realistic operator built to show the

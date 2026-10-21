@@ -18,7 +18,7 @@
 #   on the scooter.  The QR must be freshly generated for each rental.
 #
 # Usage:
-#   bin/make-qr --token "<wire token>" [--scooter SK-001]
+#   bin/make-qr --token "<token string>" [--scooter SK-001]
 #   bin/make-qr --from-server [--scooter SK-001]
 #
 # --from-server: runs script/rental_flow.rb as a subprocess (SERVER_URL and
@@ -46,7 +46,7 @@ options = { scooter: 'SK-001' }
 OptionParser.new do |opts|
   opts.banner = 'Usage: bin/make-qr [--token TOKEN | --from-server] [--scooter CODE]'
 
-  opts.on('--token TOKEN', 'Wire rental token (explicit)') { |t| options[:token] = t }
+  opts.on('--token TOKEN', 'Rental token string (explicit)') { |t| options[:token] = t }
   opts.on('--from-server', 'Run script/rental_flow.rb to obtain a fresh token') { options[:from_server] = true }
   opts.on('--scooter CODE', 'Scooter code (default: SK-001)') { |c| options[:scooter] = c }
   opts.on('-h', '--help', 'Print this help') do

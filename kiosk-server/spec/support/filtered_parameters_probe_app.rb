@@ -4,7 +4,7 @@
 # run as a SUBPROCESS, never loaded into the RSpec process. It boots a real
 # Rails::Application with kiosk-server loaded and NOTHING else (no
 # config/initializers/filter_parameter_logging.rb, so what the log shows is
-# the engine's own doing), drives one request per credential-bearing wire
+# the engine's own doing), drives one request per credential-bearing protocol
 # field through the full Rack stack at the `info` level a deployed origin
 # runs at, and prints the captured log plus the values it sent as one JSON
 # report for the spec to assert on.

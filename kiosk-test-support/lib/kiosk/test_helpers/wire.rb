@@ -43,7 +43,7 @@ module Kiosk
         http
       end
 
-      # An access token and the key it is bound to. As a header value, the wire
+      # An access token and the key it is bound to. As a header value, the protocol
       # sends it as `Authorization: DPoP <token>` with a proof for that request;
       # with no token, as the proof alone (a token request).
       DpopCredential = Data.define(:token, :key)

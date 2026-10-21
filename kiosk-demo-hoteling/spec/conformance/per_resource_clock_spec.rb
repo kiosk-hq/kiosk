@@ -47,7 +47,7 @@ RSpec.describe "a property's clock is the property's" do
     end
   end
 
-  describe 'on the wire' do
+  describe 'in the response' do
     it "publishes each property's own zone in its hotel_detail row" do
       ist = kiosk_origin.call(:hotel_detail, kind: :query,
                                              params: { property_id: istanbul.id }, as: guest.id).first

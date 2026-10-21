@@ -77,7 +77,7 @@ What each unit must carry. For EACH of the 7 apps:
       `KIOSK_PROVE_SKOOTI_SECRET=<shared intake secret>`, `KIOSK_PROVE_SKOOTI_CALLBACK_HOST=skooti.demo.kiosk.tech`;
       `KIOSK_PROVE_GETGROCERY_SECRET=<a DIFFERENT shared intake secret>`, `KIOSK_PROVE_GETGROCERY_CALLBACK_HOST=getgrocery.demo.kiosk.tech`.
       The KYC operators are the demos whose Gemfile bundles `kiosk-kyc-prove`.
-- [ ] **Wire each operator to it:** in THAT operator's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_<OP>_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
+- [ ] **Point each operator at it:** in THAT operator's env set `KIOSK_PROVE_ISSUER` + `KIOSK_PROVE_BROKER_URL` = `https://kyc.demo.kiosk.tech`, `KIOSK_PROVE_INTAKE_SECRET=<the SAME value as the broker's KIOSK_PROVE_<OP>_SECRET>`, and `KIOSK_PROVE_PUBLIC_KEY_PEM=<public half of PROVE_KEY_PEM>` (or fetch once from `https://kyc.demo.kiosk.tech/prove_key.pem`).
       The names differ by design: every OPERATOR app reads one role-named `KIOSK_PROVE_INTAKE_SECRET`, while
       the BROKER keeps a per-operator name for each registry entry. The two sides pair by VALUE; the broker resolves the
       operator from the `operator_id` in the intake body.
@@ -138,7 +138,7 @@ What each unit must carry. For EACH of the 7 apps:
 - [ ] **Deploy the Caddyfile with `deploy/deploy-caddy.sh`, from a workstation that can ssh to the
       box — NOT by hand on the box.** `deploy/deploy-caddy.sh` alone stages the file, has the BOX's
       own caddy validate it and prints the diff, changing nothing; `--apply` backs up
-      `/etc/caddy/Caddyfile`, installs, reloads, verifies the LIVE WIRE and rolls back if the wire
+      `/etc/caddy/Caddyfile`, installs, reloads, verifies the LIVE HTTP API and rolls back if the protocol
       disagrees. It ships the whole file or nothing — no patched lines, no merge — so `deploy/Caddyfile`
       is the source of truth and a hand-edit on the box is something the next `--apply` silently
       reverts.
@@ -148,7 +148,7 @@ What each unit must carry. For EACH of the 7 apps:
       throttle is deliberately not a default: a Kiosk proof verifies in milliseconds, so a flood of
       junk proofs costs the sender more than the origin.
       `deploy/Caddyfile` ships `import ratelimit` and the whole `(ratelimit)` snippet
-      COMMENTED, that file is what the box runs, and `--apply`'s wire check bursts an origin 75 times
+      COMMENTED, that file is what the box runs, and `--apply`'s protocol check bursts an origin 75 times
       and fails if a 429 comes back. Do not tick this as a skipped step — there is no step.
       The exposure the snippet covers has not gone away and the analysis is kept beside the commented
       block in `deploy/Caddyfile` and in `deploy/README.md` §"Edge rate-limit"; if the box ever

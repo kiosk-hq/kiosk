@@ -7,8 +7,8 @@
 # answers a call; this answers a salon looking at its book.
 #
 # It is deliberately NOT a Kiosk handler and NOT drawn under the mount. An
-# operator's own pages are its own business — the wire neither knows nor cares
-# that this is what moved the row — and putting it on the wire would teach the
+# operator's own pages are its own business — the protocol neither knows nor cares
+# that this is what moved the row — and putting it in the protocol would teach the
 # opposite: that a push has to be paired with a verb.
 #
 # It is also not authenticated, because this is a test harness and the surface

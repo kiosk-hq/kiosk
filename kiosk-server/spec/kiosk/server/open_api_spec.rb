@@ -98,13 +98,13 @@ RSpec.describe Kiosk::Server::OpenApi do
   describe 'it is a DERIVATION of the registry, not a second catalog' do
     include OpenApiSpecHelpers
 
-    it 'has one path per registered verb, plus the reserved wire, and nothing else' do
+    it 'has one path per registered verb, plus the reserved endpoints, and nothing else' do
       declare_query('salons')
       declare_action('book_appointment')
 
       # `/schema` is the protocol's own endpoint, not an operator verb — it is
       # here because the cutover made it answer the same 0.4 shapes everything
-      # else does (see "the reserved wire endpoints" below). `/pay` is absent:
+      # else does (see "the reserved endpoints" below). `/pay` is absent:
       # this origin has no payment provider, so `pay` is not in its
       # capabilities. Everything after the reserved block is one path per
       # registered verb and nothing more.
@@ -159,8 +159,8 @@ RSpec.describe Kiosk::Server::OpenApi do
     end
   end
 
-  # THE RESERVED WIRE. Until the cutover this document described the per-verb
-  # wire and NOTHING else, because `schema` and `pay` still answered 0.3's
+  # THE RESERVED PROTOCOL. Until the cutover this document described the per-verb
+  # protocol and NOTHING else, because `schema` and `pay` still answered 0.3's
   # envelope — a shape none of the components below can express. They answer
   # the same problem documents and the same verbatim payloads as every other
   # endpoint now (T-074 = A), so a description that left them out would be
@@ -172,15 +172,15 @@ RSpec.describe Kiosk::Server::OpenApi do
   # anything on this origin. The invariant that matters is untouched —
   # nothing here says anything about an OPERATOR verb that the verb's own
   # three fields do not.
-  describe 'the reserved wire endpoints' do
+  describe 'the reserved endpoints' do
     include OpenApiSpecHelpers
 
-    it 'describes `schema` as a GET under the `wire` tag, with its own components' do
+    it 'describes `schema` as a GET under the `reserved` tag, with its own components' do
       declare_query('salons')
 
       expect(document.dig(:paths, '/schema').keys).to eq([:get])
       expect(document.dig(:paths, '/schema', :get, :operationId)).to eq('schema')
-      expect(document.dig(:paths, '/schema', :get, :tags)).to eq(['wire'])
+      expect(document.dig(:paths, '/schema', :get, :tags)).to eq(['reserved'])
       expect(document.dig(:components, :schemas))
         .to include('schema.response', 'schema.descriptor')
     end
@@ -188,7 +188,7 @@ RSpec.describe Kiosk::Server::OpenApi do
     # An origin publishes its descriptor shape on TWO documents — `GET
     # <endpoint>/schema` and this derived OpenAPI — so a slot removed from one
     # and left on the other is a HALF removal, and nothing else asserted this
-    # half. T-085 took `params` off the wire (spec §8.3); the component that
+    # half. T-085 took `params` off the protocol (spec §8.3); the component that
     # describes a descriptor to an OpenAPI reader must not still declare it.
     it 'does not declare the retired `params` slot on the descriptor component (T-085)' do
       declare_query('salons')
@@ -214,7 +214,7 @@ RSpec.describe Kiosk::Server::OpenApi do
       expect(Kiosk.configuration.capabilities).to include('pay')
       expect(document.dig(:paths, '/pay').keys).to eq([:post])
       expect(document.dig(:paths, '/pay', :post, :operationId)).to eq('pay')
-      expect(document.dig(:paths, '/pay', :post, :tags)).to eq(['wire'])
+      expect(document.dig(:paths, '/pay', :post, :tags)).to eq(['reserved'])
       expect(document.dig(:components, :schemas)).to include('pay.request', 'pay.response')
     end
 
@@ -239,10 +239,10 @@ RSpec.describe Kiosk::Server::OpenApi do
       expect(document[:paths]).to be_empty
     end
 
-    it "sorts its operations into three tags — the wire's own, then the two verb kinds" do
+    it 'sorts its operations into three tags — the reserved endpoints, then the two verb kinds' do
       declare_query('salons')
 
-      expect(document[:tags].pluck(:name)).to eq(%w[wire queries actions])
+      expect(document[:tags].pluck(:name)).to eq(%w[reserved queries actions])
     end
   end
 
@@ -255,7 +255,7 @@ RSpec.describe Kiosk::Server::OpenApi do
       # Stoplight Prism 5.16.0 reads `el.explode || false` — it does not apply
       # the spec's defaults — and `deepObject` + `explode: false` is UNDEFINED
       # per OAS 3.1.2. A document that leaves either implicit is a document
-      # that disagrees with this wire inside somebody else's tool.
+      # that disagrees with this protocol inside somebody else's tool.
       parameters = document.dig(:paths, '/search_hotels', :get, :parameters)
       inline     = parameters.reject { |p| p.key?(:$ref) }
 
@@ -320,7 +320,7 @@ RSpec.describe Kiosk::Server::OpenApi do
                 { '$ref': '#/components/parameters/cursor' }])
     end
 
-    it "takes their types from the DECODER's table, so the document cannot outvote the wire" do
+    it "takes their types from the DECODER's table, so the document cannot outvote the engine" do
       declare_query('salons')
 
       expect(document.dig(:components, :parameters, 'limit', :schema, :type))
@@ -370,7 +370,7 @@ RSpec.describe Kiosk::Server::OpenApi do
     end
 
     it 'does not claim the body is required when the verb requires nothing of it' do
-      # The wire reads an absent body as `{}`, which satisfies a closed empty
+      # The protocol reads an absent body as `{}`, which satisfies a closed empty
       # object — so "required" there would be a claim the server never enforces.
       declare_action('ping', input_schema: { type: 'object', additionalProperties: false,
                                              properties: {}, required: [] })
@@ -518,7 +518,7 @@ RSpec.describe Kiosk::Server::OpenApi do
       expect(document.dig(:info, :version)).to eq(Kiosk::Protocol::API_VERSION)
     end
 
-    it 'requires the same DPoP-bound identity the wire does' do
+    it 'requires the same DPoP-bound identity the verbs do' do
       expect(document[:security]).to eq([{ dpopAuth: [] }])
       expect(document.dig(:components, :securitySchemes, :dpopAuth))
         .to include(type: 'http', scheme: 'DPoP')
@@ -652,7 +652,7 @@ RSpec.describe Kiosk::Server::OpenApi do
       # MEASURED, and it is the T-086 finding a porter has to know: a generic
       # OpenAPI validator sees `amenity[]` as an UNDECLARED parameter and
       # passes it over — the declared `amenity` is simply never validated.
-      # Our own wire reads both spellings (Rack parses them identically), so
+      # Our own protocol reads both spellings (Rack parses them identically), so
       # nothing is broken here; what it means is that a porter must put the
       # argument decoding AHEAD of any generic request validator, never behind
       # it. No document can express both forms — OAS has no style for the

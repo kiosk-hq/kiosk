@@ -6,7 +6,7 @@ require 'securerandom'
 
 module Kiosk
   module Reputation
-    # Stateless wire challenge for a `pow_required` answer: an HMAC over its fields
+    # Stateless signed challenge for a `pow_required` answer: an HMAC over its fields
     # and the request fingerprint, so it needs no storage and binds to one request.
     # The caller keeps the spent-id set.
     module Challenge
@@ -22,7 +22,7 @@ module Kiosk
       private_constant :Fields
 
       class << self
-        # @return [Hash] wire challenge: {id:, alg:, params:, salt: <base64>, exp:, sig:}
+        # @return [Hash] signed challenge: {id:, alg:, params:, salt: <base64>, exp:, sig:}
         # @raise [ArgumentError] when a field carries a delimiter or `params` is not a Hash
         def issue(alg:, params:, request_fingerprint:, secret:, ttl:, # rubocop:disable Metrics/ParameterLists -- public keyword signature; every keyword is part of it.
                   now: Time.now.to_i,

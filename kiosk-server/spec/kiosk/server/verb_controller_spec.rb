@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The per-verb wire at the wire level.
+# The per-verb endpoints at the protocol level.
 #
 # `GET <endpoint>/<query-name>` and `POST <endpoint>/<action-name>`, resolved
 # against the same registry `GET <endpoint>/schema` renders its descriptors
@@ -135,7 +135,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body).to eq([{ id: 1, name: 'Combette on Park' }])
     end
 
-    it 'carries the cache policy every wire response must carry' do
+    it 'carries the cache policy every Kiosk response must carry' do
       call_verb(:get, 'salons')
       expect(last_headers['Vary']).to eq('Authorization, Kiosk-PoW, Kiosk-Timezone')
       expect(last_headers['Cache-Control']).to eq('private, no-store')
@@ -213,7 +213,7 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     it 'answers 401 before it will say whether the verb exists' do
-      # The 0.4 wire was first drafted with the declared-verb check BEFORE
+      # The 0.4 protocol was first drafted with the declared-verb check BEFORE
       # authentication; this controller resolves identity first, so an unauthenticated probe
       # cannot tell a registered name from an unregistered one. That is
       # ordinary gate ORDER, not an anti-enumeration defence — spec §4.2 and
@@ -341,7 +341,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Link']).to be_nil
     end
 
-    # The total is the handler's to state on a truncated page, and the wire's
+    # The total is the handler's to state on a truncated page, and the protocol's
     # to derive on a complete one. It is never guessed from the page.
     it "emits the handler's total on a truncated page" do
       declare_query('listings') do
@@ -415,8 +415,8 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     it 'not even when the handler tried to set a policy of its own' do
-      # A handler's `Cache-Control` reaches the wire and is then REFUSED by
-      # {Headers.add_cache_policy}, the only place a wire cache policy is
+      # A handler's `Cache-Control` reaches the protocol and is then REFUSED by
+      # {Headers.add_cache_policy}, the only place a protocol cache policy is
       # decided. Refused, not edited: `public, s-maxage=600` does not become
       # `private, max-age=600`, because nobody wrote that.
       declare_query('salons') do
@@ -463,7 +463,7 @@ RSpec.describe Kiosk::Server::VerbController do
   # §3.7.4 (matrix SPEC-016), the neighbouring MAY: "the default for a `200`
   # is `private, no-store`; an operator MAY relax it to `private, max-age=N`
   # for a genuinely identity-independent payload". {HandlerServing} carries
-  # the `Cache-Control` of the handler's render to the wire answer, so a
+  # the `Cache-Control` of the handler's render to the protocol answer, so a
   # handler can use that permission through a real request.
   describe "an operator MAY relax a 200's cache policy from a handler (§3.7.4)" do
     it 'keeps `private, max-age=N` the handler set' do
@@ -496,7 +496,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(last_headers['Cache-Control']).to eq('max-age=30, private')
     end
 
-    it "NOT on a refusal: a 4xx keeps the wire's own policy" do
+    it "NOT on a refusal: a 4xx keeps the engine's own policy" do
       # §3.7.4 speaks about a `200`, and {HandlerServing} only carries the
       # render's headers on a 2xx. A handler that renders 403 with a
       # long freshness would otherwise make its own refusal cacheable.
@@ -509,10 +509,10 @@ RSpec.describe Kiosk::Server::VerbController do
     end
 
     # WHY THE PROPAGATION LIST HAS EXACTLY ONE ENTRY, measured rather than
-    # asserted. The handler renders on the wire request, `HTTP_ACCEPT`
+    # asserted. The handler renders in the protocol request, `HTTP_ACCEPT`
     # included, so Rails' own `_set_vary_header` stamps `Vary: Accept` on the
     # handler's render. A blanket copy of the render's headers would
-    # import that onto the wire, where it is false — the answer is JSON
+    # import that onto the protocol, where it is false — the answer is JSON
     # whatever the caller asked for — and would split a cache by Accept string
     # for nothing. The first expectation proves Rails really does it; the
     # second proves the seam does not carry it.
@@ -605,9 +605,9 @@ RSpec.describe Kiosk::Server::VerbController do
 
   # `input_schema` is REQUIRED on every verb, and §8.1 item 5 makes the
   # operator coerce-then-validate before the handler sees an argument. So the
-  # per-verb wire validates whatever `validate_requests` says; the first
+  # per-verb endpoints validates whatever `validate_requests` says; the first
   # example turns the flag OFF to show it.
-  describe 'input_schema is executable UNCONDITIONALLY on the per-verb wire' do
+  describe 'input_schema is executable UNCONDITIONALLY on the per-verb endpoints' do
     it 'validates with validate_requests OFF — the flag no longer gates arguments' do
       Kiosk.configure { |c| c.validate_requests = false }
       expect(Kiosk.configuration.validate_requests).to be(false)
@@ -698,7 +698,7 @@ RSpec.describe Kiosk::Server::VerbController do
   end
 
   # A body that is not JSON at all never reaches Kiosk's own parse guard on
-  # this wire: `serve` reads `params[:kiosk_verb]` first, and touching `params`
+  # this protocol: `serve` reads `params[:kiosk_verb]` first, and touching `params`
   # makes Rails parse the body — so the raise comes out of the PARAMETER layer.
   # Without the `rescue_from ActionDispatch::Http::Parameters::ParseError` in
   # {WireController} it escapes to the host's exception app, which renders an
@@ -720,7 +720,7 @@ RSpec.describe Kiosk::Server::VerbController do
     end
   end
 
-  describe 'the 0.3 wire is GONE — one wire, one conformance surface' do
+  describe 'the 0.3 protocol is GONE — one protocol, one conformance surface' do
     before { declare_query('salons') { render json: [{ id: 1 }] } }
 
     it 'leaves WireController with exactly two actions — schema and pay' do
@@ -760,7 +760,7 @@ RSpec.describe Kiosk::Server::VerbController do
       expect(body[:type]).to   eq('https://kiosk.tech/problems/verb_not_found')
       expect(body[:status]).to eq(404)
       expect(body[:code]).to   eq('verb_not_found')
-      # Not the 0.3 envelope, and not a hint that the old wire moved: the
+      # Not the 0.3 envelope, and not a hint that the old protocol moved: the
       # answer is indistinguishable from any other unregistered action.
       expect(body).not_to have_key(:ok)
       expect(body).not_to have_key(:error)

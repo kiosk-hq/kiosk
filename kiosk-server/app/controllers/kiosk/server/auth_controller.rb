@@ -17,7 +17,7 @@ module Kiosk
           render json: payload, status: status
         end
 
-        # The same RFC 9457 problem document as the wire (§9).
+        # The same RFC 9457 problem document as the protocol (§9).
         def render_error(err)
           add_problem_headers(err)
           render json: err.to_problem, status: err.http_status,
@@ -32,7 +32,7 @@ module Kiosk
           response.set_header('WWW-Authenticate', challenge) if challenge
         end
 
-        # RFC 7235 challenge header for the 402s, as on the wire.
+        # RFC 7235 challenge header for the 402s, as in the protocol.
         def www_authenticate_for(err)
           issuer = Kiosk.current_issuer
           case err

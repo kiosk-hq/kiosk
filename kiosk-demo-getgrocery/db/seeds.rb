@@ -2,7 +2,7 @@
 
 # A Dublin grocery catalog, every shelf at Product::DAILY_STOCK, and one
 # shopper who signs in with a password and has a card on file. Assistants
-# register themselves on the wire. The wine is age-restricted: a cart holding
+# register themselves in the protocol. The wine is age-restricted: a cart holding
 # it needs an age_over_18 attestation.
 [
   { sku: 'milk-0.5l',        name: 'Milk 0.5 L',                 price_cents: 89 },

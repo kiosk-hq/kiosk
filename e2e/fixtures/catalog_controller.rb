@@ -5,7 +5,7 @@
 # is the generated app's own ApplicationController, and `include Kiosk::Handler`
 # is the whole contract. Each class-level macro records a declaration and the
 # NEXT `def` claims it, so a method with no macros above it is a helper the
-# wire cannot see.
+# protocol cannot see.
 #
 # `kind :query` is what puts this verb on `GET`, and it is a property of the
 # DECLARATION rather than of the class: Kiosk::BookingsController next
@@ -52,7 +52,7 @@ module Kiosk
       # data. It is also how an assistant's own cache saves a toll — a response
       # still fresh is never re-requested and therefore never re-challenged.
       #
-      # It reaches the wire because the engine carries the `Cache-Control` of the
+      # It reaches the protocol because the engine carries the `Cache-Control` of the
       # handler's render; a seam that dropped it would make this permission unreachable
       # from the one kind of code an operator writes. `my_appointments`
       # (Kiosk::BookingsController) sets nothing and keeps `private, no-store` —

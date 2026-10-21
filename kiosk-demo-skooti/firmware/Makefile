@@ -96,8 +96,8 @@ test: build
 # the server, the KAT and the flow drivers all read. Do NOT inline a COPY of
 # that PEM here: that would be a second place a burned key is published and a
 # silent drift hazard, because regenerating the key would leave this target
-# signing with the old one. Signs a fresh message and passes the wire
-# token to the C verifier, proving C verifies a LIVE server-issued token, not
+# signing with the old one. Signs a fresh message and passes the token
+# string to the C verifier, proving C verifies a LIVE server-issued token, not
 # just the static vector. Relative path: make runs recipes in this directory.
 #
 # Then crosscheck_grammar.rb runs the other half of the same question — what

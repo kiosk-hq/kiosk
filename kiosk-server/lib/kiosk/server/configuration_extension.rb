@@ -8,7 +8,7 @@ module Kiosk
       # cannot each build their own store (a double-spent proof of work).
       LAZY_STORE_MUTEX = Mutex.new
 
-      # The discovery settings: where the wire is mounted and what it advertises.
+      # The discovery settings: where the protocol is mounted and what it advertises.
       module Discovery
         # Default `/kiosk`. Discovery advertises `endpoint = origin + mount_path`.
         attr_writer :mount_path
@@ -35,7 +35,7 @@ module Kiosk
         attr_writer :skill_url
 
         def skill_url
-          @skill_url ||= 'https://kiosk.tech/skill-v0.6.1.md'
+          @skill_url ||= 'https://kiosk.tech/skill-v0.6.2.md'
         end
         attr_accessor :skill_sha256
 

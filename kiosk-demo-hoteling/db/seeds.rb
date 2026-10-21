@@ -2,7 +2,7 @@
 
 # A hundred coined Istanbul hotels, priced in EUR cents per night — enough that
 # an assistant has to search and page rather than read the whole list — and two
-# guests who sign in with a password. Assistants register themselves on the wire.
+# guests who sign in with a password. Assistants register themselves in the protocol.
 
 # ── Two guests who sign in with a password ──────────────────────────────────
 password = 'hoteling-demo-password'

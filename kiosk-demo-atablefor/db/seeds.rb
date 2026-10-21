@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # A few Lisbon restaurants with named tables, and two diners who sign in with a
-# password. Assistants register themselves on the wire; seatings roll with the
+# password. Assistants register themselves in the protocol; seatings roll with the
 # clock (Restaurant#upcoming_seatings), so nothing here goes stale.
 
 password = 'atablefor-demo-password'

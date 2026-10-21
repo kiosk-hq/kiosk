@@ -153,7 +153,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
     end
   end
 
-  # The wire-derived floor: a stale/empty `declared_roles` must not make the
+  # The protocol-derived floor: a stale/empty `declared_roles` must not make the
   # probe set vacuous.
   describe 'when the profile declares no roles' do
     let(:profile) { minimal_profile }
@@ -166,7 +166,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
         .to have_been_made.at_least_once
     end
 
-    it 'is a BREACH when that wire-derived role is honoured' do
+    it 'is a BREACH when that request-derived role is honoured' do
       stub_request(:post, device_url).to_return(opened)
       stub_request(:post, device_url)
         .with { |req| req.body.to_s.match?(/(\A|&)(role|scope)=master/) }

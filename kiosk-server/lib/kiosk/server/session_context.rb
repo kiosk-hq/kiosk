@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # The identity a wire request runs as. {#open} wraps the request in a
+    # The identity a protocol request runs as. {#open} wraps the request in a
     # transaction and sets the principal's GUCs transaction-locally, for
     # operators who opt into RLS.
     class SessionContext
@@ -19,7 +19,7 @@ module Kiosk
 
       def self.open? = !Thread.current[KEY].nil?
 
-      # The identity the wire resolved. Raises outside a session, where a scope
+      # The identity the protocol resolved. Raises outside a session, where a scope
       # built on it would otherwise match nothing.
       def self.identity
         return current.identity if open?

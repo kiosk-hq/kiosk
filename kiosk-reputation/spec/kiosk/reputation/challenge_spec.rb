@@ -40,7 +40,7 @@ RSpec.describe Kiosk::Reputation::Challenge do
   describe '.issue' do
     include_context 'with a challenge fixture'
 
-    it 'returns a hash with all required wire fields' do
+    it 'returns a hash with all required protocol fields' do
       expect(challenge).to include(:id, :alg, :params, :salt, :exp, :sig)
     end
 

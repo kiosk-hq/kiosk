@@ -19,10 +19,10 @@ module ActiveSupport
 
     def kiosk_origin = Kiosk::TestHelpers::Conformance.require_origin!
 
-    # A refusal carries the wire's own `code`; two of this origin's refusals share 403.
+    # A refusal carries the protocol's own `code`; two of this origin's refusals share 403.
     def assert_kiosk_refused(&)
       error = assert_raises(StandardError, &)
-      assert_respond_to error, :code, "a refusal must carry the wire's own code (got #{error.class})"
+      assert_respond_to error, :code, "a refusal must carry the protocol's own code (got #{error.class})"
       error
     end
   end

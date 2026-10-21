@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Account-binding proof: the full claim ceremony (a registered client → human
-# approval on the verify page → token poll with a client assertion), a wire
+# approval on the verify page → token poll with a client assertion), a protocol
 # call as the bound assistant account, the human-initiated link-code redeem,
 # and unlink.
 # Prints a JSON result line on stdout; the shell asserts each field.
@@ -180,13 +180,13 @@ results[:token_role] = claims['role']
 agent_id = claims.fetch('agent_id')
 results[:same_client] = agent_id == client_id
 
-# Wire verb as the bound assistant account — a query is a GET at its own path.
+# Protocol verb as the bound assistant account — a query is a GET at its own path.
 MY_APPOINTMENTS = "#{SERVER}/kiosk/my_appointments".freeze
 # A call that carries a token carries a proof that its key signs for the call (RFC 9449).
 def dpop(token, key, url) = Kiosk::TestHelpers::Dpop.headers(token, key, method: 'GET', url: url)
 
 rc, q = get_json(MY_APPOINTMENTS, dpop(token, key, MY_APPOINTMENTS))
-# The answer IS the rows, so "the wire served it" is "a
+# The answer IS the rows, so "the protocol served it" is "a
 # list came back", not "ok was true".
 results[:wire_as_bound] = [rc, q.is_a?(Array)]
 

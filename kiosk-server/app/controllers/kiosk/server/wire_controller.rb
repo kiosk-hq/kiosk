@@ -6,8 +6,8 @@ require 'action_dispatch/http/parameters'
 module Kiosk
   module Server
     # The reserved `GET <endpoint>/schema` (public) and `POST <endpoint>/pay`,
-    # and the base every wire controller inherits its seams from.
-    # Wire response (JSON): success is the handler's payload VERBATIM; an error
+    # and the base every WireController inherits its seams from.
+    # Response (JSON): success is the handler's payload VERBATIM; an error
     # is an RFC 9457 problem document.
     class WireController < ::ActionController::API
       include VerbWire

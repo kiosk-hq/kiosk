@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# A query handler returns a Page instead of a bare Array to paginate; the wire
+# A query handler returns a Page instead of a bare Array to paginate; the protocol
 # writes its cursor and total as the `Link` and `X-Total-Count` headers.
 
 RSpec.describe Kiosk::Server::Page do

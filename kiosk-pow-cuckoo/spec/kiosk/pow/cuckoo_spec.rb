@@ -267,7 +267,7 @@ RSpec.describe Kiosk::Pow::Cuckoo do
   end
 
   # A malformed proof or malformed params answer false, as the Equihash backend
-  # does: a raise would reach the wire as a 500, not the 403 a bad proof earns.
+  # does: a raise would reach the protocol as a 500, not the 403 a bad proof earns.
   # The first two cycle shapes come from the caller of an unauthenticated
   # registration; the rest are operator params.
   describe '.verify on malformed input' do

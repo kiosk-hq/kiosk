@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# `bundle exec rspec`. The Kiosk conformance wiring is three lines: require the
+# `bundle exec rspec`. The Kiosk conformance setup is three lines: require the
 # engine-backed origin, require the RSpec adapter, and hand the one to the
 # other. kiosk-demo-getgrocery is the Minitest spelling of the same.
 

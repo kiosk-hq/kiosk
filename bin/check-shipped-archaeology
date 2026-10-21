@@ -285,7 +285,7 @@ RULE_PLANTS = [
   ['R1', 'a Ruby symbol', 'c.rb', "SYM = :\"K-1035\"\n"],
   ['R1', 'a trailing comment', 'd.rb', "VALUE = 1 # widened by T-158\n"],
   ['R1', 'a Rake desc', 'e.rake', "desc \"Seed the slots (K-1234)\"\n"],
-  ['R1', 'a Markdown README', 'README.md', "The wire error contract (T-054) is closed.\n"],
+  ['R1', 'a Markdown README', 'README.md', "The Kiosk error contract (T-054) is closed.\n"],
   ['R1', 'a JSON description', 'g.json', "{ \"description\": \"the toll, K-512\" }\n"],
   ['R1', 'an ERB comment', 'h.html.erb', "<%# The access line is a CONSENT field (K-072). %>\n"],
   ['R1', 'a generator template', 'i.rb.tt', "# Emitted into the host app (K-830).\n"],

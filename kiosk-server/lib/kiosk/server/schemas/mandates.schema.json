@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/mandates.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/mandates.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/mandates.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk payment: the checkout and the AP2 v0.2 mandates",
-  "description": "The checkout an operator signs, the two closed AP2 v0.2 mandates an AI assistant signs to pay it, the POST <endpoint>/pay request body, the settlement it answers and the two receipts in it. On the wire the checkout is a compact EdDSA JWT, and each mandate is a compact SD-JWT whose one disclosure is the mandate; these schemas describe the decoded objects.",
+  "description": "The checkout an operator signs, the two closed AP2 v0.2 mandates an AI assistant signs to pay it, the POST <endpoint>/pay request body, the settlement it answers and the two receipts in it. Over HTTP the checkout is a compact EdDSA JWT, and each mandate is a compact SD-JWT whose one disclosure is the mandate; these schemas describe the decoded objects.",
   "$defs": {
     "currency": {
       "type": "string",

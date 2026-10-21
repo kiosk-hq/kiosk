@@ -75,7 +75,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
         expect(actions.known).to contain_exactly('spec_post')
       end
 
-      it 'registers a handler the wire can reach' do
+      it 'registers a handler the protocol can reach' do
         register('SpecRegistrationsQueriesController')
 
         expect(queries.fetch('spec_browse')).to be_a(Kiosk::Server::ControllerVerb)
@@ -147,7 +147,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
   end
 
   describe "the registries' #unregister" do
-    it 'removes the entry so the wire stops serving it' do
+    it 'removes the entry so the protocol stops serving it' do
       declare_query('gone')
 
       expect(Kiosk::Server::Queries.unregister('gone')).to be_a(Kiosk::Server::Queries::Entry)

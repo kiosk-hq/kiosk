@@ -8,7 +8,7 @@ require 'kiosk/reputation/policy'
 require 'kiosk/reputation/policies/recent_spend'
 
 module Kiosk
-  # Policy and wire-challenge layer for proof of work, independent of any PoW
+  # Policy and challenge layer for proof of work, independent of any PoW
   # algorithm. {Challenge} is stateless: the caller keeps the spent-id set.
   module Reputation
   end

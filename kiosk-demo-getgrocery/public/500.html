@@ -5,7 +5,7 @@
   Content-Length: 0), so neither a human nor an assistant can tell a server
   fault from an empty answer. Static: no interpolation, relative links.
 
-  THE WIRE'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS. A wire failure is a FLAT
+  THE PROTOCOL'S ERRORS ARE RFC 9457 PROBLEM DOCUMENTS. A protocol failure is a FLAT
   problem document served as application/problem+json, whose top-level `code`
   (here `internal_error`) is the branch point — never the retired 0.3 wrapper
   shape, and never a retired 0.3 endpoint name. bin/check-demo-copies reads the

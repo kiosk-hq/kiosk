@@ -4,7 +4,7 @@ require 'cgi'
 
 module Kiosk
   module Server
-    # How a wire answer is written: headers, cache policy, body. Success is the
+    # How a protocol answer is written: headers, cache policy, body. Success is the
     # verb's payload; a refusal is an RFC 9457 problem document.
     module WireRendering
       private

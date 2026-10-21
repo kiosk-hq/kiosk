@@ -30,7 +30,7 @@ module Kiosk
 
     class_methods do
       # Adds `settled_currency`, the currency of a settlement among `settlements`
-      # whose checkout names the row, or NULL: the caller's own on the wire, all
+      # whose checkout names the row, or NULL: the caller's own in the protocol, all
       # of them in a back office.
       def with_settlement(settlements)
         select(arel_table[Arel.star],

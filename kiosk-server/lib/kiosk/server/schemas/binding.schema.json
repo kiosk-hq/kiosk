@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/binding.schema.json",
-  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
+  "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE HTTP bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk account binding -- claim and link",
-  "description": "The wire objects of Section 6, the one-time ceremonies that bind a registered AI assistant to an existing operator account: claim, an RFC 8628 device grant, and link. Both need the human's approval and a client assertion by the registered key. The two /oauth/* requests are form-encoded and have no schema here; their answers are in auth.schema.json.",
+  "description": "The protocol objects of Section 6, the one-time ceremonies that bind a registered AI assistant to an existing operator account: claim, an RFC 8628 device grant, and link. Both need the human's approval and a client assertion by the registered key. The two /oauth/* requests are form-encoded and have no schema here; their answers are in auth.schema.json.",
   "$defs": {
     "deviceAuthorization": {
       "type": "object",
@@ -51,7 +51,7 @@
     },
     "oauthError": {
       "$ref": "https://kiosk.tech/spec/schemas/auth.schema.json#/$defs/oauthError",
-      "description": "Section 6.1: the error answer of both /oauth/* endpoints, the one error shape on this wire that is not an RFC 9457 problem document."
+      "description": "Section 6.1: the error answer of both /oauth/* endpoints, the one error shape in this protocol that is not an RFC 9457 problem document."
     },
     "linkCode": {
       "type": "object",

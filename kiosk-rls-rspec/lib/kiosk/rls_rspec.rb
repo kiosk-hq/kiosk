@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# kiosk-rls-rspec — RSpec wiring for the Kiosk journey-test DSL.
+# kiosk-rls-rspec — RSpec integration for the Kiosk journey-test DSL.
 
 require 'rspec/core'
 require 'kiosk/test_helpers'

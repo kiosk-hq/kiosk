@@ -9,7 +9,7 @@ module Kiosk
   # and can define .valid_params?. kiosk-reputation finds it by its NAME.
   # README.md, "How to add a backend", gives the steps.
   module Pow
-    # One key of a wire object. Parsed JSON has String keys; Ruby callers use Symbols.
+    # One key of a protocol object. Parsed JSON has String keys; Ruby callers use Symbols.
     def self.param(hash, key) = hash[key] || hash[key.to_s]
   end
 end

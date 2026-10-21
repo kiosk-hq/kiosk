@@ -7,7 +7,7 @@ Cuckatoo-Cycle proof-of-work backend for [Kiosk](https://kiosk.tech).
 > Cuckatoo meets the asymmetric-verify bar, but its production parameters need
 > a native solver (this gem ships only a toy solver),
 > so it is not the default. It stays in the repo as an opt-in backend and may
-> return as a first-class extension; no demo, harness or deploy runbook wires it.
+> return as a first-class extension; no demo, harness or deploy runbook uses it.
 
 ## What this is
 
@@ -90,7 +90,7 @@ params = Kiosk::Pow::Cuckoo.params(edgebits: 29, proofsize: 42)
 
 # Verify a proof (composite nonce: header_nonce + cycle)
 # -- This is the ONE deviation from kiosk-pow-argon2id's scalar nonce: --
-# The wire proof is { header_nonce: <u32>, cycle: [proofsize ints, ascending] }
+# The protocol proof is { header_nonce: <u32>, cycle: [proofsize ints, ascending] }
 # kiosk-reputation passes this composite object unchanged to .verify.
 Kiosk::Pow::Cuckoo.verify(
   salt:   raw_salt_bytes,
@@ -104,7 +104,7 @@ keys = Kiosk::Pow::Blake2b.digest256(header).unpack("Q<4")
 Kiosk::Pow::Cuckoo.verify_cycle(keys: keys, edgebits: 29, cycle: cycle, proofsize: 42)
 ```
 
-## Wire interface: composite nonce
+## Interface: composite nonce
 
 Unlike `kiosk-pow-argon2id` (Argon2id, scalar nonce), Cuckatoo proofs are composite:
 
@@ -188,7 +188,7 @@ blake2b-256(sorted_cycle_edges_as_LE_u64) < target
 
 **TOY MECHANISM DEMO — proofsize 12 at edgebits 10; NOT production difficulty.**
 
-No demo app wires Cuckatoo. The solve → verify loop at the
+No demo app uses Cuckatoo. The solve → verify loop at the
 toy params is exercised by this gem's cross-impl parity gate (see the Solver
 section above):
 

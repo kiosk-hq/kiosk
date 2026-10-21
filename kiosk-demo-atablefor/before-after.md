@@ -2,7 +2,7 @@
 
 **For an operator weighing adoption:** what an AI assistant cannot do at a
 reservation platform today, and what the same errand looks like once this
-demo's wire is installed. The code is in this directory; this is the argument.
+demo's protocol is installed. The code is in this directory; this is the argument.
 
 atablefor is a fake-but-realistic Lisbon restaurant aggregator. Nothing here
 says any real platform works this way.

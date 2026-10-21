@@ -248,7 +248,7 @@ def check_origin(demo, pin, cuts)
   skill = doc.dig('kiosk', 'skill')
   if skill.nil?
     return fail! "#{demo} (#{pin[:host]}): serves a discovery document with NO `kiosk.skill` block — " \
-                 'an assistant is told nothing about which wire to speak'
+                 'an assistant is told nothing about which protocol to speak'
   end
 
   compare_served(demo, pin, skill['url'].to_s, skill['sha256'].to_s, cuts)

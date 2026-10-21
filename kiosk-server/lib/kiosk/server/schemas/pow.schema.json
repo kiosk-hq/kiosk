@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/pow.schema.json",
-  "title": "Kiosk proof-of-work",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/pow.schema.json. This file is self-contained (no cross-file $ref) and must be kept in sync with the upstream normative copy.",
+  "title": "Kiosk proof-of-work",
   "description": "The PoW challenge object (issued in a pow_required 402) and the proof(s) an agent returns in the Kiosk-PoW request header (raw JSON) on retry.",
   "$ref": "#/$defs/powHeader",
   "$defs": {
@@ -71,7 +71,7 @@
           }
         },
         "header_nonce": {
-          "$comment": "The bound is stated as an INCLUSIVE `maximum` of 2**32-1, matching how `indices` states its own: 4294967295 is exactly representable as an IEEE-754 double, so it survives any JSON parser, and an inclusive bound never refuses the largest legal value. Without a bound the field is unbounded on the wire while both specs call it a u32 -- and the reference verifier folds it in with `pack(\"V\")`, which truncates mod 2**32 instead of raising, so 0, 2**32 and -(2**32) seed identically and one proof has infinitely many spellings. The verifier rejects out-of-range values for the same reason; schema and verifier state one bound, not two.",
+          "$comment": "The bound is stated as an INCLUSIVE `maximum` of 2**32-1, matching how `indices` states its own: 4294967295 is exactly representable as an IEEE-754 double, so it survives any JSON parser, and an inclusive bound never refuses the largest legal value. Without a bound the field is unbounded in the JSON while both specs call it a u32 -- and the reference verifier folds it in with `pack(\"V\")`, which truncates mod 2**32 instead of raising, so 0, 2**32 and -(2**32) seed identically and one proof has infinitely many spellings. The verifier rejects out-of-range values for the same reason; schema and verifier state one bound, not two.",
           "type": "integer",
           "minimum": 0,
           "maximum": 4294967295,

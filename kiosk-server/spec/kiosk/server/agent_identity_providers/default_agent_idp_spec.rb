@@ -226,7 +226,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       expect(without_role['actor']).to eq('agent')
     end
 
-    # The claim survives the round trip the wire actually performs — a token
+    # The claim survives the round trip the protocol actually performs — a token
     # whose `actor` were dropped or rewritten between issue and verify would
     # still satisfy the assertion above.
     it 'carries the `actor` claim through verification into the resolved Identity' do

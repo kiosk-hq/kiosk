@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # An Amsterdam fleet priced in EUR cents per minute, and two riders who sign in
-# with a password. Assistants register themselves on the wire.
+# with a password. Assistants register themselves in the protocol.
 
 password = 'skooti-demo-password'
 riders = { '00000000-0000-0000-0000-000000000001' => 'ada@example.com',

@@ -206,7 +206,7 @@ RSpec.describe Kiosk::Redteam::Scenario do
       expect(v.blocked).to be(false)
     end
 
-    # A code nested in an `error` member is not one this wire sends: it reads
+    # A code nested in an `error` member is not one this protocol sends: it reads
     # as "no code", never as a match.
     it 'does NOT block on a 0.3 `error` envelope carrying the demanded code' do
       nested = { 'ok' => false, 'error' => { 'code' => 'forbidden' } }

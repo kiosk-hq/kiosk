@@ -41,7 +41,7 @@ RSpec.shared_context 'with a lying and an honest origin' do
 
   # A query whose handler renders a price as a formatted String where its own
   # output_schema declares an integer: a descriptor lie that nothing on the
-  # wire would notice.
+  # protocol would notice.
   let(:lying_verb) do
     verb_class.new(
       name: 'catalog', kind: :query,
@@ -115,7 +115,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance do
         expect(message).to include('catalog lies')
       end
 
-      it 'reports the wiring hint when no origin is configured' do
+      it 'reports the setup hint when no origin is configured' do
         # Minitest turns an exception inside a test method into a recorded
         # error, so the hint reaches the operator through the run result rather
         # than by propagating out of it.

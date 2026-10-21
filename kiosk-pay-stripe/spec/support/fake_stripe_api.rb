@@ -61,7 +61,7 @@ end
 #
 #   1. the list request actually carries the filters we think it does
 #      (`customer=…&status=open`) — a double asserts the literal Ruby args, not
-#      what the SDK puts on the wire;
+#      what the SDK puts in the protocol;
 #   2. the JSON that comes back deserializes into objects whose `respond_to?`
 #      answers true for `mode` / `success_url` / `url` — `Stripe::StripeObject`
 #      answers those through `method_missing`, and the adapter's `field` helper

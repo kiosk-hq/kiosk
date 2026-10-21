@@ -2,7 +2,7 @@
 //
 // Launch flow:
 //   1. User taps an NFC tag / App Clip Code on a scooter.
-//   2. iOS decodes the URL: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<wire-token>
+//   2. iOS decodes the URL: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<token>
 //   3. iOS calls onContinueUserActivity with an NSUserActivity whose
 //      webpageURL is the decoded URL.
 //   4. This handler:

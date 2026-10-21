@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # The wire request being dispatched, visible to its handler for the duration
+    # The protocol request being dispatched, visible to its handler for the duration
     # of one block. Fiber-local: a handler that hands work to another thread must
     # pass what it needs.
     module CurrentRequest

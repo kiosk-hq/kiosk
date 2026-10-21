@@ -19,7 +19,7 @@ The lock holds only the skooti Ed25519 public key. It never sees the agent JWT, 
 
 ## Rental token: field-by-field
 
-**Wire format** (split on the last `.`):
+**Token format** (split on the last `.`):
 
 ```
 kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(Ed25519 sig)>
@@ -65,7 +65,7 @@ condition — the axis it names is one the set runs over all 256 byte values, so
 a claim about bytes the set merely samples cannot be written here at all. Its
 header states the two questions it leaves open.
 
-**Wire token**
+**Token string**
 
 - At most 512 bytes (`SKOOTI_TOKEN_MAX`). A longer token is refused before the
   message is parsed. <!-- vectors: length -->
@@ -178,7 +178,7 @@ measurement over the whole domain instead of by a promise about it.
   rather than the RFC's: a public key whose y coordinate is at or above the
   field prime is reduced instead of refused, and the x = 0 encoding is taken
   with either sign bit. Both are about the PUBLIC KEY, which this lock is given
-  once at provisioning and never reads off the wire. The C reader applies both
+  once at provisioning and never reads from the token string. The C reader applies both
   rules itself before it calls the library, so on those two its answer is the
   RFC's. It goes one step FURTHER than the RFC on a third: a low-order public
   key is a canonical encoding the RFC permits, but under it a signature nobody
@@ -237,7 +237,7 @@ Assistant (agent token → Kiosk API)
        │
        ▼
   Lock verifies offline:
-    1. Wire token is at most 512 bytes
+    1. Token string is at most 512 bytes
     2. Split on last '.' → message + sig
     3. Base64url-decode sig (must be 64 bytes)
     3b. Its scalar half is below the group order (RFC 8032 5.1.7)
@@ -258,12 +258,12 @@ The rental token is **never sent back to the Kiosk API**. The lock **never calls
 
 ## Honest residuals
 
-The rental token is a **bearer capability**: any party that holds the wire token string can present it to the correct lock within the 15-min window (before first use). Mitigations in place:
+The rental token is a **bearer capability**: any party that holds the token string string can present it to the correct lock within the 15-min window (before first use). Mitigations in place:
 
 - **Single scooter** — the token is bound to one scooter code; it cannot unlock any other.
 - **≤ 15 min** — the window closes quickly.
 - **Single-use** — the lock rejects the token after first use, so intercepting a token that has already been used gives nothing.
 
-**It reaches the human as a plain string, and that is where it is most exposed.** The wire hands the token to the assistant and the assistant relays it onward, so it travels whatever channel that assistant uses to talk to its human — a hosted model's chat transcript included. Anyone who can read that channel inside the window holds the capability. A deployment that cares should hand the token to the human's device rather than to their conversation; the delivery options below are the same answer from the other end.
+**It reaches the human as a plain string, and that is where it is most exposed.** The HTTP API hands the token to the assistant and the assistant relays it onward, so it travels whatever channel that assistant uses to talk to its human — a hosted model's chat transcript included. Anyone who can read that channel inside the window holds the capability. A deployment that cares should hand the token to the human's device rather than to their conversation; the delivery options below are the same answer from the other end.
 
 What is not yet in place: the token is not bound to the device or customer that requested it. A production deployment may add device attestation (e.g., bind the token to the App Clip installation's device key) or deliver it via a Shared App Group Keychain rather than a URL parameter, reducing exposure further.

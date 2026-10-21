@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# kiosk-rls-minitest — Minitest wiring for the Kiosk journey-test DSL.
+# kiosk-rls-minitest — Minitest integration for the Kiosk journey-test DSL.
 
 require 'minitest'
 require 'kiosk/test_helpers'

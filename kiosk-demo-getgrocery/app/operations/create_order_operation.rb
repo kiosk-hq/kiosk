@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Places one order for the customer: the basket, its delivery window and
-# address, each line at today's catalogue price. Returns the order; raises a wire error on a refusal.
+# address, each line at today's catalogue price. Returns the order; raises a Kiosk error on a refusal.
 class CreateOrderOperation
   def self.call(customer_id:, items:, slot_at:, delivery_address:)
     order = Order.new(user_id: customer_id, slot_at: slot_at, address: delivery_address,

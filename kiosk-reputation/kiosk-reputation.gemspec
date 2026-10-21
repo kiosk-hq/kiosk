@@ -8,10 +8,10 @@ Gem::Specification.new do |spec|
   spec.authors       = ['Phil Pirozhkov']
   spec.email         = ['hello@fili.pp.ru']
 
-  spec.summary       = "Policy + wire-challenge layer for Kiosk's proof-of-work system"
+  spec.summary       = "Policy + challenge layer for Kiosk's proof-of-work system"
   spec.description   = <<~DESC
     kiosk-reputation decides *when* and *how hard* to challenge a request with a
-    proof-of-work, issues and verifies the signed wire challenge, and provides a
+    proof-of-work, issues and verifies the signed challenge, and provides a
     pluggable reputation policy interface.
 
     Pure Ruby — no dependency on any PoW gem or kiosk-core. A PoW backend is

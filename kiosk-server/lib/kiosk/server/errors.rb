@@ -2,10 +2,10 @@
 
 module Kiosk
   module Server
-    # The wire error contract: the closed `code` vocabulary and the problem
+    # The Kiosk error contract: the closed `code` vocabulary and the problem
     # document (RFC 9457) every refusal is rendered as.
     module Errors
-      # The wire's seventeen refusal codes and their HTTP status (spec §9). Adding one is a spec change first.
+      # The protocol's seventeen refusal codes and their HTTP status (spec §9). Adding one is a spec change first.
       CODES = {
         'bad_request' => 400,
         'unauthenticated' => 401,
@@ -119,7 +119,7 @@ module Kiosk
       end
 
       # What a Rails-native raise answers with: our sentence for the decided code.
-      # The exception's own text goes to the operator's log, never to the wire.
+      # The exception's own text goes to the operator's log, never to the protocol.
       # One entry per {STATUS_CODES} value.
       module Rescued
         DETAILS = {
@@ -156,7 +156,7 @@ module Kiosk
       RESCUED_DETAILS = Rescued::DETAILS
       RESCUED_HINTS = Rescued::HINTS
 
-      # @return [Hash] `{code:, message:, hint:}` of the wire error a rescued exception becomes
+      # @return [Hash] `{code:, message:, hint:}` of the Kiosk error a rescued exception becomes
       def self.rescued_wire(code, verb: nil) = Rescued.wire(code, verb)
 
       class Base < StandardError
@@ -191,7 +191,7 @@ module Kiosk
         end
       end
 
-      # A wire error named by its code rather than its class. `extra:` adds extension members;
+      # A Kiosk error named by its code rather than its class. `extra:` adds extension members;
       # the members the code and message decide stay theirs, and `instance` is never emitted (§9).
       class WireError < Base
         DECIDED = %i[type title status detail instance code hint].freeze
@@ -200,7 +200,7 @@ module Kiosk
           code = code.to_s
           unless CODES.key?(code)
             raise ArgumentError,
-                  "unknown wire code #{code.inspect} — the vocabulary is Errors::CODES, closed by the spec"
+                  "unknown error code #{code.inspect} — the vocabulary is Errors::CODES, closed by the spec"
           end
 
           super(message, hint: hint)

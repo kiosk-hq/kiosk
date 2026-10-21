@@ -5,7 +5,7 @@
 #
 # Every example here is a unit example: {Kiosk::Server::ArgumentDecoder} takes
 # a query string and a declaration and returns arguments, with no Rails and no
-# wire in the way. The wire-level half — that a real `GET <endpoint>/<verb>`
+# protocol in the way. The protocol-level half — that a real `GET <endpoint>/<verb>`
 # reaches it, and that a refusal comes back as a 400 problem document — is
 # `verb_controller_spec.rb`.
 
@@ -37,7 +37,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
       expect(decode('neighbourhood=Be%C5%9Fikta%C5%9F')).to eq(neighbourhood: 'Beşiktaş')
     end
 
-    it 'leaves an undeclared parameter as the String the wire sent' do
+    it 'leaves an undeclared parameter as the String the protocol sent' do
       expect(decode('anything=4', schema({}))).to eq(anything: '4')
     end
   end
@@ -47,7 +47,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
 
     let(:declared) { schema(amenity: { type: 'array', items: { type: 'string' } }) }
 
-    it 'decodes the PERCENT-ENCODED bracket spelling — the wire form' do
+    it 'decodes the PERCENT-ENCODED bracket spelling — the encoded form' do
       expect(decode('amenity%5B%5D=pool&amenity%5B%5D=spa', declared))
         .to eq(amenity: %w[pool spa])
     end
@@ -103,7 +103,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
 
     # The refusal is OURS: the published sentence, the published hint, and not
     # one byte of Rack's own copy — which names the parameter and the Ruby
-    # types it expected, neither of which is on this wire.
+    # types it expected, neither of which is in this protocol.
     it 'refuses a name used as both scalar and array in one query string' do
       expect { decode('amenity=pool&amenity%5B%5D=spa', declared) }
         .to raise_error(Kiosk::Server::Errors::BadRequest) { |e|
@@ -224,7 +224,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
     # §8.1 item 8 — THE QUERY HALF OF A PUBLISHED ASYMMETRY (K-1029), and the
     # case `4.5` above does NOT cover: `4.5` is not an integer under any
     # reading, so it would be refused even by a decoder that took the loose
-    # one. `2.0` is the value the two halves of the wire genuinely disagree
+    # one. `2.0` is the value the two halves of the protocol genuinely disagree
     # about — draft 2020-12 defines `integer` by VALUE, so a JSON body's
     # `{"party_size": 2.0}` IS a valid integer and an action takes it, while a
     # query string is TEXT and the declared type is the grammar its spelling
@@ -257,8 +257,8 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
     end
 
     it 'refuses a boolean spelling that is not one of the two literals' do
-      # `1`, `on` and `yes` are Rails idioms, not wire spellings — accepting
-      # them would put a second boolean grammar on a published wire.
+      # `1`, `on` and `yes` are Rails idioms, not protocol spellings — accepting
+      # them would put a second boolean grammar on a published protocol.
       declared = schema(open_now: { type: 'boolean' })
       %w[1 on yes TRUE].each do |spelling|
         expect(refusal("open_now=#{spelling}", declared).message).to include('open_now')
@@ -394,7 +394,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
     end
   end
 
-  # "Its three refusals … all mean the same thing on the wire" is a claim
+  # "Its three refusals … all mean the same thing in the protocol" is a claim
   # {ArgumentDecoder#parse!} makes in prose four lines above its rescue, and
   # since K-1307 it is also the reason none of the three publishes Rack's own
   # words. Both halves are asserted here: ONE sentence out of all three, and
@@ -413,7 +413,7 @@ RSpec.describe Kiosk::Server::ArgumentDecoder do
 
     it "answers Rack's own nesting-depth limit with a 400 rather than a 500" do
       # Rack::QueryParser::QueryLimitError is a Rack::BadRequest, like the
-      # scalar-vs-array conflict above; both mean the same thing on the wire
+      # scalar-vs-array conflict above; both mean the same thing in the protocol
       # and neither may escape as an uncaught 500.
       deep = "a#{'%5Bb%5D' * 40}=1"
       expect_one_sentence(deep) do |e|

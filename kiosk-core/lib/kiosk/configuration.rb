@@ -13,7 +13,7 @@ module Kiosk
     # :uuid (default), :bigint, :integer or :text.
     attr_accessor :user_id_type
 
-    # Nil in satellite mode: the provider's own frontend drives the wire endpoints.
+    # Nil in satellite mode: the provider's own frontend drives the protocol endpoints.
     attr_accessor :user_idp
 
     # Nil uses kiosk-server's bundled DefaultAgentIdp; set only to front another agent-identity system.
@@ -35,7 +35,7 @@ module Kiosk
     # discovery `issuer`. Readers ask `Kiosk.current_issuer`.
     attr_accessor :issuer
 
-    # Further origins, each a separate operator on the wire. Exact origins only;
+    # Further origins, each a separate operator in the protocol. Exact origins only;
     # an alias of the SAME business is better redirected
     # to the issuer at the edge. (Rails' `config.hosts` governs which Host
     # headers are accepted, not which origin the operator is.)

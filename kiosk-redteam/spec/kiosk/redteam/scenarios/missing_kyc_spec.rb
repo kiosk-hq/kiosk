@@ -3,7 +3,7 @@
 require 'spec_helper'
 require_relative 'support'
 
-# The wire traffic is register → POST /kiosk/pay → POST /kiosk/start_rental.
+# The protocol traffic is register → POST /kiosk/pay → POST /kiosk/start_rental.
 # (minimal_profile's create_owned is a plain lambda, so nothing calls an
 # action to make the resource.)
 RENTAL_TOKEN_BODY = { 'scooter_code' => 'SK-001', 'rental_token' => 'rt-1',

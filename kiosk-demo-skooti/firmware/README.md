@@ -6,7 +6,7 @@ This directory contains:
 |------|---------|
 | `skooti_lock.ino` | Arduino-ESP32 firmware (ESP32-C3 + NimBLE-Arduino) |
 | `verify.h/c` | `skooti_verify_token()` and `skooti_verify_wire()` — portable Ed25519 token verify; shared by firmware and host test |
-| `jti_store.h/c` | `jti_seen_or_insert()` — one-shot `jti` store; an in-RAM table on the host AND on the board, emptied by a power cycle until you wire the NVS block it documents |
+| `jti_store.h/c` | `jti_seen_or_insert()` — one-shot `jti` store; an in-RAM table on the host AND on the board, emptied by a power cycle until you enable the NVS block it documents |
 | `host_test.c` | Host-side crypto proof (runs on Mac/Linux, no board required) |
 | `crosscheck_main.c` | Ruby-signed token → C verify helper, taking the token as an argument or as a file's bytes (invoked by `make crosscheck`) |
 | `token_vectors.rb` | The rental-token conformance vectors — the grammar, and what the vectors do not cover, stated in its header |
@@ -30,7 +30,7 @@ message         = "kiosk-rental-v1|scooter_code|reservation_id|iat|exp|jti"
                    domain-separation tag (field 0) — lock rejects any token
                    whose field 0 is not exactly this string
 sig             = Ed25519(private_signing_key, message)   # server-side only
-wire token      = "<message>.<base64url(sig)>"
+token string      = "<message>.<base64url(sig)>"
 
 lock verifies:
   0. its own public key is the encoding RFC 8032 5.1.3 permits: y below the
@@ -71,7 +71,7 @@ lock verifies:
 ```
 
 The whole grammar — every field's charset, the signature's encoding, the
-delimiter rule and the wire cap — is stated in `../RENTAL_TOKEN.md`, the
+delimiter rule and the length cap — is stated in `../RENTAL_TOKEN.md`, the
 canonical page for this token. `make crosscheck` holds all three readers to
 that page's vectors, and `check_grammar_coverage.rb` holds the page and the
 vector set to each other.
@@ -113,7 +113,7 @@ ALL PASS
   Ruby-signed token: kiosk-rental-v1|SK-001|resv-live|...
   C verify result: 1
   MATCH — C verifier accepts Ruby/OpenSSL-signed token ✓
-  Rental-token grammar — 85 live-signed vectors through all 3 readers of this token (11 respell the wire around the signature, 10 vary the Ruby encoding tag):
+  Rental-token grammar — 85 live-signed vectors through all 3 readers of this token (11 respell the token around the signature, 10 vary the Ruby encoding tag):
     axis     vector                                         expect  C       issuer  lock
     count    six fields, well-formed                        accept  accept  accept  accept  MATCH ✓
     count    seven segments, one trailing delimiter         reject  reject  reject  reject  MATCH ✓
@@ -146,20 +146,20 @@ is `ed25519/` + `verify.c` + `jti_store.c` + the test harness.
 | | UUID | Properties | Format |
 |--|------|-----------|--------|
 | **Service** | `4e2a1000-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | — | — |
-| **Unlock** | `4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | WRITE + WRITE_NR | wire rental token (ASCII, ≤ 512 bytes; MTU negotiated to 256) |
+| **Unlock** | `4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d` | WRITE + WRITE_NR | rental token string (ASCII, ≤ 512 bytes; MTU negotiated to 256) |
 
 ### Unlock flow (App Clip → lock, offline)
 
 1. App Clip receives the rental token in the `rt=` URL parameter of its launch link.
 2. App Clip connects to `skooti-SK-001` BLE peripheral.
-3. App Clip **writes** the wire rental token to the Unlock characteristic.
+3. App Clip **writes** the rental token string to the Unlock characteristic.
 4. Lock runs `skooti_verify_token(SKOOTI_PUBKEY, token, SCOOTER_CODE, now)`:
-   checks the wire cap, the Ed25519 sig, a six-field message with no empty
+   checks the length cap, the Ed25519 sig, a six-field message with no empty
    field, domain tag (`kiosk-rental-v1`), scooter_code match, plain-digit iat
    and exp, exp > now, and a 32-lowercase-hex jti.
 5. Lock calls `jti_seen_or_insert(jti, exp, now)` — rejects if jti already consumed
    (in-RAM store; entries retained until their exp; cleared by a power cycle
-   until the NVS wiring is added — see "Replay prevention").
+   until the NVS setup is added — see "Replay prevention").
 6. On all-pass: records jti, drives GPIO HIGH for 3 s = unlocked.
 7. On any failure: stays locked; logs reason to Serial.
 
@@ -236,7 +236,7 @@ openssl pkey -in unlock_key.pem -pubout -outform DER | tail -c 32 | xxd -p -c 32
 
 That property — "the private key never leaves the server" — has one historical
 exception, and it still matters: an earlier signing key was hard-coded in this
-repo AND wired in production, so the public key `8857880d…` is **burned**: any
+repo AND used in production, so the public key `8857880d…` is **burned**: any
 lock still holding it accepts tokens anyone with a clone of this repo can mint,
 and must be reflashed.
 
@@ -293,7 +293,7 @@ that a process which has just started accepts the jti the previous one
 consumed.
 
 **To make it durable** — the step to take before a lock of yours leaves the
-bench — uncomment and complete the NVS WIRING block at the top of
+bench — uncomment and complete the NVS SETUP block at the top of
 `jti_store.c` (`nvs_open` / `nvs_get_blob` at startup, `nvs_set_blob` /
 `nvs_commit` after each insert), or do the same job with the Preferences
 library.  The check-and-record semantics are unchanged by that; what changes is
@@ -309,11 +309,11 @@ straight to the lock's unlock characteristic over BLE from a Mac or Linux
 laptop, so the board can be exercised with no App Clip and no Apple account:
 
 ```
-../bin/ble-unlock --scooter SK-001 --token "<wire token>"
+../bin/ble-unlock --scooter SK-001 --token "<token string>"
 ../bin/ble-unlock --scooter SK-001 --from-server   # SERVER_URL env; mints via the demo
 ```
 
-It is built against the wire contract above (service `4e2a1000-…`,
+It is built against the contract above (service `4e2a1000-…`,
 characteristic `4e2a1002-…`, UTF-8 token bytes, write-with-response) and is
 **UNVERIFIED until run against a real flashed ESP32-C3** — its own header says
 so, and the table below is where that status is tracked.
@@ -348,7 +348,7 @@ so, and the table below is where that status is tracked.
 | Every rule `../RENTAL_TOKEN.md` states names a vector axis, and every axis is named by a rule | **PROVEN** (`make crosscheck`) |
 | jti_store: insert → seen-again → reject; expired entry pruned → re-insert ok | **PROVEN** (`make test` jti-store tests) |
 | The jti store is RAM-only as shipped — a process that has just started accepts the jti the previous one consumed, inside its exp window | **PROVEN** (`make test` test [15]) |
-| Durable replay prevention ACROSS a reboot | **NOT SHIPPED** — `jti_store.c` has no NVS call; the NVS WIRING block at its top is the adopter's step |
+| Durable replay prevention ACROSS a reboot | **NOT SHIPPED** — `jti_store.c` has no NVS call; the NVS SETUP block at its top is the adopter's step |
 | BLE GATT advertising + connect + write unlock | **Not yet** — needs board (`../bin/ble-unlock` is the no-Apple harness for this row) |
 | GPIO drives relay on valid token | **Not yet** — needs board |
 | App Clip → lock BLE end-to-end | **Not yet** — needs board + Apple account |

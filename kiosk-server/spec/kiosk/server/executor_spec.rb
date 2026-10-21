@@ -363,7 +363,7 @@ RSpec.describe Kiosk::Server::Executor do
   describe 'verb :query handler crash' do
     include_context 'with a fake executor connection'
 
-    # THE WIRE GETS THE CLASS, THE OPERATOR GETS THE SENTENCE (K-1307).
+    # THE PROTOCOL GETS THE CLASS, THE OPERATOR GETS THE SENTENCE (K-1307).
     #
     # This example matched `/kaboom/` — the handler's OWN words, spliced into
     # the refusal — so it asserted that an arbitrary Ruby message reaches the
@@ -418,7 +418,7 @@ RSpec.describe Kiosk::Server::Executor do
   describe 'verb :query next page' do
     include_context 'with a fake executor connection'
 
-    # T-092: the cursor reaches the RESULT, never the body. The wire turns it
+    # T-092: the cursor reaches the RESULT, never the body. The protocol turns it
     # into `Link: …; rel="next"`; the Executor's job ends at carrying it.
     it "threads a Page's next_cursor and total onto the Result, not into the body" do
       register(:query, 'paged') do |args|
@@ -524,13 +524,13 @@ RSpec.describe Kiosk::Server::Executor do
 
   # ── THE OPERATOR'S ONLY DIAGNOSTIC FOR A CRASH IN THEIR OWN HANDLER ──────
   #
-  # Since K-1307 the wire error names the exception CLASS and stops. That makes
+  # Since K-1307 the Kiosk error names the exception CLASS and stops. That makes
   # this report the ONE place the message and the backtrace survive, and it is
   # not a nice-to-have: both 500 paths raise `hint: "See server logs for the
   # backtrace."`, so an operator who finds nothing in the log has been sent to
   # a place the server promised to write to and did not. The audit event is no
-  # substitute — it is built from the wire error, not from the cause — and
-  # neither is the exception's own `#cause`, which nothing on the wire renders.
+  # substitute — it is built from the Kiosk error, not from the cause — and
+  # neither is the exception's own `#cause`, which nothing in the protocol renders.
   #
   # The four properties below are the ones that make it a diagnostic rather
   # than a line of output: WHAT it says, WHERE it goes when the host app has a
@@ -963,7 +963,7 @@ RSpec.describe Kiosk::Server::Executor do
         .to raise_error(Kiosk::Server::Errors::ModuleNotServed, /payment module/)
     end
 
-    it 'puts module_not_served/501 on the wire for it, not a 403' do
+    it 'puts module_not_served/501 in the response for it, not a 403' do
       Kiosk.configuration.payment_provider = nil
       expect { pay }
         .to raise_error(Kiosk::Server::Errors::ModuleNotServed) { |e|

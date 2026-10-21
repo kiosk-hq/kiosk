@@ -2,7 +2,7 @@
 
 # The engine's route drawer (T-055 slice of K-495; closes K-505): a host that
 # mounts Kiosk::Server::Engine at the configured mount_path gets the ENTIRE
-# mount-prefixed surface — wire verbs, OAuth registration and tokens, JWKS, KYC
+# mount-prefixed surface — verbs, OAuth registration and tokens, JWKS, KYC
 # attestation, and the claim + link ceremony — without hand-writing routes.
 # (The ROOT-relative discovery routes are installed by the engine's
 # routes.append initializer into the HOST set, proven end-to-end in
@@ -28,7 +28,7 @@ RSpec.describe Kiosk::Server::Engine do
   describe 'routes' do
     include EngineRoutesSpecHelpers
 
-    it 'draws the two RESERVED wire endpoints — and the wire has no others' do
+    it 'draws the two RESERVED endpoints — and the protocol has no others' do
       expect(recognize(:get, '/schema'))
         .to include(controller: 'kiosk/server/wire', action: 'schema')
       expect(recognize(:post, '/pay'))
@@ -92,7 +92,7 @@ RSpec.describe Kiosk::Server::Engine do
         .to include(controller: 'kiosk/server/kyc_attestation', action: 'create')
     end
 
-    it 'draws the claim-flow wire: device_authorization + token + verify page' do
+    it 'draws the claim-flow endpoints: device_authorization + token + verify page' do
       expect(recognize(:post, '/oauth/device_authorization'))
         .to include(controller: 'kiosk/server/oauth_device_authorization', action: 'create')
       expect(recognize(:post, '/oauth/token'))
@@ -123,9 +123,9 @@ RSpec.describe Kiosk::Server::Engine do
         .to include(controller: 'kiosk/server/assistants', action: 'unlink')
     end
 
-    # ── the per-verb wire is NOT here any more (T-183) ───────────────────
+    # ── the per-verb endpoints is NOT here any more (T-183) ───────────────────
 
-    describe 'the per-verb wire, which this table deliberately does NOT draw' do
+    describe 'the per-verb endpoints, which this table deliberately does NOT draw' do
       it 'draws no dynamic segment at all — every path in it is a literal' do
         # The operator's `kiosk` block in config/routes.rb draws one route per
         # verb, GET for a query and POST for an action; this table is the
@@ -156,7 +156,7 @@ RSpec.describe Kiosk::Server::Engine do
       end
     end
 
-    describe 'reserved names beside the per-verb wire' do
+    describe 'reserved names beside the per-verb endpoints' do
       it 'reserves exactly the first segments it draws — and `query`/`run` left both' do
         # `RESERVED_NAMES` is the declaration-time half of the same rule, equal
         # to the engine's drawn first segments. The cutover deleted two routes, so it shed the two names;

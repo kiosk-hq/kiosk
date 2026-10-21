@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# kiosk-server: the Rails engine, its wire, auth and discovery controllers, and
+# kiosk-server: the Rails engine, its protocol, auth and discovery controllers, and
 # the install generator. See https://kiosk.tech.
 
 require 'kiosk'
@@ -17,7 +17,7 @@ module Kiosk
   module Server
   end
 
-  # The user id and role of the principal the wire resolved.
+  # The user id and role of the principal the protocol resolved.
   def self.current_user_id = Server::SessionContext.identity.user_id
   def self.current_role    = Server::SessionContext.identity.role
 

@@ -12,7 +12,7 @@ Rails.application.routes.draw do
   get '/robots.txt', to: 'crawler#robots'
   get '/sitemap.xml', to: 'crawler#sitemap'
 
-  # ── The Kiosk wire surface ────────────────────────────────────────────────
+  # ── The Kiosk HTTP API surface ────────────────────────────────────────────────
   kiosk do
     queries :catalog, :delivery_slots, :my_orders
     actions :create_order, :reschedule_delivery

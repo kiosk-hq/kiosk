@@ -17,7 +17,7 @@
 
 ```
 NFC tag / QR code
-  URL: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded-wire-token>
+  URL: https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<percent-encoded-token>
        │                           │               │
        │                    scooter code       rental token
        │                    (for BLE scan)     (provider-signed, Ed25519)
@@ -43,7 +43,7 @@ The rental token is issued by the server at `start_rental` (after pay) and
 delivered to the App Clip via the launch URL's `rt=` parameter.
 The lock verifies it fully offline.
 
-### Wire token format
+### Token string format
 
 ```
 kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(Ed25519 sig)>
@@ -210,7 +210,7 @@ Same encoding requirement as QR: the `rt=` value must be percent-encoded.
 | Server Ed25519 rental-token issue + verify chain (register → reserve → pay → start_rental) | **PROVEN** (`test/stories/ride_test.rb`) |
 | Firmware Ed25519 offline verify (domain tag + 6-field parse) + Ruby↔C interop | **PROVEN** (`make test`) |
 | One-shot jti replay prevention within a boot (in-RAM `jti_store`, 64 entries) | **PROVEN** (`make test` jti-store tests) |
-| The same store ACROSS a lock reboot | **NOT SHIPPED** — the table is in RAM; wiring it to NVS is the adopter's step, see `firmware/README.md` |
+| The same store ACROSS a lock reboot | **NOT SHIPPED** — the table is in RAM; connecting it to NVS is the adopter's step, see `firmware/README.md` |
 | App Clip Swift source compiles (`make build-sim`) | **PROVEN** (xcodebuild, iOS Simulator SDK, 2026-06-25) |
 | BLE device-name filtering (scan finds `skooti-SK-001`, not other scooters) | **Code correct; not yet tested on hardware** |
 | BLE scan → connect → unlock char discover → write token on ESP32-C3 | **Not yet** — needs board + real iPhone + paid team |
@@ -219,7 +219,7 @@ Same encoding requirement as QR: the `rt=` value must be percent-encoded.
 
 ---
 
-## BLE wire contract
+## BLE contract
 
 | Role | UUID |
 |------|------|

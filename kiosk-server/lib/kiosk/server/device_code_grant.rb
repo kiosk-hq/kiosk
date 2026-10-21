@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # The claim ceremony on the RFC 8628 device-grant wire: binds a registered
+    # The claim ceremony on the RFC 8628 device-grant endpoints: binds a registered
     # client to an existing human account once the human approves.
     #
     #   .start     — POST /oauth/device_authorization

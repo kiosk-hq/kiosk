@@ -3,7 +3,7 @@
 require 'action_cable'
 
 # Top level, unsuffixed, because Action Cable constantizes the channel named
-# in a subscribe frame: this class name IS the wire's channel name.
+# in a subscribe frame: this class name IS the protocol's channel name.
 #
 #   {"command":"subscribe",
 #    "identifier":"{\"channel\":\"KioskEvents\",\"topic\":\"todo\",\"subject\":\"list_4f1e…\"}"}

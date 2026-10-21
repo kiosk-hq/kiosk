@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # A handler action answering its verb route (T-296). The operator-facing
-# behaviour lives in handler_mixin_spec.rb; this covers what the wire does when
+# behaviour lives in handler_mixin_spec.rb; this covers what the protocol does when
 # the handler misbehaves, plus the reload property the whole design rests on.
 #
 # `ApplicationController` (the fake host base class) is defined in spec_helper.rb.
@@ -24,8 +24,8 @@ class SpecReloadableController < ApplicationController
 end
 
 module HandlerServingSpec
-  # The verb through its route. The wire NAME is its own argument — a path
-  # segment on the wire, never a body field — so it is lifted out of `args`.
+  # The verb through its route. The protocol NAME is its own argument — a path
+  # segment in the protocol, never a body field — so it is lifted out of `args`.
   def execute(kind, args)
     args = args.dup
     name = (args.delete(:name) || args.delete('name')).to_s
@@ -36,7 +36,7 @@ module HandlerServingSpec
     FileUtils.mkdir_p(File.join(views, 'spec_templated'))
     File.write(File.join(views, 'spec_templated', 'shelf.json.erb'),
                '[{"sku": "<%= @sku %>"}]')
-    File.write(File.join(views, 'spec_templated', 'shelf.html.erb'), '<p>not the wire</p>')
+    File.write(File.join(views, 'spec_templated', 'shelf.html.erb'), '<p>not the protocol</p>')
     File.write(File.join(views, 'spec_templated', 'shelf_page.json.erb'),
                '[{"sku": "<%= @sku %>"}]')
   end
@@ -99,8 +99,8 @@ RSpec.describe Kiosk::Server::HandlerServing do
   end
 
   describe 'a handler that does not answer with JSON' do
-    it 'fails loudly rather than putting HTML on the wire' do
-      stub_handler('SpecHtmlController', :query, 'Renders HTML, which the wire cannot carry.') do
+    it 'fails loudly rather than putting HTML in the response' do
+      stub_handler('SpecHtmlController', :query, 'Renders HTML, which the protocol cannot carry.') do
         def html_query = render(html: '<p>nope</p>'.html_safe)
       end
 
@@ -108,8 +108,8 @@ RSpec.describe Kiosk::Server::HandlerServing do
         .to raise_error(Kiosk::Server::Errors::Base, /non-JSON body/) { |e| expect(e.code).to eq('action_failed') }
     end
 
-    it 'reports an unmapped status rather than guessing a wire code' do
-      # 402 is three different wire codes (pow_required, payment_setup_required,
+    it 'reports an unmapped status rather than guessing an error code' do
+      # 402 is three different error codes (pow_required, payment_setup_required,
       # payment_failed); the seam refuses to pick one. A handler that means a
       # specific 402 raises the Errors class.
       stub_handler('SpecBare402Controller', :action, 'Renders a bare 402.') do
@@ -120,7 +120,7 @@ RSpec.describe Kiosk::Server::HandlerServing do
         .to raise_error(Kiosk::Server::Errors::Base, /pay up/) { |e| expect(e.code).to eq('action_failed') }
     end
 
-    it "never mistakes an operator's own code field for the wire vocabulary" do
+    it "never mistakes an operator's own code field for the error vocabulary" do
       stub_handler('SpecSoldOutController', :action, "Answers a domain refusal with the app's own error code.") do
         def sold_out
           render json: { error: { code: 'out_of_stock', message: 'sold out' } }, status: :conflict
@@ -137,7 +137,7 @@ RSpec.describe Kiosk::Server::HandlerServing do
     it 'falls back to the status when a rendered code does not belong to it' do
       # pow_required is a 402 code; rendered on a 403 it is a handler bug, and
       # the seam answers with what the status alone says rather than putting a
-      # mislabelled code on the wire.
+      # mislabelled code in the protocol.
       stub_handler('SpecMislabelledController', :query, 'Renders a 402 code on a 403 status.') do
         def mislabelled
           render json: { ok: false, error: { code: 'pow_required', message: 'nope' } },

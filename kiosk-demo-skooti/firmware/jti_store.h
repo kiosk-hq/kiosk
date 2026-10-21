@@ -17,7 +17,7 @@
  * static C array, empty at every program start, so a power cycle forgets
  * every consumed jti and a token still inside its 15-minute window unlocks a
  * second time.  Closing that is an ADOPTER'S STEP, not something the flashed
- * sketch already does: the NVS WIRING block at the top of jti_store.c is the
+ * sketch already does: the NVS SETUP block at the top of jti_store.c is the
  * exact code to add, and nothing here is durable until it is added.
  *
  * This module provides a fixed-size table of {jti, exp} entries:
@@ -38,8 +38,8 @@
  * ESP32 / NVS (the adopter adds this; it is NOT in the shipped sources):
  *   The same fixed-size table, persisted with nvs_set_blob / nvs_get_blob.
  *   The "NVS:" comment blocks in jti_store.c show exactly where those calls
- *   wire in; the Preferences library or the esp_partition API does the same
- *   job.  Until they are wired, jti_seen_or_insert forgets on reboot, and
+ *   go; the Preferences library or the esp_partition API does the same
+ *   job.  Until they are enabled, jti_seen_or_insert forgets on reboot, and
  *   `make test` asserts exactly that — see host_test.c test [15].
  *
  * =========================================================================

@@ -3,7 +3,7 @@
 # The people who share lists. `id uuid` matches the kiosk:install
 # --user-id-type=uuid choice. email and encrypted_password are Devise's login
 # columns; email stays NULLable because an assistant account registered over
-# the wire has no login. display_name is what a roster shows of another
+# the protocol has no login. display_name is what a roster shows of another
 # person; NULL for an assistant-created account, which User#public_name
 # answers with a pseudonym.
 class CreateUsers < ActiveRecord::Migration[ActiveRecord::Migration.current_version]

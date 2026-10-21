@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # The Kiosk response headers and the cache policy of a wire response.
+    # The Kiosk response headers and the cache policy of a Kiosk response.
     module Headers
       def self.add_to(headers, server_version: Kiosk::Server::VERSION)
         headers[Kiosk::Protocol::HEADER_SERVER_VERSION] = server_version
@@ -18,7 +18,7 @@ module Kiosk
       # §3.7.1: every one of these changes the answer and none is in the URL.
       WIRE_VARY = %w[Authorization Kiosk-PoW Kiosk-Timezone].freeze
 
-      # Adds the wire `Vary`; forces `no-store` on a 402; defaults to
+      # Adds the protocol `Vary`; forces `no-store` on a 402; defaults to
       # `private, no-store` and refuses a shared-cache directive (§3.7.3).
       def self.add_cache_policy(headers, status:)
         add_wire_vary(headers)
@@ -56,7 +56,7 @@ module Kiosk
         'Sent `private, no-store` instead; send `private, max-age=N` to let the caller cache it.'
 
       def self.refuse_shared_cache(value)
-        message = '[kiosk-server] refused a shared-cache policy on a wire response: ' \
+        message = '[kiosk-server] refused a shared-cache policy on a Kiosk response: ' \
                   "Cache-Control: #{value.inspect}. #{SHARED_CACHE_RULE}"
         logger = ::Rails.logger if defined?(::Rails) && ::Rails.respond_to?(:logger)
         logger ? logger.warn(message) : warn(message)

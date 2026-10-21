@@ -8,8 +8,8 @@ require 'test_helper'
 # demo runs at, so every argument a verb declares is written down unless the
 # app says otherwise. `delivery_address` is a customer's postal address — it
 # arrives on `create_order`, on `reschedule_delivery` and from the storefront
-# form — and it is this shop's own field, not the wire's: kiosk-server filters
-# the wire's credential-bearing fields from its own initializer, and an
+# form — and it is this shop's own field, not the protocol's: kiosk-server filters
+# the protocol's credential-bearing fields from its own initializer, and an
 # operator's domain field is the operator's to name.
 #
 # The assertion runs the app's real `config.filter_parameters` through the

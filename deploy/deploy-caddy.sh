@@ -43,7 +43,7 @@ hosts_from_config() {
 
 ssh_() { ssh -o BatchMode=yes -o ConnectTimeout=15 "$HOST" "$@"; }
 
-# ── verification, run against the LIVE wire and not against the config ───────
+# ── verification, run against the LIVE protocol and not against the config ───────
 #
 # Reading the file back off the box would prove only that scp works. What has to
 # be true is a property of the served response, so that is what is measured.
@@ -147,7 +147,7 @@ if ssh_ "cmp -s $STAGE $REMOTE_ETC"; then
   # reported failure. An idempotent deploy whose no-op looks like a fault is one
   # nobody runs twice, which is the whole property it exists to have.
   if [[ "$MODE" == "--apply" ]]; then
-    echo; echo "verifying the live wire anyway:"
+    echo; echo "verifying the live HTTP API anyway:"
     if verify_live && verify_no_throttle; then exit 0; else exit 1; fi
   fi
   exit 0
@@ -172,10 +172,10 @@ echo "  installed and reloaded"
 
 sleep 3
 
-# 4. verify the WIRE, and roll back if it disagrees.
+# 4. verify the PROTOCOL, and roll back if it disagrees.
 echo "  verifying:"
 if verify_live && verify_no_throttle; then
-  echo "deploy-caddy: OK — the box matches $SRC and the live wire agrees."
+  echo "deploy-caddy: OK — the box matches $SRC and the live HTTP API agrees."
   exit 0
 fi
 

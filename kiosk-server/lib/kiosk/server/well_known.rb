@@ -213,7 +213,7 @@ module Kiosk
           return '' unless skill?(config)
 
           sha = config.skill_sha256
-          line = "- Wire skill for AI assistants: #{config.skill_url}"
+          line = "- Skill for AI assistants: #{config.skill_url}"
           line += " (sha256 `#{sha}`)" if sha && !sha.to_s.empty?
           line
         end
@@ -277,7 +277,7 @@ module Kiosk
             # auth.md — #{site}
 
             How AI assistants authenticate against this provider's Kiosk
-            endpoint (`#{endpoint}`). Wire contract: the Kiosk specification
+            endpoint (`#{endpoint}`). Protocol: the Kiosk specification
             (https://kiosk.tech/specification.html). This file follows the
             auth.md section order. Registration and tokens use OAuth 2.0
             standards: RFC 7591, RFC 7523, RFC 9449 and RFC 8628.
@@ -338,7 +338,7 @@ module Kiosk
             `Kiosk-PoW` header line for each proof. A proof is never in the
             request body: the operator ignores a body `pow` field, and a
             changed body makes the proofs incorrect. The same header answers a
-            `402 pow_required` on the wire verbs too. Most of them are GETs,
+            `402 pow_required` on the verbs too. Most of them are GETs,
             which have no body. The ONE endpoint under `#{endpoint}` that has
             no toll is `GET #{endpoint}/schema`: it is public, the operator
             serves it from memory, and a toll needs an identity to charge.
@@ -349,7 +349,7 @@ module Kiosk
             check failed. Get the reference solver from
             `#{PowGate::POW_SOLVER_URL}`. The 403 `hint` names the same file.
             That URL has no version and always serves the CURRENT solver.
-            Before you run it, compare its SHA-256 with the pin that the wire
+            Before you run it, compare its SHA-256 with the pin that the
             skill above publishes.
 
             ## Claim ceremony
@@ -408,7 +408,7 @@ module Kiosk
 
             ## Use the access_token
 
-            Send `Authorization: DPoP <access_token>` to the wire verbs
+            Send `Authorization: DPoP <access_token>` to the verbs
             under `#{endpoint}` (every query, every action, and `pay`) with a
             `DPoP` header: a proof (RFC 9449) that your registered key signs
             for that method and URL, with `ath`, the hash of the token. A

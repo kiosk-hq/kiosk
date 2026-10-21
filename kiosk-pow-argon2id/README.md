@@ -7,7 +7,7 @@ Argon2id memory-hard proof-of-work backend for the [Kiosk](https://kiosk.tech) f
 > Argon2id's `verify` costs one `m`-sized eval (~64 MiB),
 > so a flood of bad proofs is a DoS on the *verifier* — the exact failure the
 > asymmetric-verify goal exists to prevent. This gem stays in the repo as an
-> opt-in backend and reference; no demo, harness or deploy runbook wires it.
+> opt-in backend and reference; no demo, harness or deploy runbook uses it.
 
 ## What it is
 
@@ -49,7 +49,7 @@ Kiosk::Pow::Argon2id.digest(salt: raw_bytes, params: { m: 65_536, t: 1, p: 1, d:
 
 | Symbol | Value | Meaning |
 |--------|-------|---------|
-| `Kiosk::Pow::Argon2id::NAME` | `"argon2id"` | Algorithm name advertised in the wire challenge |
+| `Kiosk::Pow::Argon2id::NAME` | `"argon2id"` | Algorithm name advertised in the signed challenge |
 | `m` default | `65_536` KiB (64 MiB) | ASIC-resistance knob; sets verify cost and solve cost equally |
 | `t` default | `1` | Iterations |
 | `p` default | `1` | Parallelism |
@@ -62,7 +62,7 @@ Both the Ruby verifier and the Python solver compute the same primitive:
 ```
 Argon2id(
   password = str(nonce),       # decimal ASCII string, e.g. "0", "73821"
-  salt     = raw_salt_bytes,   # ≥ 8 raw bytes; wire base64 decoded upstream
+  salt     = raw_salt_bytes,   # ≥ 8 raw bytes; protocol base64 decoded upstream
   m_cost   = params[:m],       # memory in KiB (default 65 536 = 64 MiB)
   t_cost   = params[:t],       # iterations (default 1)
   p        = params[:p],       # parallelism (default 1)
@@ -77,7 +77,7 @@ Ruby uses `Argon2::Ext.argon2id_hash_raw` (libargon2, always version `0x13`).
 Python uses `argon2.low_level.hash_secret_raw(..., version=19)` (`argon2-cffi`).
 Version `19` decimal == `0x13` hex — byte-identical output.
 
-## Wire challenge params
+## Challenge params
 
 The `params` object in the challenge carries exactly four integer keys:
 

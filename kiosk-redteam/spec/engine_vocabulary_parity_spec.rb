@@ -12,7 +12,7 @@ RSpec.describe 'the engine error vocabulary this suite stubs from' do
   # copy of that file's `STATUS_CODES`. They were byte-identical to the engine on
   # the day the row was written, which is exactly why it was `minor` and exactly
   # why it could rot: every verdict this harness reaches branches on `code`, the
-  # specs that prove the branching stub the wire FROM those rows, and a code the
+  # specs that prove the branching stub the protocol FROM those rows, and a code the
   # engine adds, re-statuses or drops leaves this suite green while it stubs an
   # answer the server can no longer send.
   #

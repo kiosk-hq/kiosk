@@ -5,10 +5,10 @@ require 'rack/mock'
 require 'uri'
 
 # A verb call through the route `kiosk do` draws, as the router reaches it. The
-# wire resolves the example's `identity` as the caller, and the session runs on
+# protocol resolves the example's `identity` as the caller, and the session runs on
 # its `connection`.
 module VerbRouteCall
-  # What the wire answered: the parsed body (nil when empty), its status and headers.
+  # What the protocol answered: the parsed body (nil when empty), its status and headers.
   Answer = Data.define(:status, :body, :headers) do
     # The answer a Rack triple carries.
     def self.from((status, headers, body))
@@ -34,7 +34,7 @@ module VerbRouteCall
     Answer.from(Kiosk::Server::Routing::VerbRoute.new(kind, name.to_s).call(verb_route_env(kind, name, args).merge(env)))
   end
 
-  # The answer's body on a 2xx; otherwise the wire error its problem document names.
+  # The answer's body on a 2xx; otherwise the Kiosk error its problem document names.
   def verb_answer(kind, name, args = {}, **)
     answer = call_verb_route(kind, name, args, **)
     return answer if answer.ok?

@@ -96,7 +96,7 @@ RSpec.describe Kiosk::Server::Events do
       # authorises an upgrade, and an operator MUST NOT refuse one over its
       # `Origin`. That header is a browser's forgery control, and a browser
       # cannot attach `Authorization` cross-origin in the first place — so
-      # requiring it would only lock out the stacks this wire is written for.
+      # requiring it would only lock out the stacks this protocol is written for.
       # ADR-0040: `connect` runs after the upgrade request has returned, so the
       # connection resolves the issuer from its own request.
       it 'resolves the identity under the origin the upgrade arrived on' do
@@ -134,7 +134,7 @@ RSpec.describe Kiosk::Server::Events do
       end
     end
 
-    # Spec Section 8.5.4. The envelope is the wire a port has to produce, and the
+    # Spec Section 8.5.4. The envelope is the protocol a port has to produce, and the
     # level a frame arrives at is what a subscriber reads it by: a subscription's
     # own frames are wrapped, the connection's are not.
     describe 'the actioncable-v1-json framing' do
@@ -182,7 +182,7 @@ RSpec.describe Kiosk::Server::Events do
       end
 
       # The refusal is right — the safe reading of a broken authorisation rule is
-      # NO. What the wire cannot carry is WHOSE code broke, so the engine says it
+      # NO. What the protocol cannot carry is WHOSE code broke, so the engine says it
       # in its own log; without that line the operator sees a refusal
       # indistinguishable from their rule answering no.
       it "REFUSES when the operator's own subject rule raises, and logs what raised" do
@@ -205,7 +205,7 @@ RSpec.describe Kiosk::Server::Events do
       def answer(name) = bad.dig(name, 'answer')
 
       # A `subscribe` names a subscription by its `identifier` STRING, which the
-      # wire compares and never parses — so the string correlates the refusal
+      # protocol compares and never parses — so the string correlates the refusal
       # whether or not it happens to be a JSON document, and the per-subscription
       # form is the one that leaves the rest of the socket working.
       it 'REJECTS a subscribe whose identifier is not a JSON document, echoing it' do
@@ -368,7 +368,7 @@ RSpec.describe Kiosk::Server::Events do
       end
     end
 
-    # Spec Section 8.5.4: the wire has no confirmation for an unsubscribe.
+    # Spec Section 8.5.4: the protocol has no confirmation for an unsubscribe.
     describe 'unsubscribing from a live subscription' do
       it 'drops it, answers nothing, and delivers nothing emitted after it' do
         expect(report['before_unsubscribe_delivered']).to be(true)

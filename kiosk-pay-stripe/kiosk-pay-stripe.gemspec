@@ -17,7 +17,7 @@ Gem::Specification.new do |spec|
         Checkout session in `mode: "setup"` that saves the buyer's card on the
         PROVIDER's own Stripe account (an existing open setup session is
         reused, so the url is stable across polls); `setup_required?` tells the
-        wire whether a principal still has to complete it, backed by
+        engine whether a principal still has to complete it, backed by
         `saved_method?`, which asks Stripe whether the resolved Customer has a
         usable card.
       - Charging. This adapter's own `#capture` settles an AP2 cart

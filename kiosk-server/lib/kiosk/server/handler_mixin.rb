@@ -5,8 +5,8 @@ require 'action_dispatch'
 
 module Kiosk
   module Server
-    # Implementation behind `include Kiosk::Handler`. The macros above a `def` make it a wire verb;
-    # a method with no pending declaration stays off the wire.
+    # Implementation behind `include Kiosk::Handler`. The macros above a `def` make it a verb;
+    # a method with no pending declaration stays off the protocol.
     module HandlerMixin
       KINDS = %i[action query].freeze
 
@@ -38,7 +38,7 @@ module Kiosk
         base.extend(ClassMethods)
         base.include(InstanceMethods)
 
-        # The wire authenticates by bearer token, never by cookie, so CSRF protection does not apply.
+        # The protocol authenticates by bearer token, never by cookie, so CSRF protection does not apply.
         base.skip_forgery_protection if base.respond_to?(:skip_forgery_protection)
 
         # Registered at include time, so an operator's own `rescue_from` declared later wins.
@@ -80,7 +80,7 @@ module Kiosk
 
         def bad_topic_name(owner, name)
           "#{owner} declared `topic #{name.inspect}`, which is not a legal Kiosk name. " \
-            "A topic name is a wire name: #{NAME_PATTERN.inspect}."
+            "A topic name matches #{NAME_PATTERN.inspect}."
         end
 
         def reserved_topic(owner, name)
@@ -300,12 +300,12 @@ module Kiosk
           kiosk_declare(method_name, pending)
         end
 
-        # Wire name → declaration for the verbs on this class, one per name.
+        # Published name → declaration for the verbs on this class, one per name.
         def kiosk_declarations
           @kiosk_declarations ||= {}
         end
 
-        # Wire name → declaration for the topics on this class.
+        # Published name → declaration for the topics on this class.
         def kiosk_topic_declarations
           @kiosk_topic_declarations ||= {}
         end
@@ -361,7 +361,7 @@ module Kiosk
 
         private
 
-        # The acting {Kiosk::Identity}; nil outside a wire request.
+        # The acting {Kiosk::Identity}; nil outside a protocol request.
         def kiosk_identity = CurrentRequest.identity
 
         # Differs from the method name only under `wire_name`.
@@ -376,8 +376,8 @@ module Kiosk
         end
 
         # A validation failure answers 400 with the errors' full messages. Any other raise Rails knows
-        # a status for maps to its lone wire code, its own message going to the operator's log and
-        # never onto the wire; anything else is re-raised.
+        # a status for maps to its lone error code, its own message going to the operator's log and
+        # never onto the protocol; anything else is re-raised.
         def kiosk_rescue_to_wire(exception)
           raise exception if exception.is_a?(Kiosk::Server::Errors::Base)
 

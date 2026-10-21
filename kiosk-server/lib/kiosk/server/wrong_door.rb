@@ -5,7 +5,7 @@ require 'active_support/concern'
 module Kiosk
   module Server
     # The account holder's browser pages. A JSON caller without a CSRF token is
-    # an assistant at the wrong door: the answer points it at the wire. Browser
+    # an assistant at the wrong door: the answer points it at the protocol. Browser
     # requests re-raise untouched. Each page's controller sets WRONG_DOOR_MESSAGE.
     module WrongDoor
       extend ActiveSupport::Concern
@@ -29,9 +29,9 @@ module Kiosk
         false
       end
 
-      # Not a wire problem document or wire error code: this page is not the wire.
+      # Not a protocol problem document or Kiosk error code: this page is not the protocol.
       def wrong_door_envelope
-        hint = "assistants use the wire: GET #{request.base_url}/.well-known/kiosk.json " \
+        hint = "assistants use the Kiosk HTTP API: GET #{request.base_url}/.well-known/kiosk.json " \
                'for the register/login endpoints, then GET <endpoint>/schema ' \
                '(public) for the verbs this origin serves'
         { ok: false,

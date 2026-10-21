@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-# An assistant at the human sign-in pages is pointed at the wire.
+# An assistant at the human sign-in pages is pointed at the protocol.
 class WireSignpostTest < ActionDispatch::IntegrationTest
   setup    { ActionController::Base.allow_forgery_protection = true }
   teardown { ActionController::Base.allow_forgery_protection = false }

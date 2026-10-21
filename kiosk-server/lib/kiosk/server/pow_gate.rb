@@ -21,9 +21,9 @@ module Kiosk
         )
       end
 
-      # `command` is the policy verb ({Executor::VERBS}); `verb` is the wire name
+      # `command` is the policy verb ({Executor::VERBS}); `verb` is the published name
       # the fingerprint binds.
-      def gate(identity:, command:, body:, pow:, method: 'POST', verb: nil) # rubocop:disable Metrics/ParameterLists -- the wire controller and the specs pass these six by name
+      def gate(identity:, command:, body:, pow:, method: 'POST', verb: nil) # rubocop:disable Metrics/ParameterLists -- WireController and the specs pass these six by name
         config = Kiosk.configuration
         policy = config.reputation_policy
         return :proceed if policy.nil? || session_paid?(config, identity)

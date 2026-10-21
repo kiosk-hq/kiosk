@@ -33,7 +33,7 @@ require 'kiosk/test_helpers/dpop'
 require_relative 'memory_event_store'
 
 report = {}
-# The engine's own log, so a scenario can assert a line the wire cannot carry.
+# The engine's own log, so a scenario can assert a line the protocol cannot carry.
 # ERROR level only: everything below it is request noise.
 LOG = StringIO.new
 
@@ -626,7 +626,7 @@ begin
   # 15 — an operator's OWN subject rule raises. The refusal is right, because
   #      the safe reading of a broken authorisation rule is NO — and the
   #      operator whose lambda raised has to be able to find out, which the
-  #      wire cannot tell them.
+  #      protocol cannot tell them.
   sock = connect(port)
   sock.pump_until { sock.frames.any? }
   sock.subscribe(identifier('boom', subject: 'anything'))

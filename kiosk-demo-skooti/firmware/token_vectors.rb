@@ -38,7 +38,7 @@ require 'base64'
 # covers is a red build rather than something a reader has to go looking for.
 #
 # THE GRAMMAR THESE VECTORS PIN is stated once, in ../RENTAL_TOKEN.md, which is
-# the canonical page for this token. In brief: the wire token is at most 512
+# the canonical page for this token. In brief: the token string is at most 512
 # bytes and splits at its LAST "." into a message and a canonical unpadded
 # base64url Ed25519 signature; the message is exactly six pipe-delimited
 # fields, none of them empty; field 0 is the literal domain tag, fields 1 and 2
@@ -65,7 +65,7 @@ require 'base64'
 # EVERY VECTOR'S SIGNATURE IS COMPUTED AT RUN TIME WITH THE LIVE DEV KEY —
 # the same `config/dev_unlock_key.pem` the server signs with — over that
 # vector's own message, and that is the whole point of holding messages here
-# rather than wire tokens. A wrong-shaped message carrying a junk signature is
+# rather than token strings. A wrong-shaped message carrying a junk signature is
 # refused by the signature gate first, so it proves nothing about the parse.
 # Most vectors then present that signature canonically, so the signature gate
 # passes and the parse is the only thing left to answer. The vectors whose
@@ -132,7 +132,7 @@ module SkootiTokenVectors
   # One NUL byte, spelled as an escape so it is visible in a diff.
   NUL = "\u0000"
 
-  # How the wire token is spelled around its signature.
+  # How the token string is spelled around its signature.
   module Spelling
     # The base64url alphabet, in value order — RFC 4648 §5. Used to respell the
     # final character of a signature.
@@ -146,7 +146,7 @@ module SkootiTokenVectors
     # below exercise.
     ORDER = (2**252) + 27_742_317_777_372_353_535_851_937_790_883_648_493
 
-    # Rebuild a wire signature with its scalar half replaced by whatever the
+    # Rebuild a encoded signature with its scalar half replaced by whatever the
     # block returns. The R half is carried through untouched, so what changes is
     # the one number RFC 8032 puts a range on.
     #
@@ -160,7 +160,7 @@ module SkootiTokenVectors
     # nothing.
     def self.respell_scalar(signature_b64)
       bytes = Base64.urlsafe_decode64(signature_b64)
-      abort "  VECTOR BROKEN — a wire signature decoded to #{bytes.bytesize} bytes, not 64" if bytes.bytesize != 64
+      abort "  VECTOR BROKEN — an encoded signature decoded to #{bytes.bytesize} bytes, not 64" if bytes.bytesize != 64
 
       tail = scalar_bytes(yield(little_endian(bytes[32, 32])))
       Base64.urlsafe_encode64(bytes[0, 32] + tail, padding: false)
@@ -183,7 +183,7 @@ module SkootiTokenVectors
             'the canonical-scalar check is never reached'
     end
 
-    # HOW A VECTOR'S WIRE TOKEN IS SPELLED around the signature the runner
+    # HOW A VECTOR'S TOKEN STRING IS SPELLED around the signature the runner
     # computes over its message. `:canonical` is the shipped spelling; every other
     # entry deliberately respells or dismantles the token, and the runner FAILS
     # when one of them returns the canonical token unchanged — a transform that is
@@ -223,7 +223,7 @@ module SkootiTokenVectors
 
       long_sig: ->(m, s) { "#{m}.#{s}A" },
 
-      # The wire shapes that never reach the field parse.
+      # The token shapes that never reach the field parse.
       no_dot: ->(m, s) { "#{m}#{s}" },
       empty_sig: ->(m, _s) { "#{m}." },
       empty_message: ->(_m, s) { ".#{s}" },
@@ -258,8 +258,8 @@ module SkootiTokenVectors
   # label   — one line, human, no trailing punctuation
   # accept  — what EVERY reader must answer at NOW
   # message — the bytes to sign
-  # wire    — the key in WIRE that builds the wire token from message + signature
-  # tag     — the Ruby encoding the wire token is handed to the two Ruby readers
+  # wire    — the key in WIRE that builds the token string from message + signature
+  # tag     — the Ruby encoding the token string is handed to the two Ruby readers
   #           under. The C reader is given a file and sees only bytes, so this
   #           member is what lets ONE vector ask all three the same question on
   #           an axis that exists in one language and not the other.
@@ -279,7 +279,7 @@ module SkootiTokenVectors
     CANONICAL_MESSAGE.with(**fields).to_s
   end
 
-  # The encoding a wire token carries unless a vector says otherwise. UTF-8 is
+  # The encoding a token string carries unless a vector says otherwise. UTF-8 is
   # what a token arriving from a request parameter or a File.read is tagged
   # with here, so it is the default case rather than a neutral one.
   DEFAULT_TAG = 'UTF-8'
@@ -290,7 +290,7 @@ module SkootiTokenVectors
     Vector.new(axis, label, accept, message, wire || :canonical, tag || DEFAULT_TAG)
   end
 
-  # A reservation id long enough to put the wire token at exactly the lock's
+  # A reservation id long enough to put the token string at exactly the lock's
   # 512-byte cap, and one byte more. DERIVED rather than typed: everything in
   # the message but the reservation id, plus the "." and the 86 unpadded
   # base64url characters a 64-byte Ed25519 signature encodes to.
@@ -305,7 +305,7 @@ module SkootiTokenVectors
   # this signature stops carrying either character, the run fails by name.
   RESV_ALPHABET = 'resv-alt0'
 
-  # The Ruby encodings a wire token is handed over under. UTF-8 is what
+  # The Ruby encodings a token string is handed over under. UTF-8 is what
   # Encoding.default_external gives a request parameter or a File.read here;
   # ASCII-8BIT is what a socket read gives; ISO-8859-1 is Rack's raw-byte
   # spelling; UTF-16LE is the one that used to RAISE out of both readers'

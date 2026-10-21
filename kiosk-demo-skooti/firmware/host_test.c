@@ -28,7 +28,7 @@
  * signature (base64url, no padding):
  *   SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg
  *
- * wire token = "<message>.<sig>"
+ * token string = "<message>.<sig>"
  */
 
 #include "verify.h"
@@ -73,14 +73,14 @@ static const uint8_t SKOOTI_PUBKEY[32] = {
 
 #define SCOOTER_CODE "SK-001"
 
-/* The two halves of the known-answer wire token, so the encoding tests can
+/* The two halves of the known-answer token string, so the encoding tests can
  * respell the signature without retyping the message. */
 #define KAT_MSG \
     "kiosk-rental-v1|SK-001|resv-1|1750000000|1750000900|aabbccddeeff00112233445566778899"
 #define KAT_SIG \
     "SDKHoyU3zzqvpVCwOcKf75EMJCyNKaxuRbvY3HmuM-q--ZaMEdeSmBi40JgZyhvBuL4A15xlupYqlGMfCnROCg"
 
-/* wire token: domain-separation tag + 6 pipe fields */
+/* token string: domain-separation tag + 6 pipe fields */
 #define WIRE_TOKEN KAT_MSG "." KAT_SIG
 
 /* Timestamp inside the validity window (exp=1750000900, now=1750000800) */
@@ -391,7 +391,7 @@ static void test_field_count_boundary(void)
  * Test 8 above closes the field COUNT. This one closes what the fields may
  * CONTAIN, and it exists for the same reason: a count gate alone leaves the
  * lock and the server's own verifier free to answer differently on bytes an
- * adopter can put on the wire. Each vector is signed with the dev key in
+ * adopter can put in the token string. Each vector is signed with the dev key in
  * ../config/dev_unlock_key.pem and sits in the KAT window (exp=1750000900,
  * NOW_FRESH), so the parse is the only gate left to answer.
  *
@@ -527,7 +527,7 @@ static void test_sig_encoding(void)
     /* 86 characters carry 516 bits and the signature is 512, so the final
      * character has four bits that decode to nothing. Canonical leaves them
      * zero; this token sets them, decodes to the identical 64 bytes, and is a
-     * different string on the wire — 'g' (value 32) becomes 'v' (value 47). */
+     * different string in the token string — 'g' (value 32) becomes 'v' (value 47). */
     result = skooti_verify_token(
         SKOOTI_PUBKEY,
         KAT_MSG "."
@@ -610,8 +610,8 @@ static void test_sig_encoding(void)
  * This is the entry point the sketch calls with the BLE write's own size. The
  * verifier below it reads a `const char *` and ends at the first NUL, so a
  * write carrying one would be verified as the prefix before it while the rest
- * of the writer's bytes went unread; the grammar admits no NUL in a wire
- * token, so the whole buffer is refused.
+ * of the writer's bytes went unread; the grammar admits no NUL in a token
+ * string, so the whole buffer is refused.
  */
 static void test_wire_bytes(void)
 {
@@ -649,7 +649,7 @@ static void test_wire_bytes(void)
  * reach: crosscheck_grammar.rb hands the helper a file and the helper passes
  * the file's own size, so every vector there carries an HONEST length. The
  * question here is what happens when it does not, and it is a C-level question
- * because a wire token cannot express it.
+ * because a token string cannot express it.
  *
  * A length used only for the cap and the NUL scan, with the parse then run
  * over a `const char *` to whatever terminator it finds, gives two answers
@@ -1014,7 +1014,7 @@ static void test_jti_store(void)
  * as the board's is at boot.  The child consumes nothing and asserts nothing;
  * it reports through its exit status.
  *
- * THIS ASSERTION IS A LIMIT, NOT A FEATURE, AND IT IS MEANT TO GO RED.  Wire
+ * THIS ASSERTION IS A LIMIT, NOT A FEATURE, AND IT IS MEANT TO GO RED.  Enable
  * the NVS block at the top of jti_store.c and the child starts REFUSING the
  * jti — at which point this test fails and tells you to turn it around, in
  * the same commit as the documentation that describes the store.  That
@@ -1086,7 +1086,7 @@ static void test_jti_store_reboot(const char *self)
     check(child_code == PROBE_EXIT_NEW,
           "jti_store: a JUST-BOOTED process ACCEPTS the jti the previous boot "
           "consumed, still inside its exp window — the store is in RAM and is "
-          "NOT durable across a power cycle (NVS wiring is the adopter's step)");
+          "NOT durable across a power cycle (NVS setup is the adopter's step)");
 }
 
 /* --------------------------------------------------------------------------

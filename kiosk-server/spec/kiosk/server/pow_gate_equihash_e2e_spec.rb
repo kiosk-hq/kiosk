@@ -18,7 +18,7 @@ require_relative '../../support/equihash_kat'
 # real equihash crypto: N distinct challenges, verify-through-backend, the
 # all-or-re-challenge quota, spend semantics, and fingerprint binding.
 module PowGateEquihashE2eSpec
-  # The call under test, as a router reaches it on the wire:
+  # The call under test, as a router reaches it over HTTP:
   # `GET <endpoint>/catalog?q=milk`. `command:` is the gate/POLICY verb the
   # policy branches on; `method:`/`verb:` are the two halves the request
   # fingerprint binds to alongside the arguments.

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Moves a paid order to another delivery window, and optionally another
-# address, on the payment it already has. Returns the order; raises a wire error on a refusal.
+# address, on the payment it already has. Returns the order; raises a Kiosk error on a refusal.
 class RescheduleDeliveryOperation
   def self.call(order_id:, slot_at:, delivery_address:)
     order = Order.own.reschedulable.find_by(id: order_id)

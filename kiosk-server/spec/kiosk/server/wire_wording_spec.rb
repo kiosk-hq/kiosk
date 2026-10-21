@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# The sentences the engine puts on the wire for a malformed request.
+# The sentences the engine puts in the protocol for a malformed request.
 #
 # A missing field reads `missing field: <name>`, the house sentence the demos
 # use too. A body that is not JSON reads `invalid JSON body`. Neither carries a
@@ -51,7 +51,7 @@ module WireWordingSpec
   end
 end
 
-RSpec.shared_context 'with a provider origin for wire wording' do
+RSpec.shared_context 'with a provider origin for protocol wording' do
   include WireWordingSpec
 
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
@@ -67,7 +67,7 @@ end
 
 RSpec.describe Kiosk::Server::Errors do
   describe 'the malformed-request sentences on the wire' do
-    include_context 'with a provider origin for wire wording'
+    include_context 'with a provider origin for protocol wording'
 
     describe 'POST /kiosk/auth/rotate' do
       it 'names the absent field and not the Ruby exception when new_client_assertion is omitted' do

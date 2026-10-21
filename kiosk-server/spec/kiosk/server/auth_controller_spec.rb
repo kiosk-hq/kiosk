@@ -22,7 +22,7 @@ RSpec.describe Kiosk::Server::AuthController do
     [status, headers, JSON.parse(raw)]
   end
 
-  # The auth plane answers the same RFC 9457 problem document as the wire:
+  # The auth plane answers the same RFC 9457 problem document as the verbs:
   # `application/problem+json`, a per-code `type` and `title`, the status in
   # the body, and the closed-vocabulary `code` at the top level.
   def expect_problem(response, http:, code:, detail: nil)

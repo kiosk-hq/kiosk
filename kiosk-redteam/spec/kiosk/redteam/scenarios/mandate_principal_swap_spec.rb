@@ -16,7 +16,7 @@ end
 RSpec.describe Kiosk::Redteam::Scenarios::MandatePrincipalSwap do
   # `POST /kiosk/pay` is a RESERVED endpoint the cutover did not touch: same
   # path, same success body shape. Only the error shape moved (problem document).
-  # minimal_profile's create_owned is a plain lambda, so the only wire traffic
+  # minimal_profile's create_owned is a plain lambda, so the only protocol traffic
   # is register ×2 and the single pay.
 
   describe '#call — non-vacuity' do

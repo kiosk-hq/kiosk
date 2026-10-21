@@ -8,7 +8,7 @@ module Kiosk
       module_function
 
       # Call only after the client has authenticated.
-      # `requested_role` always comes from a human's identity, never the wire.
+      # `requested_role` always comes from a human's identity, never the request.
       #
       # @return [Client] the client under its new holder
       def bind!(agent_id:, user_id:, requested_role: nil)

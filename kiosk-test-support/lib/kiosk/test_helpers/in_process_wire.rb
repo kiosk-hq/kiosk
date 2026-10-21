@@ -23,7 +23,7 @@ module Kiosk
         @app = app
       end
 
-      # The verb's answer, or the wire error its refusal names.
+      # The verb's answer, or the Kiosk error its refusal names.
       def call(name, kind:, params:, identity:)
         credential = credential_for(identity) if identity
         response   = request(name, kind, params, credential)

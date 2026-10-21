@@ -34,7 +34,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
         expect(probe('development')['queries']).to eq(%w[probe_browse probe_detail])
       end
 
-      it 'serves those names on the wire — the registry holds a real dispatch' do
+      it 'serves those names in the protocol — the registry holds a real dispatch' do
         expect(probe('development')['browse_fetches']).to eq('Kiosk::Server::ControllerVerb')
       end
 
@@ -57,7 +57,7 @@ RSpec.describe Kiosk::Server::HandlerRegistrations do
         expect(probe('development', 'after_remove')['queries']).to eq(%w[probe_detail])
       end
 
-      it 'stops serving a REMOVED verb on the wire, not just in the catalog' do
+      it 'stops serving a REMOVED verb in the protocol, not just in the catalog' do
         # The leak a naive re-register-only to_prepare has: the descriptor
         # disappears while the previous generation's handler stays callable.
         expect(probe('development', 'after_remove')['browse_fetches']).to start_with('NotFound:')

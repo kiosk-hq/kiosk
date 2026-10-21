@@ -113,7 +113,7 @@ RSpec.describe Kiosk::Server::EventStores::ActiveRecord do
     expect(store.since('u1', 0).first['data']).to eq('nested' => { 'k' => [1, 2] }, 's' => 'x')
   end
 
-  it 'renders occurred_at in the one form the wire publishes' do
+  it 'renders occurred_at in the one form the protocol publishes' do
     store.append('u1', event)
 
     expect(store.since('u1', 0).first['occurred_at']).to eq('2026-09-25T10:00:00Z')

@@ -4,7 +4,7 @@ Minitest integration for the [Kiosk](https://kiosk.tech) journey-test DSL.
 
 ## What it does
 
-Wires the framework-agnostic journey-test DSL (`kiosk-test-support`) into Minitest. Adds:
+Connects the framework-agnostic journey-test DSL (`kiosk-test-support`) into Minitest. Adds:
 
 - A convenience include — `include Kiosk::TestHelpers` mixes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`, `run_query`, `run_action`, `pay_action`, `kiosk_seed`) and the assertions into a `Minitest::Test` subclass.
 - Assertions: `assert_rls_denied { block }`, `assert_quota_exceeded { block }`, plus `refute_*` negative forms.
@@ -22,9 +22,9 @@ end
 
 `require "kiosk/rls_minitest"` from your `test/test_helper.rb`.
 
-## Wire an executor
+## Configure an executor
 
-The DSL is inert until an executor is configured. Wire the in-process executor, which runs against `kiosk-server` in your Rails app, in `test/test_helper.rb`:
+The DSL is inert until an executor is configured. Configure the in-process executor, which runs against `kiosk-server` in your Rails app, in `test/test_helper.rb`:
 
 ```ruby
 require "kiosk/rls_minitest"

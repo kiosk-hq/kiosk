@@ -4,7 +4,7 @@ The Devise user-IdP adapter for [Kiosk](https://kiosk.tech) — for Rails provid
 
 ## What it does
 
-Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces: the device-verify page, the linked-assistants page, and `POST /kiosk/auth/link` and `/kiosk/auth/unlink`. The wire and the event stream never take it; they accept only the assistant's bearer token.
+Reads the signed-in user from the incoming request's Warden proxy and returns a `Kiosk::Identity` for the human-side surfaces: the device-verify page, the linked-assistants page, and `POST /kiosk/auth/link` and `/kiosk/auth/unlink`. The protocol and the event stream never take it; they accept only the assistant's bearer token.
 
 The adapter is **agnostic about how the user logged in**: Devise's `database_authenticatable` and `omniauthable` modules both populate the request's Warden user, so the same read covers password login, passwordless magic-link, and every OmniAuth strategy (Google, GitHub, SAML, …).
 
@@ -22,7 +22,7 @@ gem "kiosk-user-idp-devise", github: "kiosk-hq/kiosk"
 
 The adapter declares no hard runtime dependency on `devise` — it only reads the request's Warden user, and your provider's already-installed Devise satisfies the requirement.
 
-## Wire up
+## Set up
 
 ```ruby
 # config/initializers/kiosk.rb
@@ -38,7 +38,7 @@ Kiosk.configure do |c|
 end
 ```
 
-## Pointing assistants at the wire
+## Pointing assistants at the protocol
 
 An assistant that POSTs JSON at the sign-in page, or signs out with no session, gets a JSON body naming `/.well-known/kiosk.json` (`422 invalid_authenticity_token`, `401 not_signed_in`) instead of an empty error. Browsers are answered as before.
 
@@ -55,7 +55,7 @@ devise_for :users, controllers: { sessions: "kiosk/user_identity_providers/devis
 
 ## Driving the sign-in from a script
 
-An origin wired to this adapter has no stub user-IdP, so anything that needs the HUMAN half of a ceremony — approving an assistant on the device-verify page, minting a link code, unlinking — has to hold a real browser session. `DeviseSession` is that session, and it is the client end of the same contract the adapter above serves:
+An origin that uses this adapter has no stub user-IdP, so anything that needs the HUMAN half of a ceremony — approving an assistant on the device-verify page, minting a link code, unlinking — has to hold a real browser session. `DeviseSession` is that session, and it is the client end of the same contract the adapter above serves:
 
 ```ruby
 require "kiosk/user_identity_providers/devise_session"

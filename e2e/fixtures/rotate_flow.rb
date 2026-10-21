@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Key rotation over the wire (spec Section 5.7). A newly registered client puts a
+# Key rotation over HTTP (spec Section 5.7). A newly registered client puts a
 # new key on its identity: each key signs a client assertion, and the old key's
 # assertion names the new key by its RFC 7638 thumbprint. The token endpoint
 # then issues a token for the new key only. Emits ONE JSON line for

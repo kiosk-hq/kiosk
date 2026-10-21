@@ -107,7 +107,7 @@ RSpec.describe Kiosk::Server::RequestValidation do
 
     # THE TABLE IS THE LIST, so nothing may dial an exchange it does not carry.
     # Derived from the engine's own source rather than restated here: a seventh
-    # endpoint wired up without a row fails this example instead of raising
+    # endpoint added without a row fails this example instead of raising
     # KeyError at a caller.
     it 'carries every exchange the engine dials' do
       root   = File.expand_path('../../..', __dir__)

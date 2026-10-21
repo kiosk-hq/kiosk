@@ -3,7 +3,7 @@
 Scooter rental demo operator for Kiosk.
 
 `skooti` is a fake-but-realistic micromobility operator that rents scooters —
-and a KYC-gated combustion motorcycle — over the Kiosk wire. An AI assistant
+and a KYC-gated combustion motorcycle — over the Kiosk HTTP API. An AI assistant
 self-registers, reserves a vehicle and pays for it with no account of its
 human's and no sign-in anywhere, and comes away with a short-lived signed
 token that opens that one vehicle. The last step is the human's, because it is
@@ -14,7 +14,7 @@ charge a local stripe-mock. The lock verifies the offline
 Ed25519 token by itself, with no server round-trip; here it is a software
 simulation of the firmware in `firmware/`.
 
-## Wire surface
+## HTTP API
 
 One endpoint per verb: a read is a `GET` at its own name with arguments in the
 query string, a write is a `POST` at its own name with a JSON body. Success is
@@ -145,7 +145,7 @@ terminal, in `../kiosk-demo-prove`, run `bin/rails db:reset`, then
 > There is a Kiosk origin at http://localhost:3000 — read its
 > `/.well-known/kiosk.json` and rent me a scooter for an hour and pay for it.
 
-It discovers the wire, registers itself and drives the flow. If it asks you to
+It discovers the protocol, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `ada@example.com` / `skooti-demo-password` and approve it there.
 

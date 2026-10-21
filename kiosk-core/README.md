@@ -46,7 +46,7 @@ gem "kiosk-all", github: "kiosk-hq/kiosk"
 
 ## Status
 
-Pre-v1.0 alpha. Wire-protocol semver stability begins at v1.0; pre-v1.0 minor bumps may break compatibility (CHANGELOG.md tracks).
+Pre-v1.0 alpha. Protocol semver stability begins at v1.0; pre-v1.0 minor bumps may break compatibility (CHANGELOG.md tracks).
 
 ## License
 

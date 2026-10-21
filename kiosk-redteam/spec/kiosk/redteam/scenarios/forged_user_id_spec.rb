@@ -34,7 +34,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
   describe '#call — non-vacuity' do
     include_context 'with a profile that forges user_id on reserve'
 
-    it 'puts the forged user_id on the wire as a plain argument, with no `name` field' do
+    it 'puts the forged user_id in the request as a plain argument, with no `name` field' do
       stub_registers('a', 'b')
       captured = nil
       stub_request(:post, verb_url('reserve'))
@@ -160,15 +160,15 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
   end
 
   # ── What a real 0.4 origin answers, and what this scenario makes of it ───
-  describe '#call — against the shipped 0.4 wire' do
+  describe '#call — against the shipped 0.4 protocol' do
     include_context 'with a profile that forges user_id on reserve'
 
-    # An action's payload reaches the wire VERBATIM, so skooti's `reserve`
+    # An action's payload reaches the protocol VERBATIM, so skooti's `reserve`
     # answers {reservation_id, price_per_min_cents, currency, checkout_jwt} — a bare
     # object. extract_id looks under `body["value"]`, the
     # envelope the cutover deleted; reading only that shape would find nothing
     # on ANY real origin, and every run of this scenario would end "cannot
-    # confirm ownership was enforced" — an indeterminate verdict for a wire
+    # confirm ownership was enforced" — an indeterminate verdict for a protocol
     # that answered perfectly clearly.
     it "reads the resource id out of the action's own object" do
       stub_registers('a', 'b')

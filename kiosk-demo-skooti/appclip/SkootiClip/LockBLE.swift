@@ -6,13 +6,13 @@
 //
 //   Unlock UUID:   4e2a1002-5b3c-4b1e-9f8c-6d7e8a9b0c1d
 //     Properties:  WRITE (+ WRITE_NR)
-//     Format:      wire rental token (UTF-8 string, up to ~220 bytes)
+//     Format:      rental token string (UTF-8 string, up to ~220 bytes)
 //                  "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 //
 // Cross-checked against:
 //   firmware/skooti_lock.ino  #define SERVICE_UUID / UNLOCK_UUID
 //   firmware/skooti_lock.ino  NimBLEDevice::init("skooti-" SCOOTER_CODE) — advertised name
-//   firmware/skooti_lock.ino  UnlockCallbacks::onWrite — receives the full wire token
+//   firmware/skooti_lock.ino  UnlockCallbacks::onWrite — receives the full token string
 //
 // Offline flow (NO challenge, NO server round-trip):
 //   scan → connect (to skooti-<scooterCode> ONLY) → discover unlock char → write token → unlocked
@@ -29,7 +29,7 @@
 // the unlock characteristic.
 //
 // MTU note: NimBLE on the lock negotiates MTU 256 (NimBLEDevice::setMTU(256)).  A
-// typical wire token is ~180-220 bytes.  CoreBluetooth exposes the negotiated limit
+// typical token string is ~180-220 bytes.  CoreBluetooth exposes the negotiated limit
 // via peripheral.maximumWriteValueLength(for: .withResponse); if the token exceeds
 // that limit the write is rejected with "ATT error 0x06" (request not supported for
 // large writes).  In practice iOS negotiates ≥ 185 bytes with a nearby BLE 4.2+

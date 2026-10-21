@@ -2,7 +2,7 @@
 
 module Kiosk
   module Server
-    # The identity of a wire or event-stream caller: the access token, read by
+    # The identity of a protocol or event-stream caller: the access token, read by
     # the configured agent IdP or the bundled one. A cookie session
     # reaches only the human-side pages and the binding endpoints.
     module IdentityResolution

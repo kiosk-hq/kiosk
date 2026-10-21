@@ -50,7 +50,7 @@ RSpec.describe Kiosk::Server::Result do
   end
 
   # THE 0.4 SUCCESS BODY (T-072 = C). Whatever the handler rendered is what
-  # the wire carries — and since T-092 there is no composite shape left at all:
+  # the protocol carries — and since T-092 there is no composite shape left at all:
   # a paginating query answers the same bare array as any other, with its two
   # page facts on the `Link` and `X-Total-Count` response headers.
   describe '#to_payload' do

@@ -10,7 +10,7 @@
 #      registration again with the Kiosk-PoW header carrying the solved
 #      `{challenge, nonce}` proofs as raw JSON SUCCEEDS (201); the token
 #      endpoint then issues a usable token for the new client.
-#   3. That token authenticates a real wire verb.
+#   3. That token authenticates a real verb.
 #   4. The same key on the deployment's second origin is a second account,
 #      and each origin refuses the other's token.
 #
@@ -63,7 +63,7 @@ results[:no_proof_status] = rc_noproof
 # top-level extension member beside it.
 results[:no_proof_code]   = reg_noproof['code']
 results[:challenges_len]  = Array(reg_noproof['challenges']).length
-# HOW BIG THE TOLL IS, OFF THE WIRE. `challenges_len` above says how MANY
+# HOW BIG THE TOLL IS, OFF THE PROTOCOL. `challenges_len` above says how MANY
 # proofs this origin demanded; how HARD each one is would otherwise be stated
 # only by a comment, which cannot notice a retune. The Equihash (n,k)
 # the server PUBLISHES in the challenge it just issued is recorded here, joined
@@ -81,7 +81,7 @@ results[:challenge_params_nk] = [challenge_params['n'], challenge_params['k']].j
 # value this origin ACCEPTED, so `e2e/schema_conformance.rb` can validate a
 # real solved proof against the published `pow.schema.json`. Until this
 # existed, `#/$defs/proof` — where `indices`, its Zcash canonical order and the
-# inclusive u64 `maximum` live — had no over-the-wire coverage at all.
+# inclusive u64 `maximum` live — had no coverage over HTTP at all.
 reg_key, reg, token = register_with_token(
   server: SERVER,
   issuer: ISSUER,
@@ -97,7 +97,7 @@ results[:with_proof_registered] = !reg.fetch('client_id').to_s.empty? && !token.
 claims = JWT.decode(token, nil, false).first
 results[:role] = claims['role']
 
-# ── 3. The PoW-minted token authenticates a real wire verb ──────────────────
+# ── 3. The PoW-minted token authenticates a real verb ──────────────────
 # A call that carries a token carries a proof that its key signs for the
 # URL of the origin it reaches (RFC 9449).
 def dpop(token, key, url) = Kiosk::TestHelpers::Dpop.headers(token, key, method: 'GET', url: url)
@@ -105,7 +105,7 @@ def dpop(token, key, url) = Kiosk::TestHelpers::Dpop.headers(token, key, method:
 rc_wire, wire = get_json("#{SERVER}/kiosk/salons", dpop(token, reg_key, "#{SERVER}/kiosk/salons"))
 results[:wire_status] = rc_wire
 # A query is answered with the handler's payload verbatim, so
-# the proof that the wire served this token is that a LIST came back — there
+# the proof that the protocol served this token is that a LIST came back — there
 # is no `ok` flag left to read, and the status line carries success.
 results[:wire_payload_is_array] = wire.is_a?(Array)
 

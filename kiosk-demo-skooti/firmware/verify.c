@@ -4,11 +4,11 @@
  * Portable C99.  No BLE, Arduino, or platform-specific dependencies.
  * Compiles on host (clang/gcc) and ESP32-C3 toolchain.
  *
- * See verify.h for the full token wire-format and clock documentation.
+ * See verify.h for the full token format and clock documentation.
  *
- * Token wire format:
+ * Token format:
  *   message = "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>"
- *   wire    = "<message>.<base64url(sig)>"
+ *   token   = "<message>.<base64url(sig)>"
  *
  * Field indices (0-based) — EXACTLY six, no more and no fewer:
  *   [0] domain tag      "kiosk-rental-v1"
@@ -19,7 +19,7 @@
  *   [5] jti             32 lowercase hex chars
  *
  * The full grammar this file implements — every field's charset, the
- * delimiter rule and the wire-length cap — is written out in
+ * delimiter rule and the length cap — is written out in
  * ../RENTAL_TOKEN.md, which is the canonical page for this token, and the
  * same grammar is implemented by RentalTokenIssuer.verify and by
  * script/lock_sim.rb. `make crosscheck` runs one shared vector set
@@ -153,7 +153,7 @@ static int b64url_decode(const char *src, size_t src_len,
      * carry leftover bits, and a canonical encoding leaves those bits zero.
      * Sixteen spellings of one 64-byte Ed25519 signature differ only there —
      * the 86-character encoding has four such bits — so a decoder that drops
-     * them lets sixteen distinct wire tokens carry one signature. The two Ruby
+     * them lets sixteen distinct token strings carry one signature. The two Ruby
      * readers decode strictly and admit only the one, and where readers of a
      * credential differ the WIDEST decides what a fleet accepts, so this is
      * the narrow reading: a signature has exactly one encoding.
@@ -279,7 +279,7 @@ static int is_jti(const char *s, size_t len)
  * nothing downstream can correct — would take a token both Ruby readers
  * refuse. ../RENTAL_TOKEN.md states the rule for all three.
  *
- * CONSTANT TIME. S arrives on the wire and is not a secret, but a verifier
+ * CONSTANT TIME. S arrives in the token string and is not a secret, but a verifier
  * that answers in a data-dependent time tells a caller WHICH check refused it,
  * so this one does not branch on the bytes: all 32 byte positions are always
  * read, in a fixed order, the comparison state is carried in arithmetic rather
@@ -407,8 +407,8 @@ int skooti_pubkey_is_canonical(const uint8_t pubkey[32])
  * of eight over many keys. The identity point (order 1) needs no grinding at
  * all: [h]·identity is always identity.
  *
- * This lock is handed its key once at provisioning and never reads one off the
- * wire, so nothing an attacker WRITES to this lock reaches this rule. The rule
+ * This lock is handed its key once at provisioning and never reads one from a
+ * token, so nothing an attacker WRITES to this lock reaches this rule. The rule
  * is here for the two ways a low-order key arrives without an attacker choosing
  * it: an adopter who copies this reference and whose key comes from a fleet
  * message, a provisioning tag or a server push that this file cannot audit, and
@@ -481,7 +481,7 @@ int skooti_pubkey_is_low_order(const uint8_t pubkey[32])
  *
  * Every byte this function reads is in [token, token + token_len); it never
  * looks for a terminator and never reads one. That is what makes
- * skooti_verify_wire's length argument mean something: the wire entry point
+ * skooti_verify_wire's length argument mean something: that entry point
  * hands its caller's own byte count straight down, so a buffer that is not
  * terminated at token_len is still never read past, and a length SHORTER than
  * the terminated content verifies the shorter token rather than the longer one
@@ -571,7 +571,7 @@ static int verify_bounded(const uint8_t pubkey[32],
 
     /* --- RFC 8032 5.1.7: the scalar half of the signature must be below the
      * group order. The vendored verifier only refuses S >= 2^253, which leaves
-     * S + L verifying alongside S — one token with two wire spellings, and the
+     * S + L verifying alongside S — one token with two spellings, and the
      * lock the only reader of the three that would take the second. See
      * ct_scalar_is_canonical above. --- */
     if (!ct_scalar_is_canonical(sig + 32)) return 0;
@@ -734,7 +734,7 @@ int skooti_verify_token(const uint8_t pubkey[32],
  * first one, whatever the caller was handed, so a buffer holding one would be
  * verified as the prefix before it and the bytes after it — chosen by the
  * writer, covered by no signature — would never be looked at. The grammar in
- * ../RENTAL_TOKEN.md admits no NUL in a wire token, so a buffer carrying one
+ * ../RENTAL_TOKEN.md admits no NUL in a token string, so a buffer carrying one
  * is refused whole.
  *
  * And the count BOUNDS the parse: verify_bounded is given token_len rather

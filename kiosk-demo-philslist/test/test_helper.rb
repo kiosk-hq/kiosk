@@ -11,7 +11,7 @@ Kiosk::Server::SchemaSlots.refresh_seconds = 0
 
 module ActiveSupport
   class TestCase
-    # Runs the block as `user`, the way the wire runs a handler.
+    # Runs the block as `user`, the way the protocol runs a handler.
     def as(user, &)
       identity = Kiosk::Identity.new(user_id: user.id, role: nil, actor: 'human')
       Kiosk::Server::SessionContext.open(connection: ActiveRecord::Base.connection, identity: identity, &)

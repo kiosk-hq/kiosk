@@ -36,7 +36,7 @@ bin/rails test             # the tests; CI runs exactly this
 assistant does; the age-check tests stand in for the KYC broker with
 `Kiosk::TestHelpers::Kyc`.
 
-`test/kiosk_conformance_test.rb` is the file to copy when you add a Kiosk wire
+`test/kiosk_conformance_test.rb` is the file to copy when you add a Kiosk HTTP API
 to an app of your own: the four properties the protocol makes normative of an
 origin, asserted with the matchers `kiosk-test-support` ships.
 `kiosk-demo-hoteling` is the same surface written in RSpec.
@@ -74,7 +74,7 @@ terminal, in `../kiosk-demo-prove`, run `bin/rails db:reset`, then
 > `/.well-known/kiosk.json` and order me milk, bread and coffee to my Dublin address in the first
 > free evening slot, and pay with my card on file.
 
-It discovers the wire, registers itself and drives the flow. If it asks you to
+It discovers the protocol, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `hana@example.com` / `getgrocery-demo-password` and approve it there.
 

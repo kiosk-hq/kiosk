@@ -53,7 +53,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     end
   end
 
-  # A fresh session looks exactly like the happy path on the wire, so the adapter
+  # A fresh session looks exactly like the happy path in the protocol, so the adapter
   # logs every case where it could not find out whether one was outstanding.
   describe '#setup_url when the outstanding-session lookup fails' do
     include_context 'with a Stripe adapter'

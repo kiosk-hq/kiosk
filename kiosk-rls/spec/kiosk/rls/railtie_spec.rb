@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The railtie makes `enable_rls_on` callable from a host's migration with no
-# wiring in the host. This needs real Rails: `railties` and `activerecord` are
+# setup in the host. This needs real Rails: `railties` and `activerecord` are
 # test-only Gemfile entries, never gemspec dependencies. When they are missing
 # the spec fails; it does not skip.
 
@@ -54,7 +54,7 @@ RSpec.describe Kiosk::RLS::Railtie do
       ActiveRecord::Base
     end
 
-    it 'puts the DSL on ActiveRecord::Migration with no wiring from the host' do
+    it 'puts the DSL on ActiveRecord::Migration with no setup from the host' do
       expect(ActiveRecord::Migration.include?(Kiosk::RLS::DSL)).to be(true)
     end
 

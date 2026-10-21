@@ -485,7 +485,7 @@ jobs:
   # because a derivation that matches nothing makes the live verify loop pass
   # over zero hosts. The per-site "does this vhost reach the shared snippet"
   # question the old script parsed out of the config graph is now answered ON
-  # THE WIRE, per host, by deploy/check-live-hsts.sh and by this script's own
+  # THE PROTOCOL, per host, by deploy/check-live-hsts.sh and by this script's own
   # verify_live — a parse said the config should work, a probe says the header
   # arrives.
   #
@@ -589,7 +589,7 @@ jobs:
   #     than pending examples.
   #   * bin/check-live-skill-pin (offline, no network) — that the cut every demo
   #     pins is the NEWEST one published. Its --network mode is a manual
-  #     deploy-time tool and must NOT be wired anywhere: it compares the LIVE
+  #     deploy-time tool and must NOT be called anywhere: it compares the LIVE
   #     fleet against the working tree, and those differ until the next deploy.
   published-bytes:
     name: skill pins vs the published bytes (kiosk.tech sibling)

@@ -124,7 +124,7 @@ module PowGateSpecHelpers
   #
   # `command` is the gate/POLICY verb the policy branches on; `method` and
   # `verb` are what the request fingerprint binds to and default exactly as
-  # {PowGate.gate} defaults them (POST, and the command as the wire name), so a
+  # {PowGate.gate} defaults them (POST, and the command as the published name), so a
   # caller that only cares about the policy verb passes neither.
   def issue_challenge_via_gate(command: 'query', body: { name: 'menu' },
                                method: 'POST', verb: nil)
@@ -195,8 +195,8 @@ RSpec.describe Kiosk::Server::PowGate do
   #
   # 0.3 hashed `"<command>\n<body>"`: with every read multiplexed through
   # `POST <endpoint>/query` the method was a constant and the verb name only
-  # reached the digest because the wire smuggled it back into the body. On the
-  # per-verb wire the method carries the read/write fork and the name is a path
+  # reached the digest because the protocol smuggled it back into the body. On the
+  # per-verb endpoints the method carries the read/write fork and the name is a path
   # segment, so BOTH are hashed directly — and each of the three inputs is
   # separately load-bearing, which is what the four examples below pin.
   describe '.request_fingerprint' do
@@ -245,7 +245,7 @@ RSpec.describe Kiosk::Server::PowGate do
     end
 
     # The formula itself, pinned: a client solving a challenge has to reproduce
-    # this digest byte for byte, so the separator and the ordering are wire
+    # this digest byte for byte, so the separator and the ordering are protocol
     # contract, not an implementation detail.
     it 'is exactly SHA256("<METHOD> <verb>\\n<canonical args>")' do
       expect(described_class.request_fingerprint(method: 'get', verb: 'catalog', body: { b: 2, a: 1 }))
@@ -914,7 +914,7 @@ RSpec.describe Kiosk::Server::PowGate do
   end
 
   # ─── .proofs_from_header — parse the proof(s) out of the Kiosk-PoW header ─────
-  # The wire carries the proof(s) in the `Kiosk-PoW` request HEADER as raw JSON
+  # The protocol carries the proof(s) in the `Kiosk-PoW` request HEADER as raw JSON
   # (ADR-0022), NOT in the body — so the body is identical at issue time (no
   # proof) and verify time (proof in the header) and the challenge fingerprint
   # matches. The parser flattens every accepted presentation (single proof, JSON

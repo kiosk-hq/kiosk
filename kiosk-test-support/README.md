@@ -49,9 +49,9 @@ end
 
 Helpers: `as_agent_of(user, role:)`, `as_user(user, role:)`, `as_agent(name)`, `as_anonymous`, `query(sql)`, `run_query(name, **args)`, `run_action(name, **args)`, `pay_action(name, **args)`, `kiosk_seed(table, count:, owner:, **attrs)`. See the `Kiosk::TestHelpers::Journey` docstrings for full semantics.
 
-## Wiring an executor
+## Configuring an executor
 
-The DSL is inert until you wire an executor. In production-shaped tests you wire `Kiosk::TestHelpers::InProcessExecutor`, which runs against `kiosk-server` in your Rails app:
+The DSL is inert until you configure an executor. In production-shaped tests you configure `Kiosk::TestHelpers::InProcessExecutor`, which runs against `kiosk-server` in your Rails app:
 
 ```ruby
 # spec/spec_helper.rb (RSpec) or test/test_helper.rb (Minitest)
@@ -67,9 +67,9 @@ Kiosk::TestHelpers.executor = Kiosk::TestHelpers::NullExecutor.new.tap do |e|
 end
 ```
 
-The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests wire `Kiosk::TestHelpers::InProcessExecutor` (above).
+The `NullExecutor` is the zero-dependency fallback for unit-shaped tests; production-shaped tests configure `Kiosk::TestHelpers::InProcessExecutor` (above).
 
-## Driving the wire as an assistant
+## Driving the protocol as an assistant
 
 `Kiosk::TestHelpers::Assistant` registers its key as an OAuth client and gets DPoP-bound tokens, pays proof-of-work tolls, queries, runs, pays with closed AP2 mandates (SD-JWT) and listens on `<endpoint>/events`, against any origin — a test's own live server or a deployment:
 
@@ -105,7 +105,7 @@ end
 
 - `a_customer(as:)` registers an assistant; `a_newcomer(as:)` registers a key and acts for no person yet; `published(path)` reads what the origin shows anyone.
 - `Customer#asks` and `#does` answer an `Answer` (`ok?`, `refused?(code)`, `detail`, `hint`, `rows`, `header`, `tolls_paid`, `solved_toll`, `next_page`); `asks(…, unpaid: true)` or `asks(…, proofs: […])` leaves the toll to the story.
-- `Kiosk::StoryTest#assert_refused(answer, code)` asserts the wire refused the `Answer` with `code`.
+- `Kiosk::StoryTest#assert_refused(answer, code)` asserts the protocol refused the `Answer` with `code`.
 - `Customer#sets_up_payment` and `#requests_verification` run the engine's `payment_setup` and `request_kyc`, and `#hears_verification_passed` waits for the outcome of the check it asked for last; `#pays(checkout_jwt)` signs the two closed AP2 mandates for the checkout an action answered, unchanged, and pays; on `payment_setup_required` it calls `payment_setup` and pays once more.
 - `Customer#account`, `#role` and `#claims` read its credential; `#signs_back_in` and `#with_a_fresh_credential` ask the token endpoint for a new token; `#redeems(link_code)`, `#asks_to_be_linked`, `#polls` and `#collects` are the linking ceremonies.
 - `Customer#listens_for`, `#follows(*topics, subject:, since:)` and `#hears(topic, about:, on:, **data)` read the event stream, holding each heard payload to the schema the origin publishes for its topic.

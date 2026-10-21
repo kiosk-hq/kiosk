@@ -188,7 +188,7 @@ module Kiosk
       module AfterPayment
         # The executor calls this once, after it records the settlement of
         # `checkout_mandate`, so `c.after_payment` reads the row's `settlement`. A
-        # failure here never surfaces on the wire: the log carries it.
+        # failure here never surfaces in the response: the log carries it.
         def settled(checkout_mandate)
           id = Lines.reference(checkout_mandate.line_items, @reference)
           Kiosk.configuration.after_payment&.call(id)

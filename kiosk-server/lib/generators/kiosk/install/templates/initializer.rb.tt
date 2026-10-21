@@ -9,7 +9,7 @@ Kiosk.configure do |c|
   # Type of users.id: :uuid (default), :bigint, :integer or :text.
   c.user_id_type   = :<%= options[:user_id_type] %>
 
-  # coerce-then-validate on the per-verb wire is UNCONDITIONAL: arguments are
+  # coerce-then-validate on the per-verb endpoints is UNCONDITIONAL: arguments are
   # always checked against the verb's `input_schema` (§8.1). This flag adds a check:
   # it validates every answer against the verb's `output_schema`. Off in production,
   # where a descriptor typo would become a 500 for a caller.

@@ -15,7 +15,7 @@
 #                   only) raise on boot.
 #   MISSING COLUMN  a page that SELECTs a column this app's schema.rb has
 #                   not got → HTTP 500 in production; check:binding drives the
-#                   WIRE ceremony, never the HTML page render, so CI stays green.
+#                   PROTOCOL ceremony, never the HTML page render, so CI stays green.
 #   PROXY CSRF      with `config.assume_ssl` off, behind a TLS-terminating proxy
 #                   the Rails 8.1 CSRF Origin check rejects the browser's
 #                   `Origin: https://` POST as forgery → 422 + a silent Devise

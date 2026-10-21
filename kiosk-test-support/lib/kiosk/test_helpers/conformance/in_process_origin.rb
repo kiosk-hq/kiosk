@@ -45,7 +45,7 @@ module Kiosk
           @wire.call(name, kind: kind, params: params, identity: identity_for(as))
         end
 
-        # Uses the wire's own validators, so a query's reserved `limit`/`cursor` pass as they do on the wire.
+        # Uses the protocol's own validators, so a query's reserved `limit`/`cursor` pass as they do in the protocol.
         def schema_errors(payload, schema:, verb:, kind:, slot:)
           if slot.to_s == 'input_schema'
             Kiosk::Server::RequestValidation.validate_arguments!(payload, input_schema: schema, verb: verb,

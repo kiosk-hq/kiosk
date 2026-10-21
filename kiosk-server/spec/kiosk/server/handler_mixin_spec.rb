@@ -52,7 +52,7 @@ class SpecCatalogController < SpecKioskBaseController
   end
 
   kind :query
-  description 'Reports who the wire says is calling.'
+  description 'Reports who the protocol says is calling.'
   input_schema type: 'object', additionalProperties: false, properties: {}, required: []
   output_schema true
   def whoami
@@ -60,7 +60,7 @@ class SpecCatalogController < SpecKioskBaseController
                     wire_name: kiosk_wire_name, user_agent: request.headers['User-Agent'] }]
   end
 
-  # No macros: a plain helper, NOT a wire verb.
+  # No macros: a plain helper, NOT a verb.
   def not_a_verb
     render json: { reached: true }
   end
@@ -87,7 +87,7 @@ class SpecOrdersController < ApplicationController
   end
 
   kind :action
-  description 'Refuses, to show a policy refusal reaching the wire as forbidden.'
+  description 'Refuses, to show a policy refusal reaching the protocol as forbidden.'
   input_schema type: 'object', additionalProperties: false, properties: {}, required: []
   output_schema true
   def cancel_everything
@@ -95,7 +95,7 @@ class SpecOrdersController < ApplicationController
   end
 
   kind :action
-  description 'Raises the wire error whose code no HTTP status can carry.'
+  description 'Raises the Kiosk error whose code no HTTP status can carry.'
   input_schema type: 'object', additionalProperties: false, properties: {}, required: []
   output_schema true
   def rent_motorcycle
@@ -112,7 +112,7 @@ class SpecOrdersController < ApplicationController
 end
 
 # ONE CONTROLLER, BOTH KINDS (K-921). The read and the write of the same
-# resource sit together and the wire reaches each by its own HTTP method — the
+# resource sit together and the protocol reaches each by its own HTTP method — the
 # thing the retired Kiosk::Query/Kiosk::Action split made impossible to write.
 class SpecBoardController < ApplicationController
   include Kiosk::Handler
@@ -163,8 +163,8 @@ class SpecReachController < SpecKioskBaseController
 end
 
 module HandlerMixinSpec
-  # The verb through its route, as `identity`. The wire NAME is an argument of
-  # its own — a path segment on the wire, never a body field — so it is lifted
+  # The verb through its route, as `identity`. The protocol NAME is an argument of
+  # its own — a path segment in the protocol, never a body field — so it is lifted
   # out of `args` here.
   def execute(kind, args)
     args = args.dup
@@ -193,7 +193,7 @@ module HandlerMixinSpec
 end
 
 module HandlerMixinWireSpec
-  # The 0.4 wire, exercised the way a router reaches it: the verb NAME is a
+  # The 0.4 protocol, exercised the way a router reaches it: the verb NAME is a
   # path segment (`params[:kiosk_verb]`), a query is a GET whose arguments
   # are the query string and an action is a POST whose arguments are the
   # body. There is no `name` field and no /query or /run endpoint to post to.
@@ -241,7 +241,7 @@ RSpec.shared_context 'with registered handler classes for the executor' do
   end
 end
 
-RSpec.shared_context 'with a wire token for the handler mixin' do
+RSpec.shared_context 'with an access token for the handler mixin' do
   include HandlerMixinWireSpec
 
   let(:token) do
@@ -266,7 +266,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
   include_context 'with registered handler classes for the executor'
 
   describe 'declaring verbs' do
-    it 'registers each decorated method under its wire name' do
+    it 'registers each decorated method under its published name' do
       expect(Kiosk::Server::Queries.known).to include('catalog', 'my_orders', 'whoami')
       expect(Kiosk::Server::Actions.known).to include('create_order')
     end
@@ -292,11 +292,11 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       expect(descriptor[:example_row]).to eq(sku: 'MILK-1L', price_cents: 199)
     end
 
-    it 'omits params — the slot left the wire (ADR-0023 retired it, T-085 removed it)' do
+    it 'omits params — the slot left the protocol (ADR-0023 retired it, T-085 removed it)' do
       expect(Kiosk::Server::Queries.describe('catalog')).not_to have_key(:params)
     end
 
-    it 'reaches the wire catalog the public `schema` endpoint serves' do
+    it 'reaches the catalog the public `schema` endpoint serves' do
       document = Kiosk::Server::SchemaDocument.document
 
       expect(document[:queries].pluck(:name)).to include('catalog')
@@ -320,7 +320,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       expect(Kiosk::Server::Actions.describe('staff_book')[:reach]).to eq('role')
     end
 
-    it 'carries reach onto the wire catalog the public `schema` endpoint serves' do
+    it 'carries reach onto the catalog the public `schema` endpoint serves' do
       document = Kiosk::Server::SchemaDocument.document
       reaches  = (document[:queries] + document[:actions]).to_h { |d| [d[:name], d[:reach]] }
 
@@ -385,7 +385,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       expect(Kiosk::Server::Cursor.decode_offset(result.next_cursor)).to eq(1)
     end
 
-    it "runs inside the wire's GUC-scoped transaction" do
+    it "runs inside the engine's GUC-scoped transaction" do
       execute(:query, { name: 'catalog' })
 
       expect(connection.bound(/set_config/).first.last.first).to eq('app.current_user_id')
@@ -399,7 +399,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       expect(result.body).to eq('order_id' => 'o-1', 'item_count' => 1, 'for' => 'u-1')
     end
 
-    it 'never lets a wire name reach an undeclared method' do
+    it 'never lets a published name reach an undeclared method' do
       expect { execute(:run, { name: 'place' }) }
         .to raise_error(Kiosk::Server::Errors::Base, /Unknown action/) { |e| expect(e.code).to eq('verb_not_found') }
     end
@@ -424,7 +424,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
         }
     end
 
-    it 'lets a handler raise a wire error no HTTP status can carry' do
+    it 'lets a handler raise a Kiosk error no HTTP status can carry' do
       expect { execute(:run, { name: 'rent_motorcycle' }) }
         .to raise_error(Kiosk::Server::Errors::Base) { |e|
           expect(e.code).to eq('kyc_required')
@@ -433,7 +433,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
     end
 
     # `/raised RuntimeError: boom/` was the old assertion, and the ": boom"
-    # half of it was the operator's own `raise "boom"` on the wire (K-1307).
+    # half of it was the operator's own `raise "boom"` in the protocol (K-1307).
     # The class stays — an operator reading a problem document wants to know
     # a RuntimeError escaped, and a class name cannot carry the caller's bytes
     # — and the sentence goes to the log instead, which is what the hint has
@@ -484,7 +484,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
     # actionpack's own sentence, verbatim, on a 400 problem document (K-1310).
     # This branch exists for exceptions the operator did NOT author, so the
     # sentence it rendered was always some library's. INVERTED, so a revert
-    # reddens here: the wire carries this protocol's words and the library's
+    # reddens here: the protocol carries this protocol's words and the library's
     # go to the operator's log.
     it "maps params.require's ParameterMissing to bad_request — no Kiosk classes in the handler" do
       stub_handler('SpecStrictController', :action, 'Requires a param the caller did not send.') do
@@ -514,14 +514,14 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       # This is the whole point of reusing Rails' own table: the host app's
       # `config.action_dispatch.rescue_responses` entries (a policy library's
       # NotAuthorizedError → :forbidden, Active Record's RecordNotFound →
-      # :not_found) reach the wire with zero Kiosk configuration.
+      # :not_found) reach the protocol with zero Kiosk configuration.
       #
       # THE COST OF K-1310, PINNED RATHER THAN DESCRIBED. `"policy said no"` was
       # written by whoever registered the class, and nothing in that table
       # distinguishes a host's own class from a library's — Rails documents it
       # as the place an app registers ITS LIBRARIES' exceptions. So the CODE
       # still travels and the SENTENCE does not; the sentence is in the
-      # operator's log, and the two ways to put one on the wire on purpose are
+      # operator's log, and the two ways to put one in the protocol on purpose are
       # the two specs below.
       stub_const('SpecVetoError', Class.new(StandardError))
       ActionDispatch::ExceptionWrapper.rescue_responses['SpecVetoError'] = :forbidden
@@ -569,7 +569,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
         }
     end
 
-    it 'still lets an operator SPEAK to the agent by raising a Kiosk wire error' do
+    it 'still lets an operator SPEAK to the agent by raising a Kiosk error' do
       stub_handler('SpecRaisedVetoController', :action, "Refuses in the operator's own words, by raising.") do
         def vetoed_by_raise
           raise Kiosk::Server::Errors::Forbidden.new('policy said no',
@@ -602,7 +602,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
     end
   end
 
-  describe 'rendering an explicit wire code' do
+  describe 'rendering an explicit error code' do
     it 'carries a 403 code a bare status cannot name (rls_denied)' do
       stub_handler('SpecBlockedController', :query, 'Answers with the RLS denial code, Rails-natively.') do
         def blocked
@@ -635,8 +635,8 @@ RSpec.describe Kiosk::Server::HandlerMixin do
     end
   end
 
-  describe 'the end-to-end wire path' do
-    include_context 'with a wire token for the handler mixin'
+  describe 'the end-to-end HTTP path' do
+    include_context 'with an access token for the handler mixin'
 
     it 'answers a query with the rendered rows, verbatim' do
       status, payload = get_wire('catalog', { q: 'milk' })
@@ -652,7 +652,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
       expect(payload).to eq('order_id' => 'o-1', 'item_count' => 1, 'for' => 'u-1')
     end
 
-    # ── K-921, over the wire ─────────────────────────────────────────────
+    # ── K-921, over HTTP ─────────────────────────────────────────────
     #
     # The proof that the split is REMOVED rather than merely unenforced: both
     # verbs below are declared in ONE class, and each answers on its own HTTP
@@ -682,7 +682,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
     it "renders a handler's refusal as a problem document" do
       # `items: []` satisfies the declared input_schema (an array, present) and
       # is refused by the HANDLER's own emptiness guard — so this exercises the
-      # handler's refusal reaching the wire, not the schema layer's.
+      # handler's refusal reaching the protocol, not the schema layer's.
       status, problem, headers = post_wire('create_order', { items: [] })
 
       expect(status).to eq(400)
@@ -694,7 +694,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
     end
 
     it 'gives a RENDERED payment_setup_required the same WWW-Authenticate as a raised one' do
-      # The challenge header is keyed on the wire CODE (T-054), so the
+      # The challenge header is keyed in the protocol CODE (T-054), so the
       # Rails-native way of saying a specific 402 loses nothing.
       stub_handler('SpecNeedsCardController', :action, 'Needs a card on file before it can run.') do
         def needs_card
@@ -757,7 +757,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
   end
 
   describe 'guards' do
-    it '404s a request that did not come through the Kiosk wire, as a problem document' do
+    it '404s a request that did not come through the Kiosk HTTP API, as a problem document' do
       # THE BODY IS CLIENT-FACING (K-1092): it goes straight to whoever dialed a
       # route an operator drew at a handler controller, so it is a flat problem
       # document with no `ok` or `error` member.
@@ -776,7 +776,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
         'status' => 404,
         'code' => 'verb_not_found'
       )
-      expect(problem['detail']).to include('Kiosk wire only')
+      expect(problem['detail']).to include('Kiosk HTTP API only')
       expect(problem['hint']).to include('<query-name>')
       # FLAT: neither of the two members the retired envelope owned survives.
       expect(problem.keys).not_to include('ok')
@@ -847,7 +847,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
 
     # The EQUALITY case the kind check above skipped (K-1659). Before this the
     # second declaration was stored, silently replacing the first: the earlier
-    # method went off the wire with nothing — not the cross-class check, which
+    # method went off the protocol with nothing — not the cross-class check, which
     # intersects the two registries and so cannot see a same-kind pair —
     # saying so.
     it 'refuses one name declared twice at the same kind on the same class' do
@@ -954,7 +954,7 @@ RSpec.describe Kiosk::Server::HandlerMixin do
           include Kiosk::Handler
 
           kind :query
-          description "Would be shadowed by the wire's own route."
+          description "Would be shadowed by the engine's own route."
           input_schema type: 'object'
           output_schema true
           def schema = render(json: [])

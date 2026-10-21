@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# A catalogue line, referenced on the wire by `sku`.
+# A catalogue line, referenced in the protocol by `sku`.
 class Product < ApplicationRecord
   LOW_STOCK_THRESHOLD = 5
   MAX_PRICE_CENTS     = 100_000

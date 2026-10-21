@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
 
   spec.summary       = 'RSpec integration for the Kiosk journey-test DSL'
   spec.description   = <<~DESC
-    kiosk-rls-rspec wires the framework-agnostic Kiosk journey-test DSL
+    kiosk-rls-rspec connects the framework-agnostic Kiosk journey-test DSL
     (kiosk-test-support) into RSpec.
 
     Automatically mixes the journey helpers (`as_agent_of`, `as_user`,

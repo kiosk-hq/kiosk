@@ -13,7 +13,7 @@ Gem::Specification.new do |spec|
     kiosk-all is the «I just want to start» entry point for the Kiosk
     framework. Installing it pulls in the production data-plane gems:
     kiosk-core (value types, abstract bases, configuration) and
-    kiosk-server — the whole host-side surface: the wire controllers
+    kiosk-server — the whole host-side surface: the Kiosk controllers
     (one endpoint per verb — GET /kiosk/<query-name>, POST
     /kiosk/<action-name> — plus /kiosk/{schema,openapi.json,pay}), the
     register/login auth plane, JWKS,

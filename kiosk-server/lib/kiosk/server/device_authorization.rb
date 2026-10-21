@@ -5,7 +5,7 @@ require 'digest'
 
 module Kiosk
   module Server
-    # One account-binding request on the RFC 8628 device-grant wire: a `:claim`
+    # One account-binding request on the RFC 8628 device-grant endpoints: a `:claim`
     # the agent opens and a human approves, or a `:link` a signed-in human
     # creates already approved. Only SHA-256 digests of its two codes are kept.
     #

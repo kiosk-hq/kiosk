@@ -6,7 +6,7 @@ redesign and the reference for the **viewable board** sharing pattern.
 `atablefor` is a fake-but-realistic restaurant **aggregator** — a handful of
 coined Lisbon restaurants across a few neighbourhoods (Alfama, Graça, Bairro
 Alto, Belém, Príncipe Real), each with a few finite named tables — that takes
-table reservations over the Kiosk wire. The "book a table for two tonight at 8"
+table reservations over the Kiosk HTTP API. The "book a table for two tonight at 8"
 story, completed by an AI assistant with **no human present, no web sign-in, and
 no payment** (a reservation takes no money).
 
@@ -28,7 +28,7 @@ Every confirmed reservation shows on a **public, read-only reservations board**
 after an assistant books and links, a viewer SEES the booking land under the
 diner's name.
 
-## Wire surface
+## HTTP API
 
 One endpoint per verb: a query is a `GET` whose arguments are the query string,
 an action is a `POST` whose arguments are the JSON body, and a success body IS
@@ -59,10 +59,10 @@ The verbs above are ordinary Rails controllers, one per resource:
 `book_table` and `cancel_booking`. Both `include Kiosk::Handler`, and each
 declaration says which kind of verb it is with `kind :query` / `kind :action`.
 Each is declared with the class-level descriptor macros. A refusal is a raised
-`Kiosk::Server::Errors` error or a failed model validation, which the wire turns
+`Kiosk::Server::Errors` error or a failed model validation, which the protocol turns
 into the RFC 9457 problem document an assistant branches on. Every verb's
 `input_schema` is validated on every call, so an undeclared argument is a typed
-`400` naming it. A handler is reached only through the wire.
+`400` naming it. A handler is reached only through the protocol.
 `config/initializers/kiosk.rb` is configuration only.
 
 ## Running it
@@ -98,7 +98,7 @@ assistant does; each one registers an assistant and pays its toll.
 > There is a Kiosk origin at http://localhost:3000 — read its
 > `/.well-known/kiosk.json` and book me a table for two tonight at eight somewhere in Alfama.
 
-It discovers the wire, registers itself and drives the flow. If it asks you to
+It discovers the protocol, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `bea@example.com` / `atablefor-demo-password` and approve it there.
 

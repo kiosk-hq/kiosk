@@ -581,7 +581,7 @@ GREEN_FIXTURES = {
 
 # Shapes that MUST fire, beyond each pattern's own example.
 RED_EXTRA = [
-  ['SEC-1', 'lib/dangling.rb', ['# per §99.9 the wire is additive']],
+  ['SEC-1', 'lib/dangling.rb', ['# per §99.9 the protocol is additive']],
   # CLAUDE.md is shipped content and is never exempt.
   ['PM-1', 'CLAUDE.md', PATTERNS.find { |pat| pat[:id] == 'PM-1' }[:example]],
   # An id glued into a word dates a citation of ours; it is checked, same-line and wrapped.

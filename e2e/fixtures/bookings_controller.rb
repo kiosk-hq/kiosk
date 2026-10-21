@@ -94,7 +94,7 @@ module Kiosk
     # 2026-08-20, when e2e/schema_conformance.rb — the first thing ever to check
     # a descriptor's examples against that descriptor's own schemas (§8.3,
     # matrix SPEC-084) — refused it on its first run. An assistant that copied
-    # this row verbatim built an integer id for a value the wire never returns
+    # this row verbatim built an integer id for a value the protocol never returns
     # as one.
     example_row({ id: '3f1c2d4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f', salon_id: 1,
                   slot: -> { example_slot } })

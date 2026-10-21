@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # The human pages: a signed-in human's lists, and the public housemate board.
-# Reads and writes go through the same projections and Operations the wire uses.
+# Reads and writes go through the same projections and Operations the HTTP API uses.
 class ListsController < ApplicationController
   include KioskSessionable
   include Kiosk::SkillLink

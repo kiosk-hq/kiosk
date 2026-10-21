@@ -160,7 +160,7 @@ RSpec.describe Kiosk::Server::KycVerifier do
           .to raise_error(Kiosk::Server::Errors::ModuleNotServed, /does not serve the KYC module/)
       end
 
-      it 'puts module_not_served/501 on the wire for it, and names the module in detail' do
+      it 'puts module_not_served/501 in the response for it, and names the module in detail' do
         expect { described_class.verify(raw_jws: sign_kyc(valid_payload), subject: 'u-1') }
           .to raise_error(Kiosk::Server::Errors::ModuleNotServed) { |e|
             expect(e.code).to        eq('module_not_served')

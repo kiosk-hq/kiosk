@@ -9,7 +9,7 @@ that the backends share:
   `input` (RFC 7693, no key, 32 raw bytes). It is pure Ruby. Its spec compares it
   with Python's `hashlib.blake2b(data, digest_size=32)`, on inputs at both sides
   of the 128-byte block.
-- `Kiosk::Pow.param(hash, key)` reads one key of a wire object. Parsed JSON has
+- `Kiosk::Pow.param(hash, key)` reads one key of a protocol object. Parsed JSON has
   String keys and Ruby callers use Symbols; it reads both.
 
 kiosk-pow is pure Ruby. It has no runtime dependencies, and it does not need
@@ -72,14 +72,14 @@ end
 
 | Member | Required | What it does |
 |--------|----------|--------------|
-| `NAME` | Yes | The `alg` string of the wire challenge. |
+| `NAME` | Yes | The `alg` string of the signed challenge. |
 | `.params(**)` | Yes | Returns the `params` Hash of a challenge. The host calls it when it writes its policy. |
 | `.verify(salt:, params:, nonce:)` | Yes | Returns `true` when `nonce` is a valid proof for `salt` and `params`. Returns `false` for all other input. |
 | `.valid_params?(params)` | No | Returns `false` when no proof can verify at `params`. `kiosk-server`'s PoW toll calls it through `Kiosk::Reputation::Backends.valid_params?` before it mints a challenge. A wrong configuration then fails at once. |
 
 ### 4. Read the inputs of `.verify` correctly
 
-- `salt` is raw bytes. `kiosk-reputation` decodes the base64 of the wire.
+- `salt` is raw bytes. `kiosk-reputation` decodes the base64 of the protocol.
 - `params` is the signed `params` of the challenge, with Symbol keys.
 - `nonce` is the `nonce` of the proof, as the `Kiosk-PoW` header carries it. It
   is parsed JSON, so its keys are Strings. Read it with `Kiosk::Pow.param`.

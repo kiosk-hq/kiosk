@@ -139,14 +139,14 @@ RSpec.describe Kiosk::Redteam::Verdict do
     # ── Where the code is read ───────────────────────────────────────────────
     #
     # A problem document is FLAT: `code` is a top-level extension member. A code
-    # nested in an `error` member is not one this wire sends, so it reads as nil
+    # nested in an `error` member is not one this protocol sends, so it reads as nil
     # and the verdict falls through to the status.
     it 'reads the code off the problem document itself, not out of a nested envelope' do
       flat = problem('forbidden', status: 200)
       expect(Kiosk::Redteam.error_code(response(200, flat))).to eq('forbidden')
     end
 
-    it 'does NOT read a 0.3 `error` envelope (that wire is gone)' do
+    it 'does NOT read a 0.3 `error` envelope (that protocol is gone)' do
       nested = { 'ok' => false, 'error' => { 'code' => 'forbidden' } }
       expect(Kiosk::Redteam.error_code(response(200, nested))).to be_nil
       expect(Kiosk::Redteam.blocked?(response(200, nested))).to be(false)

@@ -12,7 +12,7 @@
 #
 # `validate_requests` is the PROOF-shape flag and only that: a verb's own
 # ARGUMENTS are validated against its `input_schema` unconditionally on the
-# per-verb wire, flag or no flag. The verb dialled here declares the open
+# per-verb endpoints, flag or no flag. The verb dialled here declares the open
 # object, so nothing in this file is answered by the argument layer.
 #
 # Dispatch goes through `ActionController::Metal.action(...)`, a plain Rack
@@ -55,7 +55,7 @@ module WireControllerValidationSpec
   end
 
   # Dial `GET /kiosk/catalog` carrying the proof in the `Kiosk-PoW` header (as
-  # raw JSON — the header is the wire location per ADR-0022, and on a GET it is
+  # raw JSON — the header is the protocol location per ADR-0022, and on a GET it is
   # the ONLY location there is). An always-challenge reputation policy is
   # configured (see the shared context), so a request that CLEARS validation
   # reaches PowGate.gate and comes back 402 pow_required — never touching

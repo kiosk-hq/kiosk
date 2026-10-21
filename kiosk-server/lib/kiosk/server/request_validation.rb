@@ -34,7 +34,7 @@ module Kiosk
         end
       end
 
-      # A missing member keeps the wire's own `missing field:` sentence.
+      # A missing member keeps the protocol's own `missing field:` sentence.
       def validate_body!(body, exchange:)
         return unless Kiosk.configuration.validate_requests
 

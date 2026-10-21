@@ -7,7 +7,7 @@ The «I just want to start» meta-gem for the [Kiosk](https://kiosk.tech) framew
 `kiosk-all` declares runtime dependencies on the two production data-plane gems:
 
 - **`kiosk-core`** — value types (`Identity`, `Mandate`), abstract adapter base classes, GUC namespace constants, `Kiosk.configure`, protocol version surface
-- **`kiosk-server`** — the whole host-side surface: the wire controllers (one endpoint per registered verb — `GET /kiosk/<query-name>`, `POST /kiosk/<action-name>` — plus `/kiosk/{schema,openapi.json,pay}`), the register/login proof-of-possession auth plane, JWKS, KYC attestation, `agents.txt` / `agents.json` / `/.well-known/kiosk.json` discovery, the account-binding ceremony, `Kiosk::Server::Executor`, the PoW gate, the Rails engine, the headers middleware and the `kiosk:install` generator
+- **`kiosk-server`** — the whole host-side surface: the Kiosk controllers (one endpoint per registered verb — `GET /kiosk/<query-name>`, `POST /kiosk/<action-name>` — plus `/kiosk/{schema,openapi.json,pay}`), the register/login proof-of-possession auth plane, JWKS, KYC attestation, `agents.txt` / `agents.json` / `/.well-known/kiosk.json` discovery, the account-binding ceremony, `Kiosk::Server::Executor`, the PoW gate, the Rails engine, the headers middleware and the `kiosk:install` generator
 
 Requiring `kiosk-all` loads `Kiosk` and `Kiosk::Server`.
 

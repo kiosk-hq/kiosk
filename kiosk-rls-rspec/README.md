@@ -4,7 +4,7 @@ RSpec integration for the [Kiosk](https://kiosk.tech) journey-test DSL.
 
 ## What it does
 
-Wires the framework-agnostic journey-test DSL (`kiosk-test-support`) into RSpec. Adds:
+Connects the framework-agnostic journey-test DSL (`kiosk-test-support`) into RSpec. Adds:
 
 - `type: :kiosk_journey` metadata — auto-includes the journey helpers (`as_agent_of`, `as_user`, `as_agent`, `as_anonymous`, `query`, `run_query`, `run_action`, `pay_action`, `kiosk_seed`).
 - `type: :kiosk_agent` metadata — the same journey DSL under a second tag. It is not a second mode: nothing in this repository drives a live model, and `git ls-files 'kiosk-agent-test*'` counts 0.
@@ -20,11 +20,11 @@ group :test do
 end
 ```
 
-`require "kiosk/rls_rspec"` from your `spec_helper.rb`. The wiring registers automatically when RSpec is already loaded.
+`require "kiosk/rls_rspec"` from your `spec_helper.rb`. The integration registers automatically when RSpec is already loaded.
 
-## Wire an executor
+## Configure an executor
 
-The DSL is inert until an executor is configured. Wire the in-process executor, which runs against `kiosk-server` in your Rails app, in `spec/spec_helper.rb`:
+The DSL is inert until an executor is configured. Configure the in-process executor, which runs against `kiosk-server` in your Rails app, in `spec/spec_helper.rb`:
 
 ```ruby
 require "kiosk/rls_rspec"

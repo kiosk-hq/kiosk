@@ -41,7 +41,7 @@ module Kiosk
         served as `application/problem+json`; branch on its `code` member, not
         on the HTTP status alone.
 
-        `limit` and `cursor` are reserved parameter names this wire always
+        `limit` and `cursor` are reserved parameter names this protocol always
         accepts on a query. A query may declare `limit` to bound its page
         size; no verb declares `cursor`. The two names drive the cursor
         pagination of the specification's Section 8.4. A
@@ -58,14 +58,14 @@ module Kiosk
       }.freeze
 
       TAGS = [
-        { name: 'wire',    description: "The protocol's own reserved endpoints." },
+        { name: 'reserved', description: "The protocol's own reserved endpoints." },
         { name: 'queries', description: 'Reads. GET, arguments in the query string.' },
         { name: 'actions', description: 'Writes. POST, arguments in a JSON body.' }
       ].freeze
 
       def self.build(base_url:, config: Kiosk.configuration)
         endpoint = base_url.to_s.chomp('/') + config.mount_path
-        schemas, paths = Wire.surface(Array(config.capabilities).map(&:to_s))
+        schemas, paths = Reserved.surface(Array(config.capabilities).map(&:to_s))
         Verbs.add_entries(schemas, paths)
         document(endpoint, config, paths, schemas)
       end
@@ -79,7 +79,7 @@ module Kiosk
           security: [{ dpopAuth: [] }],
           tags: TAGS,
           paths: paths,
-          components: Wire.components(schemas)
+          components: Reserved.components(schemas)
         }
       end
       private_class_method :document
@@ -210,7 +210,7 @@ module Kiosk
             content: Refs.json_content("#{descriptor[:name]}.response")
           }
           ok[:headers] = Parameters::PAGINATION_HEADERS.keys.index_with { |h| { '$ref': "#/components/headers/#{h}" } } if kind == :query
-          { '200' => ok }.merge(Wire.problem_refs)
+          { '200' => ok }.merge(Reserved.problem_refs)
         end
 
         # A query's input is a component only when a parameter points into it.
@@ -282,7 +282,7 @@ module Kiosk
 
       # The protocol's own endpoints (§8.3, §11.3), declared rather than derived,
       # and the problem responses every operation shares.
-      module Wire
+      module Reserved
         SCHEMA_DESCRIPTION = "This origin's catalog: every query and action it publishes, " \
                              'with their descriptions and schemas. THE canonical surface ' \
                              'description — this OpenAPI document is derived from it. ' \
@@ -322,7 +322,7 @@ module Kiosk
         def schema_operation
           {
             operationId: 'schema',
-            tags: ['wire'],
+            tags: ['reserved'],
             description: SCHEMA_DESCRIPTION,
             # Public: opts out of the global `dpopAuth`.
             security: [],
@@ -333,7 +333,7 @@ module Kiosk
         def pay_operation
           {
             operationId: 'pay',
-            tags: ['wire'],
+            tags: ['reserved'],
             description: PAY_DESCRIPTION,
             requestBody: { required: true, content: Refs.json_content('pay.request') },
             responses: ok_responses('The settlement receipt.', 'pay.response')
@@ -371,7 +371,7 @@ module Kiosk
         PROBLEM = {
           type: 'object',
           title: 'Problem document (RFC 9457)',
-          description: 'Every error on this wire. Branch on `code`.',
+          description: 'Every error of this protocol. Branch on `code`.',
           properties: {
             type: {
               type: 'string', format: 'uri',

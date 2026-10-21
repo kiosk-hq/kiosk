@@ -12,12 +12,12 @@ require 'kiosk/test_helpers/stripe_mock'
 # reuse can silently stop working while every response still looks healthy
 # (`outstanding_setup_session` cannot tell "no session" from "lookup missed",
 # and degrading to minting is indistinguishable from the happy path on the
-# wire). These examples do NOT stub the SDK.
+# protocol). These examples do NOT stub the SDK.
 #
 # WHAT EACH LAYER PROVES — read this before adding to it:
 #   * doubles (`stripe_spec.rb`)          — the adapter's branching only.
 #   * FakeStripeApi (below)               — the SDK round trip: the filters we
-#     actually put on the wire, the field names we actually read back, and
+#     actually put in the protocol, the field names we actually read back, and
 #     create→list reuse end to end. NOT a claim about Stripe's semantics.
 #   * stripe-mock (below)                 — Stripe's own fixture shapes, from
 #     Stripe's own OpenAPI spec. Stateless, so it CANNOT stage an outstanding
@@ -115,9 +115,9 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       expect(fake.requests_to('POST', '/v1/checkout/sessions').size).to eq(1)
     end
 
-    # The wire request, not the Ruby call: a filter that never leaves the
+    # The protocol request, not the Ruby call: a filter that never leaves the
     # process is a filter that cannot be wrong in the way K-492 was.
-    it "asks for this customer's OPEN sessions on the wire" do
+    it "asks for this customer's OPEN sessions in the request" do
       adapter.setup_url(user_id: 'user-1', return_url: return_url)
       adapter.setup_url(user_id: 'user-1', return_url: return_url)
 

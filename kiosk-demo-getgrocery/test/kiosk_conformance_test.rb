@@ -7,15 +7,15 @@ require 'test_helper'
 #
 # Everything Kiosk-specific in this file is four assertion names. There is no
 # harness here, no hand-rolled `assert`, no results array and no exit block: the
-# checks ship in kiosk-test-support and `test/test_helper.rb` wires them in
+# checks ship in kiosk-test-support and `test/test_helper.rb` includes them
 # three lines. What IS this demo's own is the fixtures and the verb names —
 # which is the right split, because those are the only part of a conformance
 # suite that cannot be shared.
 #
 # It runs with no server, no proof-of-work and no bearer token: the calls go
 # through the registered handler under a GUC-scoped session, so what is being
-# asserted is the operator's own code rather than the wire in front of it. The
-# wire itself is driven by the stories under `test/stories/`.
+# asserted is the operator's own code rather than the protocol in front of it. The
+# protocol itself is driven by the stories under `test/stories/`.
 class KioskConformanceTest < ActiveSupport::TestCase
   # Two customers with a shopping history each. `my_orders` answers whoever is
   # calling, so a scoping assertion needs both sides seeded: one to see rows and
@@ -30,7 +30,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
     # `timezone` is spelled out rather than defaulted: `orders.timezone` carries
     # no column default on purpose, so anything that writes an order has to say
     # which clock it was quoted on. A fixture is no exception — a row that could
-    # not name its clock is a row the wire could not have produced.
+    # not name its clock is a row the protocol could not have produced.
     @alice_order = Order.create!(user: @alice, total_cents: 449,
                                  slot_at: Time.current + 3600, address: '1 Dame Street, Dublin 2',
                                  timezone: DeliverySlots::DEFAULT_ZONE_NAME)
@@ -47,7 +47,7 @@ class KioskConformanceTest < ActiveSupport::TestCase
   # about all seven at once.
   #
   # Watched fail: drop `:delivery_slots` from `queries` and this goes
-  # red naming the verb, the method and the path — where a wire test would keep
+  # red naming the verb, the method and the path — where a HTTP test would keep
   # passing until it reached that one call.
   test 'every declared verb is routed, with the method its kind requires' do
     assert_kiosk_verbs_routed

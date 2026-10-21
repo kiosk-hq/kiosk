@@ -23,7 +23,7 @@ module Kiosk
       MAX_N = 256
 
       # n must be a multiple of 8 and n / (k + 1) at most 24; bench/ holds the measured grid.
-      def self.params(n: 168, k: 7) # rubocop:disable Naming/MethodParameterName -- n and k are the Equihash parameters and the wire params keys.
+      def self.params(n: 168, k: 7) # rubocop:disable Naming/MethodParameterName -- n and k are the Equihash parameters and the protocol params keys.
         { n:, k: }
       end
 

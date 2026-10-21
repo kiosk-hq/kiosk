@@ -6,13 +6,13 @@ attack is correctly blocked.
 
 ## What it does
 
-A scenario registers its own principals over the wire, stages whatever state the
+A scenario registers its own principals over HTTP, stages whatever state the
 attack needs, then performs the attack and returns a `Verdict`. A scenario that
 finds a real breach fails loudly: `Battery#report!` answers 1 and the
 caller exits non-zero. Fix the provider, keep the scenario as a permanent
 regression.
 
-**No Rails.** The harness speaks the wire and nothing else, so
+**No Rails.** The harness speaks the protocol and nothing else, so
 it can be pointed at any Kiosk origin — your own app in CI, or a third party's
 deployment. Everything provider-specific (which verbs exist, how to create an
 owned row, which checkout pays for it) lives in a `Profile` you supply; no provider

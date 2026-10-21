@@ -11,7 +11,7 @@ require 'kiosk/test_helpers/assistant/events'
 
 module Kiosk
   module TestHelpers
-    # An assistant on the wire: registers its key as an OAuth client, then
+    # An assistant over HTTP: registers its key as an OAuth client, then
     # queries, runs and pays as the principal its token names, paying every
     # proof-of-work toll it is asked for.
     #
@@ -160,7 +160,7 @@ module Kiosk
 
       def unpaid = Wire.new(base_url:)
 
-      # The principal's token and key, which the wire signs a DPoP proof with.
+      # The principal's token and key, which the protocol signs a DPoP proof with.
       def credential(principal) = wire.dpop(principal.token, principal.key)
 
       def setup_required?(answer)

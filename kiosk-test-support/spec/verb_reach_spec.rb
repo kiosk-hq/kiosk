@@ -34,7 +34,7 @@
 # because the leak is in a WHERE clause and not in a macro. That half is the
 # demos' job: the privacy stories of philslist and tudu
 # (`test/stories/privacy_test.rb`) assert what two real principals observe over
-# the wire — and this spec is the floor under it: it needs no database
+# the protocol — and this spec is the floor under it: it needs no database
 # and no Rails, runs in a second in the gems matrix, and names the offending
 # verb instead of failing fifteen minutes into the demos matrix.
 #
@@ -76,7 +76,7 @@ module VerbReach
     }
   }.freeze
 
-  # The four §7.2 values. A fifth would be a wire change, not a demo change.
+  # The four §7.2 values. A fifth would be a protocol change, not a demo change.
   REACHES = %w[principal published consented role].freeze
 
   DEF = /^[ \t]*def[ \t]+([a-z_][a-zA-Z0-9_]*)[ \t!?(\n]/

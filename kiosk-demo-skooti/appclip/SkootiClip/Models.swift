@@ -1,6 +1,6 @@
 // Models.swift — shared data types for the Skooti App Clip (offline Ed25519)
 //
-// These structs represent the wire contracts with the BLE lock and the launch URL.
+// These structs represent the contract with the BLE lock and the launch URL.
 // None of them touch UIKit / AppKit — they are pure value types safe to use from
 // any context.
 
@@ -14,7 +14,7 @@ import Foundation
 //
 //   scooterCode   — identifies which lock to BLE-connect to (also embedded in
 //                   the token, but used for scanning / UI before writing).
-//   rentalToken   — the provider-signed wire token:
+//   rentalToken   — the provider-signed token string:
 //                   "kiosk-rental-v1|<scooter_code>|<reservation_id>|<iat>|<exp>|<jti>.<base64url(sig)>"
 //                   issued by RentalTokenIssuer (server) and carried in the rt= URL param.
 //                   The clip writes this string verbatim over BLE; the lock verifies it
@@ -29,7 +29,7 @@ import Foundation
 // Alternative delivery paths (same AgentHandoff struct; only from(url:) changes):
 //
 //   (a) URL param — reference path (current stub).
-//       https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<wire-token>
+//       https://skooti.demo.kiosk.tech/unlock?scooter=SK-001&rt=<token>
 //       Simple, works for demos.  The token is single-use + 15-min lived; exposure
 //       in logs is bounded by that window.
 //
@@ -52,7 +52,7 @@ import Foundation
 struct AgentHandoff {
     /// The scooter's short identifier (e.g. "SK-001"), parsed from the URL scooter= param.
     let scooterCode: String
-    /// The provider-signed rental token (wire format), from the URL rt= param.
+    /// The provider-signed rental token (token format), from the URL rt= param.
     /// Written verbatim as UTF-8 bytes to the lock's unlock BLE characteristic.
     let rentalToken: String
 
@@ -103,7 +103,7 @@ enum Configuration {
     // A hard-coded rental token used when the launch URL does not carry rt=.
     // It is the firmware host test's known-answer vector (SCOOTER_CODE=SK-001):
     // the same bytes `firmware/host_test.c` verifies as its WIRE_TOKEN and
-    // `firmware/skooti_lock.ino` quotes in its wire-format block — so the lock
+    // `firmware/skooti_lock.ino` quotes in its token-format block — so the lock
     // accepts it only while its clock reads under 1750000900 (the exp), which
     // the sketch's DEMO_NOW constant satisfies.
     //

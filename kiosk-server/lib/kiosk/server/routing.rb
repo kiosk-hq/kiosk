@@ -38,7 +38,7 @@ module Kiosk
       end
 
       # The endpoint of one verb route. The controller action that declares the
-      # verb answers the wire request; the name is looked up per request, so a
+      # verb answers the protocol request; the name is looked up per request, so a
       # development reload is served. A name that no action answers goes to
       # {VerbController}, which refuses it.
       class VerbRoute

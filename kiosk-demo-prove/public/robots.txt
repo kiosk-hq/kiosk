@@ -4,7 +4,7 @@ Disallow:
 
 # robots.txt governs the human web, and this origin has no agent surface to
 # send you to. The broker is an ISSUER, not a Kiosk operator: it mounts no
-# Kiosk wire, registers no verb and declares no discovery document. What it
+# Kiosk HTTP API, registers no verb and declares no discovery document. What it
 # serves is a verification page for a human, reached only from a link an
 # operator issues, and one document an operator fetches:
 #   /prove_key.pem   — the Ed25519 public key this broker signs its callbacks with

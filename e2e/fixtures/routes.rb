@@ -6,7 +6,7 @@ Rails.application.routes.draw do
   # form; there is no stub session channel to assert instead.
   devise_for :users
 
-  # ── The Kiosk wire surface ────────────────────────────────────────────────
+  # ── The Kiosk HTTP API surface ────────────────────────────────────────────────
   kiosk do
     queries :my_appointments, :salons
     actions :book_appointment

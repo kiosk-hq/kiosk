@@ -73,7 +73,7 @@ gem "kiosk-rls", github: "kiosk-hq/kiosk"
 
 ## Rails integration
 
-Nothing to wire. The gem ships a railtie (`Kiosk::RLS::Railtie`) that adds the
+Nothing to configure. The gem ships a railtie (`Kiosk::RLS::Railtie`) that adds the
 migration verbs used above to `ActiveRecord::Migration` on boot, so a
 migration can call `enable_rls_on` the moment the gem is in your `Gemfile`. Do
 **not** put `ActiveRecord::Migration.include(Kiosk::RLS::DSL)` in an

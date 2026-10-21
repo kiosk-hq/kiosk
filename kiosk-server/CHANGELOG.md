@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-10-22
+
+- 2026-10-22: Version 0.6.2, the tree cut that matches skill 0.6.2.
+- 2026-10-22: `/auth.md` names the skill as "Skill for AI assistants". The OpenAPI tag of `schema` and `pay` is `reserved`, and refusal messages say "Kiosk HTTP API".
+
 ## [0.6.1] — 2026-10-22
 
 - 2026-10-22: Version 0.6.1, the tree cut that matches skill 0.6.1.

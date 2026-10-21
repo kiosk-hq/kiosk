@@ -21,7 +21,7 @@ RSpec.shared_context 'with a profile that reads my_orders' do
   # twice: A's control query first, then B's attack query.
   #
   # (minimal_profile's create_owned is a plain lambda, so nothing here calls an
-  # action; the only wire traffic is register + these two queries.)
+  # action; the only protocol traffic is register + these two queries.)
   def stub_control_then_attack(control_rows:, attack_rows: nil, attack_status: 200,
                                attack_code: nil, control_status: 200)
     stub_request(:get, verb_url('my_orders')).to_return(

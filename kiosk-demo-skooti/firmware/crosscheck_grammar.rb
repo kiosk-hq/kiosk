@@ -32,7 +32,7 @@
 #
 # Every vector's signature is computed here, at run time, with the live dev key
 # in ../config/dev_unlock_key.pem — the same key the server signs with — over
-# that vector's own message. The vector then declares how the wire token is
+# that vector's own message. The vector then declares how the token string is
 # SPELLED around that signature, and this script applies the spelling from the
 # set's own `WIRE` table.
 #
@@ -98,7 +98,7 @@ def sign(message)
   Base64.urlsafe_encode64(KEY.sign(nil, message), padding: false)
 end
 
-# The wire token a vector asks for, as BYTES. A vector whose spelling is NOT
+# The token string a vector asks for, as BYTES. A vector whose spelling is NOT
 # :canonical and whose transform returns the canonical token measures nothing,
 # so that is a hard stop rather than a quiet pass.
 def wire_token(vector)
@@ -204,7 +204,7 @@ end
 
 puts "  Rental-token grammar — #{VECTORS.length} live-signed vectors through " \
      "all #{READERS.length} readers of this token " \
-     "(#{RESPELT} respell the wire around the signature, " \
+     "(#{RESPELT} respell the token around the signature, " \
      "#{TAGGED} vary the Ruby encoding tag):"
 puts format(ROW, 'axis', 'vector', 'expect', *READERS.map(&:first), '')
 

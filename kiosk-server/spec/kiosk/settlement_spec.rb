@@ -68,14 +68,14 @@ RSpec.describe Kiosk::Settlement do
     let(:mine)  { SecureRandom.uuid }
     let(:other) { SecureRandom.uuid }
 
-    it "reads the settlements of the principal the wire resolved, and no one else's" do
+    it "reads the settlements of the principal the protocol resolved, and no one else's" do
       own = settle(mine, [{ booking_id: 'b-1' }])
       settle(other, [{ booking_id: 'b-2' }])
 
       expect(as(mine) { described_class.own.pluck(:id) }).to eq([own])
     end
 
-    it 'refuses to answer off the wire rather than answer nothing' do
+    it 'refuses to answer outside a request rather than answer nothing' do
       expect { described_class.own.to_a }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
     end
 

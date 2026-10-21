@@ -25,7 +25,7 @@ RSpec.describe Kiosk::TestHelpers do
         .to raise_error(Kiosk::TestHelpers::Errors::ExecutorNotConfigured)
     end
 
-    it 'includes a wiring hint in the default message' do
+    it 'includes a setup hint in the default message' do
       error = nil
       begin
         described_class.require_executor!

@@ -95,7 +95,7 @@ RSpec.describe 'AssistantsController' do
   describe 'without a provider session' do
     include_context 'with a holder signed in to the assistants page'
 
-    # Default config wires no sign_in_path → the engine keeps its neutral bare
+    # Default config sets no sign_in_path → the engine keeps its neutral bare
     # 401 (unchanged API contract). A browser Accept header does NOT change this.
     it '401s without a provider session when no sign_in_path is configured' do
       wire_user_idp(nil)
@@ -105,7 +105,7 @@ RSpec.describe 'AssistantsController' do
     end
   end
 
-  # MANAGE-PAGE-UNAUTH-UX: with a sign_in_path wired AND a browser (HTML)
+  # MANAGE-PAGE-UNAUTH-UX: with a sign_in_path set AND a browser (HTML)
   # request, an unauthenticated visitor is redirected to the operator's
   # sign-in — not shown a bare 401 — with a flash alert and a stored return-to.
   describe 'with config.sign_in_path set (browser UX)' do
@@ -345,13 +345,13 @@ RSpec.describe 'AssistantsController' do
   describe 'spending_cap seam note' do
     include_context 'with a holder signed in to the assistants page'
 
-    # K-1014. The editor is rendered unconditionally, and on an origin that wires
+    # K-1014. The editor is rendered unconditionally, and on an origin that configures
     # no `config.spending_cap` seam the number it saves is read by nothing —
     # `Executor#enforce_spending_cap!` returns on `seam.nil?` before it looks at
     # the column. The page must say so where it is rendered; the field keeps
     # submitting, because setting policy on an origin that may not be the one that
     # charges is deliberate.
-    it 'says the cap binds NOTHING when the origin wires no spending_cap seam' do
+    it 'says the cap binds NOTHING when the origin configures no spending_cap seam' do
       Kiosk.configure { |c| c.spending_cap = nil }
       con.next_exec_result = [
         { 'id' => 'agent-1', 'public_key' => pem, 'created_at' => '2026-07-17 12:00:00+00',
@@ -366,7 +366,7 @@ RSpec.describe 'AssistantsController' do
       expect(html).to include('cap: 5000 cents in EUR')
     end
 
-    # THE CONTROL for the example above: with a seam wired the note is absent, so
+    # THE CONTROL for the example above: with a seam configured the note is absent, so
     # it cannot pass on a build where the paragraph is unconditional.
     it 'drops the note once a spending_cap seam IS configured — the control' do
       Kiosk.configure { |c| c.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } } }
@@ -461,7 +461,7 @@ RSpec.describe 'AssistantsController' do
   # with whatever the host's PublicExceptions has: the static public/422.html
   # every demo ships since K-532, a generic {"status":422,"error":…} echo on an
   # explicit JSON Accept, or a bodyless 422 (text/html, Content-Length 0) on a
-  # host with no such page — never a pointer to the wire the caller wanted.
+  # host with no such page — never a pointer to the protocol the caller wanted.
   #
   # A real Rails app installs `protect_from_forgery with: :exception` on every
   # ActionController::Base (config.action_controller.default_protect_from_forgery);
@@ -471,7 +471,7 @@ RSpec.describe 'AssistantsController' do
   describe 'forgery protection on a JSON POST' do
     include_context 'with a forgery-guarded assistants page'
 
-    it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the wire' do
+    it 'answers a JSON-bodied POST with its own wrong-door body and a pointer to the HTTP API' do
       status, body, headers = dispatch_guarded(
         'CONTENT_TYPE' => 'application/json', 'rack.input' => StringIO.new('{}')
       )
@@ -482,7 +482,7 @@ RSpec.describe 'AssistantsController' do
       envelope = JSON.parse(body)
       expect(envelope['ok']).to be(false)
       expect(envelope.dig('error', 'code')).to eq('invalid_authenticity_token')
-      expect(envelope.dig('error', 'message')).to include('not the Kiosk wire')
+      expect(envelope.dig('error', 'message')).to include('not the Kiosk HTTP API')
       expect(envelope.dig('error', 'hint'))
         .to include('https://provider.example/.well-known/kiosk.json')
     end

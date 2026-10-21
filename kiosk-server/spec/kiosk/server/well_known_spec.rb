@@ -82,7 +82,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     end
 
     # capabilities is computed from the live registry: empty here
-    # since this context registers no queries/actions and wires no payment.
+    # since this context registers no queries/actions and configures no payment.
     it 'advertises an empty capability set when nothing is registered' do
       expect(doc[:kiosk][:capabilities]).to eq([])
     end
@@ -150,7 +150,7 @@ RSpec.describe Kiosk::Server::WellKnown do
 
     # The default URL literal lives in exactly ONE place: the
     # `@skill_url ||=` in configuration_extension.rb. This example holds the
-    # WIRING (the discovery document advertises the configured default) plus
+    # SETUP (the discovery document advertises the configured default) plus
     # the property that makes a pin verifiable: the default names an
     # IMMUTABLE versioned cut, never the mutable `skill.md` alias.
     #
@@ -451,7 +451,7 @@ RSpec.describe Kiosk::Server::WellKnown do
     describe 'the Discover list (cold-start pointers)' do
       subject(:discover) { body[/^## Discover$.*?(?=^## )/m] }
 
-      it 'names the wire skill, the same URL agents.txt advertises' do
+      it 'names the skill, the same URL agents.txt advertises' do
         expect(discover).to include(Kiosk.configuration.skill_url)
         expect(described_class.agents_txt(base_url: 'https://api.acme.example'))
           .to include(Kiosk.configuration.skill_url)
@@ -470,7 +470,7 @@ RSpec.describe Kiosk::Server::WellKnown do
 
       it 'drops the bullet entirely at an origin advertising no skill' do
         Kiosk.configure { |c| c.skill_url = '' }
-        expect(body[/^## Discover$.*?(?=^## )/m]).not_to include('Wire skill')
+        expect(body[/^## Discover$.*?(?=^## )/m]).not_to include('Skill for AI assistants')
       end
     end
 

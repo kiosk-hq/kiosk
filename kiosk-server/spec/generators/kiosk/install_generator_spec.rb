@@ -81,12 +81,12 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
       expect(read('config/initializers/kiosk.rb')).to include('Kiosk.configure do |c|')
     end
 
-    it 'wires the default user model (singularised classified table name)' do
+    it 'sets the default user model (singularised classified table name)' do
       invoke!
       expect(read('config/initializers/kiosk.rb')).to include('c.user_model     = "User"')
     end
 
-    it 'wires the default user_id_type (:uuid)' do
+    it 'sets the default user_id_type (:uuid)' do
       invoke!
       expect(read('config/initializers/kiosk.rb')).to include('c.user_id_type   = :uuid')
     end
@@ -141,14 +141,14 @@ RSpec.describe Kiosk::Generators::InstallGenerator do
     it 'says outright that per-verb input validation is NOT this flag' do
       invoke!
       body = read('config/initializers/kiosk.rb')
-      expect(body).to include('coerce-then-validate on the per-verb wire is UNCONDITIONAL')
+      expect(body).to include('coerce-then-validate on the per-verb endpoints is UNCONDITIONAL')
       expect(body).to include('input_schema')
     end
   end
 
   # Bundling kiosk-server draws no route: the engine installs its surface only
   # when it is mounted, so the generator writes the `kiosk` block that mounts it.
-  describe 'wire routes' do
+  describe 'Kiosk routes' do
     include_context 'with a freshly generated host app'
 
     it 'writes a `kiosk` block FIRST inside the routes block, so the protocol plane wins by first match' do

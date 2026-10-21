@@ -131,7 +131,7 @@ RSpec.describe Kiosk::TestHelpers::Journey do
     include_context 'with a journey harness'
 
     # K-1706. Two `respond_to` roll-calls asserted this helper's NAME and
-    # nothing at either layer ran it, so the read side of an origin's wire
+    # nothing at either layer ran it, so the read side of an origin's protocol
     # could be renamed or mis-forwarded with the suite green.
     it 'delegates name + kwargs under the current identity' do
       harness.as_agent_of(alice) do
@@ -175,7 +175,7 @@ RSpec.describe Kiosk::TestHelpers::Journey do
     end
   end
 
-  describe 'without an executor wired' do
+  describe 'without an executor configured' do
     include_context 'with a journey harness'
 
     before { Kiosk::TestHelpers.reset! }

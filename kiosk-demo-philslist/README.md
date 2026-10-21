@@ -2,7 +2,7 @@
 
 A free classifieds board, Kiosk-enabled. This is the demo that proves Kiosk is
 **not only for commerce**: it exercises the full query + action + `schema` +
-identity-binding surface with **no money on the wire at all** — no `pay` verb,
+identity-binding surface with **no money in the protocol at all** — no `pay` verb,
 no PSP adapter, no `payment_setup_required` gate, and `pay` absent from
 `capabilities`.
 
@@ -17,14 +17,14 @@ the mount draws the whole protocol plane — but no `payment_provider` is
 configured, so the origin refuses before it reads a mandate and an empty
 `checkout_mandates` on this host means what it says.
 
-The same wire contract the commerce demos use for checkout carries a plain
+The same protocol contract the commerce demos use for checkout carries a plain
 services/data use here.
 
 Demonstrates:
 
 - `/.well-known/kiosk.json` discovery **with `pay` absent** from capabilities —
   the honest signal this operator takes no money
-- Authenticated REST wire surface — one endpoint per verb
+- Authenticated REST API — one endpoint per verb
   (`GET /kiosk/browse_listings`, `GET /kiosk/my_listings`,
   `POST /kiosk/post_listing`, `POST /kiosk/edit_listing`,
   `POST /kiosk/close_listing`) beside the public `GET /kiosk/schema` — and
@@ -40,12 +40,12 @@ Demonstrates:
 - `post_listing` / `edit_listing` / `close_listing` actions (owner-only writes)
 - A **public, read-only classifieds board** at `/` and `/listings` (open
   listings across all owners — title · category · €price · poster). Classifieds
-  are public by nature, so a listing an assistant posts over the wire visibly
+  are public by nature, so a listing an assistant posts over HTTP visibly
   appears here on the next refresh
 - **A cross-owner board that still publishes no PII.** The board is open by
   design, so its seller column is disclosed to every assistant that can
   authenticate. It carries an opaque `seller-<hex>` pseudonym derived from the
-  account id — never an address — and the same pseudonym on the wire and on the
+  account id — never an address — and the same pseudonym in the protocol and on the
   web page. It is **per-seller**, so two listings under one handle are one
   seller (which is what makes the household visible), and reversible by nobody:
   there is no verb that turns a handle back into a person. Contact happens
@@ -63,7 +63,7 @@ Demonstrates:
 Today you post to a classifieds site through its web form and answer email; a
 personal assistant can't. (The craigslist pattern is the shape here — named
 only as this contrast, never as the demo.) With Kiosk, the same board exposes
-browse / post / edit / close to your assistant as named wire verbs, one
+browse / post / edit / close to your assistant as named verbs, one
 endpoint each — and it can only touch listings you own.
 
 `price_text` is a plain nullable **string** (`"€300"`, `"Free"`, or `NULL`)
@@ -135,7 +135,7 @@ The stories in `test/stories/` show it:
 > `/.well-known/kiosk.json` and post an ad for my old bicycle at €80, then show me what else is on
 > the board.
 
-It discovers the wire, registers itself and drives the flow. If it asks you to
+It discovers the protocol, registers itself and drives the flow. If it asks you to
 approve the link, sign in at <http://localhost:3000/users/sign_in> as
 `alice@example.com` / `philslist-demo-password` and approve it there.
 
@@ -146,7 +146,7 @@ approve the link, sign in at <http://localhost:3000/users/sign_in> as
 | `db/migrate/` | The canonical `kiosk.*` migrations the install generator emits, unpruned (schema, identity tables, device_authorizations, mandates and settlements, KYC attributes, events, pow_spent, revocations, visits, refunds) — philslist takes no money and gates on no attestation, so the payment and KYC tables sit EMPTY here rather than being edited out — plus `users`, Action Cable's table and `categories` + `listings` |
 | `app/models/{user,category,listing}.rb` | `User` is a seller's account and `database_authenticatable`; `Listing.owner_id` is the load-bearing isolation predicate |
 | `config/initializers/kiosk.rb` | `Kiosk.configure` (NO `payment_provider`) — configuration only; the handler controller is separate |
-| `app/controllers/kiosk/listings_controller.rb` | Every verb on listings: the `browse_listings` / `my_listings` queries and the `post_listing` / `edit_listing` / `close_listing` actions — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query` or `kind :action`, reached only through the wire. A refusal raises a `Kiosk::Server::Errors` error (`Listing.own!` does), which the wire renders as the RFC 9457 problem document an assistant branches on |
+| `app/controllers/kiosk/listings_controller.rb` | Every verb on listings: the `browse_listings` / `my_listings` queries and the `post_listing` / `edit_listing` / `close_listing` actions — an ordinary Rails controller with `include Kiosk::Handler`, each declaration marked `kind :query` or `kind :action`, reached only through the protocol. A refusal raises a `Kiosk::Server::Errors` error (`Listing.own!` does), which the protocol renders as the RFC 9457 problem document an assistant branches on |
 | *(no `c.agent_idp`)* | Deliberate, and the point of the line's absence. An assistant authenticates with the DPoP-bound access token this engine's token endpoint (`/kiosk/oauth/token`) minted, verified by the `DefaultAgentIdp` the engine has always shipped as its fallback. This demo ships no IdP of its own and recognises no dev-only identity shape: an identity here is a verified JWT or it is nothing |
 | `test/` | Minitest tests, run by `bin/rails test`; `test/stories/` drives the origin over HTTP as sellers' assistants |
 

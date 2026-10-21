@@ -509,7 +509,7 @@ def callback_jws(customer, request_id, operator, key)
   JWT.encode(claims, key, 'EdDSA')
 end
 
-# CrossOperatorClaimReplay: a claim addressed to another operator is refused at skooti's callback and at the engine wire.
+# CrossOperatorClaimReplay: a claim addressed to another operator is refused at skooti's callback and at the engine endpoint.
 def cross_operator_replay
   client, a = new_customer
   # Open a real skooti request so the callback correlates to a pending row.
@@ -525,9 +525,9 @@ end
 
 def cross_operator_verdict(cb_rc, events, wire_resp)
   if !Kiosk::Redteam.blocked?(wire_resp)
-    { blocked: false, detail: "ENGINE BREACH: wrong-aud claim accepted at the wire (POST /kiosk/agents/kyc=#{wire_resp.status})" }
+    { blocked: false, detail: "ENGINE BREACH: wrong-aud claim accepted at the endpoint (POST /kiosk/agents/kyc=#{wire_resp.status})" }
   elsif cb_rc != 200 && events.empty?
-    { blocked: true, detail: "cross-operator claim rejected at BOTH the engine wire (POST /kiosk/agents/kyc → #{wire_resp.status}, aud mismatch) and /kyc/callback (#{cb_rc}); no kyc_verification event sent" }
+    { blocked: true, detail: "cross-operator claim rejected at BOTH the engine endpoint (POST /kiosk/agents/kyc → #{wire_resp.status}, aud mismatch) and /kyc/callback (#{cb_rc}); no kyc_verification event sent" }
   else
     { blocked: false, detail: "cross-operator claim accepted at the callback: callback=#{cb_rc}, kyc_verification events=#{events.size}" }
   end
@@ -647,7 +647,7 @@ end
 def token_forgery_verdict(forgeries, control_status)
   lines = forgeries.map(&:last).join('; ')
   return { blocked: false, detail: vacuous_control_detail('registered token', control_status) } if control_status != 200
-  return { blocked: false, detail: "REGRESSION: a self-asserted bearer was accepted over the wire — #{lines} (want 401 for each)" } unless forgeries.all? { |ok, _| ok }
+  return { blocked: false, detail: "REGRESSION: a self-asserted bearer was accepted over HTTP — #{lines} (want 401 for each)" } unless forgeries.all? { |ok, _| ok }
 
   { blocked: true,
     detail: "self-asserted `agent:u-…:r-owner` bearer resolves to NO identity — #{lines} — in the " \
@@ -703,7 +703,7 @@ beats = {
   'ForgedCallbackNoSig' => run_beat { forged_callback_no_sig }
 }
 
-# The wire-shape beats share one customer; neither touches the fleet.
+# The HTTP-shape beats share one customer; neither touches the fleet.
 wire_probe = Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL).register!
 beats['UnregisteredVerbIsOrdinaryRefusal'] = unregistered_verb(wire_probe)
 beats['MethodMismatch'] = method_mismatch(wire_probe)

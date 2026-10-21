@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 module Kiosk
-  # Wire-protocol version and header names.
+  # Protocol version and header names.
   module Protocol
     # Before 1.0 every gem and every pinned skill cut carry this exact version (spec §14.1).
-    API_VERSION = '0.6.1'
+    API_VERSION = '0.6.2'
 
     # The oldest skill cut that works with this release: same MAJOR.MINOR as
     # API_VERSION, no newer (spec §3.6). Advisory.

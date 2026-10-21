@@ -3,7 +3,7 @@
 # The Kiosk-PoW HEADER path (ADR-0022), driven through the FULL controllers.
 #
 # The proof is carried in the `Kiosk-PoW` request HEADER as raw JSON, never in
-# the request body. On the per-verb wire that is not a convenience but the
+# the request body. On the per-verb endpoints that is not a convenience but the
 # only workable channel: a query is a `GET <endpoint>/<query-name>` and a GET
 # has no body to put a proof in. This spec proves, end to end:
 #
@@ -127,7 +127,7 @@ RSpec.shared_context 'with a tolled origin' do
       c.reputation_policy = WireControllerPowHeaderSpec::AlwaysArgon2idPolicy.new
       c.pow_secret        = 'test-pow-secret-of-at-least-32-bytes'
       # The shape check is on. These examples use argon2id, whose solution is
-      # a decimal string, because it solves fast at d=4/m=8. The wire is
+      # a decimal string, because it solves fast at d=4/m=8. The protocol is
       # algorithm-agnostic: `pow.schema.json` types a proof's `nonce` on
       # `challenge.alg`, so a valid argon2id proof passes the shape check, and
       # this file running green with validation on shows that.
@@ -192,7 +192,7 @@ RSpec.describe Kiosk::Server::WireController do
     # ── the controller feeds METHOD and PATH SEGMENT to the fingerprint ────────
     #
     # These are the controller-level half of the request-fingerprint binding
-    # proved against the gate in pow_gate_spec: the wire name the endpoint tolls
+    # proved against the gate in pow_gate_spec: the published name the endpoint tolls
     # under is the PATH SEGMENT it was reached by, and the method is the
     # request's own.
 

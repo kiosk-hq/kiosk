@@ -7,7 +7,7 @@
 # deploy/Caddyfile, dials it over https with `Kiosk::TestHelpers::Wire` and
 # `Kiosk::TestHelpers::Assistant` — the same two drivers a demo's own battery uses —
 # and then runs `e2e/schema_conformance.rb` against the bytes each origin
-# served. That last step is the only way §16.3's "every wire object validates
+# served. That last step is the only way §16.3's "every protocol object validates
 # against its JSON Schema" is ever asserted about a byte a DEPLOYMENT produced
 # rather than a byte a throwaway localhost app produced.
 #
@@ -269,7 +269,7 @@ class Drive
 
   def report_no_discovery(raw)
     if raw.status == 404
-      skip 'the whole wire battery', 'serves no discovery document — not a Kiosk origin'
+      skip 'the whole HTTP battery', 'serves no discovery document — not a Kiosk origin'
     else
       error 'GET /.well-known/kiosk.json', "HTTP #{raw.status} #{raw.raw_body[0, 200].inspect}"
     end

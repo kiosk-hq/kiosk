@@ -6,7 +6,7 @@ require 'rails/generators/migration'
 
 module Kiosk
   module Generators
-    # `bin/rails g kiosk:install`: writes the Kiosk initializer, the wire routes
+    # `bin/rails g kiosk:install`: writes the Kiosk initializer, the Kiosk routes
     # and the migrations, with the DDL of {Kiosk::Server::SchemaDefinitions} written into each.
     class InstallGenerator < ::Rails::Generators::Base
       include ::Rails::Generators::Migration
@@ -14,7 +14,7 @@ module Kiosk
       source_root File.expand_path('templates', __dir__)
 
       desc 'Generate the Kiosk initializer and its canonical base migrations. ' \
-           'Draws the engine mount, so the origin answers on the wire.'
+           'Draws the engine mount, so the origin answers Kiosk requests.'
 
       class_option :user_table,    type: :string, default: 'users',
                                    desc: "Provider's user table name"

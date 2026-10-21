@@ -1,11 +1,11 @@
 # kiosk-reputation
 
-Policy and wire-challenge layer for Kiosk's proof-of-work system.
+Policy and challenge layer for Kiosk's proof-of-work system.
 
 ## Overview
 
 `kiosk-reputation` decides *when* and *how hard* to challenge a request with a
-proof-of-work, issues and verifies the signed wire challenge, and provides a
+proof-of-work, issues and verifies the signed challenge, and provides a
 pluggable reputation policy interface.
 
 **Pure Ruby — no dependency on kiosk-pow or kiosk-core.** A PoW backend registers
@@ -17,7 +17,7 @@ provides Argon2id (legacy, registers as `argon2id`); `kiosk-pow-cuckoo` provides
 Cuckatoo Cycle (opt-in, registers as `cuckatoo`). Each backend is built on
 `kiosk-pow`, whose README tells how to add a backend.
 
-## Wire protocol
+## Protocol
 
 ### Challenge — HTTP 402 `pow_required`
 
@@ -73,7 +73,7 @@ Key properties:
 The client solves each challenge and re-sends the SAME request — same method,
 same path, same query string, same body — with the proof(s) in a **`Kiosk-PoW`
 request header** as raw minified JSON, one `{challenge, nonce}` entry
-per solved challenge. The wire makes most calls GETs (a query is
+per solved challenge. The protocol makes most calls GETs (a query is
 `GET <endpoint>/<query-name>`), and a GET has no body, so the header is the ONLY
 channel a proof can travel on:
 
@@ -110,7 +110,7 @@ burning a backend eval. This is not optional; it is tested.
 
 ## Server-side parameter re-derivation (`expect:`)
 
-The challenge is stateless, so `alg`/`params` travel on the wire and come back
+The challenge is stateless, so `alg`/`params` travel in the protocol and come back
 from the client. The HMAC sig proves *we minted them*; it does **not** prove they
 are still the difficulty this server demands. Pass `expect:` — the spec the
 caller just re-derived from its own configuration for this request — and
@@ -120,7 +120,7 @@ caller just re-derived from its own configuration for this request — and
 Kiosk::Reputation::Challenge.verify(
   challenge: challenge, nonce: solution,
   request_fingerprint: fp, secret: secret, now: Time.now.to_i,
-  expect: { alg: "equihash", params: { n: 168, k: 7 } }   # from YOUR config, not the wire
+  expect: { alg: "equihash", params: { n: 168, k: 7 } }   # from YOUR config, not the protocol
 )
 ```
 
@@ -159,7 +159,7 @@ concrete backend by the host, never through this registry.
 
 ### `Challenge`
 
-Stateless, request-bound wire challenge. The caller (`kiosk-server`) maintains a
+Stateless, request-bound signed challenge. The caller (`kiosk-server`) maintains a
 spent-id set (TTL ≤ `challenge[:exp]`) to prevent replay of a valid proof —
 `Challenge` itself does not track spent ids.
 
@@ -202,7 +202,7 @@ Kiosk::Reputation::Factors.empty         # both fields nil
 ```ruby
 class MyPolicy < Kiosk::Reputation::Policy
   # @param identity [Object]  opaque identity value from the host
-  # @param verb     [Symbol]  the WIRE command — :query, :run or :pay. Not the
+  # @param verb     [Symbol]  the PROTOCOL command — :query, :run or :pay. Not the
   #   declaration name: a verb a handler declares as `kind :action` in
   #   kiosk-server arrives here as :run (`Kiosk::Handler` serves an action
   #   as `:run`), so branch on :run rather than on :action. The protocol

@@ -137,7 +137,7 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
         .to eq([{ 'user' => 'synthetic:carol' }])
     end
 
-    it "refuses arguments its input_schema rejects with the wire's own code" do
+    it "refuses arguments its input_schema rejects with the engine's own code" do
       declare_query('search',
                     input_schema: { type: 'object', properties: { limit: { type: 'integer' } },
                                     required: %w[limit] }) { render json: [] }
@@ -178,10 +178,10 @@ RSpec.describe Kiosk::TestHelpers::Conformance::InProcessOrigin do
     end
 
     it 'checks ARGUMENTS with the REQUEST validator, so a reserved name is exempt' do
-      # `limit` and `cursor` are wire-reserved and always accepted, so a verb
+      # `limit` and `cursor` are protocol-reserved and always accepted, so a verb
       # whose closed input_schema does not declare `limit` still takes one — and
       # a conformance check that validated against the bare schema would reject
-      # an example the wire accepts.
+      # an example the protocol accepts.
       closed = { type: 'object', additionalProperties: false,
                  properties: { neighbourhood: { type: 'string' } }, required: [] }
 

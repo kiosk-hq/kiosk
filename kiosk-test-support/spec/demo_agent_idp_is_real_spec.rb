@@ -53,7 +53,7 @@ RSpec.describe "the demos' agent channel is the engine's own token verifier (T-1
                       'role — that was K-539, and an env gate in front of it is not the fix.'
   end
 
-  describe "the demos' c.agent_idp wiring" do
+  describe "the demos' c.agent_idp setting" do
     it 'leaves c.agent_idp unset in every demo and in the e2e fixture host' do
       overrides = DemoAgentIdp.overrides
       expect(overrides).to be_empty,

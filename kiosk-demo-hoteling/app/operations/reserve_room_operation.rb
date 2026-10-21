@@ -2,7 +2,7 @@
 
 # Holds one room type for one stay for the customer until `Booking::PAY_WINDOW`
 # passes unpaid, when HoldLapseJob cancels it. Returns the booking; raises a
-# wire error on a refusal.
+# Kiosk error on a refusal.
 class ReserveRoomOperation
   def self.call(customer_id:, room_type_id:, check_in:, check_out:)
     booking = priced(Booking.new(user_id: customer_id, room_type: RoomType.find_by(id: room_type_id),

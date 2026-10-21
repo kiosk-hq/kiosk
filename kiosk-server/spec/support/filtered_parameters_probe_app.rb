@@ -55,9 +55,8 @@ SENT = {
   'code' => 'SENTINEL-link-code-c3',
   'device_code' => 'SENTINEL-device-code-d4',
   'kyc_jws' => 'SENTINEL-kyc-attestation-e5',
-  'intent_mandate_jws' => 'SENTINEL-intent-mandate-f6',
-  'cart_mandate_jws' => 'SENTINEL-cart-mandate-g7',
-  'payment_mandate_jws' => 'SENTINEL-payment-mandate-h8'
+  'checkout_mandate' => 'SENTINEL-checkout-mandate-f6',
+  'payment_mandate' => 'SENTINEL-payment-mandate-g7'
 }.freeze
 
 # The access token travels in a header rather than in a parameter, so it is
@@ -83,7 +82,7 @@ post_json '/kiosk/auth/register', SENT.slice('public_key', 'signed')
 post_json '/kiosk/auth/claim',    SENT.slice('code', 'public_key', 'signed')
 post_json '/kiosk/agents/kyc',    SENT.slice('kyc_jws')
 post_json '/kiosk/pay',
-          SENT.slice('intent_mandate_jws', 'cart_mandate_jws', 'payment_mandate_jws'),
+          SENT.slice('checkout_mandate', 'payment_mandate'),
           bearer: true
 post_form '/kiosk/oauth/token',
           SENT.slice('device_code', 'signed')

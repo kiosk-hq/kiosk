@@ -35,18 +35,17 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     end
 
     describe '#pays' do
-      it 'pays a quote with an intent capped at the total and a cart that lists what it buys' do
+      it 'pays the checkout an action answered with a checkout mandate and a payment mandate for it' do
         stub, sent = requests_to(:post, '/kiosk/pay')
         stub.to_return(json_return(200, 'status' => 'paid'))
+        checkout_jwt = JWT.encode({ merchant: { id: origin, name: 'Shop' }, currency: 'eur', total_amount_cents: 450 },
+                                  OpenSSL::PKey::RSA.generate(2048), 'PS256')
 
-        expect(customer.pays(total: 450, scope: 'grocery', line_items: [{ order_id: 'o1' }])).to be_ok
+        expect(customer.pays(checkout_jwt)).to be_ok
 
-        signed = JSON.parse(sent.first.body).transform_values { JWT.decode(it, principal.rsa_key.public_key, true, algorithm: 'RS256').first }
-        intent, cart, payment = signed.values_at('intent_mandate_jws', 'cart_mandate_jws', 'payment_mandate_jws')
-        expect(intent).to include('scope' => 'grocery', 'cap_amount_cents' => 450, 'currency' => 'eur', 'iss' => origin,
-                                  'user_id' => 'u1', 'agent_id' => 'a1')
-        expect(cart).to include('intent_mandate_id' => intent['id'], 'total_amount_cents' => 450, 'line_items' => [{ 'order_id' => 'o1' }])
-        expect(payment).to include('cart_mandate_id' => cart['id'], 'amount_cents' => 450)
+        mandates = JSON.parse(sent.first.body).transform_values { Kiosk::TestHelpers::Mandate.content(it) }
+        expect(mandates['checkout_mandate']).to include('checkout_jwt' => checkout_jwt)
+        expect(mandates['payment_mandate']).to include('payment_amount' => { 'amount' => 450, 'currency' => 'eur' })
       end
     end
 

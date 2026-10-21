@@ -134,22 +134,22 @@ module Kiosk
         end
       end
 
-      # The `pay` verb: settles an AP2 cart. The PSP capture runs outside any transaction,
-      # between phases 1 and 3 (§11.6).
+      # The `pay` verb: settles an operator-signed checkout through two closed AP2
+      # mandates. The PSP capture runs outside any transaction, between phases 1 and 3 (§11.6).
       module Pay
         RETRYABLE_HINT = 'the charge did not go through and no money moved. The human may need to ' \
-                         'update the payment method (payment_setup). Then sign a new chain and pay again.'
+                         'update the payment method (payment_setup). Then sign new mandates and pay again.'
         UNKNOWN_HINT   = 'the payment provider did not confirm the charge, so its status is unknown. ' \
-                         'Send the SAME chain again, byte for byte: this operator charges one chain at ' \
-                         'most once. Do not sign a new chain.'
-        CONFLICT_HINT  = 'this operator will not charge this chain: an earlier call with it was declined, ' \
-                         'or these mandate ids came before with other content. Before you sign a new ' \
-                         "chain, read the order's paid state through the operator's own query, and sign " \
-                         'a new chain only on a clear "not paid".'
+                         'Send the SAME two mandates again, byte for byte: this operator charges one pair ' \
+                         'at most once. Do not sign new mandates.'
+        CONFLICT_HINT  = 'this operator will not charge these mandates: an earlier call with them was ' \
+                         'declined, or another pair for this checkout is settled or still in progress. ' \
+                         "Before you sign new mandates, read the order's paid state through the operator's " \
+                         'own query, and sign new ones only on a clear "not paid".'
 
-        # The verified mandates, the cart row they were persisted under, and
+        # The verified mandates, the checkout row they were persisted under, and
         # whether an earlier call already persisted them.
-        Chain = Struct.new(:intent, :cart, :payment, :cart_row, :repeat)
+        Chain = Struct.new(:checkout, :payment, :checkout_row, :repeat)
 
         private
 
@@ -158,7 +158,7 @@ module Kiosk
           # Whether this origin serves payments is answered before any argument is read.
           provider = payment_provider!
           raws = pay_mandates!(args)
-          # Refused before phase 1 so the mandate ids are not burned on a charge that cannot succeed.
+          # Refused before phase 1, so the checkout is not held by a charge that cannot succeed.
           raise Errors::PaymentSetupRequired if provider.respond_to?(:setup_required?) && provider.setup_required?(user_id: identity.user_id)
 
           chain = persist_chain(raws)
@@ -177,20 +177,21 @@ module Kiosk
           )
         end
 
-        # The three signed mandates from the args, by part.
+        # The two signed mandates from the args, by part.
         def pay_mandates!(args)
           # Mandates are agent-signed, so a principal without an agent id cannot pay.
           raise Errors::Forbidden, 'payment requires an agent identity (mandates are agent-signed)' if identity.agent_id.nil?
 
-          %i[intent cart payment].to_h do |part|
-            raw = args[:"#{part}_mandate_jws"]
-            raise Errors::BadRequest, "args.#{part}_mandate_jws required" if raw.nil? || raw.to_s.empty?
+          %i[checkout payment].to_h do |part|
+            raw = args[:"#{part}_mandate"]
+            raise Errors::BadRequest, "args.#{part}_mandate required" if raw.nil? || raw.to_s.empty?
 
             [part, raw]
           end
         end
 
-        # Phase 1: verify and persist the mandate chain. A unique violation means the chain was presented before.
+        # Phase 1: verify and persist the mandates. A unique violation means they, or another
+        # live pair for the same checkout, were presented before.
         def persist_chain(raws)
           chain = Chain.new
           verify_and_persist(chain, raws)
@@ -202,30 +203,24 @@ module Kiosk
 
         def verify_and_persist(chain, raws)
           SessionContext.open(connection: connection, identity: identity) do
-            cart = verify_intent_and_cart(chain, raws)
-            # Before any persist or capture, so a refusal burns nothing.
-            enforce_spending_cap!(cart)
-            chain.payment  = MandateVerifier.verify_payment(raw_jws: raws[:payment], identity: identity, cart: cart)
-            chain.cart_row = persist_mandates(chain)
+            chain.checkout = MandateVerifier.verify_checkout(sd_jwt: raws[:checkout], identity: identity)
+            # Before any persist or capture, so a refusal holds nothing.
+            enforce_spending_cap!(chain.checkout)
+            chain.payment      = MandateVerifier.verify_payment(sd_jwt: raws[:payment], identity: identity, checkout: chain.checkout)
+            chain.checkout_row = persist_mandates(chain)
           end
           chain
         end
 
-        def verify_intent_and_cart(chain, raws)
-          chain.intent = MandateVerifier.verify_intent(raw_jws: raws[:intent], identity: identity)
-          chain.cart   = MandateVerifier.verify_cart(raw_jws: raws[:cart], identity: identity, intent: chain.intent)
-        end
-
-        # The cart row id.
+        # The checkout row id.
         def persist_mandates(chain)
-          intent_row = persist_intent_mandate(chain.intent)
-          cart_row   = persist_cart_mandate(chain.cart, intent_row_id: intent_row)
-          persist_payment_mandate(cart_row_id: cart_row, payment: chain.payment)
-          cart_row
+          checkout_row = persist_checkout_mandate(chain.checkout)
+          persist_payment_mandate(checkout_row_id: checkout_row, payment: chain.payment)
+          checkout_row
         end
 
         # Phase 2: the irreversible capture. A refusal under which no money moved
-        # declines the cart, so it stops counting against the spending cap.
+        # declines the checkout mandate, so it stops counting against the spending cap.
         def capture(provider, chain)
           charge(provider, chain)
         rescue Kiosk::PaymentProviders::SetupRequired
@@ -239,19 +234,19 @@ module Kiosk
           raise
         end
 
-        # A repeated chain resumes its capture under the same idempotency key.
+        # A repeated pair resumes its capture under the same idempotency key.
         def charge(provider, chain)
           method = chain.repeat ? :resume : :capture
-          provider.public_send(method, chain.cart, payment_method: chain.payment.payment_method)
+          provider.public_send(method, chain.checkout, payment_method: chain.payment.payment_instrument)
         end
 
         # Phase 3: record the settlement, then tell the provider, so the
         # operator's work after the payment reads the settlement. A concurrent
-        # call that settled the same cart first answers with its settlement.
+        # call that settled the same checkout first answers with its settlement.
         def settle(provider, chain, settled)
           settlement_id = record_settlement(chain, settled)
-          provider.settled(chain.cart) if provider.respond_to?(:settled)
-          settlement_result(settlement_id, settled[:psp_reference], settled[:settled_amount_cents], chain.cart.currency)
+          provider.settled(chain.checkout) if provider.respond_to?(:settled)
+          settlement_result(settlement_id, settled[:psp_reference], settled[:settled_amount_cents], chain.checkout.currency)
         rescue StandardError => e
           row = unique_violation?(e) && recorded_chain(chain)
           raise unless row && row['settlement_id']
@@ -262,7 +257,7 @@ module Kiosk
         # The settlement row's id.
         def record_settlement(chain, settled)
           SessionContext.open(connection: connection, identity: identity) do
-            persist_settlement(cart_row_id: chain.cart_row, cart: chain.cart, settled: settled)
+            persist_settlement(checkout_row_id: chain.checkout_row, checkout: chain.checkout, settled: settled)
           end
         end
 
@@ -274,104 +269,82 @@ module Kiosk
       # The mandate and settlement rows. Every value is a bind parameter; only the
       # operator-set schema name is interpolated.
       module Ledger
-        # Byte-identical chain, scoped to the acting principal on every mandate row, with its settlement if any.
+        # The byte-identical pair of the acting principal, with its settlement if any.
         CHAIN_SQL = <<~SQL.squish
-          SELECT c.id AS cart_row, c.declined_at,
+          SELECT c.id AS checkout_row, c.declined_at,
                  s.id AS settlement_id, s.psp_reference, s.settled_amount_cents, s.currency
-          FROM %<schema>s.cart_mandates c
-          JOIN %<schema>s.intent_mandates  i ON i.id = c.intent_mandate_id
-          JOIN %<schema>s.payment_mandates p ON p.cart_mandate_id = c.id
-          LEFT JOIN %<schema>s.settlements s ON s.cart_mandate_id = c.id
-          WHERE c.user_id = $1 AND i.user_id = $1 AND p.user_id = $1
-            AND c.mandate_id = $2
-            AND c.raw_jws = $3
-            AND i.raw_jws = $4
-            AND p.raw_jws = $5
+          FROM %<schema>s.checkout_mandates c
+          JOIN %<schema>s.payment_mandates p ON p.checkout_mandate_id = c.id
+          LEFT JOIN %<schema>s.settlements s ON s.checkout_mandate_id = c.id
+          WHERE c.user_id = $1 AND p.user_id = $1
+            AND c.reference = $2
+            AND c.sd_jwt = $3
+            AND p.sd_jwt = $4
           LIMIT 1
         SQL
 
-        # The signed id goes to `mandate_id`; the row id is server-generated and returned.
-        INTENT_INSERT_SQL = <<~SQL.squish
-          INSERT INTO %<schema>s.intent_mandates
-            (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
-             currency, expires_at, created_at, raw_jws)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)
-          RETURNING id
-        SQL
-
         # `line_items` arrives as JSON text; the cast stores a jsonb array rather than a string.
-        CART_INSERT_SQL = <<~SQL.squish
-          INSERT INTO %<schema>s.cart_mandates
-            (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
-             total_amount_cents, currency, expires_at, created_at, raw_jws)
+        CHECKOUT_INSERT_SQL = <<~SQL.squish
+          INSERT INTO %<schema>s.checkout_mandates
+            (reference, checkout_hash, user_id, agent_id, issuer, line_items,
+             total_amount_cents, currency, expires_at, created_at, sd_jwt)
           VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, now(), $10)
           RETURNING id
         SQL
 
         PAYMENT_INSERT_SQL = <<~SQL.squish
           INSERT INTO %<schema>s.payment_mandates
-            (mandate_id, cart_mandate_id, user_id, agent_id, issuer,
-             payment_method, amount_cents, currency, expires_at, created_at, raw_jws)
+            (reference, checkout_mandate_id, user_id, agent_id, issuer,
+             payment_instrument, amount_cents, currency, expires_at, created_at, sd_jwt)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10)
           RETURNING id
         SQL
 
-        # Nobody signs a settlement, so it has no `mandate_id` or `raw_jws`; `UNIQUE (cart_mandate_id)` keeps it single.
+        # Nobody signs a settlement; `UNIQUE (checkout_mandate_id)` keeps it single.
         SETTLEMENT_INSERT_SQL = <<~SQL.squish
           INSERT INTO %<schema>s.settlements
-            (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
+            (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
              settled_amount_cents, currency, settled_at)
           VALUES ($1, $2, $3, $4, $5, $6, $7, now())
           RETURNING id
         SQL
 
         DECLINE_SQL = <<~SQL.squish
-          UPDATE %<schema>s.cart_mandates SET declined_at = now() WHERE id = $1 AND declined_at IS NULL
+          UPDATE %<schema>s.checkout_mandates SET declined_at = now() WHERE id = $1 AND declined_at IS NULL
         SQL
 
         private
 
         def chain_record(chain)
           connection.exec_query(ledger_sql(CHAIN_SQL), 'Kiosk chain lookup', [
-                                  identity.user_id, chain.cart.id, chain.cart.raw_jws, chain.intent.raw_jws,
-                                  chain.payment.raw_jws
+                                  identity.user_id, chain.checkout.reference, chain.checkout.sd_jwt, chain.payment.sd_jwt
                                 ]).to_a.first
         end
 
-        def decline_cart(cart_row)
-          connection.exec_query(ledger_sql(DECLINE_SQL), 'Kiosk cart decline', [cart_row])
+        def decline_checkout(checkout_row)
+          connection.exec_query(ledger_sql(DECLINE_SQL), 'Kiosk checkout decline', [checkout_row])
         end
 
-        def persist_intent_mandate(intent)
-          insert_returning_id('Kiosk intent_mandate insert', INTENT_INSERT_SQL, [
-                                intent.id, intent.user_id, intent.agent_id, intent.issuer, intent.scope,
-                                intent.cap_amount_cents.to_i, intent.currency, intent.expires_at, intent.raw_jws
+        def persist_checkout_mandate(checkout)
+          insert_returning_id('Kiosk checkout_mandate insert', CHECKOUT_INSERT_SQL, [
+                                checkout.reference, checkout.checkout_hash, checkout.user_id, checkout.agent_id,
+                                checkout.issuer, checkout.line_items.to_json, checkout.total_amount_cents,
+                                checkout.currency, checkout.expires_at, checkout.sd_jwt
                               ])
         end
 
-        # References the server intent id; the signed intent-cart binding is checked by MandateVerifier.
-        def persist_cart_mandate(cart, intent_row_id:)
-          insert_returning_id('Kiosk cart_mandate insert', CART_INSERT_SQL, [
-                                cart.id, intent_row_id, cart.user_id, cart.agent_id, cart.issuer,
-                                cart.line_items.to_json, cart.total_amount_cents.to_i, cart.currency,
-                                cart.expires_at, cart.raw_jws
-                              ])
-        end
-
-        def persist_payment_mandate(cart_row_id:, payment:)
-          # No presented payment method means the on-file card funded the charge.
-          pm_db = payment.payment_method.to_s.empty? ? 'on_file' : payment.payment_method
+        def persist_payment_mandate(checkout_row_id:, payment:)
           insert_returning_id('Kiosk payment_mandate insert', PAYMENT_INSERT_SQL, [
-                                payment.id, cart_row_id, payment.user_id, payment.agent_id, payment.issuer,
-                                pm_db, payment.amount_cents.to_i, payment.currency, payment.expires_at,
-                                payment.raw_jws
+                                payment.reference, checkout_row_id, payment.user_id, payment.agent_id, payment.issuer,
+                                payment.payment_instrument, payment.amount_cents, payment.currency, payment.expires_at,
+                                payment.sd_jwt
                               ])
         end
 
-        def persist_settlement(cart_row_id:, cart:, settled:)
+        def persist_settlement(checkout_row_id:, checkout:, settled:)
           insert_returning_id('Kiosk settlement insert', SETTLEMENT_INSERT_SQL, [
-                                cart_row_id, cart.user_id, cart.agent_id, cart.issuer,
-                                settled[:psp_reference], settled[:settled_amount_cents].to_i, cart.currency
+                                checkout_row_id, checkout.user_id, checkout.agent_id, checkout.issuer,
+                                settled[:psp_reference], settled[:settled_amount_cents].to_i, checkout.currency
                               ])
         end
 

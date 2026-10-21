@@ -64,12 +64,12 @@ RSpec.shared_context 'with a Stripe adapter' do
   let(:success_url) { StripeAdapterHelpers::SUCCESS_URL }
   let(:fresh_url)   { StripeAdapterHelpers::FRESH_URL }
 
-  let(:cart_mandate) do
-    Kiosk::Mandate::CartMandate.new(
-      id: 'cart-1', intent_mandate_id: 'intent-1', user_id: 'user-1',
+  let(:checkout_mandate) do
+    Kiosk::Mandate::CheckoutMandate.new(
+      reference: 'checkout-1', checkout_hash: 'hash-1', user_id: 'user-1',
       agent_id: 'agent-1', issuer: 'https://demo.example',
       line_items: [{ sku: 'pizza', qty: 1 }], total_amount_cents: 1599,
-      currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'jws'
+      currency: 'eur', expires_at: nil, sd_jwt: 'sd-jwt'
     )
   end
 

@@ -22,35 +22,25 @@ module SettlementSpecHelpers
 
   def settle(user_id, line_items)
     agent = SecureRandom.uuid
-    intent = insert_intent(user_id, agent)
-    cart = insert_cart(user_id, agent, intent, line_items)
-    insert_settlement(user_id, agent, cart)
+    insert_settlement(user_id, agent, insert_checkout(user_id, agent, line_items))
   end
 
-  def insert_intent(user_id, agent)
+  def insert_checkout(user_id, agent, line_items)
+    reference = SecureRandom.uuid
     conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{SCHEMA}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
-        currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{user_id}', '#{agent}', 'i', 's', 1000, 'EUR', now() + interval '1 day', 'j')
-      RETURNING id
-    SQL
-  end
-
-  def insert_cart(user_id, agent, intent, line_items)
-    conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{SCHEMA}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
-        total_amount_cents, currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{intent}', '#{user_id}', '#{agent}', 'i', '#{line_items.to_json}',
+      INSERT INTO "#{SCHEMA}".checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items,
+        total_amount_cents, currency, expires_at, sd_jwt)
+      VALUES ('#{reference}', '#{reference}', '#{user_id}', '#{agent}', 'i', '#{line_items.to_json}',
         500, 'EUR', now() + interval '1 day', 'j')
       RETURNING id
     SQL
   end
 
-  def insert_settlement(user_id, agent, cart)
+  def insert_settlement(user_id, agent, checkout)
     conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{SCHEMA}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
+      INSERT INTO "#{SCHEMA}".settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
-      VALUES ('#{cart}', '#{user_id}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
+      VALUES ('#{checkout}', '#{user_id}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
       RETURNING id
     SQL
   end
@@ -63,7 +53,7 @@ end
 # The read models over the engine's own payment receipts, against a real
 # Postgres; no reachable server skips, as the other persistence specs do.
 RSpec.describe Kiosk::Settlement do
-  describe 'Kiosk::Settlement and Kiosk::CartMandate' do
+  describe 'Kiosk::Settlement and Kiosk::CheckoutMandate' do
     include SettlementSpecHelpers
 
     before do
@@ -89,11 +79,11 @@ RSpec.describe Kiosk::Settlement do
       expect { described_class.own.to_a }.to raise_error(Kiosk::Server::Errors::Unauthenticated)
     end
 
-    it "finds the settlement whose cart names a line item by the operator's own key" do
+    it "finds the settlement whose checkout names a line item by the operator's own key" do
       paid = settle(mine, [{ order_id: 'o-1', qty: 2 }])
       settle(mine, [{ order_id: 'o-2' }])
 
-      expect(described_class.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: 'o-1')).pluck(:id))
+      expect(described_class.joins(:checkout_mandate).merge(Kiosk::CheckoutMandate.referencing(order_id: 'o-1')).pluck(:id))
         .to eq([paid])
     end
   end

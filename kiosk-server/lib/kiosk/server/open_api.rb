@@ -289,8 +289,8 @@ module Kiosk
                              'PUBLIC: no credential is required. The MODULE set this origin ' \
                              'serves is `capabilities` in /.well-known/kiosk.json.'
 
-        PAY_DESCRIPTION = 'Settle an AP2 cart: submit the signed intent -> cart -> payment ' \
-                          'mandate chain. Answers 402 `payment_setup_required` when the ' \
+        PAY_DESCRIPTION = "Pay an operator's checkout: submit the closed AP2 checkout and " \
+                          'payment mandates. Answers 402 `payment_setup_required` when the ' \
                           'identity has no card on file and 402 `payment_failed` when the ' \
                           "charge did not settle — branch on the problem document's `code`."
 
@@ -452,11 +452,11 @@ module Kiosk
 
         PAY = {
           'pay.request' => {
-            type: 'object', title: 'The AP2 mandate chain',
-            properties: %w[intent cart payment].to_h do |what|
-              [:"#{what}_mandate_jws", { type: 'string', description: "Compact RS256 JWS: the signed #{what} mandate." }]
+            type: 'object', title: 'The two closed AP2 mandates',
+            properties: %w[checkout payment].to_h do |what|
+              [:"#{what}_mandate", { type: 'string', description: "Compact SD-JWT: the closed AP2 #{what} mandate." }]
             end,
-            required: %w[intent_mandate_jws cart_mandate_jws payment_mandate_jws],
+            required: %w[checkout_mandate payment_mandate],
             additionalProperties: false
           },
           'pay.response' => {

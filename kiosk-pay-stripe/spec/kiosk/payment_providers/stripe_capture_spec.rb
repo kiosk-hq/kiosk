@@ -11,11 +11,11 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
                                            created: 1_700_000_000)
     end
 
-    it "charges the customer's saved card off_session, keyed by the Stripe customer and the cart mandate id" do
+    it "charges the customer's saved card off_session, keyed by the Stripe customer and the checkout mandate reference" do
       stub_cards('pm_default_visa')
       allow(stripe.payment_intents).to receive(:create).and_return(pi)
 
-      result = adapter.capture(cart_mandate, payment_method: nil)
+      result = adapter.capture(checkout_mandate, payment_method: nil)
 
       expect(stripe.payment_intents).to have_received(:create).with(
         {
@@ -26,9 +26,9 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
           payment_method_types: ['card'],
           off_session: true,
           confirm: true,
-          metadata: { cart_mandate_id: 'cart-1' }
+          metadata: { checkout_mandate: 'checkout-1' }
         },
-        { idempotency_key: 'cus_existing-cart-1-capture' }
+        { idempotency_key: 'cus_existing-checkout-1-capture' }
       )
       expect(result[:psp_reference]).to eq('pi_123')
       expect(result[:settled_amount_cents]).to eq(1599)
@@ -44,7 +44,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount_received: 1599,
                                                          created: 0))
 
-      adapter.capture(cart_mandate)
+      adapter.capture(checkout_mandate)
 
       expect(stripe.payment_methods).to have_received(:list).once
       expect(stripe.customers).not_to have_received(:retrieve)
@@ -58,13 +58,13 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       stub_cards
 
       expect do
-        adapter.capture(cart_mandate, payment_method: nil)
+        adapter.capture(checkout_mandate, payment_method: nil)
       end.to raise_error(Kiosk::PaymentProviders::SetupRequired)
     end
 
     it 'raises SetupRequired when the resolver returns nil (unknown user)' do
       expect do
-        no_customer_adapter.capture(cart_mandate, payment_method: nil)
+        no_customer_adapter.capture(checkout_mandate, payment_method: nil)
       end.to raise_error(Kiosk::PaymentProviders::SetupRequired)
     end
   end
@@ -81,7 +81,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount_received: 1599,
                                                          created: 0))
 
-      adapter.capture(cart_mandate, payment_method: 'pm_explicit')
+      adapter.capture(checkout_mandate, payment_method: 'pm_explicit')
 
       expect(stripe.payment_intents).to have_received(:create).with(
         hash_including(customer: 'cus_existing', payment_method: 'pm_default_visa'),
@@ -94,7 +94,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
         .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_part', status: 'succeeded', amount: 1599,
                                                          amount_received: 1500, created: 0))
 
-      expect(adapter.capture(cart_mandate)[:settled_amount_cents]).to eq(1500)
+      expect(adapter.capture(checkout_mandate)[:settled_amount_cents]).to eq(1500)
     end
   end
 
@@ -112,7 +112,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       it "treats #{status} as a retryable decline: nothing was collected" do
         allow(stripe.payment_intents).to receive(:create).and_return(intent(status))
 
-        expect { adapter.capture(cart_mandate) }
+        expect { adapter.capture(checkout_mandate) }
           .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
             expect(e).to be_retryable
           }
@@ -123,7 +123,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       it "treats #{status} as an unknown outcome that must not be retried" do
         allow(stripe.payment_intents).to receive(:create).and_return(intent(status))
 
-        expect { adapter.capture(cart_mandate) }
+        expect { adapter.capture(checkout_mandate) }
           .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
             expect(e).not_to be_retryable
           }
@@ -142,7 +142,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(stripe.payment_intents).to receive(:create)
         .and_raise(Stripe::CardError.new('Your card was declined.', nil, code: 'card_declined'))
 
-      expect { adapter.capture(cart_mandate) }
+      expect { adapter.capture(checkout_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
           expect(e).to be_retryable
           expect(e.message).to eq('the payment method was declined')
@@ -155,7 +155,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(stripe.payment_intents).to receive(:create)
         .and_raise(Stripe::CardError.new('auth', nil, code: 'authentication_required'))
 
-      expect { adapter.capture(cart_mandate) }
+      expect { adapter.capture(checkout_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
           expect(e).to be_retryable
           expect(e.message).to match(/authentication/i)
@@ -172,7 +172,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       allow(stripe.payment_intents).to receive(:create)
         .and_raise(Stripe::APIConnectionError.new('timed out'))
 
-      expect { adapter.capture(cart_mandate) }
+      expect { adapter.capture(checkout_mandate) }
         .to raise_error(Kiosk::PaymentProviders::PaymentFailed) { |e|
           expect(e).not_to be_retryable
           expect(e.message).to match(/unknown/i)

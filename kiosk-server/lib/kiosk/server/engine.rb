@@ -33,7 +33,7 @@ module Kiosk
       # Whole-key matches, so an operator's own `promo_code` is left alone.
       FILTERED_PARAMETERS = %w[
         signed code device_code kyc_jws
-        intent_mandate_jws cart_mandate_jws payment_mandate_jws
+        checkout_mandate payment_mandate
       ].map { |field| /\A#{field}\z/ }.freeze
 
       initializer 'kiosk-server.filter_parameters' do |app|

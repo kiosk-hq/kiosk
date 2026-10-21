@@ -109,11 +109,11 @@ Set a PSP adapter (a `kiosk-pay-*` gem) and the engine serves `pay`. Wrap it in
 `Kiosk::Server::PaymentClaim` and the engine keeps §11.6's operator half for you:
 it claims your payable row (`unpaid → paying`) before the capture, so a second
 `pay` for that row is refused before the processor is reached, and marks it
-`paid` when the capture returns. Under the claim it checks the signed cart:
-your currency, priced lines that sum to the total, and a total equal to your
-own price for the row. That price is the one thing you write — a checker that
-answers it from your catalog, given the row and the cart's item lines as
-signed, or returns a String saying why the cart is refused.
+`paid` when the capture returns. The checkout the assistant pays is one your
+origin signed, so under the claim the engine checks one thing: that its total
+is still your own price for the row. That price is the one thing you write — a
+checker that answers it from your catalog, given the row and the checkout's
+item lines, or returns a String saying why the checkout is refused.
 
 ```ruby
 module PriceChecker
@@ -124,8 +124,8 @@ Kiosk.configure do |c|
   c.payment_provider = Kiosk::Server::PaymentClaim.new(
     psp, currency: "eur", model: "Order", reference: "order_id", query: "my_orders"
   )
-  c.cart_price_checker = PriceChecker
-  c.after_payment      = ->(order_id) { CourierDispatchJob.arm!(order_id) } # optional
+  c.checkout_price_checker = PriceChecker
+  c.after_payment          = ->(order_id) { CourierDispatchJob.arm!(order_id) } # optional
 end
 ```
 
@@ -139,8 +139,10 @@ The model also includes `Kiosk::Payable`, which gives each row:
   `refunded`. Your per-user query publishes it, so a capture in flight never
   reads as *not paid*. `Order.own.with_settlement(Kiosk::Settlement.own)` reads
   it for many rows in one query.
-- `cart(lines)`: the cart your action returns for the assistant to sign, a line
-  that names the row and then your priced lines.
+- `checkout(lines)`: the `checkout_jwt` your action returns, which the
+  assistant's AP2 mandates bind. Your origin signs it PS256 with
+  `c.signing_key`, for the row's owner. Its first line names the row; then your
+  priced lines.
 - `settlement`: the receipt of the capture that paid the row. `c.after_payment`
   runs once this receipt is recorded, so it can refund against it.
 
@@ -154,11 +156,13 @@ returns the whole charge, set the row's status column to `refunded`, which is
 where `payment_state` reads it. Then call `announce(id, "refunded")` on the
 claim to push the same topic.
 
-A repeat of a chain whose capture did not complete runs the capture again under
-the same key, the cart mandate id, so your PSP adapter must key its charge by
-it (`kiosk-pay-stripe` does). A charge refused with no money moved marks the
-cart declined: it stops counting against `spending_cap` at once, and a repeat of
-that chain answers `409 conflict`.
+A repeat of mandates whose capture did not complete runs the capture again
+under the same key, the checkout mandate's `reference`, so your PSP adapter must
+key its charge by it (`kiosk-pay-stripe` does). One checkout holds one live
+checkout mandate: a second pair for it answers `409 conflict`. A charge refused
+with no money moved marks the checkout mandate declined: it stops counting
+against `spending_cap` at once, a repeat of that pair answers `409 conflict`,
+and a new pair for the same checkout is accepted.
 
 Set `c.spending_cap = Kiosk::Server::ColumnSpendingCap.new` to cap what each
 assistant spends. The human sets the cap on `/kiosk/auth/assistants`: an amount
@@ -321,8 +325,8 @@ c.audit_sink = ->(e) { Siem.record(e.to_h.merge(args: e.args.except(:card_token)
 
 Actions only. A **query** is not emitted (it changes nothing, and every read
 would drown the trail). **`pay`** is not emitted — it already writes the far
-richer AP2 mandate trail (`intent_mandates`, `cart_mandates`,
-`payment_mandates`, `settlements`). A **refusal that never reached an action**
+richer AP2 mandate trail (`checkout_mandates`, `payment_mandates`,
+`settlements`). A **refusal that never reached an action**
 is not emitted: a 401 with no identity, a 404 for an unregistered name, a 405,
 a 400 from argument validation, a 402 from the toll. Nothing was invoked, so
 there is nothing to report — this is an action trail, not a request log. Put a
@@ -559,10 +563,10 @@ the one rendered whatever `Accept` the caller sent. On top of that:
 - `include Kiosk::SkillLink` — in a page controller: every answer carries
   `Link: <skill_url>; rel="kiosk"`, the discovery signal for a client that
   does not read HTML.
-- `Kiosk::Settlement` and `Kiosk::CartMandate` — read models over the receipts
-  `pay` records. `Kiosk::Settlement.own` is the caller's own;
-  `Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(order_id: id))`
-  is the settlement whose cart names your row by the key your line items carry.
+- `Kiosk::Settlement` and `Kiosk::CheckoutMandate` — read models over the
+  receipts `pay` records. `Kiosk::Settlement.own` is the caller's own;
+  `Kiosk::Settlement.joins(:checkout_mandate).merge(Kiosk::CheckoutMandate.referencing(order_id: id))`
+  is the settlement whose checkout names your row by the key your line items carry.
 - The handler runs inside the wire's GUC-scoped transaction, so raising rolls
   back — and so does rendering a non-2xx, which the seam converts into a raise.
 
@@ -618,7 +622,7 @@ the PoW gates.
 ```ruby
 require "kiosk/server"
 
-# The issuer is the AP2 mandate `iss` anchor; the builder refuses to answer
+# The issuer is the origin a token or a checkout names; the builder refuses to answer
 # without it, booted app or not.
 Kiosk.configure { |c| c.issuer = "https://api.acme.example" }
 

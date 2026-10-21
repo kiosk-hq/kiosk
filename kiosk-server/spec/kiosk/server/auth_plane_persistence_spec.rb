@@ -129,38 +129,28 @@ module AuthPlanePersistenceSpec
     [status, raw]
   end
 
-  # A settled receipt for this agent, `days_ago` old; returns its id. The chain
-  # is what the shipped schema requires: a settlement hangs off a cart mandate,
-  # which hangs off an intent. Every value travels as a bind, including the
-  # timestamp.
+  # A settled receipt for this agent, `days_ago` old; returns its id. The
+  # shipped schema hangs a settlement off a checkout mandate. Every value
+  # travels as a bind, including the timestamp.
   def settle!(cents:, days_ago:, currency: 'eur')
-    cart = insert_cart(insert_intent, cents)
     value(%(
       INSERT INTO #{table('settlements')}
-        (cart_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
+        (checkout_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
       VALUES ($1, $2, $3, 'https://provider.example', $4, $5, $6, $7)
       RETURNING id
-    ), [cart, holder, agent_id, SecureRandom.hex(8), cents, currency, Time.now.utc - (days_ago * 86_400)])
+    ), [insert_checkout(cents), holder, agent_id, SecureRandom.hex(8), cents, currency, Time.now.utc - (days_ago * 86_400)])
   end
 
-  def insert_intent
+  def insert_checkout(cents)
+    reference = SecureRandom.uuid
     value(%(
-      INSERT INTO #{table('intent_mandates')}
-        (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents, currency, expires_at, raw_jws)
-      VALUES ($1, $2, $3, 'https://provider.example', 'shop', 1000000, 'eur', now() + interval '1 day', 'jws')
+      INSERT INTO #{table('checkout_mandates')}
+        (reference, checkout_hash, user_id, agent_id, issuer, line_items, total_amount_cents,
+         currency, expires_at, sd_jwt)
+      VALUES ($1, $1, $2, $3, 'https://provider.example', '[]'::jsonb, $4, 'eur',
+              now() + interval '1 day', 'sd-jwt')
       RETURNING id
-    ), [SecureRandom.uuid, holder, agent_id])
-  end
-
-  def insert_cart(intent, cents)
-    value(%(
-      INSERT INTO #{table('cart_mandates')}
-        (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items, total_amount_cents,
-         currency, expires_at, raw_jws)
-      VALUES ($1, $2, $3, $4, 'https://provider.example', '[]'::jsonb, $5, 'eur',
-              now() + interval '1 day', 'jws')
-      RETURNING id
-    ), [SecureRandom.uuid, intent, holder, agent_id, cents])
+    ), [reference, holder, agent_id, cents])
   end
 end
 

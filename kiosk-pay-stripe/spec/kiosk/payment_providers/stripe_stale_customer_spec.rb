@@ -34,7 +34,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     end
 
     it 'refuses a charge with SetupRequired' do
-      expect { stale_adapter.capture(cart_mandate) }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
+      expect { stale_adapter.capture(checkout_mandate) }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
     end
   end
 

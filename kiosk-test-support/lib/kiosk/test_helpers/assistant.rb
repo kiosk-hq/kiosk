@@ -6,6 +6,7 @@ require 'securerandom'
 require 'uri'
 require 'jwt'
 require 'kiosk/test_helpers/wire'
+require 'kiosk/test_helpers/mandate'
 require 'kiosk/test_helpers/assistant/events'
 
 module Kiosk
@@ -63,41 +64,22 @@ module Kiosk
         wire.post("/kiosk/#{name}", args, wire.bearer(principal.token).merge(headers))
       end
 
-      # The intent and cart mandates for a quote of `total` cents, for #pay.
-      def mandates(principal, total:, scope:, line_items:, currency: 'eur')
-        now    = Time.now.to_i
-        common = { user_id: principal.user_id, agent_id: principal.agent_id, iss: base_url, currency:, iat: now, exp: now + 600 }
-        intent = common.merge(id: SecureRandom.uuid, scope:, cap_amount_cents: total)
-        { intent:, cart: common.merge(id: SecureRandom.uuid, intent_mandate_id: intent[:id], total_amount_cents: total, line_items:) }
-      end
-
-      def pay(principal, intent:, cart:, payment_method: 'pm_demo')
-        payment = payment_mandate(principal, cart:, payment_method:)
-        pay_raw(principal, intent_jws: sign_mandate(principal, intent), cart_jws: sign_mandate(principal, cart),
-                           payment_jws: sign_mandate(principal, payment))
+      # Signs the two closed AP2 mandates for `checkout_jwt`, unchanged, and pays.
+      def pay(principal, checkout_jwt, instrument: 'on_file')
+        pay_raw(principal, **Mandate.pay(principal.rsa_key, checkout_jwt, instrument:))
       end
 
       # On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
       # asks, and sends the same mandates once more. Against stripe-mock the
       # Customer that `payment_setup` maps already lists a card, so that answer settles.
-      def pay_raw(principal, intent_jws:, cart_jws:, payment_jws:)
-        body   = { intent_mandate_jws: intent_jws, cart_mandate_jws: cart_jws, payment_mandate_jws: payment_jws }
+      def pay_raw(principal, checkout:, payment:)
+        body   = { checkout_mandate: checkout, payment_mandate: payment }
         answer = wire.post('/kiosk/pay', body, wire.bearer(principal.token))
         return answer unless setup_required?(answer)
 
         run(principal, name: 'payment_setup')
         wire.post('/kiosk/pay', body, wire.bearer(principal.token))
       end
-
-      def payment_mandate(principal, cart:, payment_method: 'pm_demo')
-        cart = cart.transform_keys(&:to_sym)
-        now  = Time.now.to_i
-        { id: SecureRandom.uuid, cart_mandate_id: cart[:id], user_id: principal.user_id, agent_id: principal.agent_id,
-          iss: cart[:iss], payment_method:, amount_cents: cart[:total_amount_cents], currency: cart[:currency],
-          exp: now + 600, iat: now }
-      end
-
-      def sign_mandate(principal, payload) = JWT.encode(payload, principal.rsa_key, 'RS256')
 
       # Signs in again with the key it holds.
       def login(key) = wire.post('/kiosk/auth/login', possession(key))

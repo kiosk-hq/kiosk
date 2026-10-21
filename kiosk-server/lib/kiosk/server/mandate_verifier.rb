@@ -1,182 +1,139 @@
 # frozen_string_literal: true
 
-require 'jwt'
-
 module Kiosk
   module Server
-    # Verifies the agent-signed AP2 mandate chain (intent → cart → payment):
-    # signed by the authenticated agent's key, issued for this origin, bound to
-    # the authenticated principal, and within the intent's cap.
+    # Verifies the two closed AP2 v0.2 mandates of a `pay`. Each is an SD-JWT
+    # signed with the authenticated agent's key. The checkout mandate binds a
+    # checkout this origin signed for this account; the payment mandate pays
+    # exactly that checkout, to this origin.
     module MandateVerifier
       # §11.1: an ISO 4217 alpha-3 code, matched after {canonical_currency}.
       CURRENCY_CODE = /\A[a-z]{3}\z/
 
-      REQUIRED_CLAIMS = %w[id user_id agent_id iss iat exp].freeze
+      CHECKOUT_VCT = 'mandate.checkout.1'
+      PAYMENT_VCT  = 'mandate.payment.1'
+      TYP          = 'dc+sd-jwt'
+      ALGORITHM    = 'RS256'
 
       # Longer than this counts as non-expiring, which the spec refuses.
       MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
 
       module_function
 
-      def verify_intent(raw_jws:, identity:)
-        payload = Token.decode_and_check(raw_jws, identity)
-        require_amount!(payload, :cap_amount_cents)
-        currency = require_currency!(payload)
-
-        Kiosk::Mandate::IntentMandate.new(
-          **Token.common(payload, raw_jws),
-          scope: payload[:scope], cap_amount_cents: payload[:cap_amount_cents], currency: currency
+      def verify_checkout(sd_jwt:, identity:)
+        content = Token.content(sd_jwt, identity, CHECKOUT_VCT)
+        checkout_jwt, checkout_hash = Binding.checkout_jwt!(content)
+        checkout = Checkout.verify(checkout_jwt, identity: identity)
+        Kiosk::Mandate::CheckoutMandate.new(
+          **Token.common(sd_jwt, content, identity),
+          checkout_hash: checkout_hash,
+          line_items: checkout['line_items'],
+          total_amount_cents: checkout['total_amount_cents'],
+          currency: canonical_currency(checkout['currency'])
         )
       end
 
-      # `payment_method` is optional: the PSP charges the principal's card on file.
-      def verify_payment(raw_jws:, identity:, cart:)
-        payload = Token.decode_and_check(raw_jws, identity)
-        require_amount!(payload, :amount_cents)
-        currency = require_currency!(payload)
-        Binding.payment_to_cart!(payload, currency, cart)
+      def verify_payment(sd_jwt:, identity:, checkout:)
+        content = Token.content(sd_jwt, identity, PAYMENT_VCT)
+        Binding.payment_to_checkout!(content, checkout)
+        instrument = Binding.instrument!(content['payment_instrument'])
 
         Kiosk::Mandate::PaymentMandate.new(
-          **Token.common(payload, raw_jws),
-          cart_mandate_id: payload[:cart_mandate_id], payment_method: payload[:payment_method],
-          amount_cents: payload[:amount_cents], currency: currency
+          **Token.common(sd_jwt, content, identity), transaction_id: content['transaction_id'],
+                                                     payment_instrument: instrument, amount_cents: checkout.total_amount_cents, currency: checkout.currency
         )
       end
 
-      def verify_cart(raw_jws:, identity:, intent:)
-        payload = Token.decode_and_check(raw_jws, identity)
-        require_amount!(payload, :total_amount_cents)
-        currency = require_currency!(payload)
-        require_line_items!(payload)
-
-        fields = Token.claims(payload, :intent_mandate_id, :line_items, :total_amount_cents)
-        cart = Kiosk::Mandate::CartMandate.new(**Token.common(payload, raw_jws), **fields, currency: currency)
-        Binding.cart_to_intent!(cart, intent)
-        cart
-      end
-
-      # Before any `.to_i`: nil, zero or negative would launder the cap.
-      def require_amount!(payload, field)
-        value = payload[field]
-        raise Errors::Forbidden.new("mandate missing required amount field: #{field}", hint: "#{field} is a required AP2 mandate field") if value.nil?
-        return if value.is_a?(Integer) && value.positive?
-
-        raise Errors::Forbidden.new(
-          "mandate #{field} must be a positive integer number of cents",
-          hint: "#{field} was #{value.inspect}"
-        )
-      end
-
-      # §11.2: at least one entry; the settlement is reconciled from it.
-      def require_line_items!(payload)
-        value = payload[:line_items]
-        raise Errors::Forbidden.new('mandate missing required line_items field', hint: LINE_ITEMS_HINT) if value.nil?
-        raise Errors::Forbidden.new('mandate line_items must be an array', hint: "line_items was #{value.class}") unless value.is_a?(Array)
-        return unless value.empty?
-
-        raise Errors::Forbidden.new(
-          'mandate line_items must not be empty',
-          hint: 'a cart mandate says WHAT is being bought and the settlement is reconciled ' \
-                'from it — an empty array withholds both while a positive total is charged'
-        )
-      end
-
-      LINE_ITEMS_HINT = 'line_items is a required AP2 cart-mandate field — the settlement trail ' \
-                        'is reconciled from it'
-
-      # §11.1: refuses a non-String, blank or non-alpha-3 currency and returns
-      # the canonical form, so the spending-cap tally has one key per currency.
-      def require_currency!(payload)
-        value = payload[:currency]
-        raise Errors::Forbidden.new('mandate missing required currency field', hint: 'currency is a required AP2 mandate field') if value.nil?
-        raise Errors::Forbidden.new('mandate currency must be a non-empty string', hint: blank_currency_hint(value)) unless value.is_a?(String) && !value.strip.empty?
-
-        code = canonical_currency(value)
-        return code if CURRENCY_CODE.match?(code)
-
-        raise Errors::Forbidden.new(
-          'mandate currency is not an ISO 4217 alpha-3 code',
-          hint: "currency was #{value.inspect} — send a three-letter currency code, such as \"eur\""
-        )
-      end
-
-      def blank_currency_hint(value)
-        "currency was #{value.inspect} — send the three-letter currency code of this mandate, such as \"eur\""
-      end
+      CHECKOUT_HINT = 'a checkout mandate carries the checkout_jwt the operator answered, unchanged, and ' \
+                      'checkout_hash: the base64url SHA-256 of that string'
 
       # Public: an operator reading `settlements.currency` needs the same lower-casing.
       def canonical_currency(value)
         value.to_s.downcase
       end
-      private_class_method :require_amount!, :blank_currency_hint
 
-      # How each mandate in the chain must agree with the one it follows.
+      # How the payment mandate must agree with the checkout it pays.
       module Binding
         module_function
 
-        def payment_to_cart!(payload, currency, cart)
-          raise Errors::Forbidden, 'payment not bound to the cart' unless payload[:cart_mandate_id] == cart.id
-          return if payload[:amount_cents].to_i == cart.total_amount_cents.to_i && currency == cart.currency
+        # @return [Array(String, String)] the checkout_jwt and its hash
+        def checkout_jwt!(content)
+          checkout_jwt = content['checkout_jwt']
+          raise Errors::Forbidden.new('checkout mandate has no checkout_jwt', hint: CHECKOUT_HINT) unless checkout_jwt.is_a?(String)
 
-          raise Errors::Forbidden, 'payment amount/currency does not match cart'
+          checkout_hash = SdJwt.digest(checkout_jwt)
+          return [checkout_jwt, checkout_hash] if content['checkout_hash'] == checkout_hash
+
+          raise Errors::Forbidden.new('checkout_hash is not the hash of checkout_jwt', hint: CHECKOUT_HINT)
         end
 
-        def cart_to_intent!(cart, intent)
-          unless cart.intent_mandate_id == intent.id
-            raise Errors::Forbidden.new('cart not bound to the intent',
-                                        hint: "expected intent_mandate_id #{intent.id.inspect}")
-          end
-          cart_currency!(cart, intent)
-          cart_cap!(cart, intent)
+        def payment_to_checkout!(content, checkout)
+          raise Errors::Forbidden.new('payment not bound to the checkout', hint: 'transaction_id is the checkout_hash of the checkout mandate') unless content['transaction_id'] == checkout.checkout_hash
+
+          payee!(content['payee'])
+          amount!(content['payment_amount'], checkout)
         end
 
-        # A cap is meaningless across currencies.
-        def cart_currency!(cart, intent)
-          return if cart.currency == intent.currency
+        def payee!(payee)
+          issuer = Kiosk.current_issuer
+          return if payee.is_a?(Hash) && payee['id'] == issuer
 
-          raise Errors::Forbidden.new('cart currency does not match intent cap currency',
-                                      hint: "cart #{cart.currency.inspect} != intent #{intent.currency.inspect}")
+          raise Errors::Forbidden.new('payment payee is not this origin', hint: "payee is the checkout's merchant, whose id is #{issuer.inspect}")
         end
 
-        def cart_cap!(cart, intent)
-          return unless cart.total_amount_cents.to_i > intent.cap_amount_cents.to_i
+        # The signed amount must be the checkout's, in its currency, compared as a code.
+        def amount!(amount, checkout)
+          return if amount.is_a?(Hash) && amount['amount'] == checkout.total_amount_cents &&
+                    amount['currency'].is_a?(String) && MandateVerifier.canonical_currency(amount['currency']) == checkout.currency
 
-          raise Errors::Forbidden.new('cart total exceeds intent cap',
-                                      hint: "cart #{cart.total_amount_cents} > cap #{intent.cap_amount_cents}")
+          raise Errors::Forbidden.new('payment amount/currency does not match the checkout',
+                                      hint: "payment_amount is {amount: #{checkout.total_amount_cents}, currency: #{checkout.currency.inspect}}")
+        end
+
+        # @return [String] the instrument id: a PSP payment-method id, or `on_file`
+        def instrument!(instrument)
+          return instrument['id'] if instrument.is_a?(Hash) && [instrument['id'], instrument['type']].all? { it.is_a?(String) && !it.empty? }
+
+          raise Errors::Forbidden.new('payment mandate has no payment_instrument',
+                                      hint: 'payment_instrument is {id, type}; {"id": "on_file", "type": "card"} pays with the saved card')
         end
       end
 
-      # The signed JWS: its signature, issuer, principal and lifetime.
+      # The SD-JWT: its signature, its type and its lifetime.
       module Token
         module_function
 
-        # The attributes every mandate carries.
-        def common(payload, raw_jws)
-          { id: payload[:id], user_id: payload[:user_id], agent_id: payload[:agent_id], issuer: payload[:iss],
-            expires_at: Time.at(payload[:exp]).utc, created_at: Time.at(payload[:iat]).utc, raw_jws: raw_jws }
+        # The attributes both mandates carry.
+        def common(sd_jwt, content, identity)
+          { reference: SdJwt.digest(sd_jwt), user_id: identity.user_id, agent_id: identity.agent_id,
+            issuer: Kiosk.current_issuer, expires_at: Time.at(content['exp']).utc, sd_jwt: sd_jwt }
         end
 
-        # The named claims, nil when absent.
-        def claims(payload, *names) = names.index_with { |name| payload[name] }
+        # The one mandate in `delegate_payload`, with every disclosure in place.
+        def content(sd_jwt, identity, vct)
+          payload = decode(sd_jwt, identity)
+          content = payload['delegate_payload']
+          content = content.first if content.is_a?(Array) && content.one?
+          raise Errors::Forbidden.new('mandate carries no mandate', hint: SHAPE_HINT) unless content.is_a?(Hash)
+          raise Errors::Forbidden.new("mandate vct is not #{vct}", hint: VCT_HINT) unless content['vct'] == vct
 
-        def decode_and_check(raw_jws, identity)
-          payload = decode(raw_jws, identity)
-          check_principal!(payload, identity)
-          require_numeric_timestamp!(payload, :iat)
-          require_numeric_timestamp!(payload, :exp)
-          enforce_max_lifetime!(payload)
-          payload
+          check_lifetime!(content)
+          content
         end
 
-        def decode(raw_jws, identity)
-          payload, = ::JWT.decode(raw_jws, payment_key(identity), true, algorithms: ['RS256'], required_claims: REQUIRED_CLAIMS)
-          payload.transform_keys(&:to_sym)
-        rescue ::JWT::ExpiredSignature
-          raise Errors::Forbidden, 'mandate expired'
-        rescue ::JWT::MissingRequiredClaim
-          raise Errors::Forbidden.new('mandate missing a required claim', hint: "a mandate carries #{REQUIRED_CLAIMS.join(', ')}")
+        SHAPE_HINT = 'the signed payload is {"_sd_alg": "sha-256", "delegate_payload": [{"...": <digest>}]}, ' \
+                     'and the one disclosure is the mandate'
+        VCT_HINT   = "send closed mandates: #{CHECKOUT_VCT} and #{PAYMENT_VCT}. This operator takes no open mandate".freeze
+
+        def decode(sd_jwt, identity)
+          payload, header = SdJwt.verify(sd_jwt, key: payment_key(identity), algorithm: ALGORITHM)
+          return payload if header['typ'] == TYP
+
+          raise Errors::Forbidden.new("mandate typ is not #{TYP}", hint: "the JWT header is {\"alg\": \"#{ALGORITHM}\", \"typ\": \"#{TYP}\"}")
+        rescue SdJwt::Invalid => e
+          raise Errors::Forbidden.new('mandate is not a valid SD-JWT', hint: e.message)
         rescue ::JWT::DecodeError
-          raise Errors::Forbidden.new('mandate signature invalid', hint: "a mandate is a compact RS256 JWS signed with the agent's payment key")
+          raise Errors::Forbidden.new('mandate signature invalid', hint: "a mandate is an SD-JWT signed #{ALGORITHM} with the agent's payment key")
         end
 
         def payment_key(identity)
@@ -186,28 +143,27 @@ module Kiosk
           raise Errors::Forbidden.new('mandate agent has no registered payment key', hint: 'the authenticated agent is revoked or unknown')
         end
 
-        def check_principal!(payload, identity)
-          issuer = Kiosk.current_issuer
-          raise Errors::Forbidden.new('mandate issuer mismatch', hint: "expected #{issuer.inspect}") if payload[:iss] != issuer
-          # As strings: a bigint-PK host's identity carries an Integer.
-          return if payload[:agent_id].to_s == identity.agent_id.to_s && payload[:user_id].to_s == identity.user_id.to_s
+        def check_lifetime!(content)
+          require_numeric_timestamp!(content, 'iat')
+          require_numeric_timestamp!(content, 'exp')
+          raise Errors::Forbidden, 'mandate expired' if content['exp'] <= Time.now.to_i
 
-          raise Errors::Forbidden.new('mandate principal mismatch', hint: 'mandate must be signed for the authenticated agent/user')
+          enforce_max_lifetime!(content)
         end
 
         # Before `Time.at`, which raises on a String.
-        def require_numeric_timestamp!(payload, field)
-          return if payload[field].is_a?(Numeric)
+        def require_numeric_timestamp!(content, field)
+          return if content[field].is_a?(Integer)
 
           raise Errors::BadRequest.new(
             "mandate #{field} must be an integer Unix timestamp",
-            hint: "#{field} was #{payload[field].class} — send #{field} as a NumericDate integer"
+            hint: "#{field} was #{content[field].class} — send #{field} as a NumericDate integer"
           )
         end
 
         # exp − now, not exp − iat, so a future-dated iat cannot stretch it.
-        def enforce_max_lifetime!(payload)
-          return if payload[:exp].to_i - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
+        def enforce_max_lifetime!(content)
+          return if content['exp'] - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
 
           raise Errors::BadRequest.new(
             "mandate lifetime exceeds the maximum of #{MAX_MANDATE_LIFETIME_SECONDS}s",

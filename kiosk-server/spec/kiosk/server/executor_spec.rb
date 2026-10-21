@@ -1,16 +1,14 @@
 # frozen_string_literal: true
 
 module ExecutorSpecHelpers
-  # The INSERT column order of the four persist helpers, so a recorded row
+  # The INSERT column order of the three persist helpers, so a recorded row
   # reads by name instead of by bind index.
   INSERT_COLUMNS = {
-    'intent_mandates' => %w[mandate_id user_id agent_id issuer scope cap_amount_cents
-                            currency expires_at raw_jws],
-    'cart_mandates' => %w[mandate_id intent_mandate_id user_id agent_id issuer line_items
-                          total_amount_cents currency expires_at raw_jws],
-    'payment_mandates' => %w[mandate_id cart_mandate_id user_id agent_id issuer payment_method
-                             amount_cents currency expires_at raw_jws],
-    'settlements' => %w[cart_mandate_id user_id agent_id issuer psp_reference
+    'checkout_mandates' => %w[reference checkout_hash user_id agent_id issuer line_items
+                              total_amount_cents currency expires_at sd_jwt],
+    'payment_mandates' => %w[reference checkout_mandate_id user_id agent_id issuer payment_instrument
+                             amount_cents currency expires_at sd_jwt],
+    'settlements' => %w[checkout_mandate_id user_id agent_id issuer psp_reference
                         settled_amount_cents currency]
   }.freeze
 
@@ -41,23 +39,23 @@ end
 
 module ExecutorSpecReplayHelpers
   # {Executor#chain_record}'s meaning, evaluated over the recorded rows: the
-  # cart matched by (user_id, mandate_id, raw_jws), its intent and payment
-  # matched by the FK chain AND their own raw_jws, then that cart's
-  # settlement, if any. Drop the raw_jws comparisons and a mandate id re-used
-  # with different content would be handed a settlement it did not buy.
+  # checkout mandate matched by (user_id, reference, sd_jwt), its payment
+  # mandate matched by the FK AND its own sd_jwt, then that checkout's
+  # settlement, if any. Drop the sd_jwt comparisons and a pair re-used with
+  # different content would be handed a settlement it did not buy.
   def chain_rows(stored, binds)
-    user_id, cart_mandate_id, cart_jws, intent_jws, payment_jws = binds
+    user_id, reference, checkout_sd_jwt, payment_sd_jwt = binds
 
-    cart = stored_row(stored, 'cart_mandates', 'mandate_id' => cart_mandate_id, 'user_id' => user_id, 'raw_jws' => cart_jws)
-    return [] if cart.nil?
-    return [] unless stored_row(stored, 'intent_mandates', 'id' => cart['intent_mandate_id'], 'user_id' => user_id, 'raw_jws' => intent_jws)
-    return [] unless stored_row(stored, 'payment_mandates', 'cart_mandate_id' => cart['id'], 'user_id' => user_id, 'raw_jws' => payment_jws)
+    checkout = stored_row(stored, 'checkout_mandates', 'reference' => reference, 'user_id' => user_id, 'sd_jwt' => checkout_sd_jwt)
+    return [] if checkout.nil?
+    return [] unless stored_row(stored, 'payment_mandates', 'checkout_mandate_id' => checkout['id'], 'user_id' => user_id,
+                                                            'sd_jwt' => payment_sd_jwt)
 
-    [chain_row(cart, stored['settlements'].find { |r| r['cart_mandate_id'] == cart['id'] } || {})]
+    [chain_row(checkout, stored['settlements'].find { |r| r['checkout_mandate_id'] == checkout['id'] } || {})]
   end
 
-  def chain_row(cart, settlement)
-    { 'cart_row' => cart['id'], 'declined_at' => cart['declined_at'], 'settlement_id' => settlement['id'],
+  def chain_row(checkout, settlement)
+    { 'checkout_row' => checkout['id'], 'declined_at' => checkout['declined_at'], 'settlement_id' => settlement['id'],
       'psp_reference' => settlement['psp_reference'], 'settled_amount_cents' => settlement['settled_amount_cents'],
       'currency' => settlement['currency'] }
   end
@@ -78,53 +76,37 @@ module ExecutorSpecReplayHelpers
     [{ 'id' => "row-#{inserted.size}" }]
   end
 
-  def record_decline(cart_row)
-    stored['cart_mandates'].find { |r| r['id'] == cart_row }['declined_at'] = Time.current
+  def record_decline(checkout_row)
+    stored['checkout_mandates'].find { |r| r['id'] == checkout_row }['declined_at'] = Time.current
     []
   end
 
+  # The shipped schema's unique keys: `(user_id, reference)` on both mandate
+  # tables, one live checkout mandate per checkout, one settlement per checkout mandate.
   def record_insert(sql, binds)
     table = sql[/INSERT INTO \S+\.(\w+)/, 1]
-    key   = [table, binds.first]
-    raise ActiveRecord::RecordNotUnique, 'duplicate key value violates unique constraint' \
-      if inserted.include?(key)
+    row   = ExecutorSpecHelpers::INSERT_COLUMNS.fetch(table).zip(binds).to_h
+    raise ActiveRecord::RecordNotUnique, 'duplicate key value violates unique constraint' if duplicate?(table, row)
 
-    inserted << key
+    inserted << [table, binds.first]
     id = "row-#{inserted.size}"
-    stored[table] << ExecutorSpecHelpers::INSERT_COLUMNS.fetch(table).zip(binds).to_h.merge('id' => id)
+    stored[table] << row.merge('id' => id)
     [{ 'id' => id }]
   end
 
-  def stub_fresh_chain
-    intent2, cart2, pay2 = fresh_chain
-    allow(Kiosk::Server::MandateVerifier).to receive_messages(verify_intent: intent2, verify_cart: cart2, verify_payment: pay2)
+  def duplicate?(table, row)
+    return true if inserted.include?([table, row.values.first])
+
+    table == 'checkout_mandates' &&
+      stored[table].any? { |r| r['checkout_hash'] == row['checkout_hash'] && r['declined_at'].nil? }
   end
 
-  def fresh_chain
-    [Kiosk::Mandate::IntentMandate.new(**intent.to_h, id: 'intent-2'),
-     Kiosk::Mandate::CartMandate.new(**cart.to_h, id: 'cart-2', intent_mandate_id: 'intent-2'),
-     Kiosk::Mandate::PaymentMandate.new(**payment.to_h, id: 'pay-2', cart_mandate_id: 'cart-2')]
-  end
-end
-
-module ExecutorSpecCurrencyHelpers
-  def sign(payload) = JWT.encode(payload, agent_key, 'RS256')
-
-  def chain(currency)
-    base = { iss: issuer, agent_id: 'agent-1', user_id: 'u-1', exp: future, iat: Time.now.to_i }
-    { intent_mandate_jws: sign(base.merge(id: 'intent-1', scope: 'groceries',
-                                          cap_amount_cents: 5000, currency: currency)),
-      cart_mandate_jws: sign(base.merge(id: 'cart-1', intent_mandate_id: 'intent-1',
-                                        line_items: [{ sku: 'pizza', qty: 1 }],
-                                        total_amount_cents: 1599, currency: currency)),
-      payment_mandate_jws: sign(base.merge(id: 'pay-1', cart_mandate_id: 'cart-1',
-                                           payment_method: 'pm_card_visa',
-                                           amount_cents: 1599, currency: currency)) }
-  end
-
-  def answered(currency)
-    described_class.call(kind: :pay, args: chain(currency),
-                         identity: identity, connection: connection).payload[:currency]
+  # A second pair the assistant signed for `checkout_hash`: new references, new bytes.
+  def stub_second_pair(checkout_hash: checkout.checkout_hash)
+    checkout2 = Kiosk::Mandate::CheckoutMandate.new(**checkout.to_h, reference: 'cm-2', checkout_hash:, sd_jwt: 'checkout-sd-jwt-2')
+    payment2  = Kiosk::Mandate::PaymentMandate.new(**payment.to_h, reference: 'pm-2', transaction_id: checkout_hash,
+                                                                   sd_jwt: 'payment-sd-jwt-2')
+    allow(Kiosk::Server::MandateVerifier).to receive_messages(verify_checkout: checkout2, verify_payment: payment2)
   end
 end
 
@@ -139,25 +121,19 @@ RSpec.shared_context 'with pay mandates' do
   include_context 'with a fake executor connection'
 
   let(:identity) { build_identity(agent_id: 'a-1') }
-  let(:intent) do
-    Kiosk::Mandate::IntentMandate.new(
-      id: 'intent-1', user_id: 'u-1', agent_id: 'a-1', issuer: 'https://demo.example',
-      scope: 'groceries', cap_amount_cents: 5000, currency: 'eur',
-      expires_at: nil, created_at: nil, raw_jws: 'intent-jws'
-    )
-  end
-  let(:cart) do
-    Kiosk::Mandate::CartMandate.new(
-      id: 'cart-1', intent_mandate_id: 'intent-1', user_id: 'u-1', agent_id: 'a-1',
-      issuer: 'https://demo.example', line_items: [{ sku: 'pizza', qty: 1 }],
-      total_amount_cents: 1599, currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'cart-jws'
+  let(:expires_at) { nil }
+  let(:checkout) do
+    Kiosk::Mandate::CheckoutMandate.new(
+      reference: 'cm-1', checkout_hash: 'hash-1', user_id: 'u-1', agent_id: 'a-1',
+      issuer: 'https://demo.example', line_items: [{ 'sku' => 'pizza', 'qty' => 1 }],
+      total_amount_cents: 1599, currency: 'eur', expires_at: expires_at, sd_jwt: 'checkout-sd-jwt'
     )
   end
   let(:payment) do
     Kiosk::Mandate::PaymentMandate.new(
-      id: 'pay-1', cart_mandate_id: 'cart-1', user_id: 'u-1', agent_id: 'a-1',
-      issuer: 'https://demo.example', payment_method: 'pm_card_visa',
-      amount_cents: 1599, currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'payment-jws'
+      reference: 'pm-1', transaction_id: 'hash-1', user_id: 'u-1', agent_id: 'a-1',
+      issuer: 'https://demo.example', payment_instrument: 'pm_card_visa',
+      amount_cents: 1599, currency: 'eur', expires_at: expires_at, sd_jwt: 'payment-sd-jwt'
     )
   end
 end
@@ -180,52 +156,44 @@ RSpec.shared_context 'with verb :pay' do
   include_context 'with the executor instance a call builds'
 
   let(:settlement) { { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.current } }
-  let(:valid_args) do
-    { intent_mandate_jws: 'intent-jws', cart_mandate_jws: 'cart-jws', payment_mandate_jws: 'payment-jws' }
-  end
+  let(:valid_args) { { checkout_mandate: 'checkout-sd-jwt', payment_mandate: 'payment-sd-jwt' } }
 
   before do
     Kiosk.reset!
     Kiosk.configure { |c| c.issuer = 'https://demo.example' }
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_intent)
-      .with(raw_jws: 'intent-jws', identity: identity).and_return(intent)
-    allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart)
-      .with(raw_jws: 'cart-jws', identity: identity, intent: intent).and_return(cart)
+    allow(Kiosk::Server::MandateVerifier).to receive(:verify_checkout)
+      .with(sd_jwt: 'checkout-sd-jwt', identity: identity).and_return(checkout)
     allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment)
-      .with(raw_jws: 'payment-jws', identity: identity, cart: cart).and_return(payment)
+      .with(sd_jwt: 'payment-sd-jwt', identity: identity, checkout: checkout).and_return(payment)
     # Persist helpers return SERVER-generated ids (uuid PKs); the verb
     # threads them through the FK chain.
-    { persist_intent_mandate: 'intent-row', persist_cart_mandate: 'cart-row',
-      persist_payment_mandate: 'pay-row', persist_settlement: 's-1',
-      lock_assistant_payments!: nil, cart_recorded?: false }.each do |helper, value|
+    { persist_checkout_mandate: 'checkout-row', persist_payment_mandate: 'pay-row', persist_settlement: 's-1',
+      lock_assistant_payments!: nil, checkout_recorded?: false }.each do |helper, value|
       allow(executor).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double(Kiosk::PaymentProviders::Base, capture: settlement, setup_required?: false)
   end
 end
 
-# ── Replay: the mandate chain IS the idempotency key (K-739) ───────────
+# ── Replay: the two mandates ARE the idempotency key (K-739) ───────────
 #
 # `pay` publishes no idempotency header and no idempotency field, and the
-# spec (protocol.md §11.6) now says why it needs none: the three mandate
-# `id`s already are one, and an assistant whose `pay` response was lost
-# retries with the IDENTICAL chain. These examples pin BOTH halves of the
-# behaviour that claim rests on — the safe path and the unsafe one — at the
-# only layer where "how many times was the card charged" is observable
-# without a database.
+# spec (protocol.md §11.6) says why it needs none: the mandates' references
+# already are one, and an assistant whose `pay` response was lost retries
+# with the IDENTICAL pair. These examples pin BOTH halves of the behaviour
+# that claim rests on, at the only layer where "how many times was the card
+# charged" is observable without a database.
 #
 # The persist helpers run FOR REAL here (the enclosing `before` stubs them;
 # this context calls them through) against a router that enforces the
-# constraint the shipped schema declares: `UNIQUE (user_id, mandate_id)` on
-# each of the three mandate tables. So the 409 is produced by the same
+# constraints the shipped schema declares. So the 409 is produced by the same
 # `unique_violation?` remap a real Postgres would trip, not by a stub.
-RSpec.shared_context 'with a pay replayed with the identical mandate chain' do
+RSpec.shared_context 'with a pay replayed with the identical mandates' do
   include_context 'with verb :pay'
   include ExecutorSpecReplayHelpers
 
-  # `[table, mandate_id]` for every mandate row the router has accepted —
-  # the in-memory stand-in for `UNIQUE (user_id, mandate_id)`. One
-  # principal per example, so the mandate id alone is the whole key.
+  # `[table, first bound value]` for every row the router has accepted. One
+  # principal per example, so that value alone is the whole key.
   let(:inserted) { [] }
   let(:captures) { [] }
   # The rows those inserts wrote, by table, each as a column=>value hash
@@ -236,8 +204,7 @@ RSpec.shared_context 'with a pay replayed with the identical mandate chain' do
   before do
     stub_const('ActiveRecord::RecordNotUnique', Class.new(StandardError))
 
-    %i[persist_intent_mandate persist_cart_mandate
-       persist_payment_mandate persist_settlement].each do |helper|
+    %i[persist_checkout_mandate persist_payment_mandate persist_settlement].each do |helper|
       allow(executor).to receive(helper).and_call_original
     end
 
@@ -245,8 +212,8 @@ RSpec.shared_context 'with a pay replayed with the identical mandate chain' do
 
     Kiosk.configuration.payment_provider = instance_double(Kiosk::PaymentProviders::Base, setup_required?: false)
     %i[capture resume].each do |call|
-      allow(Kiosk.configuration.payment_provider).to receive(call) do |cart, **_kwargs|
-        captures << cart.id
+      allow(Kiosk.configuration.payment_provider).to receive(call) do |checkout, **_kwargs|
+        captures << checkout.reference
         settlement
       end
     end
@@ -255,81 +222,49 @@ end
 
 # ── The pay path's statements carry BIND PARAMETERS, not spliced values ───
 #
-# K-654: these four INSERTs (and the spending-cap SELECT) used to be heredocs
+# K-654: these INSERTs (and the spending-cap SELECT) used to be heredocs
 # with every field run through a private `q()` = `connection.quote`. This
 # group asserts the shape that replaced it — `$N` placeholders, values handed
 # over separately and in order — and, above all, that `connection.quote` is
-# not reachable from the pay path at all. A quoted value inside an assembled
-# string is safe exactly as long as nobody forgets one; there is now nothing
-# to forget, and that is the property worth a test.
+# not reachable from the pay path at all.
 #
 # What this group deliberately does NOT claim is that the values are STORED
 # correctly: a fake connection cannot know what Postgres makes of a bind's
 # type. That is `executor_persistence_spec.rb`, against a real database.
-RSpec.shared_context 'with dated mandates' do
-  include_context 'with a fake executor connection'
-
-  let(:expires_at) { Time.at(1_800_000_071).utc }
-  let(:intent) do
-    Kiosk::Mandate::IntentMandate.new(
-      id: 'intent-1', user_id: 'u-1', agent_id: 'a-1', issuer: 'https://demo.example',
-      scope: 'groceries', cap_amount_cents: 5000, currency: 'eur',
-      expires_at: expires_at, created_at: expires_at, raw_jws: 'intent-jws'
-    )
-  end
-  let(:cart) do
-    Kiosk::Mandate::CartMandate.new(
-      id: 'cart-1', intent_mandate_id: 'intent-1', user_id: 'u-1', agent_id: 'a-1',
-      issuer: 'https://demo.example', line_items: [{ 'sku' => 'pizza', 'qty' => 1 }],
-      total_amount_cents: 1599, currency: 'eur', expires_at: expires_at,
-      created_at: expires_at, raw_jws: 'cart-jws'
-    )
-  end
-  let(:payment) do
-    Kiosk::Mandate::PaymentMandate.new(
-      id: 'pay-1', cart_mandate_id: 'cart-1', user_id: 'u-1', agent_id: 'a-1',
-      issuer: 'https://demo.example', payment_method: 'pm_card_visa',
-      amount_cents: 1599, currency: 'eur', expires_at: expires_at,
-      created_at: expires_at, raw_jws: 'payment-jws'
-    )
-  end
-end
-
 RSpec.shared_context 'with pay-path persistence (bind parameters)' do
   subject(:executor) { described_class.new(connection: connection, identity: identity) }
 
-  include_context 'with dated mandates'
+  include_context 'with pay mandates'
+
+  let(:expires_at) { Time.at(1_800_000_071).utc }
 
   before { Kiosk.configure { |c| c.schema = 'kiosk' } }
 end
 
-RSpec.shared_context 'with a really signed mandate chain' do
-  include ExecutorSpecCurrencyHelpers
-
+# The real verifier over really signed mandates, so the answer is read end to end.
+RSpec.shared_context 'with really signed mandates' do
+  include_context 'with a checkout to pay'
   include_context 'with the executor instance a call builds'
 
-  let(:agent_key)  { OpenSSL::PKey::RSA.generate(2048) }
-  let(:issuer)     { 'https://demo.example' }
-  let(:identity)   { build_identity(agent_id: 'agent-1', user_id: 'u-1') }
-  let(:future)     { (Time.current + 600).to_i }
   let(:connection) { FakeConnection.new }
 
   before do
-    Kiosk.reset!
-    Kiosk.configure { |c| c.issuer = issuer }
-    agent_idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-    allow(agent_idp).to receive(:agent_payment_key).with('agent-1').and_return(agent_key.public_key)
-    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(agent_idp)
     allow(Kiosk::Server::SessionContext).to receive(:open) { |**_kw, &blk| blk.call }
-    { persist_intent_mandate: 'intent-row', persist_cart_mandate: 'cart-row',
-      persist_payment_mandate: 'pay-row', persist_settlement: 's-1' }.each do |helper, value|
+    { persist_checkout_mandate: 'checkout-row', persist_payment_mandate: 'pay-row', persist_settlement: 's-1' }.each do |helper, value|
       allow(executor).to receive(helper).and_return(value)
     end
     Kiosk.configuration.payment_provider = instance_double(
       Kiosk::PaymentProviders::Base,
-      capture: { psp_reference: 'pi_1', settled_amount_cents: 1599, settled_at: Time.current },
+      capture: { psp_reference: 'pi_1', settled_amount_cents: 450, settled_at: Time.current },
       setup_required?: false
     )
+  end
+
+  def answered(currency)
+    checkout_jwt = checkout(currency:)
+    pair = Kiosk::TestHelpers::Mandate.pay(agent_key, checkout_jwt)
+    described_class.call(kind: :pay, args: { checkout_mandate: pair[:checkout], payment_mandate: pair[:payment] },
+                         identity: identity, connection: connection).payload[:currency]
   end
 end
 
@@ -735,7 +670,7 @@ RSpec.describe Kiosk::Server::Executor do
   describe 'verb :pay' do
     include_context 'with verb :pay'
 
-    it 'verifies the trail, captures, and returns the full settlement payload' do
+    it 'verifies the mandates, captures, and returns the full settlement payload' do
       result = pay
       expect(result.kind).to eq(:value)
       expect(result.payload).to include(
@@ -746,26 +681,21 @@ RSpec.describe Kiosk::Server::Executor do
       )
     end
 
-    it 'threads the SERVER-generated intent id into the cart persist (FK chain, not the signed id)' do
+    it 'threads the SERVER-generated checkout id into the payment mandate persist (FK chain)' do
       pay
-      expect(executor).to have_received(:persist_cart_mandate).with(cart, intent_row_id: 'intent-row')
+      expect(executor).to have_received(:persist_payment_mandate).with(checkout_row_id: 'checkout-row', payment: payment)
     end
 
-    it 'threads the SERVER-generated cart id into the payment mandate persist (FK chain)' do
-      pay
-      expect(executor).to have_received(:persist_payment_mandate).with(cart_row_id: 'cart-row', payment: payment)
-    end
-
-    it 'threads the SERVER-generated cart id into the settlement persist (FK chain)' do
+    it 'threads the SERVER-generated checkout id into the settlement persist (FK chain)' do
       pay
       expect(executor).to have_received(:persist_settlement)
-        .with(cart_row_id: 'cart-row', cart: cart, settled: settlement)
+        .with(checkout_row_id: 'checkout-row', checkout: checkout, settled: settlement)
     end
 
-    it 'passes the assistant-presented payment_method to capture' do
+    it 'passes the assistant-presented payment instrument to capture' do
       pay
       expect(Kiosk.configuration.payment_provider).to have_received(:capture)
-        .with(cart, payment_method: 'pm_card_visa')
+        .with(checkout, payment_method: 'pm_card_visa')
     end
   end
 
@@ -787,7 +717,7 @@ RSpec.describe Kiosk::Server::Executor do
       expect(Kiosk.configuration.payment_provider).to have_received(:capture)
     end
 
-    it 'proceeds when spent + cart total is within the cap' do
+    it 'proceeds when spent + checkout total is within the cap' do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
       allow(executor).to receive(:spent_in_window).and_return(1000) # +1599 = 2599 <= 5000
       result = pay
@@ -815,7 +745,7 @@ RSpec.describe Kiosk::Server::Executor do
       expect(Kiosk.configuration.payment_provider).not_to have_received(:capture)
     end
 
-    it 'binds the acting agent_id, the cart currency and the window to the one tally statement' do
+    it 'binds the acting agent_id, the checkout currency and the window to the one tally statement' do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
       Kiosk.configuration.spending_cap_window_days = 7
       tally = nil
@@ -827,10 +757,10 @@ RSpec.describe Kiosk::Server::Executor do
       expect(tally).to eq(['a-1', 'eur', 7])
     end
 
-    # K-551: the tally must be scoped to the cart's currency — summing cents
-    # across currencies is meaningless (4999 USD is not within a 5000 EUR cap),
-    # and a cross-currency sum could erode the cap. The cart here is EUR.
-    it "scopes the settled-total tally to the cart's currency (not currency-blind)" do
+    # K-551: the tally must be scoped to the checkout's currency — summing
+    # cents across currencies is meaningless (4999 USD is not within a 5000
+    # EUR cap), and a cross-currency sum could erode the cap.
+    it "scopes the settled-total tally to the checkout's currency (not currency-blind)" do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'eur' } }
       allow(executor).to receive(:spent_in_window).and_return(0)
       pay
@@ -841,7 +771,7 @@ RSpec.describe Kiosk::Server::Executor do
   describe "verb :pay spending cap's currency" do
     include_context 'with verb :pay'
 
-    it "refuses a cart in a currency other than the cap's, before capture" do
+    it "refuses a checkout in a currency other than the cap's, before capture" do
       Kiosk.configuration.spending_cap = ->(**) { { amount_cents: 5000, currency: 'usd' } }
       allow(executor).to receive(:spent_in_window)
       expect { pay }.to raise_error(Kiosk::Server::Errors::SpendingCapExceeded) { |e|
@@ -862,17 +792,16 @@ RSpec.describe Kiosk::Server::Executor do
   describe 'verb :pay phase-1 errors' do
     include_context 'with verb :pay'
 
-    # N2: a unique-violation surfacing from phase-1 persistence (same signed
-    # mandate replayed) is a 409 Conflict, not a 500. Matched by class NAME so
-    # the gem needn't load ActiveRecord in its own unit env.
+    # N2: a unique-violation surfacing from phase-1 persistence (the same
+    # signed mandates replayed) is a 409 Conflict, not a 500. Matched by class
+    # NAME so the gem needn't load ActiveRecord in its own unit env.
     it 'maps a phase-1 unique violation to Errors::Conflict (409)' do
       stub_const('ActiveRecord::RecordNotUnique', Class.new(StandardError))
-      allow(executor).to receive(:persist_intent_mandate)
+      allow(executor).to receive(:persist_checkout_mandate)
         .and_raise(ActiveRecord::RecordNotUnique.new('dup key'))
-      # K-850: the violation alone no longer decides the answer — the executor
-      # asks whether THIS chain already settled. Here nothing did (the insert
-      # never ran), so the settled-replay lookup finds no row and the 409 the
-      # example is about is the one that reaches the caller.
+      # K-850: the violation alone does not decide the answer — the executor
+      # asks whether THIS pair already settled. Here nothing did (the insert
+      # never ran), so the lookup finds no row and the 409 reaches the caller.
       connection.next_exec_result = []
 
       expect { pay }
@@ -880,11 +809,11 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     it 'lets a non-unique phase-1 error propagate unchanged (not remapped to Conflict)' do
-      allow(Kiosk::Server::MandateVerifier).to receive(:verify_cart)
-        .and_raise(Kiosk::Server::Errors::Forbidden.new('cart exceeds intent cap'))
+      allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment)
+        .and_raise(Kiosk::Server::Errors::Forbidden.new('payment amount/currency does not match the checkout'))
 
       expect { pay }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /cap/)
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /does not match the checkout/)
     end
 
     # An agentless principal (user_idp web/mobile session, agent_id nil)
@@ -895,7 +824,7 @@ RSpec.describe Kiosk::Server::Executor do
 
       expect { pay(as: agentless) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /agent identity/) { |e| expect(e.http_status).to eq(403) }
-      expect(Kiosk::Server::MandateVerifier).not_to have_received(:verify_intent)
+      expect(Kiosk::Server::MandateVerifier).not_to have_received(:verify_checkout)
     end
   end
 
@@ -904,9 +833,9 @@ RSpec.describe Kiosk::Server::Executor do
 
     it 'does not capture when phase-1 persistence raises a unique violation' do
       stub_const('ActiveRecord::RecordNotUnique', Class.new(StandardError))
-      allow(executor).to receive(:persist_intent_mandate)
+      allow(executor).to receive(:persist_checkout_mandate)
         .and_raise(ActiveRecord::RecordNotUnique.new('dup key'))
-      connection.next_exec_result = [] # no settlement for this chain (K-850)
+      connection.next_exec_result = [] # no settlement for this pair (K-850)
       expect { pay }
         .to raise_error(Kiosk::Server::Errors::Conflict)
       expect(Kiosk.configuration.payment_provider).not_to have_received(:capture)
@@ -918,7 +847,7 @@ RSpec.describe Kiosk::Server::Executor do
       in_tx_at_capture = nil
       Kiosk.configuration.payment_provider = instance_double(Kiosk::PaymentProviders::Base)
       allow(Kiosk.configuration.payment_provider).to receive(:setup_required?).and_return(false)
-      allow(Kiosk.configuration.payment_provider).to receive(:capture) do |_cart, **_kwargs|
+      allow(Kiosk.configuration.payment_provider).to receive(:capture) do |_checkout, **_kwargs|
         in_tx_at_capture = connection.in_transaction?
         settlement
       end
@@ -932,8 +861,8 @@ RSpec.describe Kiosk::Server::Executor do
     include_context 'with verb :pay'
 
     # I-1: provider.setup_required? == true → clean 402 BEFORE Phase 1 persists
-    # anything.  No mandate ids are burned, so the agent can retry after the
-    # human completes the SetupIntent flow without hitting the UNIQUE idempotency key.
+    # anything, so the checkout is not held and the agent retries after the
+    # human completes the SetupIntent flow.
     it 'raises PaymentSetupRequired (402) before persisting mandates when provider.setup_required? is true' do
       provider = instance_double(Kiosk::PaymentProviders::Base, setup_required?: true)
       Kiosk.configuration.payment_provider = provider
@@ -944,8 +873,7 @@ RSpec.describe Kiosk::Server::Executor do
         expect(e.http_status).to eq(402)
         expect(e.code).to        eq('payment_setup_required')
       }
-      # Phase 1 mandate verification must not run — no mandate burning.
-      expect(Kiosk::Server::MandateVerifier).not_to have_received(:verify_intent)
+      expect(Kiosk::Server::MandateVerifier).not_to have_received(:verify_checkout)
     end
 
     # I-1 belt-and-suspenders: if a card is detached between the pre-check and
@@ -966,9 +894,8 @@ RSpec.describe Kiosk::Server::Executor do
     include_context 'with verb :pay'
 
     # K-545: a card DECLINE (retryable PaymentFailed) becomes a typed
-    # `payment_failed` 402, NOT a raw 500. The mandate trail is already
-    # persisted; the message is the adapter's human-safe string (no PSP
-    # internals) and the hint tells the agent it is safe to retry.
+    # `payment_failed` 402, NOT a raw 500. The message is the adapter's
+    # human-safe string (no PSP internals) and the hint says no money moved.
     it 'maps a retryable capture-time PaymentFailed to Errors::PaymentFailed (402, payment_failed)' do
       fail_capture('the payment method was declined', retryable: true)
 
@@ -983,9 +910,9 @@ RSpec.describe Kiosk::Server::Executor do
     end
 
     # An UNKNOWN outcome (timeout / connectivity — non-retryable PaymentFailed)
-    # is also a typed 402; its hint sends the SAME chain again, which the
+    # is also a typed 402; its hint sends the SAME mandates again, which the
     # operator charges at most once.
-    it 'maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same chain again' do
+    it 'maps a non-retryable capture-time PaymentFailed to a 402 whose hint sends the same mandates again' do
       fail_capture('the payment processor could not confirm the charge; its status is unknown',
                    retryable: false)
 
@@ -994,8 +921,8 @@ RSpec.describe Kiosk::Server::Executor do
       end.to raise_error(Kiosk::Server::Errors::PaymentFailed) { |e|
         expect(e.http_status).to eq(402)
         expect(e.code).to        eq('payment_failed')
-        expect(e.hint).to        include('Send the SAME chain again')
-        expect(e.hint).to        include('Do not sign a new chain')
+        expect(e.hint).to        include('Send the SAME two mandates again')
+        expect(e.hint).to        include('Do not sign new mandates')
       }
     end
   end
@@ -1003,22 +930,14 @@ RSpec.describe Kiosk::Server::Executor do
   describe 'verb :pay missing mandates' do
     include_context 'with verb :pay'
 
-    it 'raises BadRequest when intent_mandate_jws is missing' do
-      expect do
-        pay({ cart_mandate_jws: 'cart-jws', payment_mandate_jws: 'payment-jws' })
-      end.to raise_error(Kiosk::Server::Errors::BadRequest, /intent_mandate_jws/)
+    it 'raises BadRequest when checkout_mandate is missing' do
+      expect { pay({ payment_mandate: 'payment-sd-jwt' }) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /checkout_mandate/)
     end
 
-    it 'raises BadRequest when cart_mandate_jws is missing' do
-      expect do
-        pay({ intent_mandate_jws: 'intent-jws', payment_mandate_jws: 'payment-jws' })
-      end.to raise_error(Kiosk::Server::Errors::BadRequest, /cart_mandate_jws/)
-    end
-
-    it 'raises BadRequest when payment_mandate_jws is missing' do
-      expect do
-        pay({ intent_mandate_jws: 'intent-jws', cart_mandate_jws: 'cart-jws' })
-      end.to raise_error(Kiosk::Server::Errors::BadRequest, /payment_mandate_jws/)
+    it 'raises BadRequest when payment_mandate is missing' do
+      expect { pay({ checkout_mandate: 'checkout-sd-jwt' }) }
+        .to raise_error(Kiosk::Server::Errors::BadRequest, /payment_mandate/)
     end
   end
 
@@ -1026,9 +945,7 @@ RSpec.describe Kiosk::Server::Executor do
     include_context 'with verb :pay'
 
     # T-158: `module_not_served` (501), not `forbidden` (403). "This origin does
-    # not do payments" is a fact about the ORIGIN and is true of every caller,
-    # while `forbidden` is glossed "authenticated, but this identity may not do
-    # this" — the mis-fit K-1207 measured and decision «A» split.
+    # not do payments" is a fact about the ORIGIN and is true of every caller.
     it 'raises ModuleNotServed when no payment_provider is configured' do
       Kiosk.configuration.payment_provider = nil
       expect { pay }
@@ -1048,13 +965,9 @@ RSpec.describe Kiosk::Server::Executor do
         }
     end
 
-    # K-800: THE ORIGIN ANSWERS BEFORE THE ARGUMENTS DO. `pay` is drawn on every
-    # mounted host, and a host with no payment_provider answers it with
-    # `module_not_served` at 501 — but the three mandate guards used to run
-    # first, so an empty POST at a payment-free origin came back `400
-    # args.intent_mandate_jws required`: an instruction to sign three mandates,
-    # from an origin that could never settle them. The example sends NO
-    # arguments at all, which is exactly the case that wrong order got wrong.
+    # K-800: THE ORIGIN ANSWERS BEFORE THE ARGUMENTS DO. An empty POST at a
+    # payment-free origin answers `module_not_served`, never an instruction to
+    # sign mandates an origin could never settle.
     it 'answers a payment-free origin with module_not_served even when NO mandates are sent (K-800)' do
       Kiosk.configuration.payment_provider = nil
       expect { pay({}) }
@@ -1062,100 +975,124 @@ RSpec.describe Kiosk::Server::Executor do
     end
   end
 
-  describe 'verb :pay replayed with the identical mandate chain' do
-    include_context 'with a pay replayed with the identical mandate chain'
+  describe 'verb :pay replayed with the identical mandates' do
+    include_context 'with a pay replayed with the identical mandates'
 
     # THE ONE-CHARGE ASSERTION, and since K-850 also the IDEMPOTENCE one.
-    # Same args, twice: the second call re-presents `intent-1`, the row is
-    # already there, and the unique violation lands in phase 1 — BEFORE phase
-    # 2 — where the executor asks whether THIS chain already settled. It did,
-    # so the replay is answered with the settlement the first call returned.
-    # The card is charged exactly once and no second settlement is minted.
+    # Same args, twice: the second call re-presents `cm-1`, the row is already
+    # there, and the unique violation lands in phase 1 — BEFORE phase 2 — where
+    # the executor asks whether THIS pair already settled. It did, so the
+    # replay is answered with the settlement the first call returned.
     it 'charges once and replays the ORIGINAL settlement the second time (K-850)' do
       first = pay
-      expect(first.payload).to include(settlement_id: 'row-4')
+      expect(first.payload).to include(settlement_id: 'row-3')
 
       second = pay
 
       expect(second.kind).to eq(:value)
       expect(second.payload).to eq(first.payload)
-      expect(captures).to eq(['cart-1'])
+      expect(captures).to eq(['cm-1'])
       expect(inserted.count { |table, _| table == 'settlements' }).to eq(1)
     end
 
-    # A `409` on a replay would not have been idempotence — it would have been
-    # a different answer to the same request, and one carrying none of the
-    # settlement facts the assistant is missing. Pinned as its own example so
-    # the regression reads as what it is.
     it 'does not answer a settled replay with an error at all (K-850)' do
       pay
 
-      expect do
-        pay
-      end.not_to raise_error
+      expect { pay }.not_to raise_error
     end
 
-    # THE REACHABLE DOUBLE CHARGE, pinned so nobody has to take §11.6's word
-    # for it. A client that answers a lost response by MINTING A FRESH CHAIN
-    # collides with nothing: new `id`s, new rows, a second capture. Nothing in
-    # the engine can tell this from a genuine second purchase — which is
-    # exactly why the rule "retry the identical chain, never a fresh one"
-    # lives in the spec and in skill.md rather than in the executor.
-    it 'charges TWICE when the retry mints a fresh chain (the case §11.6 forbids)' do
+    # A second pair the assistant signs for a checkout already settled holds
+    # the checkout's live slot, so it answers 409 before any capture.
+    it 'refuses a second pair for a settled checkout, before any capture' do
+      pay
+      stub_second_pair
+
+      expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/)
+      expect(captures).to eq(['cm-1'])
+    end
+
+    # A second pair for ANOTHER checkout is another purchase: nothing in the
+    # engine can tell it from a genuine one, which is why "retry the identical
+    # pair, never a new one" lives in the spec and the skill.
+    it 'charges again for a pair that pays another checkout' do
+      pay
+      stub_second_pair(checkout_hash: 'hash-2')
+
       pay
 
-      stub_fresh_chain
-
-      pay
-
-      expect(captures).to eq(%w[cart-1 cart-2])
+      expect(captures).to eq(%w[cm-1 cm-2])
     end
   end
 
   describe 'verb :pay replay boundary' do
-    include_context 'with a pay replayed with the identical mandate chain'
+    include_context 'with a pay replayed with the identical mandates'
 
-    # A chain whose charge was declined is closed: no money moved under it, and
-    # a repeat answers `409 conflict` before any capture.
-    it 'answers 409 conflict to a repeat of a declined chain' do
+    before do
       allow(Kiosk.configuration.payment_provider).to receive(:capture)
         .and_raise(Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true))
-      expect do
-        pay
-      end.to raise_error(Kiosk::Server::Errors::PaymentFailed)
+    end
 
-      expect do
-        pay
-      end.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
+    # A pair whose charge was declined is closed: no money moved under it, and
+    # a repeat answers `409 conflict` before any capture.
+    it 'answers 409 conflict to a repeat of a declined pair' do
+      expect { pay }.to raise_error(Kiosk::Server::Errors::PaymentFailed)
+
+      expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/) { |e|
         expect(e.http_status).to eq(409)
         expect(e.code).to        eq('conflict')
       }
       expect(inserted.count { |table, _| table == 'settlements' }).to eq(0)
     end
 
-    # AND THE OTHER HALF OF THE BOUNDARY: a settled cart `id` re-presented
-    # with DIFFERENT signed bytes is not this request, so it is not handed
-    # this request's settlement.
-    it 'refuses a settled cart id re-presented with different bytes (K-850)' do
-      pay
-      tampered = Kiosk::Mandate::CartMandate.new(**cart.to_h, raw_jws: 'cart-jws-TAMPERED')
-      allow(Kiosk::Server::MandateVerifier).to receive_messages(verify_cart: tampered, verify_payment: payment)
+    # The decline frees the checkout: a new pair for it is a new attempt.
+    it 'settles a new pair for the same checkout after a declined charge' do
+      expect { pay }.to raise_error(Kiosk::Server::Errors::PaymentFailed)
+      allow(Kiosk.configuration.payment_provider).to receive(:capture) do |checkout, **_kwargs|
+        captures << checkout.reference
+        settlement
+      end
+      stub_second_pair
 
-      expect do
-        pay
-      end.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/)
-      expect(captures).to eq(['cart-1'])
+      expect(pay.payload).to include(psp_reference: 'pi_1')
+      expect(captures).to eq(['cm-2'])
+    end
+
+    # A second live pair for one checkout while the first is still unresolved
+    # would be a second charge, so it is refused before any capture.
+    it 'answers 409 to a second live pair for one checkout, before any capture' do
+      allow(Kiosk.configuration.payment_provider).to receive(:capture)
+        .and_raise(Kiosk::PaymentProviders::PaymentFailed.new('unknown', retryable: false))
+      expect { pay }.to raise_error(Kiosk::Server::Errors::PaymentFailed)
+      stub_second_pair
+
+      expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict)
+      expect(Kiosk.configuration.payment_provider).to have_received(:capture).once
+    end
+
+    # A settled checkout mandate re-presented with DIFFERENT signed bytes is
+    # not this request, so it is not handed this request's settlement.
+    it 'refuses a settled reference re-presented with different bytes (K-850)' do
+      allow(Kiosk.configuration.payment_provider).to receive(:capture) do |checkout, **_kwargs|
+        captures << checkout.reference
+        settlement
+      end
+      pay
+      tampered = Kiosk::Mandate::CheckoutMandate.new(**checkout.to_h, sd_jwt: 'checkout-sd-jwt-TAMPERED')
+      allow(Kiosk::Server::MandateVerifier).to receive_messages(verify_checkout: tampered, verify_payment: payment)
+
+      expect { pay }.to raise_error(Kiosk::Server::Errors::Conflict, /already processed/)
+      expect(captures).to eq(['cm-1'])
     end
   end
 
   describe 'verb :pay phase-3 window' do
-    include_context 'with a pay replayed with the identical mandate chain'
+    include_context 'with a pay replayed with the identical mandates'
 
     # The capture succeeds and phase 3 — the transaction that records it —
-    # fails. The identical chain sent again charges under the same cart id,
+    # fails. The identical pair sent again charges under the same reference,
     # which the PSP's idempotency key turns into the first charge's answer,
     # and writes the missing settlement.
-    it 'resumes a chain whose capture ran but whose settlement was never written' do
+    it 'resumes a pair whose capture ran but whose settlement was never written' do
       allow(executor).to receive(:persist_settlement)
         .and_raise(StandardError, 'connection reset during settlement insert')
       expect { pay }.to raise_error(StandardError, /connection reset/)
@@ -1165,7 +1102,7 @@ RSpec.describe Kiosk::Server::Executor do
       result = pay
 
       expect(result.payload).to include(psp_reference: 'pi_1', settled_amount_cents: 1599)
-      expect(captures).to eq(%w[cart-1 cart-1])
+      expect(captures).to eq(%w[cm-1 cm-1])
       expect(Kiosk.configuration.payment_provider).to have_received(:resume).once
       expect(inserted.count { |table, _| table == 'settlements' }).to eq(1)
     end
@@ -1174,66 +1111,47 @@ RSpec.describe Kiosk::Server::Executor do
   describe 'pay-path mandate inserts' do
     include_context 'with pay-path persistence (bind parameters)'
 
-    it 'binds every intent-mandate value and splices none of them into the SQL' do
-      id = executor.send(:persist_intent_mandate, intent)
+    it 'binds every checkout-mandate value, with line_items as JSON text under an explicit ::jsonb cast' do
+      id = executor.send(:persist_checkout_mandate, checkout)
       sql, name, binds = last_statement
 
       expect(id).to   eq('row-1') # the RETURNING id the fake hands back
-      expect(name).to eq('Kiosk intent_mandate insert')
-      expect(sql).to  include('VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now(), $9)')
-      expect(binds).to eq([
-                            'intent-1', 'u-1', 'a-1', 'https://demo.example', 'groceries',
-                            5000, 'eur', expires_at, 'intent-jws'
-                          ])
-    end
-
-    it 'binds every cart-mandate value, with line_items as JSON text under an explicit ::jsonb cast' do
-      executor.send(:persist_cart_mandate, cart, intent_row_id: 'intent-row')
-      sql, name, binds = last_statement
-
-      expect(name).to eq('Kiosk cart_mandate insert')
+      expect(name).to eq('Kiosk checkout_mandate insert')
       expect(sql).to  include('VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, now(), $10)')
       expect(binds).to eq([
-                            'cart-1', 'intent-row', 'u-1', 'a-1', 'https://demo.example',
-                            %([{"sku":"pizza","qty":1}]), 1599, 'eur', expires_at, 'cart-jws'
+                            'cm-1', 'hash-1', 'u-1', 'a-1', 'https://demo.example',
+                            %([{"sku":"pizza","qty":1}]), 1599, 'eur', expires_at, 'checkout-sd-jwt'
                           ])
     end
-  end
-
-  describe 'pay-path payment and settlement inserts' do
-    include_context 'with pay-path persistence (bind parameters)'
 
     it 'binds every payment-mandate value' do
-      executor.send(:persist_payment_mandate, cart_row_id: 'cart-row', payment: payment)
+      executor.send(:persist_payment_mandate, checkout_row_id: 'checkout-row', payment: payment)
       sql, name, binds = last_statement
 
       expect(name).to eq('Kiosk payment_mandate insert')
       expect(sql).to  include('VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), $10)')
       expect(binds).to eq([
-                            'pay-1', 'cart-row', 'u-1', 'a-1', 'https://demo.example',
-                            'pm_card_visa', 1599, 'eur', expires_at, 'payment-jws'
+                            'pm-1', 'checkout-row', 'u-1', 'a-1', 'https://demo.example',
+                            'pm_card_visa', 1599, 'eur', expires_at, 'payment-sd-jwt'
                           ])
     end
+  end
 
-    it "binds the 'on_file' sentinel rather than an empty payment_method" do
-      on_file = Kiosk::Mandate::PaymentMandate.new(**payment.to_h, payment_method: '')
-      executor.send(:persist_payment_mandate, cart_row_id: 'cart-row', payment: on_file)
-
-      expect(last_statement[2][5]).to eq('on_file')
-    end
+  describe 'pay-path settlement insert' do
+    include_context 'with pay-path persistence (bind parameters)'
 
     it 'binds every settlement value' do
-      executor.send(:persist_settlement, cart_row_id: 'cart-row', cart: cart,
+      executor.send(:persist_settlement, checkout_row_id: 'checkout-row', checkout: checkout,
                                          settled: { psp_reference: 'pi_1', settled_amount_cents: 1599 })
       sql, name, binds = last_statement
 
       expect(name).to eq('Kiosk settlement insert')
       expect(sql).to  include('VALUES ($1, $2, $3, $4, $5, $6, $7, now())')
-      expect(binds).to eq(['cart-row', 'u-1', 'a-1', 'https://demo.example', 'pi_1', 1599, 'eur'])
-      # K-948: no `raw_jws` column, so no literal `''` trailing the VALUES list.
-      # Asserted on the COLUMN list as well, because a statement that still
-      # named the column while binding nothing would satisfy the line above.
-      expect(sql).not_to include('raw_jws')
+      expect(binds).to eq(['checkout-row', 'u-1', 'a-1', 'https://demo.example', 'pi_1', 1599, 'eur'])
+      # Nobody signs a settlement: no `sd_jwt` column, asserted on the column
+      # list too, because a statement naming it while binding nothing would
+      # satisfy the line above.
+      expect(sql).not_to include('sd_jwt')
     end
   end
 
@@ -1242,19 +1160,18 @@ RSpec.describe Kiosk::Server::Executor do
 
     # The regression guard the row is actually about: no value — not even a
     # harmless one — may appear in the statement text, and `quote` must never
-    # be called. Written over all four helpers so a future fifth statement
-    # that forgets is caught by the same assertion.
+    # be called. Written over all three helpers so a future statement that
+    # forgets is caught by the same assertion.
     it 'never calls connection.quote and never lets a value reach the SQL text' do
       allow(connection).to receive(:quote)
 
-      intent_row = executor.send(:persist_intent_mandate, intent)
-      cart_row   = executor.send(:persist_cart_mandate, cart, intent_row_id: intent_row)
-      executor.send(:persist_payment_mandate, cart_row_id: cart_row, payment: payment)
-      executor.send(:persist_settlement, cart_row_id: cart_row, cart: cart,
+      checkout_row = executor.send(:persist_checkout_mandate, checkout)
+      executor.send(:persist_payment_mandate, checkout_row_id: checkout_row, payment: payment)
+      executor.send(:persist_settlement, checkout_row_id: checkout_row, checkout: checkout,
                                          settled: { psp_reference: 'pi_1', settled_amount_cents: 1599 })
 
       expect(connection).not_to have_received(:quote)
-      expect(connection.exec_queries.size).to eq(4)
+      expect(connection.exec_queries.size).to eq(3)
       connection.exec_queries.each do |sql, _name, binds|
         binds.each do |value|
           next if value.is_a?(Integer) # a bare number is not evidence of splicing
@@ -1293,8 +1210,8 @@ RSpec.describe Kiosk::Server::Executor do
       expect(binds).to eq([identity.agent_id, 'eur', 7])
     end
 
-    # The BIND is folded too, so a caller that hands over a cart the verifier
-    # never canonicalised still reads the same tally.
+    # The BIND is folded too, so a caller that hands over a checkout the
+    # verifier never canonicalised still reads the same tally.
     it 'canonicalises the currency it binds' do
       spent('EUR', nil)
       _sql, _name, binds = last_statement
@@ -1305,18 +1222,16 @@ RSpec.describe Kiosk::Server::Executor do
 
   # The currency `pay` ANSWERS with is the operator's canonical one. The
   # `verb :pay` groups stub `MandateVerifier.verify_*`, so this group runs the
-  # REAL verifier on a really signed chain and reads the answer.
+  # REAL verifier on really signed mandates and reads the answer.
   describe 'the currency a `pay` answers with (§11.3, K-1257)' do
-    include_context 'with a really signed mandate chain'
+    include_context 'with really signed mandates'
 
-    it 'answers `eur` to a chain signed `EUR` throughout' do
+    it 'answers `eur` to a checkout in `EUR`' do
       expect(answered('EUR')).to eq('eur')
     end
 
-    # The already-canonical case is here so the example above cannot be read as
-    # "the answer is always eur because the fixture says eur": this one is the
-    # control, and it is the only one where the answer equals the input bytes.
-    it 'answers `eur` to a chain already signed `eur`, which is the only case where the bytes match' do
+    # The control: the only case where the answer equals the input bytes.
+    it 'answers `eur` to a checkout already in `eur`, which is the only case where the bytes match' do
       expect(answered('eur')).to eq('eur')
     end
   end

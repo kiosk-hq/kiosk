@@ -82,13 +82,12 @@ RSpec.describe Kiosk::Server::SigningKey do
     let(:jwk) { signing_key.to_jwk }
 
     it 'has the required RSA-public members' do
-      expect(jwk.keys).to include(:kty, :use, :alg, :kid, :n, :e)
+      expect(jwk.keys).to include(:kty, :use, :kid, :n, :e)
     end
 
-    it 'advertises kty=RSA, use=sig, alg=RS256' do
-      expect(jwk[:kty]).to eq('RSA')
-      expect(jwk[:use]).to eq('sig')
-      expect(jwk[:alg]).to eq('RS256')
+    it 'advertises kty=RSA and use=sig, and no alg: the key signs RS256 and PS256' do
+      expect(jwk).to include(kty: 'RSA', use: 'sig')
+      expect(jwk).not_to have_key(:alg)
     end
 
     it 'encodes n and e as base64url without padding' do

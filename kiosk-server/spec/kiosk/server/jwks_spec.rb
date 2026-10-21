@@ -25,7 +25,7 @@ RSpec.describe Kiosk::Server::Jwks do
       json = JSON.generate(described_class.build(keys: [key]))
       parsed = JSON.parse(json, symbolize_names: true)
       jwk = parsed[:keys].first
-      expect(jwk.keys).to match_array(%i[kty use alg kid n e])
+      expect(jwk.keys).to match_array(%i[kty use kid n e])
     end
   end
 end

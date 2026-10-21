@@ -129,30 +129,23 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
       end
     end
 
-    describe 'mandates' do
-      let(:agent_key) { OpenSSL::PKey::RSA.generate(2048) }
+    describe 'checkouts' do
+      include_context 'with a checkout to pay'
 
-      before do
-        idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-        allow(idp).to receive(:agent_payment_key).with('a-1').and_return(agent_key.public_key)
-        allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
+      let(:identity) { build_identity(agent_id: 'agent-1', user_id: 'u-1') }
+
+      def mandate_for(origin)
+        Kiosk::TestHelpers::Mandate.pay(agent_key, Kiosk.with_issuer(origin) { checkout })[:checkout]
       end
 
-      def intent(iss)
-        JWT.encode({ iss: iss, agent_id: 'a-1', user_id: 'u-1', id: 'intent-1', scope: 'groceries',
-                     cap_amount_cents: 500, currency: 'eur', iat: Time.now.to_i, exp: Time.now.to_i + 600 },
-                   agent_key, 'RS256')
-      end
-
-      it 'accepts a mandate issued for the origin being served and refuses one issued for the other' do
-        identity = build_identity(agent_id: 'a-1', user_id: 'u-1')
+      it 'accepts a checkout signed for the origin being served and refuses one signed for the other' do
         verified = Kiosk.with_issuer(b) do
-          Kiosk::Server::MandateVerifier.verify_intent(raw_jws: intent(b), identity: identity)
+          Kiosk::Server::MandateVerifier.verify_checkout(sd_jwt: mandate_for(b), identity: identity)
         end
         expect(verified.issuer).to eq(b)
         expect do
-          Kiosk.with_issuer(b) { Kiosk::Server::MandateVerifier.verify_intent(raw_jws: intent(a), identity: identity) }
-        end.to raise_error(Kiosk::Server::Errors::Forbidden, /issuer mismatch/)
+          Kiosk.with_issuer(b) { Kiosk::Server::MandateVerifier.verify_checkout(sd_jwt: mandate_for(a), identity: identity) }
+        end.to raise_error(Kiosk::Server::Errors::Forbidden, /not from this origin/)
       end
     end
 

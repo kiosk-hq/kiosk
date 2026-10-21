@@ -22,10 +22,10 @@ module PaymentClaimSpecHelpers
       @captures = []
     end
 
-    def capture(cart, **)
-      @captures << cart.id
-      during&.call(cart)
-      { psp_reference: "pi_#{cart.id}", settled_amount_cents: cart.total_amount_cents, settled_at: Time.now.utc }
+    def capture(checkout, **)
+      @captures << checkout.reference
+      during&.call(checkout)
+      { psp_reference: "pi_#{checkout.reference}", settled_amount_cents: checkout.total_amount_cents, settled_at: Time.now.utc }
     end
   end
 
@@ -42,7 +42,7 @@ module PaymentClaimSpecHelpers
     include Kiosk::Owned
   end
 
-  ClaimSpecCart = Struct.new(:id, :user_id, :currency, :total_amount_cents, :line_items, keyword_init: true)
+  ClaimSpecCheckout = Struct.new(:reference, :user_id, :currency, :total_amount_cents, :line_items, keyword_init: true)
 
   def self.included(group)
     group.before do
@@ -73,9 +73,9 @@ module PaymentClaimSpecHelpers
 
   def configure_operator
     Kiosk.configure do |c|
-      c.schema             = SCHEMA
-      c.cart_price_checker = ->(id, lines) { (seen << [id, lines]) && price }
-      c.after_payment      = ->(id) { paid << id }
+      c.schema = SCHEMA
+      c.checkout_price_checker = ->(id, lines) { (seen << [id, lines]) && price }
+      c.after_payment = ->(id) { paid << id }
     end
     serve_topic
   end
@@ -110,48 +110,37 @@ module PaymentClaimSpecHelpers
                                                     reference: 'booking_id', query: 'my_bookings')
   end
 
-  def cart_for(id, total: 500, user_id: payer, currency: 'EUR', items: [])
-    ClaimSpecCart.new(id: SecureRandom.uuid, user_id: user_id, currency: currency, total_amount_cents: total,
-                      line_items: [{ 'booking_id' => id }, *items])
+  def checkout_for(id, total: 500, user_id: payer, items: [])
+    ClaimSpecCheckout.new(reference: SecureRandom.uuid, user_id: user_id, currency: 'eur', total_amount_cents: total,
+                          line_items: [{ 'booking_id' => id }, *items])
   end
 
   def status(id = row) = conn.select_value(%(SELECT payment_status FROM "#{schema}".payables WHERE id = '#{id}'))
 
   def settle(id)
     agent = SecureRandom.uuid
-    intent = insert_intent(agent)
-    cart = insert_cart(agent, intent, id)
+    checkout = insert_checkout(agent, id)
     conn.execute(<<~SQL.squish)
-      INSERT INTO "#{schema}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference,
+      INSERT INTO "#{schema}".settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
         settled_amount_cents, currency, settled_at)
-      VALUES ('#{cart}', '#{payer}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
+      VALUES ('#{checkout}', '#{payer}', '#{agent}', 'i', 'psp', 500, 'EUR', now())
     SQL
   end
 
-  def insert_intent(agent)
+  def insert_checkout(agent, id, reference: SecureRandom.uuid)
     conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{schema}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents,
-        currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{payer}', '#{agent}', 'i', 's', 1000, 'EUR', now() + interval '1 day', 'j')
-      RETURNING id
-    SQL
-  end
-
-  def insert_cart(agent, intent, id, mandate_id: SecureRandom.uuid)
-    conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{schema}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items,
-        total_amount_cents, currency, expires_at, raw_jws)
-      VALUES ('#{mandate_id}', '#{intent}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',
+      INSERT INTO "#{schema}".checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items,
+        total_amount_cents, currency, expires_at, sd_jwt)
+      VALUES ('#{reference}', '#{reference}', '#{payer}', '#{agent}', 'i', '[{"booking_id": "#{id}"}]',
         500, 'EUR', now() + interval '1 day', 'j')
       RETURNING id
     SQL
   end
 
-  # The engine's record of a cart the assistant signed, as phase 1 writes it.
-  def record(cart)
-    agent = SecureRandom.uuid
-    insert_cart(agent, insert_intent(agent), cart.line_items.first['booking_id'], mandate_id: cart.id)
-    cart
+  # The engine's record of a checkout mandate the assistant signed, as phase 1 writes it.
+  def record(checkout)
+    insert_checkout(SecureRandom.uuid, checkout.line_items.first['booking_id'], reference: checkout.reference)
+    checkout
   end
 
   def put_status(value) = conn.execute(%(UPDATE "#{schema}".payables SET payment_status = '#{value}' WHERE id = '#{row}'))
@@ -161,19 +150,19 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   describe '#settled' do
     include PaymentClaimSpecHelpers
 
-    it 'runs after_payment for the row the settled cart names, and the capture alone does not' do
-      cart = cart_for(row)
-      claim.capture(cart)
+    it 'runs after_payment for the row the settled checkout names, and the capture alone does not' do
+      checkout = checkout_for(row)
+      claim.capture(checkout)
       expect(paid).to be_empty
 
-      claim.settled(cart)
+      claim.settled(checkout)
       expect(paid).to eq([row])
     end
 
     it 'logs a failing after_payment and answers nil' do
       Kiosk.configuration.after_payment = ->(_) { raise 'refund refused' }
 
-      expect { expect(claim.settled(cart_for(row))).to be_nil }.to output(/after_payment failed for #{row}: refund refused/).to_stderr
+      expect { expect(claim.settled(checkout_for(row))).to be_nil }.to output(/after_payment failed for #{row}: refund refused/).to_stderr
     end
   end
 
@@ -184,7 +173,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     include PaymentClaimSpecHelpers
 
     it 'captures once and flips the row to paid when the capture returns' do
-      claim.capture(cart_for(row))
+      claim.capture(checkout_for(row))
 
       expect(psp.captures.size).to eq(1)
       expect(status).to eq('paid')
@@ -193,28 +182,28 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     it 'publishes the row as paying while its capture is outstanding' do
       psp.during = ->(_) { expect(status).to eq('paying') }
 
-      claim.capture(cart_for(row))
+      claim.capture(checkout_for(row))
     end
 
-    it 'refuses a second chain for the same row while the first is still capturing, before the PSP' do
+    it 'refuses a second pair for the same row while the first is still capturing, before the PSP' do
       refusal = nil
       psp.during = lambda do |_|
         psp.during = nil
-        claim.capture(cart_for(row))
+        claim.capture(checkout_for(row))
       rescue Kiosk::Server::Errors::Forbidden => e
         refusal = e
       end
 
-      claim.capture(cart_for(row))
+      claim.capture(checkout_for(row))
 
       expect(refusal&.message).to include('payment in progress', 'my_bookings')
       expect(psp.captures.size).to eq(1)
     end
 
-    it 'refuses a fresh chain for a row already paid, before the PSP' do
-      claim.capture(cart_for(row))
+    it 'refuses a fresh pair for a row already paid, before the PSP' do
+      claim.capture(checkout_for(row))
 
-      expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
+      expect { claim.capture(checkout_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
       expect(psp.captures.size).to eq(1)
     end
 
@@ -222,80 +211,65 @@ RSpec.describe Kiosk::Server::PaymentClaim do
       conn.execute(%(UPDATE "#{schema}".payables SET payment_status = 'paying' WHERE id = '#{row}'))
       settle(row)
 
-      expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
+      expect { claim.capture(checkout_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
       expect(status).to eq('paid')
       expect(psp.captures).to be_empty
     end
 
     it "hands the operator's catalog the row and the item lines, and charges its price" do
       item = { 'sku' => 'room', 'qty' => 1, 'price_cents' => 500 }
-      claim.capture(cart_for(row, items: [item]))
+      claim.capture(checkout_for(row, items: [item]))
 
       expect(seen).to eq([[row, [item]]])
       expect(psp.captures.size).to eq(1)
     end
 
-    it "releases the claim when the cart total is not the operator's price, and charges nothing" do
-      expect { claim.capture(cart_for(row, total: 1)) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /cart total 1 does not equal .*500/)
+    it "releases the claim when the checkout total is not the operator's price, and charges nothing" do
+      expect { claim.capture(checkout_for(row, total: 1)) }
+        .to raise_error(Kiosk::Server::Errors::Forbidden, /checkout total 1 does not equal .*500/)
       expect([status, psp.captures]).to eq(['unpaid', []])
     end
 
     it "refuses with the reason the operator's catalog gives" do
-      Kiosk.configuration.cart_price_checker = ->(*) { 'cart items do not mirror the booking' }
+      Kiosk.configuration.checkout_price_checker = ->(*) { 'items do not mirror the booking' }
 
-      expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, 'cart items do not mirror the booking')
+      expect { claim.capture(checkout_for(row)) }.to raise_error(Kiosk::Server::Errors::Forbidden, 'items do not mirror the booking')
       expect([status, psp.captures]).to eq(['unpaid', []])
-    end
-
-    it 'refuses priced lines that do not sum to the cart total, before asking the catalog' do
-      lines = [{ 'sku' => 'a', 'qty' => 2, 'price_cents' => 200 }]
-      expect { claim.capture(cart_for(row, items: lines)) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /does not equal the sum of its line items 400/)
-      zero = [{ 'sku' => 'a', 'qty' => 0, 'price_cents' => 500 }]
-      expect { claim.capture(cart_for(row, items: zero)) }
-        .to raise_error(Kiosk::Server::Errors::Forbidden, /positive qty and price_cents/)
-      expect([seen, psp.captures]).to eq([[], []])
     end
 
     it 'releases on a definitive decline and keeps the claim on an unknown outcome' do
       psp.during = ->(_) { raise Kiosk::PaymentProviders::PaymentFailed.new('declined', retryable: true) }
-      expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::PaymentProviders::PaymentFailed)
+      expect { claim.capture(checkout_for(row)) }.to raise_error(Kiosk::PaymentProviders::PaymentFailed)
       expect(status).to eq('unpaid')
 
       psp.during = ->(_) { raise Kiosk::PaymentProviders::PaymentFailed.new('timeout', retryable: false) }
-      expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::PaymentProviders::PaymentFailed)
+      expect { claim.capture(checkout_for(row)) }.to raise_error(Kiosk::PaymentProviders::PaymentFailed)
       expect(status).to eq('paying')
     end
 
     it 'releases the claim when the PSP asks for payment setup first' do
       psp.during = ->(_) { raise Kiosk::PaymentProviders::SetupRequired }
-      expect { claim.capture(cart_for(row)) }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
+      expect { claim.capture(checkout_for(row)) }.to raise_error(Kiosk::PaymentProviders::SetupRequired)
       expect(status).to eq('unpaid')
     end
 
     it 'answers the capture and logs when the paid event cannot be sent' do
       allow(Kiosk::Server::Events).to receive(:emit).and_raise('event store down')
 
-      expect { expect(claim.capture(cart_for(row))).to include(settled_amount_cents: 500) }
+      expect { expect(claim.capture(checkout_for(row))).to include(settled_amount_cents: 500) }
         .to output(/could not mark #{row} paid: event store down/).to_stderr
       expect(status).to eq('paid')
     end
 
-    it 'refuses a cart in another currency, a cart naming no single row, and an unknown row' do
-      expect { claim.capture(cart_for(row, currency: 'USD')) }.to raise_error(Kiosk::Server::Errors::Forbidden, /EUR/)
-      two = cart_for(row).tap { |c| c.line_items += [{ 'booking_id' => SecureRandom.uuid }] }
+    it 'refuses a checkout naming no single row, and an unknown row' do
+      two = checkout_for(row).tap { |c| c.line_items += [{ 'booking_id' => SecureRandom.uuid }] }
       expect { claim.capture(two) }.to raise_error(Kiosk::Server::Errors::Forbidden, /exactly one booking_id/)
-      expect { claim.capture(cart_for(SecureRandom.uuid)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /not found/)
+      expect { claim.capture(checkout_for(SecureRandom.uuid)) }.to raise_error(Kiosk::Server::Errors::Forbidden, /not found/)
       expect(psp.captures).to be_empty
     end
 
-    it 'answers a reference that is not a uuid with a 400, not a database error' do
-      expect { claim.capture(cart_for('1; DROP TABLE x')) }.to raise_error(Kiosk::Server::Errors::BadRequest, /not a uuid/)
-    end
-
     it "refuses a principal paying for another principal's row" do
-      expect { claim.capture(cart_for(row, user_id: SecureRandom.uuid)) }
+      expect { claim.capture(checkout_for(row, user_id: SecureRandom.uuid)) }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /not found or not yours/)
       expect([status, psp.captures]).to eq(['unpaid', []])
     end
@@ -312,14 +286,14 @@ RSpec.describe Kiosk::Server::PaymentClaim do
 
     it 'builds the same claim over another PSP' do
       other = PaymentClaimSpecHelpers::ClaimSpecPsp.new
-      claim.over(other).capture(cart_for(row))
+      claim.over(other).capture(checkout_for(row))
 
       expect([other.captures.size, psp.captures.size]).to eq([1, 0])
     end
 
     it 'moves updated_at with the status' do
       conn.execute(%(UPDATE "#{schema}".payables SET updated_at = now() - interval '1 day' WHERE id = '#{row}'))
-      claim.capture(cart_for(row))
+      claim.capture(checkout_for(row))
 
       expect(PaymentClaimSpecHelpers::Payable.find(row).updated_at).to be > 1.minute.ago
     end
@@ -328,32 +302,32 @@ RSpec.describe Kiosk::Server::PaymentClaim do
       id = conn.select_value(%(INSERT INTO "#{schema}".untimed_payables (user_id) VALUES ('#{owner}') RETURNING id))
       untimed = described_class.new(psp, currency: 'eur', model: 'PaymentClaimSpecHelpers::Untimed',
                                          reference: 'booking_id', query: 'my_bookings')
-      untimed.capture(cart_for(id))
+      untimed.capture(checkout_for(id))
 
       expect(PaymentClaimSpecHelpers::Untimed.find(id).payment_status).to eq('paid')
     end
   end
 
-  # A repeat of a chain whose capture did not complete (§11.6).
+  # A repeat of a pair of mandates whose capture did not complete (§11.6).
   describe '#resume' do
     include PaymentClaimSpecHelpers
 
-    it 'charges the newest unfinished chain again and flips the row to paid' do
+    it 'charges the newest unfinished pair again and flips the row to paid' do
       put_status('paying')
-      claim.resume(record(cart_for(row)))
+      claim.resume(record(checkout_for(row)))
 
       expect([psp.captures.size, status]).to eq([1, 'paid'])
     end
 
     it 'claims a row the first call never reached' do
-      claim.resume(record(cart_for(row)))
+      claim.resume(record(checkout_for(row)))
 
       expect([psp.captures.size, status]).to eq([1, 'paid'])
     end
 
     it 'charges again a row flipped to paid whose settlement was never written' do
       put_status('paid')
-      claim.resume(record(cart_for(row)))
+      claim.resume(record(checkout_for(row)))
 
       expect([psp.captures.size, status]).to eq([1, 'paid'])
     end
@@ -362,21 +336,21 @@ RSpec.describe Kiosk::Server::PaymentClaim do
   describe '#resume refusals' do
     include PaymentClaimSpecHelpers
 
-    it 'refuses an older chain while a newer unfinished chain holds the row, before the PSP' do
-      older = record(cart_for(row))
-      record(cart_for(row))
+    it 'refuses an older pair while a newer unfinished pair holds the row, before the PSP' do
+      older = record(checkout_for(row))
+      record(checkout_for(row))
       put_status('paying')
 
-      expect { claim.resume(older) }.to raise_error(Kiosk::Server::Errors::Forbidden, /payment in progress under another chain/)
+      expect { claim.resume(older) }.to raise_error(Kiosk::Server::Errors::Forbidden, /payment in progress under other mandates/)
       expect(psp.captures).to be_empty
     end
 
-    it 'refuses a chain for a row another chain settled, before the PSP' do
-      cart = record(cart_for(row))
+    it 'refuses a pair for a row another pair settled, before the PSP' do
+      checkout = record(checkout_for(row))
       put_status('paid')
       settle(row)
 
-      expect { claim.resume(cart) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
+      expect { claim.resume(checkout) }.to raise_error(Kiosk::Server::Errors::Forbidden, /already paid/)
       expect(psp.captures).to be_empty
     end
   end
@@ -386,7 +360,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     include PaymentClaimSpecHelpers
 
     it 'pushes one payment event to the owner when the capture returns' do
-      claim.capture(cart_for(row))
+      claim.capture(checkout_for(row))
       claim.mark_paid!(row)
 
       expect(events.since(owner, 0).map { it.slice('topic', 'subject', 'data') })
@@ -394,7 +368,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     end
 
     it 'pushes data that satisfies the payload_schema the origin serves for the topic' do
-      claim.capture(cart_for(row))
+      claim.capture(checkout_for(row))
       claim.announce(row, 'refunded')
 
       served = JSON.parse(Kiosk::Server::SchemaDocument.json).fetch('events').find { it['name'] == 'payment' }
@@ -416,8 +390,8 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     end
   end
 
-  # Kiosk::Payable: what the payable row publishes about its money, and the cart
-  # that pays for it.
+  # Kiosk::Payable: what the payable row publishes about its money, and the
+  # checkout that pays for it.
   describe Kiosk::Payable do
     include PaymentClaimSpecHelpers
 
@@ -426,7 +400,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
     it 'reads unpaid, pending while the capture runs, paid after it, and refunded' do
       states = [read.payment_state]
       psp.during = ->(_) { states << read.payment_state }
-      claim.capture(cart_for(row))
+      claim.capture(checkout_for(row))
       states << read.payment_state
       put_status('refunded')
 
@@ -448,13 +422,17 @@ RSpec.describe Kiosk::Server::PaymentClaim do
       expect([read.settlement&.currency, read(other).settlement, read(other).settled_currency]).to eq(['EUR', nil, nil])
     end
 
-    it 'builds the cart a PaymentClaim accepts: a line naming the row, then the priced lines' do
-      cart = read.cart([{ sku: 'room', qty: 2, price_cents: 250 }])
+    it "signs the checkout a PaymentClaim accepts, for the row's owner: a line naming the row, then the priced lines" do
+      Kiosk.configure do |c|
+        c.issuer      = 'https://demo.example'
+        c.signing_key = CHECKOUT_SIGNING_KEY
+      end
+      claims = JWT.decode(read.checkout([{ sku: 'room', qty: 2, price_cents: 250 }]),
+                          CHECKOUT_SIGNING_KEY.public_key, true, algorithms: ['PS256']).first
 
-      expect(cart).to eq(currency: 'eur', total_amount_cents: 500,
-                         line_items: [{ 'booking_id' => row }, { sku: 'room', qty: 2, price_cents: 250 }])
-      signed = cart_for(row, total: cart[:total_amount_cents], items: [cart[:line_items].last.stringify_keys])
-      claim.capture(signed)
+      expect(claims).to include('sub' => owner, 'currency' => 'eur', 'total_amount_cents' => 500,
+                                'line_items' => [{ 'booking_id' => row }, { 'sku' => 'room', 'qty' => 2, 'price_cents' => 250 }])
+      claim.capture(checkout_for(row, total: claims['total_amount_cents'], items: [claims['line_items'].last]))
       expect(status).to eq('paid')
     end
   end

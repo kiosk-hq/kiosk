@@ -50,7 +50,7 @@ module WireController402Spec
   def pay_env
     bearer_env('/kiosk/pay', agent_token,
                method: 'POST', 'CONTENT_TYPE' => 'application/json',
-               input: JSON.generate(intent_mandate_jws: 'x', cart_mandate_jws: 'y', payment_mandate_jws: 'z'))
+               input: JSON.generate(checkout_mandate: 'x~', payment_mandate: 'y~'))
   end
 
   def agent_token

@@ -214,7 +214,7 @@ module Kiosk
           raise ArgumentError,
                 'Kiosk.configuration.issuer must be set before serving ' \
                 '/.well-known/kiosk.json — the issuer ' \
-                'is the AP2 mandate `iss` anchor'
+                'is the origin a token or a checkout names'
         end
       end
 

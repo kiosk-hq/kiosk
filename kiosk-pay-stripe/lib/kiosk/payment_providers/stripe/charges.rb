@@ -7,10 +7,10 @@ module Kiosk
       module Charges
         private
 
-        def charge(cart_mandate, customer_id, payment_method)
+        def charge(checkout_mandate, customer_id, payment_method)
           @stripe.payment_intents.create(
-            intent_params(cart_mandate, customer_id, payment_method),
-            { idempotency_key: "#{customer_id}-#{cart_mandate.id}-capture" }
+            intent_params(checkout_mandate, customer_id, payment_method),
+            { idempotency_key: "#{customer_id}-#{checkout_mandate.reference}-capture" }
           )
         rescue ::Stripe::CardError => e
           # A definitive decline: nothing was charged, so a retry is safe.
@@ -20,16 +20,16 @@ module Kiosk
           raise unknown_outcome('could not confirm the charge')
         end
 
-        def intent_params(cart_mandate, customer_id, payment_method)
+        def intent_params(checkout_mandate, customer_id, payment_method)
           {
-            amount: cart_mandate.total_amount_cents,
-            currency: cart_mandate.currency,
+            amount: checkout_mandate.total_amount_cents,
+            currency: checkout_mandate.currency,
             customer: customer_id,
             payment_method: payment_method,
             payment_method_types: ['card'],
             off_session: true,
             confirm: true,
-            metadata: { cart_mandate_id: cart_mandate.id }
+            metadata: { checkout_mandate: checkout_mandate.reference }
           }
         end
 

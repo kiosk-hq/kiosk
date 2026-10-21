@@ -4,7 +4,7 @@ require 'securerandom'
 require 'kiosk/reputation'
 require_relative '../../support/postgres'
 
-# Writes one settled chain for a customer, as the pay path records it.
+# Writes one settled checkout for a customer, as the pay path records it.
 module ReputationFactorsSpecHelpers
   def create_tables
     Kiosk.configure { |c| c.schema = schema }
@@ -17,26 +17,20 @@ module ReputationFactorsSpecHelpers
   # The settlement's PSP reference.
   def settle(cents, at:)
     agent = SecureRandom.uuid
-    cart  = insert_cart(agent, insert_intent(agent, cents), cents)
+    checkout = insert_checkout(agent, cents)
     reference = "pi_#{SecureRandom.hex(4)}"
     conn.execute(<<~SQL.squish)
-      INSERT INTO "#{schema}".settlements (cart_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
-      VALUES ('#{cart}', '#{user}', '#{agent}', 'i', '#{reference}', #{cents}, 'eur', '#{at.utc.iso8601}')
+      INSERT INTO "#{schema}".settlements (checkout_mandate_id, user_id, agent_id, issuer, psp_reference, settled_amount_cents, currency, settled_at)
+      VALUES ('#{checkout}', '#{user}', '#{agent}', 'i', '#{reference}', #{cents}, 'eur', '#{at.utc.iso8601}')
     SQL
     reference
   end
 
-  def insert_intent(agent, cents)
+  def insert_checkout(agent, cents)
+    reference = SecureRandom.uuid
     conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{schema}".intent_mandates (mandate_id, user_id, agent_id, issuer, scope, cap_amount_cents, currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{user}', '#{agent}', 'i', 's', #{cents}, 'eur', now(), 'j') RETURNING id
-    SQL
-  end
-
-  def insert_cart(agent, intent, cents)
-    conn.select_value(<<~SQL.squish)
-      INSERT INTO "#{schema}".cart_mandates (mandate_id, intent_mandate_id, user_id, agent_id, issuer, line_items, total_amount_cents, currency, expires_at, raw_jws)
-      VALUES ('#{SecureRandom.uuid}', '#{intent}', '#{user}', '#{agent}', 'i', '[]', #{cents}, 'eur', now(), 'j') RETURNING id
+      INSERT INTO "#{schema}".checkout_mandates (reference, checkout_hash, user_id, agent_id, issuer, line_items, total_amount_cents, currency, expires_at, sd_jwt)
+      VALUES ('#{reference}', '#{reference}', '#{user}', '#{agent}', 'i', '[]', #{cents}, 'eur', now(), 'j') RETURNING id
     SQL
   end
 end

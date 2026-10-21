@@ -43,6 +43,7 @@ require_relative 'support/memory_revocation_store'
 require_relative 'support/memory_event_store'
 require_relative 'support/memory_auth_challenge_store'
 require_relative 'support/verb_route_call'
+require_relative 'support/checkout_payment'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|

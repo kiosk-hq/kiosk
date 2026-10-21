@@ -53,12 +53,12 @@ RSpec.shared_context 'with a live Stripe test key' do
 
   let(:user_id) { "integration-test-user-#{Process.pid}" }
 
-  let(:cart_mandate) do
-    Kiosk::Mandate::CartMandate.new(
-      id: "cart-int-#{Process.pid}", intent_mandate_id: 'i', user_id: user_id,
+  let(:checkout_mandate) do
+    Kiosk::Mandate::CheckoutMandate.new(
+      reference: "checkout-int-#{Process.pid}", checkout_hash: 'h', user_id: user_id,
       agent_id: 'a', issuer: 'https://demo.example',
       line_items: [{ sku: 'pizza', qty: 1 }], total_amount_cents: 1599,
-      currency: 'eur', expires_at: nil, created_at: nil, raw_jws: 'jws'
+      currency: 'eur', expires_at: nil, sd_jwt: 'sd-jwt'
     )
   end
 end
@@ -93,7 +93,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe, :integration do
 
       expect(adapter.saved_method?(user_id: user_id)).to be true
 
-      captured = adapter.capture(cart_mandate, payment_method: nil)
+      captured = adapter.capture(checkout_mandate, payment_method: nil)
       expect(captured[:settled_amount_cents]).to eq(1599)
       expect(captured[:psp_reference]).to start_with('pi_')
     end

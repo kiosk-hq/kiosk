@@ -172,60 +172,51 @@ RSpec.describe Kiosk::Server::SchemaDefinitions do
   describe '.mandates_sql' do
     subject(:sql) { described_class.mandates_sql(schema: 'kiosk', user_id_type: :uuid) }
 
-    it 'creates the three signed mandate tables and the settlements receipt table' do
-      expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".intent_mandates')
-      expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".cart_mandates')
+    it 'creates the two signed mandate tables and the settlements receipt table' do
+      expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".checkout_mandates')
       expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".payment_mandates')
       expect(sql).to include('CREATE TABLE IF NOT EXISTS "kiosk".settlements')
+      expect(sql).not_to include('intent_mandates')
     end
 
-    it 'links cart→intent, payment→cart, and settlement→cart by FK' do
-      expect(sql).to include('REFERENCES "kiosk".intent_mandates(id)')
-      expect(sql).to include('REFERENCES "kiosk".cart_mandates(id)')
+    it 'links payment→checkout and settlement→checkout by FK' do
+      expect(sql.scan('REFERENCES "kiosk".checkout_mandates(id)').size).to eq(2)
     end
 
-    it 'stores money as bigint cents and keeps raw JWS' do
-      expect(sql).to include('cap_amount_cents  bigint')
+    it 'stores money as bigint cents and keeps each signed SD-JWT' do
+      expect(sql).to include('total_amount_cents bigint')
       expect(sql).to include('settled_amount_cents bigint')
-      expect(sql.scan('raw_jws').size).to eq(3)
+      expect(sql.scan(/sd_jwt +text NOT NULL/).size).to eq(2)
     end
 
-    # The three SIGNED mandate tables each carry the JWS the assistant
+    # The two SIGNED mandate tables each carry the SD-JWT the assistant
     # signed; a settlement is a server-minted receipt nobody signs.
-    it 'gives settlements NO raw_jws column — nobody signs a server-minted receipt' do
+    it 'gives settlements NO sd_jwt column — nobody signs a server-minted receipt' do
       settlements_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.settlements.*?\);/m]
-      expect(settlements_table).not_to match(/^\s*raw_jws\s+\w/)
+      expect(settlements_table).not_to match(/^\s*sd_jwt\s+\w/)
     end
 
     it 'keeps a server-generated uuid PK on every table (never caller-supplied)' do
-      expect(sql.scan(/\bid +uuid PRIMARY KEY DEFAULT gen_random_uuid\(\)/).size).to eq(4)
+      expect(sql.scan(/\bid +uuid PRIMARY KEY DEFAULT gen_random_uuid\(\)/).size).to eq(3)
     end
 
-    it 'stores the agent-signed mandate id in a mandate_id text NOT NULL column on all three signed mandates' do
-      # intent, cart, and payment_mandates are all agent-signed and carry a signed id;
-      # settlements is a server-side PSP receipt with no agent-signed mandate_id.
-      expect(sql.scan(/mandate_id +text NOT NULL/).size).to eq(3)
-      settlements_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.settlements.*?\);/m]
-      # No standalone `mandate_id <type>` column on settlements.
-      expect(settlements_table).not_to match(/^\s*mandate_id\s+\w/)
+    it 'keys each signed mandate by its reference, unique per principal' do
+      expect(sql.scan(/^ *reference +text NOT NULL/).size).to eq(2)
+      expect(sql.scan('UNIQUE (user_id, reference)').size).to eq(2)
     end
 
-    it 'enforces per-principal uniqueness of the signed id on all three signed mandates' do
-      expect(sql).to include('UNIQUE (user_id, mandate_id)')
-      # one for intent_mandates, one for cart_mandates, one for payment_mandates
-      expect(sql.scan('UNIQUE (user_id, mandate_id)').size).to eq(3)
+    it 'holds one live checkout mandate per checkout: a declined one frees it' do
+      expect(sql).to include('ON "kiosk".checkout_mandates (user_id, checkout_hash) WHERE declined_at IS NULL')
+      expect(sql).to include('CREATE UNIQUE INDEX IF NOT EXISTS idx_checkout_mandates_live_checkout')
     end
 
-    it 'anchors idempotency with one settlement per cart on settlements' do
-      expect(sql).to include('UNIQUE (cart_mandate_id)')
+    it 'anchors idempotency with one settlement per checkout mandate on settlements' do
+      expect(sql).to include('UNIQUE (checkout_mandate_id)')
     end
 
-    it 'the signed payment_mandates table carries mandate_id, payment_method, amount_cents, and UNIQUE(user_id, mandate_id)' do
+    it 'the signed payment_mandates table carries reference, payment_instrument and amount_cents' do
       payment_table = sql[/CREATE TABLE IF NOT EXISTS "kiosk"\.payment_mandates.*?\);/m]
-      expect(payment_table).to include('mandate_id')
-      expect(payment_table).to include('payment_method')
-      expect(payment_table).to include('amount_cents')
-      expect(payment_table).to include('UNIQUE (user_id, mandate_id)')
+      expect(payment_table).to include('reference', 'payment_instrument', 'amount_cents', 'UNIQUE (user_id, reference)')
     end
 
     it 'the settlements table carries psp_reference and settled_amount_cents' do

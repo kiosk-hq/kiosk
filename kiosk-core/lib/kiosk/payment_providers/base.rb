@@ -31,8 +31,10 @@ module Kiosk
                                    'whose setup_required? can answer true'
       end
 
+      # @param checkout_mandate [Kiosk::Mandate::CheckoutMandate] what to charge, and its key
+      # @param payment_method [String, nil] the PSP payment-method id; nil charges the saved card
       # @return [Hash] `psp_reference`, `settled_amount_cents`, `settled_at`
-      def capture(_cart_mandate, payment_method:)
+      def capture(_checkout_mandate, payment_method:)
         raise NotImplementedError, "#{self.class}#capture must be implemented by the adapter"
       end
 
@@ -44,9 +46,10 @@ module Kiosk
         raise NotImplementedError, "#{self.class}#refund must be implemented by an adapter whose operator refunds"
       end
 
-      # A repeat of a chain whose capture did not complete. The adapter keys its
-      # capture by the cart mandate id, so a second capture cannot charge twice.
-      def resume(cart_mandate, payment_method:) = capture(cart_mandate, payment_method:)
+      # A repeat of a pair of mandates whose capture did not complete. The adapter
+      # keys its capture by the checkout mandate's `reference`, so a second
+      # capture cannot charge twice.
+      def resume(checkout_mandate, payment_method:) = capture(checkout_mandate, payment_method:)
     end
   end
 end

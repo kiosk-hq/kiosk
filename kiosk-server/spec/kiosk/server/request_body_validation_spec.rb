@@ -31,9 +31,8 @@ module RequestBodyValidationSpec
                                       signed: 'eyJ.eyJ.SIG' },
     'POST <endpoint>/auth/unlink' => { agent_id: 'a-1' },
     'POST <endpoint>/agents/kyc' => { kyc_jws: 'eyJ.eyJ.SIG' },
-    'POST <endpoint>/pay' => { intent_mandate_jws: 'eyJ.eyJ.SIG',
-                               cart_mandate_jws: 'eyJ.eyJ.SIG',
-                               payment_mandate_jws: 'eyJ.eyJ.SIG' }
+    'POST <endpoint>/pay' => { checkout_mandate: 'eyJ.eyJ.SIG~WyJz~',
+                               payment_mandate: 'eyJ.eyJ.SIG~WyJz~' }
   }.freeze
 
   # The member each refused body gets wrong, and how. A wrong TYPE rather than
@@ -45,7 +44,7 @@ module RequestBodyValidationSpec
     'POST <endpoint>/auth/claim' => :code,
     'POST <endpoint>/auth/unlink' => :agent_id,
     'POST <endpoint>/agents/kyc' => :kyc_jws,
-    'POST <endpoint>/pay' => :cart_mandate_jws
+    'POST <endpoint>/pay' => :checkout_mandate
   }.freeze
 
   def rv = Kiosk::Server::RequestValidation

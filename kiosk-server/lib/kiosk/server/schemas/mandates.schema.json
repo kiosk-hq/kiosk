@@ -2,62 +2,112 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/mandates.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/mandates.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
-  "title": "Kiosk AP2 payment mandates",
-  "description": "The decoded JWS payloads of the three AP2 mandates and the POST /kiosk/pay request body. On the wire each mandate is an RS256 compact JWS string; these schemas describe the decoded claim sets.",
+  "title": "Kiosk payment: the checkout and the AP2 v0.2 mandates",
+  "description": "The checkout an operator signs, the two closed AP2 v0.2 mandates an AI assistant signs to pay it, the POST <endpoint>/pay request body and the settlement it answers. On the wire the checkout is a compact PS256 JWT, and each mandate is a compact SD-JWT whose one disclosure is the mandate; these schemas describe the decoded objects.",
   "$defs": {
-    "baseClaims": {
+    "currency": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z]{3}$",
+      "description": "An ISO 4217 ALPHA-3 code, and the `pattern` is the domain: three ASCII letters, either case. An operator MAY refuse more (Section 11.1)."
+    },
+    "merchant": {
       "type": "object",
-      "description": "Claims every mandate MUST carry.",
-      "required": ["id", "user_id", "agent_id", "iss", "iat", "exp"],
+      "description": "The AP2 Merchant object. In a Kiosk checkout, `id` and `website` are the operator's issuer.",
+      "required": ["id", "name"],
       "properties": {
-        "id": { "type": "string", "description": "Unique mandate id." },
-        "user_id": { "type": "string", "description": "MUST match the authenticated identity (string-compared)." },
-        "agent_id": { "type": "string", "description": "MUST match the authenticated identity (string-compared)." },
-        "iss": { "type": "string", "description": "MUST equal the provider issuer from /.well-known/kiosk.json, verbatim." },
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "website": { "type": "string" }
+      }
+    },
+    "checkout": {
+      "type": "object",
+      "description": "The claims of the `checkout_jwt` an operator answers for an item to pay for: a JWT it signs PS256 with the key of its JWKS (Section 11.7).",
+      "required": ["iss", "sub", "iat", "merchant", "currency", "total_amount_cents", "line_items"],
+      "properties": {
+        "iss": { "type": "string", "description": "The operator's issuer, verbatim from kiosk.json." },
+        "sub": { "type": "string", "description": "The account the checkout is for. Only that account can pay it." },
         "iat": { "type": "integer" },
-        "exp": { "type": "integer", "description": "An exp already in the past is rejected." }
+        "merchant": { "$ref": "#/$defs/merchant" },
+        "currency": { "$ref": "#/$defs/currency" },
+        "total_amount_cents": { "type": "integer", "minimum": 1, "description": "MUST be positive." },
+        "line_items": { "type": "array", "minItems": 1, "items": { "type": "object" }, "description": "The first names the item to pay for; the others carry `qty` and `price_cents`, which sum to the total." }
       }
     },
-    "intent": {
-      "allOf": [{ "$ref": "#/$defs/baseClaims" }],
+    "sdJwtPayload": {
       "type": "object",
-      "required": ["cap_amount_cents", "currency"],
+      "description": "The payload of the issuer-signed JWT of a mandate. Its header is {\"alg\": \"RS256\", \"typ\": \"dc+sd-jwt\"}, signed with the AI assistant's registered key. `delegate_payload` holds one digest, and the one disclosure it names is the mandate.",
+      "required": ["delegate_payload"],
       "properties": {
-        "cap_amount_cents": { "type": "integer", "minimum": 1, "description": "Spending cap; there is no \"no cap\" spelling -- a nil cap is rejected. MUST be positive; a non-positive amount is rejected." },
-        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "An ISO 4217 ALPHA-3 code, and the `pattern` is the domain: three ASCII letters, either case. An operator MAY refuse more (Section 11.1)."},
-        "scope": { "type": "string", "description": "Provider-defined scope." }
+        "_sd_alg": { "const": "sha-256" },
+        "delegate_payload": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["..."],
+            "properties": { "...": { "type": "string" } },
+            "additionalProperties": false
+          }
+        }
       }
     },
-    "cart": {
-      "allOf": [{ "$ref": "#/$defs/baseClaims" }],
+    "lifetime": {
       "type": "object",
-      "required": ["intent_mandate_id", "total_amount_cents", "currency", "line_items"],
+      "required": ["iat", "exp"],
       "properties": {
-        "intent_mandate_id": { "type": "string", "description": "MUST equal the intent mandate id; cart total MUST NOT exceed the intent cap." },
-        "total_amount_cents": { "type": "integer", "minimum": 1, "description": "MUST be positive; a non-positive amount is rejected." },
-        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "MUST equal the intent currency, and MUST be an ISO 4217 alpha-3 code -- see the intent's note; equality to another empty string, or to another currency NAME, is not a check." },
-        "line_items": { "type": "array", "minItems": 1, "description": "Provider-defined line items, at least one. The operator matches a settlement to its own record through them." }
+        "iat": { "type": "integer" },
+        "exp": { "type": "integer", "description": "At most 24 hours ahead. An exp already in the past is rejected." }
       }
     },
-    "payment": {
-      "allOf": [{ "$ref": "#/$defs/baseClaims" }],
+    "checkoutMandate": {
+      "allOf": [{ "$ref": "#/$defs/lifetime" }],
       "type": "object",
-      "required": ["cart_mandate_id", "amount_cents", "currency"],
+      "description": "The closed AP2 Checkout Mandate.",
+      "required": ["vct", "checkout_jwt", "checkout_hash"],
       "properties": {
-        "cart_mandate_id": { "type": "string", "description": "MUST equal the cart mandate id." },
-        "amount_cents": { "type": "integer", "minimum": 1, "description": "MUST equal the cart total, same currency. MUST be positive; a non-positive amount is rejected." },
-        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "MUST equal the cart currency, and MUST be an ISO 4217 alpha-3 code." },
-        "payment_method": { "type": "string", "description": "PSP method identifier (e.g. \"on_file\")." }
+        "vct": { "const": "mandate.checkout.1" },
+        "checkout_jwt": { "type": "string", "description": "The checkout_jwt the operator answered, unchanged." },
+        "checkout_hash": { "type": "string", "description": "The base64url SHA-256 of checkout_jwt, with no padding." }
+      }
+    },
+    "paymentMandate": {
+      "allOf": [{ "$ref": "#/$defs/lifetime" }],
+      "type": "object",
+      "description": "The closed AP2 Payment Mandate.",
+      "required": ["vct", "transaction_id", "payee", "payment_amount", "payment_instrument"],
+      "properties": {
+        "vct": { "const": "mandate.payment.1" },
+        "transaction_id": { "type": "string", "description": "The checkout_hash of the checkout mandate." },
+        "payee": { "$ref": "#/$defs/merchant", "description": "The checkout's merchant: its id is the operator's issuer." },
+        "payment_amount": {
+          "type": "object",
+          "required": ["amount", "currency"],
+          "properties": {
+            "amount": { "type": "integer", "minimum": 1, "description": "The checkout's total_amount_cents." },
+            "currency": { "$ref": "#/$defs/currency", "description": "The checkout's currency, compared as a code." }
+          }
+        },
+        "payment_instrument": {
+          "type": "object",
+          "required": ["id", "type"],
+          "properties": {
+            "id": { "type": "string", "minLength": 1, "description": "\"on_file\" pays with the card the human saved through payment_setup." },
+            "type": { "type": "string", "minLength": 1 },
+            "description": { "type": "string" }
+          }
+        }
       }
     },
     "payRequest": {
       "type": "object",
-      "description": "The POST /kiosk/pay request body: the three mandates as compact JWS strings.",
-      "required": ["intent_mandate_jws", "cart_mandate_jws", "payment_mandate_jws"],
+      "description": "The POST <endpoint>/pay request body: the two closed mandates as compact SD-JWT strings.",
+      "required": ["checkout_mandate", "payment_mandate"],
       "properties": {
-        "intent_mandate_jws": { "type": "string" },
-        "cart_mandate_jws": { "type": "string" },
-        "payment_mandate_jws": { "type": "string" }
+        "checkout_mandate": { "type": "string", "pattern": "~$" },
+        "payment_mandate": { "type": "string", "pattern": "~$" }
       }
     },
     "settlement": {
@@ -67,8 +117,8 @@
       "properties": {
         "settlement_id": { "type": "string" },
         "psp_reference": { "type": "string" },
-        "settled_amount_cents": { "type": "integer", "minimum": 1, "description": "The captured amount; equals the cart total. MUST be positive: a settlement exists only for a completed capture, and every mandate amount is already positive." },
-        "currency": { "type": "string", "minLength": 1, "pattern": "^[A-Za-z]{3}$", "description": "The currency of the capture: the cart's currency in the OPERATOR's canonical spelling, which MAY differ byte for byte from the spelling the assistant signed (protocol.md 11.3, 11.5). Compare it as an ISO 4217 code, never as bytes." }
+        "settled_amount_cents": { "type": "integer", "minimum": 1, "description": "The captured amount; equals the checkout total. MUST be positive: a settlement exists only for a completed capture." },
+        "currency": { "$ref": "#/$defs/currency", "description": "The currency of the capture, in the OPERATOR's canonical spelling, which MAY differ byte for byte from the spelling in the checkout (protocol.md 11.3, 11.5). Compare it as an ISO 4217 code, never as bytes." }
       }
     }
   }

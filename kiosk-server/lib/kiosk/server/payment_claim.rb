@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
-require 'kiosk/uuid_check'
-
 module Kiosk
   module Server
     # §11.6 over a PSP adapter: claims the operator's payable row `unpaid →
-    # paying` before the capture, checks the cart against the operator's price,
+    # paying` before the capture, checks the checkout against the operator's price,
     # flips the row to `paid` once the capture returns, tells its owner on the
     # `payment` topic, and runs `c.after_payment` once the settlement is recorded.
     # A refund through it is recorded against the settlement.
@@ -19,7 +17,7 @@ module Kiosk
       attr_reader :currency, :reference
 
       # @param model [String] the payable model's name, e.g. "Order"; it includes Kiosk::Owned and Kiosk::Payable
-      # @param reference [String] the cart line-item key naming the row, e.g. "order_id"
+      # @param reference [String] the checkout line-item key naming the row, e.g. "order_id"
       # @param query [String] the per-user query that publishes the row's payment state
       def initialize(psp, currency:, model:, reference:, query:)
         @psp       = psp
@@ -34,12 +32,12 @@ module Kiosk
       # The same claim over another PSP adapter.
       def over(psp) = self.class.new(psp, **@options)
 
-      def capture(cart_mandate, payment_method: nil) = charge_row(claim!(cart_mandate), cart_mandate, payment_method)
+      def capture(checkout_mandate, payment_method: nil) = charge_row(claim!(checkout_mandate), checkout_mandate, payment_method)
 
       delegate :setup_required?, :setup_url, to: :@psp
 
-      # The settlements whose cart names this row.
-      def settlements(id) = Kiosk::Settlement.joins(:cart_mandate).merge(Kiosk::CartMandate.referencing(@reference => id))
+      # The settlements whose checkout names this row.
+      def settlements(id) = Kiosk::Settlement.joins(:checkout_mandate).merge(Kiosk::CheckoutMandate.referencing(@reference => id))
 
       def settled?(id) = settlements(id).exists?
 
@@ -58,15 +56,15 @@ module Kiosk
 
       private
 
-      def charge_row(id, cart_mandate, payment_method)
-        settled = charge(id, cart_mandate, payment_method)
+      def charge_row(id, checkout_mandate, payment_method)
+        settled = charge(id, checkout_mandate, payment_method)
         mark_paid!(id)
         settled
       end
 
       # Releases the claim when the PSP refuses before any money moved.
-      def charge(id, cart_mandate, payment_method)
-        @psp.capture(cart_mandate, payment_method: payment_method)
+      def charge(id, checkout_mandate, payment_method)
+        @psp.capture(checkout_mandate, payment_method: payment_method)
       rescue Kiosk::PaymentProviders::SetupRequired
         release!(id)
         raise
@@ -75,11 +73,11 @@ module Kiosk
         raise
       end
 
-      def claim!(cart)
-        id = referenced_id(cart)
-        refuse_unclaimable!(id, cart.user_id.to_s) unless @row.take(id, cart.user_id.to_s, from: UNPAID, to: PAYING).positive?
+      def claim!(checkout)
+        id = Lines.reference(checkout.line_items, @reference)
+        refuse_unclaimable!(id, checkout.user_id.to_s) unless @row.take(id, checkout.user_id.to_s, from: UNPAID, to: PAYING).positive?
         begin
-          check_price!(cart, id)
+          check_price!(checkout, id)
         rescue StandardError
           release!(id)
           raise
@@ -87,28 +85,20 @@ module Kiosk
         id
       end
 
-      # The one row the cart's line items name, in the operator's currency.
-      def referenced_id(cart)
-        deny "cart currency #{cart.currency.inspect} rejected — this operator prices in #{@currency.upcase}" unless cart.currency.to_s.downcase == @currency
-        Lines.reference(cart.line_items, @reference)
-      end
-
-      def check_price!(cart, id)
-        total = cart.total_amount_cents.to_i
-        lines = Array(cart.line_items).reject { |li| li[@reference] }
-        Lines.check_sum!(total, lines)
-
-        price = checker.call(id, lines)
+      # The price may have moved since the checkout was signed.
+      def check_price!(checkout, id)
+        total = checkout.total_amount_cents
+        price = checker.call(id, checkout.line_items.reject { |li| li[@reference] })
         deny price if price.is_a?(String)
         return if total == price
 
-        deny "cart total #{total} does not equal this operator's price #{price} for #{noun} #{id} — " \
-             'sign the `cart` that the action which created it returned'
+        deny "checkout total #{total} does not equal this operator's price #{price} for #{noun} #{id}: " \
+             'the price changed after the operator signed the checkout'
       end
 
       def checker
-        Kiosk.configuration.cart_price_checker or
-          raise Errors::ConfigurationError, "PaymentClaim needs c.cart_price_checker, the operator's price"
+        Kiosk.configuration.checkout_price_checker or
+          raise Errors::ConfigurationError, "PaymentClaim needs c.checkout_price_checker, the operator's price"
       end
 
       def refuse_unclaimable!(id, payer)
@@ -123,8 +113,8 @@ module Kiosk
           mark_paid!(id)
           deny "#{noun} #{id} is already paid"
         end
-        deny "#{noun} #{id} has a payment in progress under another chain. Send that chain again, " \
-             'byte for byte: it cannot charge twice. Do not sign a new chain. ' \
+        deny "#{noun} #{id} has a payment in progress under other mandates. Send those mandates again, " \
+             'byte for byte: they cannot charge twice. Do not sign new mandates. ' \
              "GET <endpoint>/#{@query} shows the payment state."
       end
 
@@ -134,62 +124,41 @@ module Kiosk
         raise Errors::Forbidden, message
       end
 
-      # The cart's line items: the one row they name, and the priced lines' sum.
+      # The checkout's line items: the one row they name.
       module Lines
         module_function
 
         def reference(line_items, key)
-          refs = Array(line_items).filter_map { |li| li[key] }.map(&:to_s).uniq
-          deny "cart line_items must reference exactly one #{key}" unless refs.size == 1
-          id = refs.first
-          return id if Kiosk::UuidCheck.valid?(id)
+          refs = line_items.filter_map { |li| li[key] }.uniq
+          return refs.first.to_s if refs.one?
 
-          raise Errors::BadRequest.new("cart line_items #{key} #{id.inspect} is not a uuid",
-                                       hint: "use the `#{key}` this operator returned, verbatim")
-        end
-
-        # The priced lines, when any, sum to the cart total.
-        def check_sum!(total, lines)
-          priced = lines.select { |li| li['price_cents'] }
-          return if priced.empty?
-
-          sum = priced.sum do |li|
-            qty = li['qty'].to_i
-            price = li['price_cents'].to_i
-            deny 'each priced line needs a positive qty and price_cents' if qty <= 0 || price <= 0
-            qty * price
-          end
-          deny "cart total #{total} does not equal the sum of its line items #{sum}" unless total == sum
-        end
-
-        def deny(message)
-          raise Errors::Forbidden, message
+          raise Errors::Forbidden, "checkout line_items must name exactly one #{key}"
         end
       end
 
-      # A repeat of a chain whose capture did not complete. The row stays with
-      # the newest unfinished chain, and the PSP keys the capture by the cart
-      # mandate id, so the repeat cannot charge twice.
+      # A repeat of mandates whose capture did not complete. The row stays with
+      # the newest unfinished checkout mandate, and the PSP keys the capture by
+      # its reference, so the repeat cannot charge twice.
       module Resume
-        def resume(cart_mandate, payment_method: nil) = charge_row(reclaim!(cart_mandate), cart_mandate, payment_method)
+        def resume(checkout_mandate, payment_method: nil) = charge_row(reclaim!(checkout_mandate), checkout_mandate, payment_method)
 
         private
 
-        # The row this repeated chain claimed, or the row it may claim now.
-        def reclaim!(cart)
-          id = referenced_id(cart)
-          payer = cart.user_id.to_s
+        # The row these repeated mandates claimed, or the row they may claim now.
+        def reclaim!(checkout)
+          id = Lines.reference(checkout.line_items, @reference)
+          payer = checkout.user_id.to_s
           status = @row.status(id, payer)
-          return claim!(cart) if status == UNPAID
-          return id if [PAYING, PAID].include?(status) && !settled?(id) && unfinished_chain(id, payer) == cart.id
+          return claim!(checkout) if status == UNPAID
+          return id if [PAYING, PAID].include?(status) && !settled?(id) && unfinished_mandate(id, payer) == checkout.reference
 
           refuse_unclaimable!(id, payer)
         end
 
-        # The signed id of the newest cart for this row that is neither settled nor declined.
-        def unfinished_chain(id, payer)
-          Kiosk::CartMandate.referencing(@reference => id).where(user_id: payer, declined_at: nil)
-                            .where.missing(:settlements).order(created_at: :desc, id: :desc).pick(:mandate_id)
+        # The reference of the newest checkout mandate for this row that is neither settled nor declined.
+        def unfinished_mandate(id, payer)
+          Kiosk::CheckoutMandate.referencing(@reference => id).where(user_id: payer, declined_at: nil)
+                                .where.missing(:settlements).order(created_at: :desc, id: :desc).pick(:reference)
         end
       end
       include Resume
@@ -218,10 +187,10 @@ module Kiosk
       # The operator's work after a payment, which reads the settlement.
       module AfterPayment
         # The executor calls this once, after it records the settlement of
-        # `cart_mandate`, so `c.after_payment` reads the row's `settlement`. A
+        # `checkout_mandate`, so `c.after_payment` reads the row's `settlement`. A
         # failure here never surfaces on the wire: the log carries it.
-        def settled(cart_mandate)
-          id = Lines.reference(cart_mandate.line_items, @reference)
+        def settled(checkout_mandate)
+          id = Lines.reference(checkout_mandate.line_items, @reference)
           Kiosk.configuration.after_payment&.call(id)
         rescue StandardError => e
           FailureLog.report("#{self.class} after_payment failed for #{id}", e)

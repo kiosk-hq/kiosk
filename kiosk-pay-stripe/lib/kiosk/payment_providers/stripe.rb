@@ -72,11 +72,11 @@ module Kiosk
       def saved_method?(user_id:) = !saved_card(user_id).nil?
 
       # Charges the principal's saved card off_session; the mandate's payment method is not used.
-      def capture(cart_mandate, **)
-        customer_id, payment_method = saved_card(cart_mandate.user_id)
+      def capture(checkout_mandate, **)
+        customer_id, payment_method = saved_card(checkout_mandate.user_id)
         raise SetupRequired unless payment_method
 
-        intent = charge(cart_mandate, customer_id, payment_method)
+        intent = charge(checkout_mandate, customer_id, payment_method)
         ensure_paid!(intent)
         {
           psp_reference: intent.id,

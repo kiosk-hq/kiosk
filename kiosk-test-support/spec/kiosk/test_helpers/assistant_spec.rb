@@ -96,27 +96,35 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
   describe '#pay' do
     include_context 'with an assistant and an origin'
 
-    let(:now)    { Time.now.to_i }
-    let(:intent) { { id: 'i1', user_id: 'u1', exp: now + 600, iat: now } }
-    let(:cart)   { { id: 'c1', intent_mandate_id: 'i1', total_amount_cents: 100, currency: 'eur', iss: origin, exp: now + 600, iat: now } }
+    let(:checkout_jwt) do
+      JWT.encode({ iss: origin, sub: 'u1', merchant: { id: origin, name: 'Shop' }, currency: 'eur',
+                   total_amount_cents: 100, line_items: [{ order_id: 'o1' }] }, OpenSSL::PKey::RSA.generate(2048), 'PS256')
+    end
 
-    it "signs the three mandates with the principal's key and binds the payment to the cart" do
+    def sent_mandates(sent) = JSON.parse(sent.first.body).transform_values { Kiosk::TestHelpers::Mandate.content(it) }
+
+    it "signs the two closed mandates with the principal's key and binds the payment to the checkout" do
       stub, sent = requests_to(:post, '/kiosk/pay')
       stub.to_return(json_return(200, 'settlement_id' => 's1'))
 
-      assistant.pay(principal, intent:, cart:)
+      assistant.pay(principal, checkout_jwt)
 
-      mandates = JSON.parse(sent.first.body).transform_values { JWT.decode(it, key.public_key, true, algorithm: 'RS256').first }
-      expect(mandates.transform_values { it['id'] }).to include('intent_mandate_jws' => 'i1', 'cart_mandate_jws' => 'c1')
-      expect(mandates['payment_mandate_jws']).to include('cart_mandate_id' => 'c1', 'amount_cents' => 100, 'currency' => 'eur',
-                                                         'user_id' => 'u1', 'agent_id' => 'a1', 'iss' => origin)
+      body = JSON.parse(sent.first.body)
+      body.each_value { expect(JWT.decode(it.split('~').first, key.public_key, true, algorithm: 'RS256').last['typ']).to eq('dc+sd-jwt') }
+      checkout, payment = sent_mandates(sent).values_at('checkout_mandate', 'payment_mandate')
+      expect(checkout).to include('vct' => 'mandate.checkout.1', 'checkout_jwt' => checkout_jwt,
+                                  'checkout_hash' => Kiosk::TestHelpers::Mandate.digest(checkout_jwt))
+      expect(payment).to include('vct' => 'mandate.payment.1', 'transaction_id' => checkout['checkout_hash'],
+                                 'payee' => { 'id' => origin, 'name' => 'Shop' },
+                                 'payment_amount' => { 'amount' => 100, 'currency' => 'eur' },
+                                 'payment_instrument' => { 'id' => 'on_file', 'type' => 'card' })
     end
 
     it 're-sends the same signed mandates when it pays a toll' do
       stub, sent = requests_to(:post, '/kiosk/pay')
       toll_then(stub, json_return(200, 'settlement_id' => 's1'))
 
-      assistant.pay(principal, intent:, cart:)
+      assistant.pay(principal, checkout_jwt)
 
       expect(sent.map(&:body).uniq.size).to eq(1)
     end
@@ -125,16 +133,17 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
   describe '#pay when payment setup is required' do
     include_context 'with an assistant and an origin'
 
-    let(:now)    { Time.now.to_i }
-    let(:intent) { { id: 'i1', user_id: 'u1', exp: now + 600, iat: now } }
-    let(:cart)   { { id: 'c1', intent_mandate_id: 'i1', total_amount_cents: 100, currency: 'eur', iss: origin, exp: now + 600, iat: now } }
+    let(:checkout_jwt) do
+      JWT.encode({ iss: origin, sub: 'u1', merchant: { id: origin, name: 'Shop' }, currency: 'eur',
+                   total_amount_cents: 100, line_items: [{ order_id: 'o1' }] }, OpenSSL::PKey::RSA.generate(2048), 'PS256')
+    end
 
     it 'calls payment_setup on payment_setup_required and sends the same mandates once more' do
       stub, sent = requests_to(:post, '/kiosk/pay')
       stub.to_return(problem_return('payment_setup_required', status: 402), json_return(200, 'settlement_id' => 's1'))
       setup = stub_request(:post, "#{origin}/kiosk/payment_setup").to_return(json_return(200, 'status' => 'ready'))
 
-      expect(assistant.pay(principal, intent:, cart:)).to have_attributes(status: 200)
+      expect(assistant.pay(principal, checkout_jwt)).to have_attributes(status: 200)
       expect(setup).to have_been_requested.once
       expect(sent.map(&:body).uniq.size).to eq(1)
       expect(sent.size).to eq(2)
@@ -146,7 +155,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       stub_request(:post, "#{origin}/kiosk/payment_setup")
         .to_return(json_return(200, 'status' => 'setup_required', 'setup_url' => 'https://pay.example/setup'))
 
-      expect(assistant.pay(principal, intent:, cart:)).to have_attributes(status: 402)
+      expect(assistant.pay(principal, checkout_jwt)).to have_attributes(status: 402)
       expect(sent.size).to eq(2)
     end
   end

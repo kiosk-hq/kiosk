@@ -35,7 +35,7 @@ module Kiosk
         attr_writer :skill_url
 
         def skill_url
-          @skill_url ||= 'https://kiosk.tech/skill-v0.5.21.md'
+          @skill_url ||= 'https://kiosk.tech/skill-v0.5.22.md'
         end
         attr_accessor :skill_sha256
 
@@ -234,7 +234,7 @@ module Kiosk
       attr_accessor :assistant_unlinked
 
       # Optional `(agent_id:) → { amount_cents:, currency: } | nil`, checked
-      # before capture; 0 blocks payments, and so does a cart in another currency.
+      # before capture; 0 blocks payments, and so does a checkout in another currency.
       # {Kiosk::Server::ColumnSpendingCap} reads
       # `agents.spending_cap_cents`, the column edited by the manage-assistants
       # page, and `agents.spending_cap_currency`.
@@ -243,8 +243,8 @@ module Kiosk
       # Days of settled spend summed against the cap. Default nil: all time.
       attr_accessor :spending_cap_window_days
 
-      # `call(id, lines) → cents | String`: the payable row's price, or why the cart is refused.
-      attr_accessor :cart_price_checker
+      # `call(id, lines) → cents | String`: the payable row's price, or why the checkout is refused.
+      attr_accessor :checkout_price_checker
 
       # Optional `call(id)`, run once the settlement that paid row `id` is recorded.
       attr_accessor :after_payment

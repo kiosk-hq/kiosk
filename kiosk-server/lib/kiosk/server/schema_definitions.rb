@@ -126,37 +126,20 @@ module Kiosk
         DDL
       end
 
-      # 005: the AP2 trail. `id` is server-generated; the signed mandate id is
-      # `mandate_id`, unique per principal. A cart's `declined_at` records a
-      # charge refused with no money moved. A settlement is server-minted, so it
-      # carries no `raw_jws`.
+      # 005: the AP2 trail. `id` is server-generated; `reference` is the hash of
+      # the presented SD-JWT, unique per principal. One checkout holds one live
+      # checkout mandate: `declined_at` records a charge refused with no money
+      # moved, and frees the checkout. A settlement is server-minted.
       def mandates_sql(schema: nil, user_id_type: nil)
         schema       ||= Kiosk.configuration.schema
         user_id_type ||= Kiosk.configuration.user_id_type
         col_type = user_id_cast(user_id_type)
 
         <<~DDL.strip
-          CREATE TABLE IF NOT EXISTS "#{schema}".intent_mandates (
-            id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            mandate_id        text NOT NULL,
-            user_id           #{col_type} NOT NULL,
-            agent_id          uuid NOT NULL,
-            issuer            text NOT NULL,
-            scope             text NOT NULL,
-            cap_amount_cents  bigint NOT NULL,
-            currency          text NOT NULL,
-            expires_at        timestamptz NOT NULL,
-            created_at        timestamptz NOT NULL DEFAULT now(),
-            raw_jws           text NOT NULL,
-            UNIQUE (user_id, mandate_id)
-          );
-          CREATE INDEX IF NOT EXISTS idx_intent_mandates_user_id  ON "#{schema}".intent_mandates (user_id);
-          CREATE INDEX IF NOT EXISTS idx_intent_mandates_agent_id ON "#{schema}".intent_mandates (agent_id);
-
-          CREATE TABLE IF NOT EXISTS "#{schema}".cart_mandates (
+          CREATE TABLE IF NOT EXISTS "#{schema}".checkout_mandates (
             id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            mandate_id         text NOT NULL,
-            intent_mandate_id  uuid NOT NULL REFERENCES "#{schema}".intent_mandates(id) ON DELETE CASCADE,
+            reference          text NOT NULL,
+            checkout_hash      text NOT NULL,
             user_id            #{col_type} NOT NULL,
             agent_id           uuid NOT NULL,
             issuer             text NOT NULL,
@@ -165,34 +148,35 @@ module Kiosk
             currency           text NOT NULL,
             expires_at         timestamptz NOT NULL,
             created_at         timestamptz NOT NULL DEFAULT now(),
-            raw_jws            text NOT NULL,
+            sd_jwt             text NOT NULL,
             declined_at        timestamptz,
-            UNIQUE (user_id, mandate_id)
+            UNIQUE (user_id, reference)
           );
-          CREATE INDEX IF NOT EXISTS idx_cart_mandates_user_id ON "#{schema}".cart_mandates (user_id);
-          CREATE INDEX IF NOT EXISTS idx_cart_mandates_intent  ON "#{schema}".cart_mandates (intent_mandate_id);
+          CREATE INDEX IF NOT EXISTS idx_checkout_mandates_user_id ON "#{schema}".checkout_mandates (user_id);
+          CREATE UNIQUE INDEX IF NOT EXISTS idx_checkout_mandates_live_checkout
+            ON "#{schema}".checkout_mandates (user_id, checkout_hash) WHERE declined_at IS NULL;
 
           CREATE TABLE IF NOT EXISTS "#{schema}".payment_mandates (
-            id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            mandate_id       text NOT NULL,
-            cart_mandate_id  uuid NOT NULL REFERENCES "#{schema}".cart_mandates(id) ON DELETE CASCADE,
-            user_id          #{col_type} NOT NULL,
-            agent_id         uuid NOT NULL,
-            issuer           text NOT NULL,
-            payment_method   text NOT NULL,
-            amount_cents     bigint NOT NULL,
-            currency         text NOT NULL,
-            expires_at       timestamptz,
-            created_at       timestamptz NOT NULL DEFAULT now(),
-            raw_jws          text NOT NULL,
-            UNIQUE (user_id, mandate_id)
+            id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            reference           text NOT NULL,
+            checkout_mandate_id uuid NOT NULL REFERENCES "#{schema}".checkout_mandates(id) ON DELETE CASCADE,
+            user_id             #{col_type} NOT NULL,
+            agent_id            uuid NOT NULL,
+            issuer              text NOT NULL,
+            payment_instrument  text NOT NULL,
+            amount_cents        bigint NOT NULL,
+            currency            text NOT NULL,
+            expires_at          timestamptz,
+            created_at          timestamptz NOT NULL DEFAULT now(),
+            sd_jwt              text NOT NULL,
+            UNIQUE (user_id, reference)
           );
-          CREATE INDEX IF NOT EXISTS idx_payment_mandates_user_id ON "#{schema}".payment_mandates (user_id);
-          CREATE INDEX IF NOT EXISTS idx_payment_mandates_cart    ON "#{schema}".payment_mandates (cart_mandate_id);
+          CREATE INDEX IF NOT EXISTS idx_payment_mandates_user_id  ON "#{schema}".payment_mandates (user_id);
+          CREATE INDEX IF NOT EXISTS idx_payment_mandates_checkout ON "#{schema}".payment_mandates (checkout_mandate_id);
 
           CREATE TABLE IF NOT EXISTS "#{schema}".settlements (
             id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-            cart_mandate_id      uuid NOT NULL REFERENCES "#{schema}".cart_mandates(id) ON DELETE CASCADE,
+            checkout_mandate_id  uuid NOT NULL REFERENCES "#{schema}".checkout_mandates(id) ON DELETE CASCADE,
             user_id              #{col_type} NOT NULL,
             agent_id             uuid NOT NULL,
             issuer               text NOT NULL,
@@ -200,10 +184,10 @@ module Kiosk
             settled_amount_cents bigint NOT NULL,
             currency             text NOT NULL,
             settled_at           timestamptz NOT NULL,
-            UNIQUE (cart_mandate_id)
+            UNIQUE (checkout_mandate_id)
           );
-          CREATE INDEX IF NOT EXISTS idx_settlements_user_id ON "#{schema}".settlements (user_id);
-          CREATE INDEX IF NOT EXISTS idx_settlements_cart    ON "#{schema}".settlements (cart_mandate_id);
+          CREATE INDEX IF NOT EXISTS idx_settlements_user_id  ON "#{schema}".settlements (user_id);
+          CREATE INDEX IF NOT EXISTS idx_settlements_checkout ON "#{schema}".settlements (checkout_mandate_id);
         DDL
       end
 

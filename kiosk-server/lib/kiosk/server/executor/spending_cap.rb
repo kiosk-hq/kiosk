@@ -8,50 +8,49 @@ module Kiosk
         private
 
         # A nil seam or a nil cap means uncapped. A cap allows no payment in
-        # another currency. Runs in the transaction that persists the cart,
-        # under a per-assistant lock, so two concurrent pays see each other: the
-        # second counts the first's cart as in flight. A cart already recorded
-        # is a repeat and adds nothing.
-        def enforce_spending_cap!(cart)
+        # another currency. Runs in the transaction that persists the checkout
+        # mandate, under a per-assistant lock, so two concurrent pays see each
+        # other: the second counts the first's checkout as in flight. A checkout
+        # mandate already recorded is a repeat and adds nothing.
+        def enforce_spending_cap!(checkout)
           cap = Kiosk.configuration.spending_cap&.call(agent_id: identity.agent_id)
           return if cap.nil? # this assistant is uncapped
 
           lock_assistant_payments!(identity.agent_id)
-          return if cart_recorded?(cart)
+          return if checkout_recorded?(checkout)
 
-          refuse_other_currency!(cap.fetch(:currency), cart)
-          refuse_over_cap!(cap.fetch(:amount_cents).to_i, cart)
+          refuse_other_currency!(cap.fetch(:currency), checkout)
+          refuse_over_cap!(cap.fetch(:amount_cents).to_i, checkout)
         end
 
-        def refuse_other_currency!(cap_currency, cart)
+        def refuse_other_currency!(cap_currency, checkout)
           cap_code = MandateVerifier.canonical_currency(cap_currency)
-          cart_code = MandateVerifier.canonical_currency(cart.currency)
-          return if cap_code == cart_code
+          return if cap_code == checkout.currency
 
           raise Errors::SpendingCapExceeded.new('assistant spending cap is in another currency',
-                                                hint: "the cap is in #{cap_code.upcase}; this charge is in #{cart_code.upcase}")
+                                                hint: "the cap is in #{cap_code.upcase}; this charge is in #{checkout.currency.upcase}")
         end
 
-        def refuse_over_cap!(cap, cart)
+        def refuse_over_cap!(cap, checkout)
           window_days = Kiosk.configuration.spending_cap_window_days
-          spent = spent_in_window(cart, window_days)
-          return if spent + cart.total_amount_cents.to_i <= cap
+          spent = spent_in_window(checkout, window_days)
+          return if spent + checkout.total_amount_cents <= cap
 
-          raise Errors::SpendingCapExceeded.new('assistant spending cap exceeded', hint: cap_hint(cap, spent, window_days, cart))
+          raise Errors::SpendingCapExceeded.new('assistant spending cap exceeded', hint: cap_hint(cap, spent, window_days, checkout))
         end
 
         # One tally per currency: cents are not fungible across currencies. One
         # statement, so a settlement committed between two reads is counted once.
-        def spent_in_window(cart, window_days)
-          binds = spent_binds(identity.agent_id, cart.currency, window_days)
+        def spent_in_window(checkout, window_days)
+          binds = spent_binds(identity.agent_id, checkout.currency, window_days)
           sql = "SELECT (#{settled_sql(window_days)}) + (#{in_flight_sql}) AS total"
           connection.exec_query(sql, 'Kiosk spent total', binds).to_a.first.fetch('total').to_i
         end
 
-        def cap_hint(cap, spent, window_days, cart)
+        def cap_hint(cap, spent, window_days, checkout)
           window_note = window_days ? " in the last #{window_days.to_i} day(s)" : ''
           "cap #{cap} cents; #{spent} already settled or in flight#{window_note}; " \
-            "this charge is #{cart.total_amount_cents.to_i}"
+            "this charge is #{checkout.total_amount_cents}"
         end
 
         # Settled cents for this agent in one currency (see SettledSpend),
@@ -67,16 +66,16 @@ module Kiosk
           SQL
         end
 
-        # Carts of this agent whose mandate is live, that have no settlement and
+        # Checkout mandates of this agent that are live, have no settlement and
         # were not declined: a capture may still run for each.
         def in_flight_sql
           schema = Kiosk.configuration.schema
           <<~SQL.squish
             SELECT COALESCE(SUM(c.total_amount_cents), 0) AS total
-            FROM #{schema}.cart_mandates c
+            FROM #{schema}.checkout_mandates c
             WHERE c.agent_id = $1 AND lower(btrim(c.currency)) = $2 AND c.expires_at > now()
               AND c.declined_at IS NULL
-              AND NOT EXISTS (SELECT 1 FROM #{schema}.settlements s WHERE s.cart_mandate_id = c.id)
+              AND NOT EXISTS (SELECT 1 FROM #{schema}.settlements s WHERE s.checkout_mandate_id = c.id)
           SQL
         end
 
@@ -86,9 +85,9 @@ module Kiosk
           window_days ? binds << window_days.to_i : binds
         end
 
-        def cart_recorded?(cart)
-          sql = "SELECT 1 FROM #{Kiosk.configuration.schema}.cart_mandates WHERE user_id = $1 AND mandate_id = $2"
-          connection.exec_query(sql, 'Kiosk cart recorded', [cart.user_id, cart.id]).any?
+        def checkout_recorded?(checkout)
+          sql = "SELECT 1 FROM #{Kiosk.configuration.schema}.checkout_mandates WHERE user_id = $1 AND reference = $2"
+          connection.exec_query(sql, 'Kiosk checkout mandate recorded', [checkout.user_id, checkout.reference]).any?
         end
 
         # Held to the end of the transaction; an advisory lock needs no grant on any table.

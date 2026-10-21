@@ -42,9 +42,8 @@ RSpec.describe Kiosk::Server::Engine do
       'code' => 'the link code redeemed at /auth/claim (§6.2)',
       'device_code' => 'the device code presented on the token poll (§6.1)',
       'kyc_jws' => 'the KYC attestation (§12)',
-      'intent_mandate_jws' => 'the intent mandate (§11)',
-      'cart_mandate_jws' => 'the cart mandate (§11)',
-      'payment_mandate_jws' => 'the payment mandate (§11)'
+      'checkout_mandate' => 'the checkout mandate (§11)',
+      'payment_mandate' => 'the payment mandate (§11)'
     }.each do |field, what|
       it "filters #{field} — #{what}" do
         expect(log).to match(/"#{field}"\s*=>\s*"\[FILTERED\]"/)

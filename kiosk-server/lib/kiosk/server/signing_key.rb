@@ -7,11 +7,10 @@ require 'json'
 
 module Kiosk
   module Server
-    # The RSA key that signs this deployment's JWTs, and its public JWK.
+    # The RSA key that signs this deployment's JWTs, and its public JWK. The
+    # key signs RS256 access tokens and PS256 checkouts, so the JWK names no `alg`.
     class SigningKey
       MIN_KEY_BITS = 2048
-
-      ALGORITHM = 'RS256'
 
       attr_reader :rsa
 
@@ -53,7 +52,6 @@ module Kiosk
         {
           kty: 'RSA',
           use: 'sig',
-          alg: ALGORITHM,
           kid: kid,
           n: b64url(rsa.n.to_s(2)),
           e: b64url(rsa.e.to_s(2))

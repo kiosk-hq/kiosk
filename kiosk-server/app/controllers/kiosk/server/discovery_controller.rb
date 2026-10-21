@@ -27,6 +27,11 @@ module Kiosk
         render_or_not_found WellKnown.oauth_authorization_server(base_url: request.base_url)
       end
 
+      def oauth_protected_resource
+        allow_cors
+        render json: WellKnown.oauth_protected_resource(base_url: request.base_url)
+      end
+
       def agent_skills_index
         allow_cors
         render_or_not_found WellKnown.agent_skills_index
@@ -65,7 +70,7 @@ module Kiosk
         document ? render(json: document) : head(:not_found)
       end
 
-      # agents.txt v1.0 requires `Access-Control-Allow-Origin: *`.
+      # agents.txt v1.0 and AI Catalog require `Access-Control-Allow-Origin: *`.
       def allow_cors
         response.set_header('Access-Control-Allow-Origin', '*')
       end

@@ -92,6 +92,9 @@ RSpec.describe Kiosk::Server::Engine do
         expect(JSON.parse(served('GET /.well-known/oauth-authorization-server')['body'])['token_endpoint'])
           .to eq('http://localhost/kiosk/oauth/token')
         expect(JSON.parse(served('GET /.well-known/ard.json')['body'])['entries']).not_to be_empty
+        expect(served('GET /.well-known/ai-catalog.json')['body']).to eq(served('GET /.well-known/ard.json')['body'])
+        expect(JSON.parse(served('GET /.well-known/oauth-protected-resource')['body'])['resource'])
+          .to eq('http://localhost')
         expect(probe('mounted', 'GET /.well-known/agent-skills/index.json')['status']).to eq(404)
         expect(served('GET /.well-known/api-catalog')['headers']['content-type']).to include('linkset+json')
         expect(served('GET /auth.md')['headers']['content-type']).to include('markdown')

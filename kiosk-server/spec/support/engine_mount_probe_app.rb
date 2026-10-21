@@ -120,6 +120,8 @@ SURFACE = [
   ['GET',  '/.well-known/oauth-authorization-server'],
   ['GET',  '/.well-known/agent-skills/index.json'],
   ['GET',  '/.well-known/ard.json'],
+  ['GET',  '/.well-known/ai-catalog.json'],
+  ['GET',  '/.well-known/oauth-protected-resource'],
   ['GET',  '/kiosk/schema'],
   ['POST', '/kiosk/pay'],
   ['GET',  '/kiosk/auth/challenge'],

@@ -149,6 +149,8 @@ module Kiosk
           get '/.well-known/oauth-authorization-server', to: 'kiosk/server/discovery#oauth_authorization_server'
           get '/.well-known/agent-skills/index.json',    to: 'kiosk/server/discovery#agent_skills_index'
           get '/.well-known/ard.json',                   to: 'kiosk/server/discovery#ard'
+          get '/.well-known/ai-catalog.json',            to: 'kiosk/server/discovery#ard'
+          get '/.well-known/oauth-protected-resource',   to: 'kiosk/server/discovery#oauth_protected_resource'
         end
       end
 

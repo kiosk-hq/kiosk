@@ -5,8 +5,8 @@ require 'uri'
 
 module Kiosk
   module Server
-    # The discovery documents — kiosk.json, agents.txt, agents.json, the OAuth
-    # metadata, the skills index, ard.json, api-catalog and auth.md — rendered
+    # The discovery documents — kiosk.json, agents.txt, agents.json, the two OAuth
+    # metadata documents, the skills index, ard.json, api-catalog and auth.md — rendered
     # as pure functions of one configuration and the request's base URL, so they
     # cannot drift.
     module WellKnown
@@ -23,6 +23,9 @@ module Kiosk
       DEVICE_CODE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
 
       SKILLS_INDEX_SCHEMA = 'https://schemas.agentskills.io/discovery/0.2.0/schema.json'
+
+      # AI Catalog requires `specVersion`; ARD v0.91 ignores it.
+      AI_CATALOG_VERSION = '1.0'
 
       # The `name` and `description` of the pinned skill's frontmatter.
       # kiosk-test-support's skill_pin_spec holds them to the published cut.
@@ -92,6 +95,17 @@ module Kiosk
           dpop_signing_alg_values_supported: [Dpop::ALGORITHM] }
       end
 
+      # `/.well-known/oauth-protected-resource` (RFC 9728). RFC 9728 §3.3 binds a
+      # document at this path to the origin, so `resource` is the origin.
+      def self.oauth_protected_resource(base_url:, config: Kiosk.configuration)
+        Shared.validate_issuer!(config)
+        base = base_url.to_s.chomp('/')
+        doc = { resource: base }
+        doc[:authorization_servers] = [Kiosk.current_issuer] if config.serve_account_binding
+        doc.merge(bearer_methods_supported: ['header'], dpop_signing_alg_values_supported: [Dpop::ALGORITHM],
+                  dpop_bound_access_tokens_required: true, resource_documentation: "#{base}/auth.md")
+      end
+
       # `/.well-known/agent-skills/index.json` (Agent Skills Discovery v0.2.0):
       # the pinned skill and its digest. nil without a `skill_sha256`.
       def self.agent_skills_index(config: Kiosk.configuration)
@@ -102,8 +116,9 @@ module Kiosk
                      url: config.skill_url, digest: "sha256:#{config.skill_sha256}" }] }
       end
 
-      # `/.well-known/ard.json` (Agentic Resource Discovery v0.91): this
-      # origin's kiosk.json and the skill that reads it.
+      # `/.well-known/ard.json` (Agentic Resource Discovery v0.91), also served
+      # at `/.well-known/ai-catalog.json` (AI Catalog 1.0): this origin's
+      # kiosk.json and the skill that reads it.
       def self.ard(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
         base = base_url.to_s.chomp('/')
@@ -114,7 +129,7 @@ module Kiosk
           entries << { identifier: "#{urn}:skill", displayName: SKILL_NAME, type: 'application/agent-skills+md',
                        url: config.skill_url, description: SKILL_DESCRIPTION }
         end
-        { entries: entries }
+        { specVersion: AI_CATALOG_VERSION, entries: entries }
       end
 
       # `/.well-known/api-catalog` (RFC 9727): every verb as an `item` of the
@@ -268,6 +283,7 @@ module Kiosk
             - This file: `#{base}/auth.md`
             - Kiosk discovery document: `#{base}/.well-known/kiosk.json`
             - OAuth metadata of the claim ceremony (RFC 8414): `#{base}/.well-known/oauth-authorization-server`
+            - OAuth metadata of this protected resource (RFC 9728): `#{base}/.well-known/oauth-protected-resource`
             - Verb catalogue (PUBLIC, no token): `#{endpoint}/schema`
             - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
             #{skill_line}

@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: The engine serves RFC 9728 protected resource metadata, and the ARD manifest also at `/.well-known/ai-catalog.json`, the path isitagentready.com reads.
 - 2026-10-21: Every deploy script that reaches the box takes the host as its first argument, or `KIOSK_DEPLOY_HOST`. `deploy/deploy.sh` pushes and rolls out.
 
 ## [0.5.25] — 2026-10-21

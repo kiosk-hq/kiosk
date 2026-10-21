@@ -176,7 +176,8 @@ assert "…and carries NO Vary, even when the request negotiates" \
 # grep silently stops working, the control fails, so the "0" assertions keep
 # their meaning.
 for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/auth.md" \
-                  "/.well-known/oauth-authorization-server" "/.well-known/ard.json"; do
+                  "/.well-known/oauth-authorization-server" "/.well-known/oauth-protected-resource" \
+                  "/.well-known/ard.json" "/.well-known/ai-catalog.json"; do
   body=$(curl -sf "$SERVER_URL$public_doc")
   assert "$public_doc is really being read (control token)" \
     "$(echo "$body" | grep -qF "$SERVER_URL" && echo present || echo MISSING)" "present"
@@ -185,6 +186,13 @@ for public_doc in "/.well-known/kiosk.json" "/agents.json" "/agents.txt" "/auth.
       "$(echo "$body" | grep -c "$verb_name" || true)" "0"
   done
 done
+
+# ARD v0.91 names ard.json, AI Catalog names ai-catalog.json: one document at both.
+assert "ai-catalog.json is the ARD manifest" \
+  "$(diff <(curl -sf "$SERVER_URL/.well-known/ard.json") <(curl -sf "$SERVER_URL/.well-known/ai-catalog.json") >/dev/null && echo same || echo DIFFERENT)" "same"
+# RFC 9728: the protected resource is the origin, and its tokens are DPoP-bound.
+assert "oauth-protected-resource names the origin and DPoP" \
+  "$(curl -sf "$SERVER_URL/.well-known/oauth-protected-resource" | jq -r '"\(.resource) \(.dpop_bound_access_tokens_required)"')" "$SERVER_URL true"
 
 # THE INVERSE, on the api-catalog. Every verb, at its real per-verb
 # endpoint, with the method that reaches it — anonymously.

@@ -95,6 +95,25 @@ RSpec.describe 'DiscoveryController' do
     end
   end
 
+  describe 'GET /.well-known/oauth-protected-resource' do
+    it 'returns the RFC 9728 metadata: the origin, the claim issuer, DPoP-bound header tokens' do
+      status, headers, raw = dispatch(:oauth_protected_resource, '/.well-known/oauth-protected-resource')
+      expect(status).to eq(200)
+      expect(headers['Content-Type']).to include('application/json')
+      expect(JSON.parse(raw)).to eq(
+        'resource' => 'https://api.acme.example', 'authorization_servers' => ['https://api.acme.example'],
+        'bearer_methods_supported' => ['header'], 'dpop_signing_alg_values_supported' => ['RS256'],
+        'dpop_bound_access_tokens_required' => true, 'resource_documentation' => 'https://api.acme.example/auth.md'
+      )
+    end
+
+    it 'names no authorization server where the origin serves no account binding' do
+      Kiosk.configure { |c| c.serve_account_binding = false }
+      _status, _headers, raw = dispatch(:oauth_protected_resource, '/.well-known/oauth-protected-resource')
+      expect(JSON.parse(raw)).not_to have_key('authorization_servers')
+    end
+  end
+
   describe 'GET /.well-known/agent-skills/index.json' do
     it 'returns the index, valid against Agent Skills Discovery v0.2.0' do
       status, headers, raw = dispatch(:agent_skills_index, '/.well-known/agent-skills/index.json')
@@ -118,6 +137,11 @@ RSpec.describe 'DiscoveryController' do
       expect(headers['Content-Type']).to include('application/json')
       expect(headers['Access-Control-Allow-Origin']).to eq('*')
       conforms?(JSON.parse(raw), 'ard-entry.schema.json', ref: '#/$defs/ArdManifest')
+    end
+
+    it 'carries the specVersion that AI Catalog requires at /.well-known/ai-catalog.json' do
+      _status, _headers, raw = dispatch(:ard, '/.well-known/ai-catalog.json')
+      expect(JSON.parse(raw)['specVersion']).to eq('1.0')
     end
   end
 
@@ -191,6 +215,7 @@ RSpec.describe 'DiscoveryController' do
       declare_query('catalog')
       actions = { agents_txt: '/agents.txt', agents_json: '/agents.json',
                   oauth_authorization_server: '/.well-known/oauth-authorization-server',
+                  oauth_protected_resource: '/.well-known/oauth-protected-resource',
                   agent_skills_index: '/.well-known/agent-skills/index.json', ard: '/.well-known/ard.json',
                   kiosk_json: '/.well-known/kiosk.json',
                   api_catalog: '/.well-known/api-catalog', auth_md: '/auth.md' }

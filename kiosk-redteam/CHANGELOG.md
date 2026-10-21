@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: The bundle that runs a battery against an Equihash origin holds `kiosk-pow-equihash`; kiosk-test-support does not bring it.
+
 ## [0.6.0] — 2026-10-21
 
 - 2026-10-21: Scenarios and batteries sign with Ed25519 keys, and the KYC test issuer signs EdDSA.

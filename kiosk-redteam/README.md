@@ -66,8 +66,9 @@ gem "kiosk-redteam", github: "kiosk-hq/kiosk", group: :development
 ```
 
 The registration toll is real Equihash: the assistant client solves the server's
-402 challenges with the reference solver that ships inside `kiosk-pow-equihash`,
-so the machine running the battery needs **`python3` with `numpy`** on `PATH`. Point a battery at an
+402 challenges with the reference solver that ships inside `kiosk-pow-equihash`.
+The bundle that runs the battery holds that gem, as the origin's bundle does,
+and the machine needs **`python3` with `numpy`** on `PATH`. Point a battery at an
 origin whose PoW is off and nothing is solved and nothing is needed.
 
 ## Usage

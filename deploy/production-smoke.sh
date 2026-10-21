@@ -381,7 +381,7 @@ smoke_stylish() {
 
   echo "── Assertion 5: forged cleartext identity token → 401 ──"
   # An `agent:u-…:a-…:r-…` token names a user, an agent and a ROLE, and NOTHING
-  # parses it: assistants authenticate with the kiosk-pop JWT the engine minted,
+  # parses it: assistants authenticate with the access token the engine minted,
   # verified by the engine's own DefaultAgentIdp, and no demo overrides
   # `c.agent_idp` at all. So this asserts that a self-asserted token buys
   # nothing in ANY environment — a 200 here would be a cross-tenant read of the

@@ -23,19 +23,17 @@
 # nothing and deletes nothing:
 #
 #   * the two REGISTRATION probes are the ones that must be REFUSED — an
-#     unproven registration and a malformed proof. Neither creates an agent,
-#     because the toll is settled before the possession proof is even read.
+#     unproven registration and a malformed proof. Neither creates a client,
+#     because the toll is settled before the key is even looked up.
+#   * the TOKEN probe sends a client assertion for a client that does not
+#     exist, so the token endpoint refuses it with `invalid_client`. The
+#     `pow_spent_store` claims an assertion's `jti` only after every other
+#     check passes, so the refusal writes nothing.
 #   * the query probes carry a forged token or no token at all, so the
 #     answer is a refusal and no row is read, let alone written.
 #
-# WHAT IT DOES LEAVE BEHIND, stated rather than claimed away, because «nothing
-# at all» would be false. `Client#register_raw` opens the possession handshake
-# with `GET /auth/challenge`, and an origin answers that by recording a
-# single-use nonce in its `auth_challenge_store`, the `kiosk.auth_challenges`
-# table, so the residue is ONE row per origin per run that expires on its own.
-# Nothing else is touched: the `pow_spent_store` records
-# only ACCEPTED proofs and this script never sends one, and a refused request
-# writes no domain row.
+# The `pow_spent_store` records only ACCEPTED proofs and assertions, and this
+# script never sends one; a refused request writes no row.
 #
 # WHAT IT THEREFORE CANNOT RUN, named rather than left as a silence: every
 # shipped `Kiosk::Redteam::Scenarios::*` except the registration pair, because
@@ -80,6 +78,7 @@ rescue LoadError => e
 end
 
 require 'json'
+require 'securerandom'
 
 CADDYFILE = File.join(REPO, 'deploy', 'Caddyfile')
 CONFORMANCE = File.join(REPO, 'e2e', 'schema_conformance.rb')
@@ -116,8 +115,7 @@ class Drive
     #
     # The admitted set is wider than `Kiosk::Redteam.blocked?` allows. `pow: :skip`
     # is met by the toll (402 pow_required) and `pow: "0"` by the header parser
-    # (400 bad_request); both refuse the registration before any possession proof
-    # is read. A finding is a 201, a 5xx, or a 2xx of any other shape.
+    # (400 bad_request); both refuse the registration before the key is looked up. A finding is a 201, a 5xx, or a 2xx of any other shape.
     REFUSALS = [400, 401, 402, 403].freeze
 
     # Signs the DPoP proof of the forged-token probe: a key no origin knows.
@@ -141,6 +139,20 @@ class Drive
         error beat, "HTTP #{response.status} #{response.body.inspect} — neither a refusal nor a " \
                     'success, so nothing was proved about the gate'
       end
+    end
+
+    # A token request for a client that does not exist: one refusal, `invalid_client` 401.
+    # The `sub` is a UUID, so the origin looks it up and finds nothing.
+    def token_probe
+      beat     = 'a token request for an unknown client'
+      stranger = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: SecureRandom.uuid, user_id: nil, token: nil, rsa_key: THROWAWAY_KEY)
+      response = @client.token(stranger)
+      if response.status == 401 && response.body.is_a?(Hash) && response.body['error'] == 'invalid_client'
+        ok "#{beat} is refused (HTTP 401 \"invalid_client\")"
+      else
+        judge_failure(beat, response, [401])
+      end
+      leak_check(beat, response.raw_body)
     end
 
     # A forged token, no token at all, the wrong method at a real verb's path,
@@ -274,6 +286,13 @@ class Drive
     catalog.body
   end
 
+  def probe(catalog)
+    registration_probes
+    token_probe
+    wire_probes(catalog)
+    schema_conformance
+  end
+
   # The published JSON Schemas against THIS origin's served bytes.
   def schema_conformance
     env = { 'SERVER_URL' => @origin, 'KIOSK_LIVE' => '1' }
@@ -290,11 +309,7 @@ def drive(origin)
   puts "\e[1m── #{origin} ──\e[0m"
   run = Drive.new(origin)
   catalog = run.survey
-  if catalog
-    run.registration_probes
-    run.wire_probes(catalog)
-    run.schema_conformance
-  end
+  run.probe(catalog) if catalog
   run
 end
 
@@ -373,9 +388,7 @@ errors   = runs.flat_map(&:errors)
 puts "  #{hosts.size} origin(s) · #{runs.sum(&:passes)} passed · " \
      "#{breaches.size} breach(es) · #{errors.size} error(s) · " \
      "#{runs.sum { it.skips.size }} skipped"
-puts '  NO DOMAIN ROW WAS WRITTEN: every probe above is a read or a refusal. The one'
-puts '  residue is a single-use auth-challenge nonce per origin, in kiosk.auth_challenges,'
-puts '  which expires unaided.'
+puts '  NO ROW WAS WRITTEN: every probe above is a read or a refusal.'
 (breaches + errors).each { |f| puts "  #{f.origin}  #{f.beat} — #{f.detail}" }
 
 exit((breaches + errors).empty? ? 0 : 1)

@@ -19,7 +19,7 @@ This directory is the *app-side* handoff; DNS + VPS provisioning is the operator
 | `rollout.sh` | **The only supported way `/etc/kiosk-demo/*.env` is set.** Run `deploy/rollout.sh [user@host]` from a checkout; it runs itself on the box as root. It is idempotent, so running it is also how you check. It renders every unit's env file from `env/<app>.env.example` (names, order, comments and every value this repository decides), keeps the `REPLACE_*` values the box already has, mints the ones nothing off the box holds a half of, and NAMES the four that someone else holds instead of writing a blank. Owner `ubuntu:ubuntu` and mode `0640` are two literal lines in it. Backs up what it changes, prints the `systemctl restart` line per changed unit, restarts nothing. See [Configuration is DECLARED](#configuration-is-declared). |
 | `deploy-caddy.sh` | **The only supported way `Caddyfile` reaches the box.** `deploy/deploy-caddy.sh [user@host] [--check|--apply]`. `--check` stages the file, has the BOX's own caddy validate it, and prints the diff, changing nothing; `--apply` backs up, installs, reloads, then verifies the LIVE WIRE and rolls back if the wire disagrees. It ships the whole file or nothing — never a patched line, never a merge — so a divergence in either direction shows up as a diff. `--self-test` exercises the derivation and the two posture arms (HSTS declared, limiter NOT enabled) and touches no host; it runs in CI. |
 | `check-live-hsts.sh` | **Run it from anywhere to audit the fleet, and after any Caddyfile change.** Probes each vhost in `Caddyfile` over HTTPS and names every origin that does not answer `Strict-Transport-Security` with `max-age >= 31536000; includeSubDomains`. It reads the WIRE rather than a config, because a config check on the template says OK for as long as the box serves without the header. `--self-test` proves the judging both ways plus two vacuity arms, and runs in CI; the live probe does not, because CI must not depend on a box this repo does not deploy. |
-| `live-fleet-drive.rb` | **Run it by hand after a deploy — it is not a CI job.** Drives every vhost in `Caddyfile` with the drivers this repo ships (`Kiosk::TestHelpers::Wire`, `Kiosk::TestHelpers::Assistant`) and then runs `e2e/schema_conformance.rb` against the bytes each origin served — the only place §16.3's «every wire object validates against its JSON Schema» is asserted about a DEPLOYED byte rather than a localhost one. **Every probe is read-only**: the two registration probes are the ones that must be REFUSED, and the query probes carry a forged bearer or none, so no domain row is created and none is deleted. The one residue is measured and named in the script's header — the possession handshake's `GET /auth/challenge` leaves one single-use nonce per origin, a row in that origin's `kiosk.auth_challenges` table (the default `auth_challenge_store`), which expires on its own. It therefore cannot run the shipped `Scenarios::*` battery, each of which registers principals and stages state — including `RegistrationWithoutPow`, whose control registers successfully. It borrows a demo's bundle automatically (`KIOSK_DRIVE_BUNDLE` picks another). `--self-test` covers the vhost derivation and the TLS seam and touches no host, but it loads the drivers out of a demo's bundle, so unlike its two siblings above it is **not** a CI job — run it yourself. The live drive stays out of CI for `check-live-hsts.sh`'s reason: CI must not depend on a box this repo does not deploy. |
+| `live-fleet-drive.rb` | **Run it by hand after a deploy — it is not a CI job.** Drives every vhost in `Caddyfile` with the drivers this repo ships (`Kiosk::TestHelpers::Wire`, `Kiosk::TestHelpers::Assistant`) and then runs `e2e/schema_conformance.rb` against the bytes each origin served — the only place §16.3's «every wire object validates against its JSON Schema» is asserted about a DEPLOYED byte rather than a localhost one. **Every probe is read-only**: the two registration probes and the token request for an unknown client are the ones that must be REFUSED, and the query probes carry a forged bearer or none, so no row is created and none is deleted. It therefore cannot run the shipped `Scenarios::*` battery, each of which registers principals and stages state — including `RegistrationWithoutPow`, whose control registers successfully. It borrows a demo's bundle automatically (`KIOSK_DRIVE_BUNDLE` picks another). `--self-test` covers the vhost derivation and the TLS seam and touches no host, but it loads the drivers out of a demo's bundle, so unlike its two siblings above it is **not** a CI job — run it yourself. The live drive stays out of CI for `check-live-hsts.sh`'s reason: CI must not depend on a box this repo does not deploy. |
 | `demo-reset.sh` | Run `deploy/demo-reset.sh [user@host]` from a checkout; it runs the box's own copy. It puts demo data back to a clean, freshly-seeded state: drops + reseeds the six non-getgrocery demos, additively reseeds getgrocery (its orders are real third-party assistant runs and seeding cannot reproduce one); `--all` wipes getgrocery too. This is the disk-reclaim tool. |
 | `production-smoke.sh` | **Not a deployment tool — do not run it on a deploy host.** A `RAILS_ENV=production` boot smoke for one demo per unique HTML surface plus the one whose HTML is rendered from a hand-written SQL projection (`stylish` \| `prove` \| `tudu`), catching the eager-load / proxy-CSRF / assistant-shaped-error classes that dev-mode CI cannot see. CI is its caller. It CREATES AND DROPS `kiosk_<app>_smoke`, so `require_disposable_host()` aborts outright when the box carries deploy markers (`/srv/kiosk`, `/etc/kiosk-demo`, an installed `kiosk-demo@.service`) and otherwise demands `CI` or `KIOSK_SMOKE_I_AM_DISPOSABLE=1`. |
 | `kyc-pairing-audit.sh` | **Run `deploy/kyc-pairing-audit.sh [user@host]` after any KYC-related env change, and on any box that predates 2026-08-13.** It runs itself on the box as root. Reads `/etc/kiosk-demo/*.env` and reports whether each KYC operator's intake secret actually pairs with the broker's registry entry, whether the pinned broker public key is the one the broker signs with, and whether an operator env still carries the retired `KIOSK_PROVE_<OP>_SECRET` spelling; `--fix-retired-names` renames it in place, after a backup. **It prints no value** — pairing comes out as PAIRED/MISMATCH and a key as a public SPKI fingerprint. It exists because nothing in the tree can see the values on the boxes: both operators answered `501 module_not_served` for thirty-five days with correct secrets stored under a name the app had stopped reading. |
@@ -315,8 +315,10 @@ the default, not forswearing protection. What follows is the analysis you need
 to decide whether to reach for it, and the numbers that say why there is no
 default. None of it is a runbook step.
 
-**What the limiter would be for.** `POST /kiosk/auth/register` runs the PoW gate
-**unauthenticated**, before any key verification: anyone can take a free 402
+**What the limiter would be for.** The PoW gate runs **unauthenticated**, before
+any lookup, on the three tolled requests that come before a token:
+`POST /kiosk/oauth/register`, `POST /kiosk/auth/claim` and the first device-code
+poll at `POST /kiosk/oauth/token`. Anyone can take a free 402
 challenge and resubmit it with a valid HMAC sig and garbage indices. PoW prices
 the attacker's **solve**; it never prices our **verify**. And at the shipped
 `WEB_CONCURRENCY=1` a plain flood of *any* endpoint -- a 404, the 402 issue path
@@ -452,7 +454,7 @@ by design, and the "true" one-liner ships a copy-paste **solver**
 M-series laptop core, the only hardware that figure has been measured on —
 `kiosk-pow-equihash/bench/README.md`'s measured grid is where to re-run it for
 your own machine. Flow:
-**discover (free) → read the schema (free) → register (solve PoW) → call a verb
+**discover (free) → read the schema (free) → register (solve PoW) → get a token → call a verb
 (each MAY toll PoW too)**.
 
 ```sh
@@ -478,49 +480,52 @@ proofs_for() { jq -c '.challenges[]' | while read -r c; do
            '{challenge:$challenge,nonce:$nonce}'   # ~9–10 s on an M-series core
   done | jq -sc .; }
 
-#    a) an agent keypair, and a challenge nonce FOR THAT KEY. `public_key` is
-#       required — without it the endpoint answers 400 — and what comes back is
-#       a proof-of-POSSESSION nonce. The PoW challenge arrives later, in (c).
+#    a) an agent keypair, and its public JWK (RFC 7517). `jws HEADER PAYLOAD`
+#       prints a compact RS256 JWS that the key signs.
 AGENT=$(mktemp -d)   # the keypair lives here, NOT in your checkout
 openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$AGENT/agent.pem"
-openssl rsa -in "$AGENT/agent.pem" -pubout -out "$AGENT/agent.pub"
-NONCE=$(curl -sG --data-urlencode "public_key@$AGENT/agent.pub" \
-  "$BASE/kiosk/auth/challenge" | jq -r .challenge)
-
-#    b) sign the proof of possession: an RS256 JWS carrying (a)'s nonce, with
-#       `aud` = the origin YOU dialed. That binding is the relay defence — a
-#       proof signed for one origin is worthless at another.
-H=$(printf '%s' '{"alg":"RS256","typ":"JWT"}' | b64url)
-P=$(printf '{"aud":"%s","nonce":"%s","jti":"%s","iat":%s}' \
-     "$BASE" "$NONCE" "$(uuidgen)" "$(date +%s)" | b64url)
-POP="$H.$P.$(printf '%s.%s' "$H" "$P" | openssl dgst -sha256 -sign "$AGENT/agent.pem" -binary | b64url)"
-BODY=$(jq -n --rawfile pk "$AGENT/agent.pub" --arg s "$POP" '{public_key:$pk, signed:$s}')
-
-#    c) register → the token. The first POST answers 402 `pow_required` with
-#       the Equihash challenge(s); solve them and re-send the SAME body with
-#       the proof in the `Kiosk-PoW` HEADER, never in the body — the signed
-#       body may not change, or the proof no longer covers what you sent.
-REG=$(curl -s -X POST "$BASE/kiosk/auth/register" \
-  -H 'content-type: application/json' -d "$BODY")
-TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
-  -H 'content-type: application/json' \
-  -H "Kiosk-PoW: $(printf '%s' "$REG" | proofs_for)" \
-  -d "$BODY" | jq -r .access_token)
-
-#       The token is bound to the key (RFC 9449): every call that carries it
-#       also carries a DPoP proof, a JWS the key signs for that method and URL
-#       (no query), new for each call. `dpop METHOD URL` prints one.
 N=$(openssl rsa -in "$AGENT/agent.pem" -noout -modulus | cut -d= -f2 | xxd -r -p | b64url)
-dpop() { local h p
-  h=$(jq -cn --arg n "$N" '{alg:"RS256",typ:"dpop+jwt",jwk:{kty:"RSA",n:$n,e:"AQAB"}}' | b64url)
-  p=$(jq -cn --arg m "$1" --arg u "$2" --arg j "$(uuidgen)" \
-        --arg a "$(printf '%s' "$TOKEN" | openssl dgst -sha256 -binary | b64url)" \
-        '{jti:$j,htm:$m,htu:$u,iat:(now|floor),ath:$a}' | b64url)
+JWK=$(jq -cn --arg n "$N" '{kty:"RSA",n:$n,e:"AQAB"}')
+jws() { local h p
+  h=$(printf '%s' "$1" | b64url); p=$(printf '%s' "$2" | b64url)
   printf '%s.%s.%s' "$h" "$p" \
     "$(printf '%s.%s' "$h" "$p" | openssl dgst -sha256 -sign "$AGENT/agent.pem" -binary | b64url)"; }
 
+#    b) register the key (RFC 7591) -> the client_id. The first POST answers
+#       402 `pow_required` with the Equihash challenge(s); solve them and send
+#       the SAME body again with the proof in the `Kiosk-PoW` HEADER.
+BODY=$(jq -cn --argjson k "$JWK" '{jwks:{keys:[$k]}}')
+REG=$(curl -s -X POST "$BASE/kiosk/oauth/register" \
+  -H 'content-type: application/json' -d "$BODY")
+CLIENT=$(curl -s -X POST "$BASE/kiosk/oauth/register" \
+  -H 'content-type: application/json' \
+  -H "Kiosk-PoW: $(printf '%s' "$REG" | proofs_for)" \
+  -d "$BODY" | jq -r .client_id)
+
+#    c) the token: a client_credentials request with a client assertion
+#       (RFC 7523) and a DPoP proof (RFC 9449) with no `ath`, because there is
+#       no token yet. `aud` is the origin YOU dialed: an assertion signed for
+#       one origin is worthless at another.
+ASSERTION=$(jws '{"alg":"RS256","typ":"JWT"}' "$(jq -cn --arg c "$CLIENT" --arg a "$BASE" --arg j "$(uuidgen)" \
+  '{iss:$c,sub:$c,aud:$a,exp:((now|floor)+60),jti:$j}')")
+DPOP_HEADER=$(jq -cn --argjson k "$JWK" '{alg:"RS256",typ:"dpop+jwt",jwk:$k}')
+TOKEN=$(curl -s -X POST "$BASE/kiosk/oauth/token" \
+  -H "DPoP: $(jws "$DPOP_HEADER" "$(jq -cn --arg u "$BASE/kiosk/oauth/token" --arg j "$(uuidgen)" \
+        '{jti:$j,htm:"POST",htu:$u,iat:(now|floor)}')")" \
+  --data-urlencode grant_type=client_credentials \
+  --data-urlencode client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer \
+  --data-urlencode "client_assertion=$ASSERTION" | jq -r .access_token)
+
+#       The token is bound to the key: every call that carries it also carries
+#       a DPoP proof that the key signs for that method and URL (no query),
+#       new for each call, with `ath` = the hash of the token. `dpop METHOD URL`
+#       prints one.
+dpop() { jws "$DPOP_HEADER" "$(jq -cn --arg m "$1" --arg u "$2" --arg j "$(uuidgen)" \
+        --arg a "$(printf '%s' "$TOKEN" | openssl dgst -sha256 -binary | b64url)" \
+        '{jti:$j,htm:$m,htu:$u,iat:(now|floor),ath:$a}')"; }
+
 #    d) read the schema — PUBLIC and cacheable, so no token and no toll here;
-#       this one answers just as well before step (c) as after it.
+#       this one answers just as well before step (b) as after it.
 curl -s "$BASE/kiosk/schema" | jq .
 
 #    e) call a query as the registered assistant — one endpoint
@@ -530,7 +535,7 @@ curl -s "$BASE/kiosk/schema" | jq .
 #       The token and a DPoP proof are required, and on the hosted origins this
 #       one DOES toll: the first call answers 402, and the retry is the SAME
 #       request, with a new DPoP proof, and the proof of work in the Kiosk-PoW
-#       header — the pattern register just used.
+#       header — the pattern registration just used.
 CAT=$(curl -s "$BASE/kiosk/catalog" -H "authorization: DPoP $TOKEN" \
   -H "DPoP: $(dpop GET "$BASE/kiosk/catalog")")
 curl -s "$BASE/kiosk/catalog" -H "authorization: DPoP $TOKEN" \
@@ -552,8 +557,8 @@ curl -s -X POST "$BASE/kiosk/create_order" \
        "delivery_address":"42 Camden Street, Dublin 2"}' | jq .
 ```
 
-> The exact challenge/proof JSON shape is what the demo's `/kiosk/auth/challenge`
-> returns and `solve.py` consumes, and the block above is the copy-paste form of
-> it. It is the only one: no demo landing page carries a curl one-liner.
+> The exact challenge/proof JSON shape is what the demo's 402 `pow_required`
+> answer carries and `solve.py` consumes, and the block above is the copy-paste
+> form of it. It is the only one: no demo landing page carries a curl one-liner.
 > Registration asks for the full-strength puzzle, so expect ~9–10 s
 > (measured on an M-series laptop core; other hardware differs).

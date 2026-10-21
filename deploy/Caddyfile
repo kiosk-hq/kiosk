@@ -74,9 +74,11 @@
 # the analysis beside it is what makes the next decision cheap.
 #
 # ── The exposure the limiter is for, and it has not gone away ────────────────
-# `POST /kiosk/auth/register` runs the PoW gate UNAUTHENTICATED, ahead of any
-# key verification: anyone can take a free 402 challenge and resubmit it with a
-# valid HMAC sig but garbage indices. PoW prices the attacker's SOLVE; it never
+# The PoW gate runs UNAUTHENTICATED, ahead of any lookup, on the three tolled
+# requests that come before a token: `POST /kiosk/oauth/register`,
+# `POST /kiosk/auth/claim` and the first device-code poll at
+# `POST /kiosk/oauth/token`. Anyone can take a free 402 challenge and resubmit
+# it with a valid HMAC sig but garbage indices. PoW prices the attacker's SOLVE; it never
 # prices our VERIFY. And at the shipped WEB_CONCURRENCY=1 a plain flood of ANY
 # endpoint — a 404, the 402 issue path itself — saturates the single worker just
 # as well. The app can make each request cheaper; only something in FRONT of the

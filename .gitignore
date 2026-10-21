@@ -15,6 +15,7 @@
 #
 # No Ruby pin is tracked: the gemspecs declare the floor (>= 4.0) and CI runs it.
 .mise.toml
+mise.local.toml
 mise.toml
 .ruby-version
 .ruby-gemset

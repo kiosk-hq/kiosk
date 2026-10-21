@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Write /etc/kiosk-demo/<unit>.env for the eight demo units from this checkout's
-# deploy/env/<unit>.env.example. Run it ON THE BOX; it is idempotent.
+# deploy/env/<unit>.env.example. It is idempotent.
 #
-#   ssh ubuntu@<box> 'sudo bash -s' < deploy/rollout.sh
+#   deploy/rollout.sh [user@host]     # host defaults to $KIOSK_DEPLOY_HOST
+#
+# From a checkout it sends itself to the box over ssh and runs there as root
+# with `--on-box`; CI runs it with `--on-box` against a scratch directory.
 #
 # The template is the declaration: names, order, comments and every value this
 # repository decides. Only a REPLACE_* value is a slot — kept if the box already
@@ -15,6 +18,13 @@
 # Run it BEFORE pushing prod-demo a tree that adds an env name: the push migrates
 # with these files, and an app missing a name it requires cannot boot to migrate.
 set -euo pipefail
+
+if [ "${1:-}" != --on-box ]; then
+  host=${1:-${KIOSK_DEPLOY_HOST:-}}
+  [ -n "$host" ] || { echo "rollout.sh: no host. Pass user@host, or set KIOSK_DEPLOY_HOST." >&2; exit 2; }
+  exec ssh "$host" 'sudo bash -s -- --on-box' <"$0"
+fi
+shift
 
 OWNER=${KIOSK_OWNER:-ubuntu:ubuntu}   # the push-to-deploy hook sources every one of these
 MODE=0640
@@ -50,7 +60,7 @@ render() {  # render <unit> — stdout is the file that unit should have
   done <"$SRC/${1/prove/kyc-demo}.env.example"   # the broker unit is `prove`, its template `kyc-demo`
 }
 
-[ $# -eq 0 ] || { echo "rollout.sh takes no arguments — running it is the whole of it" >&2; exit 2; }
+[ $# -eq 0 ] || { echo "rollout.sh --on-box takes no other argument" >&2; exit 2; }
 
 new=$(mktemp); trap 'rm -f "$new"' EXIT; fail=0
 for u in "${UNITS[@]}"; do

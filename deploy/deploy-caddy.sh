@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Deploy deploy/Caddyfile to the demo VPS, declaratively.
 #
-# Usage: deploy/deploy-caddy.sh            # CHECK: diff + remote validate, changes nothing
-#        deploy/deploy-caddy.sh --apply    # install, reload, verify, roll back on failure
+# Usage: deploy/deploy-caddy.sh [user@host]          # CHECK: diff + remote validate, changes nothing
+#        deploy/deploy-caddy.sh [user@host] --apply  # install, reload, verify, roll back on failure
 #        deploy/deploy-caddy.sh --self-test
-#        KIOSK_CADDY_HOST=… to override the host
+# The host defaults to $KIOSK_DEPLOY_HOST.
 #
 # WHY THIS EXISTS: the edge is part of the demo fleet, so it belongs in the
 # repository like everything else the demos run, rolled out by a declarative
@@ -27,7 +27,7 @@
 
 set -euo pipefail
 
-HOST="${KIOSK_CADDY_HOST:-ubuntu@vps-ecaec54a.vps.ovh.net}"
+case ${1:-} in ''|--*) HOST=${KIOSK_DEPLOY_HOST:-} ;; *) HOST=$1; shift ;; esac
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$HERE/Caddyfile"
 REMOTE_ETC="/etc/caddy/Caddyfile"
@@ -121,7 +121,8 @@ if [[ "${1:-}" == "--self-test" ]]; then
 fi
 
 MODE="${1:---check}"
-[[ "$MODE" == "--check" || "$MODE" == "--apply" ]] || { echo "usage: $0 [--check|--apply|--self-test]" >&2; exit 2; }
+[[ "$MODE" == "--check" || "$MODE" == "--apply" ]] || { echo "usage: $0 [user@host] [--check|--apply|--self-test]" >&2; exit 2; }
+[[ -n "$HOST" ]] || { echo "deploy-caddy.sh: no host. Pass user@host, or set KIOSK_DEPLOY_HOST." >&2; exit 2; }
 
 [[ -f "$SRC" ]] || { echo "no config at $SRC" >&2; exit 1; }
 echo "deploy-caddy: $SRC -> $HOST:$REMOTE_ETC  (mode $MODE)"

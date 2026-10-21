@@ -29,7 +29,7 @@ an ISSUER, not a Kiosk operator (no PoW, no `/.well-known/kiosk.json`, no agent 
 ## 4. Per-app env (`deploy/env/<app>.env.example` DECLARES it; `deploy/rollout.sh` places it)
 - [ ] **Put the four secrets nobody here can mint into their own `/etc/kiosk-demo/<unit>.env`, then run the rollout.**
       ```
-      ssh <deploy-user>@<box> 'sudo bash -s' < deploy/rollout.sh
+      deploy/rollout.sh <deploy-user>@<box>   # or set KIOSK_DEPLOY_HOST
       ```
       It writes every unit's env file from the templates — every name, every order, every value this repository
       decides — keeps the `REPLACE_*` values the box already has, mints what nothing off the box holds the other
@@ -87,8 +87,8 @@ What each unit must carry. For EACH of the 7 apps:
       Setting half of either pair is no longer a thing the rollout can do.
 - [ ] **RUN `deploy/kyc-pairing-audit.sh` ON THE BOX — it reads what is deployed, and a tick taken by eye is a guess.**
       ```
-      ssh <deploy-user>@<box> 'sudo bash -s' < deploy/kyc-pairing-audit.sh
-      ssh <deploy-user>@<box> 'sudo bash -s' -- --fix-retired-names < deploy/kyc-pairing-audit.sh
+      deploy/kyc-pairing-audit.sh <deploy-user>@<box>
+      deploy/kyc-pairing-audit.sh <deploy-user>@<box> --fix-retired-names
       ```
       It pairs each operator's `KIOSK_PROVE_INTAKE_SECRET` against the broker's `KIOSK_PROVE_<OP>_SECRET` BY VALUE,
       checks the pinned broker key against the key the broker actually signs with, and names any operator env still
@@ -215,7 +215,7 @@ What each unit must carry. For EACH of the 7 apps:
       `PG::DuplicateTable`, so the steps after it never run and the exit is buried in hook output. Symptom
       is a 500 on a page whose SELECT names the missing column. The rebuild:
       ```
-      ssh <deploy-user>@<box> 'bash /srv/kiosk/deploy/demo-reset.sh'   # AFTER deploying head
+      deploy/demo-reset.sh <deploy-user>@<box>   # AFTER deploying head
       ```
       It `db:schema:load db:seed`s the six non-getgrocery demos and re-seeds getgrocery ADDITIVELY, so the
       real third-party orders it holds survive (pass `--all` only if you mean to destroy them). Verify with

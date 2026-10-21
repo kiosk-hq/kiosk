@@ -544,7 +544,7 @@ jobs:
           export KIOSK_ENV_DIR=$RUNNER_TEMP/kiosk-demo KIOSK_SRC=$PWD
           export KIOSK_OWNER="$(id -un):$(id -gn)"
           mkdir -p "$KIOSK_ENV_DIR"
-          ! ./deploy/rollout.sh
+          ! ./deploy/rollout.sh --on-box
           [ -z "$(ls -A "$KIOSK_ENV_DIR")" ]
           for u in atablefor getgrocery hoteling philslist skooti stylish tudu prove; do
             echo "KIOSK_$(echo "$u" | tr a-z A-Z)_DB_PASSWORD=pw-$u" >"$KIOSK_ENV_DIR/$u.env"
@@ -552,9 +552,9 @@ jobs:
           for u in getgrocery hoteling skooti; do echo 'STRIPE_SECRET_KEY=sk_test_ci' >>"$KIOSK_ENV_DIR/$u.env"; done
           printf 'KIOSK_UNLOCK_SIGNING_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/skooti.env"
           printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genrsa 2048 2>/dev/null)" >>"$KIOSK_ENV_DIR/prove.env"
-          ./deploy/rollout.sh
-          ! ./deploy/rollout.sh | grep -q '^wrote'
-          ! ./deploy/rollout.sh | grep -q 'pw-tudu'
+          ./deploy/rollout.sh --on-box
+          ! ./deploy/rollout.sh --on-box | grep -q '^wrote'
+          ! ./deploy/rollout.sh --on-box | grep -q 'pw-tudu'
           s=$(sed -n 's/^KIOSK_PROVE_INTAKE_SECRET=//p' "$KIOSK_ENV_DIR/skooti.env")
           [ -n "$s" ] && grep -qx "KIOSK_PROVE_SKOOTI_SECRET=$s" "$KIOSK_ENV_DIR/prove.env"
           [ "$(stat -c '%U:%G %a' "$KIOSK_ENV_DIR/tudu.env")" = "$KIOSK_OWNER 640" ]

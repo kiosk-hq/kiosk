@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 # Reset the hosted demo data to a clean, freshly-seeded state.
 #
-# Run it on the VPS (after a deploy so /srv/kiosk is current):
-#   ssh ubuntu@kyc.demo.kiosk.tech 'bash /srv/kiosk/deploy/demo-reset.sh'
+# Run it after a deploy, so the box's /srv/kiosk is current:
+#   deploy/demo-reset.sh [user@host] [--all]   # host defaults to $KIOSK_DEPLOY_HOST
+#
+# From a checkout it runs the box's own copy over ssh with `--on-box`.
 #
 # By default the six NON-getgrocery demos are DROPPED and freshly seeded (they
 # hold only ephemeral "poker" data, so a clean reset is safe and gives the
@@ -14,8 +16,8 @@
 # kiosk.tech serves cites any of these order ids -- the reason to keep them is
 # the evidence itself, not a link.
 #
-#   bash demo-reset.sh          # reset the 6; getgrocery additive (keeps the real runs)
-#   bash demo-reset.sh --all    # ALSO wipe+reseed getgrocery (destroys them)
+#   deploy/demo-reset.sh        # reset the 6; getgrocery additive (keeps the real runs)
+#   deploy/demo-reset.sh --all  # ALSO wipe+reseed getgrocery (destroys them)
 #
 # The KYC broker (kyc.demo) has no demo content and is left untouched.
 #
@@ -44,6 +46,13 @@
 # already uses for its server log, so this is the in-repo pattern rather than a
 # new one.
 set -uo pipefail
+
+if [ "${1:-}" != --on-box ]; then
+  case ${1:-} in ''|--*) host=${KIOSK_DEPLOY_HOST:-} ;; *) host=$1; shift ;; esac
+  [ -n "$host" ] || { echo "demo-reset.sh: no host. Pass user@host, or set KIOSK_DEPLOY_HOST." >&2; exit 2; }
+  exec ssh "$host" "bash /srv/kiosk/deploy/demo-reset.sh --on-box $*"
+fi
+shift
 export PATH="/home/ubuntu/.local/bin:/home/ubuntu/.local/share/mise/installs/ruby/4.0.1/bin:$PATH"
 
 WIPE_GG=0; [ "${1:-}" = "--all" ] && WIPE_GG=1

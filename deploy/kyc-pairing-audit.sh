@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# KYC operator pairing audit — run ON THE BOX, read-only by default.
+# KYC operator pairing audit — read-only by default.
 #
-#   ssh <deploy-user>@<box> 'sudo bash -s' < deploy/kyc-pairing-audit.sh
-#   ssh <deploy-user>@<box> 'sudo bash -s' -- --fix-retired-names \
-#       < deploy/kyc-pairing-audit.sh
+#   deploy/kyc-pairing-audit.sh [user@host] [--fix-retired-names]
+#
+# The host defaults to $KIOSK_DEPLOY_HOST. From a checkout it sends itself to
+# the box over ssh and runs there as root with `--on-box`.
 #
 # WHY IT EXISTS. Nothing in this repository reads the VALUES on the boxes in
 # /etc/kiosk-demo/*.env, so a deployment can match every shipped template
@@ -27,6 +28,13 @@
 #
 # Exit 0 when every rule holds, 1 otherwise. Safe to re-run.
 set -uo pipefail
+
+if [ "${1:-}" != --on-box ]; then
+  case ${1:-} in ''|--*) host=${KIOSK_DEPLOY_HOST:-} ;; *) host=$1; shift ;; esac
+  [ -n "$host" ] || { echo "kyc-pairing-audit.sh: no host. Pass user@host, or set KIOSK_DEPLOY_HOST." >&2; exit 2; }
+  exec ssh "$host" "sudo bash -s -- --on-box $*" <"$0"
+fi
+shift
 
 REPO=${KIOSK_REPO:-/srv/kiosk}
 ENVDIR=${KIOSK_ENV_DIR:-/etc/kiosk-demo}

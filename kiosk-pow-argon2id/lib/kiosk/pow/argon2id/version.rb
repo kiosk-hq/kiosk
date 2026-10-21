@@ -3,7 +3,7 @@
 module Kiosk
   module Pow
     module Argon2id
-      VERSION = '0.5.26'
+      VERSION = '0.5.27'
     end
   end
 end

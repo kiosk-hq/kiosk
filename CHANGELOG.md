@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.27] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.5.27, matching skill 0.5.27.** `MIN_CLIENT` is 0.5.27: an older skill registers and logs in at paths that are gone.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.5.27.md`**, which registers on RFC 7591 and gets each token with a client assertion and DPoP.
+
 - 2026-10-21: `kiosk-test-support` and `kiosk-redteam` register at `oauth/register` and get tokens by client assertion and DPoP; their login, revoke and challenge helpers are gone.
 - 2026-10-21: The e2e harness registers at `oauth/register`, gets tokens by client assertion and DPoP, and validates all eighteen auth and binding schema `$defs` against live bytes.
 - 2026-10-21: `deploy/live-fleet-drive.rb` adds a read-only token probe: an unknown client must get `invalid_client`. The README walkthrough registers at `/kiosk/oauth/register`.

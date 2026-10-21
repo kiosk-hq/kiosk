@@ -47,7 +47,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::ForgedUserId do
       scenario.call(client, profile)
 
       expect(captured.uri.path).to eq('/kiosk/reserve')
-      expect(captured.headers['Authorization']).to eq('DPoP tok-b') # B calls it
+      expect(captured.headers['Authorization']).to eq("DPoP #{token_for('b')}") # B calls it
       body = JSON.parse(captured.body)
       expect(body).to eq('scooter_code' => 'SK-001', 'user_id' => 'user-a')
       expect(body).not_to have_key('name')

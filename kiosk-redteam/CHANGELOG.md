@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: Scenarios and batteries register at `oauth/register` and get tokens by client assertion and DPoP; the device-grant probes sign with a registered client.
+
 ## [0.5.26] — 2026-10-21
 
 - 2026-10-21: Version 0.5.26, the tree cut that matches skill 0.5.26.

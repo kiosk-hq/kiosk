@@ -4,7 +4,7 @@ require 'spec_helper'
 require 'base64'
 require_relative 'support'
 
-# Stubs for the registration and device-authorization endpoints.
+# Stubs for the registration, token and device-authorization endpoints.
 module DeviceGrantStubs
   # A JWS whose payload carries the given role claim — the scenario reads the
   # claim without verifying, so the signature segment is irrelevant.
@@ -13,14 +13,15 @@ module DeviceGrantStubs
     "eyJhbGciOiJSUzI1NiJ9.#{payload}.sig"
   end
 
-  def stub_register(role: 'customer', status: 201)
+  # The registration answers client a1; its first token carries `token`.
+  def stub_register(token: token_with_role('customer'), status: 201)
     ret = if status == 201
-            json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
-                             'access_token' => token_with_role(role))
+            json_return(201, 'client_id' => 'a1')
           else
             problem_return(STATUS_DEFAULT_CODE.fetch(status), status: status)
           end
-    stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(ret)
+    stub_request(:post, "#{BASE_URL}/kiosk/oauth/register").to_return(ret)
+    stub_request(:post, "#{BASE_URL}/kiosk/oauth/token").to_return(json_return(200, 'access_token' => token))
   end
 
   # RFC 6749 error object — NOT a Kiosk problem document. The OAuth half of the
@@ -77,6 +78,15 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
     expect(verdict.blocked).to be(true)
     expect(verdict.skipped).to be(false)
     expect(verdict.status).to eq(400)
+  end
+
+  it "signs every request with the registered client's assertion" do
+    stub_fixed_engine
+
+    scenario.call(client, profile)
+
+    expect(a_request(:post, device_url).with { |req| !URI.decode_www_form(req.body).to_h['client_assertion'].to_s.empty? })
+      .to have_been_made.times(7)
   end
 
   it 'probes each DECLARED role under both the role= and scope= spellings' do
@@ -148,7 +158,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
   describe 'when the profile declares no roles' do
     let(:profile) { minimal_profile }
 
-    it "still probes the role the origin's own registration token carries" do
+    it "still probes the role the origin's own first token carries" do
       stub_fixed_engine
 
       expect(scenario.call(client, profile).blocked).to be(true)
@@ -169,9 +179,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
     end
 
     it 'SKIPS — not passes — when the origin declares no role at all' do
-      stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-        .to_return(json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
-                                    'access_token' => 'eyJhbGciOiJSUzI1NiJ9.e30.sig'))
+      stub_register(token: 'eyJhbGciOiJSUzI1NiJ9.e30.sig')
 
       verdict = scenario.call(client, profile)
 

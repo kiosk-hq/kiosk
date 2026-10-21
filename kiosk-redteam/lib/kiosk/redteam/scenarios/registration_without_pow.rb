@@ -4,7 +4,7 @@ module Kiosk
   module Redteam
     module Scenarios
       # With a PoW gate, registration with no proof or a wrong one must be refused
-      # (not a 201, no token, not a crash), while a solved control registration succeeds.
+      # (not a 201, no client_id, not a crash), while a solved control registration succeeds.
       class RegistrationWithoutPow < Scenario
         def initialize
           super(name: 'RegistrationWithoutPow')
@@ -38,12 +38,12 @@ module Kiosk
         end
 
         def honest_registration?(control)
-          control.status == 201 && token_of(control)
+          control.status == 201 && client_id_of(control)
         end
 
         def control_problem(control)
           'CONTROL FAILED: a properly solved registration must return 201 with ' \
-            "an access_token — got HTTP #{control.status} #{control.body.inspect}. " \
+            "a client_id — got HTTP #{control.status} #{control.body.inspect}. " \
             'A server that refuses every registration refuses the two unproven ' \
             'ones too, which says nothing about a PoW gate.'
         end
@@ -55,14 +55,14 @@ module Kiosk
             return "#{label} crashed (HTTP #{resp.status}: #{resp.body.inspect}) — " \
                    'a crash is not a gate'
           end
-          return nil unless token_of(resp)
+          return nil unless client_id_of(resp)
 
-          "#{label} returned an access_token on HTTP #{resp.status}"
+          "#{label} returned a client_id on HTTP #{resp.status}"
         end
 
-        def token_of(resp)
+        def client_id_of(resp)
           body = resp.body
-          body.is_a?(Hash) ? body['access_token'] : nil
+          body.is_a?(Hash) ? body['client_id'] : nil
         end
       end
     end

@@ -25,6 +25,11 @@ module Kiosk
 
       private
 
+      # The client a 201 registration answer names, with the key it registered. No token yet.
+      def registered_principal(resp, key)
+        Kiosk::TestHelpers::Assistant::Principal.new(agent_id: resp.body['client_id'], user_id: nil, token: nil, rsa_key: key)
+      end
+
       # Changes a payload claim and keeps the original signature.
       def tamper_token(token)
         TokenClaims.tamper(token)

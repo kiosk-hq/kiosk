@@ -117,8 +117,8 @@ BATTERY.record('MalformedUuidArg', cancel_probes.all? { |ok, _| ok },
 
 require 'openssl'
 throwaway_pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
-rc, = WIRE.post_json('/kiosk/auth/register', { public_key: throwaway_pem })
-BATTERY.record('RegisterWithoutPoP', rc != 201, "register with no signed PoP → #{rc} (want != 201)")
+rc, = WIRE.post_json('/kiosk/oauth/register', { public_key: throwaway_pem })
+BATTERY.record('RegisterWithoutJwks', rc == 400, "register with a PEM and no jwks → #{rc} (want 400 invalid_client_metadata)")
 
 rc, = WIRE.get_json('/kiosk/availability', { party_size: 2 })
 BATTERY.record('MissingAuth', rc == 401, "unauthenticated request → #{rc} (want 401)")

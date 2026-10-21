@@ -4,7 +4,7 @@ require 'spec_helper'
 require 'base64'
 require_relative 'support'
 
-RSpec.shared_context 'with a challenge stub and a token for any role' do
+RSpec.shared_context 'with a token for any role' do
   subject(:scenario) { described_class.new }
 
   let(:client)  { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -18,34 +18,21 @@ RSpec.shared_context 'with a challenge stub and a token for any role' do
     "eyJhbGciOiJSUzI1NiJ9.#{payload}.sig"
   end
 
-  before do
-    # PoP handshake: the challenge fetch always succeeds.
-    stub_request(:get, %r{#{Regexp.escape(BASE_URL)}/kiosk/auth/challenge})
-      .to_return(
-        status: 200,
-        body: JSON.generate('challenge' => 'nonce-1'),
-        headers: { 'Content-Type' => 'application/json' }
-      )
-  end
-
-  def stub_register_returning(access_token, status: 201)
-    ret = if status == 201
-            json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1', 'access_token' => access_token)
-          else
-            problem_return('bad_request', status: status)
-          end
-    stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(ret)
+  # The registration answers a client, and the token endpoint a token for `access_token`.
+  def stub_register_returning(access_token)
+    stub_request(:post, "#{BASE_URL}/kiosk/oauth/register").to_return(json_return(201, 'client_id' => 'a1'))
+    stub_request(:post, "#{BASE_URL}/kiosk/oauth/token").to_return(json_return(200, 'access_token' => access_token))
   end
 end
 
 RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
-  include_context 'with a challenge stub and a token for any role'
+  include_context 'with a token for any role'
 
   it 'injects the escalated role onto the register wire (attack simulation)' do
-    stub = stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
+    stub_register_returning(token_with_role('customer'))
+    stub = stub_request(:post, "#{BASE_URL}/kiosk/oauth/register")
            .with(body: hash_including('role' => 'master'))
-           .to_return(json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
-                                       'access_token' => token_with_role('customer')))
+           .to_return(json_return(201, 'client_id' => 'a1'))
 
     scenario.call(client, profile)
     expect(stub).to have_been_requested
@@ -68,6 +55,18 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
     end
   end
 
+  describe 'when the token request after the registration fails' do
+    it 'is untested, not blocked' do
+      stub_request(:post, "#{BASE_URL}/kiosk/oauth/register").to_return(json_return(201, 'client_id' => 'a1'))
+      stub_request(:post, "#{BASE_URL}/kiosk/oauth/token").to_return(json_return(401, 'error' => 'invalid_client'))
+
+      verdict = scenario.call(client, profile)
+
+      expect(verdict).to have_attributes(blocked: false, untested: true)
+      expect(verdict.detail).to include('SETUP FAILED')
+    end
+  end
+
   # ── K-730 ────────────────────────────────────────────────────────────────
   #
   # A refusal of the injected registration is role-pinning only if an HONEST
@@ -77,7 +76,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
   # where no role is pinned because no agent is ever registered.
   describe 'when the server refuses the injected registration' do
     def register_returns(*responses)
-      stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
+      stub_request(:post, "#{BASE_URL}/kiosk/oauth/token")
+        .to_return(json_return(200, 'access_token' => token_with_role('customer')))
+      stub_request(:post, "#{BASE_URL}/kiosk/oauth/register").to_return(*responses)
     end
 
     # Every refusal on the auth plane is an RFC 9457 problem document too —
@@ -86,10 +87,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
       problem_return(code || STATUS_DEFAULT_CODE.fetch(status), status: status)
     end
 
-    def issued
-      json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1',
-                       'access_token' => token_with_role('customer'))
-    end
+    def issued = json_return(201, 'client_id' => 'a1')
 
     it 'returns blocked: true when the CONTROL registration succeeds (no escalation possible)' do
       register_returns(refused(400), issued)
@@ -128,7 +126,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PrivilegeSelfSelection do
       expect(stub).to have_been_requested.once
     end
 
-    it 'does not spend a control registration when the server issues a token' do
+    it 'does not spend a control registration when the server registers the client' do
       stub = register_returns(issued)
 
       expect(scenario.call(client, profile).blocked).to be(true)

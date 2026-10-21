@@ -575,7 +575,7 @@ module GetgroceryScenarios
     end
   end
 
-  # §3.8.11: a machine timestamp (the auth challenge's exp) does not move with the caller's clock.
+  # §3.8.11: a machine timestamp (the access token's exp) does not move with the caller's clock.
   class MachineTimestampsIgnoreTheCallerClock < Kiosk::Redteam::Scenario
     TOLERANCE_SECONDS = 60
 
@@ -583,11 +583,11 @@ module GetgroceryScenarios
       super(name: 'MachineTimestampsIgnoreTheCallerClock')
     end
 
-    def call(_client, _profile)
-      ask_challenges
+    def call(client, _profile)
+      ask_tokens(client)
       unmoved = answered? && apart <= TOLERANCE_SECONDS
       scenario_verdict(unmoved, @west_status) do
-        "auth/challenge on #{CLOCK_WEST} → #{@west_status}/exp=#{@exp_w.inspect}, on " \
+        "oauth/token on #{CLOCK_WEST} → #{@west_status}/exp=#{@exp_w.inspect}, on " \
           "#{CLOCK_EAST} → #{@east_status}/exp=#{@exp_e.inspect}, apart by " \
           "#{apart || 'n/a'}s (want two live future instants " \
           "within #{TOLERANCE_SECONDS}s — the two clocks are 90000s apart)"
@@ -596,14 +596,20 @@ module GetgroceryScenarios
 
     private
 
-    def ask_challenges
-      wire = Kiosk::TestHelpers::Wire.new(base_url: BASE_URL)
-      pem  = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
-      path = "/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}"
-      @west_status, west_body = wire.get_json(path, {}, { 'Kiosk-Timezone' => CLOCK_WEST })
-      @east_status, east_body = wire.get_json(path, {}, { 'Kiosk-Timezone' => CLOCK_EAST })
-      @exp_w = west_body.is_a?(Hash) ? west_body['exp'] : nil
-      @exp_e = east_body.is_a?(Hash) ? east_body['exp'] : nil
+    # One client asks for a token on each clock.
+    def ask_tokens(client)
+      principal = client.register_client!
+      @west_status, @exp_w = token_exp(client, principal, CLOCK_WEST)
+      @east_status, @exp_e = token_exp(client, principal, CLOCK_EAST)
+    end
+
+    def token_exp(client, principal, zone)
+      form = { 'grant_type' => 'client_credentials', 'client_assertion_type' => client.class::ASSERTION_TYPE,
+               'client_assertion' => client.client_assertion(principal) }
+      resp = client.wire.post_form('/kiosk/oauth/token', form,
+                                   client.wire.dpop(nil, principal.rsa_key).merge('Kiosk-Timezone' => zone))
+      token = resp.body.is_a?(Hash) ? resp.body['access_token'] : nil
+      [resp.status, token && Kiosk::Redteam::TokenClaims.claims(token)&.fetch('exp', nil)]
     end
 
     def numeric? = @exp_w.is_a?(Integer) && @exp_e.is_a?(Integer)

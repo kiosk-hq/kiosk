@@ -6,13 +6,8 @@
 
 require 'date'
 require 'json'
-require 'net/http'
 require 'time'
-require 'uri'
-require 'jwt'
-require 'openssl'
 require 'securerandom'
-require 'base64'
 
 require 'kiosk/redteam'
 
@@ -26,7 +21,6 @@ FUTURE_SLOT = lambda { |n, hour = 9|
 PAST_SLOT = '1900-01-01T09:00:00Z'
 
 SERVER = ENV.fetch('SERVER_URL')
-ISSUER = SERVER
 
 # Seeded accounts (db/seeds.rb); only the owner carries a staff_role.
 OWNER_ID      = '00000000-0000-0000-0000-0000000000a0'
@@ -44,21 +38,23 @@ end
 # The assistants' calls; each pays the proof-of-work toll its access token owes.
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
-def pop_proof(key, pem)
-  _rc, ch = WIRE.get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-  JWT.encode({ aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
-end
+# The assistant side of the binding ceremonies: registration, client assertions, tokens.
+ASSISTANT = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 
-# Links an owner's real Devise session; extra keys are smuggled into the claim body.
-def link_as_owner(extra_claim_body = {})
-  rc, link = owner_session.post_json('/kiosk/auth/link', {}, { session: true })
-  return [rc, link] unless rc == 201
+# A newly registered client redeems a link code that `session`'s human mints;
+# extra keys are smuggled into the claim body. Answers the claim's status, the
+# token answer that follows it, and the client.
+def claim_link(session, extra_claim_body = {})
+  rc, link = session.post_json('/kiosk/auth/link', {}, { session: true })
+  return [rc, {}, nil] unless rc == 201
 
-  key = OpenSSL::PKey::RSA.generate(2048)
-  pem = key.public_key.to_pem
-  rc, claimed = WIRE.post_json('/kiosk/auth/claim',
-                               { code: link.fetch('link_code'), public_key: pem, signed: pop_proof(key, pem) }.merge(extra_claim_body))
-  [rc, claimed, key]
+  principal = ASSISTANT.register_client!
+  body = { code: link.fetch('link_code'), client_assertion_type: ASSISTANT.class::ASSERTION_TYPE,
+           client_assertion: ASSISTANT.client_assertion(principal) }.merge(extra_claim_body)
+  rc = WIRE.post('/kiosk/auth/claim', body).status
+  return [rc, {}, principal] unless rc == 204
+
+  [rc, ASSISTANT.token(principal).body, principal]
 end
 
 BATTERY = Kiosk::Redteam::Battery.new
@@ -160,38 +156,20 @@ BATTERY.record('MethodMismatch',
 # A customer's own link mints, but binds at `customer`.
 customer_session = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
                                                               .sign_in!(email: ALICE_EMAIL, password: DEMO_PASSWORD)
-rc_cl, link_cl = customer_session.post_json('/kiosk/auth/link', {}, { session: true })
-cust_role = nil
-if rc_cl == 201
-  ck = OpenSSL::PKey::RSA.generate(2048)
-  cpem = ck.public_key.to_pem
-  _rc, cclaimed = WIRE.post_json('/kiosk/auth/claim',
-                                 { code: link_cl.fetch('link_code'), public_key: cpem,
-                                   signed: pop_proof(ck, cpem) })
-  cseg = cclaimed['access_token'].to_s.split('.')[1].to_s
-  cust_role = begin
-    JSON.parse(Base64.urlsafe_decode64(cseg + ('=' * ((4 - (cseg.length % 4)) % 4))))['role']
-  rescue StandardError
-    nil
-  end
-end
+rc_cl, cust_token_answer = claim_link(customer_session)
+cust_role = Kiosk::Redteam::TokenClaims.claims(cust_token_answer['access_token'])&.fetch('role', nil)
 BATTERY.record('CustomerLinkCannotCarryOwnerRole',
-               rc_cl == 201 && cust_role == 'customer',
-               "customer link mint → #{rc_cl}, bound token role #{cust_role.inspect} " \
-               '(want 201 + "customer"; the role is read off the human, never chosen)')
+               rc_cl == 204 && cust_role == 'customer',
+               "customer link claim → #{rc_cl}, bound token role #{cust_role.inspect} " \
+               '(want 204 + "customer"; the role is read off the human, never chosen)')
 
 # A forged role in the claim body is ignored; the owner's IdP session sets the role.
-rc, claimed, owner_key = link_as_owner(role: 'superuser', allowed_roles: ['superuser'], requested_role: 'superuser')
-owner_token = claimed['access_token'].to_s
-seg = owner_token.split('.')[1].to_s
-role_claim = begin
-  JSON.parse(Base64.urlsafe_decode64(seg + ('=' * ((4 - (seg.length % 4)) % 4))))['role']
-rescue StandardError
-  nil
-end
+rc, owner_token_answer, owner = claim_link(owner_session, role: 'superuser', allowed_roles: ['superuser'], requested_role: 'superuser')
+owner_token = owner_token_answer['access_token'].to_s
+role_claim = Kiosk::Redteam::TokenClaims.claims(owner_token)&.fetch('role', nil)
 BATTERY.record('OwnerLinkIgnoresForgedClaimBody',
-               rc == 201 && role_claim == 'owner',
-               "owner link with forged claim body → token role #{role_claim.inspect} (want \"owner\", body ignored)")
+               rc == 204 && role_claim == 'owner',
+               "owner link with forged claim body → claim #{rc}, token role #{role_claim.inspect} (want 204 + \"owner\", body ignored)")
 
 # Alice's calendar excludes Bob's booking.
 rc_b3, appt_b3 = WIRE.post_json(
@@ -215,11 +193,6 @@ BATTERY.record('CustomerCalendarStaysOwnScoped',
 
 # Role escalation through the device-grant ceremony (RFC 8628): the role is the approver's.
 
-DEVICE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
-
-# The OAuth endpoints are form-encoded; the first token poll of a code pays the toll.
-def oauth_post(path, form) = WIRE.post_form(path, form).then { [it.status, it.body] }
-
 # The human approves `user_code` on the verify page; returns that page.
 def approve_on_verify_page(session, user_code)
   page = session.get_html("/kiosk/oauth/device/verify?user_code=#{user_code}")
@@ -230,47 +203,35 @@ def approve_on_verify_page(session, user_code)
   page
 end
 
-# Open a ceremony, approve it on the verify page as `session`'s human, poll once.
+# The registered client opens a ceremony, `session`'s human approves it on the
+# verify page, the client polls once; the first poll of a code pays the toll.
 # Returns [authorization_http, poll_http, token_or_nil, verify_page_html].
-def claim_ceremony(session, key, pem, extra = {})
-  rc, da = oauth_post('/kiosk/oauth/device_authorization',
-                      { 'client_id' => 'redteam-claim', 'public_key' => pem }.merge(extra))
-  return [rc, nil, nil, nil] unless rc == 200
+def claim_ceremony(session, principal)
+  opened = ASSISTANT.device_authorization(principal)
+  return [opened.status, nil, nil, nil] unless opened.status == 200
 
-  page = approve_on_verify_page(session, da.fetch('user_code'))
-  rc_poll, tok = oauth_post('/kiosk/oauth/token',
-                            { 'grant_type' => DEVICE_GRANT,
-                              'device_code' => da.fetch('device_code'),
-                              'signed' => pop_proof(key, pem) })
-  [rc, rc_poll, (tok['access_token'] if tok.is_a?(Hash)), page.body]
+  page = approve_on_verify_page(session, opened.body.fetch('user_code'))
+  poll = ASSISTANT.device_token(opened.body.fetch('device_code'), principal)
+  [opened.status, poll.status, (poll.body['access_token'] if poll.body.is_a?(Hash)), page.body]
 end
 
-def token_role(token)
-  seg = token.to_s.split('.')[1].to_s
-  JSON.parse(Base64.urlsafe_decode64(seg + ('=' * ((4 - (seg.length % 4)) % 4))))
-rescue StandardError
-  {}
-end
+# The unverified claims of a token, or {}.
+def token_role(token) = Kiosk::Redteam::TokenClaims.claims(token) || {}
 
 # The request opening the ceremony may not name a role, declared or not.
+selfselect = ASSISTANT.register_client!
 self_selection = [
   ['role=owner (DECLARED here — the escalation itself)', { 'role' => 'owner' }],
   ['scope=owner (the OAuth-standard spelling of the same)', { 'scope' => 'owner' }],
   ['role=customer (declared, no escalation — still not the client\'s to name)', { 'role' => 'customer' }],
   ['role=master (undeclared)', { 'role' => 'master' }]
 ].map do |label, params|
-  fresh = OpenSSL::PKey::RSA.generate(2048)
-  rc, body = oauth_post('/kiosk/oauth/device_authorization',
-                        { 'client_id' => 'redteam-selfselect',
-                          'public_key' => fresh.public_key.to_pem }.merge(params))
+  rc, body = ASSISTANT.device_authorization(selfselect, **params).then { [it.status, it.body] }
   [rc == 400 && body['error'] == 'invalid_request', "#{label} → #{rc}/#{body['error'].inspect}"]
 end
 
 # Control: the same request without a role opens the ceremony.
-control_key = OpenSSL::PKey::RSA.generate(2048)
-rc_ctrl, da_ctrl = oauth_post('/kiosk/oauth/device_authorization',
-                              { 'client_id' => 'redteam-selfselect',
-                                'public_key' => control_key.public_key.to_pem })
+rc_ctrl, da_ctrl = ASSISTANT.device_authorization(selfselect).then { [it.status, it.body] }
 control_ok = rc_ctrl == 200 && da_ctrl['user_code'].to_s.match?(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
 BATTERY.record('DeviceGrantCannotSelfSelectRole',
                self_selection.all? { |ok, _| ok } && control_ok,
@@ -279,21 +240,19 @@ BATTERY.record('DeviceGrantCannotSelfSelectRole',
                'and the role-less ceremony still opening)')
 
 # A customer's ceremony lands at `customer`, an owner's at `owner`, over the same endpoints.
-cust_key  = OpenSSL::PKey::RSA.generate(2048)
-cust_pem  = cust_key.public_key.to_pem
-_rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cust_key, cust_pem)
+cust = ASSISTANT.register_client!
+_rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cust)
 cust_claim_role = token_role(cust_token)['role']
-rc_cust_cal, cust_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(cust_token, cust_key))
+rc_cust_cal, cust_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(cust_token, cust.rsa_key))
 cust_rows      = Array(cust_cal)
 # Positive control: the customer token reaches Alice's own booking.
 cust_sees_own  = cust_rows.any? { |r| r['id'] == appt_id_a }
 cust_own_only  = cust_rows.none? { |r| r['id'] == appt_id_b3 }
 
-own_key  = OpenSSL::PKey::RSA.generate(2048)
-own_pem  = own_key.public_key.to_pem
-_rc_o, rc_own_poll, own_claim_token, own_page = claim_ceremony(owner_session, own_key, own_pem)
+own = ASSISTANT.register_client!
+_rc_o, rc_own_poll, own_claim_token, own_page = claim_ceremony(owner_session, own)
 own_claim_role = token_role(own_claim_token)['role']
-rc_own_cal, own_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(own_claim_token, own_key))
+rc_own_cal, own_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(own_claim_token, own.rsa_key))
 own_rows        = Array(own_cal)
 own_sees_others = own_rows.any? { |r| r['id'] == appt_id_b3 }
 
@@ -320,15 +279,13 @@ BATTERY.record('DeviceGrantVerifyPageNamesTheAccess',
                "#{own_page_names}; the customer's page does NOT say owner: #{pages_differ} " \
                "(want all three — the field is the approver's real role, not a constant)")
 
-# Re-running the ceremony with a bound key (rebind) still yields the approver's role.
-rc_rebind_refused, rebind_refused_body =
-  oauth_post('/kiosk/oauth/device_authorization',
-             { 'client_id' => 'redteam-rebind', 'public_key' => cust_pem, 'role' => 'owner' })
-_rc_r, rc_rebind_poll, rebind_token, = claim_ceremony(customer_session, cust_key, cust_pem)
+# Re-running the ceremony with a bound client (rebind) still yields the approver's role.
+rc_rebind_refused, rebind_refused_body = ASSISTANT.device_authorization(cust, 'role' => 'owner').then { [it.status, it.body] }
+_rc_r, rc_rebind_poll, rebind_token, = claim_ceremony(customer_session, cust)
 rebind_claims = token_role(rebind_token)
 rebind_role   = rebind_claims['role']
 rebind_stable = rebind_claims['agent_id'] == token_role(cust_token)['agent_id']
-rc_rebind_cal, rebind_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(rebind_token, cust_key))
+rc_rebind_cal, rebind_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(rebind_token, cust.rsa_key))
 rebind_rows      = Array(rebind_cal)
 # Positive control: the rebound token still reads Alice's book.
 rebind_sees_own  = rebind_rows.any? { |r| r['id'] == appt_id_a }
@@ -337,7 +294,7 @@ BATTERY.record('DeviceGrantRebindCannotEscalate',
                rc_rebind_refused == 400 && rebind_refused_body['error'] == 'invalid_request' &&
                  rc_rebind_poll == 200 && rebind_role == 'customer' && rebind_stable &&
                  rc_rebind_cal == 200 && rebind_sees_own && rebind_own_only,
-               "known key re-runs the ceremony: role=owner → #{rc_rebind_refused}/" \
+               "bound client re-runs the ceremony: role=owner → #{rc_rebind_refused}/" \
                "#{rebind_refused_body['error'].inspect}; the honest re-run → poll #{rc_rebind_poll}, " \
                "role #{rebind_role.inspect}, agent_id stable=#{rebind_stable}, calendar #{rc_rebind_cal} " \
                "sees_own=#{rebind_sees_own} own_only=#{rebind_own_only} (want the rebind to stay " \
@@ -349,7 +306,7 @@ rc_forged_cal, = WIRE.get_json('/kiosk/salon_calendar', {}, forged_owner_bearer)
 rc_forged_book, = WIRE.post_json('/kiosk/book_appointment',
                                  { salon_id: salon_id, slot: FUTURE_SLOT.call(5) },
                                  forged_owner_bearer)
-rc_owner_cal, owner_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(owner_token, owner_key))
+rc_owner_cal, owner_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(owner_token, owner&.rsa_key))
 owner_sees_book = Array(owner_cal).any? { |r| r['id'] == appt_id_b3 }
 BATTERY.record('SelfAssertedTokenForgery',
                rc_forged_cal == 401 && rc_forged_book == 401 &&

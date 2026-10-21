@@ -18,7 +18,7 @@ require_relative '../support/prove_test_issuer'
 
 BASE_URL = ENV.fetch('SERVER_URL')
 # The KYC broker as the demo's development and test environments point this origin at it.
-BROKER_URL     = 'http://127.0.0.1:3020'
+BROKER_URL     = ENV.fetch('KIOSK_PROVE_BROKER_URL', 'http://127.0.0.1:3020')
 TRUSTED_ISSUER = ProveTestIssuer.issuer
 # The seeded rider (db/seeds.rb).
 RIDER_EMAIL   = 'ada@example.com'
@@ -328,7 +328,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::StolenToken.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
-  # Role self-selection at the unauthenticated device_authorization request.
+  # Role self-selection at the device_authorization request a registered client signs.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new, # payment currency ≠ checkout currency
   SkootiScenarios::TamperedPriceCheckout.new,            # forged checkout — below quote

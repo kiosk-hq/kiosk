@@ -8,7 +8,8 @@
 #   POST <mount>/<action-name>         an action — the arguments ARE the body
 #   POST <mount>/pay                   reserved, unchanged
 #   POST <mount>/agents/kyc            reserved, unchanged
-#   POST <mount>/auth/register         reserved, unchanged
+#   POST <mount>/oauth/register        reserved, unchanged
+#   POST <mount>/oauth/token           reserved, unchanged
 #
 # There is no `<mount>/query` and no `<mount>/run` — they were deleted at the
 # cutover — and there is no `name` field anywhere: the verb name is a PATH
@@ -22,7 +23,8 @@
 #
 # Provides:
 #   - BASE_URL constant + verb_url(name)
-#   - stub_registers(*suffixes) — successive /auth/register calls
+#   - stub_registers(*suffixes) — successive registrations and their tokens
+#   - token_for(suffix) — the access token the stub issues to agent-<suffix>
 #   - stub_action / stub_query / stub_pay / stub_kyc
 #   - minimal Profile factories
 
@@ -39,19 +41,24 @@ end
 
 # ── Stub builders ───────────────────────────────────────────────────────────
 
-def reg_response(suffix)
-  json_return(
-    201,
-    'agent_id' => "agent-#{suffix}",
-    'user_id' => "user-#{suffix}",
-    'access_token' => "tok-#{suffix}"
-  )
+def reg_response(suffix) = json_return(201, 'client_id' => "agent-#{suffix}")
+
+# The access token of agent-<suffix>, for account user-<suffix>. Unsigned: no spec verifies it.
+def token_for(suffix) = JWT.encode({ sub: "user-#{suffix}", agent_id: "agent-#{suffix}" }, nil, 'none')
+
+# Stub successive registrations; pass suffixes in order of expected calls.
+# The token endpoint answers the client that the client assertion names.
+def stub_registers(*suffixes)
+  stub_request(:post, "#{BASE_URL}/kiosk/oauth/register")
+    .to_return(*suffixes.map { |s| reg_response(s) })
+  stub_tokens
 end
 
-# Stub successive register calls; pass suffixes in order of expected calls.
-def stub_registers(*suffixes)
-  stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-    .to_return(*suffixes.map { |s| reg_response(s) })
+def stub_tokens
+  stub_request(:post, "#{BASE_URL}/kiosk/oauth/token").to_return do |request|
+    client_id = JWT.decode(URI.decode_www_form(request.body).to_h['client_assertion'], nil, false).first['sub']
+    json_return(200, 'access_token' => token_for(client_id.delete_prefix('agent-')), 'token_type' => 'DPoP')
+  end
 end
 
 # POST <mount>/agents/kyc — a reserved endpoint the cutover did not touch.

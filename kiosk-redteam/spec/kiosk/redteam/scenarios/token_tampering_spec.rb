@@ -25,6 +25,12 @@ RSpec.shared_context 'with a valid RS256 token to tamper' do
     JWT.encode({ sub: 'user-b', role: 'customer', exp: now + 3600, iat: now },
                signing_key, 'RS256')
   end
+
+  # The registration answers client agent-b, and the token endpoint the real RS256 JWT.
+  def stub_register_with_real_jwt
+    stub_request(:post, "#{BASE_URL}/kiosk/oauth/register").to_return(json_return(201, 'client_id' => 'agent-b'))
+    stub_request(:post, "#{BASE_URL}/kiosk/oauth/token").to_return(json_return(200, 'access_token' => valid_token))
+  end
 end
 
 RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
@@ -48,14 +54,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
 
     context 'when the server accepts a tampered token (broken — BREACH)' do
       it 'returns blocked: false' do
-        # Registration returns a real RS256 JWT so tamper_token works correctly.
-        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-          .to_return(
-            status: 201,
-            body: JSON.generate('agent_id' => 'agent-b', 'user_id' => 'user-b',
-                                'access_token' => valid_token),
-            headers: { 'Content-Type' => 'application/json' }
-          )
+        # The token endpoint issues a real RS256 JWT so tamper_token works correctly.
+        stub_register_with_real_jwt
         # Server accepts any token (broken auth middleware).
         # The scenario probes with the profile's `per_user_query` — GET /kiosk/ping.
         stub_query('ping', rows: [])
@@ -69,13 +69,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
 
     context 'when the server rejects the tampered token (correct — BLOCKED)' do
       it 'returns blocked: true' do
-        stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-          .to_return(
-            status: 201,
-            body: JSON.generate('agent_id' => 'agent-b', 'user_id' => 'user-b',
-                                'access_token' => valid_token),
-            headers: { 'Content-Type' => 'application/json' }
-          )
+        stub_register_with_real_jwt
         captured = nil
         stub_request(:get, verb_url('ping'))
           .with do |req|
@@ -104,14 +98,6 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   # BLOCKED off the permissive blocked? set.
   describe '#call — only a 401 proves the signature was checked (K-728)' do
     include_context 'with a valid RS256 token to tamper'
-
-    def stub_register_with_real_jwt
-      stub_request(:post, "#{BASE_URL}/kiosk/auth/register")
-        .to_return(status: 201,
-                   body: JSON.generate('agent_id' => 'agent-b', 'user_id' => 'user-b',
-                                       'access_token' => valid_token),
-                   headers: { 'Content-Type' => 'application/json' })
-    end
 
     { 403 => 'forbidden', 402 => 'payment_failed' }.each do |status, code|
       it "returns blocked: false when the tampered token is answered #{status}" do

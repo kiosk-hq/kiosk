@@ -651,7 +651,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::TokenTampering.new,
   Kiosk::Redteam::Scenarios::StolenToken.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
-  # The claim ceremony's door: the unauthenticated device_authorization request.
+  # The claim ceremony's door: the device_authorization request a registered client signs.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new,      # payment currency ≠ checkout currency
   HotelingScenarios::TamperedPriceCheckout.new,             # forged checkout — below quote

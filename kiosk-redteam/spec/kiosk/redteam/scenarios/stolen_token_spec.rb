@@ -16,9 +16,13 @@ RSpec.describe Kiosk::Redteam::Scenarios::StolenToken do
   def stub_origin(accept_stolen: false)
     stub_registers('a')
     stub_request(:get, verb_url('ping')).to_return do |req|
-      own = req.headers['Authorization'] == 'DPoP tok-a' && proof_key(req.headers['Dpop']) == generated.first
-      own || (accept_stolen && req.headers['Authorization']) ? wire_return(status: 200, body: []) : problem_return('unauthenticated')
+      own_call?(req) || (accept_stolen && req.headers['Authorization']) ? wire_return(status: 200, body: []) : problem_return('unauthenticated')
     end
+  end
+
+  # The victim's token with a proof that the victim's own key signs.
+  def own_call?(req)
+    req.headers['Authorization'] == "DPoP #{token_for('a')}" && proof_key(req.headers['Dpop']) == generated.first
   end
 
   def proof_key(proof)

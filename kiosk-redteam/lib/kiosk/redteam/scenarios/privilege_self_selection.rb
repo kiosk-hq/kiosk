@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
+require 'openssl'
+
 module Kiosk
   module Redteam
     module Scenarios
-      # A role injected into /auth/register must not reach the issued token.
-      # A refusal counts only if the same registration without the role succeeds.
+      # A role injected into the registration body must not reach the token
+      # that the client then gets. A refusal counts only if the same
+      # registration without the role succeeds.
       class PrivilegeSelfSelection < Scenario
         ESCALATED_ROLE = 'master'
 
@@ -13,14 +16,23 @@ module Kiosk
         end
 
         def call(client, _profile)
-          resp = client.register_raw(wire_role: ESCALATED_ROLE)
+          key  = OpenSSL::PKey::RSA.generate(2048)
+          resp = client.register_raw(wire_role: ESCALATED_ROLE, key:)
           return refusal_verdict(client, resp) unless resp.status == 201
-          return blocked_verdict(201) unless TokenClaims.claims(access_token(resp))&.fetch('role', nil) == ESCALATED_ROLE
 
-          breach_verdict(201, "issued token carries the self-selected role #{ESCALATED_ROLE.inspect}")
+          issued = client.token(registered_principal(resp, key))
+          setup_failure(issued, step: 'the token request after the registration with the injected role',
+                                because: 'without a token there is no role to read.') || role_verdict(issued)
         end
 
         private
+
+        def role_verdict(issued)
+          role = TokenClaims.claims(issued.body['access_token'])&.fetch('role', nil)
+          return blocked_verdict(201) unless [role, issued.body['scope']].include?(ESCALATED_ROLE)
+
+          breach_verdict(issued.status, "issued token carries the self-selected role #{ESCALATED_ROLE.inspect}")
+        end
 
         def refusal_verdict(client, resp)
           if resp.status >= 500 || resp.status.zero?
@@ -33,17 +45,13 @@ module Kiosk
         end
 
         def control_failure(control, resp)
-          return nil if control.status == 201 && access_token(control)
+          return nil if control.status == 201 && control.body.is_a?(Hash) && control.body['client_id']
 
           breach_verdict(control.status,
-                         'CONTROL FAILED: an honest registration must return 201 with an ' \
-                         "access_token — got HTTP #{control.status} #{control.body.inspect}. " \
+                         'CONTROL FAILED: an honest registration must return 201 with a ' \
+                         "client_id — got HTTP #{control.status} #{control.body.inspect}. " \
                          "The injected registration's HTTP #{resp.status} refusal therefore " \
                          'says nothing about whether the role is pinned server-side.')
-        end
-
-        def access_token(resp)
-          resp.body.is_a?(Hash) ? resp.body['access_token'] : nil
         end
       end
     end

@@ -8,11 +8,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
 
-  # The scenario posts /register up to three times, in order:
+  # The scenario posts oauth/register up to three times, in order:
   #   1. pow: :skip   2. pow: "0"   3. the CONTROL solve (only when 1 and 2
   #   were both refused, since a success is already conclusive).
   def register_returns(*responses)
-    stub_request(:post, "#{BASE_URL}/kiosk/auth/register").to_return(*responses)
+    stub_request(:post, "#{BASE_URL}/kiosk/oauth/register").to_return(*responses)
   end
 
   # The auth plane's refusals are RFC 9457 problem documents like every other error.
@@ -21,8 +21,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
   end
 
   def issued(suffix = 'ctl')
-    json_return(201, 'agent_id' => "a-#{suffix}", 'user_id' => "u-#{suffix}",
-                     'access_token' => "tok-#{suffix}")
+    json_return(201, 'client_id' => "a-#{suffix}")
   end
 
   describe '#call — non-vacuity' do
@@ -42,8 +41,8 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
 
     context 'when the server rejects both no-PoW attempts AND issues on a solved one (correct — BLOCKED)' do
       it 'returns blocked: true on a 422 pow_required + 400 bad_request (no reliance on error code)' do
-        # The scenario uses its own rejection check (status != 201, no token, not
-        # a crash) so it does NOT rely on Kiosk::Redteam.blocked? or on the
+        # The scenario uses its own rejection check (status != 201, no client_id,
+        # not a crash) so it does NOT rely on Kiosk::Redteam.blocked? or on the
         # bad_request code.
         register_returns(refused(422), refused(400), issued)
 
@@ -113,9 +112,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::RegistrationWithoutPow do
       end
     end
 
-    context 'when the control answers 201 but hands back no access_token' do
+    context 'when the control answers 201 but hands back no client_id' do
       it 'returns blocked: false' do
-        register_returns(refused(422), refused(400), json_return(201, 'agent_id' => 'a1'))
+        register_returns(refused(422), refused(400), json_return(201, 'jwks' => {}))
 
         verdict = scenario.call(client, profile)
 

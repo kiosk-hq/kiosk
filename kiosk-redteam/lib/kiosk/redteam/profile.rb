@@ -5,7 +5,7 @@ module Kiosk
     # What an origin tells the generic scenarios about itself. A nil field skips
     # the scenarios that need that surface.
     #
-    #   pow_difficulty        >0 when /register is gated by a PoW toll; 0 skips RegistrationWithoutPow
+    #   pow_difficulty        >0 when oauth/register is gated by a PoW toll; 0 skips RegistrationWithoutPow
     #   declared_roles        the roles the origin declares; DeviceGrantRoleSelfSelection needs a real one
     #   requires_kyc          whether the gated action needs a KYC attestation
     #   currency              the ISO 4217 code the origin prices in, lower case (WrongCurrencyPayment)

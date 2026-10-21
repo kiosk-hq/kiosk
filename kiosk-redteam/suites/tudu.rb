@@ -5,16 +5,11 @@
 #   SERVER_URL=http://127.0.0.1:3007 bundle exec ruby ../kiosk-redteam/suites/tudu.rb
 
 require 'json'
-require 'jwt'
-require 'net/http'
-require 'uri'
-require 'openssl'
 require 'securerandom'
 
 require 'kiosk/redteam'
 
 SERVER   = ENV.fetch('SERVER_URL')
-ISSUER   = SERVER
 EMAIL    = 'alice@example.com'
 PASSWORD = 'tudu-demo-password'
 
@@ -31,18 +26,12 @@ def client(headers) = headers.key?(:session) ? SESSION : WIRE
 def post_json(path, body, headers = {}) = client(headers).post_json(path, body, headers)
 def get_json(path, params = {}, headers = {}) = client(headers).get_json(path, params, headers)
 
-def pop_proof(key, pem)
-  rc, ch = get_json("/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-  abort "challenge failed (#{rc})" unless rc == 200
-  JWT.encode({ aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
-end
-
 ASSISTANT = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 
 def register_agent
   assistant = ASSISTANT.register!
-  { key: assistant.rsa_key, pem: assistant.rsa_key.public_key.to_pem,
-    token: assistant.token, agent_id: assistant.agent_id, user_id: assistant.user_id }
+  { principal: assistant, key: assistant.rsa_key, token: assistant.token, agent_id: assistant.agent_id,
+    user_id: assistant.user_id }
 end
 
 BATTERY = Kiosk::Redteam::Battery.new
@@ -154,21 +143,19 @@ rescue Kiosk::UserIdentityProviders::DeviseSession::SignInError => e
   abort "#{e.message} — RevokedAgentKey needs a live Devise session"
 end
 
-# A login that succeeds before unlink proves the final 404 means revoked, not never linked.
+# A token request that succeeds before unlink proves the final invalid_client means unlinked, not never linked.
 rc_link, link = post_json('/kiosk/auth/link', {}, { session: true })
-rk = OpenSSL::PKey::RSA.generate(2048)
-rpem = rk.public_key.to_pem
-rc_claim, claimed = post_json('/kiosk/auth/claim', { code: link['link_code'], public_key: rpem, signed: pop_proof(rk, rpem) })
-revoked_agent_id = claimed['agent_id']
-rc_prelogin, = post_json('/kiosk/auth/login', { public_key: rpem, signed: pop_proof(rk, rpem) })
-rc_unlink, = post_json('/kiosk/auth/unlink', { agent_id: revoked_agent_id }, { session: true })
-rc, = post_json('/kiosk/auth/login', { public_key: rpem, signed: pop_proof(rk, rpem) })
+revoked = ASSISTANT.register_client!
+rc_claim = ASSISTANT.claim(link['link_code'], revoked).status
+pre_token = ASSISTANT.token(revoked)
+rc_unlink, = post_json('/kiosk/auth/unlink', { agent_id: revoked.agent_id }, { session: true })
+post_token = ASSISTANT.token(revoked)
 BATTERY.record('RevokedAgentKey',
-               rc_link == 201 && rc_claim == 201 && !revoked_agent_id.nil? &&
-               rc_prelogin == 200 && rc_unlink == 204 && rc == 404,
-               "link=#{rc_link} claim=#{rc_claim} agent_id=#{revoked_agent_id.inspect} " \
-               "pre-revoke login=#{rc_prelogin} (want 200) unlink=#{rc_unlink} (want 204) " \
-               "post-revoke login=#{rc} (want 404)")
+               rc_link == 201 && rc_claim == 204 && pre_token.status == 200 && rc_unlink == 204 &&
+               post_token.status == 401 && post_token.body['error'] == 'invalid_client',
+               "link=#{rc_link} claim=#{rc_claim} (want 204) agent_id=#{revoked.agent_id.inspect} " \
+               "token before unlink=#{pre_token.status} (want 200) unlink=#{rc_unlink} (want 204) " \
+               "token after unlink=#{post_token.status}/#{post_token.body['error'].inspect} (want 401 invalid_client)")
 
 # A rebind watermark-revokes the key's pre-link tokens.
 pl = register_agent
@@ -177,20 +164,18 @@ pl_list = plc['list_id']
 rc, link2 = post_json('/kiosk/auth/link', {}, { session: true })
 # JWT iat is second-resolution: the pre-link token must predate the rebind watermark.
 sleep 1.1
-rc, = post_json('/kiosk/auth/claim', { code: link2['link_code'], public_key: pl[:pem], signed: pop_proof(pl[:key], pl[:pem]) })
+ASSISTANT.claim(link2['link_code'], pl[:principal])
 rc, = get_json('/kiosk/list_todos', { list_id: pl_list }, WIRE.dpop(pl[:token], pl[:key]))
 BATTERY.record('PreLinkTokenAfterLink', rc == 401,
                "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
 
 # A co-member's roster must name people by display_name, never by login address (§7.2).
 pii_rc_link, pii_link = post_json('/kiosk/auth/link', {}, { session: true })
-pii_key = OpenSSL::PKey::RSA.generate(2048)
-pii_pem = pii_key.public_key.to_pem
-pii_rc_claim, = post_json('/kiosk/auth/claim',
-                          { code: pii_link['link_code'], public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
-pii_rc_login, pii_login = post_json('/kiosk/auth/login',
-                                    { public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
-pii_auth = WIRE.dpop(pii_login['access_token'].to_s, pii_key)
+pii = ASSISTANT.register_client!
+pii_rc_claim = ASSISTANT.claim(pii_link['link_code'], pii).status
+pii_token = ASSISTANT.token(pii)
+pii_rc_token = pii_token.status
+pii_auth = WIRE.dpop(pii_token.body['access_token'].to_s, pii.rsa_key)
 
 rc_mine, mine = get_json('/kiosk/my_lists', {}, pii_auth)
 household = Array(mine).find { |r| r['title'] == 'Flat 3B' }
@@ -217,10 +202,10 @@ opaque_ok = headless_names.length >= 2 &&
             headless_names.uniq.length == headless_names.length
 
 BATTERY.record('NoLoginAddressOnTheRoster',
-               pii_rc_link == 201 && pii_rc_claim == 201 && pii_rc_login == 200 &&
+               pii_rc_link == 201 && pii_rc_claim == 204 && pii_rc_token == 200 &&
                rc_mine == 200 && rc_roster == 200 && rc_who == 200 && rc_headless == 200 &&
                no_addresses && named && recognisable && opaque_ok,
-               "link=#{pii_rc_link} claim=#{pii_rc_claim} login=#{pii_rc_login}; " \
+               "link=#{pii_rc_link} claim=#{pii_rc_claim} token=#{pii_rc_token}; " \
                "list_members on the seeded household as Alice's assistant → #{rc_roster}, " \
                "#{roster_rows.length} rows named #{roster_names.inspect}; whoami → #{rc_who} " \
                "#{who_rows.first&.fetch('display_name', nil).inspect}; account addresses in " \

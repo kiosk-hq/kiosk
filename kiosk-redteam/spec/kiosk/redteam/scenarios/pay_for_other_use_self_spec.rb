@@ -79,7 +79,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
 
       scenario.call(client, profile)
 
-      expect(captured.headers['Authorization']).to eq('DPoP tok-b')
+      expect(captured.headers['Authorization']).to eq("DPoP #{token_for('b')}")
       expect(JSON.parse(captured.body)).to eq('reservation_id' => 'res-1')
     end
   end

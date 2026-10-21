@@ -81,7 +81,7 @@ require "kiosk/redteam"
 SERVER = ENV.fetch("SERVER_URL", "http://127.0.0.1:3000")
 
 profile = Kiosk::Redteam::Profile.new(
-  # >0 means this origin is expected to gate /auth/register with a toll.
+  # >0 means this origin is expected to gate oauth/register with a toll.
   pow_difficulty: 1,
   # The roles this origin declares (Kiosk.configuration.roles), as strings.
   declared_roles: %w[customer],
@@ -138,8 +138,8 @@ scenarios share:
 |---|---|
 | `CrossTenantRead` | B's per-user query must not return rows owned by A |
 | `ForgedUserId` | a caller-supplied `user_id` never decides ownership |
-| `PrivilegeSelfSelection` | a client-chosen registration role is ignored — the role is server-pinned |
-| `DeviceGrantRoleSelfSelection` | the claim ceremony's unauthenticated opening request refuses `role`/`scope`, at a DECLARED value as well as an invented one |
+| `PrivilegeSelfSelection` | a role in the registration body does not reach the client's token — the role is server-pinned |
+| `DeviceGrantRoleSelfSelection` | the claim ceremony's opening request, signed by a registered client, refuses `role`/`scope`, at a DECLARED value as well as an invented one |
 | `SpentResourceReuse` | a consumed resource cannot be re-activated |
 | `PayForOtherUseSelf` | B paying for A's resource does not let B use it |
 | `TokenTampering` | a JWT with a flipped claim and the original signature is 401 |
@@ -156,8 +156,8 @@ scenarios share:
 Beside them the gem ships `Profile`, `Scenario`, `Verdict`, `Runner`,
 `Battery` and `LeakScan`, which decides whether a refusal leaked the runtime's
 own vocabulary, discounting needles the attack itself supplied. A scenario
-receives a `Kiosk::TestHelpers::Assistant` — register, query, run, pay with
-closed AP2 mandates, kyc, and the device-authorization request — and its
+receives a `Kiosk::TestHelpers::Assistant` — register, token, query, run, pay
+with closed AP2 mandates, kyc, and the device-authorization request — and its
 `events(principal)` is the assistant's side of `<endpoint>/events`.
 
 ## Your own beats, in the same battery

@@ -5,9 +5,7 @@ require 'spec_helper'
 RSpec.describe Kiosk::Redteam::Runner do
   describe 'against an https origin' do
     it 'drives a scenario over TLS' do
-      stub_request(:get, %r{\Ahttps://provider\.test/kiosk/auth/challenge})
-        .to_return(json_return(200, 'challenge' => 'nonce', 'exp' => Time.now.to_i + 120))
-      stub_request(:post, 'https://provider.test/kiosk/auth/register').to_return(problem_return('forbidden'))
+      stub_request(:post, 'https://provider.test/kiosk/oauth/register').to_return(problem_return('forbidden'))
 
       reached = Class.new(Kiosk::Redteam::Scenario) do
         def call(client, _profile)
@@ -21,7 +19,7 @@ RSpec.describe Kiosk::Redteam::Runner do
       results = runner.run([reached])
 
       expect(results.map { |r| r[:verdict].blocked }).to eq([true])
-      expect(a_request(:post, 'https://provider.test/kiosk/auth/register')).to have_been_made
+      expect(a_request(:post, 'https://provider.test/kiosk/oauth/register')).to have_been_made
     end
   end
 end

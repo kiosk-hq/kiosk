@@ -58,7 +58,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::UnpaidGatedAction do
       scenario.call(client, profile)
 
       expect(captured.uri.path).to eq('/kiosk/start_rental')
-      expect(captured.headers['Authorization']).to eq('DPoP tok-a')
+      expect(captured.headers['Authorization']).to eq("DPoP #{token_for('a')}")
       expect(JSON.parse(captured.body)).to eq('reservation_id' => 'res-1')
     end
   end

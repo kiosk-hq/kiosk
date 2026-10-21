@@ -4,7 +4,7 @@
 module Kiosk
   module UserIdentityProviders
     module DeviseVersion
-      VERSION = '0.5.24'
+      VERSION = '0.5.25'
     end
   end
 end

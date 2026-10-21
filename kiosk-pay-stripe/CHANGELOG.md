@@ -10,6 +10,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.25] — 2026-10-21
+
+- 2026-10-21: Version 0.5.25, the tree cut that matches skill 0.5.25.
+
 ## [0.5.24] — 2026-10-21
 
 - 2026-10-21: `capture` answers `network_confirmation_id`, the card network's id of the charge from its `latest_charge`, or nil when the network gave none.

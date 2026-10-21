@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.25] — 2026-10-21
+
+- 2026-10-21: Version 0.5.25, the tree cut that matches skill 0.5.25.
+
 ## [0.5.24] — 2026-10-21
 
 - 2026-10-21: A settled `pay` answers the AP2 v0.2 `checkout_receipt` and `payment_receipt`, JWTs signed PS256 with `c.signing_key`, each naming its mandate.

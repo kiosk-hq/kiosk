@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.25] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.5.25, matching skill 0.5.25.** `MIN_CLIENT` stays 0.5.23: the wire does not change.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.5.25.md`**, which gives the same rules in less than half the words.
+
 ## [0.5.24] — 2026-10-21
 
 - 2026-10-21: **Every gem and `API_VERSION` are 0.5.24, matching skill 0.5.24.** `MIN_CLIENT` stays 0.5.23: a 0.5.23 skill pays and ignores the receipts.

@@ -184,7 +184,7 @@ puts "\n\e[1m=== published JSON Schemas vs this origin's LIVE bytes (§16.3 anch
 # ── 1. the discovery document ────────────────────────────────────────────────
 _status, raw = get('/.well-known/kiosk.json')
 conforms('GET /.well-known/kiosk.json', "#{B}/discovery.schema.json", parse(raw)) do |doc|
-  doc['kiosk']['auth']['kind'] = 'oauth2' # `kind` is a const
+  doc['kiosk']['auth'].delete('token_url') # all five auth URLs are required
   doc
 end
 
@@ -213,14 +213,12 @@ end
 problems = []
 
 # A REAL public key, because the toll is not the first gate a garbage one
-# trips: `registration_pow_count` is paid before the possession proof is
-# verified, but a key that will not parse is refused earlier still, and the
+# trips: a JWK Set that holds no valid key is refused before the toll, and the
 # 402 this block is here to capture would never be issued.
 require 'openssl'
-status, raw = post('/kiosk/auth/register',
-                   JSON.generate(public_key: OpenSSL::PKey::RSA.new(2048).public_key.to_pem,
-                                 signed: 'not-reached-the-toll-comes-first'))
-problems << ["POST /kiosk/auth/register (unpaid toll, #{status})", parse(raw)]
+status, raw = post('/kiosk/oauth/register',
+                   JSON.generate(jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(OpenSSL::PKey::RSA.new(2048))] }))
+problems << ["POST /kiosk/oauth/register (unpaid toll, #{status})", parse(raw)]
 
 # The token poll's toll comes before the device code is looked up, so an
 # unknown code draws the same 402 problem document as a live one.
@@ -464,50 +462,78 @@ end
 # them: a pair of artefacts can sit in the same process and never meet.
 # `fixtures/auth_wire_capture.rb` runs both ceremonies against this
 # still-booted origin and writes down what went over the wire, request bodies
-# included; every one of the THIRTEEN `$defs` those two documents publish is
+# included; every one of the EIGHTEEN `$defs` those two documents publish is
 # validated below against the bytes this origin produced for it, each paired
 # with a mutated copy the same schema must refuse.
 #
-# WHAT IS NOT HERE, and it is not an omission: the two /oauth/* REQUESTS are
-# form-encoded rather than JSON, so no JSON Schema is their oracle and none
-# exists to run (binding.schema.json's own description and §17 both say so). The driver still sends them — that is how the answers below
-# come to exist — but there is nothing to validate them against. `unlink`'s
-# 204 is the other one: §6.3 gives it no body at all, which is asserted here as
-# a length rather than as a schema.
+# WHAT IS NOT HERE, and it is not an omission: the /oauth/token and
+# /oauth/device_authorization REQUESTS are form-encoded rather than JSON, so no
+# JSON Schema is their oracle and none exists to run (binding.schema.json's own
+# description and §17 both say so). The driver still sends them — that is how
+# the answers below come to exist — and the client assertions and DPoP proofs
+# they carry are validated as payloads. `claim` and `unlink` answer 204, which
+# §6.2 and §6.3 give no body at all, so each is asserted as a status rather
+# than as a schema.
 auth_capture = ENV.fetch('AUTH_CAPTURE', nil)
 if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   auth = JSON.parse(File.read(auth_capture))
   A = "#{B}/auth.schema.json".freeze
   BI = "#{B}/binding.schema.json".freeze
 
-  # §5.1 — the challenge this origin issued for a real key.
-  conforms('GET /auth/challenge', A, auth.fetch('challenge'),
-           pointer: '#/$defs/challenge') do |doc|
-    doc.delete('exp') # required: a challenge with no expiry is not short-lived
+  # §5.1 — the registration body, its JWK Set and the key inside it.
+  conforms('the POST /oauth/register body', A, auth.fetch('registration_request'),
+           pointer: '#/$defs/registrationRequest') do |doc|
+    doc.delete('jwks') # without a key there is nothing to register
+    doc
+  end
+  conforms('the registered JWK Set', A, auth.fetch('registration_request').fetch('jwks'),
+           pointer: '#/$defs/jwks') do |doc|
+    doc['keys'] *= 2 # exactly one key
+    doc
+  end
+  conforms('the registered public JWK', A, auth.fetch('registration_request').dig('jwks', 'keys', 0),
+           pointer: '#/$defs/publicJwk') do |doc|
+    doc['kty'] = 'EC' # RS256 is the one algorithm
     doc
   end
 
-  # §5.2 — the payload of the `signed` JWS this origin ACCEPTED. `aud` is the
-  # origin binding, and dropping it is the difference between a proof and a
-  # relayable one.
-  conforms('the possession proof this origin accepted', A, auth.fetch('possession_proof'),
-           pointer: '#/$defs/possessionProof') do |doc|
+  # §5.1 — the tolled 201, the client information.
+  conforms('the POST /oauth/register 201', A, auth.fetch('registration'),
+           pointer: '#/$defs/clientInformation') do |doc|
+    doc.delete('client_id')
+    doc
+  end
+  conforms('the POST /oauth/register 400', A, auth.fetch('registration_error'),
+           pointer: '#/$defs/registrationError') do |doc|
+    doc['error'] = 'invalid_request' # registration has ONE error code
+    doc
+  end
+
+  # §5.2 — the payload of a client assertion this origin ACCEPTED. `aud` is the
+  # origin binding, and dropping it is the difference between an assertion and
+  # a relayable one.
+  conforms('the client assertion this origin accepted', A, auth.fetch('client_assertion'),
+           pointer: '#/$defs/clientAssertion') do |doc|
     doc.delete('aud')
     doc
   end
 
-  # §5.3 — the login body, which is register's body member for member.
-  conforms('the POST /auth/login body', A, auth.fetch('credential_request'),
-           pointer: '#/$defs/credentialRequest') do |doc|
-    doc.delete('signed') # a public key with no proof is an assertion, not a credential
+  # §5.3 — the client_credentials 200, and the 401 of a request with no assertion.
+  conforms('the POST /oauth/token 200 (client_credentials)', A, auth.fetch('token_response'),
+           pointer: '#/$defs/tokenResponse') do |doc|
+    doc['token_type'] = 'Bearer' # `const` "DPoP"
     doc
   end
-
-  # §5.3 — the tolled 201.
-  conforms('the POST /auth/register 201', A, auth.fetch('registration'),
-           pointer: '#/$defs/registration') do |doc|
-    doc.delete('access_token')
+  conforms('the /oauth/token refusal of a request with no client assertion', A,
+           auth.fetch('oauth_error_invalid_client'), pointer: '#/$defs/oauthError') do |doc|
+    doc['error'] = 'unauthorized_client' # the vocabulary is CLOSED
     doc
+  end
+  if auth.dig('oauth_error_invalid_client', 'error') == 'invalid_client'
+    ok '…and a token request with no client assertion is `invalid_client`'
+  else
+    bad 'a token request with no client assertion is `invalid_client`',
+        "got #{auth.dig('oauth_error_invalid_client', 'error').inspect}"
   end
 
   # §5.4 — what the operator put INSIDE the token it minted. `actor` is a
@@ -519,43 +545,41 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
     doc
   end
 
-  # §5.3 and §5.5 — login's answer and revoke's answer are ONE object, and the
-  # two arms carry different controls on purpose: `required` on one side,
-  # `type` on the other, so neither half of the `$def` is taken on trust.
-  conforms('the POST /auth/login 200', A, auth.fetch('token_login'),
-           pointer: '#/$defs/token') do |doc|
-    doc.delete('access_token')
-    doc
-  end
-  conforms('the POST /auth/revoke 200 — the SAME object as login', A, auth.fetch('token_revoke'),
-           pointer: '#/$defs/token') do |doc|
-    doc['access_token'] = 1 # a compact JWT is a string
-    doc
-  end
-
-  # §5.6 — the payload of a DPoP proof this origin ACCEPTED, on that revoke.
-  # `ath` ties the proof to one token; without it a proof rides any token.
-  conforms('the DPoP proof this origin accepted', A, auth.fetch('dpop_proof'),
+  # §5.6 — the payloads of two DPoP proofs this origin ACCEPTED: the token
+  # request's, which has no token to name, and a wire call's, whose `ath` ties
+  # it to one token.
+  conforms('the DPoP proof of the token request', A, auth.fetch('token_request_proof'),
            pointer: '#/$defs/dpopProof') do |doc|
-    doc.delete('ath')
+    doc.delete('htu')
     doc
   end
+  conforms('the DPoP proof of a wire call', A, auth.fetch('dpop_proof'),
+           pointer: '#/$defs/dpopProof') do |doc|
+    doc.delete('jti')
+    doc
+  end
+  if auth.fetch('token_request_proof').key?('ath') || !auth.fetch('dpop_proof').key?('ath')
+    bad 'only the proof that carries a token names it in `ath`',
+        "token request: #{auth.fetch('token_request_proof').keys.sort}, wire call: #{auth.fetch('dpop_proof').keys.sort}"
+  else
+    ok '…and only the proof that carries a token names it in `ath`'
+  end
 
-  # §5.7 — rotation: the body, the old key's proof that names the new key, and
-  # the answer, which is login's object again.
+  # §5.7 — rotation: the body, the old key's assertion that names the new key,
+  # and the answer, which is the client information again.
   conforms('the POST /auth/rotate body', A, auth.fetch('rotation_request'),
            pointer: '#/$defs/rotationRequest') do |doc|
-    doc.delete('new_signed') # a new key with no proof of its own is an assertion
+    doc.delete('new_client_assertion') # a new key with no assertion of its own is an assertion of nothing
     doc
   end
-  conforms('the rotation proof this origin accepted', A, auth.fetch('rotation_proof'),
-           pointer: '#/$defs/rotationProof') do |doc|
+  conforms('the rotation assertion this origin accepted', A, auth.fetch('rotation_assertion'),
+           pointer: '#/$defs/rotationAssertion') do |doc|
     doc.delete('new_key')
     doc
   end
-  conforms('the POST /auth/rotate 200 — the SAME object as login', A, auth.fetch('token_rotate'),
-           pointer: '#/$defs/token') do |doc|
-    doc.delete('access_token')
+  conforms('the POST /auth/rotate 200 — the client information', A, auth.fetch('rotation_response'),
+           pointer: '#/$defs/clientInformation') do |doc|
+    doc['dpop_bound_access_tokens'] = 'yes'
     doc
   end
 
@@ -568,18 +592,13 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
 
   conforms('the POST /auth/claim body', BI, auth.fetch('claim_request'),
            pointer: '#/$defs/claimRequest') do |doc|
-    doc.delete('code') # without the code this is a bare register
+    doc.delete('client_assertion') # a leaked code alone must never bind a key
     doc
   end
-
-  # §6.2 — the claim answer, whose `$def` is a CROSS-FILE `$ref` into
-  # auth.schema.json's `registration`. The control therefore breaks a member
-  # that only the REFERENCED document declares: if the `$ref` were not followed
-  # the mutation would pass and this line would be proving nothing.
-  conforms('the POST /auth/claim 201', BI, auth.fetch('claim_response'),
-           pointer: '#/$defs/claimResponse') do |doc|
-    doc.delete('user_id')
-    doc
+  if auth['claim_status'] == 204
+    ok '…and /auth/claim answered 204 (§6.2)'
+  else
+    bad '/auth/claim answered 204', "status=#{auth['claim_status'].inspect}"
   end
 
   # §6.1 step 1 — all six members are REQUIRED here, which is narrower than RFC
@@ -591,13 +610,13 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
     doc
   end
 
-  # §6.1 — the two OAuth refusals, the one place on this wire that is not an
-  # RFC 9457 problem document. The first is the clause `oauthError` was widened
-  # for: §6.1 step 1 requires `invalid_request` for a `role` parameter, and an
-  # enum written from the section's own closing list of six could not say it.
+  # §6.1 — two OAuth refusals, the one kind of answer on this wire that is not
+  # an RFC 9457 problem document. The binding document's `oauthError` is a
+  # CROSS-FILE `$ref` into auth.schema.json, so these two also prove the `$ref`
+  # is followed.
   conforms('the /oauth/device_authorization refusal of a `role` parameter', BI,
            auth.fetch('oauth_error_role_refused'), pointer: '#/$defs/oauthError') do |doc|
-    doc['error'] = 'role_not_allowed' # the vocabulary is CLOSED at eight
+    doc['error'] = 'role_not_allowed' # the vocabulary is CLOSED
     doc
   end
   conforms('the /oauth/token refusal of an unknown grant_type', BI,
@@ -622,7 +641,8 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   end
 
   # §6.1 step 3 — the answer to the poll that COMPLETED the ceremony, after a
-  # real human approved on the real verify page.
+  # real human approved on the real verify page. A CROSS-FILE `$ref` into
+  # auth.schema.json's `tokenResponse`.
   conforms('the POST /oauth/token 200 (the completed device grant)', BI,
            auth.fetch('device_token_response'), pointer: '#/$defs/deviceTokenResponse') do |doc|
     doc['token_type'] = 'Bearer' # `const` "DPoP" — a bearer token is not what this grant issues
@@ -641,19 +661,6 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   else
     bad '/auth/unlink answered 204 with no body at all',
         "status=#{auth['unlink_status'].inspect} body_len=#{auth['unlink_body_len'].inspect}"
-  end
-
-  # The `$ref` claim itself, stated as an assertion rather than left to be
-  # inferred from two arms that both passed: §6.2 says the claim answer is the
-  # register answer «byte-for-byte the same shape», which is why the schema
-  # refers rather than restates. Two objects that both validate could still
-  # differ — one may carry a member the open root permits.
-  if auth.fetch('claim_response').keys.sort == auth.fetch('registration').keys.sort
-    ok "…and the claim 201 carries exactly the register 201's members (§6.2's `$ref`, not a coincidence)"
-  else
-    bad "the claim 201 carries exactly the register 201's members",
-        "claim=#{auth.fetch('claim_response').keys.sort.inspect} " \
-        "register=#{auth.fetch('registration').keys.sort.inspect}"
   end
 else
   absent 'the §5/§6 auth and binding wire objects were validated',

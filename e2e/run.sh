@@ -465,10 +465,11 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 #
 # THE SUITE EARNS ITS PRINCIPALS the way a real assistant does, because there is
 # no parser anywhere that would believe a self-asserted one: the human's link
-# code minted on a real Devise session, and `/auth/claim` — which binds a new
-# key to that human and returns the token every assertion below rides. Two of them, one for alice and one for bob, because the isolation
+# code minted on a real Devise session, and `/auth/claim` — which binds a newly
+# registered client to that human, whose token endpoint then issues the token
+# every assertion below rides. Two of them, one for alice and one for bob, because the isolation
 # assertions need two principals that are genuinely different people.
-log "bind two assistants to the seeded humans (link -> claim)"
+log "bind two assistants to the seeded humans (register -> link -> claim -> token)"
 bind_json=$( cd "$PWD" && SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                KIOSK_ISSUER="$KIOSK_ISSUER" \
                KIOSK_HOMES="$KIOSK_HOMES" ORIGIN_DIR_NAME="$ORIGIN_DIR_NAME" \
@@ -486,7 +487,7 @@ export BOB_KEY=$(echo "$bind_json" | jq -r '.bob_key')
   || fail "no access token for bob's assistant: $bind_json"
 [ -f "$ALICE_KEY" ] && [ -f "$BOB_KEY" ] \
   || fail "no key file for one of the two assistants: $bind_json"
-ok "alice's assistant $ALICE_AGENT and bob's assistant $BOB_AGENT are bound and hold kiosk-pop tokens"
+ok "alice's assistant $ALICE_AGENT and bob's assistant $BOB_AGENT are bound and hold DPoP-bound tokens"
 
 # ─── run the assistant ──────────────────────────────────────────────────
 
@@ -524,13 +525,14 @@ ok "all assertions passed"
 #
 # auth.schema.json and binding.schema.json are vendored in kiosk-server/lib/kiosk/server/schemas/,
 # and this is what produces a byte for them to judge.
-# This driver runs kiosk-pop (challenge → register → login → revoke) and both
-# binding directions (link → claim → unlink, and the RFC 8628 device grant with
-# a real human approving on the real verify page) and writes down the requests
-# and the answers; the schema step below validates all thirteen objects.
+# This driver runs the OAuth registration and token requests (register → token
+# → rotate) and both binding directions (link → claim → unlink, and the RFC 8628
+# device grant with a real human approving on the real verify page) and writes
+# down the requests and the answers; the schema step below validates all
+# eighteen `$defs` against them.
 #
-# AFTER the assistant, not before: the ceremonies mint a third agent for alice,
-# rebind it twice and deactivate it, and every assertion about alice and bob is
+# AFTER the assistant, not before: the ceremonies register a third agent, bind
+# it to alice twice and deactivate it, and every assertion about alice and bob is
 # already made by this point. The audit-sink row counts are taken later still,
 # so this driver's residue cannot be read as the sink's.
 log "drive the §5/§6 auth and binding ceremonies (for their live bytes)"
@@ -617,7 +619,7 @@ done
 
 # The SAME token alice's assistant has been using. This restart shares the
 # database and the exported KIOSK_SIGNING_KEY_B64 with the origin above, so the
-# kiosk-pop JWT verifies here too — the agent row and the signing key are what
+# access token verifies here too — the agent row and the signing key are what
 # it is checked against, and neither moved.
 # A call that carries the token also carries a proof that alice's key signs
 # for its method and URL (RFC 9449).

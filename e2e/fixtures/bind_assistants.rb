@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Mint the two AGENT principals the e2e assistant suite runs as: each human
-# signs in on the site, mints a link code, and a newly keyed assistant claims it.
+# signs in on the site and mints a link code; a newly registered assistant
+# claims it and asks the token endpoint for a token.
 #
 # Writes each assistant's private key, mode 600, to its origin directory,
 # KIOSK_HOMES/<name>/.kiosk/ORIGIN_DIR_NAME/key.pem: the key signs the DPoP

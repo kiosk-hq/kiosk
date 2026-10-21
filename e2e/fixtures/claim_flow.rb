@@ -1,8 +1,9 @@
 # frozen_string_literal: true
 
-# Account-binding proof: the full claim ceremony (fresh key → human approval
-# on the verify page → possession-proof token poll), a wire call as the bound
-# assistant account, the human-initiated link-code redeem, and unlink.
+# Account-binding proof: the full claim ceremony (a registered client → human
+# approval on the verify page → token poll with a client assertion), a wire
+# call as the bound assistant account, the human-initiated link-code redeem,
+# and unlink.
 # Prints a JSON result line on stdout; the shell asserts each field.
 require 'jwt'
 require 'json'
@@ -12,7 +13,6 @@ require 'kiosk/test_helpers/wire'
 require 'uri'
 require 'openssl'
 require 'securerandom'
-require 'base64'
 
 # The human half of this ceremony is a REAL browser session: there is
 # no stub user-IdP left to hand this driver a `user:u-<uuid>` token. The
@@ -76,27 +76,40 @@ def post_form(url, form, headers = {})
   paying(uri) { |toll| Net::HTTP::Post.new(uri, headers.merge(toll)).tap { it.set_form_data(form) } }
 end
 
-# Fresh possession proof (same challenge-response JWS as register/login).
-def pop_proof(key, pem)
-  rc, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-  abort "challenge failed: #{rc} #{ch}" unless rc == 200
-  JWT.encode({ aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
+require_relative 'equihash_register'
+
+# A fresh key, registered as a client (RFC 7591). The registration toll is not
+# counted in TOLLS: this driver asserts the tolls of the claim and the poll.
+def registered_client
+  key, reg = equihash_register(server: SERVER)
+  [key, reg.fetch('client_id')]
+end
+
+# A token request (RFC 6749) with a new client assertion and a new DPoP proof
+# for each send, also for the send that pays the toll. `assert: false` sends no
+# client assertion.
+def token_post(client_id, key, form, assert: true)
+  uri = URI(TOKEN_URL)
+  paying(uri) do |toll|
+    proof = Kiosk::TestHelpers::Dpop.headers(nil, key, method: 'POST', url: "#{ISSUER}/kiosk/oauth/token")
+    body = assert ? form.merge(assertion_params(client_id, key, ISSUER)) : form
+    Net::HTTP::Post.new(uri, proof.merge(toll)).tap { it.set_form_data(body) }
+  end
 end
 
 TOKEN_URL = "#{SERVER}/kiosk/oauth/token".freeze
 GRANT     = 'urn:ietf:params:oauth:grant-type:device_code'
 results   = {}
 
-# ── claim ceremony: the agent brings a FRESH key ──
-key = OpenSSL::PKey::RSA.generate(2048)
-pem = key.public_key.to_pem
+# ── claim ceremony: the agent registers a FRESH key first ──
+key, client_id = registered_client
 
 # THE OPENING REQUEST MAY NOT NAME A ROLE.
 #
-# This request is UNAUTHENTICATED — no Cookie, no Authorization — so anything it
-# carries is an assertion by a stranger. The engine does not read `role` (or its
-# OAuth spelling `scope`) off it at all: the role comes from the approving
-# human, and the parameter is REFUSED rather than ignored.
+# The client authenticates, but anything it carries beyond that is the
+# assistant's own claim. The engine does not read `role` (or its OAuth spelling
+# `scope`) off it at all: the role comes from the approving human, and the
+# parameter is REFUSED rather than ignored.
 #
 # THE DECLARED VALUE IS THE ONE THAT MATTERS. An UNDECLARED role (`owner` here —
 # this origin declares only `customer`) is refused by anything that filters on
@@ -106,25 +119,29 @@ pem = key.public_key.to_pem
 # from the parameter being refused outright. Both transports
 # are probed because the controller reads `params[:role]`, which Rails fills
 # from a form body and a JSON body alike — a guard on one would not be a guard.
+DEVICE_AUTHORIZATION = "#{SERVER}/kiosk/oauth/device_authorization".freeze
 role_probes = [%w[role customer], %w[scope customer], %w[role owner]].map do |param, value|
-  code, body = post_form("#{SERVER}/kiosk/oauth/device_authorization",
-                         { 'client_id' => 'e2e-claim-flow', 'public_key' => pem, param => value })
+  code, body = post_form(DEVICE_AUTHORIZATION, assertion_params(client_id, key, ISSUER).merge(param => value))
   "#{param}=#{value}:#{code}:#{body['error']}"
 end
-code, body = post_json("#{SERVER}/kiosk/oauth/device_authorization",
-                       { client_id: 'e2e-claim-flow', public_key: pem, role: 'customer' })
+code, body = post_json(DEVICE_AUTHORIZATION, assertion_params(client_id, key, ISSUER).merge('role' => 'customer'))
 role_probes << "json-role=customer:#{code}:#{body['error']}"
 results[:role_refused] = role_probes
 
-rc, da = post_json("#{SERVER}/kiosk/oauth/device_authorization", { client_id: 'e2e-claim-flow', public_key: pem })
+rc, da = post_form(DEVICE_AUTHORIZATION, assertion_params(client_id, key, ISSUER))
 abort "device_authorization failed: #{rc} #{da}" unless rc == 200
 device_code = da.fetch('device_code')
 user_code   = da.fetch('user_code')
 results[:da_fields] = %w[device_code user_code verification_uri expires_in interval].all? { |k| da.key?(k) }
 
-# Poll with a valid proof before approval → authorization_pending.
-rc, tok = post_form(TOKEN_URL, { grant_type: GRANT, device_code: device_code, signed: pop_proof(key, pem) })
+# Poll with a valid client assertion before approval → authorization_pending.
+rc, tok = token_post(client_id, key, { grant_type: GRANT, device_code: device_code })
 results[:pending] = [rc, tok['error']]
+
+# Polling faster than the advertised `interval` answers slow_down
+# (RFC 8628 §3.5) — assert it once, then honor the pace.
+rc, tok = token_post(client_id, key, { grant_type: GRANT, device_code: device_code })
+results[:slow_down] = [rc, tok['error']]
 
 # The human signs in through the REAL Devise form, then approves on the verify
 # page: GET first (the page + its CSRF token), then POST approve over the same
@@ -140,24 +157,18 @@ if (csrf = HUMAN_SESSION.csrf_token(show.body))
 end
 results[:approve] = HUMAN_SESSION.post_form('/kiosk/oauth/device/verify', form).code.to_i
 
-# The BIND-POP gate, at the moment it matters: an APPROVED row polled
-# WITHOUT the possession proof is denied (invalid_client) and stays
-# approved — nothing binds. (Pacing first: the registry counts every poll.)
+# Client authentication, at the moment it matters: an APPROVED row polled
+# WITHOUT the client assertion is refused (invalid_client) and stays
+# approved — nothing binds. The refusal comes before the grant, so the poll
+# registry does not count it. (Pacing first: the registry counts every poll.)
 sleep(da.fetch('interval', 5) + 1)
-rc, tok = post_form(TOKEN_URL, { grant_type: GRANT, device_code: device_code })
+rc, tok = token_post(client_id, key, { grant_type: GRANT, device_code: device_code }, assert: false)
 results[:no_pop] = [rc, tok['error']]
-
-# Polling faster than the advertised `interval` answers slow_down
-# (RFC 8628 §3.5) — assert it once, then honor the pace.
-rc, tok = post_form(TOKEN_URL, { grant_type: GRANT, device_code: device_code, signed: pop_proof(key, pem) })
-results[:slow_down] = [rc, tok['error']]
-sleep(da.fetch('interval', 5) + 1)
-rc, tok = post_form(TOKEN_URL, { grant_type: GRANT, device_code: device_code, signed: pop_proof(key, pem) })
+rc, tok = token_post(client_id, key, { grant_type: GRANT, device_code: device_code })
 abort "token poll failed: #{rc} #{tok}" unless rc == 200
 token = tok.fetch('access_token')
 # OAuth-pure response: identity rides inside the kiosk JWT claims.
-seg = token.split('.')[1]
-claims = JSON.parse(Base64.urlsafe_decode64(seg + ('=' * ((4 - (seg.length % 4)) % 4))))
+claims = JWT.decode(token, nil, false).first
 results[:bound_user] = claims['sub'] == HUMAN
 # The role the binding carries is the APPROVER's, read from this origin's
 # identity system when Alice approved — never anything the caller sent. Alice's
@@ -167,6 +178,7 @@ results[:bound_user] = claims['sub'] == HUMAN
 # `c.roles` in fixtures/initializer_kiosk.rb).
 results[:token_role] = claims['role']
 agent_id = claims.fetch('agent_id')
+results[:same_client] = agent_id == client_id
 
 # Wire verb as the bound assistant account — a query is a GET at its own path.
 MY_APPOINTMENTS = "#{SERVER}/kiosk/my_appointments".freeze
@@ -178,31 +190,30 @@ rc, q = get_json(MY_APPOINTMENTS, dpop(token, key, MY_APPOINTMENTS))
 # list came back", not "ok was true".
 results[:wire_as_bound] = [rc, q.is_a?(Array)]
 
-# kiosk-pop login stays the refresh path for the bound key.
-rc, = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
-results[:login_bound] = rc
+# The client_credentials grant is the refresh path for the bound client.
+rc, refreshed = token_post(client_id, key, { grant_type: 'client_credentials' })
+results[:token_bound] = [rc, rc == 200 && JWT.decode(refreshed.fetch('access_token'), nil, false).first['sub'] == HUMAN]
 
 # ── link flow: the human mints a code, a second assistant redeems it ──
-key2 = OpenSSL::PKey::RSA.generate(2048)
-pem2 = key2.public_key.to_pem
+key2, client_id2 = registered_client
+CLAIM_URL = "#{SERVER}/kiosk/auth/claim".freeze
 rc, link = HUMAN_SESSION.post_json('/kiosk/auth/link', {}, { session: true })
 results[:link_mint] = rc
-rc, claim = post_json("#{SERVER}/kiosk/auth/claim",
-                      { code: link.fetch('link_code', ''), public_key: pem2, signed: pop_proof(key2, pem2) })
-results[:link_claim] = [rc, claim['user_id'] == HUMAN]
-results[:tolls] = TOLLS
+rc, = post_json(CLAIM_URL, { code: link.fetch('link_code', '') }.merge(assertion_params(client_id2, key2, ISSUER)))
+_, claimed = token_post(client_id2, key2, { grant_type: 'client_credentials' })
+results[:link_claim] = [rc, JWT.decode(claimed.fetch('access_token', ''), nil, false).first['sub'] == HUMAN]
+results[:tolls] = TOLLS.dup
 
 # ── unlink the first assistant: registration-layer revocation ──
 #
-# Spec §6.3/§15.4 promise BOTH halves — "the key's tokens stop verifying AND
-# /auth/login answers 404" — and this driver asserts both, because a watermark
-# that is compared at one-second resolution has an aperture exactly one second
-# wide and only the first half sees it. Re-login is aligned to a wall-clock
-# second boundary so the fresh token's `iat` lands in the SAME second as the
-# unlink, then assert the refusal.
-proof = pop_proof(key, pem)
+# Spec §6.3/§15.4 promise BOTH halves — "the client's tokens stop verifying AND
+# the token endpoint refuses the client" — and this driver asserts both,
+# because a watermark that is compared at one-second resolution has an aperture
+# exactly one second wide and only the first half sees it. The token request is
+# aligned to a wall-clock second boundary so the fresh token's `iat` lands in
+# the SAME second as the unlink, then the refusal is asserted.
 sleep(1.0 - (Time.now.to_f % 1.0) + 0.02)
-rc, fresh = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: proof })
+rc, fresh = token_post(client_id, key, { grant_type: 'client_credentials' })
 fresh_token = rc == 200 ? fresh.fetch('access_token') : token
 rc, = HUMAN_SESSION.post_json('/kiosk/auth/unlink', { agent_id: agent_id }, { session: true })
 results[:unlink] = rc
@@ -211,17 +222,19 @@ rc, = get_json(MY_APPOINTMENTS, dpop(token, key, MY_APPOINTMENTS))
 results[:held_token_after_unlink] = rc
 rc, = get_json(MY_APPOINTMENTS, dpop(fresh_token, key, MY_APPOINTMENTS))
 results[:same_second_token_after_unlink] = rc
+rc, refused = token_post(client_id, key, { grant_type: 'client_credentials' })
+results[:token_after_unlink] = [rc, refused['error']]
 
-# THE CODE, not only the status. A key the origin no longer knows is
-# spec §9.1 rule 2 -- an argument ADDRESSING something absent -- so it is
+# THE CODE, not only the status. A link code the origin does not know is spec
+# §9.1 rule 2 -- an argument ADDRESSING something absent -- so it is
 # `not_found` and specifically NOT `verb_not_found`, which is the other 404 in
-# the vocabulary and means an unregistered verb NAME. This is the only place in
-# the harness that reaches an addressed-thing-absent 404 through a real
-# possession proof, so it is where the second of the three refusal codes is
-# exercised on a booted origin.
-rc, login_body = post_json("#{SERVER}/kiosk/auth/login", { public_key: pem, signed: pop_proof(key, pem) })
-results[:login_after_unlink]      = rc
-results[:login_after_unlink_code] = login_body.is_a?(Hash) ? login_body['code'] : nil
-results[:login_after_unlink_type] = login_body.is_a?(Hash) ? login_body['type'] : nil
+# the vocabulary and means an unregistered verb NAME. This is the place in the
+# harness that reaches an addressed-thing-absent 404 through a real client
+# assertion, so it is where the second of the three refusal codes is exercised
+# on a booted origin.
+rc, unknown = post_json(CLAIM_URL, { code: "unknown-#{SecureRandom.hex(16)}" }.merge(assertion_params(client_id2, key2, ISSUER)))
+results[:unknown_code_claim]      = rc
+results[:unknown_code_claim_code] = unknown.is_a?(Hash) ? unknown['code'] : nil
+results[:unknown_code_claim_type] = unknown.is_a?(Hash) ? unknown['type'] : nil
 
 puts JSON.generate(results)

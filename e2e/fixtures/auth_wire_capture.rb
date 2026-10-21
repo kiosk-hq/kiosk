@@ -14,16 +14,17 @@
 # So this driver runs the two ceremonies end to end against the booted origin
 # and writes down what went over the wire, request bodies included:
 #
-#   Section 5 (kiosk-pop)      challenge -> register (Equihash-tolled) ->
-#                              login -> revoke -> rotate, plus the decoded
-#                              possession, rotation and DPoP proofs and the
-#                              decoded access-token claims
-#   Section 6.2/6.3 (link)     link -> claim -> unlink
+#   Section 5 (OAuth)          register (RFC 7591, Equihash-tolled) and its
+#                              refusal -> client_credentials token (RFC 7523
+#                              client assertion, RFC 9449 DPoP) and its refusal
+#                              -> a wire call -> rotate, plus the decoded client
+#                              assertions, DPoP proofs and access-token claims
+#   Section 6.2/6.3 (link)     link -> claim (204) -> unlink
 #   Section 6.1 (device grant) device_authorization -> human approval on the
 #                              real verify page -> the token poll
-#   Section 6.1 (refusals)     the two OAuth error answers, which are the one
-#                              place on this wire that is not an RFC 9457
-#                              problem document
+#   Section 6.1 (refusals)     two OAuth error answers; the OAuth errors are
+#                              the one kind of answer on this wire that is
+#                              not an RFC 9457 problem document
 #
 # THE HUMAN IS REAL. The link, unlink and approval legs authenticate through
 # the shipped Devise form over `Kiosk::UserIdentityProviders::DeviseSession`
@@ -32,7 +33,7 @@
 # to assert instead.
 #
 # WHY IT RUNS AFTER `assistant.sh` RATHER THAN BEFORE. The ceremonies here have
-# side effects: they mint a third agent for alice, rebind it twice and then
+# side effects: they register a third agent, bind it to alice twice and then
 # deactivate it. Everything the assistant suite asserts about alice and bob is
 # already done by the time this runs, and `run.sh` takes its audit-sink row
 # counts afterwards, so nothing downstream can read this driver's residue as
@@ -92,11 +93,8 @@ def post_json(url, body, headers = {})
   end]
 end
 
-# The OAuth half of the ceremony is `application/x-www-form-urlencoded` — the
-# spec's one deliberate exception to the JSON wire — so it cannot go through
-# `post_json`, and it carries no cookie and no token: anything in it is an
-# assertion by a stranger, which is the property the endpoint is designed
-# around.
+# The OAuth requests are `application/x-www-form-urlencoded` — the spec's one
+# deliberate exception to the JSON wire — so they cannot go through `post_json`.
 def post_form(url, form, headers = {})
   uri = URI(url)
   req = Net::HTTP::Post.new(uri, headers)
@@ -110,8 +108,8 @@ def post_form(url, form, headers = {})
 end
 
 # The link-code claim and the first token poll of a device code pay the same
-# toll as register: on `402 pow_required`, solve every challenge and yield the
-# `Kiosk-PoW` header for the SAME request again.
+# toll as registration: on `402 pow_required`, solve every challenge and yield
+# the `Kiosk-PoW` header for the SAME request again.
 def paying_toll(answer)
   rc, problem = answer
   return answer unless rc == 402 && problem['code'] == 'pow_required'
@@ -128,68 +126,49 @@ def payload_of(compact)
   JSON.parse(Base64.urlsafe_decode64(seg + ('=' * ((4 - (seg.length % 4)) % 4))))
 end
 
-# A fresh possession proof for `key`: Section 5.1's challenge, signed as
-# Section 5.2's payload. Returns [the compact JWS, the challenge document].
-# `claims` adds members, such as a rotation's `new_key`.
-def possession_proof(key, pem, claims = {})
-  rc, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-  abort "challenge failed (#{rc}): #{JSON.generate(ch)}" unless rc == 200
-
-  signed = JWT.encode(
-    { aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }.merge(claims),
-    key, 'RS256'
-  )
-  [signed, ch]
-end
-
 cap = {}
 
-# ── Section 5.1/5.2/5.3 — challenge, possession proof, register ─────────────
+# ── Section 5.1 — register, and the one registration refusal ────────────────
 #
 # The register leg goes through the SHARED helper rather than a second copy of
 # the toll dance, and `on_proofs:` is not used here: the solved proof is
 # `register_pow_flow.rb`'s subject and validating it twice would say nothing
-# new. What this leg is here for is the 201 body and the challenge that opened
-# it.
-reg_key, reg = equihash_register(
-  server: SERVER, issuer: ISSUER
-)
-reg_pem = reg_key.public_key.to_pem
+# new. What this leg is here for is the request and the 201 body.
+reg_key, reg = equihash_register(server: SERVER)
+client_id = reg.fetch('client_id')
+cap['registration_request'] = registration_body(reg_key)
 cap['registration'] = reg
 
-# The challenge document and the proof payload are captured from a SECOND
-# handshake with the same key rather than reached into the helper for: a
-# challenge is single-use, so the one the helper spent is gone, and this is the
-# same endpoint answering the same key.
-login_signed, challenge_doc = possession_proof(reg_key, reg_pem)
-cap['challenge']        = challenge_doc
-cap['possession_proof'] = payload_of(login_signed)
+# A body whose JWK Set holds no key is refused before the toll is asked for.
+rc, refused = post_json("#{SERVER}/kiosk/oauth/register", { jwks: { keys: [] } })
+abort "an empty jwks was not refused (#{rc}): #{JSON.generate(refused)}" unless rc == 400
+cap['registration_error'] = refused
 
-# Section 5.4 — what the operator put inside the token it just minted.
-cap['access_token_claims'] = payload_of(reg.fetch('access_token'))
+# ── Section 5.2/5.3/5.4 — the client_credentials token, and its refusal ──────
+TOKEN_URL = "#{SERVER}/kiosk/oauth/token".freeze
+token_proof = Kiosk::TestHelpers::Dpop.headers(nil, reg_key, method: 'POST', url: "#{ISSUER}/kiosk/oauth/token")
+token_form = { 'grant_type' => 'client_credentials', **assertion_params(client_id, reg_key, ISSUER) }
+rc, issued = post_form(TOKEN_URL, token_form, token_proof)
+abort "token request failed (#{rc}): #{JSON.generate(issued)}" unless rc == 200
+cap['client_assertion']    = payload_of(token_form.fetch('client_assertion'))
+cap['token_request_proof'] = payload_of(token_proof.fetch('DPoP'))
+cap['token_response']      = issued
+cap['access_token_claims'] = payload_of(issued.fetch('access_token'))
 
-# ── Section 5.3 — login, with the credential request that produced it ───────
-login_body = { 'public_key' => reg_pem, 'signed' => login_signed }
-rc, login = post_json("#{SERVER}/kiosk/auth/login", login_body)
-abort "login failed (#{rc}): #{JSON.generate(login)}" unless rc == 200
-cap['credential_request'] = login_body
-cap['token_login']        = login
+# The same request with no client assertion is the one 401 of this wire's OAuth errors.
+no_assertion_proof = Kiosk::TestHelpers::Dpop.headers(nil, reg_key, method: 'POST', url: "#{ISSUER}/kiosk/oauth/token")
+rc, unauthenticated = post_form(TOKEN_URL, { 'grant_type' => 'client_credentials' }, no_assertion_proof)
+abort "a token request with no client assertion was not refused (#{rc}): #{JSON.generate(unauthenticated)}" unless rc == 401
+cap['oauth_error_invalid_client'] = unauthenticated
 
-# ── Section 5.5 — revoke answers the SAME object as login ───────────────────
-#
-# Revoking stamps a per-identity watermark and hands back a token issued after
-# it, so the caller is not signed out by its own call. Section 5.5 named no
-# member of that answer until 2026-08-30; `#/$defs/token` now says it
-# is login's object member for member, and this is the byte that has to agree.
-# Revoke carries the token, so it carries a DPoP proof (Section 5.6) too.
-revoke_url = "#{SERVER}/kiosk/auth/revoke"
-revoke_dpop = Kiosk::TestHelpers::Dpop.headers(login.fetch('access_token'), reg_key, method: 'POST', url: revoke_url)
-rc, revoked = post_json(revoke_url, {}, revoke_dpop)
-abort "revoke failed (#{rc}): #{JSON.generate(revoked)}" unless rc == 200
-cap['token_revoke'] = revoked
-cap['dpop_proof']   = payload_of(revoke_dpop.fetch('DPoP'))
+# ── Section 5.6 — a DPoP proof that carries the token, on a wire call ─────────
+salons_url = "#{SERVER}/kiosk/salons"
+salons_dpop = Kiosk::TestHelpers::Dpop.headers(issued.fetch('access_token'), reg_key, method: 'GET', url: salons_url)
+rc, = get_json(salons_url, salons_dpop)
+abort "the wire call with the token failed (#{rc})" unless rc == 200
+cap['dpop_proof'] = payload_of(salons_dpop.fetch('DPoP'))
 
-# ── Section 6.2 — the human's link code, redeemed by the agent's key ────────
+# ── Section 6.2 — the human's link code, redeemed by the client ─────────────
 session = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
 session.sign_in!(email: EMAIL, password: PASSWORD)
 
@@ -197,34 +176,30 @@ rc, link = session.post_json('/kiosk/auth/link', {}, { session: true })
 abort "link mint failed (#{rc}): #{JSON.generate(link)}" unless rc == 201
 cap['link_code'] = link
 
-claim_signed, = possession_proof(reg_key, reg_pem)
-claim_body = { 'code' => link.fetch('link_code'), 'public_key' => reg_pem, 'signed' => claim_signed }
+claim_body = { 'code' => link.fetch('link_code'), **assertion_params(client_id, reg_key, ISSUER) }
 claim_url = "#{SERVER}/kiosk/auth/claim"
 rc, claimed = paying_toll(post_json(claim_url, claim_body)) { |pow| post_json(claim_url, claim_body, pow) }
-abort "claim failed (#{rc}): #{JSON.generate(claimed)}" unless rc == 201
-cap['claim_request']  = claim_body
-cap['claim_response'] = claimed
+abort "claim failed (#{rc}): #{JSON.generate(claimed)}" unless rc == 204
+cap['claim_request'] = claim_body
+cap['claim_status']  = rc
 
 # ── Section 6.1 — the two OAuth refusals ────────────────────────────────────
 #
 # Both are pure refusals: neither creates a row, and neither touches the poll
 # registry, so they cost the ceremony below nothing. The first is the clause
-# `#/$defs/oauthError` was widened for — Section 6.1 step 1 REQUIRES
-# `invalid_request` for a `role` or `scope` parameter, and an enum written from
-# the section's own six-code closing list could not have expressed it.
+# `#/$defs/oauthError` carries `invalid_request` for: Section 6.1 step 1
+# REQUIRES it for a `role` or `scope` parameter.
 rc, role_refused = post_form("#{SERVER}/kiosk/oauth/device_authorization",
-                             { 'client_id' => 'e2e-auth-capture',
-                               'public_key' => reg_pem, 'role' => 'owner' })
+                             { **assertion_params(client_id, reg_key, ISSUER), 'role' => 'owner' })
 abort "a role parameter was not refused (#{rc}): #{JSON.generate(role_refused)}" unless rc == 400
 cap['oauth_error_role_refused'] = role_refused
 
-rc, bad_grant = post_form("#{SERVER}/kiosk/oauth/token", { 'grant_type' => 'client_credentials' })
+rc, bad_grant = post_form(TOKEN_URL, { 'grant_type' => 'password' })
 abort "an unknown grant_type was not refused (#{rc}): #{JSON.generate(bad_grant)}" unless rc == 400
 cap['oauth_error_unsupported_grant'] = bad_grant
 
 # ── Section 6.1 — the device grant, all three steps ─────────────────────────
-rc, da = post_form("#{SERVER}/kiosk/oauth/device_authorization",
-                   { 'client_id' => 'e2e-auth-capture', 'public_key' => reg_pem })
+rc, da = post_form("#{SERVER}/kiosk/oauth/device_authorization", assertion_params(client_id, reg_key, ISSUER))
 abort "device_authorization failed (#{rc}): #{JSON.generate(da)}" unless rc == 200
 cap['device_authorization'] = da
 
@@ -240,36 +215,38 @@ end
 approve = session.post_form('/kiosk/oauth/device/verify', form)
 abort "approval failed (#{approve.code})" unless [200, 302, 303].include?(approve.code.to_i)
 
-poll_signed, = possession_proof(reg_key, reg_pem)
-poll = { 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code',
-         'device_code' => da.fetch('device_code'), 'signed' => poll_signed }
-token_url = "#{SERVER}/kiosk/oauth/token"
-rc, granted = paying_toll(post_form(token_url, poll)) { |pow| post_form(token_url, poll, pow) }
+# A new client assertion and a new DPoP proof for each send, also for the send that pays the toll.
+poll = lambda do |pow = {}|
+  form = { 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code', 'device_code' => da.fetch('device_code'),
+           **assertion_params(client_id, reg_key, ISSUER) }
+  proof = Kiosk::TestHelpers::Dpop.headers(nil, reg_key, method: 'POST', url: "#{ISSUER}/kiosk/oauth/token")
+  post_form(TOKEN_URL, form, proof.merge(pow))
+end
+rc, granted = paying_toll(poll.call) { |pow| poll.call(pow) }
 abort "token poll failed (#{rc}): #{JSON.generate(granted)}" unless rc == 200
 cap['device_token_response'] = granted
 
-# ── Section 5.7 — the agent puts a new key on its identity ───────────────────
+# ── Section 5.7 — the client puts a new key on its identity ──────────────────
 #
-# Each key signs a challenge issued for it, and the old key's proof names the
-# new key by its thumbprint. The identity stays, so the unlink below still finds
-# the agent the claim bound.
+# Each key signs a client assertion, and the old key's assertion names the new
+# key by its thumbprint. The client stays, so the unlink below still finds the
+# agent the claim bound.
 new_key = OpenSSL::PKey::RSA.generate(2048)
-new_pem = new_key.public_key.to_pem
-rotate_signed, = possession_proof(reg_key, reg_pem, new_key: Kiosk::TestHelpers::Dpop.thumbprint(new_key))
-new_signed, = possession_proof(new_key, new_pem)
-rotate_body = { 'public_key' => reg_pem, 'signed' => rotate_signed,
-                'new_public_key' => new_pem, 'new_signed' => new_signed }
+rotate_body = { 'client_assertion_type' => ASSERTION_TYPE,
+                'client_assertion' => client_assertion(client_id, reg_key, ISSUER,
+                                                       new_key: Kiosk::TestHelpers::Dpop.thumbprint(new_key)),
+                'new_client_assertion' => client_assertion(client_id, new_key, ISSUER),
+                'jwks' => { 'keys' => [Kiosk::TestHelpers::Dpop.jwk(new_key)] } }
 rc, rotated = post_json("#{SERVER}/kiosk/auth/rotate", rotate_body)
 abort "rotate failed (#{rc}): #{JSON.generate(rotated)}" unless rc == 200
-cap['rotation_request'] = rotate_body
-cap['rotation_proof']   = payload_of(rotate_signed)
-cap['token_rotate']     = rotated
-abort 'the rotated token names another agent' unless
-  payload_of(rotated.fetch('access_token'))['agent_id'] == cap.fetch('claim_response').fetch('agent_id')
+cap['rotation_request']   = rotate_body
+cap['rotation_assertion'] = payload_of(rotate_body.fetch('client_assertion'))
+cap['rotation_response']  = rotated
+abort 'the rotation answered another client' unless rotated.fetch('client_id') == client_id
 
 # ── Section 6.3 — unlink, which answers 204 and no body at all ──────────────
 #
-# It is also this driver's own cleanup: the agent it minted is deactivated
+# It is also this driver's own cleanup: the agent it registered is deactivated
 # before the harness moves on, so nothing it left behind can be mistaken for
 # one of the two principals the suite asserts about.
 #
@@ -279,7 +256,7 @@ abort 'the rotated token names another agent' unless
 # «no body at all», so the body's LENGTH is part of what has to be captured,
 # and the JSON wrapper hands back a parsed Hash that cannot tell an empty body
 # from an unparseable one.
-unlink_body = { 'agent_id' => cap.fetch('claim_response').fetch('agent_id') }
+unlink_body = { 'agent_id' => client_id }
 unlink_req = Net::HTTP::Post.new(URI("#{SERVER}/kiosk/auth/unlink"),
                                  { 'Content-Type' => 'application/json' })
 unlink_req['Cookie'] = session.cookie_header
@@ -292,4 +269,4 @@ cap['unlink_status']   = rc
 cap['unlink_body_len'] = unlink.body.to_s.length
 
 File.write(CAPTURE, JSON.generate(cap))
-puts JSON.generate(objects: cap.keys.length, agent_id: cap.fetch('claim_response').fetch('agent_id'))
+puts JSON.generate(objects: cap.keys.length, agent_id: client_id)

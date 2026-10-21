@@ -5,7 +5,7 @@
 # Kiosk account-binding surfaces (device verify page, link mint, unlink) then
 # authenticate that Warden session through the kiosk-user-idp-devise adapter
 # (see config/initializers/kiosk.rb). Assistants never use this channel — they
-# authenticate with kiosk-pop key possession.
+# authenticate with a client assertion that their registered key signs.
 Devise.setup do |_config|
   require 'devise/orm/active_record'
 end

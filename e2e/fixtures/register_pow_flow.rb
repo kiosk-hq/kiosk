@@ -6,10 +6,11 @@
 #
 # Proves, in one run against the live server:
 #   1. A no-proof register is REJECTED with 402 pow_required + challenges[].
-#   2. Solving every challenge (bundled numpy solver) and re-POSTing register
-#      with the Kiosk-PoW header carrying the solved `{challenge, nonce}`
-#      proofs as raw JSON SUCCEEDS (201) and mints a usable token.
-#   3. The minted token authenticates a real wire verb.
+#   2. Solving every challenge (bundled numpy solver) and sending the same
+#      registration again with the Kiosk-PoW header carrying the solved
+#      `{challenge, nonce}` proofs as raw JSON SUCCEEDS (201); the token
+#      endpoint then issues a usable token for the new client.
+#   3. That token authenticates a real wire verb.
 #   4. The same key on the deployment's second origin is a second account,
 #      and each origin refuses the other's token.
 #
@@ -25,8 +26,6 @@ require 'kiosk/test_helpers/dpop'
 require 'kiosk/test_helpers/wire'
 require 'uri'
 require 'openssl'
-require 'securerandom'
-require 'base64'
 
 SERVER = ENV.fetch('SERVER_URL')
 ISSUER = ENV.fetch('KIOSK_ISSUER')
@@ -58,12 +57,7 @@ require_relative 'equihash_register'
 results = {}
 
 # ── 1. No-proof register is toll-gated (402 pow_required + challenges[]) ──────
-key = OpenSSL::PKey::RSA.generate(2048)
-pem = key.public_key.to_pem
-rc_ch, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
-abort "challenge failed: #{rc_ch} #{ch}" unless rc_ch == 200
-pop = JWT.encode({ aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
-rc_noproof, reg_noproof = post_json("#{SERVER}/kiosk/auth/register", { public_key: pem, signed: pop })
+rc_noproof, reg_noproof = post_json("#{SERVER}/kiosk/oauth/register", registration_body(OpenSSL::PKey::RSA.generate(2048)))
 results[:no_proof_status] = rc_noproof
 # RFC 9457: the branch point is the TOP-LEVEL `code`, and `challenges` is a
 # top-level extension member beside it.
@@ -88,7 +82,7 @@ results[:challenge_params_nk] = [challenge_params['n'], challenge_params['k']].j
 # real solved proof against the published `pow.schema.json`. Until this
 # existed, `#/$defs/proof` — where `indices`, its Zcash canonical order and the
 # inclusive u64 `maximum` live — had no over-the-wire coverage at all.
-reg_key, reg = equihash_register(
+reg_key, reg, token = register_with_token(
   server: SERVER,
   issuer: ISSUER,
   on_proofs: lambda { |proofs|
@@ -96,17 +90,11 @@ reg_key, reg = equihash_register(
     File.write(capture, JSON.generate(proofs: proofs)) if capture && !capture.empty?
   }
 )
-token = reg.fetch('access_token')
-results[:with_proof_registered] = !token.to_s.empty?
-# The pinned registration_role rides inside the minted JWT claims (the 201 body
-# is {agent_id, user_id, access_token} — no top-level role). Decode it to prove
-# the agent got the server-pinned :customer role it never chose.
-claims_seg = token.split('.')[1].to_s
-claims = begin
-  JSON.parse(Base64.urlsafe_decode64(claims_seg + ('=' * ((4 - (claims_seg.length % 4)) % 4))))
-rescue StandardError
-  {}
-end
+results[:with_proof_registered] = !reg.fetch('client_id').to_s.empty? && !token.to_s.empty?
+# The pinned registration_role rides inside the token's claims (the 201 body is
+# the client information, which names no role). Decode it to prove the agent
+# got the server-pinned :customer role it never chose.
+claims = JWT.decode(token, nil, false).first
 results[:role] = claims['role']
 
 # ── 3. The PoW-minted token authenticates a real wire verb ──────────────────
@@ -130,14 +118,12 @@ SECOND = ENV.fetch('KIOSK_ADDITIONAL_ORIGINS').split(',').first
 second_host = { 'Host' => URI(SECOND).authority }
 results[:first_origin_issuer]  = get_json("#{SERVER}/.well-known/kiosk.json").last.dig('kiosk', 'issuer')
 results[:second_origin_issuer] = get_json("#{SERVER}/.well-known/kiosk.json", second_host).last.dig('kiosk', 'issuer')
-_, second_reg = equihash_register(
-  server: SERVER,
-  issuer: SECOND,
-  key: reg_key,
-  headers: second_host
-)
-results[:second_origin_new_account] = second_reg.fetch('agent_id') != reg.fetch('agent_id')
-second_token = second_reg.fetch('access_token')
+_, second_reg = equihash_register(server: SERVER, key: reg_key, headers: second_host)
+results[:second_origin_new_account] = second_reg.fetch('client_id') != reg.fetch('client_id')
+rc, second_tok = client_token(server: SERVER, issuer: SECOND, client_id: second_reg.fetch('client_id'), key: reg_key,
+                              headers: second_host)
+abort "second-origin token request failed (#{rc}): #{JSON.generate(second_tok)}" unless rc == 200
+second_token = second_tok.fetch('access_token')
 second_salons = "#{SECOND}/kiosk/salons"
 results[:second_token_on_second] = get_json("#{SERVER}/kiosk/salons", second_host.merge(dpop(second_token, reg_key, second_salons))).first
 results[:first_token_on_second]  = get_json("#{SERVER}/kiosk/salons", second_host.merge(dpop(token, reg_key, second_salons))).first

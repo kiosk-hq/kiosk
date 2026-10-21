@@ -40,19 +40,15 @@ def get_json(url, headers = {})
   end]
 end
 
-# Register via the proof-of-possession handshake: challenge → sign(nonce, aud) →
-# register. `aud` binds the proof to this origin so it can't be relayed.
-# Registration is Equihash-PoW-gated (registration_pow_count=1); equihash_register
-# does the challenge → PoP → register → on-402 solve → retry handshake and
-# returns the keypair + 201 body.
+# Register the key (RFC 7591), then get a token from the token endpoint with a
+# client assertion and a DPoP proof. `aud` binds the assertion to this origin so
+# it can't be relayed. Registration is Equihash-PoW-gated
+# (registration_pow_count=1); register_with_token pays the toll and returns the
+# keypair, the 201 client information and the token.
 require_relative 'equihash_register'
-key, reg = equihash_register(
-  server: SERVER,
-  issuer: ISSUER
-)
-agent_id = reg.fetch('agent_id')
-user_id = reg.fetch('user_id')
-token = reg.fetch('access_token')
+key, reg, token = register_with_token(server: SERVER, issuer: ISSUER)
+agent_id = reg.fetch('client_id')
+user_id = JWT.decode(token, nil, false).first.fetch('sub')
 # A POST that carries the token also carries a proof that the key signs for its URL (RFC 9449).
 auth = ->(url) { Kiosk::TestHelpers::Dpop.headers(token, key, method: 'POST', url: url) }
 

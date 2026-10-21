@@ -53,13 +53,14 @@ trap 'rm -f "$AGENTS_TXT_BODY"' EXIT
 
 ALICE="00000000-0000-0000-0000-000000000001"
 
-# The two agent principals this suite runs as. They are REAL kiosk-pop JWTs the
-# booted origin issued: run.sh drives e2e/fixtures/bind_assistants.rb through
-# the shipped ceremony (Equihash-tolled register -> the human's link code ->
-# claim) and exports the results here.
+# The two agent principals this suite runs as. They are REAL access tokens the
+# booted origin's token endpoint issued: run.sh drives
+# e2e/fixtures/bind_assistants.rb through the shipped ceremony (Equihash-tolled
+# registration -> the human's link code -> claim -> token request) and exports
+# the results here.
 #
 # The agent id is a UUID by construction rather than by convention, because
-# `/auth/register` minted it: `kiosk.agents.id`, every
+# `/oauth/register` minted it as the client_id: `kiosk.agents.id`, every
 # `kiosk.*_mandates.agent_id` and `kiosk.current_agent_id()` are all typed
 # `uuid` in the canonical schema, so a caller cannot choose a shape the shipped
 # tables cannot store.
@@ -142,9 +143,13 @@ printf "\n\033[1m=== /.well-known/kiosk.json ===\033[0m\n"
 wk=$(curl -sf "$SERVER_URL/.well-known/kiosk.json")
 assert "kiosk.version present"     "$(echo "$wk" | jq -r '.kiosk.version')"     "1.0"
 assert "kiosk.endpoint correct"    "$(echo "$wk" | jq -r '.kiosk.endpoint')"    "$SERVER_URL/kiosk"
-assert "kiosk.auth.kind kiosk-pop" "$(echo "$wk" | jq -r '.kiosk.auth.kind')"   "kiosk-pop"
-assert "kiosk.auth.challenge_url"  "$(echo "$wk" | jq -r '.kiosk.auth.challenge_url')" "$SERVER_URL/kiosk/auth/challenge"
+assert "kiosk.auth has no kind"    "$(echo "$wk" | jq -r '.kiosk.auth | has("kind")')" "false"
+assert "kiosk.auth.registration_url" "$(echo "$wk" | jq -r '.kiosk.auth.registration_url')" "$SERVER_URL/kiosk/oauth/register"
+assert "kiosk.auth.token_url"      "$(echo "$wk" | jq -r '.kiosk.auth.token_url')"     "$SERVER_URL/kiosk/oauth/token"
 assert "kiosk.auth.rotate_url"     "$(echo "$wk" | jq -r '.kiosk.auth.rotate_url')"    "$SERVER_URL/kiosk/auth/rotate"
+assert "kiosk.auth.device_authorization_url" \
+  "$(echo "$wk" | jq -r '.kiosk.auth.device_authorization_url')" "$SERVER_URL/kiosk/oauth/device_authorization"
+assert "kiosk.auth.claim_url"      "$(echo "$wk" | jq -r '.kiosk.auth.claim_url')"     "$SERVER_URL/kiosk/auth/claim"
 assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      "$SERVER_URL"
 # `capabilities` names the MODULES this origin serves, not its verbs.
 assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay,events"
@@ -237,7 +242,7 @@ at_body=$(cat "$AGENTS_TXT_BODY")
 assert "agents.txt → 200"            "$at_status" "200"
 assert "agents.txt Content-Type"     "$(echo "$at_headers" | grep -i '^Content-Type:' | grep -ic 'text/plain')" "1"
 assert "agents.txt CORS *"           "$(echo "$at_headers" | grep -i '^Access-Control-Allow-Origin:' | grep -c '\*')" "1"
-assert "agents.txt names x-kiosk-pop" "$(echo "$at_body" | grep -c '^Authorization: x-kiosk-pop$')" "1"
+assert "agents.txt names oauth2"   "$(echo "$at_body" | grep -c '^Authorization: oauth2$')" "1"
 assert "agents.txt claims no payment protocol" "$(echo "$at_body" | grep -c '^Protocols:' || true)" "0"
 assert "agents.txt has Skills:"      "$(echo "$at_body" | grep -c '^Skills: ')" "1"
 
@@ -248,7 +253,8 @@ aj_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/agents.json")
 aj=$(curl -sf "$SERVER_URL/agents.json")
 assert "agents.json → 200"           "$aj_status" "200"
 assert "agents.json Content-Type"    "$(echo "$aj_headers" | grep -i '^Content-Type:' | grep -ic 'application/json')" "1"
-assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.discovery')" "/.well-known/kiosk.json"
+assert "agents.json auth.protocols" "$(echo "$aj" | jq -r '.authorization.protocols | join(",")')" "oauth2"
+assert "agents.json auth.discovery"  "$(echo "$aj" | jq -r '.authorization.discovery')" "/.well-known/oauth-authorization-server"
 assert "agents.json has no root extension" "$(echo "$aj" | jq -r 'keys | map(select(startswith("x-"))) | length')" "0"
 
 printf "\n\033[1m=== /.well-known/oauth-authorization-server (RFC 8414) ===\033[0m\n"
@@ -260,6 +266,14 @@ assert "oauth metadata names the device endpoint" \
   "$(echo "$as_meta" | jq -r '.device_authorization_endpoint')" "$SERVER_URL/kiosk/oauth/device_authorization"
 assert "oauth metadata names the token endpoint" \
   "$(echo "$as_meta" | jq -r '.token_endpoint')" "$SERVER_URL/kiosk/oauth/token"
+assert "oauth metadata names the registration endpoint" \
+  "$(echo "$as_meta" | jq -r '.registration_endpoint')" "$SERVER_URL/kiosk/oauth/register"
+assert "oauth metadata serves client_credentials and the device code" \
+  "$(echo "$as_meta" | jq -r '.grant_types_supported | join(",")')" "client_credentials,urn:ietf:params:oauth:grant-type:device_code"
+assert "oauth metadata names private_key_jwt" \
+  "$(echo "$as_meta" | jq -r '.token_endpoint_auth_methods_supported | join(",")')" "private_key_jwt"
+assert "oauth metadata names the DPoP algorithms" \
+  "$(echo "$as_meta" | jq -r '.dpop_signing_alg_values_supported | join(",")')" "RS256"
 
 # ─── /auth.md is not a cold-start dead end ───────────────────────────────
 #
@@ -467,10 +481,10 @@ GET /kiosk/no_such_verb
 POST /kiosk/salons {}
 POST /kiosk/book_appointment {}
 POST /kiosk/pay {}
-GET /kiosk/auth/challenge
-POST /kiosk/auth/register {}
-POST /kiosk/auth/login {}
-POST /kiosk/auth/revoke {}
+POST /kiosk/payment_setup {}
+POST /kiosk/oauth/register {}
+POST /kiosk/auth/rotate {}
+GET /kiosk/oauth/device/verify
 POST /kiosk/auth/link {}
 POST /kiosk/auth/claim {}
 POST /kiosk/auth/unlink {}
@@ -483,9 +497,10 @@ ROUTES
 )
 #
 # UNAUTHENTICATED on purpose, every one of them. Two reasons, and the first is
-# that a probe loop must not have side effects: `POST /kiosk/auth/revoke` with
-# ALICE's live token revokes her tokens, and every assertion after this block
-# would then be testing a different agent than it thinks. The second is that a
+# that a probe loop must not have side effects: `POST /kiosk/auth/rotate` with
+# a real assertion of ALICE's key would replace her key, and every assertion
+# after this block would then be testing a different agent than it thinks. The
+# second is that a
 # refusal is the response an agent most often reads the version handshake off,
 # so an unauthenticated sweep IS the error half §3.6 names.
 mount_missing=""
@@ -531,7 +546,7 @@ assert "…while a ROOT discovery surface carries none of them" \
 # is APPENDED — i.e. innermost — which is what lets it stamp a response no
 # Kiosk controller composed. Appended anywhere else and those two responses
 # leave the origin bare: a `POST` to an undrawn route under the mount answers
-# 404 with none of the three, while the same origin's `POST /kiosk/auth/login`
+# 404 with none of the three, while the same origin's `POST /kiosk/auth/rotate`
 # 400 carries all of them.
 #
 # These four probes are the whole of it: the two exception responses UNDER the
@@ -813,11 +828,11 @@ assert "unknown action → 404"         "$status" "404"
 # answer for it is asserted in kiosk-server's own suite.
 
 # (2) not_found -- the call is REAL and an ARGUMENT addressed something absent.
-# Exercised in the BINDING block below, where `POST /kiosk/auth/login` for a key
-# the origin no longer knows answers it through a real possession proof
-# (§5.3, §9.1 rule 2). It cannot be dialled here: login proves possession BEFORE
-# it looks the key up, so a probe with a made-up `signed` is answered 401 and
-# never reaches the 404 this code names. Search "binding: login after unlink".
+# Exercised in the BINDING block below, where `POST /kiosk/auth/claim` with a
+# link code the origin never minted answers it after a real client assertion
+# (§6.2, §9.1 rule 2). It is dialled there because the claim pays the toll
+# before it looks the code up, and that block pays it. Search "binding: claim
+# of an unknown code".
 
 # (3) module_not_served -- the whole CAPABILITY is absent from this origin.
 # This app configures no `kyc_public_key` (fixtures/initializer_kiosk.rb), so
@@ -1003,9 +1018,9 @@ assert "…with the stream's own URL published beside it" \
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #
-# /kiosk/.well-known/jwks.json publishes the RSA public key that signs
-# the kiosk-pop JWTs minted by the bundled IdP (register/login/revoke) and
-# the PS256 checkouts, so the key names no alg.
+# /kiosk/.well-known/jwks.json publishes the RSA public key that signs the
+# access tokens of the token endpoint (RS256) and the checkouts (PS256), so
+# the key names no alg.
 
 printf "\n\033[1m=== /kiosk/.well-known/jwks.json ===\033[0m\n"
 
@@ -1023,11 +1038,11 @@ assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("
 
 # ─── account binding: claim ceremony → bound wire → link redeem → unlink ──
 #
-# The RFC 8628-shaped claim ceremony binds an agent's public key to an
-# existing human account (alice); the token poll requires a possession
-# proof. Tokens remain kiosk-pop-minted: login is the refresh path, and
-# unlink (registration-layer revocation) kills it.
-printf "\n\033[1m=== account binding: claim → approve → PoP poll → bound wire → link → unlink ===\033[0m\n"
+# The RFC 8628 claim ceremony binds a registered client to an existing human
+# account (alice); the device authorization request and the token poll
+# authenticate with a client assertion. The client_credentials grant is the
+# refresh path, and unlink (registration-layer revocation) ends it.
+printf "\n\033[1m=== account binding: claim → approve → token poll → bound wire → link → unlink ===\033[0m\n"
 
 authmd=$(curl -s -o /dev/null -w '%{http_code}' "$SERVER_URL/auth.md")
 assert "binding: /auth.md served"           "$authmd" "200"
@@ -1052,14 +1067,15 @@ assert "binding: human signed in (real Devise)" "$(echo "$bind_out" | jq -r '.si
 assert "binding: human approve → 200"         "$(echo "$bind_out" | jq -r '.approve')"                              "200"
 assert "binding: fast poll → slow_down"       "$(echo "$bind_out" | jq -r '.slow_down | map(tostring) | join(":")')" "400:slow_down"
 assert "binding: token bound to the human"    "$(echo "$bind_out" | jq -r '.bound_user')"                           "true"
+assert "binding: the client keeps its client_id" "$(echo "$bind_out" | jq -r '.same_client')"                       "true"
 # The minted token carries the APPROVER's role — this origin's one declared
 # role, resolved by kiosk-user-idp-devise from Alice's session — and not a value
 # the unauthenticated opening request supplied.
 assert "binding: token role is the approver's" "$(echo "$bind_out" | jq -r '.token_role')"                          "customer"
 assert "binding: wire verb as bound account"  "$(echo "$bind_out" | jq -r '.wire_as_bound | map(tostring) | join(":")')" "200:true"
-assert "binding: kiosk-pop login refresh"     "$(echo "$bind_out" | jq -r '.login_bound')"                          "200"
+assert "binding: client_credentials refresh"  "$(echo "$bind_out" | jq -r '.token_bound | map(tostring) | join(":")')" "200:true"
 assert "binding: link-code mint (session)"    "$(echo "$bind_out" | jq -r '.link_mint')"                            "201"
-assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "201:true"
+assert "binding: link-code redeem → human"    "$(echo "$bind_out" | jq -r '.link_claim | map(tostring) | join(":")')" "204:true"
 # The toll comes before the code is looked up: the claim pays every time, the
 # token poll once per device code (five polls above, one toll).
 assert "binding: claim and token poll each paid one toll" \
@@ -1071,14 +1087,15 @@ assert "binding: unlink → 204 (no body)"      "$(echo "$bind_out" | jq -r '.un
 # wall-clock second as the unlink, which the watermark has to kill too.
 assert "binding: held token dies at unlink"   "$(echo "$bind_out" | jq -r '.held_token_after_unlink')"        "401"
 assert "binding: same-second token dies too"  "$(echo "$bind_out" | jq -r '.same_second_token_after_unlink')" "401"
-assert "binding: login after unlink → 404"    "$(echo "$bind_out" | jq -r '.login_after_unlink')"                   "404"
-# THE OTHER LIVE LEG of the split. The key was real, the proof was real, and
-# the thing
-# the call ADDRESSED is gone -- spec §9.1 rule 2. So the code is `not_found`,
-# and it is specifically NOT `module_not_served`: this origin serves the auth
-# module, and `auth/login` is a verb it very much has.
-assert "binding: …and the code is not_found"  "$(echo "$bind_out" | jq -r '.login_after_unlink_code')"              "not_found"
-assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.login_after_unlink_type')"              "https://kiosk.tech/problems/not_found"
+assert "binding: token request after unlink → invalid_client" \
+  "$(echo "$bind_out" | jq -r '.token_after_unlink | map(tostring) | join(":")')" "401:invalid_client"
+# THE OTHER LIVE LEG of the split. The client was real, the assertion was real,
+# and the thing the call ADDRESSED is absent -- spec §9.1 rule 2. So the code is
+# `not_found`, and it is specifically NOT `module_not_served`: this origin
+# serves the binding module, and `auth/claim` is a path it very much has.
+assert "binding: claim of an unknown code → 404" "$(echo "$bind_out" | jq -r '.unknown_code_claim')"           "404"
+assert "binding: …and the code is not_found"  "$(echo "$bind_out" | jq -r '.unknown_code_claim_code')"              "not_found"
+assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.unknown_code_claim_type')"              "https://kiosk.tech/problems/not_found"
 
 # THE DISCRIMINATOR, and the point of the split. Two situations that could
 # share one code, dialled at this booted origin, must answer with TWO
@@ -1088,7 +1105,7 @@ assert "binding: …type names it"              "$(echo "$bind_out" | jq -r '.lo
 # one explicit route per verb -- it is the plain routing 404 asserted far above.)
 assert "the two 'it is not here' answers are two DIFFERENT codes" \
   "$(printf '%s\n%s\n' \
-      "$(echo "$bind_out" | jq -r '.login_after_unlink_code')" \
+      "$(echo "$bind_out" | jq -r '.unknown_code_claim_code')" \
       "$KIOSK_T158_MODULE_CODE" | sort -u | wc -l | tr -d ' ')" "2"
 
 # ─── register-PoW golden path (402 pow_required → solve Equihash → 201) ──────
@@ -1101,7 +1118,7 @@ assert "the two 'it is not here' answers are two DIFFERENT codes" \
 # REJECTED 402 pow_required with challenges[], (2) solving each challenge with
 # the bundled numpy solver and re-POSTing the SAME body with the proof(s) in the
 # `Kiosk-PoW` request header — never a body `pow` field — SUCCEEDS 201,
-# (3) the PoW-minted token authenticates a real wire verb. Same mechanism the
+# (3) the token endpoint's token for that client authenticates a real wire verb. Same mechanism the
 # demos use (kiosk-demo-skooti).
 printf "\n\033[1m=== register-PoW golden path: no-proof 402 → solve Equihash → 201 → wire ===\033[0m\n"
 
@@ -1150,13 +1167,13 @@ assert "rotate: an old-key proof naming no new key → 401" "$(echo "$rot_out" |
 assert "…and that refusal moved nothing"               "$(echo "$rot_out" | jq -r '.old_token_after_refusal')"  "200"
 assert "rotate: both keys signed → 200"                "$(echo "$rot_out" | jq -r '.rotate')"                   "200"
 assert "rotate: the same agent_id"                     "$(echo "$rot_out" | jq -r '.same_agent')"               "true"
+assert "rotate: the new key gets a token → 200"        "$(echo "$rot_out" | jq -r '.new_key_token')"            "200"
 assert "rotate: the same account"                      "$(echo "$rot_out" | jq -r '.same_user')"                "true"
 assert "rotate: the new token is bound to the new key" "$(echo "$rot_out" | jq -r '.bound_to_new_key')"         "true"
 assert "rotate: the new token with the new key → 200"  "$(echo "$rot_out" | jq -r '.new_token')"                "200"
 assert "rotate: the new token with the old key → 401"  "$(echo "$rot_out" | jq -r '.new_token_old_key_proof')"  "401"
 assert "rotate: a token from before the rotation → 401" "$(echo "$rot_out" | jq -r '.old_token_after')"         "401"
-assert "rotate: the old key logs in to nothing → 404"  "$(echo "$rot_out" | jq -r '.old_key_login')"            "404"
-assert "rotate: the new key logs in → 200"             "$(echo "$rot_out" | jq -r '.new_key_login')"            "200"
+assert "rotate: the old key gets no token → 401"       "$(echo "$rot_out" | jq -r '.old_key_token')"            "401"
 
 # ─── no-human AP2 pay flow (register → checkout → checkout and payment mandates → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"

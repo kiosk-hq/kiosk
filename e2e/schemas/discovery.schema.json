@@ -60,31 +60,19 @@
         },
         "auth": {
           "type": "object",
-          "description": "The kiosk-pop proof-of-possession auth block.",
+          "description": "The auth block: the OAuth endpoints of registration and tokens, and the Kiosk endpoints of rotation and binding (Section 4.3).",
           "required": [
-            "kind",
-            "challenge_url",
-            "register_url",
-            "login_url",
-            "revoke_url",
+            "registration_url",
+            "token_url",
             "rotate_url",
             "device_authorization_url",
             "claim_url"
           ],
           "properties": {
-            "kind": {
-              "const": "kiosk-pop"
-            },
-            "challenge_url": {
+            "registration_url": {
               "type": "string"
             },
-            "register_url": {
-              "type": "string"
-            },
-            "login_url": {
-              "type": "string"
-            },
-            "revoke_url": {
+            "token_url": {
               "type": "string"
             },
             "rotate_url": {

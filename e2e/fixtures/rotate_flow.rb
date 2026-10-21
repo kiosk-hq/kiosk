@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# Key rotation over the wire (spec Section 5.7). A newly registered agent puts a
-# new key on its identity: each key signs a challenge issued for it, and the old
-# key's proof names the new key by its RFC 7638 thumbprint. Emits ONE JSON line
-# for assistant.sh to assert on.
+# Key rotation over the wire (spec Section 5.7). A newly registered client puts a
+# new key on its identity: each key signs a client assertion, and the old key's
+# assertion names the new key by its RFC 7638 thumbprint. The token endpoint
+# then issues a token for the new key only. Emits ONE JSON line for
+# assistant.sh to assert on.
 #
 #   SERVER_URL=… KIOSK_ISSUER=… bundle exec ruby rotate_flow.rb
 require 'jwt'
@@ -42,14 +43,6 @@ def post_json(url, body, headers = {})
   end]
 end
 
-# A possession proof of `key` over a fresh challenge issued for it; `claims` adds members.
-def proof(key, claims = {})
-  pem = URI.encode_www_form_component(key.public_key.to_pem)
-  rc, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{pem}")
-  abort "challenge failed: #{rc} #{ch}" unless rc == 200
-  JWT.encode({ aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid }.merge(claims), key, 'RS256')
-end
-
 def claims_of(token)
   seg = token.split('.')[1].to_s
   JSON.parse(Base64.urlsafe_decode64(seg + ('=' * ((4 - (seg.length % 4)) % 4))))
@@ -58,35 +51,36 @@ end
 def salons_status(token, key) = get_json(SALONS, Kiosk::TestHelpers::Dpop.headers(token, key, method: 'GET', url: SALONS)).first
 
 require_relative 'equihash_register'
-old_key, reg = equihash_register(server: SERVER, issuer: ISSUER)
-old_token = reg.fetch('access_token')
+old_key, reg, old_token = register_with_token(server: SERVER, issuer: ISSUER)
+client_id = reg.fetch('client_id')
 new_key = OpenSSL::PKey::RSA.generate(2048)
 results = { old_token_before: salons_status(old_token, old_key) }
 
-rotate = lambda do |signed_by_old|
+rotate = lambda do |old_assertion|
   post_json("#{SERVER}/kiosk/auth/rotate",
-            { public_key: old_key.public_key.to_pem, signed: signed_by_old,
-              new_public_key: new_key.public_key.to_pem, new_signed: proof(new_key) })
+            { client_assertion_type: ASSERTION_TYPE, client_assertion: old_assertion,
+              new_client_assertion: client_assertion(client_id, new_key, ISSUER),
+              jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(new_key)] } })
 end
 
-# The old key's proof must name the new key: one that names no key is refused,
-# and nothing moves.
-rc, = rotate.call(proof(old_key))
+# The old key's assertion must name the new key: one that names no key is
+# refused, and nothing moves.
+rc, = rotate.call(client_assertion(client_id, old_key, ISSUER))
 results[:unnamed_new_key] = rc
 results[:old_token_after_refusal] = salons_status(old_token, old_key)
 
-rc, rotated = rotate.call(proof(old_key, new_key: Kiosk::TestHelpers::Dpop.thumbprint(new_key)))
+rc, rotated = rotate.call(client_assertion(client_id, old_key, ISSUER, new_key: Kiosk::TestHelpers::Dpop.thumbprint(new_key)))
 results[:rotate] = rc
-new_token = rotated.fetch('access_token', '')
-results[:same_agent] = claims_of(new_token)['agent_id'] == reg.fetch('agent_id')
-results[:same_user]  = claims_of(new_token)['sub'] == reg.fetch('user_id')
+results[:same_agent] = rotated['client_id'] == client_id
+rc, tok = client_token(server: SERVER, issuer: ISSUER, client_id:, key: new_key)
+results[:new_key_token] = rc
+new_token = tok.fetch('access_token', '')
+results[:same_user] = claims_of(new_token)['sub'] == claims_of(old_token)['sub']
 results[:bound_to_new_key] = claims_of(new_token).dig('cnf', 'jkt') == Kiosk::TestHelpers::Dpop.thumbprint(new_key)
 results[:new_token] = salons_status(new_token, new_key)
 results[:new_token_old_key_proof] = salons_status(new_token, old_key)
 results[:old_token_after] = salons_status(old_token, old_key)
-rc, = post_json("#{SERVER}/kiosk/auth/login", { public_key: old_key.public_key.to_pem, signed: proof(old_key) })
-results[:old_key_login] = rc
-rc, = post_json("#{SERVER}/kiosk/auth/login", { public_key: new_key.public_key.to_pem, signed: proof(new_key) })
-results[:new_key_login] = rc
+rc, = client_token(server: SERVER, issuer: ISSUER, client_id:, key: old_key)
+results[:old_key_token] = rc
 
 puts JSON.generate(results)

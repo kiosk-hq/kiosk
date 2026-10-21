@@ -5,8 +5,8 @@ require 'uri'
 
 module Kiosk
   module Server
-    # The discovery documents — kiosk.json, agents.txt, agents.json, the two OAuth
-    # metadata documents, the skills index, ard.json, api-catalog and auth.md — rendered
+    # The discovery documents — kiosk.json, agents.txt, agents.json, the OAuth
+    # metadata (RFC 8414, RFC 9728), the skills index, ard.json, api-catalog and auth.md — rendered
     # as pure functions of one configuration and the request's base URL, so they
     # cannot drift.
     module WellKnown

@@ -26,13 +26,14 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2068 anchors.
+# 2074 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
 .github/workflows/ci.yml	SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	name: kiosk OSS end-to-end
 .github/workflows/ci.yml	run: ./e2e/run.sh
+CHANGELOG.md	## [0.6.0] — 2026-10-21
 CHANGELOG.md	Surfaced by a live hosted Hermes run. (K-437)
 CHANGELOG.md	surfaced by the first live Hermes run, which paid successfully but whose order could never show paid or be scheduled
 CLAUDE.md	demo Rails apps (`kiosk-demo-*` — seven operators plus the `kiosk-demo-prove`
@@ -453,6 +454,7 @@ kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal HANA, hanas.accoun
 kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal [[HANA, standalone.principal.agent_id]], Kiosk::Settlement.pluck(:user_id, :agent_id)
 kiosk-demo-getgrocery/test/stories/claim_test.rb	assert_equal standalone.principal.user_id, Order.find(left_behind['order_id']).user_id
 kiosk-demo-getgrocery/test/stories/discovery_test.rb	an assistant that knows nothing finds out, without an account, what the shop offers and how to buy
+kiosk-demo-getgrocery/test/stories/discovery_test.rb	assert_equal %w[kyc_verification order_delivery payment payment_setup], schema['events'].pluck('name').sort
 kiosk-demo-getgrocery/test/stories/privacy_test.rb	one shopper can neither move nor see another's delivery
 kiosk-demo-getgrocery/test/stories/shelf_test.rb	a price change after ordering does not change what the shopper pays
 kiosk-demo-getgrocery/test/stories/shop_test.rb	a paid order is not charged again
@@ -769,6 +771,8 @@ kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	confirm: true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	off_session: true,
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	raise PaymentFailed.new(card_decline_message(e), retryable: true)
 kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/charges.rb	when 'authentication_required' then 'the payment method needs authentication an off-session charge cannot complete'
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customer_record.rb	# The principal → Stripe Customer mapping, one row per principal, in the
+kiosk-pay-stripe/lib/kiosk/payment_providers/stripe/customers.rb	card = @stripe.payment_methods.list(customer: cus_id, type: 'card', limit: 1).data.first
 kiosk-pay-stripe/spec/generators/kiosk/pay_stripe/install_generator_spec.rb	types user_id as --user-id-type says
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	'#capture' do
 kiosk-pay-stripe/spec/kiosk/payment_providers/stripe_capture_spec.rb	captures against stripe-mock, which reports no network id
@@ -1153,6 +1157,7 @@ kiosk-server/lib/kiosk/server/identity_resolution.rb	Dpop.verify!(request.header
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/jwt_issuer.rb	DEFAULT_EXPIRES_IN = 3600
 kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
+kiosk-server/lib/kiosk/server/kyc.rb	      TOPIC         = 'kyc_verification'
 kiosk-server/lib/kiosk/server/kyc.rb	unless secure_equal?(row.fetch('nonce'), nonce)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        # Binds the attestation to this operator.
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	        if payload[:aud].to_s != config.kyc_audience.to_s
@@ -1175,6 +1180,7 @@ kiosk-server/lib/kiosk/server/oauth_error.rb	invalid_request invalid_client inva
 kiosk-server/lib/kiosk/server/payment_claim.rb	return if total == price
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	# One proof, a JSON array, repeated header lines (Rack joins them with
+kiosk-server/lib/kiosk/server/pow_gate.rb	It is paid once per access token: after one paid toll, every call made
 kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	policy.challenge_for(identity: identity, verb: verb, factors: ReputationFactors.for(identity:, policy:))
 kiosk-server/lib/kiosk/server/pow_toll.rb	# Not bad faith (clock skew, a difficulty change): release the claim

@@ -17,9 +17,11 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - The `/kiosk/.well-known/jwks.json` endpoint publishes exactly one RSA signing key (kty/use/kid/n/e, no alg: it signs RS256 tokens and PS256 checkouts) and never leaks private parameters (`d`, `p`)
 - The partial UNIQUE index on `kiosk.agents (issuer, public_key)` (WHERE `revoked_at IS NULL`) rejects a second LIVE row for one key on one origin at the DB level while allowing a revoked re-registration
 - Two origins on one deployment (`http://127.0.0.1:<port>` and `http://localhost:<port>`, via `c.additional_origins`) are each their own operator: each discovery document names its own issuer, one key registers on both as two accounts, and neither origin accepts the other's token
+- Every access token is DPoP-bound (RFC 9449): each call that carries it carries a proof that the assistant's key signs for its method and URL (`e2e/dpop.py`). A valid token sent as `Bearer`, with no proof, with a proof from another key, with a proof for another URL or made for another token answers 401, the first with `WWW-Authenticate: DPoP algs="RS256"`
+- Key rotation (`POST /kiosk/auth/rotate`): a registered agent puts a new key on its identity with both keys signing and the old key's proof naming the new key; the agent and its account stay, the new token works only with the new key, a token from before answers 401 and the old key's login 404
 - The principal flows into handlers: the `book_appointment` Action reads `Kiosk.current_user_id` and the `my_appointments` query returns only the calling principal's rows (`Appointment.own`)
 - The `pay` verb settles a checkout through the two closed AP2 mandates: `pay_flow.rb` self-registers a synthetic principal, runs `payment_setup` (the setup page, then `ready`), signs a checkout with the operator's key as an action would, signs the checkout and payment mandates (SD-JWT), pays through `kiosk-pay-stripe` against a local stripe-mock; assertions cover the unenveloped `pay` response body and the three DB tables (`checkout_mandates`, `payment_mandates`, `settlements`)
-- The EVENT STREAM, over a real WebSocket, driven by the PINNED listener (`kiosk-server/listen.py` — the same file an assistant fetches from kiosk.tech and verifies by SHA-256, rather than a client written for this harness). A salon marks an appointment confirmed at its own back-office page — OUTSIDE the mount and not a Kiosk handler, so nothing the assistant called produced it — and the event reaches a subscriber that was already waiting: with its subject and its published payload, never carrying another principal's row, resumable from `since` by a listener started cold afterwards, refused at subscribe time for a subject that is not the caller's, and disconnected with `reconnect: false` for a bearer that does not resolve
+- The EVENT STREAM, over a real WebSocket, driven by the PINNED listener (`kiosk-server/listen.py` — the same file an assistant fetches from kiosk.tech and verifies by SHA-256, rather than a client written for this harness). A salon marks an appointment confirmed at its own back-office page — OUTSIDE the mount and not a Kiosk handler, so nothing the assistant called produced it — and the event reaches a subscriber that was already waiting: with its subject and its published payload, never carrying another principal's row, resumable from `since` by a listener started cold afterwards, refused at subscribe time for a subject that is not the caller's, and disconnected with `reconnect: false` for a token that does not resolve
 
 ## What it does NOT verify (deferred)
 
@@ -42,10 +44,12 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
 - **`rails` gem** — the script installs it automatically if missing
 - **`curl`** and **`jq`** on the PATH
 - **`stripe-mock`** on the PATH (`brew install stripe-mock`); `run.sh` starts it, or reuses one already on port 12111
-- **python packages** — `e2e/requirements.txt` declares both: `numpy` for the
-  register-time Equihash toll the golden path pays, and `websockets` for the
+- **python packages** — `e2e/requirements.txt` declares them: `numpy` for the
+  register-time Equihash toll the golden path pays, `websockets` for the
   event-stream leg, which runs `kiosk-server/listen.py` — the SAME file an
-  assistant fetches from kiosk.tech and verifies by SHA-256 before executing.
+  assistant fetches from kiosk.tech and verifies by SHA-256 before executing —
+  and `pyjwt` with `cryptography` for `e2e/dpop.py`, which signs the DPoP proof
+  of every call that carries a token.
   CI installs that file; so should you:
 
   ```bash
@@ -60,7 +64,8 @@ Reproducible end-to-end test of the Kiosk OSS gems. The same script (`run.sh`) r
   KIOSK_PYTHON=.venv/bin/python bash e2e/run.sh
   ```
 
-  `KIOSK_PYTHON` defaults to `python3` and is read for the listener only; the
+  `KIOSK_PYTHON` defaults to `python3` and is read for the listener and
+  `dpop.py` only; the
   Equihash solver keeps using plain `python3`, which is the interpreter
   `kiosk-pow-equihash` names itself.
 
@@ -108,7 +113,8 @@ e2e/
 ├── schema_conformance.rb                   # the published JSON Schemas run against THIS origin's live wire bytes, §5/§6 included
 ├── schemas/                                # vendored copies of the published normative schemas this harness alone reads (the five kiosk-server ENFORCES are vendored in the gem instead)
 ├── README.md                               # this file
-├── requirements.txt                        # the harness's python dependencies: numpy for the Equihash register-PoW solver, websockets for the event-stream listener
+├── requirements.txt                        # the harness's python dependencies: numpy for the Equihash register-PoW solver, websockets for the event-stream listener, pyjwt + cryptography for dpop.py
+├── dpop.py                                 # signs a DPoP proof (RFC 9449) for one call; the listener runs it as its --proof-command
 └── fixtures/                               # files copied into the generated app
     ├── create_users.rb                     # provider's user table (UUID PK, Devise login columns)
     ├── create_salons_and_appointments.rb   # demo schema (salons + appointments)
@@ -120,7 +126,8 @@ e2e/
     ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
     ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
     ├── pay_flow.rb                         # no-human AP2 pay flow: register → sign mandates → pay
-    ├── auth_wire_capture.rb                 # the §5/§6 ceremonies driven for their BYTES: kiosk-pop (challenge → tolled register → login → revoke), link → claim → unlink, and the device grant with a real verify-page approval — written to AUTH_CAPTURE for schema_conformance.rb
+    ├── rotate_flow.rb                      # key rotation: register → rotate with both keys signing → the identity stays, the old key and its tokens stop
+    ├── auth_wire_capture.rb                 # the §5/§6 ceremonies driven for their BYTES: kiosk-pop (challenge → tolled register → login → revoke → rotate), link → claim → unlink, and the device grant with a real verify-page approval — written to AUTH_CAPTURE for schema_conformance.rb
     ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
     ├── catalog_controller.rb               # Kiosk::CatalogController — `include Kiosk::Handler`, `kind :query`: the salons verb
     ├── bookings_controller.rb              # Kiosk::BookingsController — `include Kiosk::Handler`: the my_appointments QUERY and the book_appointment ACTION in ONE controller, plus the `appointment_confirmed` TOPIC

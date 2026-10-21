@@ -41,7 +41,7 @@
 # Usage (invoked by e2e/run.sh from the generated app dir, so json_schemer —
 # a kiosk-server RUNTIME dependency — is on the load path):
 #
-#   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=… TOKEN=… \
+#   SERVER_URL=http://127.0.0.1:3001 KIOSK_ISSUER=… TOKEN=… KEY_FILE=… \
 #     bundle exec ruby <repo>/e2e/schema_conformance.rb
 #
 # Exits non-zero on any failure.
@@ -50,6 +50,7 @@ require 'json'
 require 'json_schemer'
 require 'net/http'
 require 'kiosk/test_helpers/descriptor_examples'
+require 'kiosk/test_helpers/dpop'
 require 'kiosk/test_helpers/wire'
 require 'uri'
 
@@ -253,30 +254,41 @@ abort 'schema_conformance: the served catalog publishes no query to probe' unles
 status, raw = get("/kiosk/#{PROBE_QUERY}")
 problems << ["GET /kiosk/#{PROBE_QUERY} unauthenticated (#{status})", parse(raw)]
 
-# A live run holds no bearer: minting one means registering an agent on a
-# machine this harness does not own.
+# A live run holds no token: minting one means registering an agent on a
+# machine this harness does not own. A call that carries the token carries a
+# proof that KEY_FILE's key signs for its method and URL (RFC 9449).
 TOKEN = LIVE ? ENV.fetch('TOKEN', nil) : ENV.fetch('TOKEN')
-AUTH  = TOKEN ? { 'Authorization' => "Bearer #{TOKEN}" } : nil
+KEY   = TOKEN && OpenSSL::PKey::RSA.new(File.read(ENV.fetch('KEY_FILE')))
+AUTH  = TOKEN ? ->(method, path) { Kiosk::TestHelpers::Dpop.headers(TOKEN, KEY, method:, url: "#{SERVER}#{path}") } : nil
 
 # `salons` declares a CLOSED empty input_schema, so an undeclared argument is
 # the wire's own 400 from RequestValidation — a document built on a different
 # path from every other one here.
 if AUTH
-  status, raw = get("/kiosk/#{PROBE_QUERY}?zzz=1", AUTH)
+  status, raw = get("/kiosk/#{PROBE_QUERY}?zzz=1", AUTH.call('GET', "/kiosk/#{PROBE_QUERY}"))
   problems << ["GET /kiosk/#{PROBE_QUERY}?zzz=1 — an undeclared argument (#{status})", parse(raw)]
 else
   skipped 'the RequestValidation 400 (an undeclared argument)',
-          'it is an AUTHENTICATED probe and a live run mints no bearer'
+          'it is an AUTHENTICATED probe and a live run mints no token'
+end
+
+# A valid token sent as Bearer: §5.6 refuses it, with the DPoP challenge.
+if AUTH
+  status, raw = get("/kiosk/#{PROBE_QUERY}", { 'Authorization' => "Bearer #{TOKEN}" })
+  problems << ["GET /kiosk/#{PROBE_QUERY} — a token sent as Bearer (#{status})", parse(raw)]
+else
+  skipped 'the 401 of a token sent as Bearer',
+          'it is an AUTHENTICATED probe and a live run mints no token'
 end
 
 # This origin configures no `kyc_public_key`, so the KYC attestation path is
 # PUBLISHED with no module behind it: 501 module_not_served.
 if AUTH
-  status, raw = post('/kiosk/agents/kyc', JSON.generate(kyc_jws: 'not.a.jws'), AUTH)
+  status, raw = post('/kiosk/agents/kyc', JSON.generate(kyc_jws: 'not.a.jws'), AUTH.call('POST', '/kiosk/agents/kyc'))
   problems << ["POST /kiosk/agents/kyc — no KYC module here (#{status})", parse(raw)]
 else
   skipped 'the 501 module_not_served problem document',
-          'it is an AUTHENTICATED probe and a live run mints no bearer'
+          'it is an AUTHENTICATED probe and a live run mints no token'
 end
 
 problems.each do |label, doc|
@@ -513,6 +525,32 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
     doc
   end
 
+  # §5.6 — the payload of a DPoP proof this origin ACCEPTED, on that revoke.
+  # `ath` ties the proof to one token; without it a proof rides any token.
+  conforms('the DPoP proof this origin accepted', A, auth.fetch('dpop_proof'),
+           pointer: '#/$defs/dpopProof') do |doc|
+    doc.delete('ath')
+    doc
+  end
+
+  # §5.7 — rotation: the body, the old key's proof that names the new key, and
+  # the answer, which is login's object again.
+  conforms('the POST /auth/rotate body', A, auth.fetch('rotation_request'),
+           pointer: '#/$defs/rotationRequest') do |doc|
+    doc.delete('new_signed') # a new key with no proof of its own is an assertion
+    doc
+  end
+  conforms('the rotation proof this origin accepted', A, auth.fetch('rotation_proof'),
+           pointer: '#/$defs/rotationProof') do |doc|
+    doc.delete('new_key')
+    doc
+  end
+  conforms('the POST /auth/rotate 200 — the SAME object as login', A, auth.fetch('token_rotate'),
+           pointer: '#/$defs/token') do |doc|
+    doc.delete('access_token')
+    doc
+  end
+
   # §6.2 — the human's link code, minted on a real Devise session.
   conforms('the POST /auth/link 201', BI, auth.fetch('link_code'),
            pointer: '#/$defs/linkCode') do |doc|
@@ -579,7 +617,7 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   # real human approved on the real verify page.
   conforms('the POST /oauth/token 200 (the completed device grant)', BI,
            auth.fetch('device_token_response'), pointer: '#/$defs/deviceTokenResponse') do |doc|
-    doc['token_type'] = 'bearer' # `const` "Bearer" — the spelling is the contract
+    doc['token_type'] = 'Bearer' # `const` "DPoP" — a bearer token is not what this grant issues
     doc
   end
 

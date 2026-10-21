@@ -7,6 +7,7 @@
 require 'jwt'
 require 'json'
 require 'net/http'
+require 'kiosk/test_helpers/dpop'
 require 'kiosk/test_helpers/wire'
 require 'uri'
 require 'openssl'
@@ -14,7 +15,7 @@ require 'securerandom'
 require 'base64'
 
 # The human half of this ceremony is a REAL browser session: there is
-# no stub user-IdP left to hand this driver a `user:u-<uuid>` bearer. The
+# no stub user-IdP left to hand this driver a `user:u-<uuid>` token. The
 # cookie-jar-and-CSRF helper is the demos' single copy — reached here rather
 # than duplicated into e2e/fixtures, because an eighth copy of a mechanism is
 # how the seventh one drifts.
@@ -168,7 +169,11 @@ results[:token_role] = claims['role']
 agent_id = claims.fetch('agent_id')
 
 # Wire verb as the bound assistant account — a query is a GET at its own path.
-rc, q = get_json("#{SERVER}/kiosk/my_appointments", { 'Authorization' => "Bearer #{token}" })
+MY_APPOINTMENTS = "#{SERVER}/kiosk/my_appointments".freeze
+# A call that carries a token carries a proof that its key signs for the call (RFC 9449).
+def dpop(token, key, url) = Kiosk::TestHelpers::Dpop.headers(token, key, method: 'GET', url: url)
+
+rc, q = get_json(MY_APPOINTMENTS, dpop(token, key, MY_APPOINTMENTS))
 # The answer IS the rows, so "the wire served it" is "a
 # list came back", not "ok was true".
 results[:wire_as_bound] = [rc, q.is_a?(Array)]
@@ -202,9 +207,9 @@ fresh_token = rc == 200 ? fresh.fetch('access_token') : token
 rc, = HUMAN_SESSION.post_json('/kiosk/auth/unlink', { agent_id: agent_id }, { session: true })
 results[:unlink] = rc
 
-rc, = get_json("#{SERVER}/kiosk/my_appointments", { 'Authorization' => "Bearer #{token}" })
+rc, = get_json(MY_APPOINTMENTS, dpop(token, key, MY_APPOINTMENTS))
 results[:held_token_after_unlink] = rc
-rc, = get_json("#{SERVER}/kiosk/my_appointments", { 'Authorization' => "Bearer #{fresh_token}" })
+rc, = get_json(MY_APPOINTMENTS, dpop(fresh_token, key, MY_APPOINTMENTS))
 results[:same_second_token_after_unlink] = rc
 
 # THE CODE, not only the status. A key the origin no longer knows is

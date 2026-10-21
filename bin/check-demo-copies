@@ -1865,6 +1865,10 @@ E2E_FIXTURES = {
     pairs: nil,
     why: "Run in place; the demos' claim ceremonies are Minitest tests."
   },
+  'rotate_flow.rb' => {
+    pairs: nil,
+    why: 'Run in place; it rotates an assistant key over the wire, which no demo does.'
+  },
   'pay_flow.rb' => {
     pairs: nil,
     why: "Run in place; the demos' payment beats are their own tests."

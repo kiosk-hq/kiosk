@@ -21,6 +21,7 @@
 require 'jwt'
 require 'json'
 require 'net/http'
+require 'kiosk/test_helpers/dpop'
 require 'kiosk/test_helpers/wire'
 require 'uri'
 require 'openssl'
@@ -109,7 +110,11 @@ end
 results[:role] = claims['role']
 
 # ── 3. The PoW-minted token authenticates a real wire verb ──────────────────
-rc_wire, wire = get_json("#{SERVER}/kiosk/salons", { 'Authorization' => "Bearer #{token}" })
+# A call that carries a token carries a proof that its key signs for the
+# URL of the origin it reaches (RFC 9449).
+def dpop(token, key, url) = Kiosk::TestHelpers::Dpop.headers(token, key, method: 'GET', url: url)
+
+rc_wire, wire = get_json("#{SERVER}/kiosk/salons", dpop(token, reg_key, "#{SERVER}/kiosk/salons"))
 results[:wire_status] = rc_wire
 # A query is answered with the handler's payload verbatim, so
 # the proof that the wire served this token is that a LIST came back — there
@@ -133,8 +138,9 @@ _, second_reg = equihash_register(
 )
 results[:second_origin_new_account] = second_reg.fetch('agent_id') != reg.fetch('agent_id')
 second_token = second_reg.fetch('access_token')
-results[:second_token_on_second] = get_json("#{SERVER}/kiosk/salons", second_host.merge('Authorization' => "Bearer #{second_token}")).first
-results[:first_token_on_second]  = get_json("#{SERVER}/kiosk/salons", second_host.merge('Authorization' => "Bearer #{token}")).first
-results[:second_token_on_first]  = get_json("#{SERVER}/kiosk/salons", { 'Authorization' => "Bearer #{second_token}" }).first
+second_salons = "#{SECOND}/kiosk/salons"
+results[:second_token_on_second] = get_json("#{SERVER}/kiosk/salons", second_host.merge(dpop(second_token, reg_key, second_salons))).first
+results[:first_token_on_second]  = get_json("#{SERVER}/kiosk/salons", second_host.merge(dpop(token, reg_key, second_salons))).first
+results[:second_token_on_first]  = get_json("#{SERVER}/kiosk/salons", dpop(second_token, reg_key, "#{SERVER}/kiosk/salons")).first
 
 puts JSON.generate(results)

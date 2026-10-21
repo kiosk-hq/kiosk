@@ -15,8 +15,9 @@
 # and writes down what went over the wire, request bodies included:
 #
 #   Section 5 (kiosk-pop)      challenge -> register (Equihash-tolled) ->
-#                              login -> revoke, plus the decoded possession
-#                              proof and the decoded access-token claims
+#                              login -> revoke -> rotate, plus the decoded
+#                              possession, rotation and DPoP proofs and the
+#                              decoded access-token claims
 #   Section 6.2/6.3 (link)     link -> claim -> unlink
 #   Section 6.1 (device grant) device_authorization -> human approval on the
 #                              real verify page -> the token poll
@@ -54,6 +55,7 @@ require 'base64'
 require 'json'
 require 'jwt'
 require 'net/http'
+require 'kiosk/test_helpers/dpop'
 require 'kiosk/test_helpers/wire'
 require 'openssl'
 require 'securerandom'
@@ -92,7 +94,7 @@ end
 
 # The OAuth half of the ceremony is `application/x-www-form-urlencoded` — the
 # spec's one deliberate exception to the JSON wire — so it cannot go through
-# `post_json`, and it carries no cookie and no Bearer: anything in it is an
+# `post_json`, and it carries no cookie and no token: anything in it is an
 # assertion by a stranger, which is the property the endpoint is designed
 # around.
 def post_form(url, form, headers = {})
@@ -128,12 +130,13 @@ end
 
 # A fresh possession proof for `key`: Section 5.1's challenge, signed as
 # Section 5.2's payload. Returns [the compact JWS, the challenge document].
-def possession_proof(key, pem)
+# `claims` adds members, such as a rotation's `new_key`.
+def possession_proof(key, pem, claims = {})
   rc, ch = get_json("#{SERVER}/kiosk/auth/challenge?public_key=#{URI.encode_www_form_component(pem)}")
   abort "challenge failed (#{rc}): #{JSON.generate(ch)}" unless rc == 200
 
   signed = JWT.encode(
-    { aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i },
+    { aud: ISSUER, nonce: ch.fetch('challenge'), jti: SecureRandom.uuid, iat: Time.now.to_i }.merge(claims),
     key, 'RS256'
   )
   [signed, ch]
@@ -178,10 +181,13 @@ cap['token_login']        = login
 # it, so the caller is not signed out by its own call. Section 5.5 named no
 # member of that answer until 2026-08-30; `#/$defs/token` now says it
 # is login's object member for member, and this is the byte that has to agree.
-rc, revoked = post_json("#{SERVER}/kiosk/auth/revoke", {},
-                        { 'Authorization' => "Bearer #{login.fetch('access_token')}" })
+# Revoke carries the token, so it carries a DPoP proof (Section 5.6) too.
+revoke_url = "#{SERVER}/kiosk/auth/revoke"
+revoke_dpop = Kiosk::TestHelpers::Dpop.headers(login.fetch('access_token'), reg_key, method: 'POST', url: revoke_url)
+rc, revoked = post_json(revoke_url, {}, revoke_dpop)
 abort "revoke failed (#{rc}): #{JSON.generate(revoked)}" unless rc == 200
 cap['token_revoke'] = revoked
+cap['dpop_proof']   = payload_of(revoke_dpop.fetch('DPoP'))
 
 # ── Section 6.2 — the human's link code, redeemed by the agent's key ────────
 session = Kiosk::UserIdentityProviders::DeviseSession.new(SERVER)
@@ -241,6 +247,25 @@ token_url = "#{SERVER}/kiosk/oauth/token"
 rc, granted = paying_toll(post_form(token_url, poll)) { |pow| post_form(token_url, poll, pow) }
 abort "token poll failed (#{rc}): #{JSON.generate(granted)}" unless rc == 200
 cap['device_token_response'] = granted
+
+# ── Section 5.7 — the agent puts a new key on its identity ───────────────────
+#
+# Each key signs a challenge issued for it, and the old key's proof names the
+# new key by its thumbprint. The identity stays, so the unlink below still finds
+# the agent the claim bound.
+new_key = OpenSSL::PKey::RSA.generate(2048)
+new_pem = new_key.public_key.to_pem
+rotate_signed, = possession_proof(reg_key, reg_pem, new_key: Kiosk::TestHelpers::Dpop.thumbprint(new_key))
+new_signed, = possession_proof(new_key, new_pem)
+rotate_body = { 'public_key' => reg_pem, 'signed' => rotate_signed,
+                'new_public_key' => new_pem, 'new_signed' => new_signed }
+rc, rotated = post_json("#{SERVER}/kiosk/auth/rotate", rotate_body)
+abort "rotate failed (#{rc}): #{JSON.generate(rotated)}" unless rc == 200
+cap['rotation_request'] = rotate_body
+cap['rotation_proof']   = payload_of(rotate_signed)
+cap['token_rotate']     = rotated
+abort 'the rotated token names another agent' unless
+  payload_of(rotated.fetch('access_token'))['agent_id'] == cap.fetch('claim_response').fetch('agent_id')
 
 # ── Section 6.3 — unlink, which answers 204 and no body at all ──────────────
 #

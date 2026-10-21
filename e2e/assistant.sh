@@ -8,7 +8,7 @@
 # two public catalogue documents (/kiosk/schema, /kiosk/openapi.json). A path
 # under the mount that names NEITHER a verb the catalogue publishes NOR one of
 # the wire's own reserved endpoints is asserted to answer the ordinary routing
-# 404 — with a bearer and without one alike, since a routing miss is decided
+# 404 — with a token and without one alike, since a routing miss is decided
 # before any credential is read.
 # Exits non-zero on any failure.
 #
@@ -21,8 +21,8 @@
 # is addressed by its own path, and `schema` and `pay` answer the same shape as
 # the per-verb wire.
 #
-# ONE AUTH SHAPE, WITH TWO DELIBERATE EXCEPTIONS. Everything under the mount is
-# Bearer-gated except the two DESCRIPTIONS of this origin's wire —
+# ONE AUTH SHAPE, WITH TWO DELIBERATE EXCEPTIONS. Everything under the mount
+# takes a DPoP-bound access token (RFC 9449) except the two DESCRIPTIONS of this origin's wire —
 # `GET /kiosk/schema` and `GET /kiosk/openapi.json` — which are
 # public, untolled and cacheable, and are the same registry in two dresses.
 #
@@ -35,6 +35,7 @@
 #   KIOSK_ISSUER — issuer/audience passed through to pay_flow.rb
 #   ALICE_AGENT / ALICE_AGENT_TOKEN, BOB_AGENT_TOKEN — the two assistants,
 #                  minted by the binding ceremony
+#   ALICE_KEY / BOB_KEY — the private key file of each, which signs its DPoP proofs
 #   ALICE_EMAIL / HUMAN_PASSWORD — the seeded human claim_flow.rb signs in as
 
 set -euo pipefail
@@ -65,6 +66,26 @@ ALICE="00000000-0000-0000-0000-000000000001"
 ALICE_AGENT="${ALICE_AGENT:?run.sh must export ALICE_AGENT from the binding ceremony}"
 ALICE_AGENT_TOKEN="${ALICE_AGENT_TOKEN:?run.sh must export ALICE_AGENT_TOKEN}"
 BOB_AGENT_TOKEN="${BOB_AGENT_TOKEN:?run.sh must export BOB_AGENT_TOKEN}"
+ALICE_KEY="${ALICE_KEY:?run.sh must export ALICE_KEY}"
+BOB_KEY="${BOB_KEY:?run.sh must export BOB_KEY}"
+KIOSK_PYTHON="${KIOSK_PYTHON:?run.sh must export KIOSK_PYTHON}"
+DPOP_PY="$KIOSK_OSS/e2e/dpop.py"
+
+# A DPoP proof (RFC 9449) that the key file signs for this method, URL and token.
+# dpop_proof <token> <key.pem> <METHOD> <url>
+dpop_proof() {
+  printf '%s\n%s\n' "$4" "$1" | "$KIOSK_PYTHON" "$DPOP_PY" "$2" "$3"
+}
+
+# curl with the two headers of a call that carries a token: the token, and a
+# proof that its key signs for this method and URL.
+# kcurl <token> <key.pem> <METHOD> <url> [curl args...]
+kcurl() {
+  local token="$1" key="$2" method="$3" url="$4" proof
+  shift 4
+  proof=$(dpop_proof "$token" "$key" "$method" "$url") || return 1
+  curl -X "$method" "$url" -H "Authorization: DPoP $token" -H "DPoP: $proof" "$@"
+}
 
 PASS=0
 FAIL=0
@@ -92,24 +113,24 @@ assert() {
 # endpoint.
 
 query_call() {
-  # query_call <token> <query-name> [query-string]
+  # query_call <token> <key.pem> <query-name> [query-string]
   local token="$1"
-  local name="$2"
-  local qs="${3:-}"
+  local key="$2"
+  local name="$3"
+  local qs="${4:-}"
   local url="$SERVER_URL/kiosk/$name"
   [ -n "$qs" ] && url="$url?$qs"
-  curl -sS "$url" \
-    -H "Authorization: Bearer $token" \
+  kcurl "$token" "$key" GET "$url" -sS \
     -H "Accept: application/json"
 }
 
 action_call() {
-  # action_call <token> <action-name> <json-body>
+  # action_call <token> <key.pem> <action-name> <json-body>
   local token="$1"
-  local name="$2"
-  local body="$3"
-  curl -sS -X POST "$SERVER_URL/kiosk/$name" \
-    -H "Authorization: Bearer $token" \
+  local key="$2"
+  local name="$3"
+  local body="$4"
+  kcurl "$token" "$key" POST "$SERVER_URL/kiosk/$name" -sS \
     -H "Content-Type: application/json" \
     -d "$body"
 }
@@ -123,6 +144,7 @@ assert "kiosk.version present"     "$(echo "$wk" | jq -r '.kiosk.version')"     
 assert "kiosk.endpoint correct"    "$(echo "$wk" | jq -r '.kiosk.endpoint')"    "$SERVER_URL/kiosk"
 assert "kiosk.auth.kind kiosk-pop" "$(echo "$wk" | jq -r '.kiosk.auth.kind')"   "kiosk-pop"
 assert "kiosk.auth.challenge_url"  "$(echo "$wk" | jq -r '.kiosk.auth.challenge_url')" "$SERVER_URL/kiosk/auth/challenge"
+assert "kiosk.auth.rotate_url"     "$(echo "$wk" | jq -r '.kiosk.auth.rotate_url')"    "$SERVER_URL/kiosk/auth/rotate"
 assert "kiosk.issuer set"          "$(echo "$wk" | jq -r '.kiosk.issuer')"      "$SERVER_URL"
 # `capabilities` names the MODULES this origin serves, not its verbs.
 assert "kiosk.capabilities[]"      "$(echo "$wk" | jq -r '.kiosk.capabilities | join(",")')" "schema,queries,actions,pay,events"
@@ -401,8 +423,7 @@ assert "405 is not a declared response" \
 
 printf "\n\033[1m=== response headers ===\033[0m\n"
 
-headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons" -sS -o /dev/null -D - \
   -H "Accept: application/json")
 
 assert "Kiosk-Server-Version present" "$(echo "$headers" | grep -i '^Kiosk-Server-Version:' | wc -l | tr -d ' ')" "1"
@@ -549,8 +570,7 @@ assert "Kiosk-Min-Client is a version, and it is advertised" \
 # floor, and two plausible client-version spellings ride along; a serving
 # origin answers 200 to all of it.
 assert "an ancient client is SERVED, not refused — the floor is advisory" \
-  "$(curl -sS -o /dev/null -w '%{http_code}' "$SERVER_URL/kiosk/salons" \
-       -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+  "$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons" -sS -o /dev/null -w '%{http_code}' \
        -H "Kiosk-Min-Client: 0.0.1" \
        -H "Kiosk-Client-Version: 0.0.1" \
        -H "User-Agent: kiosk-agent/0.0.1")" "200"
@@ -558,8 +578,7 @@ assert "an ancient client is SERVED, not refused — the floor is advisory" \
 # to everything": the SAME request with a bad token is refused, so the 200 is
 # a decision about this caller rather than an open door.
 assert "…while the same request with a bad token is still 401" \
-  "$(curl -sS -o /dev/null -w '%{http_code}' "$SERVER_URL/kiosk/salons" \
-       -H "Authorization: Bearer garbage" \
+  "$(kcurl garbage "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons" -sS -o /dev/null -w '%{http_code}' \
        -H "Kiosk-Min-Client: 0.0.1")" "401"
 
 # ─── a query is a GET at its own path ───────────────────────────────────
@@ -568,7 +587,7 @@ printf "\n\033[1m=== GET /kiosk/salons ===\033[0m\n"
 
 # The answer IS the handler's payload — `render json: Salon.all` reaches the
 # assistant as a bare JSON array, with no `ok`/`kind` wrapper to unpick.
-r=$(query_call "$ALICE_AGENT_TOKEN" "salons")
+r=$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "salons")
 assert "the body is a bare array"  "$(echo "$r" | jq -r 'type')"                   "array"
 assert "no envelope wrapper"       "$(echo "$r" | jq -r 'if type == "object" then has("ok") else false end')" "false"
 assert "exactly 1 salon"           "$(echo "$r" | jq -r 'length')"                 "1"
@@ -579,8 +598,7 @@ assert "salon name is Combette"      "$(echo "$r" | jq -r '.[0].name')"         
 # would serve a paid 200 to an unpaid retry; without `Kiosk-Timezone` it would
 # serve an answer computed for one caller's calendar day to a caller on another
 # clock that sent the identical URL.
-cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+cache_headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons" -sS -o /dev/null -D -)
 assert "Vary names all three request headers" \
   "$(echo "$cache_headers" | grep -ic '^Vary: Authorization, Kiosk-PoW, Kiosk-Timezone')" "1"
 
@@ -603,8 +621,7 @@ assert "…and never says public or s-maxage while doing it (§3.7.3)" \
 # THE CONTROL, and it is the one that matters: a per-principal payload keeps
 # the default. Without it "the wire honours a handler's Cache-Control" would
 # pass just as well on a build that had stopped applying any policy at all.
-mine_cache_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/my_appointments" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+mine_cache_headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/my_appointments" -sS -o /dev/null -D -)
 assert "…while an identity-scoped 200 keeps private, no-store" \
   "$(echo "$mine_cache_headers" | grep -ic '^Cache-Control: private, no-store')" "1"
 
@@ -665,15 +682,14 @@ assert "If-None-Match on the digest → 304" \
 # `{additionalProperties: false, properties: {}}`, so without the reserved
 # rule this is exactly the request that would 400 as a disallowed additional
 # property — on the very verbs the pagination contract invites it on.
-status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons?limit=5&cursor=eyJvIjoyMH0" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons?limit=5&cursor=eyJvIjoyMH0" -sS -o /dev/null -w "%{http_code}")
 assert "reserved limit/cursor accepted → 200" "$status" "200"
 
 # The contrast that keeps the assertion above honest: this origin runs with
 # `validate_requests = true`, so `salons`'s closed schema DOES refuse an
 # undeclared parameter. `limit` is accepted because it is reserved, not
 # because nothing is checking.
-r=$(query_call "$ALICE_AGENT_TOKEN" "salons" "nope=1")
+r=$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "salons" "nope=1")
 assert "an undeclared parameter → bad_request"  "$(echo "$r" | jq -r '.code')" "bad_request"
 assert "…and the refusal names it"              "$(echo "$r" | jq -r '.detail | test("nope")')" "true"
 
@@ -682,9 +698,9 @@ assert "…and the refusal names it"              "$(echo "$r" | jq -r '.detail 
 printf "\n\033[1m=== POST /kiosk/book_appointment ===\033[0m\n"
 
 # Get salon id first.
-salon_id=$(query_call "$ALICE_AGENT_TOKEN" "salons" | jq -r '.[0].id')
+salon_id=$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "salons" | jq -r '.[0].id')
 
-r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-15T14:00:00Z\"}")
+r=$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-15T14:00:00Z\"}")
 assert "the body is the action's object" "$(echo "$r" | jq -r 'type')"            "object"
 assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
 assert "appointment_id returned"   "$(echo "$r" | jq -r '.appointment_id | length > 0')" "true"
@@ -692,7 +708,7 @@ assert "salon_id echoed"           "$(echo "$r" | jq -r '.salon_id')"           
 alice_appt_id=$(echo "$r" | jq -r '.appointment_id')
 
 # Bob books at the same (public) salon so both users own exactly one row.
-r=$(action_call "$BOB_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-16T10:00:00Z\"}")
+r=$(action_call "$BOB_AGENT_TOKEN" "$BOB_KEY" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-16T10:00:00Z\"}")
 assert "bob: booked"               "$(echo "$r" | jq -r '.appointment_id | length > 0')" "true"
 bob_appt_id=$(echo "$r" | jq -r '.appointment_id')
 
@@ -702,10 +718,8 @@ bob_appt_id=$(echo "$r" | jq -r '.appointment_id')
 # undrawn path gets, with no `Allow` and no problem document, and — the half that
 # matters — the verb NEVER RUNS for the method it was not declared with. The
 # catalogue at `GET /kiosk/schema` is where a caller learns which method to use.
-mna_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/book_appointment" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/book_appointment" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+mna_headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/book_appointment" -sS -o /dev/null -D -)
+status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/book_appointment" -sS -o /dev/null -w "%{http_code}")
 appts_before_mna=$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments")
 assert "GET at an action's path → 404"  "$status" "404"
 assert "…with no Allow on it"           "$(echo "$mna_headers" | grep -ic '^Allow:')" "0"
@@ -713,36 +727,34 @@ assert "…and no problem document"       "$(echo "$mna_headers" | grep -ic '^Co
 assert "…but still stamped by the wire" "$(echo "$mna_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
 assert "…and the write never ran"       "$(psql -X -d "$DB_NAME" -tAc "SELECT COUNT(*) FROM appointments")" "$appts_before_mna"
 
-status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/salons" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}')
+status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/salons" -sS -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" -d '{}')
 assert "POST at a query's path → 404"   "$status" "404"
-mna2=$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/salons" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}')
+mna2=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/salons" -sS -o /dev/null -D - -H "Content-Type: application/json" -d '{}')
 assert "…carrying no Allow either"      "$(echo "$mna2" | grep -ic '^Allow:')" "0"
 
 # ─── app-layer per-user isolation (the headline security property) ──────
 # my_appointments reads `Appointment.own`, the caller's authenticated identity
-# (bearer token). With
+# (the access token). With
 # Alice AND Bob each owning one appointment, prove each principal sees ONLY
 # their own row — never the other's — even though both hit the same query.
 
 printf "\n\033[1m=== verify appointment landed + per-user isolation ===\033[0m\n"
 
-alice_appts=$(query_call "$ALICE_AGENT_TOKEN" "my_appointments")
+alice_appts=$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "my_appointments")
 assert "alice: 1 appointment exists"  "$(echo "$alice_appts" | jq -r 'length')"                                 "1"
 assert "alice: sees her own row"      "$(echo "$alice_appts" | jq -r --arg id "$alice_appt_id" '[.[].id] | index($id) != null')" "true"
 assert "alice: does NOT see bob's row" "$(echo "$alice_appts" | jq -r --arg id "$bob_appt_id"   '[.[].id] | index($id) == null')" "true"
 
-bob_appts=$(query_call "$BOB_AGENT_TOKEN" "my_appointments")
+bob_appts=$(query_call "$BOB_AGENT_TOKEN" "$BOB_KEY" "my_appointments")
 assert "bob: 1 appointment exists"    "$(echo "$bob_appts" | jq -r 'length')"                                   "1"
 assert "bob: sees his own row"        "$(echo "$bob_appts" | jq -r --arg id "$bob_appt_id"   '[.[].id] | index($id) != null')" "true"
 assert "bob: does NOT see alice's row" "$(echo "$bob_appts" | jq -r --arg id "$alice_appt_id" '[.[].id] | index($id) == null')" "true"
 
 # The declared `salon_id` narrows the principal's own rows and never widens them.
 assert "alice at her salon: her one row" \
-  "$(query_call "$ALICE_AGENT_TOKEN" "my_appointments" "salon_id=$salon_id" | jq -r '[.[].id] | join(",")')" "$alice_appt_id"
+  "$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "my_appointments" "salon_id=$salon_id" | jq -r '[.[].id] | join(",")')" "$alice_appt_id"
 assert "alice at another salon: no row" \
-  "$(query_call "$ALICE_AGENT_TOKEN" "my_appointments" "salon_id=$((salon_id + 1))" | jq -r 'length')" "0"
+  "$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "my_appointments" "salon_id=$((salon_id + 1))" | jq -r 'length')" "0"
 
 # ─── problem documents (RFC 9457) ───────────────────────────────────────
 
@@ -759,20 +771,17 @@ printf "\n\033[1m=== problem documents ===\033[0m\n"
 # The §3.6 version headers are still stamped, because the middleware sits above
 # the router, and that is the discriminating half of these assertions: the
 # answer is Rails' own AND it is still identifiably this wire's origin.
-nf_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/frobnicate" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/frobnicate" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
+nf_headers=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/frobnicate" -sS -o /dev/null -D -)
+status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/frobnicate" -sS -o /dev/null -w "%{http_code}")
 assert "unknown query → 404"          "$status" "404"
 assert "…not a problem document"      "$(echo "$nf_headers" | grep -ic '^Content-Type: application/problem+json')" "0"
 assert "…still stamped by the wire"   "$(echo "$nf_headers" | grep -ic '^Kiosk-Api-Version:')" "1"
 
-r=$(query_call "$ALICE_AGENT_TOKEN" "frobnicate")
+r=$(query_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "frobnicate")
 assert "…with no code to branch on"   "$(echo "$r" | grep -c 'verb_not_found')" "0"
 
 # Unknown action name → the same answer, the other method.
-status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/nope" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/nope" -sS -o /dev/null -w "%{http_code}" \
   -H "Content-Type: application/json" \
   -d '{}')
 assert "unknown action → 404"         "$status" "404"
@@ -807,11 +816,9 @@ assert "unknown action → 404"         "$status" "404"
 # `POST /kiosk/agents/kyc` is a PUBLISHED path with no module behind it. 501,
 # not 404: the URL is right. And not 403 either -- `forbidden` is
 # identity-scoped, this refusal is origin-wide.
-kyc_ms=$(curl -sS -X POST "$SERVER_URL/kiosk/agents/kyc" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+kyc_ms=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/agents/kyc" -sS \
   -H "Content-Type: application/json" -d '{"kyc_jws":"not.a.jws"}')
-kyc_ms_status=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/agents/kyc" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+kyc_ms_status=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/agents/kyc" -sS -o /dev/null -w "%{http_code}" \
   -H "Content-Type: application/json" -d '{"kyc_jws":"not.a.jws"}')
 assert "KYC at an origin that serves no KYC → 501" "$kyc_ms_status" "501"
 assert "…code is module_not_served"  "$(echo "$kyc_ms" | jq -r '.code')" "module_not_served"
@@ -821,15 +828,14 @@ assert "…title is the code's, not the incident's" "$(echo "$kyc_ms" | jq -r '.
 assert "…status restates the HTTP status"         "$(echo "$kyc_ms" | jq -r '.status')" "501"
 assert "…detail names the module"    "$(echo "$kyc_ms" | jq -r '.detail | test("KYC")')" "true"
 assert "…and is itself an RFC 9457 document" \
-  "$(curl -sS -o /dev/null -D - -X POST "$SERVER_URL/kiosk/agents/kyc" \
-      -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+  "$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/agents/kyc" -sS -o /dev/null -D - \
       -H "Content-Type: application/json" -d '{"kyc_jws":"not.a.jws"}' \
     | grep -ic '^Content-Type: application/problem+json')" "1"
 
 # The rest of the KYC module: request_kyc and the provider's callback are the
 # engine's own paths, unserved here for want of a kyc_provider.
 assert "request_kyc at an origin that serves no KYC → 501" \
-  "$(curl -sS -X POST "$SERVER_URL/kiosk/request_kyc" -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+  "$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/request_kyc" -sS \
       -H "Content-Type: application/json" -d '{}' | jq -r '"\(.status) \(.code)"')" "501 module_not_served"
 assert "the KYC callback at an origin that serves no KYC → 501" \
   "$(curl -sS -X POST "$SERVER_URL/kiosk/kyc/callback" \
@@ -851,17 +857,55 @@ assert "no auth → 401"             "$status" "401"
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/frobnicate")
 assert "no auth on an unknown name → 404 (no route, no gate)" "$status" "404"
 
-# An unrecognised credential resolves to no identity → 401.
-status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
-  -H "Authorization: Bearer garbage")
+# An unrecognised credential resolves to no identity → 401, even with a proof
+# that a real key signed for it.
+status=$(kcurl garbage "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons" -sS -o /dev/null -w "%{http_code}")
 assert "garbage token → 401"       "$status" "401"
 
-# A SELF-ASSERTED bearer, naming a seeded human and the `owner` role. It is not
-# a token, it is a sentence: no parser anywhere reads this shape, in any
+# A SELF-ASSERTED credential, naming a seeded human and the `owner` role. It is
+# not a token, it is a sentence: no parser anywhere reads this shape, in any
 # environment, so it resolves to no identity like any other garbage.
+status=$(kcurl "agent:u-$ALICE:a-$ALICE_AGENT:r-owner" "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons" \
+  -sS -o /dev/null -w "%{http_code}")
+assert "forged self-asserted token → 401" "$status" "401"
+
+# ─── the token works only with its key's proof (RFC 9449) ──────────────
+#
+# A copy of alice's token is worth nothing on its own. Each refusal below holds
+# a VALID token, so the 401 is the proof's doing, not the token's.
+printf "\n\033[1m=== DPoP: the token is bound to its key ===\033[0m\n"
+
+bearer_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
+  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" | tr -d '\r')
+assert "a valid token sent as Bearer → 401" \
+  "$(echo "$bearer_headers" | head -1 | awk '{print $2}')" "401"
+assert "…naming the DPoP scheme in WWW-Authenticate" \
+  "$(echo "$bearer_headers" | grep -ic '^WWW-Authenticate: DPoP algs="RS256"$')" "1"
+
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
-  -H "Authorization: Bearer agent:u-$ALICE:a-$ALICE_AGENT:r-owner")
-assert "forged self-asserted bearer → 401" "$status" "401"
+  -H "Authorization: DPoP $ALICE_AGENT_TOKEN")
+assert "a valid token with no DPoP proof → 401" "$status" "401"
+
+# Bob's key signs a well-formed proof for alice's token: the key is not the one
+# the token is bound to.
+foreign_proof=$(dpop_proof "$ALICE_AGENT_TOKEN" "$BOB_KEY" GET "$SERVER_URL/kiosk/salons")
+status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
+  -H "Authorization: DPoP $ALICE_AGENT_TOKEN" -H "DPoP: $foreign_proof")
+assert "a valid token with a proof from another key → 401" "$status" "401"
+
+# A proof alice signed for one URL, replayed on another.
+salons_proof=$(dpop_proof "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/salons")
+status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/my_appointments" \
+  -H "Authorization: DPoP $ALICE_AGENT_TOKEN" -H "DPoP: $salons_proof")
+assert "a proof for one URL replayed on another → 401" "$status" "401"
+status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
+  -H "Authorization: DPoP $ALICE_AGENT_TOKEN" -H "DPoP: $salons_proof")
+assert "…while the same proof on its own URL → 200 (the control)" "$status" "200"
+
+# A proof for alice's key and a DIFFERENT token: `ath` names the token it was made for.
+status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
+  -H "Authorization: DPoP $BOB_AGENT_TOKEN" -H "DPoP: $salons_proof")
+assert "a proof made for another token → 401" "$status" "401"
 
 # A path that cannot be a verb name is the same plain routing 404 — nothing
 # under the mount distinguishes it from a well-formed name nobody drew.
@@ -880,17 +924,15 @@ assert "a non-verb-shaped path → 404" "$status" "404"
 # second conformance surface — so it is the ordinary routing 404 any undrawn
 # path gets. `/kiosk/query` and `/kiosk/run` are two such names. That is the
 # assertion — not that some path is handled specially, but that none is —
-# with a bearer or without one, since a routing miss is decided before any
+# with a token or without one, since a routing miss is decided before any
 # credential is read.
 
 printf "\n\033[1m=== paths in neither the catalogue nor the reserved set ===\033[0m\n"
 
 for undrawn in query run; do
-  body=$(curl -sS -X POST "$SERVER_URL/kiosk/$undrawn" \
-           -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+  body=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/$undrawn" -sS \
            -H "Content-Type: application/json" -d '{"name":"salons"}')
-  code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/kiosk/$undrawn" \
-           -H "Authorization: Bearer $ALICE_AGENT_TOKEN" \
+  code=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/$undrawn" -sS -o /dev/null -w "%{http_code}" \
            -H "Content-Type: application/json" -d '{"name":"salons"}')
   assert "POST /kiosk/$undrawn → 404"        "$code" "404"
   assert "…and the body is no envelope"      "$(echo "$body" | grep -c '\"ok\"')" "0"
@@ -911,10 +953,8 @@ assert "…the catalog is the body itself"   "$(echo "$schema_body" | jq -r '.qu
 # ordinary 404 any undrawn path gets, with no `Allow`. The catalogue is what
 # tells an assistant which method a verb takes: `book_appointment` is published
 # as an action, and an assistant that read the schema dials POST.
-mna_code=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/book_appointment" \
-             -H "Authorization: Bearer $ALICE_AGENT_TOKEN")
-mna_allow=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/book_appointment" \
-              -H "Authorization: Bearer $ALICE_AGENT_TOKEN" | tr -d '\r' | awk 'tolower($1)=="allow:"{print $2}')
+mna_code=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/book_appointment" -sS -o /dev/null -w "%{http_code}")
+mna_allow=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/book_appointment" -sS -o /dev/null -D - | tr -d '\r' | awk 'tolower($1)=="allow:"{print $2}')
 assert "GET an action → 404"               "$mna_code" "404"
 assert "…with no Allow header"             "$mna_allow" ""
 assert "…and the catalogue says it is an action" \
@@ -1089,17 +1129,38 @@ assert "two origins: own token → 200"              "$(echo "$reg_out" | jq -r 
 assert "two origins: first's token on second → 401" "$(echo "$reg_out" | jq -r '.first_token_on_second')" "401"
 assert "two origins: second's token on first → 401" "$(echo "$reg_out" | jq -r '.second_token_on_first')" "401"
 
+# ─── key rotation: a new key, the same identity (§5.7) ──────────────────
+#
+# A newly registered agent rotates, so alice's and bob's keys stay as they are.
+printf "\n\033[1m=== key rotation: both keys sign, the identity stays ===\033[0m\n"
+
+rot_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
+             bundle exec ruby "$FIXTURES/rotate_flow.rb" )
+
+assert "rotate: the old token works before"            "$(echo "$rot_out" | jq -r '.old_token_before')"         "200"
+assert "rotate: an old-key proof naming no new key → 401" "$(echo "$rot_out" | jq -r '.unnamed_new_key')"      "401"
+assert "…and that refusal moved nothing"               "$(echo "$rot_out" | jq -r '.old_token_after_refusal')"  "200"
+assert "rotate: both keys signed → 200"                "$(echo "$rot_out" | jq -r '.rotate')"                   "200"
+assert "rotate: the same agent_id"                     "$(echo "$rot_out" | jq -r '.same_agent')"               "true"
+assert "rotate: the same account"                      "$(echo "$rot_out" | jq -r '.same_user')"                "true"
+assert "rotate: the new token is bound to the new key" "$(echo "$rot_out" | jq -r '.bound_to_new_key')"         "true"
+assert "rotate: the new token with the new key → 200"  "$(echo "$rot_out" | jq -r '.new_token')"                "200"
+assert "rotate: the new token with the old key → 401"  "$(echo "$rot_out" | jq -r '.new_token_old_key_proof')"  "401"
+assert "rotate: a token from before the rotation → 401" "$(echo "$rot_out" | jq -r '.old_token_after')"         "401"
+assert "rotate: the old key logs in to nothing → 404"  "$(echo "$rot_out" | jq -r '.old_key_login')"            "404"
+assert "rotate: the new key logs in → 200"             "$(echo "$rot_out" | jq -r '.new_key_login')"            "200"
+
 # ─── no-human AP2 pay flow (register → checkout → checkout and payment mandates → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 
 # `payment_setup` is the engine's, served against the provider port: this
 # origin writes no handler for it. The first call maps a Stripe Customer and
 # hands over the setup page; stripe-mock lists a card for it, so the next is ready.
-alice_setup=$(action_call "$ALICE_AGENT_TOKEN" "payment_setup" '{}')
+alice_setup=$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "payment_setup" '{}')
 assert "payment_setup: served by the engine → setup_required" "$(echo "$alice_setup" | jq -r '.status')" "setup_required"
 assert "…with the page for the human" "$(echo "$alice_setup" | jq -r '.setup_url | startswith("https://")')" "true"
 assert "payment_setup: once the card is saved → ready" \
-  "$(action_call "$ALICE_AGENT_TOKEN" "payment_setup" '{}' | jq -r '.status')" "ready"
+  "$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "payment_setup" '{}' | jq -r '.status')" "ready"
 
 pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
              PAY_CAPTURE="${PAY_CAPTURE:-}" \
@@ -1171,9 +1232,8 @@ assert "audit: queries emit nothing" \
 #    handler and raises; the action's own transaction ROLLS BACK and the event
 #    must be emitted anyway — which is why the seam sits outside the transaction.
 before_fail=$(event_count '.action == "book_appointment"')
-fail_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
-  "$SERVER_URL/kiosk/book_appointment" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" \
+fail_code=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/book_appointment" \
+  -sS -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" \
   -d '{"salon_id":987654,"slot":"2027-01-01T09:00:00Z"}')
 assert "audit: a booking for a missing salon fails on the wire" \
   "$([ "$fail_code" -ge 400 ] && echo yes || echo "no($fail_code)")" "yes"
@@ -1201,10 +1261,9 @@ assert "audit: the sink saw exactly that one more invocation" \
 #    name all answer before anything is invoked — so this is an action trail,
 #    not a request log.
 before_refusals=$(events 'length')
-curl -sS -o /dev/null "$SERVER_URL/kiosk/book_appointment" -H "Authorization: Bearer $ALICE_AGENT_TOKEN"
+kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" GET "$SERVER_URL/kiosk/book_appointment" -sS -o /dev/null
 curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/book_appointment" -H "Content-Type: application/json" -d '{}'
-curl -sS -o /dev/null -X POST "$SERVER_URL/kiosk/no_such_action" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" -d '{}'
+kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/no_such_action" -sS -o /dev/null -H "Content-Type: application/json" -d '{}'
 assert "audit: a routing miss, a 401 and a 404 emit nothing" \
   "$(( $(events 'length') - before_refusals ))" "0"
 
@@ -1216,9 +1275,8 @@ assert "audit: pay emits no event" "$(event_count '.action == "pay"')" "0"
 #    sentinel slot (its bug, planted on purpose). The booking must still be
 #    served, must still land in the database, and must leave no event behind.
 before_raise=$(events 'length')
-raise_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
-  "$SERVER_URL/kiosk/book_appointment" \
-  -H "Authorization: Bearer $ALICE_AGENT_TOKEN" -H "Content-Type: application/json" \
+raise_code=$(kcurl "$ALICE_AGENT_TOKEN" "$ALICE_KEY" POST "$SERVER_URL/kiosk/book_appointment" \
+  -sS -o /dev/null -w "%{http_code}" -H "Content-Type: application/json" \
   -d "{\"salon_id\":$salon_id,\"slot\":\"2030-01-01T00:00:00Z\"}")
 assert "audit: a RAISING sink does not fail the action" "$raise_code" "200"
 assert "audit: …the booking it choked on really landed" \
@@ -1254,9 +1312,10 @@ LISTENER="$KIOSK_OSS/kiosk-server/listen.py"
 # run.sh has already proved this interpreter can import `websockets`; see the
 # KIOSK_PYTHON block there for why the listener gets its own and the solver
 # does not.
-: "${KIOSK_PYTHON:=python3}"
 EVENTS_URL=$(echo "$wk" | jq -r '.kiosk.events_url')
-# The listener reads its bearer from a file, never from its command line.
+# The listener reads its token from a file, never from its command line, and
+# never reads the key: it runs this command for each DPoP proof of the upgrade.
+PROOF_CMD="$KIOSK_PYTHON $DPOP_PY $ALICE_KEY"
 ALICE_TOKEN_FILE="$TMP_DIR/alice.token"
 BAD_TOKEN_FILE="$TMP_DIR/bad.token"
 printf %s "$ALICE_AGENT_TOKEN" >|"$ALICE_TOKEN_FILE"
@@ -1278,7 +1337,7 @@ confirm_at_the_desk() {
 }
 
 EV_LOG="$TMP_DIR/listener-alice.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --max-seconds 30 >"$EV_LOG" 2>&1 &
 listener_pid=$!
 
@@ -1329,7 +1388,7 @@ wait "$listener_pid" 2>/dev/null || true
 # started cold with `--since` one below the id it last saw, is handed that event
 # again — from the DATABASE, because the process that broadcast it is gone.
 EV_REPLAY="$TMP_DIR/listener-replay.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --since "$((alice_event_id - 1))" --max-seconds 6 \
   >"$EV_REPLAY" 2>&1 || true
 assert "a cold listener resuming with since is handed the event again" \
@@ -1341,13 +1400,13 @@ assert "…and says the tail was not truncated under it" \
 # THE WAKE. With `--until-event` the listener exits 0 the moment the event
 # arrives, and that exit is what wakes the assistant. It must exit on the event,
 # not on the deadline.
-r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-17T11:00:00Z\"}")
+r=$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-17T11:00:00Z\"}")
 wait_appt_id=$(echo "$r" | jq -r '.appointment_id')
 EV_ONESHOT="$TMP_DIR/listener-oneshot.jsonl"
 ( sleep 3; confirm_at_the_desk "$wait_appt_id" >/dev/null ) &
 oneshot_started=$SECONDS
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic "appointment_confirmed:$wait_appt_id" --until-event --max-seconds 60 \
   >"$EV_ONESHOT" 2>&1
 oneshot_rc=$?
@@ -1368,7 +1427,7 @@ assert "…and stopped there, because the wait is over" \
 # arrive on this subscription.
 EV_TIMEOUT="$TMP_DIR/listener-timeout.jsonl"
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic "appointment_confirmed:$alice_appt_id" --until-event --max-seconds 6 \
   >"$EV_TIMEOUT" 2>&1
 timeout_rc=$?
@@ -1379,7 +1438,7 @@ assert "…with the subscription having been live all along" \
 
 # A wait with no deadline is refused at the argument tier.
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --until-event >/dev/null 2>&1
 unbounded_rc=$?
 set -e
@@ -1389,12 +1448,12 @@ assert "…and --until-event without a deadline is refused" "$unbounded_rc" "2"
 # connect, with `since` set to the last id the assistant saw, is handed the
 # event from the 24-hour tail.
 oneshot_event_id=$(grep '"type":"event"' "$EV_ONESHOT" | head -1 | jq -r '.id')
-r=$(action_call "$ALICE_AGENT_TOKEN" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-18T09:00:00Z\"}")
+r=$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-18T09:00:00Z\"}")
 gap_appt_id=$(echo "$r" | jq -r '.appointment_id')
 assert "the salon confirms an appointment with NOBODY connected" \
   "$(confirm_at_the_desk "$gap_appt_id")" "200"
 EV_GAP="$TMP_DIR/listener-gap.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --since "$oneshot_event_id" --max-seconds 6 \
   >"$EV_GAP" 2>&1 || true
 assert "…and the stored cursor hands it over on the next connect" \
@@ -1410,7 +1469,7 @@ assert "…and nothing at or below the cursor replayed with it" \
 # clock this harness does not have.
 psql -X -d "$DB_NAME" -q -c "DELETE FROM kiosk.events WHERE id <= 2" >/dev/null
 EV_TRUNC="$TMP_DIR/listener-truncated.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --since 1 --max-seconds 5 >"$EV_TRUNC" 2>&1 || true
 assert "a cursor the operator can no longer prove continuity from answers truncated" \
   "$(grep '"type":"subscribed"' "$EV_TRUNC" | head -1 | jq -r '.truncated')" "true"
@@ -1423,7 +1482,7 @@ assert "…and it is the SUBSCRIPTION that carries it, not an error" \
 # assistant reading as "nothing happened".
 EV_DENIED="$TMP_DIR/listener-denied.jsonl"
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic "appointment_confirmed:$bob_appt_id" --max-seconds 10 >"$EV_DENIED" 2>&1
 denied_rc=$?
 set -e
@@ -1436,11 +1495,11 @@ assert "…and the listener stops instead of waiting forever" "$denied_rc" "4"
 # typed disconnect, not the HTTP status, and the listener reports exactly that.
 EV_ANON="$TMP_DIR/listener-anon.jsonl"
 set +e
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --max-seconds 10 >"$EV_ANON" 2>&1
 anon_rc=$?
 set -e
-assert "a bad bearer is disconnected with reconnect: false" \
+assert "a bad token is disconnected with reconnect: false" \
   "$(grep '"type":"disconnect"' "$EV_ANON" | head -1 | jq -r '.reconnect')" "false"
 assert "…and the listener says the credential is finished" "$anon_rc" "3"
 
@@ -1449,10 +1508,10 @@ assert "…and the listener says the credential is finished" "$anon_rc" "3"
 # that has to notice the exit code and start the whole thing again has a gap in
 # its stream for as long as that takes. `--token-command` is the seam: the
 # listener never holds a credential of its own, it asks for a fresh one and
-# reconnects. Driven with a DEAD bearer and a command that prints a live one,
+# reconnects. Driven with a DEAD token and a command that prints a live one,
 # so the branch under test is the recovery rather than the happy path.
 EV_REFRESH="$TMP_DIR/listener-refresh.jsonl"
-"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" \
+"$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --token-command "printf %s $ALICE_AGENT_TOKEN" \
   --max-seconds 12 >"$EV_REFRESH" 2>&1 || true
 assert "…and with --token-command it mints a fresh one and carries on" \

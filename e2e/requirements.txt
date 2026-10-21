@@ -4,3 +4,7 @@ numpy
 # websockets — the pinned event-stream listener (kiosk-server/listen.py), which
 # runs under `KIOSK_PYTHON`.
 websockets>=12
+# pyjwt and cryptography — e2e/dpop.py, which signs the DPoP proof (RFC 9449)
+# of every call that carries an access token; it runs under `KIOSK_PYTHON`.
+pyjwt
+cryptography

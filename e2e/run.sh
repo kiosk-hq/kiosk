@@ -108,17 +108,19 @@ command -v psql     >/dev/null || fail "psql not on PATH"
 command -v curl     >/dev/null || fail "curl not on PATH"
 command -v jq       >/dev/null || fail "jq not on PATH"
 command -v stripe-mock >/dev/null || fail "stripe-mock not on PATH — the pay flow charges it. Install it: brew install stripe-mock"
-# Both python requirements are declared in e2e/requirements.txt, and the two
+# Every python requirement is declared in e2e/requirements.txt, and the two
 # interpreters are separate because their callers are. The register-time
 # Equihash solver needs numpy under plain `python3` — kiosk-pow-equihash names
 # that interpreter itself. The event-stream leg runs the PINNED listener (the
 # same file an assistant fetches from kiosk.tech and verifies by SHA-256) and
-# needs websockets under `KIOSK_PYTHON`, which is how a venv is pointed at
+# needs websockets under `KIOSK_PYTHON`; e2e/dpop.py signs every DPoP proof
+# and needs pyjwt and cryptography there too. `KIOSK_PYTHON` is how a venv is pointed at
 # where `pip install` is refused system-wide.
 command -v python3  >/dev/null || fail "python3 not on PATH (needed by the Equihash register-PoW solver)"
 python3 -c "import numpy" 2>/dev/null || fail "python numpy missing — needed by the Equihash register-PoW solver. Install it: python3 -m pip install -r e2e/requirements.txt"
 KIOSK_PYTHON="$(command -v "${KIOSK_PYTHON:-python3}")" || fail "KIOSK_PYTHON=${KIOSK_PYTHON:-python3} is not on PATH"
 [[ "$KIOSK_PYTHON" = /* ]] || KIOSK_PYTHON="$PWD/$KIOSK_PYTHON" # later steps run it from other directories
+"$KIOSK_PYTHON" -c "import jwt, cryptography" 2>/dev/null || fail "python pyjwt or cryptography missing — needed by e2e/dpop.py, which signs every DPoP proof. Install it: $KIOSK_PYTHON -m pip install -r e2e/requirements.txt"
 "$KIOSK_PYTHON" -c "import websockets" 2>/dev/null || fail "python websockets missing — needed by the pinned event-stream listener. Install it: $KIOSK_PYTHON -m pip install -r e2e/requirements.txt — or, where that is refused, point the harness at a venv: python3 -m venv .venv && .venv/bin/pip install -r e2e/requirements.txt && KIOSK_PYTHON=.venv/bin/python ./e2e/run.sh"
 
 pg_isready -q || fail "postgres not accepting connections (run: brew services start postgresql)"
@@ -465,16 +467,21 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 log "bind two assistants to the seeded humans (link -> claim)"
 bind_json=$( cd "$PWD" && SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                KIOSK_ISSUER="$KIOSK_ISSUER" \
+               KEY_DIR="$TMP_DIR" \
                bundle exec ruby "$FIXTURES/bind_assistants.rb" ) \
   || fail "the binding ceremony did not produce two assistants"
 export ALICE_AGENT=$(echo "$bind_json" | jq -r '.alice_agent')
 export ALICE_AGENT_TOKEN=$(echo "$bind_json" | jq -r '.alice_token')
 export BOB_AGENT=$(echo "$bind_json" | jq -r '.bob_agent')
 export BOB_AGENT_TOKEN=$(echo "$bind_json" | jq -r '.bob_token')
+export ALICE_KEY=$(echo "$bind_json" | jq -r '.alice_key')
+export BOB_KEY=$(echo "$bind_json" | jq -r '.bob_key')
 [ -n "$ALICE_AGENT_TOKEN" ] && [ "$ALICE_AGENT_TOKEN" != "null" ] \
   || fail "no access token for alice's assistant: $bind_json"
 [ -n "$BOB_AGENT_TOKEN" ] && [ "$BOB_AGENT_TOKEN" != "null" ] \
   || fail "no access token for bob's assistant: $bind_json"
+[ -f "$ALICE_KEY" ] && [ -f "$BOB_KEY" ] \
+  || fail "no key file for one of the two assistants: $bind_json"
 ok "alice's assistant $ALICE_AGENT and bob's assistant $BOB_AGENT are bound and hold kiosk-pop tokens"
 
 # ─── run the assistant ──────────────────────────────────────────────────
@@ -491,6 +498,8 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        ALICE_AGENT="$ALICE_AGENT" \
        ALICE_AGENT_TOKEN="$ALICE_AGENT_TOKEN" \
        BOB_AGENT_TOKEN="$BOB_AGENT_TOKEN" \
+       ALICE_KEY="$ALICE_KEY" \
+       BOB_KEY="$BOB_KEY" \
        AUDIT_EVENTS="$AUDIT_EVENTS" \
        AUDIT_EVENTS_REDACTED="$AUDIT_EVENTS_REDACTED" \
        PAY_CAPTURE="$PAY_CAPTURE" \
@@ -542,6 +551,7 @@ ok "auth + binding wire bytes captured: $auth_capture_out"
 log "validate live wire bytes against the published JSON Schemas"
 if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        TOKEN="$ALICE_AGENT_TOKEN" \
+       KEY_FILE="$ALICE_KEY" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
        AUTH_CAPTURE="$AUTH_CAPTURE" \
@@ -604,12 +614,17 @@ done
 # database and the exported KIOSK_SIGNING_KEY_B64 with the origin above, so the
 # kiosk-pop JWT verifies here too — the agent row and the signing key are what
 # it is checked against, and neither moved.
-SINKLESS_TOKEN="$ALICE_AGENT_TOKEN"
-sinkless_salon=$(curl -sS "http://127.0.0.1:$SERVER_PORT/kiosk/salons" \
-  -H "Authorization: Bearer $SINKLESS_TOKEN" | jq -r '.[0].id')
-sinkless_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
-  "http://127.0.0.1:$SERVER_PORT/kiosk/book_appointment" \
-  -H "Authorization: Bearer $SINKLESS_TOKEN" -H "Content-Type: application/json" \
+# A call that carries the token also carries a proof that alice's key signs
+# for its method and URL (RFC 9449).
+# dpop_proof <METHOD> <url>
+dpop_proof() { printf '%s\n%s\n' "$2" "$ALICE_AGENT_TOKEN" | "$KIOSK_PYTHON" "$KIOSK_OSS/e2e/dpop.py" "$ALICE_KEY" "$1"; }
+SINKLESS_SALONS="http://127.0.0.1:$SERVER_PORT/kiosk/salons"
+SINKLESS_BOOK="http://127.0.0.1:$SERVER_PORT/kiosk/book_appointment"
+sinkless_salon=$(curl -sS "$SINKLESS_SALONS" -H "Authorization: DPoP $ALICE_AGENT_TOKEN" \
+  -H "DPoP: $(dpop_proof GET "$SINKLESS_SALONS")" | jq -r '.[0].id')
+sinkless_code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$SINKLESS_BOOK" \
+  -H "Authorization: DPoP $ALICE_AGENT_TOKEN" -H "DPoP: $(dpop_proof POST "$SINKLESS_BOOK")" \
+  -H "Content-Type: application/json" \
   -d "{\"salon_id\":$sinkless_salon,\"slot\":\"2029-03-03T09:00:00Z\"}")
 [ "$sinkless_code" = "200" ] || fail "sink-less origin did not serve the action (got $sinkless_code)"
 

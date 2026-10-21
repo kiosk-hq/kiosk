@@ -878,10 +878,11 @@ jobs:
 
       # e2e/requirements.txt is the harness's one declaration of what its python
       # needs: numpy for the register-time Equihash solver (solve.py errors
-      # "this solver requires numpy" without it) and websockets for the PINNED
-      # event-stream listener (kiosk-server/listen.py). A human with a fresh
+      # "this solver requires numpy" without it), websockets for the PINNED
+      # event-stream listener (kiosk-server/listen.py), and pyjwt + cryptography
+      # for e2e/dpop.py, which signs every DPoP proof. A human with a fresh
       # clone installs the same file.
-      - name: Set up Python (Equihash solver + event listener)
+      - name: Set up Python (Equihash solver, event listener, DPoP proofs)
         uses: actions/setup-python@v7
         with:
           python-version: "3.12"

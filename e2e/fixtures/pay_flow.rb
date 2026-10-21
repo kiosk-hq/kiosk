@@ -8,6 +8,7 @@ require 'base64'
 require 'jwt'
 require 'json'
 require 'net/http'
+require 'kiosk/test_helpers/dpop'
 require 'kiosk/test_helpers/mandate'
 require 'kiosk/test_helpers/wire'
 require 'uri'
@@ -51,11 +52,13 @@ key, reg = equihash_register(
 agent_id = reg.fetch('agent_id')
 user_id = reg.fetch('user_id')
 token = reg.fetch('access_token')
-auth = { 'Authorization' => "Bearer #{token}" }
+# A POST that carries the token also carries a proof that the key signs for its URL (RFC 9449).
+auth = ->(url) { Kiosk::TestHelpers::Dpop.headers(token, key, method: 'POST', url: url) }
 
 # payment_setup maps a Stripe Customer and hands over the setup page. stripe-mock
 # lists a saved card for that Customer, so the second answer is ready.
-setup = Array.new(2) { post_json("#{SERVER}/kiosk/payment_setup", {}, auth).last }
+setup_url = "#{SERVER}/kiosk/payment_setup"
+setup = Array.new(2) { post_json(setup_url, {}, auth.call(setup_url)).last }
 
 # The e2e origin has no action that answers a checkout, so the harness signs one
 # here as the operator does: PS256 with the operator's key, naming its kid.
@@ -71,7 +74,8 @@ checkout_jwt = JWT.encode(checkout, operator_key, 'PS256', { kid:, typ: 'JWT' })
 mandates    = Kiosk::TestHelpers::Mandate.pay(key, checkout_jwt, instrument: 'pm_demo')
 pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates[:payment] }
 
-rc, pay = post_json("#{SERVER}/kiosk/pay", pay_request, auth)
+pay_url = "#{SERVER}/kiosk/pay"
+rc, pay = post_json(pay_url, pay_request, auth.call(pay_url))
 
 # THE BYTES, KEPT. `PAY_CAPTURE` names a file to write the request this
 # origin ACCEPTED, the checkout and the two mandates inside it, and the

@@ -18,7 +18,7 @@ Rails.application.routes.draw do
   get  '/verify', to: 'verifications#show'
   post '/verify', to: 'verifications#decide'
 
-  # ── The broker's RSA public key (the "ProveKey" operators pin/trust) ─────
+  # ── The broker's Ed25519 public key (the "ProveKey" operators pin/trust) ─
   # Operators fetch this once to configure c.kyc_public_key. A convenience for
   # the demo harness; production pins the key out-of-band.
   get  '/prove_key.pem', to: 'verifications#public_key', defaults: { format: :text }

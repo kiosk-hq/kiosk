@@ -18,9 +18,10 @@ Rails.application.configure do
   config.active_record.dump_schema_after_migration = false
 
   # The development key ships in this repository, so production refuses it.
-  prove_key = OpenSSL::PKey::RSA.new(ENV.fetch('PROVE_KEY_PEM'))
-  raise 'PROVE_KEY_PEM must be an RSA private key: openssl genrsa 2048' unless prove_key.private?
+  pem = ENV.fetch('PROVE_KEY_PEM')
+  prove_key = OpenSSL::PKey.read(pem)
+  raise 'PROVE_KEY_PEM must be an Ed25519 private key: openssl genpkey -algorithm ed25519' unless prove_key.oid == 'ED25519' && pem.include?('PRIVATE KEY')
 
-  dev_key = OpenSSL::PKey::RSA.new(Rails.root.join('config/dev_prove_key.pem').read)
-  raise 'PROVE_KEY_PEM is the development key; generate one: openssl genrsa 2048' if prove_key.public_to_der == dev_key.public_to_der
+  dev_key = OpenSSL::PKey.read(Rails.root.join('config/dev_prove_key.pem').read)
+  raise 'PROVE_KEY_PEM is the development key; generate one: openssl genpkey -algorithm ed25519' if prove_key.public_to_der == dev_key.public_to_der
 end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-require 'jwt'
+require 'base64'
+require 'json'
 require 'openssl'
 
 # Helpers for driving the broker over HTTP as skooti, the registered operator.
@@ -47,9 +48,14 @@ module BrokerRequests
     CallbackPoster.stub(:deliver, ->(**) { flunk 'the broker posted a callback' }, &)
   end
 
+  # The claims of a JWS that the broker's public key verifies EdDSA, and that carries exp, iss and sub.
   def decode(jws)
-    key = OpenSSL::PKey::RSA.new(ProveKey.public_key)
-    JWT.decode(jws, key, true, algorithms: ['RS256'], required_claims: %w[exp iss sub]).first
+    header, claims, signature = jws.split('.').map { Base64.urlsafe_decode64(it) }
+    key = OpenSSL::PKey.read(ProveKey.public_key)
+
+    assert_equal({ 'alg' => 'EdDSA', 'typ' => 'JWT' }, JSON.parse(header))
+    assert key.verify(nil, signature, jws.rpartition('.').first), 'the broker key does not verify the attestation'
+    JSON.parse(claims).tap { |payload| assert_empty %w[exp iss sub] - payload.keys }
   end
 end
 

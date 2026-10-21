@@ -4,7 +4,7 @@ require 'base64'
 require 'openssl'
 
 ENV['KIOSK_ISSUER']               ||= "http://localhost:#{ENV.fetch('PORT', '3000')}"
-ENV['KIOSK_SIGNING_KEY_B64']      ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
+ENV['KIOSK_SIGNING_KEY_B64']      ||= Base64.strict_encode64(OpenSSL::PKey.generate_key('ED25519').private_to_pem)
 ENV['KIOSK_POW_SECRET']           ||= 'getgrocery-local-pow-secret-not-a-secret'
 ENV['STRIPE_SECRET_KEY']          ||= 'sk_test_mock'
 # The KYC broker kiosk-demo-prove runs locally: its URL, issuer, intake secret and signing key.

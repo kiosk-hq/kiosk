@@ -7,4 +7,4 @@ Disallow:
 # Kiosk wire, registers no verb and declares no discovery document. What it
 # serves is a verification page for a human, reached only from a link an
 # operator issues, and one document an operator fetches:
-#   /prove_key.pem   — the RSA public key this broker signs its callbacks with
+#   /prove_key.pem   — the Ed25519 public key this broker signs its callbacks with

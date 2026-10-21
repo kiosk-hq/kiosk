@@ -47,7 +47,7 @@ module Kiosk
     example_params({ scooter_code: 'SK-001' })
     example_row({
                   reservation_id: 'a3f9c1e2-7b4d-4e8a-9c1f-2d6e5b0a3c7f', price_per_min_cents: 15, currency: 'eur',
-                  checkout_jwt: 'eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXJyZW5jeSI6ImV1ciIsInRvdGFsX2Ftb3VudF9jZW50cyI6MTV9.c2lnbmF0dXJl'
+                  checkout_jwt: 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJjdXJyZW5jeSI6ImV1ciIsInRvdGFsX2Ftb3VudF9jZW50cyI6MTV9.c2lnbmF0dXJl'
                 })
     def reserve
       @reservation = Reservation.create!(user_id: kiosk_identity.user_id, scooter_code: params[:scooter_code])

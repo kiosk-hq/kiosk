@@ -32,7 +32,7 @@ class AgeCheckStory < StoryTest
   test 'an attestation the verification service did not sign proves nothing' do
     shopper = a_shopper
     claims, = JWT.decode(kyc_attestation(shopper.principal, 'age_over_18' => true), nil, false)
-    forged = JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), 'RS256')
+    forged = JWT.encode(claims, OpenSSL::PKey.generate_key('ED25519'), 'EdDSA')
 
     assert shopper.presents(forged).refused?(:forbidden)
     assert shopper.orders('table-red-wine').refused?(:kyc_required)

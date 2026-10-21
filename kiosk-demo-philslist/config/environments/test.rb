@@ -5,7 +5,7 @@ require 'openssl'
 require 'kiosk/test_helpers/small_equihash'
 
 ENV['KIOSK_ISSUER']          ||= "http://localhost:#{ENV.fetch('PORT', '3000')}"
-ENV['KIOSK_SIGNING_KEY_B64'] ||= Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)
+ENV['KIOSK_SIGNING_KEY_B64'] ||= Base64.strict_encode64(OpenSSL::PKey.generate_key('ED25519').private_to_pem)
 ENV['KIOSK_POW_SECRET']      ||= 'philslist-local-pow-secret-not-a-secret'
 
 Rails.application.configure do

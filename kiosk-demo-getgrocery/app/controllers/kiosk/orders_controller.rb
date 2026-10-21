@@ -86,7 +86,7 @@ module Kiosk
                   slot_at: -> { DeliverySlots.starts(DeliverySlots.default_zone.tomorrow)[2].iso8601 },
                   slot_label: "12:00–14:00 (#{DeliverySlots::DEFAULT_ZONE_NAME})",
                   timezone: DeliverySlots::DEFAULT_ZONE_NAME,
-                  checkout_jwt: 'eyJhbGciOiJQUzI1NiIsInR5cCI6IkpXVCJ9.eyJjdXJyZW5jeSI6ImV1ciIsInRvdGFsX2Ftb3VudF9jZW50cyI6MTI4N30.c2lnbmF0dXJl'
+                  checkout_jwt: 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJjdXJyZW5jeSI6ImV1ciIsInRvdGFsX2Ftb3VudF9jZW50cyI6MTI4N30.c2lnbmF0dXJl'
                 })
     def create_order
       @order = CreateOrderOperation.call(

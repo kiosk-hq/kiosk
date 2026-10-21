@@ -6,17 +6,13 @@ source 'https://rubygems.org'
 # Kiosk operator: it mounts NO Kiosk wire at all (neither reserved endpoint,
 # `schema` or `pay`, and no per-verb endpoint, because it registers no verb)
 # and depends on NO kiosk gem.
-# It is the smallest possible Rails app — a request table, an RSA issuer key,
+# It is the smallest possible Rails app — an Ed25519 issuer key, a request table,
 # an intake controller, a human verification page, and a callback poster.
 gem 'rails', '~> 8.1.3'
 # Use postgresql as the database for Active Record
 gem 'pg', '~> 1.1'
 # Use the Puma web server [https://github.com/puma/puma]
 gem 'puma', '>= 5.0'
-
-# The broker signs its anonymized claims as RS256 JWS — the shape skooti's
-# Kiosk::Server::KycVerifier already accepts. Same jwt gem the demos use.
-gem 'jwt', '~> 2.10'
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem 'tzinfo-data', platforms: %i[windows jruby]

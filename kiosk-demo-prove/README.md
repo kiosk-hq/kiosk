@@ -43,7 +43,7 @@ its holder ride only that category. The table is `ClaimCatalog::LICENCE_CATEGORI
 The callback body the broker POSTs to the operator:
 
 ```json
-{ "request_id": "<the broker request>", "kyc_jws": "<compact RS256 JWS>", "nonce": "<echo>" }
+{ "request_id": "<the broker request>", "kyc_jws": "<compact EdDSA JWS>", "nonce": "<echo>" }
 ```
 
 The minted `kyc_jws` payload (the shape the operator's `KycVerifier` accepts):

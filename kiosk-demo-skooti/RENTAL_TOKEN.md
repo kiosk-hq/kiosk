@@ -6,12 +6,12 @@ The skooti unlock flow uses two distinct tokens that never cross roles.
 
 | | Agent token | Rental token |
 |---|---|---|
-| **What it is** | RS256 JWT issued by the Kiosk authorization server | Ed25519 capability issued by the skooti provider |
+| **What it is** | EdDSA JWT issued by the Kiosk authorization server | Ed25519 capability issued by the skooti provider |
 | **Who holds it** | The AI assistant (running the rental flow) | The assistant, which relays it to its human → the human's phone (App Clip) → written to the lock |
-| **Where it goes** | `Authorization: Bearer` header on every Kiosk API call | BLE write to the lock's Unlock characteristic — never sent back to the Kiosk API |
+| **Where it goes** | `Authorization: DPoP` header on every Kiosk API call, with a DPoP proof | BLE write to the lock's Unlock characteristic — never sent back to the Kiosk API |
 | **Lifetime** | Longer-lived, reusable across multiple API calls | Single-use, ≤ 15 min (`exp = iat + 900`) |
 | **Verified by** | Kiosk server (online) | The scooter lock, offline — no server round-trip at unlock time |
-| **Key type** | RSA (RS256) | Ed25519 (provider signing key) |
+| **Key type** | Ed25519 (the operator's signing key) | Ed25519 (provider signing key) |
 
 The lock holds only the skooti Ed25519 public key. It never sees the agent JWT, and the Kiosk API never sees the rental token.
 

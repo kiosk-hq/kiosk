@@ -10,11 +10,12 @@ gem 'rspec', '~> 3.13'
 gem 'sqlite3', '~> 2.9'
 
 # Local-development override — kiosk-core hasn't shipped to RubyGems yet.
-gem 'kiosk-core', path: '../kiosk-core'
+gem 'kiosk-core',            path: '../kiosk-core'
 
-# The specs start stripe-mock through its launcher.
-gem 'kiosk-pow', path: '../kiosk-pow'
-gem 'kiosk-pow-equihash', path: '../kiosk-pow-equihash'
-gem 'kiosk-test-support', path: '../kiosk-test-support'
-gem 'kiosk-server', path: '../kiosk-server'
+# The specs start stripe-mock through kiosk-test-support's launcher; that gem
+# depends on kiosk-server and kiosk-user-idp-devise.
+gem 'kiosk-pow',             path: '../kiosk-pow'
+gem 'kiosk-pow-equihash',    path: '../kiosk-pow-equihash'
+gem 'kiosk-server',          path: '../kiosk-server'
+gem 'kiosk-test-support',    path: '../kiosk-test-support'
 gem 'kiosk-user-idp-devise', path: '../kiosk-user-idp-devise'

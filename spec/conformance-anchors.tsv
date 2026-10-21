@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2074 anchors.
+# 2079 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -683,16 +683,19 @@ kiosk-demo-stylish/test/stories/linking_test.rb	signs_in(:alice).approves(reques
 kiosk-demo-stylish/test/stories/linking_test.rb	test "Alice's second assistant shares her bookings, and unlinking the first leaves the second" do
 kiosk-demo-stylish/test/stories/linking_test.rb	test 'Alice approves the code her assistant shows her, and it books in her name' do
 kiosk-demo-stylish/test/stories/linking_test.rb	test 'Alice names her assistant and caps its spending on the assistants page' do
+kiosk-demo-stylish/test/stories/linking_test.rb	unlinking the first leaves the second
 kiosk-demo-stylish/test/stories/privacy_test.rb	Alice's assistant sees Alice's appointment and not Bob's
 kiosk-demo-stylish/test/stories/privacy_test.rb	an appointment belongs to whoever booked it, whoever the arguments name
 kiosk-demo-stylish/test/stories/privacy_test.rb	class PrivacyStory < StoryTest
 kiosk-demo-stylish/test/stories/registration_test.rb	test 'a new assistant pays a proof-of-work toll to register, then finds the salon' do
+kiosk-demo-stylish/test/stories/salon_book_test.rb	a client's assistant sees only the client's own booking
 kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal 'customer', alice.role
 kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal 'owner', owner.role
 kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal 12_500, book.pluck('price_cents').sum
 kiosk-demo-stylish/test/stories/salon_book_test.rb	assert_equal [alices, bobs].sort, book.pluck('id').sort
 kiosk-demo-stylish/test/stories/salon_book_test.rb	class SalonBookStory < StoryTest
 kiosk-demo-stylish/test/stories/salon_book_test.rb	test "the owner's assistant sees every booking and what they will bring in" do
+kiosk-demo-stylish/test/stories/salon_book_test.rb	the owner's assistant sees every booking and what they will bring in
 kiosk-demo-stylish/test/test_helper.rb	def signs_in(person) = a_person(email: PEOPLE.fetch(person), password: 'combette-demo-password')
 kiosk-demo-tudu/README.md	# tudu — Kiosk reference demo (COLLABORATIVE, NON-COMMERCE)
 kiosk-demo-tudu/README.md	### Adversarial battery (`../kiosk-redteam/suites/tudu.rb`)
@@ -1028,6 +1031,7 @@ kiosk-server/README.md	- **Account binding** — the claim/link ceremonies bind 
 kiosk-server/README.md	A block-less `kiosk` only mounts.
 kiosk-server/README.md	The full host-side surface is shipped and covered by the gem's own suite
 kiosk-server/README.md	in this directory runs it and prints how many examples that is
+kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	@notice = 'Assistant unlinked — its key no longer signs in.'
 kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	class AssistantsController < ApplicationController
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def link
@@ -1079,6 +1083,7 @@ kiosk-server/lib/kiosk/payable.rb	return PENDING  if status == Kiosk::Server::Pa
 kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(agent_id:, user_id:, requested_role: nil)
 kiosk-server/lib/kiosk/server/account_binding.rb	# Remaps the holder and role, keeps agent_id and reputation.
 kiosk-server/lib/kiosk/server/account_binding.rb	always comes from a human's identity, never the request.
+kiosk-server/lib/kiosk/server/account_binding.rb	def unlink!(agent_id:, user_id:)
 kiosk-server/lib/kiosk/server/account_binding.rb	if transition && config.assistant_claimed
 kiosk-server/lib/kiosk/server/account_binding.rb	role ? [', allowed_roles = ARRAY[$3]::text[]', [role]]
 kiosk-server/lib/kiosk/server/account_holder_gate.rb	@identity = Kiosk.configuration.user_idp&.verify(request)

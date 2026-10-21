@@ -23,7 +23,7 @@ module Kiosk
 
       # The account an assistant acts for, its client_id (the agent_id), and
       # the key that signs its client assertions, DPoP proofs and mandates.
-      Principal = Data.define(:agent_id, :user_id, :token, :rsa_key)
+      Principal = Data.define(:agent_id, :user_id, :token, :key)
 
       ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
       DEVICE_CODE = 'urn:ietf:params:oauth:grant-type:device_code'
@@ -39,7 +39,7 @@ module Kiosk
       # Registers `key` (RFC 7591). `pow:` is `:solve`, `:skip` (send no proof)
       # or a String sent verbatim as the proof; `wire_role:` puts a `role` the
       # engine must ignore into the body.
-      def register_raw(pow: :solve, wire_role: nil, key: OpenSSL::PKey::RSA.generate(2048))
+      def register_raw(pow: :solve, wire_role: nil, key: Dpop.generate_key)
         body = { jwks: jwks(key), token_endpoint_auth_method: 'private_key_jwt' }
         body[:role] = wire_role if wire_role
         case pow
@@ -51,11 +51,11 @@ module Kiosk
 
       # A new key, registered: the principal has a client_id and no token yet.
       def register_client!(pow: :solve)
-        key  = OpenSSL::PKey::RSA.generate(2048)
+        key  = Dpop.generate_key
         resp = register_raw(pow:, key:)
         raise RegistrationError, "registration expected 201, got #{resp.status}: #{resp.body.inspect}" unless resp.status == 201
 
-        Principal.new(agent_id: resp.body.fetch('client_id'), user_id: nil, token: nil, rsa_key: key)
+        Principal.new(agent_id: resp.body.fetch('client_id'), user_id: nil, token: nil, key: key)
       end
 
       # A new key, registered, holding its first token.
@@ -98,7 +98,7 @@ module Kiosk
 
       # Signs the two closed AP2 mandates for `checkout_jwt`, unchanged, and pays.
       def pay(principal, checkout_jwt, instrument: 'on_file')
-        pay_raw(principal, **Mandate.pay(principal.rsa_key, checkout_jwt, instrument:))
+        pay_raw(principal, **Mandate.pay(principal.key, checkout_jwt, instrument:))
       end
 
       # On a 402 `payment_setup_required` it calls `payment_setup`, as the hint
@@ -116,14 +116,14 @@ module Kiosk
       # Puts a new key on the principal's client (spec Section 5.7): the old
       # key's assertion names the new key, and the new key signs its own. The
       # answer's Principal holds the new key and a token bound to it.
-      def rotate(principal, new_key: OpenSSL::PKey::RSA.generate(2048))
+      def rotate(principal, new_key: Dpop.generate_key)
         body = { client_assertion_type: ASSERTION_TYPE,
                  client_assertion: client_assertion(principal, new_key: Dpop.thumbprint(new_key)),
-                 new_client_assertion: client_assertion(principal.with(rsa_key: new_key)), jwks: jwks(new_key) }
+                 new_client_assertion: client_assertion(principal.with(key: new_key)), jwks: jwks(new_key) }
         response = wire.post('/kiosk/auth/rotate', body)
         return response unless response.status == 200
 
-        signed_in(principal.with(rsa_key: new_key))
+        signed_in(principal.with(key: new_key))
       end
 
       # Redeems a link code a person minted on the operator's site; answers 204.
@@ -134,13 +134,13 @@ module Kiosk
       def client_assertion(principal, **claims)
         payload = { iss: principal.agent_id, sub: principal.agent_id, aud: base_url, exp: Time.now.to_i + 60,
                     jti: SecureRandom.uuid, **claims }
-        JWT.encode(payload, principal.rsa_key, 'RS256')
+        JWT.encode(payload, principal.key, Dpop.algorithm(principal.key))
       end
 
       # What the origin publishes about itself at `/kiosk/schema`.
       def schema = @schema ||= wire.get_json('/kiosk/schema').last
 
-      def events(principal) = Events.new(base_url:, token: principal.token, key: principal.rsa_key).tap { (@connections ||= []) << it }
+      def events(principal) = Events.new(base_url:, token: principal.token, key: principal.key).tap { (@connections ||= []) << it }
 
       # Closes every event connection it opened.
       def disconnect = @connections&.each(&:close)
@@ -155,13 +155,13 @@ module Kiosk
 
       # A token request carries a DPoP proof of the registered key, with no token yet.
       def token_request(principal, form)
-        wire.post_form('/kiosk/oauth/token', form.merge(assertion_params(principal)), wire.dpop(nil, principal.rsa_key))
+        wire.post_form('/kiosk/oauth/token', form.merge(assertion_params(principal)), wire.dpop(nil, principal.key))
       end
 
       def unpaid = Wire.new(base_url:)
 
       # The principal's token and key, which the wire signs a DPoP proof with.
-      def credential(principal) = wire.dpop(principal.token, principal.rsa_key)
+      def credential(principal) = wire.dpop(principal.token, principal.key)
 
       def setup_required?(answer)
         answer.status == 402 && answer.body.is_a?(Hash) && answer.body['code'] == 'payment_setup_required'

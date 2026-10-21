@@ -2,11 +2,11 @@
 
 require 'base64'
 require 'digest'
-require 'json'
 require 'jwt'
 require 'openssl'
 require 'securerandom'
 require 'uri'
+require 'kiosk/server/eddsa'
 
 module Kiosk
   module TestHelpers
@@ -19,6 +19,14 @@ module Kiosk
     #   Dpop.headers(nil, key, method: 'POST', url: 'https://shop.example/kiosk/oauth/token')
     module Dpop
       module_function
+
+      # A new assistant key: Ed25519, or P-256 for `ES256`.
+      def generate_key(algorithm = 'EdDSA')
+        algorithm == 'ES256' ? OpenSSL::PKey::EC.generate('prime256v1') : OpenSSL::PKey.generate_key('ED25519')
+      end
+
+      # The JOSE algorithm the key signs with: EdDSA or ES256.
+      def algorithm(key) = Kiosk::Server::Jwk.algorithm(key)
 
       def headers(token, key, method:, url:, iat: Time.now.to_i)
         proof = { 'DPoP' => proof(token, key, method:, url:, iat:) }
@@ -36,24 +44,16 @@ module Kiosk
         htu = "#{uri.scheme}://#{uri.host}#{":#{uri.port}" unless uri.port == uri.default_port}#{uri.path}"
         payload = { jti: SecureRandom.uuid, htm: method.to_s.upcase, htu: htu, iat: iat }
         payload[:ath] = ath(token) if token
-        JWT.encode(payload, key, 'RS256', { typ: 'dpop+jwt', jwk: jwk(key) })
+        JWT.encode(payload, key, algorithm(key), { typ: 'dpop+jwt', jwk: jwk(key) })
       end
 
       def ath(token) = Base64.urlsafe_encode64(Digest::SHA256.digest(token.to_s), padding: false)
 
       # The RFC 7638 thumbprint of the key: a token's `cnf.jkt`, a rotation's `new_key`.
-      def thumbprint(key)
-        canonical = JSON.generate({ e: b64(key.e), kty: 'RSA', n: b64(key.n) })
-        Base64.urlsafe_encode64(Digest::SHA256.digest(canonical), padding: false)
-      end
+      def thumbprint(key) = Kiosk::Server::Jwk.thumbprint(key)
 
       # The public JWK (RFC 7517) of the key: a proof's `jwk`, a registration's `jwks` member.
-      def jwk(key)
-        { kty: 'RSA', n: b64(key.n), e: b64(key.e) }
-      end
-
-      def b64(number) = Base64.urlsafe_encode64(number.to_s(2), padding: false)
-      private_class_method :b64
+      def jwk(key) = Kiosk::Server::Jwk.public_members(key)
     end
   end
 end

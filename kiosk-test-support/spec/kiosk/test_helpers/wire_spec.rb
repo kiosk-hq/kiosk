@@ -6,7 +6,7 @@ require 'kiosk/test_helpers/wire'
 RSpec.describe Kiosk::TestHelpers::Wire do
   subject(:wire) { described_class.new(base_url: 'http://provider.test/') }
 
-  let(:key) { OpenSSL::PKey::RSA.generate(2048) }
+  let(:key) { OpenSSL::PKey.generate_key('ED25519') }
 
   it 'holds a token and its key as the Authorization value' do
     expect(described_class.dpop('tok', key)).to eq('Authorization' => described_class::DpopCredential.new(token: 'tok', key:))
@@ -29,10 +29,10 @@ RSpec.describe Kiosk::TestHelpers::Wire do
 
     wire.get('/kiosk/browse', { keyword: 'bike' }, wire.dpop('tok', key))
 
-    claims, header = JWT.decode(sent.first.headers['Dpop'], key.public_key, true, algorithms: ['RS256'])
+    claims, header = JWT.decode(sent.first.headers['Dpop'], key, true, algorithms: ['EdDSA'])
     expect(claims).to include('htm' => 'GET', 'htu' => 'http://provider.test/kiosk/browse',
                               'ath' => Kiosk::TestHelpers::Dpop.ath('tok'))
-    expect(header).to include('typ' => 'dpop+jwt', 'jwk' => include('kty' => 'RSA'))
+    expect(header).to include('typ' => 'dpop+jwt', 'jwk' => include('kty' => 'OKP', 'crv' => 'Ed25519'))
   end
 
   it 'puts params on the query string, and sends a bare GET without a content type' do

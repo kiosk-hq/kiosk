@@ -53,11 +53,11 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'json_schemer', '>= 2.3', '< 3.0'
-  spec.add_dependency 'jwt', '>= 2.0', '< 4.0'
-  spec.add_dependency 'kiosk-core', '~> 0.5.0'
-  spec.add_dependency 'kiosk-pow-equihash', '~> 0.5.0'
-  spec.add_dependency 'kiosk-server', '~> 0.5.0'
-  spec.add_dependency 'kiosk-user-idp-devise', '~> 0.5.0'
+  spec.add_dependency 'jwt', '>= 2.10', '< 4.0'
+  spec.add_dependency 'kiosk-core', '~> 0.6.0'
+  spec.add_dependency 'kiosk-pow-equihash', '~> 0.6.0'
+  spec.add_dependency 'kiosk-server', '~> 0.6.0'
+  spec.add_dependency 'kiosk-user-idp-devise', '~> 0.6.0'
   spec.add_dependency 'puma', '>= 5.0'
   spec.add_dependency 'websocket-driver', '~> 0.7'
 end

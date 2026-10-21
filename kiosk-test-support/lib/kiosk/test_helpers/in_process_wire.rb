@@ -56,7 +56,7 @@ module Kiosk
 
       # The token and key of an assistant registered and linked to the principal for this call.
       def credential_for(identity)
-        key    = OpenSSL::PKey::RSA.generate(2048)
+        key    = Dpop.generate_key
         client = Kiosk::Server::AccountBinding.bind!(agent_id: register(key).id, user_id: identity.user_id,
                                                      requested_role: identity.role)
         token  = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: client.id, role: client.role)
@@ -65,7 +65,7 @@ module Kiosk
 
       # Registers the key as a client, and pays the registration toll if the origin asks for one.
       def register(key)
-        metadata = { 'jwks' => { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key.public_key)] } }
+        metadata = { 'jwks' => { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key)] } }
         Kiosk::Server::ClientRegistration.call(metadata)
       rescue Kiosk::Server::Errors::PowRequired => e
         header = JSON.generate(Wire.solve(JSON.parse(JSON.generate(e.challenges))))

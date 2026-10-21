@@ -24,7 +24,7 @@ module Kiosk
       class Provider < Kiosk::KycProviders::Base
         Check = Data.define(:subject, :audience, :nonce, :callback_url)
 
-        def self.key = @key ||= OpenSSL::PKey::RSA.generate(2048)
+        def self.key = @key ||= OpenSSL::PKey.generate_key('ED25519')
 
         def initialize
           super
@@ -47,7 +47,7 @@ module Kiosk
         def attest(subject, audience, attributes)
           now = Time.now.to_i
           JWT.encode({ sub: subject.to_s, level: 'verified', iss: ISSUER, aud: audience.to_s, attributes:,
-                       iat: now, exp: now + 3600 }, self.class.key, 'RS256')
+                       iat: now, exp: now + 3600 }, self.class.key, 'EdDSA')
         end
       end
 
@@ -87,7 +87,7 @@ module Kiosk
         @kyc_provider = Provider.new
         config.kyc_provider   = @kyc_provider
         config.kyc_issuer     = ISSUER
-        config.kyc_public_key = Provider.key.public_key
+        config.kyc_public_key = Provider.key
       end
 
       def restore_kyc_provider

@@ -11,7 +11,7 @@ KycSpecOperator = Struct.new(:kyc_provider, :kyc_issuer, :kyc_public_key, :kyc_a
 # helper's own hooks read the configuration.
 RSpec.shared_context 'with a KYC operator' do
   let(:configuration) { KycSpecOperator.new(:brokers_provider, 'https://broker.example', :brokers_key, 'skooti') }
-  let(:rider) { Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'u1', token: 'tok', rsa_key: nil) }
+  let(:rider) { Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'u1', token: 'tok', key: nil) }
   let(:customer) { Struct.new(:principal).new(rider) }
   let(:callback_url) { 'http://127.0.0.1:3001/kiosk/kyc/callback' }
 
@@ -26,7 +26,7 @@ RSpec.shared_context 'with a KYC operator' do
 
   def verified(jws)
     JWT.decode(jws, Kiosk.configuration.kyc_public_key, true,
-               algorithm: 'RS256', iss: Kiosk.configuration.kyc_issuer, verify_iss: true).first
+               algorithm: 'EdDSA', iss: Kiosk.configuration.kyc_issuer, verify_iss: true).first
   end
 end
 

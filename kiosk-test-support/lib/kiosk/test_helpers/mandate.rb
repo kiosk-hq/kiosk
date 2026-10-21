@@ -5,6 +5,7 @@ require 'digest'
 require 'json'
 require 'jwt'
 require 'securerandom'
+require 'kiosk/test_helpers/dpop'
 
 module Kiosk
   module TestHelpers
@@ -29,7 +30,7 @@ module Kiosk
       # A closed mandate: an SD-JWT whose one disclosure is `content`.
       def sign(key, content)
         disclosure = b64(JSON.generate([b64(SecureRandom.random_bytes(16)), content]))
-        jwt = JWT.encode({ _sd_alg: 'sha-256', delegate_payload: [{ '...' => digest(disclosure) }] }, key, 'RS256',
+        jwt = JWT.encode({ _sd_alg: 'sha-256', delegate_payload: [{ '...' => digest(disclosure) }] }, key, Dpop.algorithm(key),
                          { typ: 'dc+sd-jwt' })
         "#{jwt}~#{disclosure}~"
       end

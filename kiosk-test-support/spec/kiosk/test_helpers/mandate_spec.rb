@@ -3,9 +3,9 @@
 require 'kiosk/test_helpers/mandate'
 
 RSpec.describe Kiosk::TestHelpers::Mandate do
-  let(:key) { OpenSSL::PKey::RSA.generate(2048) }
+  let(:key) { OpenSSL::PKey.generate_key('ED25519') }
   let(:checkout_jwt) do
-    JWT.encode({ merchant: { id: 'https://shop.example', name: 'Shop' }, currency: 'eur', total_amount_cents: 450 }, key, 'RS256')
+    JWT.encode({ merchant: { id: 'https://shop.example', name: 'Shop' }, currency: 'eur', total_amount_cents: 450 }, key, 'EdDSA')
   end
 
   describe '.sign' do
@@ -13,7 +13,7 @@ RSpec.describe Kiosk::TestHelpers::Mandate do
 
     it 'signs an SD-JWT whose one digest names the one disclosure, the mandate' do
       jwt, disclosure = sd_jwt.split('~')
-      payload, header = JWT.decode(jwt, key.public_key, true, algorithm: 'RS256')
+      payload, header = JWT.decode(jwt, key, true, algorithm: 'EdDSA')
 
       expect(sd_jwt).to end_with('~')
       expect(header).to include('typ' => 'dc+sd-jwt')

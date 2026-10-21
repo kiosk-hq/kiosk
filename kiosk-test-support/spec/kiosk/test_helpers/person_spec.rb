@@ -37,7 +37,7 @@ RSpec.describe Kiosk::TestHelpers::Person do
   end
 
   it 'unlinks an assistant by its agent id' do
-    principal = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'alice', token: nil, rsa_key: nil)
+    principal = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'alice', token: nil, key: nil)
     unlink = stub_request(:post, "#{origin}/kiosk/auth/unlink").with(body: { agent_id: 'a1' }.to_json).to_return(status: 204)
 
     alice.unlinks(Kiosk::TestHelpers::Customer.new(nil, principal))

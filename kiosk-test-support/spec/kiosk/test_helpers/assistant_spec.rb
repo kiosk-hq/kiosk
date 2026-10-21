@@ -27,8 +27,8 @@ RSpec.shared_context 'with an assistant and an origin' do
   subject(:assistant) { described_class.new(base_url: origin) }
 
   let(:origin)     { 'http://kiosk.example.com' }
-  let(:key)        { OpenSSL::PKey::RSA.generate(2048) }
-  let(:principal)  { described_class::Principal.new(agent_id: 'a1', user_id: 'u1', token: 'tok', rsa_key: key) }
+  let(:key)        { OpenSSL::PKey.generate_key('ED25519') }
+  let(:principal)  { described_class::Principal.new(agent_id: 'a1', user_id: 'u1', token: 'tok', key: key) }
   let(:registered) { json_return(201, 'client_id' => 'a1') }
   let(:toll) do
     { 'id' => 'c1', 'alg' => 'equihash', 'params' => { 'n' => 8, 'k' => 1 },
@@ -38,7 +38,7 @@ RSpec.shared_context 'with an assistant and an origin' do
   # The client assertion of a form or JSON body, verified with `with`.
   def assertion(body, with: key)
     expect(body['client_assertion_type']).to eq(described_class::ASSERTION_TYPE)
-    JWT.decode(body['client_assertion'], with.public_key, true, algorithm: 'RS256').first
+    JWT.decode(body['client_assertion'], with, true, algorithm: 'EdDSA').first
   end
 end
 
@@ -55,11 +55,11 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       registered_principal = assistant.register!
 
       jwk = JSON.parse(registrations.first.body).dig('jwks', 'keys', 0)
-      expect(jwk).to eq(Kiosk::TestHelpers::Dpop.jwk(registered_principal.rsa_key).transform_keys(&:to_s))
+      expect(jwk).to eq(Kiosk::TestHelpers::Dpop.jwk(registered_principal.key).transform_keys(&:to_s))
       form = URI.decode_www_form(tokens.first.body).to_h
       expect(form['grant_type']).to eq('client_credentials')
-      expect(assertion(form, with: registered_principal.rsa_key)).to include('iss' => 'a1', 'sub' => 'a1', 'aud' => origin)
-      proof, = JWT.decode(tokens.first.headers['Dpop'], registered_principal.rsa_key.public_key, true, algorithm: 'RS256')
+      expect(assertion(form, with: registered_principal.key)).to include('iss' => 'a1', 'sub' => 'a1', 'aud' => origin)
+      proof, = JWT.decode(tokens.first.headers['Dpop'], registered_principal.key, true, algorithm: 'EdDSA')
       expect(proof).to include('htm' => 'POST', 'htu' => "#{origin}/kiosk/oauth/token")
       expect(proof).not_to have_key('ath')
       expect(tokens.first.headers).not_to have_key('Authorization')
@@ -120,7 +120,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
 
     let(:checkout_jwt) do
       JWT.encode({ iss: origin, sub: 'u1', merchant: { id: origin, name: 'Shop' }, currency: 'eur',
-                   total_amount_cents: 100, line_items: [{ order_id: 'o1' }] }, OpenSSL::PKey::RSA.generate(2048), 'PS256')
+                   total_amount_cents: 100, line_items: [{ order_id: 'o1' }] }, OpenSSL::PKey.generate_key('ED25519'), 'EdDSA')
     end
 
     def sent_mandates(sent) = JSON.parse(sent.first.body).transform_values { Kiosk::TestHelpers::Mandate.content(it) }
@@ -132,7 +132,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       assistant.pay(principal, checkout_jwt)
 
       body = JSON.parse(sent.first.body)
-      body.each_value { expect(JWT.decode(it.split('~').first, key.public_key, true, algorithm: 'RS256').last['typ']).to eq('dc+sd-jwt') }
+      body.each_value { expect(JWT.decode(it.split('~').first, key, true, algorithm: 'EdDSA').last['typ']).to eq('dc+sd-jwt') }
       checkout, payment = sent_mandates(sent).values_at('checkout_mandate', 'payment_mandate')
       expect(checkout).to include('vct' => 'mandate.checkout.1', 'checkout_jwt' => checkout_jwt,
                                   'checkout_hash' => Kiosk::TestHelpers::Mandate.digest(checkout_jwt))
@@ -157,7 +157,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
 
     let(:checkout_jwt) do
       JWT.encode({ iss: origin, sub: 'u1', merchant: { id: origin, name: 'Shop' }, currency: 'eur',
-                   total_amount_cents: 100, line_items: [{ order_id: 'o1' }] }, OpenSSL::PKey::RSA.generate(2048), 'PS256')
+                   total_amount_cents: 100, line_items: [{ order_id: 'o1' }] }, OpenSSL::PKey.generate_key('ED25519'), 'EdDSA')
     end
 
     it 'calls payment_setup on payment_setup_required and sends the same mandates once more' do
@@ -260,18 +260,18 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       stub, sent = requests_to(:post, '/kiosk/auth/rotate')
       stub.to_return(json_return(200, 'client_id' => 'a1'))
       stub_request(:post, "#{origin}/kiosk/oauth/token").to_return(issued)
-      new_key = OpenSSL::PKey::RSA.generate(2048)
+      new_key = OpenSSL::PKey.generate_key('ED25519')
 
       rotated = assistant.rotate(principal, new_key:)
 
       body = JSON.parse(sent.first.body)
       old_claims = assertion(body)
-      new_claims, = JWT.decode(body['new_client_assertion'], new_key.public_key, true, algorithm: 'RS256')
+      new_claims, = JWT.decode(body['new_client_assertion'], new_key, true, algorithm: 'EdDSA')
       expect(old_claims['new_key']).to eq(Kiosk::TestHelpers::Dpop.thumbprint(new_key))
       expect(new_claims).to include('sub' => 'a1')
       expect(new_claims).not_to have_key('new_key')
       expect(body.dig('jwks', 'keys', 0, 'n')).to eq(Kiosk::TestHelpers::Dpop.jwk(new_key)[:n])
-      expect(rotated).to have_attributes(agent_id: 'a1', rsa_key: new_key, token: new_token)
+      expect(rotated).to have_attributes(agent_id: 'a1', key: new_key, token: new_token)
     end
 
     it 'redeems a link code with a client assertion' do
@@ -305,7 +305,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       form = URI.decode_www_form(sent.first.body).to_h
       expect(form).to include('grant_type' => described_class::DEVICE_CODE, 'device_code' => 'd1')
       expect(assertion(form)).to include('sub' => 'a1')
-      expect(JWT.decode(sent.first.headers['Dpop'], key.public_key, true, algorithm: 'RS256').first).not_to have_key('ath')
+      expect(JWT.decode(sent.first.headers['Dpop'], key, true, algorithm: 'EdDSA').first).not_to have_key('ath')
     end
   end
 end

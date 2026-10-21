@@ -10,7 +10,7 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     let(:origin)    { 'http://shop.example.com' }
     let(:assistant) { Kiosk::TestHelpers::Assistant.new(base_url: origin) }
     let(:principal) do
-      Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'u1', token: token('u1'), rsa_key: OpenSSL::PKey::RSA.generate(2048))
+      Kiosk::TestHelpers::Assistant::Principal.new(agent_id: 'a1', user_id: 'u1', token: token('u1'), key: OpenSSL::PKey.generate_key('ED25519'))
     end
 
     def token(account, agent: 'a1', role: 'customer') = JWT.encode({ sub: account, agent_id: agent, role: }, nil, 'none')
@@ -37,7 +37,7 @@ RSpec.describe Kiosk::TestHelpers::Customer do
         stub, sent = requests_to(:post, '/kiosk/pay')
         stub.to_return(json_return(200, 'status' => 'paid'))
         checkout_jwt = JWT.encode({ merchant: { id: origin, name: 'Shop' }, currency: 'eur', total_amount_cents: 450 },
-                                  OpenSSL::PKey::RSA.generate(2048), 'PS256')
+                                  OpenSSL::PKey.generate_key('ED25519'), 'EdDSA')
 
         expect(customer.pays(checkout_jwt)).to be_ok
 
@@ -75,7 +75,7 @@ RSpec.describe Kiosk::TestHelpers::Customer do
         linked = customer.redeems('LINK-1')
 
         expect(linked).to be_a(customer.class)
-        expect(linked.principal).to have_attributes(user_id: 'alice', agent_id: 'a1', rsa_key: principal.rsa_key)
+        expect(linked.principal).to have_attributes(user_id: 'alice', agent_id: 'a1', key: principal.key)
         expect(JSON.parse(sent.first.body)).to include('code' => 'LINK-1', 'client_assertion' => be_a(String))
       end
 

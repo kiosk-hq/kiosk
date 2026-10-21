@@ -11,6 +11,17 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.22] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.5.22, matching skill 0.5.22.** `MIN_CLIENT` is 0.5.22: an older skill cannot pay.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.5.22.md`**, which pays a signed checkout with two AP2 v0.2 mandates.
+
+- 2026-10-21: **`pay` takes two closed AP2 v0.2 mandates, each an SD-JWT, over a checkout the operator signs PS256.** The intent, cart and payment trio is gone.
+- 2026-10-21: One checkout has at most one live pair of mandates. Demo migration `20261021100020` reshapes the mandate tables and keeps every settlement.
+- 2026-10-21: `c.checkout_price_checker` replaces `c.cart_price_checker`, and `Kiosk::Payable#checkout` replaces `#cart`. The JWKS key names no `alg`.
+- 2026-10-21: kiosk-redteam, e2e and the paying demos attack and pay the signed checkout; `wrong_currency_cart` is `wrong_currency_payment`.
+
 ## [0.5.21] — 2026-10-21
 
 - 2026-10-21: **Every gem and `API_VERSION` are 0.5.21, matching skill 0.5.21.** `MIN_CLIENT` stays 0.5.20: the 0.5.20 skill reads the same wire.

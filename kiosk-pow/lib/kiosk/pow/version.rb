@@ -2,6 +2,6 @@
 
 module Kiosk
   module Pow
-    VERSION = '0.5.21'
+    VERSION = '0.5.22'
   end
 end

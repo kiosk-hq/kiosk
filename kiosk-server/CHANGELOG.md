@@ -12,6 +12,13 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.22] — 2026-10-21
+
+- 2026-10-21: `pay` verifies a closed AP2 v0.2 checkout mandate and payment mandate, each an SD-JWT, against a checkout this origin signed PS256.
+- 2026-10-21: `Kiosk::Payable#checkout` signs the `checkout_jwt` an action answers; `c.checkout_price_checker` replaces `c.cart_price_checker`.
+- 2026-10-21: The mandate tables are `checkout_mandates`, `payment_mandates` and `settlements`, with one live pair per checkout. The JWK names no `alg`.
+- 2026-10-21: Version 0.5.22, the tree cut that matches skill 0.5.22.
+
 ## [0.5.21] — 2026-10-21
 
 - agents.txt and agents.json name `x-kiosk-pop` and claim no AP2, required payment or required identity. `/.well-known/agent-configuration` is not served.

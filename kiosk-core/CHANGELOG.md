@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.22] — 2026-10-21
+
+- 2026-10-21: `Kiosk::Mandate` holds the two AP2 v0.2 mandates, `CheckoutMandate` and `PaymentMandate`; the payment port captures a checkout mandate.
+- 2026-10-21: Version 0.5.22, the tree cut that matches skill 0.5.22.
+
 ## [0.5.21] — 2026-10-21
 
 - 2026-10-21: Version 0.5.21, the tree cut that matches skill 0.5.21.

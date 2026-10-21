@@ -8,8 +8,8 @@
 # is `400 bad_request` naming the member that failed, which is what an
 # assistant needs to correct a call it has not been able to authenticate yet.
 #
-# The two `/oauth/*` requests are absent on purpose: Section 17 says they are
-# form-encoded and publishes no schema for them.
+# The `/oauth/*` requests are absent on purpose: the token and device
+# requests are form-encoded, and registration answers its own OAuth error.
 #
 # One accepted body and one refused body per exchange, the two arms that keep
 # the table honest (the flag switches it off, and no endpoint dials an exchange
@@ -23,16 +23,12 @@ module RequestBodyValidationSpec
   # the bodies the spec's own example payloads carry, and a reader comparing
   # this file with `spec/schemas/examples/` should see the same members.
   ACCEPTED = {
-    'POST <endpoint>/auth/register' => { public_key: "-----BEGIN PUBLIC KEY-----\nMII\n-----END PUBLIC KEY-----\n",
-                                         signed: 'eyJ.eyJ.SIG' },
-    'POST <endpoint>/auth/login' => { public_key: "-----BEGIN PUBLIC KEY-----\nMII\n-----END PUBLIC KEY-----\n",
-                                      signed: 'eyJ.eyJ.SIG' },
-    'POST <endpoint>/auth/rotate' => { public_key: "-----BEGIN PUBLIC KEY-----\nMII\n-----END PUBLIC KEY-----\n",
-                                       signed: 'eyJ.eyJ.SIG',
-                                       new_public_key: "-----BEGIN PUBLIC KEY-----\nMIJ\n-----END PUBLIC KEY-----\n",
-                                       new_signed: 'eyJ.eyJ.SIG2' },
-    'POST <endpoint>/auth/claim' => { code: 'ABCD-1234', public_key: "-----BEGIN PUBLIC KEY-----\nMII\n-----END PUBLIC KEY-----\n",
-                                      signed: 'eyJ.eyJ.SIG' },
+    'POST <endpoint>/auth/rotate' => { client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+                                       client_assertion: 'eyJ.eyJ.SIG', new_client_assertion: 'eyJ.eyJ.SIG2',
+                                       jwks: { keys: [{ kty: 'RSA', n: 'AQAB', e: 'AQAB' }] } },
+    'POST <endpoint>/auth/claim' => { code: 'ABCD-1234',
+                                      client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+                                      client_assertion: 'eyJ.eyJ.SIG' },
     'POST <endpoint>/auth/unlink' => { agent_id: 'a-1' },
     'POST <endpoint>/agents/kyc' => { kyc_jws: 'eyJ.eyJ.SIG' },
     'POST <endpoint>/pay' => { checkout_mandate: 'eyJ.eyJ.SIG~WyJz~',
@@ -43,9 +39,7 @@ module RequestBodyValidationSpec
   # an absent member: an absent one was already a 400 from the `fetch` beside
   # the call site, and the type is the half nothing read.
   WRONG_TYPE = {
-    'POST <endpoint>/auth/register' => :public_key,
-    'POST <endpoint>/auth/login' => :signed,
-    'POST <endpoint>/auth/rotate' => :new_public_key,
+    'POST <endpoint>/auth/rotate' => :new_client_assertion,
     'POST <endpoint>/auth/claim' => :code,
     'POST <endpoint>/auth/unlink' => :agent_id,
     'POST <endpoint>/agents/kyc' => :kyc_jws,
@@ -107,7 +101,7 @@ RSpec.describe Kiosk::Server::RequestValidation do
     it 'does nothing when the operator sets validate_requests = false' do
       Kiosk.configure { |c| c.validate_requests = false }
 
-      expect { rv.validate_body!({ public_key: 42 }, exchange: 'POST <endpoint>/auth/register') }
+      expect { rv.validate_body!({ code: 42 }, exchange: 'POST <endpoint>/auth/claim') }
         .not_to raise_error
     end
 
@@ -135,16 +129,16 @@ RSpec.describe Kiosk::Server::RequestValidation do
 
       it 'is an RFC 9457 bad_request naming the member and pointing at the schema' do
         env = Rack::MockRequest.env_for(
-          '/kiosk/auth/register',
-          method: 'POST', input: JSON.generate(public_key: 42, signed: 'eyJ.eyJ.SIG'),
+          '/kiosk/auth/rotate',
+          method: 'POST', input: JSON.generate(accepted_body('POST <endpoint>/auth/rotate').merge(client_assertion: 42)),
           'CONTENT_TYPE' => 'application/json'
         )
-        status, headers, body = dispatch(Kiosk::Server::AuthController, :register, env)
+        status, headers, body = dispatch(Kiosk::Server::AuthController, :rotate, env)
 
         expect(status).to eq(400)
         expect(headers['Content-Type']).to include('application/problem+json')
         expect(body[:code]).to eq('bad_request')
-        expect(body[:detail]).to include('auth/register').and include('public_key')
+        expect(body[:detail]).to include('auth/rotate').and include('client_assertion')
         expect(body[:hint]).to include('auth.schema.json')
       end
     end

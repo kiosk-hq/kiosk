@@ -43,7 +43,6 @@ module EngineMountSpec
   DECLINED_PATHS = [
     'POST /kiosk/oauth/device_authorization',
     'POST /kiosk/auth/claim',
-    'POST /kiosk/oauth/token',
     'GET /kiosk/oauth/device/verify',
     'POST /kiosk/auth/link',
     'POST /kiosk/auth/unlink',
@@ -160,19 +159,16 @@ RSpec.describe Kiosk::Server::Engine do
         expect(res['headers']['content-type']).not_to include('application/problem+json')
       end
 
-      it 'routes the kiosk-pop auth plane into AuthController' do
-        # A malformed register/login/revoke answers with the wire's RFC 9457
-        # problem document — reaching the controller at all is what this route
-        # proof needs, and a top-level `code` is what says a Kiosk controller
-        # answered rather than the router.
-        %w[register login revoke rotate].each do |action|
-          res = probe('mounted', "POST /kiosk/auth/#{action}")
-          expect(res['status']).to be_between(400, 401), "#{action}: got #{res['status']}"
-          expect(JSON.parse(res['body'])).to have_key('code')
-        end
-        res = probe('mounted', 'GET /kiosk/auth/challenge')
-        expect(res['status']).to eq(400)
-        expect(JSON.parse(res['body'])).to have_key('code')
+      it 'routes registration and the token endpoint to the OAuth controllers, and rotation to AuthController' do
+        # A malformed request answers with the OAuth error object on `/oauth/*`
+        # and with the wire's RFC 9457 problem document on `/auth/rotate`:
+        # either says a Kiosk controller answered rather than the router.
+        res = probe('mounted', 'POST /kiosk/oauth/register')
+        expect([res['status'], JSON.parse(res['body'])['error']]).to eq([400, 'invalid_client_metadata'])
+        res = probe('mounted', 'POST /kiosk/oauth/token')
+        expect([res['status'], JSON.parse(res['body'])['error']]).to eq([400, 'invalid_request'])
+        res = probe('mounted', 'POST /kiosk/auth/rotate')
+        expect([res['status'], JSON.parse(res['body'])['code']]).to eq([400, 'bad_request'])
       end
 
       it 'routes the KYC attestation endpoint' do
@@ -183,10 +179,7 @@ RSpec.describe Kiosk::Server::Engine do
 
       it 'routes the binding ceremony: claim wire + link surface + HTML pages' do
         res = probe('mounted', 'POST /kiosk/oauth/device_authorization')
-        expect(res['status']).to eq(400)
-        expect(JSON.parse(res['body'])).to have_key('error')
-
-        expect(probe('mounted', 'POST /kiosk/oauth/token')['status']).to eq(400)
+        expect([res['status'], JSON.parse(res['body'])['error']]).to eq([401, 'invalid_client'])
 
         # No signed-in human; the two HTML pages demand one.
         expect(probe('mounted', 'GET /kiosk/oauth/device/verify')['status']).to eq(401)
@@ -383,24 +376,25 @@ RSpec.describe Kiosk::Server::Engine do
         end
       end
 
-      it 'still serves the core: schema answers, and auth/challenge is the CORE refusal' do
+      it 'still serves the core: schema answers, and registration and the token endpoint refuse as OAuth' do
         expect(probe('binding_declined', 'GET /kiosk/schema')['status']).to eq(200)
 
-        challenge = probe('binding_declined', 'GET /kiosk/auth/challenge')
-        expect(challenge['status']).to eq(400)
-        expect(JSON.parse(challenge['body'])['code']).to eq('bad_request')
+        %w[register token].each do |endpoint|
+          res = probe('binding_declined', "POST /kiosk/oauth/#{endpoint}")
+          expect(res['status']).to eq(400)
+          expect(JSON.parse(res['body'])).to have_key('error')
+        end
       end
 
       # §4.3: the auth block is core discovery, so nothing about the declined
       # module is visible before a caller dials it.
-      it 'publishes all seven auth URLs and no binding capability' do
+      it 'publishes all five auth URLs and no binding capability' do
         res = probe('binding_declined', 'GET /.well-known/kiosk.json')
         expect(res['status']).to eq(200)
 
         kiosk = JSON.parse(res['body']).fetch('kiosk')
-        expect(kiosk.fetch('auth').keys).to include(
-          'challenge_url', 'register_url', 'login_url', 'revoke_url', 'rotate_url',
-          'device_authorization_url', 'claim_url'
+        expect(kiosk.fetch('auth').keys).to eq(
+          %w[registration_url token_url rotate_url device_authorization_url claim_url]
         )
         expect(kiosk.fetch('capabilities')).to include('queries')
         expect(kiosk.fetch('capabilities').grep(/bind/)).to be_empty

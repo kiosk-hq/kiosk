@@ -49,33 +49,6 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
         expect(Kiosk.configuration.validate_requests).to be(false)
       end
     end
-
-    # The auth-challenge nonce must outlive the registration PoW solve,
-    # or a slow honest solver's nonce expires mid-solve (and the proofs are
-    # already burned). The PoW solve window is pow_ttl * count.
-    describe 'auth_challenge_ttl vs the registration PoW solve window' do
-      it 'defaults to comfortably exceed a single-proof PoW window (count treated as >= 1)' do
-        c = Kiosk.configuration
-        expect(c.auth_challenge_ttl).to be > c.pow_ttl
-      end
-
-      it 'exceeds the full PoW window pow_ttl * registration_pow_count' do
-        Kiosk.configure { |cfg| cfg.registration_pow_count = 3 }
-        c = Kiosk.configuration
-        expect(c.auth_challenge_ttl).to be >= c.pow_ttl * c.registration_pow_count
-      end
-
-      it 'scales when pow_ttl is raised' do
-        Kiosk.configure { |cfg| cfg.pow_ttl = 600 }
-        c = Kiosk.configuration
-        expect(c.auth_challenge_ttl).to be > c.pow_ttl
-      end
-
-      it 'still honours an explicit override' do
-        Kiosk.configure { |cfg| cfg.auth_challenge_ttl = 45 }
-        expect(Kiosk.configuration.auth_challenge_ttl).to eq(45)
-      end
-    end
   end
 
   describe 'overrides' do
@@ -234,7 +207,6 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     # spent-id set that makes a proof of work single-use.
     {
       pow_spent_store: Kiosk::Server::PowSpentStores::ActiveRecord,
-      auth_challenge_store: Kiosk::Server::AuthChallengeStores::ActiveRecord,
       event_store: Kiosk::Server::EventStores::ActiveRecord,
       revocation_store: Kiosk::Server::RevocationStores::ActiveRecord,
       device_authorization_store: Kiosk::Server::DeviceAuthorizationStores::ActiveRecord
@@ -255,7 +227,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       # passes on an empty set and says nothing. Fail instead.
       it 'finds the store-allocating lazy defaults at all' do
         expect(ConfigurationExtensionSpec.allocating_defaults.keys).to include(
-          'pow_spent_store', 'auth_challenge_store', 'revocation_store', 'device_authorization_store',
+          'pow_spent_store', 'revocation_store', 'device_authorization_store',
           'event_store'
         )
       end

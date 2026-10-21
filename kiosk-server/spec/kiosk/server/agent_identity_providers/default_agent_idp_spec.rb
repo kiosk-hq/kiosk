@@ -240,8 +240,8 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
   # ── SPEC-045: two live tokens for ONE identity, both accepted ───────────────
   #
   # One assistant may hold a session on two devices without either killing the
-  # other. The revocation watermark moves only on `/auth/revoke` and on the
-  # binding ceremony's link/unlink/rebind, never on issuance — `#issue` only
+  # other. The revocation watermark moves only on a key rotation and on the
+  # binding ceremony's rebind and unlink, never on issuance — `#issue` only
   # READS it (`mint_instant`) so it cannot mint into an already-revoked window.
   describe '#issue — concurrent tokens for one identity' do
     include_context 'with an issuing DefaultAgentIdp'
@@ -263,7 +263,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       end
     end
 
-    # One `/auth/revoke` at a watermark ahead of both tokens kills BOTH, so
+    # One watermark ahead of both tokens kills BOTH, so
     # "concurrent" is a property of the session and not a hole in revocation.
     it "revokes both at once when the agent's watermark passes them" do
       first  = idp.issue(agent_id: 'a-1', role: :customer)

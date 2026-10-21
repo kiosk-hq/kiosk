@@ -65,30 +65,20 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(d[:kiosk][:endpoint]).to eq('https://api.acme.example/kiosk')
     end
 
-    it 'advertises the proof-of-possession auth surface under the same origin' do
-      expect(doc[:kiosk][:auth][:kind]).to          eq('kiosk-pop')
-      expect(doc[:kiosk][:auth][:challenge_url]).to eq('https://api.acme.example/kiosk/auth/challenge')
-      expect(doc[:kiosk][:auth][:register_url]).to  eq('https://api.acme.example/kiosk/auth/register')
-      expect(doc[:kiosk][:auth][:login_url]).to     eq('https://api.acme.example/kiosk/auth/login')
-      expect(doc[:kiosk][:auth][:revoke_url]).to    eq('https://api.acme.example/kiosk/auth/revoke')
-      expect(doc[:kiosk][:auth][:rotate_url]).to    eq('https://api.acme.example/kiosk/auth/rotate')
+    it 'advertises the five auth endpoints under the same origin, in this order' do
+      expect(doc[:kiosk][:auth]).to eq(
+        registration_url: 'https://api.acme.example/kiosk/oauth/register',
+        token_url: 'https://api.acme.example/kiosk/oauth/token',
+        rotate_url: 'https://api.acme.example/kiosk/auth/rotate',
+        device_authorization_url: 'https://api.acme.example/kiosk/oauth/device_authorization',
+        claim_url: 'https://api.acme.example/kiosk/auth/claim'
+      )
+      expect(doc[:kiosk][:auth].keys.first).to eq(:registration_url)
     end
 
-    it 'does not advertise a legacy OAuth surface' do
-      expect(doc[:kiosk][:auth]).not_to have_key(:authorize_url)
-      expect(doc[:kiosk][:auth]).not_to have_key(:token_url)
-    end
-
-    it 'advertises the account-binding endpoints (additive keys)' do
-      expect(doc[:kiosk][:auth][:device_authorization_url])
-        .to eq('https://api.acme.example/kiosk/oauth/device_authorization')
-      expect(doc[:kiosk][:auth][:claim_url])
-        .to eq('https://api.acme.example/kiosk/auth/claim')
-    end
-
-    it 'keeps the pre-binding auth keys first and byte-identical (additive-only rule)' do
-      expect(doc[:kiosk][:auth].keys.first(5))
-        .to eq(%i[kind challenge_url register_url login_url revoke_url])
+    it 'advertises the binding endpoints also where the origin serves no binding (they answer 501)' do
+      Kiosk.configure { |c| c.serve_account_binding = false }
+      expect(described_class.build(base_url: 'https://api.acme.example')[:kiosk][:auth].keys.size).to eq(5)
     end
 
     # capabilities is computed from the live registry: empty here
@@ -212,8 +202,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).to be_a(String)
     end
 
-    it 'names kiosk-pop with the x- prefix the standard gives an unregistered protocol' do
-      expect(directives(body)).to eq('Authorization' => 'x-kiosk-pop',
+    it 'names OAuth 2.0 by the identifier agents.txt registers for it' do
+      expect(directives(body)).to eq('Authorization' => 'oauth2',
                                      'Skills' => Kiosk.configuration.skill_url)
     end
 
@@ -282,8 +272,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(described_class.agents_json(base_url: 'https://api.acme.example')).not_to have_key(:payments)
     end
 
-    it 'advertises kiosk-pop with kiosk.json as its discovery document' do
-      expect(doc[:authorization]).to eq(protocols: %w[x-kiosk-pop], discovery: '/.well-known/kiosk.json')
+    it 'advertises OAuth 2.0 with the RFC 8414 metadata as its discovery document' do
+      expect(doc[:authorization]).to eq(protocols: %w[oauth2], discovery: '/.well-known/oauth-authorization-server')
     end
 
     it 'lists the configured skill' do
@@ -311,23 +301,32 @@ RSpec.describe Kiosk::Server::WellKnown do
   describe '.oauth_authorization_server' do
     subject(:doc) { described_class.oauth_authorization_server(base_url: 'https://api.acme.example') }
 
-    it 'names the issuer and the device-code grant at its two endpoints' do
+    it 'names the issuer, registration, the token endpoint and the device-code grant' do
       expect(doc).to eq(
         issuer: 'https://api.acme.example',
+        registration_endpoint: 'https://api.acme.example/kiosk/oauth/register',
         token_endpoint: 'https://api.acme.example/kiosk/oauth/token',
         device_authorization_endpoint: 'https://api.acme.example/kiosk/oauth/device_authorization',
         jwks_uri: 'https://api.acme.example/kiosk/.well-known/jwks.json',
         response_types_supported: [],
-        grant_types_supported: ['urn:ietf:params:oauth:grant-type:device_code'],
-        token_endpoint_auth_methods_supported: ['none'],
+        grant_types_supported: ['client_credentials', 'urn:ietf:params:oauth:grant-type:device_code'],
+        token_endpoint_auth_methods_supported: ['private_key_jwt'],
+        token_endpoint_auth_signing_alg_values_supported: ['RS256'],
         service_documentation: 'https://api.acme.example/auth.md',
         dpop_signing_alg_values_supported: ['RS256']
       )
     end
 
-    it 'is nil where the origin serves no account binding' do
+    it 'leaves out the device-code grant where the origin serves no account binding' do
       Kiosk.configure { |c| c.serve_account_binding = false }
-      expect(doc).to be_nil
+      expect(doc).not_to have_key(:device_authorization_endpoint)
+      expect(doc[:grant_types_supported]).to eq(['client_credentials'])
+    end
+
+    it 'reads every algorithm list from AssistantKey::ALGORITHMS' do
+      stub_const('Kiosk::Server::AssistantKey::ALGORITHMS', %w[RS256 ES256])
+      expect(doc.values_at(:token_endpoint_auth_signing_alg_values_supported, :dpop_signing_alg_values_supported))
+        .to eq([%w[RS256 ES256], %w[RS256 ES256]])
     end
 
     it 'validates the issuer (same contract as build)' do
@@ -388,8 +387,8 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body.lines.first).to eq("# auth.md — Acme Inc.\n")
     end
 
-    it 'says the auth.md registration endpoints are not served here' do
-      expect(body).to include('does not serve the auth.md')
+    it 'names the OAuth standards of registration and tokens' do
+      expect(body).to include('RFC 7591', 'RFC 7523', 'RFC 9449', 'RFC 8628')
     end
 
     it 'marks identity assertion (ID-JAG) as not supported / planned' do
@@ -403,23 +402,22 @@ RSpec.describe Kiosk::Server::WellKnown do
     # ── The register step teaches the header PoW transport ──────────────────
     #
     # The server reads registration proofs ONLY from the `Kiosk-PoW` request
-    # header ({AuthController#register} → {PowGate.proofs_from_header}); a
-    # `pow` key in the register BODY is ignored, and an assistant that sent
+    # header ({OauthRegistrationController} → {PowGate.proofs_from_header}); a
+    # `pow` key in the registration BODY is ignored, and an assistant that sent
     # one would get 402 forever. These two examples pin the served bytes.
     describe 'the Register step (PoW transport)' do
       subject(:register) { body[/^## Register$.*?(?=^## )/m] }
 
-      it 'renders the register body as `{ public_key, signed }` — no body `pow`' do
-        expect(register).to include('`{ public_key, signed }`')
-        # No JSON-ish body example anywhere in the file may pair `signed`
-        # with a `pow` field.
-        expect(body).not_to match(/\{[^}]*\bsigned\b[^}]*\bpow\b/)
+      it 'renders the RFC 7591 registration body with the key as a JWK Set — no body `pow`' do
+        expect(register).to include('{"jwks":{"keys":[{"kty":"RSA","n":"…","e":"AQAB"}]},')
+        expect(register).to include('201 { client_id')
+        expect(body).not_to match(/\{[^}]*\bjwks\b[^}]*\bpow\b/)
       end
 
       it 'sends the proof in the `Kiosk-PoW` request header, never the body' do
-        expect(register).to match(/`Kiosk-PoW`\s+request header/i)
+        expect(register).to match(/`Kiosk-PoW`\s+REQUEST HEADER/)
         expect(register).to include('Kiosk-PoW: {')
-        expect(register).to match(/NEVER travels in the\s+request body/)
+        expect(register).to match(/A proof is never in the\s+request body/)
         # The RFC 7235 pair: the 402 names the scheme, the client answers in
         # the matching request header.
         expect(register).to include('402 pow_required')
@@ -479,19 +477,13 @@ RSpec.describe Kiosk::Server::WellKnown do
     it 'advertises the ceremony endpoints as absolute URLs under the mount' do
       expect(body).to include('https://api.acme.example/kiosk/oauth/device_authorization')
       expect(body).to include('https://api.acme.example/kiosk/auth/claim')
-      expect(body).to include('https://api.acme.example/kiosk/auth/login')
+      expect(body).to include('https://api.acme.example/kiosk/oauth/token')
       expect(body).to include('https://api.acme.example/kiosk/auth/unlink')
     end
 
-    # The vocabulary is EIGHT codes: the six RFC 8628 polling codes plus
-    # `invalid_request` (spec §6.1 step 1 requires it for a `role`/`scope`
-    # parameter) and `unsupported_grant_type`, all of which the engine emits.
-    it 'documents the OAuth error vocabulary as the one exception' do
-      %w[authorization_pending slow_down expired_token access_denied
-         invalid_grant invalid_client invalid_request
-         unsupported_grant_type].each do |code|
-        expect(body).to include(code)
-      end
+    # The token vocabulary is NINE codes, and registration has one more.
+    it 'documents the OAuth error vocabulary of the /oauth/* endpoints' do
+      Kiosk::Server::OauthError::CODES.each { expect(body).to include("`#{it}`") }
     end
 
     # Every operator serves this document, and an assistant reads it to learn
@@ -506,13 +498,14 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(body).not_to include('JSON envelope')
     end
 
-    it 'requires the possession proof in the token poll (BIND-POP is not optional)' do
-      expect(body).to match(/`signed`.*possession proof/m)
-      expect(body).to include('No binding happens without a valid possession proof')
+    it 'requires a client assertion and a DPoP proof on every token request' do
+      exchange = body[/^## Exchange$.*?(?=^## )/m]
+      expect(exchange).to include('grant_type=client_credentials', '`client_assertion`', '`DPoP` header')
+      expect(exchange).to match(/token\s+request has no `ath`/)
     end
 
     it 'states the reputation-carry rule (claiming never whitewashes)' do
-      expect(body).to match(/reputation\s+carries over/)
+      expect(body).to include('keeps your `client_id` and your reputation')
     end
 
     it 'validates the issuer (same contract as build)' do

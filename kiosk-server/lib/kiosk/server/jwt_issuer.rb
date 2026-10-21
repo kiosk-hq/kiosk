@@ -5,7 +5,7 @@ require 'securerandom'
 
 module Kiosk
   module Server
-    # Issues and verifies the RS256 access tokens of the bundled kiosk-pop IdP.
+    # Issues and verifies the RS256 access tokens of the bundled agent IdP.
     module JwtIssuer
       ALGORITHM = 'RS256'
       DEFAULT_EXPIRES_IN = 3600

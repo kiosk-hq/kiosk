@@ -32,7 +32,7 @@ module Kiosk
       # Credential-bearing wire fields, kept out of the `Parameters:` log line.
       # Whole-key matches, so an operator's own `promo_code` is left alone.
       FILTERED_PARAMETERS = %w[
-        signed code device_code kyc_jws
+        client_assertion new_client_assertion code device_code kyc_jws
         checkout_mandate payment_mandate
       ].map { |field| /\A#{field}\z/ }.freeze
 
@@ -61,7 +61,7 @@ module Kiosk
         ::Rails.logger ? ::Rails.logger.warn(message) : warn(message)
       end
 
-      # A wrong `issuer` refuses every proof with "proof audience mismatch".
+      # A wrong `issuer` refuses every client assertion with "client assertion audience mismatch".
       # Warned, not raised: an operator seeds before the public origin exists.
       LOOPBACK_ISSUER =
         %r{\A(?:https?://)?(?:localhost|127(?:\.\d{1,3}){3}|0\.0\.0\.0|\[::1\])(?::\d+)?/?\z}i
@@ -69,8 +69,8 @@ module Kiosk
       # The boot-time configuration checks. Each answers a message, or nil when the configuration is sound.
       module BootChecks
         ISSUER_UNSET =
-          '[kiosk-server] `c.issuer` is not set, so every authenticated request is refused ' \
-          'with "proof audience mismatch". Set it to the origin assistants dial: ' \
+          '[kiosk-server] `c.issuer` is not set, so every client assertion is refused ' \
+          'with "client assertion audience mismatch". Set it to the origin assistants dial: ' \
           'Kiosk.configure { |c| c.issuer = "https://api.example.com" }.'
 
         ISSUER_LOOPBACK =
@@ -169,8 +169,10 @@ module Kiosk
         # `events` is also in {HandlerMixin::RESERVED_NAMES}; keep the two in step.
         mount Kiosk::Server::EventsCable::RACK_APP => 'events', internal: true, anchor: true, as: :kiosk_events
 
-        get 'auth/challenge', to: 'auth#challenge'
-        %w[register login revoke rotate].each { post "auth/#{it}", to: "auth##{it}" }
+        # RFC 7591 registration and the token endpoint (RFC 6749) are core.
+        post 'oauth/register', to: 'oauth_registration#create'
+        post 'oauth/token',    to: 'oauth_token#create'
+        post 'auth/rotate',    to: 'auth#rotate'
 
         # JWKS sits under the mount, not the origin root.
         get '.well-known/jwks.json', to: 'jwks#show'
@@ -185,7 +187,6 @@ module Kiosk
 
         # RFC 8628 device flow.
         post 'oauth/device_authorization', to: 'oauth_device_authorization#create'
-        post 'oauth/token',                to: 'oauth_token#create'
         get  'oauth/device/verify',        to: 'device_verify#show'
         post 'oauth/device/verify',        to: 'device_verify#create'
 

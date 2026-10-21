@@ -12,6 +12,12 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: Registration is RFC 7591 at `POST <endpoint>/oauth/register`; the token endpoint is core and gives tokens for a client assertion (RFC 7523) and a DPoP proof.
+- 2026-10-21: Device authorization, the link-code claim and the key rotation authenticate with a client assertion; the claim answers 204, the rotation the client information.
+- 2026-10-21: Removed `GET /auth/challenge`, `POST /auth/register`, `/auth/login` and `/auth/revoke`, the challenge store, its two settings and the `kiosk.auth_challenges` table.
+- 2026-10-21: agents.txt and agents.json name `oauth2`; the RFC 8414 metadata is always served, with registration and `private_key_jwt`.
+- 2026-10-21: `AssistantKey::ALGORITHMS` is the one list of signing algorithms that client assertions, DPoP proofs and the metadata read.
+
 ## [0.5.26] — 2026-10-21
 
 - 2026-10-21: Serves RFC 9728 protected resource metadata at `/.well-known/oauth-protected-resource`, and the ARD manifest also at `/.well-known/ai-catalog.json` with `specVersion`.

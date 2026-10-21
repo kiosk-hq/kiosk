@@ -1,295 +1,104 @@
 # frozen_string_literal: true
 
-# The claim half of the account-binding ceremony. Binding itself
-# (fresh-register vs rebind) is covered in account_binding_spec.rb; here it
-# is stubbed so the RFC 8628 state machine + BIND-POP gate can be exercised
-# in isolation.
-RSpec.shared_context 'with a device code grant store' do
-  let(:store) { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:pem)   { "-----BEGIN PUBLIC KEY-----\nMIIB...\n-----END PUBLIC KEY-----" }
-  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
-
-  before do
-    Kiosk.configure do |c|
-      c.issuer                      = 'https://combette.example/kiosk'
-      c.device_authorization_store  = store
-    end
-    described_class.reset_poll_registry!
-  end
-end
-
-RSpec.shared_context 'with a device code exchange' do
-  include_context 'with a device code grant store'
-
-  let(:start_result) do
-    described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
-  end
-  let(:device_code) { start_result[:device_code] }
-
-  # `interval: 0` disables the slow_down gate so state-machine examples
-  # can poll back-to-back; the gate has its own examples below.
-  def exchange(**)
-    described_class.exchange(device_code: device_code, interval: 0, **)
-  end
-end
-
-RSpec.shared_context 'with an approved device code row' do
-  include_context 'with a device code exchange'
-
-  # The role reaches the row the ONLY way it can since K-072: through the
-  # approval, from the approving human's identity. `.start` accepted a
-  # `requested_role:` here until then, which is what a client could set.
-  before do
-    start_result
-    store.update(start_result[:da].approve(user_id: user_id, role: 'customer'))
-  end
-end
-
-RSpec.shared_context 'with an approved device code and a valid proof' do
-  include_context 'with an approved device code row'
-
-  before do
-    allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })
-    allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
-    allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_return(
-      { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
-    )
-  end
-end
-
+# The claim ceremony on the RFC 8628 wire, below the controllers: the row a
+# client opens, and each outcome of a poll by that client.
 RSpec.describe Kiosk::Server::DeviceCodeGrant do
+  include_context 'with registered clients'
+
+  let(:store)  { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
+  let(:client) { register_client }
+  let(:holder) { holder! }
+  let(:start)  { described_class.start(client: client, store: store) }
+
+  before { described_class.reset_poll_registry! }
+
+  def exchange(device_code: start[:device_code], client: self.client, **)
+    described_class.exchange(device_code: device_code, client: client, store: store, interval: 0, **)
+  end
+
+  def expect_refused(error, &)
+    expect(&).to raise_error(Kiosk::Server::OauthError) { |e| expect(e.code).to eq(error) }
+  end
+
+  def approve(role: 'owner') = store.update(start[:da].approve(user_id: holder, role: role))
+
   describe '.start' do
-    include_context 'with a device code grant store'
-
-    it 'creates a pending :claim row and returns the full /oauth/device_authorization payload' do
-      result = described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
-
-      expect(result.keys).to include(:device_code, :user_code, :expires_in, :interval, :da)
-      expect(result[:device_code]).to be_a(String)
-      expect(result[:user_code]).to match(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/)
-      expect(result[:expires_in]).to eq(Kiosk::Server::DeviceAuthorization::DEFAULT_EXPIRES_IN)
-      expect(result[:interval]).to eq(described_class::DEFAULT_POLL_INTERVAL)
-      expect(store.size).to eq(1)
-      expect(result[:da]).to be_pending
-      expect(result[:da]).to be_claim
+    it 'creates a pending :claim row for the client, with its key, and the /oauth/device_authorization payload' do
+      expect(start).to include(device_code: be_a(String), user_code: match(/\A[A-Z0-9]{4}-[A-Z0-9]{4}\z/),
+                               expires_in: Kiosk::Server::DeviceAuthorization::DEFAULT_EXPIRES_IN,
+                               interval: described_class::DEFAULT_POLL_INTERVAL)
+      expect(start[:da]).to be_pending.and be_claim
+      expect([start[:da].client_id, start[:da].public_key_pem]).to eq([client.id, client.public_key_pem])
     end
 
-    # K-072. `.start` takes no role and the row carries none: a claim
-    # ceremony's role is stamped at APPROVAL, from the approving human's
-    # identity, so there is no opening through which an unauthenticated caller
-    # could name one.
+    # K-072: the role is stamped at APPROVAL, from the approving human.
     it 'creates the row ROLE-LESS and accepts no role parameter' do
-      result = described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
-      expect(result[:da].requested_role).to be_nil
-
-      expect { described_class.start(client_id: 'kiosk-cli', public_key_pem: pem, requested_role: 'owner') }
+      expect(start[:da].requested_role).to be_nil
+      expect { described_class.start(client: client, store: store, requested_role: 'owner') }
         .to raise_error(ArgumentError, /unknown keyword: :requested_role/)
     end
-  end
 
-  describe '.start codes' do
-    include_context 'with a device code grant store'
-
-    it 'binds the presented public key to the row (normalised)' do
-      result = described_class.start(client_id: 'kiosk-cli', public_key_pem: "  #{pem}\n")
-      expect(result[:da].public_key_pem).to eq(pem)
-    end
-
-    it 'persists only hashes of both codes (not plain)' do
-      result = described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
-      stored = store.lookup_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(result[:device_code])
-      )
-      expect(stored).to eq(result[:da])
-      expect(stored.user_code_hash).to eq(
-        Kiosk::Server::DeviceAuthorization.hash_user_code(result[:user_code].tr('-', ''))
-      )
+    it 'persists only hashes of both codes' do
+      stored = store.lookup_by_device_code_hash(Kiosk::Server::DeviceAuthorization.hash_device_code(start[:device_code]))
+      expect(stored).to eq(start[:da])
+      expect(stored.user_code_hash).to eq(Kiosk::Server::DeviceAuthorization.hash_user_code(start[:user_code].tr('-', '')))
     end
   end
 
-  describe '.exchange request validation' do
-    include_context 'with a device code exchange'
-
-    it 'rejects missing device_code with invalid_request' do
-      result = described_class.exchange(device_code: nil)
-      expect(result).to include(ok: false, error: 'invalid_request')
+  describe '.exchange' do
+    it 'refuses an unknown device_code, and a link code, with invalid_grant' do
+      expect_refused('invalid_grant') { exchange(device_code: 'definitely-not-a-real-code') }
+      link = Kiosk::Server::LinkCode.mint(user_id: holder, store: store)[:link_code]
+      expect_refused('invalid_grant') { exchange(device_code: link) }
     end
 
-    it 'rejects empty device_code with invalid_request' do
-      result = described_class.exchange(device_code: '')
-      expect(result).to include(ok: false, error: 'invalid_request')
+    it 'refuses a device_code opened by another client with invalid_grant' do
+      start
+      expect_refused('invalid_grant') { exchange(client: register_client(other_key)) }
     end
 
-    it 'rejects unknown device_code with invalid_grant' do
-      result = described_class.exchange(device_code: 'definitely-not-a-real-code')
-      expect(result).to include(ok: false, error: 'invalid_grant')
+    it 'answers authorization_pending and access_denied, the RFC 8628 codes' do
+      expect_refused('authorization_pending') { exchange }
+      store.update(start[:da].deny)
+      expect_refused('access_denied') { exchange }
     end
-  end
 
-  describe '.exchange slow_down (RFC 8628 §3.5)' do
-    include_context 'with a device code exchange'
+    it 'answers expired_token after expires_at, and marks the row expired' do
+      start
+      expect_refused('expired_token') { exchange(now: start[:da].expires_at + 1) }
+      expect(store.lookup_by_device_code_hash(start[:da].device_code_hash)).to be_expired
+    end
 
-    it 'tells a client polling faster than the interval to back off' do
-      start_result
+    it 'tells a client that polls faster than the interval to slow down' do
       t0 = Time.current
-      first  = described_class.exchange(device_code: device_code, now: t0)
-      second = described_class.exchange(device_code: device_code, now: t0 + 1)
-      expect(first).to include(error: 'authorization_pending')
-      expect(second).to include(ok: false, error: 'slow_down')
+      expect_refused('authorization_pending') { described_class.exchange(device_code: start[:device_code], client: client, store: store, now: t0) }
+      expect_refused('slow_down') { described_class.exchange(device_code: start[:device_code], client: client, store: store, now: t0 + 1) }
+      expect_refused('authorization_pending') do
+        described_class.exchange(device_code: start[:device_code], client: client, store: store,
+                                 now: t0 + described_class::DEFAULT_POLL_INTERVAL + 2)
+      end
     end
 
-    it 'serves a client honouring the interval normally' do
-      start_result
-      t0 = Time.current
-      described_class.exchange(device_code: device_code, now: t0)
-      third = described_class.exchange(
-        device_code: device_code,
-        now: t0 + described_class::DEFAULT_POLL_INTERVAL + 1
-      )
-      expect(third).to include(error: 'authorization_pending')
-    end
-  end
+    it "binds the client to the approving holder with the holder's role, and consumes the row" do
+      approve
+      bound = exchange
 
-  describe '.exchange state-machine outcomes' do
-    include_context 'with a device code exchange'
-
-    before { start_result } # materialise the pending row
-
-    it 'returns authorization_pending while the account holder has not acted' do
-      expect(exchange).to include(ok: false, error: 'authorization_pending')
+      expect([bound.id, bound.user_id, bound.role]).to eq([client.id, holder, 'owner'])
+      expect(store.lookup_by_device_code_hash(start[:da].device_code_hash)).to be_consumed
+      expect_refused('invalid_grant') { exchange }
     end
 
-    it 'returns access_denied when the account holder denied' do
-      store.update(start_result[:da].deny)
-      expect(exchange).to include(ok: false, error: 'access_denied')
-    end
-
-    it 'returns invalid_grant when the code was already consumed' do
-      consumed = start_result[:da].approve(user_id: user_id).consume
-      store.update(consumed)
-      expect(exchange).to include(ok: false, error: 'invalid_grant')
-    end
-
-    it 'returns expired_token when expires_at has passed' do
-      result = exchange(now: start_result[:da].expires_at + 1)
-      expect(result).to include(ok: false, error: 'expired_token')
-
-      # And the row was bumped to :expired so subsequent polls see it.
-      reloaded = store.lookup_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(device_code)
-      )
-      expect(reloaded).to be_expired
-    end
-  end
-
-  describe '.exchange BIND-POP on an approved row' do
-    include_context 'with an approved device code row'
-
-    it 'returns invalid_client when the poll carries no signed proof — row NOT consumed' do
-      result = exchange
-      expect(result).to include(ok: false, error: 'invalid_client')
-
-      reloaded = store.lookup_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(device_code)
-      )
-      expect(reloaded).to be_approved
-    end
-
-    it 'returns invalid_client when the proof fails — row NOT consumed, retry allowed' do
-      allow(Kiosk::Server::PopVerifier).to receive(:verify!)
-        .and_raise(Kiosk::Server::Errors::Unauthenticated.new('proof signature invalid'))
-
-      result = exchange(signed: 'bad-jws')
-      expect(result).to include(ok: false, error: 'invalid_client')
-      expect(result[:description]).to include('proof signature invalid')
-
-      # The rightful key holder can still retry with a valid proof.
-      allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })
-      allow(Kiosk::Server::AuthChallenge).to receive(:consume!).and_return(true)
-      allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_return(
-        { agent_id: 'a-1', user_id: user_id, access_token: 'tok', fresh: true }
-      )
-      expect(exchange(signed: 'good-jws')).to include(ok: true)
-    end
-  end
-
-  describe '.exchange BIND-POP on an approved row, stale nonce' do
-    include_context 'with an approved device code row'
-
-    it 'returns invalid_client on a stale/missing challenge nonce — row NOT consumed' do
-      allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return({ nonce: 'n' })
-      allow(Kiosk::Server::AuthChallenge).to receive(:consume!)
-        .and_raise(Kiosk::Server::Errors::Unauthenticated.new('no matching auth challenge'))
-
-      result = exchange(signed: 'jws')
-      expect(result).to include(ok: false, error: 'invalid_client')
-      reloaded = store.lookup_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(device_code)
-      )
-      expect(reloaded).to be_approved
-    end
-  end
-
-  describe '.exchange BIND-POP with a valid proof' do
-    include_context 'with an approved device code and a valid proof'
-
-    it "verifies the proof against the ROW's key, not anything client-supplied" do
-      exchange(signed: 'jws')
-      expect(Kiosk::Server::PopVerifier).to have_received(:verify!)
-        .with(public_key_pem: pem, signed: 'jws')
-      expect(Kiosk::Server::AuthChallenge).to have_received(:consume!)
-        .with(public_key_pem: pem, nonce: 'n')
-    end
-
-    it "binds the row's key to the approving holder's account and consumes the row" do
-      result = exchange(signed: 'jws')
-
-      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
-        public_key_pem: pem, user_id: user_id, requested_role: 'customer'
-      )
-      expect(result).to include(
-        ok: true,
-        access_token: 'kiosk-pop-jwt',
-        token_type: 'DPoP',
-        expires_in: Kiosk::Server::JwtIssuer::DEFAULT_EXPIRES_IN,
-        scope: 'customer'
-      )
-
-      # Row is now consumed; second poll → invalid_grant (single-use).
-      expect(exchange(signed: 'jws')).to include(ok: false, error: 'invalid_grant')
-    end
-  end
-
-  describe '.exchange BIND-POP with a valid proof, concurrency and scope' do
-    include_context 'with an approved device code and a valid proof'
-
-    # K-887 sibling: the `:approved` branch is decided against the snapshot
-    # read at the top of `.exchange`, so two concurrent polls of one
-    # device_code both reached `bind_and_mint`. The atomic claim makes the
-    # loser take the ordinary already-used answer. Deterministic
-    # interleaving: both calls are handed the same pre-race snapshot.
-    it 'mints for only ONE of two concurrent polls of the same device_code' do
-      approved = start_result[:da].approve(user_id: user_id)
+    # K-887: two concurrent polls both read the approved row; the atomic
+    # consume lets one bind.
+    it 'binds for only ONE of two concurrent polls of the same device_code' do
+      approved = start[:da].approve(user_id: holder, role: 'owner')
       store.update(approved)
       allow(store).to receive(:lookup_by_device_code_hash).and_return(approved)
+      allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_call_original
 
-      first  = exchange(signed: 'jws')
-      second = exchange(signed: 'jws')
-
-      expect(first[:ok]).to be(true)
-      expect(second).to include(ok: false, error: 'invalid_grant')
+      exchange
+      expect_refused('invalid_grant') { exchange }
       expect(Kiosk::Server::AccountBinding).to have_received(:bind!).once
-    end
-
-    it 'omits scope when the approving human carries no role' do
-      bare = described_class.start(client_id: 'kiosk-cli', public_key_pem: pem)
-      store.update(bare[:da].approve(user_id: user_id))
-
-      result = described_class.exchange(
-        device_code: bare[:device_code], signed: 'jws', interval: 0
-      )
-      expect(result[:ok]).to be(true)
-      expect(result.keys).not_to include(:scope)
     end
   end
 end

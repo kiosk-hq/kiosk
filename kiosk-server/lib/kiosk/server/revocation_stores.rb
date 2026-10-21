@@ -7,6 +7,14 @@ module Kiosk
     # `revoked?(agent_id:, iat:)`: a token whose `iat` is strictly before the
     # agent's watermark is revoked.
     module RevocationStores
+      # Revokes every token of `agent_id` issued so far. JWT `iat` is whole
+      # seconds, the check is `iat < watermark`, and the IdP dates a token no
+      # earlier than the watermark, so the new watermark is the second after
+      # both now and the old watermark.
+      def self.revoke_issued(agent_id, store: Kiosk.configuration.revocation_store)
+        store.revoke_all(agent_id, at: [Time.now.to_i, store.watermark_for(agent_id).to_i].max + 1)
+      end
+
       # The default store: the `<schema>.revocations` table, shared by every
       # process and kept across restarts. A token of an unlinked or deleted
       # agent is revoked too.

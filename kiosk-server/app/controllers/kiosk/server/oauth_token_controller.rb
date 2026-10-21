@@ -4,55 +4,56 @@ require 'action_controller'
 
 module Kiosk
   module Server
-    # POST <endpoint>/oauth/token: the assistant polls the claim ceremony
-    # (RFC 8628 §3.4). Only the device_code grant is served.
+    # POST <endpoint>/oauth/token (RFC 6749 Section 3.2): a registered client
+    # authenticates with a client assertion (RFC 7523) and a DPoP proof of its
+    # registered key (RFC 9449), and gets an access token bound to that key.
+    # The client_credentials grant is always served; the device-code grant
+    # (RFC 8628 Section 3.4) only where the origin serves account binding.
     class OauthTokenController < ::ActionController::API
-      include BindingModuleGate
       include AuthController::Answers
       include AuthController::Proofs
-
-      prepend_before_action :refuse_unserved_binding
-
-      UNSUPPORTED_GRANT = 'only the device_code grant is served here — ' \
-                          'kiosk-pop (POST /auth/login) is the token-refresh path'
+      include OauthAnswers
 
       def create
         case params[:grant_type].to_s
-        when DeviceCodeGrant::GRANT_TYPE then handle_device_code_grant
-        when '' then render_oauth_error(:invalid_request, 'grant_type required', status: 400)
-        else render_oauth_error(:unsupported_grant_type, UNSUPPORTED_GRANT, status: 400)
+        when Client::CLIENT_CREDENTIALS then render_token(authenticated_client)
+        when Client::DEVICE_CODE then device_code_grant
+        when '' then raise OauthError.new(:invalid_request, 'grant_type required')
+        else raise OauthError.new(:unsupported_grant_type, unsupported_grant)
         end
-      end
-
-      private
-
-      # The auth toll answers with its own problem documents (§10); every other refusal is OAuth's.
-      def handle_device_code_grant
-        result = DeviceCodeGrant.exchange(device_code: params[:device_code].to_s, signed: params[:signed], pow: proofs)
-        Kiosk::Server::Headers.add_to(response.headers)
-        return render json: token_body(result) if result[:ok]
-
-        render_grant_failure(result)
+      rescue OauthError => e
+        render_oauth_error(e)
       rescue Errors::Base => e
         render_error(e)
       end
 
-      # RFC 6749 §5.2: invalid_client — the possession proof failed —
-      # is the one error the server SHOULD signal with 401.
-      def render_grant_failure(result)
-        status = result[:error] == 'invalid_client' ? 401 : 400
-        render json: { error: result[:error], error_description: result[:description] }, status: status
+      private
+
+      # The toll comes before the client authenticates and before the code is read.
+      def device_code_grant
+        device_code = params[:device_code].to_s
+        raise OauthError.new(:unsupported_grant_type, unsupported_grant) unless Kiosk.configuration.serve_account_binding
+        raise OauthError.new(:invalid_request, 'device_code parameter required') if device_code.empty?
+
+        DeviceCodeGrant.pay_toll!(device_code, proofs)
+        render_token(DeviceCodeGrant.exchange(device_code: device_code, client: authenticated_client))
       end
 
-      def token_body(result)
-        body = { access_token: result[:access_token], token_type: result[:token_type], expires_in: result[:expires_in] }
-        body[:scope] = result[:scope] if result[:scope]
-        body
+      def unsupported_grant = "the grant types served here are #{Client.grant_types.join(', ')}"
+
+      # The client assertion, then the DPoP proof of the registered key.
+      def authenticated_client
+        client = authenticate_client!
+        Dpop.verify_token_request!(request.headers['DPoP'], jkt: client.thumbprint, url: "#{Kiosk.current_issuer}#{request.path}")
+        client
       end
 
-      def render_oauth_error(code, description, status:)
-        Kiosk::Server::Headers.add_to(response.headers)
-        render json: { error: code.to_s, error_description: description }, status: status
+      # RFC 6749 Section 5.1. The scope is the role of the client.
+      def render_token(client)
+        token = AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: client.id, role: client.role)
+        body = { access_token: token, token_type: Dpop::SCHEME, expires_in: Kiosk.configuration.access_token_ttl }
+        body[:scope] = client.role if client.role
+        render_oauth(body)
       end
     end
   end

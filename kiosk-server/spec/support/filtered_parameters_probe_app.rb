@@ -46,12 +46,13 @@ Rails.application.routes.draw do
 end
 
 # One distinguishable value per field, so the spec can look for the value
-# itself rather than for a shape. `public_key` is the CONTROL: it is public by
-# §5 and must reach the log in the clear, which is also what proves the log
-# carries parameter values at all.
+# itself rather than for a shape. `client_assertion_type` is the CONTROL: it
+# names a standard, it is no credential, and it must reach the log in the
+# clear, which is also what proves the log carries parameter values at all.
 SENT = {
-  'public_key' => 'SENTINEL-public-key-a1',
-  'signed' => 'SENTINEL-possession-proof-b2',
+  'client_assertion_type' => 'SENTINEL-assertion-type-a1',
+  'client_assertion' => 'SENTINEL-client-assertion-b2',
+  'new_client_assertion' => 'SENTINEL-new-client-assertion-h8',
   'code' => 'SENTINEL-link-code-c3',
   'device_code' => 'SENTINEL-device-code-d4',
   'kyc_jws' => 'SENTINEL-kyc-attestation-e5',
@@ -78,14 +79,14 @@ def post_form(path, body)
   Rails.application.call(env).last.close
 end
 
-post_json '/kiosk/auth/register', SENT.slice('public_key', 'signed')
-post_json '/kiosk/auth/claim',    SENT.slice('code', 'public_key', 'signed')
+post_json '/kiosk/auth/rotate',   SENT.slice('client_assertion_type', 'client_assertion', 'new_client_assertion')
+post_json '/kiosk/auth/claim',    SENT.slice('code', 'client_assertion_type', 'client_assertion')
 post_json '/kiosk/agents/kyc',    SENT.slice('kyc_jws')
 post_json '/kiosk/pay',
           SENT.slice('checkout_mandate', 'payment_mandate'),
           bearer: true
 post_form '/kiosk/oauth/token',
-          SENT.slice('device_code', 'signed')
+          SENT.slice('device_code', 'client_assertion_type', 'client_assertion')
               .merge('grant_type' => 'urn:ietf:params:oauth:grant-type:device_code')
 
 puts JSON.generate('log' => LOG.string, 'sent' => SENT, 'bearer' => BEARER)

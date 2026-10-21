@@ -28,6 +28,8 @@ module AuthPlanePersistenceSpec
   # named table in `public`, dropped with the schema, keeps that honest without
   # a second search_path to reason about.
   USERS = 'kiosk_auth_plane_spec_users'
+  # Assistant keys, generated once: an RSA key costs tens of ms.
+  KEYS = Array.new(4) { OpenSSL::PKey::RSA.generate(2048) }
 
   # A user IdP that resolves every request to one fixed identity.
   class StaticUserIdp
@@ -106,15 +108,20 @@ module AuthPlanePersistenceSpec
     end
   end
 
-  def bind!(user_id, **) = Kiosk::Server::AccountBinding.bind!(public_key_pem: pem, user_id: user_id, **)
-  def register! = Kiosk::Server::AgentRegistration.call(public_key_pem: pem, signed: 'sig')
+  def pem_of(key) = Kiosk::Server::AssistantKey.to_pem(key.public_key)
 
-  # PoW, PoP and the challenge are covered in their own specs; this file is
-  # about the row.
-  def stub_register_door
-    allow(Kiosk::Server::AuthToll).to receive(:gate)
-    allow(Kiosk::Server::PopVerifier).to receive(:verify!).and_return(nonce: 'n')
-    allow(Kiosk::Server::AuthChallenge).to receive(:consume!)
+  # The assistant key of an example that names none, and its stored form.
+  def key = KEYS[0]
+  def pem = pem_of(key)
+
+  # The client of `key`, registered with no toll; the same client again for a live key.
+  def register!(key = self.key)
+    Kiosk::Server::ClientRegistration.call({ 'jwks' => { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key.public_key)] } })
+  end
+
+  # The client of `key`, bound to `user_id`.
+  def bind!(user_id, key: self.key, **)
+    Kiosk::Server::AccountBinding.bind!(agent_id: register!(key).id, user_id: user_id, **)
   end
 
   def dispatch(action, method:, params: {})
@@ -160,7 +167,8 @@ RSpec.shared_context 'with the auth plane database' do
   let(:connection) { ActiveRecord::Base.connection }
   let(:holder)     { SecureRandom.uuid }
   let(:other)      { SecureRandom.uuid }
-  let(:pem)        { "-----BEGIN PUBLIC KEY-----\n#{SecureRandom.hex(20)}\n-----END PUBLIC KEY-----" }
+  # The account registration creates for every assistant here.
+  let(:assistant)  { SecureRandom.uuid }
   # The one IdP instance every DefaultAgentIdp.new in the code under test returns.
   let(:idp)        { Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new }
 
@@ -176,12 +184,13 @@ RSpec.shared_context 'with the auth plane database' do
       # the role vocabulary too, and assert the empty-`text[]` shape the
       # role-less path writes.
       c.registration_role = :customer
+      c.assistant_creation = ->(_pem) { assistant }
     end
-    seed_principals(holder, other)
+    seed_principals(holder, other, assistant)
     # Tokens are not what this file is about; DefaultAgentIdp#issue is covered
     # in default_agent_idp_spec.rb.
     allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
-    allow(idp).to receive(:issue).and_return('kiosk-pop-jwt')
+    allow(idp).to receive(:issue).and_return('access-token')
   end
 
   after { AuthPlanePersistenceSpec.drop_schema(connection) unless AuthPlanePersistenceSpec.postgres_error }
@@ -190,13 +199,7 @@ end
 RSpec.shared_context 'with the auth plane register door' do
   include_context 'with the auth plane database'
 
-  before do
-    stub_register_door
-    Kiosk.configure do |c|
-      c.registration_role  = :customer
-      c.assistant_creation = ->(_pubkey) { holder }
-    end
-  end
+  before { Kiosk.configure { |c| c.assistant_creation = ->(_pem) { holder } } }
 end
 
 RSpec.shared_context 'with two origins on the auth plane database' do
@@ -206,10 +209,9 @@ RSpec.shared_context 'with two origins on the auth plane database' do
   let(:b) { 'https://second.example' }
 
   before do
-    stub_register_door
     Kiosk.configure do |c|
       c.additional_origins = [b]
-      c.assistant_creation = ->(_pubkey) { holder }
+      c.assistant_creation = ->(_pem) { holder }
     end
   end
 
@@ -240,23 +242,24 @@ end
 
 # ── assistant key rotation (spec Section 5.7), through POST /auth/rotate ────
 #
-# Real keys, real possession proofs over real challenges, real tokens: the
-# rotation replaces one column of a live row, and the row is what keeps the
-# identity, so this runs against the shipped schema.
+# Real keys, real client assertions, real tokens: the rotation replaces one
+# column of a live row, and the row is what keeps the identity, so this runs
+# against the shipped schema.
 module AgentRotationSpec
   ISSUER = 'https://provider.example'
 
-  def thumbprint(key) = Kiosk::Server::SigningKey.new(key.public_key).kid
-  def pem_of(key) = key.public_key.to_pem.strip
+  def thumbprint(key) = Kiosk::Server::AssistantKey.thumbprint(key.public_key)
 
-  # A possession proof by `key` over a fresh challenge issued for it.
-  def proof(key, **claims)
-    nonce = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem_of(key))[:challenge]
-    JWT.encode({ aud: ISSUER, nonce: nonce, jti: SecureRandom.uuid, **claims }, key, 'RS256')
+  # A client assertion by `key` for `client_id`.
+  def assertion(key, client_id, **claims)
+    JWT.encode({ iss: client_id, sub: client_id, aud: ISSUER, exp: Time.now.to_i + 60, jti: SecureRandom.uuid,
+                 **claims }, key, 'RS256')
   end
 
-  def rotation_body(old_key, new_key, signed: proof(old_key, new_key: thumbprint(new_key)), new_signed: proof(new_key))
-    { public_key: pem_of(old_key), signed: signed, new_public_key: pem_of(new_key), new_signed: new_signed }
+  def rotation_body(old_key, new_key, client_id, signed: assertion(old_key, client_id, new_key: thumbprint(new_key)),
+                    new_signed: assertion(new_key, client_id))
+    { client_assertion_type: Kiosk::Server::ClientAssertion::TYPE, client_assertion: signed,
+      new_client_assertion: new_signed, jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(new_key.public_key)] } }
   end
 
   # [status, parsed body] of POST /kiosk/auth/rotate.
@@ -279,15 +282,13 @@ end
 RSpec.describe Kiosk::Server::AccountBinding do
   # ── AccountBinding: the uuid principal and the text[] role list ───────────
 
-  describe '.bind! — fresh key' do
+  describe '.bind!' do
     include_context 'with the auth plane database'
 
     it 'stores user_id as a real uuid and allowed_roles as a real text[] (not a string)' do
-      result = bind!(holder, requested_role: 'customer')
+      agent_id = bind!(holder, requested_role: 'customer').id
 
-      expect(result[:fresh]).to be(true)
-      agent_id = result.fetch(:agent_id)
-      # `pg_typeof` reads the COLUMN's type, which the INSERT had to satisfy —
+      # `pg_typeof` reads the COLUMN's type, which the statement had to satisfy —
       # a text-typed bind would have raised before this line ran.
       expect(agent_value('pg_typeof(user_id)::text', agent_id)).to eq('uuid')
       expect(agent_value('pg_typeof(allowed_roles)::text', agent_id)).to eq('text[]')
@@ -299,32 +300,23 @@ RSpec.describe Kiosk::Server::AccountBinding do
       expect(agent_row(agent_id).fetch('user_id')).to eq(holder)
     end
 
-    # The lookup that decides fresh-vs-rebind takes the CALLER'S key. A PEM
-    # carrying a quote character is the shape that would end a spliced literal
-    # early; through a bind it is simply a key that does not exist.
-    it 'looks a key up by value, quote characters and all' do
-      hostile = "-----BEGIN PUBLIC KEY-----\n' OR '1'='1\n-----END PUBLIC KEY-----"
-      first   = described_class.bind!(public_key_pem: hostile, user_id: holder)
-      second  = described_class.bind!(public_key_pem: hostile, user_id: holder)
-
-      expect(first[:fresh]).to be(true)
-      expect(second[:fresh]).to be(false) # found the SAME row
-      expect(second[:agent_id]).to eq(first[:agent_id])
-      expect(value(%(SELECT count(*) FROM #{table('agents')}))).to eq(1)
+    # The agent_id travels as a bind, and a value that is not a UUID never
+    # reaches the database.
+    it 'refuses an agent_id that names no live client, quote characters and all' do
+      expect { described_class.bind!(agent_id: "' OR '1'='1", user_id: holder) }.to raise_error(ArgumentError)
+      expect { described_class.bind!(agent_id: SecureRandom.uuid, user_id: holder) }.to raise_error(ArgumentError)
     end
 
-    # The claim ceremony's fresh-key branch runs the same INSERT as the
-    # register door. «No role at all» is the operator that assigns roles to
-    # NOBODY, the only one that may leave `registration_role` unset; a declared
-    # vocabulary with no default is refused at boot.
-    it 'binds a fresh key with no role at all — an empty text[], not NULL (K-788)' do
+    # «No role at all» is the operator that assigns roles to NOBODY, the only
+    # one that may leave `registration_role` unset; a declared vocabulary with
+    # no default is refused at boot.
+    it 'binds with no role at all — an empty text[], not NULL (K-788)' do
       configure_no_roles
 
-      result = bind!(holder)
+      agent_id = bind!(holder).id
 
-      expect(result[:fresh]).to be(true)
-      expect(agent_value('pg_typeof(allowed_roles)::text', result.fetch(:agent_id))).to eq('text[]')
-      expect(agent_value('cardinality(allowed_roles)', result.fetch(:agent_id))).to eq(0)
+      expect(agent_value('pg_typeof(allowed_roles)::text', agent_id)).to eq('text[]')
+      expect(agent_value('cardinality(allowed_roles)', agent_id)).to eq(0)
     end
   end
 
@@ -336,11 +328,10 @@ RSpec.describe Kiosk::Server::AccountBinding do
     it 'remaps the uuid principal and re-writes allowed_roles as a text[]' do
       result = bind!(holder, requested_role: 'owner')
 
-      expect(result[:fresh]).to be(false)
-      expect(result[:agent_id]).to eq(fresh[:agent_id])
-      expect(agent_row(fresh[:agent_id]).fetch('user_id')).to eq(holder)
-      expect(agent_value('allowed_roles[1]', fresh[:agent_id])).to eq('owner')
-      expect(agent_value('array_length(allowed_roles, 1)', fresh[:agent_id])).to eq(1)
+      expect(result.id).to eq(fresh.id)
+      expect(agent_row(fresh.id).fetch('user_id')).to eq(holder)
+      expect(agent_value('allowed_roles[1]', fresh.id)).to eq('owner')
+      expect(agent_value('array_length(allowed_roles, 1)', fresh.id)).to eq(1)
     end
 
     # A role-less rebind resolves the role from the OPERATOR's default, never
@@ -349,12 +340,12 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # is a one-element `text[]` afterwards, not a widened set.
     it 'resets allowed_roles to registration_role on a role-less rebind' do
       bind!(other, requested_role: 'owner')
-      expect(agent_value('allowed_roles[1]', fresh[:agent_id])).to eq('owner')
+      expect(agent_value('allowed_roles[1]', fresh.id)).to eq('owner')
 
       bind!(holder)
 
-      expect(agent_value('allowed_roles[1]', fresh[:agent_id])).to eq('customer')
-      expect(agent_value('cardinality(allowed_roles)', fresh[:agent_id])).to eq(1)
+      expect(agent_value('allowed_roles[1]', fresh.id)).to eq('customer')
+      expect(agent_value('cardinality(allowed_roles)', fresh.id)).to eq(1)
     end
 
     # An operator that assigns roles to nobody: the rebind writes the EMPTY
@@ -365,8 +356,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
       bind!(holder)
 
-      expect(agent_value('pg_typeof(allowed_roles)::text', fresh[:agent_id])).to eq('text[]')
-      expect(agent_value('cardinality(allowed_roles)', fresh[:agent_id])).to eq(0)
+      expect(agent_value('pg_typeof(allowed_roles)::text', fresh.id)).to eq('text[]')
+      expect(agent_value('cardinality(allowed_roles)', fresh.id)).to eq(0)
     end
 
     # The destructive case is a re-link to the SAME principal, and what makes
@@ -378,7 +369,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
       bind!(holder)
       expect(fired).to be_empty
-      expect(agent_row(fresh[:agent_id]).fetch('user_id')).to eq(holder)
+      expect(agent_row(fresh.id).fetch('user_id')).to eq(holder)
     end
   end
 
@@ -388,36 +379,37 @@ RSpec.describe Kiosk::Server::AccountBinding do
     let!(:bound) { bind!(holder) }
 
     it "revokes the holder's own row" do
-      described_class.unlink!(agent_id: bound[:agent_id], user_id: holder)
-      expect(agent_row(bound[:agent_id]).fetch('revoked_at')).not_to be_nil
+      described_class.unlink!(agent_id: bound.id, user_id: holder)
+      expect(agent_row(bound.id).fetch('revoked_at')).not_to be_nil
     end
 
     # The ownership predicate is the security boundary: both halves are binds,
     # and a uuid that belongs to someone else matches nothing.
     it 'refuses to revoke a row belonging to a different holder' do
       expect do
-        described_class.unlink!(agent_id: bound[:agent_id], user_id: other)
+        described_class.unlink!(agent_id: bound.id, user_id: other)
       end.to raise_error(Kiosk::Server::Errors::NotFound)
-      expect(agent_row(bound[:agent_id]).fetch('revoked_at')).to be_nil
+      expect(agent_row(bound.id).fetch('revoked_at')).to be_nil
     end
   end
 
-  # ── AgentRegistration: the same INSERT from the register door ─────────────
+  # ── ClientRegistration: the INSERT of the registration door ───────────────
 
-  describe Kiosk::Server::AgentRegistration, '.call' do
+  describe Kiosk::Server::ClientRegistration, '.call' do
     include_context 'with the auth plane register door'
 
-    it 'writes a uuid principal and a text[] role from the register door too' do
-      result = register!
+    it 'writes a uuid principal and a text[] role from the registration door' do
+      client = register!
 
-      expect(agent_value('pg_typeof(allowed_roles)::text', result.fetch(:agent_id))).to eq('text[]')
-      expect(agent_value('allowed_roles[1]', result.fetch(:agent_id))).to eq('customer')
-      expect(result.fetch(:user_id)).to eq(holder)
+      expect(agent_value('pg_typeof(allowed_roles)::text', client.id)).to eq('text[]')
+      expect(agent_value('allowed_roles[1]', client.id)).to eq('customer')
+      expect(client.user_id).to eq(holder)
     end
 
-    it 'answers Conflict for a key it already knows (the lookup is by value)' do
-      register!
-      expect { register! }.to raise_error(Kiosk::Server::Errors::Conflict)
+    it 'answers the same client for a key it already knows (the lookup is by value)' do
+      first = register!
+      expect(register!.id).to eq(first.id)
+      expect(value(%(SELECT count(*) FROM #{table('agents')}))).to eq(1)
     end
 
     # ── THE ROLE-LESS PROVIDER, END TO END ──────────────────────────────────────
@@ -428,28 +420,17 @@ RSpec.describe Kiosk::Server::AccountBinding do
     # so "no role" is the EMPTY SET, written explicitly. A fake accepts any
     # statement, which is why this example runs against a database that can say
     # no.
-    it 'registers with no registration_role at all, and the row LOGS IN (K-788)' do
+    it 'registers with no registration_role at all, and the client reads back no role (K-788)' do
       configure_no_roles
-      issued = []
-      allow(idp).to receive(:issue) { |**kw|
-        issued << kw
-        'kiosk-pop-jwt'
-      }
 
-      agent_id = register!.fetch(:agent_id)
+      client = register!
       # A real `text[]`, not NULL and not the string "{}". `array_length` of an
       # empty array is NULL in Postgres, so `cardinality` says "zero elements".
-      expect(agent_value('pg_typeof(allowed_roles)::text', agent_id)).to eq('text[]')
-      expect(agent_value('cardinality(allowed_roles)', agent_id)).to eq(0)
-      expect(agent_value('allowed_roles IS NULL', agent_id)).to be(false)
-      # The token carries NO role.
-      expect(issued.last).to eq(agent_id: agent_id, role: nil)
-
-      # And the row is usable: `/auth/login` reads `allowed_roles` back and
-      # `primary_role` must turn the empty array into nil, not into "".
-      expect(Kiosk::Server::AgentLogin.call(public_key_pem: pem, signed: 'sig'))
-        .to eq(access_token: 'kiosk-pop-jwt')
-      expect(issued.last).to eq(agent_id: agent_id, role: nil)
+      expect(agent_value('pg_typeof(allowed_roles)::text', client.id)).to eq('text[]')
+      expect(agent_value('cardinality(allowed_roles)', client.id)).to eq(0)
+      expect(agent_value('allowed_roles IS NULL', client.id)).to be(false)
+      # The token endpoint mints with this role: nil, not "".
+      expect(Kiosk::Server::Client.find(client.id).role).to be_nil
     end
   end
 
@@ -458,34 +439,32 @@ RSpec.describe Kiosk::Server::AccountBinding do
   describe 'two origins on one deployment' do
     include_context 'with two origins on the auth plane database'
 
-    it 'registers one key on each origin as two assistant accounts' do
+    it 'registers one key on each origin as two clients' do
       on_a = register_on(a)
       on_b = register_on(b)
 
-      expect(on_b[:agent_id]).not_to eq(on_a[:agent_id])
-      expect(agent_row(on_a[:agent_id]).fetch('issuer')).to eq(a)
-      expect(agent_row(on_b[:agent_id]).fetch('issuer')).to eq(b)
+      expect(on_b.id).not_to eq(on_a.id)
+      expect(agent_row(on_a.id).fetch('issuer')).to eq(a)
+      expect(agent_row(on_b.id).fetch('issuer')).to eq(b)
     end
 
-    it 'does not log a key in on an origin it never registered on' do
-      register_on(a)
-      expect { Kiosk.with_issuer(b) { Kiosk::Server::AgentLogin.call(public_key_pem: pem, signed: 'sig') } }
-        .to raise_error(Kiosk::Server::Errors::NotFound)
-    end
-
-    it 'binds a key known on A as a fresh account on B' do
+    it 'does not find a client on an origin it never registered on' do
       on_a = register_on(a)
-      bound = Kiosk.with_issuer(b) { bind!(other) }
+      expect(Kiosk.with_issuer(b) { Kiosk::Server::Client.find(on_a.id) }).to be_nil
+    end
 
-      expect(bound[:fresh]).to be(true)
-      expect(agent_row(on_a[:agent_id]).fetch('user_id')).to eq(holder)
+    it 'does not bind a client of A on B' do
+      on_a = register_on(a)
+      expect { Kiosk.with_issuer(b) { described_class.bind!(agent_id: on_a.id, user_id: other) } }
+        .to raise_error(ArgumentError)
+      expect(agent_row(on_a.id).fetch('user_id')).to eq(holder)
     end
 
     it 'does not unlink across origins' do
       on_a = register_on(a)
-      expect { Kiosk.with_issuer(b) { described_class.unlink!(agent_id: on_a[:agent_id], user_id: holder) } }
+      expect { Kiosk.with_issuer(b) { described_class.unlink!(agent_id: on_a.id, user_id: holder) } }
         .to raise_error(Kiosk::Server::Errors::NotFound)
-      expect(agent_row(on_a[:agent_id]).fetch('revoked_at')).to be_nil
+      expect(agent_row(on_a.id).fetch('revoked_at')).to be_nil
     end
   end
 
@@ -495,7 +474,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
     include_context 'with the auth plane database'
 
     let(:idp) { described_class.new }
-    let!(:agent_id) { bind!(holder)[:agent_id] }
+    let!(:agent_id) { bind!(holder).id }
 
     it 'resolves the principal of a live agent and refuses a revoked one' do
       expect(idp.send(:lookup_agent, agent_id).fetch('user_id')).to eq(holder)
@@ -506,9 +485,8 @@ RSpec.describe Kiosk::Server::AccountBinding do
     end
 
     it 'reads the stored key back byte-for-byte' do
-      real = OpenSSL::PKey::RSA.generate(2048)
-      bound = Kiosk::Server::AccountBinding.bind!(public_key_pem: real.public_key.to_pem, user_id: other)
-      expect(idp.agent_payment_key(bound[:agent_id]).to_pem).to eq(real.public_key.to_pem)
+      real = AuthPlanePersistenceSpec::KEYS[1]
+      expect(idp.agent_payment_key(bind!(other, key: real).id).to_pem).to eq(real.public_key.to_pem)
     end
   end
 
@@ -517,7 +495,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   describe Kiosk::Server::ColumnSpendingCap do
     include_context 'with the auth plane database'
 
-    let!(:agent_id) { bind!(holder)[:agent_id] }
+    let!(:agent_id) { bind!(holder).id }
 
     it 'reads the cap of a live agent and nothing for a revoked one' do
       connection.exec_query(
@@ -537,7 +515,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
   describe Kiosk::Server::AssistantsController, 'the manage page' do
     include_context 'with the auth plane manage page'
 
-    let!(:agent_id) { bind!(holder)[:agent_id] }
+    let!(:agent_id) { bind!(holder).id }
 
     it 'writes a free-text label and an integer cap through binds' do
       hostile = "Alice's ' OR 1=1 -- assistant"
@@ -552,7 +530,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
     end
 
     it 'does not write across holders (the ownership predicate is a bind pair)' do
-      foreign = Kiosk::Server::AccountBinding.bind!(public_key_pem: "#{pem}-other", user_id: other)[:agent_id]
+      foreign = bind!(other, key: AuthPlanePersistenceSpec::KEYS[1]).id
 
       dispatch(:update, method: 'POST', params: { agent_id: foreign, human_label: 'mine now' })
       expect(agent_row(foreign).fetch('human_label')).to be_nil
@@ -561,7 +539,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
     it 'lists and writes only the assistants of the origin being served' do
       Kiosk.configure { |c| c.additional_origins = ['https://second.example'] }
       elsewhere = Kiosk.with_issuer('https://second.example') do
-        Kiosk::Server::AccountBinding.bind!(public_key_pem: "#{pem}-second", user_id: holder)[:agent_id]
+        bind!(holder, key: AuthPlanePersistenceSpec::KEYS[2]).id
       end
 
       _, body = Kiosk.with_issuer('https://provider.example') { dispatch(:show, method: 'GET') }
@@ -661,86 +639,92 @@ RSpec.describe Kiosk::Server::AccountBinding do
   describe Kiosk::Server::AgentRotation, 'through POST /auth/rotate' do
     include_context 'with the auth plane database'
     include AgentRotationSpec
+    include OauthClients
 
-    let(:old_key) { DpopAgent::KEY }
-    let(:new_key) { OpenSSL::PKey::RSA.generate(2048) }
-    let!(:bound)  { Kiosk::Server::AccountBinding.bind!(public_key_pem: pem_of(old_key), user_id: holder) }
+    let(:old_key) { AuthPlanePersistenceSpec::KEYS[0] }
+    let(:new_key) { AuthPlanePersistenceSpec::KEYS[3] }
+    let!(:bound)  { bind!(holder, key: old_key, requested_role: 'customer') }
 
     before do
       Kiosk.configure { |c| c.signing_key = CHECKOUT_SIGNING_KEY }
       allow(idp).to receive(:issue).and_call_original
     end
 
-    it 'puts the new key on the same agent, account and role' do
-      before = agent_row(bound[:agent_id])
-      status, body = rotate(rotation_body(old_key, new_key))
+    it 'puts the new key on the same agent, account and role, and answers the client information' do
+      before = agent_row(bound.id)
+      status, body = rotate(rotation_body(old_key, new_key, bound.id))
 
       expect(status).to eq(200)
-      expect(body.keys).to eq(['access_token'])
-      after = agent_row(bound[:agent_id])
+      expect(body).to include('client_id' => bound.id, 'jwks' => jwks_of(new_key))
+      after = agent_row(bound.id)
       expect(after.fetch('public_key')).to eq(pem_of(new_key))
       expect(after.values_at('id', 'user_id', 'allowed_roles')).to eq(before.values_at('id', 'user_id', 'allowed_roles'))
     end
 
-    it 'answers a token bound to the new key, for the same agent and account' do
-      _, body = rotate(rotation_body(old_key, new_key))
+    it 'lets the token endpoint give a token bound to the new key, for the same agent and account' do
+      rotate(rotation_body(old_key, new_key, bound.id))
+      _, _, body = client_credentials(bound.id, key: new_key)
       claims = claims_of(body.fetch('access_token'))
 
       expect(claims.fetch('cnf')).to eq('jkt' => thumbprint(new_key))
-      expect(claims.values_at('agent_id', 'sub')).to eq([bound[:agent_id], holder])
+      expect(claims.values_at('agent_id', 'sub')).to eq([bound.id, holder])
       expect(verified?(body.fetch('access_token'))).to be(true)
     end
 
     it 'revokes every token issued before it, also in the same second' do
-      earlier = idp.issue(agent_id: bound[:agent_id], role: :customer)
-      rotate(rotation_body(old_key, new_key))
+      earlier = idp.issue(agent_id: bound.id, role: :customer)
+      rotate(rotation_body(old_key, new_key, bound.id))
       expect(verified?(earlier)).to be(false)
     end
 
-    it 'leaves the old key nothing to log in to' do
-      rotate(rotation_body(old_key, new_key))
-      expect { Kiosk::Server::AgentLogin.call(public_key_pem: pem_of(old_key), signed: proof(old_key)) }
-        .to raise_error(Kiosk::Server::Errors::NotFound)
+    it 'leaves the old key no client to authenticate as' do
+      rotate(rotation_body(old_key, new_key, bound.id))
+      expect(client_credentials(bound.id, key: old_key).first).to eq(401)
     end
 
-    it 'refuses a proof of the old key that names no new key, and changes nothing' do
-      status, body = rotate(rotation_body(old_key, new_key, signed: proof(old_key)))
+    it 'refuses an assertion of the old key that names no new key, and changes nothing' do
+      status, body = rotate(rotation_body(old_key, new_key, bound.id, signed: assertion(old_key, bound.id)))
       expect([status, body['code']]).to eq([401, 'unauthenticated'])
-      expect(agent_row(bound[:agent_id]).fetch('public_key')).to eq(pem_of(old_key))
+      expect(agent_row(bound.id).fetch('public_key')).to eq(pem_of(old_key))
     end
 
-    it 'refuses a proof of the old key that names another key' do
-      stranger = OpenSSL::PKey::RSA.generate(2048)
-      status, = rotate(rotation_body(old_key, new_key, signed: proof(old_key, new_key: thumbprint(stranger))))
+    it 'refuses an assertion of the old key that names another key' do
+      signed = assertion(old_key, bound.id, new_key: thumbprint(AuthPlanePersistenceSpec::KEYS[1]))
+      status, = rotate(rotation_body(old_key, new_key, bound.id, signed: signed))
       expect(status).to eq(401)
     end
 
-    it 'refuses a new key that did not sign its own proof' do
-      status, = rotate(rotation_body(old_key, new_key, new_signed: proof(OpenSSL::PKey::RSA.generate(2048))))
+    it 'refuses a new key that did not sign its own assertion' do
+      new_signed = assertion(AuthPlanePersistenceSpec::KEYS[1], bound.id)
+      status, = rotate(rotation_body(old_key, new_key, bound.id, new_signed: new_signed))
       expect(status).to eq(401)
     end
 
-    it 'refuses a challenge that was already used' do
-      signed = proof(old_key, new_key: thumbprint(new_key))
-      new_signed = proof(new_key)
-      Kiosk::Server::AuthChallenge.consume!(public_key_pem: pem_of(old_key), nonce: JWT.decode(signed, nil, false).first['nonce'])
+    it 'refuses a client assertion that was already used' do
+      signed = assertion(old_key, bound.id, new_key: thumbprint(new_key))
+      Kiosk::Server::ClientAssertion.authenticate!(Kiosk::Server::ClientAssertion::TYPE, signed)
 
-      status, = rotate(rotation_body(old_key, new_key, signed: signed, new_signed: new_signed))
+      status, = rotate(rotation_body(old_key, new_key, bound.id, signed: signed))
       expect(status).to eq(401)
     end
 
-    it 'answers 404 for an old key that is not registered' do
-      unknown = OpenSSL::PKey::RSA.generate(2048)
-      status, body = rotate(rotation_body(unknown, new_key))
-      expect([status, body['code']]).to eq([404, 'not_found'])
+    it 'answers 401 for a client that is not registered' do
+      status, body = rotate(rotation_body(old_key, new_key, SecureRandom.uuid))
+      expect([status, body['code']]).to eq([401, 'unauthenticated'])
+      expect(body['detail']).to eq('unknown client')
     end
 
     it 'answers 409 for a new key that is registered already, and changes nothing' do
-      Kiosk::Server::AccountBinding.bind!(public_key_pem: pem_of(new_key), user_id: other)
-      status, body = rotate(rotation_body(old_key, new_key))
+      register!(new_key)
+      status, body = rotate(rotation_body(old_key, new_key, bound.id))
 
       expect([status, body['code']]).to eq([409, 'conflict'])
-      expect(agent_row(bound[:agent_id]).fetch('public_key')).to eq(pem_of(old_key))
+      expect(agent_row(bound.id).fetch('public_key')).to eq(pem_of(old_key))
+    end
+
+    it 'answers 400 for a jwks that holds no usable key' do
+      status, body = rotate(rotation_body(old_key, new_key, bound.id).merge(jwks: { keys: [] }))
+      expect([status, body['code']]).to eq([400, 'bad_request'])
     end
   end
 end

@@ -479,8 +479,8 @@ module Kiosk
         DPOP_SCHEME = {
           type: 'http',
           scheme: 'DPoP',
-          description: 'An access token from the kiosk-pop auth plane ' \
-                       '(`POST <endpoint>/auth/register` or `/auth/login`), ' \
+          description: 'An access token from the token endpoint ' \
+                       '(`POST <endpoint>/oauth/token`), ' \
                        'verifiable against `<endpoint>/.well-known/jwks.json` and bound to the ' \
                        'registered key: send it as `Authorization: DPoP <token>` with a `DPoP` ' \
                        'proof header that the key signs (RFC 9449).'

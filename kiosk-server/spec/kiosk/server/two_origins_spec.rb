@@ -24,10 +24,20 @@ module TwoOriginsSpec
     JSON.parse(raw)
   end
 
-  def proof(aud) = JWT.encode({ aud: aud, nonce: 'n', jti: 'j' }, rsa, 'RS256')
+  CLIENT_ID = '0f1e2d3c-4b5a-4968-8778-695a4b3c2d1e'
 
-  def verify_proof(aud)
-    Kiosk::Server::PopVerifier.verify!(public_key_pem: rsa.public_key.to_pem, signed: proof(aud))
+  def assertion(aud)
+    JWT.encode({ iss: CLIENT_ID, sub: CLIENT_ID, aud: aud, exp: Time.now.to_i + 60, jti: SecureRandom.uuid },
+               agent_key, 'RS256')
+  end
+
+  # The claims of a verified client assertion. The client is the suite key's,
+  # on whichever origin the request is answered as.
+  def verify_assertion(aud)
+    client = Kiosk::Server::Client.new(id: CLIENT_ID, user_id: 'u-1', public_key_pem: agent_pem, allowed_roles: [],
+                                       issued_at: 0)
+    allow(Kiosk::Server::Client).to receive(:find).with(CLIENT_ID).and_return(client)
+    Kiosk::Server::ClientAssertion.verify(Kiosk::Server::ClientAssertion::TYPE, assertion(aud)).claims
   end
 
   # Run the block with $stderr captured, so the refusal log stays out of the output.
@@ -78,28 +88,26 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
       end
     end
 
-    describe 'the possession proof' do
-      let(:rsa) { OpenSSL::PKey::RSA.generate(2048) }
-
-      it 'accepts a proof for the origin being served' do
-        expect(Kiosk.with_issuer(b) { verify_proof(b) }[:aud]).to eq(b)
+    describe 'the client assertion' do
+      it 'accepts an assertion for the origin being served' do
+        expect(Kiosk.with_issuer(b) { verify_assertion(b) }['aud']).to eq(b)
       end
 
-      it 'answers a host it does not serve as the default origin, and rejects a proof carrying that host' do
+      it 'answers a host it does not serve as the default origin, and rejects an assertion carrying that host' do
         unserved = 'https://www.example.com'
         quietly do
           Kiosk.with_issuer(Kiosk.configuration.issuer_for(unserved)) do
-            expect(verify_proof(a)[:aud]).to eq(a)
-            expect { verify_proof(unserved) }
-              .to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof audience mismatch')
+            expect(verify_assertion(a)['aud']).to eq(a)
+            expect { verify_assertion(unserved) }
+              .to raise_error(Kiosk::Server::ClientAssertion::Refused, 'client assertion audience mismatch')
           end
         end
       end
 
-      it 'rejects a proof for A presented on B' do
+      it 'rejects an assertion for A presented on B' do
         quietly do
-          expect { Kiosk.with_issuer(b) { verify_proof(a) } }
-            .to raise_error(Kiosk::Server::Errors::Unauthenticated, 'proof audience mismatch')
+          expect { Kiosk.with_issuer(b) { verify_assertion(a) } }
+            .to raise_error(Kiosk::Server::ClientAssertion::Refused, 'client assertion audience mismatch')
         end
       end
     end
@@ -163,9 +171,9 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
 
       it 'names the origin the request arrived on' do
         _, headers, = through_middleware(
-          Kiosk::Server::AuthController.action(:register), "#{b}/kiosk/auth/register",
+          Kiosk::Server::OauthRegistrationController.action(:create), "#{b}/kiosk/oauth/register",
           method: 'POST', 'CONTENT_TYPE' => 'application/json',
-          input: JSON.generate(public_key: 'pem', signed: 'not-reached')
+          input: JSON.generate(jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key.public_key)] })
         )
         expect(headers['WWW-Authenticate']).to eq(%(Kiosk-PoW realm="#{b}"))
       end

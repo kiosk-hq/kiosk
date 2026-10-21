@@ -69,41 +69,28 @@ RSpec.describe Kiosk::Server::Errors do
   describe 'the malformed-request sentences on the wire' do
     include_context 'with a provider origin for wire wording'
 
-    # The first call an assistant makes.
-    describe 'POST /kiosk/auth/register' do
-      it 'names the absent field and not the Ruby exception when public_key is omitted' do
-        status, headers, body = call_auth(:register, JSON.generate(signed: 'x'))
-        expect_detail(status, headers, body, 'missing field: public_key')
-        expect_no_ruby(body)
-      end
-
-      it 'names the absent field when signed is omitted' do
-        status, headers, body = call_auth(:register, JSON.generate(public_key: 'x'))
-        expect_detail(status, headers, body, 'missing field: signed')
+    describe 'POST /kiosk/auth/rotate' do
+      it 'names the absent field and not the Ruby exception when new_client_assertion is omitted' do
+        body = { client_assertion_type: Kiosk::Server::ClientAssertion::TYPE, client_assertion: 'x',
+                 jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key.public_key)] } }
+        status, headers, body = call_auth(:rotate, JSON.generate(body))
+        expect_detail(status, headers, body, 'missing field: new_client_assertion')
         expect_no_ruby(body)
       end
 
       it "answers a body that is not JSON with this protocol's own sentence" do
-        status, headers, body = call_auth(:register, 'notjson')
+        status, headers, body = call_auth(:rotate, 'notjson')
         expect_detail(status, headers, body, 'invalid JSON body')
         expect_no_ruby(body)
         expect(body[:hint]).to eq(Kiosk::Server::Errors::MALFORMED_JSON_HINT)
       end
     end
 
-    describe 'POST /kiosk/auth/login' do
-      it 'names the absent field when signed is omitted' do
-        status, headers, body = call_auth(:login, JSON.generate(public_key: 'x'))
-        expect_detail(status, headers, body, 'missing field: signed')
-        expect_no_ruby(body)
-      end
-    end
-
-    # The register-shaped redeem.
     describe 'POST /kiosk/auth/claim' do
-      it 'names the absent field when signed is omitted' do
-        status, headers, body = call_auth(:claim, JSON.generate(code: 'c', public_key: 'PEM'))
-        expect_detail(status, headers, body, 'missing field: signed')
+      it 'names the absent field when client_assertion is omitted' do
+        body = { code: 'c', client_assertion_type: Kiosk::Server::ClientAssertion::TYPE }
+        status, headers, body = call_auth(:claim, JSON.generate(body))
+        expect_detail(status, headers, body, 'missing field: client_assertion')
         expect_no_ruby(body)
       end
     end

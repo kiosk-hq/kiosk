@@ -8,12 +8,12 @@ The Kiosk Rails engine — host-side surface for [Kiosk](https://kiosk.tech).
 The full host-side surface is shipped and covered by the gem's own suite
 (`bundle exec rspec` in this directory runs it and prints how many examples that is):
 
-- **Wire-protocol controllers** — each verb route (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`) reaches the operator's controller action that declares the verb, and `Kiosk::Handler` runs the wire's checks around it; `VerbController` refuses a verb route that no action answers; `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `VerbController` also serves `POST <mount>/payment_setup` against the payment provider port, and `PaymentSetupController` the page the provider returns the human to; `VerbController` serves `POST <mount>/request_kyc` against the KYC provider port, and `KycCallbackController` the provider's callback; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `AuthController` runs the register/login/rotate proof-of-possession challenge-response (kiosk-pop — the auth story); every access token is bound to the agent's key, and a call that carries one also carries a DPoP proof (RFC 9449) that `IdentityResolution` checks; JWKS backs stateless token verification.
-- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account: OAuth/RFC 8628-shaped device authorization + possession-proof-gated token poll, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. Tokens stay kiosk-pop-minted; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
+- **Wire-protocol controllers** — each verb route (`GET <mount>/<query-name>`, `POST <mount>/<action-name>`) reaches the operator's controller action that declares the verb, and `Kiosk::Handler` runs the wire's checks around it; `VerbController` refuses a verb route that no action answers; `WireController` serves the two reserved endpoints `GET <mount>/schema` and `POST <mount>/pay`; `VerbController` also serves `POST <mount>/payment_setup` against the payment provider port, and `PaymentSetupController` the page the provider returns the human to; `VerbController` serves `POST <mount>/request_kyc` against the KYC provider port, and `KycCallbackController` the provider's callback; `OpenApiController` serves a derived OpenAPI description of both at `GET <mount>/openapi.json`; `OauthRegistrationController` registers an assistant's public key (RFC 7591) and `OauthTokenController` gives a registered client an access token for a client assertion (RFC 7523) and a DPoP proof (the `client_credentials` grant); `AuthController` puts a new key on a client; every access token is bound to the client's registered key, and a call that carries one also carries a DPoP proof (RFC 9449) that `IdentityResolution` checks; JWKS backs stateless token verification.
+- **Account binding** — the claim/link ceremonies bind a registered client to an existing assistant-account holder's account: the RFC 8628 device authorization and token poll, each authenticated by a client assertion, a session-authenticated verify page and «Link an assistant» page (minimal overridable engine views), link-code mint/redeem, and unlink. The token endpoint gives the tokens; the durable `DeviceAuthorizationStores::ActiveRecord` store (migration 004) is the default.
 - **`Kiosk::Server::Executor`** — dispatches resolved commands to the host's registered queries and Actions.
 - **`Kiosk::Handler`** — the mixin an operator includes into a controller of their own to declare verbs as ordinary Rails actions; each declaration's `kind` says whether it is a query or an action, so one controller may declare both. The engine registers the controllers in `app/controllers/kiosk/` at boot and after every reload (see [Declaring queries and actions](#declaring-queries-and-actions)).
 - **`Kiosk::Server::PaymentClaim`** — the PSP decorator that keeps §11.6's operator half: one capture per payable row, and a paid state anchored to the capture (see [Payments](#payments)).
-- **Agent registration & login** — `AgentRegistration`, `AgentLogin`, `AuthToll`, and the pluggable agent-IdP resolve and mint per-agent identities.
+- **Client registration and authentication** — `ClientRegistration`, `ClientAssertion`, `AssistantKey` (the one list of signing algorithms an assistant can use), `AuthToll`, and the pluggable agent-IdP resolve and mint per-agent identities.
 - **PoW gate** — `PowGate` enforces the reputation policy's N×PoW challenge-response (soft dependency on `kiosk-reputation`; zero overhead when no policy is set).
 - **`Kiosk::Server::WellKnown`** — pure-Ruby builder for `/.well-known/kiosk.json`.
 - **`Kiosk::Server::Headers`** + **`HeadersMiddleware`** — Rack middleware that injects `Kiosk-Server-Version`, `Kiosk-API-Version`, `Kiosk-Min-Client` on `/kiosk/*` responses.
@@ -72,7 +72,7 @@ Kiosk.configure do |c|
   c.roles         = %i[customer master support]
   # The default role. The engine refuses to boot when `c.roles` is set and
   # this is not one of them. An assistant admitted with no role of its own (a
-  # self-registration, or a binding whose approving human resolves none) gets
+  # registration, or a binding whose approving human resolves none) gets
   # this one. Name your least-privileged role. An origin that assigns roles to
   # nobody sets neither line, and then no token carries a `role` claim.
   c.registration_role = :customer
@@ -254,7 +254,9 @@ what can be neither.
 The PoW gate keeps spent challenge ids in `c.pow_spent_store`, by default
 `Kiosk::Server::PowSpentStores::ActiveRecord`: the `kiosk.pow_spent` table that
 `bin/rails g kiosk:install` lays down. Every process and every deploy shares it,
-so a proof is accepted once (kiosk.tech `protocol.md` §15.2).
+so a proof is accepted once (kiosk.tech `protocol.md` §15.2). The token
+endpoint keeps the `jti` of each client assertion in the same store, so an
+assertion is accepted once too.
 
 Any other backend works: the contract is `claim(id, exp) → Boolean`,
 `release(id)`, `spent?(id)`, `mark_spent(id, exp)`, and `claim` **MUST** be one
@@ -263,20 +265,11 @@ read-then-write reintroduces exactly the replay race the gate closes.
 
 Token revocation lives in `c.revocation_store`, by default
 `Kiosk::Server::RevocationStores::ActiveRecord`: the `kiosk.revocations` table,
-which `bin/rails g kiosk:install` lays down too. A revoke, a rebind or an unlink
+which `bin/rails g kiosk:install` lays down too. A key rotation, a rebind or an unlink
 stops the agent's older tokens in every process and after a restart, and a
 token of an unlinked agent stops at once. The contract is
 `revoke_all(agent_id, at:)`, `watermark_for(agent_id)` and
 `revoked?(agent_id:, iat:)`.
-
-Outstanding auth challenges live in `c.auth_challenge_store`, by default
-`Kiosk::Server::AuthChallengeStores::ActiveRecord`: the `kiosk.auth_challenges`
-table, which `bin/rails g kiosk:install` lays down too. A challenge issued by one
-process is redeemed by any other. Any other backend works: the contract is
-`put(public_key_pem, nonce, exp)` / `take(public_key_pem, nonce) → Boolean`, and
-`take` **MUST** be one atomic operation (SQL `DELETE … RETURNING`, Redis
-`GETDEL`) so the store, not the application, decides which of two concurrent
-presentations wins.
 
 Events live in `c.event_store`, by default `Kiosk::Server::EventStores::ActiveRecord`:
 the `kiosk.events` table from `bin/rails g kiosk:install`. The event stream runs
@@ -391,8 +384,8 @@ action. Each route reaches the controller action that declares the verb, and
 not yours. Under the mount: the reserved `schema`, `openapi.json` and `pay`,
 `payment_setup` and the `payment_setup/return` page a payment provider sends the
 human back to (both answer `501 module_not_served` without a `payment_provider`), the
-kiosk-pop auth plane (`auth/challenge`, `auth/register`, `auth/login`,
-`auth/revoke`, `auth/rotate`), JWKS (`.well-known/jwks.json`), KYC (`agents/kyc`, and
+OAuth registration and token endpoints (`oauth/register`, `oauth/token`), the key
+rotation (`auth/rotate`), JWKS (`.well-known/jwks.json`), KYC (`agents/kyc`, and
 `request_kyc` and `kyc/callback`, which answer `501 module_not_served` without a
 `kyc_provider`) and the whole account-binding ceremony (the RFC 8628 claim wire,
 `auth/link`/`claim`/`unlink`, the verify and «Link an assistant» pages). The

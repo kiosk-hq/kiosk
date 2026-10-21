@@ -1,235 +1,69 @@
 # frozen_string_literal: true
 
-require 'openssl'
-
-module LinkCodeSpecHelpers
-  # Register-shaped possession proof: fetch a challenge for the key, sign
-  # {aud, nonce, jti} with the private half.
-  def signed_proof(aud: 'https://combette.example')
-    challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem)
-    JWT.encode(
-      { aud: aud, nonce: challenge[:challenge], jti: SecureRandom.uuid },
-      rsa, 'RS256'
-    )
-  end
-
-  def second_key_proof
-    rsa_b = OpenSSL::PKey::RSA.generate(2048)
-    pem_b = rsa_b.public_key.to_pem
-    challenge_b = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem_b)
-    proof_b = JWT.encode(
-      { aud: 'https://combette.example', nonce: challenge_b[:challenge], jti: SecureRandom.uuid },
-      rsa_b, 'RS256'
-    )
-    [pem_b, proof_b]
-  end
-
-  def stub_binding
-    allow(Kiosk::Server::AccountBinding).to receive(:bind!).and_return(
-      { agent_id: 'agent-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
-    )
-  end
-end
-
-RSpec.shared_context 'with an in-memory link code store' do
-  include LinkCodeSpecHelpers
-
-  let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:user_id) { '11111111-1111-1111-1111-111111111111' }
-  let(:rsa)     { OpenSSL::PKey::RSA.generate(2048) }
-  let(:pem)     { rsa.public_key.to_pem }
-
-  before do
-    Kiosk.configure do |c|
-      c.issuer                     = 'https://combette.example'
-      c.roles                      = %i[customer]
-      c.device_authorization_store = store
-    end
-  end
-
-  let(:code) { described_class.mint(user_id: user_id)[:link_code] }
-end
-
+# Account binding started by the human: the link code a signed-in holder
+# mints, and its single redemption by a registered client.
 RSpec.describe Kiosk::Server::LinkCode do
-  include_context 'with an in-memory link code store'
+  include_context 'with registered clients'
+
+  let(:store)  { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
+  let(:holder) { holder! }
+  let(:client) { register_client }
+  let(:minted) { described_class.mint(user_id: holder, requested_role: 'owner', store: store) }
+  let(:code)   { minted[:link_code] }
+
+  def redeem(code = self.code, client: self.client, key: agent_key, **)
+    described_class.redeem(code: code, assertion_type: Kiosk::Server::ClientAssertion::TYPE,
+                           assertion: client_assertion(client.id, key: key), store: store, **)
+  end
+
+  def row = store.lookup_by_device_code_hash(minted[:da].device_code_hash)
 
   describe '.mint' do
     it 'creates a pre-approved :link row bound to the holder and returns the plain code' do
-      result = described_class.mint(user_id: user_id)
-
-      expect(result[:link_code]).to be_a(String)
-      expect(result[:expires_in]).to eq(Kiosk::Server::DeviceAuthorization::DEFAULT_EXPIRES_IN)
-      expect(result[:da]).to be_approved
-      expect(result[:da]).to be_link
-      expect(result[:da].user_id).to eq(user_id)
-      expect(result[:da].client_id).to eq(described_class::CLIENT_ID)
+      expect(minted).to include(link_code: be_a(String), expires_in: Kiosk::Server::DeviceAuthorization::DEFAULT_EXPIRES_IN)
+      expect(minted[:da]).to be_approved.and be_link
+      expect([minted[:da].user_id, minted[:da].client_id]).to eq([holder, described_class::CLIENT_ID])
     end
 
     it 'persists only the hash of the link code' do
-      result = described_class.mint(user_id: user_id)
-      stored = store.lookup_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(result[:link_code])
-      )
-      expect(stored).to eq(result[:da])
+      expect(store.lookup_by_device_code_hash(Kiosk::Server::DeviceAuthorization.hash_device_code(code))).to eq(minted[:da])
     end
 
-    # roles-from-IdP (Path A): the human's role travels on the link
-    # row so the assistant inherits it at claim time.
-    it "stamps the human's requested_role onto the link row (roles-from-IdP)" do
-      Kiosk.configure { |c| c.roles = %i[customer owner] }
-      result = described_class.mint(user_id: user_id, requested_role: 'owner')
-      expect(result[:da].requested_role).to eq('owner')
-    end
-
-    it 'leaves requested_role nil for a role-less human (no regression)' do
-      result = described_class.mint(user_id: user_id)
-      expect(result[:da].requested_role).to be_nil
+    # roles-from-IdP: the human's role travels on the link row.
+    it "stamps the human's role onto the row, and none for a role-less human" do
+      expect(minted[:da].requested_role).to eq('owner')
+      expect(described_class.mint(user_id: holder, store: store)[:da].requested_role).to be_nil
     end
   end
 
   describe '.redeem' do
-    it 'binds the presented key with a valid proof and consumes the code (single-use)' do
-      stub_binding
-      result = described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
+    it "binds the client to the holder with the holder's role, and consumes the code" do
+      bound = redeem
 
-      expect(result).to eq(agent_id: 'agent-1', user_id: user_id, access_token: 'kiosk-pop-jwt')
-      # The PEM is normalised (stripped) before binding.
-      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
-        public_key_pem: pem.strip, user_id: user_id, requested_role: nil
-      )
-
-      # Second redeem → conflict (single-use).
-      expect do
-        described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
-      end.to raise_error(Kiosk::Server::Errors::Conflict, /already used/)
+      expect([bound.id, bound.user_id, bound.role]).to eq([client.id, holder, 'owner'])
+      expect(row).to be_consumed
+      expect { redeem }.to raise_error(Kiosk::Server::Errors::Conflict, /already used/)
     end
 
-    # ── K-887: single-use is decided by the ROW, not by a Ruby check ────────
-    #
-    # The `consumed?` check in `.redeem` reads the snapshot returned by
-    # `lookup_by_device_code_hash`. Two concurrent redemptions of ONE code both
-    # take that snapshot while it still says `:approved`, so before K-887 both
-    # passed the check and both reached `AccountBinding.bind!` -- with two
-    # DIFFERENT public keys, binding two assistants to the human's account.
-    #
-    # The interleaving is reproduced deterministically rather than with
-    # threads: the store is asked for the row once and both calls are handed
-    # that same pre-race snapshot, which is exactly the state each racing
-    # process holds. Nothing else is stubbed -- the real proof, the real
-    # AuthChallenge and the real atomic claim all run.
-    it 'lets only ONE of two concurrent redemptions bind, even with different keys' do
-      stub_binding
-      proof_a = signed_proof
-      pem_b, proof_b = second_key_proof
-
-      stale = store.lookup_by_device_code_hash(
-        Kiosk::Server::DeviceAuthorization.hash_device_code(code)
-      )
-      expect(stale).to be_approved
-      allow(store).to receive(:lookup_by_device_code_hash).and_return(stale)
-
-      described_class.redeem(code: code, public_key_pem: pem, signed: proof_a)
-
-      expect do
-        described_class.redeem(code: code, public_key_pem: pem_b, signed: proof_b)
-      end.to raise_error(Kiosk::Server::Errors::Conflict, /already used/)
-
-      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).once
-      expect(Kiosk::Server::AccountBinding).not_to have_received(:bind!)
-        .with(hash_including(public_key_pem: pem_b.strip))
+    it 'lets only ONE of two clients bind with one code' do
+      redeem
+      expect { redeem(client: register_client(other_key), key: other_key) }
+        .to raise_error(Kiosk::Server::Errors::Conflict)
     end
 
-    # The claim runs AFTER the proof, so a bad proof must still leave the code
-    # live -- the property the K-887 fix could most easily have broken.
-    it 'does not burn the code on a failed possession proof' do
-      stub_binding
-      expect do
-        described_class.redeem(code: code, public_key_pem: pem, signed: 'not-a-jwt')
-      end.to raise_error(Kiosk::Server::Errors::Base)
-
-      expect do
-        described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
-      end.not_to raise_error
+    it 'refuses a client assertion and leaves the code live' do
+      expect { redeem(key: other_key) }.to raise_error(Kiosk::Server::ClientAssertion::Refused, /signature invalid/)
+      expect(row).to be_approved
+      expect(redeem.user_id).to eq(holder)
     end
 
-    it "forwards the row's captured requested_role to AccountBinding.bind! (roles-from-IdP)" do
-      Kiosk.configure { |c| c.roles = %i[customer owner] }
-      stub_binding
-      role_code = described_class.mint(user_id: user_id, requested_role: 'owner')[:link_code]
-
-      described_class.redeem(code: role_code, public_key_pem: pem, signed: signed_proof)
-      expect(Kiosk::Server::AccountBinding).to have_received(:bind!).with(
-        public_key_pem: pem.strip, user_id: user_id, requested_role: 'owner'
-      )
-    end
-
-    it 'raises Unauthenticated on a failed proof and does NOT consume the code' do
-      stub_binding
-      other_key = OpenSSL::PKey::RSA.generate(2048)
-      challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: pem)
-      forged = JWT.encode(
-        { aud: 'https://combette.example', nonce: challenge[:challenge], jti: 'x' },
-        other_key, 'RS256'
-      )
-
-      expect do
-        described_class.redeem(code: code, public_key_pem: pem, signed: forged)
-      end.to raise_error(Kiosk::Server::Errors::Unauthenticated)
-      expect(Kiosk::Server::AccountBinding).not_to have_received(:bind!)
-
-      # The rightful key holder can still redeem.
-      expect(
-        described_class.redeem(code: code, public_key_pem: pem, signed: signed_proof)
-      ).to include(agent_id: 'agent-1')
-    end
-
-    it 'raises Unauthenticated on an origin-mismatched proof (relay defense)' do
-      stub_binding
-      expect do
-        described_class.redeem(
-          code: code, public_key_pem: pem,
-          signed: signed_proof(aud: 'https://evil.example')
-        )
-      end.to raise_error(Kiosk::Server::Errors::Unauthenticated, /audience/)
-    end
-
-    it 'raises BadRequest for an undersized key (same floor as registration)' do
-      small = OpenSSL::PKey::RSA.generate(1024)
-      expect do
-        described_class.redeem(code: code, public_key_pem: small.public_key.to_pem, signed: 'x')
-      end.to raise_error(Kiosk::Server::Errors::BadRequest, /too small/)
-    end
-
-    it 'raises NotFound for an unknown code' do
-      expect do
-        described_class.redeem(code: 'no-such-code', public_key_pem: pem, signed: 'x')
-      end.to raise_error(Kiosk::Server::Errors::NotFound, /unknown link code/)
-    end
-
-    it 'raises BadRequest for a blank code' do
-      expect do
-        described_class.redeem(code: '', public_key_pem: pem, signed: 'x')
-      end.to raise_error(Kiosk::Server::Errors::BadRequest, /code required/)
-    end
-
-    it 'raises NotFound for an expired code (and bumps the row lazily)' do
-      minted = described_class.mint(user_id: user_id)
-      expect do
-        described_class.redeem(
-          code: minted[:link_code], public_key_pem: pem, signed: 'x',
-          now: minted[:da].expires_at + 1
-        )
-      end.to raise_error(Kiosk::Server::Errors::NotFound, /expired/)
-      expect(
-        store.lookup_by_device_code_hash(minted[:da].device_code_hash)
-      ).to be_expired
-    end
-
-    it 'refuses to redeem a claim-flow device_code (kinds do not cross)' do
-      claim = Kiosk::Server::DeviceCodeGrant.start(client_id: 'cli', public_key_pem: pem)
-      expect do
-        described_class.redeem(code: claim[:device_code], public_key_pem: pem, signed: 'x')
-      end.to raise_error(Kiosk::Server::Errors::NotFound, /unknown link code/)
+    it 'refuses a blank, an unknown and an expired code, and a claim-flow device_code' do
+      expect { redeem('') }.to raise_error(Kiosk::Server::Errors::BadRequest, /code required/)
+      expect { redeem('no-such-code') }.to raise_error(Kiosk::Server::Errors::NotFound, /unknown link code/)
+      claim = Kiosk::Server::DeviceCodeGrant.start(client: client, store: store)
+      expect { redeem(claim[:device_code]) }.to raise_error(Kiosk::Server::Errors::NotFound, /unknown link code/)
+      expect { redeem(now: minted[:da].expires_at + 1) }.to raise_error(Kiosk::Server::Errors::NotFound, /expired/)
+      expect(row).to be_expired
     end
   end
 end

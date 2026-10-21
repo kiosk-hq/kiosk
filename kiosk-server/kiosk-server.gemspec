@@ -15,14 +15,15 @@ Gem::Specification.new do |spec|
       - The controllers — the per-verb wire (GET <endpoint>/<query-name>,
         POST <endpoint>/<action-name>) and the reserved endpoints
         (/kiosk/schema, /kiosk/pay), a derived OpenAPI description of both,
-        the register/login proof-of-possession auth plane, JWKS, the KYC
+        OAuth client registration (RFC 7591) and the token endpoint
+        (private_key_jwt client assertions, DPoP), JWKS, the KYC
         attestation endpoint, agents.txt / agents.json / kiosk.json
-        discovery, and the account-binding ceremony (RFC 8628-shaped device
-        authorization, the possession-proof-gated token poll, the verify and
-        «Link an assistant» pages).
+        discovery, and the account-binding ceremony (RFC 8628 device
+        authorization and token poll, the verify and «Link an assistant»
+        pages).
       - Kiosk::Server::Executor — dispatches a resolved command to the
         queries and actions the host registered.
-      - Agent registration and login, with a pluggable agent-IdP.
+      - Client registration and authentication, with a pluggable agent-IdP.
       - The PoW gate that enforces a kiosk-reputation policy's challenge
         (soft dependency; zero overhead when no policy is set).
       - A Rack middleware injecting the Kiosk-Server-Version /

@@ -57,7 +57,7 @@ module Kiosk
 
       # The proof-of-work settings: registration proofs and the reputation challenge.
       module ProofOfWork
-        # Equihash proofs asked at `POST /auth/register`, at the link-code claim and
+        # Equihash proofs asked at `POST /oauth/register`, at the link-code claim and
         # at the first token poll of each device code, at the gem's default params.
         # Default 0 (open). Above 0 needs `pow_secret` and `kiosk-pow-equihash`.
         attr_writer :registration_pow_count
@@ -192,13 +192,13 @@ module Kiosk
       # The keys the JWKS publishes and verification accepts, the current one first.
       def signing_keys = [signing_key, previous_signing_key].compact
 
-      # The role every self-registered agent is pinned to, and the default a
+      # The role every registered client is pinned to, and the default a
       # binding falls back to. Required, and one of {#roles}, when {#roles} is set.
       #   Kiosk.configure { |c| c.roles = %i[customer]; c.registration_role = :customer }
       attr_accessor :registration_role
 
-      # Optional `->(public_key) { record_id }` creating the account behind a
-      # self-registered agent. Unset: `user_model.constantize.create!`.
+      # Optional `->(public_key_pem) { record_id }` creating the account behind a
+      # registered client. Unset: `user_model.constantize.create!`.
       attr_accessor :assistant_creation
 
       # Account-binding ceremony state. Default: the shared database store.
@@ -233,7 +233,7 @@ module Kiosk
         true
       end
 
-      # Called as `(agent:, from:, to:)` when an assistant's key moves from one
+      # Called as `(agent:, from:, to:)` when an assistant's client moves from one
       # account to another, inside the rebind transaction: the place to move
       # the operator's own rows. `from` and `to` are `user_model` records.
       attr_accessor :assistant_claimed
@@ -291,7 +291,8 @@ module Kiosk
         @audit_sink = value
       end
 
-      # Spent challenge ids, so a proof is accepted once. Default: the shared database table.
+      # Spent ids, so a proof-of-work proof or a client assertion is accepted once.
+      # Default: the shared database table.
       attr_writer :pow_spent_store
 
       def pow_spent_store
@@ -299,29 +300,11 @@ module Kiosk
           LAZY_STORE_MUTEX.synchronize { @pow_spent_store ||= Kiosk::Server::PowSpentStores::ActiveRecord.new }
       end
 
-      # Outstanding auth nonces. Default: the shared database table.
-      attr_writer :auth_challenge_store
-
-      def auth_challenge_store
-        @auth_challenge_store ||
-          LAZY_STORE_MUTEX.synchronize do
-            @auth_challenge_store ||= Kiosk::Server::AuthChallengeStores::ActiveRecord.new
-          end
-      end
-
       # Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
       attr_writer :access_token_ttl
 
       def access_token_ttl
         @access_token_ttl ||= JwtIssuer::DEFAULT_EXPIRES_IN
-      end
-
-      # Seconds between `GET /auth/challenge` and the signed POST. Default covers
-      # the auth toll's proof-of-work window plus 60s.
-      attr_writer :auth_challenge_ttl
-
-      def auth_challenge_ttl
-        @auth_challenge_ttl ||= (pow_ttl * [registration_pow_count.to_i, 1].max) + 60
       end
 
       # Revocation watermarks, checked on every access token. Default: the

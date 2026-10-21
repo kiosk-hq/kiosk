@@ -3,7 +3,7 @@
 module Kiosk
   module Server
     # Optional proof-of-work toll on the auth requests that come before a
-    # token: `POST /auth/register`, the link-code claim `POST /auth/claim`, and
+    # token: `POST /oauth/register`, the link-code claim `POST /auth/claim`, and
     # the first token poll of each device code. It runs before any lookup, so
     # the answer never tells a caller whether a key or a code exists. It bounds
     # the cost per request, not the rate: an edge rate limit is required

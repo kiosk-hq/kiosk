@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/binding.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/binding.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk account binding -- claim and link",
-  "description": "The wire objects of Section 6, the one-time ceremonies that bind an AI assistant to an existing operator account: claim, an RFC 8628 device grant, and link. Both need the human's approval and a valid possession proof. The two /oauth/* requests are form-encoded and have no schema here; their error answer has one.",
+  "description": "The wire objects of Section 6, the one-time ceremonies that bind a registered AI assistant to an existing operator account: claim, an RFC 8628 device grant, and link. Both need the human's approval and a client assertion by the registered key. The two /oauth/* requests are form-encoded and have no schema here; their answers are in auth.schema.json.",
   "$defs": {
     "deviceAuthorization": {
       "type": "object",
@@ -46,56 +46,20 @@
       }
     },
     "deviceTokenResponse": {
-      "type": "object",
-      "description": "Section 6.1 step 3: the success answer to POST <endpoint>/oauth/token. The bound principal (`user_id`, `agent_id`) is in the access token's claims.",
-      "required": ["access_token", "token_type", "expires_in"],
-      "properties": {
-        "access_token": {
-          "type": "string",
-          "description": "The access token. Its claims are auth.schema.json#/$defs/accessTokenClaims."
-        },
-        "token_type": {
-          "const": "DPoP",
-          "description": "Always \"DPoP\": the token is bound to the key that signed the poll (Section 5.6)."
-        },
-        "expires_in": {
-          "type": "integer",
-          "description": "Seconds until the access token expires."
-        },
-        "scope": {
-          "type": "string",
-          "description": "The approving human's role, as the scope that RFC 6749 Section 5.1 grants. It is present only when the binding carries a role, and never null. An AI assistant MUST NOT treat its absence as an error."
-        }
-      }
+      "$ref": "https://kiosk.tech/spec/schemas/auth.schema.json#/$defs/tokenResponse",
+      "description": "Section 6.1 step 3: the success answer to the device-code poll of POST <endpoint>/oauth/token. `scope` is the approving human's role."
     },
     "oauthError": {
-      "type": "object",
-      "description": "Section 6.1: the error answer of both /oauth/* endpoints, the one error on this wire that is not an RFC 9457 problem document. The status is 400 for every code except `invalid_client`, which is 401.",
-      "required": ["error"],
-      "properties": {
-        "error": {
-          "enum": [
-            "authorization_pending",
-            "slow_down",
-            "expired_token",
-            "access_denied",
-            "invalid_grant",
-            "invalid_client",
-            "invalid_request",
-            "unsupported_grant_type"
-          ],
-          "description": "The OAuth error code. A closed vocabulary: an operator MUST NOT emit anything outside it, or an AI assistant polling this ceremony has a branch it cannot take."
-        },
-        "error_description": {
-          "type": "string",
-          "description": "Human-readable detail. An AI assistant branches on `error` and never on this string."
-        }
-      }
+      "$ref": "https://kiosk.tech/spec/schemas/auth.schema.json#/$defs/oauthError",
+      "description": "Section 6.1: the error answer of both /oauth/* endpoints, the one error shape on this wire that is not an RFC 9457 problem document."
     },
     "linkCode": {
       "type": "object",
       "description": "Section 6.2 -- the 201 answer to POST <endpoint>/auth/link, called on the operator's own session by the signed-in human. 201 rather than 200 because the call MINTS a redeemable single-use credential.",
-      "required": ["link_code", "expires_in"],
+      "required": [
+        "link_code",
+        "expires_in"
+      ],
       "properties": {
         "link_code": {
           "type": "string",
@@ -109,35 +73,36 @@
     },
     "claimRequest": {
       "type": "object",
-      "description": "Section 6.2 -- the body of POST <endpoint>/auth/claim, which redeems a link code. The possession proof is REQUIRED, so a leaked code alone can never bind a key its holder does not control.",
-      "required": ["code", "public_key", "signed"],
+      "description": "Section 6.2 -- the body of POST <endpoint>/auth/claim, which redeems a link code. The client assertion is REQUIRED, so a leaked code alone can never bind a key its holder does not control. The answer is 204 No Content; the AI assistant then asks the token endpoint for a token under the human's account.",
+      "required": [
+        "code",
+        "client_assertion_type",
+        "client_assertion"
+      ],
       "properties": {
         "code": {
           "type": "string",
           "description": "The `link_code` the human handed over."
         },
-        "public_key": {
-          "type": "string",
-          "description": "The AI assistant's public key, PEM-encoded."
+        "client_assertion_type": {
+          "const": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
         },
-        "signed": {
+        "client_assertion": {
           "type": "string",
-          "description": "The possession proof of Section 5.2, as a compact RS256 JWS."
+          "description": "A client assertion by the registered key (auth.schema.json#/$defs/clientAssertion)."
         }
       }
-    },
-    "claimResponse": {
-      "$ref": "https://kiosk.tech/spec/schemas/auth.schema.json#/$defs/registration",
-      "description": "Section 6.2: the 201 answer to POST <endpoint>/auth/claim, in the shape of the register answer. A new key, a rebound key and a repeated bind give answers that cannot be told apart (Section 6.3)."
     },
     "unlinkRequest": {
       "type": "object",
       "description": "Section 6.3 -- the body of POST <endpoint>/auth/unlink, called on the operator's own session. The response is 204 No Content and carries no body at all, which is why no response object appears here.",
-      "required": ["agent_id"],
+      "required": [
+        "agent_id"
+      ],
       "properties": {
         "agent_id": {
           "type": "string",
-          "description": "The bound AI assistant to deactivate. Its tokens stop verifying and /auth/login answers 404 (Section 15.4)."
+          "description": "The bound AI assistant (its client_id) to deactivate. Its tokens stop verifying and the token endpoint answers it `invalid_client` (Section 15.4)."
         }
       }
     }

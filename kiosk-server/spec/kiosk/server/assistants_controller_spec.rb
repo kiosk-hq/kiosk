@@ -5,16 +5,10 @@
 # AccountBinding. Same Metal-dispatch harness as the other controller specs.
 
 require 'rack/mock'
-require 'jwt'
 require 'openssl'
 
 module AssistantsControllerSpecHelpers
   PAGE_URL = 'https://provider.example/kiosk/auth/assistants'
-  KNOWN_AGENT_ROW = {
-    'id' => 'agent-known',
-    'user_id' => '22222222-2222-2222-2222-222222222222',
-    'allowed_roles' => '{customer}'
-  }.freeze
   HOLDER_ID = '11111111-1111-1111-1111-111111111111'
 
   # The signed-in human's user_id.
@@ -54,18 +48,6 @@ module AssistantsControllerSpecHelpers
   def minted_row(html)
     store.lookup_by_device_code_hash(
       Kiosk::Server::DeviceAuthorization.hash_device_code(html[%r{<code>([^<]+)</code>}, 1])
-    )
-  end
-
-  def stub_known_agent
-    route_exec_query(con) { |sql, _binds| sql =~ /SELECT/i ? [KNOWN_AGENT_ROW.dup] : [] }
-  end
-
-  def link_proof(rsa, key_pem)
-    challenge = Kiosk::Server::AuthChallenge.issue(public_key_pem: key_pem)
-    JWT.encode(
-      { aud: 'https://provider.example', nonce: challenge[:challenge], jti: SecureRandom.uuid },
-      rsa, 'RS256'
     )
   end
 end
@@ -238,30 +220,21 @@ RSpec.describe 'AssistantsController' do
   describe 'roles-from-IdP on the browser mint: rebind' do
     include_context 'with a holder signed in to the assistants page'
 
-    it "rebinds a KNOWN key onto the new human's role via a browser-minted code" do
+    it "binds the redeeming client with the new human's role via a browser-minted code" do
       Kiosk.configure { |c| c.roles = %i[customer owner] }
       wire_user_idp(build_identity(actor: 'human', agent_id: nil, user_id: user_id, role: 'owner'))
-      idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-      allow(idp).to receive(:issue).and_return('kiosk-pop-jwt')
-      allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(idp)
-
       _status, html = dispatch(:link, method: 'POST')
       code = html[%r{<code>([^<]+)</code>}, 1]
 
-      # The redeeming key is already registered under ANOTHER human, at
-      # `customer` — the rebind case.
-      rsa = OpenSSL::PKey::RSA.generate(2048)
-      key_pem = rsa.public_key.to_pem
-      stub_known_agent
-      proof = link_proof(rsa, key_pem)
+      client = Kiosk::Server::Client.new(id: SecureRandom.uuid, user_id: 'another-human', public_key_pem: pem,
+                                         allowed_roles: ['customer'], issued_at: 0)
+      allow(Kiosk::Server::ClientAssertion).to receive(:authenticate!).and_return(client)
+      allow(Kiosk::Server::AccountBinding).to receive(:bind!)
 
-      result = Kiosk::Server::LinkCode.redeem(code: code, public_key_pem: key_pem, signed: proof)
+      Kiosk::Server::LinkCode.redeem(code: code, assertion_type: Kiosk::Server::ClientAssertion::TYPE, assertion: 'jws')
 
-      expect(result[:agent_id]).to eq('agent-known')   # same key, same agent
-      expect(con.bound(/INSERT/i)).to be_empty         # ...so a rebind, not a fresh key
-      sql, binds = con.bound(/UPDATE/i).first
-      expect(sql).to include('allowed_roles = ARRAY[$3]::text[]')
-      expect(binds).to eq([user_id, 'agent-known', 'owner'])
+      expect(Kiosk::Server::AccountBinding).to have_received(:bind!)
+        .with(agent_id: client.id, user_id: user_id, requested_role: 'owner')
     end
   end
 

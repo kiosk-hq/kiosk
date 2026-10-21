@@ -48,7 +48,7 @@ RSpec.describe 'DiscoveryController' do
       expect(status).to eq(200)
       expect(headers['Content-Type']).to eq('text/plain; charset=utf-8')
       expect(headers['Access-Control-Allow-Origin']).to eq('*')
-      expect(raw).to include("\nAuthorization: x-kiosk-pop\n")
+      expect(raw).to include("\nAuthorization: oauth2\n")
       # base_url comes from the request
       expect(raw).to include('# JSON: https://api.acme.example/agents.json')
     end
@@ -84,19 +84,19 @@ RSpec.describe 'DiscoveryController' do
       # RFC 8414 §2: issuer and response_types_supported are REQUIRED, and a
       # server with no authorization endpoint names no response type.
       expect(doc).to include('issuer' => 'https://api.acme.example', 'response_types_supported' => [])
-      expect(doc.values_at('token_endpoint', 'device_authorization_endpoint', 'jwks_uri'))
+      expect(doc.values_at('registration_endpoint', 'token_endpoint', 'device_authorization_endpoint', 'jwks_uri'))
         .to all(start_with('https://api.acme.example/kiosk/'))
     end
 
-    it 'answers 404 where the origin serves no account binding' do
+    it 'is served also where the origin serves no account binding' do
       Kiosk.configure { |c| c.serve_account_binding = false }
-      status, = dispatch(:oauth_authorization_server, '/.well-known/oauth-authorization-server')
-      expect(status).to eq(404)
+      status, _headers, raw = dispatch(:oauth_authorization_server, '/.well-known/oauth-authorization-server')
+      expect([status, JSON.parse(raw)['grant_types_supported']]).to eq([200, ['client_credentials']])
     end
   end
 
   describe 'GET /.well-known/oauth-protected-resource' do
-    it 'returns the RFC 9728 metadata: the origin, the claim issuer, DPoP-bound header tokens' do
+    it 'returns the RFC 9728 metadata: the origin, its authorization server, DPoP-bound header tokens' do
       status, headers, raw = dispatch(:oauth_protected_resource, '/.well-known/oauth-protected-resource')
       expect(status).to eq(200)
       expect(headers['Content-Type']).to include('application/json')
@@ -107,10 +107,10 @@ RSpec.describe 'DiscoveryController' do
       )
     end
 
-    it 'names no authorization server where the origin serves no account binding' do
+    it 'names this origin as its authorization server also where the origin serves no account binding' do
       Kiosk.configure { |c| c.serve_account_binding = false }
       _status, _headers, raw = dispatch(:oauth_protected_resource, '/.well-known/oauth-protected-resource')
-      expect(JSON.parse(raw)).not_to have_key('authorization_servers')
+      expect(JSON.parse(raw)['authorization_servers']).to eq(['https://api.acme.example'])
     end
   end
 

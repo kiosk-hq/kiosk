@@ -242,7 +242,7 @@ module Kiosk
         DDL
       end
 
-      # 008: spent proof-of-work challenge ids; the primary key is the single-use gate.
+      # 008: spent ids of proof-of-work challenges and client assertions; the primary key is the single-use gate.
       def pow_spent_sql(schema: nil)
         schema ||= Kiosk.configuration.schema
 
@@ -300,22 +300,6 @@ module Kiosk
             refunded_at           timestamptz NOT NULL
           );
           CREATE INDEX IF NOT EXISTS idx_refunds_settlement_id ON "#{schema}".refunds (settlement_id);
-        DDL
-      end
-
-      # 010: each public key's outstanding auth challenge; the primary key keeps it single.
-      def auth_challenge_sql(schema: nil)
-        schema ||= Kiosk.configuration.schema
-
-        <<~DDL.strip
-          CREATE TABLE IF NOT EXISTS "#{schema}".auth_challenges (
-            public_key text        PRIMARY KEY,
-            nonce      text        NOT NULL,
-            expires_at timestamptz NOT NULL
-          );
-          -- Supports the TTL sweep only.
-          CREATE INDEX IF NOT EXISTS idx_auth_challenges_expires_at
-            ON "#{schema}".auth_challenges (expires_at);
         DDL
       end
 

@@ -7,7 +7,7 @@
 # not do is guarantee the fallback resolves to anything — `registration_role`
 # was a bare accessor with no value and no load-time check, so an origin that
 # declared a role vocabulary and configured no default still landed every
-# role-less ceremony, and every self-registration, on the EMPTY role set. The
+# role-less ceremony, and every registration, on the EMPTY role set. The
 # rule held because all eight shipped configurations happen to set `:customer`.
 #
 # The requirement is CONDITIONAL, and the condition is what keeps ADR-0011's
@@ -84,7 +84,7 @@ RSpec.describe Kiosk::Server::Engine do
     end
 
     # A default outside the declared vocabulary is a different defect and already
-    # has an owner — `AgentRegistration.call` raises ConfigurationError on it. This
+    # has an owner — `ClientRegistration.call` raises ConfigurationError on it. This
     # check must not silently accept it as «a default is present», nor duplicate
     # the message: it reports the same misconfiguration at BOOT instead of at the
     # first registration, which is the whole point of moving the question earlier.

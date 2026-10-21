@@ -5,8 +5,8 @@ require 'json'
 
 module Kiosk
   module Server
-    # The spec's challenge-response auth paths (§5, §6), drawn by the engine: challenge, register,
-    # login, rotate, revoke, and the account-binding link, claim and unlink.
+    # The Kiosk auth paths that no OAuth standard covers (§5.7, §6), drawn by the
+    # engine: the key rotation, and the account-binding link, claim and unlink.
     class AuthController < ::ActionController::API
       # The JSON answers and RFC 9457 problem documents of the auth paths.
       module Answers
@@ -61,60 +61,17 @@ module Kiosk
 
       prepend_before_action :refuse_unserved_binding, only: %i[link claim unlink]
 
-      # Unauthenticated: the nonce is worthless without the matching private key.
-      def challenge
-        public_key = request.query_parameters['public_key']
-        raise Errors::BadRequest, 'missing public_key query parameter' if public_key.blank?
+      # A refused client assertion is a 401, with the hint that says what to fix.
+      rescue_from(ClientAssertion::Refused) { |e| render_error(e.to_problem) }
 
-        respond(AuthChallenge.issue(public_key_pem: public_key), :ok)
-      rescue Errors::Base => e
-        render_error(e)
-      end
-
-      # Registers a new public key (409 if known). The optional PoW proof rides in the `Kiosk-PoW`
-      # header, so the signed body stays the same on retry.
-      def register
-        body   = parse_body!('POST <endpoint>/auth/register')
-        pow    = proofs
-        result = AgentRegistration.call(public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed), pow: pow)
-        respond(result, :created)
-      rescue KeyError => e
-        render_error(Errors.missing_field(e))
-      rescue Errors::Base => e
-        render_error(e)
-      end
-
-      # Refresh a token for an EXISTING public key (404 if unknown → register).
-      def login
-        body   = parse_body!('POST <endpoint>/auth/login')
-        result = AgentLogin.call(public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed))
-        respond(result, :ok)
-      rescue KeyError => e
-        render_error(Errors.missing_field(e))
-      rescue Errors::Base => e
-        render_error(e)
-      end
-
-      # Puts a new key on a registered agent; both keys sign (§5.7).
+      # Puts a new key on a registered client; both keys sign (§5.7). Answers the client information.
       def rotate
         body   = parse_body!('POST <endpoint>/auth/rotate')
-        result = AgentRotation.call(public_key_pem: body.fetch(:public_key), signed: body.fetch(:signed),
-                                    new_public_key_pem: body.fetch(:new_public_key), new_signed: body.fetch(:new_signed))
-        respond(result, :ok)
+        client = AgentRotation.call(type: body.fetch(:client_assertion_type), assertion: body.fetch(:client_assertion),
+                                    new_assertion: body.fetch(:new_client_assertion), jwks: body.fetch(:jwks))
+        respond(client.information, :ok)
       rescue KeyError => e
         render_error(Errors.missing_field(e))
-      rescue Errors::Base => e
-        render_error(e)
-      end
-
-      # Revokes every token of the caller's agent and returns a fresh one.
-      def revoke
-        identity = IdentityResolution.resolve(request)
-        raise Errors::AccessTokenRefused if identity.nil? || identity.agent_id.nil?
-
-        Kiosk.configuration.revocation_store.revoke_all(identity.agent_id, at: Time.now.to_i)
-        token = fresh_token(identity)
-        respond({ access_token: token }, :ok)
       rescue Errors::Base => e
         render_error(e)
       end
@@ -128,15 +85,14 @@ module Kiosk
         render_error(e)
       end
 
-      # §6.2's three fields only: `fresh` stays off the wire so a re-bind is indistinguishable (§6.3).
-      CLAIM_RESPONSE_FIELDS = %i[agent_id user_id access_token].freeze
-
-      # The optional PoW proof rides in the `Kiosk-PoW` header, as on register.
+      # Binds the client to the human who minted the code; answers 204. The
+      # optional toll's proofs ride in the `Kiosk-PoW` header.
       def claim
-        body   = parse_body!('POST <endpoint>/auth/claim')
-        result = LinkCode.redeem(code: body.fetch(:code), public_key_pem: body.fetch(:public_key),
-                                 signed: body.fetch(:signed), pow: proofs)
-        respond(result.slice(*CLAIM_RESPONSE_FIELDS), :created)
+        body = parse_body!('POST <endpoint>/auth/claim')
+        LinkCode.redeem(code: body.fetch(:code), assertion_type: body.fetch(:client_assertion_type),
+                        assertion: body.fetch(:client_assertion), pow: proofs)
+        Kiosk::Server::Headers.add_to(response.headers)
+        head :no_content
       rescue KeyError => e
         render_error(Errors.missing_field(e))
       rescue Errors::Base => e
@@ -157,11 +113,6 @@ module Kiosk
       end
 
       private
-
-      # Auth endpoints always mint through the bundled DefaultAgentIdp.
-      def fresh_token(identity)
-        AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: identity.agent_id, role: identity.role)
-      end
 
       # The human's side of binding authenticates by the provider's session, never by an agent token.
       # A page on another origin can post a form with that cookie, but cannot send JSON without a CORS preflight.

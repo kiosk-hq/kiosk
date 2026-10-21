@@ -11,7 +11,7 @@ RSpec.describe Kiosk::Server::IdentityResolution do
   describe '.agent_idp' do
     include IdentityResolutionSpecHelpers
 
-    it 'defaults to the bundled kiosk-pop DefaultAgentIdp' do
+    it 'defaults to the bundled DefaultAgentIdp' do
       expect(described_class.agent_idp)
         .to be_a(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp)
     end

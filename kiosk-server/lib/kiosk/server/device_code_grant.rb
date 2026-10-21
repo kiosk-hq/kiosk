@@ -2,13 +2,14 @@
 
 module Kiosk
   module Server
-    # The claim ceremony on the RFC 8628 device-grant wire: binds an agent key
-    # to an existing human account once the human approves.
+    # The claim ceremony on the RFC 8628 device-grant wire: binds a registered
+    # client to an existing human account once the human approves.
     #
-    #   .start    — POST /oauth/device_authorization
-    #   .exchange — POST /oauth/token (grant_type=device_code)
+    #   .start     — POST /oauth/device_authorization
+    #   .pay_toll! — POST /oauth/token (grant_type=device_code), before the client authenticates
+    #   .exchange  — POST /oauth/token (grant_type=device_code), after it authenticates
     module DeviceCodeGrant
-      GRANT_TYPE = 'urn:ietf:params:oauth:grant-type:device_code'
+      GRANT_TYPE = Client::DEVICE_CODE
 
       # Seconds; a faster poll gets `slow_down` (RFC 8628 §3.5).
       DEFAULT_POLL_INTERVAL = 5
@@ -17,9 +18,6 @@ module Kiosk
       POLL_REGISTRY_TTL = 3600
       @poll_registry = {}
       @poll_mutex    = Mutex.new
-
-      PROOF_REQUIRED = 'signed proof-of-possession required ' \
-                       '(GET /auth/challenge?public_key=… then sign {aud, nonce, jti})'
 
       STATUS_FAILURES = {
         pending: [:authorization_pending, 'the account holder has not yet approved'],
@@ -30,14 +28,13 @@ module Kiosk
 
       module_function
 
-      # No role parameter on purpose: the row takes the approving human's role.
-      def start(client_id:,
-                public_key_pem:,
+      # No role parameter on purpose: the client takes the approving human's role.
+      def start(client:,
                 store: Kiosk.configuration.device_authorization_store,
                 expires_in: DeviceAuthorization::DEFAULT_EXPIRES_IN,
                 now: Time.current)
         plain_device_code, plain_user_code, da = DeviceAuthorization.generate(
-          client_id: client_id, kind: :claim, public_key_pem: public_key_pem.to_s.strip,
+          client_id: client.id, kind: :claim, public_key_pem: client.public_key_pem,
           expires_in: expires_in, now: now
         )
         store.create(da)
@@ -45,26 +42,30 @@ module Kiosk
           expires_in: expires_in, interval: DEFAULT_POLL_INTERVAL, da: da }
       end
 
-      # Returns `{ok: true, access_token:, …}` or `{ok: false, error:, description:}`
-      # with an RFC 8628 §3.5 error code. The auth toll raises its own errors.
-      def exchange(device_code:, # rubocop:disable Metrics/ParameterLists -- the token controller and the specs pass these by name
-                   signed: nil,
-                   pow: nil,
+      # The first poll of each device code value pays the auth toll; later polls
+      # of that value are free until any code could have expired. The store is
+      # not read first, so an unknown code costs the same work as a live one.
+      def pay_toll!(device_code, pow, now: Time.current)
+        config = Kiosk.configuration
+        paid   = "device_code:#{DeviceAuthorization.hash_device_code(device_code)}"
+        return if !AuthToll.on?(config) || config.pow_spent_store.spent?(paid)
+
+        AuthToll.gate(verb: 'oauth/token', body: { device_code: device_code.to_s }, pow: pow, config: config)
+        config.pow_spent_store.mark_spent(paid, now.to_i + DeviceAuthorization::DEFAULT_EXPIRES_IN)
+      end
+
+      # @return [Client] the client under the approving human's account
+      # @raise [OauthError] with an RFC 8628 §3.5 error code
+      def exchange(device_code:, client:,
                    store: Kiosk.configuration.device_authorization_store,
                    interval: DEFAULT_POLL_INTERVAL,
                    now: Time.current)
-        return failure(:invalid_request, 'device_code parameter required') if device_code.to_s.empty?
-
         hash = DeviceAuthorization.hash_device_code(device_code)
-        pay_toll_once!(device_code, hash, pow, now)
-        da = store.lookup_by_device_code_hash(hash)
-        return failure(:invalid_grant, 'unknown device_code') if da.nil?
-        return failure(:slow_down, 'polling faster than the advertised interval') if polled_too_fast?(hash, interval, now)
+        da = authorization_of(client, store.lookup_by_device_code_hash(hash))
+        fail!(:slow_down, 'polling faster than the advertised interval') if polled_too_fast?(hash, interval, now)
 
-        da = expire_if_due(da, store, now)
-        return bind_and_mint(authorization: da, signed: signed, store: store, now: now) if da.approved?
-
-        failure(*STATUS_FAILURES.fetch(da.status))
+        consume!(expire_if_due(da, store, now), store, now)
+        AccountBinding.bind!(agent_id: client.id, user_id: da.user_id, requested_role: da.requested_role)
       end
 
       def reset_poll_registry!
@@ -74,16 +75,11 @@ module Kiosk
       class << self
         private
 
-        # The first poll of each device code value pays the auth toll; later polls
-        # of that value are free until any code could have expired. The store is
-        # not read first, so an unknown code costs the same work as a live one.
-        def pay_toll_once!(device_code, hash, pow, now)
-          config = Kiosk.configuration
-          paid   = "device_code:#{hash}"
-          return if !AuthToll.on?(config) || config.pow_spent_store.spent?(paid)
+        # A claim row that this client opened; a row of another client is unknown to it.
+        def authorization_of(client, authorization)
+          return authorization if authorization&.claim? && authorization.client_id == client.id
 
-          AuthToll.gate(verb: 'oauth/token', body: { device_code: device_code.to_s }, pow: pow, config: config)
-          config.pow_spent_store.mark_spent(paid, now.to_i + DeviceAuthorization::DEFAULT_EXPIRES_IN)
+          fail!(:invalid_grant, 'unknown device_code')
         end
 
         def expire_if_due(authorization, store, now)
@@ -93,41 +89,14 @@ module Kiosk
           store.update(authorization.expire)
         end
 
-        # Possession of the row's key is proven before binding; a failed proof
-        # is `invalid_client` and leaves the row approved for a retry.
-        def bind_and_mint(authorization:, signed:, store:, now:)
-          refusal = possession_refusal(authorization.public_key_pem, signed)
-          return refusal if refusal
-          # Atomic, so two concurrent polls mint one token.
-          return failure(:invalid_grant, 'device_code already used') if store.claim_consume(authorization, now: now).nil?
-
-          token_response(authorization)
+        # Atomic, so two concurrent polls bind once.
+        def consume!(authorization, store, now)
+          fail!(*STATUS_FAILURES.fetch(authorization.status)) unless authorization.approved?
+          fail!(:invalid_grant, 'device_code already used') if store.claim_consume(authorization, now: now).nil?
         end
 
-        def possession_refusal(public_key_pem, signed)
-          return failure(:invalid_client, PROOF_REQUIRED) if signed.nil? || signed.to_s.empty?
-          return failure(:invalid_client, 'no public key bound to this authorization') if public_key_pem.blank?
-
-          payload = PopVerifier.verify!(public_key_pem: public_key_pem, signed: signed)
-          AuthChallenge.consume!(public_key_pem: public_key_pem, nonce: payload.fetch(:nonce))
-          nil
-        rescue Errors::Base => e
-          failure(:invalid_client, e.message)
-        end
-
-        def token_response(authorization)
-          role = authorization.requested_role
-          result = AccountBinding.bind!(public_key_pem: authorization.public_key_pem,
-                                        user_id: authorization.user_id, requested_role: role)
-          response = { ok: true, access_token: result[:access_token], token_type: Dpop::SCHEME,
-                       expires_in: Kiosk.configuration.access_token_ttl }
-          # RFC 6749 §5.1: the granted scope is the approving human's role.
-          response[:scope] = role if role
-          response
-        end
-
-        def failure(error, description)
-          { ok: false, error: error.to_s, description: description }
+        def fail!(error, description)
+          raise OauthError.new(error, description)
         end
 
         # Per process; a multi-process origin rate-limits at its edge.

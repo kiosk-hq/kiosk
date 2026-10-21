@@ -6,8 +6,8 @@
 # `501 module_not_served` at the published paths it would have served. This file
 # pins both halves of `c.serve_account_binding`: OFF, every binding endpoint
 # answers that one problem document, including the `/oauth/*` pair whose only
-# Kiosk problem document this is; ON, nothing moves, and the four kiosk-pop auth
-# endpoints are untouched either way because they are CORE.
+# Kiosk problem document this is; ON, nothing moves, and registration, the
+# token endpoint and the key rotation are untouched either way because they are CORE.
 #
 # Dispatch via `ActionController::Metal.action(...)`, the harness the other
 # controller specs use. The refusal runs before anything reads the request, so
@@ -25,7 +25,6 @@ module BindingModuleGateSpec
   BINDING_ENDPOINTS = [
     ['POST', '/kiosk/oauth/device_authorization', 'OauthDeviceAuthorizationController', :create],
     ['POST', '/kiosk/auth/claim',                 'AuthController',                     :claim],
-    ['POST', '/kiosk/oauth/token',                'OauthTokenController',               :create],
     ['GET',  '/kiosk/oauth/device/verify',        'DeviceVerifyController',             :show],
     ['POST', '/kiosk/oauth/device/verify',        'DeviceVerifyController',             :create],
     ['POST', '/kiosk/auth/link',                  'AuthController',                     :link],
@@ -100,20 +99,19 @@ RSpec.describe Kiosk::Server::BindingModuleGate do
         end
       end
 
-      it 'still serves the kiosk-pop challenge endpoint' do
+      it 'still serves the token endpoint, which refuses the device-code grant as OAuth does' do
         decline_binding!
-        status, = dispatch(
-          Kiosk::Server::AuthController, :challenge, 'GET',
-          "/kiosk/auth/challenge?public_key=#{CGI.escape(OpenSSL::PKey::RSA.generate(2048).public_key.to_pem)}"
-        )
-        expect(status).to eq(200)
+        env = Rack::MockRequest.env_for('https://provider.example/kiosk/oauth/token', method: 'POST',
+                                                                                      params: { 'grant_type' => Kiosk::Server::DeviceCodeGrant::GRANT_TYPE })
+        status, _headers, raw = Kiosk::Server::OauthTokenController.action(:create).call(env)
+        expect([status, JSON.parse(read_body(raw))['error']]).to eq([400, 'unsupported_grant_type'])
       end
 
-      # §4.3: the auth block is CORE discovery. All six URLs are published by
+      # §4.3: the auth block is CORE discovery. All five URLs are published by
       # every conformant origin whether or not it serves what the last two reach,
       # and `capabilities` has no binding member — so an assistant cannot read
       # the discovery document as a capability check and has to dial and branch.
-      it 'publishes all six auth URLs and adds no capability for binding' do
+      it 'publishes all five auth URLs and adds no capability for binding' do
         served_capabilities = Kiosk::Server::WellKnown.build(base_url: 'https://provider.example')
                                                       .fetch(:kiosk).fetch(:capabilities)
         decline_binding!
@@ -123,10 +121,7 @@ RSpec.describe Kiosk::Server::BindingModuleGate do
         expect(kiosk.fetch(:capabilities)).to eq(served_capabilities)
         expect(served_capabilities.map(&:to_s).grep(/bind|claim|device/)).to be_empty
 
-        expect(auth.keys).to include(
-          :challenge_url, :register_url, :login_url, :revoke_url,
-          :device_authorization_url, :claim_url
-        )
+        expect(auth.keys).to eq(%i[registration_url token_url rotate_url device_authorization_url claim_url])
         expect(auth[:device_authorization_url])
           .to eq('https://provider.example/kiosk/oauth/device_authorization')
         expect(auth[:claim_url]).to eq('https://provider.example/kiosk/auth/claim')
@@ -138,19 +133,11 @@ RSpec.describe Kiosk::Server::BindingModuleGate do
         expect(Kiosk.configuration.serve_account_binding).to be(true)
       end
 
-      it 'opens a claim ceremony rather than refusing it' do
-        pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
-        status, _headers, body = post_device_authorization('client_id' => 'assistant', 'public_key' => pem)
-
-        expect(status).to eq(200)
-        expect(JSON.parse(body, symbolize_names: true)[:device_code]).to be_a(String)
-      end
-
-      # The OAuth wire is unchanged when the module IS served: a malformed call
+      # The OAuth wire is unchanged when the module IS served: a refused call
       # gets the OAuth error object, not a problem document. `module_not_served`
       # is the single carve-out, and this is the control that says so.
-      it 'keeps the OAuth error object for an ordinary refusal' do
-        status, headers, body = post_device_authorization('client_id' => 'assistant')
+      it 'answers the OAuth error object rather than refusing the module' do
+        status, headers, body = post_device_authorization('role' => 'owner')
 
         expect(status).to eq(400)
         expect(headers['Content-Type']).not_to include('problem+json')

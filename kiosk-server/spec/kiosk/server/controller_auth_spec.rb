@@ -416,7 +416,7 @@ RSpec.describe Kiosk::Server::WireController do
   describe 'identity resolution defaults' do
     include_context 'with a zero-config install'
 
-    it 'verifies a self-minted token with NO idp configured (bundled kiosk-pop default)' do
+    it 'verifies a self-minted token with NO idp configured (the bundled default)' do
       declare_query('probe')
       token = agent_token
       status, = route(:query, 'probe',
@@ -508,7 +508,7 @@ RSpec.describe Kiosk::Server::WireController do
         expect_problem(status, body, http: 401, code: 'unauthenticated')
       end
 
-      it 'returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)' do
+      it 'returns 401 for a foreign token under the zero-config default (the bundled idp)' do
         status, body = attest(kyc_env)
         expect_problem(status, body, http: 401, code: 'unauthenticated')
       end
@@ -566,10 +566,10 @@ RSpec.describe Kiosk::Server::WireController do
         expect(body[:error_description]).to include('does not choose its own role')
       end
 
-      it 'accepts a role-less request (role stays absent)' do
+      it 'passes a role-less request on to client authentication' do
         status, body = request_device_authorization('client_id' => 'kiosk-cli')
-        expect(status).to eq(200)
-        expect(body[:device_code]).to be_a(String)
+        expect(status).to eq(401)
+        expect(body[:error]).to eq('invalid_client')
       end
     end
   end

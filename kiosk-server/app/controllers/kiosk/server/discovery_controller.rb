@@ -24,7 +24,7 @@ module Kiosk
       end
 
       def oauth_authorization_server
-        render_or_not_found WellKnown.oauth_authorization_server(base_url: request.base_url)
+        render json: WellKnown.oauth_authorization_server(base_url: request.base_url)
       end
 
       def oauth_protected_resource

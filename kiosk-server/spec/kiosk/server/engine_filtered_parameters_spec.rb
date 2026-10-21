@@ -38,7 +38,8 @@ RSpec.describe Kiosk::Server::Engine do
 
     # Each field, and what the specification says it is.
     {
-      'signed' => 'the possession proof (§5.2), on register, claim and the token poll',
+      'client_assertion' => 'the client assertion (§5.2), on the token endpoint, the claim and the rotation',
+      'new_client_assertion' => 'the client assertion of the new key, on the rotation (§5.7)',
       'code' => 'the link code redeemed at /auth/claim (§6.2)',
       'device_code' => 'the device code presented on the token poll (§6.1)',
       'kyc_jws' => 'the KYC attestation (§12)',
@@ -53,8 +54,8 @@ RSpec.describe Kiosk::Server::Engine do
 
     # The control: without it every assertion above would also pass on a log
     # that carries no parameter values at all.
-    it 'leaves public_key in the clear — §5: a public key is not a credential' do
-      expect(log).to include(FilteredParametersProbe.sent('public_key'))
+    it 'leaves client_assertion_type in the clear — it names a standard, it is not a credential' do
+      expect(log).to include(FilteredParametersProbe.sent('client_assertion_type'))
     end
 
     it 'logs a Parameters line for every endpoint the probe dialed' do

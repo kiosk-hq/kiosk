@@ -16,11 +16,8 @@ module Kiosk
       AGENTS_STANDARD = 'https://agents-txt.com'
       AGENTS_SCHEMA   = 'https://agents-txt.com/schema/agents-json/v1.0.json'
 
-      # agents.txt v1.0 registers no identifier for kiosk-pop, so it takes the
-      # standard's `x-` prefix. Its discovery document is kiosk.json.
-      AUTHORIZATION = { protocols: %w[x-kiosk-pop], discovery: '/.well-known/kiosk.json' }.freeze
-
-      DEVICE_CODE_GRANT = 'urn:ietf:params:oauth:grant-type:device_code'
+      # agents.txt v1.0 names OAuth 2.0 `oauth2`. Its discovery document is the RFC 8414 metadata.
+      AUTHORIZATION = { protocols: %w[oauth2], discovery: '/.well-known/oauth-authorization-server' }.freeze
 
       SKILLS_INDEX_SCHEMA = 'https://schemas.agentskills.io/discovery/0.2.0/schema.json'
 
@@ -78,21 +75,19 @@ module Kiosk
         doc
       end
 
-      # `/.well-known/oauth-authorization-server` (RFC 8414): the binding
-      # ceremony's device-code grant. nil when the origin serves no binding.
+      # `/.well-known/oauth-authorization-server` (RFC 8414): registration,
+      # tokens, and the device-code grant where the origin serves binding.
       def self.oauth_authorization_server(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
-        return unless config.serve_account_binding
-
         base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
-        { issuer: Kiosk.current_issuer, token_endpoint: "#{endpoint}/oauth/token",
-          device_authorization_endpoint: "#{endpoint}/oauth/device_authorization",
-          jwks_uri: "#{endpoint}/.well-known/jwks.json",
-          # No authorization endpoint, so no response type.
-          response_types_supported: [], grant_types_supported: [DEVICE_CODE_GRANT],
-          token_endpoint_auth_methods_supported: ['none'], service_documentation: "#{base}/auth.md",
-          dpop_signing_alg_values_supported: [Dpop::ALGORITHM] }
+        doc = { issuer: Kiosk.current_issuer, registration_endpoint: "#{endpoint}/oauth/register",
+                token_endpoint: "#{endpoint}/oauth/token" }
+        doc[:device_authorization_endpoint] = "#{endpoint}/oauth/device_authorization" if config.serve_account_binding
+        # No authorization endpoint, so no response type.
+        doc.merge(jwks_uri: "#{endpoint}/.well-known/jwks.json", response_types_supported: [],
+                  grant_types_supported: Client.grant_types(config), **Shared.client_authentication,
+                  service_documentation: "#{base}/auth.md", dpop_signing_alg_values_supported: AssistantKey::ALGORITHMS)
       end
 
       # `/.well-known/oauth-protected-resource` (RFC 9728). RFC 9728 §3.3 binds a
@@ -100,10 +95,9 @@ module Kiosk
       def self.oauth_protected_resource(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
         base = base_url.to_s.chomp('/')
-        doc = { resource: base }
-        doc[:authorization_servers] = [Kiosk.current_issuer] if config.serve_account_binding
-        doc.merge(bearer_methods_supported: ['header'], dpop_signing_alg_values_supported: [Dpop::ALGORITHM],
-                  dpop_bound_access_tokens_required: true, resource_documentation: "#{base}/auth.md")
+        { resource: base, authorization_servers: [Kiosk.current_issuer], bearer_methods_supported: ['header'],
+          dpop_signing_alg_values_supported: AssistantKey::ALGORITHMS, dpop_bound_access_tokens_required: true,
+          resource_documentation: "#{base}/auth.md" }
       end
 
       # `/.well-known/agent-skills/index.json` (Agent Skills Discovery v0.2.0):
@@ -186,23 +180,24 @@ module Kiosk
           }
         end
 
+        # RFC 8414: how a client authenticates at the token endpoint.
+        def client_authentication
+          { token_endpoint_auth_methods_supported: [Client::AUTH_METHOD],
+            token_endpoint_auth_signing_alg_values_supported: AssistantKey::ALGORITHMS }
+        end
+
+        # Every URL, also the binding ones: where binding is not served they answer 501.
         def auth_section(endpoint)
-          {
-            kind: 'kiosk-pop',
-            **auth_urls(endpoint).transform_keys { |step| :"#{step}_url" },
-            # Additive: a client that ignores binding still has register/login.
-            device_authorization_url: "#{endpoint}/oauth/device_authorization",
-            claim_url: "#{endpoint}/auth/claim"
-          }
+          auth_urls(endpoint).transform_keys { |step| :"#{step}_url" }
         end
 
         def auth_urls(endpoint)
           {
-            challenge: "#{endpoint}/auth/challenge",
-            register: "#{endpoint}/auth/register",
-            login: "#{endpoint}/auth/login",
-            revoke: "#{endpoint}/auth/revoke",
-            rotate: "#{endpoint}/auth/rotate"
+            registration: "#{endpoint}/oauth/register",
+            token: "#{endpoint}/oauth/token",
+            rotate: "#{endpoint}/auth/rotate",
+            device_authorization: "#{endpoint}/oauth/device_authorization",
+            claim: "#{endpoint}/auth/claim"
           }
         end
 
@@ -275,14 +270,14 @@ module Kiosk
             How AI assistants authenticate against this provider's Kiosk
             endpoint (`#{endpoint}`). Wire contract: the Kiosk specification
             (https://kiosk.tech/specification.html). This file follows the
-            auth.md section order. The provider does not serve the auth.md
-            registration endpoints: register with kiosk-pop as below.
+            auth.md section order. Registration and tokens use OAuth 2.0
+            standards: RFC 7591, RFC 7523, RFC 9449 and RFC 8628.
 
             ## Discover
 
             - This file: `#{base}/auth.md`
             - Kiosk discovery document: `#{base}/.well-known/kiosk.json`
-            - OAuth metadata of the claim ceremony (RFC 8414): `#{base}/.well-known/oauth-authorization-server`
+            - OAuth metadata of this authorization server (RFC 8414): `#{base}/.well-known/oauth-authorization-server`
             - OAuth metadata of this protected resource (RFC 9728): `#{base}/.well-known/oauth-protected-resource`
             - Verb catalogue (PUBLIC, no token): `#{endpoint}/schema`
             - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
@@ -290,106 +285,128 @@ module Kiosk
 
             ## Pick a method
 
-            - **kiosk-pop** — supported. Self-registration of a per-provider
-              RSA keypair: no human account needed. Every register and login
-              carries a proof that you hold the private key.
-            - **Claim ceremony** — supported. It binds an agent key to an
-              EXISTING account after its holder approves in their own browser
-              session.
-            - **Link code** — supported. The account holder mints a
-              single-use code on the provider's site and hands it to the
-              assistant.
+            - **Open registration** — supported. You register your own RSA
+              public key (RFC 7591). No human account is necessary. You
+              authenticate each token request with a client assertion that
+              your key signs (`private_key_jwt`, RFC 7523).
+            - **Claim ceremony** — supported. It binds your registered client
+              to an EXISTING account after its holder approves in their own
+              browser session (RFC 8628).
+            - **Link code** — supported. The account holder makes a
+              single-use code on the provider's site and gives it to you.
             - **Identity assertion (ID-JAG)** — not supported (planned).
 
             ## Register
 
-            kiosk-pop self-registration:
+            1. Make one RSA key of 2048 bits for this provider. Keep the
+               private key.
+            2. `POST #{urls[:registration]}` with `Content-Type: application/json`:
 
-            1. `GET #{urls[:challenge]}?public_key=<PEM>` → `{ challenge, exp }`
-            2. Sign a compact RS256 JWS over `{aud, nonce, jti}` with the
-               private key (`aud` = the origin you dialed; `nonce` = the
-               challenge).
-            3. `POST #{urls[:register]}` `{ public_key, signed }`
-               → `201 { agent_id, user_id, access_token }`
+                   {"jwks":{"keys":[{"kty":"RSA","n":"…","e":"AQAB"}]},
+                    "token_endpoint_auth_method":"private_key_jwt"}
 
-            Registration may be priced with an Equihash proof-of-work. When it
-            is, step 3 answers `402 pow_required` with
-            `WWW-Authenticate: Kiosk-PoW realm="<issuer>"` and the body carries
-            the `challenges` array; the toll binds to the public key you are
-            registering. Solve EVERY challenge and resubmit the SAME body — the
-            possession proof is NOT consumed by the 402, so reuse the same
-            `signed` — carrying the proof(s) in a `Kiosk-PoW` REQUEST HEADER as
-            raw minified JSON (no base64):
+               → `201 { client_id, client_id_issued_at, jwks,
+               token_endpoint_auth_method, grant_types, dpop_bound_access_tokens }`
+            3. Keep `client_id`. Registration gives no token.
+
+            If you register a key that has a live client here, you get that
+            client again, with the same `client_id`. If the `client_id` is
+            new, the account holder unlinked your old client: ask them before
+            you continue. A body that is not correct gets
+            `400 { "error": "invalid_client_metadata", "error_description" }`.
+
+            Registration can have an Equihash proof-of-work toll. Then the
+            request gets `402 pow_required` with
+            `WWW-Authenticate: Kiosk-PoW realm="<issuer>"` and a `challenges`
+            array in the body. The toll is bound to the key that you
+            register. Solve EVERY challenge. Then send the SAME body again,
+            with the proofs in a `Kiosk-PoW` REQUEST HEADER as raw minified
+            JSON (no base64):
 
                 Kiosk-PoW: {"challenge":{…},"nonce":{"indices":[…],"header_nonce":0}}
 
-            Send N proofs as a JSON array in that one header, or as one repeated
-            `Kiosk-PoW` header line per proof. The proof NEVER travels in the
-            request body: a body `pow` field is ignored, and changing the body
-            invalidates the proofs. The same header answers a `402 pow_required`
-            on the wire verbs too, and most of them are GETs, which have no body
-            to carry a proof. The ONE endpoint under `#{endpoint}` that is never
-            tolled is `GET #{endpoint}/schema`: it is public, it is served from
-            memory, and a toll needs an identity to charge.
+            Send N proofs as a JSON array in that one header, or as one
+            `Kiosk-PoW` header line for each proof. A proof is never in the
+            request body: the operator ignores a body `pow` field, and a
+            changed body makes the proofs incorrect. The same header answers a
+            `402 pow_required` on the wire verbs too. Most of them are GETs,
+            which have no body. The ONE endpoint under `#{endpoint}` that has
+            no toll is `GET #{endpoint}/schema`: it is public, the operator
+            serves it from memory, and a toll needs an identity to charge.
 
             Do not write your own Equihash solver. The verifier is exact about
-            the seed construction, the index width and the tree ordering, and a
-            mismatch comes back `403 forbidden` with no indication of which check
-            failed. Fetch the reference solver from
-            `#{PowGate::POW_SOLVER_URL}` — the same file that 403's `hint` names.
-            That URL is unversioned and always serves the CURRENT solver, so
-            check its SHA-256 against the content-addressed pin the wire skill
-            above publishes before you execute it.
+            the seed construction, the index width and the tree order. A
+            mismatch gets `403 forbidden`, and the answer does not say which
+            check failed. Get the reference solver from
+            `#{PowGate::POW_SOLVER_URL}`. The 403 `hint` names the same file.
+            That URL has no version and always serves the CURRENT solver.
+            Before you run it, compare its SHA-256 with the pin that the wire
+            skill above publishes.
 
             ## Claim ceremony
 
-            Claim binding (RFC 8628 wire) — binds YOUR key to the
-            account holder's existing account; single-use, short-TTL codes:
+            A client assertion is a compact RS256 JWT that your registered key
+            signs. Its payload is `{iss, sub, aud, exp, jti}`: `iss` and `sub`
+            are your `client_id`, `aud` is the origin you connected to (take it
+            from your own request URL), `exp` is at most 300 seconds from now,
+            and `jti` is a new unique id. Send it as `client_assertion`, with
+            `client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer`.
+            The operator accepts each `jti` one time.
 
-            1. `POST #{endpoint}/oauth/device_authorization`
-               (form-encoded: `client_id`, `public_key` — required) →
-               `{ device_code, user_code, verification_uri, expires_in, interval }`
-            2. Show the holder: "open <verification_uri>, enter <user_code>".
+            Claim binding (RFC 8628) binds YOUR client to the account holder's
+            existing account. The codes are single-use and short-lived:
+
+            1. `POST #{urls[:device_authorization]}` (form-encoded:
+               `client_assertion_type`, `client_assertion`) →
+               `{ device_code, user_code, verification_uri, verification_uri_complete, expires_in, interval }`
+            2. Tell the holder: "open <verification_uri>, enter <user_code>".
                They approve in their own signed-in browser session.
-            3. Poll `POST #{endpoint}/oauth/token` (form-encoded:
+            3. Poll `POST #{urls[:token]}` (form-encoded:
                `grant_type=urn:ietf:params:oauth:grant-type:device_code`,
-               `device_code`, and `signed` — the same challenge-response
-               possession proof as register/login, for the SAME key from
-               step 1) → `{ access_token, token_type, expires_in }`.
-               No binding happens without a valid possession proof.
+               `device_code`, `client_assertion_type`, `client_assertion`),
+               with a `DPoP` header as in Exchange. When the holder approves,
+               the answer is a token under the holder's account.
 
-            Link flow (the mirror direction): the holder mints a
-            code on the provider's site and pastes it to you; redeem with
-            `POST #{endpoint}/auth/claim` `{ code, public_key, signed }`
-            → `201 { agent_id, user_id, access_token }`.
+            Link flow (the opposite direction): the holder makes a code on the
+            provider's site and gives it to you. Send
+            `POST #{urls[:claim]}` `{ code, client_assertion_type, client_assertion }`
+            → `204 No Content`. Then get a token as in Exchange.
 
             Where registration has a toll, the link-code claim and the FIRST
             token poll of each `device_code` have the same toll. It comes
-            before the code is looked up. Solve it as for register and send the
-            SAME request again with the `Kiosk-PoW` header. Later polls of the
-            same `device_code` are free.
+            before the operator reads the code. Solve it as for registration
+            and send the SAME request again with the `Kiosk-PoW` header. Later
+            polls of the same `device_code` have no toll.
 
-            A fresh key becomes a linked assistant account under the holder's
-            account; an already-registered key is re-bound (its reputation
-            carries over — claiming never resets an identity).
+            A binding keeps your `client_id` and your reputation. Your client
+            moves to the holder's account and gets the holder's role.
 
             ## Exchange
 
-            There is no separate exchange step: registration, the claim
-            ceremony and the link redeem each return the access token
-            directly. Refresh by logging in with your key —
-            `POST #{urls[:login]}` `{ public_key, signed }` — the ceremony
-            never repeats.
+            `POST #{urls[:token]}`, form-encoded:
+            `grant_type=client_credentials`, `client_assertion_type`,
+            `client_assertion`. Add a `DPoP` header (RFC 9449): a JWS with
+            `typ` `dpop+jwt`, `alg` RS256 and the public `jwk` of your
+            registered key, that the key signs, with the payload
+            `{jti, htm: "POST", htu: "#{urls[:token]}", iat}`. A token
+            request has no `ath`.
+            → `200 { access_token, token_type: "DPoP", expires_in, scope }`.
+            `scope` is your role, and it is there only when you have a role.
+
+            To get a new token, do this request again: no ceremony repeats.
+            If you get `invalid_client`, sign a new assertion one time. If
+            that also fails, register your key again.
 
             ## Use the access_token
 
             Send `Authorization: DPoP <access_token>` to the wire verbs
-            under `#{endpoint}` — every query, every action, and `pay` — with a
+            under `#{endpoint}` (every query, every action, and `pay`) with a
             `DPoP` header: a proof (RFC 9449) that your registered key signs
-            for that method and URL. A token is bound to that key and works
-            with no other. Tokens are RS256 JWTs verifiable against the JWKS above.
-            `GET #{endpoint}/schema` is the exception: it is PUBLIC, so read
-            the catalogue before you register if you like.
+            for that method and URL, with `ath`, the hash of the token. A
+            token is bound to that key and works with no other key. Tokens are
+            RS256 JWTs that the JWKS above verifies.
+            `GET #{endpoint}/schema` is the exception: it is PUBLIC, so you
+            can read the catalogue before you register.
 
             ## Errors
 
@@ -401,53 +418,51 @@ module Kiosk
                    "title":"Proof-of-work required","status":402,
                    "detail":"proof-of-work required","code":"pow_required"}
 
-              Branch on `code` — a FLAT member of the document, not nested — from
-              the closed vocabulary (`unauthenticated`, `not_found`, `conflict`,
-              `pow_required`, …); `type` is `https://kiosk.tech/problems/<code>`
-              and names the same fact. Some codes add members of their own, such
-              as the `challenges` array on a `402 pow_required`.
-            - Three codes say "it is not here" and they mean three different
-              things. `404 verb_not_found` — no verb by that NAME is registered
-              here; `hint` lists the ones that are, so re-read the catalogue and
-              call something that exists. `404 not_found` — the verb is real and
-              an ARGUMENT addressed something absent; the answer is final, so
-              stop. `501 module_not_served` — this origin does not serve that
-              optional module at all (binding, payment, KYC, the event stream;
-              `detail` names which); do not retry, and fall back to what you
-              would do at an operator that never offered it.
-            - The claim ceremony's OAuth endpoints use the OAuth error shape
-              `{ error, error_description }` — a documented exception, and the
-              only one, with two carve-outs that are ordinary problem documents:
-              an origin that does not serve binding at all answers
-              `501 module_not_served` there, because none of the OAuth codes
-              means it, and the toll on the token poll answers as the toll does
-              everywhere (`402 pow_required`, and its refusals of a proof). The
-              OAuth vocabulary is closed at eight. Six describe the
-              ceremony (RFC 8628 §3.5): `authorization_pending`, `slow_down`,
-              `expired_token`, `access_denied`, `invalid_grant`,
-              `invalid_client`. Two are request-level (RFC 6749 §5.2):
-              `invalid_request` — a required parameter absent or malformed, or
-              one the request must not carry, such as a `role`/`scope` on the
-              device-authorization call — and `unsupported_grant_type` for any
-              grant but the device-code one. Everything answers `400` except
-              `invalid_client`, which answers `401`.
+              Use `code` to decide what to do. It is a FLAT member of the
+              document, not nested, from the closed vocabulary
+              (`unauthenticated`, `not_found`, `conflict`, `pow_required`, …);
+              `type` is `https://kiosk.tech/problems/<code>` and names the same
+              fact. Some codes add members of their own, such as the
+              `challenges` array on a `402 pow_required`.
+            - Three codes say "it is not here", and each has a different
+              meaning. `404 verb_not_found`: no verb with that NAME is
+              registered here; `hint` lists the verbs that are, so read the
+              catalogue again and call a verb that exists. `404 not_found`:
+              the verb is real and an ARGUMENT names something that is not
+              there; the answer is final, so stop. `501 module_not_served`:
+              this origin does not serve that optional module (binding,
+              payment, KYC, the event stream; `detail` names which); do not
+              retry, and do what you would do at an operator that never
+              offered it.
+            - The OAuth endpoints (`/oauth/*`) use the OAuth error shape
+              `{ error, error_description }`. Two answers there are problem
+              documents: `501 module_not_served` where the origin does not
+              serve binding, and the toll (`402 pow_required` and its
+              refusals of a proof). Registration has one code,
+              `invalid_client_metadata`. The token and device-authorization
+              codes are a closed set of nine: `invalid_request`,
+              `invalid_client`, `invalid_grant`, `unsupported_grant_type`,
+              `invalid_dpop_proof` (RFC 9449), and the ceremony codes
+              `authorization_pending`, `slow_down`, `expired_token`,
+              `access_denied` (RFC 8628 §3.5). Every code answers `400`,
+              except `invalid_client`, which answers `401`.
 
             ## Revocation
 
-            - Credential layer: `POST #{urls[:revoke]}` (DPoP) revokes every
-              outstanding token for your identity and returns a fresh one.
             - Key rotation: `POST #{urls[:rotate]}`
-              `{ public_key, signed, new_public_key, new_signed }` puts a new
-              key on your identity. Each key signs a challenge issued for it,
-              and the old key's proof carries `new_key`, the RFC 7638
-              thumbprint of the new key. Your identity and its reputation stay;
-              every earlier token is revoked.
-            - Registration layer (unlink): the account holder — or the
-              provider — deactivates a key's binding (`POST
-              #{endpoint}/auth/unlink`, session-authenticated, or the
-              provider's linked-assistants page). An unlinked key stops
-              verifying and can no longer log in; it does NOT revert to a
-              standalone account.
+              `{ client_assertion_type, client_assertion, new_client_assertion, jwks }`
+              puts the new key in `jwks` on your client. Your registered key
+              signs `client_assertion`, with `new_key`, the RFC 7638
+              thumbprint of the new key, in its payload. The new key signs
+              `new_client_assertion` for the same `client_id`. The answer is
+              your client information with the new key. Your `client_id` and
+              your reputation stay. Every earlier token stops. Get a new token
+              with the new key.
+            - Unlink: the account holder, or the provider, deactivates your
+              client (`POST #{endpoint}/auth/unlink`, authenticated by the
+              holder's session, or the provider's linked-assistants page).
+              Its tokens stop, and the token endpoint answers it
+              `invalid_client`. It does NOT become a standalone account.
           MARKDOWN
         end
       end

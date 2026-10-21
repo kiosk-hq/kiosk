@@ -4,41 +4,28 @@ require 'action_controller'
 
 module Kiosk
   module Server
-    # POST <endpoint>/oauth/device_authorization (RFC 8628 §3.1): an assistant
-    # opens the claim half of account binding with `client_id` and `public_key`.
+    # POST <endpoint>/oauth/device_authorization (RFC 8628 §3.1): a registered
+    # client opens the claim half of account binding. It authenticates with a
+    # client assertion, so it sends no `client_id` of its own.
     class OauthDeviceAuthorizationController < ::ActionController::API
       include BindingModuleGate
+      include OauthAnswers
 
       prepend_before_action :refuse_unserved_binding
 
       def create
-        problem = request_problem
-        return render_oauth_error(:invalid_request, problem, status: 400) if problem
+        problem = role_problem
+        raise OauthError.new(:invalid_request, problem) if problem
 
-        result = DeviceCodeGrant.start(client_id: params[:client_id].to_s, public_key_pem: params[:public_key].to_s)
-        Kiosk::Server::Headers.add_to(response.headers)
-        render json: device_authorization(result)
+        render_oauth(device_authorization(DeviceCodeGrant.start(client: authenticate_client!)))
+      rescue OauthError => e
+        render_oauth_error(e)
       end
 
       private
 
-      # The first reason this request is refused, or nil.
-      def request_problem
-        return 'client_id parameter required' if params[:client_id].to_s.empty?
-        return 'public_key parameter required' if params[:public_key].to_s.empty?
-
-        key_problem(params[:public_key].to_s) || role_problem
-      end
-
-      def key_problem(public_key)
-        PopVerifier.load_public_key(public_key.strip)
-        nil
-      rescue Errors::BadRequest => e
-        e.message
-      end
-
-      # Refused, not ignored: the role is the approving human's, and this
-      # request is unauthenticated.
+      # Refused, not ignored: the role is the approving human's, and the
+      # assistant does not choose it.
       def role_problem
         offending = %i[role scope].find { |name| params.key?(name) }
         return unless offending
@@ -62,11 +49,6 @@ module Kiosk
       def verification_uri
         mount = Kiosk.configuration.mount_path
         "#{request.base_url}#{mount}/oauth/device/verify"
-      end
-
-      def render_oauth_error(code, description, status:)
-        Kiosk::Server::Headers.add_to(response.headers)
-        render json: { error: code.to_s, error_description: description }, status: status
       end
     end
   end

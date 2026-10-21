@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # AuthController's link-flow endpoints: link (session-authed code
-# mint), claim (register-shaped redeem), unlink (registration-layer
+# mint), claim (a redeem by a registered client), unlink (registration-layer
 # revocation). Service semantics live in link_code_spec.rb /
 # account_binding_spec.rb; here the controller contract is pinned — auth,
 # statuses, and the RFC 9457 problem document every refusal is since 0.4.
@@ -132,67 +132,32 @@ RSpec.describe Kiosk::Server::AuthController do
     describe 'POST /auth/claim' do
       include_context 'with a holder signed in to the auth controller'
 
-      it 'delegates to LinkCode.redeem and returns the register-shaped 201' do
-        allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-          { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt' }
-        )
-
-        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
-        expect(status).to eq(201)
-        expect(body).to eq(agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt')
-        expect(Kiosk::Server::LinkCode).to have_received(:redeem).with(
-          code: 'c', public_key_pem: 'PEM', signed: 'jws', pow: nil
-        )
+      let(:claim_body) do
+        { code: 'c', client_assertion_type: Kiosk::Server::ClientAssertion::TYPE, client_assertion: 'jws' }
       end
 
-      it '400s on a missing field (register-shaped body: code, public_key, signed)' do
-        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM' })
-        expect_problem(status, body, http: 400, code: 'bad_request', detail: /signed/)
-      end
-
-      it 'maps a failed possession proof to the 401 problem document — code stays live' do
+      it 'delegates to LinkCode.redeem and answers 204 with no body' do
         allow(Kiosk::Server::LinkCode).to receive(:redeem)
-          .and_raise(Kiosk::Server::Errors::Unauthenticated.new('proof signature invalid'))
 
-        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'bad' })
-        expect_problem(status, body, http: 401, code: 'unauthenticated',
-                                     detail: /proof signature invalid/)
-      end
-    end
-
-    describe 'POST /auth/claim response fields' do
-      include_context 'with a holder signed in to the auth controller'
-
-      # K-855. `AccountBinding.bind!` — which is what `redeem` returns — also
-      # carries `fresh:`, an internal fresh-key-vs-rebind signal that NO published
-      # surface documents (zero hits in protocol.md, specification.html, skill.md
-      # or the schemas) and that §6.2 contradicts by spelling the response out as
-      # {agent_id, user_id, access_token}. It was on the wire on every claim
-      # because the controller rendered the result hash whole. The example above
-      # could not catch it: it stubs a return value that does not have the field.
-      # This one stubs what the service actually returns.
-      it "renders only the three fields §6.2 specifies — bind!'s `fresh` never reaches the wire" do
-        allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-          { agent_id: 'a-1', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: false }
+        status, body = dispatch(:claim, body: claim_body)
+        expect([status, body]).to eq([204, {}])
+        expect(Kiosk::Server::LinkCode).to have_received(:redeem).with(
+          code: 'c', assertion_type: Kiosk::Server::ClientAssertion::TYPE, assertion: 'jws', pow: nil
         )
-
-        status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
-        expect(status).to eq(201)
-        expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
-        expect(body).not_to have_key(:fresh)
       end
 
-      # The same, for the OTHER branch: a FRESH key. §6.3 requires that a rebind
-      # be indistinguishable from any other rebind (K-787); a `fresh` flag is the
-      # field an assistant would reach for to distinguish binds at all, so it must
-      # be absent whichever branch produced the result.
-      it 'renders the same three fields for a fresh-key bind' do
-        allow(Kiosk::Server::LinkCode).to receive(:redeem).and_return(
-          { agent_id: 'a-2', user_id: user_id, access_token: 'kiosk-pop-jwt', fresh: true }
-        )
+      it '400s on a missing field' do
+        status, body = dispatch(:claim, body: claim_body.except(:client_assertion))
+        expect_problem(status, body, http: 400, code: 'bad_request', detail: /client_assertion/)
+      end
 
-        _status, body = dispatch(:claim, body: { code: 'c', public_key: 'PEM', signed: 'jws' })
-        expect(body.keys).to contain_exactly(:agent_id, :user_id, :access_token)
+      it 'maps a refused client assertion to the 401 problem document, with the hint' do
+        allow(Kiosk::Server::LinkCode).to receive(:redeem)
+          .and_raise(Kiosk::Server::ClientAssertion::Refused.new('client assertion signature invalid', hint: 'sign it'))
+
+        status, body = dispatch(:claim, body: claim_body)
+        expect_problem(status, body, http: 401, code: 'unauthenticated', detail: /signature invalid/)
+        expect(body[:hint]).to eq('sign it')
       end
     end
 

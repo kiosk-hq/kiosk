@@ -28,7 +28,7 @@ RSpec.describe Kiosk::Server::Engine do
       end
 
       it 'names the refusal the operator will see, and the line that fixes it' do
-        expect(warning).to include('proof audience mismatch')
+        expect(warning).to include('client assertion audience mismatch')
         expect(warning).to include(%(c.issuer = "https://api.example.com"))
       end
 

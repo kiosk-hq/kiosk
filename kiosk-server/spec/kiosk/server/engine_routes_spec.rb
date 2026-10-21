@@ -2,7 +2,7 @@
 
 # The engine's route drawer (T-055 slice of K-495; closes K-505): a host that
 # mounts Kiosk::Server::Engine at the configured mount_path gets the ENTIRE
-# mount-prefixed surface — wire verbs, kiosk-pop auth plane, JWKS, KYC
+# mount-prefixed surface — wire verbs, OAuth registration and tokens, JWKS, KYC
 # attestation, and the claim + link ceremony — without hand-writing routes.
 # (The ROOT-relative discovery routes are installed by the engine's
 # routes.append initializer into the HOST set, proven end-to-end in
@@ -67,17 +67,19 @@ RSpec.describe Kiosk::Server::Engine do
         .to include(controller: 'kiosk/server/kyc_callback', action: 'create')
     end
 
-    it 'draws the kiosk-pop auth plane' do
-      expect(recognize(:get, '/auth/challenge'))
-        .to include(controller: 'kiosk/server/auth', action: 'challenge')
-      expect(recognize(:post, '/auth/register'))
-        .to include(controller: 'kiosk/server/auth', action: 'register')
-      expect(recognize(:post, '/auth/login'))
-        .to include(controller: 'kiosk/server/auth', action: 'login')
-      expect(recognize(:post, '/auth/revoke'))
-        .to include(controller: 'kiosk/server/auth', action: 'revoke')
+    it 'draws registration, the token endpoint and the key rotation' do
+      expect(recognize(:post, '/oauth/register'))
+        .to include(controller: 'kiosk/server/oauth_registration', action: 'create')
+      expect(recognize(:post, '/oauth/token'))
+        .to include(controller: 'kiosk/server/oauth_token', action: 'create')
       expect(recognize(:post, '/auth/rotate'))
         .to include(controller: 'kiosk/server/auth', action: 'rotate')
+    end
+
+    it 'draws no route for the challenge, register, login and revoke paths' do
+      %w[challenge register login revoke].each do |path|
+        expect(drawn_paths).not_to include(a_string_starting_with("/auth/#{path}"))
+      end
     end
 
     it 'draws JWKS under the mount' do
@@ -164,7 +166,7 @@ RSpec.describe Kiosk::Server::Engine do
       end
 
       it 'does not swallow the multi-segment reserved routes' do
-        expect(recognize(:get,  '/auth/challenge')).to include(controller: 'kiosk/server/auth')
+        expect(recognize(:post, '/auth/rotate')).to include(controller: 'kiosk/server/auth')
         expect(recognize(:post, '/agents/kyc')).to include(controller: 'kiosk/server/kyc_attestation')
         expect(recognize(:get,  '/.well-known/jwks.json')).to include(controller: 'kiosk/server/jwks')
       end

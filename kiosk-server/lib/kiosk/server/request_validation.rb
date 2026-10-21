@@ -15,8 +15,6 @@ module Kiosk
       # RESERVED-PLANE REQUEST BODY => the published object that types it.
       # The `/oauth/*` requests are form-encoded and have no schema.
       BODY_SCHEMAS = {
-        'POST <endpoint>/auth/register' => 'auth.schema.json#/$defs/credentialRequest',
-        'POST <endpoint>/auth/login' => 'auth.schema.json#/$defs/credentialRequest',
         'POST <endpoint>/auth/rotate' => 'auth.schema.json#/$defs/rotationRequest',
         'POST <endpoint>/auth/claim' => 'binding.schema.json#/$defs/claimRequest',
         'POST <endpoint>/auth/unlink' => 'binding.schema.json#/$defs/unlinkRequest',

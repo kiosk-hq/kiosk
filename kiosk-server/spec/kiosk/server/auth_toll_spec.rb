@@ -6,12 +6,13 @@ require 'kiosk/pow/equihash'
 require_relative '../../support/equihash_kat'
 
 module AuthTollSpec
-  PEM = "-----BEGIN PUBLIC KEY-----\nMFkwE... (test)\n-----END PUBLIC KEY-----"
+  # The RFC 7638 thumbprint of the key being registered.
+  KEY = 'NzbLsXh8uDCcd-6MNwXF4W_7noWXFZAfHkxZsRGC9Xs'
 
-  def pem = PEM
+  def key = KEY
 
-  # The register request's toll: `POST auth/register` over the key being registered.
-  def register_toll(pow) = Kiosk::Server::AuthToll.gate(verb: 'auth/register', body: { public_key: pem }, pow: pow)
+  # The register request's toll: `POST oauth/register` over the thumbprint of the key being registered.
+  def register_toll(pow) = Kiosk::Server::AuthToll.gate(verb: 'oauth/register', body: { key: key }, pow: pow)
 
   def configure(count:)
     Kiosk.configure do |c|
@@ -28,10 +29,10 @@ module AuthTollSpec
 
   # A KAT challenge bound to the register fingerprint, exactly what the gate
   # itself emits: SHA256("<METHOD> <verb>\n<canonical args>"), here
-  # `POST auth/register` over the public key being registered.
-  def kat_challenge(id:, pem: PEM)
-    fp = Kiosk::Server::PowGate.request_fingerprint(method: 'POST', verb: 'auth/register',
-                                                    body: { public_key: pem })
+  # `POST oauth/register` over the thumbprint of the key being registered.
+  def kat_challenge(id:, key: KEY)
+    fp = Kiosk::Server::PowGate.request_fingerprint(method: 'POST', verb: 'oauth/register',
+                                                    body: { key: key })
     Kiosk::Reputation::Challenge.issue(
       alg: 'equihash', params: EquihashKat::PARAMS, request_fingerprint: fp,
       secret: secret, ttl: 300, salt: 'kat'.b, id: id
@@ -92,9 +93,9 @@ RSpec.describe Kiosk::Server::AuthToll do
     end.to raise_error(Kiosk::Server::Errors::Forbidden, /invalid proof/)
   end
 
-  it 'binds proofs to the public key (a proof for another key re-challenges)' do
+  it 'binds proofs to the key (a proof for another key re-challenges)' do
     configure(count: 1)
-    other = { challenge: kat_challenge(id: 'r1', pem: "-----BEGIN PUBLIC KEY-----\nOTHER\n-----END PUBLIC KEY-----"),
+    other = { challenge: kat_challenge(id: 'r1', key: 'another-thumbprint'),
               nonce: EquihashKat::NONCE }
     expect do
       register_toll([other])
@@ -102,13 +103,13 @@ RSpec.describe Kiosk::Server::AuthToll do
   end
 
   # The request fingerprint binds the toll to the CALL, not only to its
-  # arguments: the registration challenge is minted for `POST auth/register`,
-  # so a challenge carrying the same public key under any other method/verb
+  # arguments: the registration challenge is minted for `POST oauth/register`,
+  # so a challenge carrying the same key under any other method/verb
   # pair is not spendable here even though its HMAC is genuinely ours.
-  it 'binds proofs to POST auth/register (the same key under another call re-challenges)' do
+  it 'binds proofs to POST oauth/register (the same key under another call re-challenges)' do
     configure(count: 1)
     elsewhere_fp = Kiosk::Server::PowGate.request_fingerprint(
-      method: 'GET', verb: 'auth/register', body: { public_key: pem }
+      method: 'GET', verb: 'oauth/register', body: { key: key }
     )
     elsewhere = Kiosk::Reputation::Challenge.issue(
       alg: 'equihash', params: EquihashKat::PARAMS, request_fingerprint: elsewhere_fp,

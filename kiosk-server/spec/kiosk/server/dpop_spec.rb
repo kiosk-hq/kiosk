@@ -118,11 +118,44 @@ RSpec.describe Kiosk::Server::Dpop do
     end
 
     it 'refuses a proof that lacks a claim RFC 9449 requires' do
-      expect_refused(/not a JWS that its jwk signed/, proof: hand_proof(payload: claims.except(:ath)))
+      expect_refused(/not a JWS that its jwk signed/, proof: hand_proof(payload: claims.except(:jti)))
+    end
+
+    it 'refuses a proof with no `ath` on a request that carries a token' do
+      expect_refused(/ath is not the hash of this token/, proof: hand_proof(payload: claims.except(:ath)))
     end
 
     it 'refuses a value that is not a JWS' do
       expect_refused(/not a JWS that its jwk signed/, proof: 'not-a-jws')
     end
+  end
+
+  # A token request (spec Section 5.3) carries a proof and no token.
+  describe '.verify_token_request!' do
+    let(:token_url) { 'https://demo.example/kiosk/oauth/token' }
+
+    def token_proof(key: agent_key, **changes)
+      hand_proof(payload: claims(htm: 'POST', htu: token_url, ath: nil, **changes).compact, key: key,
+                 header: { typ: 'dpop+jwt', jwk: public_jwk(key) })
+    end
+
+    def expect_token_request_refused(message, proof)
+      expect { described_class.verify_token_request!(proof, jkt: agent_jkt, url: token_url) }
+        .to raise_error(Kiosk::Server::OauthError, message) { |e| expect(e.code).to eq('invalid_dpop_proof') }
+    end
+
+    it 'accepts a proof of the registered key with no ath' do
+      expect { described_class.verify_token_request!(token_proof, jkt: agent_jkt, url: token_url) }.not_to raise_error
+    end
+
+    it 'refuses no proof, a proof of another key, and a proof for another method' do
+      expect_token_request_refused(/one DPoP header is required/, nil)
+      expect_token_request_refused(/not your registered key/, token_proof(key: OpenSSL::PKey::RSA.generate(2048)))
+      expect_token_request_refused(/htm is not this request method/, token_proof(htm: 'GET'))
+    end
+  end
+
+  it 'names the algorithms of AssistantKey in its challenge' do
+    expect(described_class::CHALLENGE).to eq(%(DPoP algs="#{Kiosk::Server::AssistantKey::ALGORITHMS.join(' ')}"))
   end
 end

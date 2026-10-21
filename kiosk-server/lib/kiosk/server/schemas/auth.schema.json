@@ -2,101 +2,292 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://kiosk.tech/spec/schemas/auth.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/auth.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
-  "title": "Kiosk registration and login (kiosk-pop)",
-  "description": "The wire objects of Section 5: kiosk-pop, a proof-of-possession challenge-response. The caller proves that it holds the private key of the public key it presents, and the operator answers with a short-lived access token. The roots are open: they state what MUST be present and the shape of each member.",
+  "title": "Kiosk client registration and tokens (OAuth)",
+  "description": "The wire objects of Section 5: RFC 7591 open client registration of the AI assistant's public key, RFC 7523 client assertions signed with that key (the private_key_jwt method), and DPoP-bound access tokens from the client_credentials grant (RFC 9449). The roots are open: they state what MUST be present and the shape of each member.",
   "$defs": {
-    "challenge": {
+    "publicJwk": {
       "type": "object",
-      "description": "Section 5.1 -- the answer to GET <endpoint>/auth/challenge?public_key=<url-encoded PEM>. Single-use and short-lived; the nonce is worthless to anyone without the matching private key, which is why the endpoint is unauthenticated.",
-      "required": ["challenge", "exp"],
+      "description": "Section 5.1 -- the AI assistant's public key as an RFC 7517 JWK: an RSA key of 2048 to 4096 bits. A member that only a private key has is refused. Other members (kid, use, alg) are allowed and ignored.",
+      "required": [
+        "kty",
+        "n",
+        "e"
+      ],
       "properties": {
-        "challenge": {
+        "kty": {
+          "const": "RSA",
+          "description": "The key type. RS256 is the one signing algorithm Kiosk accepts now."
+        },
+        "n": {
           "type": "string",
-          "description": "The server-issued nonce to sign. It becomes the `nonce` claim of the possession proof.",
-          "minLength": 1
+          "minLength": 1,
+          "description": "The base64url modulus."
+        },
+        "e": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The base64url exponent."
+        }
+      },
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "d"
+            ]
+          },
+          {
+            "required": [
+              "p"
+            ]
+          },
+          {
+            "required": [
+              "q"
+            ]
+          },
+          {
+            "required": [
+              "dp"
+            ]
+          },
+          {
+            "required": [
+              "dq"
+            ]
+          },
+          {
+            "required": [
+              "qi"
+            ]
+          }
+        ]
+      }
+    },
+    "jwks": {
+      "type": "object",
+      "description": "Section 5.1 -- an RFC 7517 JWK Set that holds exactly one key, the AI assistant's public key.",
+      "required": [
+        "keys"
+      ],
+      "properties": {
+        "keys": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/publicJwk"
+          }
+        }
+      }
+    },
+    "registrationRequest": {
+      "type": "object",
+      "description": "Section 5.1 -- the body of POST <endpoint>/oauth/register, an RFC 7591 open registration: no initial access token and no human. The operator ignores every member it does not know (RFC 7591 Section 2). An optional proof-of-work proof rides in the `Kiosk-PoW` request header, never in this body.",
+      "required": [
+        "jwks"
+      ],
+      "properties": {
+        "jwks": {
+          "$ref": "#/$defs/jwks"
+        },
+        "token_endpoint_auth_method": {
+          "const": "private_key_jwt",
+          "description": "The one client authentication method: a client assertion signed with the registered key (RFC 7523)."
+        },
+        "grant_types": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "client_credentials",
+              "urn:ietf:params:oauth:grant-type:device_code"
+            ]
+          },
+          "description": "A subset of the grant types this origin serves. The operator registers the client for every grant type it serves and answers that list."
+        }
+      }
+    },
+    "clientInformation": {
+      "type": "object",
+      "description": "Section 5.1 -- the 201 answer to POST <endpoint>/oauth/register (RFC 7591 Section 3.2.1), and the 200 answer to POST <endpoint>/auth/rotate (Section 5.7). Registering a key that is registered already answers the same client again.",
+      "required": [
+        "client_id",
+        "jwks",
+        "token_endpoint_auth_method",
+        "grant_types",
+        "dpop_bound_access_tokens"
+      ],
+      "properties": {
+        "client_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The client identifier. It is also the `agent_id` of the assistant account, stable across a rotation and a rebind."
+        },
+        "client_id_issued_at": {
+          "type": "integer",
+          "description": "When the client was registered, in Unix seconds."
+        },
+        "jwks": {
+          "$ref": "#/$defs/jwks"
+        },
+        "token_endpoint_auth_method": {
+          "const": "private_key_jwt"
+        },
+        "grant_types": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "enum": [
+              "client_credentials",
+              "urn:ietf:params:oauth:grant-type:device_code"
+            ]
+          },
+          "description": "`client_credentials`, and the device-code grant where the origin serves account binding."
+        },
+        "dpop_bound_access_tokens": {
+          "const": true,
+          "description": "RFC 9449 Section 5.2: every token request carries a DPoP proof."
+        }
+      }
+    },
+    "registrationError": {
+      "type": "object",
+      "description": "Section 5.1 -- the 400 answer of POST <endpoint>/oauth/register (RFC 7591 Section 3.2.2). The toll on registration answers with problem documents instead (Section 10).",
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "const": "invalid_client_metadata",
+          "description": "The one registration error code: a member of the request is missing or not valid."
+        },
+        "error_description": {
+          "type": "string",
+          "description": "Human-readable detail. An AI assistant branches on `error` and never on this string."
+        }
+      }
+    },
+    "clientAssertion": {
+      "type": "object",
+      "description": "Section 5.2 -- the decoded payload of a client assertion (RFC 7523 Section 3), a compact JWS that the registered key signs. It is sent as `client_assertion`, with `client_assertion_type` = `urn:ietf:params:oauth:client-assertion-type:jwt-bearer`. It is a PAYLOAD, not a request body.",
+      "required": [
+        "iss",
+        "sub",
+        "aud",
+        "exp",
+        "jti"
+      ],
+      "properties": {
+        "iss": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The client_id."
+        },
+        "sub": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The client_id, the same value as `iss`."
+        },
+        "aud": {
+          "description": "ORIGIN-BINDING. The issuer of the origin the AI assistant dialed, as its only value (Section 15.1). A string, or an array with that one string.",
+          "oneOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1,
+              "maxItems": 1
+            }
+          ]
         },
         "exp": {
           "type": "integer",
-          "description": "Unix expiry of the challenge."
-        }
-      }
-    },
-    "possessionProof": {
-      "type": "object",
-      "description": "Section 5.2 -- the decoded payload of `signed`, a compact RS256 JWS. This is the object the register, login, claim and device-grant token calls all carry. It is a PAYLOAD, not a request body: the wire carries the compact serialisation, and this schema describes what a verifier reads out of it.",
-      "required": ["aud", "nonce", "jti"],
-      "properties": {
-        "aud": {
-          "type": "string",
-          "description": "ORIGIN-BINDING, and the reason a relayed proof is worthless. MUST be the origin the AI assistant dialed (Section 15.1); the operator rejects any other `aud`."
-        },
-        "nonce": {
-          "type": "string",
-          "description": "The `challenge` from Section 5.1. Single-use and server-TTL-bounded."
+          "description": "Expiry. The operator refuses an assertion that has expired or that expires more than 300 seconds after its clock."
         },
         "jti": {
           "type": "string",
-          "description": "A unique id."
-        },
-        "pub": {
-          "type": "string",
-          "description": "RFC 7638 thumbprint of the public key; verified only when present."
+          "minLength": 1,
+          "description": "A unique id. The operator accepts each id of a client one time."
         },
         "iat": {
           "type": "integer",
-          "description": "Informational only -- the server-issued `nonce` is the authoritative freshness bound, so an operator MUST NOT rely on this claim for freshness."
+          "description": "Optional: the time of signing."
         }
       }
     },
-    "credentialRequest": {
+    "tokenResponse": {
       "type": "object",
-      "description": "Section 5.3 -- the body of POST /auth/register and POST /auth/login. Register also accepts an optional proof-of-work proof, which rides in the `Kiosk-PoW` request HEADER (Sections 5.5 and 10.1) and never in this body, so that the signed bytes are identical on the retry.",
-      "required": ["public_key", "signed"],
-      "properties": {
-        "public_key": {
-          "type": "string",
-          "description": "The AI assistant's public key, PEM-encoded. An AI assistant SHOULD generate a fresh keypair per operator origin (Section 15.3)."
-        },
-        "signed": {
-          "type": "string",
-          "description": "The possession proof of Section 5.2, as a compact RS256 JWS. Its decoded payload is `#/$defs/possessionProof`."
-        }
-      }
-    },
-    "registration": {
-      "type": "object",
-      "description": "Section 5.3 -- the 201 answer to POST /auth/register. Registering an already-known key answers 409 conflict instead (use login). This is also the 201 answer to POST /auth/claim (Section 6.2), which is why `#/$defs/claimResponse` in binding.schema.json refers here rather than restating it.",
-      "required": ["agent_id", "user_id", "access_token"],
-      "properties": {
-        "agent_id": {
-          "type": "string",
-          "description": "The acting agent id. Stable across a rebind (Section 6.3)."
-        },
-        "user_id": {
-          "type": "string",
-          "description": "The identity the key maps to. An operator MUST map a known key to the same `user_id` so a saved payment card survives across sessions."
-        },
-        "access_token": {
-          "type": "string",
-          "description": "The access token, a compact RS256 JWT. Its claims are `#/$defs/accessTokenClaims`."
-        }
-      }
-    },
-    "token": {
-      "type": "object",
-      "description": "Section 5.3: the 200 answer to POST /auth/login; an unknown key answers 404 not_found. It is ALSO the 200 answer to POST /auth/revoke (Section 5.5) and to POST /auth/rotate (Section 5.7), with a token issued after the new watermark.",
-      "required": ["access_token"],
+      "description": "Section 5.3 -- the 200 answer of POST <endpoint>/oauth/token (RFC 6749 Section 5.1), for the client_credentials grant and for the device-code grant (Section 6.1). The principal (`user_id`, `agent_id`) is in the access token's claims.",
+      "required": [
+        "access_token",
+        "token_type",
+        "expires_in"
+      ],
       "properties": {
         "access_token": {
           "type": "string",
           "description": "The access token, a compact RS256 JWT. Its claims are `#/$defs/accessTokenClaims`."
+        },
+        "token_type": {
+          "const": "DPoP",
+          "description": "Always \"DPoP\": the token is bound to the registered key (Section 5.6)."
+        },
+        "expires_in": {
+          "type": "integer",
+          "description": "Seconds until the access token expires."
+        },
+        "scope": {
+          "type": "string",
+          "description": "The role of the assistant account, as the scope that RFC 6749 Section 5.1 grants. It is present only when the account has a role, and never null. An AI assistant MUST NOT treat its absence as an error."
+        }
+      }
+    },
+    "oauthError": {
+      "type": "object",
+      "description": "Sections 5.3 and 6.1 -- the error answer of POST <endpoint>/oauth/token and POST <endpoint>/oauth/device_authorization (RFC 6749 Section 5.2). The status is 400 for every code except `invalid_client`, which is 401. The toll answers with problem documents instead (Section 6.4).",
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "enum": [
+            "invalid_request",
+            "invalid_client",
+            "invalid_grant",
+            "unsupported_grant_type",
+            "invalid_dpop_proof",
+            "authorization_pending",
+            "slow_down",
+            "expired_token",
+            "access_denied"
+          ],
+          "description": "The OAuth error code: four of RFC 6749 Section 5.2, `invalid_dpop_proof` of RFC 9449, and the four device-grant codes of RFC 8628 Section 3.5. A closed vocabulary: an operator MUST NOT emit a code outside it."
+        },
+        "error_description": {
+          "type": "string",
+          "description": "Human-readable detail. An AI assistant branches on `error` and never on this string."
         }
       }
     },
     "accessTokenClaims": {
       "type": "object",
       "description": "Section 5.4 -- the decoded claim set of `access_token`. A 3-part RS256 JWT signed by the operator and verifiable statelessly against the JWKS of Section 4.4, bound to the identity's key and presented as `Authorization: DPoP` with a DPoP proof (Section 5.6).",
-      "required": ["sub", "agent_id", "actor", "iss", "aud", "iat", "nbf", "exp", "jti", "cnf"],
+      "required": [
+        "sub",
+        "agent_id",
+        "actor",
+        "iss",
+        "aud",
+        "iat",
+        "nbf",
+        "exp",
+        "jti",
+        "cnf"
+      ],
       "properties": {
         "sub": {
           "type": "string",
@@ -121,54 +312,129 @@
         "aud": {
           "description": "The operator issuer. A string, or the array spelling RFC 7519 permits.",
           "oneOf": [
-            { "type": "string" },
-            { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "minItems": 1
+            }
           ]
         },
-        "iat": { "type": "integer", "description": "Issued-at. Also what the revoked-before watermark of Section 15.4 is compared against." },
-        "nbf": { "type": "integer", "description": "Not-before." },
-        "exp": { "type": "integer", "description": "Expiry. Default lifetime is 1 hour; the durable credential is the private key, not the token." },
-        "jti": { "type": "string", "description": "Unique token id." },
+        "iat": {
+          "type": "integer",
+          "description": "Issued-at. Also what the revoked-before watermark of Section 15.4 is compared against."
+        },
+        "nbf": {
+          "type": "integer",
+          "description": "Not-before."
+        },
+        "exp": {
+          "type": "integer",
+          "description": "Expiry. Default lifetime is 1 hour; the durable credential is the private key, not the token."
+        },
+        "jti": {
+          "type": "string",
+          "description": "Unique token id."
+        },
         "cnf": {
           "type": "object",
           "description": "RFC 9449 Section 6.1 -- the key the token is bound to. Only a DPoP proof that this key signs makes the token usable.",
-          "required": ["jkt"],
+          "required": [
+            "jkt"
+          ],
           "properties": {
-            "jkt": { "type": "string", "minLength": 1, "description": "The RFC 7638 thumbprint of the identity's registered key." }
+            "jkt": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The RFC 7638 thumbprint of the registered key."
+            }
           }
         }
       }
     },
     "dpopProof": {
       "type": "object",
-      "description": "Section 5.6 -- the decoded payload of the `DPoP` request header, a compact RS256 JWS whose header carries `typ: \"dpop+jwt\"` and the public `jwk` of the registered key. The AI assistant signs a new one for each request that carries an access token.",
-      "required": ["jti", "htm", "htu", "iat", "ath"],
+      "description": "Section 5.6 -- the decoded payload of the `DPoP` request header, a compact RS256 JWS whose header carries `typ: \"dpop+jwt\"` and the public `jwk` of the registered key. The AI assistant signs a new one for each token request and for each request that carries an access token.",
+      "required": [
+        "jti",
+        "htm",
+        "htu",
+        "iat"
+      ],
       "properties": {
-        "jti": { "type": "string", "minLength": 1, "description": "A unique id for this proof." },
-        "htm": { "type": "string", "minLength": 1, "description": "The HTTP method of the request." },
-        "htu": { "type": "string", "minLength": 1, "description": "The URL of the request, with no query and no fragment. On the event stream it is `events_url` with `wss` written as `https`." },
-        "iat": { "type": "integer", "description": "The time of signing. The operator refuses a proof more than 60 seconds from its clock." },
-        "ath": { "type": "string", "minLength": 1, "description": "The base64url SHA-256 of the ASCII access token, with no padding." }
+        "jti": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A unique id for this proof."
+        },
+        "htm": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The HTTP method of the request."
+        },
+        "htu": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The URL of the request, with no query and no fragment. On the event stream it is `events_url` with `wss` written as `https`."
+        },
+        "iat": {
+          "type": "integer",
+          "description": "The time of signing. The operator refuses a proof more than 60 seconds from its clock."
+        },
+        "ath": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The base64url SHA-256 of the ASCII access token, with no padding. REQUIRED on a request that carries an access token; absent on a token request."
+        }
       }
     },
-    "rotationProof": {
+    "rotationAssertion": {
       "type": "object",
-      "description": "Section 5.7 -- the decoded payload of `signed` in a rotation: a possession proof by the registered key that also names the new key.",
-      "allOf": [{ "$ref": "#/$defs/possessionProof" }],
-      "required": ["new_key"],
+      "description": "Section 5.7 -- the decoded payload of `client_assertion` in a rotation: a client assertion by the registered key that also names the new key.",
+      "allOf": [
+        {
+          "$ref": "#/$defs/clientAssertion"
+        }
+      ],
+      "required": [
+        "new_key"
+      ],
       "properties": {
-        "new_key": { "type": "string", "minLength": 1, "description": "The RFC 7638 thumbprint of `new_public_key`." }
+        "new_key": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The RFC 7638 thumbprint of the new key in `jwks`."
+        }
       }
     },
     "rotationRequest": {
       "type": "object",
-      "description": "Section 5.7 -- the body of POST /auth/rotate. The answer is `#/$defs/token`, with a token bound to the new key.",
-      "required": ["public_key", "signed", "new_public_key", "new_signed"],
+      "description": "Section 5.7 -- the body of POST <endpoint>/auth/rotate, a Kiosk extension. The answer is `#/$defs/clientInformation` with the new key; the AI assistant then asks the token endpoint for a token with the new key.",
+      "required": [
+        "client_assertion_type",
+        "client_assertion",
+        "new_client_assertion",
+        "jwks"
+      ],
       "properties": {
-        "public_key": { "type": "string", "description": "The registered key, PEM-encoded." },
-        "signed": { "type": "string", "description": "A possession proof by the registered key over a challenge issued for it. Its decoded payload is `#/$defs/rotationProof`." },
-        "new_public_key": { "type": "string", "description": "The new key, PEM-encoded, in the key bounds of Section 5.1." },
-        "new_signed": { "type": "string", "description": "A possession proof by the new key over a challenge issued for the new key. Its decoded payload is `#/$defs/possessionProof`." }
+        "client_assertion_type": {
+          "const": "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+        },
+        "client_assertion": {
+          "type": "string",
+          "description": "A client assertion by the registered key. Its decoded payload is `#/$defs/rotationAssertion`."
+        },
+        "new_client_assertion": {
+          "type": "string",
+          "description": "A client assertion by the new key, for the same client_id. Its decoded payload is `#/$defs/clientAssertion`."
+        },
+        "jwks": {
+          "$ref": "#/$defs/jwks"
+        }
       }
     }
   }

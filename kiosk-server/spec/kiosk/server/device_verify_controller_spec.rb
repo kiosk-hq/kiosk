@@ -42,8 +42,11 @@ module DeviceVerifyControllerSpecHelpers
     [status, raw, response_headers]
   end
 
+  # A claim ceremony opened by a registered client; `.start` reads its id and key only.
   def start_claim
-    Kiosk::Server::DeviceCodeGrant.start(client_id: 'assistant', public_key_pem: pem)
+    client = Kiosk::Server::Client.new(id: SecureRandom.uuid, user_id: 'assistant-account', public_key_pem: pem,
+                                       allowed_roles: [], issued_at: 0)
+    Kiosk::Server::DeviceCodeGrant.start(client: client)
   end
 end
 

@@ -7,7 +7,7 @@ module Kiosk
     # `/oauth/*` it is the one problem document served instead of an OAuth error.
     module BindingModuleGate
       DETAIL = 'this operator does not serve the account binding module'
-      HINT   = "register a fresh assistant account at this origin's register_url instead"
+      HINT   = "use this origin with a client of your own: register it at this origin's registration_url"
 
       private
 

@@ -41,10 +41,10 @@ end
 
 require_relative 'support/memory_revocation_store'
 require_relative 'support/memory_event_store'
-require_relative 'support/memory_auth_challenge_store'
 require_relative 'support/verb_route_call'
 require_relative 'support/checkout_payment'
 require_relative 'support/dpop_agent'
+require_relative 'support/postgres'
 
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
@@ -68,7 +68,6 @@ RSpec.configure do |config|
       c.pow_spent_store      = MemoryPowSpentStore.new
       c.revocation_store     = MemoryRevocationStore.new
       c.event_store          = MemoryEventStore.new
-      c.auth_challenge_store = MemoryAuthChallengeStore.new
     end
     Kiosk::Server::Actions.reset!
     Kiosk::Server::Queries.reset!
@@ -101,6 +100,8 @@ end
 class ApplicationRecord < ActiveRecord::Base
   self.abstract_class = true
 end
+
+require_relative 'support/oauth_clients'
 
 # ── Declaring a verb, the one way there is (T-081) ──────────────────────────
 #
@@ -274,7 +275,6 @@ module SlowStoreAllocation
   # Classes whose `.new` is the allocation inside a lazy configuration default.
   STORE_CLASSES = [
     Kiosk::Server::PowSpentStores::ActiveRecord,
-    Kiosk::Server::AuthChallengeStores::ActiveRecord,
     Kiosk::Server::EventStores::ActiveRecord,
     Kiosk::Server::RevocationStores::ActiveRecord,
     Kiosk::Server::DeviceAuthorizationStores::ActiveRecord

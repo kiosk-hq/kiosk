@@ -12,6 +12,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-22: The OAuth metadata documents carry `scopes_supported: []`, because an AI assistant requests no scope. `/auth.md` writes each Discover URL bare, so a scanner reads it.
 - 2026-10-21: A DPoP proof or client assertion whose `alg` is not the algorithm of its key is refused with a message that names that algorithm.
 
 ## [0.6.0] — 2026-10-21

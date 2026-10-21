@@ -84,18 +84,21 @@ module Kiosk
         doc = { issuer: Kiosk.current_issuer, registration_endpoint: "#{endpoint}/oauth/register",
                 token_endpoint: "#{endpoint}/oauth/token" }
         doc[:device_authorization_endpoint] = "#{endpoint}/oauth/device_authorization" if config.serve_account_binding
-        # No authorization endpoint, so no response type.
-        doc.merge(jwks_uri: "#{endpoint}/.well-known/jwks.json", response_types_supported: [],
+        # No authorization endpoint, so no response type. An AI assistant
+        # requests no scope, so no scope value.
+        doc.merge(jwks_uri: "#{endpoint}/.well-known/jwks.json", response_types_supported: [], scopes_supported: [],
                   grant_types_supported: Client.grant_types(config), **Shared.client_authentication,
                   service_documentation: "#{base}/auth.md", dpop_signing_alg_values_supported: AssistantKey.algorithms)
       end
 
       # `/.well-known/oauth-protected-resource` (RFC 9728). RFC 9728 §3.3 binds a
-      # document at this path to the origin, so `resource` is the origin.
+      # document at this path to the origin, so `resource` is the origin. An
+      # AI assistant requests no scope, so `scopes_supported` is empty.
       def self.oauth_protected_resource(base_url:, config: Kiosk.configuration)
         Shared.validate_issuer!(config)
         base = base_url.to_s.chomp('/')
-        { resource: base, authorization_servers: [Kiosk.current_issuer], bearer_methods_supported: ['header'],
+        { resource: base, authorization_servers: [Kiosk.current_issuer], scopes_supported: [],
+          bearer_methods_supported: ['header'],
           dpop_signing_alg_values_supported: AssistantKey.algorithms, dpop_bound_access_tokens_required: true,
           resource_documentation: "#{base}/auth.md" }
       end
@@ -210,7 +213,7 @@ module Kiosk
           return '' unless skill?(config)
 
           sha = config.skill_sha256
-          line = "- Wire skill for AI assistants: `#{config.skill_url}`"
+          line = "- Wire skill for AI assistants: #{config.skill_url}"
           line += " (sha256 `#{sha}`)" if sha && !sha.to_s.empty?
           line
         end
@@ -281,12 +284,12 @@ module Kiosk
 
             ## Discover
 
-            - This file: `#{base}/auth.md`
-            - Kiosk discovery document: `#{base}/.well-known/kiosk.json`
-            - OAuth metadata of this authorization server (RFC 8414): `#{base}/.well-known/oauth-authorization-server`
-            - OAuth metadata of this protected resource (RFC 9728): `#{base}/.well-known/oauth-protected-resource`
-            - Verb catalogue (PUBLIC, no token): `#{endpoint}/schema`
-            - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
+            - This file: #{base}/auth.md
+            - Kiosk discovery document: #{base}/.well-known/kiosk.json
+            - OAuth metadata of this authorization server (RFC 8414): #{base}/.well-known/oauth-authorization-server
+            - OAuth metadata of this protected resource (RFC 9728): #{base}/.well-known/oauth-protected-resource
+            - Verb catalogue (PUBLIC, no token): #{endpoint}/schema
+            - Token-verification keys (JWKS): #{endpoint}/.well-known/jwks.json
             #{Shared.skill_discover_line(config)}
 
             ## Pick a method

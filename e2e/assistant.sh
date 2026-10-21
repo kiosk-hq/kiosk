@@ -288,7 +288,7 @@ printf "\n\033[1m=== /auth.md (cold-start pointers) ===\033[0m\n"
 
 authmd_body=$(curl -sf "$SERVER_URL/auth.md")
 assert "auth.md names the wire skill" \
-  "$(printf '%s' "$authmd_body" | grep -c 'Wire skill for AI assistants: `https://kiosk.tech/skill-v')" "1"
+  "$(printf '%s' "$authmd_body" | grep -c 'Wire skill for AI assistants: https://kiosk.tech/skill-v')" "1"
 assert "auth.md names the published solver" \
   "$(printf '%s' "$authmd_body" | grep -c 'https://kiosk.tech/pow/solve.py')" "1"
 assert "auth.md forbids a hand-rolled solver" \

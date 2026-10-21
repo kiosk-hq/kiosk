@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-22: The OAuth metadata documents carry `scopes_supported: []`, because an AI assistant requests no scope. `/auth.md` writes each Discover URL bare, so a scanner reads it.
+
 - 2026-10-21: kiosk-test-support drops its `kiosk-pow-equihash` and `puma` dependencies; the host's bundle brings them.
 
 - 2026-10-21: `deploy/rollout.sh` mints the KYC broker's Ed25519 `PROVE_KEY_PEM` when the box has none or an RSA one, and pins its public half in the KYC operators.

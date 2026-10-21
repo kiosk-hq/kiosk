@@ -308,7 +308,7 @@ RSpec.describe Kiosk::Server::WellKnown do
         token_endpoint: 'https://api.acme.example/kiosk/oauth/token',
         device_authorization_endpoint: 'https://api.acme.example/kiosk/oauth/device_authorization',
         jwks_uri: 'https://api.acme.example/kiosk/.well-known/jwks.json',
-        response_types_supported: [],
+        response_types_supported: [], scopes_supported: [],
         grant_types_supported: ['client_credentials', 'urn:ietf:params:oauth:grant-type:device_code'],
         token_endpoint_auth_methods_supported: ['private_key_jwt'],
         token_endpoint_auth_signing_alg_values_supported: ['EdDSA'],
@@ -397,6 +397,18 @@ RSpec.describe Kiosk::Server::WellKnown do
 
     it 'points at the OAuth metadata' do
       expect(body).to include('https://api.acme.example/.well-known/oauth-authorization-server')
+    end
+
+    # A scanner takes each URL up to the next space, so no Markdown mark may follow it.
+    it 'writes every Discover URL bare' do
+      discover = body[/^## Discover$.*?(?=^## )/m]
+      expect(discover.scan(%r{https://\S+})).to eq(
+        %w[https://api.acme.example/auth.md https://api.acme.example/.well-known/kiosk.json
+           https://api.acme.example/.well-known/oauth-authorization-server
+           https://api.acme.example/.well-known/oauth-protected-resource
+           https://api.acme.example/kiosk/schema https://api.acme.example/kiosk/.well-known/jwks.json] +
+        [Kiosk.configuration.skill_url]
+      )
     end
 
     # ── The register step teaches the header PoW transport ──────────────────

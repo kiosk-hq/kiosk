@@ -30,10 +30,10 @@ class Guest < Kiosk::TestHelpers::Customer
 
   # The two mandates for `checkout_jwt`, the payment one signed again with `currency`.
   def respelled(checkout_jwt, currency)
-    mandates = Kiosk::TestHelpers::Mandate.pay(principal.rsa_key, checkout_jwt)
+    mandates = Kiosk::TestHelpers::Mandate.pay(principal.key, checkout_jwt)
     payment = Kiosk::TestHelpers::Mandate.content(mandates[:payment])
     payment['payment_amount']['currency'] = currency
-    mandates.merge(payment: Kiosk::TestHelpers::Mandate.sign(principal.rsa_key, payment))
+    mandates.merge(payment: Kiosk::TestHelpers::Mandate.sign(principal.key, payment))
   end
 
   def a_free_room(check_in:, check_out:)

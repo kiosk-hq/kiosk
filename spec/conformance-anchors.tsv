@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2005 anchors.
+# 2003 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -322,7 +322,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.22'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.23'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -1081,12 +1081,10 @@ kiosk-server/lib/kiosk/server/engine.rb	          get '/agents.json', to: 'kiosk
 kiosk-server/lib/kiosk/server/engine.rb	          get '/agents.txt',  to: 'kiosk/server/discovery#agents_txt'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/auth.md',     to: 'kiosk/server/discovery#auth_md'
 kiosk-server/lib/kiosk/server/engine.rb	        # `schema` resolves no identity — it is PUBLIC, like `openapi.json`
-kiosk-server/lib/kiosk/server/engine.rb	        get  'auth/challenge', to: 'auth#challenge'
+kiosk-server/lib/kiosk/server/engine.rb	        %w[register login revoke rotate].each { post "auth/#{it}", to: "auth##{it}" }
 kiosk-server/lib/kiosk/server/engine.rb	        get  'schema', to: 'wire#schema'
+kiosk-server/lib/kiosk/server/engine.rb	        get 'auth/challenge', to: 'auth#challenge'
 kiosk-server/lib/kiosk/server/engine.rb	        post 'agents/kyc', to: 'kyc_attestation#create'
-kiosk-server/lib/kiosk/server/engine.rb	        post 'auth/login',     to: 'auth#login'
-kiosk-server/lib/kiosk/server/engine.rb	        post 'auth/register',  to: 'auth#register'
-kiosk-server/lib/kiosk/server/engine.rb	        post 'auth/revoke',    to: 'auth#revoke'
 kiosk-server/lib/kiosk/server/engine.rb	        post 'pay',    to: 'wire#pay'
 kiosk-server/lib/kiosk/server/engine.rb	      initializer 'kiosk-server.root_discovery_routes' do |app|
 kiosk-server/lib/kiosk/server/engine.rb	      routes do
@@ -1401,7 +1399,7 @@ kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers a name nobody regist
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on that same verb an ordinary routing 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the schema_url of kiosk.json with the same document as the bare GET schema
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	publishes all six auth URLs and no binding capability
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	publishes all seven auth URLs and no binding capability
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	reports itself mounted
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	routes the RESERVED `pay` into WireController (401 problem, not 404)
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	serves JWKS under the mount, stamped by the auto-injected middleware
@@ -1940,8 +1938,8 @@ kiosk-server/spec/kiosk/server/well_known_spec.rb	returns a parse-able JSON stri
 kiosk-server/spec/kiosk/server/well_known_spec.rb	wraps everything under a top-level `kiosk` key
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	answers 402 to a CONDITIONAL request — the toll runs before freshness
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	answers a per-verb GET the same gate as a problem document, uncacheable
+kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	carries WWW-Authenticate: Kiosk-Payment-Setup
 kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	carries WWW-Authenticate: Kiosk-PoW AND the challenges, on the reserved POST pay
-kiosk-server/spec/kiosk/server/wire_controller_402_spec.rb	carries WWW-Authenticate: Payment
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	accepts a JSON-array Kiosk-PoW header (proceeds)
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	accepts a proxy comma-combined header value {A},{B} (RFC 7230)
 kiosk-server/spec/kiosk/server/wire_controller_pow_header_spec.rb	accepts a single-proof Kiosk-PoW header on a per-verb GET and proceeds (200)

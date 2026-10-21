@@ -12,8 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.24] — 2026-10-21
+
 - 2026-10-21: A settled `pay` answers the AP2 v0.2 `checkout_receipt` and `payment_receipt`, JWTs signed PS256 with `c.signing_key`, each naming its mandate.
 - 2026-10-21: `kiosk.settlements` gains `network_confirmation_id`, so a repeat of a settled pair answers the same payment receipt claims.
+- 2026-10-21: Version 0.5.24, the tree cut that matches skill 0.5.24.
 
 ## [0.5.23] — 2026-10-21
 

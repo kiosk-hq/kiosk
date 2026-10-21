@@ -2,6 +2,6 @@
 
 module Kiosk
   module RLSRSpec
-    VERSION = '0.5.23'
+    VERSION = '0.5.24'
   end
 end

@@ -11,6 +11,12 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.24] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.5.24, matching skill 0.5.24.** `MIN_CLIENT` stays 0.5.23: a 0.5.23 skill pays and ignores the receipts.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.5.24.md`**, which keeps the two receipts that `pay` answers.
+
 - 2026-10-21: **`pay` answers the AP2 v0.2 checkout and payment receipts**, signed PS256 by the operator. Every demo adds `settlements.network_confirmation_id`.
 - 2026-10-21: The Stripe adapter answers the card network's id of a charge, `network_confirmation_id`, when the network gave one.
 

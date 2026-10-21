@@ -12,6 +12,10 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.24] — 2026-10-21
+
+- 2026-10-21: Version 0.5.24, the tree cut that matches skill 0.5.24.
+
 ## [0.5.23] — 2026-10-21
 
 - 2026-10-21: `Scenarios::StolenToken` asserts that a real access token without its key is refused 401. Every suite and scenario sends tokens with a DPoP proof.

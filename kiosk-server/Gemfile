@@ -12,6 +12,7 @@ gem 'rspec', '~> 3.13'
 # Local-development overrides — sibling gems haven't shipped to RubyGems yet.
 gem 'kiosk-core',         path: '../kiosk-core'
 gem 'kiosk-test-support', path: '../kiosk-test-support'
+gem 'kiosk-user-idp-devise', path: '../kiosk-user-idp-devise'
 
 # PoW-gate path deps — available in specs; NOT hard-required in lib code.
 # The host that wires a reputation_policy will have these loaded transitively.

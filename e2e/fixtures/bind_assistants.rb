@@ -3,15 +3,18 @@
 # Mint the two AGENT principals the e2e assistant suite runs as: each human
 # signs in on the site, mints a link code, and a newly keyed assistant claims it.
 #
-# Writes each assistant's private key to KEY_DIR, mode 600: the key signs the
-# DPoP proof of every call its token makes. Prints ONE JSON line:
+# Writes each assistant's private key, mode 600, to its origin directory,
+# KIOSK_HOMES/<name>/.kiosk/ORIGIN_DIR_NAME/key.pem: the key signs the DPoP
+# proof of every call its token makes. Prints ONE JSON line:
 # {alice_agent, alice_token, alice_user, alice_key, bob_agent, bob_token, bob_user, bob_key}.
+require 'fileutils'
 require 'json'
 require 'kiosk/test_helpers/person'
 
 SERVER   = ENV.fetch('SERVER_URL')
 PASSWORD = ENV.fetch('HUMAN_PASSWORD')
-KEY_DIR  = ENV.fetch('KEY_DIR')
+HOMES    = ENV.fetch('KIOSK_HOMES')
+ORIGIN   = ENV.fetch('ORIGIN_DIR_NAME')
 
 alice = Kiosk::TestHelpers::Person.new(SERVER, email: ENV.fetch('ALICE_EMAIL'), password: PASSWORD).links_a_newcomer
 bob   = Kiosk::TestHelpers::Person.new(SERVER, email: ENV.fetch('BOB_EMAIL'),   password: PASSWORD).links_a_newcomer
@@ -24,7 +27,8 @@ bob   = Kiosk::TestHelpers::Person.new(SERVER, email: ENV.fetch('BOB_EMAIL'),   
 end
 
 key_file = lambda do |name, a|
-  File.join(KEY_DIR, "#{name}.pem").tap do |path|
+  File.join(HOMES, name, '.kiosk', ORIGIN, 'key.pem').tap do |path|
+    FileUtils.mkdir_p(File.dirname(path))
     File.write(path, a.principal.rsa_key.to_pem)
     File.chmod(0o600, path)
   end

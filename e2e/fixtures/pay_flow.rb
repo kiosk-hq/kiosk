@@ -5,6 +5,7 @@
 # two closed AP2 mandates for a checkout the operator signed for that
 # principal, and pays. Prints a JSON line on stdout.
 require 'base64'
+require 'fileutils'
 require 'jwt'
 require 'json'
 require 'net/http'
@@ -83,6 +84,16 @@ _, jwks = get_json("#{SERVER}/kiosk/.well-known/jwks.json")
 receipt = ->(name) { JWT.decode(pay.fetch(name), nil, true, algorithms: ['PS256'], jwks: JWT::JWK::Set.new(jwks)).first }
 receipts = rc == 200 ? { checkout: receipt.call('checkout_receipt'), payment: receipt.call('payment_receipt') } : {}
 references = mandates.transform_values { Kiosk::TestHelpers::Mandate.digest(it) }
+
+# The skill's file rule: each payment in its own file in the origin directory,
+# the pay answer and the two mandates, named so the files sort by time.
+if rc == 200
+  path = File.join(ENV.fetch('PAYER_DIR'), 'receipts',
+                   "#{Time.now.utc.strftime('%Y%m%dT%H%M%SZ')}-#{receipts[:payment].fetch('payment_id')}.json")
+  FileUtils.mkdir_p(File.dirname(path))
+  File.write(path, JSON.generate(response: pay, **pay_request))
+  File.chmod(0o600, path)
+end
 
 # THE BYTES, KEPT. `PAY_CAPTURE` names a file to write the request this
 # origin ACCEPTED, the checkout and the two mandates inside it, and the

@@ -49,6 +49,10 @@ DB_NAME="kiosk_e2e_$$"
 export ALICE_EMAIL="alice@example.com" BOB_EMAIL="bob@example.com" HUMAN_PASSWORD="e2e-demo-password"
 APP_NAME="demo_app"
 TMP_DIR="$(mktemp -d -t kiosk-e2e.XXXX)"
+# Each assistant's home. As the skill says, every file an assistant writes for
+# this operator goes in ~/.kiosk/<origin-dir>/ under its home.
+KIOSK_HOMES="$TMP_DIR/homes"
+ORIGIN_DIR_NAME="http_127.0.0.1_$SERVER_PORT"
 SERVER_PID=""
 STRIPE_MOCK_PID=""
 # The origin's log. Named UNIQUELY PER INVOCATION and read back through this
@@ -467,7 +471,7 @@ ok "server up on http://127.0.0.1:$SERVER_PORT"
 log "bind two assistants to the seeded humans (link -> claim)"
 bind_json=$( cd "$PWD" && SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
                KIOSK_ISSUER="$KIOSK_ISSUER" \
-               KEY_DIR="$TMP_DIR" \
+               KIOSK_HOMES="$KIOSK_HOMES" ORIGIN_DIR_NAME="$ORIGIN_DIR_NAME" \
                bundle exec ruby "$FIXTURES/bind_assistants.rb" ) \
   || fail "the binding ceremony did not produce two assistants"
 export ALICE_AGENT=$(echo "$bind_json" | jq -r '.alice_agent')
@@ -505,7 +509,8 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
        KIOSK_OSS="$KIOSK_OSS" \
-       TMP_DIR="$TMP_DIR" \
+       KIOSK_HOMES="$KIOSK_HOMES" \
+       ORIGIN_DIR_NAME="$ORIGIN_DIR_NAME" \
        KIOSK_PYTHON="$KIOSK_PYTHON" \
        bash "$KIOSK_OSS/e2e/assistant.sh"; then
   log "assistant failed — last 80 lines of server log ($SERVER_LOG):"
@@ -555,7 +560,7 @@ if ! SERVER_URL="http://127.0.0.1:$SERVER_PORT" \
        PAY_CAPTURE="$PAY_CAPTURE" \
        POW_CAPTURE="$POW_CAPTURE" \
        AUTH_CAPTURE="$AUTH_CAPTURE" \
-       EVENT_CAPTURE="$TMP_DIR/listener-alice.jsonl" \
+       EVENT_CAPTURE="$(dirname "$ALICE_KEY")/listener-alice.jsonl" \
        bundle exec ruby "$KIOSK_OSS/e2e/schema_conformance.rb"; then
   log "schema conformance failed — last 40 lines of server log ($SERVER_LOG):"
   tail -40 "$SERVER_LOG"

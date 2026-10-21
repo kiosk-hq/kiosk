@@ -1164,6 +1164,8 @@ printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"
 # `payment_setup` is the engine's, served against the provider port: this
 # origin writes no handler for it. The first call maps a Stripe Customer and
 # hands over the setup page; stripe-mock lists a card for it, so the next is ready.
+# The paying assistant's origin directory: its receipts go there.
+PAYER_DIR="$KIOSK_HOMES/payer/.kiosk/$ORIGIN_DIR_NAME"
 alice_setup=$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "payment_setup" '{}')
 assert "payment_setup: served by the engine → setup_required" "$(echo "$alice_setup" | jq -r '.status')" "setup_required"
 assert "…with the page for the human" "$(echo "$alice_setup" | jq -r '.setup_url | startswith("https://")')" "true"
@@ -1171,7 +1173,7 @@ assert "payment_setup: once the card is saved → ready" \
   "$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "payment_setup" '{}' | jq -r '.status')" "ready"
 
 pay_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
-             PAY_CAPTURE="${PAY_CAPTURE:-}" \
+             PAY_CAPTURE="${PAY_CAPTURE:-}" PAYER_DIR="$PAYER_DIR" \
              bundle exec ruby "$FIXTURES/pay_flow.rb" )
 
 assert "pay: setup, then ready"       "$(echo "$pay_out" | jq -r '[.setup[].status] | join(",")')"   "setup_required,ready"
@@ -1187,6 +1189,13 @@ assert "pay: checkout receipt names the checkout mandate" "$(echo "$pay_out" | j
 assert "pay: payment receipt names the payment mandate"   "$(echo "$pay_out" | jq -r '.receipts.payment.reference == .references.payment')" "true"
 assert "pay: checkout receipt names the order"            "$(echo "$pay_out" | jq -r '.receipts.checkout.order_id')" "0b9e6f1c-3d2a-4e5b-8c7d-9a0f1e2d3c4b"
 assert "pay: payment receipt names the settlement"        "$(echo "$pay_out" | jq -r '.receipts.payment.payment_id == .response.settlement_id and .receipts.payment.psp_confirmation_id == .response.psp_reference')" "true"
+
+# The skill's file rule: each payment in its own file, named so the files sort by time.
+receipt_files=$(ls "$PAYER_DIR/receipts")
+assert "pay: the receipts are saved in one file named <UTC time>-<payment_id>.json" \
+  "$(echo "$receipt_files" | grep -cE "^[0-9]{8}T[0-9]{6}Z-$(echo "$pay_out" | jq -r '.response.settlement_id')\.json$")" "1"
+assert "…holding the pay answer and the two mandates" \
+  "$(jq -r '[.response.payment_receipt, .checkout_mandate, .payment_mandate] | map(length > 0) | all' "$PAYER_DIR/receipts/$receipt_files")" "true"
 
 # The AP2 trail landed in Postgres — one row each, no human anywhere.
 assert "db: 1 checkout_mandate"       "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.checkout_mandates')" "1"
@@ -1329,8 +1338,10 @@ EVENTS_URL=$(echo "$wk" | jq -r '.kiosk.events_url')
 # The listener reads its token from a file, never from its command line, and
 # never reads the key: it runs this command for each DPoP proof of the upgrade.
 PROOF_CMD="$KIOSK_PYTHON $DPOP_PY $ALICE_KEY"
-ALICE_TOKEN_FILE="$TMP_DIR/alice.token"
-BAD_TOKEN_FILE="$TMP_DIR/bad.token"
+# Alice's files for this operator live in its origin directory, beside its key.
+ALICE_DIR="$(dirname "$ALICE_KEY")"
+ALICE_TOKEN_FILE="$ALICE_DIR/token"
+BAD_TOKEN_FILE="$ALICE_DIR/bad-token"
 printf %s "$ALICE_AGENT_TOKEN" >|"$ALICE_TOKEN_FILE"
 printf %s "not-a-token" >|"$BAD_TOKEN_FILE"
 
@@ -1349,7 +1360,7 @@ confirm_at_the_desk() {
   curl -sS -o /dev/null -w "%{http_code}" -X POST "$SERVER_URL/salon_desk/confirm/$1"
 }
 
-EV_LOG="$TMP_DIR/listener-alice.jsonl"
+EV_LOG="$ALICE_DIR/listener-alice.jsonl"
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --max-seconds 30 >"$EV_LOG" 2>&1 &
 listener_pid=$!
@@ -1400,7 +1411,7 @@ wait "$listener_pid" 2>/dev/null || true
 # RESUME. The operator keeps every event for 24 hours, so a SECOND listener,
 # started cold with `--since` one below the id it last saw, is handed that event
 # again — from the DATABASE, because the process that broadcast it is gone.
-EV_REPLAY="$TMP_DIR/listener-replay.jsonl"
+EV_REPLAY="$ALICE_DIR/listener-replay.jsonl"
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --since "$((alice_event_id - 1))" --max-seconds 6 \
   >"$EV_REPLAY" 2>&1 || true
@@ -1415,7 +1426,7 @@ assert "…and says the tail was not truncated under it" \
 # not on the deadline.
 r=$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "book_appointment" "{\"salon_id\":$salon_id,\"slot\":\"2026-06-17T11:00:00Z\"}")
 wait_appt_id=$(echo "$r" | jq -r '.appointment_id')
-EV_ONESHOT="$TMP_DIR/listener-oneshot.jsonl"
+EV_ONESHOT="$ALICE_DIR/listener-oneshot.jsonl"
 ( sleep 3; confirm_at_the_desk "$wait_appt_id" >/dev/null ) &
 oneshot_started=$SECONDS
 set +e
@@ -1438,7 +1449,7 @@ assert "…and stopped there, because the wait is over" \
 # listener again rather than reading silence as an answer. Alice's first
 # appointment was confirmed long ago and no `since` is presented, so nothing can
 # arrive on this subscription.
-EV_TIMEOUT="$TMP_DIR/listener-timeout.jsonl"
+EV_TIMEOUT="$ALICE_DIR/listener-timeout.jsonl"
 set +e
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic "appointment_confirmed:$alice_appt_id" --until-event --max-seconds 6 \
@@ -1465,7 +1476,7 @@ r=$(action_call "$ALICE_AGENT_TOKEN" "$ALICE_KEY" "book_appointment" "{\"salon_i
 gap_appt_id=$(echo "$r" | jq -r '.appointment_id')
 assert "the salon confirms an appointment with NOBODY connected" \
   "$(confirm_at_the_desk "$gap_appt_id")" "200"
-EV_GAP="$TMP_DIR/listener-gap.jsonl"
+EV_GAP="$ALICE_DIR/listener-gap.jsonl"
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --since "$oneshot_event_id" --max-seconds 6 \
   >"$EV_GAP" 2>&1 || true
@@ -1481,7 +1492,7 @@ assert "…and nothing at or below the cursor replayed with it" \
 # over a hole. Pruned here directly, because the real trigger is a 24-hour
 # clock this harness does not have.
 psql -X -d "$DB_NAME" -q -c "DELETE FROM kiosk.events WHERE id <= 2" >/dev/null
-EV_TRUNC="$TMP_DIR/listener-truncated.jsonl"
+EV_TRUNC="$ALICE_DIR/listener-truncated.jsonl"
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --since 1 --max-seconds 5 >"$EV_TRUNC" 2>&1 || true
 assert "a cursor the operator can no longer prove continuity from answers truncated" \
@@ -1493,7 +1504,7 @@ assert "…and it is the SUBSCRIPTION that carries it, not an error" \
 # afterwards — and the listener exits 4 rather than sitting on a socket that
 # can never deliver anything, which is the silence it exists to stop an
 # assistant reading as "nothing happened".
-EV_DENIED="$TMP_DIR/listener-denied.jsonl"
+EV_DENIED="$ALICE_DIR/listener-denied.jsonl"
 set +e
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$ALICE_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic "appointment_confirmed:$bob_appt_id" --max-seconds 10 >"$EV_DENIED" 2>&1
@@ -1506,7 +1517,7 @@ assert "…and the listener stops instead of waiting forever" "$denied_rc" "4"
 # AND AN UNAUTHENTICATED SOCKET NEVER GETS ONE. The upgrade is answered — the
 # handshake completes before `connect` runs — so the discriminator is the
 # typed disconnect, not the HTTP status, and the listener reports exactly that.
-EV_ANON="$TMP_DIR/listener-anon.jsonl"
+EV_ANON="$ALICE_DIR/listener-anon.jsonl"
 set +e
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --max-seconds 10 >"$EV_ANON" 2>&1
@@ -1523,12 +1534,17 @@ assert "…and the listener says the credential is finished" "$anon_rc" "3"
 # listener never holds a credential of its own, it asks for a fresh one and
 # reconnects. Driven with a DEAD token and a command that prints a live one,
 # so the branch under test is the recovery rather than the happy path.
-EV_REFRESH="$TMP_DIR/listener-refresh.jsonl"
+EV_REFRESH="$ALICE_DIR/listener-refresh.jsonl"
 "$KIOSK_PYTHON" "$LISTENER" --url "$EVENTS_URL" --token-file "$BAD_TOKEN_FILE" --proof-command "$PROOF_CMD" \
   --topic appointment_confirmed --token-command "printf %s $ALICE_AGENT_TOKEN" \
   --max-seconds 12 >"$EV_REFRESH" 2>&1 || true
 assert "…and with --token-command it mints a fresh one and carries on" \
   "$(grep -c '"type":"subscribed"' "$EV_REFRESH")" "1"
+
+# The skill's file rule: every assistant wrote its files for this operator in
+# ~/.kiosk/<origin-dir>/, and nothing beside it.
+assert "every assistant file is inside its origin directory" \
+  "$(find "$KIOSK_HOMES" -type f ! -path "*/.kiosk/$ORIGIN_DIR_NAME/*" | wc -l | tr -d ' ')" "0"
 
 # ─── summary ────────────────────────────────────────────────────────────
 

@@ -15,6 +15,9 @@ Kiosk.configure do |c|
   c.registration_role  = :customer
   c.owner              = { name: 'Combette E2E Demo', support: 'demo@kiosk.tech' }
 
+  # The harness accepts ES256 beside EdDSA, so it covers both assistant key types.
+  c.assistant_algorithms = %w[EdDSA ES256]
+
   c.registration_pow_count = 1
   c.pow_secret             = ENV.fetch('KIOSK_POW_SECRET')
 

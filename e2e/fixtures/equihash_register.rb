@@ -42,9 +42,9 @@ def registration_body(key) = { jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(key)]
 # @param server   [String]  base URL (e.g. http://127.0.0.1:3001)
 # @param headers  [Hash]    sent on every request (e.g. a Host for a second origin)
 # @param on_proofs [#call, nil] called with the proofs this helper sent, once the server accepted them
-# @param key [OpenSSL::PKey::RSA] the keypair to register; a fresh one by default
-# @return [Array(OpenSSL::PKey::RSA, Hash)] the keypair and the 201 client information
-def equihash_register(server:, headers: {}, on_proofs: nil, key: OpenSSL::PKey::RSA.generate(2048))
+# @param key [OpenSSL::PKey::PKey] the keypair to register; a fresh Ed25519 one by default
+# @return [Array(OpenSSL::PKey::PKey, Hash)] the keypair and the 201 client information
+def equihash_register(server:, headers: {}, on_proofs: nil, key: OpenSSL::PKey.generate_key('ED25519'))
   body = registration_body(key)
   rc, reg = post_json("#{server}/kiosk/oauth/register", body, headers)
   rc, reg = pay_registration_toll(server, body, reg, headers, on_proofs) if rc == 402
@@ -71,7 +71,7 @@ end
 def client_assertion(client_id, key, issuer, **claims)
   now = Time.now.to_i
   JWT.encode({ iss: client_id, sub: client_id, aud: issuer, jti: SecureRandom.uuid, iat: now, exp: now + 60, **claims },
-             key, 'RS256', { typ: 'client-authentication+jwt' })
+             key, Kiosk::TestHelpers::Dpop.algorithm(key), { typ: 'client-authentication+jwt' })
 end
 
 # The two members that authenticate a client.
@@ -104,7 +104,7 @@ def client_token(server:, issuer:, client_id:, key:, headers: {})
 end
 
 # Registers a fresh key and gets its first token; aborts on any failure.
-# @return [Array(OpenSSL::PKey::RSA, Hash, String)] the keypair, the client information and the access token
+# @return [Array(OpenSSL::PKey::PKey, Hash, String)] the keypair, the client information and the access token
 def register_with_token(server:, issuer:, **)
   key, reg = equihash_register(server:, **)
   rc, tok = client_token(server:, issuer:, client_id: reg.fetch('client_id'), key:)

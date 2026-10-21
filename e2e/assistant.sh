@@ -273,7 +273,7 @@ assert "oauth metadata serves client_credentials and the device code" \
 assert "oauth metadata names private_key_jwt" \
   "$(echo "$as_meta" | jq -r '.token_endpoint_auth_methods_supported | join(",")')" "private_key_jwt"
 assert "oauth metadata names the DPoP algorithms" \
-  "$(echo "$as_meta" | jq -r '.dpop_signing_alg_values_supported | join(",")')" "RS256"
+  "$(echo "$as_meta" | jq -r '.dpop_signing_alg_values_supported | join(",")')" "EdDSA,ES256"
 
 # ─── /auth.md is not a cold-start dead end ───────────────────────────────
 #
@@ -903,7 +903,7 @@ bearer_headers=$(curl -sS -o /dev/null -D - "$SERVER_URL/kiosk/salons" \
 assert "a valid token sent as Bearer → 401" \
   "$(echo "$bearer_headers" | head -1 | awk '{print $2}')" "401"
 assert "…naming the DPoP scheme in WWW-Authenticate" \
-  "$(echo "$bearer_headers" | grep -ic '^WWW-Authenticate: DPoP algs="RS256"$')" "1"
+  "$(echo "$bearer_headers" | grep -ic '^WWW-Authenticate: DPoP algs="EdDSA ES256"$')" "1"
 
 status=$(curl -sS -o /dev/null -w "%{http_code}" "$SERVER_URL/kiosk/salons" \
   -H "Authorization: DPoP $ALICE_AGENT_TOKEN")
@@ -1018,23 +1018,21 @@ assert "…with the stream's own URL published beside it" \
 
 # ─── JWKS endpoint ──────────────────────────────────────────────────────
 #
-# /kiosk/.well-known/jwks.json publishes the RSA public key that signs the
-# access tokens of the token endpoint (RS256) and the checkouts (PS256), so
-# the key names no alg.
+# /kiosk/.well-known/jwks.json publishes the Ed25519 public key that signs the
+# access tokens, the checkouts and the receipts, all EdDSA (RFC 8037).
 
 printf "\n\033[1m=== /kiosk/.well-known/jwks.json ===\033[0m\n"
 
 jwks=$(curl -sf "$SERVER_URL/kiosk/.well-known/jwks.json")
 assert "jwks: keys[] present"          "$(echo "$jwks" | jq -r '.keys | length')"          "1"
-assert "jwks: kty=RSA"                 "$(echo "$jwks" | jq -r '.keys[0].kty')"            "RSA"
+assert "jwks: kty=OKP"                 "$(echo "$jwks" | jq -r '.keys[0].kty')"            "OKP"
+assert "jwks: crv=Ed25519"             "$(echo "$jwks" | jq -r '.keys[0].crv')"            "Ed25519"
 assert "jwks: use=sig"                 "$(echo "$jwks" | jq -r '.keys[0].use')"            "sig"
-assert "jwks: no alg (RS256 and PS256)" "$(echo "$jwks" | jq -r '.keys[0] | has("alg")')"   "false"
+assert "jwks: alg=EdDSA"               "$(echo "$jwks" | jq -r '.keys[0].alg')"            "EdDSA"
 assert "jwks: kid present"             "$(echo "$jwks" | jq -r '.keys[0].kid | length > 0')" "true"
-assert "jwks: n (modulus) present"     "$(echo "$jwks" | jq -r '.keys[0].n | length > 0')"   "true"
-assert "jwks: e (exponent) present"    "$(echo "$jwks" | jq -r '.keys[0].e | length > 0')"   "true"
+assert "jwks: x (public key) present"  "$(echo "$jwks" | jq -r '.keys[0].x | length > 0')"   "true"
 # Never leak private parameters.
 assert "jwks: no private d field"      "$(echo "$jwks" | jq -r '.keys[0] | has("d")')"      "false"
-assert "jwks: no private p field"      "$(echo "$jwks" | jq -r '.keys[0] | has("p")')"      "false"
 
 # ─── account binding: claim ceremony → bound wire → link redeem → unlink ──
 #
@@ -1174,6 +1172,21 @@ assert "rotate: the new token with the new key → 200"  "$(echo "$rot_out" | jq
 assert "rotate: the new token with the old key → 401"  "$(echo "$rot_out" | jq -r '.new_token_old_key_proof')"  "401"
 assert "rotate: a token from before the rotation → 401" "$(echo "$rot_out" | jq -r '.old_token_after')"         "401"
 assert "rotate: the old key gets no token → 401"       "$(echo "$rot_out" | jq -r '.old_key_token')"            "401"
+
+# ─── the algorithms of an assistant key (§5.1) ──────────────────────────
+#
+# This origin accepts ES256 beside EdDSA (fixtures/initializer_kiosk.rb).
+printf "\n\033[1m=== a P-256 key signs ES256; an RSA key is refused ===\033[0m\n"
+
+es_out=$( cd "$APP_DIR" && SERVER_URL="$SERVER_URL" KIOSK_ISSUER="$KIOSK_ISSUER" \
+            bundle exec ruby "$FIXTURES/es256_flow.rb" )
+
+assert "es256: the client information names the EC key"  "$(echo "$es_out" | jq -r '.registered_kty')" "EC"
+assert "es256: the proof is signed ES256"                "$(echo "$es_out" | jq -r '.proof_alg')"      "ES256"
+assert "es256: the token is bound to the P-256 key"      "$(echo "$es_out" | jq -r '.bound_to_key')"   "true"
+assert "es256: the token with its ES256 proof → 200"     "$(echo "$es_out" | jq -r '.salons')"         "200"
+assert "rsa: registration of an RSA key → 400"           "$(echo "$es_out" | jq -r '.rsa_register')"   "400"
+assert "…as invalid_client_metadata"                     "$(echo "$es_out" | jq -r '.rsa_error')"      "invalid_client_metadata"
 
 # ─── no-human AP2 pay flow (register → checkout → checkout and payment mandates → pay → persist) ───
 printf "\n\033[1m=== no-human register → mandate → pay ===\033[0m\n"

@@ -14,6 +14,7 @@ require 'kiosk/test_helpers/mandate'
 require 'kiosk/test_helpers/wire'
 require 'uri'
 require 'openssl'
+require 'securerandom'
 
 SERVER = ENV.fetch('SERVER_URL')
 ISSUER = ENV.fetch('KIOSK_ISSUER')
@@ -58,15 +59,15 @@ setup_url = "#{SERVER}/kiosk/payment_setup"
 setup = Array.new(2) { post_json(setup_url, {}, auth.call(setup_url)).last }
 
 # The e2e origin has no action that answers a checkout, so the harness signs one
-# here as the operator does: PS256 with the operator's key, naming its kid.
-operator_key = OpenSSL::PKey::RSA.new(Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64')))
-jwk = { e: Kiosk::TestHelpers::Mandate.b64(operator_key.e.to_s(2)), kty: 'RSA', n: Kiosk::TestHelpers::Mandate.b64(operator_key.n.to_s(2)) }
-kid = Kiosk::TestHelpers::Mandate.digest(JSON.generate(jwk)) # RFC 7638
-checkout = { iss: ISSUER, sub: user_id, iat: Time.now.to_i,
+# here as the operator does: EdDSA with the operator's key, naming its kid, with
+# a random jti.
+operator_key = OpenSSL::PKey.read(Base64.decode64(ENV.fetch('KIOSK_SIGNING_KEY_B64')))
+kid = Kiosk::TestHelpers::Dpop.thumbprint(operator_key) # RFC 7638
+checkout = { iss: ISSUER, sub: user_id, iat: Time.now.to_i, jti: SecureRandom.urlsafe_base64(16),
              merchant: { id: ISSUER, name: 'Combette E2E Demo', website: ISSUER },
              currency: 'eur', total_amount_cents: 1599,
              line_items: [{ order_id: '0b9e6f1c-3d2a-4e5b-8c7d-9a0f1e2d3c4b' }, { sku: 'pizza', qty: 1, price_cents: 1599 }] }
-checkout_jwt = JWT.encode(checkout, operator_key, 'PS256', { kid:, typ: 'JWT' })
+checkout_jwt = JWT.encode(checkout, operator_key, 'EdDSA', { kid:, typ: 'JWT' })
 
 mandates    = Kiosk::TestHelpers::Mandate.pay(key, checkout_jwt, instrument: 'pm_demo')
 pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates[:payment] }
@@ -74,10 +75,12 @@ pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates
 pay_url = "#{SERVER}/kiosk/pay"
 rc, pay = post_json(pay_url, pay_request, auth.call(pay_url))
 
-# The two AP2 receipts, verified as an assistant verifies them: against the
-# JWKS the origin serves, PS256. Each names the mandate it answers by reference.
+# The two AP2 receipts, verified as an assistant verifies them: against the key
+# of the JWKS the origin serves that the kid names, EdDSA. Each names the
+# mandate it answers by reference.
 _, jwks = get_json("#{SERVER}/kiosk/.well-known/jwks.json")
-receipt = ->(name) { JWT.decode(pay.fetch(name), nil, true, algorithms: ['PS256'], jwks: JWT::JWK::Set.new(jwks)).first }
+jwk_for = ->(header) { Kiosk::Server::Jwk.import(jwks.fetch('keys').find { it['kid'] == header['kid'] }) }
+receipt = ->(name) { JWT.decode(pay.fetch(name), nil, true, algorithms: ['EdDSA'], &jwk_for).first }
 receipts = rc == 200 ? { checkout: receipt.call('checkout_receipt'), payment: receipt.call('payment_receipt') } : {}
 references = mandates.transform_values { Kiosk::TestHelpers::Mandate.digest(it) }
 

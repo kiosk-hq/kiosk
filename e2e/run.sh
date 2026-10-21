@@ -357,7 +357,7 @@ ruby -e '
 ok "fixtures + generator output staged"
 
 # ─── the origin's environment ───────────────────────────────────────────
-SIGNING_KEY_PEM=$(openssl genrsa 2048 2>/dev/null)
+SIGNING_KEY_PEM=$(openssl genpkey -algorithm ed25519)
 export KIOSK_SIGNING_KEY_B64=$(echo "$SIGNING_KEY_PEM" | base64)
 export KIOSK_POW_SECRET=$(openssl rand -hex 32)
 export STRIPE_MOCK_URL="http://127.0.0.1:12111"

@@ -217,7 +217,7 @@ problems = []
 # 402 this block is here to capture would never be issued.
 require 'openssl'
 status, raw = post('/kiosk/oauth/register',
-                   JSON.generate(jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(OpenSSL::PKey::RSA.new(2048))] }))
+                   JSON.generate(jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(OpenSSL::PKey.generate_key('ED25519'))] }))
 problems << ["POST /kiosk/oauth/register (unpaid toll, #{status})", parse(raw)]
 
 # The token poll's toll comes before the device code is looked up, so an
@@ -256,7 +256,7 @@ problems << ["GET /kiosk/#{PROBE_QUERY} unauthenticated (#{status})", parse(raw)
 # machine this harness does not own. A call that carries the token carries a
 # proof that KEY_FILE's key signs for its method and URL (RFC 9449).
 TOKEN = LIVE ? ENV.fetch('TOKEN', nil) : ENV.fetch('TOKEN')
-KEY   = TOKEN && OpenSSL::PKey::RSA.new(File.read(ENV.fetch('KEY_FILE')))
+KEY   = TOKEN && OpenSSL::PKey.read(File.read(ENV.fetch('KEY_FILE')))
 AUTH  = TOKEN ? ->(method, path) { Kiosk::TestHelpers::Dpop.headers(TOKEN, KEY, method:, url: "#{SERVER}#{path}") } : nil
 
 # `salons` declares a CLOSED empty input_schema, so an undeclared argument is
@@ -493,7 +493,7 @@ if auth_capture && !auth_capture.empty? && File.exist?(auth_capture)
   end
   conforms('the registered public JWK', A, auth.fetch('registration_request').dig('jwks', 'keys', 0),
            pointer: '#/$defs/publicJwk') do |doc|
-    doc['kty'] = 'EC' # RS256 is the one algorithm
+    doc['kty'] = 'RSA' # an RSA key is refused
     doc
   end
 

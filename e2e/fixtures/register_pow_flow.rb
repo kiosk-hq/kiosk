@@ -57,7 +57,7 @@ require_relative 'equihash_register'
 results = {}
 
 # ── 1. No-proof register is toll-gated (402 pow_required + challenges[]) ──────
-rc_noproof, reg_noproof = post_json("#{SERVER}/kiosk/oauth/register", registration_body(OpenSSL::PKey::RSA.generate(2048)))
+rc_noproof, reg_noproof = post_json("#{SERVER}/kiosk/oauth/register", registration_body(OpenSSL::PKey.generate_key('ED25519')))
 results[:no_proof_status] = rc_noproof
 # RFC 9457: the branch point is the TOP-LEVEL `code`, and `challenges` is a
 # top-level extension member beside it.

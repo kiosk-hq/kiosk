@@ -53,7 +53,7 @@ def salons_status(token, key) = get_json(SALONS, Kiosk::TestHelpers::Dpop.header
 require_relative 'equihash_register'
 old_key, reg, old_token = register_with_token(server: SERVER, issuer: ISSUER)
 client_id = reg.fetch('client_id')
-new_key = OpenSSL::PKey::RSA.generate(2048)
+new_key = OpenSSL::PKey.generate_key('ED25519')
 results = { old_token_before: salons_status(old_token, old_key) }
 
 rotate = lambda do |old_assertion|

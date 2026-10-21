@@ -30,7 +30,7 @@ end
 key_file = lambda do |name, a|
   File.join(HOMES, name, '.kiosk', ORIGIN, 'key.pem').tap do |path|
     FileUtils.mkdir_p(File.dirname(path))
-    File.write(path, a.principal.rsa_key.to_pem)
+    File.write(path, a.principal.key.private_to_pem)
     File.chmod(0o600, path)
   end
 end

@@ -231,7 +231,7 @@ cap['device_token_response'] = granted
 # Each key signs a client assertion, and the old key's assertion names the new
 # key by its thumbprint. The client stays, so the unlink below still finds the
 # agent the claim bound.
-new_key = OpenSSL::PKey::RSA.generate(2048)
+new_key = OpenSSL::PKey.generate_key('ED25519')
 rotate_body = { 'client_assertion_type' => ASSERTION_TYPE,
                 'client_assertion' => client_assertion(client_id, reg_key, ISSUER,
                                                        new_key: Kiosk::TestHelpers::Dpop.thumbprint(new_key)),

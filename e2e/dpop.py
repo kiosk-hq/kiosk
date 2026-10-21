@@ -1,19 +1,26 @@
 # Prints a DPoP proof (RFC 9449) for one request: python3 dpop.py <key.pem> [METHOD],
 # with the URL on the first line of stdin and the access token on the second.
 # With no token on stdin, it prints the proof of a token request, which has no `ath`.
+# An Ed25519 key signs EdDSA (RFC 8037); a P-256 key signs ES256.
 import base64, hashlib, sys, time, uuid
 import jwt
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from cryptography.hazmat.primitives.asymmetric import ed25519
+from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat, load_pem_private_key
 
 
 def b64(data):
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
 
+def algorithm(key):
+    return "EdDSA" if isinstance(key, ed25519.Ed25519PrivateKey) else "ES256"
+
+
 def public_jwk(key):
+    if isinstance(key, ed25519.Ed25519PrivateKey):
+        return {"crv": "Ed25519", "kty": "OKP", "x": b64(key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw))}
     nums = key.public_key().public_numbers()
-    octets = lambda i: i.to_bytes((i.bit_length() + 7) // 8, "big")
-    return {"e": b64(octets(nums.e)), "kty": "RSA", "n": b64(octets(nums.n))}
+    return {"crv": "P-256", "kty": "EC", "x": b64(nums.x.to_bytes(32, "big")), "y": b64(nums.y.to_bytes(32, "big"))}
 
 
 def dpop_proof(key_pem, method, url, token=None):
@@ -22,7 +29,7 @@ def dpop_proof(key_pem, method, url, token=None):
               "iat": int(time.time())}
     if token:
         claims["ath"] = b64(hashlib.sha256(token.encode()).digest())
-    return jwt.encode(claims, key, algorithm="RS256", headers={"typ": "dpop+jwt", "jwk": public_jwk(key)})
+    return jwt.encode(claims, key, algorithm=algorithm(key), headers={"typ": "dpop+jwt", "jwk": public_jwk(key)})
 
 
 # The harness signs for any method, GET by default, so the listener runs it as its --proof-command.

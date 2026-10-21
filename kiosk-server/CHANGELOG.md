@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: A DPoP proof or client assertion whose `alg` is not the algorithm of its key is refused with a message that names that algorithm.
+
 ## [0.6.0] — 2026-10-21
 
 - 2026-10-21: The engine signs tokens, checkouts and receipts EdDSA with an Ed25519 `c.signing_key`; an RSA key is refused.

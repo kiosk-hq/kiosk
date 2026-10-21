@@ -50,9 +50,21 @@ RSpec.describe Kiosk::Server::ClientAssertion do
 
   it 'refuses an algorithm other than the one of the registered key: RS256, ES256, an HMAC keyed with the public key' do
     payload = { iss: client.id, sub: client.id, aud: OauthClients::ISSUER, exp: Time.now.to_i + 60, jti: 'j' }
-    expect_refused(/signature invalid/) { authenticate(JWT.encode(payload, client.public_key_pem, 'HS256')) }
-    expect_refused(/signature invalid/) { authenticate(JWT.encode(payload, OpenSSL::PKey::RSA.generate(2048), 'RS256')) }
-    expect_refused(/signature invalid/) { authenticate(JWT.encode(payload, Kiosk::TestHelpers::Dpop.generate_key('ES256'), 'ES256')) }
+    expect_refused(/alg is not EdDSA/) { authenticate(JWT.encode(payload, client.public_key_pem, 'HS256')) }
+    expect_refused(/alg is not EdDSA/) { authenticate(JWT.encode(payload, OpenSSL::PKey::RSA.generate(2048), 'RS256')) }
+    expect_refused(/alg is not EdDSA/) { authenticate(JWT.encode(payload, Kiosk::TestHelpers::Dpop.generate_key('ES256'), 'ES256')) }
+  end
+
+  it 'refuses an assertion that the registered key signed under the alg of another key type' do
+    payload = { iss: client.id, sub: client.id, aud: OauthClients::ISSUER, exp: Time.now.to_i + 60, jti: 'j' }
+    %w[RS256 ES256].each do |alg|
+      expect_refused(/alg is not EdDSA, the algorithm of your registered key/) { authenticate(mislabelled_jws(payload, agent_key, alg)) }
+    end
+    Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
+    p256 = Kiosk::TestHelpers::Dpop.generate_key('ES256')
+    ec_client = register_client(p256)
+    ec_payload = payload.merge(iss: ec_client.id, sub: ec_client.id)
+    expect_refused(/alg is not ES256, the algorithm of your registered key/) { authenticate(mislabelled_jws(ec_payload, p256, 'EdDSA')) }
   end
 
   it 'refuses a client whose registered key this operator no longer accepts, and says to register a new key' do

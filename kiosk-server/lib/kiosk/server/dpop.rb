@@ -87,8 +87,11 @@ module Kiosk
       # The key is the proof's own `jwk`, and its type names the one algorithm.
       def decode(proof)
         key = header_key(::JWT.decode(proof, nil, false).last)
-        claims, = ::JWT.decode(proof, key, true, algorithms: [AssistantKey.algorithm(key)], required_claims: CLAIMS)
+        algorithm = AssistantKey.algorithm(key)
+        claims, = ::JWT.decode(proof, key, true, algorithms: [algorithm], required_claims: CLAIMS)
         [key, claims]
+      rescue ::JWT::IncorrectAlgorithm
+        raise Invalid, "the DPoP proof alg is not #{algorithm}, the algorithm of its jwk"
       rescue ::JWT::DecodeError
         raise Invalid, 'the DPoP proof is not a JWS that its jwk signed, with the claims of RFC 9449'
       end

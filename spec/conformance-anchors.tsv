@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2065 anchors.
+# 2068 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1345,6 +1345,7 @@ kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an absent assert
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an algorithm other than the one of the registered key: RS256, ES256, an HMAC keyed with the public key
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion that another key signed
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion that is not a JWT
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion that the registered key signed under the alg of another key type
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion with no jti, or with iss other than sub
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an expired assertion and one that lives more than 300 seconds
 kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an unknown client, also a sub that is not a UUID
@@ -1432,6 +1433,8 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the manifest
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the four pointer documents public, one minute
 kiosk-server/spec/kiosk/server/dpop_spec.rb	accepts a proof of the registered key with no ath
 kiosk-server/spec/kiosk/server/dpop_spec.rb	accepts an ES256 proof of a P-256 key at an operator that accepts ES256
+kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses a proof that its Ed25519 key signed under alg RS256 or ES256
+kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses a proof that its P-256 key signed under alg EdDSA at an operator that accepts ES256
 kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses an ES256 proof of a P-256 key at an operator that accepts EdDSA alone
 kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses an RS256 proof of an RSA key
 kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses no proof, a proof of another key, and a proof for another method

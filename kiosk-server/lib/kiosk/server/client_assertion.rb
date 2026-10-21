@@ -104,6 +104,8 @@ module Kiosk
       def decode(assertion, key)
         ::JWT.decode(assertion.to_s, key, true, algorithms: [AssistantKey.algorithm(key)],
                                                 required_claims: REQUIRED_CLAIMS, leeway: LEEWAY).first
+      rescue ::JWT::IncorrectAlgorithm
+        refuse!("client assertion alg is not #{AssistantKey.algorithm(key)}, the algorithm of your registered key", SIGNATURE_HINT)
       rescue ::JWT::MissingRequiredClaim
         refuse!('client assertion is missing a required claim', CLAIMS_HINT)
       rescue ::JWT::ExpiredSignature

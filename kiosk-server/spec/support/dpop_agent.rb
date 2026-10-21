@@ -1,5 +1,8 @@
 # frozen_string_literal: true
 
+require 'base64'
+require 'json'
+require 'jwt'
 require 'openssl'
 require 'kiosk/test_helpers/dpop'
 
@@ -21,4 +24,11 @@ module DpopAgent
   def dpop_env(token, method:, url:, key: KEY) = Kiosk::TestHelpers::Dpop.env(token, key, method:, url:)
 
   def dpop_headers(token, method:, url:, key: KEY) = Kiosk::TestHelpers::Dpop.headers(token, key, method:, url:)
+
+  # A JWS whose header names `alg`, signed by `key` with the algorithm of its own type.
+  def mislabelled_jws(payload, key, alg, header = {})
+    input = [header.merge(alg: alg), payload].map { Base64.urlsafe_encode64(JSON.generate(it), padding: false) }.join('.')
+    signature = JWT::JWA.resolve(Kiosk::TestHelpers::Dpop.algorithm(key)).sign(data: input, signing_key: key)
+    "#{input}.#{Base64.urlsafe_encode64(signature, padding: false)}"
+  end
 end

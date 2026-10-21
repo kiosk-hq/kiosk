@@ -183,7 +183,22 @@ RSpec.describe Kiosk::Server::Dpop do
     end
 
     it 'refuses an Ed25519 jwk on a proof whose alg is not EdDSA' do
-      expect_refused(/not a JWS that its jwk signed/, proof: JWT.encode(claims, 'secret', 'HS256', { typ: 'dpop+jwt', jwk: public_jwk }))
+      expect_refused(/alg is not EdDSA, the algorithm of its jwk/,
+                     proof: JWT.encode(claims, 'secret', 'HS256', { typ: 'dpop+jwt', jwk: public_jwk }))
+    end
+
+    it 'refuses a proof that its Ed25519 key signed under alg RS256 or ES256' do
+      %w[RS256 ES256].each do |alg|
+        expect_refused(/alg is not EdDSA, the algorithm of its jwk/,
+                       proof: mislabelled_jws(claims, agent_key, alg, { typ: 'dpop+jwt', jwk: public_jwk }))
+      end
+    end
+
+    it 'refuses a proof that its P-256 key signed under alg EdDSA at an operator that accepts ES256' do
+      Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
+      proof = mislabelled_jws(claims, p256, 'EdDSA', { typ: 'dpop+jwt', jwk: public_jwk(p256) })
+      expect { described_class.verify!(proof, token:, jkt: Kiosk::TestHelpers::Dpop.thumbprint(p256), method: 'GET', url:) }
+        .to raise_error(Kiosk::Server::Errors::AccessTokenRefused, /alg is not ES256, the algorithm of its jwk/) { |e| expect(e.http_status).to eq(401) }
     end
   end
 end

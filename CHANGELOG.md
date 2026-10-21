@@ -11,6 +11,18 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+## [0.5.23] — 2026-10-21
+
+- 2026-10-21: **Every gem and `API_VERSION` are 0.5.23, matching skill 0.5.23.** `MIN_CLIENT` is 0.5.23: an older skill sends no DPoP proof.
+
+- 2026-10-21: **Every demo and the engine default pin `skill-v0.5.23.md`**, which sends a DPoP proof with each call and rotates a key without a new account.
+
+- 2026-10-21: **Every access token is bound to the assistant's key (DPoP, RFC 9449).** A call sends `Authorization: DPoP` with a `DPoP` proof; a token alone gets `401`.
+- 2026-10-21: `POST /kiosk/auth/rotate` puts a new key on an assistant account. Both keys sign, and the account keeps its binding and reputation.
+- 2026-10-21: `c.previous_signing_key` keeps an operator's old key in the JWKS, so a token or checkout that it signed still verifies while the key changes.
+- 2026-10-21: The card-setup `402` carries `WWW-Authenticate: Kiosk-Payment-Setup realm="<issuer>"` in place of the IETF `Payment` scheme name.
+- 2026-10-21: The listener in `kiosk-server/listen.py` sends a DPoP proof that the assistant's `--proof-command` prints; it never reads the key.
+
 ## [0.5.22] — 2026-10-21
 
 - 2026-10-21: **Every gem and `API_VERSION` are 0.5.22, matching skill 0.5.22.** `MIN_CLIENT` is 0.5.22: an older skill cannot pay.

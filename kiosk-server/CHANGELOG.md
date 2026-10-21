@@ -12,6 +12,14 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.23] — 2026-10-21
+
+- 2026-10-21: Every access token carries `cnf.jkt`, and `IdentityResolution` refuses a call without a DPoP proof by that key (`Errors::AccessTokenRefused`, `WWW-Authenticate: DPoP`).
+- 2026-10-21: `POST <endpoint>/auth/rotate` (`AgentRotation`) puts a new key on an agent and revokes its earlier tokens.
+- 2026-10-21: `c.previous_signing_key` is published in the JWKS and accepted for tokens and checkouts; `c.signing_keys` lists both.
+- 2026-10-21: The payment-setup `402` names `Kiosk-Payment-Setup` in `WWW-Authenticate`. The device grant answers `token_type: "DPoP"`.
+- 2026-10-21: Version 0.5.23, the tree cut that matches skill 0.5.23.
+
 ## [0.5.22] — 2026-10-21
 
 - 2026-10-21: `pay` verifies a closed AP2 v0.2 checkout mandate and payment mandate, each an SD-JWT, against a checkout this origin signed PS256.

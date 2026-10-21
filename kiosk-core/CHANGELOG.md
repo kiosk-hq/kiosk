@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.23] — 2026-10-21
+
+- 2026-10-21: `AgentIdentityProviders::Base` states that an identity's claims carry `cnf: { jkt: }`, the key that signs the call's DPoP proof.
+- 2026-10-21: Version 0.5.23, the tree cut that matches skill 0.5.23.
+
 ## [0.5.22] — 2026-10-21
 
 - 2026-10-21: `Kiosk::Mandate` holds the two AP2 v0.2 mandates, `CheckoutMandate` and `PaymentMandate`; the payment port captures a checkout mandate.

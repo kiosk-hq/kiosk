@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.5.23] — 2026-10-21
+
+- 2026-10-21: `Scenarios::StolenToken` asserts that a real access token without its key is refused 401. Every suite and scenario sends tokens with a DPoP proof.
+- 2026-10-21: Version 0.5.23, the tree cut that matches skill 0.5.23.
+
 ## [0.5.22] — 2026-10-21
 
 - 2026-10-21: The payment scenarios attack the signed checkout and the two AP2 v0.2 mandates; `WrongCurrencyCart` is `WrongCurrencyPayment`.

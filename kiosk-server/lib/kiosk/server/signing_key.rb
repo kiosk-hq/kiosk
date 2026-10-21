@@ -1,80 +1,48 @@
 # frozen_string_literal: true
 
 require 'openssl'
-require 'base64'
-require 'digest'
-require 'json'
 
 module Kiosk
   module Server
-    # The RSA key that signs this deployment's JWTs, and its public JWK. The
-    # key signs RS256 access tokens and PS256 checkouts, so the JWK names no `alg`.
+    # The Ed25519 key that signs this deployment's JWTs (EdDSA, RFC 8037): its
+    # access tokens, checkouts and receipts. Its public JWK names `alg` EdDSA.
     class SigningKey
-      MIN_KEY_BITS = 2048
+      HINT = 'generate one with `openssl genpkey -algorithm ed25519`'
 
-      attr_reader :rsa
+      attr_reader :key
 
-      def initialize(rsa)
-        raise ArgumentError, "expected OpenSSL::PKey::RSA, got #{rsa.class}" unless rsa.is_a?(OpenSSL::PKey::RSA)
-        if rsa.n.num_bits < MIN_KEY_BITS
-          raise ArgumentError,
-                "RSA key is #{rsa.n.num_bits} bits; minimum is #{MIN_KEY_BITS}"
-        end
-        @rsa = rsa
+      def initialize(key)
+        raise ArgumentError, "the signing key is an Ed25519 key, got #{key.class}; #{HINT}" unless Jwk.ed25519?(key)
+
+        @key = key
       end
 
-      def self.generate(bits: MIN_KEY_BITS)
-        new(OpenSSL::PKey::RSA.generate(bits))
+      def self.generate
+        new(OpenSSL::PKey.generate_key('ED25519'))
       end
 
-      # A public-only PEM verifies; a full keypair also signs.
+      # A public-only PEM verifies; a private PEM also signs.
       def self.from_pem(pem)
-        new(OpenSSL::PKey::RSA.new(pem))
+        new(OpenSSL::PKey.read(pem))
+      rescue OpenSSL::PKey::PKeyError
+        raise ArgumentError, "the signing key is not a PEM key; #{HINT}"
       end
 
-      delegate :public_key, to: :rsa
-
-      delegate :private?, to: :rsa
+      def private? = Jwk.private?(key)
 
       def to_pem
         raise 'cannot export PEM: signing key is public-only' unless private?
 
-        rsa.to_pem
+        key.private_to_pem
       end
 
       # The RFC 7638 thumbprint.
       def kid
-        @kid ||= compute_thumbprint
+        @kid ||= Jwk.thumbprint(key)
       end
 
-      # RFC 7517 §4; never the private parameters.
-      def to_jwk
-        {
-          kty: 'RSA',
-          use: 'sig',
-          kid: kid,
-          n: b64url(rsa.n.to_s(2)),
-          e: b64url(rsa.e.to_s(2))
-        }
-      end
-
-      private
-
-      def compute_thumbprint
-        # RFC 7638 §3.2: the required members, in alphabetical order.
-        canonical = JSON.generate(
-          {
-            e: b64url(rsa.e.to_s(2)),
-            kty: 'RSA',
-            n: b64url(rsa.n.to_s(2))
-          }
-        )
-        b64url(Digest::SHA256.digest(canonical))
-      end
-
-      def b64url(bytes)
-        Base64.urlsafe_encode64(bytes, padding: false)
-      end
+      # RFC 7517 §4; never the private member.
+      def to_jwk = { **Jwk.public_members(key), use: 'sig', alg: Eddsa::NAME, kid: kid }
     end
   end
 end

@@ -2,120 +2,75 @@
 
 require 'openssl'
 
-module SigningKeySpecSetup
-  extend RSpec::SharedContext
-
-  # Generating an RSA 2048 key takes ~100ms; cache one for the whole file.
-  let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
-  let(:signing_key) { described_class.new(rsa) }
-end
-
 RSpec.describe Kiosk::Server::SigningKey do
+  let(:ed25519)     { OpenSSL::PKey.generate_key('ED25519') }
+  let(:signing_key) { described_class.new(ed25519) }
+
   describe '.generate' do
-    include SigningKeySpecSetup
-
-    it 'produces a SigningKey carrying a private key' do
+    it 'produces a SigningKey carrying a private Ed25519 key' do
       key = described_class.generate
-      expect(key).to be_a(described_class)
-      expect(key).to be_private
-      expect(key.rsa.n.num_bits).to be >= 2048
-    end
-
-    it 'accepts a `bits:` override (still ≥ minimum)' do
-      key = described_class.generate(bits: 3072)
-      expect(key.rsa.n.num_bits).to eq(3072)
+      expect([key.private?, key.key.oid]).to eq([true, 'ED25519'])
     end
   end
 
   describe '.from_pem' do
-    include SigningKeySpecSetup
-
     it 'round-trips through PEM serialisation' do
-      pem = rsa.to_pem
-      key = described_class.from_pem(pem)
-      expect(key.kid).to eq(signing_key.kid)
+      expect(described_class.from_pem(ed25519.private_to_pem).kid).to eq(signing_key.kid)
     end
 
     it 'accepts a public-only PEM (verifier role)' do
-      pub_pem = rsa.public_key.to_pem
-      key = described_class.from_pem(pub_pem)
-      expect(key).not_to be_private
+      expect(described_class.from_pem(ed25519.public_to_pem)).not_to be_private
+    end
+
+    it 'refuses a PEM that is not a key, and names the command that makes one' do
+      expect { described_class.from_pem('PEM') }.to raise_error(ArgumentError, /openssl genpkey -algorithm ed25519/)
     end
   end
 
   describe '.new validation' do
-    include SigningKeySpecSetup
-
-    it 'rejects a non-RSA argument' do
-      expect { described_class.new('not a key') }
-        .to raise_error(ArgumentError, /RSA/)
+    it 'refuses an RSA key and a P-256 key, and names the command that makes an Ed25519 key' do
+      [OpenSSL::PKey::RSA.generate(2048), OpenSSL::PKey::EC.generate('prime256v1')].each do |key|
+        expect { described_class.new(key) }.to raise_error(ArgumentError, /Ed25519.*openssl genpkey -algorithm ed25519/)
+      end
     end
 
-    it 'rejects an undersized RSA key' do
-      undersized = OpenSSL::PKey::RSA.generate(1024)
-      expect { described_class.new(undersized) }
-        .to raise_error(ArgumentError, /minimum is 2048/)
+    it 'refuses what is not a key' do
+      expect { described_class.new('not a key') }.to raise_error(ArgumentError, /Ed25519/)
     end
   end
 
   describe '#kid (RFC 7638 thumbprint)' do
-    include SigningKeySpecSetup
-
     it 'is the same for two SigningKey instances over the same underlying key' do
-      pub_only = described_class.from_pem(rsa.public_key.to_pem)
-      expect(pub_only.kid).to eq(signing_key.kid)
+      expect(described_class.from_pem(ed25519.public_to_pem).kid).to eq(signing_key.kid)
     end
 
     it 'is base64url with no padding' do
-      expect(signing_key.kid).to match(/\A[A-Za-z0-9_-]+\z/)
+      expect(signing_key.kid).to match(/\A[A-Za-z0-9_-]{43}\z/)
     end
 
     it 'differs for distinct keys' do
-      other = described_class.generate
-      expect(other.kid).not_to eq(signing_key.kid)
+      expect(described_class.generate.kid).not_to eq(signing_key.kid)
     end
   end
 
   describe '#to_jwk' do
-    include SigningKeySpecSetup
-
     let(:jwk) { signing_key.to_jwk }
 
-    it 'has the required RSA-public members' do
-      expect(jwk.keys).to include(:kty, :use, :kid, :n, :e)
-    end
-
-    it 'advertises kty=RSA and use=sig, and no alg: the key signs RS256 and PS256' do
-      expect(jwk).to include(kty: 'RSA', use: 'sig')
-      expect(jwk).not_to have_key(:alg)
-    end
-
-    it 'encodes n and e as base64url without padding' do
-      expect(jwk[:n]).to match(/\A[A-Za-z0-9_-]+\z/)
-      expect(jwk[:e]).to match(/\A[A-Za-z0-9_-]+\z/)
-    end
-
-    it 'never leaks private parameters (d, p, q, …)' do
-      expect(jwk.keys).not_to include(:d, :p, :q, :dp, :dq, :qi)
-    end
-
-    it 'carries the same kid as #kid' do
-      expect(jwk[:kid]).to eq(signing_key.kid)
+    it 'has the RFC 8037 public members, use sig, alg EdDSA and the kid, and nothing else' do
+      expect(jwk).to eq(kty: 'OKP', crv: 'Ed25519', x: Base64.urlsafe_encode64(ed25519.raw_public_key, padding: false),
+                        use: 'sig', alg: 'EdDSA', kid: signing_key.kid)
     end
   end
 
   describe '#to_pem' do
-    include SigningKeySpecSetup
-
     it 'exports a private PEM that round-trips' do
       pem = signing_key.to_pem
-      expect(pem).to include('BEGIN RSA PRIVATE KEY').or include('BEGIN PRIVATE KEY')
-      restored = described_class.from_pem(pem)
-      expect(restored.kid).to eq(signing_key.kid)
+      expect(pem).to include('BEGIN PRIVATE KEY')
+      expect(described_class.from_pem(pem).kid).to eq(signing_key.kid)
     end
 
     it 'raises when the instance is public-only' do
-      pub_only = described_class.from_pem(rsa.public_key.to_pem)
+      pub_only = described_class.from_pem(ed25519.public_to_pem)
       expect { pub_only.to_pem }.to raise_error(/public-only/)
     end
   end

@@ -28,7 +28,7 @@ module TwoOriginsSpec
 
   def assertion(aud)
     JWT.encode({ iss: CLIENT_ID, sub: CLIENT_ID, aud: aud, exp: Time.now.to_i + 60, jti: SecureRandom.uuid },
-               agent_key, 'RS256')
+               agent_key, 'EdDSA')
   end
 
   # The claims of a verified client assertion. The client is the suite key's,
@@ -173,7 +173,7 @@ RSpec.describe Kiosk::Server::IssuerMiddleware do
         _, headers, = through_middleware(
           Kiosk::Server::OauthRegistrationController.action(:create), "#{b}/kiosk/oauth/register",
           method: 'POST', 'CONTENT_TYPE' => 'application/json',
-          input: JSON.generate(jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key.public_key)] })
+          input: JSON.generate(jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key)] })
         )
         expect(headers['WWW-Authenticate']).to eq(%(Kiosk-PoW realm="#{b}"))
       end

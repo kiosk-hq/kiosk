@@ -102,7 +102,7 @@ RSpec.describe 'DiscoveryController' do
       expect(headers['Content-Type']).to include('application/json')
       expect(JSON.parse(raw)).to eq(
         'resource' => 'https://api.acme.example', 'authorization_servers' => ['https://api.acme.example'],
-        'bearer_methods_supported' => ['header'], 'dpop_signing_alg_values_supported' => ['RS256'],
+        'bearer_methods_supported' => ['header'], 'dpop_signing_alg_values_supported' => ['EdDSA'],
         'dpop_bound_access_tokens_required' => true, 'resource_documentation' => 'https://api.acme.example/auth.md'
       )
     end

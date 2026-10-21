@@ -54,7 +54,7 @@ module KycSpec
       c.kyc_claims     = %w[age_over_18 licence_a]
       c.kyc_issuer     = 'https://kyc.example'
       c.kyc_audience   = 'shop'
-      c.kyc_public_key = kyc_key.public_key
+      c.kyc_public_key = kyc_key
     end
   end
 
@@ -102,7 +102,7 @@ module KycSpec
   def attestation(sub: 'u-1', operator: 'shop', attributes: { 'age_over_18' => true, 'licence_a' => true })
     now = Time.now.to_i
     JWT.encode({ sub: sub, level: 'verified', iss: 'https://kyc.example', aud: 'shop', operator: operator,
-                 iat: now, exp: now + 600, attributes: attributes }, kyc_key, 'RS256')
+                 iat: now, exp: now + 600, attributes: attributes }, kyc_key, 'EdDSA')
   end
 
   def open_request(age: 0, user_id: 'u-1')
@@ -151,7 +151,7 @@ RSpec.shared_context 'with Postgres for KYC' do
   after { KycSpec.drop_schema }
 
   let(:store)    { MemoryEventStore.new }
-  let(:kyc_key)  { OpenSSL::PKey::RSA.generate(2048) }
+  let(:kyc_key)  { OpenSSL::PKey.generate_key('ED25519') }
   let(:provider) { KycSpecProvider.new }
 end
 

@@ -428,7 +428,7 @@ RSpec.describe Kiosk::Server::PaymentClaim do
         c.signing_key = CHECKOUT_SIGNING_KEY
       end
       claims = JWT.decode(read.checkout([{ sku: 'room', qty: 2, price_cents: 250 }]),
-                          CHECKOUT_SIGNING_KEY.public_key, true, algorithms: ['PS256']).first
+                          CHECKOUT_SIGNING_KEY.key, true, algorithms: ['EdDSA']).first
 
       expect(claims).to include('sub' => owner, 'currency' => 'eur', 'total_amount_cents' => 500,
                                 'line_items' => [{ 'booking_id' => row }, { 'sku' => 'room', 'qty' => 2, 'price_cents' => 250 }])

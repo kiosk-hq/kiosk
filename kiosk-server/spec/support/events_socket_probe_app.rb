@@ -43,8 +43,8 @@ NO_TOPICS = ENV['PROBE_NO_TOPICS'] == '1'
 
 # ── a fake agent-IdP: one token, one identity, bound to one key ───────────────
 GOOD_TOKEN = 'good-token'
-AGENT_KEY  = OpenSSL::PKey::RSA.generate(2048)
-AGENT_JKT  = Kiosk::Server::SigningKey.new(AGENT_KEY.public_key).kid
+AGENT_KEY  = OpenSSL::PKey.generate_key('ED25519')
+AGENT_JKT  = Kiosk::Server::AssistantKey.thumbprint(AGENT_KEY)
 
 # The switches a scenario flips under a socket that is already open.
 module ProbeState
@@ -136,7 +136,7 @@ Kiosk.configure do |c|
   # A real key, generated here: the engine crashes rather than inventing one
   # outside development, which is the posture we want and the reason a fixture
   # booted in production has to bring its own.
-  c.signing_key = Kiosk::Server::SigningKey.from_pem(OpenSSL::PKey::RSA.new(2048).to_pem)
+  c.signing_key = Kiosk::Server::SigningKey.from_pem(OpenSSL::PKey.generate_key('ED25519').private_to_pem)
   # Every verb on this origin is tolled, so every scenario below also says
   # the stream is not (spec Section 8.5.3).
   c.reputation_policy = TOLL_EVERY_VERB
@@ -455,7 +455,7 @@ begin
 
   # 2c — the good token with a proof another key signed: refused.
   sock = connect(port, headers: { 'Origin' => Kiosk.configuration.issuer,
-                                  **credential(port, key: OpenSSL::PKey::RSA.generate(2048)) })
+                                  **credential(port, key: OpenSSL::PKey.generate_key('ED25519')) })
   sock.pump_until(seconds: 2) { sock.frames.any? || sock.closed? }
   report[:foreign_key_welcomed] = sock.frames.any? { |f| f['type'] == 'welcome' }
   sock.close

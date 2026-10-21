@@ -311,9 +311,9 @@ RSpec.describe Kiosk::Server::WellKnown do
         response_types_supported: [],
         grant_types_supported: ['client_credentials', 'urn:ietf:params:oauth:grant-type:device_code'],
         token_endpoint_auth_methods_supported: ['private_key_jwt'],
-        token_endpoint_auth_signing_alg_values_supported: ['RS256'],
+        token_endpoint_auth_signing_alg_values_supported: ['EdDSA'],
         service_documentation: 'https://api.acme.example/auth.md',
-        dpop_signing_alg_values_supported: ['RS256']
+        dpop_signing_alg_values_supported: ['EdDSA']
       )
     end
 
@@ -323,10 +323,10 @@ RSpec.describe Kiosk::Server::WellKnown do
       expect(doc[:grant_types_supported]).to eq(['client_credentials'])
     end
 
-    it 'reads every algorithm list from AssistantKey::ALGORITHMS' do
-      stub_const('Kiosk::Server::AssistantKey::ALGORITHMS', %w[RS256 ES256])
+    it 'reads every algorithm list from c.assistant_algorithms' do
+      Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
       expect(doc.values_at(:token_endpoint_auth_signing_alg_values_supported, :dpop_signing_alg_values_supported))
-        .to eq([%w[RS256 ES256], %w[RS256 ES256]])
+        .to eq([%w[EdDSA ES256], %w[EdDSA ES256]])
     end
 
     it 'validates the issuer (same contract as build)' do
@@ -409,9 +409,15 @@ RSpec.describe Kiosk::Server::WellKnown do
       subject(:register) { body[/^## Register$.*?(?=^## )/m] }
 
       it 'renders the RFC 7591 registration body with the key as a JWK Set — no body `pow`' do
-        expect(register).to include('{"jwks":{"keys":[{"kty":"RSA","n":"…","e":"AQAB"}]},')
+        expect(register).to include('{"jwks":{"keys":[{"kty":"OKP","crv":"Ed25519","x":"…"}]},')
+        expect(register).not_to include('P-256')
         expect(register).to include('201 { client_id')
         expect(body).not_to match(/\{[^}]*\bjwks\b[^}]*\bpow\b/)
+      end
+
+      it 'names a P-256 key only where the operator accepts ES256' do
+        Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
+        expect(register).to include('This provider also accepts a P-256 key (ES256).')
       end
 
       it 'sends the proof in the `Kiosk-PoW` request header, never the body' do

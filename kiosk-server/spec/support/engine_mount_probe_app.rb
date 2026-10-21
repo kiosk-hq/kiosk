@@ -77,8 +77,8 @@ end
 # reach a gate PAST `401`, which is the only way to tell "this path is the 0.3
 # wire" apart from "this path is an unregistered verb name" through the real
 # Rack stack. Every call carries it with a DPoP proof AGENT_KEY signs.
-AGENT_KEY = OpenSSL::PKey::RSA.generate(2048)
-CNF = { jkt: Kiosk::Server::SigningKey.new(AGENT_KEY.public_key).kid }.freeze
+AGENT_KEY = OpenSSL::PKey.generate_key('ED25519')
+CNF = { jkt: Kiosk::Server::AssistantKey.thumbprint(AGENT_KEY) }.freeze
 TOKEN = Kiosk::Server::JwtIssuer.issue(
   claims: { sub: 'u-1', agent_id: 'a-1', actor: 'agent', cnf: CNF },
   audience: 'http://localhost'

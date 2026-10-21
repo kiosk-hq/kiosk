@@ -11,7 +11,7 @@ module Kiosk
     module KycVerifier
       # Named once for the decode and the published hint.
       REQUIRED_CLAIMS = %w[exp iss aud sub].freeze
-      SIGNATURE_HINT  = 'an attestation is a compact RS256 JWS signed by the issuer this origin ' \
+      SIGNATURE_HINT  = 'an attestation is a compact EdDSA JWS signed by the issuer this origin ' \
                         'is configured to trust'
       SUBJECT_HINT    = "sub must name the principal: the caller's at POST <endpoint>/agents/kyc, " \
                         "the open verification's at the callback"
@@ -49,7 +49,7 @@ module Kiosk
       # The verified payload with symbol keys.
       def decode(raw_jws, config)
         payload, = ::JWT.decode(raw_jws, public_key!(config), true,
-                                algorithms: ['RS256'], verify_expiration: true, required_claims: REQUIRED_CLAIMS)
+                                algorithms: [Eddsa::NAME], verify_expiration: true, required_claims: REQUIRED_CLAIMS)
         payload.transform_keys(&:to_sym)
       rescue ::JWT::ExpiredSignature
         raise Errors::Forbidden, 'KYC attestation expired'

@@ -28,8 +28,8 @@ module AuthPlanePersistenceSpec
   # named table in `public`, dropped with the schema, keeps that honest without
   # a second search_path to reason about.
   USERS = 'kiosk_auth_plane_spec_users'
-  # Assistant keys, generated once: an RSA key costs tens of ms.
-  KEYS = Array.new(4) { OpenSSL::PKey::RSA.generate(2048) }
+  # Assistant keys, generated once.
+  KEYS = Array.new(4) { OpenSSL::PKey.generate_key('ED25519') }
 
   # A user IdP that resolves every request to one fixed identity.
   class StaticUserIdp
@@ -108,7 +108,7 @@ module AuthPlanePersistenceSpec
     end
   end
 
-  def pem_of(key) = Kiosk::Server::AssistantKey.to_pem(key.public_key)
+  def pem_of(key) = Kiosk::Server::AssistantKey.to_pem(key)
 
   # The assistant key of an example that names none, and its stored form.
   def key = KEYS[0]
@@ -116,7 +116,7 @@ module AuthPlanePersistenceSpec
 
   # The client of `key`, registered with no toll; the same client again for a live key.
   def register!(key = self.key)
-    Kiosk::Server::ClientRegistration.call({ 'jwks' => { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key.public_key)] } })
+    Kiosk::Server::ClientRegistration.call({ 'jwks' => { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key)] } })
   end
 
   # The client of `key`, bound to `user_id`.
@@ -248,18 +248,18 @@ end
 module AgentRotationSpec
   ISSUER = 'https://provider.example'
 
-  def thumbprint(key) = Kiosk::Server::AssistantKey.thumbprint(key.public_key)
+  delegate :thumbprint, to: Kiosk::Server::AssistantKey
 
   # A client assertion by `key` for `client_id`.
   def assertion(key, client_id, **claims)
     JWT.encode({ iss: client_id, sub: client_id, aud: ISSUER, exp: Time.now.to_i + 60, jti: SecureRandom.uuid,
-                 **claims }, key, 'RS256')
+                 **claims }, key, 'EdDSA')
   end
 
   def rotation_body(old_key, new_key, client_id, signed: assertion(old_key, client_id, new_key: thumbprint(new_key)),
                     new_signed: assertion(new_key, client_id))
     { client_assertion_type: Kiosk::Server::ClientAssertion::TYPE, client_assertion: signed,
-      new_client_assertion: new_signed, jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(new_key.public_key)] } }
+      new_client_assertion: new_signed, jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(new_key)] } }
   end
 
   # [status, parsed body] of POST /kiosk/auth/rotate.
@@ -486,7 +486,7 @@ RSpec.describe Kiosk::Server::AccountBinding do
 
     it 'reads the stored key back byte-for-byte' do
       real = AuthPlanePersistenceSpec::KEYS[1]
-      expect(idp.agent_payment_key(bind!(other, key: real).id).to_pem).to eq(real.public_key.to_pem)
+      expect(idp.agent_payment_key(bind!(other, key: real).id).public_to_pem).to eq(real.public_to_pem)
     end
   end
 

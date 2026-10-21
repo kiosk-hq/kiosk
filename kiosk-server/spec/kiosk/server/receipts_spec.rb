@@ -16,16 +16,18 @@ RSpec.describe Kiosk::Server::Receipts do
   end
   let(:jwks) { Kiosk::Server::Jwks.build(keys: Kiosk.configuration.signing_keys) }
 
-  def claims(receipt) = JWT.decode(receipts.fetch(receipt), nil, true, algorithms: ['PS256'], jwks:).first
+  def decode(receipt) = JWT.decode(receipt, nil, true, algorithms: ['EdDSA']) { Kiosk::Server::Jwks.find(jwks, it['kid']) }
+
+  def claims(receipt) = decode(receipts.fetch(receipt)).first
 
   def schema(name)
     path = File.expand_path('../../../lib/kiosk/server/schemas/mandates.schema.json', __dir__)
     JSONSchemer.schema(JSON.parse(File.read(path))).ref("#/$defs/#{name}")
   end
 
-  it 'signs both receipts PS256 with the key of the JWKS, naming its kid' do
-    headers = receipts.values.map { JWT.decode(it, nil, true, algorithms: ['PS256'], jwks:).last }
-    expect(headers).to all(include('alg' => 'PS256', 'typ' => 'JWT', 'kid' => CHECKOUT_SIGNING_KEY.kid))
+  it 'signs both receipts EdDSA with the key of the JWKS, naming its kid' do
+    headers = receipts.values.map { decode(it).last }
+    expect(headers).to all(include('alg' => 'EdDSA', 'typ' => 'JWT', 'kid' => CHECKOUT_SIGNING_KEY.kid))
   end
 
   it "names the checkout mandate by its reference and the order by the checkout's first line item" do

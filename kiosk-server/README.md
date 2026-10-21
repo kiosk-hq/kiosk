@@ -77,6 +77,11 @@ Kiosk.configure do |c|
   # nobody sets neither line, and then no token carries a `role` claim.
   c.registration_role = :customer
   c.owner         = { name: "Acme Inc.", support: "support@acme.example" }
+  # The Ed25519 key that signs access tokens, checkouts and receipts (EdDSA):
+  #   openssl genpkey -algorithm ed25519 | base64
+  c.signing_key   = Base64.decode64(ENV.fetch("KIOSK_SIGNING_KEY_B64"))
+  # An assistant key is an Ed25519 key. Add ES256 to also accept a P-256 key.
+  # c.assistant_algorithms = %w[EdDSA ES256]
   # c.mount_path  = "/kiosk"   # default
   # Optional: one event per action invocation. See "The audit sink".
   # c.audit_sink  = ->(event) { AuditRow.create!(**event.to_h) }
@@ -140,8 +145,8 @@ The model also includes `Kiosk::Payable`, which gives each row:
   reads as *not paid*. `Order.own.with_settlement(Kiosk::Settlement.own)` reads
   it for many rows in one query.
 - `checkout(lines)`: the `checkout_jwt` your action returns, which the
-  assistant's AP2 mandates bind. Your origin signs it PS256 with
-  `c.signing_key`, for the row's owner. Its first line names the row; then your
+  assistant's AP2 mandates bind. Your origin signs it EdDSA with
+  `c.signing_key`, for the row's owner, with a random `jti`. Its first line names the row; then your
   priced lines.
 - `settlement`: the record of the capture that paid the row. `c.after_payment`
   runs once this record is written, so it can refund against it.
@@ -165,7 +170,7 @@ against `spending_cap` at once, a repeat of that pair answers `409 conflict`,
 and a new pair for the same checkout is accepted.
 
 A settled `pay` answers the settlement and the two AP2 receipts,
-`checkout_receipt` and `payment_receipt`, which your origin signs PS256 with
+`checkout_receipt` and `payment_receipt`, which your origin signs EdDSA with
 `c.signing_key`. The payment receipt carries the card network's id of the charge
 when your PSP adapter's `capture` answers `network_confirmation_id`.
 
@@ -197,7 +202,7 @@ Kiosk::Visit.record!(user_id: booking.user_id, value_cents: 45_00)
 
 ### Change the signing key
 
-`c.signing_key` signs every access token and checkout. To change it with no
+`c.signing_key` signs every access token, checkout and receipt. To change it with no
 break, set the new key as `c.signing_key` and the old one as
 `c.previous_signing_key` (a public PEM is enough). The JWKS then publishes
 both, and a token or checkout that either key signed verifies. Remove

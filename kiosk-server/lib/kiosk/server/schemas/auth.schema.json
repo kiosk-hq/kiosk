@@ -7,60 +7,65 @@
   "$defs": {
     "publicJwk": {
       "type": "object",
-      "description": "Section 5.1 -- the AI assistant's public key as an RFC 7517 JWK: an RSA key of 2048 to 4096 bits. A member that only a private key has is refused. Other members (kid, use, alg) are allowed and ignored.",
+      "description": "Section 5.1 -- the AI assistant's public key as an RFC 7517 JWK: an Ed25519 key (RFC 8037), or a P-256 key where the operator accepts ES256. A member that only a private key has is refused. Other members (kid, use, alg) are allowed and ignored.",
       "required": [
         "kty",
-        "n",
-        "e"
+        "crv",
+        "x"
       ],
       "properties": {
         "kty": {
-          "const": "RSA",
-          "description": "The key type. RS256 is the one signing algorithm Kiosk accepts now."
+          "enum": [
+            "OKP",
+            "EC"
+          ],
+          "description": "The key type: OKP for an Ed25519 key, which signs EdDSA; EC for a P-256 key, which signs ES256."
         },
-        "n": {
+        "crv": {
+          "enum": [
+            "Ed25519",
+            "P-256"
+          ],
+          "description": "The curve: Ed25519 for OKP, P-256 for EC."
+        },
+        "x": {
           "type": "string",
           "minLength": 1,
-          "description": "The base64url modulus."
+          "description": "The base64url public key of an OKP key, or the base64url x coordinate of an EC key."
         },
-        "e": {
+        "y": {
           "type": "string",
           "minLength": 1,
-          "description": "The base64url exponent."
+          "description": "The base64url y coordinate of an EC key."
+        }
+      },
+      "if": {
+        "properties": {
+          "kty": {
+            "const": "EC"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "y"
+        ],
+        "properties": {
+          "crv": {
+            "const": "P-256"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "crv": {
+            "const": "Ed25519"
+          }
         }
       },
       "not": {
-        "anyOf": [
-          {
-            "required": [
-              "d"
-            ]
-          },
-          {
-            "required": [
-              "p"
-            ]
-          },
-          {
-            "required": [
-              "q"
-            ]
-          },
-          {
-            "required": [
-              "dp"
-            ]
-          },
-          {
-            "required": [
-              "dq"
-            ]
-          },
-          {
-            "required": [
-              "qi"
-            ]
-          }
+        "required": [
+          "d"
         ]
       }
     },
@@ -230,7 +235,7 @@
       "properties": {
         "access_token": {
           "type": "string",
-          "description": "The access token, a compact RS256 JWT. Its claims are `#/$defs/accessTokenClaims`."
+          "description": "The access token, a compact EdDSA JWT. Its claims are `#/$defs/accessTokenClaims`."
         },
         "token_type": {
           "const": "DPoP",
@@ -275,7 +280,7 @@
     },
     "accessTokenClaims": {
       "type": "object",
-      "description": "Section 5.4 -- the decoded claim set of `access_token`. A 3-part RS256 JWT signed by the operator and verifiable statelessly against the JWKS of Section 4.4, bound to the identity's key and presented as `Authorization: DPoP` with a DPoP proof (Section 5.6).",
+      "description": "Section 5.4 -- the decoded claim set of `access_token`. A 3-part EdDSA JWT signed by the operator and verifiable statelessly against the JWKS of Section 4.4, bound to the identity's key and presented as `Authorization: DPoP` with a DPoP proof (Section 5.6).",
       "required": [
         "sub",
         "agent_id",
@@ -358,7 +363,7 @@
     },
     "dpopProof": {
       "type": "object",
-      "description": "Section 5.6 -- the decoded payload of the `DPoP` request header, a compact RS256 JWS whose header carries `typ: \"dpop+jwt\"` and the public `jwk` of the registered key. The AI assistant signs a new one for each token request and for each request that carries an access token.",
+      "description": "Section 5.6 -- the decoded payload of the `DPoP` request header, a compact JWS whose header carries `typ: \"dpop+jwt\"`, the `alg` of the registered key (EdDSA, or ES256) and its public `jwk`. The AI assistant signs a new one for each token request and for each request that carries an access token.",
       "required": [
         "jti",
         "htm",

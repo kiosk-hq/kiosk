@@ -466,7 +466,7 @@ module Kiosk
               psp_reference: { type: 'string', description: "The processor's own reference." },
               settled_amount_cents: { type: 'integer' },
               currency: { type: 'string' },
-              **%w[checkout payment].to_h { [:"#{it}_receipt", { type: 'string', description: "The AP2 #{it} receipt: a JWT this origin signs PS256." }] }
+              **%w[checkout payment].to_h { [:"#{it}_receipt", { type: 'string', description: "The AP2 #{it} receipt: a JWT this origin signs EdDSA." }] }
             },
             required: %w[settlement_id psp_reference settled_amount_cents currency checkout_receipt payment_receipt],
             additionalProperties: false

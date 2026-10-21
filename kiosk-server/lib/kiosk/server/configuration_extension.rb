@@ -35,7 +35,7 @@ module Kiosk
         attr_writer :skill_url
 
         def skill_url
-          @skill_url ||= 'https://kiosk.tech/skill-v0.5.27.md'
+          @skill_url ||= 'https://kiosk.tech/skill-v0.6.0.md'
         end
         attr_accessor :skill_sha256
 
@@ -122,20 +122,16 @@ module Kiosk
           @kyc_audience || Kiosk.current_issuer
         end
 
-        # The KYC provider's RSA key: an OpenSSL::PKey or a PEM string.
+        # The KYC provider's Ed25519 public key: an OpenSSL::PKey or a PEM string.
         def kyc_public_key
           @kyc_public_key
         end
 
         def kyc_public_key=(value)
-          @kyc_public_key = case value
-                            when OpenSSL::PKey::PKey then value
-                            when String              then OpenSSL::PKey::RSA.new(value)
-                            when nil                 then nil
-                            else
-                              raise ArgumentError,
-                                    "kyc_public_key must be an OpenSSL::PKey or PEM string, got #{value.class}"
-                            end
+          @kyc_public_key = value.is_a?(String) ? OpenSSL::PKey.read(value) : value
+          return if @kyc_public_key.nil? || Jwk.ed25519?(@kyc_public_key)
+
+          raise ArgumentError, "kyc_public_key must be an Ed25519 key or its PEM string, got #{@kyc_public_key.class}"
         end
       end
 
@@ -169,10 +165,10 @@ module Kiosk
       include Kyc
       include Database
 
-      # Required. A SigningKey or a PEM string.
+      # Required. A SigningKey or the PEM string of an Ed25519 key.
       def signing_key
         @signing_key || raise(Errors::ConfigurationError,
-                              'c.signing_key is not set. Generate one with `openssl genrsa 2048`.')
+                              "c.signing_key is not set. #{SigningKey::HINT.capitalize}.")
       end
 
       def signing_key=(value)
@@ -191,6 +187,20 @@ module Kiosk
 
       # The keys the JWKS publishes and verification accepts, the current one first.
       def signing_keys = [signing_key, previous_signing_key].compact
+
+      # The JOSE algorithms an AI assistant can sign with. Default `["EdDSA"]`:
+      # Ed25519 keys only. `%w[EdDSA ES256]` also accepts P-256 keys.
+      def assistant_algorithms
+        @assistant_algorithms || [Eddsa::NAME]
+      end
+
+      def assistant_algorithms=(value)
+        algorithms = Array(value).map(&:to_s)
+        valid = [[Eddsa::NAME], [Eddsa::NAME, 'ES256']].include?(algorithms)
+        raise Errors::ConfigurationError, "c.assistant_algorithms is %w[EdDSA] or %w[EdDSA ES256], got #{algorithms.inspect}" unless valid
+
+        @assistant_algorithms = algorithms.freeze
+      end
 
       # The role every registered client is pinned to, and the default a
       # binding falls back to. Required, and one of {#roles}, when {#roles} is set.

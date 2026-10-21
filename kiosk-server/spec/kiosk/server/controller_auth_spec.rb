@@ -120,7 +120,7 @@ module ControllerAuthSpecKycHelpers
   def configure_kyc
     Kiosk.configure do |c|
       c.kyc_issuer     = kyc_issuer
-      c.kyc_public_key = kyc_key.public_key
+      c.kyc_public_key = kyc_key
       # The zero-config default idp verifies against the
       # provider's own signing key — configure one like a real install.
       c.signing_key    = Kiosk::Server::SigningKey.generate
@@ -134,7 +134,7 @@ module ControllerAuthSpecKycHelpers
     body = JSON.generate(kyc_jws: JWT.encode(
       { sub: 'u-kyc', level: 'verified', iss: kyc_issuer, aud: 'https://demo.example',
         iat: (Time.current - 5).to_i, exp: (Time.current + 600).to_i, **claims },
-      kyc_key, 'RS256'
+      kyc_key, 'EdDSA'
     ))
     kyc_env_with_body(body)
   end
@@ -211,7 +211,7 @@ RSpec.shared_context 'with a KYC attestation and a custom agent idp' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecKycHelpers
 
-  let(:kyc_key)    { OpenSSL::PKey::RSA.generate(2048) }
+  let(:kyc_key)    { OpenSSL::PKey.generate_key('ED25519') }
   let(:kyc_issuer) { 'https://kyc.example' }
   let(:identity)   { build_identity(user_id: 'u-kyc', agent_id: 'a-custom', claims: { cnf: cnf_for }) }
   let(:custom_idp) do
@@ -263,7 +263,7 @@ RSpec.shared_context 'with device authorization on the wire' do
   include ControllerAuthSpecHelpers
   include ControllerAuthSpecDeviceHelpers
 
-  let(:public_key) { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
+  let(:public_key) { OpenSSL::PKey.generate_key('ED25519').public_to_pem }
 
   before do
     Kiosk.configure do |c|
@@ -436,7 +436,7 @@ RSpec.describe Kiosk::Server::WireController do
       declare_query('probe')
       status, body = route(:query, 'probe', probe_env('HTTP_AUTHORIZATION' => "Bearer #{agent_token}"))
       expect_problem(status, body, http: 401, code: 'unauthenticated')
-      expect(last_headers['WWW-Authenticate']).to eq('DPoP algs="RS256"')
+      expect(last_headers['WWW-Authenticate']).to eq('DPoP algs="EdDSA"')
     end
 
     it 'answers 401 to a signed-in session with no access token: the wire takes no cookie' do

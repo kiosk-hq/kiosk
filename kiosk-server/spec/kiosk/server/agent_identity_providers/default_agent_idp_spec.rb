@@ -3,10 +3,10 @@
 require 'jwt'
 
 module DefaultAgentIdpSpec
-  # A throwaway 2048-bit RSA public key in PEM form, generated once so the
+  # A throwaway Ed25519 public key in PEM form, generated once so the
   # revocation specs can exercise agent_payment_key without minting a key per
   # example.
-  SAMPLE_PEM = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
+  SAMPLE_PEM = OpenSSL::PKey.generate_key('ED25519').public_to_pem
 
   # The IdP reads the token alone; the proof is IdentityResolution's (spec Section 5.6).
   def presented(token) = { 'HTTP_AUTHORIZATION' => "DPoP #{token}" }
@@ -15,7 +15,7 @@ module DefaultAgentIdpSpec
   # assertion reads a claim off the ISSUED token rather than off a fixture.
   def decode(token)
     JWT.decode(
-      token, Kiosk.configuration.signing_key.rsa.public_key, true, algorithms: ['RS256']
+      token, Kiosk.configuration.signing_key.key, true, algorithms: ['EdDSA']
     ).first
   end
 
@@ -104,7 +104,7 @@ RSpec.describe Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp do
       previous = Kiosk.configuration.signing_key
       Kiosk.configure do |c|
         c.signing_key          = Kiosk::Server::SigningKey.generate
-        c.previous_signing_key = Kiosk::Server::SigningKey.from_pem(previous.rsa.public_key.to_pem)
+        c.previous_signing_key = Kiosk::Server::SigningKey.from_pem(previous.key.public_to_pem)
       end
       expect(idp.verify(presented(agent_token(agent_id: 'agent-1', signing_key: previous)))).to be_a(Kiosk::Identity)
     end

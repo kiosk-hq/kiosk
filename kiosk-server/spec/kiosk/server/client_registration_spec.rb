@@ -27,7 +27,7 @@ RSpec.describe Kiosk::Server::ClientRegistration do
     expect(info).to include(token_endpoint_auth_method: 'private_key_jwt', dpop_bound_access_tokens: true,
                             grant_types: ['client_credentials', Kiosk::Server::Client::DEVICE_CODE])
     expect(info[:client_id_issued_at]).to be_within(5).of(Time.now.to_i)
-    expect(info[:jwks]).to eq(keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key.public_key)])
+    expect(info[:jwks]).to eq(keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key)])
   end
 
   it 'answers the same client for a key that has a live client, and creates nothing' do
@@ -102,7 +102,7 @@ RSpec.describe Kiosk::Server::ClientRegistration do
       received = nil
       Kiosk.configure { |c| c.assistant_creation = ->(pem) { (received = pem) && holder } }
       expect(register.user_id).to eq(holder)
-      expect(received).to eq(Kiosk::Server::AssistantKey.to_pem(agent_key.public_key))
+      expect(received).to eq(Kiosk::Server::AssistantKey.to_pem(agent_key))
     end
 
     it 'refuses a factory that answers nil' do

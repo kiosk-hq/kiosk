@@ -56,7 +56,7 @@ RSpec.shared_context 'with a holder signed in to the assistants page' do
   include AssistantsControllerSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:pem)     { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
+  let(:pem)     { OpenSSL::PKey.generate_key('ED25519').public_to_pem }
   # `next_exec_result: []` — an empty listing unless an example says otherwise.
   # The fake's default row exists for the Executor's `INSERT … RETURNING id`;
   # handing it to this page's listing SELECT would present a row with no

@@ -106,7 +106,7 @@ module Kiosk
         def fingerprint(pem)
           return '(no key)' if pem.blank?
 
-          SigningKey.from_pem(pem).kid
+          AssistantKey.thumbprint(AssistantKey.from_pem(pem))
         rescue StandardError
           '(unreadable key)'
         end

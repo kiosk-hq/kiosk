@@ -2,13 +2,13 @@
 
 require 'kiosk/test_helpers/mandate'
 
-# One signing key for the suite: generating a 2048-bit key per example is slow.
+# One signing key for the suite.
 CHECKOUT_SIGNING_KEY = Kiosk::Server::SigningKey.generate
 
 # An origin that signs checkouts, an agent whose registered key signs the two
 # closed AP2 mandates, and a checkout of 450 cents for order `o-1`.
 RSpec.shared_context 'with a checkout to pay' do
-  let(:agent_key) { OpenSSL::PKey::RSA.generate(2048) }
+  let(:agent_key) { OpenSSL::PKey.generate_key('ED25519') }
   let(:identity)  { build_identity(agent_id: 'agent-1', user_id: 'u-1') }
   let(:checkout_jwt) { checkout(total_amount_cents: 450) }
   let(:mandates) { Kiosk::TestHelpers::Mandate.pay(agent_key, checkout_jwt) }
@@ -20,7 +20,7 @@ RSpec.shared_context 'with a checkout to pay' do
       c.owner       = { name: 'Demo' }
     end
     agent_idp = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new
-    allow(agent_idp).to receive(:agent_payment_key).with('agent-1').and_return(agent_key.public_key)
+    allow(agent_idp).to receive(:agent_payment_key).with('agent-1').and_return(agent_key)
     allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_return(agent_idp)
   end
 

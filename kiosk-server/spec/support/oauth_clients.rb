@@ -15,8 +15,8 @@ module OauthClients
   USERS  = 'kiosk_oauth_spec_users'
   ISSUER = 'https://provider.example'
   SIGNING_KEY = Kiosk::Server::SigningKey.generate
-  # A second assistant key. Generated once: an RSA key costs tens of ms.
-  OTHER_KEY = OpenSSL::PKey::RSA.generate(2048)
+  # A second assistant key.
+  OTHER_KEY = OpenSSL::PKey.generate_key('ED25519')
 
   # The `user_model` of the spec origin.
   class User < ApplicationRecord
@@ -47,7 +47,7 @@ module OauthClients
   # A principal row; its id.
   def holder! = User.create!.id
 
-  def jwks_of(key) = { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key.public_key).transform_keys(&:to_s)] }
+  def jwks_of(key) = { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key).transform_keys(&:to_s)] }
 
   def register_client(key = agent_key) = Kiosk::Server::ClientRegistration.call({ 'jwks' => jwks_of(key) })
 
@@ -55,7 +55,7 @@ module OauthClients
   def client_assertion(client_id, key: agent_key, **claims)
     payload = { iss: client_id, sub: client_id, aud: Kiosk.current_issuer, exp: Time.now.to_i + 60,
                 jti: SecureRandom.uuid }.merge(claims).compact
-    JWT.encode(payload, key, 'RS256')
+    JWT.encode(payload, key, Kiosk::TestHelpers::Dpop.algorithm(key))
   end
 
   def assertion_params(client_id, key: agent_key, **claims)
@@ -65,9 +65,9 @@ module OauthClients
 
   # The DPoP proof of a token request: no `ath`, because there is no token yet.
   def token_request_proof(url, key: agent_key, **claims)
-    jwk = Kiosk::Server::AssistantKey.to_jwk(key.public_key)
+    jwk = Kiosk::Server::AssistantKey.to_jwk(key)
     payload = { jti: SecureRandom.uuid, htm: 'POST', htu: url, iat: Time.now.to_i }.merge(claims).compact
-    JWT.encode(payload, key, 'RS256', { typ: 'dpop+jwt', jwk: jwk })
+    JWT.encode(payload, key, Kiosk::TestHelpers::Dpop.algorithm(key), { typ: 'dpop+jwt', jwk: jwk })
   end
 
   def token_url = "#{ISSUER}/kiosk/oauth/token"

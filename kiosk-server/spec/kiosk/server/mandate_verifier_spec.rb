@@ -26,24 +26,35 @@ RSpec.describe Kiosk::Server::MandateVerifier do
       expect(verify_checkout.currency).to eq('eur')
     end
 
+    context 'when the agent key is a P-256 key and the operator accepts ES256' do
+      let(:agent_key) { Kiosk::TestHelpers::Dpop.generate_key('ES256') }
+
+      before { Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] } }
+
+      it 'verifies the mandates the key signs ES256' do
+        expect(JWT.decode(mandates[:checkout].split('~').first, nil, false).last['alg']).to eq('ES256')
+        expect(verify_checkout.checkout_hash).to eq(Kiosk::Server::SdJwt.digest(checkout_jwt))
+      end
+    end
+
     it 'refuses a mandate signed by any key but the agent key' do
-      forged = resign(mandates[:checkout], key: OpenSSL::PKey::RSA.generate(2048))
+      forged = resign(mandates[:checkout], key: OpenSSL::PKey.generate_key('ED25519'))
       expect { verify_checkout(forged) }.to refused(/mandate signature invalid/)
     end
 
     it 'refuses an SD-JWT whose header typ is not dc+sd-jwt' do
       jwt, disclosure = mandates[:checkout].split('~')
-      untyped = JWT.encode(JWT.decode(jwt, nil, false).first, agent_key, 'RS256')
+      untyped = JWT.encode(JWT.decode(jwt, nil, false).first, agent_key, 'EdDSA')
       expect { verify_checkout("#{untyped}~#{disclosure}~") }.to refused(/typ is not dc\+sd-jwt/)
     end
 
     it 'refuses a token that is not an SD-JWT, with the reason in the hint' do
-      expect { verify_checkout(JWT.encode({ a: 1 }, agent_key, 'RS256')) }
+      expect { verify_checkout(JWT.encode({ a: 1 }, agent_key, 'EdDSA')) }
         .to raise_error(Kiosk::Server::Errors::Forbidden) { |e| expect(e.hint).to include('ends with "~"') }
     end
 
     it 'refuses a signed payload that carries no mandate' do
-      empty = "#{JWT.encode({ _sd_alg: 'sha-256' }, agent_key, 'RS256', { typ: 'dc+sd-jwt' })}~"
+      empty = "#{JWT.encode({ _sd_alg: 'sha-256' }, agent_key, 'EdDSA', { typ: 'dc+sd-jwt' })}~"
       expect { verify_checkout(empty) }.to refused(/carries no mandate/)
     end
 
@@ -61,11 +72,12 @@ RSpec.describe Kiosk::Server::MandateVerifier do
     describe 'the checkout it binds' do
       def bound(jwt) = resign(mandates[:checkout], checkout_jwt: jwt, checkout_hash: Kiosk::Server::SdJwt.digest(jwt))
 
-      it 'refuses a checkout signed by another key, or RS256 by this one' do
+      it "refuses a checkout that another key signs under this key's kid, EdDSA or RS256" do
         claims = JWT.decode(checkout_jwt, nil, false).first.merge('total_amount_cents' => 1)
-        expect { verify_checkout(bound(JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), 'PS256'))) }
+        header = { kid: CHECKOUT_SIGNING_KEY.kid, typ: 'JWT' }
+        expect { verify_checkout(bound(JWT.encode(claims, OpenSSL::PKey.generate_key('ED25519'), 'EdDSA', header))) }
           .to refused(/checkout_jwt signature invalid/)
-        expect { verify_checkout(bound(JWT.encode(claims, CHECKOUT_SIGNING_KEY.rsa, 'RS256'))) }
+        expect { verify_checkout(bound(JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), 'RS256', header))) }
           .to refused(/checkout_jwt signature invalid/)
       end
 

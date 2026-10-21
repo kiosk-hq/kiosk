@@ -9,6 +9,12 @@ module Kiosk
       def build(keys:)
         { keys: Array(keys).map(&:to_jwk) }
       end
+
+      # The public key of the JWK in `jwks` whose `kid` is `kid`, or nil.
+      def find(jwks, kid)
+        jwk = Array(jwks[:keys] || jwks['keys']).find { |k| (k[:kid] || k['kid']) == kid }
+        jwk && Jwk.import(jwk)
+      end
     end
   end
 end

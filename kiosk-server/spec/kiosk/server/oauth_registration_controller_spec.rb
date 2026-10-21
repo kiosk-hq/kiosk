@@ -60,7 +60,7 @@ RSpec.describe Kiosk::Server::OauthRegistrationController do
                                  'code' => 'pow_required', 'challenges' => be_an(Array))
       # A challenge is single-use and bound to this request: a cache must not keep it.
       expect(headers['Cache-Control']).to eq('no-store')
-      expect(Kiosk::Server::Client.with_key(agent_key.public_key)).to be_nil
+      expect(Kiosk::Server::Client.with_key(agent_key)).to be_nil
     end
   end
 end

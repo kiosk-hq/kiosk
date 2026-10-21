@@ -5,15 +5,11 @@ require 'securerandom'
 
 module Kiosk
   module Server
-    # Issues and verifies the RS256 access tokens of the bundled agent IdP.
+    # Issues and verifies the EdDSA access tokens of the bundled agent IdP.
     module JwtIssuer
-      ALGORITHM = 'RS256'
+      ALGORITHM = Eddsa::NAME
       DEFAULT_EXPIRES_IN = 3600
       DEFAULT_LEEWAY = 60
-
-      # A `kid` not in the JWKS: the signature cannot be checked.
-      UNKNOWN_KID = ->(e) { e.message.include?('public key for kid') || e.message.include?('Could not find public key') }
-      private_constant :UNKNOWN_KID
 
       class Error < StandardError; end
       class SignatureError < Error; end
@@ -33,7 +29,7 @@ module Kiosk
         raise ArgumentError, 'signing_key must carry a private key for issuance' unless signing_key.private?
 
         payload = registered_claims(claims, issuer: issuer, audience: audience, issued_at: now.to_i, expires_in: expires_in)
-        ::JWT.encode(payload, signing_key.rsa, ALGORITHM, { kid: signing_key.kid, typ: 'JWT' })
+        ::JWT.encode(payload, signing_key.key, ALGORITHM, { kid: signing_key.kid, typ: 'JWT' })
       end
 
       def verify(token:, jwks:, audience: nil, issuer: nil, leeway: DEFAULT_LEEWAY)
@@ -58,9 +54,9 @@ module Kiosk
       def decode(token, jwks, audience:, issuer:, leeway:)
         decoded, = ::JWT.decode(
           token, nil, true,
-          jwks: jwks, algorithms: [ALGORITHM], aud: audience, iss: issuer,
+          algorithms: [ALGORITHM], aud: audience, iss: issuer,
           verify_aud: !audience.nil?, verify_iss: !issuer.nil?, leeway: leeway
-        )
+        ) { |header| Jwks.find(jwks, header['kid']) || raise(SignatureError, 'no key of the JWKS has this kid') }
         symbolize(decoded)
       rescue ::JWT::DecodeError => e
         raise error_class_for(e), e.message
@@ -70,7 +66,7 @@ module Kiosk
         case error
         when ::JWT::ExpiredSignature then ExpiredError
         when ::JWT::InvalidAudError then AudienceError
-        when ::JWT::VerificationError, ::JWT::IncorrectAlgorithm, UNKNOWN_KID then SignatureError
+        when ::JWT::VerificationError, ::JWT::IncorrectAlgorithm then SignatureError
         else InvalidError
         end
       end

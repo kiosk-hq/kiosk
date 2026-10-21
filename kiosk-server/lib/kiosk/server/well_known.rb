@@ -87,7 +87,7 @@ module Kiosk
         # No authorization endpoint, so no response type.
         doc.merge(jwks_uri: "#{endpoint}/.well-known/jwks.json", response_types_supported: [],
                   grant_types_supported: Client.grant_types(config), **Shared.client_authentication,
-                  service_documentation: "#{base}/auth.md", dpop_signing_alg_values_supported: AssistantKey::ALGORITHMS)
+                  service_documentation: "#{base}/auth.md", dpop_signing_alg_values_supported: AssistantKey.algorithms)
       end
 
       # `/.well-known/oauth-protected-resource` (RFC 9728). RFC 9728 §3.3 binds a
@@ -96,7 +96,7 @@ module Kiosk
         Shared.validate_issuer!(config)
         base = base_url.to_s.chomp('/')
         { resource: base, authorization_servers: [Kiosk.current_issuer], bearer_methods_supported: ['header'],
-          dpop_signing_alg_values_supported: AssistantKey::ALGORITHMS, dpop_bound_access_tokens_required: true,
+          dpop_signing_alg_values_supported: AssistantKey.algorithms, dpop_bound_access_tokens_required: true,
           resource_documentation: "#{base}/auth.md" }
       end
 
@@ -149,8 +149,7 @@ module Kiosk
         base = base_url.to_s.chomp('/')
         endpoint = base + config.mount_path
 
-        AuthMd.render(site: site_name(config), base: base, endpoint: endpoint,
-                      urls: Shared.auth_urls(endpoint), skill_line: Shared.skill_discover_line(config))
+        AuthMd.render(site: site_name(config), base: base, endpoint: endpoint, urls: Shared.auth_urls(endpoint), config: config)
       end
 
       # The owner's name, else the issuer's host. Also titles the OpenAPI document.
@@ -183,7 +182,7 @@ module Kiosk
         # RFC 8414: how a client authenticates at the token endpoint.
         def client_authentication
           { token_endpoint_auth_methods_supported: [Client::AUTH_METHOD],
-            token_endpoint_auth_signing_alg_values_supported: AssistantKey::ALGORITHMS }
+            token_endpoint_auth_signing_alg_values_supported: AssistantKey.algorithms }
         end
 
         # Every URL, also the binding ones: where binding is not served they answer 501.
@@ -263,7 +262,14 @@ module Kiosk
       # The `/auth.md` document.
       # rubocop:disable-next Metrics/ModuleLength -- one Markdown document; its lines are prose
       module AuthMd
-        def self.render(site:, base:, endpoint:, urls:, skill_line:)
+        # This operator also accepts a P-256 key, or says nothing.
+        def self.es256_line(config)
+          return '' unless config.assistant_algorithms.include?('ES256')
+
+          ' This provider also accepts a P-256 key (ES256).'
+        end
+
+        def self.render(site:, base:, endpoint:, urls:, config:)
           <<~MARKDOWN
             # auth.md — #{site}
 
@@ -281,11 +287,11 @@ module Kiosk
             - OAuth metadata of this protected resource (RFC 9728): `#{base}/.well-known/oauth-protected-resource`
             - Verb catalogue (PUBLIC, no token): `#{endpoint}/schema`
             - Token-verification keys (JWKS): `#{endpoint}/.well-known/jwks.json`
-            #{skill_line}
+            #{Shared.skill_discover_line(config)}
 
             ## Pick a method
 
-            - **Open registration** — supported. You register your own RSA
+            - **Open registration** — supported. You register your own
               public key (RFC 7591). No human account is necessary. You
               authenticate each token request with a client assertion that
               your key signs (`private_key_jwt`, RFC 7523).
@@ -298,11 +304,11 @@ module Kiosk
 
             ## Register
 
-            1. Make one RSA key of 2048 bits for this provider. Keep the
-               private key.
+            1. Make one Ed25519 key for this provider. Keep the private
+               key.#{es256_line(config)}
             2. `POST #{urls[:registration]}` with `Content-Type: application/json`:
 
-                   {"jwks":{"keys":[{"kty":"RSA","n":"…","e":"AQAB"}]},
+                   {"jwks":{"keys":[{"kty":"OKP","crv":"Ed25519","x":"…"}]},
                     "token_endpoint_auth_method":"private_key_jwt"}
 
                → `201 { client_id, client_id_issued_at, jwks,
@@ -345,8 +351,8 @@ module Kiosk
 
             ## Claim ceremony
 
-            A client assertion is a compact RS256 JWT that your registered key
-            signs. Its payload is `{iss, sub, aud, exp, jti}`: `iss` and `sub`
+            A client assertion is a compact JWT that your registered key
+            signs: `alg` EdDSA for an Ed25519 key, ES256 for a P-256 key. Its payload is `{iss, sub, aud, exp, jti}`: `iss` and `sub`
             are your `client_id`, `aud` is the origin you connected to (take it
             from your own request URL), `exp` is at most 300 seconds from now,
             and `jti` is a new unique id. Send it as `client_assertion`, with
@@ -386,7 +392,7 @@ module Kiosk
             `POST #{urls[:token]}`, form-encoded:
             `grant_type=client_credentials`, `client_assertion_type`,
             `client_assertion`. Add a `DPoP` header (RFC 9449): a JWS with
-            `typ` `dpop+jwt`, `alg` RS256 and the public `jwk` of your
+            `typ` `dpop+jwt`, the `alg` of your key and the public `jwk` of your
             registered key, that the key signs, with the payload
             `{jti, htm: "POST", htu: "#{urls[:token]}", iat}`. A token
             request has no `ath`.
@@ -404,7 +410,7 @@ module Kiosk
             `DPoP` header: a proof (RFC 9449) that your registered key signs
             for that method and URL, with `ath`, the hash of the token. A
             token is bound to that key and works with no other key. Tokens are
-            RS256 JWTs that the JWKS above verifies.
+            EdDSA JWTs that the JWKS above verifies.
             `GET #{endpoint}/schema` is the exception: it is PUBLIC, so you
             can read the catalogue before you register.
 

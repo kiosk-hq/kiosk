@@ -3,20 +3,20 @@
 require 'jwt'
 
 module JwtIssuerSpec
-  # One pair of RSA keys for the whole file: RSA generation is expensive.
-  def self.rsa1 = @rsa1 ||= OpenSSL::PKey::RSA.generate(2048)
-  def self.rsa2 = @rsa2 ||= OpenSSL::PKey::RSA.generate(2048)
+  # One pair of keys for the whole file.
+  def self.key1 = @key1 ||= OpenSSL::PKey.generate_key('ED25519')
+  def self.key2 = @key2 ||= OpenSSL::PKey.generate_key('ED25519')
 
   def decode(token, **)
-    JWT.decode(token, key.rsa.public_key, true, algorithms: ['RS256'], **)
+    JWT.decode(token, key.key, true, algorithms: ['EdDSA'], **)
   end
 end
 
 RSpec.shared_context 'with a configured JWT issuer' do
   include JwtIssuerSpec
 
-  let(:key)        { Kiosk::Server::SigningKey.new(JwtIssuerSpec.rsa1) }
-  let(:other_key)  { Kiosk::Server::SigningKey.new(JwtIssuerSpec.rsa2) }
+  let(:key)        { Kiosk::Server::SigningKey.new(JwtIssuerSpec.key1) }
+  let(:other_key)  { Kiosk::Server::SigningKey.new(JwtIssuerSpec.key2) }
   let(:jwks)       { Kiosk::Server::Jwks.build(keys: [key]) }
   let(:issuer)     { 'https://combette.example/kiosk' }
   let(:audience)   { 'https://claude.ai/agent/alice' }
@@ -45,7 +45,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       token = described_class.issue(claims: { sub: 'user-1', role: 'customer' }, audience: audience)
       payload, header = decode(token)
 
-      expect(header).to include('alg' => 'RS256', 'kid' => key.kid, 'typ' => 'JWT')
+      expect(header).to include('alg' => 'EdDSA', 'kid' => key.kid, 'typ' => 'JWT')
       expect(payload).to include('sub' => 'user-1', 'role' => 'customer', 'iss' => issuer, 'aud' => audience)
       expect(payload['iat']).to be_a(Integer)
       expect(payload['exp']).to be > payload['iat']
@@ -92,7 +92,7 @@ RSpec.describe Kiosk::Server::JwtIssuer do
     end
 
     it 'raises when the signing key is public-only' do
-      pub_only = Kiosk::Server::SigningKey.from_pem(key.rsa.public_key.to_pem)
+      pub_only = Kiosk::Server::SigningKey.from_pem(key.key.public_to_pem)
       Kiosk.configure { |c| c.signing_key = pub_only }
       expect do
         described_class.issue(claims: { sub: 'u' }, audience: audience)
@@ -135,12 +135,12 @@ RSpec.describe Kiosk::Server::JwtIssuer do
       end.to raise_error(described_class::SignatureError)
     end
 
-    # PS256 is the algorithm the JWKS key itself verifies, so only the RS256 list refuses it.
-    it 'rejects a bearer signed with PS256 instead of RS256' do
+    # An RSA key under the kid of the JWKS key: only the EdDSA list refuses it.
+    it 'rejects a bearer signed RS256 under the kid of the JWKS key' do
       claims = JWT.decode(token, nil, false).first
-      pss = JWT.encode(claims, key.rsa, 'PS256', { kid: key.kid, typ: 'JWT' })
+      rs256 = JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), 'RS256', { kid: key.kid, typ: 'JWT' })
       expect do
-        described_class.verify(token: pss, jwks: jwks, audience: audience)
+        described_class.verify(token: rs256, jwks: jwks, audience: audience)
       end.to raise_error(described_class::SignatureError)
     end
 

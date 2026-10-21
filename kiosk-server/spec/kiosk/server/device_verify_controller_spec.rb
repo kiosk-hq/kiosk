@@ -54,7 +54,7 @@ RSpec.shared_context 'with a holder signed in to the device verify page' do
   include DeviceVerifyControllerSpecHelpers
 
   let(:store)   { Kiosk::Server::DeviceAuthorizationStores::InMemory.new }
-  let(:pem)     { OpenSSL::PKey::RSA.generate(2048).public_key.to_pem }
+  let(:pem)     { OpenSSL::PKey.generate_key('ED25519').public_to_pem }
   let(:user_id) { '11111111-1111-1111-1111-111111111111' }
   let(:session) { {} }
 

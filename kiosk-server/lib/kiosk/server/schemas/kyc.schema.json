@@ -8,106 +8,49 @@
     "attestation": {
       "type": "object",
       "description": "Signed by the KYC provider, verified with its configured public key.",
-      "required": [
-        "sub",
-        "level",
-        "iss",
-        "aud",
-        "exp"
-      ],
+      "required": ["sub", "level", "iss", "aud", "exp"],
       "properties": {
-        "sub": {
-          "type": "string",
-          "description": "MUST equal the authenticated user_id."
-        },
-        "level": {
-          "const": "verified",
-          "description": "Binary; anything other than \"verified\" is rejected."
-        },
-        "iss": {
-          "type": "string",
-          "description": "MUST equal the provider-configured KYC issuer."
-        },
-        "aud": {
-          "type": "string",
-          "description": "OPERATOR-BINDING. The operator the attestation was minted for. MUST equal the operator's configured kyc_audience (its origin, or a stable handle it declares); the operator rejects any other aud. This stops a claim minted for operator A being replayed to operator B."
-        },
-        "iat": {
-          "type": "integer",
-          "description": "Issued-at timestamp. Not enforced by the verifier."
-        },
-        "exp": {
-          "type": "integer",
-          "description": "One year after iat. An expired attestation is rejected."
-        },
-        "attributes": {
-          "$ref": "#/$defs/attributes"
-        }
+        "sub": { "type": "string", "description": "MUST equal the authenticated user_id." },
+        "level": { "const": "verified", "description": "Binary; anything other than \"verified\" is rejected." },
+        "iss": { "type": "string", "description": "MUST equal the provider-configured KYC issuer." },
+        "aud": { "type": "string", "description": "OPERATOR-BINDING. The operator the attestation was minted for. MUST equal the operator's configured kyc_audience (its origin, or a stable handle it declares); the operator rejects any other aud. This stops a claim minted for operator A being replayed to operator B." },
+        "iat": { "type": "integer", "description": "Issued-at timestamp. Not enforced by the verifier." },
+        "exp": { "type": "integer", "description": "One year after iat. An expired attestation is rejected." },
+        "attributes": { "$ref": "#/$defs/attributes" }
       }
     },
     "attributes": {
       "type": "object",
       "description": "Optional named boolean attributes that the KYC provider vouches for, e.g. age_over_18. Only a value that is literally true counts; an action MAY require named attributes and refuse with kyc_required (403).",
-      "additionalProperties": {
-        "type": "boolean"
-      }
+      "additionalProperties": { "type": "boolean" }
     },
     "request": {
       "type": "object",
-      "required": [
-        "kyc_jws"
-      ],
+      "required": ["kyc_jws"],
       "properties": {
-        "kyc_jws": {
-          "type": "string",
-          "description": "The attestation as a compact RS256 JWS."
-        }
+        "kyc_jws": { "type": "string", "description": "The attestation as a compact EdDSA JWS." }
       }
     },
     "verification": {
       "type": "object",
       "description": "The answer to the request_kyc action: a verification opened at the KYC provider, whose page the AI assistant relays to its human.",
       "additionalProperties": false,
-      "required": [
-        "request_id",
-        "verification_url",
-        "status"
-      ],
+      "required": ["request_id", "verification_url", "status"],
       "properties": {
-        "request_id": {
-          "type": "string",
-          "description": "The provider's id for this verification; the kyc_verification event carries it back."
-        },
-        "verification_url": {
-          "type": "string",
-          "description": "The provider page the human completes."
-        },
-        "status": {
-          "const": "pending"
-        }
+        "request_id": { "type": "string", "description": "The provider's id for this verification; the kyc_verification event carries it back." },
+        "verification_url": { "type": "string", "description": "The provider page the human completes." },
+        "status": { "const": "pending" }
       }
     },
     "verificationEvent": {
       "type": "object",
       "description": "The data of a kyc_verification event: the human approved, and the event carries the provider-signed attestation to submit to POST /kiosk/agents/kyc.",
       "additionalProperties": false,
-      "required": [
-        "request_id",
-        "status",
-        "kyc_jws"
-      ],
+      "required": ["request_id", "status", "kyc_jws"],
       "properties": {
-        "request_id": {
-          "type": "string",
-          "description": "The request_id request_kyc returned."
-        },
-        "status": {
-          "const": "approved"
-        },
-        "kyc_jws": {
-          "type": "string",
-          "description": "The attestation as a compact RS256 JWS."
-        }
+        "request_id": { "type": "string", "description": "The request_id request_kyc returned." },
+        "status": { "const": "approved" },
+        "kyc_jws": { "type": "string", "description": "The attestation as a compact EdDSA JWS." }
       }
     }
   }

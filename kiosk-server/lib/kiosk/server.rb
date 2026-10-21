@@ -10,6 +10,8 @@ require 'active_support/core_ext' # the core extensions a Rails host loads, whic
 require 'zeitwerk'
 
 Zeitwerk::Loader.for_gem_extension(Kiosk).setup
+# Registers the JOSE algorithm EdDSA with ruby-jwt.
+require_relative 'server/eddsa'
 
 module Kiosk
   module Server

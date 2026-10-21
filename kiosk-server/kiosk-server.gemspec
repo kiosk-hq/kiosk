@@ -57,9 +57,9 @@ Gem::Specification.new do |spec|
                %w[listen.py requirements.txt README.md LICENSE.txt CHANGELOG.md]
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'kiosk-core', '~> 0.5.0'
+  spec.add_dependency 'kiosk-core', '~> 0.6.0'
   # Access tokens and the OAuth surface.
-  spec.add_dependency 'jwt', '>= 2.8', '< 4.0'
+  spec.add_dependency 'jwt', '>= 2.10', '< 4.0'
   # A bundled gem since Ruby 3.4; signing_key.rb and configuration_extension.rb require it.
   spec.add_dependency 'base64'
   # Loads the files under lib/kiosk.

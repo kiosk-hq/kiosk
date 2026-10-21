@@ -6,7 +6,7 @@ require 'openssl'
 module KycVerifierSpec
   # Sign a KYC attestation payload with the test KYC key.
   def sign_kyc(payload)
-    JWT.encode(payload, kyc_key, 'RS256')
+    JWT.encode(payload, kyc_key, 'EdDSA')
   end
 
   def valid_payload(**overrides)
@@ -20,7 +20,7 @@ end
 RSpec.shared_context 'with a configured KYC verifier' do
   include KycVerifierSpec
 
-  let(:kyc_key)      { OpenSSL::PKey::RSA.generate(2048) }
+  let(:kyc_key)      { OpenSSL::PKey.generate_key('ED25519') }
   let(:kyc_issuer)   { 'https://kyc.example' }
   let(:kyc_audience) { 'acme-operator' }
   let(:future)       { (Time.current + 600).to_i }
@@ -30,7 +30,7 @@ RSpec.shared_context 'with a configured KYC verifier' do
     Kiosk.configure do |c|
       c.kyc_issuer     = kyc_issuer
       c.kyc_audience   = kyc_audience
-      c.kyc_public_key = kyc_key.public_key
+      c.kyc_public_key = kyc_key
     end
   end
 end
@@ -138,14 +138,14 @@ RSpec.describe Kiosk::Server::KycVerifier do
     end
 
     it 'raises Errors::Forbidden for a tampered / wrong-key signature' do
-      other_key = OpenSSL::PKey::RSA.generate(2048)
-      raw_jws   = JWT.encode(valid_payload, other_key, 'RS256')
+      other_key = OpenSSL::PKey.generate_key('ED25519')
+      raw_jws   = JWT.encode(valid_payload, other_key, 'EdDSA')
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden)
     end
 
-    it 'raises Errors::Forbidden for an attestation signed with the right key under RS512' do
-      raw_jws = JWT.encode(valid_payload, kyc_key, 'RS512')
+    it 'raises Errors::Forbidden for an attestation signed RS256' do
+      raw_jws = JWT.encode(valid_payload, OpenSSL::PKey::RSA.generate(2048), 'RS256')
       expect { described_class.verify(raw_jws: raw_jws, subject: 'u-1') }
         .to raise_error(Kiosk::Server::Errors::Forbidden, /signature invalid/)
     end

@@ -36,7 +36,7 @@ RSpec.describe Kiosk::Server::AuthController do
 
   let(:complete) do
     { client_assertion_type: Kiosk::Server::ClientAssertion::TYPE, client_assertion: 'a.b.c',
-      new_client_assertion: 'd.e.f', jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key.public_key)] } }
+      new_client_assertion: 'd.e.f', jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key)] } }
   end
 
   it 'answers 400 bad_request for an empty body, invalid JSON and a body that is not an object' do

@@ -25,7 +25,7 @@ module RequestBodyValidationSpec
   ACCEPTED = {
     'POST <endpoint>/auth/rotate' => { client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
                                        client_assertion: 'eyJ.eyJ.SIG', new_client_assertion: 'eyJ.eyJ.SIG2',
-                                       jwks: { keys: [{ kty: 'RSA', n: 'AQAB', e: 'AQAB' }] } },
+                                       jwks: { keys: [{ kty: 'OKP', crv: 'Ed25519', x: 'AQAB' }] } },
     'POST <endpoint>/auth/claim' => { code: 'ABCD-1234',
                                       client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
                                       client_assertion: 'eyJ.eyJ.SIG' },

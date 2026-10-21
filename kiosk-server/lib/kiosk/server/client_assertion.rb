@@ -44,8 +44,8 @@ module Kiosk
       UNKNOWN_CLIENT_HINT = 'register your key at registration_url; the answer carries your client_id. ' \
                             'A client that the account holder unlinked is unknown'
 
-      SIGNATURE_HINT = "a client assertion is a compact JWS (#{AssistantKey::ALGORITHMS.join(', ')}) " \
-                       'that the private key of your registered key signs'.freeze
+      SIGNATURE_HINT = 'a client assertion is a compact JWS that the private key of your registered key signs: ' \
+                       'EdDSA for an Ed25519 key, ES256 for a P-256 key'
 
       module_function
 
@@ -63,7 +63,7 @@ module Kiosk
       def verify(type, assertion, client_id: nil, key: nil)
         check_type!(type, assertion)
         client = client_of(assertion)
-        claims = decode(assertion, key || client.key)
+        claims = decode(assertion, key || registered_key(client))
         check_claims!(claims, client_id)
         Verified.new(client: client, claims: claims)
       end
@@ -93,8 +93,16 @@ module Kiosk
         refuse!('client assertion is not a JWT', SIGNATURE_HINT)
       end
 
+      # A key that this operator accepts no longer, such as a P-256 key once ES256 is off.
+      def registered_key(client)
+        client.key
+      rescue Errors::BadRequest
+        refuse!('the registered key is not accepted here',
+                "this operator accepts #{AssistantKey.algorithms.join(' and ')} keys: register a new key at registration_url")
+      end
+
       def decode(assertion, key)
-        ::JWT.decode(assertion.to_s, key, true, algorithms: AssistantKey::ALGORITHMS,
+        ::JWT.decode(assertion.to_s, key, true, algorithms: [AssistantKey.algorithm(key)],
                                                 required_claims: REQUIRED_CLAIMS, leeway: LEEWAY).first
       rescue ::JWT::MissingRequiredClaim
         refuse!('client assertion is missing a required claim', CLAIMS_HINT)
@@ -136,7 +144,7 @@ module Kiosk
         raise Refused.new(message, hint: hint)
       end
 
-      private_class_method :check_type!, :client_of, :decode, :check_claims!, :check_audience!,
+      private_class_method :check_type!, :client_of, :registered_key, :decode, :check_claims!, :check_audience!,
                            :log_audience_mismatch, :refuse!
     end
   end

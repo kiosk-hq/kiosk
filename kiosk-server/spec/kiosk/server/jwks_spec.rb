@@ -27,7 +27,7 @@ RSpec.describe Kiosk::Server::Jwks do
       json = JSON.generate(described_class.build(keys: [key]))
       parsed = JSON.parse(json, symbolize_names: true)
       jwk = parsed[:keys].first
-      expect(jwk.keys).to match_array(%i[kty use kid n e])
+      expect(jwk.keys).to match_array(%i[kty crv x use alg kid])
     end
   end
 
@@ -52,7 +52,7 @@ RSpec.describe Kiosk::Server::Jwks do
     it 'serves the current key first and the previous key after it' do
       Kiosk.configure do |c|
         c.signing_key          = current
-        c.previous_signing_key = previous.rsa.public_key.to_pem
+        c.previous_signing_key = previous.key.public_to_pem
       end
       expect(served_kids).to eq([current.kid, previous.kid])
     end

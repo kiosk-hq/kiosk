@@ -5,7 +5,7 @@ require 'kiosk/agent_identity_providers/base'
 module Kiosk
   module Server
     module AgentIdentityProviders
-      # The bundled agent IdP: RS256 tokens signed with the origin's own key and
+      # The bundled agent IdP: EdDSA tokens signed with the origin's own key and
       # bound to the agent's registered key (`cnf.jkt`); payment keys from the agents table.
       class DefaultAgentIdp < Kiosk::AgentIdentityProviders::Base
         def verify(request)
@@ -24,7 +24,7 @@ module Kiosk
         def issue(agent_id:, role:)
           agent  = lookup_agent(agent_id)
           claims = { sub: agent.fetch('user_id'), agent_id: agent_id, actor: 'agent',
-                     cnf: { jkt: SigningKey.from_pem(agent.fetch('public_key')).kid } }
+                     cnf: { jkt: AssistantKey.thumbprint(AssistantKey.from_pem(agent.fetch('public_key'))) } }
           claims[:role] = role.to_s unless role.nil? || role.to_s.empty?
           JwtIssuer.issue(
             claims: claims, audience: Kiosk.current_issuer, now: mint_instant(agent_id),
@@ -36,7 +36,7 @@ module Kiosk
           pem = agent_row('public_key', agent_id)&.fetch('public_key', nil)
           raise Kiosk::AgentIdentityProviders::InvalidToken, "no key for agent #{agent_id}" if pem.nil?
 
-          OpenSSL::PKey::RSA.new(pem)
+          AssistantKey.from_pem(pem)
         end
 
         private

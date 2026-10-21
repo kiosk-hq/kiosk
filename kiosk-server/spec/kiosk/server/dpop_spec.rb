@@ -24,17 +24,17 @@ RSpec.describe Kiosk::Server::Dpop do
       ath: Kiosk::TestHelpers::Dpop.ath(token) }.merge(changes)
   end
 
-  def public_jwk(key = agent_key) = { kty: 'RSA', n: b64(key.n.to_s(2)), e: b64(key.e.to_s(2)) }
+  def public_jwk(key = agent_key) = Kiosk::TestHelpers::Dpop.jwk(key)
 
   # A proof built by hand, for the shapes the helper never makes.
   def hand_proof(payload: claims, header: { typ: 'dpop+jwt', jwk: public_jwk }, key: agent_key)
-    JWT.encode(payload, key, 'RS256', header)
+    JWT.encode(payload, key, 'EdDSA', header)
   end
 
   def expect_refused(message, **)
     expect { verify(**) }.to raise_error(Kiosk::Server::Errors::AccessTokenRefused, message) do |error|
       expect(error.http_status).to eq(401)
-      expect(error.response_headers).to eq('WWW-Authenticate' => 'DPoP algs="RS256"')
+      expect(error.response_headers).to eq('WWW-Authenticate' => 'DPoP algs="EdDSA"')
     end
   end
 
@@ -78,17 +78,17 @@ RSpec.describe Kiosk::Server::Dpop do
     end
 
     it 'refuses a proof whose jwk carries a private member' do
-      jwk = public_jwk.merge(d: b64(agent_key.d.to_s(2)))
+      jwk = public_jwk.merge(d: b64(agent_key.raw_private_key))
       expect_refused(/carries no public jwk/, proof: hand_proof(header: { typ: 'dpop+jwt', jwk: jwk }))
     end
 
     it 'refuses a proof that another key signed' do
-      other = OpenSSL::PKey::RSA.generate(2048)
+      other = OpenSSL::PKey.generate_key('ED25519')
       expect_refused(/not the key the token is bound to/, proof: Kiosk::TestHelpers::Dpop.proof(token, other, method: 'GET', url: url))
     end
 
     it 'refuses a proof whose jwk is not the key that signed it' do
-      other = OpenSSL::PKey::RSA.generate(2048)
+      other = OpenSSL::PKey.generate_key('ED25519')
       expect_refused(/not a JWS that its jwk signed/, proof: hand_proof(key: other))
     end
 
@@ -150,12 +150,40 @@ RSpec.describe Kiosk::Server::Dpop do
 
     it 'refuses no proof, a proof of another key, and a proof for another method' do
       expect_token_request_refused(/one DPoP header is required/, nil)
-      expect_token_request_refused(/not your registered key/, token_proof(key: OpenSSL::PKey::RSA.generate(2048)))
+      expect_token_request_refused(/not your registered key/, token_proof(key: OpenSSL::PKey.generate_key('ED25519')))
       expect_token_request_refused(/htm is not this request method/, token_proof(htm: 'GET'))
     end
   end
 
   it 'names the algorithms of AssistantKey in its challenge' do
-    expect(described_class::CHALLENGE).to eq(%(DPoP algs="#{Kiosk::Server::AssistantKey::ALGORITHMS.join(' ')}"))
+    expect(described_class.challenge).to eq('DPoP algs="EdDSA"')
+    Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
+    expect(described_class.challenge).to eq('DPoP algs="EdDSA ES256"')
+  end
+
+  describe 'the algorithm of the proof' do
+    let(:p256) { Kiosk::TestHelpers::Dpop.generate_key('ES256') }
+    let(:p256_proof) { Kiosk::TestHelpers::Dpop.proof(token, p256, method: 'GET', url: url) }
+
+    def verify_p256 = described_class.verify!(p256_proof, token:, jkt: Kiosk::TestHelpers::Dpop.thumbprint(p256), method: 'GET', url:)
+
+    it 'refuses an ES256 proof of a P-256 key at an operator that accepts EdDSA alone' do
+      expect { verify_p256 }.to raise_error(Kiosk::Server::Errors::AccessTokenRefused, /jwk is refused: the key is not an Ed25519 key/)
+    end
+
+    it 'accepts an ES256 proof of a P-256 key at an operator that accepts ES256' do
+      Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
+      expect { verify_p256 }.not_to raise_error
+    end
+
+    it 'refuses an RS256 proof of an RSA key' do
+      rsa = OpenSSL::PKey::RSA.generate(2048)
+      jwk = { kty: 'RSA', n: b64(rsa.n.to_s(2)), e: b64(rsa.e.to_s(2)) }
+      expect_refused(/jwk is refused/, proof: JWT.encode(claims, rsa, 'RS256', { typ: 'dpop+jwt', jwk: jwk }))
+    end
+
+    it 'refuses an Ed25519 jwk on a proof whose alg is not EdDSA' do
+      expect_refused(/not a JWS that its jwk signed/, proof: JWT.encode(claims, 'secret', 'HS256', { typ: 'dpop+jwt', jwk: public_jwk }))
+    end
   end
 end

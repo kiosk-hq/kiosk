@@ -233,9 +233,9 @@ module Kiosk
 
       # The 401 of a request that needs an access token: it names the DPoP scheme (RFC 9449 §7.1).
       class AccessTokenRefused < Unauthenticated
-        def initialize(message = 'a valid access token with its DPoP proof is required', hint: Dpop::HINT) = super
+        def initialize(message = 'a valid access token with its DPoP proof is required', hint: Dpop.hint) = super
 
-        def response_headers = { 'WWW-Authenticate' => Dpop::CHALLENGE }
+        def response_headers = { 'WWW-Authenticate' => Dpop.challenge }
       end
 
       class Forbidden < Base

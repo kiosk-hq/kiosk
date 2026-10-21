@@ -48,10 +48,19 @@ RSpec.describe Kiosk::Server::ClientAssertion do
     expect_refused(/signature invalid/) { authenticate(client_assertion(client.id, key: other_key)) }
   end
 
-  it 'refuses an algorithm outside AssistantKey::ALGORITHMS, also an HMAC keyed with the public key' do
+  it 'refuses an algorithm other than the one of the registered key: RS256, ES256, an HMAC keyed with the public key' do
     payload = { iss: client.id, sub: client.id, aud: OauthClients::ISSUER, exp: Time.now.to_i + 60, jti: 'j' }
     expect_refused(/signature invalid/) { authenticate(JWT.encode(payload, client.public_key_pem, 'HS256')) }
-    expect_refused(/signature invalid/) { authenticate(JWT.encode(payload, agent_key, 'PS256')) }
+    expect_refused(/signature invalid/) { authenticate(JWT.encode(payload, OpenSSL::PKey::RSA.generate(2048), 'RS256')) }
+    expect_refused(/signature invalid/) { authenticate(JWT.encode(payload, Kiosk::TestHelpers::Dpop.generate_key('ES256'), 'ES256')) }
+  end
+
+  it 'refuses a client whose registered key this operator no longer accepts, and says to register a new key' do
+    Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA ES256] }
+    p256 = Kiosk::TestHelpers::Dpop.generate_key('ES256')
+    ec_client = register_client(p256)
+    Kiosk.configure { |c| c.assistant_algorithms = %w[EdDSA] }
+    expect_refused(/registered key is not accepted here/) { authenticate(client_assertion(ec_client.id, key: p256)) }
   end
 
   it 'refuses an assertion that is not a JWT' do

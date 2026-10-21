@@ -72,7 +72,7 @@ RSpec.describe Kiosk::Server::Errors do
     describe 'POST /kiosk/auth/rotate' do
       it 'names the absent field and not the Ruby exception when new_client_assertion is omitted' do
         body = { client_assertion_type: Kiosk::Server::ClientAssertion::TYPE, client_assertion: 'x',
-                 jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key.public_key)] } }
+                 jwks: { keys: [Kiosk::Server::AssistantKey.to_jwk(agent_key)] } }
         status, headers, body = call_auth(:rotate, JSON.generate(body))
         expect_detail(status, headers, body, 'missing field: new_client_assertion')
         expect_no_ruby(body)

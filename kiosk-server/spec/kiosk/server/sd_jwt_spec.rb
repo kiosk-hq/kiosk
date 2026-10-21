@@ -57,10 +57,10 @@ RSpec.describe Kiosk::Server::SdJwt do
   end
 
   describe 'the subset a closed mandate uses' do
-    let(:key)     { OpenSSL::PKey::RSA.generate(2048) }
+    let(:key)     { OpenSSL::PKey.generate_key('ED25519') }
     let(:mandate) { Kiosk::TestHelpers::Mandate.sign(key, { vct: 'mandate.payment.1' }) }
 
-    def verify(token) = described_class.verify(token, key: key.public_key, algorithm: 'RS256')
+    def verify(token) = described_class.verify(token, key: key, algorithm: 'EdDSA')
 
     it 'answers the payload with the disclosure in place, and the header' do
       payload, header = verify(mandate)
@@ -89,15 +89,15 @@ RSpec.describe Kiosk::Server::SdJwt do
     end
 
     it 'refuses an _sd_alg other than sha-256' do
-      jwt = JWT.encode({ _sd_alg: 'sha-512', delegate_payload: [] }, key, 'RS256')
+      jwt = JWT.encode({ _sd_alg: 'sha-512', delegate_payload: [] }, key, 'EdDSA')
       expect { verify("#{jwt}~") }.to raise_error(described_class::Invalid, /sha-512/)
     end
 
     it 'refuses an object disclosure under an array digest, and an array disclosure under an object digest' do
       property = b64(JSON.generate(%w[salt name value]))
       element  = b64(JSON.generate(%w[salt value]))
-      in_array = JWT.encode({ delegate_payload: [{ '...' => described_class.digest(property) }] }, key, 'RS256')
-      in_object = JWT.encode({ _sd: [described_class.digest(element)] }, key, 'RS256')
+      in_array = JWT.encode({ delegate_payload: [{ '...' => described_class.digest(property) }] }, key, 'EdDSA')
+      in_object = JWT.encode({ _sd: [described_class.digest(element)] }, key, 'EdDSA')
 
       expect { verify("#{in_array}~#{property}~") }.to raise_error(described_class::Invalid, /\[salt, value\]/)
       expect { verify("#{in_object}~#{element}~") }.to raise_error(described_class::Invalid, /\[salt, name, value\]/)
@@ -105,12 +105,12 @@ RSpec.describe Kiosk::Server::SdJwt do
 
     it 'refuses a disclosed name the object already has' do
       property = b64(JSON.generate(%w[salt vct other]))
-      jwt = JWT.encode({ vct: 'mandate.payment.1', _sd: [described_class.digest(property)] }, key, 'RS256')
+      jwt = JWT.encode({ vct: 'mandate.payment.1', _sd: [described_class.digest(property)] }, key, 'EdDSA')
       expect { verify("#{jwt}~#{property}~") }.to raise_error(described_class::Invalid, /already in the object/)
     end
 
     it 'leaves out an array digest with no disclosure, a decoy' do
-      jwt = JWT.encode({ delegate_payload: [{ '...' => described_class.digest('decoy') }, 1] }, key, 'RS256')
+      jwt = JWT.encode({ delegate_payload: [{ '...' => described_class.digest('decoy') }, 1] }, key, 'EdDSA')
       expect(verify("#{jwt}~").first).to eq('delegate_payload' => [1])
     end
   end

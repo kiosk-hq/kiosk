@@ -17,23 +17,27 @@ module Kiosk
       WINDOW = 60
       CLAIMS = %w[jti htm htu iat].freeze
 
-      # The `WWW-Authenticate` value of a 401 on a request that needs a token.
-      CHALLENGE = %(#{SCHEME} algs="#{AssistantKey::ALGORITHMS.join(' ')}").freeze
-
-      HINT = 'send `Authorization: DPoP <access_token>` and one `DPoP` header: a JWS with typ dpop+jwt, ' \
-             "alg #{AssistantKey::ALGORITHMS.join(' or ')} and the public jwk of your registered key, signed by " \
-             'that key, whose payload carries jti, htm (the method), htu (the URL with no query), iat (now) ' \
-             'and ath (base64url SHA-256 of the access token)'.freeze
-
-      TOKEN_REQUEST_HINT = 'send one `DPoP` header: a JWS with typ dpop+jwt, ' \
-                           "alg #{AssistantKey::ALGORITHMS.join(' or ')} and the public jwk of your registered " \
-                           'key, signed by that key, whose payload carries jti, htm POST, htu (the token URL) ' \
-                           'and iat (now)'.freeze
-
       # A proof that does not hold.
       class Invalid < StandardError; end
 
       module_function
+
+      # The `WWW-Authenticate` value of a 401 on a request that needs a token.
+      def challenge = %(#{SCHEME} algs="#{AssistantKey.algorithms.join(' ')}")
+
+      def hint
+        'send `Authorization: DPoP <access_token>` and one `DPoP` header: a JWS with typ dpop+jwt, ' \
+          "alg #{AssistantKey.algorithms.join(' or ')} and the public jwk of your registered key, signed by " \
+          'that key, whose payload carries jti, htm (the method), htu (the URL with no query), iat (now) ' \
+          'and ath (base64url SHA-256 of the access token)'
+      end
+
+      def token_request_hint
+        'send one `DPoP` header: a JWS with typ dpop+jwt, ' \
+          "alg #{AssistantKey.algorithms.join(' or ')} and the public jwk of your registered " \
+          'key, signed by that key, whose payload carries jti, htm POST, htu (the token URL) ' \
+          'and iat (now)'
+      end
 
       # The access token of an `Authorization: DPoP <token>` header, else nil.
       def token(authorization)
@@ -57,7 +61,7 @@ module Kiosk
       def verify_token_request!(proof, jkt:, url:)
         check!(proof, jkt:, method: 'POST', url:, key: 'your registered key')
       rescue Invalid => e
-        raise OauthError.new(:invalid_dpop_proof, "#{e.message}: #{TOKEN_REQUEST_HINT}")
+        raise OauthError.new(:invalid_dpop_proof, "#{e.message}: #{token_request_hint}")
       end
 
       # The base64url SHA-256 of the token: the `ath` a proof carries.
@@ -80,13 +84,12 @@ module Kiosk
         raise Invalid, 'the DPoP proof iat is not within 60 seconds of now' unless (claims['iat'].to_i - Time.now.to_i).abs <= WINDOW
       end
 
+      # The key is the proof's own `jwk`, and its type names the one algorithm.
       def decode(proof)
-        key = nil
-        claims, = ::JWT.decode(proof, nil, true, algorithms: AssistantKey::ALGORITHMS, required_claims: CLAIMS) do |header|
-          key = header_key(header)
-        end
+        key = header_key(::JWT.decode(proof, nil, false).last)
+        claims, = ::JWT.decode(proof, key, true, algorithms: [AssistantKey.algorithm(key)], required_claims: CLAIMS)
         [key, claims]
-      rescue ::JWT::DecodeError, Errors::BadRequest
+      rescue ::JWT::DecodeError
         raise Invalid, 'the DPoP proof is not a JWS that its jwk signed, with the claims of RFC 9449'
       end
 
@@ -97,6 +100,8 @@ module Kiosk
         raise Invalid, 'the DPoP proof carries no public jwk' unless jwk.is_a?(Hash) && !jwk.keys.intersect?(AssistantKey::PRIVATE_MEMBERS)
 
         AssistantKey.from_jwk(jwk)
+      rescue Errors::BadRequest => e
+        raise Invalid, "the DPoP proof jwk is refused: #{e.message}"
       end
 
       # Scheme and host without case, a default port dropped (RFC 9449 Section 4.3).

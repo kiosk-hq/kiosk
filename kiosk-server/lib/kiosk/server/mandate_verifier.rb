@@ -13,7 +13,6 @@ module Kiosk
       CHECKOUT_VCT = 'mandate.checkout.1'
       PAYMENT_VCT  = 'mandate.payment.1'
       TYP          = 'dc+sd-jwt'
-      ALGORITHM    = 'RS256'
 
       # Longer than this counts as non-expiring, which the spec refuses.
       MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
@@ -126,19 +125,22 @@ module Kiosk
         VCT_HINT   = "send closed mandates: #{CHECKOUT_VCT} and #{PAYMENT_VCT}. This operator takes no open mandate".freeze
 
         def decode(sd_jwt, identity)
-          payload, header = SdJwt.verify(sd_jwt, key: payment_key(identity), algorithm: ALGORITHM)
+          key = payment_key(identity)
+          algorithm = AssistantKey.algorithm(key)
+          payload, header = SdJwt.verify(sd_jwt, key:, algorithm:)
           return payload if header['typ'] == TYP
 
-          raise Errors::Forbidden.new("mandate typ is not #{TYP}", hint: "the JWT header is {\"alg\": \"#{ALGORITHM}\", \"typ\": \"#{TYP}\"}")
+          raise Errors::Forbidden.new("mandate typ is not #{TYP}", hint: "the JWT header is {\"alg\": \"#{algorithm}\", \"typ\": \"#{TYP}\"}")
         rescue SdJwt::Invalid => e
           raise Errors::Forbidden.new('mandate is not a valid SD-JWT', hint: e.message)
         rescue ::JWT::DecodeError
-          raise Errors::Forbidden.new('mandate signature invalid', hint: "a mandate is an SD-JWT signed #{ALGORITHM} with the agent's payment key")
+          raise Errors::Forbidden.new('mandate signature invalid',
+                                      hint: "a mandate is an SD-JWT that the agent's registered key signs (#{AssistantKey.algorithms.join(' or ')})")
         end
 
         def payment_key(identity)
           AgentIdentityProviders::DefaultAgentIdp.new.agent_payment_key(identity.agent_id)
-        rescue Kiosk::AgentIdentityProviders::InvalidToken
+        rescue Kiosk::AgentIdentityProviders::InvalidToken, Errors::BadRequest
           # The agent was revoked between authentication and now.
           raise Errors::Forbidden.new('mandate agent has no registered payment key', hint: 'the authenticated agent is revoked or unknown')
         end

@@ -72,12 +72,12 @@ RSpec.describe Kiosk::Server::IdentityResolution do
     it 'refuses a valid token with no DPoP proof, naming the DPoP scheme' do
       Kiosk.configure { |c| c.agent_idp = fixed_idp(agent_identity) }
       expect { Kiosk.with_issuer('https://demo.example') { described_class.resolve(request_with('HTTP_AUTHORIZATION' => 'DPoP tok')) } }
-        .to raise_error(Kiosk::Server::Errors::AccessTokenRefused) { expect(it.response_headers).to eq('WWW-Authenticate' => 'DPoP algs="RS256"') }
+        .to raise_error(Kiosk::Server::Errors::AccessTokenRefused) { expect(it.response_headers).to eq('WWW-Authenticate' => 'DPoP algs="EdDSA"') }
     end
 
     it 'refuses a proof that another key signed' do
       Kiosk.configure { |c| c.agent_idp = fixed_idp(agent_identity) }
-      other = OpenSSL::PKey::RSA.generate(2048)
+      other = OpenSSL::PKey.generate_key('ED25519')
       expect { Kiosk.with_issuer('https://demo.example') { described_class.resolve(proven_request(key: other)) } }
         .to raise_error(Kiosk::Server::Errors::AccessTokenRefused, /not the key the token is bound to/)
     end

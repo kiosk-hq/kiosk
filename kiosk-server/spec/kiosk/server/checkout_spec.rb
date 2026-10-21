@@ -3,11 +3,11 @@
 RSpec.describe Kiosk::Server::Checkout do
   include_context 'with a checkout to pay'
 
-  let(:claims) { JWT.decode(checkout_jwt, CHECKOUT_SIGNING_KEY.public_key, true, algorithms: ['PS256']).first }
+  let(:claims) { JWT.decode(checkout_jwt, CHECKOUT_SIGNING_KEY.key, true, algorithms: ['EdDSA']).first }
 
-  it 'signs PS256 with the key of the JWKS, naming its kid' do
-    _, header = JWT.decode(checkout_jwt, CHECKOUT_SIGNING_KEY.public_key, true, algorithms: ['PS256'])
-    expect(header).to include('alg' => 'PS256', 'kid' => CHECKOUT_SIGNING_KEY.kid)
+  it 'signs EdDSA with the key of the JWKS, naming its kid' do
+    _, header = JWT.decode(checkout_jwt, CHECKOUT_SIGNING_KEY.key, true, algorithms: ['EdDSA'])
+    expect(header).to include('alg' => 'EdDSA', 'kid' => CHECKOUT_SIGNING_KEY.kid)
   end
 
   it 'names the origin, the account, the merchant and what to pay' do
@@ -26,6 +26,11 @@ RSpec.describe Kiosk::Server::Checkout do
     expect(checkout).not_to eq(checkout)
   end
 
+  # AP2 v0.2: an EdDSA signature is the same for the same claims, so the checkout carries the entropy.
+  it 'carries a jti of 128 random bits' do
+    expect(claims['jti']).to match(/\A[A-Za-z0-9_-]{22}\z/)
+  end
+
   it 'answers the claims of a checkout this origin signed for this account' do
     expect(described_class.verify(checkout_jwt, identity:)).to eq(claims)
   end
@@ -40,7 +45,7 @@ RSpec.describe Kiosk::Server::Checkout do
     it 'verifies a checkout that the previous key signed' do
       Kiosk.configure do |c|
         c.signing_key          = Kiosk::Server::SigningKey.generate
-        c.previous_signing_key = CHECKOUT_SIGNING_KEY.rsa.public_key.to_pem
+        c.previous_signing_key = CHECKOUT_SIGNING_KEY.key.public_to_pem
       end
       expect(described_class.verify(signed_before, identity:)).to eq(claims)
     end

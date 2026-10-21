@@ -237,7 +237,7 @@ RSpec.describe Kiosk::Server::WireController do
       status, headers, = dispatch(:pay, token_env('/kiosk/pay', 'garbage', method: 'POST',
                                                                            input: '{}', 'CONTENT_TYPE' => 'application/json'))
       expect(status).to eq(401)
-      expect(headers['WWW-Authenticate']).to eq('DPoP algs="RS256"')
+      expect(headers['WWW-Authenticate']).to eq('DPoP algs="EdDSA"')
     end
   end
 end

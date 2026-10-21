@@ -150,17 +150,21 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
   end
 
   describe 'signing_key' do
-    # RSA generation is ~100ms; cache one for the whole context.
-    let(:rsa)         { OpenSSL::PKey::RSA.generate(2048) }
-    let(:signing_key) { Kiosk::Server::SigningKey.new(rsa) }
+    let(:ed25519)     { OpenSSL::PKey.generate_key('ED25519') }
+    let(:signing_key) { Kiosk::Server::SigningKey.new(ed25519) }
 
-    it 'raises when no key is configured' do
+    it 'raises when no key is configured, and names the command that makes one' do
       expect { Kiosk.configuration.signing_key }
-        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /c.signing_key is not set/)
+        .to raise_error(Kiosk::Server::Errors::ConfigurationError, /c.signing_key is not set. Generate one with `openssl genpkey -algorithm ed25519`/)
+    end
+
+    it 'refuses the PEM of an RSA key' do
+      expect { Kiosk.configure { |c| c.signing_key = OpenSSL::PKey::RSA.generate(2048).to_pem } }
+        .to raise_error(ArgumentError, /signing key is an Ed25519 key/)
     end
 
     it 'does not read the environment' do
-      ENV['KIOSK_SIGNING_KEY_PEM'] = rsa.to_pem
+      ENV['KIOSK_SIGNING_KEY_PEM'] = ed25519.private_to_pem
       expect { Kiosk.configuration.signing_key }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
     ensure
       ENV.delete('KIOSK_SIGNING_KEY_PEM')
@@ -172,7 +176,7 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
     end
 
     it 'accepts a PEM string via the setter' do
-      Kiosk.configure { |c| c.signing_key = rsa.to_pem }
+      Kiosk.configure { |c| c.signing_key = ed25519.private_to_pem }
       expect(Kiosk.configuration.signing_key.kid).to eq(signing_key.kid)
     end
 
@@ -186,6 +190,34 @@ RSpec.describe Kiosk::Server::ConfigurationExtension do
       Kiosk.configure { |c| c.signing_key = signing_key }
       Kiosk.reset!
       expect { Kiosk.configuration.signing_key }.to raise_error(Kiosk::Server::Errors::ConfigurationError)
+    end
+  end
+
+  describe 'assistant_algorithms' do
+    it 'is EdDSA alone by default' do
+      expect(Kiosk.configuration.assistant_algorithms).to eq(%w[EdDSA])
+    end
+
+    it 'adds ES256' do
+      Kiosk.configure { |c| c.assistant_algorithms = %i[EdDSA ES256] }
+      expect(Kiosk.configuration.assistant_algorithms).to eq(%w[EdDSA ES256])
+    end
+
+    it 'refuses a list without EdDSA first, or with another algorithm' do
+      [%w[ES256], %w[ES256 EdDSA], %w[EdDSA RS256], []].each do |list|
+        expect { Kiosk.configure { |c| c.assistant_algorithms = list } }
+          .to raise_error(Kiosk::Server::Errors::ConfigurationError, /%w\[EdDSA\] or %w\[EdDSA ES256\]/)
+      end
+    end
+  end
+
+  describe 'kyc_public_key' do
+    it 'reads the PEM of an Ed25519 key, and refuses an RSA key' do
+      key = OpenSSL::PKey.generate_key('ED25519')
+      Kiosk.configure { |c| c.kyc_public_key = key.public_to_pem }
+      expect(Kiosk.configuration.kyc_public_key.public_to_pem).to eq(key.public_to_pem)
+      expect { Kiosk.configure { |c| c.kyc_public_key = OpenSSL::PKey::RSA.generate(2048).public_to_pem } }
+        .to raise_error(ArgumentError, /Ed25519/)
     end
   end
 

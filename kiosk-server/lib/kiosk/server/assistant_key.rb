@@ -1,29 +1,28 @@
 # frozen_string_literal: true
 
-require 'base64'
-require 'digest'
-require 'json'
-require 'jwt'
 require 'openssl'
 
 module Kiosk
   module Server
     # The public key of an AI assistant: the key it registers, signs its client
-    # assertions with and binds its tokens to. This module holds the one list of
-    # signing algorithms an assistant can use, and the bounds of its key.
+    # assertions, DPoP proofs and mandates with, and binds its tokens to. An
+    # Ed25519 key signs EdDSA. A P-256 key signs ES256 where the operator
+    # accepts ES256 (`c.assistant_algorithms`).
     module AssistantKey
-      # Client assertions, DPoP proofs and every metadata list read this list.
-      ALGORITHMS = %w[RS256].freeze
-
-      MAX_KEY_BITS = 4096
-
       # The members of a JWK that only a private key has.
-      PRIVATE_MEMBERS = %w[d p q dp dq qi].freeze
-
-      HINT = "send one RSA public key of #{SigningKey::MIN_KEY_BITS} to #{MAX_KEY_BITS} bits as an " \
-             'RFC 7517 JWK {"kty":"RSA","n":"…","e":"…"}, with no private member'.freeze
+      PRIVATE_MEMBERS = %w[d].freeze
 
       module_function
+
+      # The algorithms this operator accepts, EdDSA first. Client assertions,
+      # DPoP proofs, mandates and every metadata list read this list.
+      def algorithms = Kiosk.configuration.assistant_algorithms
+
+      def hint
+        keys = ['an Ed25519 key as an RFC 8037 JWK {"kty":"OKP","crv":"Ed25519","x":"…"}']
+        keys << 'a P-256 key as an RFC 7518 JWK {"kty":"EC","crv":"P-256","x":"…","y":"…"}' if algorithms.include?('ES256')
+        "send one public key: #{keys.join(', or ')}, with no private member"
+      end
 
       # The key of an RFC 7517 JWK Set that holds exactly one public key.
       # @raise [Errors::BadRequest] naming what is wrong
@@ -39,47 +38,49 @@ module Kiosk
         refuse!('the key is not a JWK object') unless jwk.is_a?(Hash)
         jwk = jwk.transform_keys(&:to_s)
         refuse!('the key carries a private member') if jwk.keys.intersect?(PRIVATE_MEMBERS)
-        refuse!('the key is not an RSA key') unless jwk['kty'] == 'RSA'
+        refuse!("the key is not an #{curves} key") unless key_types.include?(jwk['kty'])
 
-        checked(::JWT::JWK.import(jwk.slice('kty', 'n', 'e')).public_key)
-      rescue ::JWT::JWKError, OpenSSL::PKey::PKeyError, ArgumentError
-        refuse!('the key is not a valid RSA JWK')
+        accepted(Jwk.import(jwk))
+      rescue ArgumentError => e
+        refuse!(e.message)
       end
 
-      # @raise [Errors::BadRequest] naming what is wrong
+      # The key of a row of the agents table.
+      # @raise [Errors::BadRequest] when this operator does not accept the key
       def from_pem(pem)
-        checked(OpenSSL::PKey::RSA.new(pem.to_s))
+        accepted(OpenSSL::PKey.read(pem.to_s))
       rescue OpenSSL::PKey::PKeyError
-        refuse!('the key is not a valid RSA public key')
+        refuse!('the key is not a valid public key')
       end
 
       # The form the agents table stores.
       def to_pem(key) = key.public_to_pem.strip
 
       # RFC 7517: the public members only.
-      def to_jwk(key) = { kty: 'RSA', n: b64(key.n.to_s(2)), e: b64(key.e.to_s(2)) }
+      def to_jwk(key) = Jwk.public_members(key)
 
-      # RFC 7638: the SHA-256 of the required members, in alphabetical order.
-      def thumbprint(key)
-        jwk = to_jwk(key)
-        b64(Digest::SHA256.digest(JSON.generate({ e: jwk[:e], kty: jwk[:kty], n: jwk[:n] })))
-      end
+      # RFC 7638.
+      def thumbprint(key) = Jwk.thumbprint(key)
 
-      def b64(bytes) = Base64.urlsafe_encode64(bytes, padding: false)
+      # The one algorithm `key` signs with.
+      def algorithm(key) = Jwk.algorithm(key)
 
-      def checked(key)
-        refuse!('the key is a private key') if key.private?
-        bits = key.n.num_bits
-        refuse!("the key is too small (#{bits} bits)") if bits < SigningKey::MIN_KEY_BITS
-        refuse!("the key is too large (#{bits} bits)") if bits > MAX_KEY_BITS
+      # `OKP`, and `EC` where ES256 is accepted.
+      def key_types = algorithms.map { Jwk::ALGORITHMS.key(it) }
+
+      def curves = key_types.map { Jwk::CURVES[it] }.join(' or ')
+
+      def accepted(key)
+        refuse!('the key is a private key') if Jwk.private?(key)
+        refuse!("the key is not an #{curves} key") unless algorithms.include?(algorithm(key))
         key
       end
 
       def refuse!(detail)
-        raise Errors::BadRequest.new(detail, hint: HINT)
+        raise Errors::BadRequest.new(detail, hint: hint)
       end
 
-      private_class_method :b64, :checked, :refuse!
+      private_class_method :key_types, :curves, :accepted, :refuse!
     end
   end
 end

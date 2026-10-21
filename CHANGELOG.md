@@ -11,6 +11,10 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: `kiosk-test-support` and `kiosk-redteam` register at `oauth/register` and get tokens by client assertion and DPoP; their login, revoke and challenge helpers are gone.
+- 2026-10-21: The e2e harness registers at `oauth/register`, gets tokens by client assertion and DPoP, and validates all eighteen auth and binding schema `$defs` against live bytes.
+- 2026-10-21: `deploy/live-fleet-drive.rb` adds a read-only token probe: an unknown client must get `invalid_client`. The README walkthrough registers at `/kiosk/oauth/register`.
+- 2026-10-21: The edge rate-limit notes name the three tolled requests before a token: `oauth/register`, `auth/claim` and the first device-code poll at `oauth/token`.
 - 2026-10-21: Every operator demo drops `kiosk.auth_challenges` by a migration, and its stories register, link and sign in again over the OAuth wire.
 - 2026-10-21: The engine registers assistants by RFC 7591 and gives tokens at `oauth/token` for an RFC 7523 client assertion and a DPoP proof; binding and rotation use the assertion too.
 - 2026-10-21: Removed from the engine: `GET /auth/challenge`, `POST /auth/register`, `/auth/login`, `/auth/revoke`, and the `kiosk.auth_challenges` table of `kiosk:install`.

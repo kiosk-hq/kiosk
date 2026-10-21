@@ -66,7 +66,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
       end
     end
 
-    it "attacks with B's bearer token on A's resource id" do
+    it "attacks with B's token on A's resource id" do
       stub_registers('a', 'b')
       stub_pay(status: 200)
       captured = nil
@@ -79,7 +79,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::PayForOtherUseSelf do
 
       scenario.call(client, profile)
 
-      expect(captured.headers['Authorization']).to eq('Bearer tok-b')
+      expect(captured.headers['Authorization']).to eq('DPoP tok-b')
       expect(JSON.parse(captured.body)).to eq('reservation_id' => 'res-1')
     end
   end

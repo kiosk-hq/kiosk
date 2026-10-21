@@ -6,6 +6,7 @@ require 'openssl'
 require 'socket'
 require 'uri'
 require 'websocket/driver'
+require 'kiosk/test_helpers/dpop'
 
 module Kiosk
   module TestHelpers
@@ -35,14 +36,15 @@ module Kiosk
 
         attr_reader :url
 
-        def initialize(base_url:, token:, path: '/kiosk/events', timeout: 10)
-          uri  = URI(base_url)
-          tls  = uri.scheme == 'https'
-          @url = "#{tls ? 'wss' : 'ws'}://#{uri.host}:#{uri.port}#{path}"
-          @io  = open_socket(uri.hostname, uri.port, tls)
+        # `key` signs the DPoP proof of the upgrade; its `htu` is the events URL
+        # with the HTTP scheme, because the upgrade is an HTTP request there.
+        def initialize(base_url:, token:, key:, path: '/kiosk/events', timeout: 10)
+          http = URI.join(base_url, path)
+          @url = http.to_s.sub(/\Ahttp/, 'ws')
+          @io  = open_socket(http.hostname, http.port, http.scheme == 'https')
           @frames = []
           @closed = false
-          @driver = start_driver(token)
+          @driver = start_driver(Dpop.headers(token, key, method: 'GET', url: http.to_s))
           pump(timeout) { @frames.any? { it['type'] == 'welcome' } } || raise(Error, "#{@url} did not welcome the connection")
         end
 
@@ -98,9 +100,9 @@ module Kiosk
           ssl
         end
 
-        def start_driver(token)
+        def start_driver(headers)
           driver = WebSocket::Driver.client(self)
-          driver.set_header('Authorization', "Bearer #{token}")
+          headers.each { |name, value| driver.set_header(name, value) }
           driver.on(:message) { @frames << JSON.parse(it.data) }
           driver.on(:close)   { @closed = true }
           driver.on(:error)   { @closed = true }

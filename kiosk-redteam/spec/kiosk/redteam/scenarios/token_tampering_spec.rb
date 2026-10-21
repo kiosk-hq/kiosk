@@ -56,7 +56,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
                                 'access_token' => valid_token),
             headers: { 'Content-Type' => 'application/json' }
           )
-        # Server accepts any bearer token (broken auth middleware).
+        # Server accepts any token (broken auth middleware).
         # The scenario probes with the profile's `per_user_query` — GET /kiosk/ping.
         stub_query('ping', rows: [])
 
@@ -89,9 +89,9 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
         expect(verdict.blocked).to be(true)
         expect(verdict.status).to eq(401)
         # The probe carried the TAMPERED token, not the issued one.
-        bearer = captured.headers['Authorization'].sub('Bearer ', '')
-        expect(bearer).not_to eq(valid_token)
-        expect(bearer.split('.').last).to eq(valid_token.split('.').last)
+        sent = captured.headers['Authorization'].delete_prefix('DPoP ')
+        expect(sent).not_to eq(valid_token)
+        expect(sent.split('.').last).to eq(valid_token.split('.').last)
       end
     end
   end

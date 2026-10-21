@@ -52,16 +52,16 @@ module Kiosk
       end
 
       def kyc(principal, attestation_jws:)
-        wire.post('/kiosk/agents/kyc', { kyc_jws: attestation_jws }, wire.bearer(principal.token))
+        wire.post('/kiosk/agents/kyc', { kyc_jws: attestation_jws }, credential(principal))
       end
 
       # `pay_tolls: false` answers a proof-of-work toll instead of paying it.
       def query(principal, name:, headers: {}, pay_tolls: true, **params)
-        (pay_tolls ? wire : unpaid).get("/kiosk/#{name}", params, wire.bearer(principal.token).merge(headers))
+        (pay_tolls ? wire : unpaid).get("/kiosk/#{name}", params, credential(principal).merge(headers))
       end
 
       def run(principal, name:, headers: {}, **args)
-        wire.post("/kiosk/#{name}", args, wire.bearer(principal.token).merge(headers))
+        wire.post("/kiosk/#{name}", args, credential(principal).merge(headers))
       end
 
       # Signs the two closed AP2 mandates for `checkout_jwt`, unchanged, and pays.
@@ -74,11 +74,25 @@ module Kiosk
       # Customer that `payment_setup` maps already lists a card, so that answer settles.
       def pay_raw(principal, checkout:, payment:)
         body   = { checkout_mandate: checkout, payment_mandate: payment }
-        answer = wire.post('/kiosk/pay', body, wire.bearer(principal.token))
+        answer = wire.post('/kiosk/pay', body, credential(principal))
         return answer unless setup_required?(answer)
 
         run(principal, name: 'payment_setup')
-        wire.post('/kiosk/pay', body, wire.bearer(principal.token))
+        wire.post('/kiosk/pay', body, credential(principal))
+      end
+
+      # Puts a new key on the principal's account (spec Section 5.7): each key
+      # signs a challenge of its own, and the old key's proof names the new key.
+      # The answer's Principal holds the new key and the token bound to it.
+      def rotate(principal, new_key: OpenSSL::PKey::RSA.generate(2048))
+        new_key_thumbprint = Dpop.thumbprint(new_key)
+        body = { public_key: principal.rsa_key.public_key.to_pem,
+                 signed: proof_of_possession(principal.rsa_key, new_key: new_key_thumbprint),
+                 new_public_key: new_key.public_key.to_pem, new_signed: proof_of_possession(new_key) }
+        response = wire.post('/kiosk/auth/rotate', body)
+        return response unless response.status == 200
+
+        principal.with(token: response.body.fetch('access_token'), rsa_key: new_key)
       end
 
       # Signs in again with the key it holds.
@@ -94,15 +108,17 @@ module Kiosk
       end
 
       # A proof that the assistant holds `key`, over a fresh challenge and bound to this origin.
-      def proof_of_possession(key)
+      # `claims` adds members, such as the `new_key` of a rotation.
+      def proof_of_possession(key, **claims)
         _, challenge = wire.get_json('/kiosk/auth/challenge', public_key: key.public_key.to_pem)
-        JWT.encode({ aud: base_url, nonce: challenge['challenge'], jti: SecureRandom.uuid, iat: Time.now.to_i }, key, 'RS256')
+        JWT.encode({ aud: base_url, nonce: challenge['challenge'], jti: SecureRandom.uuid, iat: Time.now.to_i, **claims },
+                   key, 'RS256')
       end
 
       # What the origin publishes about itself at `/kiosk/schema`.
       def schema = @schema ||= wire.get_json('/kiosk/schema').last
 
-      def events(principal) = Events.new(base_url:, token: principal.token).tap { (@connections ||= []) << it }
+      def events(principal) = Events.new(base_url:, token: principal.token, key: principal.rsa_key).tap { (@connections ||= []) << it }
 
       # Closes every event connection it opened.
       def disconnect = @connections&.each(&:close)
@@ -124,6 +140,9 @@ module Kiosk
       def possession(key) = { public_key: key.public_key.to_pem, signed: proof_of_possession(key) }
 
       def unpaid = Wire.new(base_url:)
+
+      # The principal's token and key, which the wire signs a DPoP proof with.
+      def credential(principal) = wire.dpop(principal.token, principal.rsa_key)
 
       def setup_required?(answer)
         answer.status == 402 && answer.body.is_a?(Hash) && answer.body['code'] == 'payment_setup_required'

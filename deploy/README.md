@@ -440,9 +440,9 @@ Publish the test card on each paying demo's landing:
 
 Three documents are always free: the top-level **discovery** document, and the
 two catalogue documents `GET /kiosk/schema` and `GET /kiosk/openapi.json` — no
-Bearer, no toll, and `Cache-Control: max-age=60, public` so a poker (or an
+token, no toll, and `Cache-Control: max-age=60, public` so a poker (or an
 assistant) can read what the origin offers before it registers. Everything else
-— every query, every action, `pay` — needs a Bearer token and MAY toll
+— every query, every action, `pay` — needs the access token with a DPoP proof and MAY toll
 proof-of-work, and so may `register`. So the register gate is a memory-hard PoW
 by design, and the "true" one-liner ships a copy-paste **solver**
 (`kiosk-pow-equihash/solve.py`). Every demo asks for n=168 k=7, ~9–10 s on an
@@ -455,14 +455,13 @@ your own machine. Flow:
 ```sh
 # 0. Discover: who/where/which capabilities. Free — no auth, no PoW, same as the
 #    schema in step (d). (The queries and actions in (e)/(f) are NOT free: each
-#    needs a Bearer token and MAY answer 402 pow_required — solve and retry.)
+#    needs the token with a DPoP proof and MAY answer 402 pow_required — solve and retry.)
 curl -s https://getgrocery.demo.kiosk.tech/.well-known/kiosk.json | jq .
 
 # 1. Full flow — register with the bundled solver, then read schema + query.
-#    Needs curl, jq, openssl, uuidgen and python3+numpy; run it from the repo
-#    root, since the solver is referenced by a repo-relative path. Everything
-#    down to and including (e) was EXECUTED against the hosted origin exactly
-#    as written before being published here.
+#    Needs curl, jq, openssl, xxd, uuidgen and python3+numpy; run it from the repo
+#    root, since the solver is referenced by a repo-relative path. Run it
+#    against an origin that serves the release of this tree.
 BASE=https://getgrocery.demo.kiosk.tech
 
 #    Two helpers. `b64url` is JWS base64url; `proofs_for` turns a 402 problem
@@ -505,7 +504,19 @@ TOKEN=$(curl -s -X POST "$BASE/kiosk/auth/register" \
   -H "Kiosk-PoW: $(printf '%s' "$REG" | proofs_for)" \
   -d "$BODY" | jq -r .access_token)
 
-#    d) read the schema — PUBLIC and cacheable, so no Bearer and no toll here;
+#       The token is bound to the key (RFC 9449): every call that carries it
+#       also carries a DPoP proof, a JWS the key signs for that method and URL
+#       (no query), new for each call. `dpop METHOD URL` prints one.
+N=$(openssl rsa -in "$AGENT/agent.pem" -noout -modulus | cut -d= -f2 | xxd -r -p | b64url)
+dpop() { local h p
+  h=$(jq -cn --arg n "$N" '{alg:"RS256",typ:"dpop+jwt",jwk:{kty:"RSA",n:$n,e:"AQAB"}}' | b64url)
+  p=$(jq -cn --arg m "$1" --arg u "$2" --arg j "$(uuidgen)" \
+        --arg a "$(printf '%s' "$TOKEN" | openssl dgst -sha256 -binary | b64url)" \
+        '{jti:$j,htm:$m,htu:$u,iat:(now|floor),ath:$a}' | b64url)
+  printf '%s.%s.%s' "$h" "$p" \
+    "$(printf '%s.%s' "$h" "$p" | openssl dgst -sha256 -sign "$AGENT/agent.pem" -binary | b64url)"; }
+
+#    d) read the schema — PUBLIC and cacheable, so no token and no toll here;
 #       this one answers just as well before step (c) as after it.
 curl -s "$BASE/kiosk/schema" | jq .
 
@@ -513,11 +524,14 @@ curl -s "$BASE/kiosk/schema" | jq .
 #       per verb, a query is a GET whose arguments are the query string, and the
 #       success body IS the result: a bare JSON array, no envelope to unwrap
 #       (the matching-row count rides in the X-Total-Count response header).
-#       Bearer required, and on the hosted origins this one DOES toll: the
-#       first call answers 402, and the retry is the SAME request with the
-#       proof in the Kiosk-PoW header — the pattern register just used.
-CAT=$(curl -s "$BASE/kiosk/catalog" -H "authorization: Bearer $TOKEN")
-curl -s "$BASE/kiosk/catalog" -H "authorization: Bearer $TOKEN" \
+#       The token and a DPoP proof are required, and on the hosted origins this
+#       one DOES toll: the first call answers 402, and the retry is the SAME
+#       request, with a new DPoP proof, and the proof of work in the Kiosk-PoW
+#       header — the pattern register just used.
+CAT=$(curl -s "$BASE/kiosk/catalog" -H "authorization: DPoP $TOKEN" \
+  -H "DPoP: $(dpop GET "$BASE/kiosk/catalog")")
+curl -s "$BASE/kiosk/catalog" -H "authorization: DPoP $TOKEN" \
+  -H "DPoP: $(dpop GET "$BASE/kiosk/catalog")" \
   -H "Kiosk-PoW: $(printf '%s' "$CAT" | proofs_for)" | jq .
 
 #    f) …and an action is a POST at its own path, with the arguments as the body,
@@ -528,7 +542,7 @@ curl -s "$BASE/kiosk/catalog" -H "authorization: Bearer $TOKEN" \
 #       naming it. The slot id and the date are the `delivery_slot_id` and
 #       `date` of ONE delivery_slots row — set DAY to that row's `date`.
 curl -s -X POST "$BASE/kiosk/create_order" \
-  -H "authorization: Bearer $TOKEN" \
+  -H "authorization: DPoP $TOKEN" -H "DPoP: $(dpop POST "$BASE/kiosk/create_order")" \
   -H 'content-type: application/json' \
   -d '{"items":[{"sku":"milk-0.5l","qty":2}],
        "delivery_slot_id":3, "delivery_date":"'"$DAY"'",

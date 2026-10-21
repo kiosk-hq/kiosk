@@ -4,6 +4,7 @@ require 'json'
 require 'net/http'
 require 'uri'
 require 'kiosk/pow/equihash/solver'
+require 'kiosk/test_helpers/dpop'
 
 module Kiosk
   module TestHelpers
@@ -11,7 +12,7 @@ module Kiosk
     # `pay_tolls: true` it solves a proof-of-work toll and sends the request once more.
     #
     #   wire = Kiosk::TestHelpers::Wire.new(base_url: "http://127.0.0.1:3006")
-    #   status, problem = wire.post_json("/kiosk/edit_listing", { listing_id: "junk" }, Wire.bearer(token))
+    #   status, problem = wire.post_json("/kiosk/edit_listing", { listing_id: "junk" }, wire.dpop(token, key))
     class Wire
       # One answer: a body that is not JSON reads as `{}`, an unreachable origin as status 0.
       Response = Data.define(:status, :headers, :body, :raw_body, :proofs) do
@@ -42,7 +43,11 @@ module Kiosk
         http
       end
 
-      def self.bearer(token) = { 'Authorization' => "Bearer #{token}" }
+      # An access token and the key it is bound to. As a header value, the wire
+      # sends it as `Authorization: DPoP <token>` with a proof for that request.
+      DpopCredential = Data.define(:token, :key)
+
+      def self.dpop(token, key) = { 'Authorization' => DpopCredential.new(token:, key:) }
 
       # A solved proof of work for each challenge, as the `Kiosk-PoW` header carries them.
       def self.solve(challenges) = challenges.map { { challenge: it, nonce: Kiosk::Pow::Equihash.solve(it) } }
@@ -56,7 +61,7 @@ module Kiosk
         @read_timeout = read_timeout
       end
 
-      def bearer(token) = self.class.bearer(token)
+      def dpop(token, key) = self.class.dpop(token, key)
 
       def post_json(path, body = {}, headers = {}) = post(path, body, headers).then { [it.status, it.body] }
 
@@ -97,16 +102,33 @@ module Kiosk
         challenges if challenges.is_a?(Array) && challenges.any?
       end
 
-      def deliver(klass, uri, body, headers)
-        request = klass.new(uri, body.nil? ? headers : { 'Content-Type' => 'application/json' }.merge(headers))
-        request.body = JSON.generate(body) unless body.nil?
-        yield request if block_given?
+      def deliver(klass, uri, body, headers, &)
+        request = build(klass, uri, body, headers, &)
         begin
           answer = self.class.http_for(uri, open_timeout: @open_timeout, read_timeout: @read_timeout).request(request)
         rescue StandardError => e
           return Response.new(status: 0, body: { 'error' => e.class.name, 'detail' => e.message })
         end
         response(answer)
+      end
+
+      def build(klass, uri, body, headers)
+        headers = { 'Content-Type' => 'application/json' }.merge(headers) unless body.nil?
+        request = klass.new(uri, signed(headers, klass::METHOD, uri))
+        request.body = JSON.generate(body) unless body.nil?
+        yield request if block_given?
+        request
+      end
+
+      # Each delivery signs its own DPoP proof, so a retry never reuses one.
+      def signed(headers, method, uri)
+        headers.each_with_object({}) do |(name, value), out|
+          if value.is_a?(DpopCredential)
+            out.merge!(Dpop.headers(value.token, value.key, method:, url: uri.to_s))
+          else
+            out[name] = value
+          end
+        end
       end
 
       def response(answer)

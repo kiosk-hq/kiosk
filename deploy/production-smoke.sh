@@ -56,7 +56,7 @@
 # script, which is the only thing in CI that boots a demo in production mode, is
 # the one place that could carry the per-verb output-schema assertion. It does
 # not. MEASURED: this file makes exactly ONE request carrying
-# an `Authorization:` header, and it is the FORGED bearer asserted to answer
+# an `Authorization:` header, and it is the FORGED token asserted to answer
 # 401. No assertion anywhere below drives a query or an action to a SUCCESS
 # body, so the Executor never renders a payload here and the response validator
 # never runs, in production mode or any other.
@@ -210,7 +210,7 @@ require_disposable_host
 # ── THE MEASUREMENT THE POSTURE ABOVE RESTS ON, MADE ON EVERY RUN ───────────
 #
 # The header above states, as a MEASURED fact, that this file makes exactly ONE
-# request carrying an `Authorization:` header, and that it is the forged bearer
+# request carrying an `Authorization:` header, and that it is the forged token
 # asserted to answer 401. Everything that follows from it — «no assertion here
 # drives a verb to a success body, so the response validator never ran, so
 # turning it off in production costs this script nothing» — is true only while
@@ -232,7 +232,7 @@ auth_sites="$(grep -c -F -- "$auth_needle" "$SMOKE_SELF" || true)"
 if [ "$auth_sites" = "1" ]; then
   pass "exactly 1 request carries an Authorization: header — the validate_responses posture's own measurement"
 else
-  fail "this script now passes an Authorization: header on ${auth_sites} request(s), not 1. The COVERAGE header above justifies running the deployed fleet without response validation on the measured fact that the only authenticated request here is the forged bearer asserted to answer 401, so nothing ever renders a verb payload. If a new request drives a verb to a 200 it is doing so with validation OFF — say so in that section and update this count; if the count is 0, the header flag was re-spelled and this arm is watching nothing."
+  fail "this script now passes an Authorization: header on ${auth_sites} request(s), not 1. The COVERAGE header above justifies running the deployed fleet without response validation on the measured fact that the only authenticated request here is the forged token asserted to answer 401, so nothing ever renders a verb payload. If a new request drives a verb to a 200 it is doing so with validation OFF — say so in that section and update this count; if the count is 0, the header flag was re-spelled and this arm is watching nothing."
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -379,11 +379,11 @@ smoke_stylish() {
       || fail "signed-in manage page expected 200, got $authed_code"
   fi
 
-  echo "── Assertion 5: forged cleartext identity bearer → 401 ──"
-  # An `agent:u-…:a-…:r-…` bearer names a user, an agent and a ROLE, and NOTHING
+  echo "── Assertion 5: forged cleartext identity token → 401 ──"
+  # An `agent:u-…:a-…:r-…` token names a user, an agent and a ROLE, and NOTHING
   # parses it: assistants authenticate with the kiosk-pop JWT the engine minted,
   # verified by the engine's own DefaultAgentIdp, and no demo overrides
-  # `c.agent_idp` at all. So this asserts that a self-asserted bearer buys
+  # `c.agent_idp` at all. So this asserts that a self-asserted token buys
   # nothing in ANY environment — a 200 here would be a cross-tenant read of the
   # public `salons` query, authenticated as a forged owner. The dev-mode CI and
   # check:redteam gates assert the same refusal.
@@ -391,15 +391,17 @@ smoke_stylish() {
   # BEFORE the verb is looked up, so this probe is a 401 whether or not the
   # name exists — which is exactly the property being asserted, and also why an
   # unauthenticated caller cannot enumerate the catalog one path at a time.
-  FORGED_BEARER="agent:u-11111111-1111-4111-8111-111111111111:a-forged:r-owner"
+  # It is sent under the DPoP scheme, so it reaches the token check itself: the
+  # token is refused before any DPoP proof is read.
+  FORGED_TOKEN="agent:u-11111111-1111-4111-8111-111111111111:a-forged:r-owner"
   forged_code="$(curl -s -o /dev/null -w '%{http_code}' \
     "${PROXY_HEADERS[@]}" \
-    -H "Authorization: Bearer ${FORGED_BEARER}" \
+    -H "Authorization: DPoP ${FORGED_TOKEN}" \
     "${BASE}/kiosk/salons")"
   if [ "$forged_code" = "401" ]; then
-    pass "forged self-asserted bearer → 401 (no cleartext parser exists to reach)"
+    pass "forged self-asserted token → 401 (no cleartext parser exists to reach)"
   else
-    fail "forged bearer expected 401, got $forged_code (something is parsing self-asserted bearers — cross-tenant auth bypass!)"
+    fail "forged token expected 401, got $forged_code (something is parsing self-asserted tokens — cross-tenant auth bypass!)"
   fi
 
   echo "── Assertion 6: forged human X-Staff-Session → 401 in production ──"

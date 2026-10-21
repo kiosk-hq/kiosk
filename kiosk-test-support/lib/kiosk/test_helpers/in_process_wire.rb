@@ -9,6 +9,7 @@ require 'rack/mock'
 require 'uri'
 require 'kiosk/server'
 require 'kiosk/test_helpers/wire'
+require 'kiosk/test_helpers/dpop'
 
 module Kiosk
   module TestHelpers
@@ -24,10 +25,10 @@ module Kiosk
 
       # The verb's answer, or the wire error its refusal names.
       def call(name, kind:, params:, identity:)
-        token      = token_for(identity) if identity
-        response   = request(name, kind, params, token)
+        credential = credential_for(identity) if identity
+        response   = request(name, kind, params, credential)
         challenges = toll_challenges(response)
-        response   = request(name, kind, params, token, Wire.solve(challenges)) if challenges
+        response   = request(name, kind, params, credential, Wire.solve(challenges)) if challenges
         answer(response)
       end
 
@@ -35,27 +36,31 @@ module Kiosk
 
       def app = @app || ::Rails.application
 
-      def request(name, kind, params, token, proofs = nil)
-        env = credentials(token, proofs)
+      def request(name, kind, params, credential, proofs = nil)
+        query = kind.to_sym == :query
         url = "#{Kiosk.current_issuer.to_s.chomp('/')}#{Kiosk.configuration.mount_path}/#{name}"
-        return Rack::MockRequest.new(app).get(query_url(url, params), env) if kind.to_sym == :query
+        env = credentials(credential, query ? 'GET' : 'POST', url, proofs)
+        return Rack::MockRequest.new(app).get(query_url(url, params), env) if query
 
         Rack::MockRequest.new(app).post(url, env.merge(input: JSON.generate(params), 'CONTENT_TYPE' => 'application/json'))
       end
 
-      def credentials(token, proofs)
-        { 'HTTP_AUTHORIZATION' => ("Bearer #{token}" if token),
-          'HTTP_KIOSK_POW' => (JSON.generate(proofs) if proofs) }.compact
+      # The access token with a DPoP proof its key signs for this request.
+      def credentials(credential, method, url, proofs)
+        env = credential ? Dpop.env(credential.token, credential.key, method:, url:) : {}
+        env['HTTP_KIOSK_POW'] = JSON.generate(proofs) if proofs
+        env
       end
 
       def query_url(url, params) = params.empty? ? url : "#{url}?#{URI.encode_www_form(params)}"
 
-      # The token of an assistant linked to the principal for this call.
-      def token_for(identity)
-        Kiosk::Server::AccountBinding.bind!(
-          public_key_pem: OpenSSL::PKey::RSA.generate(2048).public_key.to_pem,
-          user_id: identity.user_id, requested_role: identity.role
+      # The token and key of an assistant linked to the principal for this call.
+      def credential_for(identity)
+        key   = OpenSSL::PKey::RSA.generate(2048)
+        token = Kiosk::Server::AccountBinding.bind!(
+          public_key_pem: key.public_key.to_pem, user_id: identity.user_id, requested_role: identity.role
         ).fetch(:access_token)
+        Wire::DpopCredential.new(token:, key:)
       end
 
       def toll_challenges(response)

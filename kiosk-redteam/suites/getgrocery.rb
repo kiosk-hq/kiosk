@@ -309,7 +309,7 @@ module GetgroceryScenarios
     end
   end
 
-  # The paths a caller hunting for a multiplexed endpoint tries first; with or without a bearer.
+  # The paths a caller hunting for a multiplexed endpoint tries first; with or without a token.
   class UnregisteredVerbIsOrdinaryRefusal < Kiosk::Redteam::Scenario
     UNREGISTERED = %w[query run].freeze
 
@@ -320,7 +320,7 @@ module GetgroceryScenarios
     def call(client, _profile)
       a = client.register!
       results = UNREGISTERED.flat_map do |name|
-        [[a.token, ''], [nil, ' (anon)']].map { |token, tag| post_unregistered(name, token, tag) }
+        [[a, ''], [nil, ' (anon)']].map { |principal, tag| post_unregistered(name, principal, tag) }
       end
       misses = results.reject(&:first).map(&:last)
       scenario_verdict(misses.empty?, 404) do
@@ -331,18 +331,18 @@ module GetgroceryScenarios
     private
 
     # [refused as an ordinary 404, the line that describes the answer]
-    def post_unregistered(name, token, tag)
+    def post_unregistered(name, principal, tag)
       uri = URI("#{BASE_URL}/kiosk/#{name}")
-      res = Kiosk::TestHelpers::Wire.http_for(uri).request(post_request(uri, token))
+      res = Kiosk::TestHelpers::Wire.http_for(uri).request(post_request(uri, principal))
       body = parsed_or_empty(res.body)
       [res.code.to_i == 404 && body['code'].nil?,
        "POST /kiosk/#{name}#{tag} → #{res.code}/#{body['code'].inspect} " \
        '(want 404 with no problem-document code)']
     end
 
-    def post_request(uri, token)
+    def post_request(uri, principal)
       headers = { 'Content-Type' => 'application/json' }
-      headers['Authorization'] = "Bearer #{token}" if token
+      headers.merge!(Kiosk::TestHelpers::Dpop.headers(principal.token, principal.rsa_key, method: 'POST', url: uri.to_s)) if principal
       req = Net::HTTP::Post.new(uri, headers)
       req.body = JSON.generate(name: 'catalog')
       req
@@ -372,7 +372,7 @@ module GetgroceryScenarios
     def get_action(customer)
       uri = URI("#{BASE_URL}/kiosk/create_order")
       Kiosk::TestHelpers::Wire.http_for(uri)
-                              .request(Net::HTTP::Get.new(uri, 'Authorization' => "Bearer #{customer.token}"))
+                              .request(Net::HTTP::Get.new(uri, Kiosk::TestHelpers::Dpop.headers(customer.token, customer.rsa_key, method: 'GET', url: uri.to_s)))
     end
   end
 
@@ -626,6 +626,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::StolenToken.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
   Kiosk::Redteam::Scenarios::WrongCurrencyPayment.new,

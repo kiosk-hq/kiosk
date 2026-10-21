@@ -21,7 +21,7 @@ query string, a write is a `POST` at its own name with a JSON body. Success is
 the handler's payload with no envelope around it (a query always answers an
 array); a refusal is an RFC 9457 problem document whose `code` is a flat
 member. A path that names no registered verb draws no route at all, so it is
-the ordinary 404 any undrawn path gets — bearer or not, because a routing miss
+the ordinary 404 any undrawn path gets — token or not, because a routing miss
 is decided before any credential is read.
 
 | Endpoint | Verb | What it does |

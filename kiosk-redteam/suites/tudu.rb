@@ -52,25 +52,25 @@ owner    = register_agent
 member   = register_agent
 outsider = register_agent
 
-rc, created = post_json('/kiosk/create_list', { title: 'Redteam target' }, WIRE.bearer(owner[:token]))
+rc, created = post_json('/kiosk/create_list', { title: 'Redteam target' }, WIRE.dpop(owner[:token], owner[:key]))
 abort "owner create_list failed (#{rc}) — run bin/rails db:reset" unless rc == 200
 list_id = created['list_id']
-_, inv = post_json('/kiosk/invite', { list_id: list_id }, WIRE.bearer(owner[:token]))
+_, inv = post_json('/kiosk/invite', { list_id: list_id }, WIRE.dpop(owner[:token], owner[:key]))
 invite_code = inv['code']
-post_json('/kiosk/accept_invite', { code: invite_code }, WIRE.bearer(member[:token]))
+post_json('/kiosk/accept_invite', { code: invite_code }, WIRE.dpop(member[:token], member[:key]))
 
-rc, = get_json('/kiosk/list_todos', { list_id: list_id }, WIRE.bearer(outsider[:token]))
+rc, = get_json('/kiosk/list_todos', { list_id: list_id }, WIRE.dpop(outsider[:token], outsider[:key]))
 BATTERY.record('CrossTenantRead', rc == 403, "outsider list_todos → #{rc} (want 403)")
 
 # The owner is not an input of create_list, so a forged account_id is refused with a 400.
 rc, forged = post_json('/kiosk/create_list',
                        { title: 'Forged', account_id: owner[:user_id] },
-                       WIRE.bearer(outsider[:token]))
+                       WIRE.dpop(outsider[:token], outsider[:key]))
 refused = rc == 400 && forged['code'] == 'bad_request' && forged['detail'].to_s.include?('account_id')
 
-rc_x, outsiders = post_json('/kiosk/create_list', { title: "Outsider's own" }, WIRE.bearer(outsider[:token]))
+rc_x, outsiders = post_json('/kiosk/create_list', { title: "Outsider's own" }, WIRE.dpop(outsider[:token], outsider[:key]))
 outsider_list = outsiders['list_id']
-rc_o, o_lists = get_json('/kiosk/my_lists', {}, WIRE.bearer(owner[:token]))
+rc_o, o_lists = get_json('/kiosk/my_lists', {}, WIRE.dpop(owner[:token], owner[:key]))
 o_ids = Array(o_lists).map { |r| r['list_id'] }
 BATTERY.record('ForgedUserId',
                refused && rc_x == 200 && rc_o == 200 && !o_ids.include?(outsider_list),
@@ -84,12 +84,12 @@ SQL_INTERNALS = ['::uuid', 'PG::', '22P02', 'invalid input syntax'].freeze
 uuid_probes = MALFORMED_IDS.flat_map do |junk|
   [
     # A query: the junk rides the query string.
-    [-> { get_json('/kiosk/list_todos', { list_id: junk }, WIRE.bearer(owner[:token])) },
+    [-> { get_json('/kiosk/list_todos', { list_id: junk }, WIRE.dpop(owner[:token], owner[:key])) },
      'list_todos', 'list_id'],
-    [-> { post_json('/kiosk/complete_todo', { todo_id: junk }, WIRE.bearer(owner[:token])) },
+    [-> { post_json('/kiosk/complete_todo', { todo_id: junk }, WIRE.dpop(owner[:token], owner[:key])) },
      'complete_todo', 'todo_id'],
     # The second id, on a verb whose first id is well-formed.
-    [-> { post_json('/kiosk/remove_member', { list_id: list_id, account_id: junk }, WIRE.bearer(owner[:token])) },
+    [-> { post_json('/kiosk/remove_member', { list_id: list_id, account_id: junk }, WIRE.dpop(owner[:token], owner[:key])) },
      'remove_member', 'account_id']
   ].map do |probe, verb, arg|
     rc, resp = probe.call
@@ -107,18 +107,24 @@ BATTERY.record('MalformedUuidArg', uuid_probes.all? { |ok, _| ok },
 
 rc, = get_json('/kiosk/my_lists')
 BATTERY.record('MissingAuth', rc == 401, "unauthenticated request → #{rc} (want 401)")
-rc, = get_json('/kiosk/my_lists', {}, WIRE.bearer('not-a-real-token'))
+rc, = get_json('/kiosk/my_lists', {}, WIRE.dpop('not-a-real-token', owner[:key]))
 BATTERY.record('GarbageToken', rc == 401, "garbage token → #{rc} (want 401)")
 
-rc, = get_json('/kiosk/frobnicate', {}, WIRE.bearer(owner[:token]))
+# A copied token without its key buys nothing: as a bearer token, or with another key's DPoP proof.
+rc_stolen_bearer, = get_json('/kiosk/my_lists', {}, 'Authorization' => "Bearer #{owner[:token]}")
+rc_stolen_key,    = get_json('/kiosk/my_lists', {}, WIRE.dpop(owner[:token], outsider[:key]))
+BATTERY.record('StolenToken', rc_stolen_bearer == 401 && rc_stolen_key == 401,
+               "stolen token as a bearer → #{rc_stolen_bearer}, with the thief's key → #{rc_stolen_key} (want 401 both)")
+
+rc, = get_json('/kiosk/frobnicate', {}, WIRE.dpop(owner[:token], owner[:key]))
 BATTERY.record('UnknownQuery', rc == 404, "unknown query → #{rc} (want 404)")
-rc, = post_json('/kiosk/nope', {}, WIRE.bearer(owner[:token]))
+rc, = post_json('/kiosk/nope', {}, WIRE.dpop(owner[:token], owner[:key]))
 BATTERY.record('UnknownAction', rc == 404, "unknown action → #{rc} (want 404)")
 
-# A multiplexed-endpoint name is an ordinary 404, with or without a bearer.
+# A multiplexed-endpoint name is an ordinary 404, with or without a token.
 unregistered = %w[query run].flat_map do |name|
   authed = WIRE.request(:post, "/kiosk/#{name}", body: { name: 'my_lists' },
-                                                 headers: WIRE.bearer(owner[:token]))
+                                                 headers: WIRE.dpop(owner[:token], owner[:key]))
   anon   = WIRE.request(:post, "/kiosk/#{name}", body: { name: 'my_lists' })
   [[authed.status == 404 && authed.body['code'].nil?, "#{name}→#{authed.status}"],
    [anon.status   == 404 && anon.body['code'].nil?,   "#{name}(anon)→#{anon.status}"]]
@@ -126,20 +132,20 @@ end
 BATTERY.record('UnregisteredVerbIsOrdinaryRefusal',
                unregistered.all? { |ok, _| ok },
                "unregistered verb names #{unregistered.map(&:last).join(', ')} " \
-               '(want a plain 404 with no problem-document code, bearer or not)')
+               '(want a plain 404 with no problem-document code, token or not)')
 
 # A GET at an action's path must never reach the action.
-res404 = WIRE.request(:get, '/kiosk/create_list', headers: WIRE.bearer(owner[:token]))
+res404 = WIRE.request(:get, '/kiosk/create_list', headers: WIRE.dpop(owner[:token], owner[:key]))
 BATTERY.record('MethodMismatch',
                res404.status == 404 && res404['allow'].nil? && res404.body['code'].nil?,
                "GET an action → #{res404.status} Allow=#{res404['allow'].inspect} " \
                '(want a plain 404, no Allow, no problem-document code)')
 
-rc, = post_json('/kiosk/accept_invite', { code: invite_code }, WIRE.bearer(outsider[:token]))
+rc, = post_json('/kiosk/accept_invite', { code: invite_code }, WIRE.dpop(outsider[:token], outsider[:key]))
 BATTERY.record('InviteCodeReplay', rc == 403, "replay of used invite code → #{rc} (want 403)")
 
-post_json('/kiosk/remove_member', { list_id: list_id, account_id: member[:user_id] }, WIRE.bearer(owner[:token]))
-rc, = get_json('/kiosk/list_todos', { list_id: list_id }, WIRE.bearer(member[:token]))
+post_json('/kiosk/remove_member', { list_id: list_id, account_id: member[:user_id] }, WIRE.dpop(owner[:token], owner[:key]))
+rc, = get_json('/kiosk/list_todos', { list_id: list_id }, WIRE.dpop(member[:token], member[:key]))
 BATTERY.record('RevokedMemberAccess', rc == 403, "removed member's next read → #{rc} (want 403)")
 
 begin
@@ -166,13 +172,13 @@ BATTERY.record('RevokedAgentKey',
 
 # A rebind watermark-revokes the key's pre-link tokens.
 pl = register_agent
-rc, plc = post_json('/kiosk/create_list', { title: 'Pre-link list' }, WIRE.bearer(pl[:token]))
+rc, plc = post_json('/kiosk/create_list', { title: 'Pre-link list' }, WIRE.dpop(pl[:token], pl[:key]))
 pl_list = plc['list_id']
 rc, link2 = post_json('/kiosk/auth/link', {}, { session: true })
 # JWT iat is second-resolution: the pre-link token must predate the rebind watermark.
 sleep 1.1
 rc, = post_json('/kiosk/auth/claim', { code: link2['link_code'], public_key: pl[:pem], signed: pop_proof(pl[:key], pl[:pem]) })
-rc, = get_json('/kiosk/list_todos', { list_id: pl_list }, WIRE.bearer(pl[:token]))
+rc, = get_json('/kiosk/list_todos', { list_id: pl_list }, WIRE.dpop(pl[:token], pl[:key]))
 BATTERY.record('PreLinkTokenAfterLink', rc == 401,
                "pre-link token after rebind → #{rc} (want 401 — watermark-revoked)")
 
@@ -184,12 +190,12 @@ pii_rc_claim, = post_json('/kiosk/auth/claim',
                           { code: pii_link['link_code'], public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
 pii_rc_login, pii_login = post_json('/kiosk/auth/login',
                                     { public_key: pii_pem, signed: pop_proof(pii_key, pii_pem) })
-pii_bearer = WIRE.bearer(pii_login['access_token'].to_s)
+pii_auth = WIRE.dpop(pii_login['access_token'].to_s, pii_key)
 
-rc_mine, mine = get_json('/kiosk/my_lists', {}, pii_bearer)
+rc_mine, mine = get_json('/kiosk/my_lists', {}, pii_auth)
 household = Array(mine).find { |r| r['title'] == 'Flat 3B' }
-rc_roster, roster = get_json('/kiosk/list_members', { list_id: household && household['list_id'] }, pii_bearer)
-rc_who, who = get_json('/kiosk/whoami', {}, pii_bearer)
+rc_roster, roster = get_json('/kiosk/list_members', { list_id: household && household['list_id'] }, pii_auth)
+rc_who, who = get_json('/kiosk/whoami', {}, pii_auth)
 
 # A 500 answers with a Hash; guard before indexing so the beat still reports why.
 raw_roster   = JSON.generate(roster) + JSON.generate(who)
@@ -202,9 +208,9 @@ named        = roster_rows.length >= 2 &&
 recognisable = (roster_names & %w[Alice Bob]).sort == %w[Alice Bob]
 
 # Headless accounts get a distinct opaque `member-<12 hex>`; re-invite so the roster has two.
-_, rejoin = post_json('/kiosk/invite', { list_id: list_id }, WIRE.bearer(owner[:token]))
-post_json('/kiosk/accept_invite', { code: rejoin['code'] }, WIRE.bearer(outsider[:token]))
-rc_headless, headless = get_json('/kiosk/list_members', { list_id: list_id }, WIRE.bearer(owner[:token]))
+_, rejoin = post_json('/kiosk/invite', { list_id: list_id }, WIRE.dpop(owner[:token], owner[:key]))
+post_json('/kiosk/accept_invite', { code: rejoin['code'] }, WIRE.dpop(outsider[:token], outsider[:key]))
+rc_headless, headless = get_json('/kiosk/list_members', { list_id: list_id }, WIRE.dpop(owner[:token], owner[:key]))
 headless_names = (headless.is_a?(Array) ? headless : []).map { |r| r['display_name'] }
 opaque_ok = headless_names.length >= 2 &&
             headless_names.all? { |n| n.to_s.match?(/\Amember-[0-9a-f]{12}\z/) } &&

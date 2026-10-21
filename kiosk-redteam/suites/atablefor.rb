@@ -21,18 +21,20 @@ BEA   = Kiosk::TestHelpers::Person.new(SERVER, email: 'bea@example.com', passwor
                                   .links_a_newcomer.principal
 
 DIEGO_UUID = DIEGO.user_id
-TOKEN_A    = DIEGO.token
-TOKEN_B    = BEA.token
 
 # The assistants' calls; each pays the proof-of-work toll its access token owes.
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
+
+# Each assistant's token with the key it is bound to: the wire signs a DPoP proof per call.
+AUTH_A = WIRE.dpop(DIEGO.token, DIEGO.rsa_key)
+AUTH_B = WIRE.dpop(BEA.token, BEA.rsa_key)
 
 BATTERY = Kiosk::Redteam::Battery.new
 
 # Find an open (restaurant, table, seating) row for a 2-top across the
 # aggregator, excluding any [restaurant_table_id, seating_at] pairs.
 def open_slot(exclude = [])
-  rc, avail = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.bearer(TOKEN_A))
+  rc, avail = WIRE.get_json('/kiosk/availability', { party_size: 2 }, AUTH_A)
   abort "availability failed (#{rc}): #{JSON.generate(avail)} — run bin/rails db:reset" unless rc == 200
   rows = Array(avail).reject { |r| exclude.include?([r['restaurant_table_id'], r['seating_at']]) }
   slot = rows.first
@@ -40,23 +42,23 @@ def open_slot(exclude = [])
   slot
 end
 
-# Book an availability row as `token`, optionally injecting extra args.
-def book_slot(token, slot, extra = {})
+# Book an availability row as `auth`, optionally injecting extra args.
+def book_slot(auth, slot, extra = {})
   WIRE.post_json('/kiosk/book_table',
                  { restaurant_table_id: slot.fetch('restaurant_table_id'),
                    seating_at: slot.fetch('seating_at'),
                    party_size: 2 }.merge(extra),
-                 WIRE.bearer(token))
+                 auth)
 end
 
 # Fixture: Diego's booking, the target of the cross-owner beats.
 slot_a = open_slot
-rc, diego_book = book_slot(TOKEN_A, slot_a)
+rc, diego_book = book_slot(AUTH_A, slot_a)
 abort "A book_table failed (#{rc}): #{JSON.generate(diego_book)} — run bin/rails db:reset" unless rc == 200
 diego_booking_id = diego_book['booking_id']
 abort "no booking_id from A's booking: #{JSON.generate(diego_book)}" unless diego_booking_id
 
-rc, b_mine = WIRE.get_json('/kiosk/my_bookings', {}, WIRE.bearer(TOKEN_B))
+rc, b_mine = WIRE.get_json('/kiosk/my_bookings', {}, AUTH_B)
 b_ids = Array(b_mine).map { |r| r['booking_id'] }
 BATTERY.record('CrossTenantRead',
                rc == 200 && !b_ids.include?(diego_booking_id),
@@ -64,12 +66,12 @@ BATTERY.record('CrossTenantRead',
 
 # Bea books naming Diego's user_id; the refusal writes nothing, so the slot stays free for her real booking.
 slot_b = open_slot([[slot_a['restaurant_table_id'], slot_a['seating_at']]])
-rc, forged = book_slot(TOKEN_B, slot_b, user_id: DIEGO_UUID)
+rc, forged = book_slot(AUTH_B, slot_b, user_id: DIEGO_UUID)
 refused = rc == 400 && forged['code'] == 'bad_request' && forged['detail'].to_s.include?('user_id')
 
-rc_b, beas = book_slot(TOKEN_B, slot_b)
+rc_b, beas = book_slot(AUTH_B, slot_b)
 bea_booking_id = beas['booking_id']
-rc_a, a_mine = WIRE.get_json('/kiosk/my_bookings', {}, WIRE.bearer(TOKEN_A))
+rc_a, a_mine = WIRE.get_json('/kiosk/my_bookings', {}, AUTH_A)
 a_ids = Array(a_mine).map { |r| r['booking_id'] }
 BATTERY.record('ForgedUserId',
                refused && rc_b == 200 && rc_a == 200 && !a_ids.include?(bea_booking_id),
@@ -78,7 +80,7 @@ BATTERY.record('ForgedUserId',
 
 rc, = WIRE.post_json('/kiosk/cancel_booking',
                      { booking_id: diego_booking_id },
-                     WIRE.bearer(TOKEN_B))
+                     AUTH_B)
 BATTERY.record('CrossOwnerCancel', rc == 403, "Bea cancel Diego's booking → #{rc} (want 403)")
 
 MALFORMED_IDS = ['not-a-uuid', '1; DROP TABLE bookings', '', '  '].freeze
@@ -99,7 +101,7 @@ end
 
 # The status, body and leak scan of one malformed-id probe.
 def uuid_guard_probe(path, args)
-  rc, body = WIRE.post_json(path, args, WIRE.bearer(TOKEN_A))
+  rc, body = WIRE.post_json(path, args, AUTH_A)
   [rc, body, Kiosk::Redteam::LeakScan.scan(body, SQL_INTERNALS, supplied: args)]
 end
 
@@ -121,8 +123,14 @@ BATTERY.record('RegisterWithoutPoP', rc != 201, "register with no signed PoP →
 rc, = WIRE.get_json('/kiosk/availability', { party_size: 2 })
 BATTERY.record('MissingAuth', rc == 401, "unauthenticated request → #{rc} (want 401)")
 
-rc, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.bearer('not-a-real-token'))
+rc, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop('not-a-real-token', DIEGO.rsa_key))
 BATTERY.record('GarbageToken', rc == 401, "garbage token → #{rc} (want 401)")
+
+# A copied token without its key buys nothing: as a bearer token, or with another key's DPoP proof.
+rc_stolen_bearer, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, 'Authorization' => "Bearer #{DIEGO.token}")
+rc_stolen_key,    = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop(DIEGO.token, BEA.rsa_key))
+BATTERY.record('StolenToken', rc_stolen_bearer == 401 && rc_stolen_key == 401,
+               "stolen token as a bearer → #{rc_stolen_bearer}, with the thief's key → #{rc_stolen_key} (want 401 both)")
 
 # A self-asserted `agent:u-…:a-…:r-…` bearer is no credential; the earned token is the control.
 self_asserted = [
@@ -131,26 +139,26 @@ self_asserted = [
   ['wholly invented ids',
    "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"]
 ].map do |label, token|
-  code, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.bearer(token))
+  code, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop(token, DIEGO.rsa_key))
   [code == 401, "#{label} → #{code}"]
 end
-rc_auth_ctl, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.bearer(TOKEN_A))
+rc_auth_ctl, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, AUTH_A)
 BATTERY.record('SelfAssertedTokenForgery',
                self_asserted.all? { |ok, _| ok } && rc_auth_ctl == 200,
                "self-asserted `agent:u-…:r-owner` bearer: #{self_asserted.map(&:last).join(', ')} " \
                '(want 401 each, unconditionally — this IS a local-environment server); ' \
                "CONTROL the earned token → #{rc_auth_ctl} (want 200)")
 
-rc, = WIRE.get_json('/kiosk/frobnicate', {}, WIRE.bearer(TOKEN_A))
+rc, = WIRE.get_json('/kiosk/frobnicate', {}, AUTH_A)
 BATTERY.record('UnknownQuery', rc == 404, "unknown query → #{rc} (want 404)")
 
-rc, = WIRE.post_json('/kiosk/nope', {}, WIRE.bearer(TOKEN_A))
+rc, = WIRE.post_json('/kiosk/nope', {}, AUTH_A)
 BATTERY.record('UnknownAction', rc == 404, "unknown action → #{rc} (want 404)")
 
 # `query` and `run` name no verb: a plain routing 404, the same with or without a bearer.
 unregistered = %w[query run].flat_map do |name|
   authed = WIRE.request(:post, "/kiosk/#{name}", body: { name: 'availability', party_size: 2 },
-                                                 headers: WIRE.bearer(TOKEN_A))
+                                                 headers: AUTH_A)
   anon   = WIRE.request(:post, "/kiosk/#{name}", body: { name: 'availability', party_size: 2 })
   [[authed.status == 404 && authed.body['code'].nil?, "#{name}→#{authed.status}"],
    [anon.status   == 404 && anon.body['code'].nil?,   "#{name}(anon)→#{anon.status}"]]
@@ -160,7 +168,7 @@ BATTERY.record('UnregisteredVerbIsOrdinaryRefusal',
                "unregistered verb names #{unregistered.map(&:last).join(', ')} " \
                '(want a plain 404 with no problem-document code, bearer or not)')
 
-res404 = WIRE.request(:get, '/kiosk/book_table', headers: WIRE.bearer(TOKEN_A))
+res404 = WIRE.request(:get, '/kiosk/book_table', headers: AUTH_A)
 BATTERY.record('MethodMismatch',
                res404.status == 404 && res404['allow'].nil? && res404.body['code'].nil?,
                "GET an action → #{res404.status} Allow=#{res404['allow'].inspect} " \
@@ -182,14 +190,14 @@ invalid_filter_probes = [
   ['both filters, no overlap',
    { party_size: 2, time: '18:00', date: FAR_FUTURE }, %w[19:00 20:00 21:00]]
 ].map do |label, args, named|
-  rc, resp = WIRE.get_json('/kiosk/availability', args, WIRE.bearer(TOKEN_A))
+  rc, resp = WIRE.get_json('/kiosk/availability', args, AUTH_A)
   code   = resp.is_a?(Hash) ? resp['code'] : nil
   detail = resp.is_a?(Hash) ? resp['detail'].to_s : ''
   names  = named.all? { |value| detail.include?(value) }
   ok = rc == 400 && code == 'bad_request' && names
   [ok, "#{label} → #{rc}/#{code.inspect}#{ok ? " naming #{named.join(', ')}" : "/#{JSON.generate(resp)[0, 160]}"}"]
 end
-rc_ctl, ctl = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.bearer(TOKEN_A))
+rc_ctl, ctl = WIRE.get_json('/kiosk/availability', { party_size: 2 }, AUTH_A)
 control_ok = rc_ctl == 200 && Array(ctl).any?
 BATTERY.record('InvalidFilterIsNotAnEmptyList',
                invalid_filter_probes.all? { |ok, _| ok } && control_ok,
@@ -205,13 +213,13 @@ horizon_probes = [
   ["seating_at=#{PAST_DATE}T20:00 (BEHIND the rolling horizon)", "#{PAST_DATE}T20:00:00+00:00", 'already started'],
   ["seating_at=#{BASIC_ISO} (basic ISO-8601, not the published extended form)", BASIC_ISO, 'seating_at']
 ].map do |label, bad_seating, named|
-  rc, resp = book_slot(TOKEN_A, horizon_slot, seating_at: bad_seating)
+  rc, resp = book_slot(AUTH_A, horizon_slot, seating_at: bad_seating)
   code   = resp.is_a?(Hash) ? resp['code'] : nil
   detail = resp.is_a?(Hash) ? resp['detail'].to_s : ''
   ok = rc == 400 && code == 'bad_request' && detail.include?(named)
   [ok, "#{label} → #{rc}/#{code.inspect}#{ok ? " naming #{named}" : "/#{JSON.generate(resp)[0, 160]}"}"]
 end
-rc_horizon_ctl, horizon_ctl = book_slot(TOKEN_A, horizon_slot)
+rc_horizon_ctl, horizon_ctl = book_slot(AUTH_A, horizon_slot)
 horizon_control_ok = rc_horizon_ctl == 200 && !horizon_ctl['booking_id'].to_s.empty?
 BATTERY.record('BookOutsideOfferedHorizon',
                horizon_probes.all? { |ok, _| ok } && horizon_control_ok,
@@ -241,37 +249,37 @@ shape_probes = []
 
 INT_SHAPES.each do |v|
   %i[party_size restaurant_table_id].each do |arg|
-    rc, body = book_slot(TOKEN_A, shape_slot, arg => v)
+    rc, body = book_slot(AUTH_A, shape_slot, arg => v)
     shape_probes << shape_verdict("book_table #{arg}=#{v.inspect}", rc, body, supplied: { arg => v })
   end
 end
 NONSTRING.each do |v|
-  rc, body = book_slot(TOKEN_A, shape_slot, seating_at: v)
+  rc, body = book_slot(AUTH_A, shape_slot, seating_at: v)
   shape_probes << shape_verdict("book_table seating_at=#{v.inspect}", rc, body, supplied: { seating_at: v })
-  rc, body = WIRE.post_json('/kiosk/cancel_booking', { booking_id: v }, WIRE.bearer(TOKEN_A))
+  rc, body = WIRE.post_json('/kiosk/cancel_booking', { booking_id: v }, AUTH_A)
   shape_probes << shape_verdict("cancel_booking booking_id=#{v.inspect}", rc, body, supplied: { booking_id: v })
 end
 QUERY_JUNK.each do |v|
-  rc, body = WIRE.get_json('/kiosk/availability', { party_size: v }, WIRE.bearer(TOKEN_A))
+  rc, body = WIRE.get_json('/kiosk/availability', { party_size: v }, AUTH_A)
   shape_probes << shape_verdict("availability party_size=#{v.inspect}", rc, body, supplied: { party_size: v })
 end
 # Bracket spellings Rack folds into an Array and a Hash; URI.encode_www_form cannot produce them.
 ['party_size%5B%5D=2', 'party_size%5Bx%5D=2'].each do |bracket|
-  rc, body = WIRE.get_json("/kiosk/availability?#{bracket}", {}, WIRE.bearer(TOKEN_A))
+  rc, body = WIRE.get_json("/kiosk/availability?#{bracket}", {}, AUTH_A)
   shape_probes << shape_verdict("availability #{bracket}", rc, body, supplied: bracket)
 end
 
 # party_size reaches a range comparison on an integer column, so a value past int4 must be refused.
 BEYOND_INT4 = 2_147_483_648 # one past PostgreSQL `integer`
-rc, body = book_slot(TOKEN_A, shape_slot, party_size: BEYOND_INT4)
+rc, body = book_slot(AUTH_A, shape_slot, party_size: BEYOND_INT4)
 shape_probes << shape_verdict("book_table party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
-rc, body = WIRE.get_json('/kiosk/availability', { party_size: BEYOND_INT4 }, WIRE.bearer(TOKEN_A))
+rc, body = WIRE.get_json('/kiosk/availability', { party_size: BEYOND_INT4 }, AUTH_A)
 shape_probes << shape_verdict("availability party_size=#{BEYOND_INT4}", rc, body, supplied: { party_size: BEYOND_INT4 })
 
 # Control for the leak scan: a needle the probe itself sent and the handler echoes is not a breach.
 ECHO_CONTROL = 'PG::22P02 invalid input syntax'
 rc_echo, body_echo = WIRE.get_json('/kiosk/availability',
-                                   { party_size: 2, neighborhood: ECHO_CONTROL }, WIRE.bearer(TOKEN_A))
+                                   { party_size: 2, neighborhood: ECHO_CONTROL }, AUTH_A)
 ok_echo, detail_echo = shape_verdict(
   'availability neighborhood=<a value spelling three SHAPE_LEAKS> (leak-scan control)',
   rc_echo, body_echo, supplied: { party_size: 2, neighborhood: ECHO_CONTROL }
@@ -283,10 +291,10 @@ unless JSON.generate(body_echo).include?(ECHO_CONTROL)
 end
 shape_probes << [ok_echo, detail_echo]
 
-rc_shape_book, shape_book = book_slot(TOKEN_A, shape_slot)
+rc_shape_book, shape_book = book_slot(AUTH_A, shape_slot)
 rc_shape_cancel, = WIRE.post_json('/kiosk/cancel_booking',
-                                  { booking_id: shape_book['booking_id'] }, WIRE.bearer(TOKEN_A))
-rc_shape_avail, shape_avail = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.bearer(TOKEN_A))
+                                  { booking_id: shape_book['booking_id'] }, AUTH_A)
+rc_shape_avail, shape_avail = WIRE.get_json('/kiosk/availability', { party_size: 2 }, AUTH_A)
 shape_control_ok = rc_shape_book == 200 && !shape_book['booking_id'].to_s.empty? &&
                    rc_shape_cancel == 200 && rc_shape_avail == 200 && Array(shape_avail).any?
 BATTERY.record('HostileArgShapes',
@@ -299,14 +307,14 @@ BATTERY.record('HostileArgShapes',
 
 # §8.1 item 8: a body field declared integer accepts a whole-valued float, while the query refuses "2.0".
 float_body_json = JSON.generate({ party_size: 2.0 })
-rc_fq, body_fq  = WIRE.get_json('/kiosk/availability', { party_size: '2.0' }, WIRE.bearer(TOKEN_A))
+rc_fq, body_fq  = WIRE.get_json('/kiosk/availability', { party_size: '2.0' }, AUTH_A)
 float_slot      = open_slot
-rc_fb, body_fb  = book_slot(TOKEN_A, float_slot, party_size: 2.0)
+rc_fb, body_fb  = book_slot(AUTH_A, float_slot, party_size: 2.0)
 query_half_ok   = rc_fq == 400 && body_fq['code'] == 'bad_request'
 body_half_ok    = rc_fb == 200 && body_fb['party_size'] == 2 &&
                   !body_fb['booking_id'].to_s.empty?
 sent_a_float    = float_body_json.include?('"party_size":2.0')
-WIRE.post_json('/kiosk/cancel_booking', { booking_id: body_fb['booking_id'] }, WIRE.bearer(TOKEN_A)) if body_half_ok
+WIRE.post_json('/kiosk/cancel_booking', { booking_id: body_fb['booking_id'] }, AUTH_A) if body_half_ok
 BATTERY.record('WholeValuedFloatBody',
                query_half_ok && body_half_ok && sent_a_float,
                "query ?party_size=2.0 → #{rc_fq}/#{body_fq['code'].inspect}; " \

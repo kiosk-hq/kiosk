@@ -25,7 +25,7 @@
 #   * the two REGISTRATION probes are the ones that must be REFUSED — an
 #     unproven registration and a malformed proof. Neither creates an agent,
 #     because the toll is settled before the possession proof is even read.
-#   * the query probes carry a forged bearer or no bearer at all, so the
+#   * the query probes carry a forged token or no token at all, so the
 #     answer is a refusal and no row is read, let alone written.
 #
 # WHAT IT DOES LEAVE BEHIND, stated rather than claimed away, because «nothing
@@ -120,6 +120,9 @@ class Drive
     # is read. A finding is a 201, a 5xx, or a 2xx of any other shape.
     REFUSALS = [400, 401, 402, 403].freeze
 
+    # Signs the DPoP proof of the forged-token probe: a key no origin knows.
+    THROWAWAY_KEY = OpenSSL::PKey::RSA.generate(2048)
+
     def registration_probes
       { 'an unproven registration' => :skip, 'a malformed proof' => '0' }.each do |beat, pow|
         response = @client.register_raw(pow: pow)
@@ -140,15 +143,15 @@ class Drive
       end
     end
 
-    # A forged bearer, no bearer at all, the wrong method at a real verb's path,
+    # A forged token, no token at all, the wrong method at a real verb's path,
     # and a verb nobody registered. All four are refusals by construction.
     def wire_probes(catalog)
       query = Array(catalog['queries']).first&.fetch('name', nil)
       return skip 'the query-plane probes', 'this origin publishes no query' unless query
 
-      judge "a forged bearer at /kiosk/#{query}",
-            @wire.get("/kiosk/#{query}", {}, Kiosk::TestHelpers::Wire.bearer('not.a.token')), [401, 403]
-      judge "no bearer at all at /kiosk/#{query}", @wire.get("/kiosk/#{query}"), [401, 403]
+      judge "a forged token at /kiosk/#{query}",
+            @wire.get("/kiosk/#{query}", {}, Kiosk::TestHelpers::Wire.dpop('not.a.token', THROWAWAY_KEY)), [401, 403]
+      judge "no token at all at /kiosk/#{query}", @wire.get("/kiosk/#{query}"), [401, 403]
       method_mismatch_probe(query)
       unknown_verb_probe
     end

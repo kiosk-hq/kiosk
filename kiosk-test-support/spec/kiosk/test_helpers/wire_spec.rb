@@ -6,19 +6,33 @@ require 'kiosk/test_helpers/wire'
 RSpec.describe Kiosk::TestHelpers::Wire do
   subject(:wire) { described_class.new(base_url: 'http://provider.test/') }
 
-  it 'builds a bearer header' do
-    expect(described_class.bearer('tok')).to eq('Authorization' => 'Bearer tok')
-    expect(wire.bearer('tok')).to eq('Authorization' => 'Bearer tok')
+  let(:key) { OpenSSL::PKey::RSA.generate(2048) }
+
+  it 'holds a token and its key as the Authorization value' do
+    expect(described_class.dpop('tok', key)).to eq('Authorization' => described_class::DpopCredential.new(token: 'tok', key:))
+    expect(wire.dpop('tok', key)).to eq(described_class.dpop('tok', key))
   end
 
   it "posts JSON with the caller's headers and answers the status and the parsed body" do
     stub_request(:post, 'http://provider.test/kiosk/edit_listing')
-      .with(body: { listing_id: 'junk' }.to_json, headers: { 'Content-Type' => 'application/json', 'Authorization' => 'Bearer tok' })
+      .with(body: { listing_id: 'junk' }.to_json, headers: { 'Content-Type' => 'application/json', 'Authorization' => 'DPoP tok' })
       .to_return(problem_return('bad_request'))
 
-    status, problem = wire.post_json('/kiosk/edit_listing', { listing_id: 'junk' }, wire.bearer('tok'))
+    status, problem = wire.post_json('/kiosk/edit_listing', { listing_id: 'junk' }, wire.dpop('tok', key))
 
     expect([status, problem['code']]).to eq([400, 'bad_request'])
+  end
+
+  it 'signs a DPoP proof for the method and the URL without its query, with the key the token is bound to' do
+    sent = []
+    stub_request(:get, %r{\Ahttp://provider\.test/kiosk/browse}).with { sent << it }.to_return(json_return(200, []))
+
+    wire.get('/kiosk/browse', { keyword: 'bike' }, wire.dpop('tok', key))
+
+    claims, header = JWT.decode(sent.first.headers['Dpop'], key.public_key, true, algorithms: ['RS256'])
+    expect(claims).to include('htm' => 'GET', 'htu' => 'http://provider.test/kiosk/browse',
+                              'ath' => Kiosk::TestHelpers::Dpop.ath('tok'))
+    expect(header).to include('typ' => 'dpop+jwt', 'jwk' => include('kty' => 'RSA'))
   end
 
   it 'puts params on the query string, and sends a bare GET without a content type' do

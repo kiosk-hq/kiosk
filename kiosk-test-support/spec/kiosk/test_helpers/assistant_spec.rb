@@ -171,7 +171,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
 
       expect(response.body).to eq([{ 'id' => 'r1' }])
       expect(URI.decode_www_form(sent.first.uri.query).to_h).to eq('restaurant' => 'Foo', 'limit' => '5')
-      expect(sent.first.headers['Authorization']).to eq('Bearer tok')
+      expect(sent.first.headers['Authorization']).to eq('DPoP tok')
     end
 
     it 'runs an action with the arguments as the whole body, and extra headers on top' do
@@ -231,7 +231,23 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       assistant.kyc(principal, attestation_jws: 'a.b.c')
 
       expect(JSON.parse(sent.first.body)).to eq('kyc_jws' => 'a.b.c')
-      expect(sent.first.headers['Authorization']).to eq('Bearer tok')
+      expect(sent.first.headers['Authorization']).to eq('DPoP tok')
+    end
+
+    it 'rotates to a new key: the old key names the new one, the new key signs its own proof' do
+      stub, sent = requests_to(:post, '/kiosk/auth/rotate')
+      stub.to_return(json_return(200, 'access_token' => 'tok2'))
+      new_key = OpenSSL::PKey::RSA.generate(2048)
+
+      rotated = assistant.rotate(principal, new_key:)
+
+      body = JSON.parse(sent.first.body)
+      old_claims, = JWT.decode(body['signed'], key.public_key, true, algorithm: 'RS256')
+      new_claims, = JWT.decode(body['new_signed'], new_key.public_key, true, algorithm: 'RS256')
+      expect(old_claims['new_key']).to eq(Kiosk::TestHelpers::Dpop.thumbprint(new_key))
+      expect(new_claims).not_to have_key('new_key')
+      expect(body['new_public_key']).to eq(new_key.public_key.to_pem)
+      expect(rotated).to have_attributes(agent_id: 'a1', token: 'tok2', rsa_key: new_key)
     end
 
     it 'opens the account-binding ceremony as a form, with whatever else the caller sends' do

@@ -303,11 +303,11 @@ module HotelingScenarios
 
   # Raw requests the redteam Client will not build: unregistered paths and wrong methods.
   module RawWire
-    # A nil principal sends no bearer.
+    # A nil principal sends no token.
     def raw(principal, method, path, body = nil)
       uri     = URI("#{BASE_URL}#{path}")
       headers = { 'Content-Type' => 'application/json' }
-      headers['Authorization'] = "Bearer #{principal.token}" if principal
+      headers.merge!(Kiosk::TestHelpers::Dpop.headers(principal.token, principal.rsa_key, method: method.to_s.upcase, url: uri.to_s)) if principal
       req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
       req.body = JSON.generate(body) if body
       res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
@@ -649,6 +649,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::StolenToken.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # The claim ceremony's door: the unauthenticated device_authorization request.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,

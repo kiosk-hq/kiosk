@@ -67,10 +67,11 @@ module KioskServerSpecSupport
     allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
   end
 
-  # Linking an assistant mints its token and writes no agent row.
+  # Linking an assistant mints its token, bound to the linked key, and writes no agent row.
   def link_assistants_without_database
-    allow(Kiosk::Server::AccountBinding).to receive(:bind!) do |user_id:, requested_role:, **|
-      claims = { sub: user_id, agent_id: "a-#{user_id}", role: requested_role }.compact
+    allow(Kiosk::Server::AccountBinding).to receive(:bind!) do |public_key_pem:, user_id:, requested_role:|
+      jkt    = Kiosk::Server::SigningKey.from_pem(public_key_pem).kid
+      claims = { sub: user_id, agent_id: "a-#{user_id}", role: requested_role, cnf: { jkt: } }.compact
       { access_token: Kiosk::Server::JwtIssuer.issue(claims: claims, audience: Kiosk.current_issuer) }
     end
   end

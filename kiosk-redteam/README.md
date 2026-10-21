@@ -108,6 +108,7 @@ battery.absorb(runner.run([
   Kiosk::Redteam::Scenarios::CrossTenantRead.new,
   Kiosk::Redteam::Scenarios::ForgedUserId.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::StolenToken.new,
   Kiosk::Redteam::Scenarios::RegistrationWithoutPow.new,
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
 ]))
@@ -142,6 +143,7 @@ scenarios share:
 | `SpentResourceReuse` | a consumed resource cannot be re-activated |
 | `PayForOtherUseSelf` | B paying for A's resource does not let B use it |
 | `TokenTampering` | a JWT with a flipped claim and the original signature is 401 |
+| `StolenToken` | a real access token without its key is 401: as a bearer token, and with a DPoP proof that another key signs |
 | `RegistrationWithoutPow` | a missing or bad proof is rejected when the origin charges a toll |
 | `MandatePrincipalSwap` | B paying, with its own key, the checkout the operator signed for A is rejected |
 | `MandateReplay` | A's signed mandates re-submitted under B's token are rejected |
@@ -168,7 +170,7 @@ library scenario can sit in one run.
 
 `Kiosk::TestHelpers::Wire` is the raw wire: an arbitrary method at an arbitrary path with arbitrary
 headers, which is what an attack on the REQUEST rather than on the principal
-needs — a forged or absent `Authorization`, a verb nobody registered, the wrong
+needs — a forged or absent `Authorization`, a token without its key, a verb nobody registered, the wrong
 method at a real verb's path, an assertion on `Allow:` rather than on a body. A
 body that is not JSON reads as `{}` and a connection error reads as status `0`,
 so a hostile answer is asserted on instead of crashing the run; the bytes stay
@@ -183,7 +185,7 @@ client  = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 battery = Kiosk::Redteam::Battery.new
 
 # your own beat, against your own verb
-status, rows = wire.get_json("/kiosk/my_listings", {}, wire.bearer(bob.token))
+status, rows = wire.get_json("/kiosk/my_listings", {}, wire.dpop(bob.token, bob.rsa_key))
 battery.record("CrossTenantRead", status == 200 && !ids(rows).include?(alice_row),
                "Bob's rows #{ids(rows).inspect} exclude Alice's #{alice_row}")
 

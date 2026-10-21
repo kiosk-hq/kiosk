@@ -56,8 +56,9 @@ def link_as_owner(extra_claim_body = {})
 
   key = OpenSSL::PKey::RSA.generate(2048)
   pem = key.public_key.to_pem
-  WIRE.post_json('/kiosk/auth/claim',
-                 { code: link.fetch('link_code'), public_key: pem, signed: pop_proof(key, pem) }.merge(extra_claim_body))
+  rc, claimed = WIRE.post_json('/kiosk/auth/claim',
+                               { code: link.fetch('link_code'), public_key: pem, signed: pop_proof(key, pem) }.merge(extra_claim_body))
+  [rc, claimed, key]
 end
 
 BATTERY = Kiosk::Redteam::Battery.new
@@ -69,7 +70,7 @@ abort "both assistants bound to the SAME account (#{ALICE.user_id}) — no bound
   if ALICE.user_id == BOB.user_id
 
 # Alice's appointment: the cross-tenant target.
-rc, salons = WIRE.get_json('/kiosk/salons', {}, WIRE.bearer(ALICE.token))
+rc, salons = WIRE.get_json('/kiosk/salons', {}, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 abort "salons query failed (#{rc}): #{JSON.generate(salons)} — run bin/rails db:reset" unless rc == 200
 salon_id = Array(salons).first&.fetch('salon_id')
 abort 'no salons seeded — run bin/rails db:reset' unless salon_id
@@ -77,7 +78,7 @@ abort 'no salons seeded — run bin/rails db:reset' unless salon_id
 rc, appt_a = WIRE.post_json(
   '/kiosk/book_appointment',
   { salon_id: salon_id, slot: FUTURE_SLOT.call(1) },
-  WIRE.bearer(ALICE.token)
+  WIRE.dpop(ALICE.token, ALICE.rsa_key)
 )
 abort "A book_appointment failed (#{rc}): #{JSON.generate(appt_a)}" unless rc == 200
 appt_id_a = appt_a['appointment_id']
@@ -86,12 +87,12 @@ appt_id_a = appt_a['appointment_id']
 rc_b, bobs = WIRE.post_json(
   '/kiosk/book_appointment',
   { salon_id: salon_id, slot: FUTURE_SLOT.call(2, 10) },
-  WIRE.bearer(BOB.token)
+  WIRE.dpop(BOB.token, BOB.rsa_key)
 )
 abort "B book_appointment failed (#{rc_b}): #{JSON.generate(bobs)}" unless rc_b == 200
 appt_id_bob = bobs['appointment_id']
 
-rc, b_appts = WIRE.get_json('/kiosk/my_appointments', {}, WIRE.bearer(BOB.token))
+rc, b_appts = WIRE.get_json('/kiosk/my_appointments', {}, WIRE.dpop(BOB.token, BOB.rsa_key))
 b_ids = Array(b_appts).map { |r| r['id'] }
 b_sees_own = b_ids.include?(appt_id_bob)
 BATTERY.record('CrossTenantRead',
@@ -103,12 +104,12 @@ BATTERY.record('CrossTenantRead',
 rc, forged = WIRE.post_json(
   '/kiosk/book_appointment',
   { salon_id: salon_id, slot: FUTURE_SLOT.call(2), user_id: ALICE.user_id },
-  WIRE.bearer(BOB.token)
+  WIRE.dpop(BOB.token, BOB.rsa_key)
 )
 refused = rc == 400 && forged['code'] == 'bad_request' && forged['detail'].to_s.include?('user_id')
 
 # Bob's booking must not appear under Alice, whose own must.
-rc_a, a_appts = WIRE.get_json('/kiosk/my_appointments', {}, WIRE.bearer(ALICE.token))
+rc_a, a_appts = WIRE.get_json('/kiosk/my_appointments', {}, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 a_ids = Array(a_appts).map { |r| r['id'] }
 a_sees_own = a_ids.include?(appt_id_a)
 BATTERY.record('ForgedUserId',
@@ -120,18 +121,24 @@ BATTERY.record('ForgedUserId',
 rc, = WIRE.get_json('/kiosk/salons')
 BATTERY.record('MissingAuth', rc == 401, "unauthenticated request → #{rc} (want 401)")
 
-rc, = WIRE.get_json('/kiosk/salons', {}, WIRE.bearer('not-a-real-token'))
+rc, = WIRE.get_json('/kiosk/salons', {}, WIRE.dpop('not-a-real-token', ALICE.rsa_key))
 BATTERY.record('GarbageToken', rc == 401, "garbage token → #{rc} (want 401)")
 
-rc, = WIRE.get_json('/kiosk/frobnicate', {}, WIRE.bearer(ALICE.token))
+# A copied token without its key buys nothing: as a bearer token, or with another key's DPoP proof.
+rc_stolen_bearer, = WIRE.get_json('/kiosk/salons', {}, 'Authorization' => "Bearer #{ALICE.token}")
+rc_stolen_key,    = WIRE.get_json('/kiosk/salons', {}, WIRE.dpop(ALICE.token, BOB.rsa_key))
+BATTERY.record('StolenToken', rc_stolen_bearer == 401 && rc_stolen_key == 401,
+               "stolen token as a bearer → #{rc_stolen_bearer}, with the thief's key → #{rc_stolen_key} (want 401 both)")
+
+rc, = WIRE.get_json('/kiosk/frobnicate', {}, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 BATTERY.record('UnknownQuery', rc == 404, "unknown query → #{rc} (want 404)")
 
-rc, = WIRE.post_json('/kiosk/nope', {}, WIRE.bearer(ALICE.token))
+rc, = WIRE.post_json('/kiosk/nope', {}, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 BATTERY.record('UnknownAction', rc == 404, "unknown action → #{rc} (want 404)")
 
 # /kiosk/query and /kiosk/run route nowhere: a plain 404 with or without a bearer.
 unregistered = %w[query run].flat_map do |name|
-  authed = WIRE.request(:post, "/kiosk/#{name}", body: { name: 'salons' }, headers: WIRE.bearer(ALICE.token))
+  authed = WIRE.request(:post, "/kiosk/#{name}", body: { name: 'salons' }, headers: WIRE.dpop(ALICE.token, ALICE.rsa_key))
   anon   = WIRE.request(:post, "/kiosk/#{name}", body: { name: 'salons' })
   [[authed.status == 404 && authed.body['code'].nil?, "#{name}→#{authed.status}"],
    [anon.status   == 404 && anon.body['code'].nil?,   "#{name}(anon)→#{anon.status}"]]
@@ -142,7 +149,7 @@ BATTERY.record('UnregisteredVerbIsOrdinaryRefusal',
                '(want a plain 404 with no problem-document code, bearer or not)')
 
 # A GET at an action's path matches no route and never reaches the action.
-res404 = WIRE.request(:get, '/kiosk/book_appointment', headers: WIRE.bearer(ALICE.token))
+res404 = WIRE.request(:get, '/kiosk/book_appointment', headers: WIRE.dpop(ALICE.token, ALICE.rsa_key))
 BATTERY.record('MethodMismatch',
                res404.status == 404 && res404['allow'].nil? && res404.body['code'].nil?,
                "GET an action → #{res404.status} Allow=#{res404['allow'].inspect} " \
@@ -174,7 +181,7 @@ BATTERY.record('CustomerLinkCannotCarryOwnerRole',
                '(want 201 + "customer"; the role is read off the human, never chosen)')
 
 # A forged role in the claim body is ignored; the owner's IdP session sets the role.
-rc, claimed = link_as_owner(role: 'superuser', allowed_roles: ['superuser'], requested_role: 'superuser')
+rc, claimed, owner_key = link_as_owner(role: 'superuser', allowed_roles: ['superuser'], requested_role: 'superuser')
 owner_token = claimed['access_token'].to_s
 seg = owner_token.split('.')[1].to_s
 role_claim = begin
@@ -190,11 +197,11 @@ BATTERY.record('OwnerLinkIgnoresForgedClaimBody',
 rc_b3, appt_b3 = WIRE.post_json(
   '/kiosk/book_appointment',
   { salon_id: salon_id, slot: FUTURE_SLOT.call(3) },
-  WIRE.bearer(BOB.token)
+  WIRE.dpop(BOB.token, BOB.rsa_key)
 )
 appt_id_b3 = appt_b3['appointment_id']
 
-rc, cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(ALICE.token))
+rc, cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 rows = Array(cal)
 own_ids  = rows.map { |r| r['id'] }
 # Positive control: an empty calendar would satisfy every absence.
@@ -276,7 +283,7 @@ cust_key  = OpenSSL::PKey::RSA.generate(2048)
 cust_pem  = cust_key.public_key.to_pem
 _rc_a, rc_cust_poll, cust_token, cust_page = claim_ceremony(customer_session, cust_key, cust_pem)
 cust_claim_role = token_role(cust_token)['role']
-rc_cust_cal, cust_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(cust_token))
+rc_cust_cal, cust_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(cust_token, cust_key))
 cust_rows      = Array(cust_cal)
 # Positive control: the customer token reaches Alice's own booking.
 cust_sees_own  = cust_rows.any? { |r| r['id'] == appt_id_a }
@@ -286,7 +293,7 @@ own_key  = OpenSSL::PKey::RSA.generate(2048)
 own_pem  = own_key.public_key.to_pem
 _rc_o, rc_own_poll, own_claim_token, own_page = claim_ceremony(owner_session, own_key, own_pem)
 own_claim_role = token_role(own_claim_token)['role']
-rc_own_cal, own_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(own_claim_token))
+rc_own_cal, own_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(own_claim_token, own_key))
 own_rows        = Array(own_cal)
 own_sees_others = own_rows.any? { |r| r['id'] == appt_id_b3 }
 
@@ -321,7 +328,7 @@ _rc_r, rc_rebind_poll, rebind_token, = claim_ceremony(customer_session, cust_key
 rebind_claims = token_role(rebind_token)
 rebind_role   = rebind_claims['role']
 rebind_stable = rebind_claims['agent_id'] == token_role(cust_token)['agent_id']
-rc_rebind_cal, rebind_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(rebind_token))
+rc_rebind_cal, rebind_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(rebind_token, cust_key))
 rebind_rows      = Array(rebind_cal)
 # Positive control: the rebound token still reads Alice's book.
 rebind_sees_own  = rebind_rows.any? { |r| r['id'] == appt_id_a }
@@ -337,12 +344,12 @@ BATTERY.record('DeviceGrantRebindCannotEscalate',
                "the approver's role, not one ceremony later's escalation)")
 
 # An unsigned `agent:u-…:r-owner` bearer resolves to no identity; the owner's real token is the control.
-forged_owner_bearer = WIRE.bearer("agent:u-#{OWNER_ID}:a-#{SecureRandom.uuid}:r-owner")
+forged_owner_bearer = WIRE.dpop("agent:u-#{OWNER_ID}:a-#{SecureRandom.uuid}:r-owner", ALICE.rsa_key)
 rc_forged_cal, = WIRE.get_json('/kiosk/salon_calendar', {}, forged_owner_bearer)
 rc_forged_book, = WIRE.post_json('/kiosk/book_appointment',
                                  { salon_id: salon_id, slot: FUTURE_SLOT.call(5) },
                                  forged_owner_bearer)
-rc_owner_cal, owner_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.bearer(owner_token))
+rc_owner_cal, owner_cal = WIRE.get_json('/kiosk/salon_calendar', {}, WIRE.dpop(owner_token, owner_key))
 owner_sees_book = Array(owner_cal).any? { |r| r['id'] == appt_id_b3 }
 BATTERY.record('SelfAssertedTokenForgery',
                rc_forged_cal == 401 && rc_forged_book == 401 &&
@@ -396,7 +403,7 @@ bad_failures = []
 BAD_INPUTS.each do |label, args|
   body = args.dup
   body[:salon_id] = salon_id if body[:salon_id] == :seeded
-  rc, resp = WIRE.post_json('/kiosk/book_appointment', body, WIRE.bearer(ALICE.token))
+  rc, resp = WIRE.post_json('/kiosk/book_appointment', body, WIRE.dpop(ALICE.token, ALICE.rsa_key))
   code = resp.is_a?(Hash) ? resp['code'] : nil
   # `supplied:` keeps the probe's own echoed bytes from reading as a leak.
   scan = Kiosk::Redteam::LeakScan.scan(resp, PG_INTERNALS, supplied: body)
@@ -409,14 +416,14 @@ end
 
 # Positive controls: a bare and a priced booking still succeed.
 rc_bare, bare = WIRE.post_json('/kiosk/book_appointment',
-                               { salon_id: salon_id, slot: FUTURE_SLOT.call(3) }, WIRE.bearer(ALICE.token))
+                               { salon_id: salon_id, slot: FUTURE_SLOT.call(3) }, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 bad_failures << "CONTROL bare salon booking → HTTP #{rc_bare} #{JSON.generate(bare)[0, 160]}" unless rc_bare == 200
 
-rc_menu, menu = WIRE.get_json('/kiosk/service_menu', {}, WIRE.bearer(ALICE.token))
+rc_menu, menu = WIRE.get_json('/kiosk/service_menu', {}, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 service = Array(menu).find { |r| r['price_cents'].to_i.positive? }
 rc_full, full = WIRE.post_json('/kiosk/book_appointment',
                                { salon_id: salon_id, slot: FUTURE_SLOT.call(4),
-                                 service_id: service && service['service_id'] }, WIRE.bearer(ALICE.token))
+                                 service_id: service && service['service_id'] }, WIRE.dpop(ALICE.token, ALICE.rsa_key))
 unless rc_menu == 200 && rc_full == 200 && full['price_cents'].to_i == service['price_cents'].to_i
   bad_failures << "CONTROL priced booking → HTTP #{rc_full} price_cents=#{full['price_cents'].inspect} " \
                   "(want #{service && service['price_cents'].inspect})"

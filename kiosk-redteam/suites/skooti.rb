@@ -58,7 +58,7 @@ end
 
 # The kyc_verification events this customer's stream replays from the start.
 def kyc_events_for(customer)
-  stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: customer.token)
+  stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: customer.token, key: customer.rsa_key)
   stream.subscribe('kyc_verification', since: 0)
   stream.listen(2)
 ensure
@@ -326,6 +326,7 @@ scenarios = [
   Kiosk::Redteam::Scenarios::MandatePrincipalSwap.new,
   Kiosk::Redteam::Scenarios::MandateReplay.new,
   Kiosk::Redteam::Scenarios::TokenTampering.new,
+  Kiosk::Redteam::Scenarios::StolenToken.new,
   Kiosk::Redteam::Scenarios::PrivilegeSelfSelection.new,
   # Role self-selection at the unauthenticated device_authorization request.
   Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection.new,
@@ -468,7 +469,7 @@ end
 # Victim B gets a real broker-signed jws through request_kyc and the broker page.
 def issued_victim_jws(client)
   b = client.register!
-  stream_b = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: b.token)
+  stream_b = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: b.token, key: b.rsa_key)
   stream_b.subscribe('kyc_verification')
   request_id = request_kyc!(client, b, 'B')
   approve_rc = broker_approve(request_id)
@@ -552,11 +553,11 @@ def forged_callback_verdict(cb_wrong, cb_missing, events)
   end
 end
 
-# A raw request the Client will not construct; bearer: false asks whether a credential changes the answer.
-def raw_wire(customer, method, path, body = nil, bearer: true)
+# A raw request the Client will not construct; signed_in: false asks whether a credential changes the answer.
+def raw_wire(customer, method, path, body = nil, signed_in: true)
   uri     = URI("#{BASE_URL}#{path}")
   headers = { 'Content-Type' => 'application/json' }
-  headers['Authorization'] = "Bearer #{customer.token}" if bearer
+  headers.merge!(Kiosk::TestHelpers::Dpop.headers(customer.token, customer.rsa_key, method: method.to_s.upcase, url: uri.to_s)) if signed_in
   req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
   req.body = JSON.generate(body) if body
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
@@ -578,21 +579,21 @@ def probes_verdict(probes, blocked_detail, breach_detail)
   end
 end
 
-# POST /kiosk/query and /kiosk/run route nowhere: a plain 404, bearer or not, with no problem document.
+# POST /kiosk/query and /kiosk/run route nowhere: a plain 404, token or not, with no problem document.
 def unregistered_verb(customer)
-  probes = %w[query run].product([[true, ''], [false, ' (anon)']]).map do |name, (bearer, tag)|
-    unregistered_verb_probe(customer, name, bearer, tag)
+  probes = %w[query run].product([[true, ''], [false, ' (anon)']]).map do |name, (signed_in, tag)|
+    unregistered_verb_probe(customer, name, signed_in, tag)
   end
   probes_verdict(probes,
                  "unregistered verb names #{probes.map(&:last).join(', ')} " \
-                 '(the ordinary 404 any undrawn path gets, bearer or not, ' \
+                 '(the ordinary 404 any undrawn path gets, token or not, ' \
                  'and no privileged surface either way)',
                  'an unregistered verb name answers the wrong thing: ' \
                  "#{probes.reject { |ok, _| ok }.map(&:last).join(', ')}")
 end
 
-def unregistered_verb_probe(customer, name, bearer, tag)
-  res, body = raw_wire(customer, :post, "/kiosk/#{name}", { name: 'scooters_available' }, bearer: bearer)
+def unregistered_verb_probe(customer, name, signed_in, tag)
+  res, body = raw_wire(customer, :post, "/kiosk/#{name}", { name: 'scooters_available' }, signed_in:)
   [res.code.to_i == 404 && body['code'].nil?,
    "POST /kiosk/#{name}#{tag} → #{res.code}/#{body['code'].inspect} (want 404 with no problem-document code)"]
 end
@@ -616,9 +617,10 @@ def method_mismatch_probe(customer, method, path, body)
        "Allow=#{res['allow'].inspect} (want a plain 404, no Allow, no code)"]
 end
 
-def bearer_status(token)
+# The status of my_reservations for `token`, with a DPoP proof that `key` signs.
+def token_status(token, key)
   uri = URI("#{BASE_URL}/kiosk/my_reservations")
-  req = Net::HTTP::Get.new(uri, { 'Authorization' => "Bearer #{token}" })
+  req = Net::HTTP::Get.new(uri, Kiosk::TestHelpers::Dpop.headers(token, key, method: 'GET', url: uri.to_s))
   Kiosk::TestHelpers::Wire.http_for(uri).request(req).code.to_i
 end
 
@@ -626,7 +628,7 @@ end
 # resolves to no identity; the real token, paying its toll, is the control.
 def self_asserted_token_forgery(customer)
   forgeries = forged_agent_bearers(customer).map do |label, token|
-    code = bearer_status(token)
+    code = token_status(token, customer.rsa_key)
     [code == 401, "#{label} → #{code}"]
   end
 

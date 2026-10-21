@@ -378,9 +378,9 @@ if pay_capture && File.exist?(pay_capture)
     settled
   end
 
-  { 'checkout_receipt' => 'checkoutReceipt', 'payment_receipt' => 'paymentReceipt' }.each do |part, defn|
-    conforms("the #{part}'s claims", "#{B}/mandates.schema.json",
-             cap.fetch('claims').fetch(part), pointer: "#/$defs/#{defn}") do |claims|
+  { 'checkout_receipt' => 'checkoutReceipt', 'payment_receipt' => 'paymentReceipt' }.each do |receipt, defn|
+    conforms("the claims of the #{receipt}", "#{B}/mandates.schema.json",
+             cap.fetch('claims').fetch(receipt), pointer: "#/$defs/#{defn}") do |claims|
       claims.delete('reference') # a receipt names the mandate it answers
       claims
     end

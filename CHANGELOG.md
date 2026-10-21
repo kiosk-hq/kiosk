@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: `deploy/deploy.sh` runs `rollout.sh` before the push, so an incomplete env file stops the deploy before the new code boots.
+
 ## [0.6.0] — 2026-10-21
 
 - 2026-10-21: **Every gem and `API_VERSION` are 0.6.0, matching skill 0.6.0, and every inter-gem constraint is `~> 0.6.0`.** `MIN_CLIENT` is 0.6.0: a 0.5 skill registers an RSA key, which is refused.

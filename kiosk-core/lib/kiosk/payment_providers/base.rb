@@ -33,7 +33,8 @@ module Kiosk
 
       # @param checkout_mandate [Kiosk::Mandate::CheckoutMandate] what to charge, and its key
       # @param payment_method [String, nil] the PSP payment-method id; nil charges the saved card
-      # @return [Hash] `psp_reference`, `settled_amount_cents`, `settled_at`
+      # @return [Hash] `psp_reference`, `settled_amount_cents`, `settled_at`, and
+      #   `network_confirmation_id`: the card network's id of the charge, or nil when the PSP reports none
       def capture(_checkout_mandate, payment_method:)
         raise NotImplementedError, "#{self.class}#capture must be implemented by the adapter"
       end

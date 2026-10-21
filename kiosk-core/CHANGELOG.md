@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: `PaymentProviders::Base#capture` may answer `network_confirmation_id`, the card network's id of the charge, which the payment receipt names.
+
 ## [0.5.23] — 2026-10-21
 
 - 2026-10-21: `AgentIdentityProviders::Base` states that an identity's claims carry `cnf: { jkt: }`, the key that signs the call's DPoP proof.

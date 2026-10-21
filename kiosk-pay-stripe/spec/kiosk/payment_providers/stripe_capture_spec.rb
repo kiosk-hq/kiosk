@@ -8,7 +8,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
 
     let(:pi) do
       Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount: 1599, amount_received: 1599,
-                                           created: 1_700_000_000)
+                                           created: 1_700_000_000, latest_charge: charge('583910485721044'))
     end
 
     it "charges the customer's saved card off_session, keyed by the Stripe customer and the checkout mandate reference" do
@@ -26,12 +26,31 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
           payment_method_types: ['card'],
           off_session: true,
           confirm: true,
-          metadata: { checkout_mandate: 'checkout-1' }
+          metadata: { checkout_mandate: 'checkout-1' },
+          expand: ['latest_charge']
         },
         { idempotency_key: 'cus_existing-checkout-1-capture' }
       )
       expect(result[:psp_reference]).to eq('pi_123')
       expect(result[:settled_amount_cents]).to eq(1599)
+      expect(result[:network_confirmation_id]).to eq('583910485721044')
+    end
+
+    it 'reports no network id when the card network returned none' do
+      stub_cards('pm_default_visa')
+      allow(stripe.payment_intents).to receive(:create)
+        .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount_received: 1599,
+                                                         created: 0, latest_charge: charge(nil)))
+
+      expect(adapter.capture(checkout_mandate)[:network_confirmation_id]).to be_nil
+    end
+
+    it 'captures against stripe-mock, which reports no network id' do
+      with_stripe_mock do |mocked|
+        captured = mocked.capture(checkout_mandate)
+
+        expect(captured).to include(psp_reference: start_with('pi_'), network_confirmation_id: nil)
+      end
     end
   end
 
@@ -42,7 +61,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       stub_cards('pm_listed_visa')
       allow(stripe.payment_intents).to receive(:create)
         .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount_received: 1599,
-                                                         created: 0))
+                                                         created: 0, latest_charge: charge(nil)))
 
       adapter.capture(checkout_mandate)
 
@@ -79,7 +98,7 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
       # ignored and the saved card is charged.
       allow(stripe.payment_intents).to receive(:create)
         .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_123', status: 'succeeded', amount_received: 1599,
-                                                         created: 0))
+                                                         created: 0, latest_charge: charge(nil)))
 
       adapter.capture(checkout_mandate, payment_method: 'pm_explicit')
 
@@ -92,7 +111,8 @@ RSpec.describe Kiosk::PaymentProviders::Stripe do
     it 'settles what the intent received, not what it asked for' do
       allow(stripe.payment_intents).to receive(:create)
         .and_return(Stripe::PaymentIntent.construct_from(id: 'pi_part', status: 'succeeded', amount: 1599,
-                                                         amount_received: 1500, created: 0))
+                                                         amount_received: 1500, created: 0,
+                                                         latest_charge: charge(nil)))
 
       expect(adapter.capture(checkout_mandate)[:settled_amount_cents]).to eq(1500)
     end

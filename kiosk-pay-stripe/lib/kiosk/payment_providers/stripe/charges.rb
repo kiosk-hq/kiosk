@@ -29,7 +29,9 @@ module Kiosk
             payment_method_types: ['card'],
             off_session: true,
             confirm: true,
-            metadata: { checkout_mandate: checkout_mandate.reference }
+            metadata: { checkout_mandate: checkout_mandate.reference },
+            # The charge carries the card network's id of the transaction.
+            expand: ['latest_charge']
           }
         end
 

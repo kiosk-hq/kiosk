@@ -26,6 +26,11 @@ module StripeAdapterHelpers
                                                    .and_return(Stripe::ListObject.construct_from(data: cards))
   end
 
+  # The expanded `latest_charge` of a card PaymentIntent, with the network's id of the transaction.
+  def charge(network_transaction_id)
+    { id: 'ch_123', payment_method_details: { type: 'card', card: { network_transaction_id: } } }
+  end
+
   # A listed Checkout Session as the SDK would return it.
   def listed_session(mode: 'setup', success_url: SUCCESS_URL, url: 'https://checkout.stripe.com/setup/OUTSTANDING')
     Stripe::Checkout::Session.construct_from(mode: mode, success_url: success_url, url: url)

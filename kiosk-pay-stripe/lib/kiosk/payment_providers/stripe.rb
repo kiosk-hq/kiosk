@@ -81,7 +81,8 @@ module Kiosk
         {
           psp_reference: intent.id,
           settled_amount_cents: intent.amount_received,
-          settled_at: Time.at(intent.created).utc
+          settled_at: Time.at(intent.created).utc,
+          network_confirmation_id: intent.latest_charge.payment_method_details.card.network_transaction_id
         }
       end
 

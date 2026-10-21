@@ -43,6 +43,8 @@ RSpec.describe Kiosk::Server::AssistantKey do
     small = OpenSSL::PKey::RSA.generate(1024)
     expect_refused(/too small \(1024 bits\)/) { described_class.from_jwk(described_class.to_jwk(small.public_key)) }
     expect_refused(/too small/) { described_class.from_pem(small.public_key.to_pem) }
+    large = OpenSSL::PKey::RSA.generate(4104)
+    expect_refused(/too large \(4104 bits\)/) { described_class.from_jwk(described_class.to_jwk(large.public_key)) }
   end
 
   it 'refuses a private key as a PEM, and a PEM that is not a key' do

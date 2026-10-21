@@ -56,6 +56,11 @@ RSpec.describe Kiosk::Server::ClientRegistration do
       .not_to raise_error
   end
 
+  it 'gives the registration role whatever role or scope the request names' do
+    client = register(metadata.merge('role' => 'owner', 'scope' => 'owner'))
+    expect(client.role).to eq('customer')
+  end
+
   it 'ignores metadata members it does not know' do
     expect { register(metadata.merge('client_name' => 'x', 'redirect_uris' => ['https://x.example'])) }.not_to raise_error
   end

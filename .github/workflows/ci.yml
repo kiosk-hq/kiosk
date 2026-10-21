@@ -192,10 +192,10 @@ jobs:
           KIOSK_PROVE_INTAKE_SECRET: ci-zeitwerk-check-intake-secret
         run: |
           # Keys are minted per run and never echoed.
-          export KIOSK_SIGNING_KEY_B64="$(ruby -rbase64 -ropenssl -e 'print Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')"
-          export KIOSK_PROVE_PUBLIC_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).public_key.to_pem')"
+          export KIOSK_SIGNING_KEY_B64="$(ruby -rbase64 -ropenssl -e 'print Base64.strict_encode64(OpenSSL::PKey.generate_key("ED25519").private_to_pem)')"
+          export KIOSK_PROVE_PUBLIC_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").public_to_pem')"
           if [ "${{ matrix.demo }}" = "kiosk-demo-prove" ]; then
-            export PROVE_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey::RSA.new(2048).to_pem')"
+            export PROVE_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem')"
           fi
           if [ "${{ matrix.demo }}" = "kiosk-demo-skooti" ]; then
             export KIOSK_UNLOCK_SIGNING_KEY_PEM="$(ruby -e 'require "openssl"; puts OpenSSL::PKey.generate_key("ED25519").private_to_pem')"
@@ -552,7 +552,11 @@ jobs:
           for u in getgrocery hoteling skooti; do echo 'STRIPE_SECRET_KEY=sk_test_ci' >>"$KIOSK_ENV_DIR/$u.env"; done
           printf 'KIOSK_UNLOCK_SIGNING_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/skooti.env"
           printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genrsa 2048 2>/dev/null)" >>"$KIOSK_ENV_DIR/prove.env"
+          ! ./deploy/rollout.sh --on-box 2>&1 | grep -q '^MISSING prove PROVE_KEY_PEM'
+          sed -i '/^PROVE_KEY_PEM=/,/END/d' "$KIOSK_ENV_DIR/prove.env"
+          printf 'PROVE_KEY_PEM="%s"\n' "$(openssl genpkey -algorithm ed25519)" >>"$KIOSK_ENV_DIR/prove.env"
           ./deploy/rollout.sh --on-box
+          sed -n 's/^KIOSK_SIGNING_KEY_B64=//p' "$KIOSK_ENV_DIR/tudu.env" | openssl base64 -d -A | openssl pkey -noout -text | grep -q '^ED25519'
           ! ./deploy/rollout.sh --on-box | grep -q '^wrote'
           ! ./deploy/rollout.sh --on-box | grep -q 'pw-tudu'
           s=$(sed -n 's/^KIOSK_PROVE_INTAKE_SECRET=//p' "$KIOSK_ENV_DIR/skooti.env")

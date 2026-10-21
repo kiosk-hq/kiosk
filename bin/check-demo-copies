@@ -1872,6 +1872,10 @@ E2E_FIXTURES = {
     pairs: nil,
     why: "Run in place; the demos' claim ceremonies are Minitest tests."
   },
+  'es256_flow.rb' => {
+    pairs: nil,
+    why: 'Run in place; it registers a P-256 key and an RSA key over the wire, which no demo does.'
+  },
   'rotate_flow.rb' => {
     pairs: nil,
     why: 'Run in place; it rotates an assistant key over the wire, which no demo does.'

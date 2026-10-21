@@ -69,8 +69,8 @@ What each unit must carry. For EACH of the 7 apps:
 ### 4b. KYC broker env (copy `deploy/env/kyc-demo.env.example` → `/etc/kiosk-demo/prove.env`)
 - [ ] `SECRET_KEY_BASE`, `KIOSK_PROVE_DB` / `KIOSK_PROVE_DB_{USER,PASSWORD}`, `PORT=3008`. No kiosk gem — no signing key / no PoW knob.
 - [ ] **Issuer + public URL:** `KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech`, `PROVE_PUBLIC_URL=https://kyc.demo.kiosk.tech`.
-- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh 2048-bit RSA private PEM>` — REQUIRED, enforced at boot: the
-      broker refuses to start in production without it (and rejects a PEM that does not parse as a private key), because
+- [ ] **Broker signing key:** `PROVE_KEY_PEM=<fresh Ed25519 private PEM>` (`openssl genpkey -algorithm ed25519`) — REQUIRED, enforced at boot: the
+      broker refuses to start in production without it (and rejects a PEM that is not an Ed25519 private key), because
       the baked-in dev key's private half is world-readable in the public repo — silently signing with it would let anyone
       forge attestations, and the pin flows below would faithfully pin its forgeable public half.
 - [ ] **Operator allow-list — ONE PAIR PER KYC OPERATOR, and an operator with no pair is silently not registered:**
@@ -113,8 +113,8 @@ What each unit must carry. For EACH of the 7 apps:
         KIOSK_POW_SECRET=throwaway-at-least-32-bytes-long-xxxx \
         KIOSK_ISSUER=https://throwaway.example.test \
         bin/rails zeitwerk:check                     # getgrocery, hoteling, skooti: add STRIPE_SECRET_KEY=sk_test_throwaway
-                                                     # prove: add PROVE_KEY_PEM="$(openssl genrsa 2048)" — it must PARSE
-                                                     #   as an RSA private key — a throwaway literal will not do;
+                                                     # prove: add PROVE_KEY_PEM="$(openssl genpkey -algorithm ed25519)" — it
+                                                     #   must PARSE as an Ed25519 private key — a throwaway literal will not do;
                                                      #   the kiosk vars above are ignored by the broker (harmless)
                                                      # skooti: add KIOSK_UNLOCK_SIGNING_KEY_PEM="$(openssl genpkey \
                                                      #   -algorithm ed25519)" — same rule, it must PARSE as an Ed25519

@@ -119,7 +119,7 @@ class Drive
     REFUSALS = [400, 401, 402, 403].freeze
 
     # Signs the DPoP proof of the forged-token probe: a key no origin knows.
-    THROWAWAY_KEY = OpenSSL::PKey::RSA.generate(2048)
+    THROWAWAY_KEY = OpenSSL::PKey.generate_key('ED25519')
 
     def registration_probes
       { 'an unproven registration' => :skip, 'a malformed proof' => '0' }.each do |beat, pow|
@@ -145,7 +145,7 @@ class Drive
     # The `sub` is a UUID, so the origin looks it up and finds nothing.
     def token_probe
       beat     = 'a token request for an unknown client'
-      stranger = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: SecureRandom.uuid, user_id: nil, token: nil, rsa_key: THROWAWAY_KEY)
+      stranger = Kiosk::TestHelpers::Assistant::Principal.new(agent_id: SecureRandom.uuid, user_id: nil, token: nil, key: THROWAWAY_KEY)
       response = @client.token(stranger)
       if response.status == 401 && response.body.is_a?(Hash) && response.body['error'] == 'invalid_client'
         ok "#{beat} is refused (HTTP 401 \"invalid_client\")"

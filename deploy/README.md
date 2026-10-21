@@ -78,6 +78,15 @@ half-set: the broker's copy of an operator's intake secret
 `KIOSK_PROVE_INTAKE_SECRET`, and each operator's pinned
 `KIOSK_PROVE_PUBLIC_KEY_PEM` is the public half of the broker's `PROVE_KEY_PEM`.
 
+**Key types.** Kiosk signs with Ed25519 keys only. A `KIOSK_SIGNING_KEY_B64`
+that is not an Ed25519 key is minted again, as if the slot were empty: the
+tokens and unpaid checkouts the old key signed stop verifying. A
+`PROVE_KEY_PEM` that is not an Ed25519 key counts as missing, so the script
+names it and leaves the broker and both KYC operators alone. Put a new one into
+`/etc/kiosk-demo/prove.env` by hand (`openssl genpkey -algorithm ed25519`) and
+re-run. An assistant registered with an RSA key no longer authenticates: it
+makes an Ed25519 key and registers again.
+
 **Who reads an env file.** systemd hands each one to its unit through
 `EnvironmentFile=`, which it reads as root; the push-to-deploy hook at
 `/srv/kiosk.git/hooks/post-receive` (`deploy/post-receive`) **also sources every one of them**, as the
@@ -480,16 +489,18 @@ proofs_for() { jq -c '.challenges[]' | while read -r c; do
            '{challenge:$challenge,nonce:$nonce}'   # ~9–10 s on an M-series core
   done | jq -sc .; }
 
-#    a) an agent keypair, and its public JWK (RFC 7517). `jws HEADER PAYLOAD`
-#       prints a compact RS256 JWS that the key signs.
+#    a) an agent keypair, and its public JWK (RFC 8037). `jws HEADER PAYLOAD`
+#       prints a compact EdDSA JWS that the key signs. OpenSSL signs Ed25519
+#       from a file only, so the signing input goes to a file first.
 AGENT=$(mktemp -d)   # the keypair lives here, NOT in your checkout
-openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$AGENT/agent.pem"
-N=$(openssl rsa -in "$AGENT/agent.pem" -noout -modulus | cut -d= -f2 | xxd -r -p | b64url)
-JWK=$(jq -cn --arg n "$N" '{kty:"RSA",n:$n,e:"AQAB"}')
+openssl genpkey -algorithm ed25519 -out "$AGENT/agent.pem"
+X=$(openssl pkey -in "$AGENT/agent.pem" -pubout -outform DER | tail -c 32 | b64url)
+JWK=$(jq -cn --arg x "$X" '{kty:"OKP",crv:"Ed25519",x:$x}')
 jws() { local h p
   h=$(printf '%s' "$1" | b64url); p=$(printf '%s' "$2" | b64url)
+  printf '%s.%s' "$h" "$p" > "$AGENT/input"
   printf '%s.%s.%s' "$h" "$p" \
-    "$(printf '%s.%s' "$h" "$p" | openssl dgst -sha256 -sign "$AGENT/agent.pem" -binary | b64url)"; }
+    "$(openssl pkeyutl -sign -inkey "$AGENT/agent.pem" -rawin -in "$AGENT/input" | b64url)"; }
 
 #    b) register the key (RFC 7591) -> the client_id. The first POST answers
 #       402 `pow_required` with the Equihash challenge(s); solve them and send
@@ -506,9 +517,9 @@ CLIENT=$(curl -s -X POST "$BASE/kiosk/oauth/register" \
 #       (RFC 7523) and a DPoP proof (RFC 9449) with no `ath`, because there is
 #       no token yet. `aud` is the origin YOU dialed: an assertion signed for
 #       one origin is worthless at another.
-ASSERTION=$(jws '{"alg":"RS256","typ":"JWT"}' "$(jq -cn --arg c "$CLIENT" --arg a "$BASE" --arg j "$(uuidgen)" \
+ASSERTION=$(jws '{"alg":"EdDSA","typ":"JWT"}' "$(jq -cn --arg c "$CLIENT" --arg a "$BASE" --arg j "$(uuidgen)" \
   '{iss:$c,sub:$c,aud:$a,exp:((now|floor)+60),jti:$j}')")
-DPOP_HEADER=$(jq -cn --argjson k "$JWK" '{alg:"RS256",typ:"dpop+jwt",jwk:$k}')
+DPOP_HEADER=$(jq -cn --argjson k "$JWK" '{alg:"EdDSA",typ:"dpop+jwt",jwk:$k}')
 TOKEN=$(curl -s -X POST "$BASE/kiosk/oauth/token" \
   -H "DPoP: $(jws "$DPOP_HEADER" "$(jq -cn --arg u "$BASE/kiosk/oauth/token" --arg j "$(uuidgen)" \
         '{jti:$j,htm:"POST",htu:$u,iat:(now|floor)}')")" \

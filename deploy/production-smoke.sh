@@ -267,7 +267,7 @@ smoke_stylish() {
   export SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(64)')}"
   # The production initializer does NOT self-provision a signing key (that only
   # happens in dev/test), so supply an ephemeral one here or boot fails.
-  export KIOSK_SIGNING_KEY_B64="${KIOSK_SIGNING_KEY_B64:-$(ruby -e 'require "openssl"; require "base64"; print Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')}"
+  export KIOSK_SIGNING_KEY_B64="${KIOSK_SIGNING_KEY_B64:-$(ruby -e 'require "openssl"; require "base64"; print Base64.strict_encode64(OpenSSL::PKey.generate_key("ED25519").private_to_pem)')}"
   export KIOSK_ISSUER="${KIOSK_ISSUER:-$ORIGIN}"
   # The PoW HMAC key is mandatory outside development/test — the app
   # refuses to boot without it, so the smoke must supply an ephemeral one here
@@ -507,14 +507,14 @@ smoke_prove() {
 
   # ── Production env the broker needs. It has NO kiosk-gem dependency, so no
   # kiosk signing-key initializer, no PoW knobs — SECRET_KEY_BASE, the DB role,
-  # and its OWN RSA signing key (the ProveKey). ─
+  # and its OWN Ed25519 signing key (the ProveKey). ─
   export RAILS_ENV=production
   export SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(64)')}"
   # The broker refuses to boot in production without PROVE_KEY_PEM, and
-  # the env file validates that it parses as an RSA PRIVATE key — so generate a
+  # the env file validates that it is an Ed25519 PRIVATE key — so generate a
   # throwaway keypair (nothing pins it: assertion 6 only asserts /prove_key.pem
   # serves ITS public half).
-  export PROVE_KEY_PEM="${PROVE_KEY_PEM:-$(ruby -e 'require "openssl"; print OpenSSL::PKey::RSA.new(2048).to_pem')}"
+  export PROVE_KEY_PEM="${PROVE_KEY_PEM:-$(ruby -e 'require "openssl"; print OpenSSL::PKey.generate_key("ED25519").private_to_pem')}"
   export KIOSK_PROVE_ISSUER="${KIOSK_PROVE_ISSUER:-https://kyc.smoke.test}"
   # database.yml (production) connects as this role (CI: postgres; local: login).
   export KIOSK_PROVE_DB_USER="${KIOSK_PROVE_DB_USER:-postgres}"
@@ -679,7 +679,7 @@ smoke_tudu() {
   export SECRET_KEY_BASE="${SECRET_KEY_BASE:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(64)')}"
   # The production initializer self-provisions neither the signing key nor the
   # PoW secret and refuses to boot without them (same as stylish).
-  export KIOSK_SIGNING_KEY_B64="${KIOSK_SIGNING_KEY_B64:-$(ruby -e 'require "openssl"; require "base64"; print Base64.strict_encode64(OpenSSL::PKey::RSA.new(2048).to_pem)')}"
+  export KIOSK_SIGNING_KEY_B64="${KIOSK_SIGNING_KEY_B64:-$(ruby -e 'require "openssl"; require "base64"; print Base64.strict_encode64(OpenSSL::PKey.generate_key("ED25519").private_to_pem)')}"
   export KIOSK_ISSUER="${KIOSK_ISSUER:-$ORIGIN}"
   export KIOSK_POW_SECRET="${KIOSK_POW_SECRET:-$(ruby -e 'require "securerandom"; print SecureRandom.hex(32)')}"
   export KIOSK_TUDU_DB_USER="${KIOSK_TUDU_DB_USER:-postgres}"

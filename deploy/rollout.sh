@@ -33,6 +33,10 @@ SRC=${KIOSK_SRC:-/srv/kiosk}/deploy/env
 UNITS=(atablefor getgrocery hoteling philslist skooti stylish tudu prove)  # broker last: it reads the operators'
 
 # shellcheck disable=SC2016  # this is an awk program; nothing in it is shell
+ed25519() { # stdin is a private PEM; true when it is an Ed25519 key, the one type Kiosk signs with
+  openssl pkey -noout -text 2>/dev/null | grep -q '^ED25519 Private-Key'
+}
+
 value() {   # value <file> <KEY> — the whole right-hand side, a multi-line quoted PEM included
   awk -v k="$2=" 'index($0,k)==1{v=substr($0,length(k)+1);print v
                   if(v~/^"/&&v!~/"$/){q=1;next}exit} q{print;if(/"$/)exit}' "$1" 2>/dev/null || true
@@ -45,14 +49,18 @@ render() {  # render <unit> — stdout is the file that unit should have
     case $1/$key in
       prove/KIOSK_PROVE_*_SECRET)   # one secret, two names: the operator's own copy is the source
         o=${key#KIOSK_PROVE_}; o=${o%_SECRET}; val=$(value "$DIR/${o,,}.env" KIOSK_PROVE_INTAKE_SECRET) ;;
-      */KIOSK_PROVE_PUBLIC_KEY_PEM) # the public half of the broker's own key
-        val=$(value "$DIR/prove.env" PROVE_KEY_PEM | tr -d '"' | openssl pkey -pubout 2>/dev/null) || true
-        [ -z "$val" ] || val=\"$val\" ;;
+      */KIOSK_PROVE_PUBLIC_KEY_PEM) # the public half of the broker's own key, when it is an Ed25519 key
+        o=$(value "$DIR/prove.env" PROVE_KEY_PEM | tr -d '"')
+        val=; ! printf '%s\n' "$o" | ed25519 || val=\"$(printf '%s\n' "$o" | openssl pkey -pubout)\" ;;
       *) val=$(value "$live" "$key")
+         case $key in   # a key that is not an Ed25519 key is a slot to fill again
+           KIOSK_SIGNING_KEY_B64) printf '%s' "$val" | openssl base64 -d -A 2>/dev/null | ed25519 || val= ;;
+           PROVE_KEY_PEM)         printf '%s\n' "$val" | tr -d '"' | ed25519 || val= ;;
+         esac
          [ -n "$val" ] || case $key in   # nothing off this box holds the other half of these
            SECRET_KEY_BASE)                            val=$(openssl rand -hex 64) ;;
            KIOSK_POW_SECRET|KIOSK_PROVE_INTAKE_SECRET) val=$(openssl rand -hex 32) ;;
-           KIOSK_SIGNING_KEY_B64)                      val=$(openssl genrsa 2048 2>/dev/null | openssl base64 -A) ;;
+           KIOSK_SIGNING_KEY_B64)                      val=$(openssl genpkey -algorithm ed25519 | openssl base64 -A) ;;
          esac ;;
     esac
     [ -n "$val" ] || { echo "MISSING $1 $key" >&2; return 1; }

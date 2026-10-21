@@ -81,7 +81,7 @@ DECLARED_DEV_KEYS = {
   'kiosk-demo-skooti/config/dev_unlock_key.pem' =>
     'the Ed25519 rental-token vector reproduced in the lock firmware and its tests',
   'kiosk-demo-prove/config/dev_prove_key.pem' =>
-    'the RSA broker key development and test sign attestations with'
+    'the Ed25519 broker key development and test sign attestations with'
 }.freeze
 
 # The detector must match a freshly minted key and must not match an armor-only placeholder.

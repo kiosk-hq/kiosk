@@ -195,7 +195,7 @@ off each subdir's authoritative `*.gemspec`.
 ## The two development keypairs this repo tracks on purpose
 
 `kiosk-demo-skooti/config/dev_unlock_key.pem` (Ed25519) and
-`kiosk-demo-prove/config/dev_prove_key.pem` (RSA) are private keys, they are
+`kiosk-demo-prove/config/dev_prove_key.pem` (Ed25519) are private keys, they are
 committed, and that is deliberate. Read the header of either file: it says what
 the key is for, that it is world-readable, and that it must never sign
 anything real. Both applications enforce that rather than asking — production

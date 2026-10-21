@@ -208,8 +208,8 @@ The demo bakes in shortcuts production operators replace:
   gives them real Devise credentials so the link walkthrough signs in like a
   person would).
 - **Nothing in the AI-assistant channel** → there is nothing to replace. This
-  demo configures no `c.agent_idp`, so the engine verifies its own kiosk-pop
-  JWTs through `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`; set
+  demo configures no `c.agent_idp`, so the engine verifies its own access
+  tokens through `Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp`; set
   one only to front an EXTERNAL agent-identity issuer. The human session
   channel already runs the real `kiosk-user-idp-devise` adapter.
 

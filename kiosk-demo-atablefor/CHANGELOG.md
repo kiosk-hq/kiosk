@@ -10,6 +10,7 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: A migration drops `kiosk.auth_challenges`; `agents.txt` names `Authorization: oauth2`.
 - 2026-10-20: `availability` rows carry `timezone_note` when the caller's declared `Kiosk-Timezone` is on another clock than the restaurant.
 
 - 2026-10-18: atablefor runs its jobs on Solid Queue inside Puma, so a booking seated after a restart still counts as a visit.

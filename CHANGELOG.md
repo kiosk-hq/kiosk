@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: Every operator demo drops `kiosk.auth_challenges` by a migration, and its stories register, link and sign in again over the OAuth wire.
 - 2026-10-21: The engine registers assistants by RFC 7591 and gives tokens at `oauth/token` for an RFC 7523 client assertion and a DPoP proof; binding and rotation use the assertion too.
 - 2026-10-21: Removed from the engine: `GET /auth/challenge`, `POST /auth/register`, `/auth/login`, `/auth/revoke`, and the `kiosk.auth_challenges` table of `kiosk:install`.
 

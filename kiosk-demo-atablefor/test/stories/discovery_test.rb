@@ -36,7 +36,7 @@ class DiscoveryStory < StoryTest
     agents_txt = assistant.wire.get('/agents.txt')
 
     assert_equal 200, agents_txt.status
-    assert_match(/^Authorization: x-kiosk-pop$/, agents_txt.raw_body)
+    assert_match(/^Authorization: oauth2$/, agents_txt.raw_body)
     assert_no_match(/^Payments:|Protocols: ap2/, agents_txt.raw_body)
   end
 

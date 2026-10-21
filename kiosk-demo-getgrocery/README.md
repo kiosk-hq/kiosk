@@ -204,4 +204,4 @@ authenticates through a **real Devise session** — `kiosk-user-idp-devise`
 reading the Warden user, the same channel every other demo uses. The seeded
 shopper `hana@example.com` signs in at `/users/sign_in`, and
 `test/stories/claim_test.rb` drives that form rather than asserting a bearer. Assistants never touch this
-channel — kiosk-pop key possession is their only credential.
+channel — their own key, by a client assertion and a DPoP-bound token, is their only credential.

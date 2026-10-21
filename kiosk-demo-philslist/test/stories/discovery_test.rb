@@ -36,7 +36,7 @@ class DiscoveryStory < StoryTest
 
     agents_txt = Net::HTTP.get(URI("#{live_url}/agents.txt"))
 
-    assert_match(/^Authorization: x-kiosk-pop$/, agents_txt)
+    assert_match(/^Authorization: oauth2$/, agents_txt)
     assert_no_match(/^Payments:|Protocols: ap2/, agents_txt)
   end
 

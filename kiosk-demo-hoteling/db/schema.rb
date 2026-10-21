@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_21_100021) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_100022) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -280,12 +280,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_100021) do
     t.index ["user_id"], name: "idx_agents_user_id", where: "(revoked_at IS NULL)"
     t.check_constraint "(spending_cap_cents IS NULL) = (spending_cap_currency IS NULL)", name: "agents_spending_cap_currency_set"
     t.check_constraint "spending_cap_currency ~ '^[a-z]{3}$'::text", name: "agents_spending_cap_currency_check"
-  end
-
-  create_table "kiosk.auth_challenges", primary_key: "public_key", id: :text, force: :cascade do |t|
-    t.text "nonce", null: false
-    t.timestamptz "expires_at", null: false
-    t.index ["expires_at"], name: "idx_auth_challenges_expires_at"
   end
 
   create_table "kiosk.checkout_mandates", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|

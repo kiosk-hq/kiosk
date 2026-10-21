@@ -691,6 +691,9 @@ COPIES = {
   'db/migrate/20261021100021_add_network_confirmation_id_to_kiosk_settlements.rb' => {
     rule: :identical, why: "Gives settlements the network id the payment receipt names, as kiosk:install's has it."
   },
+  'db/migrate/20261021100022_drop_kiosk_auth_challenges.rb' => {
+    rule: :identical, why: 'Drops kiosk.auth_challenges, which kiosk:install does not make, from a database that has it.'
+  },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },
@@ -699,9 +702,6 @@ COPIES = {
   },
   'db/migrate/20261018100009_create_kiosk_revocations.rb' => {
     rule: :identical, why: 'kiosk:install — kiosk.revocations, the token revocation watermarks.'
-  },
-  'db/migrate/20261018100010_create_kiosk_auth_challenges.rb' => {
-    rule: :identical, why: "kiosk:install — kiosk.auth_challenges, each public key's outstanding challenge."
   },
   'db/migrate/20261018100013_create_kiosk_pay_stripe_customers.rb' => {
     rule: :identical,
@@ -760,7 +760,6 @@ GENERATOR_TEMPLATES = {
   'create_kiosk_events.rb.tt' => { emits: 'create_kiosk_events.rb' },
   'create_kiosk_pow_spent.rb.tt' => { emits: 'create_kiosk_pow_spent.rb' },
   'create_kiosk_revocations.rb.tt' => { emits: 'create_kiosk_revocations.rb' },
-  'create_kiosk_auth_challenges.rb.tt' => { emits: 'create_kiosk_auth_challenges.rb' },
   'create_kiosk_visits.rb.tt' => { emits: 'create_kiosk_visits.rb' },
   'create_kiosk_refunds.rb.tt' => { emits: 'create_kiosk_refunds.rb' }
 }.freeze

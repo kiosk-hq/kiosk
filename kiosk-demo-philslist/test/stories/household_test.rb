@@ -9,7 +9,7 @@ class HouseholdStory < StoryTest
 
   test "Alice approves a new assistant on the board's site, and it posts as her" do
     newcomer = a_newcomer(as: Seller)
-    request  = newcomer.asks_to_be_linked(client_id: 'philslist-test')
+    request  = newcomer.asks_to_be_linked
 
     assert_empty %w[device_code user_code verification_uri expires_in interval] - request.rows.keys
     assert newcomer.polls(request).refused?(:authorization_pending)
@@ -45,7 +45,7 @@ class HouseholdStory < StoryTest
     assert_equal '€140', Listing.find(bookshelf['listing_id']).price_text
 
     assert_predicate his.asks(:my_listings), :ok?
-    assert hers.signs_back_in.refused?(:not_found)
+    assert hers.signs_back_in.refused?(:invalid_client)
     assert_predicate his.signs_back_in, :ok?
   end
 end

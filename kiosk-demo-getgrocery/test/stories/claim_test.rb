@@ -15,7 +15,7 @@ class ClaimStory < StoryTest
 
     assert_equal 'setup_required', standalone.sets_up_payment['status']
 
-    link = standalone.asks_to_be_linked(client_id: 'getgrocery-claim')
+    link = standalone.asks_to_be_linked
     a_person(email: 'hana@example.com', password: 'getgrocery-demo-password').approves(link['user_code'])
     hanas = standalone.collects(link)
 

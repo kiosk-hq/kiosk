@@ -77,8 +77,8 @@ page, the link-code mint, the unlink — are authenticated by **real Devise**
 (`kiosk-user-idp-devise` reading the Warden session), not by a stub. The seeded
 riders `ada@example.com` and `ben@example.com` sign in at `/users/sign_in`; an
 assistant that redeems a code one of them mints is bound to THAT account and
-reads only its reservations. Assistants never touch this channel — kiosk-pop key
-possession is their only credential.
+reads only its reservations. Assistants never touch this channel — their own
+key, by a client assertion and a DPoP-bound token, is their only credential.
 
 ## Running it
 

@@ -5,7 +5,7 @@ require 'test_helper'
 class LinkingStory < StoryTest
   test 'Alice approves the code her assistant shows her, and it books in her name' do
     newcomer = a_newcomer(as: Client)
-    request  = newcomer.asks_to_be_linked(client_id: 'stylish-test')
+    request  = newcomer.asks_to_be_linked
 
     assert newcomer.polls(request).refused?(:authorization_pending)
 
@@ -27,7 +27,7 @@ class LinkingStory < StoryTest
 
     signs_in(:alice).unlinks(first)
 
-    assert first.signs_back_in.refused?(:not_found)
+    assert first.signs_back_in.refused?(:invalid_client)
     assert_predicate second.signs_back_in, :ok?
   end
 

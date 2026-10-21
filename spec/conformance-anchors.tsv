@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2014 anchors.
+# 2017 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -1128,6 +1128,7 @@ kiosk-server/lib/kiosk/server/handler_serving.rb	def wire_error(status, parsed)
 kiosk-server/lib/kiosk/server/handler_serving.rb	kiosk_render_refusal(e)
 kiosk-server/lib/kiosk/server/handler_serving.rb	module HandlerServing
 kiosk-server/lib/kiosk/server/identity_resolution.rb	# the configured agent IdP or the bundled kiosk-pop one. A cookie session
+kiosk-server/lib/kiosk/server/identity_resolution.rb	Dpop.verify!(request.headers['DPoP'],
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/jwt_issuer.rb	DEFAULT_EXPIRES_IN = 3600
 kiosk-server/lib/kiosk/server/kyc.rb	        def write_grants(user_id, attributes)
@@ -1212,6 +1213,7 @@ kiosk-server/lib/kiosk/server/well_known.rb	def self.oauth_authorization_server(
 kiosk-server/lib/kiosk/server/wire_rendering.rb	def render_wire_error(error)
 kiosk-server/lib/kiosk/skill_link.rb	module SkillLink
 kiosk-server/lib/kiosk/skill_link.rb	response.set_header('Link', %(<#{Kiosk.configuration.skill_url}>; rel="kiosk", #{API_CATALOG}))
+kiosk-server/listen.py	the DPoP proof your private key signs for them
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	draws no verb of its own — a fresh app declares none
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	so the protocol plane wins by first match
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	writes no separate routes file
@@ -1332,6 +1334,7 @@ kiosk-server/spec/kiosk/server/configuration_extension_spec.rb	offers no way to 
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	answers 304 to If-None-Match on the current digest
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	does NOT fall back to user_idp — KYC is an agent-only surface
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	emits no Vary even when the request negotiates content
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	it 'refuses a valid token sent as a Bearer token, naming the DPoP scheme' do
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	records the named anonymized attributes an attestation carries
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request

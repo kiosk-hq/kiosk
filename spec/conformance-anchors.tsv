@@ -26,7 +26,7 @@
 # that leaves the matrices: which row cites which pair, what it claims and how
 # it is rated stay where the matrices live.
 #
-# 2017 anchors.
+# 2050 anchors.
 .github/workflows/ci.yml	          SERVER_URL=http://127.0.0.1:3000 bundle exec ruby "../kiosk-redteam/suites/${demo#kiosk-demo-}.rb"
 .github/workflows/ci.yml	        if: matrix.demo != 'kiosk-demo-prove'
 .github/workflows/ci.yml	      - name: Red-team battery
@@ -44,7 +44,7 @@ README.md	Every Kiosk gem lives in this repo and under that licence: `ls */*.gem
 README.md	Meta-gem; `bundle add kiosk-all` installs core + server
 README.md	Opt-in RLS DSL + migration helpers
 README.md	PSP adapter — Stripe, AP2 mandate trail
-README.md	Rails engine, routes, kiosk-pop auth surface, executor
+README.md	Rails engine, routes, OAuth client registration and DPoP token endpoint, executor
 README.md	Red-team scenarios, adversarial test harness
 README.md	app-layer-authorized data plane with opt-in Postgres RLS defense-in-depth
 README.md	multi-assistant identity per user
@@ -72,8 +72,8 @@ deploy/demo-reset.sh	# placed against this origin — the Hermes-verified order 
 deploy/env/getgrocery.env.example	STRIPE_SECRET_KEY=sk_test_REPLACE_WITH_STRIPE_TEST_KEY
 deploy/env/hoteling.env.example	STRIPE_SECRET_KEY=sk_test_REPLACE_WITH_STRIPE_TEST_KEY
 deploy/env/skooti.env.example	KIOSK_PROVE_ISSUER=https://kyc.demo.kiosk.tech
-e2e/README.md	    ├── claim_flow.rb                       # account-binding claim ceremony: fresh key → verify-page approval → PoP token → bound wire call → link-code redeem → unlink
-e2e/README.md	    ├── equihash_register.rb                # shared register helper: challenge → PoP → register; solves the register 402 + retries with the Kiosk-PoW header
+e2e/README.md	    ├── claim_flow.rb                       # account-binding claim ceremony: registered key → verify-page approval → token poll with a client assertion → bound wire call → link-code redeem → unlink
+e2e/README.md	    ├── equihash_register.rb                # shared helper: register the JWK, solve the register 402 + retry with the Kiosk-PoW header; client assertion; client_credentials token request
 e2e/README.md	    ├── register_pow_flow.rb                # register-PoW driver: no-proof register → 402, solve + re-POST with Kiosk-PoW header → 201, token authenticates a verb
 e2e/README.md	## File layout
 e2e/README.md	## Run locally
@@ -120,7 +120,7 @@ e2e/assistant.sh	a routing 404 UNDER the mount is a 404
 e2e/assistant.sh	agents.json has no root extension
 e2e/assistant.sh	agents.json → 200
 e2e/assistant.sh	agents.txt claims no payment protocol
-e2e/assistant.sh	agents.txt names x-kiosk-pop
+e2e/assistant.sh	agents.txt names oauth2
 e2e/assistant.sh	agents.txt → 200
 e2e/assistant.sh	alice: 1 appointment exists
 e2e/assistant.sh	alice: does NOT see bob's row
@@ -133,7 +133,10 @@ e2e/assistant.sh	api-catalog advertises it as a service-desc
 e2e/assistant.sh	api-catalog hyperlinks $verb_name, unauthenticated
 e2e/assistant.sh	api-catalog → 200
 e2e/assistant.sh	appointment_id returned
-e2e/assistant.sh	assert "kiosk.auth.challenge_url"
+e2e/assistant.sh	assert "kiosk.auth.claim_url"
+e2e/assistant.sh	assert "kiosk.auth.registration_url"
+e2e/assistant.sh	assert "kiosk.auth.rotate_url"
+e2e/assistant.sh	assert "kiosk.auth.token_url"
 e2e/assistant.sh	assert "no Authorization header → 200"  "$oa_anon" "200"
 e2e/assistant.sh	assert "no Authorization header → 200"  "$sch_status" "200"
 e2e/assistant.sh	assert "no envelope wrapper"       "$(echo "$r" | jq -r 'has("value")')"           "false"
@@ -146,19 +149,21 @@ e2e/assistant.sh	assert "…with a STRONG ETag (no W/)"    "$(echo "$sch_headers
 e2e/assistant.sh	auth.md opens with the auth.md heading
 e2e/assistant.sh	binding: /auth.md served
 e2e/assistant.sh	binding: claim and token poll each paid one toll
+e2e/assistant.sh	binding: claim of an unknown code → 404
+e2e/assistant.sh	binding: client_credentials refresh
 e2e/assistant.sh	binding: device_authorization fields
 e2e/assistant.sh	binding: fast poll → slow_down
 e2e/assistant.sh	binding: held token dies at unlink
 e2e/assistant.sh	binding: human approve → 200
-e2e/assistant.sh	binding: kiosk-pop login refresh
 e2e/assistant.sh	binding: link-code mint (session)
 e2e/assistant.sh	binding: link-code redeem → human
-e2e/assistant.sh	binding: login after unlink → 404
 e2e/assistant.sh	binding: pending before approval
 e2e/assistant.sh	binding: poll without proof denied
 e2e/assistant.sh	binding: role/scope refused on the opening request
 e2e/assistant.sh	binding: same-second token dies too
+e2e/assistant.sh	binding: the client keeps its client_id
 e2e/assistant.sh	binding: token bound to the human
+e2e/assistant.sh	binding: token request after unlink → invalid_client
 e2e/assistant.sh	binding: token role is the approver's
 e2e/assistant.sh	binding: unlink → 204 (no body)
 e2e/assistant.sh	binding: wire verb as bound account
@@ -178,7 +183,8 @@ e2e/assistant.sh	jwks: no alg (RS256 and PS256)
 e2e/assistant.sh	jwks: no private d field
 e2e/assistant.sh	jwks: no private p field
 e2e/assistant.sh	jwks: use=sig
-e2e/assistant.sh	kiosk.auth.kind kiosk-pop
+e2e/assistant.sh	kiosk.auth has no kind
+e2e/assistant.sh	kiosk.auth.registration_url"
 e2e/assistant.sh	kiosk.capabilities[]
 e2e/assistant.sh	kiosk.endpoint correct
 e2e/assistant.sh	kiosk.schema_url is digest-versioned
@@ -186,8 +192,10 @@ e2e/assistant.sh	kiosk.version present
 e2e/assistant.sh	limit and cursor are injected into a query
 e2e/assistant.sh	my_appointments declares salon_id as a query parameter
 e2e/assistant.sh	no auth → 401
+e2e/assistant.sh	oauth metadata names private_key_jwt
 e2e/assistant.sh	oauth metadata names the device endpoint
 e2e/assistant.sh	oauth metadata names the issuer
+e2e/assistant.sh	oauth metadata names the registration endpoint
 e2e/assistant.sh	one path per verb the canonical catalog publishes
 e2e/assistant.sh	pay: a Stripe PaymentIntent
 e2e/assistant.sh	pay: checkout receipt names the checkout mandate
@@ -209,6 +217,10 @@ e2e/assistant.sh	register-pow: solve+proof → registered
 e2e/assistant.sh	register-pow: the expected (n,k) was READ from the gem
 e2e/assistant.sh	request_kyc at an origin that serves no KYC → 501
 e2e/assistant.sh	reserved limit/cursor accepted → 200
+e2e/assistant.sh	rotate: a token from before the rotation → 401
+e2e/assistant.sh	rotate: both keys signed → 200
+e2e/assistant.sh	rotate: the old key gets no token → 401
+e2e/assistant.sh	rotate: the same agent_id
 e2e/assistant.sh	salon name is Combette
 e2e/assistant.sh	schema publishes {queries, actions, events} and nothing else
 e2e/assistant.sh	status restates the HTTP status
@@ -259,10 +271,11 @@ e2e/assistant.sh	…with no code to branch on
 e2e/fixtures/bookings_controller.rb	# The e2e origin's APPOINTMENTS resource, and the harness's proof that ONE
 e2e/fixtures/bookings_controller.rb	# controller may declare BOTH kinds: `my_appointments` is a query
 e2e/fixtures/bookings_controller.rb	Appointment.own.order(:id)
-e2e/fixtures/equihash_register.rb	JWT.encode({ aud: issuer, nonce: ch.fetch('challenge')
-e2e/fixtures/equihash_register.rb	body = { public_key: pem, signed: registration_pop(
+e2e/fixtures/equihash_register.rb	JWT.encode({ iss: client_id, sub: client_id, aud: issuer
+e2e/fixtures/equihash_register.rb	def client_token(
 e2e/fixtures/equihash_register.rb	def equihash_register(
-e2e/fixtures/pay_flow.rb	# Register via the proof-of-possession handshake: challenge → sign(nonce, aud) →
+e2e/fixtures/equihash_register.rb	def registration_body(key) = { jwks: { keys: [Kiosk::TestHelpers::Dpop.jwk(key)] } }
+e2e/fixtures/pay_flow.rb	# Register the key (RFC 7591), then get a token from the token endpoint with a
 e2e/fixtures/pay_flow.rb	checkout_jwt = JWT.encode(checkout, operator_key, 'PS256', { kid:, typ: 'JWT' })
 e2e/fixtures/pay_flow.rb	mandates    = Kiosk::TestHelpers::Mandate.pay(key, checkout_jwt, instrument: 'pm_demo')
 e2e/fixtures/pay_flow.rb	pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates[:payment] }
@@ -283,7 +296,11 @@ e2e/schema_conformance.rb	GET /.well-known/kiosk.json
 e2e/schema_conformance.rb	GET /kiosk/schema
 e2e/schema_conformance.rb	VIOLATES its own schema
 e2e/schema_conformance.rb	and the same schema REFUSES a broken copy of those very bytes
-e2e/schema_conformance.rb	conforms('the POST /auth/register 201'
+e2e/schema_conformance.rb	conforms('the POST /auth/rotate 200 — the client information'
+e2e/schema_conformance.rb	conforms('the POST /oauth/register 201'
+e2e/schema_conformance.rb	conforms('the POST /oauth/register 400'
+e2e/schema_conformance.rb	conforms('the POST /oauth/token 200 (client_credentials)'
+e2e/schema_conformance.rb	conforms('the POST /oauth/token 200 (the completed device grant)'
 e2e/schema_conformance.rb	no control mutation given
 e2e/schema_conformance.rb	published examples (the loop is not empty)
 e2e/schema_conformance.rb	satisfies its own schema
@@ -325,7 +342,7 @@ kiosk-core/lib/kiosk/configuration.rb	    # to the issuer at the edge. (Rails' `
 kiosk-core/lib/kiosk/configuration.rb	  # Rails app on the bundled agent-IdP; the provider supplies its own user
 kiosk-core/lib/kiosk/configuration.rb	origins.include?(normalized) ? normalized : issuer
 kiosk-core/lib/kiosk/mandate.rb	  # AP2 (Agent Payments Protocol) mandate value objects.
-kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.26'
+kiosk-core/lib/kiosk/protocol.rb	API_VERSION = '0.5.27'
 kiosk-core/spec/spec_helper.rb	require 'kiosk'
 kiosk-demo-atablefor/README.md	Restaurant table-booking demo operator for Kiosk — the flagship of the demo
 kiosk-demo-atablefor/README.md	There is **no `pay`**: the advertised capabilities are `[schema, queries, actions]`.
@@ -626,7 +643,7 @@ kiosk-demo-stylish/README.md	- Authenticated REST wire surface — **one endpoin
 kiosk-demo-stylish/README.md	- Human↔assistant account binding over real Devise sessions — the claim ceremony (verify page) and human-minted link codes, asserted by `test/stories/linking_test.rb`
 kiosk-demo-stylish/README.md	- JWKS endpoint for JWT verification
 kiosk-demo-stylish/README.md	- `/.well-known/kiosk.json` discovery
-kiosk-demo-stylish/README.md	1. **First contact (claim)** — an assistant with a fresh key opens the ceremony at `/kiosk/oauth/device_authorizati
+kiosk-demo-stylish/README.md	1. **First contact (claim)** — an assistant with a newly registered key opens the ceremony at `/kiosk/oauth/device_authorization
 kiosk-demo-stylish/README.md	2. **Human-initiated (link)** — the signed-in human mints a link code, a second assistant redeems it at `/kiosk/aut
 kiosk-demo-stylish/README.md	Deliberate, and the point of the line's absence.
 kiosk-demo-stylish/README.md	The test asserts every step, and that the booking landed on the human's own row.
@@ -653,7 +670,7 @@ kiosk-demo-stylish/test/stories/linking_test.rb	  test "Alice's second assistant
 kiosk-demo-stylish/test/stories/linking_test.rb	  test 'Alice approves the code her assistant shows her, and it books in her name' do
 kiosk-demo-stylish/test/stories/linking_test.rb	'spending_cap_cents' => '12345')
 kiosk-demo-stylish/test/stories/linking_test.rb	Alice approves the code her assistant shows her, and it books in her name
-kiosk-demo-stylish/test/stories/linking_test.rb	assert first.signs_back_in.refused?(:not_found)
+kiosk-demo-stylish/test/stories/linking_test.rb	assert first.signs_back_in.refused?(:invalid_client)
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal [booked], second.appointments
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_equal account_of(:alice), Appointment.find(alice.books['appointment_id']).user_id
 kiosk-demo-stylish/test/stories/linking_test.rb	assert_includes page.body, 'cap: 12345 cents in EUR'
@@ -1001,31 +1018,29 @@ kiosk-server/CHANGELOG.md	- `rake kiosk:doctor` — follow-up.
 kiosk-server/CHANGELOG.md	`Kiosk::OperationResult` and `render_kiosk_result` are removed
 kiosk-server/LICENSE.txt	Version 2.0, January 2004
 kiosk-server/README.md	## What's in this release
-kiosk-server/README.md	- **Account binding** — the claim/link ceremonies bind an agent's public key to an existing assistant-account holder's account
+kiosk-server/README.md	- **Account binding** — the claim/link ceremonies bind a registered client to an existing assistant-account holder
 kiosk-server/README.md	A block-less `kiosk` only mounts.
 kiosk-server/README.md	The full host-side surface is shipped and covered by the gem's own suite
 kiosk-server/README.md	in this directory runs it and prints how many examples that is
 kiosk-server/app/controllers/kiosk/server/assistants_controller.rb	class AssistantsController < ApplicationController
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	LinkCode.mint(user_id: identity.user_id, requested_role: identity.role)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def link
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	def register
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	identity = Kiosk.configuration.user_idp&.verify(request)
 kiosk-server/app/controllers/kiosk/server/auth_controller.rb	pow    = PowGate.proofs_from_header(
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	respond({ access_token: token }, :ok)
-kiosk-server/app/controllers/kiosk/server/auth_controller.rb	result = AgentRegistration.call(
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	# The public discovery documents at the host root, all rendered by
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	class DiscoveryController < ::ActionController::API
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render json: WellKnown.agents_json(base_url: request.base_url)
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render json: WellKnown.api_catalog(base_url: request.base_url),
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render json: WellKnown.ard(base_url: request.base_url)
+kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render json: WellKnown.oauth_authorization_server(base_url: request.base_url)
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render plain: WellKnown.agents_txt(base_url: request.base_url),
 kiosk-server/app/controllers/kiosk/server/discovery_controller.rb	render plain: WellKnown.auth_md(base_url: request.base_url),
 kiosk-server/app/controllers/kiosk/server/kyc_attestation_controller.rb	class KycAttestationController < ::ActionController::API
-kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	client_id parameter required
-kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	is not accepted here — an assistant does not choose its own role.
-kiosk-server/app/controllers/kiosk/server/oauth_device_authorization_controller.rb	public_key parameter required
-kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	grant_type required
-kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	only the device_code grant is served here — 
+kiosk-server/app/controllers/kiosk/server/oauth_registration_controller.rb	ClientRegistration.call(
+kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	DeviceCodeGrant.pay_toll!(device_code, proofs)
+kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	body[:scope] = client.role if client.role
+kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	client = authenticate_client!
+kiosk-server/app/controllers/kiosk/server/oauth_token_controller.rb	render_token(DeviceCodeGrant.exchange(device_code: device_code, client: authenticated_client))
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	class VerbController < WireController
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	def serve(command)
 kiosk-server/app/controllers/kiosk/server/verb_controller.rb	descriptor = descriptor_for!(command, name)
@@ -1036,7 +1051,6 @@ kiosk-server/app/controllers/kiosk/server/wire_controller.rb	include VerbWire
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	rescue_from ::ActionDispatch::Http::Parameters::ParseError do
 kiosk-server/app/controllers/kiosk/server/wire_controller.rb	rescue_from Errors::Base, with: :render_wire_error
 kiosk-server/kiosk-server.gemspec	spec.license       = 'Apache-2.0'
-kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_auth_challenges.rb.tt',
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_device_authorizations.rb.tt',
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_events.rb.tt',
 kiosk-server/lib/generators/kiosk/install/install_generator.rb	        migration_template 'create_kiosk_identity_tables.rb.tt',
@@ -1056,8 +1070,8 @@ kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_kyc_attributes.
 kiosk-server/lib/generators/kiosk/install/templates/create_kiosk_visits.rb.tt	<%= ddl(:visits, user_id_type: user_id_type) %>
 kiosk-server/lib/kiosk/owned.rb	scope :own, -> { owned_by(Kiosk.current_user_id) }
 kiosk-server/lib/kiosk/payable.rb	return PENDING  if status == Kiosk::Server::PaymentClaim::PAYING
-kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(public_key_pem:, user_id:, requested_role: nil)
-kiosk-server/lib/kiosk/server/account_binding.rb	# Known key: remap the holder and role, keep agent_id and reputation.
+kiosk-server/lib/kiosk/server/account_binding.rb	      def bind!(agent_id:, user_id:, requested_role: nil)
+kiosk-server/lib/kiosk/server/account_binding.rb	# Remaps the holder and role, keeps agent_id and reputation.
 kiosk-server/lib/kiosk/server/account_binding.rb	always comes from a human's identity, never the wire.
 kiosk-server/lib/kiosk/server/account_binding.rb	if transition && config.assistant_claimed
 kiosk-server/lib/kiosk/server/account_binding.rb	role ? [', allowed_roles = ARRAY[$3]::text[]', [role]]
@@ -1071,6 +1085,11 @@ kiosk-server/lib/kiosk/server/caller_timezone.rb	An IANA `Area/Location` name or
 kiosk-server/lib/kiosk/server/caller_timezone.rb	def from_env(env)
 kiosk-server/lib/kiosk/server/caller_timezone.rb	def from_value(raw)
 kiosk-server/lib/kiosk/server/caller_timezone.rb	refuse(raw) unless SHAPE.match?(value)
+kiosk-server/lib/kiosk/server/client_assertion.rb	# Client authentication by `private_key_jwt`: an RFC 7523 client assertion
+kiosk-server/lib/kiosk/server/client_assertion.rb	REQUIRED_CLAIMS = %w[iss sub aud exp jti].freeze
+kiosk-server/lib/kiosk/server/client_assertion.rb	issuer = Kiosk.current_issuer
+kiosk-server/lib/kiosk/server/client_registration.rb	# RFC 7591 open registration of an AI assistant's public key, with no human:
+kiosk-server/lib/kiosk/server/client_registration.rb	AuthToll.gate(verb: 'oauth/register', body: { key: AssistantKey.thumbprint(key) }, pow: pow, config: config)
 kiosk-server/lib/kiosk/server/column_spending_cap.rb	class ColumnSpendingCap
 kiosk-server/lib/kiosk/server/configuration_extension.rb	        @skill_url ||= 'https://kiosk.tech/skill-v
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      # `agents.spending_cap_cents`, the column edited by the manage-assistants
@@ -1078,18 +1097,18 @@ kiosk-server/lib/kiosk/server/configuration_extension.rb	      attr_accessor :sp
 kiosk-server/lib/kiosk/server/configuration_extension.rb	      def computed_capabilities
 kiosk-server/lib/kiosk/server/configuration_extension.rb	# Seconds an access token lives. One paid proof-of-work toll lasts as long. Default 3600.
 kiosk-server/lib/kiosk/server/configuration_extension.rb	c.signing_key is not set. Generate one with
-kiosk-server/lib/kiosk/server/device_code_grant.rb	        pay_toll_once!(device_code, hash, pow, now)
-kiosk-server/lib/kiosk/server/device_code_grant.rb	da = store.lookup_by_device_code_hash(hash)
-kiosk-server/lib/kiosk/server/device_code_grant.rb	device_code parameter required
+kiosk-server/lib/kiosk/server/device_code_grant.rb	# The claim ceremony on the RFC 8628 device-grant wire: binds a registered
+kiosk-server/lib/kiosk/server/device_code_grant.rb	da = authorization_of(client, store.lookup_by_device_code_hash(hash))
 kiosk-server/lib/kiosk/server/engine.rb	          get '/.well-known/kiosk.json',          to: 'kiosk/server/discovery#kiosk_json'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/agents.json', to: 'kiosk/server/discovery#agents_json'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/agents.txt',  to: 'kiosk/server/discovery#agents_txt'
 kiosk-server/lib/kiosk/server/engine.rb	          get '/auth.md',     to: 'kiosk/server/discovery#auth_md'
 kiosk-server/lib/kiosk/server/engine.rb	        # `schema` resolves no identity — it is PUBLIC, like `openapi.json`
-kiosk-server/lib/kiosk/server/engine.rb	        %w[register login revoke rotate].each { post "auth/#{it}", to: "auth##{it}" }
 kiosk-server/lib/kiosk/server/engine.rb	        get  'schema', to: 'wire#schema'
-kiosk-server/lib/kiosk/server/engine.rb	        get 'auth/challenge', to: 'auth#challenge'
 kiosk-server/lib/kiosk/server/engine.rb	        post 'agents/kyc', to: 'kyc_attestation#create'
+kiosk-server/lib/kiosk/server/engine.rb	        post 'auth/rotate',    to: 'auth#rotate'
+kiosk-server/lib/kiosk/server/engine.rb	        post 'oauth/register', to: 'oauth_registration#create'
+kiosk-server/lib/kiosk/server/engine.rb	        post 'oauth/token',    to: 'oauth_token#create'
 kiosk-server/lib/kiosk/server/engine.rb	        post 'pay',    to: 'wire#pay'
 kiosk-server/lib/kiosk/server/engine.rb	      initializer 'kiosk-server.root_discovery_routes' do |app|
 kiosk-server/lib/kiosk/server/engine.rb	      routes do
@@ -1127,7 +1146,7 @@ kiosk-server/lib/kiosk/server/handler_mixin.rb	status = ::ActionDispatch::Except
 kiosk-server/lib/kiosk/server/handler_serving.rb	def wire_error(status, parsed)
 kiosk-server/lib/kiosk/server/handler_serving.rb	kiosk_render_refusal(e)
 kiosk-server/lib/kiosk/server/handler_serving.rb	module HandlerServing
-kiosk-server/lib/kiosk/server/identity_resolution.rb	# the configured agent IdP or the bundled kiosk-pop one. A cookie session
+kiosk-server/lib/kiosk/server/identity_resolution.rb	# the configured agent IdP or the bundled one. A cookie session
 kiosk-server/lib/kiosk/server/identity_resolution.rb	Dpop.verify!(request.headers['DPoP'],
 kiosk-server/lib/kiosk/server/issuer_middleware.rb	issuer = Kiosk.configuration.issuer_for(::Rack::Request.new(env).base_url)
 kiosk-server/lib/kiosk/server/jwt_issuer.rb	DEFAULT_EXPIRES_IN = 3600
@@ -1143,16 +1162,15 @@ kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verified_attributes(raw)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	def verify(raw_jws:, subject:)
 kiosk-server/lib/kiosk/server/kyc_verifier.rb	if payload[:aud].to_s != config.kyc_audience.to_s
 kiosk-server/lib/kiosk/server/link_code.rb	# minting human's own role, never anything the assistant sends.
-kiosk-server/lib/kiosk/server/link_code.rb	AuthToll.gate(verb: 'auth/claim', body: { code: code.to_s, public_key: pem }, pow: pow)
+kiosk-server/lib/kiosk/server/link_code.rb	AuthToll.gate(verb: 'auth/claim', body: { code: code.to_s }, pow: pow)
 kiosk-server/lib/kiosk/server/link_code.rb	def mint(user_id:,
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	      MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	MAX_MANDATE_LIFETIME_SECONDS = 24 * 60 * 60
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	currency: canonical_currency(checkout['currency'])
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	return if content['exp'] - Time.now.to_i <= MAX_MANDATE_LIFETIME_SECONDS
 kiosk-server/lib/kiosk/server/mandate_verifier.rb	value.to_s.downcase
+kiosk-server/lib/kiosk/server/oauth_error.rb	invalid_request invalid_client invalid_grant unsupported_grant_type invalid_dpop_proof
 kiosk-server/lib/kiosk/server/payment_claim.rb	return if total == price
-kiosk-server/lib/kiosk/server/pop_verifier.rb	PROOF_REQUIRED_CLAIMS = %w[aud nonce jti].freeze
-kiosk-server/lib/kiosk/server/pop_verifier.rb	issuer = Kiosk.current_issuer
 kiosk-server/lib/kiosk/server/pow_gate.rb	      def proofs_from_header(raw)
 kiosk-server/lib/kiosk/server/pow_gate.rb	# One proof, a JSON array, repeated header lines (Rack joins them with
 kiosk-server/lib/kiosk/server/pow_gate.rb	def proofs_from_header(raw)
@@ -1195,13 +1213,12 @@ kiosk-server/lib/kiosk/server/schemas/binding.schema.json	VENDORED copy of the n
 kiosk-server/lib/kiosk/server/verb_registry.rb	          descriptor[:example_row]    = found.example_row    unless found.example_row.nil?
 kiosk-server/lib/kiosk/server/verb_wire.rb	PowGate.gate(
 kiosk-server/lib/kiosk/server/verb_wire.rb	pow = PowGate.proofs_from_header(
-kiosk-server/lib/kiosk/server/well_known.rb	            kind: 'kiosk-pop',
 kiosk-server/lib/kiosk/server/well_known.rb	          - **Identity assertion (ID-JAG)** — not supported (planned).
 kiosk-server/lib/kiosk/server/well_known.rb	# The discovery documents — kiosk.json, agents.txt, agents.json, the OAuth
 kiosk-server/lib/kiosk/server/well_known.rb	# as pure functions of one configuration and the request's base URL, so they
 kiosk-server/lib/kiosk/server/well_known.rb	**Identity assertion (ID-JAG)** — not supported (planned).
 kiosk-server/lib/kiosk/server/well_known.rb	AGENTS_STANDARD = 'https://agents-txt.com'
-kiosk-server/lib/kiosk/server/well_known.rb	AUTHORIZATION = { protocols: %w[x-kiosk-pop], discovery: '/.well-known/kiosk.json' }.freeze
+kiosk-server/lib/kiosk/server/well_known.rb	AUTHORIZATION = { protocols: %w[oauth2], discovery: '/.well-known/oauth-authorization-server' }.freeze
 kiosk-server/lib/kiosk/server/well_known.rb	def self.agent_skills_index(config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_json(base_url:, config: Kiosk.configuration)
 kiosk-server/lib/kiosk/server/well_known.rb	def self.agents_txt(base_url:, config: Kiosk.configuration)
@@ -1217,15 +1234,11 @@ kiosk-server/listen.py	the DPoP proof your private key signs for them
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	draws no verb of its own — a fresh app declares none
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	so the protocol plane wins by first match
 kiosk-server/spec/generators/kiosk/install_generator_spec.rb	writes no separate routes file
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	STILL watermark-revokes the key's earlier tokens (idempotent ⇒ still re-issues)
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	deactivates the binding (revoked_at) and watermark-revokes outstanding tokens
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	does not fire assistant_claimed for a fresh key (nothing was re-bound)
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	fires assistant_claimed(agent:, from:, to:) with both accounts
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	registers a linked assistant account under the holder's user_id
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	remaps agents.user_id, keeping agent_id stable — no INSERT, reputation untouched
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	revokes a pre-link token minted in the SAME wall-clock second as the rebind
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	revokes a pre-rebind token but leaves the fresh bind! token verifiable
-kiosk-server/spec/kiosk/server/account_binding_spec.rb	still answers the caller exactly as a rebind does (no new wire semantics)
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	deactivates the client and revokes its tokens, also one minted in the same second
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	fires with the previous and the new account, inside the rebind transaction
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	moves the client to the holder's account, keeping its agent_id and key
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	revokes every earlier token, also one minted in the same second, and the next token verifies
+kiosk-server/spec/kiosk/server/account_binding_spec.rb	stamps the watermark after now, also for a rebind to the same holder
 kiosk-server/spec/kiosk/server/account_binding_spec.rb	warns the operator when a role-less ceremony lands on a multi-role origin
 kiosk-server/spec/kiosk/server/actions_spec.rb	OMITS the extension keys entirely when they are not declared
 kiosk-server/spec/kiosk/server/actions_spec.rb	carries the declared description into the descriptor
@@ -1240,20 +1253,6 @@ kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.r
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	omits the role claim entirely when role is nil
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	revokes both at once when the agent's watermark passes them
 kiosk-server/spec/kiosk/server/agent_identity_providers/default_agent_idp_spec.rb	stamps an `actor` claim of `agent` on every token it mints, role or no role
-kiosk-server/spec/kiosk/server/agent_login_spec.rb	maps a known key to its registered user_id on every login
-kiosk-server/spec/kiosk/server/agent_login_spec.rb	mints a fresh token for a known key and provisions nothing
-kiosk-server/spec/kiosk/server/agent_login_spec.rb	proves possession and burns the challenge before the lookup
-kiosk-server/spec/kiosk/server/agent_login_spec.rb	raises NotFound for an unregistered key (no silent new account)
-kiosk-server/spec/kiosk/server/agent_login_spec.rb	stops at a failed proof: no challenge burned, no lookup, no token
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	RSpec.describe Kiosk::Server::AgentRegistration do
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	burns the challenge and proves possession before touching the database
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	does not accept a role argument on .call
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	provisions a new agent and never writes a client-supplied name column
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	raises Conflict on an already-registered public key (use /auth/login)
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	requires a `signed` proof-of-possession argument
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	stops at a failed proof: no challenge burned, no query, no account, no token
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	treats an empty-string registration_role as unset (no ConfigurationError)
-kiosk-server/spec/kiosk/server/agent_registration_spec.rb	writes an empty allowed_roles with registration_role unset (K-788)
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an INDEXED name where an array is declared — a%5B0%5D= is an object
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an array of objects — that read is an ACTION too
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	REFUSES an array-valued object leaf — the shape T-087 dropped
@@ -1279,30 +1278,35 @@ kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a malformed date
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses a name used as both scalar and array in one query string
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses an EMPTY value where a scalar type is declared
 kiosk-server/spec/kiosk/server/argument_decoder_spec.rb	refuses the same whole-valued float spelling on a RESERVED integer name — limit=20.0
-kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	mints `exp` from the clock alone, and no ambient zone moves it
-kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	mints a nonce and records it with a TTL, consumable exactly once
-kiosk-server/spec/kiosk/server/auth_challenge_spec.rb	raises Unauthenticated on replay (single-use)
-kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	drops expired rows and leaves live ones
-kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	is single-use: the second take of the same nonce is false
-kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	keeps only the most recently issued challenge for a key
-kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	lets exactly one of N racing takes win
-kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	refuses a WRONG nonce and does NOT consume the outstanding challenge
-kiosk-server/spec/kiosk/server/auth_challenge_stores_spec.rb	refuses an EXPIRED challenge and refuses an unknown key
-kiosk-server/spec/kiosk/server/auth_controller_402_spec.rb	register toll 402 pow_required carries WWW-Authenticate: Kiosk-PoW AND the challenges body
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	lists RS256 as the one signing algorithm
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a JWK with a private member
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a key outside 2048 to 4096 bits
+kiosk-server/spec/kiosk/server/assistant_key_spec.rb	refuses a key that is not RSA, or not a JWK
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	captures the human's user_idp role onto the link row (roles-from-IdP)
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	deactivates one of the holder's own bindings and answers 204 with no body
-kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	delegates to LinkCode.redeem and returns the register-shaped 201
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	delegates to LinkCode.redeem and answers 204 with no body
+kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	maps a refused client assertion to the 401 problem document, with the hint
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	mints a single-use link code for the signed-in account holder (201)
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	refuses a link posted as a form
 kiosk-server/spec/kiosk/server/auth_controller_binding_spec.rb	refuses an unlink posted as a form, and unlinks nothing
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	puts the caller's original token under the revocation watermark
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 400 bad_request when public_key is absent
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated for a GARBAGE token (nil identity, not 500)
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	returns 401 Unauthenticated when NO Authorization header is present
-kiosk-server/spec/kiosk/server/auth_controller_spec.rb	revokes all sessions for the caller and hands back a fresh usable token
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	does not log a key in on an origin it never registered on
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	answers 400 bad_request for an empty body, invalid JSON and a body that is not an object
+kiosk-server/spec/kiosk/server/auth_controller_spec.rb	answers 400 bad_request naming each member that is absent
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	answers 400 for a jwks that holds no usable key
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	answers 409 for a new key that is registered already, and changes nothing
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	answers the same client for a key it already knows (the lookup is by value)
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	does not bind a client of A on B
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	does not find a client on an origin it never registered on
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	leaves the old key no client to authenticate as
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	lets the token endpoint give a token bound to the new key, for the same agent and account
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	puts the new key on the same agent, account and role, and answers the client information
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	refuses a client assertion that was already used
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	refuses a new key that did not sign its own assertion
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	refuses a stored cap with no currency
-kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers one key on each origin as two assistant accounts
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	refuses an assertion of the old key that names no new key, and changes nothing
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers one key on each origin as two clients
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	registers with no registration_role at all, and the client reads back no role (K-788)
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	remaps the uuid principal and re-writes allowed_roles as a text[]
+kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	revokes every token issued before it, also in the same second
 kiosk-server/spec/kiosk/server/auth_plane_persistence_spec.rb	saves a cap with its currency, and ColumnSpendingCap reads both
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers a paid claim of an unknown link code not found
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	answers an unpaid poll with the 402 problem document, the same for an unknown and a live code
@@ -1310,21 +1314,52 @@ kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks an unknown link co
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks the first poll of an unknown device code for the toll before it reads the store
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	asks the toll again for another device code
 kiosk-server/spec/kiosk/server/auth_toll_binding_spec.rb	charges each device code once: later polls of the same code are free
-kiosk-server/spec/kiosk/server/auth_toll_spec.rb	binds proofs to POST auth/register (the same key under another call re-challenges)
-kiosk-server/spec/kiosk/server/auth_toll_spec.rb	binds proofs to the public key (a proof for another key re-challenges)
+kiosk-server/spec/kiosk/server/auth_toll_spec.rb	binds proofs to POST oauth/register (the same key under another call re-challenges)
+kiosk-server/spec/kiosk/server/auth_toll_spec.rb	binds proofs to the key (a proof for another key re-challenges)
 kiosk-server/spec/kiosk/server/auth_toll_spec.rb	demands `count` challenges (402) when no proof is submitted
 kiosk-server/spec/kiosk/server/auth_toll_spec.rb	is a no-op when registration_pow_count is 0 (default)
 kiosk-server/spec/kiosk/server/auth_toll_spec.rb	proceeds when the real verifier accepts the proof
 kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	answers #{method} #{path} with 501 module_not_served
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	keeps the OAuth error object for an ordinary refusal
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all six auth URLs and adds no capability for binding
-kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	still serves the kiosk-pop challenge endpoint
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	answers the OAuth error object rather than refusing the module
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	publishes all five auth URLs and adds no capability for binding
+kiosk-server/spec/kiosk/server/binding_module_gate_spec.rb	still serves the token endpoint, which refuses the device-code grant as OAuth does
 kiosk-server/spec/kiosk/server/caller_timezone_spec.rb	refuses a UTC offset by name
 kiosk-server/spec/kiosk/server/checkout_spec.rb	answers the claims of a checkout this origin signed for this account
 kiosk-server/spec/kiosk/server/checkout_spec.rb	gives the merchant the issuer for a name when the owner has none
 kiosk-server/spec/kiosk/server/checkout_spec.rb	names the origin, the account, the merchant and what to pay
 kiosk-server/spec/kiosk/server/checkout_spec.rb	signs PS256 with the key of the JWKS, naming its kid
 kiosk-server/spec/kiosk/server/checkout_spec.rb	signs the same checkout to other bytes each time, so its hash names one checkout
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	accepts `aud` as a one-element array
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	accepts each jti one time
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	answers the client of a correct assertion
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	gives a hint that says what to fix
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	logs the signed `aud` and this request's issuer for the operator, and names no origin to the caller
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses a client_id that is not the sub
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an `aud` that is another origin, or that names a second audience
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an absent assertion and a wrong assertion type
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an algorithm outside AssistantKey::ALGORITHMS, also an HMAC keyed with the public key
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion that another key signed
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion that is not a JWT
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an assertion with no jti, or with iss other than sub
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an expired assertion and one that lives more than 300 seconds
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an unknown client, also a sub that is not a UUID
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	refuses an unlinked client
+kiosk-server/spec/kiosk/server/client_assertion_spec.rb	spends no jti on a expect_refused assertion
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	RSpec.describe Kiosk::Server::ClientRegistration do
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	accepts the requested auth method and a subset of the served grant types
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	answers the client information of RFC 7591 Section 3.2.1
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	answers the same client for a key that has a live client, and creates nothing
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	creates an assistant account and a client with the registration role
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	gives an unlinked key a new client and a new account
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	gives the registration role whatever role or scope the request names
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	ignores metadata members it does not know
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	lists only client_credentials where the origin serves no binding
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	pays the toll before any lookup, on the key thumbprint
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	refuses a body with no usable key
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	refuses a registration_role that is not among the configured roles
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	refuses another auth method and a grant type the origin does not serve
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	writes an empty role list where the origin declares no roles
+kiosk-server/spec/kiosk/server/client_registration_spec.rb	writes no row for a refused body
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	reads the per-assistant cap and its currency from agents (live rows only)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil for an unknown or revoked key (no row)
 kiosk-server/spec/kiosk/server/column_spending_cap_spec.rb	returns nil when the assistant row has no cap set (unlimited)
@@ -1336,12 +1371,15 @@ kiosk-server/spec/kiosk/server/controller_auth_spec.rb	does NOT fall back to use
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	emits no Vary even when the request negotiates content
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	it 'refuses a valid token sent as a Bearer token, naming the DPoP scheme' do
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	records the named anonymized attributes an attestation carries
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	rejects a role not among the configured roles with 400 invalid_request
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	rejects a role the provider DOES declare — the escalation, not a typo
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	rejects an unknown role passed via the OAuth-standard scope param
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest (not 500) for a scalar/array body (TypeError on body[:kyc_jws])
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest (not 500) for an EMPTY body on an authenticated request
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 BadRequest for a valid JSON object missing the kyc_jws field
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 bad_request (not 500) for INVALID JSON on a wire POST
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 400 bad_request (not 500) for a non-object JSON body on a wire POST
-kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 401 for a foreign token under the zero-config default (bundled kiosk-pop idp)
+kiosk-server/spec/kiosk/server/controller_auth_spec.rb	returns 401 for a foreign token under the zero-config default (the bundled idp)
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves ?v=<digest> immutable, and a stale ?v= short-lived
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	serves GET /kiosk/schema with no credential whatsoever
 kiosk-server/spec/kiosk/server/controller_auth_spec.rb	…and a token it cannot verify changes nothing, because it is not read
@@ -1354,14 +1392,13 @@ kiosk-server/spec/kiosk/server/device_authorization_spec.rb	persists only the SH
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	persists only the SHA-256 hex digest of the user_code (not plain)
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	returns [plain_device_code, plain_user_code, DeviceAuthorization]
 kiosk-server/spec/kiosk/server/device_authorization_spec.rb	starts in :pending status with no user_id and no consumed_at
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	binds the row's key to the approving holder's account and consumes the row
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	omits scope when the approving human carries no role
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	rejects unknown device_code with invalid_grant
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	returns access_denied when the account holder denied
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	returns authorization_pending while the account holder has not acted
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	returns expired_token when expires_at has passed
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	returns invalid_client when the poll carries no signed proof — row NOT consumed
-kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	returns invalid_client when the proof fails — row NOT consumed, retry allowed
+kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	answers authorization_pending and access_denied, the RFC 8628 codes
+kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	answers expired_token after expires_at, and marks the row expired
+kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	binds the client to the approving holder with the holder's role, and consumes the row
+kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	creates a pending :claim row for the client, with its key, and the /oauth/device_authorization payload
+kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	refuses a device_code opened by another client with invalid_grant
+kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	refuses an unknown device_code, and a link code, with invalid_grant
+kiosk-server/spec/kiosk/server/device_code_grant_spec.rb	tells a client that polls faster than the interval to slow down
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a non-HTML request with a body naming the sign-in URL
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s a visitor with no provider session (sign in first)
 kiosk-server/spec/kiosk/server/device_verify_controller_spec.rb	401s when no user_idp is configured at all
@@ -1386,6 +1423,8 @@ kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the RFC 8414
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the index, valid against Agent Skills Discovery v0.2.0
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	returns the manifest, valid against the ARD v0.91 schema
 kiosk-server/spec/kiosk/server/discovery_controller_spec.rb	serves the four pointer documents public, one minute
+kiosk-server/spec/kiosk/server/dpop_spec.rb	accepts a proof of the registered key with no ath
+kiosk-server/spec/kiosk/server/dpop_spec.rb	refuses no proof, a proof of another key, and a proof for another method
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots with no role vocabulary and no default — nothing was made mandatory
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	boots — this is what all seven demos and the e2e fixture configure
 kiosk-server/spec/kiosk/server/engine_default_role_boot_spec.rb	does not come up at all
@@ -1407,7 +1446,7 @@ kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers a name nobody regist
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the OTHER method on that same verb an ordinary routing 404
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	answers the schema_url of kiosk.json with the same document as the bare GET schema
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	leaves the ROOT-served discovery documents bare — they are outside the mount
-kiosk-server/spec/kiosk/server/engine_mount_spec.rb	publishes all seven auth URLs and no binding capability
+kiosk-server/spec/kiosk/server/engine_mount_spec.rb	publishes all five auth URLs and no binding capability
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	reports itself mounted
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	routes the RESERVED `pay` into WireController (401 problem, not 404)
 kiosk-server/spec/kiosk/server/engine_mount_spec.rb	serves JWKS under the mount, stamped by the auto-injected middleware
@@ -1665,14 +1704,12 @@ kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	raises Errors::ModuleNotServ
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	returns an empty attribute set for a bare binary attestation (backward-compat)
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	returns claims hash for a valid attestation
 kiosk-server/spec/kiosk/server/kyc_verifier_spec.rb	returns the granted named boolean attributes (String-keyed)
-kiosk-server/spec/kiosk/server/link_code_spec.rb	binds the presented key with a valid proof and consumes the code (single-use)
+kiosk-server/spec/kiosk/server/link_code_spec.rb	binds the client to the holder with the holder's role, and consumes the code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	creates a pre-approved :link row bound to the holder and returns the plain code
+kiosk-server/spec/kiosk/server/link_code_spec.rb	lets only ONE of two clients bind with one code
 kiosk-server/spec/kiosk/server/link_code_spec.rb	persists only the hash of the link code
-kiosk-server/spec/kiosk/server/link_code_spec.rb	raises NotFound for an expired code (and bumps the row lazily)
-kiosk-server/spec/kiosk/server/link_code_spec.rb	raises NotFound for an unknown code
-kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on a failed proof and does NOT consume the code
-kiosk-server/spec/kiosk/server/link_code_spec.rb	raises Unauthenticated on an origin-mismatched proof (relay defense)
-kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses to redeem a claim-flow device_code (kinds do not cross)
+kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses a blank, an unknown and an expired code, and a claim-flow device_code
+kiosk-server/spec/kiosk/server/link_code_spec.rb	refuses a client assertion and leaves the code live
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 400 for an exp beyond the maximum lifetime, and accepts one within it
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers 400 for an exp or iat that is not an integer, before Time.at
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	answers the checkout mandate, its values taken from the checkout this origin signed
@@ -1695,15 +1732,27 @@ kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an SD-JWT whose 
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an amount or a currency other than the checkout, and an amount in a string
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	refuses an open mandate, and a payment mandate in the checkout place
 kiosk-server/spec/kiosk/server/mandate_verifier_spec.rb	takes the currency in lower case, the spelling the spending cap counts
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	forwards the APPROVING human's role to bind! and echoes it as the granted scope
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	opens a claim ceremony for a well-formed key (form-encoded)
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses a client-supplied role — even one this provider declares
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses an undeclared role the same way — the value is never consulted
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	refuses the OAuth-standard `scope` spelling too
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	rejects non-device grants — kiosk-pop login is the refresh path
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	requires a grant_type
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	requires public_key — the ceremony is key-bound (invalid_request)
-kiosk-server/spec/kiosk/server/oauth_binding_controllers_spec.rb	returns 401 invalid_client when the possession proof is missing/failed (BIND-POP)
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	answers 401 invalid_client for a missing or refused client assertion
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	opens a claim ceremony for the client, with the client's key on the row
+kiosk-server/spec/kiosk/server/oauth_device_authorization_controller_spec.rb	refuses a role or a scope, also an empty one: the assistant does not choose its role
+kiosk-server/spec/kiosk/server/oauth_error_spec.rb	answers {error, error_description}, 401 for invalid_client and 400 for every other code
+kiosk-server/spec/kiosk/server/oauth_error_spec.rb	refuses a code outside the vocabulary
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	answers 201 with the client information, which no cache keeps
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	answers 400 invalid_client_metadata for a body that is not JSON, or has no key
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	answers the problem document 402 pow_required with WWW-Authenticate: Kiosk-PoW, and registers nothing
+kiosk-server/spec/kiosk/server/oauth_registration_controller_spec.rb	answers the same client_id for the same key
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers 401 invalid_client for a refused client assertion, and says what to fix
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers a DPoP token bound to the registered key, which no cache keeps
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers authorization_pending until the holder approves
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers invalid_client before it reads the code
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers invalid_client for an unlinked client
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers invalid_dpop_proof with no proof, a proof of another key, or a proof for another URL
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers invalid_grant to another client, and leaves the code for its own client
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers invalid_request with no grant_type, and unsupported_grant_type for another grant
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	answers invalid_request without a device_code
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	asks the toll on the first poll, before the client authenticates
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	binds the client to the approving holder and answers a token with the holder's role as scope
+kiosk-server/spec/kiosk/server/oauth_token_controller_spec.rb	leaves out scope for a client with no role
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	answers 304 to If-None-Match on its own ETag
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	answers the derived document to a caller with NO credential
 kiosk-server/spec/kiosk/server/open_api_controller_spec.rb	carries the PUBLIC cache policy and a strong ETag
@@ -1746,21 +1795,6 @@ kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes nothing and claims n
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes nothing when the request names nobody
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	pushes payment_setup ready to the principal once the provider confirms readiness
 kiosk-server/spec/kiosk/server/payment_setup_spec.rb	still renders the page when the provider raises
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	accepts a proof that omits the optional `pub` claim
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	is a different origin (relay/takeover)
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	names NO origin on the wire
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	names NO origin on the wire — not the configured issuer, not any other
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	prefers Rails.logger for the diagnostic when a Rails logger is present
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof missing the challenge nonce
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof missing the jti
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof signed by a different key than the one presented
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof signed with PS256 instead of RS256
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof whose `aud` is a different origin (relay/takeover)
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a proof whose `pub` thumbprint does not match the presented key
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a public key above the 4096-bit cap
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	rejects a public key below the RSA-2048 floor
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	returns the payload for a valid, origin-bound, key-bound proof
-kiosk-server/spec/kiosk/server/pop_verifier_spec.rb	routes the issuer-vs-signed-aud diagnostic to the operator's log
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	issues `count` equihash challenges on an unproven request (the 402 shape)
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	proceeds only when ALL three verify; a short set re-challenges
 kiosk-server/spec/kiosk/server/pow_gate_equihash_e2e_spec.rb	proceeds when the real equihash verifier accepts the submitted proof (N=1)
@@ -1869,8 +1903,8 @@ kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a checkout signed for
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	accepts a token on the origin that minted it and refuses it on the other
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	advertises each origin as its own issuer
 kiosk-server/spec/kiosk/server/two_origins_spec.rb	advertises the default issuer on a host the operator does not serve
-kiosk-server/spec/kiosk/server/two_origins_spec.rb	answers a host it does not serve as the default origin, and rejects a proof carrying that host
-kiosk-server/spec/kiosk/server/two_origins_spec.rb	rejects a proof for A presented on B
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	answers a host it does not serve as the default origin, and rejects an assertion carrying that host
+kiosk-server/spec/kiosk/server/two_origins_spec.rb	rejects an assertion for A presented on B
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	'not on a 200'
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	NOT on a refusal: a 4xx keeps the wire's own policy
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	accepts limit and cursor on a verb that declares neither, with a CLOSED schema
@@ -1920,29 +1954,28 @@ kiosk-server/spec/kiosk/server/verb_controller_spec.rb	validates with validate_r
 kiosk-server/spec/kiosk/server/verb_controller_spec.rb	…while GET <endpoint>/schema, which IS public, says so — the control
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	is refused AT CONFIGURATION TIME, not at the first tolled write
 kiosk-server/spec/kiosk/server/verb_vocabulary_spec.rb	is that the gate vocabulary names the write kind :run, not :action
+kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises OAuth 2.0 with the RFC 8414 metadata as its discovery document
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises an empty capability set when nothing is registered
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises kiosk-core's MIN_CLIENT as min_client
-kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises kiosk-pop with kiosk.json as its discovery document
-kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the account-binding endpoints (additive keys)
+kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the binding endpoints also where the origin serves no binding (they answer 501)
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the computed module names (schema/queries/actions/pay)
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the configured issuer
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the configured owner
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the document schema version
-kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the proof-of-possession auth surface under the same origin
+kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the five auth endpoints under the same origin, in this order
 kiosk-server/spec/kiosk/server/well_known_spec.rb	advertises the skill descriptor when skill_sha256 is set
 kiosk-server/spec/kiosk/server/well_known_spec.rb	computes the endpoint as base_url + mount_path
 kiosk-server/spec/kiosk/server/well_known_spec.rb	declares no payment protocol, even where the operator serves pay
 kiosk-server/spec/kiosk/server/well_known_spec.rb	declares no payments block, even where the operator serves pay
-kiosk-server/spec/kiosk/server/well_known_spec.rb	documents the OAuth error vocabulary as the one exception
+kiosk-server/spec/kiosk/server/well_known_spec.rb	documents the OAuth error vocabulary of the /oauth/* endpoints
 kiosk-server/spec/kiosk/server/well_known_spec.rb	follows the canonical auth.md section order
 kiosk-server/spec/kiosk/server/well_known_spec.rb	hyperlinks EVERY registered verb, at its own endpoint, unauthenticated
-kiosk-server/spec/kiosk/server/well_known_spec.rb	keeps the pre-binding auth keys first and byte-identical (additive-only rule)
 kiosk-server/spec/kiosk/server/well_known_spec.rb	links every registered verb, then pay, as an item with its method
 kiosk-server/spec/kiosk/server/well_known_spec.rb	links the catalog at its digest-versioned, immutable URL
 kiosk-server/spec/kiosk/server/well_known_spec.rb	links the two versioned descriptions from the endpoint
 kiosk-server/spec/kiosk/server/well_known_spec.rb	moves that link when the catalog moves — that is the whole mechanism
-kiosk-server/spec/kiosk/server/well_known_spec.rb	names kiosk-pop with the x- prefix the standard gives an unregistered protocol
-kiosk-server/spec/kiosk/server/well_known_spec.rb	names the issuer and the device-code grant at its two endpoints
+kiosk-server/spec/kiosk/server/well_known_spec.rb	names OAuth 2.0 by the identifier agents.txt registers for it
+kiosk-server/spec/kiosk/server/well_known_spec.rb	names the issuer, registration, the token endpoint and the device-code grant
 kiosk-server/spec/kiosk/server/well_known_spec.rb	never names a registered verb in this companion — pointer, not copy
 kiosk-server/spec/kiosk/server/well_known_spec.rb	never names a registered verb in this document — pointer, not copy
 kiosk-server/spec/kiosk/server/well_known_spec.rb	omits the skill block when skill_sha256 is not set

@@ -16,7 +16,7 @@ module Kiosk
         end
 
         def call(client, _profile)
-          key  = OpenSSL::PKey::RSA.generate(2048)
+          key  = OpenSSL::PKey.generate_key('ED25519')
           resp = client.register_raw(wire_role: ESCALATED_ROLE, key:)
           return refusal_verdict(client, resp) unless resp.status == 201
 

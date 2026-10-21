@@ -30,7 +30,7 @@ ASSISTANT = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 
 def register_agent
   assistant = ASSISTANT.register!
-  { principal: assistant, key: assistant.rsa_key, token: assistant.token, agent_id: assistant.agent_id,
+  { principal: assistant, key: assistant.key, token: assistant.token, agent_id: assistant.agent_id,
     user_id: assistant.user_id }
 end
 
@@ -175,7 +175,7 @@ pii = ASSISTANT.register_client!
 pii_rc_claim = ASSISTANT.claim(pii_link['link_code'], pii).status
 pii_token = ASSISTANT.token(pii)
 pii_rc_token = pii_token.status
-pii_auth = WIRE.dpop(pii_token.body['access_token'].to_s, pii.rsa_key)
+pii_auth = WIRE.dpop(pii_token.body['access_token'].to_s, pii.key)
 
 rc_mine, mine = get_json('/kiosk/my_lists', {}, pii_auth)
 household = Array(mine).find { |r| r['title'] == 'Flat 3B' }

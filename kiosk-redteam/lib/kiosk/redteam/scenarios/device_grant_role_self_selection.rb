@@ -83,7 +83,7 @@ module Kiosk
 
         # The client that signs every request of this scenario, or the verdict of a failed registration.
         def registered_client(client)
-          key  = OpenSSL::PKey::RSA.generate(2048)
+          key  = OpenSSL::PKey.generate_key('ED25519')
           resp = client.register_raw(key:)
           return [registered_principal(resp, key), nil] if resp.status == 201
 

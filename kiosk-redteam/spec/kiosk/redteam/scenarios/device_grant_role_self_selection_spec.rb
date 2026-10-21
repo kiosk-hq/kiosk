@@ -10,7 +10,7 @@ module DeviceGrantStubs
   # claim without verifying, so the signature segment is irrelevant.
   def token_with_role(role)
     payload = Base64.urlsafe_encode64(JSON.generate('role' => role)).delete('=')
-    "eyJhbGciOiJSUzI1NiJ9.#{payload}.sig"
+    "eyJhbGciOiJFZERTQSJ9.#{payload}.sig"
   end
 
   # The registration answers client a1; its first token carries `token`.
@@ -179,7 +179,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::DeviceGrantRoleSelfSelection do
     end
 
     it 'SKIPS — not passes — when the origin declares no role at all' do
-      stub_register(token: 'eyJhbGciOiJSUzI1NiJ9.e30.sig')
+      stub_register(token: 'eyJhbGciOiJFZERTQSJ9.e30.sig')
 
       verdict = scenario.call(client, profile)
 

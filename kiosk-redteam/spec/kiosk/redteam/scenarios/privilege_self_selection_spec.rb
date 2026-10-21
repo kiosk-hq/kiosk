@@ -15,7 +15,7 @@ RSpec.shared_context 'with a token for any role' do
   # the scenario reads the claim without verifying).
   def token_with_role(role)
     payload = Base64.urlsafe_encode64(JSON.generate('role' => role)).delete('=')
-    "eyJhbGciOiJSUzI1NiJ9.#{payload}.sig"
+    "eyJhbGciOiJFZERTQSJ9.#{payload}.sig"
   end
 
   # The registration answers a client, and the token endpoint a token for `access_token`.

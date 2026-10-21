@@ -342,7 +342,7 @@ module GetgroceryScenarios
 
     def post_request(uri, principal)
       headers = { 'Content-Type' => 'application/json' }
-      headers.merge!(Kiosk::TestHelpers::Dpop.headers(principal.token, principal.rsa_key, method: 'POST', url: uri.to_s)) if principal
+      headers.merge!(Kiosk::TestHelpers::Dpop.headers(principal.token, principal.key, method: 'POST', url: uri.to_s)) if principal
       req = Net::HTTP::Post.new(uri, headers)
       req.body = JSON.generate(name: 'catalog')
       req
@@ -372,7 +372,7 @@ module GetgroceryScenarios
     def get_action(customer)
       uri = URI("#{BASE_URL}/kiosk/create_order")
       Kiosk::TestHelpers::Wire.http_for(uri)
-                              .request(Net::HTTP::Get.new(uri, Kiosk::TestHelpers::Dpop.headers(customer.token, customer.rsa_key, method: 'GET', url: uri.to_s)))
+                              .request(Net::HTTP::Get.new(uri, Kiosk::TestHelpers::Dpop.headers(customer.token, customer.key, method: 'GET', url: uri.to_s)))
     end
   end
 
@@ -607,7 +607,7 @@ module GetgroceryScenarios
       form = { 'grant_type' => 'client_credentials', 'client_assertion_type' => client.class::ASSERTION_TYPE,
                'client_assertion' => client.client_assertion(principal) }
       resp = client.wire.post_form('/kiosk/oauth/token', form,
-                                   client.wire.dpop(nil, principal.rsa_key).merge('Kiosk-Timezone' => zone))
+                                   client.wire.dpop(nil, principal.key).merge('Kiosk-Timezone' => zone))
       token = resp.body.is_a?(Hash) ? resp.body['access_token'] : nil
       [resp.status, token && Kiosk::Redteam::TokenClaims.claims(token)&.fetch('exp', nil)]
     end

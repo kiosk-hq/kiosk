@@ -43,7 +43,7 @@ module Kiosk
         def attacks(client, victim, verb)
           path = "/kiosk/#{verb}"
           { 'as a bearer token' => client.wire.get(path, {}, 'Authorization' => "Bearer #{victim.token}"),
-            "with the thief's own key" => client.query(victim.with(rsa_key: OpenSSL::PKey::RSA.generate(2048)), name: verb) }
+            "with the thief's own key" => client.query(victim.with(key: OpenSSL::PKey.generate_key('ED25519')), name: verb) }
         end
       end
     end

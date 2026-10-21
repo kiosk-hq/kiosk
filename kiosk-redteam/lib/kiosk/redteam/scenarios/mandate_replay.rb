@@ -19,7 +19,7 @@ module Kiosk
         def attack(client, profile)
           a = client.register!
           b = client.register!
-          signed = Kiosk::TestHelpers::Mandate.pay(a.rsa_key, profile.pay_for.call(client, a, profile.create_owned.call(client, a)))
+          signed = Kiosk::TestHelpers::Mandate.pay(a.key, profile.pay_for.call(client, a, profile.create_owned.call(client, a)))
           client.pay_raw(a, **signed)
           resp = client.pay_raw(b, **signed)
 

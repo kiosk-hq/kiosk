@@ -7,7 +7,7 @@ require 'openssl'
 require 'json'
 require 'base64'
 
-RSpec.shared_context 'with a valid RS256 token to tamper' do
+RSpec.shared_context 'with a valid EdDSA token to tamper' do
   subject(:scenario) { described_class.new }
 
   let(:client) { Kiosk::TestHelpers::Assistant.new(base_url: BASE_URL) }
@@ -17,16 +17,16 @@ RSpec.shared_context 'with a valid RS256 token to tamper' do
   # route answers a routing 404 before the credential is read.
   let(:profile) { Kiosk::Redteam::Profile.new(per_user_query: 'ping') }
 
-  # Issue a real RS256 JWT so tamper_token has a valid payload to mutate.
-  let(:signing_key) { OpenSSL::PKey::RSA.generate(2048) }
+  # Issue a real EdDSA JWT so tamper_token has a valid payload to mutate.
+  let(:signing_key) { OpenSSL::PKey.generate_key('ED25519') }
 
   let(:valid_token) do
     now = Time.now.to_i
     JWT.encode({ sub: 'user-b', role: 'customer', exp: now + 3600, iat: now },
-               signing_key, 'RS256')
+               signing_key, 'EdDSA')
   end
 
-  # The registration answers client agent-b, and the token endpoint the real RS256 JWT.
+  # The registration answers client agent-b, and the token endpoint the real EdDSA JWT.
   def stub_register_with_real_jwt
     stub_request(:post, "#{BASE_URL}/kiosk/oauth/register").to_return(json_return(201, 'client_id' => 'agent-b'))
     stub_request(:post, "#{BASE_URL}/kiosk/oauth/token").to_return(json_return(200, 'access_token' => valid_token))
@@ -35,7 +35,7 @@ end
 
 RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   describe '#call — a profile that declares no routed verb' do
-    include_context 'with a valid RS256 token to tamper'
+    include_context 'with a valid EdDSA token to tamper'
 
     it 'SKIPS rather than scoring a routing 404 as a refused token' do
       # An origin routes one explicit line per registered verb and nothing else,
@@ -50,11 +50,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   end
 
   describe '#call — non-vacuity' do
-    include_context 'with a valid RS256 token to tamper'
+    include_context 'with a valid EdDSA token to tamper'
 
     context 'when the server accepts a tampered token (broken — BREACH)' do
       it 'returns blocked: false' do
-        # The token endpoint issues a real RS256 JWT so tamper_token works correctly.
+        # The token endpoint issues a real EdDSA JWT so tamper_token works correctly.
         stub_register_with_real_jwt
         # Server accepts any token (broken auth middleware).
         # The scenario probes with the profile's `per_user_query` — GET /kiosk/ping.
@@ -97,7 +97,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   # 402 means a toll fired ahead of the signature check. Both used to score
   # BLOCKED off the permissive blocked? set.
   describe '#call — only a 401 proves the signature was checked (K-728)' do
-    include_context 'with a valid RS256 token to tamper'
+    include_context 'with a valid EdDSA token to tamper'
 
     { 403 => 'forbidden', 402 => 'payment_failed' }.each do |status, code|
       it "returns blocked: false when the tampered token is answered #{status}" do
@@ -121,7 +121,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
   end
 
   describe 'tamper_token (private helper)' do
-    include_context 'with a valid RS256 token to tamper'
+    include_context 'with a valid EdDSA token to tamper'
 
     let(:scenario_instance) { described_class.new }
 
@@ -144,17 +144,17 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
       expect(tamp_parts[2]).to eq(orig_parts[2]) # signature unchanged
     end
 
-    it 'produces a token that fails RS256 verification' do
+    it 'produces a token that fails EdDSA verification' do
       tampered = scenario_instance.send(:tamper_token, valid_token)
       expect do
-        JWT.decode(tampered, signing_key.public_key, true, algorithms: ['RS256'])
+        JWT.decode(tampered, signing_key, true, algorithms: ['EdDSA'])
       end.to raise_error(JWT::DecodeError)
     end
 
     context 'when the token carries no role claim (role-absent provider)' do
       let(:sub_token) do
         now = Time.now.to_i
-        JWT.encode({ sub: 'user-b', exp: now + 3600, iat: now }, signing_key, 'RS256')
+        JWT.encode({ sub: 'user-b', exp: now + 3600, iat: now }, signing_key, 'EdDSA')
       end
 
       it 'flips the sub claim' do
@@ -165,7 +165,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
       it 'still produces a signature-invalid token' do
         tampered = scenario_instance.send(:tamper_token, sub_token)
         expect do
-          JWT.decode(tampered, signing_key.public_key, true, algorithms: ['RS256'])
+          JWT.decode(tampered, signing_key, true, algorithms: ['EdDSA'])
         end.to raise_error(JWT::DecodeError)
       end
     end
@@ -173,7 +173,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
     context 'when the token carries only an exp claim (no role, no sub)' do
       let(:exp_token) do
         now = Time.now.to_i
-        JWT.encode({ exp: now + 3600, iat: now }, signing_key, 'RS256')
+        JWT.encode({ exp: now + 3600, iat: now }, signing_key, 'EdDSA')
       end
 
       it 'bumps the exp claim by 999_999 seconds' do
@@ -185,7 +185,7 @@ RSpec.describe Kiosk::Redteam::Scenarios::TokenTampering do
 
     context 'when the token carries none of role / sub / exp' do
       let(:sentinel_token) do
-        JWT.encode({ iat: Time.now.to_i, foo: 'bar' }, signing_key, 'RS256')
+        JWT.encode({ iat: Time.now.to_i, foo: 'bar' }, signing_key, 'EdDSA')
       end
 
       it 'injects the __tamper__ sentinel claim' do

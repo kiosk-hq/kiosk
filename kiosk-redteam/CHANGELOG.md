@@ -12,6 +12,11 @@ already written is edited.
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-21
+
+- 2026-10-21: Scenarios and batteries sign with Ed25519 keys, and the KYC test issuer signs EdDSA.
+- 2026-10-21: Version 0.6.0, the tree cut that matches skill 0.6.0.
+
 ## [0.5.27] — 2026-10-21
 
 - 2026-10-21: Scenarios and batteries register at `oauth/register` and get tokens by client assertion and DPoP; the device-grant probes sign with a registered client.

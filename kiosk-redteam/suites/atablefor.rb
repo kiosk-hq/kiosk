@@ -26,8 +26,8 @@ DIEGO_UUID = DIEGO.user_id
 WIRE = Kiosk::TestHelpers::Wire.new(base_url: SERVER, pay_tolls: true)
 
 # Each assistant's token with the key it is bound to: the wire signs a DPoP proof per call.
-AUTH_A = WIRE.dpop(DIEGO.token, DIEGO.rsa_key)
-AUTH_B = WIRE.dpop(BEA.token, BEA.rsa_key)
+AUTH_A = WIRE.dpop(DIEGO.token, DIEGO.key)
+AUTH_B = WIRE.dpop(BEA.token, BEA.key)
 
 BATTERY = Kiosk::Redteam::Battery.new
 
@@ -116,19 +116,19 @@ BATTERY.record('MalformedUuidArg', cancel_probes.all? { |ok, _| ok },
                '(want 400/"bad_request", a detail naming the argument, and no SQL internals)')
 
 require 'openssl'
-throwaway_pem = OpenSSL::PKey::RSA.generate(2048).public_key.to_pem
+throwaway_pem = OpenSSL::PKey.generate_key('ED25519').public_to_pem
 rc, = WIRE.post_json('/kiosk/oauth/register', { public_key: throwaway_pem })
 BATTERY.record('RegisterWithoutJwks', rc == 400, "register with a PEM and no jwks → #{rc} (want 400 invalid_client_metadata)")
 
 rc, = WIRE.get_json('/kiosk/availability', { party_size: 2 })
 BATTERY.record('MissingAuth', rc == 401, "unauthenticated request → #{rc} (want 401)")
 
-rc, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop('not-a-real-token', DIEGO.rsa_key))
+rc, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop('not-a-real-token', DIEGO.key))
 BATTERY.record('GarbageToken', rc == 401, "garbage token → #{rc} (want 401)")
 
 # A copied token without its key buys nothing: as a bearer token, or with another key's DPoP proof.
 rc_stolen_bearer, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, 'Authorization' => "Bearer #{DIEGO.token}")
-rc_stolen_key,    = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop(DIEGO.token, BEA.rsa_key))
+rc_stolen_key,    = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop(DIEGO.token, BEA.key))
 BATTERY.record('StolenToken', rc_stolen_bearer == 401 && rc_stolen_key == 401,
                "stolen token as a bearer → #{rc_stolen_bearer}, with the thief's key → #{rc_stolen_key} (want 401 both)")
 
@@ -139,7 +139,7 @@ self_asserted = [
   ['wholly invented ids',
    "agent:u-#{SecureRandom.uuid}:a-#{SecureRandom.uuid}:r-owner"]
 ].map do |label, token|
-  code, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop(token, DIEGO.rsa_key))
+  code, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, WIRE.dpop(token, DIEGO.key))
   [code == 401, "#{label} → #{code}"]
 end
 rc_auth_ctl, = WIRE.get_json('/kiosk/availability', { party_size: 2 }, AUTH_A)

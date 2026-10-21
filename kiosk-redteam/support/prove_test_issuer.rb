@@ -2,6 +2,7 @@
 
 require 'openssl'
 require 'jwt'
+require 'kiosk/server/eddsa'
 
 # Signs KYC attestations as the broker does, for the operator `skooti`, with
 # the broker's development key, so an attack can attest a customer without the
@@ -15,7 +16,7 @@ module ProveTestIssuer
   def keypair
     raise 'ProveTestIssuer signs with a public development key' if ENV['RAILS_ENV'] == 'production'
 
-    @keypair ||= OpenSSL::PKey::RSA.new(File.read(KEY))
+    @keypair ||= OpenSSL::PKey.read(File.read(KEY))
   end
 
   def issuer = 'https://kyc.test.local'
@@ -27,6 +28,6 @@ module ProveTestIssuer
   def sign(user_id, issued_at, attributes = nil)
     claims = { sub: user_id.to_s, level: 'verified', iss: issuer, aud: audience, operator: audience,
                iat: issued_at, exp: issued_at + 3600 }
-    JWT.encode(attributes ? claims.merge(attributes:) : claims, keypair, 'RS256')
+    JWT.encode(attributes ? claims.merge(attributes:) : claims, keypair, 'EdDSA')
   end
 end

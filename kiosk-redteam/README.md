@@ -185,7 +185,7 @@ client  = Kiosk::TestHelpers::Assistant.new(base_url: SERVER)
 battery = Kiosk::Redteam::Battery.new
 
 # your own beat, against your own verb
-status, rows = wire.get_json("/kiosk/my_listings", {}, wire.dpop(bob.token, bob.rsa_key))
+status, rows = wire.get_json("/kiosk/my_listings", {}, wire.dpop(bob.token, bob.key))
 battery.record("CrossTenantRead", status == 200 && !ids(rows).include?(alice_row),
                "Bob's rows #{ids(rows).inspect} exclude Alice's #{alice_row}")
 

@@ -113,7 +113,7 @@ def minimal_profile(**overrides)
 end
 
 # The key a test operator signs its checkouts with.
-OPERATOR_KEY = OpenSSL::PKey::RSA.generate(2048)
+OPERATOR_KEY = OpenSSL::PKey.generate_key('ED25519')
 
 # The checkout a test operator signs for +principal+ to pay +owned_ref+.
 def pay_for_callable
@@ -121,6 +121,6 @@ def pay_for_callable
     JWT.encode({ iss: BASE_URL, sub: principal.user_id, iat: Time.now.to_i,
                  merchant: { id: BASE_URL, name: 'Test', website: BASE_URL }, currency: 'eur', total_amount_cents: 100,
                  line_items: [{ reservation_id: owned_ref[:id] || 'res-1' }, { qty: 1, price_cents: 100 }] },
-               OPERATOR_KEY, 'PS256')
+               OPERATOR_KEY, 'EdDSA')
   end
 end

@@ -31,7 +31,7 @@ module Kiosk
             agent_id: principal.agent_id,
             user_id: principal.user_id,
             token: tamper_token(principal.token),
-            rsa_key: principal.rsa_key
+            key: principal.key
           )
         end
       end

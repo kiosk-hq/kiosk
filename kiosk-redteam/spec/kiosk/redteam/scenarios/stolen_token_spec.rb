@@ -29,11 +29,11 @@ RSpec.describe Kiosk::Redteam::Scenarios::StolenToken do
     return nil if proof.nil?
 
     _, header = JWT.decode(proof, nil, false)
-    Kiosk::TestHelpers::Dpop.thumbprint(JWT::JWK.import(header['jwk']).public_key)
+    Kiosk::TestHelpers::Dpop.thumbprint(Kiosk::Server::Jwk.import(header['jwk']))
   end
 
   before do
-    allow(OpenSSL::PKey::RSA).to receive(:generate).and_wrap_original do |original, *args|
+    allow(OpenSSL::PKey).to receive(:generate_key).and_wrap_original do |original, *args|
       original.call(*args).tap { generated << Kiosk::TestHelpers::Dpop.thumbprint(it) }
     end
   end

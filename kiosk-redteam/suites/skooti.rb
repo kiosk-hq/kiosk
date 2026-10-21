@@ -25,7 +25,7 @@ RIDER_EMAIL   = 'ada@example.com'
 DEMO_PASSWORD = 'skooti-demo-password'
 
 # Wrong key, trusted issuer: only the signature is bad.
-FORGED_KYC_KEY = OpenSSL::PKey::RSA.generate(2048)
+FORGED_KYC_KEY = OpenSSL::PKey.generate_key('ED25519')
 
 # The attributes MC-001 asks for, spelled as the attestation carries them.
 LICENCE_ATTRIBUTES = { 'age_over_18' => true, 'licence_a' => true }.freeze
@@ -35,7 +35,7 @@ def attest_forged(user_id)
   # Trusted issuer and correct audience: ONLY the signature is wrong.
   claims = { sub: user_id, level: 'verified', iss: TRUSTED_ISSUER, aud: ProveTestIssuer.audience,
              iat: now, exp: now + 3600 }
-  JWT.encode(claims, FORGED_KYC_KEY, 'RS256')
+  JWT.encode(claims, FORGED_KYC_KEY, 'EdDSA')
 end
 
 # The broker's approval as the human gives it, and skooti's KYC callback reached directly.
@@ -58,7 +58,7 @@ end
 
 # The kyc_verification events this customer's stream replays from the start.
 def kyc_events_for(customer)
-  stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: customer.token, key: customer.rsa_key)
+  stream = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: customer.token, key: customer.key)
   stream.subscribe('kyc_verification', since: 0)
   stream.listen(2)
 ensure
@@ -393,7 +393,7 @@ def forged_licence_jws(customer)
   now = Time.now.to_i
   claims = { sub: customer.user_id, level: 'verified', iss: TRUSTED_ISSUER,
              aud: ProveTestIssuer.audience, iat: now, exp: now + 3600, attributes: LICENCE_ATTRIBUTES }
-  JWT.encode(claims, FORGED_KYC_KEY, 'RS256')
+  JWT.encode(claims, FORGED_KYC_KEY, 'EdDSA')
 end
 
 # MotorcycleForgedKyc: wrong-key licence attributes must not unlock rent_motorcycle.
@@ -469,7 +469,7 @@ end
 # Victim B gets a real broker-signed jws through request_kyc and the broker page.
 def issued_victim_jws(client)
   b = client.register!
-  stream_b = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: b.token, key: b.rsa_key)
+  stream_b = Kiosk::TestHelpers::Assistant::Events.new(base_url: BASE_URL, token: b.token, key: b.key)
   stream_b.subscribe('kyc_verification')
   request_id = request_kyc!(client, b, 'B')
   approve_rc = broker_approve(request_id)
@@ -506,7 +506,7 @@ def callback_jws(customer, request_id, operator, key)
   claims = { sub: customer.user_id, level: 'verified', iss: ProveTestIssuer.issuer,
              operator:, aud: operator, request_id:, nonce: 'any', iat: now, exp: now + 3600,
              attributes: LICENCE_ATTRIBUTES }
-  JWT.encode(claims, key, 'RS256')
+  JWT.encode(claims, key, 'EdDSA')
 end
 
 # CrossOperatorClaimReplay: a claim addressed to another operator is refused at skooti's callback and at the engine wire.
@@ -557,7 +557,7 @@ end
 def raw_wire(customer, method, path, body = nil, signed_in: true)
   uri     = URI("#{BASE_URL}#{path}")
   headers = { 'Content-Type' => 'application/json' }
-  headers.merge!(Kiosk::TestHelpers::Dpop.headers(customer.token, customer.rsa_key, method: method.to_s.upcase, url: uri.to_s)) if signed_in
+  headers.merge!(Kiosk::TestHelpers::Dpop.headers(customer.token, customer.key, method: method.to_s.upcase, url: uri.to_s)) if signed_in
   req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
   req.body = JSON.generate(body) if body
   res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)
@@ -628,7 +628,7 @@ end
 # resolves to no identity; the real token, paying its toll, is the control.
 def self_asserted_token_forgery(customer)
   forgeries = forged_agent_bearers(customer).map do |label, token|
-    code = token_status(token, customer.rsa_key)
+    code = token_status(token, customer.key)
     [code == 401, "#{label} → #{code}"]
   end
 

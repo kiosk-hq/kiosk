@@ -166,7 +166,7 @@ module HotelingScenarios
     def forged(principal, junk)
       claims = { iss: BASE_URL, sub: principal.user_id, iat: Time.now.to_i, merchant: { id: BASE_URL, name: 'hoteling' },
                  currency: 'eur', total_amount_cents: 100, line_items: [{ booking_id: junk }, { qty: 1, price_cents: 100 }] }
-      JWT.encode(claims, OpenSSL::PKey::RSA.generate(2048), 'PS256')
+      JWT.encode(claims, OpenSSL::PKey.generate_key('ED25519'), 'EdDSA')
     end
 
     # `supplied:` discounts the probe's own echoed bytes from the leak scan.
@@ -307,7 +307,7 @@ module HotelingScenarios
     def raw(principal, method, path, body = nil)
       uri     = URI("#{BASE_URL}#{path}")
       headers = { 'Content-Type' => 'application/json' }
-      headers.merge!(Kiosk::TestHelpers::Dpop.headers(principal.token, principal.rsa_key, method: method.to_s.upcase, url: uri.to_s)) if principal
+      headers.merge!(Kiosk::TestHelpers::Dpop.headers(principal.token, principal.key, method: method.to_s.upcase, url: uri.to_s)) if principal
       req = (method == :get ? Net::HTTP::Get : Net::HTTP::Post).new(uri, headers)
       req.body = JSON.generate(body) if body
       res = Kiosk::TestHelpers::Wire.http_for(uri).request(req)

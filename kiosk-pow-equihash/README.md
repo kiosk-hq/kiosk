@@ -204,7 +204,7 @@ time as the tree folds — so verification stops at the first tree node that doe
 not cancel. Rubbish indices are rejected without a single hash (0.012 ms
 measured); rubbish that is at least well-ordered stops after two hashes
 (0.30 ms), against ~22 ms for a complete one. That gap is the point, because
-`verify` is reachable unauthenticated on `POST /auth/register`: an attacker who
+`verify` is reachable unauthenticated on `POST /kiosk/oauth/register`: an attacker who
 wants the whole hash loop has to hand over an almost-complete solution, against
 a salt that is fresh per challenge.
 

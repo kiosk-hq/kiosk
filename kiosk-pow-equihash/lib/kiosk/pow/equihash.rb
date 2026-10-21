@@ -47,7 +47,7 @@ module Kiosk
       end
       private_class_method :coerce_params
 
-      # Checks run cheapest-first: this is reachable unauthenticated on `POST /auth/register`.
+      # Checks run cheapest-first: this is reachable unauthenticated on `POST /kiosk/oauth/register`.
       def self.verify(salt:, params:, nonce:) # rubocop:disable Naming/PredicateMethod -- the PoW backend interface name.
         indices = proof_indices(nonce)
         return false unless indices && valid_params?(params)

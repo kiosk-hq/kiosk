@@ -2,7 +2,8 @@
 
 Kiosk is a protocol and the reference implementation of it. The parts of this
 repository that carry security weight are the ones an origin exposes to the open
-internet: the register/login proof-of-possession handshake, the JWT-bearing data
+internet: the OAuth client registration and the token endpoint that
+authenticates a client assertion and a DPoP proof, the token-bearing data
 plane, the proof-of-work gate in front of registration, the payment path that
 settles a cart mandate against a card saved on the provider's own PSP account,
 and the optional Postgres row-level-security backstop. A flaw in any of those

@@ -89,7 +89,7 @@ end
 
 ### 5. Make a wrong proof cheap to refuse
 
-`.verify` runs before authentication on `POST /kiosk/auth/register`. Anyone can
+`.verify` runs before authentication on `POST /kiosk/oauth/register`. Anyone can
 send it a proof. So:
 
 - Check the shape and the bounds of the proof first. Compute hashes last.

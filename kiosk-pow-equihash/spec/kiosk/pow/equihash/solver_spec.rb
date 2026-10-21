@@ -7,7 +7,7 @@ require 'rbconfig'
 # The verifier and the solver are two halves of one algorithm with two very
 # different threat positions, and the load boundary between them is the whole
 # safety property here: a provider runs `verify` on an UNAUTHENTICATED
-# `POST /auth/register`, so nothing it loads on that path may be able to spawn a
+# `POST /kiosk/oauth/register`, so nothing it loads on that path may be able to spawn a
 # process. `kiosk/pow/equihash` is therefore free of `open3`, and `solve` lives
 # behind its own require.
 #

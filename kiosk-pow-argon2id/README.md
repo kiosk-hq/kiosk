@@ -19,7 +19,7 @@ lever is exactly `2^d`.
 
 Providers can demand this PoW on any query or action endpoint
 (`GET /kiosk/<query-name>`, `POST /kiosk/<action-name>`) — and, as an optional
-registration toll, on `/kiosk/auth/register` — at their discretion, via
+registration toll, on `/kiosk/oauth/register` — at their discretion, via
 `kiosk-reputation`'s policy layer. `pay` is tolled the same way, so it may
 answer `402 pow_required`; it answers `402 payment_setup_required` when the
 customer has no saved card. `kiosk-pow-argon2id` ships both sides:

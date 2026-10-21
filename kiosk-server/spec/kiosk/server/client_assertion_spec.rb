@@ -99,10 +99,11 @@ RSpec.describe Kiosk::Server::ClientAssertion do
   end
 
   it 'gives a hint that says what to fix' do
-    authenticate(client_assertion(client.id, aud: 'https://relay.example'))
-  rescue described_class::Refused => e
-    expect(e.hint).to include('the origin you connected to')
-    expect(e.to_oauth.code).to eq('invalid_client')
-    expect(e.to_problem.http_status).to eq(401)
+    expect { authenticate(client_assertion(client.id, aud: 'https://relay.example')) }
+      .to raise_error(described_class::Refused) { |e|
+        expect(e.hint).to include('the origin you connected to')
+        expect(e.to_oauth.code).to eq('invalid_client')
+        expect(e.to_problem.http_status).to eq(401)
+      }
   end
 end

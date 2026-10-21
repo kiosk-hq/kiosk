@@ -9,7 +9,7 @@ module ExecutorSpecHelpers
     'payment_mandates' => %w[reference checkout_mandate_id user_id agent_id issuer payment_instrument
                              amount_cents currency expires_at sd_jwt],
     'settlements' => %w[checkout_mandate_id user_id agent_id issuer psp_reference
-                        settled_amount_cents currency]
+                        settled_amount_cents currency network_confirmation_id]
   }.freeze
 
   def pay(args = valid_args, as: identity)
@@ -160,7 +160,7 @@ RSpec.shared_context 'with verb :pay' do
 
   before do
     Kiosk.reset!
-    Kiosk.configure { |c| c.issuer = 'https://demo.example' }
+    Kiosk.configure { |c| (c.issuer = 'https://demo.example') && (c.signing_key = CHECKOUT_SIGNING_KEY) }
     allow(Kiosk::Server::MandateVerifier).to receive(:verify_checkout)
       .with(sd_jwt: 'checkout-sd-jwt', identity: identity).and_return(checkout)
     allow(Kiosk::Server::MandateVerifier).to receive(:verify_payment)
@@ -681,6 +681,17 @@ RSpec.describe Kiosk::Server::Executor do
       )
     end
 
+    it 'answers the two receipts, naming each mandate by its reference' do
+      allow(Kiosk.configuration.payment_provider).to receive(:capture)
+        .and_return(settlement.merge(network_confirmation_id: 'n-1'))
+
+      claims = ReceiptClaims.unsigned(pay.payload)
+
+      expect(claims[:checkout_receipt]).to include('status' => 'Success', 'reference' => 'cm-1')
+      expect(claims[:payment_receipt]).to include('status' => 'Success', 'reference' => 'pm-1', 'payment_id' => 's-1',
+                                                  'psp_confirmation_id' => 'pi_1', 'network_confirmation_id' => 'n-1')
+    end
+
     it 'threads the SERVER-generated checkout id into the payment mandate persist (FK chain)' do
       pay
       expect(executor).to have_received(:persist_payment_mandate).with(checkout_row_id: 'checkout-row', payment: payment)
@@ -990,7 +1001,7 @@ RSpec.describe Kiosk::Server::Executor do
       second = pay
 
       expect(second.kind).to eq(:value)
-      expect(second.payload).to eq(first.payload)
+      expect(ReceiptClaims.unsigned(second.payload)).to eq(ReceiptClaims.unsigned(first.payload))
       expect(captures).to eq(['cm-1'])
       expect(inserted.count { |table, _| table == 'settlements' }).to eq(1)
     end
@@ -1142,12 +1153,13 @@ RSpec.describe Kiosk::Server::Executor do
 
     it 'binds every settlement value' do
       executor.send(:persist_settlement, checkout_row_id: 'checkout-row', checkout: checkout,
-                                         settled: { psp_reference: 'pi_1', settled_amount_cents: 1599 })
+                                         settled: { psp_reference: 'pi_1', settled_amount_cents: 1599,
+                                                    network_confirmation_id: '583910485721044' })
       sql, name, binds = last_statement
 
       expect(name).to eq('Kiosk settlement insert')
-      expect(sql).to  include('VALUES ($1, $2, $3, $4, $5, $6, $7, now())')
-      expect(binds).to eq(['checkout-row', 'u-1', 'a-1', 'https://demo.example', 'pi_1', 1599, 'eur'])
+      expect(sql).to  include('VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())')
+      expect(binds).to eq(['checkout-row', 'u-1', 'a-1', 'https://demo.example', 'pi_1', 1599, 'eur', '583910485721044'])
       # Nobody signs a settlement: no `sd_jwt` column, asserted on the column
       # list too, because a statement naming it while binding nothing would
       # satisfy the line above.
@@ -1168,7 +1180,8 @@ RSpec.describe Kiosk::Server::Executor do
       checkout_row = executor.send(:persist_checkout_mandate, checkout)
       executor.send(:persist_payment_mandate, checkout_row_id: checkout_row, payment: payment)
       executor.send(:persist_settlement, checkout_row_id: checkout_row, checkout: checkout,
-                                         settled: { psp_reference: 'pi_1', settled_amount_cents: 1599 })
+                                         settled: { psp_reference: 'pi_1', settled_amount_cents: 1599,
+                                                    network_confirmation_id: '583910485721044' })
 
       expect(connection).not_to have_received(:quote)
       expect(connection.exec_queries.size).to eq(3)

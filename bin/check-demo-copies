@@ -683,6 +683,9 @@ COPIES = {
   'db/migrate/20261021100020_reshape_kiosk_mandates_for_ap2_v02.rb' => {
     rule: :identical, why: "Moves the mandate trail to AP2 v0.2's checkout and payment mandates, as kiosk:install's has it."
   },
+  'db/migrate/20261021100021_add_network_confirmation_id_to_kiosk_settlements.rb' => {
+    rule: :identical, why: "Gives settlements the network id the payment receipt names, as kiosk:install's has it."
+  },
   'db/migrate/20261018100012_create_solid_cable_messages.rb' => {
     rule: :identical, why: "Action Cable's pubsub queue, on the primary database."
   },

@@ -183,6 +183,7 @@ module Kiosk
             psp_reference        text NOT NULL,
             settled_amount_cents bigint NOT NULL,
             currency             text NOT NULL,
+            network_confirmation_id text,
             settled_at           timestamptz NOT NULL,
             UNIQUE (checkout_mandate_id)
           );

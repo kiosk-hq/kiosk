@@ -11,6 +11,7 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: **`pay` answers the AP2 v0.2 checkout and payment receipts**, signed PS256 by the operator. Every demo adds `settlements.network_confirmation_id`.
 - 2026-10-21: The Stripe adapter answers the card network's id of a charge, `network_confirmation_id`, when the network gave one.
 
 - 2026-10-21: kiosk-test-support depends on kiosk-server and kiosk-user-idp-devise, so its in-process helpers and `Person` load in a bundle that names only it.

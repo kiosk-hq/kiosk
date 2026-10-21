@@ -77,9 +77,16 @@ pay_request = { checkout_mandate: mandates[:checkout], payment_mandate: mandates
 pay_url = "#{SERVER}/kiosk/pay"
 rc, pay = post_json(pay_url, pay_request, auth.call(pay_url))
 
+# The two AP2 receipts, verified as an assistant verifies them: against the
+# JWKS the origin serves, PS256. Each names the mandate it answers by reference.
+_, jwks = get_json("#{SERVER}/kiosk/.well-known/jwks.json")
+receipt = ->(name) { JWT.decode(pay.fetch(name), nil, true, algorithms: ['PS256'], jwks: JWT::JWK::Set.new(jwks)).first }
+receipts = rc == 200 ? { checkout: receipt.call('checkout_receipt'), payment: receipt.call('payment_receipt') } : {}
+references = mandates.transform_values { Kiosk::TestHelpers::Mandate.digest(it) }
+
 # THE BYTES, KEPT. `PAY_CAPTURE` names a file to write the request this
 # origin ACCEPTED, the checkout and the two mandates inside it, and the
-# settlement it answered — so `e2e/schema_conformance.rb` can validate all five
+# settlement it answered with its two receipts — so `e2e/schema_conformance.rb` can validate all seven
 # against the published `mandates.schema.json` rather than against a
 # hand-written example. Nothing is reconstructed here: these are the same
 # objects the request carried.
@@ -88,9 +95,10 @@ if (capture = ENV.fetch('PAY_CAPTURE', nil))
                         request: pay_request,
                         claims: { checkout: checkout,
                                   checkout_mandate: Kiosk::TestHelpers::Mandate.content(mandates[:checkout]),
-                                  payment_mandate: Kiosk::TestHelpers::Mandate.content(mandates[:payment]) },
+                                  payment_mandate: Kiosk::TestHelpers::Mandate.content(mandates[:payment]),
+                                  checkout_receipt: receipts[:checkout], payment_receipt: receipts[:payment] },
                         response: pay
                       ))
 end
 
-puts JSON.generate(http_code: rc, user_id: user_id, agent_id: agent_id, setup: setup, response: pay)
+puts JSON.generate(http_code: rc, user_id: user_id, agent_id: agent_id, setup: setup, response: pay, receipts:, references:)

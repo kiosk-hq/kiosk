@@ -1174,6 +1174,11 @@ assert "pay: unenveloped"             "$(echo "$pay_out" | jq -r '.response | ha
 assert "pay: a Stripe PaymentIntent"  "$(echo "$pay_out" | jq -r '.response.psp_reference | startswith("pi_")')" "true"
 assert "pay: settled 1599"            "$(echo "$pay_out" | jq -r '.response.settled_amount_cents')" "1599"
 assert "pay: settlement_id"           "$(echo "$pay_out" | jq -r '.response.settlement_id | length > 0')" "true"
+# The AP2 receipts verified against the served JWKS in pay_flow.rb; each names its mandate.
+assert "pay: checkout receipt names the checkout mandate" "$(echo "$pay_out" | jq -r '.receipts.checkout.reference == .references.checkout')" "true"
+assert "pay: payment receipt names the payment mandate"   "$(echo "$pay_out" | jq -r '.receipts.payment.reference == .references.payment')" "true"
+assert "pay: checkout receipt names the order"            "$(echo "$pay_out" | jq -r '.receipts.checkout.order_id')" "0b9e6f1c-3d2a-4e5b-8c7d-9a0f1e2d3c4b"
+assert "pay: payment receipt names the settlement"        "$(echo "$pay_out" | jq -r '.receipts.payment.payment_id == .response.settlement_id and .receipts.payment.psp_confirmation_id == .response.psp_reference')" "true"
 
 # The AP2 trail landed in Postgres — one row each, no human anywhere.
 assert "db: 1 checkout_mandate"       "$(psql -X -d "$DB_NAME" -tAc 'SELECT COUNT(*) FROM kiosk.checkout_mandates')" "1"

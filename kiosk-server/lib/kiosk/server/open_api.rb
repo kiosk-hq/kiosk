@@ -460,14 +460,15 @@ module Kiosk
             additionalProperties: false
           },
           'pay.response' => {
-            type: 'object', title: 'Settlement receipt',
+            type: 'object', title: 'Settlement and its AP2 receipts',
             properties: {
               settlement_id: { type: 'string', description: "This origin's settlement row id." },
               psp_reference: { type: 'string', description: "The processor's own reference." },
               settled_amount_cents: { type: 'integer' },
-              currency: { type: 'string' }
+              currency: { type: 'string' },
+              **%w[checkout payment].to_h { [:"#{it}_receipt", { type: 'string', description: "The AP2 #{it} receipt: a JWT this origin signs PS256." }] }
             },
-            required: %w[settlement_id psp_reference settled_amount_cents currency],
+            required: %w[settlement_id psp_reference settled_amount_cents currency checkout_receipt payment_receipt],
             additionalProperties: false
           }
         }.freeze

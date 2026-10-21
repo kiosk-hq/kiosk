@@ -128,8 +128,9 @@ RSpec.shared_context 'with real Postgres for executor persistence' do
 
   before do
     Kiosk.configure do |c|
-      c.schema = ExecutorPersistenceSpec::PERSIST_SPEC_SCHEMA
-      c.issuer = 'https://demo.example'
+      c.schema      = ExecutorPersistenceSpec::PERSIST_SPEC_SCHEMA
+      c.issuer      = 'https://demo.example'
+      c.signing_key = CHECKOUT_SIGNING_KEY
     end
   end
 end
@@ -656,7 +657,7 @@ RSpec.describe Kiosk::Server::Executor do
       second = pay
 
       expect(second.kind).to eq(:value)
-      expect(second.payload).to eq(first.payload)
+      expect(ReceiptClaims.unsigned(second.payload)).to eq(ReceiptClaims.unsigned(first.payload))
       expect(second.payload[:psp_reference]).to eq("pi_#{checkout.reference}")
       expect(captures).to eq([checkout.reference]) # NOT charged a second time
       expect(settlement_count).to eq(1) # NO second settlement minted

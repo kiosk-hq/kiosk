@@ -12,6 +12,9 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: A settled `pay` answers the AP2 v0.2 `checkout_receipt` and `payment_receipt`, JWTs signed PS256 with `c.signing_key`, each naming its mandate.
+- 2026-10-21: `kiosk.settlements` gains `network_confirmation_id`, so a repeat of a settled pair answers the same payment receipt claims.
+
 ## [0.5.23] — 2026-10-21
 
 - 2026-10-21: Every access token carries `cnf.jkt`, and `IdentityResolution` refuses a call without a DPoP proof by that key (`Errors::AccessTokenRefused`, `WWW-Authenticate: DPoP`).

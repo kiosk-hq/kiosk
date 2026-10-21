@@ -246,12 +246,12 @@ module Kiosk
         def settle(provider, chain, settled)
           settlement_id = record_settlement(chain, settled)
           provider.settled(chain.checkout) if provider.respond_to?(:settled)
-          settlement_result(settlement_id, settled[:psp_reference], settled[:settled_amount_cents], chain.checkout.currency)
+          settlement_result(chain, settlement_id, settled, chain.checkout.currency)
         rescue StandardError => e
           row = unique_violation?(e) && recorded_chain(chain)
           raise unless row && row['settlement_id']
 
-          stored_settlement(row)
+          stored_settlement(chain, row)
         end
 
         # The settlement row's id.
@@ -261,8 +261,14 @@ module Kiosk
           end
         end
 
-        def settlement_result(settlement_id, psp_reference, settled_amount_cents, currency)
-          Result.new(kind: :value, payload: { settlement_id:, psp_reference:, settled_amount_cents:, currency: })
+        # The settlement, and the two receipts that name its mandates (§11.3).
+        # `settled`: `psp_reference`, `settled_amount_cents` and `network_confirmation_id`.
+        def settlement_result(chain, settlement_id, settled, currency)
+          psp_reference = settled[:psp_reference]
+          receipts = Receipts.issue(checkout: chain.checkout, payment: chain.payment, settlement_id:, psp_reference:,
+                                    network_confirmation_id: settled[:network_confirmation_id])
+          Result.new(kind: :value, payload: { settlement_id:, psp_reference:, settled_amount_cents: settled[:settled_amount_cents],
+                                              currency:, **receipts })
         end
       end
 
@@ -272,7 +278,8 @@ module Kiosk
         # The byte-identical pair of the acting principal, with its settlement if any.
         CHAIN_SQL = <<~SQL.squish
           SELECT c.id AS checkout_row, c.declined_at,
-                 s.id AS settlement_id, s.psp_reference, s.settled_amount_cents, s.currency
+                 s.id AS settlement_id, s.psp_reference, s.settled_amount_cents, s.currency,
+                 s.network_confirmation_id
           FROM %<schema>s.checkout_mandates c
           JOIN %<schema>s.payment_mandates p ON p.checkout_mandate_id = c.id
           LEFT JOIN %<schema>s.settlements s ON s.checkout_mandate_id = c.id
@@ -304,8 +311,8 @@ module Kiosk
         SETTLEMENT_INSERT_SQL = <<~SQL.squish
           INSERT INTO %<schema>s.settlements
             (checkout_mandate_id, user_id, agent_id, issuer, psp_reference,
-             settled_amount_cents, currency, settled_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+             settled_amount_cents, currency, network_confirmation_id, settled_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, now())
           RETURNING id
         SQL
 
@@ -344,7 +351,8 @@ module Kiosk
         def persist_settlement(checkout_row_id:, checkout:, settled:)
           insert_returning_id('Kiosk settlement insert', SETTLEMENT_INSERT_SQL, [
                                 checkout_row_id, checkout.user_id, checkout.agent_id, checkout.issuer,
-                                settled[:psp_reference], settled[:settled_amount_cents].to_i, checkout.currency
+                                settled[:psp_reference], settled[:settled_amount_cents].to_i, checkout.currency,
+                                settled[:network_confirmation_id]
                               ])
         end
 

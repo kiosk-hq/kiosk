@@ -39,3 +39,13 @@ RSpec.shared_context 'with a checkout to pay' do
     Kiosk::TestHelpers::Mandate.sign(key, content.compact)
   end
 end
+
+# A pay answer with each receipt read as its claims less `iat`: a repeat signs
+# the same receipts again, so only the signature and the time differ.
+module ReceiptClaims
+  def self.unsigned(payload)
+    payload.to_h do |key, value|
+      key.to_s.end_with?('_receipt') ? [key, JWT.decode(value, nil, false).first.except('iat')] : [key, value]
+    end
+  end
+end

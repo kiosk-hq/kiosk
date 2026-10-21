@@ -15,9 +15,13 @@ module Kiosk
       # @param user_id the account the checkout is for; only that account can pay it
       # @return [String] the compact JWT
       def sign(user_id:, currency:, total_amount_cents:, line_items:)
+        signed({ iss: Kiosk.current_issuer, sub: user_id.to_s, iat: Time.now.to_i, merchant: merchant,
+                 currency: currency, total_amount_cents: total_amount_cents, line_items: line_items })
+      end
+
+      # @return [String] `claims` as a compact JWT, signed PS256 with the operator's signing key
+      def signed(claims)
         key = Kiosk.configuration.signing_key
-        claims = { iss: Kiosk.current_issuer, sub: user_id.to_s, iat: Time.now.to_i, merchant: merchant,
-                   currency: currency, total_amount_cents: total_amount_cents, line_items: line_items }
         ::JWT.encode(claims, key.rsa, ALGORITHM, { kid: key.kid, typ: 'JWT' })
       end
 

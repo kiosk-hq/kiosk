@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_21_100020) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_21_100021) do
   create_schema "kiosk"
 
   # These are extensions that must be enabled in order to support this database
@@ -371,6 +371,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_21_100020) do
     t.bigint "settled_amount_cents", null: false
     t.text "currency", null: false
     t.timestamptz "settled_at", null: false
+    t.text "network_confirmation_id"
     t.index ["checkout_mandate_id"], name: "idx_settlements_checkout"
     t.index ["user_id"], name: "idx_settlements_user_id"
     t.unique_constraint ["checkout_mandate_id"], name: "settlements_checkout_mandate_id_key"

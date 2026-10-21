@@ -143,8 +143,8 @@ The model also includes `Kiosk::Payable`, which gives each row:
   assistant's AP2 mandates bind. Your origin signs it PS256 with
   `c.signing_key`, for the row's owner. Its first line names the row; then your
   priced lines.
-- `settlement`: the receipt of the capture that paid the row. `c.after_payment`
-  runs once this receipt is recorded, so it can refund against it.
+- `settlement`: the record of the capture that paid the row. `c.after_payment`
+  runs once this record is written, so it can refund against it.
 
 When the capture returns, the engine pushes `{"order_id": "…", "payment_state":
 "paid"}` to the row's owner on the `payment` topic. Refund through the claim,
@@ -163,6 +163,11 @@ checkout mandate: a second pair for it answers `409 conflict`. A charge refused
 with no money moved marks the checkout mandate declined: it stops counting
 against `spending_cap` at once, a repeat of that pair answers `409 conflict`,
 and a new pair for the same checkout is accepted.
+
+A settled `pay` answers the settlement and the two AP2 receipts,
+`checkout_receipt` and `payment_receipt`, which your origin signs PS256 with
+`c.signing_key`. The payment receipt carries the card network's id of the charge
+when your PSP adapter's `capture` answers `network_confirmation_id`.
 
 Set `c.spending_cap = Kiosk::Server::ColumnSpendingCap.new` to cap what each
 assistant spends. The human sets the cap on `/kiosk/auth/assistants`: an amount
@@ -578,7 +583,7 @@ the one rendered whatever `Accept` the caller sent. On top of that:
   `Link: <skill_url>; rel="kiosk"`, the discovery signal for a client that
   does not read HTML.
 - `Kiosk::Settlement` and `Kiosk::CheckoutMandate` — read models over the
-  receipts `pay` records. `Kiosk::Settlement.own` is the caller's own;
+  records `pay` writes. `Kiosk::Settlement.own` is the caller's own;
   `Kiosk::Settlement.joins(:checkout_mandate).merge(Kiosk::CheckoutMandate.referencing(order_id: id))`
   is the settlement whose checkout names your row by the key your line items carry.
 - The handler runs inside the wire's GUC-scoped transaction, so raising rolls

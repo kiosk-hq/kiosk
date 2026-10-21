@@ -3,7 +3,7 @@
   "$id": "https://kiosk.tech/spec/schemas/mandates.schema.json",
   "$comment": "VENDORED copy of the normative kiosk.tech schema at spec/schemas/mandates.schema.json. It is here so RequestValidation can hold a reserved-plane request body to it at runtime, and so e2e/schema_conformance.rb can validate this origin's LIVE wire bytes against the PUBLISHED schema -- both with no second checkout and no network fetch. Identical to the upstream copy as PARSED JSON once this $comment is removed.",
   "title": "Kiosk payment: the checkout and the AP2 v0.2 mandates",
-  "description": "The checkout an operator signs, the two closed AP2 v0.2 mandates an AI assistant signs to pay it, the POST <endpoint>/pay request body and the settlement it answers. On the wire the checkout is a compact PS256 JWT, and each mandate is a compact SD-JWT whose one disclosure is the mandate; these schemas describe the decoded objects.",
+  "description": "The checkout an operator signs, the two closed AP2 v0.2 mandates an AI assistant signs to pay it, the POST <endpoint>/pay request body, the settlement it answers and the two receipts in it. On the wire the checkout is a compact PS256 JWT, and each mandate is a compact SD-JWT whose one disclosure is the mandate; these schemas describe the decoded objects.",
   "$defs": {
     "currency": {
       "type": "string",
@@ -113,12 +113,45 @@
     "settlement": {
       "type": "object",
       "description": "The pay response body, answered verbatim: there is no envelope, no ok flag and no kind discriminator (protocol.md 8.2, 11.3).",
-      "required": ["settlement_id", "psp_reference", "settled_amount_cents", "currency"],
+      "required": ["settlement_id", "psp_reference", "settled_amount_cents", "currency", "checkout_receipt", "payment_receipt"],
       "properties": {
         "settlement_id": { "type": "string" },
         "psp_reference": { "type": "string" },
         "settled_amount_cents": { "type": "integer", "minimum": 1, "description": "The captured amount; equals the checkout total. MUST be positive: a settlement exists only for a completed capture." },
-        "currency": { "$ref": "#/$defs/currency", "description": "The currency of the capture, in the OPERATOR's canonical spelling, which MAY differ byte for byte from the spelling in the checkout (protocol.md 11.3, 11.5). Compare it as an ISO 4217 code, never as bytes." }
+        "currency": { "$ref": "#/$defs/currency", "description": "The currency of the capture, in the OPERATOR's canonical spelling, which MAY differ byte for byte from the spelling in the checkout (protocol.md 11.3, 11.5). Compare it as an ISO 4217 code, never as bytes." },
+        "checkout_receipt": { "$ref": "#/$defs/compactJwt", "description": "The AP2 checkout receipt: a compact JWT the operator signs PS256 with the key of its JWKS. Its claims are `checkoutReceipt` (protocol.md 11.3)." },
+        "payment_receipt": { "$ref": "#/$defs/compactJwt", "description": "The AP2 payment receipt: a compact JWT the operator signs PS256 with the key of its JWKS. Its claims are `paymentReceipt` (protocol.md 11.3)." }
+      }
+    },
+    "compactJwt": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$",
+      "description": "A compact JWS: three base64url segments."
+    },
+    "checkoutReceipt": {
+      "type": "object",
+      "description": "The claims of the checkout receipt a successful pay answers (AP2 v0.2 checkout_receipt.json, status Success).",
+      "required": ["status", "iss", "iat", "reference", "order_id"],
+      "properties": {
+        "status": { "const": "Success" },
+        "iss": { "type": "string", "description": "The operator's issuer." },
+        "iat": { "type": "integer" },
+        "reference": { "type": "string", "description": "The reference of the checkout mandate: the base64url SHA-256 of its compact SD-JWT." },
+        "order_id": { "type": "string", "description": "The id in the first line item of the checkout." }
+      }
+    },
+    "paymentReceipt": {
+      "type": "object",
+      "description": "The claims of the payment receipt a successful pay answers (AP2 v0.2 payment_receipt.json, status Success). `network_confirmation_id` is present only when the payment provider reports it; AP2 requires it, so a receipt without it does not satisfy AP2's schema (protocol.md 11.3).",
+      "required": ["status", "iss", "iat", "reference", "payment_id", "psp_confirmation_id"],
+      "properties": {
+        "status": { "const": "Success" },
+        "iss": { "type": "string", "description": "The operator's issuer." },
+        "iat": { "type": "integer" },
+        "reference": { "type": "string", "description": "The reference of the payment mandate: the base64url SHA-256 of its compact SD-JWT." },
+        "payment_id": { "type": "string", "description": "The settlement_id." },
+        "psp_confirmation_id": { "type": "string", "description": "The psp_reference." },
+        "network_confirmation_id": { "type": "string", "description": "The card network's id of the transaction." }
       }
     }
   }

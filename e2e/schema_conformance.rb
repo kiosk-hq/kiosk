@@ -377,10 +377,18 @@ if pay_capture && File.exist?(pay_capture)
     settled['settled_amount_cents'] = '1599' # integer cents, never a string
     settled
   end
+
+  { 'checkout_receipt' => 'checkoutReceipt', 'payment_receipt' => 'paymentReceipt' }.each do |part, defn|
+    conforms("the #{part}'s claims", "#{B}/mandates.schema.json",
+             cap.fetch('claims').fetch(part), pointer: "#/$defs/#{defn}") do |claims|
+      claims.delete('reference') # a receipt names the mandate it answers
+      claims
+    end
+  end
 else
   absent 'the checkout and its AP2 mandates were validated',
          "PAY_CAPTURE (#{pay_capture.inspect}) is missing — pay_flow.rb did not write the " \
-         'captured request/claims/response, so five mandate schemas checked nothing',
+         'captured request/claims/response, so seven mandate schemas checked nothing',
          "settling a payment means charging somebody's deployment"
 end
 

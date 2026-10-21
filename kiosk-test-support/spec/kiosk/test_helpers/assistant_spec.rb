@@ -10,6 +10,11 @@ module AssistantRequests
     [stub_request(method, /\A#{origin}#{path}/).with { sent << it }, sent]
   end
 
+  def new_token = JWT.encode({ sub: 'u1', agent_id: 'a1' }, nil, 'none')
+
+  # The token endpoint's answer: a token for account u1.
+  def issued = json_return(200, 'access_token' => new_token)
+
   def toll_then(stub, answer)
     calls = 0
     stub.to_return { (calls += 1) == 1 ? problem_return('pow_required', status: 402, challenges: [toll]) : answer }
@@ -24,14 +29,16 @@ RSpec.shared_context 'with an assistant and an origin' do
   let(:origin)     { 'http://kiosk.example.com' }
   let(:key)        { OpenSSL::PKey::RSA.generate(2048) }
   let(:principal)  { described_class::Principal.new(agent_id: 'a1', user_id: 'u1', token: 'tok', rsa_key: key) }
-  let(:registered) { json_return(201, 'agent_id' => 'a1', 'user_id' => 'u1', 'access_token' => 'tok') }
+  let(:registered) { json_return(201, 'client_id' => 'a1') }
   let(:toll) do
     { 'id' => 'c1', 'alg' => 'equihash', 'params' => { 'n' => 8, 'k' => 1 },
       'salt' => Base64.strict_encode64('kat'), 'exp' => 9_999_999_999, 'sig' => 'x' }
   end
 
-  before do
-    stub_request(:get, %r{/kiosk/auth/challenge}).to_return(json_return(200, 'challenge' => 'nonce-1'))
+  # The client assertion of a form or JSON body, verified with `with`.
+  def assertion(body, with: key)
+    expect(body['client_assertion_type']).to eq(described_class::ASSERTION_TYPE)
+    JWT.decode(body['client_assertion'], with.public_key, true, algorithm: 'RS256').first
   end
 end
 
@@ -39,22 +46,30 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
   describe '#register!' do
     include_context 'with an assistant and an origin'
 
-    it 'proves possession of a fresh key, origin-bound, and answers the principal' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
+    it 'registers the public JWK of a fresh key, then asks for a token with a client assertion and a DPoP proof' do
+      stub, registrations = requests_to(:post, '/kiosk/oauth/register')
       stub.to_return(registered)
+      stub, tokens = requests_to(:post, '/kiosk/oauth/token')
+      stub.to_return(issued)
 
       registered_principal = assistant.register!
 
-      body = JSON.parse(sent.first.body)
-      claims, = JWT.decode(body['signed'], registered_principal.rsa_key.public_key, true, algorithm: 'RS256')
-      expect(body.keys).to contain_exactly('public_key', 'signed')
-      expect(claims).to include('aud' => origin, 'nonce' => 'nonce-1')
-      expect(registered_principal).to have_attributes(agent_id: 'a1', user_id: 'u1', token: 'tok')
+      jwk = JSON.parse(registrations.first.body).dig('jwks', 'keys', 0)
+      expect(jwk).to eq(Kiosk::TestHelpers::Dpop.jwk(registered_principal.rsa_key).transform_keys(&:to_s))
+      form = URI.decode_www_form(tokens.first.body).to_h
+      expect(form['grant_type']).to eq('client_credentials')
+      expect(assertion(form, with: registered_principal.rsa_key)).to include('iss' => 'a1', 'sub' => 'a1', 'aud' => origin)
+      proof, = JWT.decode(tokens.first.headers['Dpop'], registered_principal.rsa_key.public_key, true, algorithm: 'RS256')
+      expect(proof).to include('htm' => 'POST', 'htu' => "#{origin}/kiosk/oauth/token")
+      expect(proof).not_to have_key('ath')
+      expect(tokens.first.headers).not_to have_key('Authorization')
+      expect(registered_principal).to have_attributes(agent_id: 'a1', user_id: 'u1')
     end
 
     it 'pays a registration toll with the proofs in the Kiosk-PoW header and the same body' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
+      stub, sent = requests_to(:post, '/kiosk/oauth/register')
       toll_then(stub, registered)
+      stub_request(:post, "#{origin}/kiosk/oauth/token").to_return(issued)
 
       assistant.register!
 
@@ -64,9 +79,16 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
     end
 
     it 'raises when the origin does not register' do
-      stub_request(:post, "#{origin}/kiosk/auth/register").to_return(problem_return('bad_request', status: 422))
+      stub_request(:post, "#{origin}/kiosk/oauth/register").to_return(json_return(400, 'error' => 'invalid_client_metadata'))
 
-      expect { assistant.register! }.to raise_error(described_class::RegistrationError, /expected 201, got 422/)
+      expect { assistant.register! }.to raise_error(described_class::RegistrationError, /expected 201, got 400/)
+    end
+
+    it 'raises when the origin issues no token' do
+      stub_request(:post, "#{origin}/kiosk/oauth/register").to_return(registered)
+      stub_request(:post, "#{origin}/kiosk/oauth/token").to_return(json_return(401, 'error' => 'invalid_client'))
+
+      expect { assistant.register! }.to raise_error(described_class::RegistrationError, /expected 200, got 401/)
     end
   end
 
@@ -74,7 +96,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
     include_context 'with an assistant and an origin'
 
     it 'sends no proof when told to skip, and a verbatim one when given a string' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
+      stub, sent = requests_to(:post, '/kiosk/oauth/register')
       stub.to_return(problem_return('pow_required', status: 402, challenges: [toll]))
 
       expect(assistant.register_raw(pow: :skip).status).to eq(402)
@@ -84,7 +106,7 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
     end
 
     it 'sends the role an assistant has no right to choose' do
-      stub, sent = requests_to(:post, '/kiosk/auth/register')
+      stub, sent = requests_to(:post, '/kiosk/oauth/register')
       stub.to_return(registered)
 
       assistant.register_raw(wire_role: 'admin')
@@ -234,31 +256,56 @@ RSpec.describe Kiosk::TestHelpers::Assistant do
       expect(sent.first.headers['Authorization']).to eq('DPoP tok')
     end
 
-    it 'rotates to a new key: the old key names the new one, the new key signs its own proof' do
+    it 'rotates to a new key: the old key names the new one, the new key signs its own assertion' do
       stub, sent = requests_to(:post, '/kiosk/auth/rotate')
-      stub.to_return(json_return(200, 'access_token' => 'tok2'))
+      stub.to_return(json_return(200, 'client_id' => 'a1'))
+      stub_request(:post, "#{origin}/kiosk/oauth/token").to_return(issued)
       new_key = OpenSSL::PKey::RSA.generate(2048)
 
       rotated = assistant.rotate(principal, new_key:)
 
       body = JSON.parse(sent.first.body)
-      old_claims, = JWT.decode(body['signed'], key.public_key, true, algorithm: 'RS256')
-      new_claims, = JWT.decode(body['new_signed'], new_key.public_key, true, algorithm: 'RS256')
+      old_claims = assertion(body)
+      new_claims, = JWT.decode(body['new_client_assertion'], new_key.public_key, true, algorithm: 'RS256')
       expect(old_claims['new_key']).to eq(Kiosk::TestHelpers::Dpop.thumbprint(new_key))
+      expect(new_claims).to include('sub' => 'a1')
       expect(new_claims).not_to have_key('new_key')
-      expect(body['new_public_key']).to eq(new_key.public_key.to_pem)
-      expect(rotated).to have_attributes(agent_id: 'a1', token: 'tok2', rsa_key: new_key)
+      expect(body.dig('jwks', 'keys', 0, 'n')).to eq(Kiosk::TestHelpers::Dpop.jwk(new_key)[:n])
+      expect(rotated).to have_attributes(agent_id: 'a1', rsa_key: new_key, token: new_token)
     end
 
-    it 'opens the account-binding ceremony as a form, with whatever else the caller sends' do
-      stub_request(:post, 'https://kiosk.example.com/kiosk/oauth/device_authorization')
-        .with(body: { 'client_id' => 'cli', 'public_key' => 'PEM', 'role' => 'owner' })
-        .to_return(json_return(200, 'user_code' => 'ABCD'))
+    it 'redeems a link code with a client assertion' do
+      stub, sent = requests_to(:post, '/kiosk/auth/claim')
+      stub.to_return(status: 204)
 
-      response = described_class.new(base_url: 'https://kiosk.example.com')
-                                .device_authorization(client_id: 'cli', public_key: 'PEM', role: 'owner')
+      expect(assistant.claim('LINK-1', principal).status).to eq(204)
+      body = JSON.parse(sent.first.body)
+      expect(body['code']).to eq('LINK-1')
+      expect(assertion(body)).to include('sub' => 'a1', 'aud' => origin)
+    end
 
+    it 'opens the account-binding ceremony as a form with a client assertion, and whatever else the caller sends' do
+      stub, sent = requests_to(:post, '/kiosk/oauth/device_authorization')
+      stub.to_return(json_return(200, 'user_code' => 'ABCD'))
+
+      response = assistant.device_authorization(principal, role: 'owner')
+
+      form = URI.decode_www_form(sent.first.body).to_h
+      expect(form['role']).to eq('owner')
+      expect(assertion(form)).to include('sub' => 'a1')
       expect(response.body['user_code']).to eq('ABCD')
+    end
+
+    it 'polls the device grant with a client assertion and a DPoP proof that carries no token' do
+      stub, sent = requests_to(:post, '/kiosk/oauth/token')
+      stub.to_return(json_return(400, 'error' => 'authorization_pending'))
+
+      assistant.device_token('d1', principal)
+
+      form = URI.decode_www_form(sent.first.body).to_h
+      expect(form).to include('grant_type' => described_class::DEVICE_CODE, 'device_code' => 'd1')
+      expect(assertion(form)).to include('sub' => 'a1')
+      expect(JWT.decode(sent.first.headers['Dpop'], key.public_key, true, algorithm: 'RS256').first).not_to have_key('ath')
     end
   end
 end

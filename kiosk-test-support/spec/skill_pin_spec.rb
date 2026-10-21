@@ -3,6 +3,7 @@
 require 'digest'
 require 'yaml'
 require 'kiosk/server/well_known'
+require 'kiosk/server/oauth_error'
 
 # Skill pin check (immutable versioned skill files).
 #
@@ -71,17 +72,21 @@ module SkillPin
           'skipped example reads as a passing one in every summary line CI prints.'
   end
 
-  # The OAuth errors `DeviceCodeGrant` can emit during a ceremony, read from
-  # its `failure(:code, …)` calls and `[:code, …]` table rows. invalid_request
-  # is a malformed call (no device_code), not an outcome of a ceremony.
+  # The OAuth errors that the token and device-authorization endpoints can
+  # answer: the engine's closed list without `invalid_client_metadata`, which
+  # only registration answers.
+  def token_errors = Kiosk::Server::OauthError::CODES - %w[invalid_client_metadata]
+
+  # The OAuth errors `DeviceCodeGrant` emits during a ceremony, read from its
+  # `fail!(:code, …)` calls and `[:code, …]` table rows.
   def emitted_grant_errors
-    File.read(GRANT_SOURCE).scan(/(?:failure\(|\[):([a-z_]+)/).flatten.uniq - %w[invalid_request]
+    File.read(GRANT_SOURCE).scan(/(?:fail!\(|\[):([a-z_]+)/).flatten.uniq
   end
 
-  # The claim ceremony's bullet and its sub-bullets in the skill at `url`, up
-  # to the sibling bullet.
+  # The binding section of the skill at `url`: the two ceremonies and the
+  # error list of their `/oauth/*` requests, up to the give-up horizon.
   def ceremony_section(url)
-    File.read(published_file(url))[/^- \*\*No code from the human\*\*.*?(?=^- \*\*The human hands you a code)/m]
+    File.read(published_file(url))[/^- \*\*No code from the human\*\*.*?^- \*\*GIVE UP[^\n]*/m]
   end
 end
 
@@ -174,19 +179,23 @@ RSpec.describe 'the skill pin' do
     end
   end
 
-  # The pinned cut must teach an assistant to END its device-code poll: a
-  # ceremony the human denied, or one whose `expires_in` elapsed, must not poll
-  # forever. The vocabulary is derived from the engine, so a code added there and
-  # not taught to the skill fails here.
+  # The pinned cut must teach every error the token endpoint answers, and must
+  # teach an assistant to END its device-code poll: a ceremony the human
+  # denied, or one whose `expires_in` elapsed, must not poll forever. The
+  # vocabulary is derived from the engine, so a code added there and not taught
+  # to the skill fails here.
   describe 'the skill pin: the device-code poll in the pinned cut' do
     include_context 'with the published kiosk.tech checkout'
 
-    it 'the pinned cut names every device-grant error the engine can emit, and a give-up horizon' do
+    it 'the pinned cut names every token-endpoint error the engine can answer, and a give-up horizon' do
       expect(File).to exist(SkillPin::GRANT_SOURCE)
-      emitted = SkillPin.emitted_grant_errors
-      expect(emitted.size).to be >= 5,
-                              "parsed only #{emitted.size} failure code(s) out of " \
-                              "#{SkillPin::GRANT_SOURCE}; the call shape changed and this expectation is blind"
+      emitted = SkillPin.token_errors
+      expect(emitted.size).to eq(9), "the engine lists #{emitted.size} token-endpoint errors, not nine: #{emitted.join(', ')}"
+      grant = SkillPin.emitted_grant_errors
+      expect(grant.size).to be >= 5,
+                            "parsed only #{grant.size} failure code(s) out of " \
+                            "#{SkillPin::GRANT_SOURCE}; the call shape changed and this expectation is blind"
+      expect(grant - emitted).to be_empty, "#{SkillPin::GRANT_SOURCE} emits #{(grant - emitted).join(', ')}, outside the engine's list"
 
       name    = File.basename(SkillPin.pins.values.filter_map { it[:url] }.uniq.first)
       section = SkillPin.ceremony_section(name)
@@ -194,8 +203,8 @@ RSpec.describe 'the skill pin' do
 
       missing = emitted.reject { |code| section.include?(code) }
       expect(missing).to be_empty,
-                         "#{name} teaches the device-code poll without naming #{missing.join(', ')} — the engine " \
-                         "emits #{emitted.sort.join(', ')} (#{SkillPin::GRANT_SOURCE}), and an error the skill " \
+                         "#{name} teaches the binding requests without naming #{missing.join(', ')} — the engine " \
+                         "answers #{emitted.sort.join(', ')}, and an error the skill " \
                          'does not name is an error the assistant loops on'
       expect(section).to include('GIVE UP'),
                          "#{name}'s device-code poll states no give-up horizon. Nothing pushes on approval, so a " \

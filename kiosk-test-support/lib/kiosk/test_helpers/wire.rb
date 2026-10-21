@@ -44,7 +44,8 @@ module Kiosk
       end
 
       # An access token and the key it is bound to. As a header value, the wire
-      # sends it as `Authorization: DPoP <token>` with a proof for that request.
+      # sends it as `Authorization: DPoP <token>` with a proof for that request;
+      # with no token, as the proof alone (a token request).
       DpopCredential = Data.define(:token, :key)
 
       def self.dpop(token, key) = { 'Authorization' => DpopCredential.new(token:, key:) }

@@ -3,15 +3,15 @@
 require 'kiosk'
 
 # No demo may ship a cleartext AGENT-IdP stub, and no demo may override the
-# engine's own agent-IdP at all. Assistants authenticate with the kiosk-pop
-# JWTs that the engine mints, and `Kiosk::Server::IdentityResolution` falls back
+# engine's own agent-IdP at all. Assistants authenticate with the DPoP-bound
+# access tokens that the engine's token endpoint mints, and `Kiosk::Server::IdentityResolution` falls back
 # to the adapter that verifies them. So this reads the shipped tree:
 #   - no demo, and not the e2e fixture host, ships a `stub_idp.rb` or a
 #     `jwt_or_stub_idp.rb`;
 #   - no demo initializer sets `c.agent_idp`: the engine's default is the whole
 #     mechanism, and an override is how a second one gets in.
 #
-# That the default is the kiosk-pop verifier, and that it refuses a forged
+# That the default verifies the engine's own tokens, and that it refuses a forged
 # bearer in every environment, is asserted in kiosk-server's
 # identity_resolution_spec.rb. This gem does not depend on kiosk-server.
 #
@@ -34,7 +34,7 @@ module DemoAgentIdp
   end
 end
 
-RSpec.describe "the demos' agent channel is the engine's own kiosk-pop verifier (T-104)" do
+RSpec.describe "the demos' agent channel is the engine's own token verifier (T-104)" do
   it 'finds the demo tree where it expects it (this spec never skips)' do
     expect(DemoAgentIdp::DEMO_ROOTS.size).to be >= 7,
                                              'expected the operator demos beside kiosk-test-support, found ' \
@@ -48,7 +48,7 @@ RSpec.describe "the demos' agent channel is the engine's own kiosk-pop verifier 
               names.map { |n| File.join(DemoAgentIdp::E2E_FIXTURES, n) }).select { |p| File.exist?(p) }
     expect(strays).to be_empty,
                       "a cleartext agent-IdP stub is back: #{strays.join(', ')}. Assistants " \
-                      'authenticate with the kiosk-pop JWT the engine minted (T-104); a ' \
+                      'authenticate with the access token the engine minted (T-104); a ' \
                       'self-asserted `agent:u-…:a-…:r-…` parser lets anyone be any agent at any ' \
                       'role — that was K-539, and an env gate in front of it is not the fix.'
   end

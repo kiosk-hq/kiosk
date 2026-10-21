@@ -55,7 +55,7 @@ module KioskServerSpecSupport
     end
   end
 
-  # An origin with no database: linking an assistant mints its token, nothing
+  # An origin with no database: registering and linking an assistant mints its token, nothing
   # revokes it, and a verb's session runs on `connection`.
   def serve_wire_on(connection)
     Kiosk.configure do |c|
@@ -67,12 +67,35 @@ module KioskServerSpecSupport
     allow(ActiveRecord::Base).to receive(:lease_connection).and_return(connection)
   end
 
-  # Linking an assistant mints its token, bound to the linked key, and writes no agent row.
+  # Registering and linking an assistant keeps its client in memory, and its
+  # token is bound to the registered key. No agent row is written.
   def link_assistants_without_database
-    allow(Kiosk::Server::AccountBinding).to receive(:bind!) do |public_key_pem:, user_id:, requested_role:|
-      jkt    = Kiosk::Server::SigningKey.from_pem(public_key_pem).kid
-      claims = { sub: user_id, agent_id: "a-#{user_id}", role: requested_role, cnf: { jkt: } }.compact
-      { access_token: Kiosk::Server::JwtIssuer.issue(claims: claims, audience: Kiosk.current_issuer) }
+    clients = {}
+    register_clients_in(clients)
+    allow(Kiosk::Server::AccountBinding).to receive(:bind!) do |agent_id:, user_id:, requested_role:|
+      clients[agent_id] = clients.fetch(agent_id).with(user_id:, allowed_roles: [requested_role].compact)
+    end
+    issue_tokens_from(clients)
+  end
+
+  def register_clients_in(clients)
+    allow(Kiosk::Server::ClientRegistration).to receive(:call) do |metadata|
+      pem = Kiosk::Server::AssistantKey.to_pem(Kiosk::Server::AssistantKey.from_jwks(metadata['jwks']))
+      id  = "a-#{clients.size + 1}"
+      clients[id] = Kiosk::Server::Client.new(id:, user_id: nil, public_key_pem: pem, allowed_roles: [], issued_at: 0)
+    end
+  end
+
+  # The engine's agent-IdP verifies as it does in production; it mints from `clients`.
+  def issue_tokens_from(clients)
+    allow(Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp).to receive(:new).and_wrap_original do |original, *args|
+      original.call(*args).tap do |idp|
+        allow(idp).to receive(:issue) do |agent_id:, role:|
+          client = clients.fetch(agent_id)
+          claims = { sub: client.user_id, agent_id:, role:, cnf: { jkt: client.thumbprint } }.compact
+          Kiosk::Server::JwtIssuer.issue(claims:, audience: Kiosk.current_issuer)
+        end
+      end
     end
   end
 

@@ -20,8 +20,6 @@ RSpec.describe Kiosk::TestHelpers::Customer do
       [stub_request(method, "#{origin}#{path}").with { sent << it }, sent]
     end
 
-    before { stub_request(:get, %r{/kiosk/auth/challenge}).to_return(json_return(200, 'challenge' => 'nonce-1')) }
-
     it 'reads whose account it acts for, and in which role, off its credential' do
       expect([customer.account, customer.role]).to eq(%w[u1 customer])
     end
@@ -69,43 +67,47 @@ RSpec.describe Kiosk::TestHelpers::Customer do
     end
 
     describe 'a new credential' do
-      it 'holds the account the origin signed into it, as the same kind of customer' do
-        stub, sent = requests_to(:post, '/kiosk/auth/claim')
-        stub.to_return(json_return(201, 'access_token' => token('alice', agent: 'a1')))
+      it 'redeems a link code, then holds the account the origin signed into a new token, as the same kind of customer' do
+        claim, sent = requests_to(:post, '/kiosk/auth/claim')
+        claim.to_return(status: 204)
+        stub_request(:post, "#{origin}/kiosk/oauth/token").to_return(json_return(200, 'access_token' => token('alice', agent: 'a1')))
 
         linked = customer.redeems('LINK-1')
 
         expect(linked).to be_a(customer.class)
         expect(linked.principal).to have_attributes(user_id: 'alice', agent_id: 'a1', rsa_key: principal.rsa_key)
-        expect(JSON.parse(sent.first.body)).to include('code' => 'LINK-1', 'public_key' => principal.rsa_key.public_key.to_pem)
+        expect(JSON.parse(sent.first.body)).to include('code' => 'LINK-1', 'client_assertion' => be_a(String))
       end
 
-      it 'comes from signing back in with its own key' do
-        stub_request(:post, "#{origin}/kiosk/auth/login").to_return(json_return(200, 'access_token' => token('u1', role: 'owner')))
+      it 'raises when the origin refuses the link code' do
+        stub_request(:post, "#{origin}/kiosk/auth/claim").to_return(problem_return('not_found', status: 404))
+
+        expect { customer.redeems('LINK-1') }.to raise_error(/did not redeem LINK-1: 404/)
+      end
+
+      it 'comes from a token request with its own key' do
+        stub_request(:post, "#{origin}/kiosk/oauth/token").with(body: hash_including('grant_type' => 'client_credentials'))
+                                                          .to_return(json_return(200, 'access_token' => token('u1', role: 'owner')))
 
         expect(customer.signs_back_in).to be_ok
         expect(customer.with_a_fresh_credential.role).to eq('owner')
       end
 
       it 'is refused once the assistant is no longer known' do
-        stub_request(:post, "#{origin}/kiosk/auth/login").to_return(problem_return('not_found', status: 404))
+        stub_request(:post, "#{origin}/kiosk/oauth/token").to_return(json_return(401, 'error' => 'invalid_client'))
 
-        expect(customer.signs_back_in).to be_refused(:not_found)
-        expect { customer.with_a_fresh_credential }.to raise_error(/issued no credential: 404/)
+        expect(customer.signs_back_in).to be_refused(:invalid_client)
+        expect { customer.with_a_fresh_credential }.to raise_error(/issued no credential: 401/)
       end
     end
 
-    describe 'a new credential by device grant' do
-      it 'is collected once the person approves the code the assistant showed' do
-        stub_request(:post, "#{origin}/kiosk/oauth/device_authorization").to_return(json_return(200, 'device_code' => 'd1', 'user_code' => 'U-1'))
-        polls = stub_request(:post, "#{origin}/kiosk/oauth/token").with(body: hash_including('device_code' => 'd1'))
-                                                                  .to_return(json_return(400, 'error' => 'authorization_pending'),
-                                                                             json_return(200, 'access_token' => token('alice')))
-        request = customer.asks_to_be_linked
+    describe 'a newcomer' do
+      it 'registers its key and holds no token yet' do
+        stub_request(:post, "#{origin}/kiosk/oauth/register").to_return(json_return(201, 'client_id' => 'a2'))
 
-        expect(customer.polls(request)).to be_refused(:authorization_pending)
-        expect(customer.collects(request).account).to eq('alice')
-        expect(polls).to have_been_requested.twice
+        newcomer = described_class.newcomer(assistant)
+
+        expect(newcomer.principal).to have_attributes(agent_id: 'a2', user_id: nil, token: nil)
       end
     end
 

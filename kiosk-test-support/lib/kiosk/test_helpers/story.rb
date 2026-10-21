@@ -18,7 +18,7 @@ module Kiosk
       # A newly registered assistant, as `as` (a demo's own Customer subclass).
       def a_customer(as: Customer) = as.new(assistant, register)
 
-      # An assistant holding a key and no account here yet.
+      # An assistant that registered its key here and acts for no person yet.
       def a_newcomer(as: Customer) = as.newcomer(assistant)
 
       # Someone with an account on the operator's site, signed in there.

@@ -11,8 +11,9 @@ require 'kiosk/test_helpers/assistant/events'
 
 module Kiosk
   module TestHelpers
-    # An assistant on the wire: registers, then queries, runs and pays as the
-    # principal it registered, paying every proof-of-work toll it is asked for.
+    # An assistant on the wire: registers its key as an OAuth client, then
+    # queries, runs and pays as the principal its token names, paying every
+    # proof-of-work toll it is asked for.
     #
     #   assistant = Kiosk::TestHelpers::Assistant.new(base_url: live_url)
     #   rider     = assistant.register!
@@ -20,8 +21,12 @@ module Kiosk
     class Assistant
       class RegistrationError < StandardError; end
 
-      # The account an assistant registered, and the key that signs its mandates.
+      # The account an assistant acts for, its client_id (the agent_id), and
+      # the key that signs its client assertions, DPoP proofs and mandates.
       Principal = Data.define(:agent_id, :user_id, :token, :rsa_key)
+
+      ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+      DEVICE_CODE = 'urn:ietf:params:oauth:grant-type:device_code'
 
       attr_reader :wire
 
@@ -31,24 +36,51 @@ module Kiosk
 
       def base_url = wire.base_url
 
-      # `pow:` is `:solve`, `:skip` (send no proof) or a String sent verbatim as
-      # the proof; `wire_role:` puts a `role` the engine must ignore into the body.
-      def register_raw(pow: :solve, wire_role: nil)
-        register(pow:, wire_role:).first
+      # Registers `key` (RFC 7591). `pow:` is `:solve`, `:skip` (send no proof)
+      # or a String sent verbatim as the proof; `wire_role:` puts a `role` the
+      # engine must ignore into the body.
+      def register_raw(pow: :solve, wire_role: nil, key: OpenSSL::PKey::RSA.generate(2048))
+        body = { jwks: jwks(key), token_endpoint_auth_method: 'private_key_jwt' }
+        body[:role] = wire_role if wire_role
+        case pow
+        when :solve then wire.post('/kiosk/oauth/register', body)
+        when :skip then unpaid.post('/kiosk/oauth/register', body)
+        else unpaid.post('/kiosk/oauth/register', body, 'Kiosk-PoW' => pow)
+        end
       end
 
-      def register!(pow: :solve)
-        response, key = register(pow:)
-        raise RegistrationError, "register! expected 201, got #{response.status}: #{response.body.inspect}" unless response.status == 201
+      # A new key, registered: the principal has a client_id and no token yet.
+      def register_client!(pow: :solve)
+        key  = OpenSSL::PKey::RSA.generate(2048)
+        resp = register_raw(pow:, key:)
+        raise RegistrationError, "registration expected 201, got #{resp.status}: #{resp.body.inspect}" unless resp.status == 201
 
-        Principal.new(agent_id: response.body.fetch('agent_id'), user_id: response.body.fetch('user_id'),
-                      token: response.body.fetch('access_token'), rsa_key: key)
+        Principal.new(agent_id: resp.body.fetch('client_id'), user_id: nil, token: nil, rsa_key: key)
       end
 
-      # The unauthenticated request that opens the account-binding ceremony (RFC 8628 §3.1).
-      def device_authorization(client_id:, public_key:, **extra)
-        wire.post_form('/kiosk/oauth/device_authorization',
-                       { 'client_id' => client_id, 'public_key' => public_key }.merge(extra.transform_keys(&:to_s)))
+      # A new key, registered, holding its first token.
+      def register!(pow: :solve) = signed_in(register_client!(pow:))
+
+      # The principal holding a new token from the client_credentials grant.
+      def signed_in(principal)
+        response = token(principal)
+        raise RegistrationError, "token request expected 200, got #{response.status}: #{response.body.inspect}" unless response.status == 200
+
+        access_token = response.body.fetch('access_token')
+        principal.with(token: access_token, user_id: JWT.decode(access_token, nil, false).first['sub'])
+      end
+
+      # Asks the token endpoint for a token of the principal's client (RFC 6749 §4.4).
+      def token(principal) = token_request(principal, 'grant_type' => 'client_credentials')
+
+      # Polls for the token a person grants on the operator's site (RFC 8628 §3.4).
+      def device_token(device_code, principal)
+        token_request(principal, 'grant_type' => DEVICE_CODE, 'device_code' => device_code)
+      end
+
+      # Opens the account-binding ceremony (RFC 8628 §3.1), with whatever else the caller sends.
+      def device_authorization(principal, **extra)
+        wire.post_form('/kiosk/oauth/device_authorization', assertion_params(principal).merge(extra.transform_keys(&:to_s)))
       end
 
       def kyc(principal, attestation_jws:)
@@ -81,38 +113,28 @@ module Kiosk
         wire.post('/kiosk/pay', body, credential(principal))
       end
 
-      # Puts a new key on the principal's account (spec Section 5.7): each key
-      # signs a challenge of its own, and the old key's proof names the new key.
-      # The answer's Principal holds the new key and the token bound to it.
+      # Puts a new key on the principal's client (spec Section 5.7): the old
+      # key's assertion names the new key, and the new key signs its own. The
+      # answer's Principal holds the new key and a token bound to it.
       def rotate(principal, new_key: OpenSSL::PKey::RSA.generate(2048))
-        new_key_thumbprint = Dpop.thumbprint(new_key)
-        body = { public_key: principal.rsa_key.public_key.to_pem,
-                 signed: proof_of_possession(principal.rsa_key, new_key: new_key_thumbprint),
-                 new_public_key: new_key.public_key.to_pem, new_signed: proof_of_possession(new_key) }
+        body = { client_assertion_type: ASSERTION_TYPE,
+                 client_assertion: client_assertion(principal, new_key: Dpop.thumbprint(new_key)),
+                 new_client_assertion: client_assertion(principal.with(rsa_key: new_key)), jwks: jwks(new_key) }
         response = wire.post('/kiosk/auth/rotate', body)
         return response unless response.status == 200
 
-        principal.with(token: response.body.fetch('access_token'), rsa_key: new_key)
+        signed_in(principal.with(rsa_key: new_key))
       end
 
-      # Signs in again with the key it holds.
-      def login(key) = wire.post('/kiosk/auth/login', possession(key))
+      # Redeems a link code a person minted on the operator's site; answers 204.
+      def claim(code, principal) = wire.post('/kiosk/auth/claim', { code:, **assertion_params(principal) })
 
-      # Redeems a link code a person minted on the operator's site.
-      def claim(code, key) = wire.post('/kiosk/auth/claim', { code: }.merge(possession(key)))
-
-      # Polls for the credential a person grants on the operator's site (RFC 8628 §3.4).
-      def device_token(device_code, key)
-        wire.post_form('/kiosk/oauth/token', 'grant_type' => 'urn:ietf:params:oauth:grant-type:device_code',
-                                             'device_code' => device_code, 'signed' => proof_of_possession(key))
-      end
-
-      # A proof that the assistant holds `key`, over a fresh challenge and bound to this origin.
-      # `claims` adds members, such as the `new_key` of a rotation.
-      def proof_of_possession(key, **claims)
-        _, challenge = wire.get_json('/kiosk/auth/challenge', public_key: key.public_key.to_pem)
-        JWT.encode({ aud: base_url, nonce: challenge['challenge'], jti: SecureRandom.uuid, iat: Time.now.to_i, **claims },
-                   key, 'RS256')
+      # A client assertion (RFC 7523 §3) that the principal's key signs for this
+      # origin. `claims` adds or replaces members, such as the `new_key` of a rotation.
+      def client_assertion(principal, **claims)
+        payload = { iss: principal.agent_id, sub: principal.agent_id, aud: base_url, exp: Time.now.to_i + 60,
+                    jti: SecureRandom.uuid, **claims }
+        JWT.encode(payload, principal.rsa_key, 'RS256')
       end
 
       # What the origin publishes about itself at `/kiosk/schema`.
@@ -125,19 +147,16 @@ module Kiosk
 
       private
 
-      def register(pow:, wire_role: nil)
-        key  = OpenSSL::PKey::RSA.generate(2048)
-        body = possession(key)
-        body[:role] = wire_role if wire_role
-        response = case pow
-                   when :solve then wire.post('/kiosk/auth/register', body)
-                   when :skip then unpaid.post('/kiosk/auth/register', body)
-                   else unpaid.post('/kiosk/auth/register', body, 'Kiosk-PoW' => pow)
-                   end
-        [response, key]
+      def jwks(key) = { keys: [Dpop.jwk(key)] }
+
+      def assertion_params(principal)
+        { 'client_assertion_type' => ASSERTION_TYPE, 'client_assertion' => client_assertion(principal) }
       end
 
-      def possession(key) = { public_key: key.public_key.to_pem, signed: proof_of_possession(key) }
+      # A token request carries a DPoP proof of the registered key, with no token yet.
+      def token_request(principal, form)
+        wire.post_form('/kiosk/oauth/token', form.merge(assertion_params(principal)), wire.dpop(nil, principal.rsa_key))
+      end
 
       def unpaid = Wire.new(base_url:)
 

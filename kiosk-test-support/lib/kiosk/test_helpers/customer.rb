@@ -40,10 +40,8 @@ module Kiosk
     class Customer
       attr_reader :principal
 
-      # An assistant holding a key and no account at its origin yet.
-      def self.newcomer(assistant)
-        new(assistant, Assistant::Principal.new(agent_id: nil, user_id: nil, token: nil, rsa_key: OpenSSL::PKey::RSA.generate(2048)))
-      end
+      # An assistant that registered its key here and acts for no person yet.
+      def self.newcomer(assistant) = new(assistant, assistant.register_client!)
 
       def initialize(assistant, principal)
         @assistant = assistant
@@ -85,21 +83,25 @@ module Kiosk
       def account = claims['sub']
       def role = claims['role']
 
-      def signs_back_in = Answer.new(@assistant.login(principal.rsa_key))
+      # Asks the token endpoint for a new token with the key it holds.
+      def signs_back_in = Answer.new(@assistant.token(principal))
 
-      # This assistant holding the credential a fresh sign-in issues.
+      # This assistant holding the credential a fresh token request issues.
       def with_a_fresh_credential = holding(signs_back_in)
 
       # Redeems the link code a person handed over; the assistant then acts for that person.
-      def redeems(link_code) = holding(Answer.new(@assistant.claim(link_code, principal.rsa_key)))
+      def redeems(link_code)
+        claimed = Answer.new(@assistant.claim(link_code, principal))
+        raise "#{origin} did not redeem #{link_code}: #{claimed}" unless claimed.ok?
 
-      # Asks to be linked to a person's account; the answer carries the code the person approves.
-      def asks_to_be_linked(client_id: 'kiosk-story')
-        Answer.new(@assistant.device_authorization(client_id:, public_key: principal.rsa_key.public_key.to_pem))
+        with_a_fresh_credential
       end
 
+      # Asks to be linked to a person's account; the answer carries the code the person approves.
+      def asks_to_be_linked = Answer.new(@assistant.device_authorization(principal))
+
       # Asks once whether the person has approved `request`.
-      def polls(request) = Answer.new(@assistant.device_token(request['device_code'], principal.rsa_key))
+      def polls(request) = Answer.new(@assistant.device_token(request['device_code'], principal))
 
       # This assistant holding the credential the person granted through `request`.
       def collects(request) = holding(polls(request))

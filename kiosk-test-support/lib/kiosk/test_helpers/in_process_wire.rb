@@ -54,13 +54,22 @@ module Kiosk
 
       def query_url(url, params) = params.empty? ? url : "#{url}?#{URI.encode_www_form(params)}"
 
-      # The token and key of an assistant linked to the principal for this call.
+      # The token and key of an assistant registered and linked to the principal for this call.
       def credential_for(identity)
-        key   = OpenSSL::PKey::RSA.generate(2048)
-        token = Kiosk::Server::AccountBinding.bind!(
-          public_key_pem: key.public_key.to_pem, user_id: identity.user_id, requested_role: identity.role
-        ).fetch(:access_token)
+        key    = OpenSSL::PKey::RSA.generate(2048)
+        client = Kiosk::Server::AccountBinding.bind!(agent_id: register(key).id, user_id: identity.user_id,
+                                                     requested_role: identity.role)
+        token  = Kiosk::Server::AgentIdentityProviders::DefaultAgentIdp.new.issue(agent_id: client.id, role: client.role)
         Wire::DpopCredential.new(token:, key:)
+      end
+
+      # Registers the key as a client, and pays the registration toll if the origin asks for one.
+      def register(key)
+        metadata = { 'jwks' => { 'keys' => [Kiosk::Server::AssistantKey.to_jwk(key.public_key)] } }
+        Kiosk::Server::ClientRegistration.call(metadata)
+      rescue Kiosk::Server::Errors::PowRequired => e
+        header = JSON.generate(Wire.solve(JSON.parse(JSON.generate(e.challenges))))
+        Kiosk::Server::ClientRegistration.call(metadata, pow: Kiosk::Server::PowGate.proofs_from_header(header))
       end
 
       def toll_challenges(response)

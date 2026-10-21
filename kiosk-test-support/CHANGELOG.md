@@ -12,6 +12,8 @@ already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: The gemspec depends on kiosk-server and kiosk-user-idp-devise, which the in-process helpers and `Person` require, so a bundle with this gem alone loads them.
+
 ## [0.5.23] — 2026-10-21
 
 - 2026-10-21: `Wire#dpop` replaces `Wire#bearer`: each call sends the token as `Authorization: DPoP` with a new proof. `Assistant#rotate` puts a new key on a principal.

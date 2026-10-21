@@ -11,6 +11,8 @@ it under `## [Unreleased]`; nothing already written is edited.
 
 ## [Unreleased]
 
+- 2026-10-21: kiosk-test-support depends on kiosk-server and kiosk-user-idp-devise, so its in-process helpers and `Person` load in a bundle that names only it.
+
 ## [0.5.23] — 2026-10-21
 
 - 2026-10-21: **Every gem and `API_VERSION` are 0.5.23, matching skill 0.5.23.** `MIN_CLIENT` is 0.5.23: an older skill sends no DPoP proof.
